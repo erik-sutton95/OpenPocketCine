@@ -241,11 +241,13 @@ final class CaptureListTests: XCTestCase {
         XCTAssertEqual(ShutterAngle.nearestLabel(denom: 48, fps: 24), "180°")
     }
 
-    func testEmptyCapListShowsOnlyCurrent() {
+    func testEmptyCapListUsesFallbackLadderAndRetainsCurrent() {
         var status = CameraStatus()
         status.shutterDenom = 80
-        XCTAssertEqual(CaptureLists.shutterDenoms(from: status), [80])
-        XCTAssertEqual(CaptureLists.shutterLabels(from: status), ["1/80"])
+        let denoms = CaptureLists.shutterDenoms(from: status)
+        XCTAssertTrue(denoms.contains(80))
+        XCTAssertTrue(denoms.contains(48), "The fallback retains a 180° shutter at 24 fps")
+        XCTAssertEqual(CaptureLists.shutterLabels(from: status), denoms.map { "1/\($0)" })
     }
 
     private static let shutter25p = hex(

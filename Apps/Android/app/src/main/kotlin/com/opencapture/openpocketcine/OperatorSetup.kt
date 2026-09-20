@@ -149,6 +149,8 @@ object SettingsHelpCopy {
         "A connected game controller. The selected gimbal joystick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
     const val KEEP_SCREEN_AWAKE =
         "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. Android may still dim when the device overheats."
+    const val HDR_DISPLAY =
+        "Outdoor panel brightness, not a grade. WAVE, HISTO, PARADE, VECTOR, zebras and false color still read the decoded camera signal — judge exposure there, not from how bright the picture looks. Screen recording drops back to a normal SDR picture so the file is not HDR-boosted. This is not the camera's HDR/HLG color mode. Off by default."
     const val THEME = "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
     const val SUPPORT = "Connection, live view, controls, and troubleshooting."
     const val REPORT = "Opens a public issue form on GitHub for this project."
@@ -1377,6 +1379,17 @@ private fun DisplayRows(
     onExpandDisp: (PocketDispMode?) -> Unit,
 ) {
     val view = LocalView.current
+    SettingsRowCard(title = "Panel") {
+        SettingsSwitchInlineRow(
+            title = "HDR display",
+            help = SettingsHelpCopy.HDR_DISPLAY,
+            showTopDivider = false,
+            isOn = model.hdrDisplay,
+        ) {
+            operatorHaptic(view, model.hapticsEnabled)
+            model.updateHdrDisplay(!model.hdrDisplay)
+        }
+    }
     PocketDispMode.entries.forEach { mode ->
         SettingsRowCard(
             title = mode.settingsTitle,

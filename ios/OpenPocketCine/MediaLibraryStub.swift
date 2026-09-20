@@ -295,6 +295,28 @@ struct MediaLibraryView: View {
     @State private var viewingPhoto: MediaFile?
     @State private var deliveryFiles: [MediaFile]?
     @State private var resolvedDurations: [String: String] = [:]
+    @State private var cacheEntries: [String: MediaCacheEntry] = [:]
+    @State private var cacheCameraID: String?
+
+    private struct CacheRequest: Equatable {
+        var cameraID: String
+        var files: [MediaFile]
+        var revision: UInt64
+    }
+
+    private var cacheRequest: CacheRequest {
+        CacheRequest(
+            cameraID: session.mediaCameraID, files: session.mediaFiles,
+            revision: session.mediaCacheRevision)
+    }
+
+    private func cachedEntry(_ file: MediaFile) -> MediaCacheEntry? {
+        cacheCameraID == session.mediaCameraID ? cacheEntries[file.path] : nil
+    }
+
+    private func cachedGrade(_ file: MediaFile) -> MediaCacheGrade {
+        cachedEntry(file)?.grade ?? .none
+    }
 
     private var session: CameraSession { model.session }
 
@@ -311,7 +333,8 @@ struct MediaLibraryView: View {
         if isLive { return session.mediaFiles }
         return MediaLibraryQuery.cachedOnly(
             session.mediaFiles,
-            cachedPaths: Set(session.mediaFiles.filter(session.isAvailableOffline).map(\.path)))
+            cachedPaths: Set(
+                session.mediaFiles.filter { cachedGrade($0).isPlayableOffline }.map(\.path)))
     }
 
     private var displayedFiles: [MediaFile] {
@@ -398,15 +421,15 @@ struct MediaLibraryView: View {
 
     private func mediaPermissions(_ file: MediaFile) -> MonitorMediaPermissions {
         var permissions: MonitorMediaPermissions = [.favorite]
-        if isLive || session.isDownloaded(file) { permissions.insert(.share) }
-        if isLive && !session.isDownloaded(file) { permissions.insert(.cache) }
+        if isLive || cachedGrade(file) == .original { permissions.insert(.share) }
+        if isLive && cachedGrade(file) != .original { permissions.insert(.cache) }
         if isLive && file.isDeletable { permissions.insert(.delete) }
         return permissions
     }
 
     private var catalogItems: [MonitorMediaItem] {
         displayedFiles.map { file in
-            let grade = session.cacheGrade(for: file)
+            let grade = cachedGrade(file)
             let color = session.shotColor(for: file)?.label ?? ""
             let metadata = MediaClipPresentation.metadataLine(
                 file: file, durationOverride: resolvedDurations[file.id])
@@ -460,9 +483,9 @@ struct MediaLibraryView: View {
             ) { item in
                 if let file = filesByID[item.id] {
                     MediaCatalogThumbnail(
-                        file: file, cacheGrade: session.cacheGrade(for: file),
-                        localURL: session.localURL(for: file),
-                        thumbnailURL: session.thumbnailURL(for: file),
+                        cameraID: session.mediaCameraID, file: file, cacheGrade: cachedGrade(file),
+                        localURL: cachedEntry(file)?.originalURL,
+                        thumbnailURL: cachedEntry(file)?.thumbnailURL,
                         onDuration: { resolvedDurations[file.id] = $0 }
                     )
                 }
@@ -504,6 +527,14 @@ struct MediaLibraryView: View {
                     exitSelectionMode()
                 }
             }
+        }
+        .task(id: cacheRequest) {
+            let request = cacheRequest
+            let entries = await session.cameraMedia.cacheEntries(
+                cameraID: request.cameraID, files: request.files)
+            guard !Task.isCancelled, cacheRequest == request else { return }
+            cacheCameraID = request.cameraID
+            cacheEntries = entries
         }
         .onAppear { session.beginMediaBrowse() }
         .onDisappear { session.endMediaBrowse() }
@@ -622,7 +653,8 @@ struct MediaLibraryView: View {
         .buttonStyle(MonitorButtonStyle())
         .accessibilityLabel("Filter library")
         .accessibilityValue(
-            activeFilterCount == 0 ? "Off" : "\(activeFilterCount) active")
+            activeFilterCount == 0 ? "Off" : "\(activeFilterCount) active"
+        )
         .accessibilityAddTraits(on ? .isSelected : [])
         .accessibilityIdentifier("monitor.media.filter")
     }
@@ -855,6 +887,7 @@ private struct FilterCalendarSheet: View {
 /// The Osmo adapter owns thumbnail acquisition and metadata fallbacks. All card,
 /// grid/list and selection rendering lives in MonitorMediaCatalog.
 private struct MediaCatalogThumbnail: View {
+    let cameraID: String
     let file: MediaFile
     let cacheGrade: MediaCacheGrade
     let localURL: URL?
@@ -877,24 +910,30 @@ private struct MediaCatalogThumbnail: View {
             }
         }
         .clipped()
-        .task(id: "\(file.id)#\(thumbnailURL?.path ?? "")") {
+        .task(
+            id:
+                "\(cameraID)#\(file.id)#\(thumbnailURL?.path ?? "")#\(localURL?.path ?? "")#\(cacheGrade.rawValue)"
+        ) {
+            thumbnail = nil
             await loadThumbnail()
             await loadDuration()
         }
     }
 
     private func loadThumbnail() async {
-        let cacheKey = "\(file.id)#grid" as NSString
+        let cacheKey = "\(cameraID)#\(file.id)#grid" as NSString
         if let cached = MediaCellThumbnailCache.shared.object(forKey: cacheKey) {
             thumbnail = cached
             return
         }
         func present(_ image: UIImage) {
+            guard !Task.isCancelled else { return }
             MediaCellThumbnailCache.shared.setObject(image, forKey: cacheKey)
             thumbnail = image
         }
-        if let thumbnailURL, let data = try? Data(contentsOf: thumbnailURL),
-            let image = await MediaCellImageLoader.shared.downsampled(data: data, maxPixelSize: 640)
+        if let thumbnailURL,
+            let image = await MediaCellImageLoader.shared.downsampled(
+                at: thumbnailURL, maxPixelSize: 640)
         {
             present(image)
             return
@@ -908,8 +947,8 @@ private struct MediaCatalogThumbnail: View {
         }
         await model.session.ensureThumbnail(for: file)
         if let cachedURL = model.session.thumbnailURL(for: file),
-            let data = try? Data(contentsOf: cachedURL),
-            let image = await MediaCellImageLoader.shared.downsampled(data: data, maxPixelSize: 640)
+            let image = await MediaCellImageLoader.shared.downsampled(
+                at: cachedURL, maxPixelSize: 640)
         {
             present(image)
             return
@@ -933,14 +972,16 @@ private struct MediaCatalogThumbnail: View {
     }
 
     private func loadDuration() async {
-        guard !isPhoto else { return }
+        guard !Task.isCancelled, !isPhoto else { return }
         if file.durationSeconds > 0 {
             onDuration(MediaClipFormatting.durationLabel(seconds: file.durationSeconds))
             return
         }
         guard isDownloaded, let localURL else { return }
         let asset = AVURLAsset(url: localURL)
-        if let duration = try? await asset.load(.duration), duration.isValid, duration.seconds > 0 {
+        if let duration = try? await asset.load(.duration), !Task.isCancelled, duration.isNumeric,
+            duration.seconds > 0
+        {
             onDuration(MediaClipFormatting.durationLabel(seconds: Int(duration.seconds)))
         }
     }

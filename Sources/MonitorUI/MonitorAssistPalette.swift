@@ -31,6 +31,7 @@
         @State private var grabOffset: Double = 0
         @State private var pinnedIDs: [String] = []
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.monitorHDRChromeGain) private var hdrGain
 
         public init(
             tools: [MonitorToolItem], layout: MonitorAssistPaletteLayout,
@@ -269,7 +270,10 @@
                     .opacity(labelOpacity)
                     .accessibilityHidden(true)
             }
-            .foregroundStyle(tool.enabled ? MonitorTheme.accent : MonitorTheme.secondary)
+            .foregroundStyle(
+                tool.enabled
+                    ? MonitorTheme.edrAccent(gain: hdrGain)
+                    : MonitorTheme.edrSecondary(gain: hdrGain))
             .frame(width: full.cellWidth, height: full.cellHeight)
             .background(
                 tool.enabled ? MonitorTheme.accent.opacity(0.13) : .clear,

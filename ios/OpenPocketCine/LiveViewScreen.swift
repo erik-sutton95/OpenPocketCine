@@ -884,7 +884,8 @@ private struct LiveFeedPane: View {
             transfer: LiveMonitorColorScience.transfer(
                 isPhoto: model.session.status.isPhoto,
                 colorMode: model.session.status.colorMode),
-            pictureFlip: model.livePictureViewFlip
+            pictureFlip: model.livePictureViewFlip,
+            hdrDisplay: model.hdrDisplayActive
         )
         .onChange(of: model.assist.effects) { _, fx in
             model.session.decoder.effects = fx.withFaceAF(model.session.wantsFaceAF)

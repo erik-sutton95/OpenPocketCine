@@ -5,6 +5,17 @@ import XCTest
 @testable import MonitorUI
 
 final class CaptureDeferredRenderingTests: XCTestCase {
+    @MainActor func testCaptureTabsKeepLabelsWhenCameraModesShrinkBeforeRendering() {
+        var labels = ["Speed", "Angle"]
+        let tabs = MonitorCaptureTabs(
+            options: Array(labels.indices), selection: 1,
+            title: { labels[$0] }, select: { _ in })
+        // Camera telemetry can remove these modes between the parent's body and
+        // SwiftUI's later evaluation of the child. Indices belong to that snapshot.
+        labels = []
+        XCTAssertEqual(tabs.rows.data.map(\.title), ["Speed", "Angle"])
+    }
+
     @MainActor func testCaptureTabsRenderFrozenLabelsAndSelectionOffMainActor() async {
         let probe = Probe()
         let tabs = MonitorCaptureTabs(

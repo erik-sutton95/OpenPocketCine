@@ -48,6 +48,8 @@ enum SettingsHelpCopy {
         "A connected game controller. The selected gimbal joystick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
     static let keepScreenAwake =
         "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. iOS may still dim when the device overheats."
+    static let hdrDisplay =
+        "Outdoor panel brightness, not a grade. WAVE, HISTO, PARADE, VECTOR, zebras and false color still read the decoded camera signal — judge exposure there, not from how bright the picture looks. Screen recording and AirPlay drop back to a normal SDR picture so the file is not HDR-boosted. This is not the camera's HDR/HLG color mode. Off by default."
     static let themeHelp =
         "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
     static let sourceHelp =
@@ -97,6 +99,17 @@ struct SettingsRootView: View {
     @State private var showLUTPicker = false
     @State private var showWatcherWiFiCode = false
     @State private var confirmClearCache = false
+    @State private var cacheBytes: UInt64?
+    private struct CacheSizeRequest: Equatable {
+        var cameraID: String
+        var revision: UInt64
+    }
+    private var cacheSizeRequest: CacheSizeRequest {
+        CacheSizeRequest(
+            cameraID: model.session.mediaCameraID, revision: model.session.mediaCacheRevision)
+    }
+    @State private var clearingCache = false
+    @State private var cacheClearFailed = false
     @State private var diagnosticsShare: DiagnosticSharePayload?
     @State private var showProblemReport = false
     @State private var showDiagnosticOptions = false
@@ -679,6 +692,14 @@ struct SettingsRootView: View {
 
     @ViewBuilder private var displayRows: some View {
         Group {
+            SettingsRowCard(title: "Panel") {
+                SettingsSwitchInlineRow(
+                    title: "HDR display",
+                    help: SettingsHelpCopy.hdrDisplay,
+                    showTopDivider: false,
+                    isOn: model.hdrDisplay
+                ) { model.hdrDisplay.toggle() }
+            }
             dispSectionCard(
                 .live,
                 reset: { model.dispLive = .liveDefaults }
@@ -859,7 +880,7 @@ struct SettingsRootView: View {
                 Button {
                     confirmClearCache = true
                 } label: {
-                    Text("Clear")
+                    Text(clearingCache ? "Clearing…" : "Clear")
                         .font(LiveType.ui(size: 13, weight: .semibold))
                         .foregroundStyle(LiveDesign.rec)
                 }
@@ -872,11 +893,28 @@ struct SettingsRootView: View {
             titleVisibility: .visible
         ) {
             Button("Clear", role: .destructive) {
-                model.session.clearMediaCache()
+                clearingCache = true
+                Task {
+                    do { try await model.session.clearMediaCache() } catch {
+                        cacheClearFailed = true
+                    }
+                    clearingCache = false
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Removes downloaded clip files from this phone. The clip list is kept.")
+        }
+        .disabled(clearingCache)
+        .task(id: cacheSizeRequest) {
+            let request = cacheSizeRequest
+            cacheBytes = nil
+            let bytes = await model.session.cameraMedia.cacheByteCount(cameraID: request.cameraID)
+            guard !Task.isCancelled, cacheSizeRequest == request else { return }
+            cacheBytes = bytes
+        }
+        .alert("Could not clear the cache. Try again.", isPresented: $cacheClearFailed) {
+            Button("OK", role: .cancel) {}
         }
     }
 
@@ -909,7 +947,7 @@ struct SettingsRootView: View {
     }
 
     private var cacheSizeLabel: String {
-        let bytes = model.session.mediaCacheByteCount()
+        guard let bytes = cacheBytes else { return "Checking…" }
         if bytes == 0 { return "Empty" }
         return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }

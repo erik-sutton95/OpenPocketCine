@@ -175,12 +175,13 @@ struct ScopeTraceMetalView: UIViewRepresentable {
         view.delegate = context.coordinator
         view.isPaused = true
         view.enableSetNeedsDisplay = true
-        view.colorPixelFormat = .bgra8Unorm
+        view.colorPixelFormat = LiveHDRDisplay.drawablePixelFormat()
         view.isOpaque = false
         view.backgroundColor = .clear
         view.clearColor = MTLClearColorMake(0, 0, 0, 0)
         view.clipsToBounds = true
         view.layer.masksToBounds = true
+        LiveHDRDisplay.configure(view)
         push(into: context.coordinator, view: view)
         return view
     }
@@ -190,6 +191,7 @@ struct ScopeTraceMetalView: UIViewRepresentable {
     }
 
     private func push(into renderer: ScopeTraceRenderer, view: MTKView) {
+        LiveHDRDisplay.configure(view)
         let explicit = layoutSize.width > 1 && layoutSize.height > 1
         renderer.update(
             samples: samples, trail: trail, mode: mode, transfer: transfer,
@@ -266,6 +268,13 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
         queue = device?.makeCommandQueue()
         pipeline = Self.sharedPipeline
         super.init()
+    }
+
+    private func activePipeline(for view: MTKView) -> MTLRenderPipelineState? {
+        if LiveHDRDisplay.isEnabled, view.colorPixelFormat == .rgba16Float {
+            return Self.hdrPipeline ?? pipeline
+        }
+        return pipeline
     }
 
     func update(
@@ -363,7 +372,7 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
     }
 
     func draw(in view: MTKView) {
-        guard let pipeline, let queue,
+        guard let pipeline = activePipeline(for: view), let queue,
             let descriptor = view.currentRenderPassDescriptor,
             let drawable = view.currentDrawable,
             let command = queue.makeCommandBuffer()
@@ -372,6 +381,8 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
         if publishedVertexCount > 0, let vertexBuffer = publishedBuffer {
             encoder.setRenderPipelineState(pipeline)
             encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+            var gain = LiveHDRDisplay.presentGain
+            encoder.setFragmentBytes(&gain, length: MemoryLayout<Float>.size, index: 0)
             let layout = publishedBounds.width > 1 ? publishedBounds : view.bounds.size
             var viewSize = SIMD2<Float>(
                 Float(view.drawableSize.width), Float(view.drawableSize.height))
@@ -415,8 +426,45 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
                 o.color = v.color;
                 return o;
             }
-            fragment float4 trace_f(VOut in [[stage_in]]) { return in.color; }
+            fragment float4 trace_f(VOut in [[stage_in]], constant float &gain [[buffer(0)]]) {
+                return float4(in.color.rgb * gain, in.color.a);
+            }
             """
+        return makePipeline(device: device, source: source, pixelFormat: .bgra8Unorm)
+    }()
+
+    nonisolated static let hdrPipeline: MTLRenderPipelineState? = {
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        let source = """
+            #include <metal_stdlib>
+            using namespace metal;
+            struct TraceVertex { float2 position; float size; float4 color; };
+            struct VOut { float4 position [[position]]; float size [[point_size]]; float4 color; };
+            vertex VOut trace_v(uint vid [[vertex_id]],
+                                const device TraceVertex *vertices [[buffer(0)]],
+                                constant float2 &viewSize [[buffer(1)]],
+                                constant float2 &bounds [[buffer(2)]]) {
+                TraceVertex v = vertices[vid];
+                float2 center = v.position + v.size * 0.5;
+                float2 scale = viewSize / max(bounds, float2(1.0, 1.0));
+                VOut o;
+                o.position = float4(
+                    center.x / bounds.x * 2.0 - 1.0,
+                    1.0 - center.y / bounds.y * 2.0, 0.0, 1.0);
+                o.size = v.size * min(scale.x, scale.y);
+                o.color = v.color;
+                return o;
+            }
+            fragment float4 trace_f(VOut in [[stage_in]], constant float &gain [[buffer(0)]]) {
+                return float4(in.color.rgb * gain, in.color.a);
+            }
+            """
+        return makePipeline(device: device, source: source, pixelFormat: .rgba16Float)
+    }()
+
+    nonisolated private static func makePipeline(
+        device: MTLDevice, source: String, pixelFormat: MTLPixelFormat
+    ) -> MTLRenderPipelineState? {
         guard let library = try? device.makeLibrary(source: source, options: nil),
             let vertexFunction = library.makeFunction(name: "trace_v"),
             let fragmentFunction = library.makeFunction(name: "trace_f")
@@ -425,7 +473,7 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
         descriptor.vertexFunction = vertexFunction
         descriptor.fragmentFunction = fragmentFunction
         let attachment = descriptor.colorAttachments[0]
-        attachment?.pixelFormat = .bgra8Unorm
+        attachment?.pixelFormat = pixelFormat
         attachment?.isBlendingEnabled = true
         attachment?.rgbBlendOperation = .add
         attachment?.alphaBlendOperation = .add
@@ -434,7 +482,7 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
         attachment?.sourceAlphaBlendFactor = .one
         attachment?.destinationAlphaBlendFactor = .one
         return try? device.makeRenderPipelineState(descriptor: descriptor)
-    }()
+    }
 }
 
 /// Fixed-size texture ring (FeedFrameBaker pool pattern): rotate `depth`
@@ -486,11 +534,12 @@ struct VectorscopeMetalView: UIViewRepresentable {
         view.delegate = context.coordinator
         view.isPaused = true
         view.enableSetNeedsDisplay = true
-        view.colorPixelFormat = .bgra8Unorm
+        view.colorPixelFormat = LiveHDRDisplay.drawablePixelFormat()
         view.isOpaque = false
         view.backgroundColor = .clear
         view.clearColor = MTLClearColorMake(0, 0, 0, 0)
         view.framebufferOnly = false
+        LiveHDRDisplay.configure(view)
         push(into: context.coordinator, view: view)
         return view
     }
@@ -500,6 +549,7 @@ struct VectorscopeMetalView: UIViewRepresentable {
     }
 
     private func push(into renderer: VectorscopeMetalRenderer, view: MTKView) {
+        LiveHDRDisplay.configure(view)
         renderer.update(
             points: points, trailPoints: trailPoints, zoom: zoom, brightness: brightness,
             revision: revision, view: view)
@@ -540,6 +590,13 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
         super.init()
     }
 
+    private func activePipeline(for view: MTKView) -> MTLRenderPipelineState? {
+        if LiveHDRDisplay.isEnabled, view.colorPixelFormat == .rgba16Float {
+            return Self.hdrQuadPipeline ?? pipeline
+        }
+        return pipeline
+    }
+
     func update(
         points: [ScopePoint], trailPoints: [ScopePoint],
         zoom: VectorscopeAssist.Zoom, brightness: Int, revision: UInt64, view: MTKView
@@ -578,7 +635,7 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
     }
 
     func draw(in view: MTKView) {
-        guard let device, let queue, let pipeline,
+        guard let device, let queue, let pipeline = activePipeline(for: view),
             let descriptor = view.currentRenderPassDescriptor,
             let drawable = view.currentDrawable,
             let command = queue.makeCommandBuffer()
@@ -606,9 +663,10 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
             encoder.setFragmentTexture(texture, index: 0)
             encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         }
-        drawQuad(blurredTrail, opacity: Float(ScopeTraceMetal.trailDecay))
-        drawQuad(blurredMain, opacity: 1)
-        drawQuad(mainTexture, opacity: 0.35)
+        let gain = LiveHDRDisplay.presentGain
+        drawQuad(blurredTrail, opacity: Float(ScopeTraceMetal.trailDecay) * gain)
+        drawQuad(blurredMain, opacity: gain)
+        drawQuad(mainTexture, opacity: 0.35 * gain)
         encoder.endEncoding()
         command.present(drawable)
         command.commit()
@@ -677,6 +735,38 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
                 return density.sample(linearSampler, in.uv) * opacity;
             }
             """
+        return makeQuadPipeline(device: device, source: source, pixelFormat: .bgra8Unorm)
+    }()
+
+    nonisolated static let hdrQuadPipeline: MTLRenderPipelineState? = {
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        let source = """
+            #include <metal_stdlib>
+            using namespace metal;
+            struct VOut { float4 position [[position]]; float2 uv; };
+            vertex VOut vector_v(uint vid [[vertex_id]],
+                                 constant float4 &quad [[buffer(0)]]) {
+                float2 corners[4] = { float2(0, 0), float2(1, 0), float2(0, 1), float2(1, 1) };
+                float2 c = corners[vid];
+                float2 pos01 = float2(quad.x + c.x * quad.z, quad.y + c.y * quad.w);
+                VOut o;
+                o.position = float4(pos01.x * 2.0 - 1.0, 1.0 - pos01.y * 2.0, 0.0, 1.0);
+                o.uv = c;
+                return o;
+            }
+            fragment float4 vector_f(VOut in [[stage_in]],
+                                     texture2d<float> density [[texture(0)]],
+                                     constant float &opacity [[buffer(0)]]) {
+                constexpr sampler linearSampler(filter::linear, address::clamp_to_zero);
+                return density.sample(linearSampler, in.uv) * opacity;
+            }
+            """
+        return makeQuadPipeline(device: device, source: source, pixelFormat: .rgba16Float)
+    }()
+
+    nonisolated private static func makeQuadPipeline(
+        device: MTLDevice, source: String, pixelFormat: MTLPixelFormat
+    ) -> MTLRenderPipelineState? {
         guard let library = try? device.makeLibrary(source: source, options: nil),
             let vertexFunction = library.makeFunction(name: "vector_v"),
             let fragmentFunction = library.makeFunction(name: "vector_f")
@@ -685,7 +775,7 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
         descriptor.vertexFunction = vertexFunction
         descriptor.fragmentFunction = fragmentFunction
         let attachment = descriptor.colorAttachments[0]
-        attachment?.pixelFormat = .bgra8Unorm
+        attachment?.pixelFormat = pixelFormat
         attachment?.isBlendingEnabled = true
         attachment?.rgbBlendOperation = .add
         attachment?.alphaBlendOperation = .add
@@ -694,5 +784,5 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
         attachment?.sourceAlphaBlendFactor = .one
         attachment?.destinationAlphaBlendFactor = .one
         return try? device.makeRenderPipelineState(descriptor: descriptor)
-    }()
+    }
 }

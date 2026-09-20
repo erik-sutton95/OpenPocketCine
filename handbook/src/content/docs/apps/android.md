@@ -88,6 +88,12 @@ reported pan, tilt and zoom, or **Not set**. Tap outside to minimize the editor
 without activating the controls behind it. Until dragged, the editor stays centered
 when the screen rotates; a manually placed editor keeps its chosen position.
 
+Operator Setup → Display includes **HDR display** (off by default). It uses this
+phone's HDR panel so live view, scopes, settings, media, playback and on-screen
+type stay readable in sun. It does not change the camera's HDR/HLG color mode
+or the file on the card. WAVE and HISTO still measure the decoded picture. Turn
+it off indoors; extra brightness uses more power.
+
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
 in portrait. Settings groups use compact information buttons beside their labels;
 Controls groups touch safety, gimbal options, and the on-screen joystick separately.

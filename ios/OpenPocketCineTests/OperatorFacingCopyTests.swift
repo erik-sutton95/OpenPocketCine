@@ -131,6 +131,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.gimbalJoystick,
             SettingsHelpCopy.gamepad,
             SettingsHelpCopy.keepScreenAwake,
+            SettingsHelpCopy.hdrDisplay,
             CaptureLists.nativeIsoHopTitle,
             CaptureLists.nativeIsoHopHelp,
             NDAssist.helpCopy,

@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Android 15+: drop the HDR panel boost while the screen is being recorded. -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
+
     <!-- BLE: Android 12+ uses nearby-device permissions; older needs location. -->
     <uses-permission
         android:name="android.permission.BLUETOOTH"

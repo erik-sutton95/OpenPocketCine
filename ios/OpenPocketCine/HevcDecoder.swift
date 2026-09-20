@@ -192,6 +192,16 @@ final class HevcDecoder {
             applyEffectsChange()
         }
     }
+    /// Outdoor HDR panel. Identity presents through Metal EDR; VT stays sticky.
+    var hdrDisplayEnabled = false {
+        didSet {
+            guard oldValue != hdrDisplayEnabled else { return }
+            #if !targetEnvironment(simulator)
+                prefersPixelBufferDisplay = hdrDisplayEnabled
+            #endif
+            applyEffectsChange()
+        }
+    }
     /// VT owns the HEVC block; the display layer only shows already-decoded image buffers.
     private var vtOwnsHardwareDecode = false
     #if targetEnvironment(simulator)
@@ -779,10 +789,10 @@ final class HevcDecoder {
                 detail: effects.replacesIdentityFeed ? "replacement" : "identity"))
         // Parameter sets + assist: start VT now. Gating on lastPresentedAt
         // delayed persisted LUT until the 5 s unlock, then sent 0x09/0xa8.
-        if hasFormat, needsDecodedSample {
+        if hasFormat, needsDecodedSample || hdrDisplayEnabled {
             hardwareDecoderUnlocked = true
         }
-        if needsDecodedSample { sessionOwnsVT = true }
+        if needsDecodedSample || hdrDisplayEnabled { sessionOwnsVT = true }
         processedFeed?.resetPresentDedup()
         let needVT = shouldStartVT
         let needGPU = effects.needsGPUFeed || presentsOnMetal
@@ -890,6 +900,10 @@ final class HevcDecoder {
     private func adoptPresentedFeed() {
         guard let feed = processedFeed else { return }
         if !effects.needsGPUFeed {
+            if hdrDisplayEnabled, feed.hasPresentedFrame {
+                adoptReplacingMetalFeed(feed)
+                return
+            }
             feed.setOverlayChrome(false)
             feed.isHidden = true
             displayLayer.isHidden = false
@@ -977,6 +991,13 @@ final class HevcDecoder {
         }
 
         if !result.needsGPU || !effects.needsGPUFeed {
+            if hdrDisplayEnabled, let feed = processedFeed {
+                let identity = CIImage(cvPixelBuffer: result.source)
+                if feed.display(identity, unmanaged: false, overlay: false, timeNs: result.timeNs) {
+                    adoptReplacingMetalFeed(feed)
+                    return true
+                }
+            }
             if !metalOwnsPicture {
                 processedFeed?.setOverlayChrome(false)
                 processedFeed?.isHidden = true

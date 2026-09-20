@@ -81,6 +81,7 @@
         nonisolated let stacked: Bool
         nonisolated let appearance: MonitorSegmentedAppearance
         let action: @MainActor () -> Void
+        @Environment(\.monitorHDRChromeGain) private var hdrGain
 
         nonisolated init(
             title: String, active: Bool, compact: Bool, stacked: Bool,
@@ -104,7 +105,9 @@
                     .foregroundStyle(
                         active && appearance == .inspector
                             ? Color(red: 8 / 255, green: 25 / 255, blue: 31 / 255)
-                            : (active ? MonitorTheme.text : MonitorTheme.muted)
+                            : (active
+                                ? MonitorTheme.edrText(gain: hdrGain)
+                                : MonitorTheme.edrMuted(gain: hdrGain))
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(appearance == .inspector ? 0.75 : (compact ? 0.85 : 1))

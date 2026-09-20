@@ -232,6 +232,14 @@ inputs even when development builds share the same version, build number and
 dirty Git revision. Persisted reports retain their original origin and identity
 when uploaded by a later build; older records remain unknown.
 
+Assist-stall classification requires observable, fresh native output. Old assist
+timestamps retained after switching to compressed-layer presentation do not prove
+an active assist stall. A classified active assist stall cannot be marked recovered
+until that failure clears; fresh decoded/presented frames alone are insufficient.
+This corrects incident accounting, not the underlying transport/decoder outages.
+The [build 111 audit](audits/2026-09-19-testflight-111-sentry.md) records reviewed
+Sentry groups, recovered build 111 symbols, reproduced fixes and outstanding device evidence.
+
 Feed grouping includes incident kind as well as stage and error class, separating
 transport stalls from fresh-input/stale-output incidents at the same stage. New
 fingerprints do not regroup historical events. Use the separate
