@@ -666,11 +666,20 @@ final class HevcDecoder {
         return isPresentationReady
     }
 
+    /// A current IRAP can restore references between the watchdog snapshot
+    /// and its scheduled owner. MainActor makes this check and mutation atomic.
+    /// Returns whether a rebuild was spent, independently of display readiness.
+    func rebuildPresentationIfNeeded(referenceLossOnly: Bool) -> Bool {
+        if referenceLossOnly, !referenceRecoveryNeeded { return false }
+        _ = rebuildPresentation()
+        return true
+    }
+
     /// Missing compressed references cannot be repaired by dropping another
     /// arbitrary frame. Retain the image and let the watchdog request an IRAP.
     func noteCompressedDiscontinuity() {
+        referenceRecoveryNeeded = referenceRecoveryNeeded || hasSubmittedRandomAccess
         hasSubmittedRandomAccess = false
-        referenceRecoveryNeeded = true
         beginIDRHold()
         ControlLiveLog.line("decoder: compressedDiscontinuity awaitingRandomAccess=1")
     }

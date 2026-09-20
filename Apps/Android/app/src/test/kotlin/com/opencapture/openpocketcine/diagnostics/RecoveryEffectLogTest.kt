@@ -7,6 +7,14 @@ class RecoveryEffectLogTest {
     @Test
     fun requestedBlockedSentAndFreshPictureUseSharedNames() {
         assertEquals(
+            "recovery: action=decoder effect=requested reason=referenceLoss",
+            RecoveryEffectLog.line(
+                RecoveryAction.DECODER,
+                RecoveryEffect.REQUESTED,
+                RecoveryReason.REFERENCE_LOSS,
+            ),
+        )
+        assertEquals(
             "recovery: action=decoder effect=requested reason=outputSilence",
             RecoveryEffectLog.line(
                 RecoveryAction.DECODER,

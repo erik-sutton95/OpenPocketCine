@@ -115,6 +115,23 @@ rebuild and one recovery enable. The owner keeps the last image and waits up to
 16 seconds for fresh source and presentation before transferring to full datalink
 rejoin. Fresh native output with stale presentation does not request a camera PLI.
 
+An explicit compressed discontinuity after valid references can request that
+same repair on the next eligible watchdog tick, while the old output is still
+younger than two seconds. Ordinary startup, a deliberate decoder replacement
+and an IDR hold without known loss do not qualify. Fresh complete AUs, output
+expectation, an established picture and all existing readiness, motion,
+command/GOP grace and cooldown gates still apply. There is no second repair
+owner or additional timer. Clearing the loss flag on IRAP admission alone does
+not finish an early repair: output must be newer than the action, and the shell
+still requires fresh source and presentation within its 16-second deadline.
+Before mutating the decoder, the same owner rechecks explicit loss atomically:
+a fresh IRAP may already have restored references since the watchdog tick. If
+so, it rolls back the unspent action without sending a speculative enable.
+
+The [physical follow-up](audits/2026-09-20-physical-connection-followup.md)
+recorded three 2.3–3.1-second loss holds before this correction. Those traces
+establish avoidable policy delay, not the radio or packet-order cause of loss.
+
 A rebuilt decoder has no valid inter-frame references. Invalid-session errors
 must not rebuild inline and retry the same P-frame. Numeric errors are scoped to
 the decoder generation; IDR hold can expire only while valid references remain.

@@ -57,7 +57,11 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 | `SessionRecovery` | **Yes**, separate | BLE loss, confirmed camera-network loss, foreground picture failure, or failed endpoint/watchdog repair starts the full saved-camera spine. Handshake success alone cannot finish it. Eight attempts / 180 s total, then the operator. |
 
 `rebuildVTSession` is emitted when native decode is expected, complete AUs are
-fresh, and decoder output is silent. iOS maps that to `rebuildPresentation` plus
+fresh, and decoder output is silent or established references are explicitly
+broken. Known reference loss can use the next eligible tick without first
+waiting for two seconds of silence; ordinary startup/IDR holds cannot. All
+existing readiness, motion, command/GOP grace and ownership gates remain.
+iOS maps that to `rebuildPresentation` plus
 one recovery enable; Android maps it to `rebuildDecoderKeepingPicture`. Those
 are source mappings, not a completed physical proof. Fresh native output with
 stale presentation does not trigger a camera PLI. Packet-without-complete-AU
@@ -86,8 +90,8 @@ watchdog action, including a reported Settings-return freeze. That report does
 **not** prove the initiating decoder error (no VT status, no compressed-stream
 reproduction). Source now has decoder-output recovery and a typed local incident
 spool. **iOS physical camera qualification of this follow-up has not been rerun
-on this branch. No Android device was attached.** Portable watchdog and incident
-tests exist; they are not a Pocket take.
+on this branch.** The later September 20 Android take and its additional findings
+are recorded below. Portable watchdog and incident tests are not a Pocket take.
 Foreground no longer starts a competing UDP rebuild/enable. A full reconnect
 restores BLE as well as Wi-Fi and UDP; reopening UDP after disconnecting BLE was
 an incomplete recovery. Old socket/decoder callbacks cannot supply fresh-picture
@@ -106,6 +110,14 @@ not by fresh upstream traffic. Compressed admission cannot clear recovery with
 an old retained IRAP while still rejecting newer P-frames. These corrections
 have automated regressions; physical cadence and camera-response qualification
 remain required.
+
+The [physical follow-up](audits/2026-09-20-physical-connection-followup.md)
+records a clean five-minute Android cadence segment followed by three recovered
+reference-loss freezes and two slow starts. The startup sequence race predates
+UI 2.0: a short handshake acknowledgment was mistaken for the command window.
+Both shells now require the actual initial telemetry window before registration,
+within the existing bounded negotiation. The follow-up distinguishes those
+observations from qualification of the resulting fixes.
 
 Chrome is three flags:
 

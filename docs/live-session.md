@@ -27,6 +27,14 @@ peer migration: the September 12 Pocket 4 Pro RVI capture showed camera traffic
 continuing to the retired port while ACKs left from the replacement port. Only
 the later handshake moved camera traffic to the current endpoint.
 
+Registration needs both the handshake acknowledgment and the initial 34-byte
+`0x01` telemetry command window from the current endpoint. A short `0x00`
+acknowledgment has no command cursor: treating its first payload word as one
+can start the command sequence at 9 and leave the endpoint unable to start
+picture. Both shells wait for protocol evidence within their existing bounded
+negotiation, then seed commands from the window plus 8. Zero and wraparound
+are valid. Late packets from a retired endpoint cannot seed its replacement.
+
 ## ACK pump
 
 Window ACK is pktType `0x04` at 40 Hz. Payload is three window groups:

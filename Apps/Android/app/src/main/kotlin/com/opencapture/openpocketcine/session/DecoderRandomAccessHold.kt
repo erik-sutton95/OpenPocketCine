@@ -12,6 +12,8 @@ internal class DecoderRandomAccessHold {
         private set
     var hasDecodableReferences: Boolean = false
         private set
+    var referenceRecoveryNeeded: Boolean = false
+        private set
 
     fun shouldAccept(isIrap: Boolean): Boolean = !awaitingIdr || isIrap
 
@@ -24,6 +26,7 @@ internal class DecoderRandomAccessHold {
     fun onIrapAccepted() {
         hasDecodableReferences = true
         awaitingIdr = false
+        referenceRecoveryNeeded = false
     }
 
     fun beginHold() {
@@ -32,6 +35,10 @@ internal class DecoderRandomAccessHold {
 
     /** Incomplete / overflowed compressed AUs broke the GOP. Keep the last picture. */
     fun noteBrokenReferences() {
+        // Startup and an intentional decoder replacement have no references
+        // yet. Only a real discontinuity of an established chain fast-tracks
+        // the existing watchdog; a pending loss survives its codec rebuild.
+        referenceRecoveryNeeded = referenceRecoveryNeeded || hasDecodableReferences
         hasDecodableReferences = false
         awaitingIdr = true
     }
@@ -47,6 +54,7 @@ internal class DecoderRandomAccessHold {
         generation += 1
         awaitingIdr = false
         hasDecodableReferences = false
+        referenceRecoveryNeeded = false
     }
 
     /** Test seam: a configured decoder that already acquired random access. */

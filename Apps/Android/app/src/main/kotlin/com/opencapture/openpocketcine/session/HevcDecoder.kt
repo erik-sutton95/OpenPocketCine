@@ -19,9 +19,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * depacketizer (Annex-B, DJI marker already stripped). Pocket is HEVC; Nano is AVC.
  * SwiftCore.hevcCsd / hevcNalTypes already classify both.
  */
-class HevcDecoder internal constructor(private val cadence: LivePipelineCadence = LivePipelineCadence()) {
+class HevcDecoder internal constructor(
+    private val cadence: LivePipelineCadence = LivePipelineCadence(),
+    private val lock: Any = Any(),
+) {
     internal enum class LiveCodec { HEVC, AVC }
-    private val lock = Any()
     private val inputOwnership = DecoderInputOwnership(lock)
     private var codec: MediaCodec? = null
     private var surface: Surface? = null
@@ -39,6 +41,7 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
     internal val randomAccess = DecoderRandomAccessHold()
     val awaitingIdr: Boolean get() = randomAccess.awaitingIdr
     val hasDecodableReferences: Boolean get() = randomAccess.hasDecodableReferences
+    val referenceRecoveryNeeded: Boolean get() = synchronized(lock) { randomAccess.referenceRecoveryNeeded }
     var nalTypesSeen = ""
         private set
     var lastKeyframeAt: Long? = null
@@ -144,6 +147,8 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
     fun claimInputOwner(): Long = inputOwnership.claim()
 
     fun advanceInputEpoch(inputOwner: Long, epoch: Long) = inputOwnership.advance(inputOwner, epoch)
+
+    internal fun captureInputOwnership(): DecoderInputOwnership.Token = inputOwnership.capture()
 
     fun decode(accessUnit: ByteArray): Boolean = decodeInput(accessUnit, null, 0)
 
@@ -337,6 +342,18 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
             errorLifetime.resetLifetime()
             decoderErrors.set(0)
             surface?.isValid == true
+        }
+
+    /** Recheck a queued loss repair atomically with codec mutation: a delivered
+     * IRAP may already have restored references since the watchdog snapshot. */
+    internal fun rebuildPresentationIfNeeded(
+        referenceLossOnly: Boolean,
+        input: DecoderInputOwnership.Token,
+    ): Boolean =
+        inputOwnership.withCurrent(input.owner, input.epoch, false) {
+            if (referenceLossOnly && !randomAccess.referenceRecoveryNeeded) return@withCurrent false
+            rebuildPresentation()
+            true
         }
 
     /**

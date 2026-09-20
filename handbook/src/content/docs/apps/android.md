@@ -150,6 +150,12 @@ reference frame keeps recovery active until a new keyframe arrives. These
 changes have automated regressions; sustained phone-and-camera qualification
 is pending. If picture stops, share diagnostics with the action and time.
 
+A Pocket 4 Pro test held 25 fps for five minutes, but later exposed slow startup
+and short freezes after incomplete video data. Startup now waits for the camera's
+command window; known dropped-reference recovery can act sooner while keeping
+the last image visible. Validation of these follow-up fixes is still in progress;
+the earlier clean segment does not establish uninterrupted reliability.
+
 Returning from Media now starts live view once and waits for a fresh picture.
 An older live-picture deadline no longer treats intentional browsing as a failed
 feed. If live view cannot return, bounded connection recovery takes over. Please

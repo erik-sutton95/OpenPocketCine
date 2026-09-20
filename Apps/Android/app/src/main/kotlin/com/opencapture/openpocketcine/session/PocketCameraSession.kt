@@ -1322,6 +1322,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private fun applyFeedWatchdog(now: Long, packets: Int) {
         if (needsForegroundRecover) return
         if (datalink?.isRebuilding == true || feedRecoveryJob != null) return
+        val pictureOwner = mediaPictureGeneration
+        val repairLink = datalink
+        val decoderInput = decoder.captureInputOwnership()
         val videoAgeMs = datalink?.lastVideoPacketAt?.let { now - it }
         val snap =
             LiveViewEnablePolicy.Snapshot(
@@ -1348,6 +1351,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 lastDecoderOutputAt = decoder.lastDecoderOutputAt,
                 lastPresentedAt = decoder.lastPresentedAt,
                 decoderOutputExpected = decoder.decoderOutputExpected,
+                referenceRecoveryNeeded = decoder.referenceRecoveryNeeded,
                 repairReady = decoder.isPresentationReady,
             )
         if (coreWatchdog == 0L && SwiftCore.isAvailable) {
@@ -1386,6 +1390,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     age(lastCameraSetAt)?.let { append(",\"secondsSinceCameraSet\":$it") }
                     age(decoder.lastDecoderOutputAt)?.let { append(",\"lastDecoderOutputAge\":$it") }
                     append(",\"decoderOutputExpected\":${decoder.decoderOutputExpected}")
+                    append(",\"referenceRecoveryNeeded\":${snap.referenceRecoveryNeeded}")
                     append(",\"repairReady\":${decoder.isPresentationReady}")
                     append("}")
                 }
@@ -1399,7 +1404,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 }
                 "rebuildVTSession" -> {
                     endGimbalStick()
-                    startFeedRecovery { rebuildDecoderKeepingPicture() }
+                    val watchdogHandle = coreWatchdog
+                    startFeedRecovery {
+                        if (!ownsLivePicture(pictureOwner) || datalink !== repairLink) return@startFeedRecovery
+                        rebuildDecoderKeepingPicture(snap.referenceRecoveryNeeded, decoderInput) {
+                            if (coreWatchdog == watchdogHandle) {
+                                SwiftCore.feedWatchdogTick(watchdogHandle, "{\"rollbackLastAction\":true}")
+                            }
+                        }
+                    }
                 }
                 "reopenDatalink" -> {
                     endGimbalStick()
@@ -1430,7 +1443,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             }
             LiveViewEnablePolicy.Action.REBUILD_DECODER -> {
                 endGimbalStick()
-                startFeedRecovery { rebuildDecoderKeepingPicture() }
+                startFeedRecovery {
+                    if (!ownsLivePicture(pictureOwner) || datalink !== repairLink) return@startFeedRecovery
+                    rebuildDecoderKeepingPicture(snap.referenceRecoveryNeeded, decoderInput) {
+                        feedWatchdog.restore(watchdogBeforeTick)
+                    }
+                }
             }
             LiveViewEnablePolicy.Action.REBUILD_UDP -> {
                 endGimbalStick()
@@ -1604,14 +1622,26 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     /** Native decoder rebuild + one owned PLI. Last picture held. Not a second repair owner. */
-    private suspend fun rebuildDecoderKeepingPicture() {
+    private suspend fun rebuildDecoderKeepingPicture(
+        referenceLossOnly: Boolean,
+        input: DecoderInputOwnership.Token,
+        onUnspent: () -> Unit,
+    ) {
         val owner = mediaPictureGeneration
         val link = datalink ?: return
         fun ownsPicture() = ownsLivePicture(owner) && datalink === link && !link.isClosed
-        logRecovery(RecoveryAction.DECODER, RecoveryEffect.REQUESTED, RecoveryReason.OUTPUT_SILENCE)
+        val reason = if (referenceLossOnly) RecoveryReason.REFERENCE_LOSS else RecoveryReason.OUTPUT_SILENCE
+        logRecovery(RecoveryAction.DECODER, RecoveryEffect.REQUESTED, reason)
         val startedAt = SystemClock.elapsedRealtime()
-        withContext(Dispatchers.IO) { decoder.rebuildPresentation() }
+        val rebuilt = withContext(Dispatchers.IO) { decoder.rebuildPresentationIfNeeded(referenceLossOnly, input) }
         if (!ownsPicture()) return
+        if (decoder.captureInputOwnership() != input) return
+        if (!rebuilt) {
+            // This job excludes subsequent watchdog ticks; its generation/link
+            // still own the request. Restore only the unspent action, not idle.
+            onUnspent()
+            return
+        }
         var sent = false
         val readyDeadline = startedAt + LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS
         while (SystemClock.elapsedRealtime() < readyDeadline) {
@@ -4840,6 +4870,7 @@ internal object LiveViewEnablePolicy {
         val lastDecoderOutputAt: Long? = null,
         val lastPresentedAt: Long? = null,
         val decoderOutputExpected: Boolean = false,
+        val referenceRecoveryNeeded: Boolean = false,
         val repairReady: Boolean = true,
     )
 
@@ -5340,9 +5371,13 @@ internal object LiveViewEnablePolicy {
         }
         if (!snap.pathReady || !snap.repairReady) return Action.NONE
 
-        val outputAge = age(snap.now, snap.lastDecoderOutputAt) ?: age(snap.now, snap.lastPresentedAt) ?: 0L
+        val outputAt = snap.lastDecoderOutputAt ?: snap.lastPresentedAt
+        val outputAge = age(snap.now, outputAt) ?: 0L
         val decoderSilent =
             snap.decoderOutputExpected && snap.sawPicture && outputAge >= STALL_MS
+        val knownReferenceLoss =
+            snap.decoderOutputExpected && snap.sawPicture && snap.referenceRecoveryNeeded
+        val decoderNeedsRepair = decoderSilent || knownReferenceLoss
         val presentedAge = age(snap.now, snap.lastPresentedAt) ?: 0L
         val auAge = age(snap.now, snap.lastAccessUnitAt)
         val assemblyStalled =
@@ -5352,7 +5387,10 @@ internal object LiveViewEnablePolicy {
                 auAge >= STALL_MS &&
                 presentedAge >= STALL_MS &&
                 (!snap.decoderOutputExpected || decoderSilent)
-        if (state.stage == Stage.REBUILD_DECODER && decoderSilent) {
+        // An early loss repair must not accept still-young pre-action output,
+        // or IRAP submission without output, as completion of its deadline.
+        val outputAfterAction = outputAt != null && outputAt > state.lastActionAt
+        if (state.stage == Stage.REBUILD_DECODER && (decoderNeedsRepair || !outputAfterAction)) {
             if (snap.now - state.lastActionAt >= ENDPOINT_PICTURE_GRACE_MS) {
                 return fire(state, Action.FULL_REJOIN, snap.now)
             }
@@ -5362,7 +5400,7 @@ internal object LiveViewEnablePolicy {
         val sinceEnable = if (snap.lastEnableAt == 0L) null else snap.now - snap.lastEnableAt
         val videoAge = age(snap.now, snap.lastVideoPacketAt)
         if (udpReceiveAlive(snap) && !assemblyStalled) {
-            if (decoderSilent &&
+            if (decoderNeedsRepair &&
                 snap.hasFormat &&
                 (auAge ?: Long.MAX_VALUE) < STALL_MS
             ) {

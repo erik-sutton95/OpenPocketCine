@@ -4,14 +4,13 @@ New and changed
 
 Fixes
 
-- A retired connection cannot discard the replacement connection's first keyframe. Dropped reference frames keep recovery active until usable picture returns.
-- First-picture recovery has a deadline even when packets arrive. Repeated camera controls cannot indefinitely delay a stalled decoder or frame assembly.
+- Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
+- Replacement keyframes stay protected. First-picture recovery is bounded; repeated controls cannot indefinitely delay a stalled decoder or frame assembly.
 - Android 15+ startup and HDR screen-recording fixes remain included.
-
 - Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
 
 What to test
 
-- Connect with assists off, then with LUT/WAVE on. Run for five minutes while changing normal camera controls. Share diagnostics and the time of any freeze.
+- Connect and disconnect three times, then run for five minutes with LUT/WAVE and normal camera controls. Share diagnostics and the time of slow startup or any freeze.
 - Open Media, play a clip and return repeatedly. Check that live picture resumes and no reconnect interrupts browsing.
 - Cover and uncover Settings, rotate, and briefly leave the app. Confirm the picture returns. With HDR display on, screen recordings should remain normal SDR.

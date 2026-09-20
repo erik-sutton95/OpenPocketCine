@@ -77,7 +77,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         XCTAssertGreaterThan(arriving.accessUnits, retained.accessUnits.count)
         XCTAssertNotNil(arriving.lastAU)
         let snapshot = FeedWatchdog.Snapshot(
-            now: 20, lastDecodedFrameAge: 3,
+            now: 20, lastDecodedFrameAge: 0.239,
             lastVideoPacketAge: Date().timeIntervalSince(try XCTUnwrap(arriving.lastPacket)),
             lastAccessUnitAge: Date().timeIntervalSince(try XCTUnwrap(arriving.lastAU)),
             lastStatusAge: 0, flowHealthy: true, pathReady: true,
@@ -86,11 +86,12 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
             secondsSinceLastEnable: 20,
             lastDecoderOutputAge: decoder.nativeOutputAge,
             decoderOutputExpected: decoder.nativeOutputExpected,
+            referenceRecoveryNeeded: decoder.referenceRecoveryNeeded,
             repairReady: decoder.isDisplayReady)
         var watchdog = FeedWatchdog()
-        XCTAssertNotEqual(
-            watchdog.tick(snapshot), .none,
-            "A retained old IRAP must not suppress repair while admission still drops every new P-frame"
+        XCTAssertEqual(
+            watchdog.tick(snapshot), .rebuildVTSession,
+            "Known rejected references must not wait two seconds to infer native-output silence"
         )
 
         // The next genuine IRAP reopens admission and restores the decoder's
@@ -140,6 +141,66 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         XCTAssertTrue(decoder.canReleaseIDRHold)
         XCTAssertFalse(decoder.referenceRecoveryNeeded)
         XCTAssertFalse(decoder.awaitingIDR, "A current IRAP must not be invalidated after delivery")
+        var watchdog = FeedWatchdog()
+        let healthy = FeedWatchdog.Snapshot(
+            now: 20, lastDecodedFrameAge: 0.01,
+            lastVideoPacketAge: 0.01, lastAccessUnitAge: 0.01, lastStatusAge: 0.01,
+            flowHealthy: true, pathReady: true, hasFormat: decoder.hasFormat,
+            decoderFailed: decoder.isDecoderWedged, live: true,
+            sawPicture: decoder.lastPresentedAt != nil,
+            lastDecoderOutputAge: decoder.nativeOutputAge,
+            decoderOutputExpected: decoder.nativeOutputExpected,
+            referenceRecoveryNeeded: decoder.referenceRecoveryNeeded,
+            repairReady: decoder.isDisplayReady)
+        XCTAssertEqual(
+            watchdog.tick(healthy), .none, "A fresh IRAP suffix needs no speculative PLI")
+    }
+
+    func testIntentionalReferenceResetWithRetainedPictureDoesNotInventKnownLoss() throws {
+        let decoder = HevcDecoder()
+        let display = DisplayLayerView(decoder.displayLayer)
+        display.frame = CGRect(x: 0, y: 0, width: 64, height: 64)
+        display.layoutSubviews()
+        defer { decoder.reset() }
+        decoder.noteCompressedDiscontinuity()
+        XCTAssertFalse(
+            decoder.referenceRecoveryNeeded, "Cold startup has no good references to lose")
+        XCTAssertTrue(decoder.decode(accessUnit: Self.syntheticKeyframe))
+        let heldPicture = try XCTUnwrap(decoder.lastPresentedAt)
+        XCTAssertTrue(decoder.canReleaseIDRHold)
+        decoder.flushForRecovery()
+        XCTAssertEqual(decoder.lastPresentedAt, heldPicture)
+        XCTAssertFalse(decoder.canReleaseIDRHold)
+        decoder.noteCompressedDiscontinuity()
+        XCTAssertFalse(
+            decoder.referenceRecoveryNeeded,
+            "Intentional replacement already owns its missing references")
+        XCTAssertFalse(decoder.rebuildPresentationIfNeeded(referenceLossOnly: true))
+    }
+
+    func testFreshIRAPBeforeScheduledLossRepairDoesNotRebuildPresentation() throws {
+        let decoder = HevcDecoder()
+        let display = DisplayLayerView(decoder.displayLayer)
+        display.frame = CGRect(x: 0, y: 0, width: 64, height: 64)
+        display.layoutSubviews()
+        defer { decoder.reset() }
+        XCTAssertTrue(decoder.decode(accessUnit: Self.syntheticKeyframe))
+        decoder.noteCompressedDiscontinuity()
+        XCTAssertTrue(decoder.referenceRecoveryNeeded)
+        // The watchdog has requested repair, but its MainActor task has not
+        // executed. A spontaneous current IRAP wins that scheduling interval.
+        XCTAssertTrue(decoder.decode(accessUnit: Self.syntheticKeyframe))
+        let generation = decoder.sourceFrameGeneration
+        XCTAssertFalse(decoder.rebuildPresentationIfNeeded(referenceLossOnly: true))
+        XCTAssertEqual(decoder.sourceFrameGeneration, generation)
+        XCTAssertTrue(decoder.canReleaseIDRHold)
+        XCTAssertFalse(decoder.awaitingIDR)
+        decoder.noteCompressedDiscontinuity()
+        XCTAssertTrue(decoder.rebuildPresentationIfNeeded(referenceLossOnly: true))
+        XCTAssertTrue(
+            decoder.referenceRecoveryNeeded, "A spent repair keeps its loss until a current IRAP")
+        decoder.reset()
+        XCTAssertFalse(decoder.referenceRecoveryNeeded)
     }
 
     func testWaitingFeedReceivesPicturesAcrossSettingsAndGeometryChanges() async throws {

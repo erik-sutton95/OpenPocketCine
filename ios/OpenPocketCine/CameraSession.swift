@@ -4342,6 +4342,7 @@ final class CameraSession {
             secondsSinceCameraSet: datalink?.secondsSinceLastCommand,
             lastDecoderOutputAge: decoder.nativeOutputAge,
             decoderOutputExpected: decoder.nativeOutputExpected,
+            referenceRecoveryNeeded: decoder.referenceRecoveryNeeded,
             repairReady: decoder.isDisplayReady && !isBrowsingMedia && !status.inPlayback
                 && !liveEnableGate.inFlight
         )
@@ -4435,14 +4436,24 @@ final class CameraSession {
             }
         case .rebuildVTSession:
             endGimbalStick(cancelMove: true)
-            recordFeedRepair("decoder", phase: .requested, reason: "outputSilence")
-            ControlLiveLog.line("recovery: action=decoder effect=requested reason=outputSilence")
+            let referenceLossOnly = snap.referenceRecoveryNeeded
+            let reason = referenceLossOnly ? "referenceLoss" : "outputSilence"
+            recordFeedRepair("decoder", phase: .requested, reason: reason)
+            ControlLiveLog.line("recovery: action=decoder effect=requested reason=\(reason)")
             logFeedObserve(snap: snap, watchdog: action)
             let pictureOwner = cameraMedia.resumeID
             startFeedRecovery { [weak self] in
-                guard let self, self.isLivePictureRepairCurrent(pictureOwner) else { return }
+                guard let self, !Task.isCancelled,
+                    self.isLivePictureRepairCurrent(pictureOwner)
+                else { return }
                 let started = Date()
-                _ = self.decoder.rebuildPresentation()
+                guard self.decoder.rebuildPresentationIfNeeded(referenceLossOnly: referenceLossOnly)
+                else {
+                    // The serialized owner still holds this generation's
+                    // unspent request; preserve its exact previous ladder.
+                    self.feedWatchdog = watchdogBeforeTick
+                    return
+                }
                 // The rebuild is a real attempt, but a temporarily detached
                 // display or in-flight enable is not a failed connection.
                 // Keep this owner and its bounded deadline while gates settle.

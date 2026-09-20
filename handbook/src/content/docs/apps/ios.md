@@ -121,6 +121,11 @@ its own status. First connection and dropped-frame recovery now have additional
 checks for traffic arriving without a usable picture. These changes have
 simulator regressions; sustained camera-connected qualification is pending.
 
+Connection startup now waits for the camera's command window before completing
+setup. If video data is lost after picture is established, the existing recovery
+can act sooner while keeping the last image visible. Please test first connection
+and normal use; these changes still need iPhone camera qualification.
+
 View Assist favorites match the live system-button size and remember which
 tools you actually use (saved on the phone). Collapsed, landscape keeps two
 favorites and portrait keeps one, under the arrow. The expanded catalog

@@ -1123,6 +1123,7 @@ public enum AndroidSessionWire {
             secondsSinceCameraSet: jsonOptionalNumber(json, key: "secondsSinceCameraSet"),
             lastDecoderOutputAge: jsonOptionalNumber(json, key: "lastDecoderOutputAge"),
             decoderOutputExpected: jsonBool(json, key: "decoderOutputExpected", default: false),
+            referenceRecoveryNeeded: jsonBool(json, key: "referenceRecoveryNeeded", default: false),
             repairReady: jsonBool(json, key: "repairReady", default: true)
         )
         switch watchdog.tick(snap) {

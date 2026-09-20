@@ -123,10 +123,13 @@ Aggregate validation:
 - `just handbook-build`: 41 pages. Strict Swift formatting lint on changed
   files and `git diff --check` passed.
 
-No reachable physical iPhone/iPad or Android camera setup was available during
-this audit. Simulator and JVM tests cannot prove radio stability, camera GOP
-response, sustained cadence or thermal performance. The PR remains a draft
-until the required physical pass:
+No reachable physical camera setup was available during the initial source
+audit. A later Android pass exercised source `71a878a` and exposed additional
+startup and loss-recovery defects; see the
+[physical follow-up](2026-09-20-physical-connection-followup.md) for measured
+cadence, failures and limits. Simulator and JVM tests cannot prove radio
+stability, camera GOP response, sustained cadence or thermal performance. The
+PR remains a draft until the required physical pass:
 
 1. Cold-connect Pocket 3 and Pocket 4 / 4 Pro with identity output and with
    LUT/WAVE/HDR; verify first picture and retained image during recovery.

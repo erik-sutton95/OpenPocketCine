@@ -5,13 +5,12 @@ New and changed
 Fixes
 
 - An established feed keeps its last picture instead of returning to Waiting for live view when frame statistics age out.
-- Improved recovery when video arrives without a usable picture or camera controls are changing. Multiview and resizing keep the current picture host.
-- Capture changes, playback assists, proxy downloads and media-cache work retain the previous Sentry fixes.
-
+- Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
+- Improved recovery during camera-control changes. Multiview, resizing, playback assists and media-cache work retain the previous fixes.
 - Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
 
 What to test
 
-- Connect with assists off, then with LUT/WAVE on. Run for five minutes while changing normal camera controls. Share diagnostics and the time of any freeze.
+- Connect and disconnect three times, then run for five minutes with LUT/WAVE and normal camera controls. Share diagnostics and the time of slow startup or any freeze.
 - Open Media, play a clip and return repeatedly. Check that live picture resumes and no reconnect interrupts browsing.
 - Rotate, resize and switch single-camera/Multiview views. Cover and uncover Settings; confirm picture continues and HDR screen recordings stay normal SDR.

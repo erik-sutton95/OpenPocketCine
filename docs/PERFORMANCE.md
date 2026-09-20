@@ -52,6 +52,16 @@ do not publish whole-page geometry. Selection changes publish only when the rang
 endpoint changes. This is a scheduling constraint, not a measured
 sustained-frame-rate claim, and it does not change live feed, scope or HUD budgets.
 
+## Connection follow-up measurements
+
+The [September 20 physical connection follow-up](audits/2026-09-20-physical-connection-followup.md)
+records a five-minute Android segment at 25 fps with a maximum 67.4 ms present
+gap and 33.7 ms ACK gap. Later loss holds lasted 2.3–3.1 seconds; that session
+does not qualify uninterrupted reliability. Explicit known reference loss now
+enters the existing watchdog repair without the otherwise required two-second
+decoder silence, retaining all grace and ownership gates. The unknown-stall
+threshold, ACK rate and repair budgets are unchanged.
+
 ## Image anchoring experiment
 
 A temporary iPhone 16 Pro Max benchmark of Vision homography registration at

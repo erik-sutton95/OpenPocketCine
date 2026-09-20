@@ -2,8 +2,11 @@ package com.opencapture.openpocketcine.session
 
 /** Source ownership checked under the same lock as decoder state mutation. */
 internal class DecoderInputOwnership(private val decoderLock: Any) {
+    data class Token(val owner: Long, val epoch: Long)
     private var owner = 0L
     private var epoch = 0L
+
+    fun capture(): Token = synchronized(decoderLock) { Token(owner, epoch) }
 
     fun claim(): Long = synchronized(decoderLock) {
         owner += 1

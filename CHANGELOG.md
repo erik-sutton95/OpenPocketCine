@@ -279,6 +279,13 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Both shells wait for the camera's valid initial command window before
+  registration, preventing a short handshake acknowledgment from seeding the
+  wrong command sequence. Explicit compressed reference loss can request the
+  existing bounded watchdog repair sooner, preserving readiness/grace gates and
+  requiring output newer than the repair. These address defects found during
+  [physical Android testing](docs/audits/2026-09-20-physical-connection-followup.md);
+  cross-platform camera qualification remains incomplete.
 - iOS keeps an established live picture visible when FPS statistics age out,
   instead of returning to startup Waiting for live view. Both shells preserve
   recovery after compressed-queue loss; retired Android drains cannot discard

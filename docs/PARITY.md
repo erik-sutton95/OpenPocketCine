@@ -19,7 +19,15 @@ The iOS startup-cover correction needs no Android equivalent: Android already
 shows waiting only while `hasPicture` is false. iOS now keeps warmup completed
 through an established-feed stall and resets it on disconnect; FPS aging and
 RECOV remain independent. Automated regressions are available. Physical
-qualification of this follow-up is pending on both platforms.
+qualification is partial on Android and pending on iOS; the
+[physical follow-up](audits/2026-09-20-physical-connection-followup.md) records
+the exact tested source, successful cadence segments and failures.
+
+Both shells require a real initial command window after the handshake before
+registration. Both also carry explicit compressed reference loss to the existing
+watchdog so an established feed can repair on the next eligible tick. Ordinary
+startup/IDR holds do not acquire early repair authority. Readiness, motion,
+command/GOP grace, cooldown and the fresh-picture deadline remain shared.
 
 Both media-return loops use one accepted live start and the existing bounded
 picture deadline. Media generation changes retire old live-picture waits while
