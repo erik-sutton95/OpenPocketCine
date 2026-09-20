@@ -1,18 +1,18 @@
 New and changed
 
+- TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
 - Dials, sliders and readouts use less memory while preserving their values.
 - Pocket 3 zoom follows FORMAT limits and refused values settle back. Shutter, ISO, zoom and ND use consistent formatting across phone languages.
-- HDR display brightens the phone panel; off by default. Screen recording uses normal SDR. Camera HDR/HLG recording is unchanged.
 
 Fixes
 
 - Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
 - Replacement keyframes stay protected. First-picture recovery is bounded; repeated controls cannot indefinitely delay a stalled decoder or frame assembly.
 - Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
-- Android 15+ startup and HDR screen-recording fixes remain included.
+- Android 15+ startup and HDR screen-recording fixes remain included. Settings and remembered cameras retain their existing behavior.
 
 What to test
 
 - Connect three times, then run LUT/WAVE for five minutes while using zoom and scope brightness sliders. Share diagnostics and the time of slow startup or freezes.
 - Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
-- On Pocket 3, check 1080 zooms to 4×, 2.7K to 3× and 4K to 2×. Check readouts in a decimal-comma language and normal SDR screen recordings with HDR display on.
+- With TalkBack on, check REC, timecode, battery and assists each speak one phrase. Double-tap and hold an assist tool to check both actions.

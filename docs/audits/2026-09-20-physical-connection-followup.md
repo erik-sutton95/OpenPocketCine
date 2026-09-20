@@ -221,6 +221,13 @@ up. The cause remains unproven. Temporary instrumentation was removed; the
 assertion and tolerance were not weakened. Both Android apps were then stopped
 and the camera released before iPhone testing.
 
+The later main integration includes #379 KTX helpers and #380 TalkBack labels
+through `c57c57d`. The combined source passed `just android-check`: 945 JVM tests,
+assemble, lint and Vulkan synchronization checks. Independent review found no
+change to connection/recovery ownership. Android was no longer attached at both
+USB preflights, so the updated APK was not installed and its instrumentation was
+not run. The earlier camera and device-test results do not qualify this APK.
+
 ## iPhone Debug qualification
 
 An iPhone 16 Pro Max running iOS 27.0 connected over USB to test the same Pocket

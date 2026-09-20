@@ -30,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -51,7 +53,7 @@ class BackdropRenderActivity : ComponentActivity() {
     private lateinit var pattern: Bitmap
 
     fun replaceSource(color: Int?) {
-        source.image = color?.let { Bitmap.createBitmap(213, 120, Bitmap.Config.ARGB_8888).apply { eraseColor(it) } }
+        source.image = color?.let { createBitmap(213, 120, Bitmap.Config.ARGB_8888).apply { eraseColor(it) } }
     }
     fun restorePattern() { source.image = pattern }
 
@@ -63,7 +65,7 @@ class BackdropRenderActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         pattern = assets.open("monitor_backdrop_reference.png").use { BitmapFactory.decodeStream(it) }
-        source.image = if (intent.getBooleanExtra("sampled", false)) Bitmap.createScaledBitmap(pattern, 180, 120, true) else pattern
+        source.image = if (intent.getBooleanExtra("sampled", false)) pattern.scale(180, 120) else pattern
         material = when (intent.getStringExtra("material")) {
             "compact" -> MonitorMaterial.Compact
             "scope" -> MonitorMaterial.Scope

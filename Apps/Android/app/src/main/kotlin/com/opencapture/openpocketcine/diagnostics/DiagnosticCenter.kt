@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.media.MediaShare
 import com.opencapture.openpocketcine.session.LocalVPNFilter
@@ -215,7 +216,7 @@ object DiagnosticCenter {
                 }
             }
         if (emailSupport) {
-            intent.selector = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
+            intent.selector = Intent(Intent.ACTION_SENDTO, "mailto:".toUri())
             intent.putExtra(Intent.EXTRA_EMAIL, arrayOf("support@openpocketcine.app"))
             intent.putExtra(Intent.EXTRA_SUBJECT, "OpenPocketCine — report a problem")
             intent.putExtra(Intent.EXTRA_TEXT,
