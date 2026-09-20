@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine
 
 import android.content.Context
+import androidx.core.content.edit
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.feed.FeedUpscaleSwitch
 import com.opencapture.openpocketcine.feed.FeedUpscaler
@@ -535,6 +536,6 @@ object OperatorPrefs {
         prefs(context).getStringSet(PLAYBACK_ASSISTS, null)?.toSet() ?: emptySet()
 
     fun setPlaybackVisibleAssistTools(context: Context, value: Set<String>) {
-        prefs(context).edit().putStringSet(PLAYBACK_ASSISTS, value).apply()
+        prefs(context).edit { putStringSet(PLAYBACK_ASSISTS, value) }
     }
 }

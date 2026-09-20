@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.bridge
 
+import android.util.Log
+
 /**
  * JNI binding to `libOpenPocketCineAndroid.so` — OpenPocketViewCore plus
  * `OpenPocketCineAndroidFacade`. Staged by `:app:stageSwiftCore` / `just android-core`.
@@ -9,7 +11,15 @@ object SwiftCore {
         try {
             System.loadLibrary("OpenPocketCineAndroid")
             true
-        } catch (_: UnsatisfiedLinkError) {
+        } catch (e: UnsatisfiedLinkError) {
+            // Nothing that reads this flag can work without the core, and the
+            // app degrades quietly instead of crashing. Say so once in logcat,
+            // or a stripped / wrong-ABI build looks like a dead camera.
+            //
+            // Wrapped because reporting a failure must never become one: JVM
+            // unit tests have no `.so` to load and no `android.util.Log` to
+            // load it with, and the stub throws rather than no-op.
+            runCatching { Log.e("SwiftCore", "libOpenPocketCineAndroid.so did not load", e) }
             false
         }
     }

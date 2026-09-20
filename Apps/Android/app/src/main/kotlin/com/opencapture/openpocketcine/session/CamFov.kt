@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.session
 import kotlin.math.abs
 import kotlin.math.round
 import kotlin.math.roundToInt
+import java.util.Locale
 
 /**
  * iOS `CamFov`. Operator 1×…12× from `cam_fov` `@0` + lens `@14`.
@@ -81,6 +82,30 @@ object CamFov {
     fun clamp(factor: Double, max: Double = MAX_FACTOR): Double =
         factor.coerceIn(MIN_FACTOR, max)
 
+    /**
+     * The remembered chip stop, kept inside what the current FORMAT allows.
+     *
+     * A FORMAT change can drop the ceiling under a stop the operator already picked — 2.7K offers
+     * 3×, 4K stops at 2×. The stop is only the readout's last resort, before any `cam_fov` lands,
+     * but even then it must not advertise a factor this FORMAT would refuse.
+     */
+    fun stopWithinCycle(stop: Double, stops: List<Double>): Double =
+        clamp(stop, stops.lastOrNull() ?: MIN_FACTOR)
+
+    /**
+     * The line to show when a new FORMAT pulls the zoom ceiling out from under the factor the
+     * operator is already holding.
+     *
+     * The body does not refuse: it walks the lens back to whatever the new capture size allows, so
+     * without a word the chip just falls to 1x and nothing on screen says why. [size] is
+     * [VideoResolution.sizeTitle]. Null while the held factor still fits, which is the usual case.
+     */
+    fun ceilingNote(size: String, held: Double, stops: List<Double>): String? {
+        val ceiling = stops.lastOrNull() ?: return null
+        if (displayTenths(held) <= ceiling + 0.05) return null
+        return "$size caps zoom at ${displayLabel(ceiling)}"
+    }
+
     fun lensPosition(factor: Double): Int {
         val f = clamp(factor)
         if (abs(f - MIN_FACTOR) < 0.001) return LENS_1X
@@ -96,7 +121,7 @@ object CamFov {
         if (abs(shown - MAX_FACTOR) < 0.05) return "12×"
         val nearest = shown.roundToInt()
         if (abs(shown - nearest) < 0.05 && nearest in 1..12) return "${nearest}×"
-        return String.format("%.1f×", shown)
+        return String.format(Locale.US, "%.1f×", shown)
     }
 
     fun nextJump(from: Double, stops: List<Double> = JUMPS): Double {
@@ -191,6 +216,10 @@ object CamFov {
         return if (raw == 0) null else factor(raw)
     }
 
+    /**
+     * Confirmation test for the chip pin ([CameraValuePin]): the live factor comes back off a lens
+     * position and lands a hair off what was asked, so exact equality would never release the pin.
+     */
     fun matches(live: Double, target: Double): Boolean =
         abs(displayTenths(live) - displayTenths(target)) < 0.15
 

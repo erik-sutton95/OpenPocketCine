@@ -382,8 +382,16 @@ final class CameraSession {
     var zoomMax: Double { zoomStops.last ?? 1 }
     /// Pinch HUD between `cam_fov` pushes. Nil when fingers are up.
     var zoomPinchPreview: Double?
-    /// Chip-tap target until `cam_fov` catches up. Nil when live matches.
-    var zoomOptimistic: Double?
+    /// Chip-tap target until `cam_fov` catches up, on the same settle window as
+    /// every other control. It has to expire on its own: the body answers an ask
+    /// it cannot honour by clamping to its own ceiling, and it moves the lens
+    /// without being asked (a FORMAT change resets to 1×, so does the operator
+    /// working the camera directly). None of those ever report the asked-for
+    /// factor, so a pin that only cleared on a match would sit on the chip
+    /// showing a zoom the camera is not at for the rest of the session.
+    private var zoomPin: CameraValuePin<Double>?
+    /// Nil when live matches, or once the pin has run out of settle window.
+    var zoomOptimistic: Double? { zoomPin?.expected }
 
     /// Last successful SoftAP creds. Kept across disconnect — reconnect GetSSID often returns `0xE4`.
     /// Exposed so Frame.io can leave the camera AP and rejoin after upload.
@@ -720,7 +728,7 @@ final class CameraSession {
         zoomStop = 1
         zoomStopTouched = false
         zoomPinchPreview = nil
-        zoomOptimistic = nil
+        zoomPin = nil
         zoomPinchAnchor = 1
         lastPinchLens = nil
         lastPinchLogTenths = nil
@@ -1438,19 +1446,38 @@ final class CameraSession {
         CamFov.readout(
             live: status.zoomFactor,
             preview: zoomColorHopPending ? nil : zoomPinchPreview,
-            fallback: zoomStop,
+            fallback: fallbackZoomStop,
             optimistic: zoomColorHopPending ? nil : zoomOptimistic)
+    }
+
+    /// `zoomStop` can outlive the FORMAT that allowed it — see
+    /// `CamFov.stopWithinCycle`.
+    private var fallbackZoomStop: Double {
+        CamFov.stopWithinCycle(zoomStop, stops: zoomStops)
     }
 
     /// Zoom disc hub. Hundredths, not the chip's 0.1× steps. Follows the finger
     /// even while a D-Log2 hop is holding camera writes.
     var zoomDialReadout: Double {
         CamFov.continuousReadout(
-            live: status.zoomFactor, preview: zoomPinchPreview, fallback: zoomStop,
+            live: status.zoomFactor, preview: zoomPinchPreview, fallback: fallbackZoomStop,
             optimistic: zoomOptimistic)
     }
 
+    /// Drops a chip pin the camera never confirmed, so the HUD falls back to
+    /// `cam_fov`. Runs ahead of the unchanged-bytes guard below: a body that
+    /// clamps the ask, or that resets the lens on its own, reports the same
+    /// bytes every push and would never get the pin cleared. `CamFov.matches` is
+    /// the confirmation test because the live factor comes back off a lens
+    /// position, a hair off what was asked.
+    private func reconcileZoomPin(_ live: Double?) {
+        _ = CameraValuePin.reconcile(
+            &zoomPin, reported: live, now: Date.timeIntervalSinceReferenceDate,
+            confirms: CamFov.matches)
+    }
+
     private func noteZoomIfChanged(_ new: CameraStatus) {
+        reconcileZoomPin(new.zoomFactor)
         guard new.zoomFactorRaw != lastLoggedZoomRaw || new.zoomLens != lastLoggedZoomLens else {
             return
         }
@@ -1458,9 +1485,6 @@ final class CameraSession {
         lastLoggedZoomLens = new.zoomLens
         guard new.zoomFactorRaw > 0 || new.zoomLens != nil else { return }
         if let factor = new.zoomFactor {
-            if let optimistic = zoomOptimistic, CamFov.matches(factor, optimistic) {
-                zoomOptimistic = nil
-            }
             if !zoomStopTouched {
                 if abs(factor - CamFov.maxFactor) < 0.15 {
                     zoomStop = 12
@@ -1489,7 +1513,7 @@ final class CameraSession {
         if zoomPinchPreview == nil {
             zoomPinchAnchor = status.zoomFactor ?? zoomOptimistic ?? zoomStop
             zoomPinchSlew = nil
-            zoomOptimistic = nil
+            zoomPin = nil
             lastPinchLens = nil
             lastPinchLogTenths = nil
         }
@@ -1549,7 +1573,7 @@ final class CameraSession {
             pendingZoomAfterHop = factor
             return
         }
-        zoomOptimistic = factor
+        zoomPin = CameraValuePin(factor, now: Date.timeIntervalSinceReferenceDate)
         markZoomStop(factor)
         controlNote = "Zoom \(to)"
         fireZoom(write, target: factor, announce: true)
@@ -2373,6 +2397,10 @@ final class CameraSession {
                 self.status.fps = previousFps
                 self.formatPin = nil
             })
+        // `fireCamera` clears the note on its way out and only writes one when
+        // the SET could not go. Hold that failure aside: the shutter rematch
+        // below sends again and would clear it along with anything written here.
+        let formatSendNote = controlNote
         // Angle mode is ours: keep the chosen degrees and rewrite 1/N for the new fps.
         if OperatorPrefs.shutterUsesAngle, previousFps != status.fps, status.expoMode != .auto {
             let denom = ShutterAngle.denom(
@@ -2382,6 +2410,18 @@ final class CameraSession {
             if denom != status.shutterDenom {
                 setShutterDenom(denom)
             }
+        }
+        // Settle the note once both sends are done. A failure from either send
+        // outranks the ceiling note, which is only worth showing when the
+        // format change actually went.
+        if let formatSendNote {
+            controlNote = formatSendNote
+        } else if controlNote == nil {
+            controlNote = CamFov.ceilingNote(
+                size: format.resolution.sizeTitle,
+                held: zoomCycleFrom,
+                stops: connectedCamera?.model.activeZoomStops(
+                    resolution: format.resolution, shootingMode: status.shootingMode) ?? [])
         }
     }
 
@@ -2933,7 +2973,7 @@ final class CameraSession {
     }
 
     private var zoomCycleFrom: Double {
-        zoomPinchPreview ?? zoomOptimistic ?? status.zoomFactor ?? zoomStop
+        zoomPinchPreview ?? zoomOptimistic ?? status.zoomFactor ?? fallbackZoomStop
     }
 
     private func nudgeGamepadIso(steps: Int) {

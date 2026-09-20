@@ -4,6 +4,7 @@ import com.opencapture.openpocketcine.feed.LiveColorScience
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import kotlin.math.abs
 import kotlin.math.floor
+import java.util.Locale
 
 /** How the ND chip names the reading. Operator setting, not a camera SET. */
 enum class NDFilterNotation(val persisted: String, val editorLabel: String) {
@@ -68,7 +69,7 @@ object NDFilterRecommendation {
         if (!stops.isFinite()) return NONE_LABEL
         if (abs(stops) < 0.05) return "0.0"
         val sign = if (stops > 0) "+" else "−"
-        return sign + String.format("%.1f", abs(stops))
+        return sign + String.format(Locale.US, "%.1f", abs(stops))
     }
 
     /** Optical density of the picture (`ND 0.4`). Signed when under. */
@@ -77,7 +78,7 @@ object NDFilterRecommendation {
         val density = stops * DENSITY_PER_STOP
         if (abs(density) < 0.05) return "ND 0.0"
         val sign = if (density > 0) "" else "−"
-        return "ND $sign${String.format("%.1f", abs(density))}"
+        return "ND $sign${String.format(Locale.US, "%.1f", abs(density))}"
     }
 
     fun pictureStops(lumaHistogram: IntArray, transfer: MonitorTransfer): Double? {

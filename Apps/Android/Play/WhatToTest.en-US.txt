@@ -1,16 +1,18 @@
 New and changed
 
-- HDR display (Operator Setup → Display) brightens live view, scopes, settings, media and playback on the phone panel. Off by default. This is not the camera's HDR/HLG color mode.
-- Screen recording temporarily uses a normal SDR picture so the file is not HDR-boosted. WAVE / HISTO still read the decoded camera signal.
-- Zoom dials, the scopes' brightness sliders, the battery percentage and the frame-rate readout carry their numbers with less work, leaving more room for live view to stay smooth.
+- Dials, sliders and readouts carry their numbers with less work, leaving more room for live view to stay smooth.
+- Pocket 3 zoom offers only the stops the recording FORMAT allows, with a short note naming the new cap.
+- HDR display (Operator Setup → Display) boosts the phone panel, not the camera's HDR/HLG mode. Off by default; WAVE/HISTO still measure the camera signal.
 
 Fixes
 
-- Screen recording on Android 15+ no longer keeps the HDR panel boost in the captured file.
+- The zoom readout settles on the camera's own value when a requested zoom is refused.
+- Shutter, ISO, zoom and ND readouts use a fixed number format, including on phones whose language uses decimal commas.
+- Screen recordings stay normal SDR, including on Android 15 and newer phones.
 - The app no longer closes on its own the moment it opens on Android 15 and newer phones.
 
 What to test
 
-- Turn on HDR display outdoors or at a bright window. Check the feed, WAVE, settings type, and a clip. Toggle it off and confirm the picture returns to normal.
-- Start a screen recording with HDR display on and confirm the recording looks like a normal SDR picture, not the boosted panel.
-- Drag the zoom dial and the scopes' brightness sliders for a while: nothing should stutter, and every readout should sit where it did before. Check TalkBack on Operator Setup → Display.
+- Drag the zoom dial and scopes' brightness sliders. Check for stutters and unchanged readouts, including TalkBack on Operator Setup → Display.
+- On Pocket 3, cycle zoom at 1080, 2.7K and 4K: caps are 4×, 3× and 2×. FORMAT changes return to 1×. Check shutter, ISO, zoom and ND on a decimal-comma phone language.
+- Toggle HDR display in bright light. Check the feed, scopes, settings and playback, then make a screen recording and confirm the file stays normal SDR.
