@@ -7,6 +7,16 @@ incomplete.
 
 ## Connection regression follow-up
 
+Android's GATT initialization checks native request admission and advances the
+existing tolerated descriptor fallback through both characteristics before
+arming pairing. Failed local registration of required FFF4 notifications or a
+rejected arm write fails promptly; optional FFF5 notification registration may
+fall back. Readiness still requires the successful arm callback. The ten-second
+setup deadline is unchanged. This is an Android adapter correction:
+CoreBluetooth exposes different asynchronous setup
+APIs. Stage diagnostics contain no camera name/address. JVM regression proof is
+separate from physical qualification, which remains pending for this correction.
+
 The [September 20 audit](audits/2026-09-20-connection-regressions.md) covers both
 shells' compressed admission and bounded first-picture/control-grace recovery.
 Android's Kotlin fallback matches the portable policies. Android additionally

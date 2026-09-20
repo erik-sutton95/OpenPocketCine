@@ -308,3 +308,63 @@ brightness, charging, build and harness constant while changing only Reduce
 Transparency. Its existing gate stops passive backdrop generation and blurred
 glass presentation. That would isolate the total glass workload, not distinguish
 backdrop baking from compositing. It was not run after the three thermal stops.
+
+## Android 13 Bluetooth setup report
+
+A subsequent user-supplied report from app build 53, source `3a3f8587f52a`, on
+Android 13 / CPH2333 shows a discovered Pocket 4 Pro and one failure:
+`connect failed at connecting_gatt — Bluetooth connect timed out`.
+The attached typed feed-incident summary has zero entries. The report contains
+no native Bluetooth status, callback timestamps or initialization-stage details.
+Neither GATT status 133 nor a decoder/live-view fault can be inferred from it.
+Raw reports and the screenshot remain outside Git.
+
+The existing ten-second timer spans `connectGatt`, service discovery, FFF4/FFF5
+notification setup and the FFF4 pairing-arm write. The connection continuation
+succeeds only on that final write callback. Thus the report does not prove the
+radio connection itself failed. The reviewed Mattufia changes do not modify
+this initialization path. Its behavior was unchanged between the reported
+source and `884016d`; only numeric failure-callback logging had been added.
+
+Source inspection identified two preexisting timeout mechanisms: discarded
+native request-admission results, and a handled/missing-descriptor FFF4 fallback
+that settles FFF4 without starting FFF5. The latter leaves the pairing-arm
+prerequisites permanently incomplete. These are concrete code gaps, not proven
+causes of this tester's report. Android's
+[BluetoothGatt API](https://developer.android.com/reference/android/bluetooth/BluetoothGatt)
+distinguishes synchronous request admission from subsequent callback completion;
+a rejected request must not be treated as an outstanding accepted write.
+
+The Android shell now uses one initialization coordinator per owned GATT
+attempt. Rejected descriptor submissions and existing missing/handled-descriptor
+fallbacks advance FFF4 to FFF5, then submit the pairing arm once. Rejected arm
+submission fails promptly; accepted submission still waits for a successful
+callback. Required FFF4 local notification registration is checked separately
+from descriptor fallback: rejection or a handled local-registration exception
+fails setup before FFF5 or the arm. Optional FFF5 local registration remains
+tolerated. This also prevents reporting readiness with no locally registered
+FFF4 notifications.
+
+Existing worker/attempt/GATT ownership fences and dead-Bluetooth-service cleanup
+remain in place. The ten-second deadline, MTU ordering and successful setup
+sequence are unchanged. New breadcrumbs record stage, monotonic elapsed time,
+typed admission reasons and numeric native status, without camera identifiers
+or exception text. There is no additional retry or live-enable traffic.
+
+The original regression run produced five failures across eight cases using a
+production-wired extraction of the previous behavior. Independent review then
+identified the required-local-registration false-readiness path and requested
+separate failure handling. Tests substitute native GATT calls and callback
+delivery; they do not reproduce this phone's radio or firmware behavior.
+
+The follow-up regression failed on both required-local-registration cases
+before the correction. Final focused verification passed 26 checks: 16
+initialization, five callback-owner and five binder tests. `just android-check`
+passed 961 JVM tests (850 app and 111 shared monitor UI), debug assembly, lint
+and Vulkan synchronization checks. The final source passed independent review;
+`just check` passed 1,021 portable tests and the handbook built 41 pages.
+
+The connected-device preflight still found no Android device. The corrected
+build has not been installed or tested on the reported Android 13 phone, and
+the earlier Samsung live-feed proof does not qualify these newer BLE changes.
+The report remains unresolved pending a corrected-build retry and diagnostics.

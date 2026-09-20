@@ -9,10 +9,10 @@ Fixes
 - Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
 - Replacement keyframes stay protected. First-picture recovery is bounded; repeated controls cannot indefinitely delay a stalled decoder or frame assembly.
 - Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
-- Android 15+ startup and HDR screen-recording fixes remain included. Settings and remembered cameras retain their existing behavior.
+- Bluetooth setup advances through supported notification fallbacks and reports rejected setup writes promptly, with more useful diagnostics.
 
 What to test
 
-- Connect three times, then run LUT/WAVE for five minutes while using zoom and scope brightness sliders. Share diagnostics and the time of slow startup or freezes.
+- Connect three times. If Bluetooth setup fails, retry once and share diagnostics immediately. Then test five minutes of live view with controls.
 - Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
 - With TalkBack on, check REC, timecode, battery and assists each speak one phrase. Double-tap and hold an assist tool to check both actions.

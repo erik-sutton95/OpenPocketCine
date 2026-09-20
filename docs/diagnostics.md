@@ -82,6 +82,14 @@ Android BLE connection failures journal `status`, `newState` and `connectSettled
 before cleanup. These are numeric platform values and a boolean, with no device
 name or address. They distinguish an initial GATT failure from a settled link
 drop; a generic status such as 133 does not identify its underlying radio cause.
+The Android setup journal also records typed initialization stages, elapsed time,
+native request admission and callback status. Its ten-second `connecting_gatt`
+deadline covers connection, service discovery, notification setup and pairing
+arm, so that phase alone does not identify a radio-connect failure. Rejected
+writes, failed local notification registration and missing notification
+descriptors must be distinguishable from an accepted request whose callback
+never arrived. These breadcrumbs contain no camera identifiers or credentials
+and do not add retry traffic.
 
 ## Typed feed incidents
 

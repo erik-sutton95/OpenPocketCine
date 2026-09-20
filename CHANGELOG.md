@@ -279,6 +279,13 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Android Bluetooth setup checks rejected native writes instead of waiting for
+  callbacks that may never arrive. The tolerated notification fallback advances
+  to the next characteristic. Failed required notification registration and
+  rejected pairing-arm writes fail promptly.
+  Stage diagnostics distinguish connection, discovery and notification waits;
+  the deadline stays bounded. The reported Android 13 timeout still needs
+  affected-device confirmation.
 - Both shells wait for the camera's valid initial command window before
   registration, preventing a short handshake acknowledgment from seeding the
   wrong command sequence. Explicit compressed reference loss can request the
