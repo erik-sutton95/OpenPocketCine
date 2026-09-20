@@ -29,15 +29,51 @@ import Testing
                 == .done)
     }
 
-    @Test func stillExitsAfterTheExitBudgetWhileInPlayback() {
+    @Test func exhaustedExitBudgetNeverEnablesWhileInPlayback() {
         #expect(
             MediaLiveResume.action(
                 attempt: MediaLiveResume.maxExitAttempts + 1,
                 inPlayback: true,
                 exitAcknowledged: false,
                 pictureFresh: false)
-                == .exitPlayback,
-            "0x09/0xa8 in gallery ACKs E0 — keep exiting")
+                == .exhausted,
+            "0x09/0xa8 in gallery ACKs E0 — transfer the bounded failed resume")
+    }
+
+    @Test func successfulEnableIsNotRepeatedWhileFirstPictureIsPending() {
+        var enableSent = false
+        var enables = 0
+        for _ in 0..<100 {
+            let action = MediaLiveResume.action(
+                attempt: 2, inPlayback: false, exitAcknowledged: true,
+                pictureFresh: false, enableSent: enableSent)
+            if action == .enableLiveView {
+                enables += 1
+                enableSent = true
+            } else {
+                #expect(action == .waitForPicture)
+            }
+        }
+        #expect(enables == 1)
+        #expect(
+            MediaLiveResume.action(
+                attempt: 2, inPlayback: false, exitAcknowledged: true,
+                pictureFresh: false, enableSent: true, deadlineExpired: true) == .exhausted)
+    }
+
+    @Test func mediaEntryAndQuickReturnBothRetireThePreviousPictureOwner() {
+        #expect(
+            MediaLiveResume.isCurrentPictureOwner(
+                generation: 2, currentGeneration: 2, browsing: false))
+        #expect(
+            !MediaLiveResume.isCurrentPictureOwner(
+                generation: 2, currentGeneration: 3, browsing: true))
+        #expect(
+            !MediaLiveResume.isCurrentPictureOwner(
+                generation: 2, currentGeneration: 4, browsing: false))
+        #expect(
+            MediaLiveResume.isCurrentPictureOwner(
+                generation: 4, currentGeneration: 4, browsing: false))
     }
 
     @Test func strayPlaybackOnLiveViewSendsExit() {

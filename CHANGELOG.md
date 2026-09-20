@@ -279,6 +279,19 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- iOS keeps an established live picture visible when FPS statistics age out,
+  instead of returning to startup Waiting for live view. Both shells preserve
+  recovery after compressed-queue loss; retired Android drains cannot discard
+  a replacement connection's keyframe. First-picture recovery is bounded even
+  with fresh packets, and repeated camera controls cannot indefinitely suppress
+  recovery at a stalled decoder or assembly stage. Automated regressions cover
+  these failures; physical qualification remains pending. See the
+  [connection audit](docs/audits/2026-09-20-connection-regressions.md).
+- Returning from Media sends one accepted live start and waits for fresh picture
+  within the existing recovery deadline. Opening Media retires older picture
+  deadlines without interrupting an active connection negotiation. This prevents
+  repeated stream resets on return and false reconnects during playback on both
+  shells; physical qualification remains pending.
 - iOS retiring live-video views cannot resize a replacement's display layer or
   reclaim its single-camera/Multiview feed bindings. This prevents a reproduced
   zero-size readiness failure during host replacement. Physical qualification

@@ -144,6 +144,18 @@ scopes. Panels can reach equally close to the left and right edges. Record,
 media, and settings stay protected. Panels fit the available
 space after rotation or resizing, including saved positions. Long-press a View Assist toolbar button for its settings.
 
+Connection recovery now protects the first picture after replacing a connection
+and detects when arriving traffic cannot produce a usable picture. A dropped
+reference frame keeps recovery active until a new keyframe arrives. These
+changes have automated regressions; sustained phone-and-camera qualification
+is pending. If picture stops, share diagnostics with the action and time.
+
+Returning from Media now starts live view once and waits for a fresh picture.
+An older live-picture deadline no longer treats intentional browsing as a failed
+feed. If live view cannot return, bounded connection recovery takes over. Please
+test repeated browsing, playback and return with a connected camera; physical
+qualification of this follow-up is still pending.
+
 ## How Swift reaches Android
 
 Business logic stays in `OpenPocketViewCore`. Android follows the OpenZCine

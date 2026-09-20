@@ -5,6 +5,28 @@ unless a row lists an exception. GPU backends, Bluetooth stacks, and OS APIs may
 diverge. Shipping a one-platform operator-visible change without a row here is
 incomplete.
 
+## Connection regression follow-up
+
+The [September 20 audit](audits/2026-09-20-connection-regressions.md) covers both
+shells' compressed admission and bounded first-picture/control-grace recovery.
+Android's Kotlin fallback matches the portable policies. Android additionally
+fences admission and scheduled drains by endpoint epoch so retired work cannot
+consume a replacement keyframe. Decoder input also checks source owner/epoch
+inside its existing lock to reject an already-admitted retired callback. Both queues preserve repair demand when an old
+retained IRAP precedes an unresolved loss.
+
+The iOS startup-cover correction needs no Android equivalent: Android already
+shows waiting only while `hasPicture` is false. iOS now keeps warmup completed
+through an established-feed stall and resets it on disconnect; FPS aging and
+RECOV remain independent. Automated regressions are available. Physical
+qualification of this follow-up is pending on both platforms.
+
+Both media-return loops use one accepted live start and the existing bounded
+picture deadline. Media generation changes retire old live-picture waits while
+preserving active endpoint negotiation; the return owner uses the serialized
+feed-recovery slot. A genuine negotiation failure still escalates. A retained
+image or a handshake alone cannot complete recovery.
+
 ## Photo LUT View Assist
 
 Photo and Live Photo use Normal / Rec.709 for live LUT selection and image

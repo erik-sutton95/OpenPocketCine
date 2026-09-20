@@ -52,7 +52,7 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 | --- | --- | --- |
 | `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video packet/AU → enable ×2 (status young) → one UDP rebuild with fresh handshake/registration/subscription. Separately, when native decode is expected, fresh complete AUs with silent decoder output request one decoder rebuild and one enable (not a UDP rebuild). The repair retains the last picture and requires fresh source/presentation; negotiation failure or a 16 s picture deadline transfers to full recovery. Holds 4 s after any tracked SET. Blocked enables do not spend a ladder rung. |
 | `LinkDiagnoser` | **Observe only** | Classify → cheapest repair. SoftAP lost → rejoin; BLE lost → full reconnect; present stall → none. |
-| `CameraSoftAP.firstPictureStep` | **Yes**, runs **before** the watchdog | Can rejoin (new handshake) after a few failed enables. |
+| `CameraSoftAP.firstPictureStep` | **Yes**, runs **before** the watchdog | After the initial enable and one resend, fresh traffic without picture reaches the existing 16 s deadline and transfers to negotiated recovery; Pocket 3 FORMAT ownership is preserved. |
 | Keepalive / SET-timeout / foreground | **Yes**, gated | Extra UDP rebuilds only when status is stale (`statusFresh` false) and no repair is in flight. Do not cancel a live rebuild to start another. A successful replacement-endpoint negotiation receives one enable from its repair caller, including keepalive. `still holding for IDR` is not a repair owner. |
 | `SessionRecovery` | **Yes**, separate | BLE loss, confirmed camera-network loss, foreground picture failure, or failed endpoint/watchdog repair starts the full saved-camera spine. Handshake success alone cannot finish it. Eight attempts / 180 s total, then the operator. |
 
@@ -68,6 +68,12 @@ qualification is pending**. Renderer-only local repair is **not implemented**.
 `fullSessionRejoin` remains the policy's last rung; both shells map it to
 `rejoinDatalinkKeepingLive`. Endpoint repair owns its negotiation and picture
 deadline without releasing the slot to a competing watchdog task.
+Intentional Media entry retires picture deadlines by generation without
+cancelling an active endpoint negotiation. Media return waits for that owner to
+finish, claims the same recovery slot, sends one accepted live start and waits
+for fresh source/presentation under the existing deadline. Normal keepalive
+cannot start a competing repair while return is pending. A failed negotiation
+still transfers to full recovery; missing picture during playback does not.
 Native callback age is separate from presentation age. Decoder errors carry a
 generation and numeric origin/status; historical cumulative errors cannot label
 the current decoder failed.
@@ -92,6 +98,14 @@ work before restarting sequence numbers. Active audio work also checks its
 original generation between requests. Mode and speed changes require an active,
 fresh live picture, and ordinary driver commands cannot enter an unnegotiated
 session. Retired requests and new control taps cannot write into negotiation.
+
+The [September 20 regression audit](audits/2026-09-20-connection-regressions.md)
+separates confirmed UI 2.0 regressions from older first-picture, endpoint and
+media ownership defects. Repeated SET grace is bounded by the stalled stage,
+not by fresh upstream traffic. Compressed admission cannot clear recovery with
+an old retained IRAP while still rejecting newer P-frames. These corrections
+have automated regressions; physical cadence and camera-response qualification
+remain required.
 
 Chrome is three flags:
 

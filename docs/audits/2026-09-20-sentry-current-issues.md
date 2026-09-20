@@ -187,3 +187,11 @@ between a Multiview tile and its single-camera monitor, rotate/resize with
 assists and HDR on/off, cover/uncover Settings, and record live-rate/thermal
 evidence and the first diagnostic failure if picture stops. Keep the original
 build 110 archive if it becomes available. No merge or release is part of this review.
+
+## Subsequent connection investigation
+
+The [same-day connection regression audit](2026-09-20-connection-regressions.md)
+refreshes the incident inventory and investigates the reported increase in
+Waiting for live view since before UI 2.0. Its release boundaries, additional
+reproductions and qualification status supplement this snapshot; the counts
+and prior-fix resolutions above retain their original cutoff.

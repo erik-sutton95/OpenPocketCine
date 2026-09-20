@@ -151,7 +151,25 @@ fallback (that unbound MediaCodec from the ImageReader). Return-from-gallery
 is `MediaLiveResume` (`0x02/0x0c` until the playback bit clears, then the
 captured live-start — `0x02/0x68` `08` then `0x09/0xa8` + IDR hold),
 not a raw enable write. Leftover GOP packets are not a live picture —
-resume is done only when a frame presented after resume started.
+resume is done only when fresh source and presentation follow resume. The return
+owner sends that live-start pair once after accepted playback exit, then waits
+within the existing 16-second picture deadline. It does not resend every 350 ms.
+A blocked local start is not counted as sent. Expired exit/picture budgets hand
+off to bounded full-session recovery.
+
+Opening or closing Media advances the picture-owner generation. An older decoder,
+foreground or endpoint picture wait cannot enable or escalate after that change,
+even if Media opens and closes before the wait finishes. An endpoint negotiation
+already in progress is allowed to finish; return-to-live waits for that owner to
+release the same recovery slot. A real negotiation failure still belongs to
+connection recovery. Settings coverage does not change this media generation.
+
+Once an iOS connection has qualified rolling pictures, stats aging cannot
+return it to startup **Waiting for live view** or hide its retained image.
+Recovery uses its own RECOV/Reconnecting state. Disconnect resets first-picture
+qualification. Android already uses its retained `hasPicture` state for the
+startup cover. Synthetic native/JVM regressions cover these changes; physical
+camera qualification is still pending.
 
 ## Disconnect teardown
 
@@ -192,7 +210,14 @@ IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
 The live pending queue is bounded (eight AUs) and keeps an independently
 decodable suffix when it can. An IRAP in that suffix still releases IDR hold
 on decode. A later incomplete AU cannot be repaired by replaying an older
-complete GOP.
+complete GOP. When a retained older IRAP predates the loss, its delivery must
+leave decoder recovery armed while admission waits for a new random-access
+frame. A current safe IRAP suffix clears the hold normally. Android admission,
+drain consumption and scheduling cleanup all check the endpoint epoch under
+the queue lock; retired work cannot consume a replacement endpoint's first IRAP.
+Decoder callbacks run outside that lock. Their captured driver owner and
+epoch are rechecked inside the decoder's existing state lock, so a callback
+already admitted before retirement cannot alter replacement reference state.
 
 Same-raster new VPS/SPS (zoom `0xB8`, FORMAT SET, D-Log2 → D-Log hop) keep
 VT **only if** `VTDecompressionSessionCanAcceptFormatDescription` says so.

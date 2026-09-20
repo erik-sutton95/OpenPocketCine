@@ -1,6 +1,50 @@
 import Foundation
 import OpenPocketViewCore
 
+/// One bounded post-gallery owner. Dependencies are the actual shell operations;
+/// tests drive this same loop without a camera or wall-clock-length deadline.
+@MainActor
+enum MediaLiveResumeRunner {
+    enum Result: Equatable { case restored, exhausted, superseded }
+
+    static func run(
+        timeout: Duration = .seconds(FeedWatchdog.decoderRepairDeadline),
+        isCurrent: () -> Bool,
+        inPlayback: () -> Bool,
+        pictureFresh: () -> Bool,
+        exitPlayback: () async -> Bool,
+        enableLiveView: () -> Bool
+    ) async -> Result {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        var attempt = 1
+        var exitAcknowledged = false
+        var enableSent = false
+        while !Task.isCancelled, isCurrent() {
+            switch MediaLiveResume.action(
+                attempt: attempt, inPlayback: inPlayback(),
+                exitAcknowledged: exitAcknowledged, pictureFresh: pictureFresh(),
+                enableSent: enableSent, deadlineExpired: ContinuousClock.now >= deadline)
+            {
+            case .done:
+                return .restored
+            case .exhausted:
+                return .exhausted
+            case .exitPlayback:
+                let acknowledged = await exitPlayback()
+                exitAcknowledged = acknowledged || exitAcknowledged
+                attempt += 1
+                do { try await Task.sleep(for: .milliseconds(180)) } catch { return .superseded }
+            case .enableLiveView:
+                enableSent = enableLiveView()
+                do { try await Task.sleep(for: .milliseconds(100)) } catch { return .superseded }
+            case .waitForPicture:
+                do { try await Task.sleep(for: .milliseconds(100)) } catch { return .superseded }
+            }
+        }
+        return .superseded
+    }
+}
+
 /// Operator-facing media notes. Never name a sister app or another camera brand.
 enum MediaOperatorCopy {
     static let listing = "Listing camera clips…"
@@ -718,6 +762,7 @@ final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchecked Send
 extension CameraSession {
     func beginMediaBrowse() {
         cameraMedia.cancelResumeLive()
+        retireLivePictureRecoveryForMedia()
         cameraMedia.browseTask?.cancel()
         cameraMedia.browseTask = nil
         loadMediaFavorites()
@@ -747,11 +792,21 @@ extension CameraSession {
         cameraMedia.assembler.reset()
         isBrowsingMedia = false
         mediaNote = nil
-        guard hasMediaDatalink else { return }
         cameraMedia.resumeLiveTask?.cancel()
+        cameraMedia.resumeLiveTask = nil
         let token = cameraMedia.nextResumeID()
+        // A full rejoin briefly has no driver while negotiating its replacement.
+        // Preserve that owner and queue this return behind it, rather than lose
+        // the only new picture/enable owner when the old generation retires.
+        guard hasMediaDatalink || hasFeedRecoveryInFlight else { return }
         cameraMedia.resumeLiveTask = Task { [weak self] in
-            await self?.resumeLiveViewAfterMedia(token: token)
+            guard let self else { return }
+            defer {
+                if token == self.cameraMedia.resumeID { self.cameraMedia.resumeLiveTask = nil }
+            }
+            await self.claimMediaLiveRecovery(token: token) { [weak self] in
+                await self?.resumeLiveViewAfterMedia(token: token)
+            }
         }
     }
 
@@ -759,41 +814,36 @@ extension CameraSession {
     /// drops the playback bit, then `0x09/0xa8`. Enable while still in playback
     /// ACKs `E0`/`D6` and the camera stays on "Playback in progress".
     func resumeLiveViewAfterMedia(token: Int) async {
-        var exitAcked = false
         let started = Date()
-        for attempt in 1...(MediaLiveResume.maxExitAttempts + 2) {
-            guard !Task.isCancelled, token == cameraMedia.resumeID, !isBrowsingMedia else {
-                return
-            }
-            switch MediaLiveResume.action(
-                attempt: attempt,
-                inPlayback: status.inPlayback,
-                exitAcknowledged: exitAcked,
-                pictureFresh: MediaLiveResume.isPictureFresh(
-                    lastPresentedAt: decoder.lastPresentedAt, since: started)
-            ) {
-            case .done:
-                ControlLiveLog.line("media: live resume done attempt=\(attempt)")
-                return
-            case .exitPlayback:
+        let result = await MediaLiveResumeRunner.run(
+            isCurrent: { self.isLivePictureRepairCurrent(token) },
+            inPlayback: { self.status.inPlayback },
+            pictureFresh: { self.hasFreshRecoveryPicture(since: started) },
+            exitPlayback: {
                 ControlLiveLog.line(
-                    "media: exit playback attempt=\(attempt) inPlayback=\(status.inPlayback ? 1 : 0)"
-                )
+                    "media: exit playback inPlayback=\(self.status.inPlayback ? 1 : 0)")
                 do {
-                    let reply = try await awaitMediaOpcode(0x02, 0x0C, timeout: .milliseconds(450))
-                    {
+                    let reply = try await self.awaitMediaOpcode(
+                        0x02, 0x0C, timeout: .milliseconds(450)
+                    ) {
                         self.sendExitPlayback()
                     }
-                    if CameraReply.parse(reply.payload).isSuccess { exitAcked = true }
+                    return CameraReply.parse(reply.payload).isSuccess
                 } catch {
-                    sendExitPlayback()
+                    return false
                 }
-                try? await Task.sleep(for: .milliseconds(180))
-            case .enableLiveView:
-                ControlLiveLog.line("media: enable live after playback attempt=\(attempt)")
-                restartLiveViewAfterMedia()
-                try? await Task.sleep(for: .milliseconds(350))
-            }
+            },
+            enableLiveView: { self.restartLiveViewAfterMedia() })
+        guard !Task.isCancelled, isLivePictureRepairCurrent(token) else { return }
+        switch result {
+        case .restored:
+            ControlLiveLog.line("media: live resume has fresh picture")
+        case .exhausted:
+            ControlLiveLog.line("media: live resume picture deadline or exit budget expired")
+            beginSessionRecovery(
+                reason: "live picture did not return after media", trigger: .datalinkLost)
+        case .superseded:
+            break
         }
     }
 

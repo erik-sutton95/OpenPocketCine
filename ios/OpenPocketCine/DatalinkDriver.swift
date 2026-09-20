@@ -1562,13 +1562,14 @@ final class DatalinkDriver {
         guard !closed, udpGeneration == generation else { return }
         noteInboundTraffic()
         let batch = videoAssembler.takeDelivery()
-        if batch.discontinuity { onVideoDiscontinuity?() }
-        for accessUnit in batch.accessUnits {
-            #if DEBUG
-                FeedStressAutomation.noteSourceDelivered(videoPackets: 0, accessUnits: 1)
-            #endif
-            onAccessUnit?(accessUnit)
-        }
+        batch.deliver(
+            onDiscontinuity: { self.onVideoDiscontinuity?() },
+            onAccessUnit: { accessUnit in
+                #if DEBUG
+                    FeedStressAutomation.noteSourceDelivered(videoPackets: 0, accessUnits: 1)
+                #endif
+                self.onAccessUnit?(accessUnit)
+            })
         if videoAssembler.hasPending {
             Task(priority: .utility) { @MainActor [weak self] in
                 self?.flushPendingAccessUnits(generation: generation)
@@ -1827,6 +1828,25 @@ final class DatalinkDriver {
 /// HEVC reassembly on the UDP queue. Main hops only complete access units (~25 Hz),
 /// not every SoftAP datagram.
 final class SoftAPVideoAssembler: @unchecked Sendable {
+    struct Delivery {
+        let accessUnits: [[UInt8]]
+        let discontinuity: Bool
+        let awaitingRandomAccess: Bool
+
+        /// A retained old IRAP can paint, but cannot repair missing references
+        /// after it. A current IRAP suffix, conversely, restores those references.
+        /// Keep the same ordering for production and decoder integration tests.
+        @MainActor
+        func deliver(
+            onDiscontinuity: () -> Void,
+            onAccessUnit: ([UInt8]) -> Void
+        ) {
+            if discontinuity, !awaitingRandomAccess { onDiscontinuity() }
+            for accessUnit in accessUnits { onAccessUnit(accessUnit) }
+            if discontinuity, awaitingRandomAccess { onDiscontinuity() }
+        }
+    }
+
     struct Snapshot {
         var packets = 0
         var dropped = 0
@@ -1955,7 +1975,7 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
 
     func takePending() -> [[UInt8]] { takeDelivery().accessUnits }
 
-    func takeDelivery() -> (accessUnits: [[UInt8]], discontinuity: Bool) {
+    func takeDelivery() -> Delivery {
         lock.withLock { state in
             if let pendingSince = state.pendingSince {
                 state.maximumDeliveryWait = max(
@@ -1968,7 +1988,9 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
             state.discontinuity = false
             state.pending.removeAll(keepingCapacity: true)
             state.hopScheduled = false
-            return (aus, discontinuity)
+            return Delivery(
+                accessUnits: aus, discontinuity: discontinuity,
+                awaitingRandomAccess: state.awaitingRandomAccess)
         }
     }
 

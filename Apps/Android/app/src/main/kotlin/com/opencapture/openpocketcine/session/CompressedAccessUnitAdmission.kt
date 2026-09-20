@@ -13,9 +13,11 @@ internal class CompressedAccessUnitAdmission(
         val accessUnits: List<ByteArray>,
         val discontinuity: Boolean,
         val dropped: Int,
+        val awaitingRandomAccess: Boolean = false,
     )
 
     private val lock = Any()
+    private var currentEpoch = 0L
     private val pending = ArrayDeque<ByteArray>()
     private var pendingBytes = 0
     private var awaitingRandomAccess = false
@@ -31,8 +33,9 @@ internal class CompressedAccessUnitAdmission(
     val pendingCount: Int get() = synchronized(lock) { pending.size }
     val queuedBytes: Int get() = synchronized(lock) { pendingBytes }
 
-    fun noteIncompleteLoss(): Boolean =
+    fun noteIncompleteLoss(epoch: Long = 0): Boolean =
         synchronized(lock) {
+            if (epoch != currentEpoch) return@synchronized false
             if (pending.isNotEmpty()) {
                 drops += pending.size
                 pending.clear()
@@ -43,8 +46,9 @@ internal class CompressedAccessUnitAdmission(
             scheduleHopLocked()
         }
 
-    fun offer(accessUnit: ByteArray): Boolean =
+    fun offer(accessUnit: ByteArray, epoch: Long = 0): Boolean =
         synchronized(lock) {
+            if (epoch != currentEpoch) return@synchronized false
             val irap = hasRandomAccess(accessUnit)
             val key = carriesKeyframe(accessUnit)
             if (irap) awaitingRandomAccess = false
@@ -63,8 +67,11 @@ internal class CompressedAccessUnitAdmission(
             scheduleHopLocked()
         }
 
-    fun takeDelivery(): Delivery =
+    fun takeDelivery(epoch: Long = 0): Delivery =
         synchronized(lock) {
+            // Check and consume under one lock: a retired drain cannot take the
+            // replacement endpoint's IRAP or release its single scheduled hop.
+            if (epoch != currentEpoch) return@synchronized Delivery(emptyList(), false, 0)
             hopScheduled = false
             val dropped = 0
             val aus = pending.toList()
@@ -72,11 +79,14 @@ internal class CompressedAccessUnitAdmission(
             pendingBytes = 0
             val disc = discontinuity
             discontinuity = false
-            Delivery(aus, disc, dropped)
+            Delivery(aus, disc, dropped, awaitingRandomAccess)
         }
 
-    fun reset() {
+    fun reset(epoch: Long) {
         synchronized(lock) {
+            // Close can race the TX teardown that also advances the epoch.
+            if (epoch < currentEpoch) return
+            currentEpoch = epoch
             pending.clear()
             pendingBytes = 0
             awaitingRandomAccess = false
@@ -89,8 +99,27 @@ internal class CompressedAccessUnitAdmission(
     }
 
     /** Executor rejected the drain; allow a later offer to schedule again. */
-    fun releaseScheduledHop() {
-        synchronized(lock) { hopScheduled = false }
+    fun releaseScheduledHop(epoch: Long = 0) {
+        synchronized(lock) {
+            if (epoch == currentEpoch) hopScheduled = false
+        }
+    }
+
+    /** Decode callbacks run outside the admission lock, on the driver's decode executor. */
+    fun drain(
+        epoch: Long,
+        isCurrent: () -> Boolean,
+        onDiscontinuity: () -> Unit,
+        onAccessUnit: (ByteArray) -> Unit,
+    ) {
+        val delivery = takeDelivery(epoch)
+        if (delivery.discontinuity && !delivery.awaitingRandomAccess && isCurrent()) onDiscontinuity()
+        for (unit in delivery.accessUnits) {
+            if (isCurrent()) onAccessUnit(unit)
+        }
+        // A retained old IRAP may paint the held image, but cannot repair the
+        // references lost after it. A fresh decodable suffix clears loss above.
+        if (delivery.discontinuity && delivery.awaitingRandomAccess && isCurrent()) onDiscontinuity()
     }
 
     private fun scheduleHopLocked(): Boolean {

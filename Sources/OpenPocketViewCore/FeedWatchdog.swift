@@ -382,15 +382,9 @@ public struct FeedWatchdog: Equatable, Sendable {
                 if Self.shouldHoldForGOPReset(
                     secondsSinceLastEnable: snap.secondsSinceLastEnable,
                     lastVideoPacketAge: snap.lastVideoPacketAge)
-                    || (snap.secondsSinceCameraSet ?? .infinity) < Self.cameraSetGrace
-                    || FocusTrackMode.shouldHoldWatchdog(
-                        secondsSinceSet: snap.secondsSinceFocusTrackSet)
-                    || CamFov.shouldHoldWatchdog(
-                        secondsSinceSet: snap.secondsSinceZoomSet, pinchActive: snap.zoomPinchActive
+                    || Self.shouldHoldForControlGrace(
+                        snap, stalledStageAge: snap.lastDecoderOutputAge ?? snap.lastDecodedFrameAge
                     )
-                    || GimbalStick.shouldHoldWatchdog(
-                        secondsSinceThrow: snap.secondsSinceGimbalThrow,
-                        stickHeld: snap.gimbalStickHeld)
                 {
                     return .none
                 }
@@ -407,32 +401,9 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
-        if FocusTrackMode.shouldHoldWatchdog(
-            secondsSinceSet: snap.secondsSinceFocusTrackSet,
-            lastVideoPacketAge: snap.lastVideoPacketAge)
-        {
-            return .none
-        }
-
-        if CamFov.shouldHoldWatchdog(
-            secondsSinceSet: snap.secondsSinceZoomSet,
-            lastVideoPacketAge: snap.lastVideoPacketAge,
-            pinchActive: snap.zoomPinchActive)
-        {
-            return .none
-        }
-
-        if GimbalStick.shouldHoldWatchdog(
-            secondsSinceThrow: snap.secondsSinceGimbalThrow,
-            lastVideoPacketAge: snap.lastVideoPacketAge,
-            stickHeld: snap.gimbalStickHeld)
-        {
-            return .none
-        }
-
-        if Self.shouldHoldForCameraSet(
-            secondsSinceSet: snap.secondsSinceCameraSet,
-            lastVideoPacketAge: snap.lastVideoPacketAge)
+        if Self.shouldHoldForControlGrace(
+            snap,
+            stalledStageAge: assemblyStalled ? snap.lastAccessUnitAge : snap.lastVideoPacketAge)
         {
             return .none
         }
@@ -548,6 +519,25 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
         lastActionAt = now
         return action
+    }
+
+    /// Bound repeated SET/throw grace by progress at the stage that stopped.
+    /// Fresh fragments cannot renew an AU stall, and fresh compressed AUs
+    /// cannot renew a native-output stall. A held gesture still owns its grace.
+    private static func shouldHoldForControlGrace(
+        _ snap: Snapshot, stalledStageAge: TimeInterval?
+    ) -> Bool {
+        shouldHoldForCameraSet(
+            secondsSinceSet: snap.secondsSinceCameraSet, lastVideoPacketAge: stalledStageAge)
+            || FocusTrackMode.shouldHoldWatchdog(
+                secondsSinceSet: snap.secondsSinceFocusTrackSet,
+                lastVideoPacketAge: stalledStageAge)
+            || CamFov.shouldHoldWatchdog(
+                secondsSinceSet: snap.secondsSinceZoomSet,
+                lastVideoPacketAge: stalledStageAge, pinchActive: snap.zoomPinchActive)
+            || GimbalStick.shouldHoldWatchdog(
+                secondsSinceThrow: snap.secondsSinceGimbalThrow,
+                lastVideoPacketAge: stalledStageAge, stickHeld: snap.gimbalStickHeld)
     }
 
     private mutating func resetIdle() {

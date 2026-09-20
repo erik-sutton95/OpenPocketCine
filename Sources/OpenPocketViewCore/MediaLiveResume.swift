@@ -11,7 +11,9 @@ public enum MediaLiveResume: Sendable {
     public enum Action: Equatable, Sendable {
         case exitPlayback
         case enableLiveView
+        case waitForPicture
         case done
+        case exhausted
     }
 
     /// One tick of the post-media resume loop.
@@ -19,16 +21,25 @@ public enum MediaLiveResume: Sendable {
         attempt: Int,
         inPlayback: Bool,
         exitAcknowledged: Bool,
-        pictureFresh: Bool
+        pictureFresh: Bool,
+        enableSent: Bool = false,
+        deadlineExpired: Bool = false
     ) -> Action {
         if pictureFresh, !inPlayback { return .done }
+        if deadlineExpired { return .exhausted }
         if inPlayback || !exitAcknowledged {
-            return .exitPlayback
+            return attempt > maxExitAttempts ? .exhausted : .exitPlayback
         }
-        if attempt > maxExitAttempts {
-            return pictureFresh ? .done : .enableLiveView
-        }
-        return .enableLiveView
+        return enableSent ? .waitForPicture : .enableLiveView
+    }
+
+    /// Opening and closing media each retire a live-picture requirement.
+    /// A return before an old deadline still belongs to a new owner. Endpoint
+    /// negotiation may finish, but its old picture wait must not enable/rejoin.
+    public static func isCurrentPictureOwner(
+        generation: Int, currentGeneration: Int, browsing: Bool
+    ) -> Bool {
+        generation == currentGeneration && !browsing
     }
 
     /// Keepalive while the operator is already on live view: camera still

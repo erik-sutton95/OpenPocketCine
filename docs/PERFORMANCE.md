@@ -245,3 +245,15 @@ deletions remain counted and retryable. A tree still awaiting metadata preservat
 is protected from deletion, including after a failed rollback. These changes have simulator regressions;
 physical live-rate and thermal qualification remain pending for the
 [build 111 triage](audits/2026-09-19-testflight-111-sentry.md).
+
+## September 20 connection corrections
+
+The [regression follow-up](audits/2026-09-20-connection-regressions.md) retains the
+eight-AU queue bound, existing ACK/HUD cadence, enable spacing and picture-repair
+deadline. Delivery carries one additional admission-state flag; Android adds an
+epoch comparison inside the existing queue lock, never a lock around decoder
+callbacks. AU/reference mutation also validates source ownership within the
+existing decoder lock. No per-packet logging, new decoder, extra scope tap or recurring
+repair timer is added. Repeated SET grace is capped against the failed stage.
+These structural bounds are not a measured physical cadence/thermal result;
+that qualification remains pending.

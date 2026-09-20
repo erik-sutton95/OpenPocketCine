@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class HevcDecoder internal constructor(private val cadence: LivePipelineCadence = LivePipelineCadence()) {
     internal enum class LiveCodec { HEVC, AVC }
     private val lock = Any()
+    private val inputOwnership = DecoderInputOwnership(lock)
     private var codec: MediaCodec? = null
     private var surface: Surface? = null
     private var configured = false
@@ -140,19 +141,29 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
         }
     }
 
-    fun decode(accessUnit: ByteArray): Boolean {
+    fun claimInputOwner(): Long = inputOwnership.claim()
+
+    fun advanceInputEpoch(inputOwner: Long, epoch: Long) = inputOwnership.advance(inputOwner, epoch)
+
+    fun decode(accessUnit: ByteArray): Boolean = decodeInput(accessUnit, null, 0)
+
+    fun decode(accessUnit: ByteArray, inputOwner: Long, epoch: Long): Boolean =
+        decodeInput(accessUnit, inputOwner, epoch)
+
+    private fun decodeInput(accessUnit: ByteArray, inputOwner: Long?, epoch: Long): Boolean {
         if (!SwiftCore.isAvailable) return false
         var size: Pair<Int, Int>? = null
         var requestEnable = false
-        val ok =
-            synchronized(lock) {
-                val result = decodeLocked(accessUnit)
-                size = lastSizeCallback
-                lastSizeCallback = null
-                requestEnable = lastEnableCallback
-                lastEnableCallback = false
-                result
-            }
+        val mutation = {
+            val result = decodeLocked(accessUnit)
+            size = lastSizeCallback
+            lastSizeCallback = null
+            requestEnable = lastEnableCallback
+            lastEnableCallback = false
+            result
+        }
+        val ok = if (inputOwner == null) synchronized(lock, mutation)
+        else inputOwnership.withCurrent(inputOwner, epoch, false, mutation)
         size?.let { onOutputSizeChanged?.invoke(it.first, it.second) }
         if (requestEnable) onParameterSetsChanged?.invoke()
         return ok
@@ -309,6 +320,10 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
         synchronized(lock) { randomAccess.noteBrokenReferences() }
     }
 
+    fun noteReferenceDiscontinuity(inputOwner: Long, epoch: Long) {
+        inputOwnership.withCurrent(inputOwner, epoch, Unit) { randomAccess.noteBrokenReferences() }
+    }
+
     /**
      * Watchdog decoder repair. Keeps the last picture. Requires an IRAP on the
      * replacement codec. Does not send enable.
@@ -351,6 +366,7 @@ class HevcDecoder internal constructor(private val cadence: LivePipelineCadence 
     }
 
     private fun resetLocked() {
+        inputOwnership.invalidate()
         running = false
         val out = outputThread
         outputThread = null

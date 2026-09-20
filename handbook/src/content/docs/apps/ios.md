@@ -115,6 +115,12 @@ picture's size and output staying with the current monitor. Camera-connected
 switching and resizing still need physical validation. Report the action and
 time if picture freezes.
 
+Once live view has started, a brief stall keeps the last picture visible instead
+of returning to the startup **Waiting for live view** cover. Recovery still shows
+its own status. First connection and dropped-frame recovery now have additional
+checks for traffic arriving without a usable picture. These changes have
+simulator regressions; sustained camera-connected qualification is pending.
+
 View Assist favorites match the live system-button size and remember which
 tools you actually use (saved on the phone). Collapsed, landscape keeps two
 favorites and portrait keeps one, under the arrow. The expanded catalog
@@ -122,6 +128,12 @@ uses those same cells. Tap the arrow to open or close, or press and drag it
 so the expanding edge stays under your finger; a flick finishes the motion.
 The landscape expand
 arrow accepts taps farther to its right, with the toolbar anchored in place.
+
+Returning from Media now starts live view once and waits for a fresh picture.
+An older live-picture deadline no longer treats intentional browsing as a failed
+feed. If live view cannot return, bounded connection recovery takes over. Please
+test repeated browsing, playback and return with a connected camera; physical
+qualification of this follow-up is still pending.
 
 ## Moving scopes
 

@@ -13,7 +13,9 @@ object MediaLiveResume {
     enum class Action {
         EXIT_PLAYBACK,
         ENABLE_LIVE_VIEW,
+        WAIT_FOR_PICTURE,
         DONE,
+        EXHAUSTED,
     }
 
     fun action(
@@ -21,12 +23,15 @@ object MediaLiveResume {
         inPlayback: Boolean,
         exitAcknowledged: Boolean,
         pictureFresh: Boolean,
+        enableSent: Boolean = false,
+        deadlineExpired: Boolean = false,
     ): Action {
         if (pictureFresh && !inPlayback) return Action.DONE
-        if (attempt > MAX_EXIT_ATTEMPTS) {
-            return if (pictureFresh) Action.DONE else Action.ENABLE_LIVE_VIEW
+        if (deadlineExpired) return Action.EXHAUSTED
+        if (inPlayback || !exitAcknowledged) {
+            return if (attempt > MAX_EXIT_ATTEMPTS) Action.EXHAUSTED else Action.EXIT_PLAYBACK
         }
-        if (inPlayback || !exitAcknowledged) return Action.EXIT_PLAYBACK
+        if (enableSent) return Action.WAIT_FOR_PICTURE
         return Action.ENABLE_LIVE_VIEW
     }
 
@@ -41,6 +46,58 @@ object MediaLiveResume {
      */
     fun isPictureFresh(lastPresentedAt: Long?, since: Long): Boolean =
         lastPresentedAt != null && lastPresentedAt >= since
+
+    fun isCurrentPictureOwner(generation: Long, currentGeneration: Long, browsing: Boolean): Boolean =
+        generation == currentGeneration && !browsing
+}
+
+/** The production media-return loop; the session claims its one repair slot before calling. */
+internal object MediaLiveResumeRunner {
+    enum class Result { RESTORED, EXHAUSTED, SUPERSEDED }
+
+    /** Link absence during an existing negotiation is not loss of the media-return owner. */
+    suspend fun awaitRepairSlot(
+        isCurrent: () -> Boolean,
+        repairBusy: () -> Boolean,
+        sleep: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
+    ): Boolean {
+        while (isCurrent() && repairBusy()) sleep(100)
+        return isCurrent()
+    }
+
+    suspend fun run(
+        timeoutMs: Long,
+        nowMs: () -> Long,
+        isCurrent: () -> Boolean,
+        inPlayback: () -> Boolean,
+        pictureFresh: () -> Boolean,
+        exitPlayback: suspend () -> Boolean,
+        enableLiveView: () -> Boolean,
+        sleep: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
+    ): Result {
+        val startedAt = nowMs()
+        var attempt = 1
+        var exitAcked = false
+        var enableSent = false
+        while (isCurrent()) {
+            when (MediaLiveResume.action(attempt, inPlayback(), exitAcked, pictureFresh(),
+                    enableSent, nowMs() - startedAt >= timeoutMs)) {
+                MediaLiveResume.Action.DONE -> return Result.RESTORED
+                MediaLiveResume.Action.EXHAUSTED -> return Result.EXHAUSTED
+                MediaLiveResume.Action.EXIT_PLAYBACK -> {
+                    exitAcked = exitPlayback() || exitAcked
+                    attempt += 1
+                    sleep(180)
+                }
+                MediaLiveResume.Action.ENABLE_LIVE_VIEW -> {
+                    enableSent = enableLiveView()
+                    sleep(100)
+                }
+                MediaLiveResume.Action.WAIT_FOR_PICTURE -> sleep(100)
+            }
+        }
+        return Result.SUPERSEDED
+    }
 }
 
 /** What to do after `0x02/0x0c` enter-playback. Newest list page needs no playback. */

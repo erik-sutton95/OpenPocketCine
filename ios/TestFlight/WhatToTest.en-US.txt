@@ -1,15 +1,17 @@
 New and changed
 
-- HDR display (Operator Setup → Display) brightens live view, scopes, settings, media and playback on the phone panel. Off by default. This is not the camera's HDR/HLG color mode.
-- Pocket 3 FORMAT follows the camera's reported choices. Square frame guides follow the recorded picture.
+- HDR display in Operator Setup → Display brightens the phone panel. Off by default; it does not change camera HDR/HLG recording.
 
 Fixes
 
-- Improved live-picture handling when switching between a camera and Multiview, rotating or resizing the app.
-- Capture-mode changes, playback assists, proxy downloads and media-cache work include the previous Sentry crash and hang fixes.
+- An established feed keeps its last picture instead of returning to Waiting for live view when frame statistics age out.
+- Improved recovery when video arrives without a usable picture or camera controls are changing. Multiview and resizing keep the current picture host.
+- Capture changes, playback assists, proxy downloads and media-cache work retain the previous Sentry fixes.
+
+- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
 
 What to test
 
-- Switch between a Multiview tile and its single-camera monitor, rotate or resize the app, and confirm the picture continues. Share diagnostics with the time of any freeze.
-- Try cold AI upscaling, playback assists and a populated Media library. Confirm the interface responds while caching or clearing files.
-- Turn HDR display on, then start screen recording and confirm it stays normal SDR. On Pocket 3, check FORMAT and square framing against the camera.
+- Connect with assists off, then with LUT/WAVE on. Run for five minutes while changing normal camera controls. Share diagnostics and the time of any freeze.
+- Open Media, play a clip and return repeatedly. Check that live picture resumes and no reconnect interrupts browsing.
+- Rotate, resize and switch single-camera/Multiview views. Cover and uncover Settings; confirm picture continues and HDR screen recordings stay normal SDR.

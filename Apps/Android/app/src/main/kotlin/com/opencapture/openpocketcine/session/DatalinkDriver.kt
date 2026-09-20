@@ -259,8 +259,9 @@ class DatalinkDriver internal constructor(
     private val lastGimbalStickElapsed = AtomicLong(0)
 
     var onStatusFrame: ((DumlFrame) -> Unit)? = null
-    var onAccessUnit: ((ByteArray) -> Unit)? = null
-    var onReferenceDiscontinuity: (() -> Unit)? = null
+    var onAccessUnit: ((ByteArray, Long) -> Unit)? = null
+    var onReferenceDiscontinuity: ((Long) -> Unit)? = null
+    var onVideoEpochChanged: ((Long) -> Unit)? = null
     private val lastIncompleteDropped = AtomicInteger(0)
     private val admission = CompressedAccessUnitAdmission()
 
@@ -301,7 +302,6 @@ class DatalinkDriver internal constructor(
         rawVideoPackets.set(0)
         leftoverVideoPackets.set(0)
         lastIncompleteDropped.set(0)
-        admission.reset()
         lastVideoElapsed.set(0)
         lastStatusElapsed.set(0)
         lastAccessUnitElapsed.set(0)
@@ -477,26 +477,23 @@ class DatalinkDriver internal constructor(
      */
     private fun scheduleAdmissionDrain(receiveEpoch: Long) {
         if (closed.get() || decodeExecutor.isShutdown) {
-            admission.releaseScheduledHop()
+            admission.releaseScheduledHop(receiveEpoch)
             return
         }
         val enqueuedAt = cadence.queued()
         runCatching {
             decodeExecutor.execute {
                 cadence.dequeued(enqueuedAt)
-                val delivery = admission.takeDelivery()
-                if (delivery.discontinuity && !closed.get()) {
-                    onReferenceDiscontinuity?.invoke()
-                }
-                for (unit in delivery.accessUnits) {
-                    if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
-                        onAccessUnit?.invoke(unit)
-                    }
-                }
+                admission.drain(
+                    receiveEpoch,
+                    isCurrent = { !closed.get() && receiveEpoch == nativeFeedbackEpoch.get() },
+                    onDiscontinuity = { onReferenceDiscontinuity?.invoke(receiveEpoch) },
+                    onAccessUnit = { onAccessUnit?.invoke(it, receiveEpoch) },
+                )
             }
         }.onFailure {
             cadence.dequeued(enqueuedAt)
-            admission.releaseScheduledHop()
+            admission.releaseScheduledHop(receiveEpoch)
         }
     }
 
@@ -621,7 +618,7 @@ class DatalinkDriver internal constructor(
         closed = closed,
         fence = {
             nativeProgramRunner.invalidate()
-            nativeFeedbackEpoch.incrementAndGet()
+            retireVideoEpoch()
             nativeProgramFeedback.set(null)
             nativeProgramProgress.set(null)
             clearNativeCurveTargets()
@@ -637,6 +634,7 @@ class DatalinkDriver internal constructor(
             liveViewEnabled = false
             onAccessUnit = null
             onReferenceDiscontinuity = null
+            onVideoEpochChanged = null
             onStatusFrame = null
         },
         // This is the sole send admitted after closed=true. The executor is shut
@@ -741,7 +739,7 @@ class DatalinkDriver internal constructor(
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
     private fun discardUdp(keepPoke: Boolean) {
         if (!closed.get()) nativeProgramRunner.interrupt()
-        nativeFeedbackEpoch.incrementAndGet()
+        retireVideoEpoch()
         ackDispatch.invalidate()
         nativeProgramFeedback.set(null)
         nativeCurveDispatch.clear()
@@ -768,6 +766,14 @@ class DatalinkDriver internal constructor(
             runCatching { pokeSocket?.close() }
             pokeSocket = null
         }
+    }
+
+    private fun retireVideoEpoch() {
+        val epoch = nativeFeedbackEpoch.incrementAndGet()
+        // Fence decoder mutation independently of queue ownership. Never hold
+        // admission's lock while waiting for the decoder's existing lock.
+        onVideoEpochChanged?.invoke(epoch)
+        admission.reset(epoch)
     }
 
     private fun ensurePoke(lifetime: DatalinkOpenLoop) {
@@ -1091,12 +1097,12 @@ class DatalinkDriver internal constructor(
                 val previous = lastIncompleteDropped.getAndSet(dropped)
                 var hop = false
                 if (AccessUnitDiscontinuity.shouldNote(previous, dropped)) {
-                    hop = admission.noteIncompleteLoss() || hop
+                    hop = admission.noteIncompleteLoss(receiveEpoch) || hop
                 }
                 if (au != null) {
                     lastAccessUnitElapsed.set(SystemClock.elapsedRealtime())
                     cadence.note(LivePipelineCadence.Stage.AU)
-                    hop = admission.offer(au) || hop
+                    hop = admission.offer(au, receiveEpoch) || hop
                 }
                 if (hop) scheduleAdmissionDrain(receiveEpoch)
             }

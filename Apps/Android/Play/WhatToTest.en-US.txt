@@ -1,15 +1,17 @@
 New and changed
 
-- HDR display (Operator Setup → Display) brightens live view, scopes, settings, media and playback on the phone panel. Off by default. This is not the camera's HDR/HLG color mode.
-- Screen recording temporarily uses a normal SDR picture so the file is not HDR-boosted. WAVE / HISTO still read the decoded camera signal.
+- HDR display in Operator Setup → Display brightens the phone panel. Off by default; it does not change camera HDR/HLG recording.
 
 Fixes
 
-- Screen recording on Android 15+ no longer keeps the HDR panel boost in the captured file.
-- The app no longer closes on its own the moment it opens on Android 15 and newer phones.
+- A retired connection cannot discard the replacement connection's first keyframe. Dropped reference frames keep recovery active until usable picture returns.
+- First-picture recovery has a deadline even when packets arrive. Repeated camera controls cannot indefinitely delay a stalled decoder or frame assembly.
+- Android 15+ startup and HDR screen-recording fixes remain included.
+
+- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
 
 What to test
 
-- Turn on HDR display outdoors or at a bright window. Check the feed, WAVE, settings type, and a clip. Toggle it off and confirm the picture returns to normal.
-- Start a screen recording with HDR display on and confirm the recording looks like a normal SDR picture, not the boosted panel.
-- Check TalkBack on Operator Setup → Display. Share diagnostics with the time of any freeze.
+- Connect with assists off, then with LUT/WAVE on. Run for five minutes while changing normal camera controls. Share diagnostics and the time of any freeze.
+- Open Media, play a clip and return repeatedly. Check that live picture resumes and no reconnect interrupts browsing.
+- Cover and uncover Settings, rotate, and briefly leave the app. Confirm the picture returns. With HDR display on, screen recordings should remain normal SDR.
