@@ -44,7 +44,7 @@ struct VideoView: View {
     }
 }
 
-private struct VideoDisplayRepresentable: UIViewRepresentable {
+struct VideoDisplayRepresentable: UIViewRepresentable {
     let decoder: HevcDecoder
     var effects: LiveImageEffects
     var assistMirror: Bool
@@ -65,6 +65,11 @@ private struct VideoDisplayRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: DisplayLayerView, context: Context) {
+        updateDisplay(uiView)
+    }
+
+    func updateDisplay(_ uiView: DisplayLayerView) {
+        guard uiView.ownsDisplayLayer else { return }
         uiView.onReady = { [decoder] in decoder.noteDisplayReady() }
         decoder.processedFeed = uiView.ciFeed
         uiView.applyHDRDisplay(hdrDisplay)
@@ -104,6 +109,10 @@ final class DisplayLayerView: UIView {
     let ciFeed = CIFeedView()
     var onReady: (() -> Void)?
 
+    /// A replacement host can adopt the session's layer before this view retires.
+    /// Late updates and layout from the old host must not change the live owner.
+    var ownsDisplayLayer: Bool { displayLayer.superlayer === pictureHost.layer }
+
     init(_ layer: AVSampleBufferDisplayLayer) {
         displayLayer = layer
         super.init(frame: .zero)
@@ -141,11 +150,15 @@ final class DisplayLayerView: UIView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        ciFeed.isEnabled = window != nil
+        ciFeed.isEnabled = ownsDisplayLayer && window != nil
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        guard ownsDisplayLayer else {
+            ciFeed.isEnabled = false
+            return
+        }
         // UIKit can resize the overlay immediately while the standalone video
         // layer implicitly interpolates its bounds. Commit both as one geometry
         // update; any enclosing rotation animation then moves the complete picture.

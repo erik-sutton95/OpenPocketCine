@@ -894,3 +894,15 @@ Physical iPhone/iPad camera proof and live-rate/thermal budget measurements are
 outstanding: no device was connected during this task. Simulator tests are not
 physical qualification. Remaining OS crashes and live-camera outages
 are recorded in the [Sentry audit](audits/2026-09-19-testflight-111-sentry.md).
+
+### iOS live-display ownership follow-up (2026-09-20)
+
+Retired single-camera and Multiview hosts cannot resize a display layer adopted
+by another host or reclaim its decoder/feed bindings. Native regressions exercise
+both handoff directions, late zero-size layout and continued replacement-host
+resizing. This is an iOS-only implementation correction: Android does not use
+`DisplayLayerView`, SwiftUI representables or `AVSampleBufferDisplayLayer`.
+No watchdog thresholds, ACK cadence or live-enable policy change. Physical
+iPhone/iPad camera and live-rate/thermal checks remain pending; no phone was
+reachable during this follow-up. The [current triage](audits/2026-09-20-sentry-current-issues.md)
+keeps the unresolved field failures separate from the reproduced ownership bug.

@@ -640,18 +640,19 @@ struct MultiviewView: View {
 
 }
 
-private struct MultiviewVideoLayer: UIViewRepresentable {
+struct MultiviewVideoLayer: UIViewRepresentable {
     let tile: MultiviewSession.Tile
     var hdrDisplay = false
     func makeUIView(context: Context) -> DisplayLayerView {
         let view = DisplayLayerView(tile.decoder.displayLayer)
         view.onReady = { [decoder = tile.decoder] in decoder.noteDisplayReady() }
         tile.decoder.invalidatePictureFlipPresentation()
-        wire(view)
+        updateDisplay(view)
         return view
     }
-    func updateUIView(_ view: DisplayLayerView, context: Context) { wire(view) }
-    private func wire(_ view: DisplayLayerView) {
+    func updateUIView(_ view: DisplayLayerView, context: Context) { updateDisplay(view) }
+    func updateDisplay(_ view: DisplayLayerView) {
+        guard view.ownsDisplayLayer else { return }
         tile.decoder.applyPictureMirror = { [weak view] mirrored in
             view?.setPictureMirrored(mirrored)
         }

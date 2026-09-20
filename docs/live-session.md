@@ -155,6 +155,15 @@ resume is done only when a frame presented after resume started.
 
 ## Disconnect teardown
 
+On iOS, only the `DisplayLayerView` that currently contains the session's display
+layer may update its geometry or decoder/feed bindings. A retiring single-camera
+or Multiview host can receive late SwiftUI updates and UIKit layout callbacks
+after replacement. Those callbacks must not shrink the adopted layer to zero,
+close decoder readiness, or redirect output to the retired Metal view. Native
+regressions cover both handoff directions and continued resizing of the current
+host. This fixes a reproduced ownership defect; it does not establish the cause
+of every field stall. Physical camera qualification remains pending.
+
 In-app Disconnect must drop the UDP driver (`udpGeneration` / closed flag,
 callbacks, ACK pump) and the platform decoder (VT invalidate + layer flush
 on iOS; MediaCodec output-thread join + Surface unbind on Android). A

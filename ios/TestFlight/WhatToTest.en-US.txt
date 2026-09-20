@@ -1,14 +1,15 @@
 New and changed
 
 - HDR display (Operator Setup → Display) brightens live view, scopes, settings, media and playback on the phone panel. Off by default. This is not the camera's HDR/HLG color mode.
-- Screen recording and AirPlay temporarily use a normal SDR picture so the file is not HDR-boosted. WAVE / HISTO still read the decoded camera signal.
+- Pocket 3 FORMAT follows the camera's reported choices. Square frame guides follow the recorded picture.
 
 Fixes
 
-- HDR live view is no longer flipped vertically on the Metal present path.
+- Improved live-picture handling when switching between a camera and Multiview, rotating or resizing the app.
+- Capture-mode changes, playback assists, proxy downloads and media-cache work include the previous Sentry crash and hang fixes.
 
 What to test
 
-- Turn on HDR display outdoors or at a bright window. Check the feed, WAVE, settings type, and a clip. Toggle it off and confirm the picture returns to normal.
-- Start a screen recording with HDR display on and confirm the recording looks like a normal SDR picture, not the boosted panel.
-- Keep a live session running while changing settings and zooming. Share diagnostics with the time of any freeze.
+- Switch between a Multiview tile and its single-camera monitor, rotate or resize the app, and confirm the picture continues. Share diagnostics with the time of any freeze.
+- Try cold AI upscaling, playback assists and a populated Media library. Confirm the interface responds while caching or clearing files.
+- Turn HDR display on, then start screen recording and confirm it stays normal SDR. On Pocket 3, check FORMAT and square framing against the camera.

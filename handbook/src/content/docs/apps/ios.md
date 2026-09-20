@@ -109,6 +109,12 @@ On iPad, the interface reflows as you resize the app window. System window butto
 stay clear of the monitor controls. Camera-connected use while resizing is still
 under physical iPad validation.
 
+Live-picture handling has been corrected when switching between a single-camera
+monitor and Multiview or resizing the app. Simulator regressions cover the
+picture's size and output staying with the current monitor. Camera-connected
+switching and resizing still need physical validation. Report the action and
+time if picture freezes.
+
 View Assist favorites match the live system-button size and remember which
 tools you actually use (saved on the phone). Collapsed, landscape keeps two
 favorites and portrait keeps one, under the arrow. The expanded catalog

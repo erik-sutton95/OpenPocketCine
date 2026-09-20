@@ -279,6 +279,10 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- iOS retiring live-video views cannot resize a replacement's display layer or
+  reclaim its single-camera/Multiview feed bindings. This prevents a reproduced
+  zero-size readiness failure during host replacement. Physical qualification
+  and investigation of the remaining Sentry live outages are pending.
 - iOS playback assists wait for a ready item with a numeric seek position.
   Native upscaler preparation and media cache scanning/deletion no longer run
   in interface updates. Clear Cache preserves clip/color metadata and retries
