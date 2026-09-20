@@ -286,6 +286,9 @@ separate iOS and Android lists.
   Stage diagnostics distinguish connection, discovery and notification waits;
   the deadline stays bounded. The reported Android 13 timeout still needs
   affected-device confirmation.
+- Android frame-timing diagnostics retire old records during Media browsing,
+  including when playback setup fails and video keeps decoding off screen.
+  Live recovery and reporting remain suppressed while browsing.
 - Both shells wait for the camera's valid initial command window before
   registration, preventing a short handshake acknowledgment from seeding the
   wrong command sequence. Explicit compressed reference loss can request the

@@ -86,6 +86,10 @@ camera, enabled assists, and which action triggered it. A useful comparison is
 30 seconds static followed by a slow pan, then joystick and LUT/scopes separately.
 For AirPods head tracking, test it separately from manual joystick movement.
 
+Android reports include picture timings and drop estimates. Say whether movement
+looked smooth but delayed, or skipped forward. These measurements cover stages
+inside the app; they do not measure the full delay from camera to screen.
+
 If recovery becomes stuck, keep the app open for about 15 seconds before tapping
 Retry so the report includes the failed stage. Recent builds record separate
 packet, frame-assembly and presentation measurements; a good average FPS can

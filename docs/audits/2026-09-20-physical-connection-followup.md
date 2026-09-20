@@ -368,3 +368,30 @@ The connected-device preflight still found no Android device. The corrected
 build has not been installed or tested on the reported Android 13 phone, and
 the earlier Samsung live-feed proof does not qualify these newer BLE changes.
 The report remains unresolved pending a corrected-build retry and diagnostics.
+
+## Android timing-diagnostics integration
+
+Upstream PR #381 landed during this follow-up and was integrated from
+`958dc9a`. Its decoder measurements preserve the existing owner/epoch checks and
+do not alter recovery admission. Review identified a separate retention bug:
+the session skipped cadence-window retirement during Media, while the new
+counter retained unmatched output timestamps until a window closed.
+
+This is reachable when entering playback mode fails but the Media browser stays
+open: live ingestion continues, and a background renderer can drain decoded
+images without reporting presentation. The unmatched timestamp set then grows
+throughout browsing. This is source evidence of unbounded diagnostic storage,
+not an observed dropout, memory-pressure event or cause of the Android 13 report.
+
+The correction drains cadence windows on every LIVE keepalive, suppressing the
+returned report during Media. Publication, incident snapshots, live recovery and
+camera-command guards retain their existing browsing behavior. No additional
+camera commands or recovery actions are introduced. The current combined build
+still requires Android physical qualification.
+
+A production-used keepalive seam reproduced the old failure across 120 muted
+windows at 25 decoded frames per second. After correction, the resumed window
+covers one second and only the last muted window's 25 pending frames; the next
+empty window reports zero drops. All 17 cadence checks passed, followed by
+972 Android JVM tests, build, lint and Vulkan synchronization checks. Independent
+review passed. Repository checks and the 41-page handbook build also passed.

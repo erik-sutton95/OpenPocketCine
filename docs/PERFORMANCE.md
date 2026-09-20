@@ -243,6 +243,12 @@ designed: decoder output continued while presentation fell to zero, and the
 shortfall grew without bound. The current counter reports those pictures as
 drops a window after each is lost rather than as a standing shortfall.
 
+LIVE keepalive ticks also retire cadence windows while browsing Media, without
+publishing cadence reports or invoking live recovery. A failed playback-mode
+transition may leave the camera streaming while the browser stays open; if the
+renderer then stops presenting, diagnostic frame stamps must not accumulate for
+the entire browsing interval. This drain adds no camera commands.
+
 `WIFI_MODE_FULL_LOW_LATENCY` stays on while live.
 
 ## When this pointer fires

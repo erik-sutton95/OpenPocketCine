@@ -35,6 +35,44 @@ private class Pictures(private val cadence: LivePipelineCadence) {
 }
 
 class LivePipelineCadenceTest {
+    @Test fun suppressedMediaWindowsForgetUnpresentedHistoryInsteadOfRetainingTheWholeVisit() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        var stamp = 0L
+        repeat(120) {
+            repeat(25) {
+                now += 40_000_000
+                cadence.noteOutput(++stamp)
+            }
+            // Failed playback entry can leave Media open while decode continues
+            // and the covered renderer never reports any of these pictures.
+            assertNull(cadence.takeKeepaliveWindow(live = true, isBrowsingMedia = true))
+        }
+        now += 1_000_000_000
+        val resumed = cadence.takeKeepaliveWindow(live = true, isBrowsingMedia = false)!!
+        assertEquals(25, resumed.dropped, "Only the last suppressed window can still be pending")
+        assertEquals(1.0, resumed.seconds, "Media windows must have closed while publication was suppressed")
+        assertEquals(0.0, resumed.hz[LivePipelineCadence.Stage.OUTPUT])
+        now += 1_000_000_000
+        val next = cadence.takeKeepaliveWindow(live = true, isBrowsingMedia = false)!!
+        assertEquals(0, next.dropped, "Earlier Media drops must not be retained or announced again")
+    }
+
+    @Test fun nonLiveKeepaliveDoesNotConsumeAWindow() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        cadence.noteOutput(1)
+        now = 1_000_000_000
+        assertNull(cadence.takeKeepaliveWindow(live = false, isBrowsingMedia = false))
+        val firstLive = cadence.takeKeepaliveWindow(live = true, isBrowsingMedia = false)!!
+        assertEquals(1.0, firstLive.hz[LivePipelineCadence.Stage.OUTPUT])
+        assertEquals(0, firstLive.dropped)
+        now += 1_000_000_000
+        assertEquals(1, cadence.takeKeepaliveWindow(live = true, isBrowsingMedia = false)!!.dropped)
+        now += 1_000_000_000
+        assertEquals(0, cadence.takeKeepaliveWindow(live = true, isBrowsingMedia = false)!!.dropped)
+    }
+
     @Test fun maximumGapIncludesInitialSilenceAndTrailingSilence() {
         var now = 0L
         val cadence = LivePipelineCadence { now }

@@ -958,9 +958,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     } else if (live && !isBrowsingMedia) {
                         withContext(Dispatchers.IO) { datalink?.keepalive() }
                     }
+                    val window = cadence.takeKeepaliveWindow(live, isBrowsingMedia)
                     if (live && !isBrowsingMedia) {
                         publishPipelineStats()
-                        val window = cadence.takeWindow()
                         noteFeedIncidentSnapshot(window)
                         window?.let { lineWindow ->
                             withContext(Dispatchers.IO) {

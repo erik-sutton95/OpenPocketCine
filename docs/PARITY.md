@@ -17,6 +17,12 @@ CoreBluetooth exposes different asynchronous setup
 APIs. Stage diagnostics contain no camera name/address. JVM regression proof is
 separate from physical qualification, which remains pending for this correction.
 
+Android's frame-transit diagnostics retire pending output stamps on each LIVE
+keepalive even during Media browsing. Report publication and live recovery stay
+suppressed while browsing. This bounds Android-specific diagnostic bookkeeping;
+iOS has no equivalent stamp set. Current combined-device qualification remains
+pending.
+
 The [September 20 audit](audits/2026-09-20-connection-regressions.md) covers both
 shells' compressed admission and bounded first-picture/control-grace recovery.
 Android's Kotlin fallback matches the portable policies. Android additionally

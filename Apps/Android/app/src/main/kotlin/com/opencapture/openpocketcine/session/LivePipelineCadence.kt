@@ -138,6 +138,13 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
         val dropped: Int,
     )
 
+    /** The LIVE keepalive closes windows even when Media suppresses publication. */
+    fun takeKeepaliveWindow(live: Boolean, isBrowsingMedia: Boolean): Window? {
+        if (!live) return null
+        val window = takeWindow()
+        return if (isBrowsingMedia) null else window
+    }
+
     @Synchronized fun takeWindow(): Window? {
         val now = nowNs()
         val seconds = (now - started) / 1e9

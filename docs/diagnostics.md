@@ -147,6 +147,9 @@ timing and counters only; no picture, audio, camera credentials or device identi
   keeps moving is not a drop and a picture lost once is reported once, one window
   late. These legs follow one picture across one hop; they do not add up to a
   glass-to-glass figure and do not reach physical scanout.
+  While the session is live, cadence windows still close during Media browsing
+  even though their reports and live recovery remain suppressed. This retires
+  unmatched frame stamps if decoding continues without presentation.
 - `session: foreground` / foreground recovery rows record network readiness and
   picture freshness. Recovery stage, failure, completion and exhausted-budget
   rows remain in the journal shared by the operator.
