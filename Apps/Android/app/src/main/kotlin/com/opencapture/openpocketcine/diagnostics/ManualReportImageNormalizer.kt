@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import androidx.core.graphics.scale
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
@@ -50,7 +51,7 @@ internal object ManualReportImageNormalizer {
             val scale = max.toFloat() / maxOf(oriented.width, oriented.height).toFloat()
             val w = (oriented.width * scale).toInt().coerceAtLeast(1)
             val h = (oriented.height * scale).toInt().coerceAtLeast(1)
-            val scaled = Bitmap.createScaledBitmap(oriented, w, h, true)
+            val scaled = oriented.scale(w, h)
             if (scaled !== oriented) oriented.recycle()
             oriented = scaled
         }
@@ -60,11 +61,9 @@ internal object ManualReportImageNormalizer {
                 else Result.TooLarge
             }
             val shrink =
-                Bitmap.createScaledBitmap(
-                    oriented,
+                oriented.scale(
                     (oriented.width * 0.7f).toInt().coerceAtLeast(1),
                     (oriented.height * 0.7f).toInt().coerceAtLeast(1),
-                    true,
                 )
             if (shrink !== oriented) oriented.recycle()
             oriented = shrink

@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.MonitorGlass
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
@@ -107,7 +109,7 @@ internal fun PlaybackFrameSample(
             val dh = (srcH * scale).roundToInt().coerceAtLeast(1)
             val dst =
                 buf[slot]?.takeIf { it.width == dw && it.height == dh && it.isMutable }
-                    ?: Bitmap.createBitmap(dw, dh, Bitmap.Config.ARGB_8888).also { buf[slot] = it }
+                    ?: createBitmap(dw, dh, Bitmap.Config.ARGB_8888).also { buf[slot] = it }
             textureView.getBitmap(dst)
             previousBundle = publishPlaybackScopeTap(dst, colorMode, iso, plan, previousBundle)
             slot = 1 - slot
@@ -260,8 +262,10 @@ internal fun rememberPhotoBackdrop(bitmap: Bitmap?, identity: Any): com.opencapt
         if (bitmap != null && resumed) {
             source.image = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                 val scale = minOf(1f, 213f / bitmap.width, 120f / bitmap.height)
-                Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1),
-                    (bitmap.height * scale).toInt().coerceAtLeast(1), true)
+                bitmap.scale(
+                    (bitmap.width * scale).toInt().coerceAtLeast(1),
+                    (bitmap.height * scale).toInt().coerceAtLeast(1),
+                )
             }
         }
     }

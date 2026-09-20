@@ -88,6 +88,7 @@ import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.createBitmap
 import com.opencapture.openpocketcine.assists.AssistLongPress
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.LiveAssistBar
@@ -963,7 +964,7 @@ private fun LiveFaceFramePump(
                 inFlight.set(false)
                 continue
             }
-            val dest = Bitmap.createBitmap(tapW, tapH, Bitmap.Config.ARGB_8888)
+            val dest = createBitmap(tapW, tapH, Bitmap.Config.ARGB_8888)
             try {
                 PixelCopy.request(
                     view,
