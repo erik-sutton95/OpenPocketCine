@@ -115,7 +115,8 @@ decoder. This applies to both ordinary silence and known-loss repairs.
 
 ## Other Android PRs reviewed
 
-All eight contemporaneous Mattufia PR diffs were compared with this branch.
+All eight initial Mattufia PR diffs and the later #385 were compared with this
+branch.
 
 - [#378](https://github.com/erik-sutton95/OpenPocketCine/pull/378) fixes the
   Android screen-recording visibility callback permission/exception path. It
@@ -130,12 +131,43 @@ All eight contemporaneous Mattufia PR diffs were compared with this branch.
   The corresponding debug launch correction from #374 is included so physical
   qualification launches the installed debug app. The earlier baseline used
   the original package; the combined build uses separate pairing/preferences.
+  #374 subsequently merged as `a8bce54`; its device-test recipe and setup notes
+  are integrated too. This follow-up changes no app or protocol source.
 - [#377](https://github.com/erik-sutton95/OpenPocketCine/pull/377),
   [#379](https://github.com/erik-sutton95/OpenPocketCine/pull/379) and
   [#380](https://github.com/erik-sutton95/OpenPocketCine/pull/380) cover Compose
   allocations, KTX cleanup and TalkBack semantics. The closed
   [#376](https://github.com/erik-sutton95/OpenPocketCine/pull/376) locale changes
   are carried by #373. None replaces the connection corrections in this audit.
+- [#385](https://github.com/erik-sutton95/OpenPocketCine/pull/385) increases
+  scheduling waits in iOS inspector tests and exempts test-only changes from
+  tester-note requirements. It overlaps the test synchronization work here,
+  but changes no live-view behavior and has not been adopted.
+
+## Combined-build Android replay
+
+Source `6560c27` includes the connection corrections and upstream #373. The
+installed debug APK matched the built APK. A Samsung SM-S931B on Android 15
+connected to Pocket 4 Pro using hardware HEVC at 1280×720 and Vulkan.
+
+| Scenario | Observed result |
+| --- | --- |
+| Three starts | Picture 307, 238 and 228 ms after handshake; one enable each, no startup repair. These exclude Bluetooth and Wi-Fi setup time. |
+| Five-minute uninterrupted feed | 299 cadence samples; AU, output and presentation averaged 25.0 fps. Maximum presentation gap 77.1 ms, ACK gap 30.1 ms and queue wait 3.0 ms. No incomplete AUs, input misses, decoder errors or repairs. |
+| Settings, identity and LUT with waveform | Approximately 25 fps; no repair. Preferences restored. A selected nonidentity LUT was not established. |
+| Existing Media playback and return | Original clip played; live resumed without another enable or repair. One cycle, not a cached-proxy test. |
+| Background and foreground | One automatic UDP rebuild and one enable restored 25 fps, without a full session rejoin or crash. |
+
+No natural reference loss occurred, so this replay does not establish the early
+repair's hardware latency. Deterministic regressions cover that logic and the
+ownership races. Temperature rose from 35.5°C to 38.9°C, reaching light thermal
+status; the short test does not establish endurance. Both Android apps were
+stopped and the shared camera released before any further device testing.
+Raw diagnostics and device identifiers remain ignored locally.
+
+After integrating #374, `just android-device-test` passed all 25 instrumentation
+tests across nine suites on the same phone, with no failures or skips. The
+camera stayed disconnected and both app packages were stopped afterward.
 
 ## Remaining qualification
 
@@ -153,9 +185,10 @@ The Android journal now retains numeric status, new state and whether the GATT
 connection had settled, before cleanup, without device identifiers. No retry
 timing was inferred from the successful manual retry about 25 seconds later.
 
-The original baseline precedes the startup and known-loss corrections; the short
-replay does not complete their qualification. Repeat startup and loss recovery
-on the combined build and retain the first failure's trace.
+The combined replay completed normal startup and steady-feed qualification on
+this Android/camera pair. The GATT failure did not recur in its three starts,
+but this sample does not establish its elimination. Loss recovery still needs
+hardware timing evidence; retain the first failure's trace.
 
 iPhone physical testing remains pending: the paired device's wireless developer
 tunnel is disconnected. A USB link is needed to retain automation while the

@@ -228,6 +228,12 @@ android-vulkan-test:
 android-check: android-vulkan-test
     cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew assembleDebug test lint
 
+# Run the on-device instrumentation suite: gestures, hit testing, layout.
+# CI has no emulator, so a real device is the only place these run.
+# With several devices attached, pass the serial: `just android-device-test R58R92BL76K`.
+android-device-test serial="":
+    cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" {{ if serial == "" { "" } else { "ANDROID_SERIAL=" + serial } }} ./gradlew connectedDebugAndroidTest
+
 # Build and install the debug APK on a connected device/emulator, then launch it.
 # The debug build's application ID has a suffix; the activity class does not.
 # With several devices attached, pass the serial: `just android-install R58R92BL76K`.
