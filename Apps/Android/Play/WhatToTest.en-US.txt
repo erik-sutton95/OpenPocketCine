@@ -1,16 +1,18 @@
 New and changed
 
-- HDR display in Operator Setup → Display brightens the phone panel. Off by default; it does not change camera HDR/HLG recording.
+- Pocket 3 zoom stops follow FORMAT, with a note when the ceiling changes. Refused zoom values settle back to the camera's reading.
+- Shutter, ISO, zoom and ND readouts use a fixed number format across phone languages.
+- HDR display brightens the phone panel; off by default. Screen recording uses normal SDR. Camera HDR/HLG recording is unchanged.
 
 Fixes
 
 - Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
 - Replacement keyframes stay protected. First-picture recovery is bounded; repeated controls cannot indefinitely delay a stalled decoder or frame assembly.
-- Android 15+ startup and HDR screen-recording fixes remain included.
 - Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
+- Android 15+ startup and HDR screen-recording fixes remain included.
 
 What to test
 
-- Connect and disconnect three times, then run for five minutes with LUT/WAVE and normal camera controls. Share diagnostics and the time of slow startup or any freeze.
-- Open Media, play a clip and return repeatedly. Check that live picture resumes and no reconnect interrupts browsing.
-- Cover and uncover Settings, rotate, and briefly leave the app. Confirm the picture returns. With HDR display on, screen recordings should remain normal SDR.
+- Connect and disconnect three times, then run for five minutes with LUT/WAVE and normal controls. Share diagnostics and the time of slow startup or any freeze.
+- Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
+- On Pocket 3, check 1080 zooms to 4×, 2.7K to 3× and 4K to 2×. Check readouts in a decimal-comma language and normal SDR screen recordings with HDR display on.

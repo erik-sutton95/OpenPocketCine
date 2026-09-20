@@ -542,6 +542,21 @@ selected an ActiveTrack target instead; it is not evidence of pinch zoom.
 DJI lists Video zoom ceilings of 2× at 4K, 3× at 2.7K and 4× at 1080p.
 [DJI specifications](https://www.dji.com/osmo-pocket-3/specs).
 
+OpenPocketCine now caps the offered stops per FORMAT rather than per body, in
+`VideoResolution.pocket3ZoomMax`. Measured entries are marked; the rest follow
+the size they share a ceiling with:
+
+| FORMAT | Ceiling | Res byte |
+| --- | --- | --- |
+| 1080 | 4× | `0A`*, `0C`, `42`, `69`* |
+| 2.7K | 3× | `2D`*, `43`, `5F` |
+| 2160 (1:1) | 3× | `6A`* |
+| 4K | 2× | `10`*, `67`, `7D` |
+| 3K (1:1) | 2× | `6B`*, `6C` |
+
+\* measured on the body. A FORMAT with no entry falls back to the body's
+absolute range, since an unknown size must not silently narrow the chips.
+
 A later **UI** pass reached **2.0× at 4K/60** and **4.0× at 1080P/60**, returning
 each to 1.0×. The relative-rate and stop writes were **accepted**, and separate
 lens **status** moved **217 → 434 → 217** at 4K and **217 → 868 → 217** at 1080P.
@@ -1214,17 +1229,15 @@ controls in OpenPocketCine:
 
 1. Preserve the full model-specific audio DSP reply and establish safe independent
    wind/directional mutations.
-2. Respect the 2.7K 3× zoom ceiling; `CameraModel.activeZoomStops` currently uses
-   the generic 4× branch outside Pocket 3's 4K special case.
-3. Qualify shooting-mode semantics by model. Pocket 3 Photo uses `05`, while the
+2. Qualify shooting-mode semantics by model. Pocket 3 Photo uses `05`, while the
    shared `.photo` case is `17`. `ShootingMode.isPhoto` also includes
    `superNight`, but Pocket 3's observed `28` mode is Low-Light video.
-4. Qualify WB status tint interpretation and the additional Low-Light ISO values.
-5. Keep Med-Tele experimental until controlled replay, status/persistence checks
+3. Qualify WB status tint interpretation and the additional Low-Light ISO values.
+4. Keep Med-Tele experimental until controlled replay, status/persistence checks
    and mode restrictions establish a usable command contract.
-6. Require original-file validation before promoting mode, codec or color menu
+5. Require original-file validation before promoting mode, codec or color menu
    observations into recording guarantees.
-7. Select the model-specific RTMP configuration format: Pocket 3's captured
+6. Select the model-specific RTMP configuration format: Pocket 3's captured
    version 00 URL payload differs from the current prototype's version 01 JSON.
 
 This inventory guides future implementation. It does not add those controls to

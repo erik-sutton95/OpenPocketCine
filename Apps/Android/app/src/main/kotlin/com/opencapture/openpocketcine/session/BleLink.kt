@@ -25,6 +25,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.opencapture.openpocketcine.bridge.SwiftCore
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.pairing.FoundCameraIdentity
 import java.util.UUID
 import kotlinx.coroutines.CancellableContinuation
@@ -425,6 +426,10 @@ class BleLink(context: Context) {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                 onGattCallback(attempt, gatt) {
                     if (status != BluetoothGatt.GATT_SUCCESS || newState == BluetoothProfile.STATE_DISCONNECTED) {
+                        DiagnosticCenter.log(
+                            "warning", "ble", "connectionState",
+                            "ble: connection state status=$status newState=$newState connectSettled=${connectSettled.get()}",
+                        )
                         finishConnect(IllegalStateException("the camera disconnected"))
                         notifyLinkLostIfSettled(attempt)
                         closeGatt(IllegalStateException("the camera disconnected"))

@@ -125,8 +125,11 @@ All eight contemporaneous Mattufia PR diffs were compared with this branch.
 - [#373](https://github.com/erik-sutton95/OpenPocketCine/pull/373) addresses zoom
   HUD pins, Pocket 3 format-dependent zoom limits and locale handling. These are
   separate from the connection defects. Its debug application-ID change is a
-  dependency of the launch recipe in [#374](https://github.com/erik-sutton95/OpenPocketCine/pull/374);
-  applying that recipe alone would launch the wrong package for this branch.
+  dependency of the launch recipe in [#374](https://github.com/erik-sutton95/OpenPocketCine/pull/374).
+  During this audit, #373 merged as `95967a4` and was integrated into this branch.
+  The corresponding debug launch correction from #374 is included so physical
+  qualification launches the installed debug app. The earlier baseline used
+  the original package; the combined build uses separate pairing/preferences.
 - [#377](https://github.com/erik-sutton95/OpenPocketCine/pull/377),
   [#379](https://github.com/erik-sutton95/OpenPocketCine/pull/379) and
   [#380](https://github.com/erik-sutton95/OpenPocketCine/pull/380) cover Compose
@@ -136,9 +139,23 @@ All eight contemporaneous Mattufia PR diffs were compared with this branch.
 
 ## Remaining qualification
 
-The measurements above precede the newly identified startup and known-loss
-corrections. They cannot qualify those fixes. Repeat startup and loss recovery
-on the updated build and retain the first failure's trace.
+An initial replay on corrected source `f602689` was interrupted for integration
+of upstream #373. One attempt failed in Bluetooth with Android GATT status 133
+about 281 ms after starting, before services or datalink negotiation. A subsequent
+attempt established picture 318 ms after handshake, with one enable and no
+repair. Its short 33-sample exposure held approximately 25 fps without incomplete
+AUs or decoder errors. This is not the required five-minute replay or physical
+proof of the earlier known-loss action.
+
+The GATT failure's underlying cause is unproven. Initial connection has one
+attempt and returns to the camera list on failure; this behavior predates UI 2.0.
+The Android journal now retains numeric status, new state and whether the GATT
+connection had settled, before cleanup, without device identifiers. No retry
+timing was inferred from the successful manual retry about 25 seconds later.
+
+The original baseline precedes the startup and known-loss corrections; the short
+replay does not complete their qualification. Repeat startup and loss recovery
+on the combined build and retain the first failure's trace.
 
 iPhone physical testing remains pending: the paired device's wireless developer
 tunnel is disconnected. A USB link is needed to retain automation while the

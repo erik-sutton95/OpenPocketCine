@@ -78,6 +78,11 @@ Portable types: `Sources/OpenPocketViewCore/Diagnostics.swift`. iOS
 Android `diagnostics/DiagnosticCenter` (uncaught handler, share sheet).
 Android has no TestFlight screenshot hook — PARITY exception.
 
+Android BLE connection failures journal `status`, `newState` and `connectSettled`
+before cleanup. These are numeric platform values and a boolean, with no device
+name or address. They distinguish an initial GATT failure from a settled link
+drop; a generic status such as 133 does not identify its underlying radio cause.
+
 ## Typed feed incidents
 
 A 1 Hz allowlisted spool records packet, AU, decode-submit/accept/output,
