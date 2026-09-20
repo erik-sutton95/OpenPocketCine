@@ -32,6 +32,17 @@ Power the Pocket on, stay close, and allow Bluetooth. Pocket and Nano both appea
 
 Approve the Join prompt for the camera SoftAP. On 5.8 GHz in a DFS region the camera AP can take about a minute to beacon; the app keeps trying. A wrong cached passphrase after a camera Wi-Fi reset is dropped so the next tap re-reads credentials over Bluetooth.
 
+## Live view stays black on an older Android phone
+
+Bluetooth, Wi-Fi, settings and camera controls all working while the picture
+never starts points at the phone's video decoder, not the link. Some decoders
+from before Android 11 turn down the low-latency setting the monitor asks for,
+and refusing it used to cost the whole decoder. The app now starts again without
+that setting when a decoder turns it down; phones that accept it are unaffected.
+
+If a build still shows nothing here, send **Share Diagnostics**: a `codec:` line
+with no decoded pictures names the decoder that refused.
+
 ## Picture starts then freezes
 
 Stay on the camera Wi-Fi. Session recovery holds the last frame under **Reconnecting**. If chrome still moves (timecode, storage) while the well is black, send **Share Diagnostics**.

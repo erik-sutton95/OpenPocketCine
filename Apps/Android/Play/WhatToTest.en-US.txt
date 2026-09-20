@@ -6,13 +6,13 @@ New and changed
 
 Fixes
 
+- Live view no longer stays black on phones whose video decoder turns down the low-latency setting; it now starts without that setting.
 - The zoom readout settles on the camera's own value when a requested zoom is refused.
 - Shutter, ISO, zoom and ND readouts use a fixed number format, including on phones whose language uses decimal commas.
 - Screen recordings stay normal SDR, including on Android 15 and newer phones.
-- The app no longer closes on its own the moment it opens on Android 15 and newer phones.
 
 What to test
 
+- If live view has ever stayed black on your phone while Wi-Fi, settings and camera controls worked, connect again and say whether a picture arrives.
 - Drag the zoom dial and scopes' brightness sliders. Check for stutters and unchanged readouts, including TalkBack on Operator Setup → Display.
 - On Pocket 3, cycle zoom at 1080, 2.7K and 4K: caps are 4×, 3× and 2×. FORMAT changes return to 1×. Check shutter, ISO, zoom and ND on a decimal-comma phone language.
-- Toggle HDR display in bright light. Check the feed, scopes, settings and playback, then make a screen recording and confirm the file stays normal SDR.
