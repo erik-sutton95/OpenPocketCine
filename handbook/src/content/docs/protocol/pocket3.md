@@ -1235,9 +1235,9 @@ controls in OpenPocketCine:
 3. Qualify WB status tint interpretation and the additional Low-Light ISO values.
 4. Keep Med-Tele experimental until controlled replay, status/persistence checks
    and mode restrictions establish a usable command contract.
-6. Require original-file validation before promoting mode, codec or color menu
+5. Require original-file validation before promoting mode, codec or color menu
    observations into recording guarantees.
-7. Select the model-specific RTMP configuration format: Pocket 3's captured
+6. Select the model-specific RTMP configuration format: Pocket 3's captured
    version 00 URL payload differs from the current prototype's version 01 JSON.
 
 This inventory guides future implementation. It does not add those controls to
