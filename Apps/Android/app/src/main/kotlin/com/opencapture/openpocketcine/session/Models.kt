@@ -34,7 +34,11 @@ data class CameraModel(
     /**
      * Chip cycle for this body, current FORMAT, and shooting mode.
      * SlowMo / TimeLapse / SuperNight lock digital zoom (Pro keeps 1×/3×).
-     * Pocket 3 4K Video max is 2× (DJI spec).
+     *
+     * Pocket 3 is per-FORMAT: the ceiling follows the capture size class, so
+     * 1080 keeps 1×/2×/4× while 2.7K and 2160 1:1 stop at 3× and 4K and 3K 1:1
+     * stop at 2× — see [VideoResolution.pocket3ZoomMax]. With no FORMAT known
+     * yet, offer the body's absolute range.
      */
     fun activeZoomStops(resolutionCode: Int = -1, shootingMode: Int = -1): List<Double> {
         val n = name.lowercase().replace(" ", "")
@@ -49,7 +53,11 @@ data class CameraModel(
         if (digitalLocked) return listOf(1.0)
         if (isPocket4) return listOf(1.0, 2.0, 4.0)
         if (isPocket3) {
-            return if (resolutionCode == CameraCommands.RES_4K) listOf(1.0, 2.0) else listOf(1.0, 2.0, 4.0)
+            return when (VideoResolution.fromRaw(resolutionCode)?.pocket3ZoomMax) {
+                2.0 -> listOf(1.0, 2.0)
+                3.0 -> listOf(1.0, 2.0, 3.0)
+                else -> listOf(1.0, 2.0, 4.0)
+            }
         }
         if (family != "pocket") return listOf(1.0)
         return zoomStops.ifEmpty { listOf(1.0, 2.0, 4.0) }

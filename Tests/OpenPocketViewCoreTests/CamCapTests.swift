@@ -600,6 +600,51 @@ import Testing
         #expect(s.colorMode == .dLogM)
     }
 
+    @Test func optimisticZoomPinExpiresWhenTheBodyNeverConfirms() {
+        // The chip rides the same pin as every other control, with
+        // `CamFov.matches` standing in for equality.
+        func held(_ ask: Double, live: Double?, age: Double) -> Double? {
+            var pin: CameraValuePin<Double>? = CameraValuePin(ask, now: 0)
+            return CameraValuePin.reconcile(
+                &pin, reported: live, now: age, confirms: CamFov.matches)
+        }
+        // Fresh ask: the chip holds the target through the round trip.
+        #expect(held(3, live: 1, age: 0) == 3)
+        #expect(held(3, live: nil, age: 0) == 3)
+        // Body confirmed — the pin has done its job, live takes over.
+        #expect(held(3, live: 3, age: 0) == nil)
+        #expect(held(3, live: 2.97, age: 0) == nil)
+        // Body clamped, or moved the lens on its own (FORMAT change resets to
+        // 1×). It never reports 3×, so only the deadline can free the chip.
+        #expect(held(3, live: 1, age: 2) == nil)
+        #expect(held(4, live: 2, age: 5) == nil)
+        #expect(held(3, live: nil, age: 5) == nil)
+        // A pin that outlived its ask must not win the readout.
+        #expect(CamFov.readout(live: 1, preview: nil, fallback: 3, optimistic: nil) == 1)
+    }
+
+    @Test func formatCeilingClampsTheRememberedStopAndSaysSo() {
+        let pocket3 = CameraModel.resolve(modelId: 0x20, name: "OsmoPocket3-Test")
+        func stops(_ res: VideoResolution) -> [Double] {
+            pocket3.activeZoomStops(resolution: res, shootingMode: -1)
+        }
+        // 2.7K offers 3x, 4K only 2x, 1080 the full 4x.
+        #expect(stops(.p2_7K) == [1, 2, 3])
+        #expect(stops(.p4K) == [1, 2])
+        #expect(stops(.p1080) == [1, 2, 4])
+        // The stop the operator last tapped cannot outlive the FORMAT that
+        // allowed it: dropping to 4K has to pull 3x back to the new ceiling.
+        #expect(CamFov.stopWithinCycle(3, stops: stops(.p2_7K)) == 3)
+        #expect(CamFov.stopWithinCycle(3, stops: stops(.p4K)) == 2)
+        #expect(CamFov.stopWithinCycle(4, stops: []) == CamFov.minFactor)
+        // And the operator is told why the chip fell, only when it actually falls.
+        #expect(CamFov.ceilingNote(size: "4K", held: 3, stops: [1, 2]) == "4K caps zoom at 2\u{00D7}")
+        #expect(CamFov.ceilingNote(size: "4K", held: 2, stops: [1, 2]) == nil)
+        #expect(CamFov.ceilingNote(size: "2.7K", held: 4, stops: [1, 2, 3]) != nil)
+        #expect(CamFov.ceilingNote(size: "1080", held: 3, stops: [1, 2, 4]) == nil)
+        #expect(CamFov.ceilingNote(size: "4K", held: 3, stops: []) == nil)
+    }
+
     @Test func zoomStopsFollowTheBody() {
         let pro = CameraModel.resolve(modelId: 0x0022, name: nil)
         let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)
@@ -611,6 +656,25 @@ import Testing
         #expect(nano.zoomStops == [1])
         #expect(pocket3.activeZoomStops(resolution: .p4K, shootingMode: 0x01) == [1, 2])
         #expect(pocket3.activeZoomStops(resolution: .p1080, shootingMode: 0x01) == [1, 2, 4])
+        // Measured on a Pocket 3: the body clamps an over-ask to its own max,
+        // so these are the stops it actually reaches, not the ones we hoped for.
+        #expect(pocket3.activeZoomStops(resolution: .p2_7K, shootingMode: 0x01) == [1, 2, 3])
+        #expect(pocket3.activeZoomStops(resolution: .p1080_1x1, shootingMode: 0x01) == [1, 2, 4])
+        #expect(pocket3.activeZoomStops(resolution: .p2160_1x1, shootingMode: 0x01) == [1, 2, 3])
+        #expect(pocket3.activeZoomStops(resolution: .p3K_1x1, shootingMode: 0x01) == [1, 2])
+        // Unmeasured bytes inherit their measured sibling's size class.
+        #expect(pocket3.activeZoomStops(resolution: .p1080_9x16, shootingMode: 0x01) == [1, 2, 4])
+        #expect(pocket3.activeZoomStops(resolution: .p2_7K_4x3, shootingMode: 0x01) == [1, 2, 3])
+        #expect(pocket3.activeZoomStops(resolution: .p4K_1x1, shootingMode: 0x01) == [1, 2])
+        #expect(pocket3.activeZoomStops(resolution: .p3K_9x16, shootingMode: 0x01) == [1, 2])
+        // No FORMAT yet, or a byte the catalog does not name: full range.
+        #expect(pocket3.activeZoomStops(resolution: nil, shootingMode: 0x01) == [1, 2, 4])
+        #expect(
+            pocket3.activeZoomStops(resolution: VideoResolution(rawValue: 0xFE), shootingMode: 0x01)
+                == [1, 2, 4])
+        #expect(VideoResolution.p2_7K.pocket3ZoomMax == 3)
+        #expect(VideoResolution.p4K.pocket3ZoomMax == 2)
+        #expect(VideoResolution(rawValue: 0xFE).pocket3ZoomMax == nil)
         #expect(pocket4.activeZoomStops(resolution: .p4K, shootingMode: 0x01) == [1, 2, 4])
         #expect(pro.activeZoomStops(resolution: .p4K, shootingMode: 0x00) == [1, 3])
         #expect(pocket4.activeZoomStops(resolution: .p4K, shootingMode: 0x00) == [1])

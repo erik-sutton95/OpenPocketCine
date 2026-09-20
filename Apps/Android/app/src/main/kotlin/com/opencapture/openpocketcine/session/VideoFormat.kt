@@ -31,6 +31,28 @@ data class VideoResolution(val rawValue: Int) {
                 null -> null
             }
 
+    /**
+     * Pocket 3 digital-zoom ceiling for this FORMAT, or `null` for a byte the
+     * catalog does not name.
+     *
+     * The limit tracks the capture size class, not the aspect — a bigger frame
+     * leaves less crop headroom. Measured on a body by asking past the ceiling
+     * and reading `cam_fov` `zoomLens` back: the camera clamps to its own max
+     * rather than refusing, so an over-ask reports the true limit. `0x0A`,
+     * `0x69` (4x), `0x2D`, `0x6A` (3x), `0x10`, `0x6B` (2x) are measured; the
+     * rest inherit from a measured sibling in the same size class.
+     */
+    val pocket3ZoomMax: Double?
+        get() =
+            when (rawValue) {
+                0x0A, 0x0C, 0x42, 0x69 -> 4.0 // 1080 — 0x0A, 0x69 measured
+                0x2D, 0x43, 0x5F -> 3.0 // 2.7K — 0x2D measured
+                0x6A -> 3.0 // 2160 — measured
+                0x10, 0x67, 0x7D -> 2.0 // 4K — 0x10 measured
+                0x6B, 0x6C -> 2.0 // 3K — 0x6B measured
+                else -> null
+            }
+
     val sizeTitle: String
         get() =
             when (rawValue) {

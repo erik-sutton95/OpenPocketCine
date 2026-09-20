@@ -95,6 +95,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 val ChromeShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
@@ -835,7 +836,7 @@ class FrameRateSampler(
             return 1.0 / average
         }
 
-    val formatted: String get() = String.format("%.2f", displayFPS)
+    val formatted: String get() = String.format(Locale.US, "%.2f", displayFPS)
 }
 
 /** 0–4 bars from the 0–100 link-health score, with hysteresis. */

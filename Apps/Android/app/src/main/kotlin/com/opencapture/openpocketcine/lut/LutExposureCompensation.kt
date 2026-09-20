@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.lut
 import kotlin.math.abs
 import kotlin.math.round
 import kotlin.math.pow
+import java.util.Locale
 
 /**
  * iOS `LUTExposureCompensation`. Input-referred stops before the Rec.709 cube.
@@ -29,7 +30,7 @@ internal object LutExposureCompensation {
     fun label(stops: Double): String {
         val value = snap(stops)
         if (value == 0.0) return "0.0"
-        val formatted = "%+.1f".format(value)
+        val formatted = String.format(Locale.US, "%+.1f", value)
         return formatted.replace("-", "−")
     }
 
