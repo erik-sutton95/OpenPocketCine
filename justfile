@@ -228,12 +228,19 @@ android-vulkan-test:
 android-check: android-vulkan-test
     cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew assembleDebug test lint
 
+# Run the on-device instrumentation suite: gestures, hit testing, layout.
+# CI has no emulator, so a real device is the only place these run.
+# With several devices attached, pass the serial: `just android-device-test R58R92BL76K`.
+android-device-test serial="":
+    cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" {{ if serial == "" { "" } else { "ANDROID_SERIAL=" + serial } }} ./gradlew connectedDebugAndroidTest
+
 # Build and install the debug APK on a connected device/emulator, then launch it.
+# The debug build carries an `applicationIdSuffix`, so it launches as `.debug`.
 # With several devices attached, pass the serial: `just android-install R58R92BL76K`.
 android-install serial="":
     just android-build
     "${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}/platform-tools/adb" {{ if serial == "" { "" } else { "-s " + serial } }} install -r Apps/Android/app/build/outputs/apk/debug/app-debug.apk
-    "${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}/platform-tools/adb" {{ if serial == "" { "" } else { "-s " + serial } }} shell am start -n com.opencapture.openpocketcine/.MainActivity
+    "${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}/platform-tools/adb" {{ if serial == "" { "" } else { "-s " + serial } }} shell am start -n com.opencapture.openpocketcine.debug/com.opencapture.openpocketcine.MainActivity
 
 # Print the committed Android product version and local versionCode (Play stamps a CI counter).
 android-version:
