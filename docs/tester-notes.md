@@ -21,6 +21,10 @@ Any pull request that can trigger a TestFlight archive or a Play upload
 **replaces** those files. CI requires the path to change; this document
 requires the *content* to be the window, not an append.
 
+A branch that touches only test targets is exempt on both platforms: no test
+source ships in an archive or an upload, so there is nothing testers have not
+already been asked to try. CI skips the requirement for those paths.
+
 ## Steps
 
 1. Run `just tester-notes-window`. Completion: the printed list is this PR's
