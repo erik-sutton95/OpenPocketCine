@@ -123,12 +123,15 @@ import kotlin.math.roundToInt
 
 @Composable
 fun MediaPhotoViewer(
+    model: AppModel,
     file: MediaFile,
     controller: MediaLibraryController,
     onClose: () -> Unit,
     onDeliver: (MediaFile) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
+    val assist = model.assist
+    var showDesqueezeOptions by remember { mutableStateOf(false) }
     var bitmap by remember(file.id) { mutableStateOf<Bitmap?>(null) }
     var loading by remember { mutableStateOf(true) }
     var zoom by remember(file.id) { mutableStateOf(AnchoredPinchZoom()) }
@@ -149,6 +152,7 @@ fun MediaPhotoViewer(
 
     BackHandler {
         when {
+            showDesqueezeOptions -> showDesqueezeOptions = false
             confirmDelete -> confirmDelete = false
             else -> onClose()
         }
@@ -178,60 +182,42 @@ fun MediaPhotoViewer(
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val widthPx = constraints.maxWidth.toFloat()
                 val heightPx = constraints.maxHeight.toFloat()
-                val fit = min(widthPx / image.width, heightPx / image.height)
-                val imageW = image.width * fit * zoom.scale
-                val imageH = image.height * fit * zoom.scale
+                val fitted = PlaybackVideoLayout.aspectFitRect(
+                    PlaybackVideoLayout.Size(assist.presentedAspect(image.width.toFloat() / image.height, playback = true), 1f),
+                    PlaybackVideoLayout.Rect(0f, 0f, widthPx, heightPx),
+                )
+                LaunchedEffect(fitted.width, fitted.height) { zoom = zoom.endGesture(fitted.width, fitted.height) }
+                val imageW = fitted.width * zoom.scale
+                val imageH = fitted.height * zoom.scale
                 val left = (widthPx - imageW) / 2f + zoom.offsetX
                 val top = (heightPx - imageH) / 2f + zoom.offsetY
                 Box(Modifier.fillMaxSize().monitorBackdropSource(backdrop,
                     imageRect = androidx.compose.ui.geometry.Rect(left, top, left + imageW, top + imageH)))
-                Image(
-                    image.asImageBitmap(),
-                    contentDescription = file.filename,
-                    contentScale = ContentScale.Fit,
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = zoom.scale
-                                scaleY = zoom.scale
-                                translationX = zoom.offsetX
-                                translationY = zoom.offsetY
-                            }
-                            .pointerInput(file.id) {
-                                detectPlaybackVideoGestures(
-                                    isReady = { true },
-                                    isZoomed = { zoom.isZoomed },
-                                    config =
-                                        PlaybackGestureConfig(
-                                            enableTap = false,
-                                            enableScrub = false,
-                                            enableSwipe = false,
-                                        ),
-                                    onTap = {},
-                                    onChromeSwipe = {},
-                                    onScrubStart = {},
-                                    onScrubDelta = {},
-                                    onScrubEnd = {},
-                                    onPinch = { magnification, centroid ->
-                                        val anchor = unitPoint(centroid, widthPx, heightPx)
-                                        zoom =
-                                            zoom.pinchChanged(
-                                                magnification,
-                                                anchor.first,
-                                                anchor.second,
-                                                widthPx,
-                                                heightPx,
-                                            )
-                                    },
-                                    onPinchEnd = { zoom = zoom.endGesture(widthPx, heightPx) },
-                                    onPan = { translation ->
-                                        zoom = zoom.panChanged(translation.x, translation.y)
-                                    },
-                                    onPanEnd = { zoom = zoom.endGesture(widthPx, heightPx) },
-                                )
+                Box(Modifier.offset { IntOffset(fitted.x.roundToInt(), fitted.y.roundToInt()) }
+                    .size(with(photoDensity) { fitted.width.toDp() }, with(photoDensity) { fitted.height.toDp() })
+                    .clipToBounds()
+                    .pointerInput(file.id, fitted.width, fitted.height) {
+                        detectPlaybackVideoGestures(
+                            isReady = { true }, isZoomed = { zoom.isZoomed },
+                            config = PlaybackGestureConfig(enableTap = false, enableScrub = false, enableSwipe = false),
+                            onTap = {}, onChromeSwipe = {}, onScrubStart = {}, onScrubDelta = {}, onScrubEnd = {},
+                            onPinch = { magnification, centroid ->
+                                val anchor = unitPoint(centroid, fitted.width, fitted.height)
+                                zoom = zoom.pinchChanged(magnification, anchor.first, anchor.second, fitted.width, fitted.height)
                             },
-                )
+                            onPinchEnd = { zoom = zoom.endGesture(fitted.width, fitted.height) },
+                            onPan = { zoom = zoom.panChanged(it.x, it.y) },
+                            onPanEnd = { zoom = zoom.endGesture(fitted.width, fitted.height) },
+                        )
+                    }) {
+                    Image(image.asImageBitmap(), contentDescription = file.filename, contentScale = ContentScale.FillBounds,
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                            scaleX = zoom.scale
+                            scaleY = zoom.scale
+                            translationX = zoom.offsetX
+                            translationY = zoom.offsetY
+                        })
+                }
             }
         } else if (loading) {
             Column(
@@ -288,13 +274,31 @@ fun MediaPhotoViewer(
                     .padding(bottom = MonitorPlaybackLayout.PHOTO_FAVORITE_BOTTOM.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                MediaCircleIconButton(
-                    OpcIcon.STAR,
-                    if (favorite) "Remove from favorites" else "Add to favorites",
-                    { controller.toggleFavorite(file) },
-                    filled = favorite,
-                    tint = if (favorite) LiveDesign.amber else LiveDesign.text,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    com.opencapture.openpocketcine.assists.AssistToolCell(
+                        tool = LiveAssistTool.DESQ,
+                        isOn = assist.isPlaybackVisible(LiveAssistTool.DESQ), enabled = true,
+                        onClick = { assist.togglePlayback(LiveAssistTool.DESQ) },
+                        onLongClick = { showDesqueezeOptions = true },
+                    )
+                    MediaCircleIconButton(
+                        OpcIcon.STAR,
+                        if (favorite) "Remove from favorites" else "Add to favorites",
+                        { controller.toggleFavorite(file) },
+                        filled = favorite,
+                        tint = if (favorite) LiveDesign.amber else LiveDesign.text,
+                    )
+                }
+            }
+        }
+
+        if (showDesqueezeOptions) {
+            Popup(alignment = Alignment.Center, onDismissRequest = { showDesqueezeOptions = false },
+                properties = PopupProperties(focusable = true)) {
+                val popupWindow = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+                AssistOptionsPopup(LiveAssistTool.DESQ, assist, onDismiss = { showDesqueezeOptions = false },
+                    playback = true,
+                    maxHeightDp = with(photoDensity) { popupWindow.height.toDp().value * 0.8f })
             }
         }
 
@@ -365,8 +369,8 @@ fun MediaPlayerScreen(
     val favorite = controller.isFavorite(active)
     val progress = controller.downloadProgress[active.path]
     val context = LocalContext.current
-    val playbackConfiguration = LocalConfiguration.current
-    val portraitPlayback = playbackConfiguration.screenHeightDp > playbackConfiguration.screenWidthDp
+    val playbackWindow = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val portraitPlayback = playbackWindow.height > playbackWindow.width
     val density = LocalDensity.current
     val anyPlaybackAssistOn = assist.playbackVisibleTools.isNotEmpty()
     val audioMetersOn = assist.isPlaybackVisible(LiveAssistTool.AUDIO)
@@ -642,9 +646,12 @@ fun MediaPlayerScreen(
                 PlaybackVideoLayout.Rect(0f, 0f, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
             val fitted =
                 PlaybackVideoLayout.aspectFitRect(
-                    PlaybackVideoLayout.Size(videoWidth, videoHeight),
+                    PlaybackVideoLayout.Size(assist.presentedAspect(videoWidth / videoHeight, playback = true), 1f),
                     container,
                 )
+            LaunchedEffect(fitted.width, fitted.height) {
+                zoom = zoom.endGesture(fitted.width, fitted.height)
+            }
             val mirror = MirrorAssist.feedScaleX(assist.isPlaybackVisible(LiveAssistTool.MIRROR))
             val overlayWidthPx = constraints.maxWidth
             val overlayHeightPx = constraints.maxHeight

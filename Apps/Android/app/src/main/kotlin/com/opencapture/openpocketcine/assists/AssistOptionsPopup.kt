@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -208,6 +209,7 @@ private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colo
         LiveAssistTool.VECTOR -> VectorscopeOptions(state)
         LiveAssistTool.LIGHTS -> LightsOptions(state)
         LiveAssistTool.ND -> NdOptions(state)
+        LiveAssistTool.DESQ -> DesqueezeOptions(state)
         LiveAssistTool.GUIDES -> GuidesOptions(state)
         LiveAssistTool.GRID -> GridOptions(state)
         LiveAssistTool.CROSS -> OptionCopy(CrosshairAssist.HELP)
@@ -590,4 +592,42 @@ private fun CompensationPicker(selected: CrushClipCompensation, onSelect: (Crush
 @Composable
 private fun OptionCopy(text: String) {
     Text(text, color = LiveDesign.muted, fontSize = 13.sp)
+}
+
+@Composable
+internal fun DesqueezeOptions(state: LiveAssistState) {
+    SettingsInlineRow("Ratio", help = AnamorphicDesqueeze.HELP, showTopDivider = false, stacked = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val selected = if (state.desqueezeCustom) "Custom" else state.desqueezePreset.label
+            (DesqueezePreset.entries.map { it.label } + "Custom").chunked(4).forEach { row ->
+                SettingsSegmented(row, selected) { label ->
+                    if (label == "Custom") state.selectCustomDesqueeze()
+                    else DesqueezePreset.entries.first { it.label == label }.let(state::selectDesqueezePreset)
+                }
+            }
+        }
+    }
+    if (state.desqueezeCustom) {
+        SettingsInlineRow("Custom ratio", help = "1.00×–2.00× in 0.01 increments.", stacked = true) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                androidx.compose.material3.Slider(
+                    value = state.desqueezeCustomFactor.toFloat(),
+                    onValueChange = { state.updateDesqueezeFactor(it.toDouble()) },
+                    valueRange = 1f..2f,
+                    steps = 99,
+                    modifier = Modifier.weight(1f).semantics {
+                        contentDescription = "Anamorphic desqueeze custom ratio"
+                        stateDescription = AnamorphicDesqueeze.label(state.desqueezeCustomFactor)
+                    },
+                )
+                Text(AnamorphicDesqueeze.label(state.desqueezeCustomFactor),
+                    style = LiveType.ui(12f, FontWeight.Medium), color = LiveDesign.text)
+            }
+        }
+    }
+    SettingsInlineRow("Direction", stacked = true) {
+        SettingsSegmented(DesqueezeDirection.entries.map { it.label }, state.desqueezeDirection.label) { label ->
+            state.updateDesqueezeDirection(DesqueezeDirection.entries.first { it.label == label })
+        }
+    }
 }

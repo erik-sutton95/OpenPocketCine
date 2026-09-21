@@ -108,6 +108,8 @@ struct MediaPhotoViewer: View {
     @State private var isPreparingShare = false
     @State private var isDeleteConfirmPresented = false
     @State private var loadTask: Task<Void, Never>?
+    @State private var desqueezeOptions = false
+    @State private var desqueezeHelp = false
 
     private var session: CameraSession { model.session }
 
@@ -117,17 +119,24 @@ struct MediaPhotoViewer: View {
 
             if let image {
                 GeometryReader { geo in
+                    let rect = DesqueezeAssist.presentationRect(
+                        sourceSize: image.size, in: CGRect(origin: .zero, size: geo.size),
+                        effects: photoEffects)
                     Image(uiImage: image)
                         .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: geo.size.width, height: geo.size.height)
+                        .frame(width: rect.width, height: rect.height)
                         .scaleEffect(zoom.scale)
                         .offset(zoom.offset)
+                        .frame(width: rect.width, height: rect.height)
+                        .clipped()
                         .contentShape(Rectangle())
                         .gesture(
                             SimultaneousGesture(
-                                pinchGesture(size: geo.size),
-                                panGesture(size: geo.size)))
+                                pinchGesture(size: rect.size),
+                                panGesture(size: rect.size))
+                        )
+                        .onChange(of: rect.size) { _, size in zoom.endGesture(size: size) }
+                        .position(x: rect.midX, y: rect.midY)
                 }
                 .ignoresSafeArea()
             } else if isLoading {
@@ -158,8 +167,11 @@ struct MediaPhotoViewer: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 14 + windowGeometry.topControlInset)
                 Spacer()
-                favoriteButton
-                    .padding(.bottom, 18)
+                HStack(spacing: 20) {
+                    photoDesqueezeButton
+                    favoriteButton
+                }
+                .padding(.bottom, 18)
             }
         }
         .statusBarHidden()
@@ -178,6 +190,76 @@ struct MediaPhotoViewer: View {
                 }
             }
         }
+        .overlay {
+            if desqueezeOptions { photoDesqueezeOptions }
+        }
+    }
+
+    private var photoEffects: LiveImageEffects {
+        var effects = LiveImageEffects()
+        effects.desqueezeFactor =
+            model.assist.isPlaybackVisible(.desqueeze)
+            ? model.assist.desqueezeFactor : 1
+        effects.desqueezeHorizontal = model.assist.desqueezeHorizontal
+        return effects
+    }
+
+    private var photoDesqueezeButton: some View {
+        AssistToolChip(
+            tool: .desqueeze, isOn: model.assist.isPlaybackVisible(.desqueeze), compact: true
+        )
+        .contentShape(Rectangle())
+        .minTapTarget()
+        .gesture(
+            LongPressGesture(minimumDuration: 0.25).exclusively(before: TapGesture())
+                .onEnded { value in
+                    switch value {
+                    case .first: desqueezeOptions = true
+                    case .second: model.assist.togglePlayback(.desqueeze)
+                    }
+                }
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { model.assist.togglePlayback(.desqueeze) }
+        .accessibilityLabel("Anamorphic Desqueeze")
+        .accessibilityValue(model.assist.isPlaybackVisible(.desqueeze) ? "On" : "Off")
+        .accessibilityAction(named: "Options") { desqueezeOptions = true }
+        .accessibilityIdentifier("photo.desqueeze")
+    }
+
+    private var photoDesqueezeOptions: some View {
+        GeometryReader { geo in
+            MonitorInspector(
+                title: LiveAssistTool.desqueeze.title, viewport: geo.size,
+                safeArea: LiveMonitorLayout.resolvedSafeArea(
+                    geo.safeAreaInsets, scene: windowGeometry.safeArea),
+                helpVisible: $desqueezeHelp,
+                onClose: { desqueezeOptions = false }
+            ) {
+                EmptyView()
+            } content: {
+                if let image {
+                    Image(uiImage: image).resizable()
+                        .aspectRatio(
+                            image.size.width / image.size.height
+                                * (model.assist.desqueezeHorizontal
+                                    ? model.assist.desqueezeFactor
+                                    : 1 / model.assist.desqueezeFactor),
+                            contentMode: .fit
+                        )
+                        .frame(maxHeight: 160)
+                }
+                MonitorInspectorCard {
+                    DesqueezeLongPressMenu(assist: model.assist)
+                }
+                .environment(\.monitorInspectorHelp, desqueezeHelp)
+            } footer: {
+                EmptyView()
+            }
+            .environment(\.monitorSegmentedAppearance, .inspector)
+        }
+        .ignoresSafeArea()
     }
 
     private var favoriteButton: some View {
@@ -399,8 +481,9 @@ struct MediaPlayerView: View {
 
             GeometryReader { geo in
                 let container = CGRect(origin: .zero, size: geo.size)
-                let videoRect = PlaybackVideoLayout.aspectFitRect(
-                    videoSize: videoDisplaySize, in: container)
+                let videoRect = DesqueezeAssist.presentationRect(
+                    sourceSize: videoDisplaySize, in: container,
+                    effects: model.assist.playbackEffects)
 
                 ZStack {
                     MediaPlayerLayerView(
@@ -440,19 +523,20 @@ struct MediaPlayerView: View {
 
                 Color.clear
                     .frame(width: videoRect.width, height: videoRect.height)
-                    .position(x: videoRect.midX, y: videoRect.midY)
                     .contentShape(Rectangle())
                     .onAppear {
                         frameScrubVideoWidth = videoRect.width
                         zoomContainerSize = videoRect.size
                     }
-                    .onChange(of: videoRect.width) { _, width in
-                        frameScrubVideoWidth = width
-                        zoomContainerSize = videoRect.size
+                    .onChange(of: videoRect.size) { _, size in
+                        frameScrubVideoWidth = size.width
+                        zoomContainerSize = size
+                        zoom.endGesture(size: size)
                     }
                     .gesture(playbackVideoGesture)
                     .simultaneousGesture(playbackFrameTapGesture)
                     .simultaneousGesture(playbackFrameScrubGesture)
+                    .position(x: videoRect.midX, y: videoRect.midY)
 
                 playbackTransportFlashOverlay(in: videoRect)
                 playbackFrameScrubOverlay(in: videoRect)
@@ -575,8 +659,9 @@ struct MediaPlayerView: View {
             enabled: playerVisible && isClipReady, surroundRGB: 0x000000
         ) { size in
             guard let buffer = playbackFeed.backdropSource() else { return [] }
-            let rect = PlaybackVideoLayout.aspectFitRect(
-                videoSize: videoDisplaySize, in: CGRect(origin: .zero, size: size))
+            let rect = DesqueezeAssist.presentationRect(
+                sourceSize: videoDisplaySize, in: CGRect(origin: .zero, size: size),
+                effects: model.assist.playbackEffects)
             let effects = model.assist.playbackEffects
             return [
                 MonitorVideoBackdropSource(
@@ -696,6 +781,8 @@ struct MediaPlayerView: View {
         hasher.combine(model.assist.zebraMidtoneIRE)
         hasher.combine(model.assist.lutEnabled)
         hasher.combine(model.assist.lutSelection.rawValue)
+        hasher.combine(model.assist.desqueezeFactor)
+        hasher.combine(model.assist.desqueezeHorizontal)
         hasher.combine(model.assist.splitComparison)
         hasher.combine(model.assist.monitorColorMode?.rawValue)
         return hasher.finalize()

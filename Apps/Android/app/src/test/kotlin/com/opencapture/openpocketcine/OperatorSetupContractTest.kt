@@ -151,6 +151,7 @@ class OperatorSetupContractTest {
                 "GUIDES",
                 "GRID",
                 "CROSS",
+                "DESQ",
                 "MIRROR",
                 "AUDIO",
             ),
@@ -158,9 +159,9 @@ class OperatorSetupContractTest {
         )
         assertTrue(OperatorPrefs.DEFAULT_CLEAN_PINS.containsAll(setOf("LUT", "PEAK", "MIRROR")))
         assertEquals(OperatorPrefs.DEFAULT_CLEAN_PINS, OperatorPrefs.resolvedCleanPins(null))
-        assertEquals(OperatorPrefs.DEFAULT_CLEAN_PINS, OperatorPrefs.resolvedCleanPins(emptySet()))
+        assertEquals(emptySet(), OperatorPrefs.resolvedCleanPins(emptySet()))
         assertEquals(setOf("WAVE"), OperatorPrefs.resolvedCleanPins(setOf("WAVE")))
-        assertEquals(OperatorPrefs.DEFAULT_CLEAN_PINS, toggledCleanPins(setOf("LUT"), "LUT"))
+        assertEquals(emptySet(), toggledCleanPins(setOf("LUT"), "LUT"))
         assertEquals(setOf("LUT", "PEAK"), toggledCleanPins(setOf("LUT"), "PEAK"))
     }
 
@@ -176,6 +177,7 @@ class OperatorSetupContractTest {
                 "Parade",
                 "Vectorscope",
                 "Traffic Lights",
+                "Anamorphic Desqueeze",
             ),
             AssistCard.entries.map { it.title },
         )

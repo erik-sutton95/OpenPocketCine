@@ -4,18 +4,19 @@ import XCTest
 @testable import OpenPocketCine
 
 final class AssistBarChromeTests: XCTestCase {
-    func testToolbarOmitsLevelAndDesqueeze() {
+    func testToolbarIncludesDesqueezeAndOmitsLevel() {
         XCTAssertEqual(
             LiveAssistTool.toolbarCases,
             [
                 .lut, .peaking, .falseColor, .zebra, .waveform, .parade, .histogram,
-                .vectorscope, .trafficLights, .ndMeter, .guides, .grid, .crosshair, .mirror,
+                .vectorscope, .trafficLights, .ndMeter, .guides, .grid, .crosshair, .desqueeze,
+                .mirror,
             ]
         )
         XCTAssertFalse(LiveAssistTool.toolbarCases.contains(.level))
-        XCTAssertFalse(LiveAssistTool.toolbarCases.contains(.desqueeze))
+        XCTAssertTrue(LiveAssistTool.toolbarCases.contains(.desqueeze))
         XCTAssertFalse(LiveAssistTool.settingsCases.contains(.level))
-        XCTAssertFalse(LiveAssistTool.settingsCases.contains(.desqueeze))
+        XCTAssertTrue(LiveAssistTool.settingsCases.contains(.desqueeze))
         XCTAssertEqual(LiveAssistTool.settingsCases.last, .audioMeters)
     }
 
@@ -28,7 +29,7 @@ final class AssistBarChromeTests: XCTestCase {
         XCTAssertTrue(LiveAssistTool.audioMeters.hasConfiguration)
         XCTAssertFalse(LiveAssistTool.mirror.hasConfiguration)
         XCTAssertFalse(LiveAssistTool.level.hasConfiguration)
-        XCTAssertFalse(LiveAssistTool.desqueeze.hasConfiguration)
+        XCTAssertTrue(LiveAssistTool.desqueeze.hasConfiguration)
     }
 
     func testPopupParksAboveIconWhenThereIsRoom() {

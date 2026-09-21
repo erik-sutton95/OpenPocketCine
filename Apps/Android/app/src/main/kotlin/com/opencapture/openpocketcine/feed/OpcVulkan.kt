@@ -40,7 +40,7 @@ internal object OpcVulkan {
     /** Re-present last imported frame with current slots (drag/resize, no new HEVC). */
     @JvmStatic external fun nativeRedraw(handle: Long): Boolean
 
-    @JvmStatic external fun nativeSetFeedRect(handle: Long, x: Float, y: Float, w: Float, h: Float)
+    @JvmStatic external fun nativeSetFeedRect(handle: Long, x: Float, y: Float, w: Float, h: Float, stretchToRect: Boolean)
 
     @JvmStatic external fun nativeSetUiScale(handle: Long, scale: Float)
 

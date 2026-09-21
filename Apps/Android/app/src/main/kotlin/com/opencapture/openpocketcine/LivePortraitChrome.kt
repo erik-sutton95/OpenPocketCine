@@ -215,7 +215,8 @@ fun LivePortraitChrome(
     var topQuick by remember { mutableStateOf(false) }
     val captureOpen = sheet != null || stripQuick || topQuick
     val hidesCaptureValues = hidesLowerCaptureValues(sheet, stripQuick, topQuick)
-    val fill = sourceIsVertical || model.portraitFeedAspect == PortraitFeedAspect.FILL
+    val desqueezeVisible = assist.isVisible(LiveAssistTool.DESQ)
+    val fill = sourceIsVertical || (!desqueezeVisible && model.portraitFeedAspect == PortraitFeedAspect.FILL)
     val tablet = min(layout.viewportWidth, layout.viewportHeight) >= 600f
     val editing = model.chromeEditorMode
     val showsStatus = model.chromeSectionMounts(PocketDispSection.STATUS_BAR)
@@ -342,7 +343,7 @@ fun LivePortraitChrome(
             }
         }
 
-        if (editing == null && !sourceIsVertical) {
+        if (editing == null && !sourceIsVertical && !desqueezeVisible) {
             LivePortraitAspectToggle(
                 fill = fill,
                 locked = uiLocked,

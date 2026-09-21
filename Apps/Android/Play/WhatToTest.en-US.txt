@@ -1,18 +1,14 @@
 New and changed
 
-- Shared diagnostics include picture timings and drop estimates to help distinguish a delayed feed from a jumpy one.
-- TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
-- Pocket 3 zoom follows FORMAT limits and refused values settle back. Shutter, ISO, zoom and ND use consistent formatting across phone languages.
+- Anamorphic Desqueeze adds 1.1×, 1.2×, 1.33×, 1.5×, 1.6×, 1.8× and 2.0× presets plus a Custom slider in 0.01 steps for live view, videos and photos. Tap DE-SQ to toggle; hold for options.
 
 Fixes
 
-- Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
-- Replacement keyframes stay protected. First-picture recovery is bounded; repeated controls cannot indefinitely delay a stalled decoder or frame assembly.
-- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
-- Bluetooth setup advances through supported notification fallbacks and reports rejected setup writes promptly, with more useful diagnostics.
+- Connection recovery preserves the last picture and bounds repair attempts. Returning from Media starts live view once.
+- TalkBack reads live-view readouts and assist tools as whole phrases while preserving tap and hold actions.
+- Pocket 3 zoom follows FORMAT limits, and refused zoom values settle back to the camera's reading.
 
 What to test
 
-- Connect three times. If Bluetooth fails, retry once and share diagnostics. Test five minutes of live view; report the time of any freeze and whether the picture felt late or jumpy.
-- Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
-- With TalkBack on, check REC, timecode, battery and assists each speak one phrase. Double-tap and hold an assist tool to check both actions.
+- Try every DE-SQ preset, Custom and both directions in live view and playback. Check the full image, LUTs and guides; reopen the app to confirm options persist. Shared files should stay unchanged.
+- Reconnect, open Media and return repeatedly. With TalkBack on, check REC, timecode, battery and assists. Change Pocket 3 FORMAT while zoomed and check the zoom limit.

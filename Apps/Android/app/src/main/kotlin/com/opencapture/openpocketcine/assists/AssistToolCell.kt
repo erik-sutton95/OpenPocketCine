@@ -114,8 +114,8 @@ internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifi
         LiveAssistTool.CROSS -> com.opencapture.monitorui.MonitorAssistIcon.CROSSHAIR
         LiveAssistTool.MIRROR -> com.opencapture.monitorui.MonitorAssistIcon.MIRROR
         LiveAssistTool.AUDIO -> com.opencapture.monitorui.MonitorAssistIcon.AUDIO_METERS
-        LiveAssistTool.ND -> null
+        LiveAssistTool.ND, LiveAssistTool.DESQ -> null
     }
-    if (icon == null) OpcIcon(OpcIcon.APERTURE, null, modifier, tint)
+    if (icon == null) OpcIcon(if (tool == LiveAssistTool.DESQ) OpcIcon.MAXIMIZE else OpcIcon.APERTURE, null, modifier, tint)
     else com.opencapture.monitorui.MonitorAssistIcon(icon, tint, modifier)
 }

@@ -387,6 +387,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         }
         viewingPhoto?.let { file ->
             MediaPhotoViewer(
+                model = model,
                 file = file,
                 controller = controller,
                 onClose = { viewingPhoto = null },

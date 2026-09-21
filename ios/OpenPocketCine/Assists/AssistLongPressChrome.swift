@@ -70,7 +70,8 @@ enum AssistLongPressChrome {
         case .crosshair: CrosshairAssist.longPressMenu(assist: assist)
         case .mirror: MirrorAssist.longPressMenu(assist: assist)
         case .audioMeters: AudioAssist.longPressMenu(assist: assist)
-        case .level, .desqueeze, .evMeter, .instantReview, .magnification:
+        case .desqueeze: DesqueezeAssist.longPressMenu(assist: assist)
+        case .level, .evMeter, .instantReview, .magnification:
             EmptyView()
         }
     }

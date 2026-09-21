@@ -17,6 +17,13 @@ separate iOS and Android lists.
 
 ### Added
 
+- Anamorphic Desqueeze (**DE-SQ**) on iOS and Android: live view, video playback
+  and photo viewing share 1.1×, 1.2×, 1.33×, 1.5×, 1.6×, 1.8× and 2.0× presets,
+  plus a remembered Custom factor from 1.00× to 2.00× in 0.01 steps. Horizontal
+  and Vertical corrections fit the full picture; framing and playback zoom
+  follow the corrected aspect. Live and playback activation are independent.
+  Recordings, exports and scope measurements remain unchanged.
+
 - **HDR display** (Operator Setup → Display): optional outdoor boost that uses
   the phone's HDR panel so live view, scopes, settings, media, playback and HUD
   type stay readable in sun. Off by default. The picture is a brightness aid,

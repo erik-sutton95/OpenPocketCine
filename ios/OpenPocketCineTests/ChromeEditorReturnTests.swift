@@ -223,9 +223,9 @@ final class ChromeEditorReturnTests: XCTestCase {
     func testCleanViewStockPinsExcludeOmittedTools() {
         XCTAssertEqual(
             LiveAssistState.cleanViewDefaultPinnedTools,
-            [.lut, .peaking, .mirror]
+            [.lut, .peaking, .desqueeze, .mirror]
         )
-        XCTAssertFalse(LiveAssistTool.cleanPinCases.contains(.desqueeze))
+        XCTAssertTrue(LiveAssistTool.cleanPinCases.contains(.desqueeze))
         XCTAssertFalse(LiveAssistTool.cleanPinCases.contains(.level))
         XCTAssertFalse(LiveAssistTool.cleanPinCases.contains(.magnification))
     }

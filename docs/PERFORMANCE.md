@@ -300,3 +300,14 @@ existing decoder lock. No per-packet logging, new decoder, extra scope tap or re
 repair timer is added. Repeated SET grace is capped against the failed stage.
 These structural bounds are not a measured physical cadence/thermal result;
 that qualification remains pending.
+
+## Anamorphic display correction
+
+DE-SQ reuses the existing image presentation path: iOS applies the affine
+correction after LUT and pixel warnings, and Android fits its final presentation
+viewport. Playback uses the corrected picture rect for framing and zoom bounds.
+There is no second decoder, new scope tap, recurring timer or camera command.
+Inspector previews retain the existing 5 Hz / 320-pixel admission bounds.
+Factor changes re-present the held playback frame through the existing effects
+update. Physical cadence and thermal qualification remain separate from geometry
+and compositor regression tests.

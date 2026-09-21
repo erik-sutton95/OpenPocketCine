@@ -377,6 +377,7 @@ internal enum class CleanPinTool(val key: String, val title: String) {
     GUIDES("GUIDES", "Guides"),
     GRID("GRID", "Grid"),
     CROSSHAIR("CROSS", "Crosshair"),
+    DESQUEEZE("DESQ", "Anamorphic Desqueeze"),
     MIRROR("MIRROR", "Mirror"),
     AUDIO("AUDIO", "Audio Levels"),
 }
@@ -390,6 +391,7 @@ internal enum class AssistCard(val title: String) {
     PARADE("Parade"),
     VECTORSCOPE("Vectorscope"),
     TRAFFIC_LIGHTS("Traffic Lights"),
+    DESQUEEZE("Anamorphic Desqueeze"),
 }
 
 internal fun connectionPhaseLabel(phase: ConnectionPhase, failure: String?): String =
@@ -921,6 +923,17 @@ private fun AssistRows(model: AppModel, statusColorMode: Int, onOpenLut: () -> U
                 TrafficLightsAssistCard(assist)
             }
         }
+    }
+
+    SettingsRowCard(title = "Anamorphic Desqueeze", onReset = {
+        assist.updateDesqueezeFactor(1.33)
+        assist.selectDesqueezePreset(com.opencapture.openpocketcine.assists.DesqueezePreset.X133)
+        assist.updateDesqueezeDirection(com.opencapture.openpocketcine.assists.DesqueezeDirection.HORIZONTAL)
+    }) {
+        SettingsSwitchInlineRow("Enabled", isOn = assist.desqueeze, showTopDivider = false) {
+            assist.toggle(LiveAssistTool.DESQ)
+        }
+        com.opencapture.openpocketcine.assists.DesqueezeOptions(assist)
     }
 
     SettingsRowCard(title = "LUT") {

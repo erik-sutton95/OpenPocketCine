@@ -76,6 +76,47 @@ class LiveAssistState(
     var lutExposureStops by mutableDoubleStateOf(0.0)
         private set
 
+    var desqueeze by mutableStateOf(false)
+        private set
+    var desqueezePreset by mutableStateOf(DesqueezePreset.X133)
+        private set
+    var desqueezeCustom by mutableStateOf(false)
+        private set
+    var desqueezeCustomFactor by mutableDoubleStateOf(1.33)
+        private set
+    var desqueezeDirection by mutableStateOf(DesqueezeDirection.HORIZONTAL)
+        private set
+
+    val desqueezeFactor: Double
+        get() = if (desqueezeCustom) desqueezeCustomFactor else desqueezePreset.factor
+
+    fun selectDesqueezePreset(preset: DesqueezePreset) {
+        desqueezePreset = preset
+        desqueezeCustom = false
+        persist()
+    }
+
+    fun selectCustomDesqueeze() {
+        desqueezeCustom = true
+        persist()
+    }
+
+    fun updateDesqueezeFactor(value: Double) {
+        desqueezeCustomFactor = AnamorphicDesqueeze.snap(value)
+        desqueezeCustom = true
+        persist()
+    }
+
+    fun updateDesqueezeDirection(value: DesqueezeDirection) {
+        desqueezeDirection = value
+        persist()
+    }
+
+    fun presentedAspect(sourceAspect: Float, playback: Boolean = false, preview: Boolean = false): Float =
+        AnamorphicDesqueeze.aspect(sourceAspect,
+            preview || if (playback) isPlaybackVisible(LiveAssistTool.DESQ) else isVisible(LiveAssistTool.DESQ),
+            desqueezeFactor, desqueezeDirection)
+
     var clean by mutableStateOf(false)
     var pinned by mutableStateOf(parsePins(pinnedNames))
 
@@ -200,6 +241,7 @@ class LiveAssistState(
             LiveAssistTool.GRID -> grid
             LiveAssistTool.CROSS -> crosshair
             LiveAssistTool.MIRROR -> mirror
+            LiveAssistTool.DESQ -> desqueeze
         }
 
     /** Pins filter DISP 2; they never flip [isOn]. */
@@ -251,6 +293,7 @@ class LiveAssistState(
             LiveAssistTool.GRID -> grid = !grid
             LiveAssistTool.CROSS -> crosshair = !crosshair
             LiveAssistTool.MIRROR -> mirror = !mirror
+            LiveAssistTool.DESQ -> desqueeze = !desqueeze
         }
         if (tool in stackableScopeTools && isOn(tool)) bringToFront(tool)
         persist()
@@ -474,6 +517,7 @@ class LiveAssistState(
         grid = LiveAssistTool.GRID in tools
         crosshair = LiveAssistTool.CROSS in tools
         mirror = LiveAssistTool.MIRROR in tools
+        desqueeze = LiveAssistTool.DESQ in tools
         if (guideRatio != null && guideRatio > 0f) {
             guideAspect = GuideAspect.entries.minBy { kotlin.math.abs(it.ratio - guideRatio) }
             selectedGuides = setOf(guideAspect)
@@ -493,6 +537,10 @@ class LiveAssistState(
         for (g in selectedGuides) guidesJson.put(g.label)
         return JSONObject()
             .put("tools", tools)
+            .put("desqueezePreset", desqueezePreset.name)
+            .put("desqueezeCustom", desqueezeCustom)
+            .put("desqueezeCustomFactor", desqueezeCustomFactor)
+            .put("desqueezeDirection", desqueezeDirection.name)
             .put("guideAspect", guideAspect.label)
             .put("guideFamily", guideFamily.label)
             .put("selectedGuides", guidesJson)
@@ -579,6 +627,13 @@ class LiveAssistState(
         grid = LiveAssistTool.GRID in on
         crosshair = LiveAssistTool.CROSS in on
         mirror = LiveAssistTool.MIRROR in on
+        desqueeze = LiveAssistTool.DESQ in on
+        desqueezePreset = DesqueezePreset.entries.firstOrNull { it.name == obj.optString("desqueezePreset") }
+            ?: DesqueezePreset.X133
+        desqueezeCustom = obj.optBoolean("desqueezeCustom", false)
+        desqueezeCustomFactor = AnamorphicDesqueeze.snap(obj.optDouble("desqueezeCustomFactor", 1.33))
+        desqueezeDirection = DesqueezeDirection.entries.firstOrNull { it.name == obj.optString("desqueezeDirection") }
+            ?: DesqueezeDirection.HORIZONTAL
         lutOn = if (obj.has("lutArmed")) obj.optBoolean("lutArmed", true) else LiveAssistTool.LUT in on
         lutExposureStops = LutExposureCompensation.snap(obj.optDouble("lutExposureStops", 0.0))
         splitComparison = obj.optBoolean("splitComparison", false)
@@ -656,7 +711,7 @@ class LiveAssistState(
 
     companion object {
         val defaultPinned: Set<LiveAssistTool> =
-            setOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.MIRROR)
+            setOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.MIRROR, LiveAssistTool.DESQ)
 
         val stackableScopeTools: List<LiveAssistTool> =
             listOf(
@@ -705,10 +760,8 @@ class LiveAssistState(
             )
         }
 
-        private fun parsePins(names: Set<String>): Set<LiveAssistTool> {
-            val parsed = names.mapNotNull(LiveAssistTool::fromPersisted).toSet()
-            return parsed.ifEmpty { defaultPinned }
-        }
+        private fun parsePins(names: Set<String>): Set<LiveAssistTool> =
+            names.mapNotNull(LiveAssistTool::fromPersisted).toSet()
 
         private fun parsePlayback(names: Set<String>): Set<LiveAssistTool> =
             names.mapNotNull(LiveAssistTool::fromPersisted).toSet()

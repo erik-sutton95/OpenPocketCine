@@ -140,6 +140,28 @@ feed. If live view cannot return, bounded connection recovery takes over. Please
 test repeated browsing, playback and return with a connected camera; physical
 qualification of this follow-up is still pending.
 
+### Anamorphic Desqueeze
+
+Use **DE-SQ** in View Assist for an anamorphic lens or adapter. Tap to toggle;
+long-press for **Anamorphic Desqueeze** options. Choose **1.1×, 1.2×, 1.33×,
+1.5×, 1.6×, 1.8× or 2.0×**, or select **Custom** for a **1.00×–2.00×** slider
+in **0.01** steps. Custom remembers its last value when you switch presets.
+**Horizontal** widens the picture; **Vertical** corrects a rotated adapter.
+The full corrected picture fits within the display area. While DE-SQ is on,
+portrait Fill is suspended and its control is hidden; switching DE-SQ off
+restores your saved Fit/Fill choice.
+
+Desqueeze works in live view, video playback and photo viewing. Video and photo
+playback share their own on/off choice, separate from live view; factor and
+direction are shared. In the photo viewer, tap **DE-SQ** beside Favorite and
+hold it for options. Settings persist between launches. Desqueeze starts off;
+the initial factor is 1.33×. New DISP 2 pin preferences include it, while
+existing saved pins stay unchanged.
+
+LUTs and picture warnings follow the correction, and framing guides align with
+the corrected picture. Desqueeze changes only the display: recordings, shared
+files and scope measurements keep the original image.
+
 ## Moving scopes
 
 Newly enabled windowed scopes start in the center, ready for you to place them.
