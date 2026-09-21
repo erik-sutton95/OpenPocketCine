@@ -111,7 +111,7 @@ still contain visible gaps. Pocket 4 Pro motion stutter remains under physical
 investigation on both iPhone and Android, including the
 [Redmi report](https://github.com/erik-sutton95/OpenPocketCine/issues/334).
 
-More: [Camera Wi-Fi](../protocol/wifi/), [iOS app](../apps/ios/), [Android app](../apps/android/).
+More: [Camera Wi-Fi](../../protocol/wifi/), [iOS app](../../apps/ios/), [Android app](../../apps/android/).
 
 On iOS, returning from the background with arriving video but an invalid native
 decoder now hands recovery to the feed watchdog. It can rebuild the decoder

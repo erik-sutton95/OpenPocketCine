@@ -27,7 +27,16 @@ open issues with pcaps or SoftAP passwords.
 - [Android app](./apps/android/) — JNI, Gradle, Google Play closed testing
 - [Keeping docs current](./contribute/documentation/) — what to update in the same PR
 
-## Protocol
+## Osmo Devices
+
+[Device references](./devices/) collect captured command sets and capability
+surveys by camera model. Start here for model-specific behavior and firmware limits:
+
+- [Osmo Pocket 3](./protocol/pocket3/) — physical Mimo survey and implementation gaps
+- [Osmo Pocket 4 Pro](./protocol/pocket4-pro/) — Slow Motion, Photo and Live Photo commands
+- [Osmo Action 6](./devices/action-6/) — connection, formats, aperture, controls and original media
+
+## Shared protocol
 
 BLE is control only; bulk data goes over Wi-Fi.
 
@@ -40,8 +49,6 @@ BLE scan → GATT connect → app-pairing → read Wi-Fi creds → join AP → U
 - [Camera Wi-Fi](./protocol/wifi/)
 - [DUML frame](./protocol/duml-frame/) · [transport](./protocol/duml-transport/)
 - [Command catalog](./protocol/commands/)
-- [Pocket 3 findings](./protocol/pocket3/) — physical Mimo survey, protocol evidence, and implementation gaps
-- [Pocket 4 Pro shooting modes](./protocol/pocket4-pro/) — automated Slow Motion, Photo and Live Photo command evidence
 - [Live view](./protocol/live-view/)
 - [HTTP media](./protocol/media/)
 - [iOS protocol notes](./protocol/ios/)

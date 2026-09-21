@@ -193,6 +193,10 @@ jobs:
               - '.github/workflows/ci.yml'
             handbook:
               - 'handbook/**'
+              - 'scripts/check-handbook-links.py'
+              - 'justfile'
+              - '.lycheeignore'
+              - '.github/workflows/ci.yml'
               - 'scripts/stage-pages.sh'
               - '.github/workflows/deploy-pages.yml'
 
@@ -271,7 +275,9 @@ jobs:
         env:
           ASTRO_TELEMETRY_DISABLED: "1"
           HANDBOOK_BASE: /docs
-        run: npm --prefix handbook run build
+        run: |
+          npm --prefix handbook run build
+          python3 scripts/check-handbook-links.py --base /docs
 
   gate:
     name: CI gate

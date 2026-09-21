@@ -1185,7 +1185,7 @@ the empty-list case and preserving portrait on an fps change. Physical Android
 and on-camera fps-change checks remain pending. The operator's earlier session
 inputs were not captured, so the reproduction does not establish that this
 fallback caused that session's behavior. See
-[format fallback behavior](commands.md#pocket-3-format-choices-without-a-capability-table).
+[format fallback behavior](../commands/#pocket-3-format-choices-without-a-capability-table).
 
 ## OpenPocketCine recording and warm reconnect
 

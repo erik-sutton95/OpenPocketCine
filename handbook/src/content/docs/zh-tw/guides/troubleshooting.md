@@ -56,4 +56,4 @@ description: 配對、相機 Wi-Fi、即時畫面，以及會擋住畫面的本�
 
 如果恢復流程卡住，先讓 App 開著大約 15 秒再按 Retry，這樣報告裡才會包含失敗的階段。近期版本會分別記錄封包、畫面組裝和顯示三個階段的量測；平均 FPS 看起來正常，仍可能有肉眼可見的斷格。Pocket 4 Pro 移動時的卡頓仍在 iPhone 和 Android 上實機調查中，包含這則 [Redmi 回報](https://github.com/erik-sutton95/OpenPocketCine/issues/334)。
 
-更多：[相機 Wi-Fi](../protocol/wifi/)、[iOS 版](../apps/ios/)、[Android 版](../apps/android/)。
+更多：[相機 Wi-Fi](../../protocol/wifi/)、[iOS 版](../../apps/ios/)、[Android 版](../../apps/android/)。

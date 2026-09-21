@@ -5,7 +5,7 @@ description: SwiftUI iPhone and iPad shell. Physical device for BLE and camera W
 
 The production iOS app is a universal iPhone and iPad SwiftUI shell in
 `ios/OpenPocketCine/`. It is the operator-proven datalink. Generate the Xcode
-project with XcodeGen — see [Setup](../guides/setup/).
+project with XcodeGen — see [Setup](../../guides/setup/).
 
 ## Field Monitor interface
 
@@ -326,7 +326,7 @@ Verify record start/stop on the camera body until you trust the link.
 
 If live view never starts after Wi-Fi joins, pause local VPNs and ad
 blockers or exclude this app
-([Troubleshooting](../guides/troubleshooting/)).
+([Troubleshooting](../../guides/troubleshooting/)).
 
 ## Device requirements
 
@@ -336,7 +336,7 @@ the layout is in play). Protocol tests (`just test`) do not need hardware.
 iPad hides the system time / battery bar; monitor chrome is the HUD.
 
 Platform notes for the wire (Hotspot Configuration, Local Network, CoreBluetooth):
-[iOS protocol notes](../protocol/ios/).
+[iOS protocol notes](../../protocol/ios/).
 
 ## Releases
 

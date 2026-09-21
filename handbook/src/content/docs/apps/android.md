@@ -14,7 +14,7 @@ technical details and a reply email are optional. For a local diagnostic export,
 use pairing's overflow menu → **Share Diagnostics** or System → **Diagnostic
 options → Save diagnostic report**. Local VPNs and ad blockers (AdGuard, Blokada,
 RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
-exclude this app ([Troubleshooting](../guides/troubleshooting/)).
+exclude this app ([Troubleshooting](../../guides/troubleshooting/)).
 
 On **Your cameras**, PAIRED and NEARBY groups separate remembered cameras from
 new discoveries. Select a camera to see its connection progress and **Cancel**.
@@ -179,7 +179,7 @@ pattern, not Skip/SKIE:
    the Swift facade — a handshake miss is a recoverable session error, not a
    crash.
 
-Build recipes: [Setup](../guides/setup/). The living JNI/I/O notes:
+Build recipes: [Setup](../../guides/setup/). The living JNI/I/O notes:
 [`ANDROID.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/ANDROID.md).
 
 ## Operator surface
