@@ -113,6 +113,7 @@ fun MonitorPairCameraPage(
     onPrimary: () -> Unit,
     onBack: () -> Unit,
     onDiagnostics: () -> Unit,
+    onReportProblem: () -> Unit,
     modifier: Modifier = Modifier,
     onWatchFeed: (() -> Unit)? = null,
     extra: @Composable ColumnScope.() -> Unit = {},
@@ -123,7 +124,7 @@ fun MonitorPairCameraPage(
         val railWidth = if (tablet) 268.dp else 210.dp
         if (portrait) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PairingRail(presentation, true, onDiagnostics, onWatchFeed)
+                PairingRail(presentation, true, onDiagnostics, onReportProblem, onWatchFeed)
                 PairingPane(
                     presentation, true, tablet, onSelect, onPrimary, onBack, extra,
                     Modifier.weight(1f),
@@ -136,7 +137,7 @@ fun MonitorPairCameraPage(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 PairingRail(
-                    presentation, false, onDiagnostics, onWatchFeed,
+                    presentation, false, onDiagnostics, onReportProblem, onWatchFeed,
                     Modifier.width(railWidth).fillMaxHeight(),
                 )
                 PairingPane(
@@ -153,6 +154,7 @@ private fun PairingRail(
     presentation: MonitorPairingPresentation,
     portrait: Boolean,
     onDiagnostics: () -> Unit,
+    onReportProblem: () -> Unit,
     onWatchFeed: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -224,6 +226,18 @@ private fun PairingRail(
                 style = MonitorTypography.text(10f, FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Box(
+            Modifier.fillMaxWidth().heightIn(min = 44.dp)
+                .clickable(role = Role.Button, onClick = onReportProblem)
+                .testTag("pair.reportProblem"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Report a problem",
+                color = MonitorPalette.accent,
+                style = MonitorTypography.text(12f, FontWeight.SemiBold),
             )
         }
     }

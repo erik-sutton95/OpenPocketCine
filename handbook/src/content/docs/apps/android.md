@@ -8,9 +8,11 @@ HEVC/AVC live view, GPU looks, scopes, camera writes, and media. The public beta
 Google Play is open — [join the Android beta](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA). iOS is the daily driver. arm64
 phones, Android 10 or newer.
 
-If pairing or live view fails: Connection setup **Share Diagnostics**, or
-Operator Setup → System → **Share Diagnostics**. The report has no name,
-location, or Wi-Fi password. Local VPNs and ad blockers (AdGuard, Blokada,
+If pairing or live view fails, tap **Report a problem** on the pairing screen or
+in **Operator Setup → System**. It works before your first successful pairing;
+technical details and a reply email are optional. For a local diagnostic export,
+use pairing's overflow menu → **Share Diagnostics** or System → **Diagnostic
+options → Save diagnostic report**. Local VPNs and ad blockers (AdGuard, Blokada,
 RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
 exclude this app ([Troubleshooting](../guides/troubleshooting/)).
 

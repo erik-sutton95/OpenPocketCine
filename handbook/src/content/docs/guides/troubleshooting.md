@@ -5,7 +5,10 @@ description: Pairing, camera Wi-Fi, live view, and local VPNs or ad blockers tha
 
 Pairing and live view need a **physical** phone and the camera. The Simulator has no Bluetooth or camera Wi-Fi.
 
-If a step fails: Connection setup **Share Diagnostics**, or Operator Setup → System → **Report a problem**. The report has no name, location, or Wi-Fi password.
+If a step fails, tap **Report a problem** on the pairing screen, even if you have
+never connected a camera. The same form is in Operator Setup → System. Describe
+what happened and choose whether to include technical details. For a local
+diagnostic export, use the pairing screen's overflow menu → **Share Diagnostics**.
 
 ## Live view never starts
 
@@ -116,7 +119,7 @@ without forcing a full camera reconnect. A short picture hold can still occur
 while it waits for a new random-access frame. If a hold persists, keep the app
 open briefly and share diagnostics so the incident's recovery timeline is saved.
 
-Use **Operator Setup → System → Report a problem** to describe what happened
+Use **Report a problem** on the pairing screen or in **Operator Setup → System** to describe what happened
 without leaving the app. Add an email if you would like a reply. Technical details
 are optional and can be reviewed before you send. You can add up to three photos
 or screenshots, preview them and remove any before sending. Only choose images

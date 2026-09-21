@@ -4,6 +4,55 @@ import XCTest
 /// Opt-in real-device navigation. This does not manufacture telemetry, start a
 /// recording, or move a camera. Live-camera and thermal proof remain separate.
 final class PhysicalNavigationTests: XCTestCase {
+    func testPhysicalReportProblemBeforePairing() throws {
+        guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
+            throw XCTSkip("Requires the opted-in physical navigation run")
+        }
+        continueAfterFailure = false
+        let originalOrientation = XCUIDevice.shared.orientation
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_PHYSICAL_UI_REVIEW"] = "1"
+        app.launchEnvironment["OPV_CONSENT_REVIEW_ID"] = UUID().uuidString
+        XCUIDevice.shared.orientation = .portrait
+        app.launch()
+        defer {
+            app.terminate()
+            XCUIDevice.shared.orientation = originalOrientation
+        }
+        let decline = app.buttons["reliability.consent.decline"]
+        if decline.waitForExistence(timeout: 10) { decline.tap() }
+        let report = app.buttons["pair.reportProblem"]
+        let pair = app.buttons["cameras.pair"]
+        expectation(for: NSPredicate { _, _ in report.exists || pair.exists }, evaluatedWith: app)
+        waitForExpectations(timeout: 20)
+        // The launch splash can still cover controls already in the accessibility tree.
+        Thread.sleep(forTimeInterval: 3)
+        if !report.exists { pair.tap() }
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        func capturePairingScreen(_ name: String) {
+            let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
+            XCUIDevice.shared.orientation = orientation
+            Thread.sleep(forTimeInterval: 2)
+            XCTAssertTrue(report.isHittable)
+            XCTAssertGreaterThanOrEqual(report.frame.height, 44)
+            XCTAssertTrue(app.frame.contains(report.frame))
+            capturePairingScreen("pairing-support-\(orientation.rawValue)")
+            report.tap()
+            XCTAssertTrue(app.textViews["What happened?"].waitForExistence(timeout: 5))
+            capturePairingScreen("pairing-report-form-\(orientation.rawValue)")
+            app.buttons["Close"].firstMatch.tap()
+            XCTAssertTrue(report.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["Find your camera"].firstMatch.exists)
+        }
+        app.buttons["Pairing help and diagnostics"].tap()
+        XCTAssertTrue(app.buttons["Share Diagnostics"].waitForExistence(timeout: 5))
+    }
+
     func testPhysicalSimplifiedSupportNavigation() throws {
         guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
             throw XCTSkip("Requires the opted-in physical navigation run")

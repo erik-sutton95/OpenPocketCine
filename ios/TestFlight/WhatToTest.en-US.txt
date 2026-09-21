@@ -1,17 +1,15 @@
 New and changed
 
-- Pocket 3 zoom stops follow FORMAT, with a note when the ceiling changes. Refused zoom values settle back to the camera's reading.
-- HDR display brightens the phone panel; off by default. Screen recording and AirPlay use normal SDR. Camera HDR/HLG recording is unchanged.
+- Report a problem is visible on the pairing screen, even before your first connection. Add a description, optional technical details and screenshots without opening Settings.
+- Pocket 3 zoom follows FORMAT limits. HDR display offers an optional outdoor screen boost; screen recording and AirPlay stay SDR.
 
 Fixes
 
-- An established feed keeps its last picture instead of returning to Waiting for live view when frame statistics age out.
-- Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
-- Repeated controls cannot indefinitely delay stalled-picture recovery. Multiview and resizing keep the current picture host.
-- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
+- Connection setup and stalled-picture recovery have bounded waits. An established feed keeps its last picture while recovering.
+- Returning from Media starts live view once; older recovery deadlines no longer reconnect just because you opened Media.
 
 What to test
 
-- Connect and disconnect three times, then run for five minutes with LUT/WAVE and normal controls. Share diagnostics and the time of slow startup or any freeze.
-- Open Media, play a clip and return repeatedly. Cover Settings, rotate and switch single-camera/Multiview views; confirm picture returns.
-- On Pocket 3, check 1080 zooms to 4×, 2.7K to 3× and 4K to 2×. With HDR display on, check the feed stays upright and screen recordings remain normal SDR.
+- Before connecting a camera, open Report a problem in portrait and landscape. Close it and confirm pairing is still available. Share Diagnostics remains in the pairing menu.
+- Connect three times, then open Media and Settings, rotate and return to live view. Report any slow startup or freeze with the time it happened.
+- On Pocket 3, check 1080 zooms to 4×, 2.7K to 3× and 4K to 2×. With HDR display on, confirm screen recordings remain normal SDR.

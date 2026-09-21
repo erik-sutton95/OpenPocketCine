@@ -351,10 +351,12 @@ exporting an archive with the Watch companion. Cloud cannot register the Watch
 identifier during export. Setup and export-log troubleshooting:
 [Watch companion signing](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/testflight-ci.md#watch-companion-signing).
 
-If pairing or live view fails: Connection setup **Share Diagnostics**, or
-Operator Setup → System → **Share Diagnostics**, or take a screenshot for
-TestFlight and paste the copied report into the feedback. The report has no
-name, location, or Wi-Fi password.
+If pairing or live view fails, tap **Report a problem** on the pairing screen or
+in **Operator Setup → System**. It works before your first successful pairing;
+technical details and a reply email are optional. For a local diagnostic export,
+use pairing's overflow menu → **Share Diagnostics** or System → **Diagnostic
+options → Save diagnostic report**. You can also take a screenshot for TestFlight
+and paste the copied diagnostics into the feedback.
 
 ### False color during exposure changes
 

@@ -19,7 +19,8 @@ remain separate rollout requirements.
 
 | Path | What it is |
 | --- | --- |
-| Connection setup (first pair) → **Share Diagnostics** | Same redacted report, available before a camera is saved |
+| Connection setup (first pair) → **Report a problem** | Native form, available at every pairing step before a camera is saved |
+| Connection setup → overflow menu → **Share Diagnostics** | Local redacted diagnostic export |
 | Operator Setup → System → **Diagnostic options → Save diagnostic report** | Redacted report (`report.txt`). Includes a local typed incident summary when one was captured (`incidents.txt`) |
 | Operator Setup → System → **Automatic error reports** | Off by default. Available only when the build contains a valid HTTPS reporting destination. Consent can be revoked without deleting locally saved reports |
 | TestFlight screenshot feedback | iOS copies that compact paste to the clipboard — paste it into the TestFlight comment. Apple does not let an app attach files to TestFlight feedback. |
@@ -285,12 +286,17 @@ for development and verification; production alert filters stay unchanged.
 
 See [privacy operations](sentry-privacy-operations.md) for controller contact, DPA, retention, access controls, deletion verification and store-disclosure readiness.
 
-## Manual support from System
+## Manual support from pairing and System
 
 **Report a problem** opens a native form. A description is required; reply email
 and technical details are optional. Details are off by default and available for
 review. Only Send report stores a submission. This does not enable automatic
 Sentry reporting, and no email application or account is required.
+
+Both shells show **Report a problem** directly below the pairing target, at every
+step, including missing permissions, scanning and failures. It opens the same form
+as Operator Setup → System without requiring a saved camera or successful pairing.
+Closing the form returns to pairing without cancelling or restarting the attempt.
 
 A separate private queue holds one report. It expires after seven days and is
 removed when the app next runs. It transmits a Sentry feedback envelope only while the app is in the foreground and the camera

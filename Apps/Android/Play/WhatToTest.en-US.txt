@@ -1,18 +1,15 @@
 New and changed
 
-- Shared diagnostics include picture timings and drop estimates to help distinguish a delayed feed from a jumpy one.
+- Report a problem is visible on the pairing screen, even before your first connection. Add a description, optional technical details and screenshots without opening Settings.
 - TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
-- Pocket 3 zoom follows FORMAT limits and refused values settle back. Shutter, ISO, zoom and ND use consistent formatting across phone languages.
 
 Fixes
 
-- Live view no longer stays black on phones whose video decoder turns down the low-latency setting; it starts again without that setting.
-- Connection setup waits for the camera's command window and keeps the last picture; first-picture recovery is bounded so repeated controls cannot stall the decoder or frame assembly.
-- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
-- Bluetooth setup advances through supported notification fallbacks and reports rejected setup writes promptly, with more useful diagnostics.
+- Live view starts again without the low-latency setting when the phone's decoder refuses it, instead of staying black.
+- Connection setup and stalled-picture recovery have bounded waits. Returning from Media starts live view once and avoids older recovery deadlines.
 
 What to test
 
-- Connect three times; if live view ever stayed black on your phone, say whether a picture now arrives. If Bluetooth fails, retry once and share diagnostics.
-- Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
-- With TalkBack on, check REC, timecode, battery and assists each speak one phrase. Report any freeze and whether the picture felt late or jumpy.
+- Before connecting a camera, open Report a problem in portrait and landscape. Close it and confirm pairing is still available. Share Diagnostics remains in the pairing menu.
+- Connect three times, then open Media and Settings, rotate and return to live view. Report any black picture or freeze with the time it happened.
+- With TalkBack on, check REC, timecode, battery and assists each speak one phrase, and Report a problem is reachable before pairing.

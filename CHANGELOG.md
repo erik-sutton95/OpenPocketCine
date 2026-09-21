@@ -17,6 +17,11 @@ separate iOS and Android lists.
 
 ### Added
 
+- **Report a problem** is visible at every pairing step on iOS and Android,
+  including before the first camera is connected. It opens the existing native
+  form with optional technical details and images; local **Share Diagnostics**
+  remains in the pairing menu.
+
 - **HDR display** (Operator Setup → Display): optional outdoor boost that uses
   the phone's HDR panel so live view, scopes, settings, media, playback and HUD
   type stay readable in sun. Off by default. The picture is a brightness aid,
