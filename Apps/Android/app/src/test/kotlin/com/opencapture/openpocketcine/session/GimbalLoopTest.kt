@@ -15,7 +15,8 @@ class GimbalLoopTest {
     )
 
     private class Camera(program: GimbalProgram) {
-        data class Command(val at: Double, val target: GimbalWaypoint, val duration: Double, val phase: String)
+        data class Command(val at: Double, val from: GimbalWaypoint, val target: GimbalWaypoint,
+            val duration: Double, val phase: String, val label: String)
         val engine = GimbalMoveEngine()
         var now = 0.0
         var live = program.a!!
@@ -25,6 +26,7 @@ class GimbalLoopTest {
         private var duration = 1.0
         val commands = mutableListOf<Command>()
         val starts = mutableListOf<Double>()
+        var repeatedPreparation = false
         var lastOutput: GimbalMoveEngine.Output? = null
 
         init { assertTrue(engine.start(program, live)) }
@@ -35,9 +37,10 @@ class GimbalLoopTest {
             val before = engine.readout(live)?.phase
             lastOutput = engine.tick(0.01, live)
             val phase = engine.readout(live)?.phase
-            if (before == "HOLD" && phase == "RUN") starts += now
+            if ((before == "HOLD" || before == "VERIFY") && phase == "RUN") starts += now
+            if (starts.isNotEmpty() && (phase == "HOLD" || phase == "APPROACH")) repeatedPreparation = true
             lastOutput?.target?.let {
-                commands += Command(now, it, lastOutput!!.duration, phase!!)
+                commands += Command(now, live, it, lastOutput!!.duration, phase!!, engine.readout(live)!!.label)
                 origin = live
                 target = it
                 motionAt = now
@@ -79,50 +82,75 @@ class GimbalLoopTest {
         assertEquals(1, camera.starts.size)
     }
 
-    @Test fun exactAndSmoothProgramsRepeatFullTimingAndGeometryForThreeCycles() {
-        for (program in listOf(program(), program(includeC = true), program(1.0, includeC = true))) {
+    @Test fun exactProgramsAlternateWaypointsAndUnequalLegDurationsWithoutAnotherHold() {
+        for (program in listOf(program(), program(includeC = true))) {
             val camera = Camera(program)
-            camera.until { camera.starts.size == 4 }
-            val first = camera.takeCommands(0)
-            assertEquals(program.c ?: program.b, first.last().target)
-            for (cycle in 1..2) {
-                val repeated = camera.takeCommands(cycle)
-                assertEquals(first.map { it.target }, repeated.map { it.target })
-                assertEquals(first.map { it.duration }, repeated.map { it.duration })
-                first.zip(repeated).forEach { (original, next) ->
-                    assertEquals(original.at - first.first().at, next.at - repeated.first().at, 1e-8)
-                }
+            camera.until { camera.starts.size == 5 }
+            for (pass in 0..3) {
+                val reversed = pass % 2 == 1
+                val commands = camera.takeCommands(pass)
+                val targets = if (reversed) listOfNotNull(program.b.takeIf { program.c != null }, program.a)
+                    else listOfNotNull(program.b, program.c)
+                val durations = if (program.c == null) listOf(program.durationAB)
+                    else if (reversed) listOf(program.durationBC, program.durationAB)
+                    else listOf(program.durationAB, program.durationBC)
+                val labels = if (reversed) listOfNotNull("C→B".takeIf { program.c != null }, "B→A")
+                    else listOfNotNull("A→B", "B→C".takeIf { program.c != null })
+                assertEquals(targets, commands.map { it.target })
+                assertEquals(durations, commands.map { it.duration })
+                assertEquals(labels, commands.map { it.label })
+                assertEquals(durations.sum() + 0.3, camera.starts[pass + 1] - camera.starts[pass], 0.011)
             }
-            val returns = camera.commands.filter { it.phase == "APPROACH" }
-            assertEquals(3, returns.size)
-            assertTrue(returns.all { GimbalMoveEngine.angularDistance(it.target, program.a!!) < 1e-8 })
+            assertFalse(camera.repeatedPreparation)
+            assertTrue(camera.commands.none { it.phase == "APPROACH" })
             assertTrue(camera.engine.running)
             assertFalse(camera.lastOutput!!.finished)
             assertNull(camera.engine.failure)
         }
     }
 
-    @Test fun returnUsesMeasuredFinalPoseAndSafeSubdivisionsBeforeTwoSecondHold() {
+    @Test fun smoothPassesFollowTheSameCurveBackwardsWithOriginalWaypointLabels() {
+        val program = program(1.0, includeC = true)
+        val curve = GimbalProgramCurve.create(program)!!
+        val camera = Camera(program)
+        camera.until { camera.starts.size == 5 }
+        for (pass in 0..3) {
+            val commands = camera.takeCommands(pass)
+            val reversed = pass % 2 == 1
+            assertEquals(99, commands.size)
+            assertEquals(if (reversed) "C→B" else "A→B", commands.first().label)
+            assertEquals(if (reversed) "B→A" else "B→C", commands.last().label)
+            assertEquals(if (reversed) program.a else program.c, commands.last().target)
+            commands.forEach { command ->
+                val elapsed = (command.at - commands.first().at + 0.1).coerceIn(0.0, curve.duration)
+                val expected = curve.position(if (reversed) curve.duration - elapsed else elapsed)
+                assertTrue(GimbalMoveEngine.angularDistance(expected, command.target) < 1e-8)
+                assertEquals(0.1, command.duration)
+            }
+            commands.zipWithNext().forEach { (first, second) -> assertEquals(0.05, second.at - first.at, 1e-8) }
+            assertEquals(5.3, camera.starts[pass + 1] - camera.starts[pass], 0.011)
+        }
+        assertFalse(camera.repeatedPreparation)
+        assertNull(camera.engine.failure)
+    }
+
+    @Test fun wideArcUsesTimedSafeSubdivisionsInBothDirectionsWithoutResetTravel() {
         val program = GimbalProgram(point(-40.0), point(220.0), durationAB = 3.0, loop = true)
         val camera = Camera(program)
-        camera.until { camera.engine.readout(camera.live)?.phase == "VERIFY" }
-        while (camera.engine.readout(camera.live)?.phase == "VERIFY") {
-            camera.step { it.copy(yawDeg = 219.9) }
+        camera.until { camera.starts.size == 5 }
+        for (pass in 0..3) {
+            val commands = camera.takeCommands(pass)
+            assertEquals(3, commands.size)
+            assertEquals(3.0, commands.sumOf { it.duration })
+            assertEquals(if (pass % 2 == 0) program.b else program.a, commands.last().target)
+            commands.forEach {
+                assertTrue(abs(it.target.yawDeg - it.from.yawDeg) <= 120.0)
+                assertTrue(if (pass % 2 == 0) it.target.yawDeg > it.from.yawDeg else it.target.yawDeg < it.from.yawDeg)
+                assertEquals(if (pass % 2 == 0) "A→B" else "B→A", it.label)
+            }
         }
-        assertEquals("APPROACH", camera.engine.readout(camera.live)?.phase)
-        assertNull(camera.lastOutput?.target, "Verification cannot dispatch the return in the same tick")
-        assertFalse(camera.lastOutput!!.finished)
-        camera.until { camera.starts.size == 2 }
-        val returns = camera.commands.filter { it.phase == "APPROACH" }
-        assertEquals(3, returns.size)
-        var previous = 219.9
-        returns.forEach {
-            assertTrue(abs(it.target.yawDeg - previous) <= 120.0)
-            previous = it.target.yawDeg
-        }
-        assertEquals(219.9 + (-40.0 - 219.9) / 3, returns.first().target.yawDeg, 1e-8)
-        assertTrue(GimbalMoveEngine.angularDistance(program.a!!, returns.last().target) < 1e-8)
-        assertEquals(2.0, camera.starts[1] - returns.last().at - returns.last().duration, 0.011)
+        assertFalse(camera.repeatedPreparation)
+        assertNull(camera.engine.failure)
     }
 
     @Test fun failedVerificationNeverReturnsToA() {
@@ -145,29 +173,40 @@ class GimbalLoopTest {
         assertEquals(1, camera.commands.size)
     }
 
-    @Test fun cancelAtCycleBoundaryPreventsAnyReturnCommand() {
+    @Test fun cancelBeforeOrAfterTurnaroundPreventsAnyFurtherCommand() {
         for (afterVerification in listOf(false, true)) {
             val camera = Camera(program())
             camera.until { camera.engine.readout(camera.live)?.phase == "VERIFY" }
-            if (afterVerification) camera.until { camera.engine.readout(camera.live)?.phase == "APPROACH" }
+            if (afterVerification) camera.until { camera.starts.size == 2 }
+            val commandsAtCancel = camera.commands.size
             camera.engine.cancel()
             repeat(100) { camera.step() }
             assertNull(camera.lastOutput)
             assertFalse(camera.engine.running)
-            assertEquals(1, camera.commands.size)
+            assertEquals(commandsAtCancel, camera.commands.size)
         }
     }
 
-    @Test fun pauseResumeDoesNotShortenOrFlattenTheNextCycle() {
+    @Test fun pauseOnReverseKeepsDirectionAndDoesNotShortenOrFlattenLaterPasses() {
         for (program in listOf(program(includeC = true), program(1.0, includeC = true))) {
             val reference = Camera(program)
-            reference.until { reference.starts.size == 2 }
+            reference.until { reference.starts.size == 3 }
             val camera = Camera(program)
-            camera.until { camera.starts.size == 1 && camera.now >= camera.starts[0] + 1.23 }
-            camera.pauseAndResume(point(15.0))
-            camera.until { camera.starts.size == 3 }
-            assertEquals(reference.takeCommands(0).map { it.target }, camera.takeCommands(1).map { it.target })
-            assertEquals(reference.takeCommands(0).map { it.duration }, camera.takeCommands(1).map { it.duration })
+            camera.until { camera.starts.size == 2 && camera.now >= camera.starts[1] + 1.23 }
+            val commandsBeforePause = camera.commands.size
+            camera.pauseAndResume(camera.live)
+            camera.step()
+            assertEquals("C→B", camera.commands[commandsBeforePause].label)
+            camera.until { camera.starts.size == 5 }
+            assertEquals(program.a, camera.takeCommands(1).last().target)
+            for (pass in 2..3) {
+                val original = reference.takeCommands(pass - 2)
+                val repeated = camera.takeCommands(pass)
+                assertEquals(original.map { it.target }, repeated.map { it.target })
+                assertEquals(original.map { it.duration }, repeated.map { it.duration })
+                assertEquals(original.map { it.label }, repeated.map { it.label })
+            }
+            assertFalse(camera.repeatedPreparation)
             assertNull(camera.engine.failure)
             assertTrue(camera.engine.running)
         }

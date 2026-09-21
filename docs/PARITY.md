@@ -381,7 +381,11 @@ Native rotation safety: approach uses reachable-arc segments, and exact legs
 spanning at least 180° use timed native sub-moves along the reachable arc. Last-mile dispatch
 rejects ambiguous pan directions from fresh actual feedback. Selfie Flip is a
 presentation/stick mapping concern, not a sign change for native waypoints.
-MIRROR assist reflects waypoint letters and the dashed preview.
+Waypoint letters and the dashed preview follow settled rotate-180 pan orientation
+XOR MIRROR assist on both shells, independent of the camera Selfie Flip setting.
+Stored positions and native commands stay unchanged. Regression tests cover front,
+selfie, manual 180 and MIRROR combinations; physical selfie-overlay qualification
+remains pending on both shells.
 
 Motion Control continuation uses Start/Pause/Resume/Stop in both shells. Pause
 freezes remaining time; Resume requires fresh, settled feedback and has no new
@@ -389,9 +393,11 @@ countdown. Duration dials run from 0.5 to 120 seconds (left increases, right
 decreases). Android physical qualification remains outstanding.
 
 Motion Control Loop (2026-09-21): both shells offer an off-by-default Loop
-switch, chosen before Start. Successful final verification returns to A via the
-existing safe approach, settles for 2 seconds, and repeats the full saved take.
-The initial countdown runs once. Pause/Resume keeps the loop; Stop, manual control,
+switch, chosen before Start. Successful final verification reverses the saved
+path: A→B→A or A→B→C→B→A, repeating until Stop. Each reverse leg uses its
+original duration and retraces the same smoothed curve. Countdown, approach to A
+and the two-second settle happen only once; endpoint verification remains at each
+turnaround. Pause/Resume keeps the direction and loop; Stop, manual control,
 feedback/waypoint failure and session interruption end it. Closing an active editor
 minimizes to the control pill. Both shells retain points, durations, Smoothness and
 Loop across editor dismissal within the camera session; Clear resets points,

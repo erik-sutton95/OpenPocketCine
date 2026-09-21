@@ -300,6 +300,7 @@ fun LiveGimbalOverlay(
 /** The existing 25 Hz display prediction invalidates only marker content. */
 @Composable
 private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: GimbalProgram) {
+    val poseInvertPan by model.session.gimbalPoseInvertPan.collectAsState()
     var frameTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) { delay(40); frameTick += 1 }
@@ -317,7 +318,7 @@ private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: 
                 for (sample in preview) {
                     val (nx, ny, onScreen) = GimbalMoveEngine.project(sample, live, aspect)
                     if (!onScreen) { connected = false; continue }
-                    val x = (feed.minX + motionOverlayX(nx, model.assist.mirror).toFloat() * feed.width).dp.toPx()
+                    val x = (feed.minX + motionOverlayX(nx, poseInvertPan, model.assist.mirror).toFloat() * feed.width).dp.toPx()
                     val y = (feed.minY + ny.toFloat() * feed.height).dp.toPx()
                     if (connected) path.lineTo(x, y) else path.moveTo(x, y)
                     connected = true
@@ -331,10 +332,12 @@ private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: 
             val (nx, ny, onScreen) = GimbalMoveEngine.project(point, live, aspect)
             Box(
                 Modifier
-                    .offset(
-                        (feed.minX + motionOverlayX(nx, model.assist.mirror).toFloat() * feed.width - 13f).dp,
-                        (feed.minY + ny.toFloat() * feed.height - 13f).dp,
-                    )
+                    .offset {
+                        IntOffset(
+                            (feed.minX + motionOverlayX(nx, poseInvertPan, model.assist.mirror).toFloat() * feed.width - 13f).dp.roundToPx(),
+                            (feed.minY + ny.toFloat() * feed.height - 13f).dp.roundToPx(),
+                        )
+                    }
                     .size(26.dp)
                     .background(
                         LiveDesign.accent.copy(alpha = if (onScreen) 0.92f else 0.45f),
@@ -523,7 +526,7 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("Loop", color = LiveDesign.text, style = LiveType.ui(13f, FontWeight.SemiBold))
-                Text("Return to A and repeat until Stop.", color = LiveDesign.faint, style = LiveType.ui(9.5f))
+                Text("Repeat back and forth until Stop.", color = LiveDesign.faint, style = LiveType.ui(9.5f))
             }
             MonitorSwitchGraphic(program.loop)
         }

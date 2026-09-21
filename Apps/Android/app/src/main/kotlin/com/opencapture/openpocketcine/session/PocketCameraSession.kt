@@ -203,6 +203,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val focusPoint: StateFlow<Pair<Float, Float>> = _focusPoint.asStateFlow()
     private val _gimbalPoseViewFlip = MutableStateFlow(false)
     val gimbalPoseViewFlip: StateFlow<Boolean> = _gimbalPoseViewFlip.asStateFlow()
+    private val _gimbalPoseInvertPan = MutableStateFlow(false)
+    val gimbalPoseInvertPan: StateFlow<Boolean> = _gimbalPoseInvertPan.asStateFlow()
     private val gimbalLimitWatch = GimbalLimitWatch()
     private var lastGimbalCommand = 0f to 0f
     private val _gimbalLimitPulse = MutableStateFlow(0)
@@ -4195,6 +4197,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun syncGimbalPose() {
         _gimbalPoseViewFlip.value = gimbalStickMapping.poseViewFlip
+        _gimbalPoseInvertPan.value = gimbalStickMapping.invertPan
     }
 
     private fun tickGimbalLimit() {

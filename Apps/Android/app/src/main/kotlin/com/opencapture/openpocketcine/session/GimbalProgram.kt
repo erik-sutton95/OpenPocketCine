@@ -320,6 +320,7 @@ class GimbalMoveEngine {
     var failure: String? = null
         private set
     private var program = GimbalProgram()
+    private var reversed = false
     private var legs: List<Leg> = emptyList()
     private var index = 0
     private var phase = "HOLD"
@@ -366,6 +367,7 @@ class GimbalMoveEngine {
             return false
         }
         legs = next
+        reversed = false
         curve = GimbalProgramCurve.create(program)
         nextCurveCommand = 0.0
         index = 0
@@ -505,13 +507,7 @@ class GimbalMoveEngine {
         if (phase == "HOLD") {
             if (angularDistance(live, a) > ARRIVE_DEG) return stop(live, "Camera moved before the take")
             if (elapsed + 1e-9 < HOLD_SECONDS) return output(live)
-            phase = "RUN"
-            elapsed = 0.0
-            curve?.let {
-                nextCurveCommand = 0.05
-                return output(live, it.position(0.1), 0.1)
-            }
-            return startExactLeg(live)
+            return beginPassMotion(live)
         }
         if (phase == "RUN") curve?.let { return tickCurve(it, live) }
         if (phase == "RUN") {
@@ -532,17 +528,49 @@ class GimbalMoveEngine {
         }
         if (phase == "VERIFY" && elapsed >= 0.3 && checkpoints.isEmpty()) {
             if (angularDistance(live, legs[index].to) > ARRIVE_DEG) return stop(live, "Camera missed its final position")
-            if (program.loop) {
-                // Restart from measured feedback and the immutable full program,
-                // including the safe return to A and its normal settling hold.
-                if (!start(program, live)) return stop(live, failure ?: "Set reachable gimbal points again")
-                return output(live)
-            }
+            if (program.loop) return turnAround(live)
             phase = "DONE"
             running = false
             return output(live, finished = true)
         }
         return output(live)
+    }
+
+    /** Rebuild from saved geometry so pausing a pass cannot shorten later passes. */
+    private fun turnAround(live: GimbalWaypoint): Output {
+        reversed = !reversed
+        val a = program.a!!
+        val b = program.b!!
+        val c = program.c
+        val pass = when {
+            !reversed -> program
+            c != null -> program.copy(a = c, c = a, durationAB = program.durationBC, durationBC = program.durationAB)
+            else -> program.copy(a = b, b = a)
+        }
+        legs = when {
+            !reversed -> listOfNotNull(Leg("A→B", a, b, program.durationAB),
+                c?.let { Leg("B→C", b, it, program.durationBC) })
+            c != null -> listOf(Leg("C→B", c, b, program.durationBC), Leg("B→A", b, a, program.durationAB))
+            else -> listOf(Leg("B→A", b, a, program.durationAB))
+        }
+        curve = GimbalProgramCurve.create(pass)
+        index = 0
+        clock = 0.0
+        nextCurveCommand = 0.0
+        verificationInterruptedByPause = false
+        observations.clear()
+        checkpoints.clear()
+        return beginPassMotion(live)
+    }
+
+    private fun beginPassMotion(live: GimbalWaypoint): Output {
+        phase = "RUN"
+        elapsed = 0.0
+        curve?.let {
+            nextCurveCommand = 0.05
+            return output(live, it.position(0.1), 0.1)
+        }
+        return startExactLeg(live)
     }
 
     private fun startExactLeg(live: GimbalWaypoint): Output {

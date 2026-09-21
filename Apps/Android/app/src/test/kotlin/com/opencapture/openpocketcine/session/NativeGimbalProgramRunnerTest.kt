@@ -273,7 +273,7 @@ class NativeGimbalProgramRunnerTest {
     }
 
     @Test
-    fun loopingRunnerRestartsWithoutAnotherPreparationOrCountdown() {
+    fun loopingRunnerReversesWithoutAnotherPreparationCountdownOrHold() {
         val tx = Tx()
         var origin = a
         var target = a
@@ -299,7 +299,11 @@ class NativeGimbalProgramRunnerTest {
         assertEquals(0, stops)
         val firstReturn = sends.first { it.second == a }.first
         val nextTake = sends.first { it.first > firstReturn && it.second == b }.first
-        assertEquals(2.5, nextTake - firstReturn, 0.05, "Only return duration and the A hold precede the next take")
+        assertEquals(1.3, nextTake - firstReturn, 0.05, "Only the timed reverse pass and verification precede the next pass")
+        sends.zipWithNext().forEach { (first, next) ->
+            assertEquals(if (first.second == a) b else a, next.second)
+            assertEquals(1.3, next.first - first.first, 0.05)
+        }
         assertTrue(updates.size <= 67, "Loop progress retains the existing 5 Hz publication bound")
         assertTrue(runner.cancel(token))
         tx.through(13.1)

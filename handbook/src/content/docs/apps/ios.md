@@ -317,13 +317,16 @@ countdown before preparation and approach to A. Pause holds the move; Resume
 continues from the stopped position without another countdown. Stop clears the
 continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
 the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
-does not reverse stored mechanical angles; MIRROR changes the preview only.
+does not reverse stored mechanical angles. Waypoint letters and the dashed path
+follow the selfie orientation and MIRROR assist visually; saved positions and
+programmed movements stay the same.
 
-**Loop** (off by default) repeats each successfully completed take: return to A,
-settle for 2 seconds, then repeat the same durations and Smoothness. The return
-and settle are outside the timed take; the Start countdown runs only once.
-Choose Loop before Start. Pause/Resume and Stop work throughout the loop, and a
-motion failure or manual takeover stops it.
+**Loop** (off by default) moves back and forth: A→B→A→B, or
+A→B→C→B→A→B→C. Each reverse leg keeps its original duration and retraces
+the same smoothed path. The countdown, approach to A and two-second settle happen
+only at the initial start. There is a brief position check at each turnaround.
+Choose Loop before Start. Pause/Resume keeps the current direction; Stop, a motion
+failure or manual takeover ends the loop.
 
 Closing and reopening the editor retains A/B/C, durations, Smoothness and Loop
 for the current camera session. During a run, Close minimizes to the control pill

@@ -17,9 +17,10 @@ separate iOS and Android lists.
 
 ### Added
 
-- Motion Control Loop on iOS and Android: repeat a verified A→B or A→B→C take,
-  returning safely to A and settling between iterations. Pause/Resume and Stop
-  remain available; failures end the loop. Points, durations, Smoothness and Loop
+- Motion Control Loop on iOS and Android moves back and forth: A→B→A or
+  A→B→C→B→A, with the same leg durations and smoothed path in either direction.
+  Countdown and the initial settle run once. Pause/Resume and Stop remain
+  available; failures end the loop. Points, durations, Smoothness and Loop
   remain in the camera session when the editor closes. Close during a run keeps
   the control pill visible. Physical loop qualification remains pending.
 
@@ -284,6 +285,10 @@ separate iOS and Android lists.
   identification mark on clip upload.
 
 ### Fixed
+
+- Motion Control waypoint letters and the dashed path compensate for settled
+  selfie orientation and MIRROR on both shells. Saved positions and motion
+  commands are unchanged. Physical camera verification remains pending.
 
 - Android Bluetooth setup checks rejected native writes instead of waiting for
   callbacks that may never arrive. The tolerated notification fallback advances

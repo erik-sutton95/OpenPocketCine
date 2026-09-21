@@ -338,7 +338,7 @@ private struct LiveGimbalMoveEditor: View {
             }
 
             MonitorCaptureToggle(
-                "Loop", help: "Return to A and repeat until Stop.",
+                "Loop", help: "Repeat back and forth until Stop.",
                 isOn: Binding(
                     get: { model.session.gimbalProgram.loop },
                     set: { if canInteract() { model.session.setGimbalLoop($0) } })
@@ -608,7 +608,10 @@ struct LiveGimbalWaypointMarks: View {
                                 }
                                 let point = CGPoint(
                                     x: feed.minX + CGFloat(
-                                        model.assist.isVisible(.mirror) ? 1 - mark.nx : mark.nx)
+                                        GimbalWaypointPresentation.normalizedX(
+                                            mark.nx,
+                                            poseInvertPan: model.session.gimbalPoseInvertPan,
+                                            assistMirror: model.assist.isVisible(.mirror)))
                                         * feed.width,
                                     y: feed.minY + CGFloat(mark.ny) * feed.height)
                                 if connected {
@@ -638,7 +641,10 @@ struct LiveGimbalWaypointMarks: View {
                             .shadow(color: .black.opacity(0.45), radius: 2)
                             .position(
                                 x: feed.minX + CGFloat(
-                                    model.assist.isVisible(.mirror) ? 1 - mark.nx : mark.nx)
+                                    GimbalWaypointPresentation.normalizedX(
+                                        mark.nx,
+                                        poseInvertPan: model.session.gimbalPoseInvertPan,
+                                        assistMirror: model.assist.isVisible(.mirror)))
                                     * feed.width,
                                 y: feed.minY + CGFloat(mark.ny) * feed.height
                             )

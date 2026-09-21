@@ -31,7 +31,9 @@ against fresh actual pan before dispatch: a delta of 180° or more is rejected
 because the firmware could choose the route through the missing sector.
 Head tracking applies the same guard, including on its background send queue.
 Selfie Flip and rotate-180 picture correction do not invert stored mechanical
-yaw or native pitch. MIRROR assist reflects marker and curve presentation only.
+yaw or native pitch. Waypoint letters and the curve follow the settled
+rotate-180 pan orientation, composed with MIRROR assist. This changes their
+horizontal presentation only, for either Selfie Flip setting.
 
 The scheduler wakes on leg boundaries. A boundary dispatch more than 20 ms late
 invalidates the take. Smaller dispatch and radio delays remain measurement
@@ -118,14 +120,16 @@ retain their durations. Curved moves cut the remaining curve and join it from th
 actual stopped pose. Stop discards the continuation. Manual control, disconnect,
 and leaving the active camera session also cancel it.
 
-Loop is off by default. Enable it before Start to repeat the saved A→B or
-A→B→C take until Stop. Each successful final verification returns along the
-reachable arc to A, settles there for the existing 2 seconds, then runs the
-original durations and Smoothness again. Return and settle time are outside the
-timed take; the three-second countdown happens only once. Loop cannot be changed
-during a run (including countdown or pause). Pause/Resume applies to the current
-iteration; the next iteration uses the full saved path. A failed checkpoint,
-lost feedback, manual control or session interruption stops repetition.
+Loop is off by default. Enable it before Start to move back and forth until
+Stop: A→B→A→B, or A→B→C→B→A→B→C. After successful final verification,
+the path reverses with the same leg durations: C→B uses B→C's duration and
+B→A uses A→B's duration. Smoothness retraces the same curve in reverse. The
+three-second countdown, approach to A and two-second settle happen only at the
+initial start; each turnaround retains the brief endpoint verification window.
+Loop cannot be changed during a run (including countdown or pause).
+Pause/Resume preserves the current direction and remaining time; the next pass
+uses the full saved path. A failed checkpoint, lost feedback, manual control or
+session interruption stops repetition.
 
 The camera session retains points, durations, Smoothness and Loop when the editor
 is closed or minimized. Reopening restores them. Closing during a run minimizes

@@ -290,6 +290,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     private var resumeNeedsCommand = false
     public private(set) var failure: String?
     private var program = GimbalProgram()
+    private var isReversing = false
     private var legs: [Leg] = []
     private var index = 0
     private var phase = "HOLD"
@@ -309,6 +310,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     public mutating func start(program: GimbalProgram, live: GimbalWaypoint) -> Bool {
         cancel()
         self.program = program
+        isReversing = false
         verificationInterruptedByPause = false
         failure = nil
         lastReadout = nil
@@ -494,13 +496,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
                 return stop(live: live, reason: "Camera moved before the take")
             }
             if elapsed + 1e-9 < Self.holdSeconds { return output(live: live) }
-            phase = "RUN"
-            elapsed = 0
-            if let curve {
-                nextCurveCommand = 0.05
-                return output(live: live, target: curve.position(at: 0.1), duration: 0.1)
-            }
-            return startExactLeg(live: live)
+            return beginPass(live: live)
         }
         if phase == "RUN", let curve { return tickCurve(curve, live: live) }
         if phase == "RUN" {
@@ -532,19 +528,53 @@ public struct GimbalMoveEngine: Equatable, Sendable {
                 return stop(live: live, reason: "Camera missed its final position")
             }
             if program.loop {
-                // Only a verified finish repeats. Rebuild from the saved program,
-                // including full durations after a paused/resumed take.
-                let original = program
-                guard start(program: original, live: live) else {
-                    return stop(live: live, reason: failure ?? "Set reachable gimbal points again")
-                }
-                return output(live: live)
+                return turnAround(live: live)
             }
             phase = "DONE"
             running = false
             return output(live: live, finished: true)
         }
         return output(live: live)
+    }
+
+    private mutating func beginPass(live: GimbalWaypoint) -> Output {
+        phase = "RUN"
+        elapsed = 0
+        if let curve {
+            nextCurveCommand = 0.05
+            return output(live: live, target: curve.position(at: 0.1), duration: 0.1)
+        }
+        return startExactLeg(live: live)
+    }
+
+    /// Reverse only after a verified endpoint. Preparation belongs to the initial
+    /// Start, and paused legs must never replace the saved full path or durations.
+    private mutating func turnAround(live: GimbalWaypoint) -> Output {
+        isReversing.toggle()
+        var path = program
+        if isReversing {
+            path.a = program.c ?? program.b
+            path.b = program.c == nil ? program.a : program.b
+            path.c = program.c == nil ? nil : program.a
+            if program.c != nil {
+                path.durationAB = program.durationBC
+                path.durationBC = program.durationAB
+            }
+        }
+        let firstLabel = isReversing ? (program.c == nil ? "B→A" : "C→B") : "A→B"
+        legs = [Leg(label: firstLabel, from: path.a!, to: path.b!, duration: path.durationAB)]
+        if let c = path.c {
+            legs.append(Leg(label: isReversing ? "B→A" : "B→C",
+                from: path.b!, to: c, duration: path.durationBC))
+        }
+        curve = GimbalProgramCurve(program: path)
+        index = 0
+        clock = 0
+        nextCurveCommand = 0
+        observations = []
+        checkpoints = []
+        verificationInterruptedByPause = false
+        return beginPass(live: live)
     }
 
     private mutating func startExactLeg(live: GimbalWaypoint) -> Output {

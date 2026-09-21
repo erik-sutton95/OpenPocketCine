@@ -1,15 +1,16 @@
 New and changed
 
-- Motion Control Loop repeats the saved take until Stop, returning to A between runs. Closing and reopening the editor keeps the program for the camera session.
+- Motion Control Loop runs back and forth: A-B-A or A-B-C-B-A, keeping each leg’s duration and Smoothness. Closing the editor keeps the program for the camera session.
 - TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
 - Pocket 3 zoom follows FORMAT limits and refused values settle back. Readouts use consistent formatting across phone languages.
 
 Fixes
 
+- Motion Control waypoint letters and path now compensate for selfie orientation and MIRROR. Saved positions and motion stay unchanged.
 - Bluetooth setup reports rejected writes promptly. Connection and picture recovery use bounded retries; Media return starts live view once.
 
 What to test
 
-- Set A/B and optional C, enable Loop, and watch several repeats. Test Pause/Resume and Stop during the take and return to A. Try Smoothness with C set.
+- Loop A/B/C both ways with unequal durations and Smoothness. Test Pause/Resume and Stop on reverse legs. Check markers while panning in selfie mode, with Selfie Flip and MIRROR on/off.
 - Close and reopen Motion Control. Check points, durations, Smoothness and Loop remain. Clear should remove points and switch Loop off.
 - Connect repeatedly and return from Media. With TalkBack on, check each readout speaks one phrase and assist tap/hold still work. Check Pocket 3 zoom limits per FORMAT.
