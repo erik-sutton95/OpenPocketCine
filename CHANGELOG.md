@@ -21,7 +21,9 @@ separate iOS and Android lists.
   Gentle/Balanced/Responsive presets, sensitivity, Smoothness, dead band, Lerp,
   framing, speed and acceleration/jerk controls. Faces reuse continuous face
   detection with bounded recovery through brief misses. Delayed attitude no longer
-  repeatedly restarts the easing ramp, and rate damping reduces visual-loop overshoot.
+  repeatedly restarts the easing ramp. Motion matching follows subject velocity; a
+  delayed-progress watchdog removes the stale-attitude speed clamp and stops
+  stalled takes without a catch-up jump. Requested pan/tilt speed is visible.
   Manual control and extended subject loss stop it. Single-camera Pocket sessions only; Android and physical qualification
   are deferred. Settings last for the session.
 

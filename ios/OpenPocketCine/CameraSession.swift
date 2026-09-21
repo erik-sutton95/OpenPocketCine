@@ -230,6 +230,8 @@ final class CameraSession {
         return pose
     }
 
+    var gimbalAttitudeReceivedAt: TimeInterval? { lastMoveAttitudeAt }
+
     private(set) var gimbalControlSceneActive = true
     @ObservationIgnored private var nativeTargetGeneration: UInt64 = 0
     @ObservationIgnored private var nativeHeadToken: UInt64?

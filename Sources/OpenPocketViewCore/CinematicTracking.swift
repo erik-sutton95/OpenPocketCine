@@ -12,6 +12,8 @@ public struct CinematicTrackingSettings: Equatable, Sendable {
     public var maxAcceleration = 45.0
     public var maxJerk = 180.0
     public var confidence = 0.5
+    /// Match the subject's angular velocity; zero uses framing error alone.
+    public var motionMatching = 1.0
     public var framingX = 0.5
     public var framingY = 0.5
     public var panEnabled = true
@@ -54,6 +56,7 @@ public struct CinematicTrackingSettings: Equatable, Sendable {
             && (0...0.3).contains(deadBand) && (0...1.5).contains(lerp)
             && (1...90).contains(maxSpeed) && (5...180).contains(maxAcceleration)
             && (10...900).contains(maxJerk) && (0.3...0.95).contains(confidence)
+            && (0...1).contains(motionMatching)
             && (0.1...0.9).contains(framingX) && (0.1...0.9).contains(framingY)
     }
 }
@@ -64,6 +67,7 @@ public struct CinematicTrackingController: Sendable {
     public static let maxObservationAge = 0.25
     public static let commandDuration = 0.1
     public static let maxTickGap = 0.12
+    public private(set) var feedbackLost = false
     public private(set) var panSpeed = 0.0
     public private(set) var tiltSpeed = 0.0
     public private(set) var panAcceleration = 0.0
@@ -73,6 +77,12 @@ public struct CinematicTrackingController: Sendable {
     private var filterX = OneEuro()
     private var filterY = OneEuro()
     private var center: (x: Double, y: Double)?
+    private var rawCenter: (x: Double, y: Double)?
+    private var motion = CinematicSubjectMotion()
+    private var feedback = CinematicTrackingFeedback()
+    private var followsPanMotion = false
+    private var followsTiltMotion = false
+    private var motionObservationAt: TimeInterval?
     private var observationAt: TimeInterval?
     private var tickAt: TimeInterval?
     private var commandedYaw: Double?
@@ -116,6 +126,7 @@ public struct CinematicTrackingController: Sendable {
         center = (
             filterX.update(box.centerX, dt: dt), filterY.update(box.centerY, dt: dt)
         )
+        rawCenter = (box.centerX, box.centerY)
         observationAt = measuredAt
         return true
     }
@@ -124,9 +135,13 @@ public struct CinematicTrackingController: Sendable {
     /// `invertPan` includes camera pose and encoder mirroring, never the MIRROR assist.
     public mutating func target(
         pose: GimbalWaypoint, now: TimeInterval, settings: CinematicTrackingSettings,
-        pictureAspect: Double, invertPan: Bool
+        pictureAspect: Double, invertPan: Bool, poseReceivedAt: TimeInterval? = nil
     ) -> GimbalWaypoint? {
-        guard settings.isValid, now.isFinite, pictureAspect.isFinite, pictureAspect > 0,
+        guard !feedbackLost else { return nil }
+        let poseTime = poseReceivedAt ?? now
+        guard settings.isValid, now.isFinite, poseTime.isFinite,
+            now >= poseTime, now - poseTime <= 0.3,
+            pictureAspect.isFinite, pictureAspect > 0,
             let center, let observationAt, now >= observationAt,
             now - observationAt <= Self.maxObservationAge,
             let nativePitch = pose.nativePitchDeg, nativePitch.isFinite,
@@ -141,7 +156,13 @@ public struct CinematicTrackingController: Sendable {
             reset()
             return nil
         }
+        guard feedback.accepts(pose, receivedAt: poseTime, settings: settings) else {
+            reset()
+            feedbackLost = true
+            return nil
+        }
         tickAt = now
+        motion.notePose(pose, receivedAt: poseTime)
 
         // Nominal 80° horizontal FOV at 1×. This is a servo gain estimate, not
         // calibrated lens geometry; zoom compensation avoids an overactive tele view.
@@ -150,25 +171,40 @@ public struct CinematicTrackingController: Sendable {
         let y = Self.softDeadBand(settings.framingY - center.y, radius: settings.deadBand)
         let yawError = atan(2 * x * tangent) * 180 / .pi * (invertPan ? -1 : 1)
         let pitchError = atan(2 * y * tangent / pictureAspect) * 180 / .pi
+        if motionObservationAt != observationAt, let rawCenter {
+            let imageYaw =
+                atan(2 * (rawCenter.x - 0.5) * tangent) * 180 / .pi
+                * (invertPan ? -1 : 1)
+            let imagePitch = atan(2 * (0.5 - rawCenter.y) * tangent / pictureAspect) * 180 / .pi
+            motion.observe(imageYaw: imageYaw, imagePitch: imagePitch, measuredAt: observationAt)
+            motionObservationAt = observationAt
+        }
+        if x != 0 { followsPanMotion = true }
+        if y != 0 { followsTiltMotion = true }
+        if x == 0 && abs(motion.yawRate) < 0.5 || !settings.panEnabled { followsPanMotion = false }
+        if y == 0 && abs(motion.pitchRate) < 0.5 || !settings.tiltEnabled {
+            followsTiltMotion = false
+        }
         let panRate = pan.step(
-            error: yawError, enabled: settings.panEnabled, dt: dt, settings: settings)
+            error: yawError,
+            subjectRate: motion.yawRate * (followsPanMotion ? settings.motionMatching : 0),
+            enabled: settings.panEnabled, dt: dt, settings: settings)
         let tiltRate = tilt.step(
-            error: pitchError, enabled: settings.tiltEnabled, dt: dt, settings: settings)
+            error: pitchError,
+            subjectRate: motion.pitchRate * (followsTiltMotion ? settings.motionMatching : 0),
+            enabled: settings.tiltEnabled, dt: dt, settings: settings)
         // Keep fractional progress across 0.1° wire quantization. Re-anchoring
         // every target at feedback would erase every speed below 0.5°/s.
-        // Feedback still bounds lead, so a stalled motor cannot wind up a move.
-        let lead = floor(settings.maxSpeed * Self.commandDuration * 10) / 10
+        // Delayed feedback is checked against recent trajectory history above,
+        // never used to pull a progressing target backward. Divergence ends
+        // the take instead of accumulating an unbounded catch-up movement.
         let wantedYaw =
             settings.panEnabled ? (commandedYaw ?? pose.yawDeg) + panRate * dt : pose.yawDeg
         let wantedPitch =
             settings.tiltEnabled ? (commandedPitch ?? pose.pitchDeg) + tiltRate * dt : pose.pitchDeg
-        let yaw = HeadTrack.Reach.clampPan(
-            min(max(wantedYaw, pose.yawDeg - lead), pose.yawDeg + lead))
-        let pitch = HeadTrack.Reach.clampTilt(
-            min(max(wantedPitch, pose.pitchDeg - lead), pose.pitchDeg + lead))
-        // A feedback lead clamp is normal with delayed/quantized telemetry.
-        // Preserve the speed spring there: resetting it creates a repeated
-        // accelerate/brake cycle. Only a mechanical reach limit cancels an axis.
+        let yaw = HeadTrack.Reach.clampPan(wantedYaw)
+        let pitch = HeadTrack.Reach.clampTilt(wantedPitch)
+        // Mechanical reach limits cancel only the affected axis.
         if yaw == HeadTrack.Reach.panMinDeg || yaw == HeadTrack.Reach.panMaxDeg {
             pan = Axis()
         }
@@ -177,6 +213,7 @@ public struct CinematicTrackingController: Sendable {
         }
         commandedYaw = yaw
         commandedPitch = pitch
+        feedback.noteTarget(yaw: yaw, pitch: pitch, at: now)
         panSpeed = pan.rate
         tiltSpeed = tilt.rate
         panAcceleration = pan.acceleration
@@ -200,7 +237,8 @@ public struct CinematicTrackingController: Sendable {
         var acceleration = 0.0
 
         mutating func step(
-            error: Double, enabled: Bool, dt: Double, settings: CinematicTrackingSettings
+            error: Double, subjectRate: Double, enabled: Bool, dt: Double,
+            settings: CinematicTrackingSettings
         ) -> Double {
             guard enabled else {
                 self = Self()
@@ -211,8 +249,12 @@ public struct CinematicTrackingController: Sendable {
             // framing point. Without it, stacking interpolation and a speed
             // spring can make the complete camera/image loop underdamped.
             let dampingTime = 0.16 + 2 / omega + settings.lerp / log(2)
+            let subjectRate = min(max(subjectRate, -settings.maxSpeed), settings.maxSpeed)
             let wanted = min(
-                max((error - rate * dampingTime) * settings.sensitivity, -settings.maxSpeed),
+                max(
+                    subjectRate + (error - (rate - subjectRate) * dampingTime)
+                        * settings.sensitivity,
+                    -settings.maxSpeed),
                 settings.maxSpeed)
             // Actual elapsed time makes Lerp independent of frame/control rate.
             let alpha = settings.lerp == 0 ? 1 : -expm1(-log(2) * dt / settings.lerp)

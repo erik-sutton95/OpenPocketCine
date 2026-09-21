@@ -436,7 +436,12 @@ sets how strongly the camera follows, **Dead band** allows small movements
 without following, and **Smoothness** eases starts and changes of direction.
 **Lerp** adds a separate trailing blend: its value is the time to move halfway
 toward a new follow speed. Zero turns that blend off. **Maximum speed** caps
-requested movement. Fine tuning adds acceleration, jerk and confidence limits.
+the planned follow speed; acceleration and smoothing still affect catch-up.
+**Motion matching** in Fine tuning matches the subject’s pace while easing
+framing corrections. It defaults to 100%; lowering it adds deliberate trailing.
+Fine tuning also adds acceleration, jerk and confidence limits. The requested
+pan/tilt readout helps distinguish a low demand from a camera that is falling
+behind. For faster subjects, start with Responsive.
 
 Choose center or thirds, adjust vertical framing, or enable **Keep composition
 when selecting**. Pan and tilt can be enabled separately. Return to the Track
@@ -453,7 +458,10 @@ reselection. It does not recognize people by identity.
 Manual gimbal control, zoom or picture-format changes, Settings, Media, interface
 lock and leaving the app stop tracking. Select the subject again to resume.
 A tight, clearly visible subject works better than a box containing background
-or several people. More smoothing and Lerp also mean more lag.
+or several people. More smoothing and Lerp also mean more lag. If camera feedback
+stops following the planned movement, tracking stops and requires reselection;
+it does not send a catch-up jump. Very abrupt fast reversals can still leave the
+picture, and this prototype is not yet comparable to ActiveTrack on hardware.
 
 Objects use Apple's local Vision region tracker; faces use continuous detection.
 The prototype needs no model

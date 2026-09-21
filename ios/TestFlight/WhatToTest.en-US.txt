@@ -1,15 +1,15 @@
 New and changed
 
-- Gimbal → Track adds experimental phone-side subject/object tracking. Tune sensitivity, Smoothness, dead band, Lerp, framing and motion limits. Settings last for this session.
+- Gimbal → Track adds experimental phone-side tracking. Tune sensitivity, Smoothness, dead band, Lerp, Motion matching, framing and motion limits. Settings last for this session.
 - Pocket 3 zoom stops follow FORMAT. HDR display optionally brightens the phone panel; recordings and camera HDR/HLG are unchanged.
 
 Fixes
 
 - Live view keeps its last picture during recovery. Connection setup waits for the camera command window, and repeated controls cannot delay stalled-picture recovery indefinitely.
-- Phone tracking continuously detects the selected face, tolerates brief misses and avoids repeated easing restarts with delayed gimbal feedback.
+- Phone tracking matches subject velocity and removes a speed bottleneck from delayed attitude. Diverging camera feedback ends tracking.
 
 What to test
 
-- Open Gimbal → Track, select a person or object, and compare Gentle, Balanced and Responsive. Test center/thirds framing, tiny movements, direction reversals and front/selfie views.
+- In Gimbal → Track, use Responsive, Motion matching 100% and maximum speed 90°/s. Follow a walking person, stop and reverse. Compare Gentle/Balanced and front/selfie views.
 - Tap a face and briefly turn away: check recovery and smooth motion. Cover it for over a second or cross two faces: select again. Manual controls, zoom and leaving the app must stop tracking.
 - Run tracking for five minutes with LUT/WAVE. Compare feed smoothness and phone temperature with tracking off. Share diagnostics and the time of any freeze or unexpected movement.

@@ -1055,7 +1055,7 @@ keeps the unresolved field failures separate from the reproduced ownership bug.
 ## Cinematic Tracking prototype (2026-09-21)
 
 **Explicit prototype exception:** iOS gains **Gimbal → Track**, with local
-person/object region tracking, sensitivity, Smoothness, dead band, Lerp, speed,
+person/object region tracking, sensitivity, Smoothness, dead band, Lerp, Motion matching, speed,
 framing and acceleration/jerk controls. Android keeps its existing camera-side
 ActiveTrack; the phone tracker and its controls are deferred until this experiment
 is physically evaluated. The Foundation-only controller is portable, but no
@@ -1070,6 +1070,9 @@ window. Ambiguous face crossings require reselection.
 See the [prototype contract and physical review](cinematic-tracking.md).
 The first physical review reported bobbing and rapid subject loss. Follow-up
 regressions cover ramp resets under delayed attitude, damping with delayed video,
-single-frame misses and bounded face recovery. Physical iPhone qualification of
+single-frame misses and bounded face recovery. A subsequent physical review found
+slow pursuit at maximum speed. Motion matching now estimates subject velocity;
+a progress watchdog replaces the delayed-attitude lead clamp. Moving-subject,
+latency and stalled-feedback regressions cover this revision. Physical iPhone qualification of
 the revised motion, direction/mirroring, stop/takeover and sustained feed/thermal
 budget remains pending for the operator's review.

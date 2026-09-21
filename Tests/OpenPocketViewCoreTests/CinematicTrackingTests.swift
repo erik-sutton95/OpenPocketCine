@@ -98,42 +98,60 @@ import Testing
         #expect(furthest > 0.1)
     }
 
-    @Test func laggingFeedbackCannotAccumulateACommandAboveSpeedCap() throws {
-        for speed in [1.0, 1.5, 18.0, 60.0] {
+    @Test func stalledFeedbackStopsWithoutUnboundedCatchupOrAutomaticRestart() throws {
+        for speed in [1.0, 1.5, 18.0, 60.0, 90.0] {
             var controller = CinematicTrackingController()
             var settings = CinematicTrackingSettings.preset(.responsive)
             settings.maxSpeed = speed
-            for tick in 0..<150 {
+            var stopped = false
+            for tick in 0..<200 {
                 let now = Double(tick) * 0.04
                 controller.observe(box: box(x: 0.9), measuredAt: now, now: now)
-                let result = controller.target(
-                    pose: pose, now: now, settings: settings, pictureAspect: 1.77, invertPan: false)
-                let target = try #require(result)
-                let encoded = try #require(
+                guard
+                    let target = controller.target(
+                        pose: pose, now: now, settings: settings, pictureAspect: 1.77,
+                        invertPan: false)
+                else {
+                    stopped = true
+                    #expect(controller.feedbackLost)
+                    // Further valid observations cannot replay the retired trajectory.
+                    controller.observe(box: box(x: 0.9), measuredAt: now + 0.04, now: now + 0.04)
+                    #expect(
+                        controller.target(
+                            pose: pose, now: now + 0.04, settings: settings,
+                            pictureAspect: 1.77, invertPan: false) == nil)
+                    break
+                }
+                let frame = try #require(
                     Commands.gimbalTimedTarget(waypoint: target, duration: 0.1))
                 let yaw =
                     Double(
-                        Int16(
-                            bitPattern: UInt16(encoded.payload[0]) | UInt16(encoded.payload[1]) << 8
-                        )) / 10
-                #expect(abs(yaw - pose.yawDeg) / 0.1 <= speed + 1e-8)
+                        Int16(bitPattern: UInt16(frame.payload[0]) | UInt16(frame.payload[1]) << 8))
+                    / 10
+                let travelBound = speed * (CinematicTrackingFeedback.allowedLag + 0.1 + 0.04) + 0.3
+                #expect(abs(yaw - pose.yawDeg) <= travelBound)
             }
+            #expect(stopped, "Fresh but fixed feedback must stop a stalled take at \(speed)°/s")
         }
     }
 
-    @Test func boundedLeadDoesNotRepeatedlyRestartTheMotionRamp() throws {
+    @Test func delayedFeedbackDoesNotRepeatedlyRestartTheMotionRamp() throws {
         var controller = CinematicTrackingController()
         let settings = CinematicTrackingSettings.preset(.gentle)
         var previousSpeed = 0.0
         var largestDrop = 0.0
-        // Slow/quantized attitude feedback must bound the command without
-        // continually throwing away the easing state and starting from rest.
+        var history = [0.0]
+        var camera = 0.0
         for tick in 0..<150 {
             let now = Double(tick) * 0.04
             controller.observe(box: box(x: 0.8), measuredAt: now, now: now)
+            var feedback = pose
+            feedback.yawDeg = (history[max(0, tick - 6)] * 10).rounded() / 10
             let result = controller.target(
-                pose: pose, now: now, settings: settings, pictureAspect: 1.77, invertPan: false)
-            _ = try #require(result)
+                pose: feedback, now: now, settings: settings, pictureAspect: 1.77, invertPan: false)
+            let target = try #require(result)
+            camera += (target.yawDeg - camera) * (1 - exp(-0.04 / 0.1))
+            history.append(camera)
             largestDrop = max(largestDrop, previousSpeed - controller.panSpeed)
             previousSpeed = controller.panSpeed
         }
@@ -176,6 +194,28 @@ import Testing
         }
     }
 
+    @Test func heldAttitudeReceiptExpiresEvenWithFreshImages() throws {
+        var controller = CinematicTrackingController()
+        let settings = CinematicTrackingSettings.preset(.responsive)
+        for tick in 0...8 {
+            let now = Double(tick) * 0.04
+            controller.observe(box: box(x: 0.8), measuredAt: now, now: now)
+            let target = controller.target(
+                pose: pose, now: now, settings: settings, pictureAspect: 1.77,
+                invertPan: false, poseReceivedAt: 0)
+            if now <= 0.3 {
+                let target = try #require(target)
+                let bound =
+                    settings.maxSpeed * (CinematicTrackingFeedback.allowedLag + 0.1 + 0.3 + 0.04)
+                    + 0.3
+                #expect(abs(target.yawDeg) <= bound)
+            } else {
+                #expect(target == nil)
+                #expect(controller.panSpeed == 0)
+            }
+        }
+    }
+
     @Test func staleMeasurementsAndSchedulerGapsResetMotion() throws {
         var controller = CinematicTrackingController()
         #expect({ !controller.observe(box: box(), measuredAt: 1, now: 1.3) }())
@@ -212,7 +252,7 @@ import Testing
         var locked = CinematicTrackingController()
         var settings = CinematicTrackingSettings()
         settings.panEnabled = false
-        for tick in 0..<50 {
+        for tick in 0..<20 {
             let now = Double(tick) * 0.04
             do {
                 normal.observe(box: box(x: 0.8, y: 0.2), measuredAt: now, now: now)

@@ -79,7 +79,9 @@ struct LiveCinematicTrackingControls: View {
             slider(
                 "Maximum speed", value: $tracker.settings.maxSpeed, range: 1...90,
                 readout: String(format: "%.0f°/s", tracker.settings.maxSpeed),
-                help: "Limits how quickly the camera is asked to pan or tilt.")
+                help:
+                    "Caps the planned follow speed. Acceleration and smoothing also affect how quickly the camera catches up."
+            )
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("FRAMING").font(MonitorTheme.font(9, weight: .semibold))
@@ -106,6 +108,12 @@ struct LiveCinematicTrackingControls: View {
             DisclosureGroup("Fine tuning", isExpanded: $advanced) {
                 VStack(spacing: 16) {
                     slider(
+                        "Motion matching", value: $tracker.settings.motionMatching, range: 0...1,
+                        readout: percent(tracker.settings.motionMatching),
+                        help:
+                            "Match the subject’s pace while smoothing framing corrections. Lower values let moving subjects drift farther before following."
+                    )
+                    slider(
                         "Acceleration", value: $tracker.settings.maxAcceleration, range: 5...180,
                         readout: String(format: "%.0f°/s²", tracker.settings.maxAcceleration),
                         help: "How quickly follow speed can change.")
@@ -121,6 +129,12 @@ struct LiveCinematicTrackingControls: View {
                         help: "Ignore less certain observations. Brief misses keep the selection.")
                     Text(
                         "Confidence \(percent(tracker.confidence)) · Analysis \(Int(tracker.inferenceMilliseconds)) ms"
+                    )
+                    .font(MonitorTheme.font(10)).foregroundStyle(MonitorTheme.muted)
+                    Text(
+                        String(
+                            format: "Requested pan %.1f°/s · tilt %.1f°/s",
+                            abs(tracker.requestedPanSpeed), abs(tracker.requestedTiltSpeed))
                     )
                     .font(MonitorTheme.font(10)).foregroundStyle(MonitorTheme.muted)
                 }.padding(.top, 12)

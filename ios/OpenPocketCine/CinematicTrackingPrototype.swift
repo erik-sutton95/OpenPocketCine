@@ -22,6 +22,8 @@ final class CinematicTrackingPrototype {
     private(set) var box: TrackingBox?
     private(set) var confidence = 0.0
     private(set) var inferenceMilliseconds = 0.0
+    private(set) var requestedPanSpeed = 0.0
+    private(set) var requestedTiltSpeed = 0.0
     private(set) var subjectKind = SubjectKind.object
     var isEngaged: Bool {
         state == .selecting || state == .acquiring || state == .tracking || state == .holding
@@ -153,6 +155,8 @@ final class CinematicTrackingPrototype {
         raster = nil
         acceptedFrames = 0
         confidence = 0
+        requestedPanSpeed = 0
+        requestedTiltSpeed = 0
         controller.reset()
         state = reason == nil ? .idle : .stopped
         message = reason ?? "Select a person or object in the live picture."
@@ -282,6 +286,8 @@ final class CinematicTrackingPrototype {
             box = result.box
             confidence = result.confidence
             inferenceMilliseconds = result.milliseconds
+            requestedPanSpeed = controller.panSpeed
+            requestedTiltSpeed = controller.tiltSpeed
             lastHUD = now
         }
         return true
@@ -323,10 +329,14 @@ final class CinematicTrackingPrototype {
         guard let raster,
             let target = controller.target(
                 pose: pose, now: now, settings: settings,
-                pictureAspect: raster.width / max(1, raster.height), invertPan: startingInvert),
+                pictureAspect: raster.width / max(1, raster.height), invertPan: startingInvert,
+                poseReceivedAt: session.gimbalAttitudeReceivedAt),
             session.updateNativeSubjectTrack(target: target, token: token)
         else {
-            stop(reason: "Subject or live feedback lost. Select it again to resume.")
+            stop(
+                reason: controller.feedbackLost
+                    ? "Gimbal couldn’t keep up. Select the subject again."
+                    : "Subject or live feedback lost. Select it again to resume.")
             return
         }
     }
@@ -349,6 +359,8 @@ final class CinematicTrackingPrototype {
                 state = .holding
                 message = "Holding · waiting for the selected subject"
                 confidence = 0
+                requestedPanSpeed = 0
+                requestedTiltSpeed = 0
             }
             return false
         }
