@@ -3966,6 +3966,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _gimbalProgram.value = _gimbalProgram.value.copy(smoothness = value.coerceIn(0.0, 1.0))
     }
 
+    fun setGimbalLoop(enabled: Boolean) {
+        cancelProgrammedMove()
+        _gimbalProgram.value = _gimbalProgram.value.copy(loop = enabled)
+    }
+
     fun clearGimbalProgram() {
         cancelProgrammedMove()
         val keep = _gimbalProgram.value

@@ -388,6 +388,17 @@ freezes remaining time; Resume requires fresh, settled feedback and has no new
 countdown. Duration dials run from 0.5 to 120 seconds (left increases, right
 decreases). Android physical qualification remains outstanding.
 
+Motion Control Loop (2026-09-21): both shells offer an off-by-default Loop
+switch, chosen before Start. Successful final verification returns to A via the
+existing safe approach, settles for 2 seconds, and repeats the full saved take.
+The initial countdown runs once. Pause/Resume keeps the loop; Stop, manual control,
+feedback/waypoint failure and session interruption end it. Closing an active editor
+minimizes to the control pill. Both shells retain points, durations, Smoothness and
+Loop across editor dismissal within the camera session; Clear resets points,
+Smoothness and Loop while keeping duration preferences. Session reset clears the
+program. Automated regression coverage is separate from physical qualification;
+physical loop and sustained live-view budget checks remain pending on both shells.
+
 ## Multiview session network and shutdown (in validation)
 
 Every new iOS Multiview session opens the network picker with empty camera slots.

@@ -235,4 +235,75 @@ class NativeGimbalProgramRunnerTest {
         assertFalse(nativeGimbalTargetIsSafe(a, selfie.copy(pose = a.copy(pitchDeg = -60.0)), 1.1))
     }
 
+    @Test
+    fun loopKeepsOneTokenAndCancelFencesReturnBeforeOrAfterVerification() {
+        for (cancelAfterReturn in listOf(false, true)) {
+            val tx = Tx()
+            var origin = a
+            var target = a
+            var motionAt = 0.0
+            var duration = 1.0
+            fun physical() = GimbalMoveEngine.lerp(origin, target, (tx.now - motionAt) / duration)
+            val sends = mutableListOf<Pair<Double, GimbalWaypoint>>()
+            val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+            val events = mutableListOf<String>()
+            val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+                { NativeGimbalFeedback(physical(), tx.now) }, { next, seconds ->
+                    origin = physical()
+                    target = next
+                    motionAt = tx.now
+                    duration = seconds
+                    sends += tx.now to next
+                    events += "target"
+                    true
+                }, { events += "stop" })
+            val token = runner.start(GimbalProgram(a, b, durationAB = 1.0, loop = true)) { updates += it }
+            // Preparation + A hold + one-second move; final verification ends after 3.55s.
+            tx.through(if (cancelAfterReturn) 3.65 else 3.45)
+            assertEquals(if (cancelAfterReturn) listOf(b, a) else listOf(b), sends.map { it.second })
+            assertTrue(updates.all { it.token == token && !it.finished && it.failure == null })
+            val countAtCancel = sends.size
+            assertTrue(runner.cancel(token))
+            tx.schedule(0.0) { events += "manual" }
+            tx.through(10.0)
+            assertEquals(countAtCancel, sends.size)
+            assertEquals(listOf("stop", "manual"), events.takeLast(2))
+            assertFalse(runner.resume(token))
+        }
+    }
+
+    @Test
+    fun loopingRunnerRestartsWithoutAnotherPreparationOrCountdown() {
+        val tx = Tx()
+        var origin = a
+        var target = a
+        var motionAt = 0.0
+        var duration = 1.0
+        fun physical() = GimbalMoveEngine.lerp(origin, target, (tx.now - motionAt) / duration)
+        val sends = mutableListOf<Pair<Double, GimbalWaypoint>>()
+        val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+        var stops = 0
+        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+            { NativeGimbalFeedback(physical(), tx.now) }, { next, seconds ->
+                origin = physical()
+                target = next
+                motionAt = tx.now
+                duration = seconds
+                sends += tx.now to next
+                true
+            }, { stops++ })
+        val token = runner.start(GimbalProgram(a, b, durationAB = 1.0, loop = true)) { updates += it }
+        tx.through(13.0)
+        assertTrue(sends.count { it.second == b } >= 3)
+        assertTrue(updates.all { it.token == token && !it.finished && it.failure == null })
+        assertEquals(0, stops)
+        val firstReturn = sends.first { it.second == a }.first
+        val nextTake = sends.first { it.first > firstReturn && it.second == b }.first
+        assertEquals(2.5, nextTake - firstReturn, 0.05, "Only return duration and the A hold precede the next take")
+        assertTrue(updates.size <= 67, "Loop progress retains the existing 5 Hz publication bound")
+        assertTrue(runner.cancel(token))
+        tx.through(13.1)
+        assertEquals(1, stops)
+    }
+
 }

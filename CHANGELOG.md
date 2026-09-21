@@ -17,6 +17,12 @@ separate iOS and Android lists.
 
 ### Added
 
+- Motion Control Loop on iOS and Android: repeat a verified A→B or A→B→C take,
+  returning safely to A and settling between iterations. Pause/Resume and Stop
+  remain available; failures end the loop. Points, durations, Smoothness and Loop
+  remain in the camera session when the editor closes. Close during a run keeps
+  the control pill visible. Physical loop qualification remains pending.
+
 - **HDR display** (Operator Setup → Display): optional outdoor boost that uses
   the phone's HDR panel so live view, scopes, settings, media, playback and HUD
   type stay readable in sun. Off by default. The picture is a brightness aid,

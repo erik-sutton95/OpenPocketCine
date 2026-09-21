@@ -299,7 +299,7 @@ private struct LiveGimbalMoveEditor: View {
                 CloseButton(
                     action: {
                         guard canInteract() else { return }
-                        model.liveGimbalPanel = .none
+                        model.liveGimbalPanel = model.session.gimbalMoveRunning ? .runPill : .none
                     }, size: 30
                 )
                 .accessibilityIdentifier("motion.close")
@@ -337,6 +337,15 @@ private struct LiveGimbalMoveEditor: View {
                 .foregroundStyle(LiveDesign.text)
             }
 
+            MonitorCaptureToggle(
+                "Loop", help: "Return to A and repeat until Stop.",
+                isOn: Binding(
+                    get: { model.session.gimbalProgram.loop },
+                    set: { if canInteract() { model.session.setGimbalLoop($0) } })
+            )
+            .disabled(model.session.gimbalMoveRunning)
+            .accessibilityIdentifier("motion.loop")
+
             HStack(spacing: 8) {
                 Button {
                     guard canInteract() else { return }
@@ -347,6 +356,7 @@ private struct LiveGimbalMoveEditor: View {
                         .padding(.vertical, 10)
                 }
                 .buttonStyle(.zcTapTarget)
+                .accessibilityIdentifier("motion.clear")
                 .foregroundStyle(LiveDesign.muted)
                 .background(LiveDesign.glassBright, in: Capsule())
 

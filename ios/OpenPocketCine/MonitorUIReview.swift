@@ -77,6 +77,13 @@
             ]
             status.availableShutterDenoms = [25, 50, 100, 200, 500]
             model.session.status = status
+            if ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION"] == "1" {
+                model.session.gimbalProgram = GimbalProgram(
+                    a: .init(yawDeg: 0, pitchDeg: 0, zoom: 1, nativePitchDeg: 0),
+                    b: .init(yawDeg: 30, pitchDeg: 0, zoom: 1, nativePitchDeg: 0),
+                    c: .init(yawDeg: 30, pitchDeg: 20, zoom: 1, nativePitchDeg: -20),
+                    durationAB: 3, durationBC: 2, smoothness: 0.5)
+            }
             model.session.liveSignalBars = 4
             model.session.liveFPS = "25.00"
             model.savedCameras = [

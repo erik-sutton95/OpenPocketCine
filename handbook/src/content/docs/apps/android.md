@@ -292,6 +292,18 @@ continues from the stopped position without another countdown. Stop clears the
 continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
 the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
 does not reverse stored mechanical angles; MIRROR changes the preview only.
+
+**Loop** (off by default) repeats each successfully completed take: return to A,
+settle for 2 seconds, then repeat the same durations and Smoothness. The return
+and settle are outside the timed take; the Start countdown runs only once.
+Choose Loop before Start. Pause/Resume and Stop work throughout the loop, and a
+motion failure or manual takeover stops it.
+
+Closing and reopening the editor retains A/B/C, durations, Smoothness and Loop
+for the current camera session. During a run, Close minimizes to the control pill
+so Pause and Stop stay available. Stop keeps the saved program; Clear removes the
+points and resets Smoothness and Loop. A new camera session starts a fresh program.
+
 Physical Android Motion Control and Pocket 3 qualification remain pending; the
 recorded motion checks are on Pocket 4 Pro/iPhone. See
 [Motion Control qualification](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/programmed-moves.md#evidence-and-qualification).

@@ -1,18 +1,15 @@
 New and changed
 
-- Shared diagnostics include picture timings and drop estimates to help distinguish a delayed feed from a jumpy one.
+- Motion Control Loop repeats the saved take until Stop, returning to A between runs. Closing and reopening the editor keeps the program for the camera session.
 - TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
-- Pocket 3 zoom follows FORMAT limits and refused values settle back. Shutter, ISO, zoom and ND use consistent formatting across phone languages.
+- Pocket 3 zoom follows FORMAT limits and refused values settle back. Readouts use consistent formatting across phone languages.
 
 Fixes
 
-- Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
-- Replacement keyframes stay protected. First-picture recovery is bounded; repeated controls cannot indefinitely delay a stalled decoder or frame assembly.
-- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
-- Bluetooth setup advances through supported notification fallbacks and reports rejected setup writes promptly, with more useful diagnostics.
+- Bluetooth setup reports rejected writes promptly. Connection and picture recovery use bounded retries; Media return starts live view once.
 
 What to test
 
-- Connect three times. If Bluetooth fails, retry once and share diagnostics. Test five minutes of live view; report the time of any freeze and whether the picture felt late or jumpy.
-- Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
-- With TalkBack on, check REC, timecode, battery and assists each speak one phrase. Double-tap and hold an assist tool to check both actions.
+- Set A/B and optional C, enable Loop, and watch several repeats. Test Pause/Resume and Stop during the take and return to A. Try Smoothness with C set.
+- Close and reopen Motion Control. Check points, durations, Smoothness and Loop remain. Clear should remove points and switch Loop off.
+- Connect repeatedly and return from Media. With TalkBack on, check each readout speaks one phrase and assist tap/hold still work. Check Pocket 3 zoom limits per FORMAT.

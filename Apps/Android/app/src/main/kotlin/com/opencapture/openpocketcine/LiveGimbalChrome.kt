@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.Slider
@@ -74,6 +75,7 @@ import com.opencapture.monitorui.MonitorDurationDialMetrics
 import com.opencapture.monitorui.MonitorInspector
 import com.opencapture.monitorui.MonitorOptionGroup
 import com.opencapture.monitorui.MonitorPalette
+import com.opencapture.monitorui.MonitorSwitchGraphic
 import com.opencapture.monitorui.MonitorValueDrum
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.session.GimbalHudCopy
@@ -479,8 +481,11 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
                 )
             }
             LivePopupCloseButton(
-                onClick = { model.liveGimbalPanel = LiveGimbalPanel.NONE },
+                onClick = {
+                    model.liveGimbalPanel = if (running) LiveGimbalPanel.RUN_PILL else LiveGimbalPanel.NONE
+                },
                 size = 30.dp,
+                modifier = Modifier.testTag("motion.close"),
             )
         }
         waypointRow(model, program, GimbalWaypointSlot.A, duration = null, floor = null, running, cameraId, phase)
@@ -507,9 +512,26 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
                 onValueChange = { model.session.setGimbalSmoothness(it.toDouble()) },
                 valueRange = 0f..1f, steps = 19)
         }
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 44.dp)
+                .testTag("motion.loop")
+                .toggleable(value = program.loop, enabled = !running, role = Role.Switch,
+                    onValueChange = model.session::setGimbalLoop)
+                .alpha(if (running) .45f else 1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Loop", color = LiveDesign.text, style = LiveType.ui(13f, FontWeight.SemiBold))
+                Text("Return to A and repeat until Stop.", color = LiveDesign.faint, style = LiveType.ui(9.5f))
+            }
+            MonitorSwitchGraphic(program.loop)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!running) {
-                Chip("Clear", selected = false, modifier = Modifier.weight(1f)) { model.session.clearGimbalProgram() }
+                Chip("Clear", selected = false, modifier = Modifier.weight(1f).testTag("motion.clear")) {
+                    model.session.clearGimbalProgram()
+                }
                 Chip(GimbalHudCopy.RUN, selected = model.session.canRunProgrammedMove,
                     modifier = Modifier.weight(1f).testTag("motion.startStop"),
                     enabled = model.session.canRunProgrammedMove) { model.session.runProgrammedMove() }
@@ -634,6 +656,7 @@ private fun LiveGimbalRunPill(model: AppModel, program: GimbalProgram, running: 
         Box(
             Modifier
                 .size(44.dp, 40.dp)
+                .testTag("motion.expand")
                 .chromeClickable(onClick = { model.liveGimbalPanel = LiveGimbalPanel.EDITOR }),
             contentAlignment = Alignment.Center,
         ) {

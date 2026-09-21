@@ -109,6 +109,7 @@ data class GimbalProgram(
     val durationAB: Double = DEFAULT_DURATION,
     val durationBC: Double = DEFAULT_DURATION,
     val smoothness: Double = 0.0,
+    val loop: Boolean = false,
 ) {
     val canRun: Boolean get() = a != null && b != null
 
@@ -531,6 +532,12 @@ class GimbalMoveEngine {
         }
         if (phase == "VERIFY" && elapsed >= 0.3 && checkpoints.isEmpty()) {
             if (angularDistance(live, legs[index].to) > ARRIVE_DEG) return stop(live, "Camera missed its final position")
+            if (program.loop) {
+                // Restart from measured feedback and the immutable full program,
+                // including the safe return to A and its normal settling hold.
+                if (!start(program, live)) return stop(live, failure ?: "Set reachable gimbal points again")
+                return output(live)
+            }
             phase = "DONE"
             running = false
             return output(live, finished = true)

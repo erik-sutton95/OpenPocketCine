@@ -118,6 +118,22 @@ retain their durations. Curved moves cut the remaining curve and join it from th
 actual stopped pose. Stop discards the continuation. Manual control, disconnect,
 and leaving the active camera session also cancel it.
 
+Loop is off by default. Enable it before Start to repeat the saved A→B or
+A→B→C take until Stop. Each successful final verification returns along the
+reachable arc to A, settles there for the existing 2 seconds, then runs the
+original durations and Smoothness again. Return and settle time are outside the
+timed take; the three-second countdown happens only once. Loop cannot be changed
+during a run (including countdown or pause). Pause/Resume applies to the current
+iteration; the next iteration uses the full saved path. A failed checkpoint,
+lost feedback, manual control or session interruption stops repetition.
+
+The camera session retains points, durations, Smoothness and Loop when the editor
+is closed or minimized. Reopening restores them. Closing during a run minimizes
+to the control pill so Pause and Stop remain available. Stop discards the active
+continuation but retains the saved program. Clear removes the points and resets
+Smoothness and Loop; duration preferences remain. Ending the camera session resets
+the program; it is not saved across app launches.
+
 Pausing interrupts qualification of any waypoint whose verification window was
 still pending. Such a waypoint is not recorded as verified; subsequent waypoint
 checks remain strict. A paused take is not an uninterrupted timing qualification.

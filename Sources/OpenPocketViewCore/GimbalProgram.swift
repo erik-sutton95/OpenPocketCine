@@ -55,6 +55,7 @@ public struct GimbalProgram: Equatable, Sendable {
     public var durationAB: TimeInterval
     public var durationBC: TimeInterval
     public var smoothness: Double
+    public var loop: Bool
 
     public static let durationStep: TimeInterval = 0.5
     public static let minDuration: TimeInterval = 0.5
@@ -69,7 +70,8 @@ public struct GimbalProgram: Equatable, Sendable {
         c: GimbalWaypoint? = nil,
         durationAB: TimeInterval = defaultDuration,
         durationBC: TimeInterval = defaultDuration,
-        smoothness: Double = 0
+        smoothness: Double = 0,
+        loop: Bool = false
     ) {
         self.a = a
         self.b = b
@@ -77,6 +79,7 @@ public struct GimbalProgram: Equatable, Sendable {
         self.durationAB = Self.clampedDuration(durationAB)
         self.durationBC = Self.clampedDuration(durationBC)
         self.smoothness = smoothness
+        self.loop = loop
     }
 
     public var canRun: Bool { a != nil && b != nil }
@@ -527,6 +530,15 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         if phase == "VERIFY", elapsed >= 0.3, checkpoints.isEmpty {
             guard Self.angularDistance(live, legs[index].to) <= Self.arriveDeg else {
                 return stop(live: live, reason: "Camera missed its final position")
+            }
+            if program.loop {
+                // Only a verified finish repeats. Rebuild from the saved program,
+                // including full durations after a paused/resumed take.
+                let original = program
+                guard start(program: original, live: live) else {
+                    return stop(live: live, reason: failure ?? "Set reachable gimbal points again")
+                }
+                return output(live: live)
             }
             phase = "DONE"
             running = false

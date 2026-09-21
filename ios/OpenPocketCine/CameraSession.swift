@@ -2705,6 +2705,11 @@ final class CameraSession {
             durationAB: gimbalProgram.durationAB, durationBC: gimbalProgram.durationBC)
     }
 
+    func setGimbalLoop(_ enabled: Bool) {
+        cancelProgrammedMove()
+        gimbalProgram.loop = enabled
+    }
+
     var canRunProgrammedMove: Bool {
         !isFeedWarming && !isLiveVideoStale && gimbalProgram.canRun
             && [gimbalProgram.a, gimbalProgram.b, gimbalProgram.c]

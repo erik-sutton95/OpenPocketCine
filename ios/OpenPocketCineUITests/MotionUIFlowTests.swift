@@ -82,6 +82,57 @@ final class MotionUIFlowTests: XCTestCase {
         XCTAssertTrue(expand.waitForExistence(timeout: 5))
     }
 
+    func testLoopAndProgramSurviveClosingUntilClear() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION"] = "1"
+        app.launch()
+        defer { app.terminate() }
+
+        func openEditor() {
+            app.buttons["monitor.system.gimbalControls"].tap()
+            let open = app.buttons["motion.openEditor"]
+            XCTAssertTrue(open.waitForExistence(timeout: 5))
+            open.tap()
+            XCTAssertTrue(app.staticTexts["motion.editor.title"].waitForExistence(timeout: 5))
+        }
+        XCTAssertTrue(app.buttons["monitor.system.gimbalControls"].waitForExistence(timeout: 10))
+        openEditor()
+        let readouts = ["A", "B", "C"].map { app.staticTexts["motion.waypoint.\($0).readout"] }
+        let saved = readouts.map(\.label)
+        XCTAssertFalse(saved.contains("Not set"))
+        let durations = ["B", "C"].map { app.descendants(matching: .any)["motion.duration.\($0)"].firstMatch }
+        let savedDurations = durations.map { $0.value as? String }
+        XCTAssertEqual(savedDurations, ["3s", "2s"])
+        let smoothness = app.sliders["Path smoothness"]
+        let savedSmoothness = smoothness.value as? String
+        XCTAssertNotNil(savedSmoothness)
+        let loop = app.switches["motion.loop"]
+        // Custom Toggle styles can expose NSNumber rather than String to XCTest.
+        func loopValue() -> String { String(describing: loop.value ?? "") }
+        XCTAssertTrue(loop.isHittable, app.debugDescription)
+        XCTAssertTrue(["0", "Off"].contains(loopValue()), loop.debugDescription)
+        loop.tap()
+        XCTAssertTrue(["1", "On"].contains(loopValue()), loop.debugDescription)
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "motion-control-loop-saved-program"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["motion.close"].tap()
+        XCTAssertFalse(app.staticTexts["motion.editor.title"].exists)
+        openEditor()
+        XCTAssertEqual(readouts.map(\.label), saved)
+        XCTAssertEqual(durations.map { $0.value as? String }, savedDurations)
+        XCTAssertEqual(smoothness.value as? String, savedSmoothness)
+        XCTAssertTrue(["1", "On"].contains(loopValue()), loop.debugDescription)
+        app.buttons["motion.clear"].tap()
+        XCTAssertEqual(readouts.map(\.label), ["Not set", "Not set", "Not set"])
+        XCTAssertTrue(["0", "Off"].contains(loopValue()), loop.debugDescription)
+        XCTAssertFalse(smoothness.exists)
+    }
+
     func testFloatingEditorDragCommitsLocationAfterRelease() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
