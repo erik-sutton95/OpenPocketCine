@@ -14,7 +14,7 @@ class GimbalLoopTest {
         durationAB = 3.0, durationBC = 2.0, smoothness = smoothness, loop = true,
     )
 
-    private class Camera(program: GimbalProgram) {
+    private class Camera(private val program: GimbalProgram) {
         data class Command(val at: Double, val from: GimbalWaypoint, val target: GimbalWaypoint,
             val duration: Double, val phase: String, val label: String)
         val engine = GimbalMoveEngine()
@@ -34,10 +34,14 @@ class GimbalLoopTest {
         fun step(transform: (GimbalWaypoint) -> GimbalWaypoint = { it }) {
             now += 0.01
             live = transform(GimbalMoveEngine.lerp(origin, target, (now - motionAt) / duration))
-            val before = engine.readout(live)?.phase
+            val before = engine.readout(live)
             lastOutput = engine.tick(0.01, live)
-            val phase = engine.readout(live)?.phase
-            if ((before == "HOLD" || before == "VERIFY") && phase == "RUN") starts += now
+            val readout = engine.readout(live)
+            val phase = readout?.phase
+            val turned = (before?.label == "B→C" && readout?.label == "C→B") ||
+                (before?.label == "B→A" && readout?.label == "A→B") ||
+                (program.c == null && before?.label == "A→B" && readout?.label == "B→A")
+            if (phase == "RUN" && (before?.phase == "HOLD" || turned)) starts += now
             if (starts.isNotEmpty() && (phase == "HOLD" || phase == "APPROACH")) repeatedPreparation = true
             lastOutput?.target?.let {
                 commands += Command(now, live, it, lastOutput!!.duration, phase!!, engine.readout(live)!!.label)
@@ -99,7 +103,7 @@ class GimbalLoopTest {
                 assertEquals(targets, commands.map { it.target })
                 assertEquals(durations, commands.map { it.duration })
                 assertEquals(labels, commands.map { it.label })
-                assertEquals(durations.sum() + 0.3, camera.starts[pass + 1] - camera.starts[pass], 0.011)
+                assertEquals(durations.sum(), camera.starts[pass + 1] - camera.starts[pass], 1e-8)
             }
             assertFalse(camera.repeatedPreparation)
             assertTrue(camera.commands.none { it.phase == "APPROACH" })
@@ -128,7 +132,7 @@ class GimbalLoopTest {
                 assertEquals(0.1, command.duration)
             }
             commands.zipWithNext().forEach { (first, second) -> assertEquals(0.05, second.at - first.at, 1e-8) }
-            assertEquals(5.3, camera.starts[pass + 1] - camera.starts[pass], 0.011)
+            assertEquals(5.0, camera.starts[pass + 1] - camera.starts[pass], 1e-8)
         }
         assertFalse(camera.repeatedPreparation)
         assertNull(camera.engine.failure)
@@ -153,18 +157,22 @@ class GimbalLoopTest {
         assertNull(camera.engine.failure)
     }
 
-    @Test fun failedVerificationNeverReturnsToA() {
+    @Test fun missedArrivalStopsDuringReturnWithinTheVerificationDeadline() {
         val camera = Camera(program())
-        camera.until { camera.engine.readout(camera.live)?.phase == "VERIFY" }
-        repeat(60) { camera.step { it.copy(yawDeg = it.yawDeg - 0.4) } }
+        camera.until { camera.starts.size == 1 && camera.now >= camera.starts[0] + 2.99 - 1e-8 }
+        val boundary = camera.starts[0] + 3.0
+        while (camera.engine.running && camera.now < boundary + 1) {
+            camera.step { it.copy(yawDeg = it.yawDeg - 0.4) }
+        }
         assertFalse(camera.engine.running)
         assertEquals("Camera waypoint could not be verified", camera.engine.failure)
-        assertEquals(1, camera.commands.size)
+        assertTrue(camera.now <= boundary + 0.411)
+        assertEquals(2, camera.commands.size, "The timed reverse starts immediately, then failed feedback stops it")
         assertNull(camera.engine.tick(0.01, camera.live))
     }
 
-    @Test fun missedFinalPositionAfterEarlierSettledReportsDoesNotLoop() {
-        val camera = Camera(program())
+    @Test fun oneShotMissedFinalPositionAfterEarlierSettledReportsStillFails() {
+        val camera = Camera(program().copy(loop = false))
         camera.until { camera.engine.readout(camera.live)?.phase == "VERIFY" }
         repeat(20) { camera.step() }
         repeat(15) { camera.step { it.copy(yawDeg = it.yawDeg - 0.4) } }
@@ -174,16 +182,52 @@ class GimbalLoopTest {
     }
 
     @Test fun cancelBeforeOrAfterTurnaroundPreventsAnyFurtherCommand() {
-        for (afterVerification in listOf(false, true)) {
+        for (afterTurnaround in listOf(false, true)) {
             val camera = Camera(program())
-            camera.until { camera.engine.readout(camera.live)?.phase == "VERIFY" }
-            if (afterVerification) camera.until { camera.starts.size == 2 }
+            camera.until { camera.starts.size == 1 && camera.now >= camera.starts[0] + 2.99 - 1e-8 }
+            if (afterTurnaround) camera.until { camera.starts.size == 2 }
             val commandsAtCancel = camera.commands.size
             camera.engine.cancel()
             repeat(100) { camera.step() }
             assertNull(camera.lastOutput)
             assertFalse(camera.engine.running)
             assertEquals(commandsAtCancel, camera.commands.size)
+        }
+    }
+
+    @Test fun shortSmoothLoopsAcceptSparseFeedbackWithFractionalDelayWithoutEndpointHolds() {
+        for (legDuration in listOf(0.5, 1.0)) {
+            val program = program(1.0, includeC = true).copy(durationAB = legDuration, durationBC = legDuration)
+            val engine = GimbalMoveEngine()
+            val origin = program.a!!
+            data class Segment(val at: Double, val from: GimbalWaypoint, val to: GimbalWaypoint, val duration: Double)
+            val segments = mutableListOf(Segment(0.0, origin, origin, 1.0))
+            fun physical(time: Double): GimbalWaypoint {
+                val segment = segments.lastOrNull { it.at <= time } ?: segments.first()
+                return GimbalMoveEngine.lerp(segment.from, segment.to, (time - segment.at) / segment.duration)
+            }
+            assertTrue(engine.start(program, origin))
+            var reported = origin
+            var receipt = 0.0
+            val turns = mutableListOf<Double>()
+            for (step in 1..1_200) {
+                val now = step * 0.01
+                if (step % 10 == 7) {
+                    reported = physical(now - 0.137)
+                    receipt = now
+                }
+                val before = engine.readout(reported)?.label
+                val out = engine.tick(0.01, reported, now - receipt)!!
+                val after = engine.readout(reported)!!
+                if ((before == "B→C" && after.label == "C→B") ||
+                    (before == "B→A" && after.label == "A→B")) turns += now
+                out.target?.let { segments += Segment(now, physical(now), it, out.duration) }
+                assertFalse(out.stop || out.finished, "duration=$legDuration now=$now failure=${engine.failure}")
+                if (now >= 2.0) assertEquals("RUN", after.phase)
+            }
+            assertTrue(turns.size >= 4)
+            turns.zipWithNext().forEach { (first, next) -> assertEquals(legDuration * 2, next - first, 1e-8) }
+            assertNull(engine.failure)
         }
     }
 

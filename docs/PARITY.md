@@ -393,16 +393,21 @@ countdown. Duration dials run from 0.5 to 120 seconds (left increases, right
 decreases). Android physical qualification remains outstanding.
 
 Motion Control Loop (2026-09-21): both shells offer an off-by-default Loop
-switch, chosen before Start. Successful final verification reverses the saved
-path: A→B→A or A→B→C→B→A, repeating until Stop. Each reverse leg uses its
+switch, chosen before Start. Each timed endpoint reverses the saved path without
+an added pause: A→B→A or A→B→C→B→A, repeating until Stop. Each reverse leg uses its
 original duration and retraces the same smoothed curve. Countdown, approach to A
-and the two-second settle happen only once; endpoint verification remains at each
-turnaround. Pause/Resume keeps the direction and loop; Stop, manual control,
+and the two-second settle happen only once; the return begins while the existing
+bounded waypoint check verifies the turnaround. Smoothed endpoints use a bounded
+history of dispatched timed commands for the same affine feedback-delay fit.
+Pause/Resume keeps the direction and loop; Stop, manual control,
 feedback/waypoint failure and session interruption end it. Closing an active editor
 minimizes to the control pill. Both shells retain points, durations, Smoothness and
 Loop across editor dismissal within the camera session; Clear resets points,
 Smoothness and Loop while keeping duration preferences. Session reset clears the
-program. Automated regression coverage is separate from physical qualification;
+program. Both editors cap their preferred height at 420 pt/dp, keep the header
+and action bar fixed, and scroll settings between them. A bottom fade appears
+only while more content remains below. Automated regression coverage is separate
+from physical qualification;
 physical loop and sustained live-view budget checks remain pending on both shells.
 
 ## Multiview session network and shutdown (in validation)

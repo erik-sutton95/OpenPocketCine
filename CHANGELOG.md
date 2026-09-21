@@ -19,8 +19,10 @@ separate iOS and Android lists.
 
 - Motion Control Loop on iOS and Android moves back and forth: A→B→A or
   A→B→C→B→A, with the same leg durations and smoothed path in either direction.
-  Countdown and the initial settle run once. Pause/Resume and Stop remain
-  available; failures end the loop. Points, durations, Smoothness and Loop
+  Countdown and the initial settle run once; turnarounds have no added pause,
+  with position verification continuing during the return. Pause/Resume and Stop
+  remain available; failures end the loop. The compact editor keeps its header
+  and action bar fixed, with scrollable settings and a bottom overflow fade. Points, durations, Smoothness and Loop
   remain in the camera session when the editor closes. Close during a run keeps
   the control pill visible. Physical loop qualification remains pending.
 

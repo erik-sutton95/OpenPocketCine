@@ -308,7 +308,13 @@ class GimbalMoveEngine {
         val targetYaw: Double, val targetPitch: Double, val remainingDeg: Double)
     private data class Leg(val label: String, val from: GimbalWaypoint, val to: GimbalWaypoint, val duration: Double)
     private data class Observation(val time: Double, val pose: GimbalWaypoint)
-    private data class Checkpoint(val time: Double, val incoming: Leg, val outgoing: Leg?, val outgoingAt: Double)
+    private data class Checkpoint(val time: Double, val incoming: Leg, val outgoing: Leg?, val outgoingAt: Double,
+        val usesCommandHistory: Boolean = false)
+    // The overlapping timed targets are affine between dispatches, even on a smoothed path.
+    private data class CommandReference(val time: Double, val from: GimbalWaypoint, val to: GimbalWaypoint,
+        val duration: Double) {
+        fun position(at: Double) = lerp(from, to, (at - time) / duration)
+    }
 
     var running = false
         private set
@@ -331,6 +337,7 @@ class GimbalMoveEngine {
     private var needsCommand = false
     private val observations = mutableListOf<Observation>()
     private val checkpoints = mutableListOf<Checkpoint>()
+    private val commandHistory = mutableListOf<CommandReference>()
     private var lastReadout: Readout? = null
     private var curve: GimbalProgramCurve? = null
     private var nextCurveCommand = 0.0
@@ -424,6 +431,7 @@ class GimbalMoveEngine {
         nextCurveCommand = 0.0
         checkpoints.clear()
         observations.clear()
+        commandHistory.clear()
         isPaused = false
         resumeNeedsCommand = true
         return true
@@ -437,6 +445,7 @@ class GimbalMoveEngine {
         needsCommand = false
         checkpoints.clear()
         observations.clear()
+        commandHistory.clear()
     }
 
     val nextWakeInterval: Double
@@ -516,6 +525,9 @@ class GimbalMoveEngine {
             if (elapsed + 1e-9 < leg.duration) return if (streamed) tickLinearLeg(live) else output(live)
             if (streamed && nextCurveCommand < leg.duration) return stop(live, "Move interrupted — waypoint dispatch was late")
             if (elapsed - leg.duration > 0.02 + 1e-9) return stop(live, "Move interrupted — waypoint dispatch was late")
+            if (index + 1 == legs.size && program.loop) {
+                return turnAround(live, clock - (elapsed - leg.duration))
+            }
             checkpoints += Checkpoint(clock - (elapsed - leg.duration), leg, legs.getOrNull(index + 1), clock)
             if (index + 1 < legs.size) {
                 index += 1
@@ -528,7 +540,6 @@ class GimbalMoveEngine {
         }
         if (phase == "VERIFY" && elapsed >= 0.3 && checkpoints.isEmpty()) {
             if (angularDistance(live, legs[index].to) > ARRIVE_DEG) return stop(live, "Camera missed its final position")
-            if (program.loop) return turnAround(live)
             phase = "DONE"
             running = false
             return output(live, finished = true)
@@ -536,8 +547,10 @@ class GimbalMoveEngine {
         return output(live)
     }
 
-    /** Rebuild from saved geometry so pausing a pass cannot shorten later passes. */
-    private fun turnAround(live: GimbalWaypoint): Output {
+    /** Reverse on the deadline and qualify arrival/departure together while moving. */
+    private fun turnAround(live: GimbalWaypoint, boundary: Double): Output {
+        val incoming = legs[index]
+        val streamed = curve != null
         reversed = !reversed
         val a = program.a!!
         val b = program.b!!
@@ -555,11 +568,8 @@ class GimbalMoveEngine {
         }
         curve = GimbalProgramCurve.create(pass)
         index = 0
-        clock = 0.0
         nextCurveCommand = 0.0
-        verificationInterruptedByPause = false
-        observations.clear()
-        checkpoints.clear()
+        checkpoints += Checkpoint(boundary, incoming, legs[0], clock, streamed)
         return beginPassMotion(live)
     }
 
@@ -611,6 +621,8 @@ class GimbalMoveEngine {
         index = if (elapsed >= curve.durationAB) 1 else 0
         if (elapsed + 1e-9 >= curve.duration) {
             if (nextCurveCommand < curve.duration) return stop(live, "Move interrupted — waypoint dispatch was late")
+            if (elapsed - curve.duration > 0.02 + 1e-9) return stop(live, "Move interrupted — waypoint dispatch was late")
+            if (program.loop) return turnAround(live, clock - (elapsed - curve.duration))
             checkpoints += Checkpoint(clock - (elapsed - curve.duration), legs[1], null, clock)
             phase = "VERIFY"
             elapsed = 0.0
@@ -644,6 +656,9 @@ class GimbalMoveEngine {
         if (low > high) return false
         fun reference(sample: Observation, delay: Double): GimbalWaypoint {
             val time = sample.time - delay
+            if (check.usesCommandHistory && commandHistory.isNotEmpty()) {
+                return (commandHistory.lastOrNull { it.time <= time } ?: commandHistory.first()).position(time)
+            }
             return if (time < check.time) {
                 lerp(check.incoming.from, check.incoming.to,
                     1 + (time - check.time) / check.incoming.duration)
@@ -652,9 +667,10 @@ class GimbalMoveEngine {
             }
         }
         val knots = mutableListOf(low, high)
+        val boundaries = if (check.usesCommandHistory) commandHistory.flatMap { listOf(it.time, it.time + it.duration) }
+            else listOf(check.time - check.incoming.duration, check.time, check.outgoingAt, check.outgoingAt + outgoing.duration)
         for (sample in nearby) {
-            for (time in listOf(check.time - check.incoming.duration, check.time,
-                check.outgoingAt, check.outgoingAt + outgoing.duration)) {
+            for (time in boundaries) {
                 val delay = sample.time - time
                 if (delay > low && delay < high) knots += delay
             }
@@ -712,6 +728,11 @@ class GimbalMoveEngine {
         duration: Double = 0.0, finished: Boolean = false): Output {
         if (target != null && !canSendNativeTarget(live, target)) {
             return stop(live, "Camera moved outside the safe rotation path")
+        }
+        if (program.loop && target != null) {
+            val from = commandHistory.lastOrNull()?.position(clock) ?: live
+            commandHistory += CommandReference(clock, from, target, duration)
+            while (commandHistory.size > 1 && commandHistory[1].time < clock - 1) commandHistory.removeAt(0)
         }
         lastReadout = snapshot(live)
         return Output(target, duration, finished = finished)

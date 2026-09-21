@@ -236,7 +236,7 @@ class NativeGimbalProgramRunnerTest {
     }
 
     @Test
-    fun loopKeepsOneTokenAndCancelFencesReturnBeforeOrAfterVerification() {
+    fun loopKeepsOneTokenAndCancelFencesTargetsBeforeOrAfterTurnaround() {
         for (cancelAfterReturn in listOf(false, true)) {
             val tx = Tx()
             var origin = a
@@ -258,8 +258,8 @@ class NativeGimbalProgramRunnerTest {
                     true
                 }, { events += "stop" })
             val token = runner.start(GimbalProgram(a, b, durationAB = 1.0, loop = true)) { updates += it }
-            // Preparation + A hold + one-second move; final verification ends after 3.55s.
-            tx.through(if (cancelAfterReturn) 3.65 else 3.45)
+            // Preparation + A hold + one-second move; reverse is dispatched at 3.25s.
+            tx.through(if (cancelAfterReturn) 3.3 else 3.2)
             assertEquals(if (cancelAfterReturn) listOf(b, a) else listOf(b), sends.map { it.second })
             assertTrue(updates.all { it.token == token && !it.finished && it.failure == null })
             val countAtCancel = sends.size
@@ -299,10 +299,10 @@ class NativeGimbalProgramRunnerTest {
         assertEquals(0, stops)
         val firstReturn = sends.first { it.second == a }.first
         val nextTake = sends.first { it.first > firstReturn && it.second == b }.first
-        assertEquals(1.3, nextTake - firstReturn, 0.05, "Only the timed reverse pass and verification precede the next pass")
+        assertEquals(1.0, nextTake - firstReturn, 1e-8, "Turnaround adds no verification hold")
         sends.zipWithNext().forEach { (first, next) ->
             assertEquals(if (first.second == a) b else a, next.second)
-            assertEquals(1.3, next.first - first.first, 0.05)
+            assertEquals(1.0, next.first - first.first, 1e-8)
         }
         assertTrue(updates.size <= 67, "Loop progress retains the existing 5 Hz publication bound")
         assertTrue(runner.cancel(token))

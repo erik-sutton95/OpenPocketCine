@@ -41,6 +41,12 @@ attitude receipts before the UI hop. Smoothed paths write 20 Hz native targets
 directly at monotonic deadlines under exclusive ownership; UI progress is 5 Hz. Marker/curve projection uses the existing 25 Hz overlay timeline;
 measured motion prediction is display-only. No new ACK timer or video enable
 is introduced. Native stream targets are not logged individually at 20 Hz.
+Loop reversal dispatches on the existing timed boundary, without a stationary
+verification hold. Smoothed turnaround verification stores at most one second
+of 20 Hz timed-command references plus the active predecessor, and uses the
+existing affine delay fit during the bounded checkpoint window. The editor's
+scroll fade updates local presentation state only; neither scrolling nor fading
+adds a timer, command stream or shared-model publication.
 
 Media drag selection uses the native display clock only while a held selection
 gesture requests edge scrolling. Ordinary vertical scrolling while selecting uses

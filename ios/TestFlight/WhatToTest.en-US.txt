@@ -1,6 +1,6 @@
 New and changed
 
-- Motion Control Loop runs back and forth: A-B-A or A-B-C-B-A, keeping each leg’s duration and Smoothness. Closing the editor keeps the program for the camera session.
+- Motion Control loops back and forth without an added endpoint pause. Its compact editor keeps action buttons fixed while settings scroll, with a fade showing more below.
 - Pocket 3 zoom stops follow FORMAT, with a note when the ceiling changes. Refused zoom values settle back to the camera's reading.
 - HDR display brightens the phone panel; off by default. Screen recording and AirPlay use normal SDR.
 
@@ -11,6 +11,6 @@ Fixes
 
 What to test
 
-- Loop A/B/C both ways with unequal durations and Smoothness. Test Pause/Resume and Stop on reverse legs. Check markers while panning in selfie mode, with Selfie Flip and MIRROR on/off.
-- Close and reopen Motion Control. Check points, durations, Smoothness and Loop remain. Clear should remove points and switch Loop off.
+- Loop A/B/C both ways with unequal durations and Smoothness; check there is no endpoint pause. Try Pause/Resume and Stop on reverse legs, and selfie markers with Selfie Flip and MIRROR on/off.
+- Scroll Motion Control in portrait and landscape: buttons stay fixed and the fade clears at the bottom. Close/reopen keeps the program; Clear removes points and switches Loop off.
 - Connect repeatedly, use controls and open Media, then return. Check Pocket 3 zoom limits per FORMAT and HDR display while recording the phone screen.

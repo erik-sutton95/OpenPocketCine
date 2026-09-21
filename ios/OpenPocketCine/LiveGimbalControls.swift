@@ -257,54 +257,139 @@ private struct LiveGimbalFloatMove: ViewModifier {
 
 }
 
+private struct MotionSettingsBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct MotionSettingsOverflowReporter: ViewModifier {
+    @Binding var canScrollFurther: Bool
+    var viewportHeight: CGFloat
+    @State private var contentBottom: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentSize.height - geometry.containerSize.height
+                    - geometry.contentOffset.y > 2
+            } action: { _, more in
+                canScrollFurther = more
+            }
+        } else {
+            content
+                .onPreferenceChange(MotionSettingsBottomKey.self) { bottom in
+                    contentBottom = bottom
+                    canScrollFurther = bottom > viewportHeight + 2
+                }
+                .onChange(of: viewportHeight) { _, height in
+                    canScrollFurther = contentBottom > height + 2
+                }
+        }
+    }
+}
+
 private struct LiveGimbalMoveEditor: View {
     var maximumHeight: CGFloat
     @Environment(AppModel.self) private var model
 
     @Environment(\.motionControlCanInteract) private var canInteract
 
+    @State private var scrollHeight: CGFloat = 0
+    @State private var canScrollFurther = false
+
     var body: some View {
-        ViewThatFits(in: .vertical) {
-            content
-            ScrollView { content }.scrollIndicators(.hidden)
-                .accessibilityIdentifier("motion.editor.scroll")
-                .frame(maxHeight: maximumHeight)
+        VStack(spacing: 0) {
+            header
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+
+            ScrollView {
+                settings
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: MotionSettingsBottomKey.self,
+                                value: proxy.frame(in: .named("motion.settings")).maxY)
+                        }
+                    }
+            }
+            .coordinateSpace(name: "motion.settings")
+            .scrollIndicators(.hidden)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { scrollHeight = proxy.size.height }
+                        .onChange(of: proxy.size.height) { _, height in scrollHeight = height }
+                }
+            }
+            .modifier(
+                MotionSettingsOverflowReporter(
+                    canScrollFurther: $canScrollFurther, viewportHeight: scrollHeight))
+            .mask {
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(
+                        colors: [.black, canScrollFurther ? .clear : .black],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: min(24, scrollHeight))
+                }
+            }
+            .accessibilityIdentifier("motion.editor.scroll")
+            .accessibilityValue(canScrollFurther ? "More settings below" : "End of settings")
+
+            actions
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+                }
         }
-        .frame(maxHeight: maximumHeight)
+        .frame(height: min(maximumHeight, 420))
         .monitorGlass(in: RoundedRectangle(cornerRadius: 16), density: .expanded)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(Rectangle())
     }
 
-    private var content: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(LiveGimbalCopy.programmedMove)
-                    .font(MonitorTheme.font(9, weight: .semibold))
-                    .textCase(.uppercase).tracking(1.8)
+    private var header: some View {
+        HStack {
+            Text(LiveGimbalCopy.programmedMove)
+                .font(MonitorTheme.font(9, weight: .semibold))
+                .textCase(.uppercase).tracking(1.8)
+                .foregroundStyle(LiveDesign.text)
+                .accessibilityIdentifier("motion.editor.title")
+            Spacer()
+            Button {
+                guard canInteract() else { return }
+                model.liveGimbalPanel = .runPill
+            } label: {
+                OpcIcon.minimize
+                    .frame(width: 16, height: 16)
                     .foregroundStyle(LiveDesign.text)
-                    .accessibilityIdentifier("motion.editor.title")
-                Spacer()
-                Button {
-                    guard canInteract() else { return }
-                    model.liveGimbalPanel = .runPill
-                } label: {
-                    OpcIcon.minimize
-                        .frame(width: 16, height: 16)
-                        .foregroundStyle(LiveDesign.text)
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.zcTapTarget)
-                .accessibilityLabel("Minimize")
-                .accessibilityIdentifier("motion.minimize")
-                CloseButton(
-                    action: {
-                        guard canInteract() else { return }
-                        model.liveGimbalPanel = model.session.gimbalMoveRunning ? .runPill : .none
-                    }, size: 30
-                )
-                .accessibilityIdentifier("motion.close")
+                    .frame(width: 30, height: 30)
             }
+            .buttonStyle(.zcTapTarget)
+            .accessibilityLabel("Minimize")
+            .accessibilityIdentifier("motion.minimize")
+            CloseButton(
+                action: {
+                    guard canInteract() else { return }
+                    model.liveGimbalPanel = model.session.gimbalMoveRunning ? .runPill : .none
+                }, size: 30
+            )
+            .accessibilityIdentifier("motion.close")
+        }
+    }
 
+    private var settings: some View {
+        VStack(alignment: .leading, spacing: 10) {
             waypointRow(.a, duration: nil, floor: nil)
             waypointRow(
                 .b, duration: model.session.gimbalProgram.durationAB,
@@ -345,62 +430,59 @@ private struct LiveGimbalMoveEditor: View {
             )
             .disabled(model.session.gimbalMoveRunning)
             .accessibilityIdentifier("motion.loop")
-
-            HStack(spacing: 8) {
-                Button {
-                    guard canInteract() else { return }
-                    model.session.clearGimbalProgram()
-                } label: {
-                    Text(LiveGimbalCopy.clear)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                }
-                .buttonStyle(.zcTapTarget)
-                .accessibilityIdentifier("motion.clear")
-                .foregroundStyle(LiveDesign.muted)
-                .background(LiveDesign.glassBright, in: Capsule())
-
-                if model.session.gimbalMoveCanPause {
-                    Button(model.session.gimbalMovePaused ? "Resume" : "Pause") {
-                        guard canInteract() else { return }
-                        model.session.pauseOrResumeProgrammedMove()
-                    }
-                    .buttonStyle(.zcTapTarget)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .foregroundStyle(LiveDesign.background)
-                    .background(LiveDesign.accent, in: Capsule())
-                    .accessibilityIdentifier("motion.pauseResume")
-                }
-
-                Button {
-                    guard canInteract() else { return }
-                    model.session.runProgrammedMove()
-                } label: {
-                    Text(
-                        model.session.gimbalMoveRunning
-                            ? (model.session.gimbalStartCountdown.map { "Stop · \($0)" }
-                                ?? LiveGimbalCopy.stopMove) : LiveGimbalCopy.runMove
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                }
-                .buttonStyle(.zcTapTarget)
-                .foregroundStyle(runEnabled ? LiveDesign.background : LiveDesign.muted)
-                .background(
-                    (model.session.gimbalMoveRunning
-                        ? LiveDesign.rec
-                        : runEnabled ? LiveDesign.accent : LiveDesign.glassBright),
-                    in: Capsule()
-                )
-                .accessibilityIdentifier("motion.startStop")
-                .disabled(!runEnabled && !model.session.gimbalMoveRunning)
-                .opacity(runEnabled || model.session.gimbalMoveRunning ? 1 : 0.45)
-            }
-            .font(LiveType.ui(size: 14, weight: .semibold))
         }
-        .padding(EdgeInsets(top: 10, leading: 14, bottom: 14, trailing: 14))
-        .contentShape(Rectangle())
+    }
+
+    private var actions: some View {
+        HStack(spacing: 8) {
+            Button {
+                guard canInteract() else { return }
+                model.session.clearGimbalProgram()
+            } label: {
+                Text(LiveGimbalCopy.clear)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.zcTapTarget)
+            .accessibilityIdentifier("motion.clear")
+            .foregroundStyle(LiveDesign.muted)
+            .background(LiveDesign.glassBright, in: Capsule())
+
+            if model.session.gimbalMoveCanPause {
+                Button(model.session.gimbalMovePaused ? "Resume" : "Pause") {
+                    guard canInteract() else { return }
+                    model.session.pauseOrResumeProgrammedMove()
+                }
+                .buttonStyle(.zcTapTarget)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .foregroundStyle(LiveDesign.background)
+                .background(LiveDesign.accent, in: Capsule())
+                .accessibilityIdentifier("motion.pauseResume")
+            }
+
+            Button {
+                guard canInteract() else { return }
+                model.session.runProgrammedMove()
+            } label: {
+                Text(
+                    model.session.gimbalMoveRunning
+                        ? (model.session.gimbalStartCountdown.map { "Stop · \($0)" }
+                            ?? LiveGimbalCopy.stopMove) : LiveGimbalCopy.runMove
+                )
+                .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.zcTapTarget)
+            .foregroundStyle(runEnabled ? LiveDesign.background : LiveDesign.muted)
+            .background(
+                (model.session.gimbalMoveRunning
+                    ? LiveDesign.rec
+                    : runEnabled ? LiveDesign.accent : LiveDesign.glassBright),
+                in: Capsule()
+            )
+            .accessibilityIdentifier("motion.startStop")
+            .disabled(!runEnabled && !model.session.gimbalMoveRunning)
+            .opacity(runEnabled || model.session.gimbalMoveRunning ? 1 : 0.45)
+        }
+        .font(LiveType.ui(size: 14, weight: .semibold))
     }
 
     private var runEnabled: Bool {

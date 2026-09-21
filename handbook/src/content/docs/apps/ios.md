@@ -324,9 +324,14 @@ programmed movements stay the same.
 **Loop** (off by default) moves back and forth: A→B→A→B, or
 A→B→C→B→A→B→C. Each reverse leg keeps its original duration and retraces
 the same smoothed path. The countdown, approach to A and two-second settle happen
-only at the initial start. There is a brief position check at each turnaround.
+only at the initial start. The return starts without an added endpoint pause;
+position checks continue while it moves.
 Choose Loop before Start. Pause/Resume keeps the current direction; Stop, a motion
 failure or manual takeover ends the loop.
+
+The compact editor keeps its header and Clear, Start/Stop and Pause/Resume
+buttons fixed. The settings scroll above the buttons, with a subtle bottom fade
+when more content remains below.
 
 Closing and reopening the editor retains A/B/C, durations, Smoothness and Loop
 for the current camera session. During a run, Close minimizes to the control pill

@@ -110,6 +110,7 @@ final class MotionUIFlowTests: XCTestCase {
         let savedSmoothness = smoothness.value as? String
         XCTAssertNotNil(savedSmoothness)
         let loop = app.switches["motion.loop"]
+        scrollSettingsToBottom(app.scrollViews["motion.editor.scroll"])
         // Custom Toggle styles can expose NSNumber rather than String to XCTest.
         func loopValue() -> String { String(describing: loop.value ?? "") }
         XCTAssertTrue(loop.isHittable, app.debugDescription)
@@ -126,11 +127,106 @@ final class MotionUIFlowTests: XCTestCase {
         XCTAssertEqual(readouts.map(\.label), saved)
         XCTAssertEqual(durations.map { $0.value as? String }, savedDurations)
         XCTAssertEqual(smoothness.value as? String, savedSmoothness)
+        scrollSettingsToBottom(app.scrollViews["motion.editor.scroll"])
         XCTAssertTrue(["1", "On"].contains(loopValue()), loop.debugDescription)
         app.buttons["motion.clear"].tap()
         XCTAssertEqual(readouts.map(\.label), ["Not set", "Not set", "Not set"])
         XCTAssertTrue(["0", "Off"].contains(loopValue()), loop.debugDescription)
         XCTAssertFalse(smoothness.exists)
+    }
+
+    func testEditorKeepsActionsFixedAndFadesOnlyOverflowInBothOrientations() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION"] = "1"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION_RUNNING"] = "1"
+        app.launch()
+        defer {
+            app.terminate()
+            XCUIDevice.shared.orientation = .portrait
+        }
+        XCTAssertTrue(app.buttons["monitor.system.gimbalControls"].waitForExistence(timeout: 10))
+        app.buttons["monitor.system.gimbalControls"].tap()
+        let open = app.buttons["motion.openEditor"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+
+        let title = app.staticTexts["motion.editor.title"]
+        let scroll = app.scrollViews["motion.editor.scroll"]
+        let clear = app.buttons["motion.clear"]
+        let startStop = app.buttons["motion.startStop"]
+        let pause = app.buttons["motion.pauseResume"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            let settled = NSPredicate { _, _ in
+                (app.frame.width > app.frame.height) == orientation.isLandscape
+                    && app.buttons["motion.close"].isHittable && clear.isHittable
+            }
+            expectation(for: settled, evaluatedWith: app)
+            waitForExpectations(timeout: 10)
+            scroll.swipeDown()
+            let hasMore = NSPredicate { _, _ in
+                (scroll.value as? String) == "More settings below"
+            }
+            expectation(for: hasMore, evaluatedWith: scroll)
+            waitForExpectations(timeout: 5)
+
+            let titleFrame = title.frame
+            let clearFrame = clear.frame
+            let startFrame = startStop.frame
+            let pauseFrame = pause.frame
+            XCTAssertLessThanOrEqual(clearFrame.maxY - titleFrame.minY, 420)
+            XCTAssertGreaterThanOrEqual(clearFrame.height, 44)
+            XCTAssertTrue(startStop.isHittable)
+            XCTAssertEqual(startStop.label, "Stop")
+            XCTAssertTrue(pause.isHittable)
+            XCTAssertLessThanOrEqual(scroll.frame.maxY, clearFrame.minY)
+            attachScreenshot(orientation.isLandscape ? "motion-compact-landscape-overflow" : "motion-compact-portrait-overflow")
+
+            scrollSettingsToBottom(scroll)
+            XCTAssertEqual(scroll.value as? String, "End of settings")
+            XCTAssertTrue(app.switches["motion.loop"].isHittable)
+            XCTAssertEqual(title.frame.minY, titleFrame.minY, accuracy: 1)
+            XCTAssertEqual(clear.frame.minY, clearFrame.minY, accuracy: 1)
+            XCTAssertEqual(startStop.frame.minY, startFrame.minY, accuracy: 1)
+            XCTAssertEqual(pause.frame.minY, pauseFrame.minY, accuracy: 1)
+            XCTAssertTrue(clear.isHittable)
+            XCTAssertTrue(startStop.isHittable)
+            XCTAssertTrue(pause.isHittable)
+            XCTAssertTrue(app.buttons["motion.close"].isHittable)
+            attachScreenshot(orientation.isLandscape ? "motion-compact-landscape-end" : "motion-compact-portrait-end")
+        }
+
+        // A footer action remains usable after scrolling to the last setting.
+        clear.tap()
+        XCTAssertEqual(app.staticTexts["motion.waypoint.A.readout"].label, "Not set")
+        XCUIDevice.shared.orientation = .portrait
+        let fits = NSPredicate { _, _ in
+            app.frame.width < app.frame.height && (scroll.value as? String) == "End of settings"
+        }
+        expectation(for: fits, evaluatedWith: scroll)
+        waitForExpectations(timeout: 5)
+        attachScreenshot("motion-compact-empty-without-overflow")
+    }
+
+    private func scrollSettingsToBottom(_ scroll: XCUIElement) {
+        for _ in 0..<5 {
+            if (scroll.value as? String) == "End of settings" { return }
+            let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.85))
+            let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.15))
+            start.press(forDuration: 0.01, thenDragTo: end)
+        }
+    }
+
+    private func attachScreenshot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testFloatingEditorDragCommitsLocationAfterRelease() {

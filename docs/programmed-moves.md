@@ -88,9 +88,17 @@ observation is not allowed; off-path points cannot cancel one another.
 This software consistency rule is not measured camera accuracy or proof of
 optical repeatability. An equally sized physical motor delay and feedback delay
 remain indistinguishable without a synchronized acquisition clock. A failed B
-check invalidates the take even if C is already moving. Final verification
-instead requires a continuous run of fresh stopped observations within 0.15°
-for at least 80 ms, received within 400 ms of the final deadline. This avoids
+check invalidates the take even if C is already moving. Loop endpoints use the
+same moving check while the return begins, without a stationary verification
+pause. Smoothed loop endpoints fit the piecewise linear timed commands actually
+dispatched, including overlapping look-ahead commands, instead of assuming the
+camera follows the ideal Bézier exactly. Their bounded reference history retains
+one second plus the active predecessor; each command starts from the preceding
+command's predicted position at dispatch. Pause/Resume clears this history and
+anchors it at the fresh stopped pose, just as it clears pending checkpoints.
+A failed turnaround stops the return within the existing 400 ms window.
+Single-take final verification instead requires a continuous run of fresh stopped
+observations within 0.15° for at least 80 ms, received within 400 ms of the final deadline. This avoids
 rejecting a correct stopped endpoint because receipt time differs from camera
 measurement time. It cannot distinguish acquisition delay from an equally
 small motor-arrival delay; exact physical timing remains unqualified.
@@ -103,6 +111,11 @@ failure send a native relative-zero replacement command. Manual stick control
 cancels the path; iOS head tracking is suspended while the path owns the gimbal.
 
 ## Operator controls
+
+The editor is capped at 420 pt/dp and fits within the available monitor bounds.
+Its header and Clear, Start/Stop and Pause/Resume action bar stay fixed; waypoints,
+durations, Smoothness and Loop scroll between them. A subtle bottom fade appears
+only while more settings remain below, and clears at the end of the content.
 
 Motion Control uses horizontal duration dials from 0.5 to 120 seconds in
 half-second steps. Swipe left to increase duration and right to decrease it. Drag the
@@ -121,11 +134,13 @@ actual stopped pose. Stop discards the continuation. Manual control, disconnect,
 and leaving the active camera session also cancel it.
 
 Loop is off by default. Enable it before Start to move back and forth until
-Stop: A→B→A→B, or A→B→C→B→A→B→C. After successful final verification,
-the path reverses with the same leg durations: C→B uses B→C's duration and
-B→A uses A→B's duration. Smoothness retraces the same curve in reverse. The
+Stop: A→B→A→B, or A→B→C→B→A→B→C. The path reverses at each timed
+endpoint without an added pause, with the same leg durations: C→B uses B→C's
+duration and B→A uses A→B's duration. Smoothness retraces the same curve in reverse. The
 three-second countdown, approach to A and two-second settle happen only at the
-initial start; each turnaround retains the brief endpoint verification window.
+initial start. Endpoint verification runs during the return, retaining the same
+feedback-delay and angular-error limits. Native firmware still controls motor
+acceleration through each direction change.
 Loop cannot be changed during a run (including countdown or pause).
 Pause/Resume preserves the current direction and remaining time; the next pass
 uses the full saved path. A failed checkpoint, lost feedback, manual control or

@@ -1,14 +1,22 @@
 package com.opencapture.openpocketcine
 
 import android.os.SystemClock
+import android.graphics.Rect
+import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -19,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.math.min
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -50,6 +59,7 @@ class MotionProgramSessionTest {
                         }
                     }
                 }
+                scrollToEnd()
                 assertTrue(node("motion.loop").isChecked)
                 click("motion.close")
                 scenario.onActivity {
@@ -57,6 +67,7 @@ class MotionProgramSessionTest {
                     assertEquals(program, model!!.session.gimbalProgram.value)
                     model!!.liveGimbalPanel = LiveGimbalPanel.EDITOR
                 }
+                scrollToEnd()
                 assertTrue(node("motion.loop").isChecked)
                 click("motion.loop")
                 scenario.onActivity { assertEquals(program.copy(loop = false), model!!.session.gimbalProgram.value) }
@@ -76,6 +87,7 @@ class MotionProgramSessionTest {
                     }
                     assertTrue(node("motion.startStop").isEnabled)
                     click("motion.expand")
+                    scrollToEnd()
                     assertTrue(node("motion.loop").isChecked)
                 }
 
@@ -94,6 +106,106 @@ class MotionProgramSessionTest {
                 scenario.onActivity { model?.close() }
             }
         }
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Test fun compactEditorKeepsActionsFixedWhileSettingsScrollAndFadeClearsAtTheEnd() {
+        ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
+            var model: AppModel? = null
+            var heightLimit by mutableFloatStateOf(420f)
+            var maximumHeightPx = 0f
+            try {
+                scenario.onActivity { activity ->
+                    val app = AppModel(activity)
+                    model = app
+                    seed(app.session, "_gimbalProgram", program)
+                    app.liveGimbalPanel = LiveGimbalPanel.EDITOR
+                    activity.setContent {
+                        BoxWithConstraints(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
+                            val height = min(maxHeight.value, heightLimit)
+                            maximumHeightPx = (height - 16f) * LocalDensity.current.density
+                            key(heightLimit) {
+                                val layout = LiveMonitorLayout.fit(maxWidth.value, height,
+                                    0f, 0f, 0f, 0f, showsBottomBars = true)
+                                LiveGimbalOverlay(app, layout, layout.feed, uiLocked = false)
+                            }
+                        }
+                    }
+                }
+                for (height in listOf(420f, 280f)) {
+                    scenario.onActivity {
+                        heightLimit = height
+                        seed(model!!.session, "_gimbalMoveRunning", true)
+                        seed(model!!.session, "_gimbalMovePaused", true)
+                    }
+                    val settings = node("motion.settings") { state(it) == "More settings below" }
+                    val header = bounds(node("motion.close"))
+                    val stop = bounds(node("motion.startStop"))
+                    val resume = bounds(node("motion.pauseResume"))
+                    assertTrue(stop.bottom - header.top <= maximumHeightPx + 1,
+                        "Editor must fit the available height")
+                    assertTrue(bounds(settings).bottom <= stop.top, "Fade belongs above the actions")
+                    swipeSettings(scenario, bounds(settings))
+                    scrollToEnd()
+                    assertEquals(null, state(node("motion.settings")),
+                        "The fade and its accessibility hint disappear at the end")
+                    assertEquals(header, bounds(node("motion.close")))
+                    assertEquals(stop, bounds(node("motion.startStop")))
+                    assertEquals(resume, bounds(node("motion.pauseResume")))
+                    assertTrue(node("motion.loop").isVisibleToUser)
+                    scenario.onActivity {
+                        assertEquals(null, model!!.gimbalFloatCenter, "Settings scroll must not drag the window")
+                        assertEquals(program, model!!.session.gimbalProgram.value)
+                    }
+                    click("motion.startStop")
+                    scenario.onActivity { assertFalse(model!!.session.gimbalMoveRunning.value) }
+                }
+            } finally {
+                scenario.onActivity { model?.close() }
+            }
+        }
+    }
+
+    private fun scrollToEnd() {
+        repeat(20) {
+            val settings = node("motion.settings")
+            if (state(settings) != "More settings below") return
+            assertTrue(settings.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            SystemClock.sleep(80)
+        }
+        error("Motion settings did not reach the end")
+    }
+
+    private fun bounds(node: AccessibilityNodeInfo) = Rect().also(node::getBoundsInScreen)
+    private fun state(node: AccessibilityNodeInfo) = AccessibilityNodeInfoCompat.wrap(node).stateDescription?.toString()
+
+    /** Begin within the visible fade to prove it cannot intercept the settings gesture. */
+    private fun swipeSettings(scenario: ActivityScenario<BackdropRenderActivity>, rect: Rect) {
+        val downAt = SystemClock.uptimeMillis()
+        val x = rect.left + rect.width() * 0.15f
+        val startY = rect.bottom - 8f
+        val endY = rect.top + 16f
+        for (step in 0..9) {
+            val action = when (step) {
+                0 -> MotionEvent.ACTION_DOWN
+                9 -> MotionEvent.ACTION_UP
+                else -> MotionEvent.ACTION_MOVE
+            }
+            val y = startY + (endY - startY) * step / 9
+            scenario.onActivity { activity ->
+                val decor = activity.window.decorView
+                val location = IntArray(2)
+                decor.getLocationOnScreen(location)
+                val event = MotionEvent.obtain(downAt, SystemClock.uptimeMillis(), action,
+                    x - location[0], y - location[1], 0)
+                event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                try { decor.dispatchTouchEvent(event) } finally { event.recycle() }
+            }
+            SystemClock.sleep(16)
+        }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        SystemClock.sleep(80)
     }
 
     /** Seed camera-owned state in the fixture; no production bypass for stable-pose capture. */
