@@ -158,13 +158,13 @@ final class MotionUIFlowTests: XCTestCase {
         attachScreenshot("motion-zoom-dlog2-unavailable")
     }
 
-    func testZoomSliderStaysActionableAboveFixedActionsInBothOrientations() {
+    func testZoomChipAndDiscKeepFullEditorInBothOrientations() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
         app.launchEnvironment["OPV_UI_REVIEW_MOTION"] = "1"
-        app.launchEnvironment["OPV_UI_REVIEW_MOTION_ZOOM_CONTROL"] = "1"
+        app.launchEnvironment["OPV_UI_REVIEW_ZOOM_CONTROLS"] = "1"
         app.launch()
         defer {
             app.terminate()
@@ -177,12 +177,13 @@ final class MotionUIFlowTests: XCTestCase {
         open.tap()
 
         let title = app.staticTexts["motion.editor.title"]
-        let zoom = app.sliders["motion.zoom"]
-        let readout = app.staticTexts["motion.zoom.readout"]
+        let zoom = app.buttons["monitor.system.zoom"]
         let scroll = app.scrollViews["motion.editor.scroll"]
         let clear = app.buttons["motion.clear"]
         let start = app.buttons["motion.startStop"]
-        XCTAssertTrue(zoom.waitForExistence(timeout: 5))
+        let points = ["A", "B", "C"].map { app.staticTexts["motion.waypoint.\($0).readout"] }
+        let savedPoints = points.map(\.label)
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
 
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             XCUIDevice.shared.orientation = orientation
@@ -192,37 +193,62 @@ final class MotionUIFlowTests: XCTestCase {
             }
             expectation(for: settled, evaluatedWith: app)
             waitForExpectations(timeout: 10)
-            XCTAssertTrue(zoom.isEnabled)
-            let zoomFrame = zoom.frame
+            let titleFrame = title.frame
             let clearFrame = clear.frame
             let startFrame = start.frame
-            let before = readout.label
-            zoom.adjust(toNormalizedSliderPosition: orientation.isLandscape ? 0.71 : 0.37)
-            XCTAssertNotEqual(
-                readout.label, before, "The presentation fixture must consume the slider input")
-            XCTAssertTrue(title.exists, "Zoom must keep the full editor open")
+            if !orientation.isLandscape {
+                XCTAssertLessThanOrEqual(clearFrame.maxY, zoom.frame.minY - 8,
+                    "The default editor must leave the original zoom chip exposed")
+            }
+            let beforeTap = zoom.label
+            zoom.tap()
+            XCTAssertTrue(title.exists, "The existing zoom chip must not minimize Motion Control")
+            XCTAssertFalse(app.buttons["motion.expand"].exists)
+            expectation(for: NSPredicate { _, _ in zoom.label != beforeTap }, evaluatedWith: zoom)
+            waitForExpectations(timeout: 5)
+            XCTAssertNotEqual(zoom.label, beforeTap, "The original single-tap action must receive the touch")
+            let beforeDoubleTap = zoom.label
+            zoom.doubleTap()
+            XCTAssertTrue(title.exists, "Extended zoom must also leave the full editor open")
+            expectation(for: NSPredicate { _, _ in zoom.label != beforeDoubleTap }, evaluatedWith: zoom)
+            waitForExpectations(timeout: 5)
+            XCTAssertNotEqual(zoom.label, beforeDoubleTap, "The original double-tap action must receive the touch")
+            zoom.press(forDuration: 0.55)
+            let dial = app.descendants(matching: .any)["monitor.zoom.dial"].firstMatch
+            XCTAssertTrue(dial.waitForExistence(timeout: 5))
+            XCTAssertTrue(dial.isHittable, "The zoom disc must be above the Motion Control card")
+            XCTAssertFalse(clear.isHittable, "The disc owns input while open")
+            XCTAssertFalse(app.buttons["motion.minimizeBackdrop"].isHittable,
+                "The covered backdrop must not receive a minimize action")
+            attachScreenshot(orientation.isLandscape ? "motion-zoom-disc-landscape" : "motion-zoom-disc-portrait")
+            app.buttons["Close zoom dial"].tap()
+            expectation(for: NSPredicate { _, _ in !dial.isHittable && clear.isHittable },
+                evaluatedWith: app)
+            waitForExpectations(timeout: 5)
+            XCTAssertTrue(title.exists)
+            XCTAssertTrue(clear.isHittable)
             XCTAssertTrue(zoom.isHittable)
-            XCTAssertLessThanOrEqual(zoom.frame.maxY, clear.frame.minY)
+            XCTAssertFalse(app.buttons["motion.expand"].exists)
+            XCTAssertFalse(app.sliders["motion.zoom"].exists, "Motion Control uses the existing zoom controls")
+            XCTAssertEqual(title.frame.minY, titleFrame.minY, accuracy: 1)
+            XCTAssertEqual(points.map(\.label), savedPoints)
 
             scrollSettingsToBottom(scroll)
-            XCTAssertEqual(zoom.frame.minY, zoomFrame.minY, accuracy: 1)
             XCTAssertEqual(clear.frame.minY, clearFrame.minY, accuracy: 1)
             XCTAssertEqual(start.frame.minY, startFrame.minY, accuracy: 1)
-            XCTAssertTrue(zoom.isHittable)
             XCTAssertTrue(clear.isHittable)
             XCTAssertTrue(start.isHittable)
-            attachScreenshot(
-                orientation.isLandscape ? "motion-zoom-slider-landscape" : "motion-zoom-slider-portrait")
+            attachScreenshot(orientation.isLandscape ? "motion-zoom-chip-landscape" : "motion-zoom-chip-portrait")
         }
     }
 
-    func testZoomSliderIsDisabledWhileDLog2IsRecording() {
+    func testZoomChipKeepsRecordingColorGateWithEditorOpen() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
         app.launchEnvironment["OPV_UI_REVIEW_MOTION"] = "1"
-        app.launchEnvironment["OPV_UI_REVIEW_MOTION_ZOOM_CONTROL"] = "1"
+        app.launchEnvironment["OPV_UI_REVIEW_ZOOM_CONTROLS"] = "1"
         app.launchEnvironment["OPV_UI_REVIEW_ZOOM_DLOG2_RECORDING"] = "1"
         app.launch()
         defer { app.terminate() }
@@ -231,10 +257,14 @@ final class MotionUIFlowTests: XCTestCase {
         let open = app.buttons["motion.openEditor"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         open.tap()
-        let zoom = app.sliders["motion.zoom"]
-        XCTAssertTrue(zoom.waitForExistence(timeout: 5))
-        XCTAssertTrue(zoom.isHittable)
-        XCTAssertFalse(zoom.isEnabled)
+        let title = app.staticTexts["motion.editor.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        let zoom = app.buttons["monitor.system.zoom"]
+        let before = zoom.label
+        zoom.tap()
+        XCTAssertTrue(app.staticTexts["motion.editor.title"].exists)
+        XCTAssertEqual(zoom.label, before)
+        XCTAssertTrue(app.staticTexts["Can't change color while recording — D-Log2 can't zoom"].waitForExistence(timeout: 5))
     }
 
     func testEditorKeepsActionsFixedAndFadesOnlyOverflowInBothOrientations() {
@@ -265,7 +295,6 @@ final class MotionUIFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["motion.clear"].exists)
         XCTAssertEqual(restart.label, "Restart")
         XCTAssertEqual(pause.label, "Resume")
-        XCTAssertFalse(app.sliders["motion.zoom"].isEnabled, "A paused program still owns zoom")
         let readouts = ["A", "B", "C"].map { app.staticTexts["motion.waypoint.\($0).readout"] }
         let savedPoints = readouts.map(\.label)
 
@@ -366,6 +395,7 @@ final class MotionUIFlowTests: XCTestCase {
         XCTAssertTrue(title.waitForExistence(timeout: 5))
 
         let origin = title.frame
+        let footerOffset = app.buttons["motion.startStop"].frame.minY - origin.minY
         let start = title.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(
             forDuration: 0.01,
@@ -378,6 +408,9 @@ final class MotionUIFlowTests: XCTestCase {
         XCTAssertGreaterThan(
             hypot(title.frame.minX - origin.minX, title.frame.minY - origin.minY), 40,
             "Release must keep the dragged editor location")
+        XCTAssertEqual(
+            app.buttons["motion.startStop"].frame.minY - title.frame.minY, footerOffset, accuracy: 1,
+            "The first drag release must keep the same card height")
         XCTAssertTrue(app.buttons["motion.minimize"].exists)
         XCTAssertTrue(app.buttons["motion.close"].exists)
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())

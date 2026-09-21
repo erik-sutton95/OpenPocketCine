@@ -1,10 +1,12 @@
 package com.opencapture.openpocketcine
 
 import android.os.SystemClock
+import android.os.Bundle
 import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
@@ -21,12 +23,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.openpocketcine.session.GimbalProgram
-import com.opencapture.monitorui.MonitorZoomScale
-import com.opencapture.openpocketcine.core.ConnectionPhase
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraModel
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.GimbalWaypoint
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -164,14 +160,11 @@ class MotionProgramSessionTest {
                     val stop = bounds(node("motion.startStop"))
                     val resume = bounds(node("motion.pauseResume"))
                     val restart = bounds(node("motion.restart"))
-                    val zoom = bounds(node("motion.zoom"))
-                    assertFalse(node("motion.zoom").isEnabled, "Manual zoom is disabled while paused")
                     assertTrue(restart.right <= resume.left && resume.right <= stop.left,
                         "Paused actions stay ordered Restart, Resume, Stop")
                     assertTrue(stop.bottom - header.top <= maximumHeightPx + 1,
                         "Editor must fit the available height")
-                    assertTrue(bounds(settings).bottom <= zoom.top && zoom.bottom <= stop.top,
-                        "Fade belongs above the fixed zoom and actions")
+                    assertTrue(bounds(settings).bottom <= stop.top, "Fade belongs above the actions")
                     swipeSettings(scenario, bounds(settings))
                     scrollToEnd()
                     assertEquals(null, state(node("motion.settings")),
@@ -180,7 +173,6 @@ class MotionProgramSessionTest {
                     assertEquals(stop, bounds(node("motion.startStop")))
                     assertEquals(resume, bounds(node("motion.pauseResume")))
                     assertEquals(restart, bounds(node("motion.restart")))
-                    assertEquals(zoom, bounds(node("motion.zoom")))
                     assertTrue(node("motion.loop").isVisibleToUser)
                     scenario.onActivity {
                         assertEquals(null, model!!.gimbalFloatCenter, "Settings scroll must not drag the window")
@@ -196,60 +188,130 @@ class MotionProgramSessionTest {
     }
 
     @OptIn(ExperimentalComposeUiApi::class)
-    @Test fun motionZoomUsesContinuousReadoutAndCurrentInteractionAndCameraLimits() {
+    @Test fun existingZoomChipAndDiscWorkWithoutMinimizingTheEditor() {
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             var model: AppModel? = null
+            var taps = 0
+            var doubleTaps = 0
+            var dialEnds = 0
+            var portrait = true
+            val dialValues = mutableListOf<Double>()
             try {
                 scenario.onActivity { activity ->
                     val app = AppModel(activity)
                     model = app
-                    val camera = FoundCamera("motion-fixture", "", "Motion fixture", CameraModel("Osmo Pocket 4 Pro"), null)
-                    PocketCameraSession::class.java.getDeclaredField("connectedCamera").apply { isAccessible = true }
-                        .set(app.session, camera)
-                    seed(app.session, "_phase", ConnectionPhase.LIVE)
-                    seed(app.session, "_status", CameraStatus(colorMode = CameraCommands.COLOR_NORMAL, zoomFactor = 1.537))
-                    seed(app.session, "_zoomDialReadout", 1.537)
-                    seed(app.session, "_zoomReadout", 1.5)
+                    seed(app.session, "_gimbalProgram", program)
                     app.liveGimbalPanel = LiveGimbalPanel.EDITOR
                     activity.setContent {
                         BoxWithConstraints(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
-                            val layout = LiveMonitorLayout.fit(maxWidth.value, maxHeight.value,
+                            portrait = maxHeight > maxWidth
+                            val layout = LiveMonitorLayout.fieldMonitor(maxWidth.value, maxHeight.value,
                                 0f, 0f, 0f, 0f, showsBottomBars = true)
-                            LiveGimbalOverlay(app, layout, layout.feed, uiLocked = false)
+                            val cluster = layout.gimbalCluster(true)
+                            val zoom = cluster.zoom
+                            Box(Modifier.liveModuleFrame(zoom)) {
+                                LiveZoomChip(factor = 1.5, dialFactor = 1.537, locked = false, maximum = 12.0,
+                                    onCycle = { taps++ }, onDigitalCycle = { doubleTaps++ },
+                                    onDial = { dialValues += it }, onDialEnd = { dialEnds++ })
+                            }
+                            LiveGimbalOverlay(app, layout, layout.feed, uiLocked = false,
+                                joystickBounds = cluster.stick, zoomBounds = zoom)
                         }
                     }
                 }
-                assertEquals(MonitorZoomScale.position(1.537, 1.0, 12.0).toFloat(),
-                    node("motion.zoom") { it.isEnabled }.rangeInfo.current, 1e-6f)
-                for (guard in listOf("running", "paused", "countdown", "locked", "interaction", "recording D-Log2", "limited mode")) {
-                    scenario.onActivity {
-                        val app = model!!
-                        seed(app.session, "_gimbalMoveRunning", guard in listOf("running", "paused", "countdown"))
-                        seed(app.session, "_gimbalMovePaused", guard == "paused")
-                        seed(app.session, "_gimbalMoveCountdown", if (guard == "countdown") 2 else null)
-                        app.uiLocked = guard == "locked"
-                        app.liveChromeInteractive = guard != "interaction"
-                        seed(app.session, "_status", CameraStatus(
-                            colorMode = if (guard == "recording D-Log2") CameraCommands.COLOR_DLOG2 else CameraCommands.COLOR_NORMAL,
-                            isRecording = guard == "recording D-Log2",
-                            shootingMode = if (guard == "limited mode") CameraCommands.SHOOT_SLOWMO else -1,
-                            zoomFactor = 1.537))
-                        if (guard == "limited mode") {
-                            PocketCameraSession::class.java.getDeclaredField("connectedCamera").apply { isAccessible = true }
-                                .set(app.session, FoundCamera("motion-fixture", "", "Motion fixture", CameraModel("Osmo Pocket 4"), null))
-                        }
-                    }
-                    assertFalse(node("motion.zoom") { !it.isEnabled }.isEnabled, guard)
-                }
+                assertTrue(node("motion.editor").isVisibleToUser)
+                assertEquals(null, find(node("motion.editor"), "motion.zoom"), "No separate zoom slider in Motion Control")
+                val chip = bounds(node("live.zoom"))
+                assertFalse(Rect.intersects(bounds(node("motion.editor")), chip),
+                    "The default editor must expose the production zoom chip without a manual move")
+                scenario.onActivity { assertEquals(null, model!!.gimbalFloatCenter) }
+                pointerPress(chip, 40)
+                SystemClock.sleep(400)
                 scenario.onActivity {
-                    model!!.liveChromeInteractive = true
-                    seed(model!!.session, "_status", CameraStatus(colorMode = CameraCommands.COLOR_DLOG2, zoomFactor = 1.0))
+                    assertEquals(1, taps)
+                    assertEquals(LiveGimbalPanel.EDITOR, model!!.liveGimbalPanel)
                 }
-                assertTrue(node("motion.zoom") { it.isEnabled }.isEnabled, "Idle D-Log2 retains the existing manual color-hop policy")
+                pointerPress(chip, 30)
+                SystemClock.sleep(70)
+                pointerPress(chip, 30)
+                SystemClock.sleep(400)
+                scenario.onActivity {
+                    assertEquals(1, doubleTaps)
+                    assertEquals(1, taps, "Double tap must keep its separate zoom action")
+                    assertEquals(LiveGimbalPanel.EDITOR, model!!.liveGimbalPanel)
+                }
+                pointerPress(chip, 650)
+                val disc = zoomDiscNode()
+                scenario.onActivity { assertEquals(LiveGimbalPanel.EDITOR, model!!.liveGimbalPanel) }
+                assertTrue(disc.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id,
+                    Bundle().apply { putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, .42f) }))
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                scenario.onActivity { assertTrue(dialValues.isNotEmpty(), "The disc must own input above the full editor") }
+                val close = disc.actionList.first { it.label?.toString() == "Close zoom" }
+                assertTrue(disc.performAction(close.id))
+                assertTrue(node("motion.close").isVisibleToUser)
+                scenario.onActivity {
+                    assertEquals(1, dialEnds)
+                    assertEquals(LiveGimbalPanel.EDITOR, model!!.liveGimbalPanel)
+                    assertEquals(program, model!!.session.gimbalProgram.value)
+                }
+                val beforeDrag = bounds(node("motion.editor"))
+                val header = bounds(node("motion.header"))
+                val down = SystemClock.uptimeMillis()
+                val targetX = header.exactCenterX() + if (portrait) 0f else 80f
+                val targetY = header.exactCenterY() + if (portrait) 80f else 0f
+                pointerEvent(MotionEvent.ACTION_DOWN, header.exactCenterX(), header.exactCenterY(), down)
+                pointerEvent(MotionEvent.ACTION_MOVE, targetX, targetY, down)
+                val duringDrag = bounds(node("motion.editor") { bounds(it) != beforeDrag })
+                if (portrait) assertTrue(duringDrag.bottom > chip.top,
+                    "The first drag may cross the default zoom boundary before release")
+                scenario.onActivity { assertEquals(null, model!!.gimbalFloatCenter) }
+                pointerEvent(MotionEvent.ACTION_UP, targetX, targetY, down)
+                val afterDrag = bounds(node("motion.editor"))
+                assertEquals(beforeDrag.height(), duringDrag.height())
+                assertEquals(beforeDrag.height(), afterDrag.height(), "First release must not grow the editor")
+                scenario.onActivity { assertTrue(model!!.gimbalFloatCenter != null) }
             } finally {
                 scenario.onActivity { model?.close() }
             }
         }
+    }
+
+    /** Native screen input tests the actual backdrop cutout, not a semantics bypass. */
+    private fun pointerPress(rect: Rect, durationMs: Long) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val down = SystemClock.uptimeMillis()
+        for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+            pointerEvent(action, rect.exactCenterX(), rect.exactCenterY(), down)
+            if (action == MotionEvent.ACTION_DOWN) SystemClock.sleep(durationMs)
+        }
+        instrumentation.waitForIdleSync()
+    }
+
+    private fun pointerEvent(action: Int, x: Float, y: Float, down: Long) {
+        val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+        event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+        try {
+            assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation.injectInputEvent(event, true))
+        } finally { event.recycle() }
+    }
+
+    private fun zoomDiscNode(): AccessibilityNodeInfo {
+        fun findDisc(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+            if (node.actionList.any { it.label?.toString() == "Close zoom" }) return node
+            for (index in 0 until node.childCount) {
+                node.getChild(index)?.let(::findDisc)?.let { return it }
+            }
+            return null
+        }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        while (SystemClock.uptimeMillis() < deadline) {
+            instrumentation.waitForIdleSync()
+            instrumentation.uiAutomation.rootInActiveWindow?.let(::findDisc)?.let { return it }
+            SystemClock.sleep(80)
+        }
+        error("Long press did not open the zoom disc above the editor")
     }
 
     private fun scrollToEnd() {

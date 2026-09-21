@@ -29,8 +29,9 @@ separate iOS and Android lists.
   the control pill visible. While paused, Restart replaces Clear and starts the
   saved program again from A with countdown and preparation. The corrected A/B
   loop passed an operator iPhone check; broader physical qualification remains pending.
-- Motion Control adds a fixed Zoom slider above the action buttons, so each
-  point can be framed without closing the editor. Both shells remove hundredth
+- Motion Control keeps the existing zoom chip and long-press disc usable while
+  the full editor stays open, so points can be framed without a separate slider.
+  Closing the disc returns to the editor. Both shells remove hundredth
   rounding and whole-stop snapping from the general zoom dial, preserving
   fractional input through the camera's integer lens command conversion.
   Whole-stop haptics fire once per crossing. Physical lens smoothness remains

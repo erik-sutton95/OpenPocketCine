@@ -11,15 +11,10 @@
         static var isActive: Bool { screen != nil }
 
         #if DEBUG
-            static var motionZoomControl: Bool {
+            static var zoomControls: Bool {
                 screen == "live"
-                    && ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_ZOOM_CONTROL"]
+                    && ProcessInfo.processInfo.environment["OPV_UI_REVIEW_ZOOM_CONTROLS"]
                         == "1"
-            }
-
-            /// Presentation input only. This fixture never invokes a camera command.
-            static func setMotionZoomPreview(_ factor: Double, session: CameraSession) {
-                session.zoomPinchPreview = factor
             }
         #endif
 
@@ -80,7 +75,7 @@
             status.timecode = "15:39:50:00"
             status.colorMode = .dLog2
             #if DEBUG
-                if motionZoomControl {
+                if zoomControls {
                     let recordingDLog2 =
                         ProcessInfo.processInfo.environment["OPV_UI_REVIEW_ZOOM_DLOG2_RECORDING"]
                         == "1"

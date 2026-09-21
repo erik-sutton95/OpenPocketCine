@@ -74,11 +74,14 @@ clock alignment and exact pixel locking are not claimed.
 
 ## Programmed zoom
 
-The fixed Zoom slider above the action buttons lets the operator frame each
-point without closing or minimizing the editor. It shares the manual zoom
-limits and color-mode rules, and is disabled while a take owns motion (including
-pause), while locked, or recording in D-Log2. Pointer input retains fractional
-values; hundredths are only a readout format.
+Use the existing zoom chip while the editor stays open: tap for the camera's
+normal zoom stops, or hold for the zoom disc. The disc opens above Motion Control;
+closing it returns to the full editor. Default portrait placement leaves the chip
+exposed; manual window positions retain their usual bounds. There is no additional
+zoom slider.
+The same lock, FORMAT and D-Log2 recording restrictions apply. Manual zoom during
+an active or paused take cancels that take through the existing takeover path.
+Pointer input retains fractional values; hundredths are only a readout format.
 
 Save each point at the desired zoom. A zoom-changing take sets A's zoom during
 preparation, then interpolates A→B and optional B→C over their chosen durations.
@@ -272,7 +275,11 @@ status feedback exposed no intermediate lens positions in either transition.
 That telemetry is too sparse to establish visual smoothness or a speed benefit;
 the production command format and 20 Hz limit remain unchanged. General dial
 rounding and whole-stop snapping are removed independently. Physical comparison
-with Mimo and the camera controls remains pending.
+with Mimo and the camera controls remains pending. The operator still reports
+visible ticking during a roughly 3×→6×, 2.5-second programmed leg. A follow-up
+capture pairing command timestamps with actual preview frames was prepared, but
+the iPhone disconnected before it could run. No higher-rate or alternative zoom
+command has been validated or shipped.
 
 `just gimbal-test` exercises camera-timed command dispatch, sparse feedback at
 reversals, motor easing, early-only waypoint observations, late dispatch, missing feedback,

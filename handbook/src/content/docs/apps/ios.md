@@ -322,10 +322,11 @@ does not reverse stored mechanical angles. Waypoint letters and the dashed path
 follow the selfie orientation and MIRROR assist visually; saved positions and
 programmed movements stay the same.
 
-Use the **Zoom** slider above the fixed action buttons to frame a point without
-closing or minimizing Motion Control, then SET or RESET that point. The slider
-follows the camera's zoom limits and is disabled during a take, including pause,
-and while recording in D-Log2.
+Use the existing **zoom chip** to frame a point without closing or minimizing
+Motion Control. Tap for the usual zoom stops, or hold to open the zoom disc.
+Closing the disc returns to the full editor; SET or RESET then saves the point.
+The camera's zoom limits and D-Log2 recording restrictions still apply. Manual
+zoom takes over and cancels an active or paused motion program.
 
 Each point also saves its zoom. When those amounts differ, Motion Control
 transitions between them over the leg durations; B's zoom is reached even when

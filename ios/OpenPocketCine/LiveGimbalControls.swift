@@ -78,6 +78,8 @@ struct LiveGimbalOverlay: View {
     var layout: LiveMonitorLayout
     var feed: CGRect
     var joystickBounds: CGRect = .zero
+    var zoomBounds: CGRect = .zero
+    var coveredByZoom = false
 
     private var bounds: CGRect {
         CGRect(
@@ -96,6 +98,37 @@ struct LiveGimbalOverlay: View {
         )
     }
 
+    private var defaultEditorBounds: CGRect {
+        guard layout.viewport.height > layout.viewport.width else {
+            return bounds
+        }
+        let top = max(bounds.minY, 44)
+        let bottom = zoomBounds.isEmpty ? bounds.maxY : min(bounds.maxY, zoomBounds.minY - 8)
+        return CGRect(
+            x: bounds.minX, y: top, width: bounds.width,
+            height: max(1, bottom - top))
+    }
+
+    /// Only the unset position avoids the zoom chip. Dragging still uses the
+    /// whole viewport, and the compact pill keeps the editor's default top edge.
+    private var defaultTop: CGFloat {
+        let height = min(defaultEditorBounds.height, 420)
+        let center = MonitorMotionPlacement.center(
+            preferred: nil,
+            size: .init(width: Double(Self.editorWidth), height: Double(height)),
+            viewport: .init(
+                width: Double(layout.viewport.width), height: Double(layout.viewport.height)),
+            bounds: .init(
+                x: defaultEditorBounds.minX, y: defaultEditorBounds.minY,
+                width: defaultEditorBounds.width, height: defaultEditorBounds.height))
+        return CGFloat(center.y) - height / 2
+    }
+
+    private var editorMaximumHeight: CGFloat {
+        // Keep the card's height stable through a first drag and its commit.
+        defaultEditorBounds.height
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             if model.liveGimbalPanel == .editor || model.liveGimbalPanel == .runPill
@@ -105,22 +138,29 @@ struct LiveGimbalOverlay: View {
                     .zIndex(0)
             }
             if model.liveGimbalPanel == .editor {
-                MonitorMotionDismissBackdrop(excluding: joystickBounds) {
+                MonitorMotionDismissBackdrop(excluding: [joystickBounds, zoomBounds]) {
                     model.liveGimbalPanel = .runPill
                 }
                 .accessibilityLabel("Minimize motion control")
                 .accessibilityIdentifier("motion.minimizeBackdrop")
+                // The card's explicit Minimize button serves VoiceOver. An
+                // accessible full-screen backdrop masks the controls in its holes.
+                .accessibilityHidden(true)
                 .zIndex(0.5)
 
-                LiveGimbalMoveEditor(maximumHeight: bounds.height)
+                LiveGimbalMoveEditor(maximumHeight: editorMaximumHeight)
                     .frame(width: Self.editorWidth)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityHidden(coveredByZoom)
                     .modifier(
                         LiveGimbalFloatMove(
                             stored: Bindable(model).gimbalFloatCenter,
-                            sizeHint: CGSize(width: Self.editorWidth, height: 280),
+                            sizeHint: CGSize(
+                                width: Self.editorWidth, height: min(editorMaximumHeight, 420)),
                             bounds: bounds,
-                            viewport: layout.viewport
+                            viewport: layout.viewport,
+                            defaultTop: defaultTop
                         )
                     )
                     .zIndex(1)
@@ -135,6 +175,7 @@ struct LiveGimbalOverlay: View {
                             sizeHint: CGSize(width: 172, height: 44),
                             bounds: bounds,
                             viewport: layout.viewport,
+                            defaultTop: defaultTop,
                             immediateDrag: true
                         )
                     )
@@ -157,6 +198,7 @@ private struct LiveGimbalFloatMove: ViewModifier {
     var sizeHint: CGSize
     var bounds: CGRect
     var viewport: CGSize
+    var defaultTop: CGFloat? = nil
     var immediateDrag = false
     @State private var measured = CGSize.zero
     @State private var dragging = false
@@ -171,10 +213,15 @@ private struct LiveGimbalFloatMove: ViewModifier {
     }
 
     private var center: CGPoint {
+        let preferred = (placement.preview ?? stored).map {
+            MonitorMotionPlacement.Point(x: Double($0.x), y: Double($0.y))
+        }
+        let fallback = defaultTop.map {
+            MonitorMotionPlacement.Point(
+                x: Double(viewport.width / 2), y: Double($0 + size.height / 2))
+        }
         let resolved = MonitorMotionPlacement.center(
-            preferred: (placement.preview ?? stored).map {
-                .init(x: Double($0.x), y: Double($0.y))
-            },
+            preferred: preferred ?? fallback,
             size: placementSize,
             viewport: .init(width: Double(viewport.width), height: Double(viewport.height)),
             bounds: placementBounds)
@@ -296,11 +343,8 @@ private struct LiveGimbalMoveEditor: View {
     @Environment(AppModel.self) private var model
 
     @Environment(\.motionControlCanInteract) private var canInteract
-    @Environment(\.interfaceLocked) private var interfaceLocked
-
     @State private var scrollHeight: CGFloat = 0
     @State private var canScrollFurther = false
-    @State private var editingZoom: Double?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -355,10 +399,6 @@ private struct LiveGimbalMoveEditor: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("motion.zoomUnavailable")
             }
-
-            zoomControl
-                .padding(.horizontal, 14)
-                .padding(.top, 6)
 
             actions
                 .padding(.horizontal, 14)
@@ -503,73 +543,6 @@ private struct LiveGimbalMoveEditor: View {
             .opacity(runEnabled || model.session.gimbalMoveRunning ? 1 : 0.45)
         }
         .font(LiveType.ui(size: 14, weight: .semibold))
-    }
-
-    private var zoomControl: some View {
-        let cameraID = model.session.connectedCamera?.id
-        let phase = model.session.phase.label
-        let maximum = model.session.zoomMax
-        let scale = MonitorZoomScale(minimum: 1, maximum: maximum)
-        let factor = editingZoom ?? model.session.zoomDialReadout
-        return HStack(spacing: 8) {
-            Text("Zoom")
-                .font(LiveType.ui(size: 12, weight: .regular))
-                .foregroundStyle(LiveDesign.muted)
-            Slider(
-                value: Binding(
-                    get: { scale.position(editingZoom ?? model.session.zoomDialReadout) },
-                    set: { position in
-                        guard canAdjustZoom,
-                            model.session.connectedCamera?.id == cameraID,
-                            model.session.phase.label == phase,
-                            model.session.zoomMax == maximum,
-                            position.isFinite
-                        else { return }
-                        let next = scale.value(at: position)
-                        editingZoom = next
-                        #if DEBUG && targetEnvironment(simulator)
-                            if MonitorUIReview.motionZoomControl {
-                                MonitorUIReview.setMotionZoomPreview(next, session: model.session)
-                                return
-                            }
-                        #endif
-                        model.session.setZoomSlider(next)
-                    }),
-                in: 0...1,
-                onEditingChanged: { editing in
-                    if !editing { editingZoom = nil }
-                }
-            )
-            .tint(LiveDesign.accent)
-            .disabled(!canAdjustZoom)
-            .accessibilityLabel("Motion control zoom")
-            .accessibilityValue(String(format: "%.2f×", factor))
-            .accessibilityIdentifier("motion.zoom")
-            Text(String(format: "%.2f×", factor))
-                .font(LiveType.ui(size: 12, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(LiveDesign.text)
-                .frame(width: 52, alignment: .trailing)
-                .accessibilityIdentifier("motion.zoom.readout")
-        }
-        .frame(height: 44)
-        .onChange(of: cameraID) { _, _ in editingZoom = nil }
-        .onChange(of: maximum) { _, _ in editingZoom = nil }
-        .onChange(of: canAdjustZoom) { _, enabled in
-            if !enabled { editingZoom = nil }
-        }
-    }
-
-    private var canAdjustZoom: Bool {
-        guard canInteract(), !interfaceLocked, !model.session.isLocked,
-            !model.session.gimbalMoveRunning,
-            model.session.zoomMax.isFinite, model.session.zoomMax > 1,
-            !(model.session.status.colorMode == .dLog2 && model.session.status.isRecording)
-        else { return false }
-        #if DEBUG && targetEnvironment(simulator)
-            if MonitorUIReview.motionZoomControl { return true }
-        #endif
-        return model.session.canSetGimbalConfiguration
     }
 
     private var runEnabled: Bool {

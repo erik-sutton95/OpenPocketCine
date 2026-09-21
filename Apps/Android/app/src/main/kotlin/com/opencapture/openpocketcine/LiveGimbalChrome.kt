@@ -85,9 +85,7 @@ import com.opencapture.monitorui.MonitorOptionGroup
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorSwitchGraphic
 import com.opencapture.monitorui.MonitorValueDrum
-import com.opencapture.monitorui.MonitorZoomScale
 import com.opencapture.openpocketcine.core.ConnectionPhase
-import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.GimbalHudCopy
 import com.opencapture.openpocketcine.session.GimbalMode
 import com.opencapture.openpocketcine.session.GimbalMoveEngine
@@ -248,6 +246,7 @@ fun LiveGimbalOverlay(
     feed: ChromeRect,
     uiLocked: Boolean,
     joystickBounds: ChromeRect = ChromeRect(0f, 0f, 0f, 0f),
+    zoomBounds: ChromeRect = ChromeRect(0f, 0f, 0f, 0f),
 ) {
     if (uiLocked) return
     val panel = model.liveGimbalPanel
@@ -268,8 +267,10 @@ fun LiveGimbalOverlay(
                 layout.viewportHeight - max(8f, layout.safeTop) - max(8f, layout.safeBottom),
             ),
         )
-    val editorHeight = min(EDITOR_HEIGHT_DP, bounds.height)
-    val defaultTopCenter = Offset(bounds.midX, bounds.minY + (bounds.height - editorHeight) / 2f)
+    val defaultEditor = motionEditorDefaultFrame(bounds, zoomBounds, layout.viewportHeight > layout.viewportWidth)
+    val editorMaximumHeight = defaultEditor.height
+    val editorHeight = min(EDITOR_HEIGHT_DP, editorMaximumHeight)
+    val defaultTopCenter = Offset(defaultEditor.midX, defaultEditor.minY)
     Box(Modifier.fillMaxSize().zIndex(if (panel == LiveGimbalPanel.EDITOR) 1f else 0f)) {
         if (panel == LiveGimbalPanel.EDITOR || panel == LiveGimbalPanel.RUN_PILL || running) {
             LiveGimbalWaypointMarks(model, feed, program)
@@ -277,8 +278,9 @@ fun LiveGimbalOverlay(
         if (panel == LiveGimbalPanel.EDITOR) {
             MonitorMotionDismissBackdrop(
                 viewport = Rect(0f, 0f, layout.viewportWidth, layout.viewportHeight),
-                excluding = Rect(joystickBounds.minX, joystickBounds.minY,
-                    joystickBounds.minX + joystickBounds.width, joystickBounds.minY + joystickBounds.height),
+                excluding = listOf(joystickBounds, zoomBounds).map { rect ->
+                    Rect(rect.minX, rect.minY, rect.minX + rect.width, rect.minY + rect.height)
+                },
                 onDismiss = { model.liveGimbalPanel = LiveGimbalPanel.RUN_PILL },
             )
             GimbalFloatMove(
@@ -289,7 +291,7 @@ fun LiveGimbalOverlay(
                 defaultTopCenter = defaultTopCenter,
                 identity = Triple(panel, cameraId, phase),
             ) {
-                LiveGimbalEditor(model, program, running, maxWidthDp = bounds.width, maxHeightDp = bounds.height)
+                LiveGimbalEditor(model, program, running, maxWidthDp = bounds.width, maxHeightDp = editorMaximumHeight)
             }
         }
         if (panel == LiveGimbalPanel.RUN_PILL) {
@@ -306,6 +308,17 @@ fun LiveGimbalOverlay(
             }
         }
     }
+}
+
+/** Keep the portrait default between system edge gestures and Zoom; manual drags use the full viewport. */
+internal fun motionEditorDefaultFrame(bounds: ChromeRect, zoom: ChromeRect, portrait: Boolean): ChromeRect {
+    val originalHeight = min(EDITOR_HEIGHT_DP, bounds.height)
+    val reservedTop = if (portrait) max(bounds.minY, 44f) else bounds.minY
+    val bottom = if (portrait && !zoom.isEmpty) min(bounds.maxY, max(reservedTop + 1f, zoom.minY - 8f)) else bounds.maxY
+    val height = min(originalHeight, bottom - reservedTop)
+    val top = (bounds.minY + (bounds.height - originalHeight) / 2f).coerceIn(reservedTop, bottom - height)
+    val width = min(EDITOR_WIDTH_DP, bounds.width)
+    return ChromeRect(bounds.midX - width / 2f, top, width, height)
 }
 
 /** The existing 25 Hz display prediction invalidates only marker content. */
@@ -469,16 +482,8 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
     val paused by model.session.gimbalMovePaused.collectAsState()
     val phase by model.session.phaseFlow.collectAsState()
     val status by model.session.status.collectAsState()
-    val liveZoom by model.session.zoomDialReadout.collectAsState()
     val zoomNote = model.session.programmedZoomUnavailableReason(status)
     val cameraId = model.session.connectedCamera?.id
-    val zoomMaximum = model.session.zoomMax().takeIf { it.isFinite() }?.coerceAtLeast(1.0) ?: 1.0
-    val zoomEnabled = !running && !model.uiLocked && model.liveChromeInteractive &&
-        !model.isEditingChrome && model.liveOperatorPanel == null && phase == ConnectionPhase.LIVE &&
-        model.monitorCapabilities(status).zoom && zoomMaximum > 1.0 &&
-        !CamFov.zoomNeedsColorHopWhileRecording(zoomMaximum, status.colorMode, status.isRecording)
-    var pointerZoom by remember(cameraId, phase, zoomMaximum, zoomEnabled) { mutableStateOf<Double?>(null) }
-    val shownZoom = (pointerZoom ?: liveZoom).takeIf { it.isFinite() }?.coerceIn(1.0, zoomMaximum) ?: 1.0
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     val remainingThreshold = with(density) { 2.dp.roundToPx() }
@@ -566,31 +571,6 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
         zoomNote?.let {
             Text(it, color = LiveDesign.muted, style = LiveType.ui(10f),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("motion.zoomNote"))
-        }
-        Row(Modifier.fillMaxWidth().height(50.dp).padding(horizontal = 12.dp).testTag("motion.zoomRow")
-            .alpha(if (zoomEnabled) 1f else .45f),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Zoom", color = LiveDesign.text, style = LiveType.ui(12f, FontWeight.SemiBold))
-            Slider(value = MonitorZoomScale.position(shownZoom, 1.0, zoomMaximum).toFloat(),
-                onValueChange = { position ->
-                    if (zoomEnabled && !model.session.gimbalMoveRunning.value &&
-                        !model.uiLocked && model.liveChromeInteractive && !model.isEditingChrome &&
-                        model.liveOperatorPanel == null && model.liveGimbalPanel == LiveGimbalPanel.EDITOR &&
-                        model.session.connectedCamera?.id == cameraId && model.session.phase == phase &&
-                        model.session.zoomMax() == zoomMaximum &&
-                        !CamFov.zoomNeedsColorHopWhileRecording(zoomMaximum,
-                            model.session.status.value.colorMode, model.session.status.value.isRecording)) {
-                        val factor = MonitorZoomScale.valueAt(position.toDouble(), 1.0, zoomMaximum)
-                        pointerZoom = factor
-                        model.session.setZoomSlider(factor)
-                    }
-                }, onValueChangeFinished = { pointerZoom = null }, enabled = zoomEnabled,
-                modifier = Modifier.weight(1f).testTag("motion.zoom")
-                    .semantics { contentDescription = "Zoom"; stateDescription = MonitorZoomScale.dialLabel(shownZoom, maximum = zoomMaximum) },
-                valueRange = 0f..1f)
-            Text(MonitorZoomScale.dialLabel(shownZoom, maximum = zoomMaximum),
-                color = LiveDesign.text, style = LiveType.ui(12f, FontWeight.Medium),
-                modifier = Modifier.width(48.dp), maxLines = 1)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).testTag("motion.actions"),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {

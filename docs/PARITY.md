@@ -251,11 +251,14 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   The disc hub shows hundredths (1.53×); the chip still shows tenths. Past the
   last optical stop (Pocket 4 Pro 6× / 12×) the chip uses the same digital-crop
   amber as the disc ticks.
-- The expanded Motion Control editor passes joystick touches to the original
-  control so positions can be set without minimizing the window. A continuous
-  logarithmic Zoom slider stays fixed above the actions, within the existing
-  height limit. It uses the same camera limits and manual zoom path; it is disabled
-  while a take owns motion (including pause), while locked, or recording in D-Log2. Other outside
+- The expanded Motion Control editor passes joystick and zoom-chip touches to
+  the original controls. Single/double tap keeps the existing zoom stops; a hold
+  opens the existing zoom disc above the editor. Closing the disc restores the
+  full editor. Default portrait placement leaves the zoom chip exposed; manual
+  window positions keep their normal drag bounds and overlap priority. There is
+  no separate zoom slider in Motion Control. Existing
+  lock, FORMAT and D-Log2 recording rules still apply; manual zoom can take over
+  an active or paused program. Other outside
   taps minimize without activating covered controls. Window dragging uses local
   transient placement and one shared-model commit on release.
 - Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
@@ -431,13 +434,15 @@ no automatic color change occurs. Raw camera color/FORMAT changes can stop a tak
 before its next zoom write. Gimbal-only programs remain available in D-Log2.
 Zoom accuracy and integrated Restart still await physical qualification.
 
-Motion zoom controls (2026-09-22): both shells add the fixed in-editor Zoom
-slider and remove general dial rounding and whole-stop snapping. Seven iOS
-simulator motion UI tests pass; Android instrumentation builds but cannot run
-without an attached device. Physical iPhone layout verification is pending: the
-two XCTest launches timed out enabling automation before the test body ran.
-The bounded camera speed comparison did not establish smoother physical zoom;
-see [measurement limits](programmed-moves.md#evidence-and-qualification).
+Motion zoom controls (2026-09-22): both shells keep the existing chip and disc
+accessible while the editor remains open, replacing the added in-editor slider.
+General dial input retains fractional values without whole-stop snapping.
+Simulator and native hit-testing checks cover editor retention and the control
+exclusions. Android instrumentation builds but cannot run without an attached
+device. Physical iPhone layout verification remains pending: earlier XCTest
+launches timed out enabling automation, and the phone disconnected before the
+latest camera comparison could run. The reported programmed-zoom ticking remains
+unresolved; see [measurement limits](programmed-moves.md#evidence-and-qualification).
 
 ## Multiview session network and shutdown (in validation)
 

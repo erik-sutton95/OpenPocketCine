@@ -2,9 +2,10 @@ import UIKit
 import XCTest
 
 /// Opt-in presentation proof on the real saved camera connection. This test only
-/// opens and scrolls Motion Control; it never changes zoom or a programmed move.
+/// opens and scrolls Motion Control and opens/closes its zoom disc; it never
+/// changes zoom or a programmed move.
 final class PhysicalMotionZoomTests: XCTestCase {
-    func testZoomAndActionsStayVisibleWhileSettingsScroll() throws {
+    func testExistingZoomDiscPreservesEditorAndFixedActions() throws {
         guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1" else {
             throw XCTSkip("Requires an opted-in physical run with a saved Pocket 4 Pro")
         }
@@ -37,13 +38,12 @@ final class PhysicalMotionZoomTests: XCTestCase {
         open.tap()
 
         let title = app.staticTexts["motion.editor.title"]
-        let zoom = app.sliders["motion.zoom"]
-        let zoomReadout = app.staticTexts["motion.zoom.readout"]
+        let zoom = app.buttons["monitor.system.zoom"]
         let scroll = app.scrollViews["motion.editor.scroll"]
         let clear = app.buttons["motion.clear"]
         let start = app.buttons["motion.startStop"]
         XCTAssertTrue(zoom.waitForExistence(timeout: 5))
-        let originalZoom = zoomReadout.label
+        let originalZoom = zoom.label
         let points = ["A", "B", "C"].map { app.staticTexts["motion.waypoint.\($0).readout"] }
         let originalPoints = points.map(\.label)
 
@@ -68,8 +68,7 @@ final class PhysicalMotionZoomTests: XCTestCase {
             for _ in 0..<3 { scrollMargin(scroll, towardBottom: false) }
             XCTAssertTrue(zoom.isEnabled, "Real idle camera must permit manual zoom")
             XCTAssertTrue(app.buttons["motion.close"].isHittable)
-            XCTAssertLessThanOrEqual(scroll.frame.maxY, zoom.frame.minY)
-            XCTAssertLessThanOrEqual(zoom.frame.maxY, clear.frame.minY)
+            XCTAssertLessThanOrEqual(scroll.frame.maxY, clear.frame.minY)
             XCTAssertGreaterThanOrEqual(clear.frame.height, 44)
             XCTAssertGreaterThanOrEqual(start.frame.height, 44)
             let fixedFrames = [title.frame, zoom.frame, clear.frame, start.frame]
@@ -87,9 +86,24 @@ final class PhysicalMotionZoomTests: XCTestCase {
                 XCTAssertEqual(element.frame.minX, frame.minX, accuracy: 1)
                 XCTAssertTrue(element.isHittable)
             }
-            XCTAssertEqual(zoomReadout.label, originalZoom, "Scrolling must not adjust the lens")
+            XCTAssertEqual(zoom.label, originalZoom, "Scrolling must not adjust the lens")
             XCTAssertEqual(points.map(\.label), originalPoints, "Scrolling must not edit the program")
             attachScreenshot("physical-motion-zoom-\(name)-settings-end", app: app)
+            zoom.press(forDuration: 0.55)
+            let dial = app.descendants(matching: .any)["monitor.zoom.dial"].firstMatch
+            XCTAssertTrue(dial.waitForExistence(timeout: 5))
+            XCTAssertTrue(dial.isHittable)
+            XCTAssertFalse(clear.isHittable, "The disc must own input above the editor")
+            attachScreenshot("physical-motion-zoom-\(name)-disc", app: app)
+            app.buttons["Close zoom dial"].tap()
+            wait(until: { !dial.isHittable && clear.isHittable },
+                "Closing the disc must restore the full editor after its exit transition")
+            XCTAssertTrue(title.exists)
+            XCTAssertTrue(clear.isHittable)
+            XCTAssertFalse(app.buttons["motion.expand"].exists)
+            XCTAssertFalse(app.sliders["motion.zoom"].exists)
+            XCTAssertEqual(zoom.label, originalZoom, "Opening the disc must not adjust the lens")
+            XCTAssertEqual(points.map(\.label), originalPoints)
             let before = Int(snapshot(app)["pres"] ?? "0") ?? 0
             wait(until: { (Int(self.snapshot(app)["pres"] ?? "0") ?? 0) > before },
                 "Live view must continue presenting while the editor is open")

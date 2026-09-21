@@ -14,6 +14,33 @@ import kotlin.test.assertTrue
 
 class MotionControlInteractionTest {
     @Test
+    fun defaultPortraitEditorLeavesTheProductionZoomChipVisible() {
+        for (safeTop in listOf(0f, 44f, 59f)) {
+            for ((width, height) in listOf(390f to 844f, 360f to 640f, 320f to 568f)) {
+                val layout = LiveMonitorLayout.fieldMonitor(width, height, 0f, 0f, safeTop, 24f, showsBottomBars = true)
+                val zoom = layout.gimbalCluster(true).zoom
+                val top = maxOf(8f, safeTop)
+                val bounds = ChromeRect(8f, top, width - 16f, height - top - 24f)
+                val editor = motionEditorDefaultFrame(bounds, zoom, portrait = true)
+                assertFalse(editor.intersects(zoom), "$width × $height must expose the actual zoom chip")
+                assertTrue(editor.maxY <= zoom.minY - 8f)
+                assertTrue(editor.minY >= maxOf(top, 44f), "Header must avoid system top-edge gestures")
+                assertEquals(minOf(420f, zoom.minY - 8f - maxOf(top, 44f)), editor.height)
+            }
+        }
+    }
+
+    @Test
+    fun defaultLandscapeOrMissingZoomPreservesCenteredPlacement() {
+        val bounds = ChromeRect(8f, 8f, 828f, 374f)
+        val zoom = ChromeRect(650f, 220f, 44f, 36f)
+        assertEquals(ChromeRect(252f, 8f, 340f, 374f), motionEditorDefaultFrame(bounds, zoom, portrait = false))
+        val portrait = ChromeRect(8f, 44f, 374f, 776f)
+        assertEquals(ChromeRect(25f, 222f, 340f, 420f),
+            motionEditorDefaultFrame(portrait, ChromeRect(0f, 0f, 0f, 0f), portrait = true))
+    }
+
+    @Test
     fun pillDragKeepsExclusiveOwnershipThroughReleaseEvenAfterReturningToStart() {
         val drag = MotionControlDragGesture(immediate = true, slop = 8f)
         assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(10, 2f))
