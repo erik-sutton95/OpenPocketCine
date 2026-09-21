@@ -78,8 +78,10 @@ jobs:
           # Combined merge diffs also count notes rewritten during conflict resolution.
           changed_files="$(git log --diff-merges=combined --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
           # Notes-check tooling is not a TestFlight archive. Require copy only when
-          # production iOS paths change (docs/tester-notes.md).
-          production_files="$(grep -E '^(Sources/|Tests/|ios/|Package\.swift$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files" | grep -vE '^scripts/ios-release-notes' || true)"
+          # production iOS paths change (docs/tester-notes.md). Test targets are not
+          # in the archive either: a test-only branch has no operator-visible work to
+          # describe, and the window is what testers have not been asked to try yet.
+          production_files="$(grep -E '^(Sources/|Tests/|ios/|Package\.swift$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/ios-release-notes|Tests/|ios/OpenPocketCine(UI)?Tests/)' || true)"
           if [[ -n "$production_files" ]]; then
             if ! grep -Fxq 'ios/TestFlight/WhatToTest.en-US.txt' <<< "$changed_files"; then
               echo "Update ios/TestFlight/WhatToTest.en-US.txt with the this-build window (docs/tester-notes.md)." >&2
@@ -100,8 +102,12 @@ jobs:
           # Combined merge diffs also count notes rewritten during conflict resolution.
           changed_files="$(git log --diff-merges=combined --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
           # Notes-check tooling is not a Play upload. Require copy only when
-          # production Android paths change (docs/tester-notes.md).
-          production_files="$(grep -E '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Sources/CJNI/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files" | grep -vE '^scripts/android-release-notes' || true)"
+          # production Android paths change (docs/tester-notes.md). Unit and
+          # instrumentation sources are not in the upload either: a test-only branch
+          # has no operator-visible work to describe. Matched per module rather than
+          # per name, so monitor-ui and any module added later are exempt on the same
+          # terms as app instead of silently demanding notes.
+          production_files="$(grep -E '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Sources/CJNI/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/android-release-notes|Apps/Android/[^/]+/src/(test|androidTest)/)' || true)"
           if [[ -n "$production_files" ]]; then
             if ! grep -Fxq 'Apps/Android/Play/WhatToTest.en-US.txt' <<< "$changed_files"; then
               echo "Update Apps/Android/Play/WhatToTest.en-US.txt with the this-build window (docs/tester-notes.md)." >&2
