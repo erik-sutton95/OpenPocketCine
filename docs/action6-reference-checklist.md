@@ -3,7 +3,8 @@
 Surface: **docs**. Session opened **2026-09-21**. Status: **Mimo survey archived;
 hardware gaps listed below remain open**. The format/control sweep and 16
 complete originals are preserved (ten MP4, three JPEG and three DNG). The 42
-network takes and Bluetooth log are closed and structurally validated; the
+main network takes, separate timecode follow-up and Bluetooth log are closed and
+structurally validated; the
 observed starting video setup and tested favorite flag were restored. This
 document must not be read as an OpenPocketCine support claim.
 
@@ -74,7 +75,7 @@ when they return an error or empty list.
 | Storage | Internal/SD choices, capacity reports, remaining time/shots, behavior when unavailable | Internal capacity/free space and No SD UI; no formatting, deletion or pre-existing media changes; card switching untested |
 | Album | List/pagination, thumbnails, playback, favorites, original/proxy transfer | 13 items listed; Original export, download/proxy/list traffic and single-item Favorite On/Off qualified; deletion and pagination untested |
 | Connectivity | Disconnect/reconnect, supported band choices, persistence; local livestream if time | Normal reconnect and later background-session loss; band choices viewed only; STA untested |
-| Body-only controls | Orientation lock, pre-record/loop, timecode, custom presets, quick switch, gesture/voice, display settings | Mimo presets/loop/voice surveyed; physical body-only menus/timecode/pre-record/gesture/QS untested |
+| Body-only controls | Orientation lock, pre-record/loop, timecode, custom presets, quick switch, gesture/voice, display settings | Mimo presets/loop/voice surveyed; timecode-menu app block/status and return captured; timecode reset/sync, pre-record, gesture and QS untested |
 | USB | File transfer/original preservation; webcam and DisplayPort modes if available | Phone USB AFC secured 13 JPEG/MP4 originals; iPhone HTTP Range secured three complete DNGs; direct camera USB, webcam and DisplayPort untested |
 
 Formatting, factory/wireless reset, firmware update, existing-media deletion,

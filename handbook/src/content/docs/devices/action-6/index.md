@@ -24,7 +24,7 @@ reset, storage format, or deletion of pre-existing media was part of the survey.
 | [Connection and live view](./connection/) | UDP startup, command cursors, live-enable receiver, status codes, subscriptions, AVC/SEI validation |
 | [Video, aperture and exposure](./settings/) | Video format writes, aperture strategies and ranges, iris telemetry, manual exposure, WB, image adjustments |
 | [Shooting modes](./modes/) | SuperNight, Photo, Slow Motion, Timelapse, Hyperlapse, Portrait Mode, loop recording and custom presets |
-| [Orientation and device settings](./device-settings/) | Remaining 4:3/square/portrait Video formats, explicit reconnect, storage, Wi-Fi choices and general settings |
+| [Orientation and device settings](./device-settings/) | Remaining 4:3/square/portrait Video formats, explicit reconnect, timecode-menu blocking state, storage, Wi-Fi choices and general settings |
 | [Stabilization and advanced controls](./controls/) | Horizon modes, rate restrictions, zoom, film tones, exposure limits and additional control evidence |
 | [Original media](./media/) | Complete-file hashes, dimensions, rational rates, codec/bit depth, audio and metadata; RAW preservation status |
 | [Firmware and published specifications](./specifications/) | DJI source links, release differences, advertised matrices, lens accessories and features outside the tested scope |
@@ -97,6 +97,11 @@ HTTP reconstruction was observed, and complete originals were validated
 separately. The closed Bluetooth log contains **1,591,008 complete records**
 with no trailing partial record. These are capture-integrity counts, not counts
 of distinct commands or proof that every camera workflow was exercised.
+
+A later [timecode-menu follow-up](./device-settings/#camera-body-timecode-menu)
+adds one closed network file with **40,389 packets**, preserving Mimo's blocked
+state and subsequent return to normal preview. Its counts are separate from
+the continuous survey above; reset/sync operations remain unqualified.
 
 The retained media includes **16 complete originals, 402,022,877 bytes**:
 ten MP4s and three JPEG+RAW pairs. The [media reference](./media/) gives exact

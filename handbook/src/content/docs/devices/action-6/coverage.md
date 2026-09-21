@@ -16,6 +16,29 @@ This is a lower bound for the whole session: the complete closed Bluetooth log
 was structurally validated, but its later records are not included in this
 command-decoding snapshot.
 
+A separately scoped [timecode-menu follow-up](../device-settings/#camera-body-timecode-menu)
+adds **20,070 CRC-valid DUML frames** and one previously absent network family,
+`00/2A`. Its device 28 → app 02 transfer reassembles ten chunks into **9,220 bytes**;
+gzip integrity and the transfer's trailing MD5 both validate. The decompressed
+JSON-lines content and identifiers remain private. Its event categories support
+a diagnostic/event-file interpretation, not a qualified timecode setter or
+dependency. Including this follow-up yields
+**60 network families**, or **62** with the two Bluetooth-only families above.
+The T01–T42 table and counts below retain their original scope.
+
+The supplemental `00/2A` device pushes use sender 28, receiver 02, flags 40;
+app replies reverse the endpoints with flags C0. Observed bodies are:
+
+| Phase | Body | Evidence limit |
+| --- | --- | --- |
+| Offer | `01 SIZE_LE32 NAME_LENGTH:u8 NAME… TRAILER…` | 32 bytes in this file; filename and trailing field semantics remain private or unresolved |
+| Data | `04 CHUNK_INDEX_LE32 GZIP_BYTES…` | Indices 0–9; nine 981-byte bodies and one 441-byte body, contributing 976×9+436 compressed bytes |
+| Completion | `03 MD5_16` | 17 bytes; digest matches the complete compressed file; final app reply is one-byte 00 |
+
+Other app replies have seven or five bytes and are not fully qualified here.
+This single transfer does not establish retry/resume behavior or a general
+file-upload/download API. Raw traffic remains authoritative.
+
 Use the [command comparison](../commands/) for qualified setters and model
 restrictions. An observed family or successful GET does not establish a usable
 control, and an absent family does not establish unsupported hardware.

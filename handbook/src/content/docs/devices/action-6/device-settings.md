@@ -12,7 +12,8 @@ OpenPocketCine implementation.
 
 ## Evidence and confidence
 
-Only closed takes **T18–T20** are analyzed here. T20 was copied after T21 began.
+The original sections analyze closed takes **T18–T20**. The final timecode
+follow-up below identifies its separate capture. T20 was copied after T21 began.
 Private frozen copies, capture hashes, screenshots/OCR, exact bodies and
 **103,220 CRC-valid DUML frames** are retained under
 `captures/action6-20260921/analysis/followup-survey/`. No active capture was
@@ -71,6 +72,32 @@ Advertising was independently captured during this disconnect interval; see
 branch remains a separate gap until explicitly observed.
 
 ## General settings
+
+### Camera-body timecode menu
+
+A final, separate capture after the main survey preserved Mimo's behavior while
+the operator had the camera's **Timecode** menu open. At **12:33:58 UTC**,
+screenshot **588** reads **“Device in timecode setting. Unable to use app.”**
+Screenshot **590** shows Mimo home at 12:34:50; opening the camera again gives
+normal live control in **591** at 12:35:16. The camera touchscreen itself was
+not photographed, and its individual menu options were not recorded.
+
+In this follow-up, the named `audio_timecode_status` value changes from `01`
+at frame **69**, **12:32:46.757956**, to `00` at **28106**,
+**12:34:39.555896**, remaining zero through the restored preview. This correlates
+with the timecode-menu block; it does **not** establish external timecode lock,
+sync success, or a general interpretation of every possible value. Shooting
+mode and format remain Video, Custom 4K1:1/25. `timecode_info` remains eight
+bytes, with hours/minutes/seconds/frames at offsets **3–6**. No reset/sync SET
+or independently identified physical reset/sync action was captured.
+
+The closed file `02-body-timecode_00001_20260921143246.pcapng` contains
+**40,389 packets** and **20,070 CRC-valid DUML frames**, from
+**12:32:46 to 12:35:36 UTC**. Its SHA-256 is
+`03a610b5b3731808060ea7c4169f69a914e9a4b245d4ae019c31ed1791966c06`.
+These are supplemental counts, outside T01–T42. Exact values and correlations
+remain in the private `analysis/body-timecode/` archive. The Mac's internet
+route was unchanged.
 
 ### Voice Control
 
