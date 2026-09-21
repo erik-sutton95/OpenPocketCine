@@ -124,6 +124,8 @@ final class HevcDecoder {
     var onPresentedFrame: (() -> Void)?
     /// VT source buffer after assist present. Face AF / Vision.
     var onSourceFrame: ((CVPixelBuffer) -> Void)?
+    /// Original immutable source, real frames only, with monotonic decode-receipt time.
+    var onTrackingFrame: ((CVPixelBuffer, TimeInterval) -> Void)?
     /// Wrist preview. `source` is the VT identity buffer when a cube does not own
     /// the picture (`nil` for LUT replace). `unmanaged` is a cube product.
     var onWatchPreview: ((CIImage, CVPixelBuffer?, Bool) -> Void)?
@@ -554,6 +556,9 @@ final class HevcDecoder {
                 if isNewSourceFrame, result.shouldPresent {
                     self.pipelineMetrics.adopted(
                         at: ProcessInfo.processInfo.systemUptime, completedAt: completedAt)
+                }
+                if isNewSourceFrame, result.shouldPresent {
+                    self.onTrackingFrame?(imageBuffer, assistSubmittedAt)
                 }
                 let presented = self.applyAssistResult(
                     result, isNewSourceFrame: isNewSourceFrame)

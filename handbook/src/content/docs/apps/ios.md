@@ -421,3 +421,34 @@ If System says “This build cannot send automatic reports,” the installed bui
 has no reporting destination. A configured TestFlight update is required;
 reinstalling the same build will not enable it. When that update arrives, the
 app asks if you have not previously chosen Enable or Not now.
+
+## Cinematic Tracking prototype
+
+**Gimbal → Track** adds experimental tracking that runs on the iPhone. With a
+Pocket connected and live picture running, tap **Select subject**, then drag a
+box around a person or object. You can also tap a visible face. During selection,
+a drag starts immediately; the ordinary hold-and-drag gesture still selects
+camera ActiveTrack outside this mode.
+
+Start with **Gentle**, or compare **Balanced** and **Responsive**. **Sensitivity**
+sets how strongly the camera follows, **Dead band** allows small movements
+without following, and **Smoothness** eases starts and changes of direction.
+**Lerp** adds a separate trailing blend: its value is the time to move halfway
+toward a new follow speed. Zero turns that blend off. **Maximum speed** caps
+requested movement. Fine tuning adds acceleration, jerk and confidence limits.
+
+Choose center or thirds, adjust vertical framing, or enable **Keep composition
+when selecting**. Pan and tilt can be enabled separately. Return to the Track
+tab to tune while following. The live message has a **Stop** button. Values last
+for this session, and AirPods head tracking is switched off when selecting.
+
+Subject loss, manual gimbal control, zoom or picture-format changes, Settings,
+Media, interface lock and leaving the app stop tracking. Select the subject again
+to resume. It does not search for missing subjects or recognize people by identity.
+A tight, clearly visible subject works better than a box containing background
+or several people. More smoothing and Lerp also mean more lag.
+
+This first version uses Apple's local Vision object tracker and needs no model
+download or cloud connection. It is iOS-only, single-camera and **not yet
+physically qualified** for tracking accuracy, cinematic motion, or sustained
+feed/thermal performance. Android, Nano and borrowed Multiview are excluded.

@@ -6,6 +6,7 @@ private enum GimbalSettingsTab: String, CaseIterable {
     case mode = "Mode"
     case speed = "Speed"
     case ramp = "Ramp"
+    case track = "Track"
 }
 
 /// Trailing gimbal pane: Mode / Speed / Ramp tabs, one drum per tab, motion
@@ -77,6 +78,8 @@ struct LiveGimbalSheetHost: View {
                         drum(
                             GimbalSpeed.pickerOrder, selected: model.session.gimbalSpeed,
                             title: { $0.label }, select: model.session.setGimbalSpeed)
+                    case .track:
+                        LiveCinematicTrackingControls(canInteract: canPresentEditor)
                     case .ramp:
                         drum(
                             GimbalRamp.pickerOrder, selected: model.gimbalRamp,

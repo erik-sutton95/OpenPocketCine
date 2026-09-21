@@ -33,7 +33,8 @@ enum LiveGimbalCopy {
     static let update = "Update"
     static let clear = "Clear"
     static let accessibilityButton = "Gimbal controls"
-    static let accessibilityHint = "Opens follow, speed, ramp, and motion control"
+    static let accessibilityHint =
+        "Opens follow, speed, ramp, cinematic tracking, and motion control"
     static let holdDuration: TimeInterval = 0.3
     static let dragSlop: CGFloat = 8
 }

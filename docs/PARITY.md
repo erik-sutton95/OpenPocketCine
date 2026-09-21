@@ -1051,3 +1051,19 @@ No watchdog thresholds, ACK cadence or live-enable policy change. Physical
 iPhone/iPad camera and live-rate/thermal checks remain pending; no phone was
 reachable during this follow-up. The [current triage](audits/2026-09-20-sentry-current-issues.md)
 keeps the unresolved field failures separate from the reproduced ownership bug.
+
+## Cinematic Tracking prototype (2026-09-21)
+
+**Explicit prototype exception:** iOS gains **Gimbal → Track**, with local
+person/object region tracking, sensitivity, Smoothness, dead band, Lerp, speed,
+framing and acceleration/jerk controls. Android keeps its existing camera-side
+ActiveTrack; the phone tracker and its controls are deferred until this experiment
+is physically evaluated. The Foundation-only controller is portable, but no
+Android Vision adapter or JNI entry point is implied.
+
+Off by default and session-only. Available on single-camera Pocket sessions;
+borrowed Multiview and Nano are excluded. Stop, subject loss, manual control,
+inactive scenes and navigation end driving. No automatic subject reacquisition.
+See the [prototype contract and physical review](cinematic-tracking.md).
+Physical iPhone tracking quality, direction/mirroring, stop/takeover and sustained
+feed/thermal qualification remain pending for the operator's review.

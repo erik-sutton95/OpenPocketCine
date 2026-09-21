@@ -219,6 +219,41 @@ final class MonitorUIFlowTests: XCTestCase {
         XCTAssertTrue(record.isEnabled)
     }
 
+    func testCinematicTrackingControlsRemainReachableAcrossRotation() {
+        app.launch()
+        app.buttons["monitor.system.gimbalControls"].tap()
+        let track = app.buttons["Track"].firstMatch
+        XCTAssertTrue(track.waitForExistence(timeout: 5))
+        track.tap()
+        XCTAssertTrue(app.staticTexts["Cinematic Tracking"].exists)
+        XCTAssertFalse(
+            app.buttons["cinematicTracking.select"].isEnabled,
+            "A presentation fixture must not acquire motor control")
+        capture("cinematic-tracking-portrait")
+        rotate(.landscapeLeft)
+        XCTAssertTrue(app.buttons["Close Gimbal"].isHittable)
+        let inspector = app.otherElements["monitor.inspector"]
+        let scroll = inspector.scrollViews.firstMatch
+        func revealTracking(_ element: XCUIElement) {
+            for _ in 0..<14 where !element.isHittable {
+                let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+                start.press(forDuration: 0.05, thenDragTo: end)
+            }
+        }
+        revealTracking(app.sliders["cinematicTracking.slider.Lerp"])
+        XCTAssertTrue(app.sliders["cinematicTracking.slider.Lerp"].isHittable)
+        app.sliders["cinematicTracking.slider.Lerp"].adjust(toNormalizedSliderPosition: 0.4)
+        capture("cinematic-tracking-motion-controls")
+        revealTracking(app.buttons["Fine tuning"])
+        app.buttons["Fine tuning"].tap()
+        revealTracking(app.sliders["cinematicTracking.slider.Jerk limit"])
+        XCTAssertTrue(app.sliders["cinematicTracking.slider.Jerk limit"].isHittable)
+        capture("cinematic-tracking-fine-tuning")
+        app.buttons["Close Gimbal"].tap()
+        XCTAssertTrue(app.buttons["monitor.system.record"].isHittable)
+    }
+
     func testDrawersAndContinuousZoomSurviveRotation() {
         app.launch()
         let gimbal = app.buttons["monitor.system.gimbalControls"]

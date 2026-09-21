@@ -234,8 +234,11 @@ final class CameraSession {
     @ObservationIgnored private var nativeTargetGeneration: UInt64 = 0
     @ObservationIgnored private var nativeHeadToken: UInt64?
     @ObservationIgnored private var nativeMoveToken: UInt64?
+    @ObservationIgnored private var nativeSubjectToken: UInt64?
+    let cinematicTracking = CinematicTrackingPrototype()
 
     func beginNativeHeadTrack() -> UInt64? {
+        guard !cinematicTracking.isEngaged else { return nil }
         guard phase == .live, !sessionRecovery.isRecovering, gimbalControlSceneActive,
             !isFeedWarming, hasGimbal, !isLocked, !gimbalMoveRunning, !gimbalStickHeld,
             !isBrowsingMedia, !isLiveVideoStale, freshGimbalWaypoint != nil,
@@ -272,7 +275,70 @@ final class CameraSession {
     }
 
     private func cancelNativeHeadTrack() {
+        if cinematicTracking.isEngaged { cinematicTracking.stop() }
         if let token = nativeHeadToken { endNativeHeadTrack(token: token) }
+    }
+
+    var canStartCinematicTracking: Bool {
+        phase == .live && !sessionRecovery.isRecovering && gimbalControlSceneActive
+            && !isFeedWarming && hasGimbal && !isLocked && !gimbalMoveRunning
+            && !gimbalStickHeld && !isBrowsingMedia && !isLiveVideoStale
+            && freshGimbalWaypoint != nil && datalink != nil && datalink?.isClosed != true
+            && !holdsMonitor && !isMultiviewBorrowed
+    }
+
+    var canContinueCinematicTracking: Bool {
+        canStartCinematicTracking && nativeSubjectToken != nil
+    }
+    var cinematicTrackingInvertPan: Bool {
+        CinematicTrackingController.rawPanInverted(
+            poseInverted: gimbalPoseInvertPan, cameraViewMirrored: gimbalPoseViewFlip)
+    }
+
+    /// Retire camera-side ActiveTrack before the phone can acquire the motor stream.
+    func prepareCinematicTracking() async -> Bool {
+        guard canStartCinematicTracking else { return false }
+        clearLocalTracking()
+        lastOperatorClearAt = Date()
+        let cleared = await requestCamera(
+            Commands.clearTrackingBox(), name: "Stop camera tracking", timeout: .milliseconds(800))
+        return cleared && !Task.isCancelled && canStartCinematicTracking
+    }
+
+    func beginNativeSubjectTrack() -> UInt64? {
+        guard canStartCinematicTracking,
+            cinematicTracking.state == .acquiring || cinematicTracking.state == .tracking,
+            let datalink
+        else {
+            return nil
+        }
+        if let token = nativeHeadToken { endNativeHeadTrack(token: token) }
+        restGimbalStickWire()
+        prepHeadTrackGimbal()
+        nativeTargetGeneration &+= 1
+        nativeSubjectToken = nativeTargetGeneration
+        datalink.beginNativeTargets(token: nativeTargetGeneration)
+        return nativeTargetGeneration
+    }
+
+    func updateNativeSubjectTrack(target: GimbalWaypoint, token: UInt64) -> Bool {
+        guard canContinueCinematicTracking, nativeSubjectToken == token,
+            let live = freshGimbalWaypoint,
+            GimbalMoveEngine.canSendNativeTarget(from: live, to: target),
+            let frame = Commands.gimbalTimedTarget(
+                waypoint: target, duration: CinematicTrackingController.commandDuration),
+            let datalink
+        else {
+            endNativeSubjectTrack(token: token)
+            return false
+        }
+        return datalink.noteNativeTarget(frame, token: token)
+    }
+
+    func endNativeSubjectTrack(token: UInt64) {
+        guard nativeSubjectToken == token else { return }
+        nativeSubjectToken = nil
+        datalink?.endNativeTargets(token: token)
     }
 
     var overlayGimbalWaypoint: GimbalWaypoint? {
@@ -352,7 +418,7 @@ final class CameraSession {
     }
     /// Face-priority EV also needs Vision, including AF-S.
     var wantsFaceDetect: Bool {
-        wantsFaceAF || wantsFacePriorityMeter
+        wantsFaceAF || wantsFacePriorityMeter || cinematicTracking.state == .selecting
     }
     var wantsFacePriorityMeter: Bool {
         OperatorPrefs.facePriorityExposureEnabled && status.expoMode == .auto
@@ -512,6 +578,10 @@ final class CameraSession {
     init(borrowing sharedDecoder: HevcDecoder? = nil, cameraMedia: CameraMedia? = nil) {
         self.cameraMedia = cameraMedia ?? CameraMedia()
         self.decoder = sharedDecoder ?? HevcDecoder()
+        cinematicTracking.attach(to: self)
+        decoder.onTrackingFrame = { [weak self] buffer, measuredAt in
+            self?.cinematicTracking.consider(buffer, measuredAt: measuredAt)
+        }
         gimbalStickMapping = GimbalStickMapping()
         syncGimbalPose()
         if sharedDecoder != nil {
@@ -2872,6 +2942,16 @@ final class CameraSession {
     /// Feed tap: inside the AF-C face box → ActiveTrack SET with that rect.
     /// Anywhere else → tap-to-focus.
     func handleFeedTap(at normalized: CGPoint) {
+        if cinematicTracking.state == .selecting {
+            if let face = sceneFaces.filter({ $0.contains(x: normalized.x, y: normalized.y) })
+                .min(by: { $0.area < $1.area })
+            {
+                cinematicTracking.start(face)
+            } else {
+                controlNote = "Drag a box around the subject to track it"
+            }
+            return
+        }
         let x = min(max(Double(normalized.x), 0), 1)
         let y = min(max(Double(normalized.y), 0), 1)
         if let box = FaceTrackTap.boxIfTapped(
@@ -2894,6 +2974,7 @@ final class CameraSession {
     /// `0x32` region). Glamour is `0x8E` pid `0x0039`, not `0x68`.
     func markFocus(at normalized: CGPoint) {
         guard supportsTapFocus else { return }
+        if cinematicTracking.isEngaged { cinematicTracking.stop() }
         cancelTracking(sendClear: isTrackingActive)
         // Hold the tap reticle so AF-C face detect cannot hide it immediately.
         lastTapFocusAt = Date()
@@ -2932,6 +3013,10 @@ final class CameraSession {
 
     /// Drag-to-track: `0x02/0xA6` centre+size, then poll `0x02/0xA5` until lock or idle.
     func startTracking(_ box: TrackingBox) {
+        if cinematicTracking.state == .selecting {
+            cinematicTracking.start(box)
+            return
+        }
         cancelProgrammedMove()
         if box.isTooSmall {
             noteFrameTooSmall()
@@ -2968,6 +3053,7 @@ final class CameraSession {
     }
 
     func cancelSubjectTracking() {
+        cinematicTracking.stop()
         cancelTracking(sendClear: true)
     }
 
@@ -3031,6 +3117,10 @@ final class CameraSession {
     /// Triangle/Y (discussion #159 left that face free): track the AF-C face, or cancel.
     func handleGamepadTrackToggle() {
         guard !isLocked else { return }
+        if cinematicTracking.isEngaged {
+            cinematicTracking.stop()
+            return
+        }
         switch GamepadFaceTrack.action(
             trackingActive: isTrackingActive,
             overlay: focusOverlay,
@@ -3138,11 +3228,17 @@ final class CameraSession {
     /// The camera is the source of truth: a body-screen lock starts here, a
     /// body-screen cancel is silence + `0xA5` idle.
     private func applyLiveTrackingPush(_ payload: [UInt8]) {
+        // A new body-screen lock takes control back. Ignore only the normal
+        // clear-command grace; never run two trackers against the same motors.
         guard
             TrackingClearPolicy.shouldApplyLivePush(
                 operatorClearedAt: lastOperatorClearAt, now: Date())
         else { return }
         guard let box = TrackingBox.parseLivePush(payload) else { return }
+        if cinematicTracking.isEngaged {
+            cinematicTracking.stop(
+                reason: "Camera tracking took control. Select again to use phone tracking.")
+        }
         lastSubjectPushAt = Date()
         subjectBox = smoothedSubject(toward: box)
         isTracking = true

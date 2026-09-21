@@ -1,17 +1,15 @@
 New and changed
 
-- Pocket 3 zoom stops follow FORMAT, with a note when the ceiling changes. Refused zoom values settle back to the camera's reading.
-- HDR display brightens the phone panel; off by default. Screen recording and AirPlay use normal SDR. Camera HDR/HLG recording is unchanged.
+- Gimbal → Track adds experimental phone-side subject/object tracking. Tune sensitivity, Smoothness, dead band, Lerp, framing and motion limits. Settings last for this session.
+- Pocket 3 zoom stops follow FORMAT. HDR display optionally brightens the phone panel; recordings and camera HDR/HLG are unchanged.
 
 Fixes
 
-- An established feed keeps its last picture instead of returning to Waiting for live view when frame statistics age out.
-- Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
-- Repeated controls cannot indefinitely delay stalled-picture recovery. Multiview and resizing keep the current picture host.
-- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
+- Live view keeps its last picture during recovery. Connection setup waits for the camera command window, and repeated controls cannot delay stalled-picture recovery indefinitely.
+- Media return starts live view once. Settings, resizing and Multiview retain the current picture host.
 
 What to test
 
-- Connect and disconnect three times, then run for five minutes with LUT/WAVE and normal controls. Share diagnostics and the time of slow startup or any freeze.
-- Open Media, play a clip and return repeatedly. Cover Settings, rotate and switch single-camera/Multiview views; confirm picture returns.
-- On Pocket 3, check 1080 zooms to 4×, 2.7K to 3× and 4K to 2×. With HDR display on, check the feed stays upright and screen recordings remain normal SDR.
+- Open Gimbal → Track, select a person or object, and compare Gentle, Balanced and Responsive. Test center/thirds framing, tiny movements, direction reversals and front/selfie views.
+- Occlude the subject, zoom, use the stick, open Settings/Media and leave the app. Confirm tracking stops and needs a new selection. Camera tracking and AirPods must not drive alongside it.
+- Run tracking for five minutes with LUT/WAVE. Compare feed smoothness and phone temperature with tracking off. Share diagnostics and the time of any freeze or unexpected movement.

@@ -113,7 +113,8 @@ struct LiveViewScreen: View {
                 sampleBus: app.frameSamples,
                 effects: { [weak app] in
                     guard let app else { return LiveImageEffects() }
-                    return app.assist.effects.withFaceAF(app.session.wantsFaceAF)
+                    return app.assist.effects.withFaceAF(
+                        app.session.wantsFaceAF || app.session.cinematicTracking.wantsFrames)
                 },
                 transfer: { [weak app] in
                     guard let app else { return nil }
@@ -138,6 +139,7 @@ struct LiveViewScreen: View {
             zoomDismissTask?.cancel()
             zoomDismissTask = nil
             zoomDialMounted = false
+            model.session.cinematicTracking.stop()
             headphones.detach()
             gamepad.detach()
             model.session.decoder.stopSimulatorSample()
@@ -162,6 +164,7 @@ struct LiveViewScreen: View {
             if oldPanel == .settings { model.session.recordFeedBreadcrumb(.settingsExit) }
             if panel == .settings { model.session.recordFeedBreadcrumb(.settingsEnter) }
             if panel != nil {
+                model.session.cinematicTracking.stop()
                 model.captureDrum = nil
                 model.assist.configureTool = nil
                 closeZoomDial()
@@ -172,11 +175,13 @@ struct LiveViewScreen: View {
                 headphones.sync()
             }
         }
-        .onChange(of: model.headTrackingEnabled) { _, _ in
+        .onChange(of: model.headTrackingEnabled) { _, enabled in
+            if enabled { model.session.cinematicTracking.stop() }
             headphones.sync()
         }
         .onChange(of: model.isEditingChrome) { _, editing in
             if editing {
+                model.session.cinematicTracking.stop()
                 headphones.noteBlocked()
                 model.liveGimbalPanel = .none
             } else {
@@ -608,6 +613,9 @@ struct LiveViewScreen: View {
                     .zIndex(4)
             }
 
+            LiveCinematicTrackingOverlay(feed: layout.onFeed)
+                .zIndex(4)
+
             LiveSessionBanners(
                 feed: layout.onFeed,
                 topBar: showsStatusBar ? layout.topDeck : nil
@@ -742,6 +750,7 @@ struct LiveViewScreen: View {
                 label: { CamFov.displayLabel(factor: $0) },
                 onEditing: { editing in
                     if editing {
+                        model.session.cinematicTracking.stop()
                         zoomGestureAnchor =
                             model.session.status.zoomFactor ?? model.session.zoomOptimistic
                             ?? model.session.zoomStop
@@ -871,7 +880,8 @@ private struct LiveFeedPane: View {
     @Environment(AppModel.self) private var model
 
     private var liveEffects: LiveImageEffects {
-        var fx = model.assist.effects.withFaceAF(model.session.wantsFaceAF)
+        var fx = model.assist.effects.withFaceAF(
+            model.session.wantsFaceAF || model.session.cinematicTracking.wantsFrames)
         fx.mirror = model.assist.isVisible(.mirror)
         return fx
     }
@@ -888,10 +898,16 @@ private struct LiveFeedPane: View {
             hdrDisplay: model.hdrDisplayActive
         )
         .onChange(of: model.assist.effects) { _, fx in
-            model.session.decoder.effects = fx.withFaceAF(model.session.wantsFaceAF)
+            model.session.decoder.effects = fx.withFaceAF(
+                model.session.wantsFaceAF || model.session.cinematicTracking.wantsFrames)
+        }
+        .onChange(of: model.session.cinematicTracking.wantsFrames) { _, _ in
+            model.session.decoder.effects = model.assist.effects.withFaceAF(
+                model.session.wantsFaceAF || model.session.cinematicTracking.wantsFrames)
         }
         .onChange(of: model.session.wantsFaceAF) { _, wants in
-            model.session.decoder.effects = model.assist.effects.withFaceAF(wants)
+            model.session.decoder.effects = model.assist.effects.withFaceAF(
+                wants || model.session.cinematicTracking.wantsFrames)
         }
         .onChange(of: model.session.status.colorMode) { _, _ in
             model.syncLiveMonitorColor()

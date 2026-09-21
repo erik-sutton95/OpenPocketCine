@@ -75,3 +75,13 @@ Findings to preserve before revisiting:
 Resume with a concrete Pocket command or effective-state lead, the exact model
 and firmware, and a bounded test with a known release path. The success
 criterion remains the physical joystick-hold feel, not an ACK or matching label.
+
+## Cinematic Tracking (iOS prototype)
+
+**Gimbal → Track** opens the experimental phone-side person/object tracker.
+Select a subject in the picture, then tune sensitivity, Smoothness, dead band,
+Lerp, speed and framing while it runs. Fine tuning adds acceleration, jerk and
+confidence limits. Manual gimbal control or subject loss stops it. Settings are
+session-only; camera-side ActiveTrack remains the normal feed-gesture behavior
+outside phone selection. Android and physical qualification are deferred.
+See [Cinematic Tracking](cinematic-tracking.md) for implementation and testing.

@@ -1,18 +1,15 @@
 New and changed
 
-- Shared diagnostics include picture timings and drop estimates to help distinguish a delayed feed from a jumpy one.
-- TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
-- Pocket 3 zoom follows FORMAT limits and refused values settle back. Shutter, ISO, zoom and ND use consistent formatting across phone languages.
+- No new controls this build. Existing camera-side subject tracking is unchanged.
+- Pocket 3 zoom stops follow FORMAT, with a note when the ceiling changes. Refused zoom values settle back to the camera reading.
 
 Fixes
 
-- Connection setup waits for the camera's command window. Recovery can act sooner after lost video data while keeping the last picture.
-- Replacement keyframes stay protected. First-picture recovery is bounded; repeated controls cannot indefinitely delay a stalled decoder or frame assembly.
-- Media return starts live view once. Older picture-repair deadlines no longer reconnect just because you opened Media.
-- Bluetooth setup advances through supported notification fallbacks and reports rejected setup writes promptly, with more useful diagnostics.
+- Live view keeps the last picture during recovery. Connection setup waits for the camera command window, and repeated controls cannot delay stalled-picture recovery indefinitely.
+- TalkBack announces the live readouts. Android 15 and later keep launch working without the recording callback.
 
 What to test
 
-- Connect three times. If Bluetooth fails, retry once and share diagnostics. Test five minutes of live view; report the time of any freeze and whether the picture felt late or jumpy.
-- Open Media, play a clip and return repeatedly. Cover Settings, rotate and briefly leave the app; confirm picture returns.
-- With TalkBack on, check REC, timecode, battery and assists each speak one phrase. Double-tap and hold an assist tool to check both actions.
+- Connect and disconnect three times, then run five minutes with LUT/WAVE and ordinary controls. Share diagnostics and the time of slow startup or any freeze.
+- On Pocket 3, check 1080 zooms to 4×, 2.7K to 3× and 4K to 2×. Enable TalkBack and check live readouts remain understandable.
+- Open Media, play a clip and return repeatedly. Confirm the live picture resumes.

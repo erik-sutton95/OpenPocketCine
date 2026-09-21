@@ -505,7 +505,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     private var canDrive: Bool {
         guard let model else { return false }
         if !model.session.gimbalControlSceneActive || model.session.isLocked
-            || model.session.gimbalMoveRunning
+            || model.session.gimbalMoveRunning || model.session.cinematicTracking.isEngaged
         {
             return false
         }

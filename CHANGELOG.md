@@ -17,6 +17,12 @@ separate iOS and Android lists.
 
 ### Added
 
+- Experimental iOS **Gimbal → Track**: phone-side person/object tracking with
+  Gentle/Balanced/Responsive presets, sensitivity, Smoothness, dead band, Lerp,
+  framing, speed and acceleration/jerk controls. Manual control and subject loss
+  stop it. Single-camera Pocket sessions only; Android and physical qualification
+  are deferred. Settings last for the session.
+
 - **HDR display** (Operator Setup → Display): optional outdoor boost that uses
   the phone's HDR panel so live view, scopes, settings, media, playback and HUD
   type stay readable in sun. Off by default. The picture is a brightness aid,

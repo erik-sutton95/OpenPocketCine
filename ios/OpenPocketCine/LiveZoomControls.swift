@@ -207,7 +207,11 @@ struct LiveZoomPinchModifier: ViewModifier {
                 lastTranslation = value.translation
                 if !holdStarted {
                     holdStarted = true
-                    beginTrackHold()
+                    if model.session.cinematicTracking.state == .selecting {
+                        trackArmed = true
+                    } else {
+                        beginTrackHold()
+                    }
                 }
                 let slop = hypot(value.translation.width, value.translation.height)
                 if !trackArmed, slop > LiveFeedFocusGesture.trackHoldSlop {
@@ -381,7 +385,8 @@ struct LiveZoomChip: View {
         .allowsHitTesting(!interfaceLocked)
         .disabled(interfaceLocked)
         .accessibilityLabel(
-            isDigitalCrop ? "Zoom \(title), digital crop" : "Zoom \(title)")
+            isDigitalCrop ? "Zoom \(title), digital crop" : "Zoom \(title)"
+        )
         .accessibilityHint(
             tapStops.doubleTap.isEmpty
                 ? "Tap cycles camera zoom stops. Hold opens the continuous zoom dial."
