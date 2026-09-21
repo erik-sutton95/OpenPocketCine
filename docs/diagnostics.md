@@ -273,6 +273,9 @@ until that failure clears; fresh decoded/presented frames alone are insufficient
 This corrects incident accounting, not the underlying transport/decoder outages.
 The [build 111 audit](audits/2026-09-19-testflight-111-sentry.md) records reviewed
 Sentry groups, recovered build 111 symbols, reproduced fixes and outstanding device evidence.
+The [September 21 inventory](audits/2026-09-21-sentry-crashes-dropouts.md) covers
+all issue statuses, manual feedback, both supplied TestFlight reports and
+attachment integrity, with release-specific counts and unresolved discovery work.
 The [September 20 follow-up](audits/2026-09-20-sentry-current-issues.md) records
 resolved prior fixes, feedback moved to Discussions, remaining failures and the
 reproduced iOS display-host ownership defect. Resolved implementation issues

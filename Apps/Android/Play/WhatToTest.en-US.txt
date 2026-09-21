@@ -1,15 +1,15 @@
 New and changed
 
 - Report a problem is visible on the pairing screen, even before your first connection. Add a description, optional technical details and screenshots without opening Settings.
-- TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
 
 Fixes
 
+- Improved recovery when a running preview loses its video format.
 - Live view starts again without the low-latency setting when the phone's decoder refuses it, instead of staying black.
 - Connection setup and stalled-picture recovery have bounded waits. Returning from Media starts live view once and avoids older recovery deadlines.
 
 What to test
 
 - Before connecting a camera, open Report a problem in portrait and landscape. Close it and confirm pairing is still available. Share Diagnostics remains in the pairing menu.
-- Connect three times, then open Media and Settings, rotate and return to live view. Report any black picture or freeze with the time it happened.
-- With TalkBack on, check REC, timecode, battery and assists each speak one phrase, and Report a problem is reachable before pairing.
+- Connect three times, then return from Media, Settings and the background. Watch preview recovery and report any freeze with the time it happened and technical details.
+- If live view previously stayed black on your phone, retry and report whether a picture now appears.

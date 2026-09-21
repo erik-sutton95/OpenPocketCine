@@ -1,15 +1,15 @@
 New and changed
 
 - Report a problem is visible on the pairing screen, even before your first connection. Add a description, optional technical details and screenshots without opening Settings.
-- Pocket 3 zoom follows FORMAT limits. HDR display offers an optional outdoor screen boost; screen recording and AirPlay stay SDR.
+- Pocket 3 zoom follows the limits of the selected FORMAT.
 
 Fixes
 
-- Connection setup and stalled-picture recovery have bounded waits. An established feed keeps its last picture while recovering.
-- Returning from Media starts live view once; older recovery deadlines no longer reconnect just because you opened Media.
+- Improved recovery when a running preview loses its video format.
+- Connection setup and stalled-picture recovery have bounded waits. An established feed keeps its last picture while recovering; returning from Media starts live view once.
 
 What to test
 
 - Before connecting a camera, open Report a problem in portrait and landscape. Close it and confirm pairing is still available. Share Diagnostics remains in the pairing menu.
-- Connect three times, then open Media and Settings, rotate and return to live view. Report any slow startup or freeze with the time it happened.
-- On Pocket 3, check 1080 zooms to 4×, 2.7K to 3× and 4K to 2×. With HDR display on, confirm screen recordings remain normal SDR.
+- Connect three times, then return from Media, Settings and the background. Watch preview recovery and report any freeze with the time it happened and technical details.
+- On Pocket 3, check 1080 zooms to 4×, 2.7K to 3× and 4K to 2×.

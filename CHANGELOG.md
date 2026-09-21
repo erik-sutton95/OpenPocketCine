@@ -284,6 +284,13 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Both shells can recover an established live feed after the decoder loses its
+  video format while compressed frames keep arriving. The existing watchdog
+  still owns the single repair and bounded escalation; startup and grace gates
+  are unchanged. Core, native decoder and Android fallback regressions cover
+  the defect. Physical camera qualification remains pending; the
+  [Sentry audit](docs/audits/2026-09-21-sentry-crashes-dropouts.md) records the
+  remaining discovery, dropout and native-crash investigations.
 - Android Bluetooth setup checks rejected native writes instead of waiting for
   callbacks that may never arrive. The tolerated notification fallback advances
   to the next characteristic. Failed required notification registration and

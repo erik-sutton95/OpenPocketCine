@@ -386,7 +386,11 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
 
         if Self.udpReceiveAlive(snap), !assemblyStalled {
-            if decoderNeedsRepair, snap.hasFormat,
+            // A failed presentation path can discard parameter sets while
+            // retaining the last image. Inter-frames cannot restore that format;
+            // the existing decoder repair owns the one enable that requests it.
+            // Established picture/output intent still exclude cold startup.
+            if decoderNeedsRepair,
                 (snap.lastAccessUnitAge ?? .infinity) < Self.stallThreshold
             {
                 // After the one decoder attempt, ownership passes to the shell

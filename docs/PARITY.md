@@ -106,6 +106,13 @@ Datalink bind, ACK, enable-write, and decoder latch facts live in
 lives in [`ANDROID.md`](../ANDROID.md). First-run copy and operator voice:
 [`UX.md`](UX.md). Live-path SLOs: [`PERFORMANCE.md`](PERFORMANCE.md).
 
+Missing-format decoder recovery uses the shared watchdog on both shells; the
+Android JVM fallback matches it. An established feed with expected but silent
+native output and fresh complete AUs remains eligible for the existing bounded
+repair after losing parameter sets. Portable and iOS integration regressions
+cover this state; physical iPhone/Pocket and Android/Pocket qualification of this
+September 21 correction remains pending. No stall threshold or ACK rate changes.
+
 ## Chrome metrics
 
 Must match across shells. Do not keep a second copy in `ANDROID.md`.
