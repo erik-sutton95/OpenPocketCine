@@ -53,8 +53,32 @@ export default defineConfig({
           label: 'Osmo Devices', translations: { 'zh-TW': 'Osmo 裝置' },
           items: [
             { label: 'Device references', slug: 'devices' },
-            { label: 'Osmo Pocket 3', translations: { 'zh-TW': 'Osmo Pocket 3' }, slug: 'protocol/pocket3' },
-            { label: 'Osmo Pocket 4 Pro', translations: { 'zh-TW': 'Osmo Pocket 4 Pro' }, slug: 'protocol/pocket4-pro' },
+            {
+              label: 'Osmo Pocket 3', translations: { 'zh-TW': 'Osmo Pocket 3' }, collapsed: true,
+              items: [
+                { label: 'Overview and evidence', slug: 'devices/pocket-3' },
+                { label: 'Command comparison', slug: 'devices/pocket-3/commands' },
+                { label: 'Shooting modes and formats', slug: 'devices/pocket-3/modes' },
+                { label: 'Exposure, focus and audio', slug: 'devices/pocket-3/settings' },
+                { label: 'Zoom and gimbal controls', slug: 'devices/pocket-3/controls' },
+                { label: 'Original media', slug: 'devices/pocket-3/media' },
+                { label: 'Mimo album and exports', slug: 'devices/pocket-3/album' },
+                { label: 'Livestream', slug: 'devices/pocket-3/livestream' },
+                { label: 'USB webcam', slug: 'devices/pocket-3/webcam' },
+                { label: 'Connection and reconnect', slug: 'devices/pocket-3/connection' },
+                { label: 'Coverage and implementation', slug: 'devices/pocket-3/coverage' },
+              ],
+            },
+            {
+              label: 'Osmo Pocket 4 Pro', translations: { 'zh-TW': 'Osmo Pocket 4 Pro' }, collapsed: true,
+              items: [
+                { label: 'Overview and evidence', slug: 'devices/pocket-4-pro' },
+                { label: 'Command comparison', slug: 'devices/pocket-4-pro/commands' },
+                { label: 'Slow Motion', slug: 'devices/pocket-4-pro/slow-motion' },
+                { label: 'Photo and Live Photo', slug: 'devices/pocket-4-pro/photo' },
+                { label: 'Coverage and implementation', slug: 'devices/pocket-4-pro/coverage' },
+              ],
+            },
             {
               label: 'Osmo Action 6', collapsed: true,
               items: [

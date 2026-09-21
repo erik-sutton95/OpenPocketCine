@@ -5,7 +5,7 @@ description: Qualified Action 6 command families, differences from Pocket and Na
 
 This is the implementation index for **Action 6 V01.02.0521 with Mimo 2.12.0**.
 It compares the physical survey with the [shared catalog](../../../protocol/commands/)
-and [Pocket 3 reference](../../../protocol/pocket3/). Follow each evidence link
+and [Pocket 3 reference](../../pocket-3/). Follow each evidence link
 for exact packets, accepted values and conditional capability tables. The survey
 qualifies Mimo behavior; it does not establish OpenPocketCine app support.
 

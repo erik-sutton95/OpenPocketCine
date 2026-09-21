@@ -6,7 +6,7 @@ not a new protocol or architecture contract.
 Correction status: the documentation changes identified in items 1–4 and 6–7
 below are applied in this worktree, including Multiview navigation and the stale
 engineering paragraphs. Item 5 now has a separate
-[Pocket 3 survey reference](../handbook/src/content/docs/protocol/pocket3.md),
+[Pocket 3 survey reference](../handbook/src/content/docs/devices/pocket-3/index.md),
 linked from navigation and the command catalog. Its UI, accepted-request,
 status and inspected-file evidence are explicitly distinguished. The
 [reference result map](pocket3-reference-checklist.md) records the remaining
@@ -268,7 +268,7 @@ obsolete facts in future implementations.
 ## Physical evidence to prioritize before returning Pocket 3
 
 The survey now supplies a substantial part of the original evidence queue.
-The [public reference](https://openpocketcine.app/docs/protocol/pocket3/) and
+The [public reference](https://openpocketcine.app/docs/devices/pocket-3/) and
 [result map](pocket3-reference-checklist.md) distinguish completed observations
 from remaining checks; they do not claim an exhaustive sweep or prove OPC parity.
 

@@ -184,7 +184,7 @@ space after rotation or resizing, including saved positions. Long-press a View A
 - Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
   with 4K max 2×; Nano 1×). Pocket 3's ceiling is per-FORMAT, not one
   generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×, 3K 1:1 2×**
-  ([survey](https://openpocketcine.app/docs/protocol/pocket3/#zoom-and-med-tele)).
+  ([survey](https://openpocketcine.app/docs/devices/pocket-3/controls/#zoom-and-med-tele)).
   Zoom must not drop the live picture. FORMAT lists
   `camcap_video_format` pairs (2.7K / 4:3 / 1:1 / 9:16 when the body
   advertises them; aspect is the res byte). A tap stays on that pair until
@@ -193,7 +193,7 @@ space after rotation or resizing, including saved positions. Long-press a View A
   when the camera supplies no capability table (16:9 and 1:1; 9:16 stays
   body Lock Portrait unless already reported); reported choices take priority.
   Physical iPhone build 99 passed one 2.7K/25 D-Log M record and warm reconnect
-  ([survey evidence](https://openpocketcine.app/docs/protocol/pocket3/#openpocketcine-recording-and-warm-reconnect)).
+  ([survey evidence](https://openpocketcine.app/docs/devices/pocket-3/connection/#openpocketcine-recording-and-warm-reconnect)).
   The full matrix, camera cold boot and other shooting modes remain unqualified.
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.

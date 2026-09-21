@@ -242,7 +242,7 @@ The highest-value remaining captures are:
 | Advert model ID can be inherited | Independent Mac scan identifies classic `0018` | Classify Action 6 from observed ID and retain name fallback |
 
 Reference comparisons use the repository's [BLE pairing](../../../protocol/ble/),
-[Pocket 3 observations](../../../protocol/pocket3/),
+[Pocket 3 observations](../../pocket-3/),
 `Sources/OpenPocketViewCore/Commands.swift`, `Sources/OpenPocketViewCore/BleAdvert.swift`
 and `ios/OpenPocketCine/BleLink.swift`. They are comparisons, not physical tests
 of OpenPocketCine with this loaner.
