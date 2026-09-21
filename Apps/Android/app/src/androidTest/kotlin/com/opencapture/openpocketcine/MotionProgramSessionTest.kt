@@ -42,7 +42,7 @@ class MotionProgramSessionTest {
     )
 
     @OptIn(ExperimentalComposeUiApi::class)
-    @Test fun closeReopenRetainsFullProgramUntilClearAndActiveCloseKeepsStop() {
+    @Test fun closeReopenAndPausedRestartRetainFullProgramUntilClear() {
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             var model: AppModel? = null
             try {
@@ -78,6 +78,12 @@ class MotionProgramSessionTest {
                         seed(model!!.session, "_gimbalMoveRunning", true)
                         seed(model!!.session, "_gimbalMoveCountdown", if (state == "countdown") 2 else null)
                         seed(model!!.session, "_gimbalMovePaused", state == "paused")
+                        if (state != "paused") {
+                            model!!.session.restartProgrammedMove()
+                            assertTrue(model!!.session.gimbalMoveRunning.value, "Restart requires a paused move")
+                            assertEquals(if (state == "countdown") 2 else null,
+                                model!!.session.gimbalMoveCountdown.value)
+                        }
                     }
                     assertFalse(node("motion.loop") { !it.isEnabled }.isEnabled, "Loop is fixed during $state")
                     click("motion.close")
@@ -91,10 +97,19 @@ class MotionProgramSessionTest {
                     assertTrue(node("motion.loop").isChecked)
                 }
 
-                click("motion.startStop")
+                val token = PocketCameraSession::class.java.getDeclaredField("moveToken").apply { isAccessible = true }
+                scenario.onActivity { token.set(model!!.session, 42L) }
+                click("motion.restart")
                 scenario.onActivity {
+                    // No connected camera: the existing Start guards prevent a new countdown,
+                    // after Restart has retired the paused continuation without clearing its program.
                     assertFalse(model!!.session.gimbalMoveRunning.value)
+                    assertFalse(model!!.session.gimbalMovePaused.value)
+                    assertEquals(null, model!!.session.gimbalMoveCountdown.value)
+                    assertEquals(null, token.get(model!!.session))
                     assertEquals(program, model!!.session.gimbalProgram.value)
+                    model!!.session.restartProgrammedMove()
+                    assertFalse(model!!.session.gimbalMoveRunning.value, "Restart is ignored while idle")
                 }
                 click("motion.clear")
                 scenario.onActivity {
@@ -142,6 +157,9 @@ class MotionProgramSessionTest {
                     val header = bounds(node("motion.close"))
                     val stop = bounds(node("motion.startStop"))
                     val resume = bounds(node("motion.pauseResume"))
+                    val restart = bounds(node("motion.restart"))
+                    assertTrue(restart.right <= resume.left && resume.right <= stop.left,
+                        "Paused actions stay ordered Restart, Resume, Stop")
                     assertTrue(stop.bottom - header.top <= maximumHeightPx + 1,
                         "Editor must fit the available height")
                     assertTrue(bounds(settings).bottom <= stop.top, "Fade belongs above the actions")
@@ -152,6 +170,7 @@ class MotionProgramSessionTest {
                     assertEquals(header, bounds(node("motion.close")))
                     assertEquals(stop, bounds(node("motion.startStop")))
                     assertEquals(resume, bounds(node("motion.pauseResume")))
+                    assertEquals(restart, bounds(node("motion.restart")))
                     assertTrue(node("motion.loop").isVisibleToUser)
                     scenario.onActivity {
                         assertEquals(null, model!!.gimbalFloatCenter, "Settings scroll must not drag the window")

@@ -389,7 +389,9 @@ remains pending on both shells.
 
 Motion Control continuation uses Start/Pause/Resume/Stop in both shells. Pause
 freezes remaining time; Resume requires fresh, settled feedback and has no new
-countdown. Duration dials run from 0.5 to 120 seconds (left increases, right
+countdown. While paused, Restart replaces Clear and starts the saved program
+from A with the normal countdown/preparation, retaining all points and settings.
+Duration dials run from 0.5 to 120 seconds (left increases, right
 decreases). Android physical qualification remains outstanding.
 
 Motion Control Loop (2026-09-21): both shells offer an off-by-default Loop
@@ -412,7 +414,8 @@ program. Both editors cap their preferred height at 420 pt/dp, keep the header
 and action bar fixed, and scroll settings between them. A bottom fade appears
 only while more content remains below. Automated regression coverage is separate
 from physical qualification;
-physical loop and sustained live-view budget checks remain pending on both shells.
+the operator confirmed the corrected A/B loop on iPhone. Broader physical loop
+qualification and sustained live-view budget checks remain pending on both shells.
 
 ## Multiview session network and shutdown (in validation)
 

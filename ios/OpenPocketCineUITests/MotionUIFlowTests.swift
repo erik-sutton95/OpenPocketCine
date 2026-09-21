@@ -142,6 +142,7 @@ final class MotionUIFlowTests: XCTestCase {
         app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
         app.launchEnvironment["OPV_UI_REVIEW_MOTION"] = "1"
         app.launchEnvironment["OPV_UI_REVIEW_MOTION_RUNNING"] = "1"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION_PAUSED"] = "1"
         app.launch()
         defer {
             app.terminate()
@@ -155,16 +156,21 @@ final class MotionUIFlowTests: XCTestCase {
 
         let title = app.staticTexts["motion.editor.title"]
         let scroll = app.scrollViews["motion.editor.scroll"]
-        let clear = app.buttons["motion.clear"]
+        let restart = app.buttons["motion.restart"]
         let startStop = app.buttons["motion.startStop"]
         let pause = app.buttons["motion.pauseResume"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["motion.clear"].exists)
+        XCTAssertEqual(restart.label, "Restart")
+        XCTAssertEqual(pause.label, "Resume")
+        let readouts = ["A", "B", "C"].map { app.staticTexts["motion.waypoint.\($0).readout"] }
+        let savedPoints = readouts.map(\.label)
 
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             XCUIDevice.shared.orientation = orientation
             let settled = NSPredicate { _, _ in
                 (app.frame.width > app.frame.height) == orientation.isLandscape
-                    && app.buttons["motion.close"].isHittable && clear.isHittable
+                    && app.buttons["motion.close"].isHittable && restart.isHittable
             }
             expectation(for: settled, evaluatedWith: app)
             waitForExpectations(timeout: 10)
@@ -176,33 +182,38 @@ final class MotionUIFlowTests: XCTestCase {
             waitForExpectations(timeout: 5)
 
             let titleFrame = title.frame
-            let clearFrame = clear.frame
+            let restartFrame = restart.frame
             let startFrame = startStop.frame
             let pauseFrame = pause.frame
-            XCTAssertLessThanOrEqual(clearFrame.maxY - titleFrame.minY, 420)
-            XCTAssertGreaterThanOrEqual(clearFrame.height, 44)
+            XCTAssertLessThanOrEqual(restartFrame.maxY - titleFrame.minY, 420)
+            XCTAssertGreaterThanOrEqual(restartFrame.height, 44)
             XCTAssertTrue(startStop.isHittable)
             XCTAssertEqual(startStop.label, "Stop")
             XCTAssertTrue(pause.isHittable)
-            XCTAssertLessThanOrEqual(scroll.frame.maxY, clearFrame.minY)
+            XCTAssertLessThanOrEqual(scroll.frame.maxY, restartFrame.minY)
             attachScreenshot(orientation.isLandscape ? "motion-compact-landscape-overflow" : "motion-compact-portrait-overflow")
 
             scrollSettingsToBottom(scroll)
             XCTAssertEqual(scroll.value as? String, "End of settings")
             XCTAssertTrue(app.switches["motion.loop"].isHittable)
             XCTAssertEqual(title.frame.minY, titleFrame.minY, accuracy: 1)
-            XCTAssertEqual(clear.frame.minY, clearFrame.minY, accuracy: 1)
+            XCTAssertEqual(restart.frame.minY, restartFrame.minY, accuracy: 1)
             XCTAssertEqual(startStop.frame.minY, startFrame.minY, accuracy: 1)
             XCTAssertEqual(pause.frame.minY, pauseFrame.minY, accuracy: 1)
-            XCTAssertTrue(clear.isHittable)
+            XCTAssertTrue(restart.isHittable)
             XCTAssertTrue(startStop.isHittable)
             XCTAssertTrue(pause.isHittable)
             XCTAssertTrue(app.buttons["motion.close"].isHittable)
             attachScreenshot(orientation.isLandscape ? "motion-compact-landscape-end" : "motion-compact-portrait-end")
         }
 
-        // A footer action remains usable after scrolling to the last setting.
-        clear.tap()
+        // Restart cancels the continuation but must never erase the saved path.
+        restart.tap()
+        XCTAssertTrue(app.buttons["motion.clear"].waitForExistence(timeout: 5))
+        XCTAssertFalse(restart.exists)
+        XCTAssertEqual(readouts.map(\.label), savedPoints,
+            "Restart must preserve the program even when fresh camera feedback is unavailable")
+        app.buttons["motion.clear"].tap()
         XCTAssertEqual(app.staticTexts["motion.waypoint.A.readout"].label, "Not set")
         XCUIDevice.shared.orientation = .portrait
         let fits = NSPredicate { _, _ in

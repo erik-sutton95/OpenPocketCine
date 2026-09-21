@@ -562,6 +562,12 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
                     enabled = model.session.canRunProgrammedMove) { model.session.runProgrammedMove() }
             } else {
                 if (countdown == null) {
+                    if (paused) {
+                        Chip("Restart", selected = false,
+                            modifier = Modifier.weight(1f).height(44.dp).testTag("motion.restart")) {
+                            model.session.restartProgrammedMove()
+                        }
+                    }
                     Chip(if (paused) "Resume" else "Pause", selected = true,
                         modifier = Modifier.weight(1f).height(44.dp).testTag("motion.pauseResume")) {
                         if (paused) model.session.resumeProgrammedMove() else model.session.pauseProgrammedMove()

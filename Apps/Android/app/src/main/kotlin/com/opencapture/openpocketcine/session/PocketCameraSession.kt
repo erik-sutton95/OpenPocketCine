@@ -4053,6 +4053,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         moveDatalink?.resumeNativeProgram(token)
     }
 
+    fun restartProgrammedMove() {
+        if (!_gimbalMoveRunning.value || !_gimbalMovePaused.value) return
+        cancelProgrammedMove()
+        runProgrammedMove()
+    }
+
     fun cancelProgrammedMove() {
         moveCountdownJob?.cancel()
         moveCountdownJob = null

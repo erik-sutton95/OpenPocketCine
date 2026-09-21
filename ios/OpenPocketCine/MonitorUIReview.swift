@@ -86,6 +86,8 @@
                 if ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_RUNNING"] == "1" {
                     model.session.gimbalMoveRunning = true
                     model.session.gimbalMoveCanPause = true
+                    model.session.gimbalMovePaused =
+                        ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_PAUSED"] == "1"
                 }
             }
             model.session.liveSignalBars = 4

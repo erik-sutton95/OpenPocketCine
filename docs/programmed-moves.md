@@ -123,7 +123,7 @@ cancels the path; iOS head tracking is suspended while the path owns the gimbal.
 ## Operator controls
 
 The editor is capped at 420 pt/dp and fits within the available monitor bounds.
-Its header and Clear, Start/Stop and Pause/Resume action bar stay fixed; waypoints,
+Its header and Clear/Restart, Start/Stop and Pause/Resume action bar stay fixed; waypoints,
 durations, Smoothness and Loop scroll between them. A subtle bottom fade appears
 only while more settings remain below, and clears at the end of the content.
 
@@ -138,6 +138,9 @@ has been removed.
 Pause sends an ordered motor STOP and freezes the remaining motion time. Resume
 continues immediately from fresh, settled camera feedback, without returning to A
 or repeating the countdown. A pause during preparation can still approach A.
+While paused, Restart replaces Clear in the fixed action bar. Restart retains
+all saved points and settings, discards the paused continuation, and starts a new
+countdown followed by preparation, return to A and the initial settle.
 The remaining exact leg is timed in tenths of a second, rounded up; later legs
 retain their durations. Curved moves cut the remaining curve and join it from the
 actual stopped pose. Stop discards the continuation. Manual control, disconnect,
@@ -215,7 +218,9 @@ motor easing reached each endpoint exactly but differed from the constant-speed
 reference. Directly observed reversal verification passes that regression across
 10 feedback phases and native pitch wrapping; off-path, missed, overshot,
 wrong-direction, stalled-at-endpoint, late and stale feedback still fail. Physical retesting
-of this correction remains pending.
+of this correction passed the operator's A/B loop check on the connected iPhone.
+This confirms the reported failure is resolved for that run, not broad timing or
+accuracy qualification.
 
 `just gimbal-test` exercises camera-timed command dispatch, sparse feedback at
 reversals, motor easing, early-only waypoint observations, late dispatch, missing feedback,

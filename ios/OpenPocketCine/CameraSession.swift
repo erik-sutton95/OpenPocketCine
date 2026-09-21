@@ -2794,6 +2794,12 @@ final class CameraSession {
         }
     }
 
+    func restartProgrammedMove() {
+        guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning, gimbalMovePaused else { return }
+        cancelProgrammedMove()
+        runProgrammedMove()
+    }
+
     func pauseOrResumeProgrammedMove() {
         guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning,
             let token = nativeMoveToken, let datalink

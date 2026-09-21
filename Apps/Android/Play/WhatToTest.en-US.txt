@@ -13,5 +13,5 @@ Fixes
 What to test
 
 - Loop A/B/C with unequal durations and Smoothness: no endpoint pause or unexpected error. Try Pause/Resume and Stop on reverse legs; check selfie markers with Selfie Flip and MIRROR on/off.
-- Scroll Motion Control in portrait and landscape: buttons stay fixed and the fade clears at the bottom. Close/reopen keeps the program; Clear removes points and switches Loop off.
+- Pause and choose Restart: the saved program starts again from A. Scroll in both orientations: actions stay fixed. Close/reopen retains the program; Clear removes points.
 - Connect repeatedly and return from Media. With TalkBack on, check each readout speaks one phrase and assist tap/hold still work. Check Pocket 3 zoom limits per FORMAT.

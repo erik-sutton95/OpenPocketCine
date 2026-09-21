@@ -26,7 +26,9 @@ separate iOS and Android lists.
   remain available; failures end the loop. The compact editor keeps its header
   and action bar fixed, with scrollable settings and a bottom overflow fade. Points, durations, Smoothness and Loop
   remain in the camera session when the editor closes. Close during a run keeps
-  the control pill visible. Physical loop qualification remains pending.
+  the control pill visible. While paused, Restart replaces Clear and starts the
+  saved program again from A with countdown and preparation. The corrected A/B
+  loop passed an operator iPhone check; broader physical qualification remains pending.
 
 - **HDR display** (Operator Setup → Display): optional outdoor boost that uses
   the phone's HDR panel so live view, scopes, settings, media, playback and HUD

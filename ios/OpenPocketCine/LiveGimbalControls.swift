@@ -437,13 +437,17 @@ private struct LiveGimbalMoveEditor: View {
         HStack(spacing: 8) {
             Button {
                 guard canInteract() else { return }
-                model.session.clearGimbalProgram()
+                if model.session.gimbalMovePaused {
+                    model.session.restartProgrammedMove()
+                } else {
+                    model.session.clearGimbalProgram()
+                }
             } label: {
-                Text(LiveGimbalCopy.clear)
+                Text(model.session.gimbalMovePaused ? "Restart" : LiveGimbalCopy.clear)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.zcTapTarget)
-            .accessibilityIdentifier("motion.clear")
+            .accessibilityIdentifier(model.session.gimbalMovePaused ? "motion.restart" : "motion.clear")
             .foregroundStyle(LiveDesign.muted)
             .background(LiveDesign.glassBright, in: Capsule())
 
