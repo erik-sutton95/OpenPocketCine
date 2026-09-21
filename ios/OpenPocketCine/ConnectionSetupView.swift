@@ -10,6 +10,7 @@ struct ConnectionSetupView: View {
     let compact: Bool
     @State private var selectedID: UUID?
     @State private var diagnostics: DiagnosticSharePayload?
+    @State private var showProblemReport = false
     @State private var orientation = InterfaceOrientationObserver()
 
     var body: some View {
@@ -40,12 +41,16 @@ struct ConnectionSetupView: View {
                         diagnostics = DiagnosticSharePayload(url: url)
                     }
                 },
+                onReportProblem: { showProblemReport = true },
                 onWatchFeed: { model.openWatcherBrowse() })
         }
         .ignoresSafeArea()
         .onAppear { orientation.start() }
         .onDisappear { orientation.stop() }
         .sheet(item: $diagnostics) { payload in DiagnosticActivityShareView(items: [payload.url]) }
+        .sheet(isPresented: $showProblemReport) {
+            ProblemReportView().environment(model)
+        }
         .onChange(of: model.session.phase) { _, phase in
             if phase == .openingDatalink { LocalVPNProbe.noteIfActive() }
         }

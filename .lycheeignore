@@ -1,5 +1,7 @@
 # Starlight in-content links are site routes (../ble/, ./protocol/wifi/), not files.
-handbook/src/content/docs
+# Cross-section routes can resolve outside docs/ when read as source paths.
+# just handbook-build validates the actual generated routes and anchors.
+handbook/src/content/
 handbook/node_modules
 handbook/dist
 handbook/.astro

@@ -90,6 +90,6 @@ to either one. The successful warm takes do not discriminate between them.
 
 No production fix is claimed by this investigation. The unchanged core baseline
 passed 753 tests in 72 suites. The broader
-[Pocket 3 survey](https://openpocketcine.app/docs/protocol/pocket3/) records the
+[Pocket 3 survey](https://openpocketcine.app/docs/devices/pocket-3/) records the
 separate Mimo controls and protocol findings gathered while the camera remained
 available.

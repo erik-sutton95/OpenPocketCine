@@ -282,7 +282,7 @@ ownership of stream repair.
 
 ## Automated Mimo mode surveys
 
-The [Pocket 4 Pro survey](../handbook/src/content/docs/protocol/pocket4-pro.md)
+The [Pocket 4 Pro survey](../handbook/src/content/docs/devices/pocket-4-pro/index.md)
 used XCTest/WebDriverAgent with W3C viewport pointer actions, screenshots and
 RVI captures. Use one phone operator at a time; decoding closed takes can run
 separately. Keep the action journal and raw files in the ignored capture folder.

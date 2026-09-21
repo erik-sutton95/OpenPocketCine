@@ -5456,8 +5456,9 @@ internal object LiveViewEnablePolicy {
         val sinceEnable = if (snap.lastEnableAt == 0L) null else snap.now - snap.lastEnableAt
         val videoAge = age(snap.now, snap.lastVideoPacketAt)
         if (udpReceiveAlive(snap) && !assemblyStalled) {
+            // Lost parameter sets are restored by this existing repair's enable.
+            // Requiring format here strands an established decoder on inter-frames.
             if (decoderNeedsRepair &&
-                snap.hasFormat &&
                 (auAge ?: Long.MAX_VALUE) < STALL_MS
             ) {
                 if (state.stage == Stage.FULL_REJOIN || state.stage == Stage.COOLDOWN) {

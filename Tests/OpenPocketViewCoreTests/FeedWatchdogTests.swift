@@ -51,6 +51,52 @@ import Testing
         #expect(dog.tick(snap) == .none)
     }
 
+    @Test func establishedDecoderWithoutFormatStillOwnsOneBoundedRepair() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(now: 100, frameAge: 3, videoAge: 0.01)
+        snap.lastAccessUnitAge = 0.01
+        snap.decoderOutputExpected = true
+        snap.lastDecoderOutputAge = 3
+        snap.hasFormat = false
+        #expect(dog.tick(snap) == .rebuildVTSession)
+        for second in 1..<16 {
+            snap.now = 100 + Double(second)
+            snap.lastDecoderOutputAge = 3 + Double(second)
+            #expect(dog.tick(snap) == .none)
+        }
+        snap.now = 116
+        #expect(dog.tick(snap) == .fullSessionRejoin)
+    }
+
+    @Test func missingFormatDoesNotBypassStartupReadinessOrGrace() {
+        let base: FeedWatchdog.Snapshot = {
+            var snap = Self.snap(now: 100, frameAge: 3, videoAge: 0.01)
+            snap.lastAccessUnitAge = 0.01
+            snap.decoderOutputExpected = true
+            snap.lastDecoderOutputAge = 3
+            snap.hasFormat = false
+            return snap
+        }()
+        let holds: [(inout FeedWatchdog.Snapshot) -> Void] = [
+            { $0.sawPicture = false },
+            { $0.decoderOutputExpected = false },
+            { $0.repairReady = false },
+            { $0.pathReady = false },
+            { $0.secondsSinceCameraSet = 0.1 },
+            { $0.secondsSinceLastEnable = 0.1 },
+            { $0.gimbalStickHeld = true },
+            { $0.zoomPinchActive = true },
+            { $0.lastDecoderOutputAge = 0.01 },
+        ]
+        for hold in holds {
+            var snap = base
+            hold(&snap)
+            var dog = FeedWatchdog()
+            #expect(dog.tick(snap) == .none)
+            #expect(dog.stage == .idle)
+        }
+    }
+
     @Test func decoderRepairRespectsReadinessAndResetsOnlyOnFreshOutput() {
         var dog = FeedWatchdog()
         var snap = Self.snap(now: 100, frameAge: 3, videoAge: 0.01)

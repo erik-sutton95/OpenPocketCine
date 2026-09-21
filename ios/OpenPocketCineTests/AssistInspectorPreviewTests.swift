@@ -233,19 +233,21 @@ final class AssistInspectorPreviewTests: XCTestCase {
     func testSourceAndOptionChangesDiscardWorkAlreadyInsideTheRenderer() async throws {
         let clock = InspectorPreviewTestClock()
         let release = DispatchSemaphore(value: 0)
-        let optionStarted = expectation(description: "Option render started")
-        let sourceStarted = expectation(description: "Source render started")
+        let optionStarted = InspectorPreviewTestSignal("Option render started")
+        let sourceStarted = InspectorPreviewTestSignal("Source render started")
         let invocations = InspectorRenderInvocationCounter()
         let reference = try Self.referenceImage()
         let renderer = AssistInspectorImageRenderer(
             now: { clock.now },
             operation: { _, _ in
                 if invocations.increment() == 1 {
-                    optionStarted.fulfill()
+                    optionStarted.signal()
                 } else {
-                    sourceStarted.fulfill()
+                    sourceStarted.signal()
                 }
-                _ = release.wait(timeout: .now() + 3)
+                XCTAssertEqual(
+                    release.wait(timeout: .now() + 10), .success,
+                    "Test did not release the work the renderer was already running")
                 return reference
             })
         let buffer = try Self.buffer(width: 8, height: 8)
@@ -254,7 +256,7 @@ final class AssistInspectorPreviewTests: XCTestCase {
         let optionTask = Task {
             await renderer.render(owner: owner, source: buffer, effects: { LiveImageEffects() })
         }
-        await fulfillment(of: [optionStarted], timeout: 2)
+        try await optionStarted.wait()
         renderer.invalidate(owner: owner)
         release.signal()
         let optionResult = await optionTask.value
@@ -264,7 +266,7 @@ final class AssistInspectorPreviewTests: XCTestCase {
         let sourceTask = Task {
             await renderer.render(owner: owner, source: buffer, effects: { LiveImageEffects() })
         }
-        await fulfillment(of: [sourceStarted], timeout: 2)
+        try await sourceStarted.wait()
         renderer.invalidate(owner: owner)
         release.signal()
         let sourceResult = await sourceTask.value

@@ -11,12 +11,14 @@
         public var onPrimary: () -> Void
         public var onBack: () -> Void
         public var onDiagnostics: () -> Void
+        public var onReportProblem: () -> Void
         public var onWatchFeed: (() -> Void)?
 
         public init(
             presentation: CameraPairingPresentation, safeArea: EdgeInsets = EdgeInsets(),
             onSelect: @escaping (String) -> Void, onPrimary: @escaping () -> Void,
             onBack: @escaping () -> Void, onDiagnostics: @escaping () -> Void,
+            onReportProblem: @escaping () -> Void,
             onWatchFeed: (() -> Void)? = nil
         ) {
             self.presentation = presentation
@@ -25,6 +27,7 @@
             self.onPrimary = onPrimary
             self.onBack = onBack
             self.onDiagnostics = onDiagnostics
+            self.onReportProblem = onReportProblem
             self.onWatchFeed = onWatchFeed
         }
 
@@ -120,6 +123,15 @@
                 .overlay(
                     RoundedRectangle(cornerRadius: 10).stroke(
                         Color.white.opacity(0.06), lineWidth: 1))
+                Button(action: onReportProblem) {
+                    Text("Report a problem")
+                        .font(MonitorTheme.font(12, weight: .semibold))
+                        .foregroundStyle(MonitorTheme.accent)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("pair.reportProblem")
             }
             .padding(11).frame(
                 maxWidth: .infinity, maxHeight: portrait ? nil : .infinity, alignment: .topLeading

@@ -24,6 +24,11 @@ separate iOS and Android lists.
   follow the corrected aspect. Live and playback activation are independent.
   Recordings, exports and scope measurements remain unchanged.
 
+- **Report a problem** is visible at every pairing step on iOS and Android,
+  including before the first camera is connected. It opens the existing native
+  form with optional technical details and images; local **Share Diagnostics**
+  remains in the pairing menu.
+
 - **HDR display** (Operator Setup → Display): optional outdoor boost that uses
   the phone's HDR panel so live view, scopes, settings, media, playback and HUD
   type stay readable in sun. Off by default. The picture is a brightness aid,
@@ -286,6 +291,13 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Both shells can recover an established live feed after the decoder loses its
+  video format while compressed frames keep arriving. The existing watchdog
+  still owns the single repair and bounded escalation; startup and grace gates
+  are unchanged. Core, native decoder and Android fallback regressions cover
+  the defect. Physical camera qualification remains pending; the
+  [Sentry audit](docs/audits/2026-09-21-sentry-crashes-dropouts.md) records the
+  remaining discovery, dropout and native-crash investigations.
 - Android Bluetooth setup checks rejected native writes instead of waiting for
   callbacks that may never arrive. The tolerated notification fallback advances
   to the next characteristic. Failed required notification registration and

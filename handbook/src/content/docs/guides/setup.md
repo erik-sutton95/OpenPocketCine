@@ -33,7 +33,7 @@ Pocket 4 Pro, checks fresh pipeline counters and stops at serious thermal state.
 Use one phone at a time; these Debug assist workloads do not establish Release
 thermal performance or physical display scanout.
 
-More: [iOS app](../apps/ios/).
+More: [iOS app](../../apps/ios/).
 
 ## Android
 
@@ -55,7 +55,7 @@ beta; saved pairing and preferences belong to the app you opened.
 
 The Compose app is **arm64-v8a only**. Join the
 [public beta on Google Play](https://play.google.com/apps/testing/com.opencapture.openpocketcine). Pairing and live view
-need a physical phone. More: [Android app](../apps/android/). Maintainer
+need a physical phone. More: [Android app](../../apps/android/). Maintainer
 upload: `just android-play-setup`.
 
 ## This handbook

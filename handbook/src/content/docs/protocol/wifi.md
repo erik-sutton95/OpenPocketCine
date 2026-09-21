@@ -44,6 +44,6 @@ Live view on that socket is unicast to the associated phone. The camera does not
 
 ### Live view never starts after a successful join
 
-A local VPN or ad blocker (AdGuard, Blokada, RethinkDNS) can join the SoftAP and still drop UDP `9004`. Pairing looks fine; the well stays on Waiting for live view. Pause the filter or exclude this app. Official camera apps do the same — the phone cannot send camera UDP around a VPN that captures every app. Operator FAQ: [Troubleshooting](../guides/troubleshooting/).
+A local VPN or ad blocker (AdGuard, Blokada, RethinkDNS) can join the SoftAP and still drop UDP `9004`. Pairing looks fine; the well stays on Waiting for live view. Pause the filter or exclude this app. Official camera apps do the same — the phone cannot send camera UDP around a VPN that captures every app. Operator FAQ: [Troubleshooting](../../guides/troubleshooting/).
 
 Once associated, open the [UDP DUML datalink](../duml-transport/).

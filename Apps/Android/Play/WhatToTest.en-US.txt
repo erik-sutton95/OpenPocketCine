@@ -1,14 +1,15 @@
 New and changed
 
-- Anamorphic Desqueeze adds 1.1×, 1.2×, 1.33×, 1.5×, 1.6×, 1.8× and 2.0× presets plus a Custom slider in 0.01 steps for live view, videos and photos. Tap DE-SQ to toggle; hold for options.
+- Anamorphic Desqueeze (DE-SQ) works in live view, video playback and photos. Choose a lens preset or a custom 1.00–2.00× factor in 0.01 steps.
+- Report a problem is visible on the pairing screen, even before your first connection, with optional technical details and screenshots.
 
 Fixes
 
-- Connection recovery preserves the last picture and bounds repair attempts. Returning from Media starts live view once.
-- TalkBack reads live-view readouts and assist tools as whole phrases while preserving tap and hold actions.
-- Pocket 3 zoom follows FORMAT limits, and refused zoom values settle back to the camera's reading.
+- Improved recovery when a running preview loses its video format.
+- Live view starts again without the low-latency setting when the phone's decoder refuses it, instead of staying black.
 
 What to test
 
-- Try every DE-SQ preset, Custom and both directions in live view and playback. Check the full image, LUTs and guides; reopen the app to confirm options persist. Shared files should stay unchanged.
-- Reconnect, open Media and return repeatedly. With TalkBack on, check REC, timecode, battery and assists. Change Pocket 3 FORMAT while zoomed and check the zoom limit.
+- Tap DE-SQ to toggle; hold for presets, Custom and direction. Try LUT, grids, rotation and playback zoom. Check your custom factor survives a restart and files remain unchanged.
+- Before connecting a camera, open Report a problem in portrait and landscape. Close it and confirm pairing is still available. Share Diagnostics remains in the pairing menu.
+- Connect three times and check recovery after Media, Settings and background use. If live view previously stayed black on your phone, retry and report whether a picture now appears.

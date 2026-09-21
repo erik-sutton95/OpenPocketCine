@@ -227,6 +227,29 @@ Decoder callbacks run outside that lock. Their captured driver owner and
 epoch are rechecked inside the decoder's existing state lock, so a callback
 already admitted before retirement cannot alter replacement reference state.
 
+`KEY_LOW_LATENCY` is a demand, not a hint. The framework turns it into
+`setConfig(OMX_IndexConfigLowLatency)` on a legacy OMX component, and `ACodec`
+returns that component's refusal straight out of `configureCodec`, so
+`MediaCodec.configure` throws `CodecException(-1010)` and a working decoder is
+lost over one optional key. The tuning keys beside it do not behave this way —
+`max-input-size`, `priority` and `operating-rate` are each followed by
+`err = OK; // ignore error` — so this is the only one that needs a decision.
+A 2017 Exynos part shows the cost of getting it wrong: Bluetooth, Wi-Fi,
+settings and camera controls all work while the feed stays black and not one
+picture is ever submitted to decode (#311).
+
+The decision is to keep asking wherever the key exists and to recover from the
+refusal: catch `CodecException(-1010)` from a `configure` that carried the key
+and configure a **fresh** instance without it, since a codec that threw out of
+`configure` is spent. Gating the request on `FEATURE_LowLatency` instead looks
+right and is wrong — measured on a Galaxy S23, the `c2.qti.avc.decoder` we pick
+does not carry that feature, because Qualcomm ships low latency as a separate
+`c2.qti.avc.decoder.low_latency` component, yet the key has always worked on
+that phone. The advertisement describes a component, not whether the key is safe
+to send, so reading it as a veto would silently drop the tuning across every
+Qualcomm device to rescue one Exynos. Only the phone that refuses pays, and it
+pays one extra `configure`.
+
 Same-raster new VPS/SPS (zoom `0xB8`, FORMAT SET, D-Log2 → D-Log hop) keep
 VT **only if** `VTDecompressionSessionCanAcceptFormatDescription` says so.
 A kept session that refuses the new sets fails every frame with no log —

@@ -13,6 +13,8 @@ extend-exclude = [
 [default.extend-words]
 # Camera / protocol domain terms that are not misspellings.
 DUML = "DUML"
+EIS = "EIS"
+FOV = "FOV"
 DLog = "DLog"
 HEVC = "HEVC"
 Osmo = "Osmo"

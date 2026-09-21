@@ -8,11 +8,13 @@ HEVC/AVC live view, GPU looks, scopes, camera writes, and media. The public beta
 Google Play is open — [join the Android beta](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA). iOS is the daily driver. arm64
 phones, Android 10 or newer.
 
-If pairing or live view fails: Connection setup **Share Diagnostics**, or
-Operator Setup → System → **Share Diagnostics**. The report has no name,
-location, or Wi-Fi password. Local VPNs and ad blockers (AdGuard, Blokada,
+If pairing or live view fails, tap **Report a problem** on the pairing screen or
+in **Operator Setup → System**. It works before your first successful pairing;
+technical details and a reply email are optional. For a local diagnostic export,
+use pairing's overflow menu → **Share Diagnostics** or System → **Diagnostic
+options → Save diagnostic report**. Local VPNs and ad blockers (AdGuard, Blokada,
 RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
-exclude this app ([Troubleshooting](../guides/troubleshooting/)).
+exclude this app ([Troubleshooting](../../guides/troubleshooting/)).
 
 On **Your cameras**, PAIRED and NEARBY groups separate remembered cameras from
 new discoveries. Select a camera to see its connection progress and **Cancel**.
@@ -199,7 +201,7 @@ pattern, not Skip/SKIE:
    the Swift facade — a handshake miss is a recoverable session error, not a
    crash.
 
-Build recipes: [Setup](../guides/setup/). The living JNI/I/O notes:
+Build recipes: [Setup](../../guides/setup/). The living JNI/I/O notes:
 [`ANDROID.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/ANDROID.md).
 
 ## Operator surface
@@ -209,7 +211,7 @@ Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×;
 Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). Pocket 3's ceiling is
 per-FORMAT, not one generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×,
 3K 1:1 2×**
-([survey](https://openpocketcine.app/docs/protocol/pocket3/#zoom-and-med-tele)). Zoom must not drop the live
+([survey](https://openpocketcine.app/docs/devices/pocket-3/controls/#zoom-and-med-tele)). Zoom must not drop the live
 picture. FORMAT lists `camcap_video_format` pairs (2.7K / 4:3 / 1:1 / 9:16
 when the body advertises them; aspect is the res byte). A tap stays on that
 pair until the body reports it. Pocket 3 normal Video also has a

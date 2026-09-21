@@ -40,4 +40,4 @@ lists an exception. Live UDP/decoder facts:
 The full seam table:
 [`docs/ARCHITECTURE.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/ARCHITECTURE.md).
 
-Wire format is in [Protocol](../protocol/connection/).
+Wire format is in [Protocol](../../protocol/connection/).

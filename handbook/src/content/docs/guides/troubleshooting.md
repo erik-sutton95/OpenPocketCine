@@ -5,7 +5,10 @@ description: Pairing, camera Wi-Fi, live view, and local VPNs or ad blockers tha
 
 Pairing and live view need a **physical** phone and the camera. The Simulator has no Bluetooth or camera Wi-Fi.
 
-If a step fails: Connection setup **Share Diagnostics**, or Operator Setup → System → **Report a problem**. The report has no name, location, or Wi-Fi password.
+If a step fails, tap **Report a problem** on the pairing screen, even if you have
+never connected a camera. The same form is in Operator Setup → System. Describe
+what happened and choose whether to include technical details. For a local
+diagnostic export, use the pairing screen's overflow menu → **Share Diagnostics**.
 
 ## Live view never starts
 
@@ -46,6 +49,17 @@ has started. These checks help locate the failure and are not a guaranteed fix.
 ## Wi-Fi join never finishes
 
 Approve the Join prompt for the camera SoftAP. On 5.8 GHz in a DFS region the camera AP can take about a minute to beacon; the app keeps trying. A wrong cached passphrase after a camera Wi-Fi reset is dropped so the next tap re-reads credentials over Bluetooth.
+
+## Live view stays black on an older Android phone
+
+Bluetooth, Wi-Fi, settings and camera controls all working while the picture
+never starts points at the phone's video decoder, not the link. Some decoders
+from before Android 11 turn down the low-latency setting the monitor asks for,
+and refusing it used to cost the whole decoder. The app now starts again without
+that setting when a decoder turns it down; phones that accept it are unaffected.
+
+If a build still shows nothing here, send **Share Diagnostics**: a `codec:` line
+with no decoded pictures names the decoder that refused.
 
 ## Picture starts then freezes
 
@@ -97,7 +111,7 @@ still contain visible gaps. Pocket 4 Pro motion stutter remains under physical
 investigation on both iPhone and Android, including the
 [Redmi report](https://github.com/erik-sutton95/OpenPocketCine/issues/334).
 
-More: [Camera Wi-Fi](../protocol/wifi/), [iOS app](../apps/ios/), [Android app](../apps/android/).
+More: [Camera Wi-Fi](../../protocol/wifi/), [iOS app](../../apps/ios/), [Android app](../../apps/android/).
 
 On iOS, returning from the background with arriving video but an invalid native
 decoder now hands recovery to the feed watchdog. It can rebuild the decoder
@@ -105,7 +119,7 @@ without forcing a full camera reconnect. A short picture hold can still occur
 while it waits for a new random-access frame. If a hold persists, keep the app
 open briefly and share diagnostics so the incident's recovery timeline is saved.
 
-Use **Operator Setup → System → Report a problem** to describe what happened
+Use **Report a problem** on the pairing screen or in **Operator Setup → System** to describe what happened
 without leaving the app. Add an email if you would like a reply. Technical details
 are optional and can be reviewed before you send. You can add up to three photos
 or screenshots, preview them and remove any before sending. Only choose images

@@ -32,7 +32,7 @@ It is a source-backed choice list, not proof that every pair has passed physical
 recording/reconnect checks. Physical iPhone build 0.1.0 (99) subsequently passed
 one landscape 2.7K/25 D-Log M record and app-relaunch/reconnect sequence, with
 an independently decoded 2688×1512/25fps original. Other pairs, Android and
-camera power-cycle persistence remain pending. See [the survey](../handbook/src/content/docs/protocol/pocket3.md#openpocketcine-recording-and-warm-reconnect)
+camera power-cycle persistence remain pending. See [the survey](../handbook/src/content/docs/devices/pocket-3/connection.md#openpocketcine-recording-and-warm-reconnect)
 and [the public fallback notes](../handbook/src/content/docs/protocol/commands.md#pocket-3-format-choices-without-a-capability-table).
 
 What still has to live in the app:
@@ -66,7 +66,7 @@ cam_video_param_v2  @0 = res, @1 = fps_idx      # live HUD
 The zero trailer above describes normal Video and the surveyed Pocket 3
 Low-Light writes. Pocket 3 Slow Motion instead accepted `00 04 00` at
 100/120 fps and `00 08 00` at 240 fps. These bytes are not an aspect field.
-See the [physical survey](../handbook/src/content/docs/protocol/pocket3.md#shooting-modes-and-formats)
+See the [physical survey](../handbook/src/content/docs/devices/pocket-3/modes.md#shooting-modes-and-formats)
 for the exact accepted pairs; qualify other bodies separately.
 
 ### Capability table
@@ -109,7 +109,7 @@ make it a legal pair on every model or mode.
 
 **200 fps** is index `13` on the physically surveyed Pocket 4 Pro. Mimo sent
 `10 13 00 04 00` for 4K/200, with success reply and matching status. See the
-[mode survey](../handbook/src/content/docs/protocol/pocket4-pro.md). Other bodies
+[mode survey](../handbook/src/content/docs/devices/pocket-4-pro/index.md). Other bodies
 remain unqualified by this take.
 
 ### Resolution byte (aspect is this byte)
@@ -225,7 +225,7 @@ Body UI (operator photo, 16:9): aspect chip, then 1080P / 2.7K / 4K, fps
 | 9:16 | 1080p | **1080×1920** |
 
 **SlowMo** (separate mode; body swipe-up has resolution + speed, **no aspect
-chip**): the [physical survey](../handbook/src/content/docs/protocol/pocket3.md#shooting-modes-and-formats)
+chip**): the [physical survey](../handbook/src/content/docs/devices/pocket-3/modes.md#shooting-modes-and-formats)
 confirmed accepted 4K 16:9 **100/120**, 2.7K 2688×1512 120 and 1080p 120/240
 selections. FAQ: 4K/120 uncropped is SlowMo only. The inspected Slow Motion
 originals have no audio track; companions are documented separately. At
@@ -241,7 +241,7 @@ unspecified in those rows).
 
 **Zoom (DJI spec):** Video 1080p 4×, 2.7K 3×, 4K 2×.
 SlowMo / Timelapse: off. The current `CameraModel.activeZoomStops` clamps
-4K to 2× but still offers 4× for 2.7K. The [physical Mimo survey](../handbook/src/content/docs/protocol/pocket3.md#zoom-and-med-tele)
+4K to 2× but still offers 4× for 2.7K. The [physical Mimo survey](../handbook/src/content/docs/devices/pocket-3/controls.md#zoom-and-med-tele)
 confirmed the 3× endpoint at 2.7K. The app clamp still needs an implementation
 correction; the existing code is not proof of 4× support.
 
