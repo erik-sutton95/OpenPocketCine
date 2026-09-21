@@ -1,6 +1,6 @@
 New and changed
 
-- Motion Control loops back and forth without an added endpoint pause. Its compact editor keeps action buttons fixed while settings scroll, with a fade showing more below.
+- Motion Control loops back and forth and transitions between saved zoom amounts. D-Log2 blocks zoom-changing programs. Paused Restart keeps the program and starts again from A.
 - Pocket 3 zoom stops follow FORMAT, with a note when the ceiling changes. Refused zoom values settle back to the camera's reading.
 - HDR display brightens the phone panel; off by default. Screen recording and AirPlay use normal SDR.
 
@@ -12,6 +12,6 @@ Fixes
 
 What to test
 
-- Loop A/B/C with unequal durations and Smoothness: no endpoint pause or unexpected error. Try Pause/Resume and Stop on reverse legs; check selfie markers with Selfie Flip and MIRROR on/off.
+- Save different zoom at A/B/C and test both loop directions, Pause/Resume and Stop. D-Log2 should block Start without changing color mode. Check selfie markers with MIRROR on/off.
 - Pause and choose Restart: the saved program starts again from A. Scroll in both orientations: actions stay fixed. Close/reopen retains the program; Clear removes points.
 - Connect repeatedly, use controls and open Media, then return. Check Pocket 3 zoom limits per FORMAT and HDR display while recording the phone screen.

@@ -29,6 +29,11 @@ separate iOS and Android lists.
   the control pill visible. While paused, Restart replaces Clear and starts the
   saved program again from A with countdown and preparation. The corrected A/B
   loop passed an operator iPhone check; broader physical qualification remains pending.
+- Motion Control transitions between different zoom amounts saved at A/B/C,
+  including reverse loops and measured Pause/Resume. B's saved zoom remains exact
+  when the angular path is smoothed. Zoom-changing programs are blocked in D-Log2
+  while idle or recording, with no automatic color-mode change; current camera
+  FORMAT limits also apply. Physical zoom response remains unqualified.
 
 - **HDR display** (Operator Setup → Display): optional outdoor boost that uses
   the phone's HDR panel so live view, scopes, settings, media, playback and HUD

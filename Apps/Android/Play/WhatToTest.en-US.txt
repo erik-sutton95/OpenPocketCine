@@ -1,6 +1,6 @@
 New and changed
 
-- Motion Control loops back and forth without an added endpoint pause. Its compact editor keeps action buttons fixed while settings scroll, with a fade showing more below.
+- Motion Control loops back and forth and transitions between saved zoom amounts. D-Log2 blocks zoom-changing programs. Paused Restart keeps the program and starts again from A.
 - TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
 - Pocket 3 zoom follows FORMAT limits and refused values settle back. Readouts use consistent formatting across phone languages.
 
@@ -12,6 +12,6 @@ Fixes
 
 What to test
 
-- Loop A/B/C with unequal durations and Smoothness: no endpoint pause or unexpected error. Try Pause/Resume and Stop on reverse legs; check selfie markers with Selfie Flip and MIRROR on/off.
+- Save different zoom at A/B/C and test both loop directions, Pause/Resume and Stop. D-Log2 should block Start without changing color mode. Check selfie markers with MIRROR on/off.
 - Pause and choose Restart: the saved program starts again from A. Scroll in both orientations: actions stay fixed. Close/reopen retains the program; Clear removes points.
 - Connect repeatedly and return from Media. With TalkBack on, check each readout speaks one phrase and assist tap/hold still work. Check Pocket 3 zoom limits per FORMAT.

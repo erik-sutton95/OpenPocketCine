@@ -310,4 +310,166 @@ class NativeGimbalProgramRunnerTest {
         assertEquals(1, stops)
     }
 
+    @Test fun zoomPreparationAndLoopUseDistinctTwentyHzLensTargetsWithoutMoreUiProgress() {
+        val tx = Tx()
+        val zooms = mutableListOf<Pair<Double, Int>>()
+        val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+        var measuredZoom = 1.7
+        val program = GimbalProgram(a, a.copy(zoom = 3.0), a.copy(zoom = 2.0), 1.0, 2.0, loop = true)
+        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+            { NativeGimbalFeedback(a.copy(zoom = measuredZoom), tx.now) }, { _, _ -> true }, {},
+            sendZoom = { lens, _ ->
+                zooms += tx.now to lens
+                measuredZoom = CamFov.factorFromLens(lens)!!
+                true
+            })
+        runner.start(program) { updates += it }
+        tx.through(2.24)
+        assertEquals(listOf(0.25 to CamFov.LENS_1X), zooms, "Preparation applies A once; hold is deduplicated")
+        tx.through(11.3)
+        zooms.zipWithNext().forEach { (first, next) ->
+            assertTrue(next.first - first.first >= 0.05 - 1e-8)
+            assertTrue(first.second != next.second)
+        }
+        for ((time, factor) in listOf(3.2 to 3.0, 5.2 to 2.0, 7.2 to 3.0, 8.2 to 1.0, 9.2 to 3.0, 11.2 to 2.0)) {
+            assertTrue(zooms.any { kotlin.math.abs(it.first - time) < 1e-7 && it.second == CamFov.pinchLens(factor) },
+                "Saved endpoint $factor must be requested 50 ms before $time + 50 ms")
+        }
+        assertTrue(updates.size <= 58, "Zoom adds no 20 Hz UI callbacks")
+        assertTrue(updates.none { it.finished || it.failure != null })
+    }
+
+    @Test fun pauseResumeUsesMeasuredZoomAndCancellationFencesEveryLensCallback() {
+        val tx = Tx()
+        var measuredZoom = 1.0
+        val zooms = mutableListOf<Pair<Double, Int>>()
+        val events = mutableListOf<String>()
+        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+            { NativeGimbalFeedback(a.copy(zoom = measuredZoom), tx.now, zoomReceivedAt = tx.now) }, { _, _ -> true }, { events += "gimbal stop" },
+            sendZoom = { lens, _ -> zooms += tx.now to lens; measuredZoom = CamFov.factorFromLens(lens)!!; true },
+            stopZoom = { events += "zoom stop" })
+        val token = runner.start(GimbalProgram(a, a.copy(zoom = 3.0), durationAB = 1.0, loop = true)) {}
+        tx.through(2.65)
+        assertTrue(runner.pause(token))
+        tx.through(2.66)
+        assertEquals(1, events.count { it == "zoom stop" })
+        val pausedCount = zooms.size
+        measuredZoom = 1.7
+        tx.through(3.1)
+        assertEquals(pausedCount, zooms.size)
+        assertTrue(runner.resume(token))
+        tx.through(3.11)
+        assertEquals(CamFov.pinchLens(1.7 + (3.0 - 1.7) * 0.05 / 0.6), zooms.last().second)
+        val beforeCancel = zooms.size
+        assertTrue(runner.cancel(token))
+        tx.schedule(0.0) { events += "manual zoom" }
+        tx.through(10.0)
+        assertEquals(beforeCancel, zooms.size)
+        assertEquals(listOf("zoom stop", "gimbal stop", "manual zoom"), events.takeLast(3))
+        zooms.zipWithNext().forEach { (first, next) -> assertTrue(next.first - first.first >= 0.05 - 1e-8) }
+    }
+
+    @Test fun resumeCombinesStableAttitudeWithNewerVerifiedLensFeedback() {
+        val tx = Tx()
+        var measuredZoom = 2.0
+        var attitudeAt: Double? = null
+        var lastAttitudeAt = 0.0
+        var lensAt: Double? = null
+        val zooms = mutableListOf<Int>()
+        val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+            {
+                lastAttitudeAt = attitudeAt ?: tx.now
+                NativeGimbalFeedback(a.copy(zoom = measuredZoom), lastAttitudeAt, lensAt ?: tx.now)
+            },
+            { _, _ -> true }, {}, sendZoom = { lens, _ -> zooms += lens; true })
+        val token = runner.start(GimbalProgram(a, a.copy(zoom = 3.0), durationAB = 1.0, loop = true)) { updates += it }
+        tx.through(2.60)
+        assertTrue(runner.pause(token))
+        tx.through(2.86)
+        attitudeAt = lastAttitudeAt
+        lensAt = 2.86
+        // The angular stability proof remains fresh, but the lens changes independently.
+        tx.through(2.87)
+        measuredZoom = 1.0
+        lensAt = 2.87
+        tx.through(3.08)
+        lensAt = 3.08
+        assertTrue(runner.resume(token))
+        tx.through(3.081)
+        assertFalse(updates.last().paused)
+        assertEquals(1.0, updates.last().live?.zoom)
+        assertEquals(CamFov.pinchLens(1.0 + (3.0 - 1.0) * 0.05 / 0.7), zooms.last(),
+            "Resume must use the newer settled lens value, not the angular sample's cached zoom")
+    }
+
+    @Test fun rawColorOrFormatChangeStopsZoomEvenWhileTargetIsDeduplicated() {
+        for (recording in listOf(false, true)) {
+            for (changeColor in listOf(false, true)) {
+                val tx = Tx()
+                var status = CameraStatus(colorMode = CameraCommands.COLOR_NORMAL, zoomFactor = 1.0, isRecording = recording)
+                val model = CameraModel("Osmo Pocket 4 Pro")
+                val program = GimbalProgram(a, a.copy(zoom = 6.0), durationAB = 1.0)
+                val zooms = mutableListOf<Int>()
+                val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+                var stops = 0
+                val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+                    { NativeGimbalFeedback(a, tx.now) }, { _, _ -> true }, {},
+                    zoomFailure = { nativeProgramZoomFailure(it, model, status) },
+                    sendZoom = { lens, _ -> zooms += lens; true }, stopZoom = { stops++ })
+                runner.start(program) { updates += it }
+                tx.through(0.5)
+                status = if (changeColor) status.copy(colorMode = CameraCommands.COLOR_DLOG2)
+                    else status.copy(shootingMode = CameraCommands.SHOOT_SLOWMO)
+                tx.through(0.6)
+                assertEquals(listOf(CamFov.LENS_1X), zooms)
+                assertEquals(1, stops)
+                assertTrue(updates.last().finished)
+                assertEquals(if (changeColor) "Zoom moves are unavailable in D-Log2" else
+                    "Saved zoom exceeds the current FORMAT limit", updates.last().failure)
+                tx.through(5.0)
+                assertEquals(1, zooms.size)
+            }
+        }
+    }
+
+    @Test fun blockedPreparationAndStaleFeedbackNeverEmitFurtherZoom() {
+        for (blockedAtStart in listOf(false, true)) {
+            val tx = Tx()
+            var fresh = true
+            var zooms = 0
+            var zoomStops = 0
+            val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+            val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+                { if (fresh) NativeGimbalFeedback(a, tx.now) else null }, { _, _ -> true }, {},
+                zoomFailure = { if (blockedAtStart) "Zoom moves are unavailable in D-Log2" else null },
+                sendZoom = { _, _ -> zooms++; true }, stopZoom = { zoomStops++ })
+            runner.start(GimbalProgram(a, a.copy(zoom = 3.0), durationAB = 1.0)) { updates += it }
+            tx.through(0.5)
+            fresh = false
+            tx.through(5.0)
+            assertEquals(if (blockedAtStart) 0 else 1, zooms)
+            assertEquals(if (blockedAtStart) 0 else 1, zoomStops)
+            assertTrue(updates.last().finished)
+            assertTrue(updates.last().failure != null)
+        }
+    }
+
+    @Test fun rawColorChangeBeforeFinalVerificationCompletesStillInvalidatesTake() {
+        val tx = Tx()
+        var status = CameraStatus(colorMode = CameraCommands.COLOR_NORMAL, zoomFactor = 1.0)
+        val model = CameraModel("Osmo Pocket 4 Pro")
+        val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+            { NativeGimbalFeedback(a, tx.now) }, { _, _ -> true }, {},
+            zoomFailure = { nativeProgramZoomFailure(it, model, status) }, sendZoom = { _, _ -> true })
+        runner.start(GimbalProgram(a, a.copy(zoom = 3.0), durationAB = 1.0)) { updates += it }
+        tx.through(3.545)
+        assertTrue(updates.none { it.finished })
+        status = status.copy(colorMode = CameraCommands.COLOR_DLOG2)
+        tx.through(4.0)
+        assertTrue(updates.last().finished)
+        assertEquals("Zoom moves are unavailable in D-Log2", updates.last().failure)
+    }
+
 }

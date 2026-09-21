@@ -295,6 +295,16 @@ does not reverse stored mechanical angles. Waypoint letters and the dashed path
 follow the selfie orientation and MIRROR assist visually; saved positions and
 programmed movements stay the same.
 
+Each point also saves its zoom. When those amounts differ, Motion Control
+transitions between them over the leg durations; B's zoom is reached even when
+Smoothness rounds the gimbal path. Loop reverses zoom too. Pause stops the zoom
+stream, and Resume waits for fresh, settled lens feedback before continuing.
+Zoom-changing programs are unavailable in **D-Log2**, both while recording and
+idle; Start shows the reason. Choose a compatible color mode yourself—the program
+never switches color mode. Programs without zoom changes still work in D-Log2.
+Saved zoom must fit the current camera FORMAT. Zoom timing and optical smoothness
+remain experimental.
+
 **Loop** (off by default) moves back and forth: A→B→A→B, or
 A→B→C→B→A→B→C. Each reverse leg keeps its original duration and retraces
 the same smoothed path. The countdown, approach to A and two-second settle happen

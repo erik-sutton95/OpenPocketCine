@@ -2,8 +2,9 @@
 
 Status: **experimental; physical timing and positional accuracy are not qualified**.
 The portable `GimbalMoveEngine` and the Android implementation control pan and
-tilt on a fixed camera body. Roll, translation and zoom are outside the path.
-Saved zoom values do not cause zoom SETs during a take.
+tilt on a fixed camera body. Roll and translation are outside the path.
+When saved points have different zoom amounts, the take also transitions through
+those amounts. Programs with the same zoom at every point leave zoom untouched.
 
 ## Timing contract
 
@@ -70,6 +71,37 @@ reports, extrapolates at most 100 ms and hides after 300 ms without feedback.
 It never changes captured points, command targets or verification. The decoder
 currently assigns presentation timestamps locally, so attitude/video capture
 clock alignment and exact pixel locking are not claimed.
+
+## Programmed zoom
+
+Save each point at the desired zoom. A zoom-changing take sets A's zoom during
+preparation, then interpolates A→B and optional B→C over their chosen durations.
+Zoom reaches B's saved amount even when Smoothness rounds the angular path past B.
+The background transport scheduler sends distinct absolute lens targets at no
+more than 20 Hz, with 50 ms look-ahead clipped at each zoom endpoint. An endpoint
+stays pending until sampled so an accepted late callback cannot skip its amount.
+There is no extra GET loop, color change, ACK timer or live-view enable.
+
+Loop reverses the zoom path with the gimbal. Pause and Stop retire future zoom
+commands and send the existing zoom STOP after lens ownership has begun. Resume
+requires fresh post-pause lens feedback, stable within one lens tick for 200 ms
+and received within 300 ms, in addition to settled gimbal feedback. Unrelated
+attitude packets cannot refresh this lens evidence. Resume anchors the remaining
+zoom path at the measured amount; Restart restores the full saved path from A.
+Manual zoom and app color changes cancel the programmed move before taking over.
+
+Zoom-changing programs cannot start in D-Log2, whether recording or idle. The
+editor shows the reason above its disabled Start button. Select a compatible
+color mode before running; the program never changes color mode automatically.
+Programs with no zoom changes continue to support D-Log2. Both shells validate
+saved and current zoom against the body's current FORMAT/mode limits. Received
+color/FORMAT changes are checked before further background writes and stop a
+now-unsupported take, including while paused. Pending manual zoom requests are
+retired before a zoom-changing take starts.
+
+These are commanded lens amounts and timing. Lens response, optical smoothness
+and zoom endpoint accuracy still require physical qualification; gimbal waypoint
+verification is not a zoom-accuracy measurement.
 
 ## Feedback and failures
 
@@ -175,8 +207,10 @@ checks remain strict. A paused take is not an uninterrupted timing qualification
 Native targets bypass the held-stick stream, which is rested before a move.
 Manual and head-tracking stick control retain their existing 25 Hz pump. The
 40 Hz ACK queue remains unchanged. Motion supervision and waypoint overlays
-run at up to 25 Hz; session progress remains 5 Hz without a debug overlay. No extra GET loop, zoom SET,
-decoder reset or live-view enable is introduced. See [performance](PERFORMANCE.md).
+run at up to 25 Hz; session progress remains 5 Hz without a debug overlay.
+Zoom-changing takes add at most 20 Hz distinct lens SETs on that same scheduler,
+using the existing zoom watchdog grace. No extra GET loop, decoder reset or
+live-view enable is introduced. See [performance](PERFORMANCE.md).
 
 ## Evidence and qualification
 

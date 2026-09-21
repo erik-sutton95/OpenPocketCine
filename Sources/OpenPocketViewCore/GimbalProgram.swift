@@ -84,6 +84,11 @@ public struct GimbalProgram: Equatable, Sendable {
 
     public var canRun: Bool { a != nil && b != nil }
 
+    public var changesZoom: Bool {
+        let zooms = [a, b, c].compactMap { $0?.zoom }
+        return zip(zooms, zooms.dropFirst()).contains { abs($0 - $1) > 1e-6 }
+    }
+
     /// Operator row: Not set / A·B / A·B·C / Partial.
     public var summary: String {
         if a != nil, b != nil, c != nil { return "A·B·C" }
@@ -306,6 +311,9 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     public private(set) var failure: String?
     private var program = GimbalProgram()
     private var isReversing = false
+    private var zoomPath = GimbalZoomPath(program: GimbalProgram())
+    private var zoomElapsedOffset: TimeInterval = 0
+    private var pendingZoomEndpoint: Double?
     private var legs: [Leg] = []
     private var index = 0
     private var phase = "HOLD"
@@ -326,6 +334,8 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     public mutating func start(program: GimbalProgram, live: GimbalWaypoint) -> Bool {
         cancel()
         self.program = program
+        zoomPath = GimbalZoomPath(program: program)
+        zoomElapsedOffset = 0
         isReversing = false
         verificationInterruptedByPause = false
         failure = nil
@@ -388,6 +398,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         checkpoints = []
         observations = []
         isPaused = true
+        pendingZoomEndpoint = nil
         lastReadout = snapshot(live: live)
         return true
     }
@@ -405,6 +416,9 @@ public struct GimbalMoveEngine: Equatable, Sendable {
             resumeNeedsCommand = true
             return true
         }
+        zoomPath = zoomPath.remaining(after: phase == "VERIFY" ? zoomPath.duration : zoomElapsedOffset + elapsed,
+            from: live.zoom, quantized: curve == nil || phase == "VERIFY")
+        zoomElapsedOffset = 0
         if let curve, phase == "RUN" {
             self.curve = curve.remaining(after: elapsed, from: live)
             index = self.curve!.durationAB > 0 ? 0 : 1
@@ -431,10 +445,33 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         running = false
         isPaused = false
         resumeNeedsCommand = false
+        pendingZoomEndpoint = nil
         needsCommand = false
         checkpoints = []
         observations = []
         commandHistory = []
+    }
+
+    /// Absolute lens samples share the take clock and a short command look-ahead.
+    /// The shell quantizes and sends them at no more than 20 Hz.
+    public var programmedZoomTarget: Double? {
+        guard program.changesZoom, running, !isPaused, index < legs.count else { return nil }
+        if let pendingZoomEndpoint { return pendingZoomEndpoint }
+        if phase == "APPROACH" || phase == "HOLD" { return program.a?.zoom }
+        return phase == "RUN" ? zoomPath.position(at: zoomElapsedOffset + elapsed) : zoomPath.end
+    }
+
+    /// Call only when the shell admits a lens sample; duplicate lens values also
+    /// consume the endpoint. A late tick must not skip a saved zoom amount.
+    public mutating func consumeProgrammedZoomTarget() -> Double? {
+        let target = programmedZoomTarget
+        if target != nil { pendingZoomEndpoint = nil }
+        return target
+    }
+
+    /// A shell capability change can invalidate a take before another command is sent.
+    public mutating func interrupt(live: GimbalWaypoint, reason: String) -> Output {
+        stop(live: live, reason: reason)
     }
 
     /// Wake on the command deadline, not a fixed sleep after a 25 Hz tick.
@@ -530,6 +567,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
             guard elapsed - leg.duration <= 0.02 + 1e-9 else {
                 return stop(live: live, reason: "Move interrupted — waypoint dispatch was late")
             }
+            if program.changesZoom { pendingZoomEndpoint = leg.to.zoom }
             if index + 1 == legs.count, program.loop {
                 return turnAround(live: live, boundary: clock - (elapsed - leg.duration))
             }
@@ -537,6 +575,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
                 time: clock - (elapsed - leg.duration), incoming: leg,
                 outgoing: index + 1 < legs.count ? legs[index + 1] : nil, outgoingAt: clock))
             if index + 1 < legs.count {
+                zoomElapsedOffset += leg.duration
                 index += 1
                 elapsed = 0
                 return startExactLeg(live: live)
@@ -589,6 +628,8 @@ public struct GimbalMoveEngine: Equatable, Sendable {
                 from: path.b!, to: c, duration: path.durationBC))
         }
         curve = GimbalProgramCurve(program: path)
+        zoomPath = GimbalZoomPath(program: path)
+        zoomElapsedOffset = 0
         index = 0
         nextCurveCommand = 0
         checkpoints.append(Checkpoint(time: boundary, incoming: incoming,
@@ -640,7 +681,10 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     }
 
     private mutating func tickCurve(_ curve: GimbalProgramCurve, live: GimbalWaypoint) -> Output {
-        index = elapsed >= curve.durationAB ? 1 : 0
+        if program.changesZoom, index == 0, elapsed + 1e-9 >= curve.durationAB {
+            pendingZoomEndpoint = curve.b.zoom
+        }
+        index = elapsed + 1e-9 >= curve.durationAB ? 1 : 0
         if elapsed + 1e-9 >= curve.duration {
             guard nextCurveCommand >= curve.duration else {
                 return stop(live: live, reason: "Move interrupted — waypoint dispatch was late")
@@ -648,6 +692,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
             guard elapsed - curve.duration <= 0.02 + 1e-9 else {
                 return stop(live: live, reason: "Move interrupted — waypoint dispatch was late")
             }
+            if program.changesZoom { pendingZoomEndpoint = curve.c.zoom }
             if program.loop {
                 return turnAround(live: live, boundary: clock - (elapsed - curve.duration))
             }

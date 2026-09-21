@@ -417,6 +417,15 @@ from physical qualification;
 the operator confirmed the corrected A/B loop on iPhone. Broader physical loop
 qualification and sustained live-view budget checks remain pending on both shells.
 
+Programmed zoom (2026-09-21): differing saved zoom amounts drive at most 20 Hz
+absolute lens targets alongside the timed gimbal path in both shells. Zoom visits
+B's amount even when the angular path rounds B, reverses in Loop, pauses/stops
+with the take and resumes from fresh settled lens feedback. Restart restores the
+saved zoom path. D-Log2 blocks zoom-changing programs while idle and recording;
+no automatic color change occurs. Raw camera color/FORMAT changes can stop a take
+before its next zoom write. Gimbal-only programs remain available in D-Log2.
+Zoom accuracy and integrated Restart still await physical qualification.
+
 ## Multiview session network and shutdown (in validation)
 
 Every new iOS Multiview session opens the network picker with empty camera slots.

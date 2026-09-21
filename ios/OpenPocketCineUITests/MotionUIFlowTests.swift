@@ -135,6 +135,29 @@ final class MotionUIFlowTests: XCTestCase {
         XCTAssertFalse(smoothness.exists)
     }
 
+    func testDLog2ExplainsWhyZoomProgramCannotStart() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION"] = "1"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION_ZOOM"] = "1"
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["monitor.system.gimbalControls"].waitForExistence(timeout: 10))
+        app.buttons["monitor.system.gimbalControls"].tap()
+        let open = app.buttons["motion.openEditor"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+        let reason = app.staticTexts["motion.zoomUnavailable"]
+        XCTAssertTrue(reason.waitForExistence(timeout: 5))
+        XCTAssertEqual(reason.label, "Zoom moves are unavailable in D-Log2")
+        XCTAssertTrue(reason.isHittable, "The reason must be visible beside the disabled Start button")
+        XCTAssertFalse(app.buttons["motion.startStop"].isEnabled)
+        XCTAssertTrue(app.buttons["motion.clear"].isEnabled)
+        attachScreenshot("motion-zoom-dlog2-unavailable")
+    }
+
     func testEditorKeepsActionsFixedAndFadesOnlyOverflowInBothOrientations() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait

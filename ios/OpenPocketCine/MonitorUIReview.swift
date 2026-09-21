@@ -83,6 +83,11 @@
                     b: .init(yawDeg: 30, pitchDeg: 0, zoom: 1, nativePitchDeg: 0),
                     c: .init(yawDeg: 30, pitchDeg: 20, zoom: 1, nativePitchDeg: -20),
                     durationAB: 3, durationBC: 2, smoothness: 0.5)
+                if ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_ZOOM"] == "1" {
+                    model.session.gimbalProgram.b?.zoom = 3
+                    model.session.gimbalProgram.c?.zoom = 2
+                    model.session.status.zoomLens = CamFov.lens1x
+                }
                 if ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_RUNNING"] == "1" {
                     model.session.gimbalMoveRunning = true
                     model.session.gimbalMoveCanPause = true

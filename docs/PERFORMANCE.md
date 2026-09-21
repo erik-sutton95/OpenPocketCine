@@ -46,7 +46,12 @@ verification hold. Smoothed turnaround verification stores at most one second
 of 20 Hz timed-command references plus the active predecessor, and uses the
 existing affine delay fit during the bounded checkpoint window. The editor's
 scroll fade updates local presentation state only; neither scrolling nor fading
-adds a timer, command stream or shared-model publication.
+adds a timer, command stream or shared-model publication. When saved zoom amounts
+differ, the existing motion scheduler also emits distinct absolute lens targets
+at no more than 20 Hz, with 50 ms look-ahead and bounded endpoint retention. Zoom
+runs on the transport queue, with no 20 Hz UI callback. The existing zoom/SET
+watchdog grace sees these writes through a monotonic timestamp. Color, lens and
+FORMAT evidence is read before the UI hop; no extra GET or ACK timer is added.
 
 Media drag selection uses the native display clock only while a held selection
 gesture requests edge scrolling. Ordinary vertical scrolling while selecting uses

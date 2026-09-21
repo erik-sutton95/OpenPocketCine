@@ -466,6 +466,8 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
     val countdown by model.session.gimbalMoveCountdown.collectAsState()
     val paused by model.session.gimbalMovePaused.collectAsState()
     val phase by model.session.phaseFlow.collectAsState()
+    val status by model.session.status.collectAsState()
+    val zoomNote = model.session.programmedZoomUnavailableReason(status)
     val cameraId = model.session.connectedCamera?.id
     val scroll = rememberScrollState()
     val density = LocalDensity.current
@@ -550,6 +552,10 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
                 }
                 MonitorSwitchGraphic(program.loop)
             }
+        }
+        zoomNote?.let {
+            Text(it, color = LiveDesign.muted, style = LiveType.ui(10f),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("motion.zoomNote"))
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).testTag("motion.actions"),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {

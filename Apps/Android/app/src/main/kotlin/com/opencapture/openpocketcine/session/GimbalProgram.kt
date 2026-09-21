@@ -112,6 +112,8 @@ data class GimbalProgram(
     val loop: Boolean = false,
 ) {
     val canRun: Boolean get() = a != null && b != null
+    val changesZoom: Boolean
+        get() = listOfNotNull(a, b, c).map { it.zoom }.zipWithNext().any { (from, to) -> abs(to - from) > 1e-6 }
 
     val summary: String
         get() =
@@ -327,6 +329,9 @@ class GimbalMoveEngine {
         private set
     private var program = GimbalProgram()
     private var reversed = false
+    private var zoomPath = GimbalZoomPath(GimbalProgram())
+    private var zoomElapsedOffset = 0.0
+    private var pendingZoomEndpoint: Double? = null
     private var legs: List<Leg> = emptyList()
     private var index = 0
     private var phase = "HOLD"
@@ -342,9 +347,23 @@ class GimbalMoveEngine {
     private var curve: GimbalProgramCurve? = null
     private var nextCurveCommand = 0.0
 
+    val programmedZoomTarget: Double?
+        get() {
+            if (!running || isPaused || !program.changesZoom) return null
+            pendingZoomEndpoint?.let { return it }
+            if (phase == "APPROACH" || phase == "HOLD") return program.a?.zoom
+            return if (phase == "RUN") zoomPath.position(zoomElapsedOffset + elapsed) else zoomPath.end
+        }
+
+    fun consumeProgrammedZoomTarget(): Double? = programmedZoomTarget.also {
+        if (it != null) pendingZoomEndpoint = null
+    }
+
     fun start(program: GimbalProgram, live: GimbalWaypoint): Boolean {
         cancel()
         this.program = program
+        zoomPath = GimbalZoomPath(program)
+        zoomElapsedOffset = 0.0
         verificationInterruptedByPause = false
         failure = null
         lastReadout = null
@@ -399,6 +418,7 @@ class GimbalMoveEngine {
         checkpoints.clear()
         observations.clear()
         isPaused = true
+        pendingZoomEndpoint = null
         lastReadout = snapshot(live)
         return true
     }
@@ -415,6 +435,9 @@ class GimbalMoveEngine {
             resumeNeedsCommand = true
             return true
         }
+        zoomPath = zoomPath.remaining(if (phase == "VERIFY") zoomPath.duration else zoomElapsedOffset + elapsed,
+            live.zoom, quantized = curve == null || phase == "VERIFY")
+        zoomElapsedOffset = 0.0
         val activeCurve = curve
         if (activeCurve != null && phase == "RUN") {
             curve = activeCurve.remaining(elapsed, live)
@@ -442,6 +465,7 @@ class GimbalMoveEngine {
         running = false
         isPaused = false
         resumeNeedsCommand = false
+        pendingZoomEndpoint = null
         needsCommand = false
         checkpoints.clear()
         observations.clear()
@@ -525,11 +549,13 @@ class GimbalMoveEngine {
             if (elapsed + 1e-9 < leg.duration) return if (streamed) tickLinearLeg(live) else output(live)
             if (streamed && nextCurveCommand < leg.duration) return stop(live, "Move interrupted — waypoint dispatch was late")
             if (elapsed - leg.duration > 0.02 + 1e-9) return stop(live, "Move interrupted — waypoint dispatch was late")
+            if (program.changesZoom) pendingZoomEndpoint = leg.to.zoom
             if (index + 1 == legs.size && program.loop) {
                 return turnAround(live, clock - (elapsed - leg.duration))
             }
             checkpoints += Checkpoint(clock - (elapsed - leg.duration), leg, legs.getOrNull(index + 1), clock)
             if (index + 1 < legs.size) {
+                zoomElapsedOffset += leg.duration
                 index += 1
                 elapsed = 0.0
                 return startExactLeg(live)
@@ -567,6 +593,8 @@ class GimbalMoveEngine {
             else -> listOf(Leg("B→A", b, a, program.durationAB))
         }
         curve = GimbalProgramCurve.create(pass)
+        zoomPath = GimbalZoomPath(pass)
+        zoomElapsedOffset = 0.0
         index = 0
         nextCurveCommand = 0.0
         checkpoints += Checkpoint(boundary, incoming, legs[0], clock, streamed, isTurnaround = true)
@@ -618,10 +646,12 @@ class GimbalMoveEngine {
     }
 
     private fun tickCurve(curve: GimbalProgramCurve, live: GimbalWaypoint): Output {
-        index = if (elapsed >= curve.durationAB) 1 else 0
+        if (program.changesZoom && index == 0 && elapsed + 1e-9 >= curve.durationAB) pendingZoomEndpoint = curve.b.zoom
+        index = if (elapsed + 1e-9 >= curve.durationAB) 1 else 0
         if (elapsed + 1e-9 >= curve.duration) {
             if (nextCurveCommand < curve.duration) return stop(live, "Move interrupted — waypoint dispatch was late")
             if (elapsed - curve.duration > 0.02 + 1e-9) return stop(live, "Move interrupted — waypoint dispatch was late")
+            if (program.changesZoom) pendingZoomEndpoint = curve.c.zoom
             if (program.loop) return turnAround(live, clock - (elapsed - curve.duration))
             checkpoints += Checkpoint(clock - (elapsed - curve.duration), legs[1], null, clock)
             phase = "VERIFY"

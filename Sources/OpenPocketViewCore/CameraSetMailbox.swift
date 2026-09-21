@@ -82,6 +82,13 @@ public struct CameraSetMailbox: Equatable, Sendable {
         lastLaunch.removeAll()
     }
 
+    /// Retire one control when a programmed take takes ownership of it.
+    public mutating func cancel(_ key: UInt16) {
+        supersedeOpen(key)
+        pending[key] = nil
+        lastLaunch[key] = nil
+    }
+
     public func hasOpen(_ key: UInt16) -> Bool { open[key] != nil }
 
     public func isOpenSeq(_ key: UInt16, seq: UInt16) -> Bool {

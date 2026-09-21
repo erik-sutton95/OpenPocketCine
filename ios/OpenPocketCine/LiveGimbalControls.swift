@@ -344,6 +344,16 @@ private struct LiveGimbalMoveEditor: View {
             .accessibilityIdentifier("motion.editor.scroll")
             .accessibilityValue(canScrollFurther ? "More settings below" : "End of settings")
 
+            if let reason = model.session.programmedZoomUnavailableReason {
+                Text(reason)
+                    .font(LiveType.ui(size: 11, weight: .regular))
+                    .foregroundStyle(LiveDesign.muted)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 6)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("motion.zoomUnavailable")
+            }
+
             actions
                 .padding(.horizontal, 14)
                 .padding(.top, 10)

@@ -33,12 +33,12 @@ import Testing
             #expect(started)
         }
 
-        mutating func tick(miss: Double = 0) -> GimbalMoveEngine.Output? {
-            now += 0.01
+        mutating func tick(miss: Double = 0, dt: Double = 0.01) -> GimbalMoveEngine.Output? {
+            now += dt
             live = GimbalMoveEngine.lerp(from, target, u: (now - sentAt) / duration)
             live.yawDeg += miss
             let before = engine.readout(live: live)?.label
-            let out = engine.tick(dt: 0.01, live: live)
+            let out = engine.tick(dt: dt, live: live)
             let after = engine.readout(live: live)
             if (before == "A→B" && after?.label == "B→A")
                 || (before == "B→C" && after?.label == "C→B")
@@ -126,6 +126,69 @@ import Testing
             #expect(GimbalMoveEngine.angularDistance(
                 forwardCurve.position(at: time), reverseCurve.position(at: 5 - time)) < 1e-8)
         }
+    }
+
+    @Test(arguments: [0.0, 1.0])
+    func zoomVisitsSavedAmountsOnEveryPassEvenWithRoundedB(smoothness: Double) {
+        var a = point(0)
+        var b = point(30)
+        var c = point(30, 20)
+        a.zoom = 1
+        b.zoom = 3
+        c.zoom = 2
+        var camera = Camera(GimbalProgram(a: a, b: b, c: c,
+            durationAB: 3, durationBC: 2, smoothness: smoothness, loop: true))
+        var visited: Set<Double> = []
+        for _ in 0..<2200 where camera.engine.running && camera.turnarounds < 3 {
+            _ = camera.tick()
+            guard let zoom = camera.engine.consumeProgrammedZoomTarget(),
+                let row = camera.engine.readout(live: camera.live), row.phase == "RUN" else { continue }
+            let route: (Double, Double, Double)
+            switch row.label {
+            case "A→B": route = (1, 3, 3)
+            case "B→C": route = (3, 2, 2)
+            case "C→B": route = (2, 3, 2)
+            case "B→A": route = (3, 1, 3)
+            default: Issue.record("Unexpected zoom leg"); continue
+            }
+            let fraction = min(1, (row.elapsed + 0.05) / route.2)
+            let expected = route.0 + (route.1 - route.0) * fraction
+            #expect(abs(zoom - expected) < 1e-8 || (row.elapsed <= 0.02 && abs(zoom - route.0) < 1e-8),
+                "\(row.label) t=\(row.elapsed) zoom=\(zoom) expected=\(expected)")
+            if zoom == zoom.rounded() { visited.insert(zoom) }
+        }
+        #expect(camera.engine.failure == nil)
+        #expect(camera.turnarounds == 3)
+        #expect(visited == [1, 2, 3])
+        let paused = camera.engine.pause(live: camera.live)
+        #expect(paused)
+        #expect(camera.engine.programmedZoomTarget == nil)
+        camera.live.zoom = 2.4
+        let resumedMove = camera.engine.resume(live: camera.live)
+        #expect(resumedMove)
+        let resumed = camera.engine.programmedZoomTarget!
+        #expect(resumed > 2.4 && resumed < 2.5, "Resume anchors zoom at the measured amount")
+        camera.engine.cancel()
+        #expect(camera.engine.programmedZoomTarget == nil)
+    }
+
+    @Test func acceptedLateBoundaryCannotSkipTheZoomEndpoint() {
+        var b = point(30)
+        b.zoom = 3
+        var camera = Camera(GimbalProgram(a: point(0), b: b, durationAB: 1, loop: true))
+        for _ in 0..<400 {
+            _ = camera.tick()
+            _ = camera.engine.consumeProgrammedZoomTarget()
+            if let row = camera.engine.readout(live: camera.live), row.phase == "RUN", row.elapsed >= 0.94 - 1e-9 { break }
+        }
+        #expect(camera.engine.programmedZoomTarget! < 3)
+        _ = camera.tick(dt: 0.065)
+        #expect(camera.turnarounds == 1)
+        #expect(camera.engine.failure == nil)
+        #expect(camera.engine.programmedZoomTarget == 3)
+        let endpoint = camera.engine.consumeProgrammedZoomTarget()
+        #expect(endpoint == 3)
+        #expect(camera.engine.programmedZoomTarget! < 3)
     }
 
     @Test func loopDefaultsOffAndFinishesOnce() {
