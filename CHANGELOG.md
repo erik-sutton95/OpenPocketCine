@@ -19,8 +19,10 @@ separate iOS and Android lists.
 
 - Experimental iOS **Gimbal → Track**: phone-side person/object tracking with
   Gentle/Balanced/Responsive presets, sensitivity, Smoothness, dead band, Lerp,
-  framing, speed and acceleration/jerk controls. Manual control and subject loss
-  stop it. Single-camera Pocket sessions only; Android and physical qualification
+  framing, speed and acceleration/jerk controls. Faces reuse continuous face
+  detection with bounded recovery through brief misses. Delayed attitude no longer
+  repeatedly restarts the easing ramp, and rate damping reduces visual-loop overshoot.
+  Manual control and extended subject loss stop it. Single-camera Pocket sessions only; Android and physical qualification
   are deferred. Settings last for the session.
 
 - **HDR display** (Operator Setup → Display): optional outdoor boost that uses

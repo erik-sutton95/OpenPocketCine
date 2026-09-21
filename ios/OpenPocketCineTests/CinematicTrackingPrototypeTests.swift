@@ -84,6 +84,109 @@ final class CinematicTrackingPrototypeTests: XCTestCase {
         XCTAssertEqual(trackingFrames, 0)
     }
 
+    func testSingleWeakObservationDoesNotDiscardTheSelectedSubject() async throws {
+        let session = try await readySession()
+        defer { session.disconnect() }
+        let tracker = session.cinematicTracking
+        tracker.select()
+        let now = ProcessInfo.processInfo.systemUptime
+        tracker.consider(ScopeTestBuffers.makeEdgeBuffer(), measuredAt: now - 0.2)
+        let box = TrackingBox(x: 0.3, y: 0.3, width: 0.2, height: 0.2)
+        tracker.start(box)
+        for index in 0..<3 {
+            tracker.adopt(
+                .init(box: box, confidence: 0.95, milliseconds: 5),
+                measuredAt: now - 0.15 + Double(index) * 0.05)
+        }
+        XCTAssertEqual(tracker.state, .tracking)
+        tracker.adopt(
+            .init(box: box, confidence: tracker.settings.confidence - 0.1, milliseconds: 5),
+            measuredAt: now)
+        XCTAssertTrue(tracker.isEngaged, "One blurred frame must not require reselection")
+        XCTAssertNotNil(tracker.box)
+    }
+
+    func testFaceLockPausesStaleMotionAndRecoversOnlyTheNearbySubject() async throws {
+        let session = try await readySession()
+        defer { session.disconnect() }
+        let tracker = session.cinematicTracking
+        tracker.select()
+        let start = ProcessInfo.processInfo.systemUptime
+        tracker.consider(ScopeTestBuffers.makeEdgeBuffer(), measuredAt: start - 0.1)
+        let selected = FaceHit(box: TrackingBox(x: 0.3, y: 0.3, width: 0.15, height: 0.2))
+        let stranger = FaceHit(box: TrackingBox(x: 0.7, y: 0.3, width: 0.2, height: 0.3))
+        tracker.start(selected.box, preferFace: true)
+        let generation = tracker.frameGeneration
+        XCTAssertEqual(tracker.subjectKind, .face)
+        for index in 0..<3 {
+            let time = start + Double(index) * 0.04
+            tracker.considerFaces(
+                [selected, stranger], measuredAt: time, generation: generation, now: time)
+        }
+        XCTAssertEqual(tracker.state, .tracking)
+        XCTAssertTrue(tracker.maintainObservation(now: start + 0.2))
+        XCTAssertFalse(tracker.maintainObservation(now: start + 0.4))
+        XCTAssertEqual(tracker.state, .holding)
+        XCTAssertTrue(tracker.isEngaged)
+        tracker.considerFaces(
+            [stranger], measuredAt: start + 0.5, generation: generation, now: start + 0.5)
+        XCTAssertEqual(tracker.state, .holding)
+        tracker.considerFaces(
+            [selected], measuredAt: start + 0.52, generation: generation, now: start + 0.52)
+        tracker.considerFaces(
+            [], measuredAt: start + 0.56, generation: generation, now: start + 0.56)
+        for index in 0..<3 {
+            let time = start + 0.6 + Double(index) * 0.04
+            tracker.considerFaces(
+                [selected, stranger], measuredAt: time, generation: generation, now: time)
+            if index < 2 {
+                XCTAssertEqual(tracker.state, .holding, "Recovery requires consecutive matches")
+            }
+        }
+        XCTAssertEqual(tracker.state, .tracking)
+        XCTAssertTrue(tracker.maintainObservation(now: start + 0.75))
+        XCTAssertFalse(tracker.maintainObservation(now: start + 1))
+        tracker.considerFaces(
+            [selected], measuredAt: start + 1.4, generation: generation, now: start + 1.4)
+        tracker.considerFaces(
+            [], measuredAt: start + 1.44, generation: generation, now: start + 1.44)
+        tracker.considerFaces(
+            [selected], measuredAt: start + 1.5, generation: generation, now: start + 1.5)
+        XCTAssertFalse(tracker.maintainObservation(now: start + 1.8))
+        XCTAssertEqual(
+            tracker.state, .stopped, "Tentative matches must not extend the recovery deadline")
+        tracker.considerFaces(
+            [selected], measuredAt: start + 1.81, generation: generation, now: start + 1.81)
+        XCTAssertEqual(tracker.state, .stopped, "An expired lock cannot restart from a late result")
+    }
+
+    func testFreshFaceSelectionUsesDetectionAndRejectsStaleOwnerAndFrame() async throws {
+        let session = try await readySession()
+        defer { session.disconnect() }
+        let tracker = session.cinematicTracking
+        tracker.select()
+        let now = ProcessInfo.processInfo.systemUptime
+        tracker.consider(ScopeTestBuffers.makeEdgeBuffer(), measuredAt: now)
+        let face = FaceHit(box: TrackingBox(x: 0.3, y: 0.2, width: 0.1, height: 0.15))
+        let previousGeneration = tracker.frameGeneration
+        tracker.considerFaces([face], measuredAt: now, generation: previousGeneration, now: now)
+        tracker.start(TrackingBox(x: 0.2, y: 0.1, width: 0.3, height: 0.7))
+        XCTAssertEqual(
+            tracker.subjectKind, .face, "A drag around one person should use face detection")
+        XCTAssertEqual(tracker.box, face.box)
+        for index in 1...4 {
+            let time = now + Double(index) * 0.04
+            tracker.considerFaces(
+                [face], measuredAt: time, generation: previousGeneration, now: time)
+            tracker.considerFaces(
+                [face], measuredAt: time, generation: tracker.frameGeneration, now: time + 0.4)
+        }
+        XCTAssertEqual(tracker.state, .acquiring)
+        tracker.stop()
+        tracker.considerFaces([face], measuredAt: now, generation: previousGeneration, now: now)
+        XCTAssertFalse(tracker.isEngaged)
+    }
+
     func testVisionTracksSyntheticObjectWithoutChangingCoordinateOrigin() async throws {
         let worker = CinematicVisionWorker()
         defer { worker.retire() }

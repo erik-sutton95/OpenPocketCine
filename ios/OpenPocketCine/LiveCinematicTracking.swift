@@ -118,7 +118,7 @@ struct LiveCinematicTrackingControls: View {
                         "Minimum confidence", value: $tracker.settings.confidence,
                         range: 0.3...0.95,
                         readout: percent(tracker.settings.confidence),
-                        help: "Stop when the tracker is less certain. Higher values stop sooner.")
+                        help: "Ignore less certain observations. Brief misses keep the selection.")
                     Text(
                         "Confidence \(percent(tracker.confidence)) · Analysis \(Int(tracker.inferenceMilliseconds)) ms"
                     )
@@ -128,7 +128,7 @@ struct LiveCinematicTrackingControls: View {
             .font(MonitorTheme.font(11))
 
             Text(
-                "Manual gimbal control stops tracking. If the subject is lost, select it again. Settings last for this session."
+                "Tap a face to keep following it through brief misses. Manual control stops tracking. After a longer loss, select again. Settings last for this session."
             )
             .font(MonitorTheme.font(10)).foregroundStyle(MonitorTheme.muted)
             .fixedSize(horizontal: false, vertical: true)
@@ -200,7 +200,11 @@ struct LiveCinematicTrackingOverlay: View {
                     LiveTrackingChrome.bracketPath(
                         in: CGSize(width: feed.width * box.width, height: feed.height * box.height)
                     )
-                    .stroke(MonitorTheme.accent, lineWidth: 2)
+                    .stroke(
+                        tracker.state == .holding ? MonitorTheme.muted : MonitorTheme.accent,
+                        style: StrokeStyle(
+                            lineWidth: 2, dash: tracker.state == .holding ? [5, 4] : [])
+                    )
                     .frame(width: feed.width * box.width, height: feed.height * box.height)
                     .position(x: feed.width * x, y: feed.height * box.centerY)
                     .allowsHitTesting(false)

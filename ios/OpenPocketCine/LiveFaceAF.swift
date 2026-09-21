@@ -11,54 +11,87 @@ final class LiveFaceDetector: @unchecked Sendable {
     static let minimumConfidence: Float = 0.70
 
     private let queue = DispatchQueue(label: "opv.face-af", qos: .userInitiated)
+    private let lock = NSLock()
     private var busy = false
-    private var lastRun = Date.distantPast
+    private var lastRun = -Double.infinity
     private var pending: Pending?
+    private let detectFrame: @Sendable (CVPixelBuffer, Bool, Float) -> FaceDetectResult
+
+    init(
+        detectFrame: @escaping @Sendable (CVPixelBuffer, Bool, Float) -> FaceDetectResult = {
+            detect(in: $0, rectanglesOnly: $1, minimumConfidence: $2)
+        }
+    ) {
+        self.detectFrame = detectFrame
+    }
 
     private struct Pending {
         let buffer: CVPixelBuffer
         let rectanglesOnly: Bool
+        let minimumConfidence: Float
+        let interval: TimeInterval
         let completion: @MainActor (FaceDetectResult) -> Void
     }
 
     func consider(
         _ buffer: CVPixelBuffer,
         rectanglesOnly: Bool = false,
+        minimumConfidence: Float = LiveFaceDetector.minimumConfidence,
+        interval: TimeInterval = LiveFaceDetector.interval,
         completion: @escaping @MainActor (FaceDetectResult) -> Void
     ) {
-        queue.async { [weak self] in
-            guard let self else { return }
-            // Keep the newest buffer while a detect is in flight so a gimbal
-            // pan is not scored against a frame that is already 200 ms old.
-            self.pending = Pending(
-                buffer: buffer, rectanglesOnly: rectanglesOnly, completion: completion)
-            self.pump()
-        }
+        // Replace the waiting frame at admission, not behind synchronous Vision
+        // on its worker queue. There is one running job and one newest frame.
+        lock.lock()
+        pending = Pending(
+            buffer: buffer, rectanglesOnly: rectanglesOnly,
+            minimumConfidence: minimumConfidence, interval: max(Self.interval, interval),
+            completion: completion)
+        let start = !busy
+        busy = true
+        lock.unlock()
+        if start { queue.async { [self] in pump() } }
     }
 
     private func pump() {
-        guard !busy, let next = pending else { return }
-        let now = Date()
-        guard now.timeIntervalSince(lastRun) >= Self.interval else { return }
+        lock.lock()
+        guard let next = pending else {
+            busy = false
+            lock.unlock()
+            return
+        }
+        let now = ProcessInfo.processInfo.systemUptime
+        let wait = next.interval - (now - lastRun)
+        if wait > 0 {
+            lock.unlock()
+            queue.asyncAfter(deadline: .now() + wait) { [self] in pump() }
+            return
+        }
         pending = nil
-        busy = true
         lastRun = now
-        let result = Self.detect(in: next.buffer, rectanglesOnly: next.rectanglesOnly)
-        busy = false
-        DispatchQueue.main.async { next.completion(result) }
-        pump()
+        lock.unlock()
+        let result = detectFrame(next.buffer, next.rectanglesOnly, next.minimumConfidence)
+        DispatchQueue.main.async { [self] in
+            next.completion(result)
+            // Delivery is part of the occupied slot, so a busy UI cannot grow a
+            // queue of increasingly stale results either.
+            queue.async { [self] in pump() }
+        }
     }
 
     static func detect(
-        in buffer: CVPixelBuffer, rectanglesOnly: Bool = false
+        in buffer: CVPixelBuffer, rectanglesOnly: Bool = false,
+        minimumConfidence: Float = LiveFaceDetector.minimumConfidence
     ) -> FaceDetectResult {
-        let faces = detectFaces(in: buffer, rectanglesOnly: rectanglesOnly)
+        let faces = detectFaces(
+            in: buffer, rectanglesOnly: rectanglesOnly, minimumConfidence: minimumConfidence)
         return FaceDetectResult(
             faces: Array(faces.sorted { score($0) > score($1) }.prefix(SceneFacePolicy.maxFaces)))
     }
 
     static func detectFaces(
-        in buffer: CVPixelBuffer, rectanglesOnly: Bool = false
+        in buffer: CVPixelBuffer, rectanglesOnly: Bool = false,
+        minimumConfidence: Float = LiveFaceDetector.minimumConfidence
     ) -> [FaceHit] {
         let request: VNImageBasedRequest =
             rectanglesOnly ? VNDetectFaceRectanglesRequest() : VNDetectFaceLandmarksRequest()

@@ -81,7 +81,9 @@ criterion remains the physical joystick-hold feel, not an ACK or matching label.
 **Gimbal → Track** opens the experimental phone-side person/object tracker.
 Select a subject in the picture, then tune sensitivity, Smoothness, dead band,
 Lerp, speed and framing while it runs. Fine tuning adds acceleration, jerk and
-confidence limits. Manual gimbal control or subject loss stops it. Settings are
+confidence limits. Face selections use the existing local face detector throughout
+the take. Brief detection misses retain selection with a bounded stationary
+hold; extended loss, ambiguous crossings or manual gimbal control stop it. Settings are
 session-only; camera-side ActiveTrack remains the normal feed-gesture behavior
 outside phone selection. Android and physical qualification are deferred.
 See [Cinematic Tracking](cinematic-tracking.md) for implementation and testing.

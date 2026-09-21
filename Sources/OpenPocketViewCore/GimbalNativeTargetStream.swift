@@ -19,7 +19,8 @@ public struct GimbalNativeTargetStream: Sendable {
     @discardableResult
     public mutating func submit(_ frame: Duml.Frame, token: UInt64, now: TimeInterval) -> Bool {
         guard self.token == token, now.isFinite,
-            frame.cmdSet == 4, frame.cmdId == 0x14, frame.payload.count == 8 else { return false }
+            frame.cmdSet == 4, frame.cmdId == 0x14, frame.payload.count == 8
+        else { return false }
         submittedAt = now
         guard frame.payload != lastPayload else { return true }
         lastPayload = frame.payload
@@ -40,6 +41,15 @@ public struct GimbalNativeTargetStream: Sendable {
         pending = nil
         emittedAt = now
         return frame
+    }
+
+    /// Drop pending movement while retaining ownership for a short subject hold.
+    @discardableResult
+    public mutating func suspend(token: UInt64) -> Bool {
+        guard self.token == token else { return false }
+        pending = nil
+        lastPayload = nil
+        return true
     }
 
     /// A supplied stale token cannot cancel the current owner.

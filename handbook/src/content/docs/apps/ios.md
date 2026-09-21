@@ -427,7 +427,8 @@ app asks if you have not previously chosen Enable or Not now.
 **Gimbal → Track** adds experimental tracking that runs on the iPhone. With a
 Pocket connected and live picture running, tap **Select subject**, then drag a
 box around a person or object. You can also tap a visible face. During selection,
-a drag starts immediately; the ordinary hold-and-drag gesture still selects
+a drag starts immediately. A box containing one detected face automatically
+follows that face. The ordinary hold-and-drag gesture still selects
 camera ActiveTrack outside this mode.
 
 Start with **Gentle**, or compare **Balanced** and **Responsive**. **Sensitivity**
@@ -442,13 +443,20 @@ when selecting**. Pan and tilt can be enabled separately. Return to the Track
 tab to tune while following. The live message has a **Stop** button. Values last
 for this session, and AirPods head tracking is switched off when selecting.
 
-Subject loss, manual gimbal control, zoom or picture-format changes, Settings,
-Media, interface lock and leaving the app stop tracking. Select the subject again
-to resume. It does not search for missing subjects or recognize people by identity.
+Faces use the same local detector as the existing face overlay throughout the
+take. A brief missed detection keeps the selection. After 250 ms without a valid
+observation, dashed brackets and **Holding** indicate that camera movement has
+stopped. Three consecutive nearby matches can resume within one second of the
+last good observation. A longer loss or an ambiguous face crossing requires
+reselection. It does not recognize people by identity.
+
+Manual gimbal control, zoom or picture-format changes, Settings, Media, interface
+lock and leaving the app stop tracking. Select the subject again to resume.
 A tight, clearly visible subject works better than a box containing background
 or several people. More smoothing and Lerp also mean more lag.
 
-This first version uses Apple's local Vision object tracker and needs no model
+Objects use Apple's local Vision region tracker; faces use continuous detection.
+The prototype needs no model
 download or cloud connection. It is iOS-only, single-camera and **not yet
-physically qualified** for tracking accuracy, cinematic motion, or sustained
+physically qualified** for revised tracking accuracy, cinematic motion, or sustained
 feed/thermal performance. Android, Nano and borrowed Multiview are excluded.

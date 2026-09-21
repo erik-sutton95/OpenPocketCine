@@ -767,6 +767,19 @@ final class DatalinkDriver {
         }
     }
 
+    /// Brake without commanding an old attitude, and keep the current owner.
+    func suspendNativeTargets(token: UInt64) -> Bool {
+        var suspended = false
+        onUDPQueueSync {
+            guard !closed, case .ready = conn?.state,
+                wire.withLock({ $0.nativeTargetStream.suspend(token: token) })
+            else { return }
+            _ = sendDumlOnQueue(Commands.gimbalTimedStop(), trackCommand: false)
+            suspended = true
+        }
+        return suspended
+    }
+
     /// Latest `0x04/0x01` axes. The ACK pump emits them on the UDP queue.
     func noteGimbalStick(axis0: UInt16, axis1: UInt16) {
         if closed { return }

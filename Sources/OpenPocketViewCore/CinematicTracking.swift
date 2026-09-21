@@ -11,7 +11,7 @@ public struct CinematicTrackingSettings: Equatable, Sendable {
     public var maxSpeed = 24.0
     public var maxAcceleration = 45.0
     public var maxJerk = 180.0
-    public var confidence = 0.65
+    public var confidence = 0.5
     public var framingX = 0.5
     public var framingY = 0.5
     public var panEnabled = true
@@ -96,7 +96,9 @@ public struct CinematicTrackingController: Sendable {
 
     /// A confidence score is not identity proof. Refuse a jump instead of chasing it.
     public static func continuous(from old: TrackingBox, to new: TrackingBox, dt: Double) -> Bool {
-        guard usable(old), usable(new), dt > 0, dt <= maxObservationAge else { return false }
+        guard usable(old), usable(new), dt > 0, dt <= CinematicFaceLock.recoveryInterval else {
+            return false
+        }
         let distance = hypot(old.centerX - new.centerX, old.centerY - new.centerY)
         let ratio = new.area / old.area
         return distance <= min(0.2, 0.045 + dt * 1.2) && (0.45...2.2).contains(ratio)
@@ -164,8 +166,15 @@ public struct CinematicTrackingController: Sendable {
             min(max(wantedYaw, pose.yawDeg - lead), pose.yawDeg + lead))
         let pitch = HeadTrack.Reach.clampTilt(
             min(max(wantedPitch, pose.pitchDeg - lead), pose.pitchDeg + lead))
-        if yaw != wantedYaw { pan = Axis() }
-        if pitch != wantedPitch { tilt = Axis() }
+        // A feedback lead clamp is normal with delayed/quantized telemetry.
+        // Preserve the speed spring there: resetting it creates a repeated
+        // accelerate/brake cycle. Only a mechanical reach limit cancels an axis.
+        if yaw == HeadTrack.Reach.panMinDeg || yaw == HeadTrack.Reach.panMaxDeg {
+            pan = Axis()
+        }
+        if pitch == HeadTrack.Reach.tiltMinDeg || pitch == HeadTrack.Reach.tiltMaxDeg {
+            tilt = Axis()
+        }
         commandedYaw = yaw
         commandedPitch = pitch
         panSpeed = pan.rate
@@ -197,12 +206,17 @@ public struct CinematicTrackingController: Sendable {
                 self = Self()
                 return 0
             }
+            let omega = 4.6 / (0.18 + 2.2 * settings.smoothness * settings.smoothness)
+            // Rate feedback brakes before the delayed visual error crosses the
+            // framing point. Without it, stacking interpolation and a speed
+            // spring can make the complete camera/image loop underdamped.
+            let dampingTime = 0.16 + 2 / omega + settings.lerp / log(2)
             let wanted = min(
-                max(error * settings.sensitivity, -settings.maxSpeed), settings.maxSpeed)
+                max((error - rate * dampingTime) * settings.sensitivity, -settings.maxSpeed),
+                settings.maxSpeed)
             // Actual elapsed time makes Lerp independent of frame/control rate.
             let alpha = settings.lerp == 0 ? 1 : -expm1(-log(2) * dt / settings.lerp)
             interpolated += (wanted - interpolated) * alpha
-            let omega = 4.6 / (0.18 + 2.2 * settings.smoothness * settings.smoothness)
             // Integrate a critically damped rate spring in bounded substeps.
             let steps = max(1, Int(ceil(dt / 0.005)))
             let h = dt / Double(steps)

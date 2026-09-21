@@ -1062,8 +1062,14 @@ is physically evaluated. The Foundation-only controller is portable, but no
 Android Vision adapter or JNI entry point is implied.
 
 Off by default and session-only. Available on single-camera Pocket sessions;
-borrowed Multiview and Nano are excluded. Stop, subject loss, manual control,
-inactive scenes and navigation end driving. No automatic subject reacquisition.
+borrowed Multiview and Nano are excluded. Stop, extended subject loss, manual
+control, inactive scenes and navigation end driving. Faces now share the existing
+detector continuously. Brief misses retain selection, stop motion after 250 ms,
+and allow three consecutive nearby matches within a fixed one-second recovery
+window. Ambiguous face crossings require reselection.
 See the [prototype contract and physical review](cinematic-tracking.md).
-Physical iPhone tracking quality, direction/mirroring, stop/takeover and sustained
-feed/thermal qualification remain pending for the operator's review.
+The first physical review reported bobbing and rapid subject loss. Follow-up
+regressions cover ramp resets under delayed attitude, damping with delayed video,
+single-frame misses and bounded face recovery. Physical iPhone qualification of
+the revised motion, direction/mirroring, stop/takeover and sustained feed/thermal
+budget remains pending for the operator's review.

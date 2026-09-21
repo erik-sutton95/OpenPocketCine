@@ -121,6 +121,61 @@ import Testing
         }
     }
 
+    @Test func boundedLeadDoesNotRepeatedlyRestartTheMotionRamp() throws {
+        var controller = CinematicTrackingController()
+        let settings = CinematicTrackingSettings.preset(.gentle)
+        var previousSpeed = 0.0
+        var largestDrop = 0.0
+        // Slow/quantized attitude feedback must bound the command without
+        // continually throwing away the easing state and starting from rest.
+        for tick in 0..<150 {
+            let now = Double(tick) * 0.04
+            controller.observe(box: box(x: 0.8), measuredAt: now, now: now)
+            let result = controller.target(
+                pose: pose, now: now, settings: settings, pictureAspect: 1.77, invertPan: false)
+            _ = try #require(result)
+            largestDrop = max(largestDrop, previousSpeed - controller.panSpeed)
+            previousSpeed = controller.panSpeed
+        }
+        #expect(largestDrop <= settings.maxAcceleration * 0.04 + 1e-8)
+    }
+
+    @Test func delayedVideoAndQuantizedAttitudeSettleWithoutRepeatedReversals() throws {
+        for preset in CinematicTrackingSettings.Preset.allCases {
+            var controller = CinematicTrackingController()
+            let settings = CinematicTrackingSettings.preset(preset)
+            var cameraYaw = 0.0
+            var targetYaw = 0.0
+            var history = [Double]()
+            var furthestYaw = 0.0
+            // 100 ms motor response, 80 ms attitude delay and 160 ms video
+            // delay. Exercise the closed loop rather than perfect feedback.
+            for frame in 0..<2_000 {
+                let now = Double(frame) * 0.01
+                history.append(cameraYaw)
+                if frame.isMultiple(of: 4) {
+                    let picturedYaw = history[max(0, frame - 16)]
+                    let x = 0.5 + tan((18 - picturedYaw) * .pi / 180) / (2 * tan(40 * .pi / 180))
+                    controller.observe(box: box(x: x), measuredAt: now, now: now)
+                    let yaw = (history[max(0, frame - 8)] * 10).rounded() / 10
+                    let feedback = GimbalWaypoint(
+                        yawDeg: yaw, pitchDeg: 0, zoom: 1, nativePitchDeg: 170)
+                    let result = controller.target(
+                        pose: feedback, now: now, settings: settings, pictureAspect: 1.77,
+                        invertPan: false)
+                    targetYaw = (try #require(result).yawDeg * 10).rounded() / 10
+                }
+                cameraYaw += (targetYaw - cameraYaw) * (1 - exp(-0.01 / 0.1))
+                furthestYaw = max(furthestYaw, cameraYaw)
+            }
+            let quietAngle = atan(2 * settings.deadBand * tan(40 * .pi / 180)) * 180 / .pi
+            #expect(
+                furthestYaw < 18 + quietAngle,
+                "\(preset): must not chase back across the quiet zone")
+            #expect(abs(cameraYaw - history[1_600]) < 0.5, "\(preset): should settle")
+        }
+    }
+
     @Test func staleMeasurementsAndSchedulerGapsResetMotion() throws {
         var controller = CinematicTrackingController()
         #expect({ !controller.observe(box: box(), measuredAt: 1, now: 1.3) }())

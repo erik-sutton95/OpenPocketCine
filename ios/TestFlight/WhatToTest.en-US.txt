@@ -6,10 +6,10 @@ New and changed
 Fixes
 
 - Live view keeps its last picture during recovery. Connection setup waits for the camera command window, and repeated controls cannot delay stalled-picture recovery indefinitely.
-- Media return starts live view once. Settings, resizing and Multiview retain the current picture host.
+- Phone tracking continuously detects the selected face, tolerates brief misses and avoids repeated easing restarts with delayed gimbal feedback.
 
 What to test
 
 - Open Gimbal → Track, select a person or object, and compare Gentle, Balanced and Responsive. Test center/thirds framing, tiny movements, direction reversals and front/selfie views.
-- Occlude the subject, zoom, use the stick, open Settings/Media and leave the app. Confirm tracking stops and needs a new selection. Camera tracking and AirPods must not drive alongside it.
+- Tap a face and briefly turn away: check recovery and smooth motion. Cover it for over a second or cross two faces: select again. Manual controls, zoom and leaving the app must stop tracking.
 - Run tracking for five minutes with LUT/WAVE. Compare feed smoothness and phone temperature with tracking off. Share diagnostics and the time of any freeze or unexpected movement.

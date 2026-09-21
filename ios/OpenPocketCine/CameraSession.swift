@@ -307,7 +307,8 @@ final class CameraSession {
 
     func beginNativeSubjectTrack() -> UInt64? {
         guard canStartCinematicTracking,
-            cinematicTracking.state == .acquiring || cinematicTracking.state == .tracking,
+            cinematicTracking.state == .acquiring || cinematicTracking.state == .tracking
+                || cinematicTracking.state == .holding,
             let datalink
         else {
             return nil
@@ -339,6 +340,11 @@ final class CameraSession {
         guard nativeSubjectToken == token else { return }
         nativeSubjectToken = nil
         datalink?.endNativeTargets(token: token)
+    }
+
+    func suspendNativeSubjectTrack(token: UInt64) -> Bool {
+        guard canContinueCinematicTracking, nativeSubjectToken == token else { return false }
+        return datalink?.suspendNativeTargets(token: token) == true
     }
 
     var overlayGimbalWaypoint: GimbalWaypoint? {
@@ -418,7 +424,7 @@ final class CameraSession {
     }
     /// Face-priority EV also needs Vision, including AF-S.
     var wantsFaceDetect: Bool {
-        wantsFaceAF || wantsFacePriorityMeter || cinematicTracking.state == .selecting
+        wantsFaceAF || wantsFacePriorityMeter || cinematicTracking.wantsFaceDetections
     }
     var wantsFacePriorityMeter: Bool {
         OperatorPrefs.facePriorityExposureEnabled && status.expoMode == .auto
@@ -580,7 +586,11 @@ final class CameraSession {
         self.decoder = sharedDecoder ?? HevcDecoder()
         cinematicTracking.attach(to: self)
         decoder.onTrackingFrame = { [weak self] buffer, measuredAt in
-            self?.cinematicTracking.consider(buffer, measuredAt: measuredAt)
+            guard let self else { return }
+            self.cinematicTracking.consider(buffer, measuredAt: measuredAt)
+            if self.cinematicTracking.wantsFaceDetections {
+                self.considerFaceAF(buffer, trackingMeasurement: measuredAt)
+            }
         }
         gimbalStickMapping = GimbalStickMapping()
         syncGimbalPose()
@@ -2946,7 +2956,7 @@ final class CameraSession {
             if let face = sceneFaces.filter({ $0.contains(x: normalized.x, y: normalized.y) })
                 .min(by: { $0.area < $1.area })
             {
-                cinematicTracking.start(face)
+                cinematicTracking.start(face, preferFace: true)
             } else {
                 controlNote = "Drag a box around the subject to track it"
             }
@@ -3273,15 +3283,36 @@ final class CameraSession {
             secondsSinceGimbal: lastGimbalStickAt.map { Date().timeIntervalSince($0) })
     }
 
-    private func considerFaceAF(_ buffer: CVPixelBuffer) {
+    private func considerFaceAF(_ buffer: CVPixelBuffer, trackingMeasurement: TimeInterval? = nil) {
         guard wantsFaceDetect else {
             clearFaceAF()
             return
         }
-        let moving = isFaceSceneMoving
+        // When following a face, the fresh decoder callback owns the shared
+        // request. The ordinary source callback also includes cached repaints.
+        if cinematicTracking.wantsFaceDetections && trackingMeasurement == nil { return }
+        let moving = isFaceSceneMoving || cinematicTracking.subjectKind == .face
+            && cinematicTracking.isEngaged
+        let generation = cinematicTracking.frameGeneration
+        let decoderGeneration = decoder.sourceFrameGeneration
+        let startedAt = ProcessInfo.processInfo.systemUptime
         tickFaceBoxes(sceneMoving: moving)
-        faceDetector.consider(buffer, rectanglesOnly: moving) { [weak self] result in
-            self?.applyDetectedFaces(result.faces)
+        let minimumConfidence = trackingMeasurement != nil && cinematicTracking.subjectKind == .face
+            ? min(LiveFaceDetector.minimumConfidence, Float(cinematicTracking.settings.confidence))
+            : LiveFaceDetector.minimumConfidence
+        let interval = trackingMeasurement != nil && ProcessInfo.processInfo.thermalState == .serious
+            ? 0.2 : LiveFaceDetector.interval
+        faceDetector.consider(
+            buffer, rectanglesOnly: moving, minimumConfidence: minimumConfidence, interval: interval
+        ) { [weak self] result in
+            guard let self, self.decoder.sourceFrameGeneration == decoderGeneration else { return }
+            self.applyDetectedFaces(
+                result.faces.filter { $0.confidence >= Double(LiveFaceDetector.minimumConfidence) })
+            if let trackingMeasurement {
+                self.cinematicTracking.considerFaces(
+                    result.faces, measuredAt: trackingMeasurement, generation: generation,
+                    milliseconds: (ProcessInfo.processInfo.systemUptime - startedAt) * 1_000)
+            }
         }
         tickFacePriority(from: buffer)
     }

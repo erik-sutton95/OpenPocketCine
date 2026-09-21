@@ -9,8 +9,10 @@ import Vision
 @MainActor @Observable
 final class CinematicTrackingPrototype {
     enum State: Equatable {
-        case idle, selecting, acquiring, tracking, stopped
+        case idle, selecting, acquiring, tracking, holding, stopped
     }
+
+    enum SubjectKind { case face, object }
 
     var settings = CinematicTrackingSettings()
     var keepComposition = false
@@ -20,8 +22,13 @@ final class CinematicTrackingPrototype {
     private(set) var box: TrackingBox?
     private(set) var confidence = 0.0
     private(set) var inferenceMilliseconds = 0.0
-    var isEngaged: Bool { state == .selecting || state == .acquiring || state == .tracking }
+    private(set) var subjectKind = SubjectKind.object
+    var isEngaged: Bool {
+        state == .selecting || state == .acquiring || state == .tracking || state == .holding
+    }
     var wantsFrames: Bool { isEngaged }
+    var wantsFaceDetections: Bool { isEngaged && (state == .selecting || subjectKind == .face) }
+    var frameGeneration: UInt64 { generation }
 
     @ObservationIgnored private weak var session: CameraSession?
     @ObservationIgnored private let worker = CinematicVisionWorker()
@@ -37,6 +44,10 @@ final class CinematicTrackingPrototype {
     @ObservationIgnored private var initialFrame: SourceFrame?
     @ObservationIgnored private var seed: TrackingBox?
     @ObservationIgnored private var lastObservation: (box: TrackingBox, time: TimeInterval)?
+    @ObservationIgnored private var selectionFaces: (hits: [FaceHit], time: TimeInterval)?
+    @ObservationIgnored private var faceLock: CinematicFaceLock?
+    @ObservationIgnored private var motionSuspended = false
+    @ObservationIgnored private var recoveryDeadline: TimeInterval?
     @ObservationIgnored private var acceptedFrames = 0
     // A cancelled job retains the occupied slot until its completion returns.
     @ObservationIgnored private var busy = false
@@ -44,6 +55,7 @@ final class CinematicTrackingPrototype {
     @ObservationIgnored private var lastHUD = -Double.infinity
     @ObservationIgnored private var lastResultAt: TimeInterval?
     @ObservationIgnored private var startedAt = 0.0
+    @ObservationIgnored private var lastTickAt: TimeInterval?
     @ObservationIgnored private var raster: CGSize?
     @ObservationIgnored private var startingZoom = 1.0
     @ObservationIgnored private var startingInvert = false
@@ -62,7 +74,7 @@ final class CinematicTrackingPrototype {
         message = "Drag a box around a person or object, or tap a face."
     }
 
-    func start(_ selection: TrackingBox) {
+    func start(_ selection: TrackingBox, preferFace: Bool = false) {
         guard state == .selecting, CinematicTrackingController.usable(selection),
             let session, session.canStartCinematicTracking
         else { return }
@@ -75,7 +87,17 @@ final class CinematicTrackingPrototype {
         }
         generation &+= 1
         let current = generation
+        let face = selectionFaces.flatMap { snapshot -> FaceHit? in
+            guard abs(selectedFrame.measuredAt - snapshot.time) <= 0.25 else { return nil }
+            return CinematicFaceLock.selectedFace(in: selection, faces: snapshot.hits)
+        }
+        subjectKind = preferFace || face != nil ? .face : .object
+        let selection = face?.box ?? selection
+        if subjectKind == .face {
+            faceLock = CinematicFaceLock(box: selection, measuredAt: selectedFrame.measuredAt)
+        }
         seed = selection
+        lastObservation = (selection, selectedFrame.measuredAt)
         if keepComposition {
             settings.framingX = min(max(selection.centerX, 0.1), 0.9)
             settings.framingY = min(max(selection.centerY, 0.1), 0.9)
@@ -122,7 +144,12 @@ final class CinematicTrackingPrototype {
         latestSelectionFrame = nil
         box = nil
         lastObservation = nil
+        selectionFaces = nil
+        faceLock = nil
+        motionSuspended = false
+        recoveryDeadline = nil
         lastResultAt = nil
+        lastTickAt = nil
         raster = nil
         acceptedFrames = 0
         confidence = 0
@@ -137,7 +164,9 @@ final class CinematicTrackingPrototype {
             latestSelectionFrame = SourceFrame(buffer: buffer, measuredAt: measuredAt)
             return
         }
-        guard state == .acquiring || state == .tracking, let seed, !busy else { return }
+        guard state == .acquiring || state == .tracking || state == .holding, let seed else {
+            return
+        }
         let source = initialFrame ?? SourceFrame(buffer: buffer, measuredAt: measuredAt)
         let buffer = source.buffer
         let measuredAt = source.measuredAt
@@ -161,6 +190,13 @@ final class CinematicTrackingPrototype {
             return
         }
         raster = size
+        // Faces share the existing AF detector's fresh source job. No second
+        // face request or generic patch tracker runs for the selected person.
+        if subjectKind == .face {
+            initialFrame = nil
+            return
+        }
+        guard !busy else { return }
         busy = true
         initialFrame = nil
         lastAdmission = now
@@ -168,41 +204,79 @@ final class CinematicTrackingPrototype {
         worker.track(buffer, seed: seed, generation: current) { [weak self] result in
             guard let self else { return }
             self.busy = false
-            guard self.generation == current, self.state == .acquiring || self.state == .tracking
+            guard self.generation == current,
+                self.state == .acquiring || self.state == .tracking
+                    || self.state == .holding
             else { return }
             self.adopt(result, measuredAt: measuredAt)
         }
     }
 
-    private func adopt(_ result: CinematicVisionWorker.Result?, measuredAt: TimeInterval) {
-        let now = ProcessInfo.processInfo.systemUptime
-        guard now - measuredAt <= CinematicTrackingController.maxObservationAge else {
-            // Cold Vision startup may be slow. It cannot steer using that frame.
-            if state == .tracking {
-                stop(reason: "Tracking fell behind. Select the subject again.")
-            }
+    /// Shared detector results keep their original decode timestamp and owner.
+    /// Smoothed/held overlay boxes and cached repaints never feed the motors.
+    func considerFaces(
+        _ faces: [FaceHit], measuredAt: TimeInterval, generation: UInt64,
+        milliseconds: Double = 0, now: TimeInterval = ProcessInfo.processInfo.systemUptime
+    ) {
+        guard generation == self.generation, wantsFaceDetections,
+            now >= measuredAt, now - measuredAt <= CinematicTrackingController.maxObservationAge
+        else { return }
+        if state == .selecting {
+            selectionFaces = (faces, measuredAt)
             return
+        }
+        var candidateLock = faceLock
+        let match = candidateLock?.update(
+            faces: faces, measuredAt: measuredAt, minimumConfidence: settings.confidence)
+        if candidateLock?.isAmbiguous == true {
+            stop(reason: "Faces crossed. Select the person again.")
+            return
+        }
+        let accepted = adopt(
+            match.map {
+                CinematicVisionWorker.Result(
+                    box: $0.box, confidence: $0.confidence, milliseconds: milliseconds)
+            }, measuredAt: measuredAt, now: now)
+        if accepted { faceLock = candidateLock }
+    }
+
+    @discardableResult
+    func adopt(
+        _ result: CinematicVisionWorker.Result?, measuredAt: TimeInterval,
+        now: TimeInterval = ProcessInfo.processInfo.systemUptime
+    ) -> Bool {
+        guard state == .acquiring || state == .tracking || state == .holding,
+            now >= measuredAt, now - measuredAt <= CinematicTrackingController.maxObservationAge
+        else { return false }
+        if state == .tracking || state == .holding {
+            _ = maintainObservation(now: now)
+            guard isEngaged else { return false }
         }
         guard let result, result.confidence >= settings.confidence,
             CinematicTrackingController.usable(result.box)
         else {
-            stop(reason: "Subject lost. Select it again to resume.")
-            return
+            if state == .acquiring || state == .holding { acceptedFrames = 0 }
+            return false
         }
         if let lastObservation,
+            measuredAt != lastObservation.time,
             !CinematicTrackingController.continuous(
                 from: lastObservation.box, to: result.box, dt: measuredAt - lastObservation.time)
         {
-            stop(reason: "Subject changed or moved out of view. Select it again.")
-            return
+            if state == .acquiring || state == .holding { acceptedFrames = 0 }
+            return false
         }
-        guard controller.observe(box: result.box, measuredAt: measuredAt, now: now) else { return }
+        guard controller.observe(box: result.box, measuredAt: measuredAt, now: now) else {
+            return false
+        }
         lastObservation = (result.box, measuredAt)
         lastResultAt = measuredAt
         acceptedFrames += 1
-        if acceptedFrames >= 3, state == .acquiring {
+        if acceptedFrames >= 3, state == .acquiring || state == .holding {
             state = .tracking
-            message = "Tracking on this phone"
+            motionSuspended = false
+            recoveryDeadline = nil
+            message = subjectKind == .face ? "Following selected face" : "Following selected object"
         }
         if now - lastHUD >= 0.2 || state == .acquiring {
             box = result.box
@@ -210,9 +284,15 @@ final class CinematicTrackingPrototype {
             inferenceMilliseconds = result.milliseconds
             lastHUD = now
         }
+        return true
     }
 
     private func tick(now: TimeInterval) {
+        if let lastTickAt, now - lastTickAt > CinematicTrackingController.maxTickGap {
+            stop(reason: "Tracking paused too long. Select the subject again.")
+            return
+        }
+        lastTickAt = now
         guard let session, let token, session.canContinueCinematicTracking,
             let pose = session.freshGimbalWaypoint
         else {
@@ -231,8 +311,16 @@ final class CinematicTrackingPrototype {
             }
             return
         }
-        guard let lastResultAt, now - lastResultAt <= CinematicTrackingController.maxObservationAge,
-            let raster,
+        guard maintainObservation(now: now) else {
+            if state == .holding, !motionSuspended {
+                motionSuspended = session.suspendNativeSubjectTrack(token: token)
+                if !motionSuspended {
+                    stop(reason: "Gimbal control interrupted. Select the subject again.")
+                }
+            }
+            return
+        }
+        guard let raster,
             let target = controller.target(
                 pose: pose, now: now, settings: settings,
                 pictureAspect: raster.width / max(1, raster.height), invertPan: startingInvert),
@@ -241,6 +329,30 @@ final class CinematicTrackingPrototype {
             stop(reason: "Subject or live feedback lost. Select it again to resume.")
             return
         }
+    }
+
+    /// A short detection miss keeps the lock. Stale measurements never continue
+    /// driving: hold the camera while allowing a bounded, nearby recovery.
+    @discardableResult
+    func maintainObservation(now: TimeInterval) -> Bool {
+        guard state == .tracking || state == .holding, let lastResultAt else { return false }
+        let age = now - lastResultAt
+        if now > (recoveryDeadline ?? (lastResultAt + CinematicFaceLock.recoveryInterval)) {
+            stop(reason: "Subject lost. Select it again to resume.")
+            return false
+        }
+        if age > CinematicTrackingController.maxObservationAge {
+            if state != .holding {
+                controller.reset()
+                acceptedFrames = 0
+                recoveryDeadline = lastResultAt + CinematicFaceLock.recoveryInterval
+                state = .holding
+                message = "Holding · waiting for the selected subject"
+                confidence = 0
+            }
+            return false
+        }
+        return state == .tracking
     }
 }
 

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import OpenPocketViewCore
 
 @Suite struct GimbalNativeTargetStreamTests {
@@ -70,5 +71,27 @@ import Testing
         #expect(stopped)
         let afterStop = stream.next(now: 0.1)
         #expect(afterStop == nil)
+    }
+
+    @Test func subjectHoldDropsPendingMovementButKeepsExclusiveOwnership() {
+        var stream = GimbalNativeTargetStream()
+        stream.begin(token: 1)
+        stream.submit(target(2), token: 1, now: 0)
+        let suspended = stream.suspend(token: 1)
+        #expect(suspended)
+        #expect(stream.token == 1)
+        let held = stream.next(now: 0.1)
+        #expect(held == nil)
+        // A previously submitted angle can be sent again after reacquisition.
+        let resumed = stream.submit(target(2), token: 1, now: 0.2)
+        #expect(resumed)
+        let targetAfterHold = stream.next(now: 0.2)
+        #expect(targetAfterHold == target(2))
+        stream.begin(token: 2)
+        stream.submit(target(3), token: 2, now: 0.3)
+        let staleSuspend = stream.suspend(token: 1)
+        #expect(!staleSuspend)
+        let newOwnerTarget = stream.next(now: 0.3)
+        #expect(newOwnerTarget == target(3))
     }
 }
