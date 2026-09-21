@@ -397,7 +397,11 @@ switch, chosen before Start. Each timed endpoint reverses the saved path without
 an added pause: A→B→A or A→B→C→B→A, repeating until Stop. Each reverse leg uses its
 original duration and retraces the same smoothed curve. Countdown, approach to A
 and the two-second settle happen only once; the return begins while the existing
-bounded waypoint check verifies the turnaround. Smoothed endpoints use a bounded
+bounded waypoint check verifies the turnaround. Exact reversals also accept a
+fresh endpoint observation within 0.15° and 200 ms, bracketed by ordered approach
+and departure on the finite path across the full feedback window. This handles
+native motor easing without claiming constant-speed timing; missing or invalid
+feedback still stops the move. Smoothed endpoints use a bounded
 history of dispatched timed commands for the same affine feedback-delay fit.
 Pause/Resume keeps the direction and loop; Stop, manual control,
 feedback/waypoint failure and session interruption end it. Closing an active editor

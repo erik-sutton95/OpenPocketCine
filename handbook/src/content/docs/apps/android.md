@@ -299,7 +299,9 @@ programmed movements stay the same.
 A→B→C→B→A→B→C. Each reverse leg keeps its original duration and retraces
 the same smoothed path. The countdown, approach to A and two-second settle happen
 only at the initial start. The return starts without an added endpoint pause;
-position checks continue while it moves.
+position checks continue while it moves. Exact reversals allow the camera's
+natural motor easing when fresh feedback confirms arrival and a clean return.
+If feedback cannot verify the endpoint, the move stops.
 Choose Loop before Start. Pause/Resume keeps the current direction; Stop, a motion
 failure or manual takeover ends the loop.
 

@@ -283,6 +283,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         var outgoing: Leg?
         var outgoingAt: TimeInterval
         var usesCommandHistory = false
+        var isTurnaround = false
     }
 
     /// Timed targets form an affine reference even when look-ahead commands
@@ -591,7 +592,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         index = 0
         nextCurveCommand = 0
         checkpoints.append(Checkpoint(time: boundary, incoming: incoming,
-            outgoing: legs[0], outgoingAt: clock, usesCommandHistory: streamed))
+            outgoing: legs[0], outgoingAt: clock, usesCommandHistory: streamed, isTurnaround: true))
         return beginPass(live: live)
     }
 
@@ -747,6 +748,50 @@ public struct GimbalMoveEngine: Equatable, Sendable {
                     return true
                 }
             }
+        }
+        return directlyObservedTurnaround(check, observations: nearby)
+    }
+
+    /// A real endpoint observation also qualifies an exact loop reversal when
+    /// the firmware eases its motors. This proves contact and departure, not
+    /// constant-speed timing. Curved windows retain their command-history fit.
+    private func directlyObservedTurnaround(_ check: Checkpoint, observations: [Observation]) -> Bool {
+        guard check.isTurnaround, !check.usesCommandHistory, let outgoing = check.outgoing else { return false }
+        let endpoint = check.incoming.to
+        func along(_ pose: GimbalWaypoint, toward other: GimbalWaypoint) -> Double? {
+            let yaw = other.yawDeg - endpoint.yawDeg
+            let pitch = Self.pitchDelta(from: endpoint, to: other)
+            let length = hypot(yaw, pitch)
+            guard length > Self.arriveDeg else { return nil }
+            let distance = ((pose.yawDeg - endpoint.yawDeg) * yaw
+                + Self.pitchDelta(from: endpoint, to: pose) * pitch) / length
+            let nearest = Self.lerp(endpoint, other, u: distance / length)
+            return Self.angularDistance(pose, nearest) <= Self.arriveDeg + 1e-9 ? distance : nil
+        }
+        for (index, arrival) in observations.enumerated() {
+            guard arrival.time >= check.time, arrival.time <= check.time + 0.2 + 1e-9,
+                Self.angularDistance(arrival.pose, endpoint) <= Self.arriveDeg else { continue }
+            let before = observations[..<index]
+            let after = observations[(index + 1)...]
+            guard before.contains(where: { arrival.time - $0.time >= 0.08 - 1e-9
+                && Self.angularDistance($0.pose, endpoint) > Self.arriveDeg }),
+                after.contains(where: { $0.time - arrival.time >= 0.08 - 1e-9
+                    && Self.angularDistance($0.pose, endpoint) > Self.arriveDeg }) else { continue }
+            var closest = Double.infinity
+            let approaches = (Array(before) + [arrival]).allSatisfy { sample in
+                guard let distance = along(sample.pose, toward: check.incoming.from),
+                    distance <= closest + Self.arriveDeg + 1e-9 else { return false }
+                closest = min(closest, distance)
+                return true
+            }
+            var farthest = -Double.infinity
+            let departs = ([arrival] + Array(after)).allSatisfy { sample in
+                guard let distance = along(sample.pose, toward: outgoing.to),
+                    distance >= farthest - Self.arriveDeg - 1e-9 else { return false }
+                farthest = max(farthest, distance)
+                return true
+            }
+            if approaches && departs { return true }
         }
         return false
     }

@@ -288,4 +288,4 @@ relay-test:
 
 # Fast programmed-motion regression loop.
 gimbal-test:
-    swift test --filter 'Gimbal(Repeatability|SafeRoute|Loop)Tests'
+    swift test --filter 'Gimbal(Repeatability|SafeRoute|Loop|LoopVerification)Tests'

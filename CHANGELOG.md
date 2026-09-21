@@ -20,7 +20,9 @@ separate iOS and Android lists.
 - Motion Control Loop on iOS and Android moves back and forth: A→B→A or
   A→B→C→B→A, with the same leg durations and smoothed path in either direction.
   Countdown and the initial settle run once; turnarounds have no added pause,
-  with position verification continuing during the return. Pause/Resume and Stop
+  with position verification continuing during the return. Exact reversals accept
+  directly observed arrival and return when native motor easing differs from
+  constant speed, avoiding a false waypoint-verification failure. Pause/Resume and Stop
   remain available; failures end the loop. The compact editor keeps its header
   and action bar fixed, with scrollable settings and a bottom overflow fade. Points, durations, Smoothness and Loop
   remain in the camera session when the editor closes. Close during a run keeps

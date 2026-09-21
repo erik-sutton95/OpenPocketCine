@@ -6,11 +6,12 @@ New and changed
 
 Fixes
 
+- Exact loop reversals accept confirmed arrival with native motor easing, preventing a false waypoint-verification error.
 - Motion Control waypoint letters and path now compensate for selfie orientation and MIRROR. Saved positions and motion stay unchanged.
 - Bluetooth setup reports rejected writes promptly. Connection and picture recovery use bounded retries; Media return starts live view once.
 
 What to test
 
-- Loop A/B/C both ways with unequal durations and Smoothness; check there is no endpoint pause. Try Pause/Resume and Stop on reverse legs, and selfie markers with Selfie Flip and MIRROR on/off.
+- Loop A/B/C with unequal durations and Smoothness: no endpoint pause or unexpected error. Try Pause/Resume and Stop on reverse legs; check selfie markers with Selfie Flip and MIRROR on/off.
 - Scroll Motion Control in portrait and landscape: buttons stay fixed and the fade clears at the bottom. Close/reopen keeps the program; Clear removes points and switches Loop off.
 - Connect repeatedly and return from Media. With TalkBack on, check each readout speaks one phrase and assist tap/hold still work. Check Pocket 3 zoom limits per FORMAT.

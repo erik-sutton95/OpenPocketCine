@@ -88,9 +88,19 @@ observation is not allowed; off-path points cannot cancel one another.
 This software consistency rule is not measured camera accuracy or proof of
 optical repeatability. An equally sized physical motor delay and feedback delay
 remain indistinguishable without a synchronized acquisition clock. A failed B
-check invalidates the take even if C is already moving. Loop endpoints use the
-same moving check while the return begins, without a stationary verification
-pause. Smoothed loop endpoints fit the piecewise linear timed commands actually
+check invalidates the take even if C is already moving. Loop endpoints first use
+the same moving check while the return begins, without a stationary verification
+pause. Exact loop reversals can also qualify from a directly observed endpoint
+within 0.15°, received between the boundary and 200 ms afterward. Fresh reports
+must show approach and departure outside that tolerance, each at least 80 ms
+from the arrival report. All reports in the complete ±300 ms window must stay
+within 0.15° of the finite incoming/return segments and progress in the expected
+direction, allowing at most 0.15° retreat from the best observed progress.
+This alternative accommodates native motor easing; it proves observed arrival
+and reversal, not constant-speed timing. It does not apply to intermediate B or
+smoothed commands. Sparse reports can still miss a brief valid arrival; absent
+evidence, the move stops instead of assuming success. Smoothed loop endpoints fit
+the piecewise linear timed commands actually
 dispatched, including overlapping look-ahead commands, instead of assuming the
 camera follows the ideal Bézier exactly. Their bounded reference history retains
 one second plus the active predecessor; each command starts from the preceding
@@ -198,8 +208,17 @@ exact-B take failed waypoint verification; that speed is not qualified for
 exact intermediate points. These are initial checks, not optical accuracy
 measurements or a measured maximum speed.
 
+A 2026-09-21 iPhone journal localized a loop failure to the first B→A return
+of a 3.5-second A/B program. The journal did not record every attitude sample.
+A deterministic regression reproduced the same verification error when native
+motor easing reached each endpoint exactly but differed from the constant-speed
+reference. Directly observed reversal verification passes that regression across
+10 feedback phases and native pitch wrapping; off-path, missed, overshot,
+wrong-direction, stalled-at-endpoint, late and stale feedback still fail. Physical retesting
+of this correction remains pending.
+
 `just gimbal-test` exercises camera-timed command dispatch, sparse feedback at
-reversals, early-only waypoint observations, late dispatch, missing feedback,
+reversals, motor easing, early-only waypoint observations, late dispatch, missing feedback,
 approach failure, cancellation, duration preservation and packet validation.
 Simulated success validates the algorithm under its assumptions; it does not
 qualify camera firmware or radio timing.

@@ -309,7 +309,7 @@ class GimbalMoveEngine {
     private data class Leg(val label: String, val from: GimbalWaypoint, val to: GimbalWaypoint, val duration: Double)
     private data class Observation(val time: Double, val pose: GimbalWaypoint)
     private data class Checkpoint(val time: Double, val incoming: Leg, val outgoing: Leg?, val outgoingAt: Double,
-        val usesCommandHistory: Boolean = false)
+        val usesCommandHistory: Boolean = false, val isTurnaround: Boolean = false)
     // The overlapping timed targets are affine between dispatches, even on a smoothed path.
     private data class CommandReference(val time: Double, val from: GimbalWaypoint, val to: GimbalWaypoint,
         val duration: Double) {
@@ -569,7 +569,7 @@ class GimbalMoveEngine {
         curve = GimbalProgramCurve.create(pass)
         index = 0
         nextCurveCommand = 0.0
-        checkpoints += Checkpoint(boundary, incoming, legs[0], clock, streamed)
+        checkpoints += Checkpoint(boundary, incoming, legs[0], clock, streamed, isTurnaround = true)
         return beginPassMotion(live)
     }
 
@@ -712,7 +712,46 @@ class GimbalMoveEngine {
                 }
             }
         }
-        return false
+        return turnaroundIsObserved(check, nearby)
+    }
+
+    /** Native endpoint easing need not have constant velocity when contact and reversal are observed. */
+    private fun turnaroundIsObserved(check: Checkpoint, nearby: List<Observation>): Boolean {
+        if (!check.isTurnaround || check.usesCommandHistory) return false
+        val outgoing = check.outgoing ?: return false
+        val endpoint = check.incoming.to
+        fun along(pose: GimbalWaypoint, other: GimbalWaypoint): Double? {
+            val yaw = other.yawDeg - endpoint.yawDeg
+            val pitch = pitchDelta(endpoint, other)
+            val length = hypot(yaw, pitch)
+            if (length <= ARRIVE_DEG) return null
+            val distance = ((pose.yawDeg - endpoint.yawDeg) * yaw + pitchDelta(endpoint, pose) * pitch) / length
+            val nearest = lerp(endpoint, other, distance / length)
+            return if (angularDistance(pose, nearest) <= ARRIVE_DEG + 1e-9) distance else null
+        }
+        return nearby.any { arrival ->
+            if (arrival.time < check.time || arrival.time > check.time + 0.2 + 1e-9 ||
+                angularDistance(arrival.pose, endpoint) > ARRIVE_DEG) return@any false
+            val approach = nearby.filter { it.time <= arrival.time }
+            val departure = nearby.filter { it.time >= arrival.time }
+            if (approach.none { arrival.time - it.time >= 0.08 - 1e-9 && angularDistance(it.pose, endpoint) > ARRIVE_DEG } ||
+                departure.none { it.time - arrival.time >= 0.08 - 1e-9 && angularDistance(it.pose, endpoint) > ARRIVE_DEG }) {
+                return@any false
+            }
+            var nearest = Double.POSITIVE_INFINITY
+            for (sample in approach) {
+                val distance = along(sample.pose, check.incoming.from) ?: return@any false
+                if (distance > nearest + ARRIVE_DEG + 1e-9) return@any false
+                nearest = min(nearest, distance)
+            }
+            var farthest = Double.NEGATIVE_INFINITY
+            for (sample in departure) {
+                val distance = along(sample.pose, outgoing.to) ?: return@any false
+                if (distance < farthest - ARRIVE_DEG - 1e-9) return@any false
+                farthest = max(farthest, distance)
+            }
+            true
+        }
     }
 
     private fun stop(live: GimbalWaypoint, reason: String): Output {
