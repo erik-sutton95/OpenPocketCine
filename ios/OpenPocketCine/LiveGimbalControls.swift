@@ -296,9 +296,11 @@ private struct LiveGimbalMoveEditor: View {
     @Environment(AppModel.self) private var model
 
     @Environment(\.motionControlCanInteract) private var canInteract
+    @Environment(\.interfaceLocked) private var interfaceLocked
 
     @State private var scrollHeight: CGFloat = 0
     @State private var canScrollFurther = false
+    @State private var editingZoom: Double?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -353,6 +355,10 @@ private struct LiveGimbalMoveEditor: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("motion.zoomUnavailable")
             }
+
+            zoomControl
+                .padding(.horizontal, 14)
+                .padding(.top, 6)
 
             actions
                 .padding(.horizontal, 14)
@@ -497,6 +503,73 @@ private struct LiveGimbalMoveEditor: View {
             .opacity(runEnabled || model.session.gimbalMoveRunning ? 1 : 0.45)
         }
         .font(LiveType.ui(size: 14, weight: .semibold))
+    }
+
+    private var zoomControl: some View {
+        let cameraID = model.session.connectedCamera?.id
+        let phase = model.session.phase.label
+        let maximum = model.session.zoomMax
+        let scale = MonitorZoomScale(minimum: 1, maximum: maximum)
+        let factor = editingZoom ?? model.session.zoomDialReadout
+        return HStack(spacing: 8) {
+            Text("Zoom")
+                .font(LiveType.ui(size: 12, weight: .regular))
+                .foregroundStyle(LiveDesign.muted)
+            Slider(
+                value: Binding(
+                    get: { scale.position(editingZoom ?? model.session.zoomDialReadout) },
+                    set: { position in
+                        guard canAdjustZoom,
+                            model.session.connectedCamera?.id == cameraID,
+                            model.session.phase.label == phase,
+                            model.session.zoomMax == maximum,
+                            position.isFinite
+                        else { return }
+                        let next = scale.value(at: position)
+                        editingZoom = next
+                        #if DEBUG && targetEnvironment(simulator)
+                            if MonitorUIReview.motionZoomControl {
+                                MonitorUIReview.setMotionZoomPreview(next, session: model.session)
+                                return
+                            }
+                        #endif
+                        model.session.setZoomSlider(next)
+                    }),
+                in: 0...1,
+                onEditingChanged: { editing in
+                    if !editing { editingZoom = nil }
+                }
+            )
+            .tint(LiveDesign.accent)
+            .disabled(!canAdjustZoom)
+            .accessibilityLabel("Motion control zoom")
+            .accessibilityValue(String(format: "%.2f×", factor))
+            .accessibilityIdentifier("motion.zoom")
+            Text(String(format: "%.2f×", factor))
+                .font(LiveType.ui(size: 12, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(LiveDesign.text)
+                .frame(width: 52, alignment: .trailing)
+                .accessibilityIdentifier("motion.zoom.readout")
+        }
+        .frame(height: 44)
+        .onChange(of: cameraID) { _, _ in editingZoom = nil }
+        .onChange(of: maximum) { _, _ in editingZoom = nil }
+        .onChange(of: canAdjustZoom) { _, enabled in
+            if !enabled { editingZoom = nil }
+        }
+    }
+
+    private var canAdjustZoom: Bool {
+        guard canInteract(), !interfaceLocked, !model.session.isLocked,
+            !model.session.gimbalMoveRunning,
+            model.session.zoomMax.isFinite, model.session.zoomMax > 1,
+            !(model.session.status.colorMode == .dLog2 && model.session.status.isRecording)
+        else { return false }
+        #if DEBUG && targetEnvironment(simulator)
+            if MonitorUIReview.motionZoomControl { return true }
+        #endif
+        return model.session.canSetGimbalConfiguration
     }
 
     private var runEnabled: Bool {

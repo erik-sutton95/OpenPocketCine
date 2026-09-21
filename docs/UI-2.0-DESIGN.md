@@ -363,7 +363,8 @@ Zoom chip is 44 square, numeric 18/20. Prototype tap toggles optical lenses,
 double-tap selects digital crops, hold 380 ms opens logarithmic dial. Its
 double-tap window is 240 ms. Dial spans 210°, shows ±0.36π, uses equally spaced
 minor ticks on the log ring with taller marks on 1/1.5/2/3/4/6/9/12; the hub
-reads hundredths (1.53×). Selected label fades as it reaches the fixed center
+reads hundredths (1.53×), while pointer input retains fractional precision and
+never snaps to those labels or whole stops. Selected label fades as it reaches the fixed center
 marker. The zoom chip still uses tenths. Optical labels are cyan/white; crop warning amber. Landscape is a trailing
 half-disc (radius clamps 120…260 phone or 330 tablet and half viewport height−12)
 with material to the physical edge. Portrait is the same logarithmic scale as a

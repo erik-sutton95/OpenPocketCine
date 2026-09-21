@@ -85,7 +85,9 @@ import com.opencapture.monitorui.MonitorOptionGroup
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorSwitchGraphic
 import com.opencapture.monitorui.MonitorValueDrum
+import com.opencapture.monitorui.MonitorZoomScale
 import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.GimbalHudCopy
 import com.opencapture.openpocketcine.session.GimbalMode
 import com.opencapture.openpocketcine.session.GimbalMoveEngine
@@ -467,8 +469,16 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
     val paused by model.session.gimbalMovePaused.collectAsState()
     val phase by model.session.phaseFlow.collectAsState()
     val status by model.session.status.collectAsState()
+    val liveZoom by model.session.zoomDialReadout.collectAsState()
     val zoomNote = model.session.programmedZoomUnavailableReason(status)
     val cameraId = model.session.connectedCamera?.id
+    val zoomMaximum = model.session.zoomMax().takeIf { it.isFinite() }?.coerceAtLeast(1.0) ?: 1.0
+    val zoomEnabled = !running && !model.uiLocked && model.liveChromeInteractive &&
+        !model.isEditingChrome && model.liveOperatorPanel == null && phase == ConnectionPhase.LIVE &&
+        model.monitorCapabilities(status).zoom && zoomMaximum > 1.0 &&
+        !CamFov.zoomNeedsColorHopWhileRecording(zoomMaximum, status.colorMode, status.isRecording)
+    var pointerZoom by remember(cameraId, phase, zoomMaximum, zoomEnabled) { mutableStateOf<Double?>(null) }
+    val shownZoom = (pointerZoom ?: liveZoom).takeIf { it.isFinite() }?.coerceIn(1.0, zoomMaximum) ?: 1.0
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     val remainingThreshold = with(density) { 2.dp.roundToPx() }
@@ -556,6 +566,31 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
         zoomNote?.let {
             Text(it, color = LiveDesign.muted, style = LiveType.ui(10f),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("motion.zoomNote"))
+        }
+        Row(Modifier.fillMaxWidth().height(50.dp).padding(horizontal = 12.dp).testTag("motion.zoomRow")
+            .alpha(if (zoomEnabled) 1f else .45f),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Zoom", color = LiveDesign.text, style = LiveType.ui(12f, FontWeight.SemiBold))
+            Slider(value = MonitorZoomScale.position(shownZoom, 1.0, zoomMaximum).toFloat(),
+                onValueChange = { position ->
+                    if (zoomEnabled && !model.session.gimbalMoveRunning.value &&
+                        !model.uiLocked && model.liveChromeInteractive && !model.isEditingChrome &&
+                        model.liveOperatorPanel == null && model.liveGimbalPanel == LiveGimbalPanel.EDITOR &&
+                        model.session.connectedCamera?.id == cameraId && model.session.phase == phase &&
+                        model.session.zoomMax() == zoomMaximum &&
+                        !CamFov.zoomNeedsColorHopWhileRecording(zoomMaximum,
+                            model.session.status.value.colorMode, model.session.status.value.isRecording)) {
+                        val factor = MonitorZoomScale.valueAt(position.toDouble(), 1.0, zoomMaximum)
+                        pointerZoom = factor
+                        model.session.setZoomSlider(factor)
+                    }
+                }, onValueChangeFinished = { pointerZoom = null }, enabled = zoomEnabled,
+                modifier = Modifier.weight(1f).testTag("motion.zoom")
+                    .semantics { contentDescription = "Zoom"; stateDescription = MonitorZoomScale.dialLabel(shownZoom, maximum = zoomMaximum) },
+                valueRange = 0f..1f)
+            Text(MonitorZoomScale.dialLabel(shownZoom, maximum = zoomMaximum),
+                color = LiveDesign.text, style = LiveType.ui(12f, FontWeight.Medium),
+                modifier = Modifier.width(48.dp), maxLines = 1)
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).testTag("motion.actions"),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {

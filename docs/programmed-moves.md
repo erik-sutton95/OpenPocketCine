@@ -74,6 +74,12 @@ clock alignment and exact pixel locking are not claimed.
 
 ## Programmed zoom
 
+The fixed Zoom slider above the action buttons lets the operator frame each
+point without closing or minimizing the editor. It shares the manual zoom
+limits and color-mode rules, and is disabled while a take owns motion (including
+pause), while locked, or recording in D-Log2. Pointer input retains fractional
+values; hundredths are only a readout format.
+
 Save each point at the desired zoom. A zoom-changing take sets A's zoom during
 preparation, then interpolates A→B and optional B→C over their chosen durations.
 Zoom reaches B's saved amount even when Smoothness rounds the angular path past B.
@@ -81,6 +87,10 @@ The background transport scheduler sends distinct absolute lens targets at no
 more than 20 Hz, with 50 ms look-ahead clipped at each zoom endpoint. An endpoint
 stays pending until sampled so an accepted late callback cannot skip its amount.
 There is no extra GET loop, color change, ACK timer or live-view enable.
+Interpolation retains Double precision until the existing absolute command
+encodes an integer lens position (217 units per 1×); the wire format does not
+carry a floating-point zoom factor. Removing dial rounding does not change
+this programmed command stream or establish smooth physical lens response.
 
 Loop reverses the zoom path with the gimbal. Pause and Stop retire future zoom
 commands and send the existing zoom STOP after lens ownership has begun. Resume
@@ -255,6 +265,14 @@ wrong-direction, stalled-at-endpoint, late and stale feedback still fail. Physic
 of this correction passed the operator's A/B loop check on the connected iPhone.
 This confirms the reported failure is resolved for that run, not broad timing or
 accuracy qualification.
+
+A 2026-09-22 Pocket 4 Pro/iPhone comparison sent a single 1×→2× target with
+absolute-command speed bytes `0x48` and `0x4E`. The camera accepted both, but
+status feedback exposed no intermediate lens positions in either transition.
+That telemetry is too sparse to establish visual smoothness or a speed benefit;
+the production command format and 20 Hz limit remain unchanged. General dial
+rounding and whole-stop snapping are removed independently. Physical comparison
+with Mimo and the camera controls remains pending.
 
 `just gimbal-test` exercises camera-timed command dispatch, sparse feedback at
 reversals, motor easing, early-only waypoint observations, late dispatch, missing feedback,

@@ -63,7 +63,8 @@ Image previews use the raw feed and work with all scopes off.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. The disc hub reads hundredths (1.53×)
-and the chip still shows tenths. Its limits and recording restrictions
+and the chip still shows tenths. Dragging retains finer values without snapping
+to those displayed numbers or whole zoom stops. Its limits and recording restrictions
 remain camera-specific. In landscape the larger disc sits on the trailing
 screen edge and covers the controls beneath it until closed. In portrait it
 sits on the bottom screen edge. Gimbal cameras expose Mode, Speed, Ramp and
@@ -241,7 +242,7 @@ space after rotation or resizing, including saved positions. Long-press a View A
   D-pad shutter changes also update the shutter-angle readout when angle display is selected.
   A gimbal stop pulses only after the head moves then stalls
   (Haptics setting). Capture drums, the zoom disc, and duration
-  dials pulse on coarse snaps (172° → 180°, 3×, whole seconds),
+  dials pulse on coarse steps and whole-stop crossings (172° → 180°, 3×, whole seconds),
   not on every hundredth or half-second tick. Stick
   pan stays picture-relative. The rotate-180 button inverts pan at the
   end of the rotation (like Mimo). Extra-mirror live view when that 180
@@ -320,6 +321,11 @@ the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
 does not reverse stored mechanical angles. Waypoint letters and the dashed path
 follow the selfie orientation and MIRROR assist visually; saved positions and
 programmed movements stay the same.
+
+Use the **Zoom** slider above the fixed action buttons to frame a point without
+closing or minimizing Motion Control, then SET or RESET that point. The slider
+follows the camera's zoom limits and is disabled during a take, including pause,
+and while recording in D-Log2.
 
 Each point also saves its zoom. When those amounts differ, Motion Control
 transitions between them over the leg durations; B's zoom is reached even when

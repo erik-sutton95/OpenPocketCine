@@ -244,14 +244,18 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   viewport, and one continuous material to the physical edge. In portrait the disc
   is a bottom half-circle flush to the screen edge, covering camera values and
   system buttons until closed. Minor ticks are equally spaced on the log ring;
-  labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. A very slow turn
-  can rest on whole stops (2×, 3×, 4×, 6×, 9×, 12×); a faster turn does not.
-  Those whole stops also fire the same detent haptic as capture drums.
+  labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. Pointer input and
+  the moving ring retain fractional values without hundredth rounding or
+  whole-stop snapping. Reaching or crossing a whole stop gives one haptic pulse;
+  labels and accessibility steps still use hundredths.
   The disc hub shows hundredths (1.53×); the chip still shows tenths. Past the
   last optical stop (Pocket 4 Pro 6× / 12×) the chip uses the same digital-crop
   amber as the disc ticks.
 - The expanded Motion Control editor passes joystick touches to the original
-  control so positions can be set without minimizing the window. Other outside
+  control so positions can be set without minimizing the window. A continuous
+  logarithmic Zoom slider stays fixed above the actions, within the existing
+  height limit. It uses the same camera limits and manual zoom path; it is disabled
+  while a take owns motion (including pause), while locked, or recording in D-Log2. Other outside
   taps minimize without activating covered controls. Window dragging uses local
   transient placement and one shared-model commit on release.
 - Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
@@ -332,7 +336,8 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   targets stay within −44…70. Measurements are never clipped into fake
   endpoints; capture and native dispatch reject out-of-range targets. Full contract and pending
   physical qualification: [Motion Control takes](programmed-moves.md).
-  Run preps Fast + tilt unlocked. No zoom SET during the slew. No motion debug plate is displayed.
+  Run preps Fast + tilt unlocked. Zoom-changing programs follow the saved zoom
+  path; equal-zoom programs send no zoom SET. No motion debug plate is displayed.
 
 ## Connection reliability audit (2026-09-12)
 
@@ -425,6 +430,14 @@ saved zoom path. D-Log2 blocks zoom-changing programs while idle and recording;
 no automatic color change occurs. Raw camera color/FORMAT changes can stop a take
 before its next zoom write. Gimbal-only programs remain available in D-Log2.
 Zoom accuracy and integrated Restart still await physical qualification.
+
+Motion zoom controls (2026-09-22): both shells add the fixed in-editor Zoom
+slider and remove general dial rounding and whole-stop snapping. Seven iOS
+simulator motion UI tests pass; Android instrumentation builds but cannot run
+without an attached device. Physical iPhone layout verification is pending: the
+two XCTest launches timed out enabling automation before the test body ran.
+The bounded camera speed comparison did not establish smoother physical zoom;
+see [measurement limits](programmed-moves.md#evidence-and-qualification).
 
 ## Multiview session network and shutdown (in validation)
 

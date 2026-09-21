@@ -10,6 +10,19 @@
         static var screen: String? { ProcessInfo.processInfo.environment["OPV_UI_REVIEW_SCREEN"] }
         static var isActive: Bool { screen != nil }
 
+        #if DEBUG
+            static var motionZoomControl: Bool {
+                screen == "live"
+                    && ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_ZOOM_CONTROL"]
+                        == "1"
+            }
+
+            /// Presentation input only. This fixture never invokes a camera command.
+            static func setMotionZoomPreview(_ factor: Double, session: CameraSession) {
+                session.zoomPinchPreview = factor
+            }
+        #endif
+
         static func prepare(_ model: AppModel) {
             // Presentation reviews do not send reports or inherit first-run consent.
             // Keep the operator's real choice and explicit consent reviews separate.
@@ -66,6 +79,16 @@
             status.audioChannel = .stereo
             status.timecode = "15:39:50:00"
             status.colorMode = .dLog2
+            #if DEBUG
+                if motionZoomControl {
+                    let recordingDLog2 =
+                        ProcessInfo.processInfo.environment["OPV_UI_REVIEW_ZOOM_DLOG2_RECORDING"]
+                        == "1"
+                    status.colorMode = recordingDLog2 ? .dLog2 : .normal
+                    status.isRecording = recordingDLog2
+                    status.zoomLens = CamFov.lens1x
+                }
+            #endif
             status.batteryPercent = 68
             status.storageFreeMb = 107 * 1024
             status.storageTotalMb = 128 * 1024

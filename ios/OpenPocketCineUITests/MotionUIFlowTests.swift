@@ -158,6 +158,85 @@ final class MotionUIFlowTests: XCTestCase {
         attachScreenshot("motion-zoom-dlog2-unavailable")
     }
 
+    func testZoomSliderStaysActionableAboveFixedActionsInBothOrientations() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION"] = "1"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION_ZOOM_CONTROL"] = "1"
+        app.launch()
+        defer {
+            app.terminate()
+            XCUIDevice.shared.orientation = .portrait
+        }
+        XCTAssertTrue(app.buttons["monitor.system.gimbalControls"].waitForExistence(timeout: 10))
+        app.buttons["monitor.system.gimbalControls"].tap()
+        let open = app.buttons["motion.openEditor"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+
+        let title = app.staticTexts["motion.editor.title"]
+        let zoom = app.sliders["motion.zoom"]
+        let readout = app.staticTexts["motion.zoom.readout"]
+        let scroll = app.scrollViews["motion.editor.scroll"]
+        let clear = app.buttons["motion.clear"]
+        let start = app.buttons["motion.startStop"]
+        XCTAssertTrue(zoom.waitForExistence(timeout: 5))
+
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            let settled = NSPredicate { _, _ in
+                (app.frame.width > app.frame.height) == orientation.isLandscape
+                    && zoom.isHittable && clear.isHittable
+            }
+            expectation(for: settled, evaluatedWith: app)
+            waitForExpectations(timeout: 10)
+            XCTAssertTrue(zoom.isEnabled)
+            let zoomFrame = zoom.frame
+            let clearFrame = clear.frame
+            let startFrame = start.frame
+            let before = readout.label
+            zoom.adjust(toNormalizedSliderPosition: orientation.isLandscape ? 0.71 : 0.37)
+            XCTAssertNotEqual(
+                readout.label, before, "The presentation fixture must consume the slider input")
+            XCTAssertTrue(title.exists, "Zoom must keep the full editor open")
+            XCTAssertTrue(zoom.isHittable)
+            XCTAssertLessThanOrEqual(zoom.frame.maxY, clear.frame.minY)
+
+            scrollSettingsToBottom(scroll)
+            XCTAssertEqual(zoom.frame.minY, zoomFrame.minY, accuracy: 1)
+            XCTAssertEqual(clear.frame.minY, clearFrame.minY, accuracy: 1)
+            XCTAssertEqual(start.frame.minY, startFrame.minY, accuracy: 1)
+            XCTAssertTrue(zoom.isHittable)
+            XCTAssertTrue(clear.isHittable)
+            XCTAssertTrue(start.isHittable)
+            attachScreenshot(
+                orientation.isLandscape ? "motion-zoom-slider-landscape" : "motion-zoom-slider-portrait")
+        }
+    }
+
+    func testZoomSliderIsDisabledWhileDLog2IsRecording() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION"] = "1"
+        app.launchEnvironment["OPV_UI_REVIEW_MOTION_ZOOM_CONTROL"] = "1"
+        app.launchEnvironment["OPV_UI_REVIEW_ZOOM_DLOG2_RECORDING"] = "1"
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["monitor.system.gimbalControls"].waitForExistence(timeout: 10))
+        app.buttons["monitor.system.gimbalControls"].tap()
+        let open = app.buttons["motion.openEditor"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+        let zoom = app.sliders["motion.zoom"]
+        XCTAssertTrue(zoom.waitForExistence(timeout: 5))
+        XCTAssertTrue(zoom.isHittable)
+        XCTAssertFalse(zoom.isEnabled)
+    }
+
     func testEditorKeepsActionsFixedAndFadesOnlyOverflowInBothOrientations() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
@@ -186,6 +265,7 @@ final class MotionUIFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["motion.clear"].exists)
         XCTAssertEqual(restart.label, "Restart")
         XCTAssertEqual(pause.label, "Resume")
+        XCTAssertFalse(app.sliders["motion.zoom"].isEnabled, "A paused program still owns zoom")
         let readouts = ["A", "B", "C"].map { app.staticTexts["motion.waypoint.\($0).readout"] }
         let savedPoints = readouts.map(\.label)
 
@@ -239,12 +319,12 @@ final class MotionUIFlowTests: XCTestCase {
         app.buttons["motion.clear"].tap()
         XCTAssertEqual(app.staticTexts["motion.waypoint.A.readout"].label, "Not set")
         XCUIDevice.shared.orientation = .portrait
-        let fits = NSPredicate { _, _ in
-            app.frame.width < app.frame.height && (scroll.value as? String) == "End of settings"
-        }
-        expectation(for: fits, evaluatedWith: scroll)
+        let portrait = NSPredicate { _, _ in app.frame.width < app.frame.height }
+        expectation(for: portrait, evaluatedWith: app)
         waitForExpectations(timeout: 5)
-        attachScreenshot("motion-compact-empty-without-overflow")
+        scrollSettingsToBottom(scroll)
+        XCTAssertEqual(scroll.value as? String, "End of settings")
+        attachScreenshot("motion-compact-empty-settings-end")
     }
 
     private func scrollSettingsToBottom(_ scroll: XCUIElement) {

@@ -29,6 +29,12 @@ separate iOS and Android lists.
   the control pill visible. While paused, Restart replaces Clear and starts the
   saved program again from A with countdown and preparation. The corrected A/B
   loop passed an operator iPhone check; broader physical qualification remains pending.
+- Motion Control adds a fixed Zoom slider above the action buttons, so each
+  point can be framed without closing the editor. Both shells remove hundredth
+  rounding and whole-stop snapping from the general zoom dial, preserving
+  fractional input through the camera's integer lens command conversion.
+  Whole-stop haptics fire once per crossing. Physical lens smoothness remains
+  under investigation.
 - Motion Control transitions between different zoom amounts saved at A/B/C,
   including reverse loops and measured Pause/Resume. B's saved zoom remains exact
   when the angular path is smoothed. Zoom-changing programs are blocked in D-Log2

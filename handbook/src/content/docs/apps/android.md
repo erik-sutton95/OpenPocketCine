@@ -230,7 +230,7 @@ Choose **Gimbal joystick → Left / Right** in the same Controls tab. D-pad shut
 changes also update the shutter-angle readout when angle display is selected.
 A gimbal stop pulses only after the head moves then stalls (Haptics
 setting). Capture drums, the zoom disc, and duration dials pulse on
-coarse snaps (172° → 180°, 3×, whole seconds), not on every hundredth
+coarse steps and whole-stop crossings (172° → 180°, 3×, whole seconds), not on every hundredth
 or half-second tick. AirPods head tracking is iPhone-only (no headphone IMU)
 on Android). Stick pan stays
 picture-relative. Stick triple-tap 180 inverts pan at the end of the
@@ -277,7 +277,8 @@ The fitted portrait feed is centered vertically, with STBY, timecode and REC SET
 a separate row below the status area. View Assist, FIT/FILL and the joystick
 cluster stay above the camera values in fixed positions when switching FIT/FILL.
 Hold zoom for a continuous dial. The disc hub reads hundredths (1.53×); the chip
-still shows tenths. In landscape the larger zoom disc sits on the trailing screen
+still shows tenths. Dragging retains finer values without snapping to those
+displayed numbers or whole zoom stops. In landscape the larger zoom disc sits on the trailing screen
 edge and covers the controls beneath it until closed. In portrait it sits on the
 bottom screen edge.
 
@@ -294,6 +295,11 @@ the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
 does not reverse stored mechanical angles. Waypoint letters and the dashed path
 follow the selfie orientation and MIRROR assist visually; saved positions and
 programmed movements stay the same.
+
+Use the **Zoom** slider above the fixed action buttons to frame a point without
+closing or minimizing Motion Control, then SET or RESET that point. The slider
+follows the camera's zoom limits and is disabled during a take, including pause,
+and while recording in D-Log2.
 
 Each point also saves its zoom. When those amounts differ, Motion Control
 transitions between them over the leg durations; B's zoom is reached even when

@@ -2,6 +2,19 @@ import MonitorPresentation
 import Testing
 
 struct MonitorZoomScaleTests {
+    @Test func continuousDragPreservesSubHundredthMotionAcrossWholeStops() {
+        let scale = MonitorZoomScale(minimum: 1, maximum: 12)
+        for target in [1.531, 1.534, 2.981, 2.999, 3.001, 3.019] {
+            let origin = target - 0.001
+            let delta =
+                (scale.position(origin) - scale.position(target)) * MonitorZoomScale.angularSpan
+            let actual = scale.dragged(from: origin, angleDelta: delta, current: origin)
+            #expect(
+                abs(actual - target) < 1e-12,
+                "Continuous pointer target \(target) was changed to \(actual)")
+        }
+    }
+
     @Test func proportionalTravelHasEqualSpacingAtEachDoubling() {
         let scale = MonitorZoomScale(minimum: 1, maximum: 12)
         #expect(abs((scale.position(4) - scale.position(2)) - scale.position(2)) < 0.000001)
@@ -22,7 +35,7 @@ struct MonitorZoomScaleTests {
         #expect(scale.isLabeledTick(1.50))
         #expect(!scale.isLabeledTick(1.53))
         let nearby = scale.dragged(from: 1.53, angleDelta: 0)
-        #expect(nearby == 1.53)
+        #expect(abs(nearby - 1.53) < 1e-12)
         let ticks = MonitorZoomScale.minorTickPositions()
         #expect(ticks.count == 19)
         #expect(ticks.first == 0)
@@ -30,19 +43,7 @@ struct MonitorZoomScaleTests {
         #expect(abs((ticks[1] - ticks[0]) - (ticks[2] - ticks[1])) < 1e-9)
         let step = scale.dragged(from: 1.00, angleDelta: -0.02)
         #expect(step > 1.00 && step < 1.10)
-        #expect(abs(step / 0.01 - (step / 0.01).rounded()) < 1e-9)
-    }
-
-    @Test func slowRotationSnapsToWholeStopsAndFastRotationDoesNot() {
-        let scale = MonitorZoomScale(minimum: 1, maximum: 12)
-        #expect(scale.slowSnap(2.98, current: 2.97) == 3)
-        #expect(scale.slowSnap(3.02, current: 3.00) == 3)
-        #expect(abs(scale.slowSnap(3.08, current: 3.00) - 3.08) < 1e-9)
-        #expect(scale.slowSnap(3.12, current: 3.00) == 3.12)
-        #expect(abs(scale.slowSnap(1.52, current: 1.51) - 1.52) < 1e-9)
-        #expect(scale.slowSnap(6.02, current: 6.00) == 6)
-        let fast = scale.dragged(from: 2.5, angleDelta: -0.4, current: 2.5)
-        #expect(abs(fast - 3) > 0.05)
+        #expect(abs(step / 0.01 - (step / 0.01).rounded()) > 0.001)
     }
 
     @Test func singleStopAndInvalidGeometryStayFinite() {

@@ -1,17 +1,18 @@
 New and changed
 
-- Motion Control loops back and forth and transitions between saved zoom amounts. D-Log2 blocks zoom-changing programs. Paused Restart keeps the program and starts again from A.
+- Motion Control adds a fixed Zoom slider for setting points, loops back and forth between saved zoom amounts, and offers Restart while paused. D-Log2 blocks zoom-changing programs.
 - TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
 - Pocket 3 zoom follows FORMAT limits and refused values settle back. Readouts use consistent formatting across phone languages.
 
 Fixes
 
+- The zoom dial retains fractional input without snapping to hundredths or whole zoom stops. Crossing a whole stop gives one haptic pulse; camera lens smoothness still needs testing.
 - Exact loop reversals accept confirmed arrival with native motor easing, preventing a false waypoint-verification error.
 - Motion Control waypoint letters and path now compensate for selfie orientation and MIRROR. Saved positions and motion stay unchanged.
 - Bluetooth setup reports rejected writes promptly. Connection and picture recovery use bounded retries; Media return starts live view once.
 
 What to test
 
-- Save different zoom at A/B/C and test both loop directions, Pause/Resume and Stop. D-Log2 should block Start without changing color mode. Check selfie markers with MIRROR on/off.
+- Use Zoom without closing Motion Control; SET A/B/C at different amounts. Test both loop directions and Pause/Resume. Compare slow dial zoom with Mimo. D-Log2 recording must disable the slider.
 - Pause and choose Restart: the saved program starts again from A. Scroll in both orientations: actions stay fixed. Close/reopen retains the program; Clear removes points.
 - Connect repeatedly and return from Media. With TalkBack on, check each readout speaks one phrase and assist tap/hold still work. Check Pocket 3 zoom limits per FORMAT.

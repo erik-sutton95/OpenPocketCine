@@ -21,6 +21,12 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.openpocketcine.session.GimbalProgram
+import com.opencapture.monitorui.MonitorZoomScale
+import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.openpocketcine.session.CameraModel
+import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.GimbalWaypoint
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -158,11 +164,14 @@ class MotionProgramSessionTest {
                     val stop = bounds(node("motion.startStop"))
                     val resume = bounds(node("motion.pauseResume"))
                     val restart = bounds(node("motion.restart"))
+                    val zoom = bounds(node("motion.zoom"))
+                    assertFalse(node("motion.zoom").isEnabled, "Manual zoom is disabled while paused")
                     assertTrue(restart.right <= resume.left && resume.right <= stop.left,
                         "Paused actions stay ordered Restart, Resume, Stop")
                     assertTrue(stop.bottom - header.top <= maximumHeightPx + 1,
                         "Editor must fit the available height")
-                    assertTrue(bounds(settings).bottom <= stop.top, "Fade belongs above the actions")
+                    assertTrue(bounds(settings).bottom <= zoom.top && zoom.bottom <= stop.top,
+                        "Fade belongs above the fixed zoom and actions")
                     swipeSettings(scenario, bounds(settings))
                     scrollToEnd()
                     assertEquals(null, state(node("motion.settings")),
@@ -171,6 +180,7 @@ class MotionProgramSessionTest {
                     assertEquals(stop, bounds(node("motion.startStop")))
                     assertEquals(resume, bounds(node("motion.pauseResume")))
                     assertEquals(restart, bounds(node("motion.restart")))
+                    assertEquals(zoom, bounds(node("motion.zoom")))
                     assertTrue(node("motion.loop").isVisibleToUser)
                     scenario.onActivity {
                         assertEquals(null, model!!.gimbalFloatCenter, "Settings scroll must not drag the window")
@@ -179,6 +189,63 @@ class MotionProgramSessionTest {
                     click("motion.startStop")
                     scenario.onActivity { assertFalse(model!!.session.gimbalMoveRunning.value) }
                 }
+            } finally {
+                scenario.onActivity { model?.close() }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Test fun motionZoomUsesContinuousReadoutAndCurrentInteractionAndCameraLimits() {
+        ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
+            var model: AppModel? = null
+            try {
+                scenario.onActivity { activity ->
+                    val app = AppModel(activity)
+                    model = app
+                    val camera = FoundCamera("motion-fixture", "", "Motion fixture", CameraModel("Osmo Pocket 4 Pro"), null)
+                    PocketCameraSession::class.java.getDeclaredField("connectedCamera").apply { isAccessible = true }
+                        .set(app.session, camera)
+                    seed(app.session, "_phase", ConnectionPhase.LIVE)
+                    seed(app.session, "_status", CameraStatus(colorMode = CameraCommands.COLOR_NORMAL, zoomFactor = 1.537))
+                    seed(app.session, "_zoomDialReadout", 1.537)
+                    seed(app.session, "_zoomReadout", 1.5)
+                    app.liveGimbalPanel = LiveGimbalPanel.EDITOR
+                    activity.setContent {
+                        BoxWithConstraints(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
+                            val layout = LiveMonitorLayout.fit(maxWidth.value, maxHeight.value,
+                                0f, 0f, 0f, 0f, showsBottomBars = true)
+                            LiveGimbalOverlay(app, layout, layout.feed, uiLocked = false)
+                        }
+                    }
+                }
+                assertEquals(MonitorZoomScale.position(1.537, 1.0, 12.0).toFloat(),
+                    node("motion.zoom") { it.isEnabled }.rangeInfo.current, 1e-6f)
+                for (guard in listOf("running", "paused", "countdown", "locked", "interaction", "recording D-Log2", "limited mode")) {
+                    scenario.onActivity {
+                        val app = model!!
+                        seed(app.session, "_gimbalMoveRunning", guard in listOf("running", "paused", "countdown"))
+                        seed(app.session, "_gimbalMovePaused", guard == "paused")
+                        seed(app.session, "_gimbalMoveCountdown", if (guard == "countdown") 2 else null)
+                        app.uiLocked = guard == "locked"
+                        app.liveChromeInteractive = guard != "interaction"
+                        seed(app.session, "_status", CameraStatus(
+                            colorMode = if (guard == "recording D-Log2") CameraCommands.COLOR_DLOG2 else CameraCommands.COLOR_NORMAL,
+                            isRecording = guard == "recording D-Log2",
+                            shootingMode = if (guard == "limited mode") CameraCommands.SHOOT_SLOWMO else -1,
+                            zoomFactor = 1.537))
+                        if (guard == "limited mode") {
+                            PocketCameraSession::class.java.getDeclaredField("connectedCamera").apply { isAccessible = true }
+                                .set(app.session, FoundCamera("motion-fixture", "", "Motion fixture", CameraModel("Osmo Pocket 4"), null))
+                        }
+                    }
+                    assertFalse(node("motion.zoom") { !it.isEnabled }.isEnabled, guard)
+                }
+                scenario.onActivity {
+                    model!!.liveChromeInteractive = true
+                    seed(model!!.session, "_status", CameraStatus(colorMode = CameraCommands.COLOR_DLOG2, zoomFactor = 1.0))
+                }
+                assertTrue(node("motion.zoom") { it.isEnabled }.isEnabled, "Idle D-Log2 retains the existing manual color-hop policy")
             } finally {
                 scenario.onActivity { model?.close() }
             }
