@@ -17,7 +17,9 @@ Format / Color / Mode tabs on the details drawer; landscape has no extra
 category row, and shooting mode is its own top control (not FORMAT). ISO,
 shutter, white balance, focus and audio stay along the bottom and remain
 visible while a top picker is open. Auto exposure keeps EV as the value and
-shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
+shows the camera-reported applied shutter under it (`EV 1/200s`), updating as
+Auto adjusts exposure. Missing or unsupported shutter data leaves the caption
+as `EV`. Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value. Camera controls hold your selection while the
 camera confirms it, so an older status update does not briefly move the dial back.
 A rejected or unconfirmed change returns to the reported camera value after settling.

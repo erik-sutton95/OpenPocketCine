@@ -322,6 +322,12 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Auto exposure on iOS and Android reads applied shutter telemetry for the EV
+  caption instead of retaining the remembered manual shutter. Missing or
+  unsupported applied values clear the shutter caption; Manual controls keep
+  their configured readback. The operator confirmed the fix on iPhone 16 Pro Max
+  on 2026-09-22; Android physical validation remains pending.
+
 - Motion Control waypoint letters and the dashed path compensate for settled
   selfie orientation and MIRROR on both shells. Saved positions and motion
   commands are unchanged. Physical camera verification remains pending.

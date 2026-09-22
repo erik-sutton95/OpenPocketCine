@@ -7,11 +7,10 @@ New and changed
 Fixes
 
 - EV is separate from compensation settings. It shows a dash when camera metering is unavailable; DISP 2 and playback hide it.
-- Motion Control help text is brighter, the zoom dial retains fractional input, and loop reversals avoid false waypoint failures.
-- Improved recovery when a running preview loses its video format.
+- Auto exposure shows the camera's applied shutter under EV. Missing or unsupported shutter readings leave only EV visible.
 
 What to test
 
-- Toggle EV in View Assist. Compare with the camera in Auto and Manual, rotate the phone, and check the fixed left-edge placement. Confirm DISP 2 hides it and the on/off choice is saved.
-- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, change a duration, then close/reopen it. Check saved settings remain and actions stay fixed.
-- Hold DE-SQ for presets, Custom and direction. Check framing and playback, then check preview recovery after Media, Settings and background use.
+- Toggle EV, compare its reading with the camera, rotate, then reopen the app to check the saved choice. In Auto, change lighting and compare the shutter caption; switch to Manual and back.
+- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, change a duration, then close/reopen it and check saved settings remain.
+- Hold DE-SQ for presets, Custom and direction. Check framing with LUTs and guides in live view, videos and photos.

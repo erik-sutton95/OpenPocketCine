@@ -971,8 +971,10 @@ class CameraControlTest {
         expo[7] = CameraCommands.EXPO_AUTO.toByte()
         expo[16] = 0x90.toByte()
         expo[17] = 0x01
+        expo[20] = 0xC8.toByte()
+        expo[21] = 0x80.toByte()
         val next = StatusExtras.applyExpo(expo, CameraStatus())
-        assertEquals(50, next.shutterDenom)
+        assertEquals(200, next.shutterDenom)
         assertEquals(0x05, next.isoIndex)
         assertEquals(CameraCommands.EXPO_AUTO, next.expoMode)
         assertEquals(0x10, next.evComp)
@@ -981,6 +983,7 @@ class CameraControlTest {
         manual[7] = CameraCommands.EXPO_MANUAL.toByte()
         manual[6] = 0x0F
         val fromManual = StatusExtras.applyExpo(manual, CameraStatus())
+        assertEquals(50, fromManual.shutterDenom)
         assertEquals(CameraCommands.EXPO_MANUAL, fromManual.expoMode)
         assertEquals(0x0F, fromManual.evComp)
     }

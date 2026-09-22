@@ -5,6 +5,18 @@ description: DUML set/cmd values used on the connection spine, camera control, m
 
 Commands we know for the connection spine, status, camera control, media, and live view. Framing is in [DUML frame](../duml-frame/). This is not a complete vendor dictionary — only what OpenPocketCine has confirmed.
 
+For `cam_expo_param`, distinguish configured shutter at offsets **2–4** from
+applied shutter at **20–22**. The [Action 6 observation](../../devices/action-6/modes/#manual-photo-and-the-full-shutter-representation)
+shows a remembered 1/8000 while Auto applies 1/25. Both app shells use applied
+shutter for the Auto EV caption and keep configured shutter for Manual controls.
+The Auto readout accepts integer reciprocals (`0x8000` bit set, decimal byte
+zero, denominator 1–16000); absent, fractional or seconds values leave only
+`EV` visible. It never substitutes the remembered manual setting. ISO telemetry
+continues reading offsets 16–17, and requested EV remains at offset 6.
+These paths have synthetic regression coverage. The operator confirmed the fix
+on iPhone 16 Pro Max with build source `0645792d` on 2026-09-22; the camera
+model was not recorded. Android physical verification remains pending.
+
 | set/cmd | meaning | notes |
 |---|---|---|
 | `0x07/0x45` | SetPairingPIN | pairing handshake |

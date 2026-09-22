@@ -140,8 +140,15 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Gated by Haptics.
 - Camera-value pickers (ISO, shutter/EV, exposure, WB, focus, audio) grow from
   bottom-center. Auto-exposure EV keeps the compensation as the value and shows
-  the camera-chosen shutter in the caption (`EV 1/200s`); a missing denom stays
-  `EV`. FORMAT, COLOR and shooting mode hang from the top well of those
+  the applied shutter in the caption (`EV 1/200s`), using `cam_expo_param`
+  offsets 20–22 in Auto on both shells. Offsets 2–4 retain the manual setting.
+  Missing or unsupported applied values clear the caption to `EV`; the current
+  readout supports integer reciprocals only. ISO continues using offsets 16–17.
+  Updates retain the existing 5 Hz HUD budget without polling or additional
+  camera commands. Regression coverage exercises changing Auto telemetry and
+  Manual settling. The operator confirmed the fix on iPhone 16 Pro Max with
+  build source `0645792d` on 2026-09-22; the camera model was not recorded.
+  Android physical qualification remains pending. FORMAT, COLOR and shooting mode hang from the top well of those
   controls: portrait details sit under the info bar and keep Format / Color / Mode
   category tabs; landscape attaches to the screen top with no extra category row.
   Portrait floating lower corners are 16; landscape attached bottom edges stay

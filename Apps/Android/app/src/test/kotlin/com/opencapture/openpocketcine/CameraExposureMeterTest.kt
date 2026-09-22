@@ -58,7 +58,7 @@ class CameraExposureMeterTest {
             assertEquals("—", meter.label)
             assertEquals("Camera exposure meter, unavailable", meter.accessibilityLabel)
         }
-        val missing = StatusExtras.applyExpo(ByteArray(15), prior)
+        val missing = StatusExtras.applyExpo(ByteArray(15).apply { this[6] = 0x10 }, prior)
         assertEquals(0x10, missing.evComp)
         assertEquals(-1, missing.meteredEv)
         val invalid = StatusExtras.applyExpo(exposure(CameraCommands.EXPO_AUTO, 0x10, 0), prior)
