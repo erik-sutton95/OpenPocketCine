@@ -4,7 +4,7 @@ package com.opencapture.openpocketcine.session
  * Overlay fields the JNI status JSON does not yet carry, parsed from the same
  * subscribe pushes / GET replies the camera already sends.
  *
- * `cam_expo_param` uses the labeled Mimo offsets: shutter `@2–3` (`denom|0x8000`),
+ * `cam_expo_param` uses applied shutter `@20–22` in Auto, configured `@2–3` otherwise,
  * ISO index `@5`, EV `@6`, expo mode `@7`, ISO number `@16`.
  */
 object StatusExtras {
@@ -48,7 +48,7 @@ object StatusExtras {
     }
 
     fun applyExpo(value: ByteArray, status: CameraStatus): CameraStatus {
-        if (value.size < 18) return status
+        if (value.size < 8) return status
         var next = status
         if (value.size > 7) {
             val mode = value[7].toInt() and 0xFF
@@ -59,13 +59,24 @@ object StatusExtras {
         if (value.size > 5) {
             next = next.copy(isoIndex = value[5].toInt() and 0xFF)
         }
-        val shutterRaw = u16(value, 2)
-        if (shutterRaw and 0x8000 != 0) {
-            val denom = shutterRaw and 0x7FFF
-            if (denom in 1..16_000) next = next.copy(shutterDenom = denom)
+        if (value[7].toInt() == CameraCommands.EXPO_AUTO) {
+            // The manual setting stays fixed in Auto. Never use it as a fallback.
+            val raw = if (value.size >= 23) u16(value, 20) else 0
+            val denom = raw and 0x7FFF
+            val supported = value.size >= 23 && raw and 0x8000 != 0 &&
+                value[22].toInt() == 0 && denom in 1..16_000
+            next = next.copy(shutterDenom = if (supported) denom else -1)
+        } else {
+            val shutterRaw = u16(value, 2)
+            if (shutterRaw and 0x8000 != 0) {
+                val denom = shutterRaw and 0x7FFF
+                if (denom in 1..16_000) next = next.copy(shutterDenom = denom)
+            }
         }
-        val iso = u16(value, 16)
-        if (iso in 50..102_400) next = next.copy(iso = iso)
+        if (value.size >= 18) {
+            val iso = u16(value, 16)
+            if (iso in 50..102_400) next = next.copy(iso = iso)
+        }
         if (value.size > 6) {
             val ev = value[6].toInt() and 0xFF
             next = next.copy(evComp = if (ev in 0x07..0x19) ev else -1)

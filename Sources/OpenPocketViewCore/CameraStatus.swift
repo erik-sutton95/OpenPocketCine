@@ -36,7 +36,8 @@ public struct CameraStatus: Equatable, Sendable {
     public var evComp: EvComp?
     /// Last `0x8E` pid `0x000F` GET reply (Auto ISO ceiling).
     public var isoLimit: IsoLimit?
-    /// Shutter as 1/N from `cam_expo_param` `@2–3` (`denom | 0x8000`). `-1` unknown. Not `@16`.
+    /// Shutter as 1/N: applied `cam_expo_param` `@20–22` in Auto, configured
+    /// `@2–3` otherwise. `-1` unknown or unsupported by the integer readout.
     public var shutterDenom: Int = -1
     /// Legal 1/N denoms from `camcap_shutter`, camera order. Empty until the cap push.
     public var availableShutterDenoms: [Int] = []
@@ -311,7 +312,11 @@ public enum CameraStatusDecoder {
             return !formats.isEmpty
         case "cam_expo_param" where item.value.count >= 8:
             if let mode = ExpoMode.parseExpoParam(item.value) { status.expoMode = mode }
-            if let denom = ExpoParam.shutterDenom(item.value) { status.shutterDenom = denom }
+            if ExpoMode.parseExpoParam(item.value) == .auto {
+                status.shutterDenom = ExpoParam.shutterDenom(item.value) ?? -1
+            } else if let denom = ExpoParam.shutterDenom(item.value) {
+                status.shutterDenom = denom
+            }
             if let idx = ExpoParam.isoIndex(item.value) { status.isoIndex = idx }
             if let iso = ExpoParam.isoValue(item.value) { status.iso = iso }
             status.evComp = ExpoParam.evComp(item.value)

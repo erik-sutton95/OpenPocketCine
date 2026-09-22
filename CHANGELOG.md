@@ -291,6 +291,11 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Auto exposure on iOS and Android reads applied shutter telemetry for the EV
+  caption instead of retaining the remembered manual shutter. Missing or
+  unsupported applied values clear the shutter caption; Manual controls keep
+  their configured readback. Physical Pocket lighting-change validation is pending.
+
 - Both shells can recover an established live feed after the decoder loses its
   video format while compressed frames keep arriving. The existing watchdog
   still owns the single repair and bounded escalation; startup and grace gates

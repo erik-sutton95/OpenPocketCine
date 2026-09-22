@@ -1,3 +1,4 @@
+import MonitorPresentation
 import OpenPocketViewCore
 import XCTest
 
@@ -5,6 +6,31 @@ import XCTest
 
 @MainActor
 final class CameraDialReconciliationTests: XCTestCase {
+    func testAutoShutterCaptionTracksTelemetryWhileEVIsSettling() {
+        let session = CameraSession(borrowing: HevcDecoder())
+        session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        defer { session.disconnect() }
+        session.status.expoMode = .auto
+        session.setEv(EvComp(thirds: 1))
+        for (shutter, iso) in [(25, 800), (200, 100)] {
+            var value = [UInt8](repeating: 0, count: 46)
+            value[2] = 0x40
+            value[3] = 0x9F  // Remembered 1/8000 stays fixed.
+            value[6] = 0x10  // Older EV must not pin the live shutter or ISO.
+            value[7] = 0x01
+            value[16] = UInt8(iso & 0xFF)
+            value[17] = UInt8(iso >> 8)
+            value[20] = UInt8(shutter)
+            value[21] = 0x80
+            session.applyIncomingStatus(subscribe("cam_expo_param", value))
+            XCTAssertEqual(
+                MonitorExposureReadout.autoEvCaption(shutterDenom: session.status.shutterDenom),
+                "EV 1/\(shutter)s")
+            XCTAssertEqual(session.status.iso, iso)
+            XCTAssertEqual(session.status.evComp, EvComp(thirds: 1))
+        }
+    }
+
     func testShootingModeDoesNotBounceThroughAnOlderStatusPush() {
         let session = CameraSession(borrowing: HevcDecoder())
         // An unopened driver admits the command without opening a socket.
