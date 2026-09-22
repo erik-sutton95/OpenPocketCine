@@ -425,14 +425,26 @@ from physical qualification;
 the operator confirmed the corrected A/B loop on iPhone. Broader physical loop
 qualification and sustained live-view budget checks remain pending on both shells.
 
-Programmed zoom (2026-09-21): differing saved zoom amounts drive at most 20 Hz
-absolute lens targets alongside the timed gimbal path in both shells. Zoom visits
+Programmed zoom (2026-09-22): differing saved zoom amounts drive at most 20 Hz
+zoom rate refreshes alongside the timed gimbal path in both shells. Pocket 4 Pro uses
+native continuous speed/direction during timed legs, with one absolute command
+to prepare A. Slower edges and a faster middle fit intermediate durations;
+longer legs wait before zooming continuously to finish at the waypoint. Takes
+faster than the native speed ceiling or with under-50-ms native travel are blocked.
+Exact transition deadlines share the transport timer and reserve their dispatch
+slot; STOP bypasses rate refresh admission. Fresh lens feedback must confirm A
+within two lens ticks before timed zoom begins. Other bodies retain absolute
+targets pending native-rate calibration. Native lens feedback has an 850 ms
+freshness deadline, independently of the 300 ms gimbal feedback deadline. Zoom targets
 B's amount even when the angular path rounds B, reverses in Loop, pauses/stops
 with the take and resumes from fresh settled lens feedback. Restart restores the
 saved zoom path. D-Log2 blocks zoom-changing programs while idle and recording;
 no automatic color change occurs. Raw camera color/FORMAT changes can stop a take
 before its next zoom write. Gimbal-only programs remain available in D-Log2.
-Zoom accuracy and integrated Restart still await physical qualification.
+A physical iPhone/Pocket 4 Pro comparison showed substantially fewer still frames
+and smaller frame-to-frame jumps with native zoom. Endpoint accuracy and integrated
+Restart still await qualification. Android code, tests and build match; physical
+Android validation remains pending because no device is attached.
 
 Motion zoom controls (2026-09-22): both shells keep the existing chip and disc
 accessible while the editor remains open, replacing the added in-editor slider.
@@ -441,8 +453,8 @@ Simulator and native hit-testing checks cover editor retention and the control
 exclusions. Android instrumentation builds but cannot run without an attached
 device. Physical iPhone layout verification remains pending: earlier XCTest
 launches timed out enabling automation, and the phone disconnected before the
-latest camera comparison could run. The reported programmed-zoom ticking remains
-unresolved; see [measurement limits](programmed-moves.md#evidence-and-qualification).
+first camera comparison could run. The later native-rate video comparison improved
+programmed-zoom continuity; see [measurement limits](programmed-moves.md#evidence-and-qualification).
 
 ## Multiview session network and shutdown (in validation)
 

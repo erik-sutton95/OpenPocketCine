@@ -206,4 +206,26 @@ class GimbalProgramZoomTest {
         val measured = NativeGimbalFeedback.from(DumlFrame(0, 0, 1, 0, 4, 5, pitch), 12.0, status.zoomFactor!!)!!
         assertTrue(abs(measured.pose.zoom - 3.0) < 1e-9)
     }
+
+    @Test fun nativeResumeAllowsTheMeasuredLensCadenceButStillNeedsRecentStableFeedback() {
+        val payload = ByteArray(16).also { it[14] = 0x8B.toByte(); it[15] = 0x02 }
+        val lens = DumlFrame(0, 0, 1, 0, 0, 0x99, StatusExtras.packSubscribe("cam_lens_state", payload))
+        var native = NativeProgramZoomObservation(ready).notePause(1.0)
+        native = native.observing(lens, pro, 1.2).observing(lens, pro, 1.6)
+        assertTrue(native.canResume(1.7), "Two distinct 2.5 Hz lens receipts can prove a settled zoom")
+        assertFalse(native.canResume(1.91), "Resume still needs a receipt no older than 300 ms")
+        native = native.observing(lens, pro, 2.5)
+        assertFalse(native.canResume(2.5), "A gap beyond 850 ms resets stability")
+        val other = NativeProgramZoomObservation(ready).notePause(1.0)
+            .observing(lens, CameraModel("Osmo Pocket 3"), 1.2)
+            .observing(lens, CameraModel("Osmo Pocket 3"), 1.6)
+        assertFalse(other.canResume(1.6), "Unmeasured bodies retain the previous continuity threshold")
+        val stability = NativeZoomPauseStability(maximumGap = 0.85)
+        stability.reset(1.0)
+        stability.observe(NativeGimbalFeedback(a.copy(zoom = 3.0), 1.2, 1.2))
+        stability.observe(NativeGimbalFeedback(a.copy(zoom = 3.0), 1.6, 1.6))
+        assertTrue(stability.ready(1.7))
+        stability.observe(NativeGimbalFeedback(a.copy(zoom = 3.0), 2.5, 2.5))
+        assertFalse(stability.ready(2.5))
+    }
 }

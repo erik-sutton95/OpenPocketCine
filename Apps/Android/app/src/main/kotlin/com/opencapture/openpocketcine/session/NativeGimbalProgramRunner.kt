@@ -33,7 +33,8 @@ internal data class NativeProgramZoomObservation(val status: CameraStatus = Came
         }
         val lens = CamFov.pinchLens(next.zoomFactor)
         val gap = receivedAt?.let { now - it } ?: Double.POSITIVE_INFINITY
-        val changed = (stableLens == null || gap > 0.3 || abs(stableLens - lens) > 1) && (pausedAt == null || now > pausedAt)
+        val maximumGap = if (CameraModel.looksLikePocket4Pro(model.name)) 0.85 else 0.3
+        val changed = (stableLens == null || gap > maximumGap || abs(stableLens - lens) > 1) && (pausedAt == null || now > pausedAt)
         return copy(status = next, receivedAt = now,
             stableSince = if (changed) now else stableSince, stableLens = if (changed) lens else stableLens)
     }
@@ -49,7 +50,7 @@ internal data class NativeProgramZoomObservation(val status: CameraStatus = Came
 }
 
 /** Only distinct lens reports after STOP can establish stable zoom for Resume. */
-internal class NativeZoomPauseStability {
+internal class NativeZoomPauseStability(private val maximumGap: Double = 0.3) {
     private var pausedAt = Double.POSITIVE_INFINITY
     private var latestAt: Double? = null
     private var stableSince: Double? = null
@@ -68,7 +69,7 @@ internal class NativeZoomPauseStability {
         if (!sample.pose.zoom.isFinite()) return
         val lens = CamFov.pinchLens(sample.pose.zoom)
         val gap = latestAt?.let { receipt - it } ?: Double.POSITIVE_INFINITY
-        if (anchorLens == null || gap > 0.3 || abs(lens - anchorLens!!) > 1) {
+        if (anchorLens == null || gap > maximumGap || abs(lens - anchorLens!!) > 1) {
             anchorLens = lens
             stableSince = receipt
         }
@@ -96,8 +97,18 @@ internal fun nativeProgramZoomFailure(program: GimbalProgram, model: CameraModel
     }
     if (status.zoomFactor?.let { it.isFinite() && it in 1.0..ceiling } != true ||
         target?.let { !it.isFinite() || it !in 1.0..ceiling } == true) return "Wait for camera zoom feedback"
+    if (CameraModel.looksLikePocket4Pro(model.name)) {
+        GimbalZoomPath(program).legs.firstNotNullOfOrNull {
+            NativeProgramZoom.timingFailure(it.from, it.to, it.duration)
+        }?.let { return it }
+    }
     return null
 }
+
+/** Angular reports cannot refresh the lens report's independent 2.5 Hz evidence. */
+internal fun nativeProgramZoomFeedbackFailure(receivedAt: Double?, now: Double): String? =
+    if (receivedAt != null && now.isFinite() && now >= receivedAt && now - receivedAt <= 0.85) null
+    else "Move interrupted — camera zoom feedback lost"
 
 /** Existing subscribe/status frames are consumed before the main-thread status callback. */
 internal fun nativeProgramZoomStatus(frame: DumlFrame, status: CameraStatus, model: CameraModel): CameraStatus {
@@ -128,6 +139,8 @@ internal class NativeGimbalProgramRunner(
     private val stopZoom: () -> Unit = {},
     private val noteZoomPause: (Double) -> Unit = {},
     private val zoomResumeReady: (Double) -> Boolean = { true },
+    private val usesNativeZoom: Boolean = false,
+    private val sendNativeZoom: (NativeProgramZoomCommand, GimbalProgram) -> Boolean = { _, _ -> false },
 ) {
     data class Progress(val token: Long, val program: GimbalProgram, val live: GimbalWaypoint?,
         val readout: GimbalMoveEngine.Readout?, val failure: String?, val finished: Boolean,
@@ -138,7 +151,10 @@ internal class NativeGimbalProgramRunner(
         val publish: (Progress) -> Unit, var lastTick: Double, var lastPublish: Double = Double.NEGATIVE_INFINITY,
         val stability: NativePauseStability = NativePauseStability(),
         val zoomStability: NativeZoomPauseStability = NativeZoomPauseStability(),
-        var nextZoomAt: Double = lastTick, var lastZoomLens: Int? = null, var ownsZoom: Boolean = false)
+        var nextZoomAt: Double = lastTick, var lastZoomLens: Int? = null, var ownsZoom: Boolean = false,
+        var lastNativeZoom: NativeProgramZoomCommand? = null,
+        var lastNativeRateAt: Double = Double.NEGATIVE_INFINITY,
+        var preparationZoom: Double? = null, var preparationSentAt: Double? = null)
 
     private data class Request(val token: Long, val program: GimbalProgram, val publish: (Progress) -> Unit)
     private val controlLock = Any()
@@ -175,7 +191,8 @@ internal class NativeGimbalProgramRunner(
                         engine.failure ?: "Set reachable gimbal points again", true, epoch = epoch))
                     return@schedule
                 }
-                val run = Run(token, program, engine, publish, current)
+                val run = Run(token, program, engine, publish, current,
+                    zoomStability = NativeZoomPauseStability(if (usesNativeZoom) 0.85 else 0.3))
                 active = run
                 if (!sampleZoom(run, current, epoch)) return@schedule
                 if (generation.get() != token || callbackEpoch.get() != epoch) return@schedule
@@ -244,7 +261,8 @@ internal class NativeGimbalProgramRunner(
             if (run == null && sample != null) {
                 val engine = GimbalMoveEngine()
                 if (engine.start(saved.program, sample.pose)) {
-                    run = Run(token, saved.program, engine, saved.publish, now())
+                    run = Run(token, saved.program, engine, saved.publish, now(),
+                        zoomStability = NativeZoomPauseStability(if (usesNativeZoom) 0.85 else 0.3))
                     active = run
                 }
             }
@@ -292,6 +310,10 @@ internal class NativeGimbalProgramRunner(
             run.lastTick = now()
             run.nextZoomAt = run.lastTick
             run.lastZoomLens = null
+            run.lastNativeZoom = null
+            run.lastNativeRateAt = Double.NEGATIVE_INFINITY
+            run.preparationZoom = null
+            run.preparationSentAt = null
             publish(run, pose, false, force = true)
             wake(run, run.lastTick + 0.000001)
         }
@@ -325,6 +347,11 @@ internal class NativeGimbalProgramRunner(
                 return@schedule
             }
             zoomFailure(run.program)?.let { fail(run, sample.pose, it); return@schedule }
+            if (usesNativeZoom && run.program.changesZoom) {
+                nativeProgramZoomFeedbackFailure(sample.zoomReceivedAt, current)?.let {
+                    fail(run, sample.pose, it); return@schedule
+                }
+            }
             val out = run.engine.tick(current - run.lastTick, sample.pose, current - sample.receivedAt)
             run.lastTick = current
             if (out == null) {
@@ -335,7 +362,7 @@ internal class NativeGimbalProgramRunner(
             if (!out.finished && !sampleZoom(run, current, epoch)) return@schedule
             if (generation.get() != run.token || callbackEpoch.get() != epoch) return@schedule
             if (out.stop) stop()
-            if (out.stop) stopOwnedZoom(run)
+            if (out.stop || out.finished) stopOwnedZoom(run)
             if (out.target != null && !send(out.target, out.duration)) {
                 fail(run, sample.pose, "Set reachable gimbal points again")
                 return@schedule
@@ -357,6 +384,12 @@ internal class NativeGimbalProgramRunner(
     private fun sampleZoom(run: Run, current: Double, epoch: Long): Boolean {
         if (!run.program.changesZoom) return true
         zoomFailure(run.program)?.let { fail(run, feedback()?.pose, it); return false }
+        if (usesNativeZoom) {
+            nativeProgramZoomFeedbackFailure(feedback()?.zoomReceivedAt, current)?.let {
+                fail(run, feedback()?.pose, it); return false
+            }
+        }
+        if (usesNativeZoom) return sampleNativeZoom(run, current, epoch)
         if (current + 1e-9 < run.nextZoomAt) return true
         val target = run.engine.consumeProgrammedZoomTarget() ?: return true
         run.nextZoomAt = current + 0.05
@@ -369,6 +402,61 @@ internal class NativeGimbalProgramRunner(
             return false
         }
         run.lastZoomLens = lens
+        run.ownsZoom = true
+        return true
+    }
+
+    private fun sampleNativeZoom(run: Run, current: Double, epoch: Long): Boolean {
+        val demand = run.engine.nativeZoomDemand ?: return true
+        demand.failureReason?.let { fail(run, feedback()?.pose, it); return false }
+        zoomTargetFailure(demand.destination, run.program)?.let { fail(run, feedback()?.pose, it); return false }
+        val command = demand.command
+        if (command !is NativeProgramZoomCommand.Position) {
+            val expected = run.preparationZoom
+            val sentAt = run.preparationSentAt
+            if (expected != null && sentAt != null) {
+                val sample = feedback()
+                val verified = sample != null && sample.zoomReceivedAt?.let { it > sentAt } == true &&
+                    abs(sample.pose.zoom - expected) <= 2.0 / 217.0 + 1e-9
+                if (!verified) {
+                    fail(run, sample?.pose, "Move interrupted — camera did not reach the starting zoom")
+                    return false
+                }
+            }
+        }
+        run.nextZoomAt = current + demand.nextChange
+        when (command) {
+            is NativeProgramZoomCommand.Position -> if (command == run.lastNativeZoom) return true
+            is NativeProgramZoomCommand.Rate -> {
+                if (command.speed !in NativeProgramZoom.SLOWEST_SPEED..NativeProgramZoom.FASTEST_SPEED) return true
+                val due = run.lastNativeRateAt + NativeProgramZoom.INTERVAL
+                if (command == run.lastNativeZoom && demand.nextChange < NativeProgramZoom.INTERVAL - 1e-9) return true
+                if (current < due - 1e-9) {
+                    run.nextZoomAt = minOf(run.nextZoomAt, due)
+                    return true
+                }
+            }
+            NativeProgramZoomCommand.Stop -> if (!run.ownsZoom || command == run.lastNativeZoom) return true
+        }
+        when (command) {
+            is NativeProgramZoomCommand.Position -> {
+                run.preparationZoom = command.factor
+                run.preparationSentAt = current
+            }
+            is NativeProgramZoomCommand.Rate -> {
+                run.lastNativeRateAt = current
+                run.nextZoomAt = minOf(run.nextZoomAt, current + NativeProgramZoom.INTERVAL)
+                run.preparationZoom = null
+                run.preparationSentAt = null
+            }
+            NativeProgramZoomCommand.Stop -> Unit
+        }
+        if (generation.get() != run.token || callbackEpoch.get() != epoch) return false
+        if (!sendNativeZoom(command, run.program)) {
+            fail(run, feedback()?.pose, zoomFailure(run.program) ?: "Move interrupted — zoom command failed")
+            return false
+        }
+        run.lastNativeZoom = command
         run.ownsZoom = true
         return true
     }

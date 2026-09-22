@@ -84,16 +84,32 @@ an active or paused take cancels that take through the existing takeover path.
 Pointer input retains fractional values; hundredths are only a readout format.
 
 Save each point at the desired zoom. A zoom-changing take sets A's zoom during
-preparation, then interpolates A→B and optional B→C over their chosen durations.
-Zoom reaches B's saved amount even when Smoothness rounds the angular path past B.
-The background transport scheduler sends distinct absolute lens targets at no
-more than 20 Hz, with 50 ms look-ahead clipped at each zoom endpoint. An endpoint
-stays pending until sampled so an accepted late callback cannot skip its amount.
-There is no extra GET loop, color change, ACK timer or live-view enable.
-Interpolation retains Double precision until the existing absolute command
-encodes an integer lens position (217 units per 1×); the wire format does not
-carry a floating-point zoom factor. Removing dial rounding does not change
-this programmed command stream or establish smooth physical lens response.
+preparation, then schedules A→B and optional B→C against their chosen durations.
+Zoom targets B's saved amount even when Smoothness rounds the angular path past B.
+On Pocket 4 Pro, the background scheduler uses the camera's continuous zoom
+speed-and-direction commands, refreshed at no more than 20 Hz. Preparing A still
+uses one absolute position command. The timed take uses native speeds with slower
+edges and, when needed, a faster middle; it does not repeatedly seek intermediate
+positions or pulse STOP to synthesize a slower speed. Native zoom has seven speed
+settings. A long leg waits before zooming at the slowest speed so zoom finishes
+at the waypoint. A leg faster than the highest native speed allows cannot start.
+Zoom differences
+requiring less than 50 ms at the slowest speed (about 1.05% of the starting amount)
+are also rejected, including a paused remainder that becomes too small. Keep those
+points at the same zoom or increase the difference. Each native rate span lasts
+at least 50 ms; very short ideal gear spans are combined while retaining the
+integrated rate and waypoint deadline. Phase transitions wake the existing
+scheduler directly; identical refreshes yield their slot to the next transition.
+STOP is immediate. Before the first timed rate, a post-preparation lens report must
+place A within two lens ticks; a lost setup command cannot silently offset the take.
+The calibrated rate schedule is specific to Pocket 4 Pro; other bodies retain
+the existing absolute-target path until their native rate response is measured.
+No extra GET loop, color change, ACK timer or live-view enable is added.
+The camera's absolute wire format remains an integer lens position (217 units
+per 1×); native continuous zoom controls speed rather than a floating-point
+position. Lens feedback must remain fresh within 850 ms during native moves,
+allowing for the body's measured 2.5 Hz lens subscription. Gimbal feedback has
+its existing separate 300 ms deadline.
 
 Loop reverses the zoom path with the gimbal. Pause and Stop retire future zoom
 commands and send the existing zoom STOP after lens ownership has begun. Resume
@@ -221,8 +237,9 @@ Native targets bypass the held-stick stream, which is rested before a move.
 Manual and head-tracking stick control retain their existing 25 Hz pump. The
 40 Hz ACK queue remains unchanged. Motion supervision and waypoint overlays
 run at up to 25 Hz; session progress remains 5 Hz without a debug overlay.
-Zoom-changing takes add at most 20 Hz distinct lens SETs on that same scheduler,
-using the existing zoom watchdog grace. No extra GET loop, decoder reset or
+Zoom-changing takes add at most 20 Hz zoom rate/target refreshes on that same scheduler,
+using the existing zoom watchdog grace. STOP remains immediate. No extra GET loop,
+decoder reset or
 live-view enable is introduced. See [performance](PERFORMANCE.md).
 
 ## Evidence and qualification
@@ -273,13 +290,43 @@ A 2026-09-22 Pocket 4 Pro/iPhone comparison sent a single 1×→2× target with
 absolute-command speed bytes `0x48` and `0x4E`. The camera accepted both, but
 status feedback exposed no intermediate lens positions in either transition.
 That telemetry is too sparse to establish visual smoothness or a speed benefit;
-the production command format and 20 Hz limit remain unchanged. General dial
-rounding and whole-stop snapping are removed independently. Physical comparison
-with Mimo and the camera controls remains pending. The operator still reports
+that experiment retained the absolute command format and 20 Hz limit. General dial
+rounding and whole-stop snapping are removed independently. The operator subsequently reported
 visible ticking during a roughly 3×→6×, 2.5-second programmed leg. A follow-up
 capture pairing command timestamps with actual preview frames was prepared, but
-the iPhone disconnected before it could run. No higher-rate or alternative zoom
-command has been validated or shipped.
+the iPhone disconnected before it could run. That attempt did not validate a
+higher-rate or alternative zoom command.
+
+A subsequent 2026-09-22 Mimo rocker capture on Pocket 4 Pro observed 140 native
+`01 <speed> <direction> 00` requests with matching successful replies, including
+speed bytes `48` and `49`, plus a successful `FF 00 00 00` STOP on release. Lens reports
+moved 1×→approximately 4.36×→1×. A direct body probe measured the slowest native
+logarithmic rate at approximately 0.208/s; the next speeds are integer multiples.
+These seven speed bytes (72–78) also match DJI's
+[zoom-speed enumeration](https://developer.dji.com/doc/payload-sdk-api-reference/en/core/dji-typedef.html).
+This evidence establishes native rate acceptance on that body, not a calibration
+for all Pocket models.
+
+A subsequent physical comparison ran stationary-gimbal 3×↔6× loops at 2.5 seconds
+per leg, first with repeated absolute targets and then native rates. Production
+depacketizer replay and video decoding yielded 1,539 and 1,488 frames respectively,
+with no incomplete access-unit drops. Image registration over the moving windows
+found near-still adjacent frames (absolute log scale change below 0.001) in 26.0%
+of the absolute run versus 2.4% of the native run; 99th-percentile scale changes
+fell from 0.0474 to 0.0173. This is a one-scene functional comparison, not general
+optical qualification. The native run sent 347 rate commands, with absolute
+commands only for setup/restoration; all 351 zoom requests including STOP received
+successful replies. During the native window, ACK submission stayed at 40 Hz,
+median GPU delivery was 25.1 fps, maximum video gap was 84 ms, and no queue or
+incomplete-frame drops or recovery enables were logged. Sparse lens feedback
+peaked near 6.05× for the 6× target.
+The rate schedule is calibrated and open loop between reports; exact lens endpoint
+accuracy is not verified by the gimbal checks. Android physical testing remains
+pending without an attached device. The final pause/resume/Restart hardware probe
+could not run because camera Wi-Fi did not rejoin before its bounded timeout;
+the iPhone then disconnected before installation of the clean final build. Those
+controls pass deterministic regressions but remain physically unverified for
+native-rate zoom.
 
 `just gimbal-test` exercises camera-timed command dispatch, sparse feedback at
 reversals, motor easing, early-only waypoint observations, late dispatch, missing feedback,

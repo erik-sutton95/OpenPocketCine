@@ -239,6 +239,20 @@ class DatalinkDriver internal constructor(
             }
         },
         zoomResumeReady = { readNativeZoomObservation().canResume(it) },
+        usesNativeZoom = CameraModel.looksLikePocket4Pro(cameraModel.name),
+        sendNativeZoom = { command, program ->
+            val now = SystemClock.elapsedRealtimeNanos() / 1e9
+            if (closed.get() || programmedZoomFailure(program) != null ||
+                nativeProgramZoomFeedbackFailure(readNativeZoomObservation().receivedAt, now) != null) false else {
+                sendDumlLocked(0x02, CameraCommands.CMD_ZOOM, command.payload, CameraCommands.FLAG_REQUEST,
+                    CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP).also { sent ->
+                    if (sent) {
+                        nativeZoomOwned.set(true)
+                        lastNativeZoomWriteAt.set(SystemClock.elapsedRealtime())
+                    }
+                }
+            }
+        },
     )
     /** One hop at a time; admission already caps pending AUs. Unbounded execute would replay a GOP. */
     private val decodeExecutor = Executors.newSingleThreadExecutor { Thread(it, "opc.hevc") }
@@ -786,6 +800,9 @@ class DatalinkDriver internal constructor(
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
     private fun discardUdp(keepPoke: Boolean) {
         if (!closed.get()) nativeProgramRunner.interrupt()
+        // Best effort on the retiring socket, before its epoch can be replaced.
+        if (nativeZoomOwned.getAndSet(false)) sendDumlLocked(0x02, CameraCommands.CMD_ZOOM,
+            CameraCommands.zoomStop(), CameraCommands.FLAG_REQUEST, CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP)
         retireVideoEpoch()
         ackDispatch.invalidate()
         nativeProgramFeedback.set(null)

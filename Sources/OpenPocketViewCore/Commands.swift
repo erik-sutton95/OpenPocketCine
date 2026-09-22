@@ -480,6 +480,11 @@ public enum Commands {
         setZoomLens(CamFov.lensPosition(for: factor), seq: seq)
     }
 
+    /// Mimo held zoom: `01 rate direction 00`; refresh while held, then STOP.
+    public static func setZoomRate(_ rate: UInt8, increasing: Bool, seq: UInt16 = 0) -> Duml.Frame {
+        camera(0xB8, [0x01, min(78, max(72, rate)), increasing ? 0x01 : 0x00, 0x00], seq: seq)
+    }
+
     /// `0x02/0xb8` `03 00` + u16-LE. 100 (`64 00`) slews toward 12×; 300
     /// (`2C 01`) from 12× lands at 9.15×. ACK `00`.
     public static func setZoomSlew(_ value: UInt16, seq: UInt16 = 0) -> Duml.Frame {

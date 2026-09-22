@@ -26,6 +26,17 @@ internal data class GimbalZoomPath(val legs: List<Leg>) {
         return end
     }
 
+    fun nativeDemand(time: Double): NativeProgramZoomDemand {
+        var remaining = time.coerceAtLeast(0.0)
+        for (leg in legs) {
+            if (remaining < leg.duration - 1e-9) {
+                return NativeProgramZoom.demand(leg.from, leg.to, leg.duration, remaining)
+            }
+            remaining = maxOf(0.0, remaining - leg.duration)
+        }
+        return NativeProgramZoomDemand(NativeProgramZoomCommand.Stop, end)
+    }
+
     fun remaining(time: Double, zoom: Double, quantized: Boolean): GimbalZoomPath {
         val next = legs.toMutableList()
         var consumed = time.coerceAtLeast(0.0)

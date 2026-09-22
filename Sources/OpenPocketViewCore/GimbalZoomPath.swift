@@ -33,6 +33,18 @@ struct GimbalZoomPath: Equatable, Sendable {
         return end
     }
 
+    func nativeDemand(at time: TimeInterval) -> NativeProgramZoomDemand {
+        var remaining = max(0, time)
+        for leg in legs {
+            if remaining < leg.duration - 1e-9 {
+                return NativeProgramZoom.demand(from: leg.from, to: leg.to,
+                    duration: leg.duration, elapsed: remaining)
+            }
+            remaining = max(0, remaining - leg.duration)
+        }
+        return .init(command: .stop, destination: end)
+    }
+
     func remaining(after time: TimeInterval, from zoom: Double, quantized: Bool) -> Self {
         var result = self
         var consumed = max(0, time)
