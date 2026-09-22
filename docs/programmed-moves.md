@@ -88,18 +88,20 @@ preparation, then schedules A→B and optional B→C against their chosen durati
 Zoom targets B's saved amount even when Smoothness rounds the angular path past B.
 On Pocket 4 Pro, the background scheduler uses the camera's continuous zoom
 speed-and-direction commands, refreshed at no more than 20 Hz. Preparing A still
-uses one absolute position command. The timed take uses native speeds with slower
-edges and, when needed, a faster middle; it does not repeatedly seek intermediate
-positions or pulse STOP to synthesize a slower speed. Native zoom has seven speed
-settings. A long leg waits before zooming at the slowest speed so zoom finishes
-at the waypoint. A leg faster than the highest native speed allows cannot start.
-Zoom differences
+uses one absolute position command. Each timed leg holds one native speed for its
+entire moving portion. Changing between adjacent native speeds is visibly abrupt,
+so the app does not switch gears mid-leg, seek intermediate positions or pulse
+STOP to synthesize a different speed. Native zoom has seven speed settings.
+The app chooses the slowest gear that can cover the zoom range by the waypoint,
+and delays the zoom start when that gear would otherwise arrive early. The chosen
+gimbal duration is unchanged. This waiting interval can occur at the start of a
+reverse loop leg as well; zoom does not necessarily move throughout the whole leg.
+A leg faster than the highest native speed allows cannot start. Zoom differences
 requiring less than 50 ms at the slowest speed (about 1.05% of the starting amount)
 are also rejected, including a paused remainder that becomes too small. Keep those
-points at the same zoom or increase the difference. Each native rate span lasts
-at least 50 ms; very short ideal gear spans are combined while retaining the
-integrated rate and waypoint deadline. Phase transitions wake the existing
-scheduler directly; identical refreshes yield their slot to the next transition.
+points at the same zoom or increase the difference. Phase transitions wake the
+existing scheduler directly; identical refreshes yield their slot to the next
+transition.
 STOP is immediate. Before the first timed rate, a post-preparation lens report must
 place A within two lens ticks; a lost setup command cannot silently offset the take.
 The calibrated rate schedule is specific to Pocket 4 Pro; other bodies retain
@@ -327,6 +329,16 @@ could not run because camera Wi-Fi did not rejoin before its bounded timeout;
 the iPhone then disconnected before installation of the clean final build. Those
 controls pass deterministic regressions but remain physically unverified for
 native-rate zoom.
+
+The operator subsequently confirmed improved continuity but reported occasional
+mid-leg jumps. Replaying the same native video found 12 stable interior speed
+steps above a 1.5× ratio; most were approximately 1.9–2.1×, matching the switch
+between native gears 72 and 73. Swift transport-cadence and Android runner
+regressions reproduced two speeds within a 3×→6×/2.5-second leg. The planner now
+uses one gear for the moving portion and delays its start to preserve the saved
+leg duration. These regression tests pass without a mid-leg rate change. The
+new physical comparison was blocked by camera Wi-Fi failing to rejoin before
+any zoom command was sent; optical validation of this follow-up remains pending.
 
 `just gimbal-test` exercises camera-timed command dispatch, sparse feedback at
 reversals, motor easing, early-only waypoint observations, late dispatch, missing feedback,

@@ -10,21 +10,21 @@ import Testing
         #expect(NativeProgramZoomCommand.rate(speed: 72, increasing: true).frame.flags == 0x40)
     }
 
-    @Test func timedLegBlendsNativeSpeedsWithoutPositionStepsOrStopPulses() {
+    @Test func timedLegUsesOneNativeSpeedWithoutPositionStepsOrStopPulses() {
         let dt = 0.0005
         var distance = 0.0
         var commands: [NativeProgramZoomCommand] = []
         for i in 0..<5000 {
             let command = NativeProgramZoom.demand(from: 3, to: 6, duration: 2.5, elapsed: Double(i) * dt).command
-            guard case .rate(let speed, let increasing) = command else {
-                Issue.record("Timed movement must use a native rate throughout"); return
+            if case .rate(let speed, let increasing) = command {
+                #expect(increasing)
+                distance += Double(speed - 71) * NativeProgramZoom.slowestLogRate * dt
+            } else if case .position = command {
+                Issue.record("Timed movement must not seek intermediate positions"); return
             }
-            #expect(increasing)
-            distance += Double(speed - 71) * NativeProgramZoom.slowestLogRate * dt
             if commands.last != command { commands.append(command) }
         }
-        #expect(commands == [.rate(speed: 72, increasing: true), .rate(speed: 73, increasing: true),
-            .rate(speed: 72, increasing: true)])
+        #expect(commands == [.stop, .rate(speed: 73, increasing: true)])
         #expect(abs(3 * exp(distance) - 6) < 0.002)
         #expect(NativeProgramZoom.demand(from: 3, to: 6, duration: 2.5, elapsed: 2.5).command == .stop)
     }
@@ -50,7 +50,7 @@ import Testing
         #expect(path.nativeDemand(at: 2.5).command == .stop, "The smaller B-C change waits for its continuous window")
         #expect(path.nativeDemand(at: 4).command == .rate(speed: 72, increasing: false))
         let continuous = GimbalZoomPath(program: .init(a: a, b: b,
-            c: .init(yawDeg: 0, pitchDeg: 0, zoom: 3), durationAB: 2.5, durationBC: 2.5))
+            c: .init(yawDeg: 0, pitchDeg: 0, zoom: 6 * exp(-0.208 * 2.5)), durationAB: 2.5, durationBC: 2.5))
         #expect(continuous.nativeDemand(at: 2.5 - 5e-10).command == .rate(speed: 72, increasing: false))
         let resumed = path.remaining(after: 1.5, from: 5.2, quantized: true)
         #expect(resumed.legs[0].from == 5.2)
@@ -123,7 +123,7 @@ import Testing
     }
 
     @Test func nativeSchedulerKeepsExactTransitionsAtRealDispatchCadence() {
-        // Includes tiny ideal fast/slow spans that must be coalesced, and both directions.
+        // Durations between native gears must retain one speed and the full integrated distance.
         for exponent in [log(2), 0.208 * 2.51, 0.208 * 4.99] {
             for increasing in [true, false] {
                 let from = increasing ? 3 : 3 * exp(exponent)
@@ -183,7 +183,7 @@ import Testing
             model: .init(name: "Osmo Pocket 4 Pro"), status: status)
         controller.observe(lens(651), at: 0)
         #expect(controller.nativeCommand(for: .init(command: .position(3), destination: 3), at: 0) == .position(3))
-        let demand = NativeProgramZoom.demand(from: 3, to: 6, duration: 2.5, elapsed: 0)
+        let demand = NativeProgramZoom.demand(from: 3, to: 6, duration: 2.5, elapsed: 1)
         #expect(controller.nativeFailure(for: demand, at: 0.1) != nil, "Receipt before setup is not proof")
         controller.observe(lens(868), at: 0.2)
         #expect(controller.nativeFailure(for: demand, at: 0.2) != nil, "Wrong starting zoom must fail")
@@ -191,6 +191,34 @@ import Testing
         controller.observe(lens(652), at: 0.3)
         #expect(controller.nativeFailure(for: demand, at: 0.3) == nil)
         #expect(controller.nativeCommand(for: demand, at: 0.3) == demand.command)
+    }
+
+    @Test func nativeLegDoesNotChangeSpeedMidwayToFitTheDuration() {
+        let program = GimbalProgram(a: .init(yawDeg: 0, pitchDeg: 0, zoom: 3),
+            b: .init(yawDeg: 0, pitchDeg: 0, zoom: 6), durationAB: 2.5)
+        var status = CameraStatus()
+        status.colorMode = .normal
+        status.zoomLens = 651
+        status.shootingMode = 1
+        var controller = GimbalProgramZoom(program: program,
+            model: .init(name: "Osmo Pocket 4 Pro"), status: status)
+        var time = 0.0
+        var speeds = Set<UInt8>()
+        var stoppedAfterMovement = false
+        var started = false
+        while time < 2.5 - 1e-9 {
+            controller.observe(lens(651), at: time)
+            let demand = NativeProgramZoom.demand(from: 3, to: 6, duration: 2.5, elapsed: time)
+            if let command = controller.nativeCommand(for: demand, at: time) {
+                if case .rate(let speed, _) = command {
+                    #expect(!stoppedAfterMovement, "A steady zoom must not stop and restart mid-leg")
+                    speeds.insert(speed)
+                    started = true
+                } else if case .stop = command, started { stoppedAfterMovement = true }
+            }
+            time += min(0.04, controller.nextWakeInterval(at: time))
+        }
+        #expect(speeds.count == 1, "Observed native gears 72→73 nearly double the physical zoom speed")
     }
 
     private func push(_ name: String, _ value: [UInt8]) -> Duml.Frame {

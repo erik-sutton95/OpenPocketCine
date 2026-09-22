@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.session
 
 import kotlin.math.abs
-import kotlin.math.floor
+import kotlin.math.ceil
 import kotlin.math.ln
 
 /** Camera-owned continuous zoom; positions are used only to prepare the take. */
@@ -21,7 +21,7 @@ internal sealed interface NativeProgramZoomCommand {
 internal data class NativeProgramZoomDemand(val command: NativeProgramZoomCommand, val destination: Double,
     val failureReason: String? = null, val nextChange: Double = Double.POSITIVE_INFINITY)
 
-/** Same measured Pocket 4 Pro schedule as the portable core; no stop/start modulation. */
+/** One native gear per moving leg avoids visible speed jumps; same schedule as the portable core. */
 internal object NativeProgramZoom {
     const val SLOWEST_LOG_RATE = 0.208
     const val SLOWEST_SPEED = 72
@@ -51,39 +51,16 @@ internal object NativeProgramZoom {
             from < 1.0 || to < 1.0 || duration <= 0 || elapsed < 0 || elapsed >= duration ||
             abs(from - to) <= 1e-6 || stopped.failureReason != null) return stopped
         val distance = abs(ln(to / from))
-        val movingDuration = minOf(duration, distance / SLOWEST_LOG_RATE)
-        val averageGear = distance / (SLOWEST_LOG_RATE * movingDuration)
-        val low = floor(averageGear + 1e-9).toInt().coerceIn(1, 7)
-        var fastDuration = if (low == 7) 0.0 else maxOf(0.0, distance / SLOWEST_LOG_RATE - low * movingDuration)
-        var slowDuration = movingDuration - fastDuration
-        val segments: List<Pair<Int, Double>>
-        if (fastDuration <= 1e-9) {
-            segments = listOf(low to movingDuration)
-        } else {
-            // Every rate span gets a full wire interval, preserving integrated
-            // log distance and the deadline by delaying the start when needed.
-            if (fastDuration < INTERVAL) {
-                fastDuration = INTERVAL
-                slowDuration = (distance / SLOWEST_LOG_RATE - (low + 1) * fastDuration) / low
-            }
-            segments = when {
-                slowDuration < INTERVAL -> listOf(low + 1 to distance / ((low + 1) * SLOWEST_LOG_RATE))
-                slowDuration < 2 * INTERVAL -> listOf(low to slowDuration, low + 1 to fastDuration)
-                else -> listOf(low to slowDuration / 2, low + 1 to fastDuration, low to slowDuration / 2)
-            }
-        }
-        if (segments.any { it.second < INTERVAL - 1e-9 }) {
+        // Select the slowest gear that can reach the waypoint by its deadline.
+        // Waiting preserves the gimbal duration without a mid-zoom speed change.
+        val gear = ceil(distance / (SLOWEST_LOG_RATE * duration) - 1e-9).toInt().coerceIn(1, 7)
+        val movingDuration = distance / (gear * SLOWEST_LOG_RATE)
+        if (movingDuration < INTERVAL - 1e-9) {
             return stopped.copy(failureReason = "Increase the zoom difference between points")
         }
-        var boundary = maxOf(0.0, duration - segments.sumOf { it.second })
-        if (elapsed < boundary - 1e-9) return stopped.copy(nextChange = boundary - elapsed)
-        for ((gear, seconds) in segments) {
-            boundary += seconds
-            if (elapsed < boundary - 1e-9) {
-                return NativeProgramZoomDemand(NativeProgramZoomCommand.Rate(71 + gear, to > from), to,
-                    nextChange = boundary - elapsed)
-            }
-        }
-        return stopped
+        val delay = maxOf(0.0, duration - movingDuration)
+        if (elapsed < delay - 1e-9) return stopped.copy(nextChange = delay - elapsed)
+        return NativeProgramZoomDemand(NativeProgramZoomCommand.Rate(71 + gear, to > from), to,
+            nextChange = duration - elapsed)
     }
 }

@@ -31,8 +31,8 @@ public struct NativeProgramZoomDemand: Equatable, Sendable {
 }
 
 /// Pocket 4 Pro's measured slowest logarithmic zoom rate; higher native gears
-/// are integer multiples. Blend adjacent gears once through the middle of a leg,
-/// avoiding both repeated position targets and stop/start pulse modulation.
+/// are integer multiples. Keep one gear for the entire moving portion of a leg:
+/// changing gears produces a visible velocity step, even with continuous zoom.
 public enum NativeProgramZoom {
     public static let slowestLogRate = 0.208
     public static let slowestSpeed: UInt8 = 72
@@ -66,48 +66,21 @@ public enum NativeProgramZoom {
             abs(from - to) > 1e-6, stopped.failureReason == nil
         else { return stopped }
         let distance = abs(log(to / from))
-        let movingDuration = min(duration, distance / slowestLogRate)
-        let averageGear = distance / (slowestLogRate * movingDuration)
-        let low = min(7, max(1, Int(floor(averageGear + 1e-9))))
-        var fastDuration = low == 7 ? 0 : max(0, distance / slowestLogRate - Double(low) * movingDuration)
-        var slowDuration = movingDuration - fastDuration
-        let minimum = GimbalProgramZoom.interval
-        var segments: [(gear: Int, duration: TimeInterval)] = []
-        if fastDuration <= 1e-9 {
-            segments = [(low, movingDuration)]
-        } else {
-            // Keep every rate span at least one dispatch interval. A very short
-            // fast middle borrows time from the slow span and delays the start;
-            // integrated log distance and the waypoint deadline stay unchanged.
-            if fastDuration < minimum {
-                fastDuration = minimum
-                slowDuration = (distance / slowestLogRate - Double(low + 1) * fastDuration) / Double(low)
-            }
-            if slowDuration < minimum {
-                segments = [(low + 1, distance / (Double(low + 1) * slowestLogRate))]
-            } else if slowDuration < 2 * minimum {
-                segments = [(low, slowDuration), (low + 1, fastDuration)]
-            } else {
-                segments = [(low, slowDuration / 2), (low + 1, fastDuration), (low, slowDuration / 2)]
-            }
-        }
-        let activeDuration = segments.reduce(0) { $0 + $1.duration }
-        guard segments.allSatisfy({ $0.duration >= minimum - 1e-9 }) else {
+        // Use the slowest gear that can reach the waypoint by its deadline.
+        // The waiting interval preserves the requested gimbal duration without
+        // a mid-zoom gear change, position correction or start/stop modulation.
+        let gear = min(7, max(1, Int(ceil(distance / (slowestLogRate * duration) - 1e-9))))
+        let movingDuration = distance / (Double(gear) * slowestLogRate)
+        guard movingDuration >= GimbalProgramZoom.interval - 1e-9 else {
             stopped.failureReason = "Increase the zoom difference between points"
             return stopped
         }
-        var boundary = max(0, duration - activeDuration)
-        if elapsed < boundary - 1e-9 {
-            stopped.nextChange = boundary - elapsed
+        let delay = max(0, duration - movingDuration)
+        if elapsed < delay - 1e-9 {
+            stopped.nextChange = delay - elapsed
             return stopped
         }
-        for segment in segments {
-            boundary += segment.duration
-            if elapsed < boundary - 1e-9 {
-                return .init(command: .rate(speed: UInt8(71 + segment.gear), increasing: to > from),
-                    destination: to, nextChange: boundary - elapsed)
-            }
-        }
-        return stopped
+        return .init(command: .rate(speed: UInt8(71 + gear), increasing: to > from),
+            destination: to, nextChange: duration - elapsed)
     }
 }

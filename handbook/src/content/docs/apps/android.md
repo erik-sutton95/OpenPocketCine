@@ -312,11 +312,12 @@ never switches color mode. Programs without zoom changes still work in D-Log2.
 Saved zoom must fit the current camera FORMAT. Zoom timing and optical smoothness
 remain experimental.
 
-Pocket 4 Pro programmed zoom uses the camera's continuous zoom speeds. A slower
-start and finish surround a faster middle when needed. For a long leg, zoom
-waits before moving so it finishes at the waypoint; the camera cannot continuously
-zoom more slowly than its lowest native speed. A duration too short for the
-saved zoom range disables Start. Tiny differences below approximately 1.05% of
+Pocket 4 Pro programmed zoom holds one of the camera's continuous speeds for each
+leg, without changing speed midway. When that speed would reach the next zoom
+amount early, zoom waits before starting so it finishes at the waypoint. Your
+gimbal movement duration stays unchanged; zoom may cover only part of that time,
+including on reverse loop legs. The camera offers seven fixed native speeds.
+A duration too short for the saved zoom range disables Start. Tiny differences below approximately 1.05% of
 the starting zoom are also unavailable; use the same zoom at those points or
 increase the difference. The camera must report that it reached A's zoom before
 the timed zoom begins. These native rates improve continuity; lens endpoint

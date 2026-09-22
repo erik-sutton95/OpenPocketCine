@@ -428,8 +428,9 @@ qualification and sustained live-view budget checks remain pending on both shell
 Programmed zoom (2026-09-22): differing saved zoom amounts drive at most 20 Hz
 zoom rate refreshes alongside the timed gimbal path in both shells. Pocket 4 Pro uses
 native continuous speed/direction during timed legs, with one absolute command
-to prepare A. Slower edges and a faster middle fit intermediate durations;
-longer legs wait before zooming continuously to finish at the waypoint. Takes
+to prepare A. Each leg holds one speed throughout its moving portion, avoiding
+visible jumps between native gears. Zoom waits before starting when necessary to
+reach the waypoint on time; gimbal durations remain unchanged. Takes
 faster than the native speed ceiling or with under-50-ms native travel are blocked.
 Exact transition deadlines share the transport timer and reserve their dispatch
 slot; STOP bypasses rate refresh admission. Fresh lens feedback must confirm A
@@ -444,7 +445,9 @@ before its next zoom write. Gimbal-only programs remain available in D-Log2.
 A physical iPhone/Pocket 4 Pro comparison showed substantially fewer still frames
 and smaller frame-to-frame jumps with native zoom. Endpoint accuracy and integrated
 Restart still await qualification. Android code, tests and build match; physical
-Android validation remains pending because no device is attached.
+Android validation remains pending because no device is attached. The follow-up
+that removes mid-leg speed switching passes both platform regressions; its
+physical video comparison was blocked by the camera Wi-Fi rejoin failure.
 
 Motion zoom controls (2026-09-22): both shells keep the existing chip and disc
 accessible while the editor remains open, replacing the added in-editor slider.

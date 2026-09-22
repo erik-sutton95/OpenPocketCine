@@ -50,8 +50,8 @@ adds a timer, command stream or shared-model publication. When saved zoom amount
 differ, the existing motion scheduler also emits zoom rate/target refreshes at no more than
 20 Hz. Native phase deadlines use the same timer; STOP bypasses refresh admission. Pocket 4 Pro uses refreshed native continuous rates, with one absolute
 position during preparation; other bodies retain 50 ms look-ahead absolute
-targets and bounded endpoint retention. Native rate legs use at most two speed
-changes instead of repeated start/stop modulation. Zoom
+targets and bounded endpoint retention. Native rate legs hold one speed while
+moving; a delayed start fits the waypoint deadline without gear changes or repeated start/stop modulation. Zoom
 runs on the transport queue, with no 20 Hz UI callback. The existing zoom/SET
 watchdog grace sees these writes through a monotonic timestamp. Color, lens and
 FORMAT evidence is read before the UI hop; no extra GET or ACK timer is added.
