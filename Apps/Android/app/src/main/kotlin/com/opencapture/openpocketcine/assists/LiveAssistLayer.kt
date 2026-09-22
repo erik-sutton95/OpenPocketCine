@@ -89,6 +89,8 @@ fun LiveAssistLayer(
     showTapFocusBox: Boolean = true,
     /** Picture well in the same space as [modifier]; defaults to the layer box. */
     feedFrame: ChromeRect? = null,
+    /** Recorded image within the source raster, excluding camera-added padding. AF keeps [feedFrame]. */
+    framingFrame: ChromeRect? = null,
     /** Clear space between fixed controls, in dp. Storage still uses the full canvas. */
     placementFrame: ChromeRect? = null,
     /** Audio defaults at the safe leading edge, independent of the expanded palette. */
@@ -128,6 +130,9 @@ fun LiveAssistLayer(
                     )
                 }
             }
+        val framingFeed = framingFrame?.let { frame -> with(density) {
+            AssistRect(frame.x.dp.toPx(), frame.y.dp.toPx(), frame.width.dp.toPx(), frame.height.dp.toPx())
+        } } ?: feed
         val placement = with(density) {
             val frame = placementFrame ?: ChromeRect(56f, 56f,
                 maxOf(0f, canvas.width / density.density - 112f),
@@ -138,13 +143,13 @@ fun LiveAssistLayer(
                 maxOf(0f, frame.height.dp.toPx() - 2 * padding))
         }
         if (shown(LiveAssistTool.GUIDES)) {
-            GuidesOverlay(state, feed)
+            GuidesOverlay(state, framingFeed)
         }
         if (shown(LiveAssistTool.GRID)) {
-            GridOverlay(state, feed)
+            GridOverlay(state, framingFeed)
         }
         if (shown(LiveAssistTool.CROSS)) {
-            CrosshairOverlay(feed)
+            CrosshairOverlay(framingFeed)
         }
         if (shown(LiveAssistTool.FALSE) && state.falseColorReference) {
             val portrait = canvas.height > canvas.width
@@ -274,6 +279,7 @@ private fun StackedScopePanel(
             LiveAssistTool.GRID,
             LiveAssistTool.CROSS,
             LiveAssistTool.MIRROR,
+            LiveAssistTool.DESQ,
             -> return
         }
     MovableAssistPanel(
@@ -308,6 +314,7 @@ private fun StackedScopePanel(
                 LiveAssistTool.GRID,
                 LiveAssistTool.CROSS,
                 LiveAssistTool.MIRROR,
+            LiveAssistTool.DESQ,
                 -> {}
             }
         }

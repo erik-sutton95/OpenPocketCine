@@ -438,32 +438,51 @@ class HevcDecoder internal constructor(
             val mime =
                 if (detected == LiveCodec.AVC) MediaFormat.MIMETYPE_VIDEO_AVC
                 else MediaFormat.MIMETYPE_VIDEO_HEVC
-            val format = MediaFormat.createVideoFormat(mime, pictureWidth, pictureHeight)
-            format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 512 * 1024)
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, LiveViewPresentTiming.FRAME_RATE_HINT)
-            format.setInteger(MediaFormat.KEY_OPERATING_RATE, LiveViewPresentTiming.OPERATING_RATE)
-            format.setInteger(MediaFormat.KEY_PRIORITY, 0)
-            if (Build.VERSION.SDK_INT >= 30) {
-                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+            fun buildFormat(lowLatency: Boolean): MediaFormat {
+                val format = MediaFormat.createVideoFormat(mime, pictureWidth, pictureHeight)
+                format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 512 * 1024)
+                format.setInteger(MediaFormat.KEY_FRAME_RATE, LiveViewPresentTiming.FRAME_RATE_HINT)
+                format.setInteger(MediaFormat.KEY_OPERATING_RATE, LiveViewPresentTiming.OPERATING_RATE)
+                format.setInteger(MediaFormat.KEY_PRIORITY, 0)
+                // The version check repeats what LiveDecoderTuning already decided
+                // so lint can see the guard next to the key.
+                if (lowLatency && Build.VERSION.SDK_INT >= 30) {
+                    format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+                }
+                // Do not stamp KEY_COLOR_* — Pocket VUI is unspecified (transfer=255).
+                // Forcing BT.709 limited made C2 apply a matrix the bitstream did not
+                // ask for (posterized shadows / colour shifts vs iOS VT).
+                if (detected == LiveCodec.AVC) {
+                    val (sps, pps) = splitAvcCsd(csd)
+                    format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
+                    if (pps != null) format.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
+                } else {
+                    format.setByteBuffer("csd-0", ByteBuffer.wrap(csd))
+                }
+                return format
             }
-            // Do not stamp KEY_COLOR_* — Pocket VUI is unspecified (transfer=255).
-            // Forcing BT.709 limited made C2 apply a matrix the bitstream did not
-            // ask for (posterized shadows / colour shifts vs iOS VT).
-            if (detected == LiveCodec.AVC) {
-                val (sps, pps) = splitAvcCsd(csd)
-                format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
-                if (pps != null) format.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
-            } else {
-                format.setByteBuffer("csd-0", ByteBuffer.wrap(csd))
-            }
-            val created = LiveHevcCodec.createDecoder(mime)
+            var created = LiveHevcCodec.createDecoder(mime)
             decoder = created
+            val lowLatency = LiveDecoderTuning.lowLatencyRequested(Build.VERSION.SDK_INT)
             Log.i(
                 TAG,
                 "decoder ${created.name} software=${LiveHevcCodec.isSoftwareName(created.name)} " +
-                    "${pictureWidth}x$pictureHeight",
+                    "${pictureWidth}x$pictureHeight lowLatency=$lowLatency",
             )
-            created.configure(format, target, null, 0)
+            try {
+                created.configure(buildFormat(lowLatency), target, null, 0)
+            } catch (refusal: Exception) {
+                val code = (refusal as? MediaCodec.CodecException)?.errorCode
+                if (!LiveDecoderTuning.retryWithoutLowLatency(lowLatency, code)) throw refusal
+                // The component has no low-latency index and said so. A codec
+                // that threw out of configure is spent, so the retry takes a
+                // fresh one; losing low latency beats losing the picture.
+                Log.w(TAG, "decoder ${created.name} refused low latency (codec:$code); retrying without it")
+                runCatching { created.release() }
+                created = LiveHevcCodec.createDecoder(mime)
+                decoder = created
+                created.configure(buildFormat(lowLatency = false), target, null, 0)
+            }
             created.start()
             codec = created
             configured = true

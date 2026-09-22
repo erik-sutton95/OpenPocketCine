@@ -5,10 +5,7 @@ import UIKit
 /// grouped into threes with a divider, gold edge chevrons, long-press tray.
 /// AUDIO rides its own trailing section. Ignores taps when locked.
 ///
-/// Level and De-SQ are not on this bar (Pocket has no anamorphic squeeze; horizon
-/// is not shipped). Grouping matches OpenZCine `MonitorAssistStrip` after those
-/// two chips are removed: LUT/PEAK/FALSE | ZEBRA/WAVE/PARADE | HISTO/VECTOR/LIGHTS
-/// | GUIDES/GRID/CROSS | MIRROR | AUDIO. ND sits with HISTO/VECTOR/LIGHTS.
+/// Level is not shipped. DE-SQ sits beside MIRROR with the picture transforms.
 struct LiveAssistBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var environmentLocked

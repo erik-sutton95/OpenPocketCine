@@ -40,7 +40,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         toolbarCases.filter { $0 != .level && $0 != .magnification } + [.audioMeters]
     }
 
-    /// OpenZCine `activeCases` minus photography-only, AUDIO, Level, and De-SQ.
+    /// OpenZCine `activeCases` minus photography-only, AUDIO, and Level.
     /// AUDIO is appended as its own trailing section in `LiveAssistBar`.
     /// ND sits with the exposure meters (HISTO / VECTOR / LIGHTS).
     static var toolbarGroups: [[LiveAssistTool]] {
@@ -49,7 +49,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
             [.zebra, .waveform, .parade],
             [.histogram, .vectorscope, .trafficLights, .ndMeter],
             [.guides, .grid, .crosshair],
-            [.mirror],
+            [.desqueeze, .mirror],
         ]
     }
 
@@ -73,13 +73,13 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Pocket does not ship Level (unproven gimbal roll) or De-SQ (no anamorphic squeeze).
-    var isPocketOmitted: Bool { self == .level || self == .desqueeze }
+    /// Pocket does not ship Level (unproven gimbal roll).
+    var isPocketOmitted: Bool { self == .level }
 
     var hasConfiguration: Bool {
         switch self {
         // Mirror stays tap-only; audio options affect presentation only.
-        case .mirror, .evMeter, .instantReview, .magnification, .level, .desqueeze:
+        case .mirror, .evMeter, .instantReview, .magnification, .level:
             false
         default: true
         }
@@ -151,7 +151,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .crosshair: "Crosshair"
         case .level: "Horizon"
         case .evMeter: "EV Meter"
-        case .desqueeze: "Desqueeze"
+        case .desqueeze: "Anamorphic Desqueeze"
         case .mirror: "Mirror"
         case .magnification: "Magnify"
         case .instantReview: "Instant Playback"
@@ -202,32 +202,6 @@ enum LevelStyle: String, CaseIterable, Codable {
     case gauge = "Gauge"
 }
 
-enum DesqueezeRatio: String, CaseIterable, Codable {
-    case x1 = "1x"
-    case x133 = "1.33x"
-    case x15 = "1.5x"
-    case x16 = "1.6x"
-    case x165 = "1.65x"
-    case x18 = "1.8x"
-    case x2 = "2x"
-
-    var factor: Double {
-        switch self {
-        case .x1: 1
-        case .x133: 1.33
-        case .x15: 1.5
-        case .x16: 1.6
-        case .x165: 1.65
-        case .x18: 1.8
-        case .x2: 2
-        }
-    }
-
-    static func matching(_ factor: Double) -> DesqueezeRatio? {
-        allCases.first { abs($0.factor - factor) < 0.02 }
-    }
-}
-
 @Observable
 final class LiveAssistState {
     var peaking = false
@@ -268,6 +242,8 @@ final class LiveAssistState {
     var zebraMidtoneColor: ZebraPaint = .amber
     var desqueezeFactor: Double = 1.33
     var desqueezeHorizontal = true
+    var desqueezeCustom = false
+    var desqueezeCustomFactor: Double = 1.33
     var splitComparison = false
     var splitVertical = true
     /// Input-referred LUT stops (−3…+3, half-stop). 0 is the cube as shipped.
@@ -399,7 +375,6 @@ final class LiveAssistState {
         cleanViewPinnedTools = OperatorPrefs.cleanViewPinnedTools
         playbackVisibleTools = OperatorPrefs.playbackVisibleAssistTools
         level = false
-        desqueeze = false
         if monitorColorMode == nil {
             monitorColorMode = OperatorPrefs.lastMonitorColorMode
         }
@@ -407,9 +382,9 @@ final class LiveAssistState {
         lastSaved = OperatorPrefs.encoded(self)
     }
 
-    /// Grade, peaking, and mirror — the picture, not chrome. Pocket has no de-squeeze.
+    /// Picture corrections stay visible in DISP 2 unless the operator unpins them.
     static let cleanViewDefaultPinnedTools: Set<LiveAssistTool> = [
-        .lut, .peaking, .mirror,
+        .lut, .peaking, .desqueeze, .mirror,
     ]
 
     func isOn(_ tool: LiveAssistTool) -> Bool {
@@ -1180,6 +1155,8 @@ enum OperatorPrefs {
         var zebraHighlightColor: String
         var zebraMidtoneColor: String
         var desqueezeFactor: Double
+        var desqueezeCustom: Bool?
+        var desqueezeCustomFactor: Double?
         var desqueezeHorizontal: Bool
         var splitComparison: Bool
         var splitVertical: Bool
@@ -1207,6 +1184,8 @@ enum OperatorPrefs {
             zebraMidtoneIRE = s.zebraMidtoneIRE
             zebraHighlightColor = s.zebraHighlightColor.rawValue
             zebraMidtoneColor = s.zebraMidtoneColor.rawValue
+            desqueezeCustom = s.desqueezeCustom
+            desqueezeCustomFactor = s.desqueezeCustomFactor
             desqueezeFactor = s.desqueezeFactor
             desqueezeHorizontal = s.desqueezeHorizontal
             splitComparison = s.splitComparison
@@ -1255,7 +1234,10 @@ enum OperatorPrefs {
             s.zebraMidtoneIRE = zebraMidtoneIRE
             s.zebraHighlightColor = ZebraPaint(rawValue: zebraHighlightColor) ?? .white
             s.zebraMidtoneColor = ZebraPaint(rawValue: zebraMidtoneColor) ?? .amber
-            s.desqueezeFactor = desqueezeFactor
+            s.desqueezeFactor = DesqueezeAssist.snap(desqueezeFactor)
+            s.desqueezeCustom =
+                desqueezeCustom ?? (DesqueezeRatio.matching(s.desqueezeFactor) == nil)
+            s.desqueezeCustomFactor = DesqueezeAssist.snap(desqueezeCustomFactor ?? desqueezeFactor)
             s.desqueezeHorizontal = desqueezeHorizontal
             s.splitComparison = splitComparison
             s.splitVertical = splitVertical
@@ -1285,6 +1267,8 @@ struct FeedAlignedAssists: View {
     /// When set (letterboxed clip playback), framing overlays align to this rect
     /// instead of the full geometry — OpenZCine `FeedAlignedAssists(feed:)`.
     var feed: CGRect? = nil
+    /// Decoded raster aspect before the optical correction.
+    var sourceAspect: CGFloat? = nil
     /// Recorded frame width/height. Live 1:1 sits as a square inside a 16:9 well.
     var pictureAspect: CGFloat? = nil
     /// Live 180 / MIRROR compose. Nil uses the assist chip only (playback).
@@ -1300,7 +1284,13 @@ struct FeedAlignedAssists: View {
             let feed =
                 self.feed
                 ?? overlayFeedRect(
-                    CGRect(origin: .zero, size: proxy.size), assist, pictureAspect: pictureAspect)
+                    CGRect(origin: .zero, size: proxy.size), assist, pictureAspect: pictureAspect,
+                    sourceAspect: sourceAspect)
+            let focusFeed =
+                self.feed
+                ?? DesqueezeAssist.presentationRect(
+                    sourceSize: sourceAspect.map { CGSize(width: $0, height: 1) } ?? proxy.size,
+                    in: CGRect(origin: .zero, size: proxy.size), effects: assist.effects)
             ZStack {
                 if guides {
                     GuidesAssist.overlay(feed: feed, assist: assist, fallback: guideAspect)
@@ -1319,7 +1309,7 @@ struct FeedAlignedAssists: View {
                 }
                 ForEach(Array(sceneFaces.enumerated()), id: \.offset) { _, box in
                     TrackingBracketView(
-                        rect: feedRect(mirroredBox(box, mirrored), in: feed),
+                        rect: feedRect(mirroredBox(box, mirrored), in: focusFeed),
                         color: LiveDesign.text.opacity(SceneFacePolicy.dimOpacity),
                         lineWidth: 1.6
                     )
@@ -1328,25 +1318,25 @@ struct FeedAlignedAssists: View {
                     switch overlay {
                     case .search(let box):
                         TrackingBoxView(
-                            feed: feed, box: mirroredBox(box, mirrored))
+                            feed: focusFeed, box: mirroredBox(box, mirrored))
                         FocusBoxView(
-                            feed: feed,
+                            feed: focusFeed,
                             normalized: mirrored
                                 ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
                                 : focusPoint
                         )
                     case .subject(let box):
-                        SubjectBoxView(feed: feed, box: mirroredBox(box, mirrored))
+                        SubjectBoxView(feed: focusFeed, box: mirroredBox(box, mirrored))
                     case .face(let box):
                         TrackingBracketView(
-                            rect: feedRect(mirroredBox(box, mirrored), in: feed),
+                            rect: feedRect(mirroredBox(box, mirrored), in: focusFeed),
                             color: LiveDesign.text.opacity(0.92),
                             lineWidth: 1.6
                         )
                     case .focus:
                         if showTapFocusBox {
                             FocusBoxView(
-                                feed: feed,
+                                feed: focusFeed,
                                 normalized: mirrored
                                     ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
                                     : focusPoint
@@ -1379,26 +1369,18 @@ struct FeedAlignedAssists: View {
 }
 
 /// OpenZCine `desqueezedRect` — framing aids sit on the visible (shrunk) picture, not the full frame.
-private func overlayFeedRect(
-    _ full: CGRect, _ assist: LiveAssistState, pictureAspect: CGFloat?
+func overlayFeedRect(
+    _ full: CGRect, _ assist: LiveAssistState, pictureAspect: CGFloat?,
+    sourceAspect: CGFloat? = nil
 ) -> CGRect {
-    var feed = full
-    if assist.desqueeze, assist.desqueezeFactor > 1 {
-        let factor = CGFloat(assist.desqueezeFactor)
-        if assist.desqueezeHorizontal {
-            let width = full.width / factor
-            feed = CGRect(
-                x: full.midX - width / 2, y: full.minY, width: width, height: full.height)
-        } else {
-            let height = full.height / factor
-            feed = CGRect(
-                x: full.minX, y: full.midY - height / 2, width: full.width, height: height)
-        }
-    }
-    let aspect = pictureAspect ?? 0
-    guard aspect > 0 else { return feed }
-    return PlaybackVideoLayout.aspectFitRect(
-        videoSize: CGSize(width: aspect, height: 1), in: feed)
+    let effects = assist.effects
+    let raster = DesqueezeAssist.presentationRect(
+        sourceSize: sourceAspect.map { CGSize(width: $0, height: 1) } ?? full.size,
+        in: full, effects: effects)
+    guard let pictureAspect, pictureAspect > 0 else { return raster }
+    // The recorded picture may be letterboxed inside the camera's live raster.
+    return DesqueezeAssist.presentationRect(
+        sourceSize: CGSize(width: pictureAspect, height: 1), in: raster, effects: effects)
 }
 
 private func mirroredBox(_ box: TrackingBox, _ mirror: Bool) -> TrackingBox {
@@ -1958,6 +1940,7 @@ struct AssistToolIcon: View {
             icon.frame(width: size, height: size)
         } else if let icon = tool.opcIcon {
             icon.frame(width: size, height: size)
+                .rotationEffect(.degrees(tool == .desqueeze ? 90 : 0))
         }
     }
 }

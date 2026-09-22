@@ -15,7 +15,9 @@ That is a same-PR rule, not a follow-up.
 | **Engineering contracts** | `docs/*.md`, `AGENTS.md`, `ANDROID.md` | Agents and maintainers (parity, live-session, budgets, hygiene) | No |
 
 Do not paste live-session runbooks, SoftAP passwords, or packet captures into
-the handbook. Wire facts that are safe to publish live under [Protocol](../protocol/connection/).
+the handbook. Common wire facts that are safe to publish live under
+[Shared protocol](../../protocol/connection/). Model-specific command sets,
+capability matrices, and capture findings belong under [Osmo Devices](../../devices/).
 Gotchas that only agents need stay in `docs/live-session.md`.
 
 ## What to update when
@@ -23,17 +25,21 @@ Gotchas that only agents need stay in `docs/live-session.md`.
 | You changed | Update in the same PR |
 | --- | --- |
 | DUML, BLE, opcode, pktType, HEVC/AVC payload | Matching page under `handbook/src/content/docs/protocol/` |
-| Operator-visible chrome, assists, connection UX | [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md) **and** the [iOS](../apps/ios/) or [Android](../apps/android/) app page if the public description changed |
-| Build, toolchain, how to run | [Setup](../guides/setup/) and `CONTRIBUTING.md` if GitHub workflow changed |
+| Device survey, model-specific command values, firmware restrictions | Matching reference under `handbook/src/content/docs/devices/`; link common definitions instead of duplicating them |
+| Operator-visible chrome, assists, connection UX | [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md) **and** the [iOS](../../apps/ios/) or [Android](../../apps/android/) app page if the public description changed |
+| Build, toolchain, how to run | [Setup](../../guides/setup/) and `CONTRIBUTING.md` if GitHub workflow changed |
 | Git, tags, version trains | [`docs/RELEASE.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/RELEASE.md) (not Git Flow; no `develop`) |
 | Play closed testing | [`docs/android-play-ci.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/android-play-ci.md); this handbook only if the public Android install path changed |
 | TestFlight / Play tester notes | [`docs/tester-notes.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/tester-notes.md) (this-build window; not the handbook) |
-| Architecture seams (core vs shell) | [Architecture](../apps/architecture/) if the public map changed; `docs/ARCHITECTURE.md` is the seam table |
+| Architecture seams (core vs shell) | [Architecture](../../apps/architecture/) if the public map changed; `docs/ARCHITECTURE.md` is the seam table |
 | Live-path budgets (ACK Hz, HUD Hz) | `docs/PERFORMANCE.md` (not duplicated here) |
 | First-run / operator copy | `docs/UX.md`; handbook only if the public FTUE description changed |
-| Pairing / live-view operator FAQ (VPN, Wi-Fi join, black well) | [Troubleshooting](../guides/troubleshooting/) and `site/support/` |
+| Pairing / live-view operator FAQ (VPN, Wi-Fi join, black well) | [Troubleshooting](../../guides/troubleshooting/) and `site/support/` |
 
 A task is not done until those pages match the code. Preview with `just handbook`.
+Run `HANDBOOK_BASE=/docs just handbook-build` before publication; the build checks
+rendered page routes and anchors, including translated fallback pages. Relative
+links resolve from the final trailing-slash URL, not the Markdown file path.
 Merge to `main` deploys Pages when `handbook/` or `site/` changed.
 
 ## Release notes

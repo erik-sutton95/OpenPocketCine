@@ -3,17 +3,23 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct KnownReferenceLossTests {
-    @Test func explicitLossRequestsTheExistingRepairBeforeTheOrdinaryTimeout() {
+    @Test(arguments: [true, false])
+    func explicitLossRequestsTheExistingRepairBeforeTheOrdinaryTimeout(hasFormat: Bool) {
+        func snapshot(elapsed: Double = 0) -> FeedWatchdog.Snapshot {
+            var result = Self.snapshot(elapsed: elapsed)
+            result.hasFormat = hasFormat
+            return result
+        }
         var dog = FeedWatchdog()
-        #expect(dog.tick(Self.snapshot()) == .rebuildVTSession)
+        #expect(dog.tick(snapshot()) == .rebuildVTSession)
         #expect(dog.stage == .rebuildVT)
         #expect(dog.lastActionAt == 100)
         for elapsed in [0.1, 1, 2, 8, 15.999] {
-            #expect(dog.tick(Self.snapshot(elapsed: elapsed)) == .none)
+            #expect(dog.tick(snapshot(elapsed: elapsed)) == .none)
             #expect(dog.lastActionAt == 100, "Repeated loss cannot renew the repair deadline")
         }
-        #expect(dog.tick(Self.snapshot(elapsed: 16)) == .fullSessionRejoin)
-        #expect(dog.tick(Self.snapshot(elapsed: 17)) == .none)
+        #expect(dog.tick(snapshot(elapsed: 16)) == .fullSessionRejoin)
+        #expect(dog.tick(snapshot(elapsed: 17)) == .none)
     }
 
     @Test func clearingLossBeforeNewOutputDoesNotReleaseAnEarlyRepair() {
@@ -76,13 +82,12 @@ import Testing
         }
     }
 
-    @Test func startupUnobservableOutputAndMissingFormatCannotFastRepair() {
-        for gate in 0..<3 {
+    @Test func startupAndUnobservableOutputCannotFastRepair() {
+        for gate in 0..<2 {
             var snap = Self.snapshot()
             switch gate {
             case 0: snap.sawPicture = false
-            case 1: snap.decoderOutputExpected = false
-            default: snap.hasFormat = false
+            default: snap.decoderOutputExpected = false
             }
             var dog = FeedWatchdog()
             #expect(dog.tick(snap) == .none)

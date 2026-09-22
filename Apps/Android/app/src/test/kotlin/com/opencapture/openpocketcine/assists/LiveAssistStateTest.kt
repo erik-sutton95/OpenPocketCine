@@ -35,6 +35,7 @@ class LiveAssistStateTest {
                 LiveAssistTool.GUIDES,
                 LiveAssistTool.GRID,
                 LiveAssistTool.CROSS,
+                LiveAssistTool.DESQ,
                 LiveAssistTool.MIRROR,
             ),
             LiveAssistTool.toolbarCases,

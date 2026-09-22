@@ -30,6 +30,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.opencapture.monitorui.MonitorIcon
 import com.opencapture.monitorui.MonitorPairCameraPage
 import com.opencapture.monitorui.MonitorPairingCheck
@@ -42,8 +44,11 @@ import com.opencapture.monitorui.MonitorPairingStep
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.openpocketcine.AppModel
+import com.opencapture.openpocketcine.LegalDocumentScreen
+import com.opencapture.openpocketcine.LegalKind
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
 import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.LocalVPNFilter
 
@@ -80,6 +85,8 @@ fun PairingExperience(
     val found by model.session.found.collectAsState()
     val radioOn by model.session.radioOn.collectAsState()
     var selectedId by remember { mutableStateOf<String?>(null) }
+    var showProblemReport by remember { mutableStateOf(false) }
+    var showReportingPrivacy by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val busy = phase.isBusy()
     val step = (StartupConnectionCopy.wizardStep(phase) - 1).coerceIn(0, pairingSteps.lastIndex)
@@ -128,6 +135,7 @@ fun PairingExperience(
         },
         onBack = model::cancelPairing,
         onDiagnostics = { DiagnosticCenter.shareReport(context, model.session) },
+        onReportProblem = { showProblemReport = true },
         extra = {
             if (model.coreVersion == null) {
                 PairingCallout(
@@ -156,6 +164,24 @@ fun PairingExperience(
             }
         },
     )
+    if (showProblemReport) {
+        ManualProblemReportDialog(
+            model = model,
+            onClose = { showProblemReport = false },
+            onPrivacy = { showReportingPrivacy = true },
+        )
+    }
+    if (showReportingPrivacy) {
+        Dialog(
+            onDismissRequest = { showReportingPrivacy = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            LegalDocumentScreen(
+                kind = LegalKind.PRIVACY,
+                onClose = { showReportingPrivacy = false },
+            )
+        }
+    }
 }
 
 private fun pairingPresentation(

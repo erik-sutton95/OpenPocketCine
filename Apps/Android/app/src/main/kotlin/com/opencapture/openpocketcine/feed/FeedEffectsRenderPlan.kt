@@ -128,7 +128,7 @@ internal object FeedEffectsRenderPlanFactory {
         val inspectorDemand = assist.inspectorScopeDemand?.takeIf { it.playback == playback && previewTool == null }
         val inspector = inspectorDemand?.tool
         val previewOwner = inspectorDemand?.takeIf {
-            it.tool in listOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.FALSE, LiveAssistTool.ZEBRA)
+            it.tool in listOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.FALSE, LiveAssistTool.ZEBRA, LiveAssistTool.DESQ)
         }?.owner
         val inspectorOnly = inspector != null && listOf(LiveAssistTool.WAVE, LiveAssistTool.PARADE,
             LiveAssistTool.HISTO, LiveAssistTool.VECTOR, LiveAssistTool.LIGHTS, LiveAssistTool.ND).none(shown)

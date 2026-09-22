@@ -51,6 +51,14 @@ internal class LiveFeedEffectsSession(
     private val playback: Boolean = false,
     private val backdrop: MonitorBackdropFeed? = null,
 ) {
+    @Volatile private var stretchToRect = false
+
+    /** Only the final presentation changes; the OES source and grading raster stay native. */
+    fun setStretchToRect(enabled: Boolean) {
+        stretchToRect = enabled
+        requestRender()
+    }
+
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -394,7 +402,7 @@ internal class LiveFeedEffectsSession(
                 GLES20.glViewport(0, 0, source.width, source.height)
                 copy.draw(oesTexture, texMatrix)
                 val content =
-                    if (letterboxSource) {
+                    if (letterboxSource && !stretchToRect) {
                         liveFeedContentRect(
                             width.toFloat(),
                             height.toFloat(),

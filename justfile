@@ -17,7 +17,7 @@ setup:
 # Run every repository quality check that this tree currently supports.
 # `swift-lint` is available as `just lint` after `just format`; the existing tree is not
 # yet fully swift-format clean, so it is not a merge gate.
-check: hygiene site-check testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test swift-test
+check: hygiene site-check testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test swift-test handbook-build
 
 # Verify release reporting configuration without network or real credentials.
 sentry-test:
@@ -198,7 +198,8 @@ handbook-build:
     if [[ ! -d handbook/node_modules ]]; then
         npm --prefix handbook ci
     fi
-    ASTRO_TELEMETRY_DISABLED=1 HANDBOOK_BASE="${HANDBOOK_BASE:-}" npm --prefix handbook run build
+    ASTRO_TELEMETRY_DISABLED=1 HANDBOOK_BASE="${HANDBOOK_BASE:-/docs}" npm --prefix handbook run build
+    python3 scripts/check-handbook-links.py --base "${HANDBOOK_BASE:-/docs}"
 
 # Merge landing page + handbook into public-site/ as GitHub Pages will ship it.
 handbook-stage:

@@ -38,8 +38,8 @@ struct LiveImageEffects: Equatable, Sendable {
     var splitVertical = true
     /// Left-to-right monitor flip. Applied in `VideoView`, not this compositor.
     var mirror = false
-    /// Anamorphic display stretch. `1` is off. Pocket sensors are not squeezed — this is a
-    /// preview-only transform matching OpenZCine DE-SQ.
+    /// Anamorphic display stretch. `1` is off. Anamorphic adapters squeeze the source;
+    /// this preview-only correction never changes recordings or scope samples.
     var desqueezeFactor: Double = 1
     var desqueezeHorizontal = true
     /// Traffic-light pixel-fraction threshold (operator compensation, stops / 10).

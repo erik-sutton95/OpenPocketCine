@@ -206,12 +206,12 @@ internal class LiveVulkanSession(
         }
     }
 
-    fun setFeedRect(x: Float, y: Float, w: Float, h: Float) {
+    fun setFeedRect(x: Float, y: Float, w: Float, h: Float, stretchToRect: Boolean = false) {
         val native = handle
         if (native == 0L || presentGate.isReleased) return
         feedW = w
         feedH = h
-        OpcVulkan.nativeSetFeedRect(native, x, y, w, h)
+        OpcVulkan.nativeSetFeedRect(native, x, y, w, h, stretchToRect)
     }
 
     fun setPlates(packed: FloatArray) {

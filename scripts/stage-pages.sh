@@ -14,6 +14,7 @@ if [[ ! -d "$root/handbook/node_modules" ]]; then
   npm --prefix "$root/handbook" ci
 fi
 ASTRO_TELEMETRY_DISABLED=1 HANDBOOK_BASE=/docs npm --prefix "$root/handbook" run build
+python3 "$root/scripts/check-handbook-links.py" --base /docs --dist "$root/handbook/dist" --site "$root/site"
 
 mkdir -p "$dest/docs"
 if [[ -d "$root/handbook/dist/docs" ]]; then

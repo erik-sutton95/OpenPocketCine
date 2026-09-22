@@ -69,7 +69,7 @@ enum AssistInspectorPreviewPolicy {
     static func imageOptions(
         assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer
     ) -> LiveImageEffects {
-        var result = assist.effects
+        var result = assist.gradesClip ? assist.playbackEffects : assist.effects
         result.peaking = tool == .peaking
         result.falseColor = tool == .falseColor
         result.zebra = tool == .zebra
@@ -82,7 +82,7 @@ enum AssistInspectorPreviewPolicy {
         result.faceAF = false
         result.inspectorSample = false
         result.colorMode = transfer.colorMode
-        result.mirror = tool == .mirror || assist.isVisible(.mirror)
+        result.mirror = tool == .mirror || result.mirror
         if tool == .lut {
             result.splitComparison = assist.splitComparison
         }

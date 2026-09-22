@@ -1,10 +1,10 @@
 package com.opencapture.openpocketcine.assists
 
 /**
- * OpenZCine cinema live-monitor set. Pocket omits LEVEL, DE-SQ, MAG, EV, PLAY.
+ * OpenZCine cinema live-monitor set. Pocket omits LEVEL, MAG, EV, PLAY.
  *
  * Toolbar: LUT PEAK FALSE | ZEBRA WAVE PARADE | HISTO VECTOR LIGHTS ND |
- * GUIDES GRID CROSS | MIRROR | AUDIO.
+ * GUIDES GRID CROSS DE-SQ | MIRROR | AUDIO.
  */
 enum class LiveAssistTool {
     LUT,
@@ -21,11 +21,12 @@ enum class LiveAssistTool {
     GUIDES,
     GRID,
     CROSS,
+    DESQ,
     MIRROR,
     ;
 
     val chipLabel: String
-        get() = name
+        get() = if (this == DESQ) "DE-SQ" else name
 
     val label: String
         get() = name
@@ -47,6 +48,7 @@ enum class LiveAssistTool {
                 GUIDES -> "Guides"
                 GRID -> "Grid"
                 CROSS -> "Crosshair"
+                DESQ -> "Anamorphic Desqueeze"
                 MIRROR -> "Mirror"
             }
 
@@ -64,7 +66,7 @@ enum class LiveAssistTool {
                 listOf(LUT, PEAK, FALSE),
                 listOf(ZEBRA, WAVE, PARADE),
                 listOf(HISTO, VECTOR, LIGHTS, ND),
-                listOf(GUIDES, GRID, CROSS),
+                listOf(GUIDES, GRID, CROSS, DESQ),
                 listOf(MIRROR),
             )
 

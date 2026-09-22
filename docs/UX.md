@@ -37,8 +37,9 @@ wizard. The saved row being connected shows discovery/joining progress and
 **Cancel**; camera names stay above availability and connection actions. Other
 connection actions wait until the attempt finishes or is cancelled. On iOS,
 **Watch a feed** is the eye button next to the Multiview grid button in the
-camera-list header. Settings does not start a new pair. The wizard always offers **Share
-Diagnostics** so a stuck first pair can still send a report.
+camera-list header. Settings does not start a new pair. The wizard always shows
+**Report a problem** below the pairing target so a stuck first pair can open the
+native report form. **Share Diagnostics** remains in the overflow menu.
 
 Pocket and Nano are separate bodies. If Bluetooth reached a different camera
 than the one tapped, say so and tell the operator to pick the matching row.
@@ -133,8 +134,10 @@ separate hold-to-move interaction.
   controls appear only with the host grant. Interrupted feeds hold the last frame,
   show bounded reconnect progress, and retain Leave / Choose a feed after failure.
 - TestFlight / Play What to Test is this-build operator copy (`docs/tester-notes.md`).
-- Connection setup (first pair): **Share Diagnostics** on the wizard so a
-  tester who never reaches Operator Setup can still send a report.
+- Connection setup (first pair): **Report a problem** stays visible at every
+  step, including scanning, missing permissions and failures. Closing the form
+  returns to pairing without cancelling the attempt. The overflow menu retains
+  **Share Diagnostics** for local export.
 - Operator Setup → System → **Report a problem** opens a native Sentry form
   for a description, optional reply email, optional reviewed technical details and
   up to three selected photos/screenshots. Show previews and removal before Send.

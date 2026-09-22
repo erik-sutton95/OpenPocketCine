@@ -115,6 +115,15 @@ rebuild and one recovery enable. The owner keeps the last image and waits up to
 16 seconds for fresh source and presentation before transferring to full datalink
 rejoin. Fresh native output with stale presentation does not request a camera PLI.
 
+An established decoder can lose its format when a failed display path resets
+parameter sets. Fresh inter-frames cannot recreate those sets. Missing format
+must not disable the same bounded decoder repair when output is expected and
+silent: its existing enable requests a new random-access frame and format.
+The established-picture, readiness, grace and deadline checks still apply;
+cold startup and fresh native output remain outside this repair. The
+[September 21 Sentry review](audits/2026-09-21-sentry-crashes-dropouts.md)
+records the failing native regression and the limits of field attribution.
+
 An explicit compressed discontinuity after valid references can request that
 same repair on the next eligible watchdog tick, while the old output is still
 younger than two seconds. Ordinary startup, a deliberate decoder replacement

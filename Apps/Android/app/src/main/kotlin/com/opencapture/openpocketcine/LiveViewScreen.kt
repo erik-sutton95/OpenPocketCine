@@ -365,8 +365,8 @@ fun LiveViewScreen(model: AppModel) {
         val safeTrailing = with(density) { cutout.getRight(this, layoutDir).toDp().value }
         val vw = maxWidth.value
         val vh = maxHeight.value
-        val fill =
-            if (verticalPicture) true else model.portraitFeedAspect == PortraitFeedAspect.FILL
+        val desqueezeVisible = assist.isVisible(LiveAssistTool.DESQ)
+        val fill = verticalPicture || (!desqueezeVisible && model.portraitFeedAspect == PortraitFeedAspect.FILL)
         val feedAspectRatio = if (verticalPicture) 9f / 16f else 16f / 9f
         val assistH =
             if (!model.assistClean && !fill && model.chromeSectionMounts(PocketDispSection.TOOL_BAR)) {
@@ -428,7 +428,8 @@ fun LiveViewScreen(model: AppModel) {
         // then clips (center crop). Vertical Pocket fill stays 9:16 pillars.
         val fillCrop = zones != null && fill && !verticalPicture
         val pictureContent =
-            if (fillCrop) portraitFillCropContent(layout.feed) else layout.onFeed
+            if (desqueezeVisible) layout.onFeed.fittedContent(assist.presentedAspect(pictureAspect))
+            else if (fillCrop) portraitFillCropContent(layout.feed) else layout.onFeed
         val showGimbalButton =
             model.monitorCapabilities(status).gimbal &&
                 model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
@@ -491,18 +492,20 @@ fun LiveViewScreen(model: AppModel) {
             effectsPlan,
             canvasOrigin,
             platesGen,
-            layout.onFeed,
+            pictureContent,
+            desqueezeVisible,
             density.density,
             liveViewFlip,
         ) {
             val session = vulkanSession ?: return@LaunchedEffect
             if (!useVulkan) return@LaunchedEffect
-            val picture = layout.onFeed
+            val picture = if (desqueezeVisible) pictureContent else layout.onFeed
             session.setFeedRect(
                 with(density) { picture.x.dp.toPx() },
                 with(density) { picture.y.dp.toPx() },
                 with(density) { picture.width.dp.toPx() },
                 with(density) { picture.height.dp.toPx() },
+                stretchToRect = desqueezeVisible,
             )
             session.setPlates(GpuOverlayBus.plateSnapshot())
             session.syncAssists(
@@ -552,6 +555,7 @@ fun LiveViewScreen(model: AppModel) {
             ) {
                 LiveFeedPresenter(
                     mirrored = liveViewFlip,
+                    stretchToRect = desqueezeVisible,
                     backdrop = backdrop,
                     sourceIdentity = model.session.connectedCamera ?: model.session,
                     sourceReady = hasPicture,
@@ -581,10 +585,11 @@ fun LiveViewScreen(model: AppModel) {
 
             // iOS `LiveZoomPinchWell` sits under chip + scopes so direct drag
             // on WAVE / PARADE / HISTO / VECTOR still reaches MovableAssistPanel.
-            Box(Modifier.liveModuleFrame(layout.onFeed)) {
+            val gestureFrame = if (desqueezeVisible) pictureContent else layout.onFeed
+            Box(Modifier.liveModuleFrame(gestureFrame)) {
                 LiveFeedGestureWell(
                     enabled = !uiLocked && model.liveOperatorPanel == null && chromeInteractive,
-                    feed = ChromeRect(0f, 0f, layout.onFeed.width, layout.onFeed.height),
+                    feed = ChromeRect(0f, 0f, gestureFrame.width, gestureFrame.height),
                     onTap = { point ->
                         val x = if (liveViewFlip) 1f - point.x else point.x
                         model.session.handleFeedTap(x, point.y)
@@ -608,8 +613,10 @@ fun LiveViewScreen(model: AppModel) {
                         model.chromeSectionMounts(PocketDispSection.FOCUS_BOX) &&
                             model.session.supportsTapFocus,
                     locked = uiLocked,
-                    feedFrame = layout.onFeed.fittedContent(
+                    feedFrame = if (desqueezeVisible) pictureContent else layout.onFeed.fittedContent(
                         VideoResolution.fromRaw(status.resolutionCode)?.ratio ?: pictureAspect),
+                    framingFrame = if (desqueezeVisible) pictureContent.fittedContent(
+                        assist.presentedAspect(VideoResolution.fromRaw(status.resolutionCode)?.ratio ?: pictureAspect)) else null,
                     placementFrame = scopePlacement,
                     audioPlacementFrame = scopePlacement.copy(x = layout.safeLeading,
                         width = maxOf(0f, scopePlacement.maxX - layout.safeLeading)),
@@ -1066,6 +1073,7 @@ private fun View.unsplitMotionEvents() {
 @Composable
 private fun LiveFeedPresenter(
     mirrored: Boolean,
+    stretchToRect: Boolean,
     backdrop: MonitorBackdropFeed,
     sourceIdentity: Any,
     sourceReady: Boolean,
@@ -1101,6 +1109,7 @@ private fun LiveFeedPresenter(
     }
     LaunchedEffect(sourceIdentity, sourceReady) { session.configurePreviewSource(sourceIdentity, sourceReady) }
     LaunchedEffect(plan) { session.updatePlan(plan) }
+    LaunchedEffect(stretchToRect) { session.setStretchToRect(stretchToRect) }
 
     Box(modifier.graphicsLayer { scaleX = if (mirrored) -1f else 1f }) {
         key(gpuFailed) {

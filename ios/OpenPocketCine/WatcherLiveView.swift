@@ -21,7 +21,8 @@ struct WatcherLiveView: View {
             let raster =
                 client.decoder.pictureSize.width > 0
                 ? client.decoder.pictureSize : CGSize(width: 1280, height: 720)
-            let feed = AVMakeRect(aspectRatio: raster, insideRect: viewport)
+            let feed = DesqueezeAssist.presentationRect(
+                sourceSize: raster, in: viewport, effects: model.assist.effects)
             let bottom = max(proxy.safeAreaInsets.bottom, 10.0)
             ZStack {
                 Color.black.ignoresSafeArea()

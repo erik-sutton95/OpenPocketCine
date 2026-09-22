@@ -82,6 +82,14 @@ the last picture.
 
 After a healthy take the feed can still **freeze or go black at ~3–5 min** — cumulative packet counts do not detect that. Staged recover is `docs/feed-watchdog.md` in the repository.
 
+After a picture has been established, losing the decoder's parameter sets must
+not disable recovery while complete compressed frames keep arriving. If native
+output is expected but silent, the existing bounded decoder repair requests a
+new random-access frame and format while retaining the last image. Startup,
+readiness, command grace and the recovery deadline still apply. Synthetic
+regressions cover this missing-format state; physical camera qualification is
+pending, and this does not establish the cause of every reported dropout.
+
 ## Per packet
 
 `[8B transport hdr][12B fragment hdr][HEVC or AVC bytes]`.

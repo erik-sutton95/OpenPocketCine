@@ -10,6 +10,32 @@ import kotlin.test.assertTrue
 
 class KnownReferenceLossTest {
     @Test
+    fun lostFormatStillAllowsOneBoundedDecoderRepair() {
+        for (knownLoss in listOf(false, true)) {
+            val state = LiveViewEnablePolicy.State()
+            val start = snapshot().copy(
+                hasFormat = false,
+                referenceRecoveryNeeded = knownLoss,
+                lastDecoderOutputAt = if (knownLoss) 99_761 else 97_000,
+            )
+            assertEquals(LiveViewEnablePolicy.Action.REBUILD_DECODER,
+                LiveViewEnablePolicy.tick(state, start))
+            for (second in 1 until 16) {
+                val next = snapshot(second * 1_000L).copy(
+                    hasFormat = false, referenceRecoveryNeeded = knownLoss,
+                    lastDecoderOutputAt = start.lastDecoderOutputAt,
+                )
+                assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, next))
+            }
+            assertEquals(LiveViewEnablePolicy.Action.FULL_REJOIN,
+                LiveViewEnablePolicy.tick(state, snapshot(16_000).copy(
+                    hasFormat = false, referenceRecoveryNeeded = knownLoss,
+                    lastDecoderOutputAt = start.lastDecoderOutputAt,
+                )))
+        }
+    }
+
+    @Test
     fun canceledRepairWaitingForCodecLockCannotMutateANewInputLifetime() {
         for (referenceLossOnly in listOf(true, false)) {
             for (retirement in 0..2) {
@@ -179,7 +205,7 @@ class KnownReferenceLossTest {
             s.copy(lastCameraSetAt = s.now - 100), s.copy(lastFocusTrackAt = s.now - 100),
             s.copy(lastZoomAt = s.now - 100), s.copy(lastGimbalThrowAt = s.now - 100),
             s.copy(lastEnableAt = s.now - 1_000), s.copy(live = false),
-            s.copy(sawPicture = false), s.copy(decoderOutputExpected = false), s.copy(hasFormat = false),
+            s.copy(sawPicture = false), s.copy(decoderOutputExpected = false),
         )
         for (snap in guarded) {
             val state = LiveViewEnablePolicy.State()

@@ -1,18 +1,16 @@
 New and changed
 
-- Motion Control keeps the existing zoom chip and long-press disc usable while editing, loops between saved zoom amounts, and offers Restart while paused. D-Log2 blocks zoom-changing programs.
-- Pocket 3 zoom stops follow FORMAT, with a note when the ceiling changes. Refused zoom values settle back to the camera's reading.
-- HDR display brightens the phone panel; off by default. Screen recording and AirPlay use normal SDR.
+- Motion Control loops through saved zooms and offers Restart while paused. The existing zoom chip and long-press disc stay accessible; D-Log2 blocks zoom-changing programs.
+- Anamorphic Desqueeze (DE-SQ) works in live view, videos and photos, with lens presets and a custom 1.00–2.00× factor in 0.01 steps.
+- Report a problem is available before pairing, with optional technical details and screenshots.
 
 Fixes
 
-- The zoom dial retains fractional input without snapping to hundredths or whole zoom stops. Crossing a whole stop gives one haptic pulse; camera lens smoothness still needs testing.
-- Exact loop reversals accept confirmed arrival with native motor easing, preventing a false waypoint-verification error.
-- Motion Control waypoint letters and path now compensate for selfie orientation and MIRROR. Saved positions and motion stay unchanged.
-- Connection and picture recovery keep the last picture and use bounded retries. Media return starts live view once.
+- Motion Control drags more smoothly and keeps duration dials usable after moving. Help text is brighter, and loop reversals avoid false waypoint failures.
+- Preview recovers after video format loss. Connection and stalled-picture recovery have bounded waits; Media return starts live view once.
 
 What to test
 
-- With Motion Control open, tap/double tap zoom or hold for the disc. Close the disc: the full editor stays open. SET A/B/C at different zoom amounts; check both loop directions and D-Log2 restrictions.
-- Pause and choose Restart: the saved program starts again from A. Scroll in both orientations: actions stay fixed. Close/reopen retains the program; Clear removes points.
-- Connect repeatedly, use controls and open Media, then return. Check Pocket 3 zoom limits per FORMAT and HDR display while recording the phone screen.
+- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, adjust a duration, then close/reopen it. Check saved settings remain and actions stay fixed.
+- Tap DE-SQ to toggle; hold for presets, Custom and direction. Try LUTs, guides and playback. Before pairing, open and close Report a problem.
+- Connect three times, then return from Media, Settings and the background. Report any freeze with its time and technical details.

@@ -1,18 +1,16 @@
 New and changed
 
-- Motion Control keeps the existing zoom chip and long-press disc usable while editing, loops between saved zoom amounts, and offers Restart while paused. D-Log2 blocks zoom-changing programs.
-- TalkBack reads live-view readouts and assist tools as whole phrases, while preserving tap and hold actions.
-- Pocket 3 zoom follows FORMAT limits and refused values settle back. Readouts use consistent formatting across phone languages.
+- Motion Control loops through saved zooms and offers Restart while paused. The existing zoom chip and long-press disc stay accessible; D-Log2 blocks zoom-changing programs.
+- Anamorphic Desqueeze (DE-SQ) works in live view, videos and photos, with lens presets and a custom 1.00–2.00× factor in 0.01 steps.
+- Report a problem is available before pairing, with optional technical details and screenshots.
 
 Fixes
 
-- The zoom dial retains fractional input without snapping to hundredths or whole zoom stops. Crossing a whole stop gives one haptic pulse; camera lens smoothness still needs testing.
-- Exact loop reversals accept confirmed arrival with native motor easing, preventing a false waypoint-verification error.
-- Motion Control waypoint letters and path now compensate for selfie orientation and MIRROR. Saved positions and motion stay unchanged.
-- Bluetooth setup reports rejected writes promptly. Connection and picture recovery use bounded retries; Media return starts live view once.
+- Motion Control help text is brighter, the zoom dial retains fractional input, and loop reversals avoid false waypoint failures.
+- Preview recovers after video format loss. If the decoder refuses low latency, live view retries without that setting instead of staying black.
 
 What to test
 
-- With Motion Control open, tap/double tap zoom or hold for the disc. Close the disc: the full editor stays open. SET A/B/C at different zoom amounts; check both loop directions and D-Log2 restrictions.
-- Pause and choose Restart: the saved program starts again from A. Scroll in both orientations: actions stay fixed. Close/reopen retains the program; Clear removes points.
-- Connect repeatedly and return from Media. With TalkBack on, check each readout speaks one phrase and assist tap/hold still work. Check Pocket 3 zoom limits per FORMAT.
+- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, adjust a duration, then close/reopen it. Check saved settings remain and actions stay fixed.
+- Tap DE-SQ to toggle; hold for presets, Custom and direction. Try LUTs, guides and playback. Before pairing, open and close Report a problem.
+- Connect three times, then return from Media, Settings and the background. Report any freeze with its time and technical details.

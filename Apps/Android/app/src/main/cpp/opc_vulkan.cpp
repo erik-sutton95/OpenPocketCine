@@ -290,6 +290,7 @@ struct OpcVk {
     uint32_t plateCount = 0;
     float uiScale = 1.f;
     float feedRect[4]{0, 0, 1, 1};
+    bool stretchFeedToRect = false;
     float lutSize = 0;
     float limitsPaintSize = 0;
     float limitsWeightSize = 0;
@@ -1792,7 +1793,8 @@ static bool renderFrame(OpcVk* r) {
         vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->blitLayout, 0, 1, &srcSet, 0, nullptr);
         float blitPc[2] = {1.f, 0.f};
         vkCmdPushConstants(r->cmd, r->blitLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, blitPc);
-        setCoverViewportAt(r->cmd, srcW, srcH, dx, dy, dw, dh, r->swapExtent.width, r->swapExtent.height);
+        if (r->stretchFeedToRect) setCoverViewportAt(r->cmd, dw, dh, dx, dy, dw, dh, r->swapExtent.width, r->swapExtent.height);
+        else setCoverViewportAt(r->cmd, srcW, srcH, dx, dy, dw, dh, r->swapExtent.width, r->swapExtent.height);
         vkCmdDraw(r->cmd, 3, 1, 0, 0);
         vkCmdEndRenderPass(r->cmd);
     };
@@ -1969,8 +1971,10 @@ static bool renderFrame(OpcVk* r) {
                             grade ? &r->blitSets[0] : &r->blitSets[5], 0, nullptr);
     float blitPc[2] = {1.f, 0.f};
     vkCmdPushConstants(r->cmd, r->blitLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, blitPc);
-    setCoverViewportAt(r->cmd, (float)kSourceW, (float)kSourceH, destX, destY, destW, destH,
-                       r->swapExtent.width, r->swapExtent.height);
+    if (r->stretchFeedToRect) setCoverViewportAt(r->cmd, destW, destH, destX, destY, destW, destH,
+                                              r->swapExtent.width, r->swapExtent.height);
+    else setCoverViewportAt(r->cmd, (float)kSourceW, (float)kSourceH, destX, destY, destW, destH,
+                            r->swapExtent.width, r->swapExtent.height);
     vkCmdDraw(r->cmd, 3, 1, 0, 0);
 
     if (r->plateCount && r->glassPipe) {
@@ -2360,7 +2364,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeRedraw(JNIEnv*, jclass,
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetFeedRect(JNIEnv*, jclass, jlong h, jfloat x,
-                                                                    jfloat y, jfloat w, jfloat ht) {
+                                                                    jfloat y, jfloat w, jfloat ht, jboolean stretchToRect) {
     auto* r = fromHandle(h);
     if (!r) return;
     std::lock_guard<std::mutex> g(r->lock);
@@ -2368,6 +2372,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetFeedRect(JNIEnv*, jc
     r->feedRect[1] = y;
     r->feedRect[2] = w;
     r->feedRect[3] = ht;
+    r->stretchFeedToRect = stretchToRect == JNI_TRUE;
 }
 
 extern "C" JNIEXPORT void JNICALL

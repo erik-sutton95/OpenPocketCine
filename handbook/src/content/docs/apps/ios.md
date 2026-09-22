@@ -5,7 +5,7 @@ description: SwiftUI iPhone and iPad shell. Physical device for BLE and camera W
 
 The production iOS app is a universal iPhone and iPad SwiftUI shell in
 `ios/OpenPocketCine/`. It is the operator-proven datalink. Generate the Xcode
-project with XcodeGen — see [Setup](../guides/setup/).
+project with XcodeGen — see [Setup](../../guides/setup/).
 
 ## Field Monitor interface
 
@@ -141,6 +141,28 @@ feed. If live view cannot return, bounded connection recovery takes over. Please
 test repeated browsing, playback and return with a connected camera; physical
 qualification of this follow-up is still pending.
 
+### Anamorphic Desqueeze
+
+Use **DE-SQ** in View Assist for an anamorphic lens or adapter. Tap to toggle;
+long-press for **Anamorphic Desqueeze** options. Choose **1.1×, 1.2×, 1.33×,
+1.5×, 1.6×, 1.8× or 2.0×**, or select **Custom** for a **1.00×–2.00×** slider
+in **0.01** steps. Custom remembers its last value when you switch presets.
+**Horizontal** widens the picture; **Vertical** corrects a rotated adapter.
+The full corrected picture fits within the display area. While DE-SQ is on,
+portrait Fill is suspended and its control is hidden; switching DE-SQ off
+restores your saved Fit/Fill choice.
+
+Desqueeze works in live view, video playback and photo viewing. Video and photo
+playback share their own on/off choice, separate from live view; factor and
+direction are shared. In the photo viewer, tap **DE-SQ** beside Favorite and
+hold it for options. Settings persist between launches. Desqueeze starts off;
+the initial factor is 1.33×. New DISP 2 pin preferences include it, while
+existing saved pins stay unchanged.
+
+LUTs and picture warnings follow the correction, and framing guides align with
+the corrected picture. Desqueeze changes only the display: recordings, shared
+files and scope measurements keep the original image.
+
 ## Moving scopes
 
 Newly enabled windowed scopes start in the center, ready for you to place them.
@@ -185,7 +207,7 @@ space after rotation or resizing, including saved positions. Long-press a View A
 - Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
   with 4K max 2×; Nano 1×). Pocket 3's ceiling is per-FORMAT, not one
   generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×, 3K 1:1 2×**
-  ([survey](https://openpocketcine.app/docs/protocol/pocket3/#zoom-and-med-tele)).
+  ([survey](https://openpocketcine.app/docs/devices/pocket-3/controls/#zoom-and-med-tele)).
   Zoom must not drop the live picture. FORMAT lists
   `camcap_video_format` pairs (2.7K / 4:3 / 1:1 / 9:16 when the body
   advertises them; aspect is the res byte). A tap stays on that pair until
@@ -194,7 +216,7 @@ space after rotation or resizing, including saved positions. Long-press a View A
   when the camera supplies no capability table (16:9 and 1:1; 9:16 stays
   body Lock Portrait unless already reported); reported choices take priority.
   Physical iPhone build 99 passed one 2.7K/25 D-Log M record and warm reconnect
-  ([survey evidence](https://openpocketcine.app/docs/protocol/pocket3/#openpocketcine-recording-and-warm-reconnect)).
+  ([survey evidence](https://openpocketcine.app/docs/devices/pocket-3/connection/#openpocketcine-recording-and-warm-reconnect)).
   The full matrix, camera cold boot and other shooting modes remain unqualified.
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
   Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
@@ -377,7 +399,7 @@ Verify record start/stop on the camera body until you trust the link.
 
 If live view never starts after Wi-Fi joins, pause local VPNs and ad
 blockers or exclude this app
-([Troubleshooting](../guides/troubleshooting/)).
+([Troubleshooting](../../guides/troubleshooting/)).
 
 ## Device requirements
 
@@ -387,7 +409,7 @@ the layout is in play). Protocol tests (`just test`) do not need hardware.
 iPad hides the system time / battery bar; monitor chrome is the HUD.
 
 Platform notes for the wire (Hotspot Configuration, Local Network, CoreBluetooth):
-[iOS protocol notes](../protocol/ios/).
+[iOS protocol notes](../../protocol/ios/).
 
 ## Releases
 
@@ -402,10 +424,12 @@ exporting an archive with the Watch companion. Cloud cannot register the Watch
 identifier during export. Setup and export-log troubleshooting:
 [Watch companion signing](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/testflight-ci.md#watch-companion-signing).
 
-If pairing or live view fails: Connection setup **Share Diagnostics**, or
-Operator Setup → System → **Share Diagnostics**, or take a screenshot for
-TestFlight and paste the copied report into the feedback. The report has no
-name, location, or Wi-Fi password.
+If pairing or live view fails, tap **Report a problem** on the pairing screen or
+in **Operator Setup → System**. It works before your first successful pairing;
+technical details and a reply email are optional. For a local diagnostic export,
+use pairing's overflow menu → **Share Diagnostics** or System → **Diagnostic
+options → Save diagnostic report**. You can also take a screenshot for TestFlight
+and paste the copied diagnostics into the feedback.
 
 ### False color during exposure changes
 

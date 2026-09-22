@@ -203,6 +203,42 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         XCTAssertFalse(decoder.referenceRecoveryNeeded)
     }
 
+    func testLostFormatWithFreshPFramesCannotStrandAnEstablishedDecoder() throws {
+        let decoder = HevcDecoder()
+        let display = DisplayLayerView(decoder.displayLayer)
+        display.frame = CGRect(x: 0, y: 0, width: 64, height: 64)
+        display.layoutSubviews()
+        defer { decoder.reset() }
+        XCTAssertTrue(decoder.decode(accessUnit: Self.syntheticKeyframe))
+        let heldPicture = try XCTUnwrap(decoder.lastPresentedAt)
+        decoder.effects.histogram = true
+        decoder.unlockHardwareDecoder()
+        XCTAssertTrue(decoder.nativeOutputExpected)
+
+        // A failed display path calls this same format reset. Fresh inter-frames
+        // cannot supply the missing parameter sets or rebuild its reference chain.
+        decoder.flushForRecovery()
+        XCTAssertFalse(decoder.decode(accessUnit: Self.syntheticPFrame))
+        XCTAssertFalse(decoder.hasFormat)
+        XCTAssertTrue(decoder.nativeOutputExpected)
+        XCTAssertEqual(decoder.lastPresentedAt, heldPicture)
+        var watchdog = FeedWatchdog()
+        let snapshot = FeedWatchdog.Snapshot(
+            now: 100, lastDecodedFrameAge: 3,
+            lastVideoPacketAge: 0.01, lastAccessUnitAge: 0.01, lastStatusAge: 0.01,
+            flowHealthy: true, pathReady: true, hasFormat: decoder.hasFormat,
+            decoderFailed: decoder.isDecoderWedged, live: true,
+            sawPicture: decoder.lastPresentedAt != nil, secondsSinceLastEnable: 20,
+            lastDecoderOutputAge: decoder.nativeOutputAge,
+            decoderOutputExpected: decoder.nativeOutputExpected,
+            referenceRecoveryNeeded: decoder.referenceRecoveryNeeded,
+            repairReady: decoder.isDisplayReady)
+        XCTAssertEqual(watchdog.tick(snapshot), .rebuildVTSession)
+        XCTAssertTrue(decoder.rebuildPresentation())
+        XCTAssertEqual(decoder.lastPresentedAt, heldPicture)
+        XCTAssertTrue(decoder.isPresentationReady, "The existing owner can request fresh format")
+    }
+
     func testWaitingFeedReceivesPicturesAcrossSettingsAndGeometryChanges() async throws {
         let model = AppModel()
         model.assist.lutEnabled = false

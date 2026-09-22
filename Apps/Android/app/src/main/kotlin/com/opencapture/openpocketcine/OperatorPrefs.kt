@@ -232,11 +232,11 @@ object OperatorPrefs {
     private const val FEED_UPSCALER = "OpenPocketCine.feedUpscaler"
 
     const val DEFAULT_GIMBAL_SENSITIVITY = 4
-    val DEFAULT_CLEAN_PINS = setOf("LUT", "PEAK", "MIRROR")
+    val DEFAULT_CLEAN_PINS = setOf("LUT", "PEAK", "MIRROR", "DESQ")
 
-    /** Absent or empty pin set → stock LUT / PEAK / MIRROR, matching iOS load. */
+    /** Only absent preferences receive defaults; an explicitly empty set stays empty. */
     fun resolvedCleanPins(raw: Set<String>?): Set<String> =
-        if (raw.isNullOrEmpty()) DEFAULT_CLEAN_PINS else raw
+        raw ?: DEFAULT_CLEAN_PINS
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
