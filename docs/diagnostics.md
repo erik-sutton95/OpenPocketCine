@@ -245,6 +245,13 @@ timing. Its local summaries retain installed-build identity and distinguish
 simulation from driver-declared physical evidence. It does not upload reports
 or substitute historical journal data for fresh picture progress.
 
+The same guide covers core packet/command chaos and native feed/UI stress.
+Android reuses cumulative `LivePipelineCadence` snapshots without consuming
+keepalive windows. Native fault-arm/disarm markers, actual command results and
+fresh recovery samples distinguish configured faults from faults that fired.
+Raw build/instrumentation logs stay private; simulation results and compile
+checks cannot qualify a physical connection.
+
 Debug builds accept `OPV_RELIABILITY_VERIFY=incident|gatedIncident|crash|hang|resume` at launch.
 This opens an isolated verification screen, uses a separate consent suite/cache,
 and never constructs the camera UI. `incident` drives the real portable recorder

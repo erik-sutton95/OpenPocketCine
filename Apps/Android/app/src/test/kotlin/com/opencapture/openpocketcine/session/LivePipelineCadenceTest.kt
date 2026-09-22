@@ -35,6 +35,23 @@ private class Pictures(private val cadence: LivePipelineCadence) {
 }
 
 class LivePipelineCadenceTest {
+    @Test fun cumulativeSnapshotsDoNotConsumeOrResetKeepaliveEvidence() {
+        var now = 0L
+        val cadence = LivePipelineCadence { now }
+        cadence.note(LivePipelineCadence.Stage.VIDEO)
+        now = 1_000_000_000
+        val first = cadence.snapshot()
+        assertEquals(1L, first.counts[LivePipelineCadence.Stage.VIDEO])
+        assertEquals(1000.0, first.ageMs[LivePipelineCadence.Stage.VIDEO])
+        assertEquals(-1.0, first.ageMs[LivePipelineCadence.Stage.OUTPUT])
+        assertEquals(1.0, cadence.takeWindow()!!.hz[LivePipelineCadence.Stage.VIDEO])
+        assertEquals(first, cadence.snapshot())
+        cadence.note(LivePipelineCadence.Stage.VIDEO)
+        now += 1_000_000_000
+        assertEquals(2L, cadence.snapshot().counts[LivePipelineCadence.Stage.VIDEO])
+        assertEquals(1.0, cadence.takeWindow()!!.hz[LivePipelineCadence.Stage.VIDEO])
+    }
+
     @Test fun suppressedMediaWindowsForgetUnpresentedHistoryInsteadOfRetainingTheWholeVisit() {
         var now = 0L
         val cadence = LivePipelineCadence { now }

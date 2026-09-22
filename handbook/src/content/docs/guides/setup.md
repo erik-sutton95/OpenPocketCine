@@ -77,6 +77,20 @@ evidence; none is bundled with this runner. Recording is opt-in, unsupported
 paths remain coverage gaps, and generated artifacts stay local. Offline demos
 are explicitly marked simulation and do not qualify either app on hardware.
 
+With Swift installed, `just connection-chaos --seed 401 --seeds 128` exercises
+the real portable packet assembler, command mailbox and recovery policy under
+loss, reordering, congestion and outages while settings requests continue.
+Its virtual timing is not camera performance evidence.
+
+For concurrent UI/control work on phones, the guide documents iPhone
+`INJECT_MODE=overlap` with `just ios-feed-stress`, and
+`just android-feed-stress --seed 401 --seconds 300`. Both reconnect a saved
+camera and overlap bounded local video faults with operator actions. Android
+also requires actual ISO command replies; iOS has broader UI scenario coverage.
+These new modes await physical qualification on both platforms. Local video
+drops do not reproduce Wi-Fi route loss or network congestion. Pair first,
+connect the unlocked phone by USB, and follow the guide's model requirements.
+
 ## This handbook
 
 ```bash

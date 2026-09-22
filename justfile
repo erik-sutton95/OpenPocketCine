@@ -93,6 +93,14 @@ connection-stress *args:
 connection-stress-test:
     python3 -m unittest discover -s tools/connection-stress -p 'test_*.py'
 
+# Seeded faults + 100 settings offers/s against real Swift connection code; no device.
+connection-chaos *args:
+    python3 tools/connection-stress/chaos.py {{args}}
+
+# Physical Android + saved Pocket: bounded packet loss during UI and command work.
+android-feed-stress *args:
+    python3 tools/connection-stress/android.py {{args}}
+
 # Run all Swift-only checks.
 swift-check: swift-lint swift-test
 

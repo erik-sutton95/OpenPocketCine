@@ -9,10 +9,16 @@ incomplete.
 
 The [connection stress matrix](connection-stress-testing.md) is shared maintainer
 tooling for both platforms, with the same evidence and teardown contract. It
-ships a script interface and local agent mailbox, not native device adapters.
-The existing iOS-only feed XCTest exception remains; Android physical adapters
-and both platforms' connection-matrix qualification are pending. Unsupported
-paths are explicit coverage gaps. No operator-visible shell behavior changes.
+ships a script interface and local agent mailbox. Separate native feed runners
+now target both platforms: iOS overlaps existing loss/burst/output suppression
+with its UI scenarios; Android combines local video loss with Settings/ISO SET
+pressure, joystick input and lifecycle changes. Android does not yet match iOS
+assist/rotation/changing-settings or opt-in recording coverage. Its fault hook
+is Debug-gated, and cumulative cadence snapshots preserve existing windows.
+Both native overlap qualifications, actual network impairment and the matrix's
+native adapters are pending. Unsupported paths remain explicit coverage gaps.
+The portable chaos suite does not cover Android's still-local SET mailbox;
+consolidation is tracked in the guide. No operator-visible shell behavior changes.
 
 Android's GATT initialization checks native request admission and advances the
 existing tolerated descriptor fallback through both characteristics before

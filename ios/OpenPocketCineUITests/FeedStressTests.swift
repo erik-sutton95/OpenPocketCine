@@ -12,6 +12,9 @@ final class FeedStressTests: XCTestCase {
     private var limitS: TimeInterval = 300
     private var recordOptIn = false
     private var injectOptIn = false
+    private var overlapInjection = false
+    private var overlapScenarios = 0
+    private var deferringFaultProgress = false
     private var deadline: Date = .distantFuture
     private var isoOriginal = ""
     private var failures: [String] = []
@@ -49,6 +52,14 @@ final class FeedStressTests: XCTestCase {
         if limitS > 1_740 { limitS = 1_740 }
         recordOptIn = env["OPV_FEED_STRESS_RECORD"] == "1"
         injectOptIn = !(env["OPV_FEED_STRESS_INJECT"] ?? "").isEmpty
+        let injectionMode = env["OPV_FEED_STRESS_INJECT_MODE"] ?? "isolated"
+        guard ["isolated", "overlap"].contains(injectionMode) else {
+            throw FeedStressError.halted("Unknown injection mode")
+        }
+        overlapInjection = injectionMode == "overlap"
+        guard !overlapInjection || injectOptIn else {
+            throw FeedStressError.halted("overlap mode requires an injection plan")
+        }
         if let filter = env["OPV_FEED_STRESS_SCENARIOS"], !filter.isEmpty {
             let names = filter.split(separator: ",").map(String.init)
             selectedScenarios = FeedStressScenario.selectable.filter { names.contains($0.rawValue) }
@@ -57,6 +68,10 @@ final class FeedStressTests: XCTestCase {
             }
         }
         let steadyOnly = selectedScenarios == [.steadyFeed]
+        guard !overlapInjection || !selectedScenarios.contains(.mediaReturn) else {
+            throw FeedStressError.halted(
+                "mediaReturn uses a separate identity proof; run it in isolated mode")
+        }
         if selectedScenarios.contains(.steadyFeed) {
             guard steadyOnly, !recordOptIn, !injectOptIn, limitS <= 1_560 else {
                 throw FeedStressError.halted(
@@ -100,7 +115,8 @@ final class FeedStressTests: XCTestCase {
         if steadyOnly { deadline = Date().addingTimeInterval(limitS) }
         var cycle = 0
         var completedScenarios = 0
-        while Date() < deadline {
+        var coveredScenarios = Set<String>()
+        stressLoop: while Date() < deadline {
             if thermalHalt() {
                 failures.append("thermal halt before completing the requested run")
                 break
@@ -108,21 +124,32 @@ final class FeedStressTests: XCTestCase {
             cycle += 1
             var scenarios = selectedScenarios
             if recordOptIn { scenarios.append(.briefRecord) }
-            if injectOptIn { scenarios.append(.injectFault) }
+            if injectOptIn && !overlapInjection { scenarios.append(.injectFault) }
             scenarios.shuffle(using: &rng)
             for scenario in scenarios {
                 if Date() > deadline { break }
+                if overlapInjection,
+                    Date().addingTimeInterval(overlapScenarios > 0 ? 50 : 20) >= deadline
+                {
+                    break stressLoop
+                }
                 if thermalHalt() {
                     failures.append("thermal halt before completing the requested run")
                     break
                 }
                 do {
-                    try run(scenario)
+                    if overlapInjection {
+                        try runOverlappingFault(scenario)
+                    } else {
+                        try run(scenario)
+                    }
                     completedScenarios += 1
+                    coveredScenarios.insert(scenario.rawValue)
                     record(scenario, "pass", extra: "cycle=\(cycle)")
                 } catch {
                     record(scenario, "fail", extra: "cycle=\(cycle) \(error)")
                     failures.append("cycle \(cycle) \(scenario.rawValue): \(error)")
+                    if overlapInjection { break stressLoop }
                 }
                 dismissChrome()
             }
@@ -130,6 +157,13 @@ final class FeedStressTests: XCTestCase {
         }
         if completedScenarios == 0 {
             failures.append("no scenario completed successfully")
+        }
+        if overlapInjection {
+            let required = (selectedScenarios + (recordOptIn ? [.briefRecord] : [])).map(\.rawValue)
+            let missing = Set(required).subtracting(coveredScenarios).sorted()
+            if !missing.isEmpty {
+                failures.append("incomplete overlap coverage: \(missing.joined(separator: ","))")
+            }
         }
 
         finishSafely()
@@ -489,6 +523,73 @@ final class FeedStressTests: XCTestCase {
             why: "recover after bounded inject")
     }
 
+    /// The existing bounded injection window now overlaps real UI actions.
+    /// No extra camera enable, ACK sleep or production fault hook is introduced.
+    private func runOverlappingFault(_ scenario: FeedStressScenario) throws {
+        if overlapScenarios > 0 { try waitForHealthyBaseline(minimum: 30, boundedByRun: true) }
+        overlapScenarios += 1
+        guard Date().addingTimeInterval(20) < deadline else {
+            throw FeedStressError.halted("Insufficient time for fault overlap and recovery")
+        }
+        postFeedStress("com.opencapture.opc.feed-stress.arm-inject")
+        defer { postFeedStress("com.opencapture.opc.feed-stress.disarm-inject") }
+        let armed = try waitForInjectionState(armed: true)
+        deferringFaultProgress = true
+        defer { deferringFaultProgress = false }
+        try run(scenario)
+        deferringFaultProgress = false
+        postFeedStress("com.opencapture.opc.feed-stress.disarm-inject")
+        let stopped = try waitForInjectionState(armed: false)
+        guard injectedCount(stopped) > injectedCount(armed) else {
+            throw FeedStressError.halted("No injected fault overlapped \(scenario.rawValue)")
+        }
+        try waitForFreshRecovery(from: stopped)
+    }
+
+    /// Two new windows must advance every stage after disarm. Old counters,
+    /// repeated snapshots and packet arrival without assembled pictures cannot pass.
+    private func waitForFreshRecovery(from baseline: [String: String]) throws {
+        let expires = Date().addingTimeInterval(16)
+        var previous = baseline
+        var healthyWindows = 0
+        while Date() < expires {
+            if thermalHalt() { throw FeedStressError.halted("thermal") }
+            sleepStep(0.5)
+            let current = try requireSnapshot()
+            guard let run = baseline["run"], !run.isEmpty,
+                current["run"] == run, current["halt"] == "0"
+            else { throw FeedStressError.halted("Recorder ended or restarted during recovery") }
+            guard current["t"] != previous["t"] else { continue }
+            let fresh = ["srcAgeMs", "decAgeMs", "presAgeMs"].allSatisfy { key in
+                guard let age = Int(current[key] ?? "") else { return false }
+                return (0..<2_000).contains(age)
+            }
+            let advancing =
+                int(current, "srcDelAU") > int(previous, "srcDelAU")
+                && decodeMoved(from: previous, to: current)
+                && presentMoved(from: previous, to: current)
+            healthyWindows = fresh && advancing ? healthyWindows + 1 : 0
+            previous = current
+            if healthyWindows >= 2 { return }
+        }
+        throw FeedStressError.noProgress("two fresh recovery windows after concurrent faults")
+    }
+
+    private func injectedCount(_ value: [String: String]) -> Int {
+        int(value, "injDrop") + int(value, "injSil")
+    }
+
+    private func waitForInjectionState(armed: Bool) throws -> [String: String] {
+        let expires = Date().addingTimeInterval(4)
+        while Date() < expires {
+            let value = try requireSnapshot()
+            if value["inj"] == (armed ? "1" : "0") { return value }
+            sleepStep(0.25)
+        }
+        throw FeedStressError.halted(
+            "Injection state did not become \(armed ? "armed" : "disarmed")")
+    }
+
     private func waitForLiveMonitor() throws {
         let liveDeadline = Date().addingTimeInterval(60)
         while Date() < liveDeadline {
@@ -554,9 +655,10 @@ final class FeedStressTests: XCTestCase {
         collapseAssists()
     }
 
-    private func waitForHealthyBaseline(minimum: TimeInterval) throws {
+    private func waitForHealthyBaseline(minimum: TimeInterval, boundedByRun: Bool = false) throws {
         var healthySince = Date()
-        let expires = Date().addingTimeInterval(max(60, minimum * 3))
+        let baselineDeadline = Date().addingTimeInterval(max(60, minimum * 3))
+        let expires = boundedByRun ? min(deadline, baselineDeadline) : baselineDeadline
         var last = try requireSnapshot()
         while Date() < expires {
             if thermalHalt() { throw FeedStressError.halted("thermal during baseline") }
@@ -690,6 +792,9 @@ final class FeedStressTests: XCTestCase {
         source: Bool, decode: Bool, present: Bool,
         timeout: TimeInterval, why: String
     ) throws -> [String: String] {
+        // UI/control assertions still run during impairment. Picture proof is
+        // deferred to the wrapper's fresh baseline AFTER confirmed disarm.
+        if deferringFaultProgress { return try requireSnapshot() }
         let end = Date().addingTimeInterval(timeout)
         var last = start
         while Date() < end {
@@ -708,6 +813,7 @@ final class FeedStressTests: XCTestCase {
         from start: [String: String], to end: [String: String],
         source: Bool, decode: Bool, present: Bool, why: String
     ) throws {
+        if deferringFaultProgress { return }
         if !progressed(from: start, to: end, source: source, decode: decode, present: present) {
             throw FeedStressError.noProgress(why + " start=\(start) end=\(end)")
         }
@@ -795,6 +901,7 @@ final class FeedStressTests: XCTestCase {
         let snap = snapshot()
         let body =
             "scenario=\(scenario.rawValue) result=\(result) extra=\(extra) "
+            + "injectMode=\(overlapInjection ? "overlap" : "isolated") "
             + "srcDelAU=\(snap["srcDelAU"] ?? "?") decOut=\(snap["decOut"] ?? "?") "
             + "pres=\(snap["pres"] ?? "?") presEnqueue=\(snap["presEnqueue"] ?? "?") "
             + "presMetal=\(snap["presMetal"] ?? "?") t=\(snap["t"] ?? "?") hook=\(snap["hook"] ?? "?")"

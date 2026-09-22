@@ -149,7 +149,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val ble = BleLink(context)
     private val joiner = CameraApJoiner(context)
-    private val cadence = LivePipelineCadence()
+    internal val cadence = LivePipelineCadence()
+    /** Instrumentation only. Invoked after ACK observation; never blocks or delays the receive thread. */
+    @Volatile internal var debugVideoPacketAdmission: (() -> Boolean)? = null
+    /** Main-thread instrumentation observes actual ACKs/timeouts, never the optimistic HUD. */
+    internal var debugCameraSetResult: ((Int, Boolean) -> Unit)? = null
+    internal val pendingCameraSetCount: Int get() = inflight.size + inflightPending.size
     private val videoHistory = LiveSessionVideoHistory()
     val decoder = HevcDecoder(cadence).also { dec ->
         dec.onParameterSetsChanged = {
@@ -801,6 +806,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     camera.model.pairingToken,
                     cadence,
                     videoHistory,
+                    debugVideoPacketAdmission = { debugVideoPacketAdmission?.invoke() ?: true },
                 ).also { created ->
                     val inputOwner = decoder.claimInputOwner()
                     created.onVideoEpochChanged = { epoch -> decoder.advanceInputEpoch(inputOwner, epoch) }
@@ -4535,6 +4541,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             _controlNote.value = "not live"
             onFail?.invoke()
             onSettle?.invoke(false)
+            if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(SwiftCore.waitKey(kind), false)
             return
         }
         _controlNote.value = null
@@ -4593,6 +4600,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         inflight.remove(key)
         val parsed = CameraReply.parse(reply.payload)
         val ok = parsed.isSuccess
+        if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(key, ok)
         if (!ok) {
             send.onFail?.invoke()
             _controlNote.value = "${send.name}: ${parsed.message}"
@@ -4605,6 +4613,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private fun settleInflightTimeout(key: Int, send: InflightSend) {
         if (inflight[key] !== send) return
         inflight.remove(key)
+        if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(key, false)
         // iOS `ControlHud.timeoutNote(announce: false)` — never toast a SET timeout.
         Log.i(TAG, "control: ${send.name} — SET timeout, leave HUD")
         val zoomKey = SwiftCore.waitKey(SwiftCore.CMD_SET_ZOOM_LENS)

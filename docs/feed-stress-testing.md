@@ -4,6 +4,8 @@ For a seeded connection matrix with script or agent drivers across platforms,
 see [connection stress testing](connection-stress-testing.md). That runner has
 an explicit device-adapter contract; the XCTest below remains the built-in iOS
 feed workload and is not automatically a connection-matrix adapter.
+The guide also describes `just android-feed-stress`, the separate Android
+UI/control workload. Both new concurrent-fault modes need physical qualification.
 
 Surface: **iOS Debug XCTest** and `tools/feed-stress-*`. Not a production
 background task. Not an Android qualification. See the
@@ -44,11 +46,25 @@ INJECT='loss:0.02,burst:4:100,outputSilenceMs:2500' \
 ```
 
 Injection is Debug-only, needs 30 s of observed healthy **counter** progress, and
-arms only in the inject scenario. Packet loss is simulated **after** the local
+arms in the inject scenario by default. Packet loss is simulated **after** the local
 ACK observation, before assembly. That is not radio interference, camera-side ACK
 loss, roaming, or iOS interface migration. Decoder-output suppression tests
 missing callbacks; it does not manufacture a native decoder error. The ACK queue
 is not slept. Real RF attenuation is a separate experiment.
+
+To overlap faults with every selected core UI/control scenario:
+
+```sh
+INJECT_MODE=overlap INJECT='loss:0.02,burst:4:100,outputSilenceMs:2500' \
+  just ios-feed-stress '<iPhone UDID>' seed=401 limit=600 record=0
+```
+
+Each arm retains the eight-second runtime cap and needs a new healthy baseline.
+UI actions run while impairment is active; fresh-picture checks resume after
+confirmed disarm and require two advancing AU/decode/presentation windows in the
+same active recorder run. Every selected scenario must complete; short limits
+can fail coverage. `mediaReturn` and `steadyFeed` cannot use overlap mode. This
+does not extend the existing physical results to the new overlap mode.
 
 ## Evidence
 

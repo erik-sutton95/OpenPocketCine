@@ -79,7 +79,8 @@ import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private val composeFirstFrameDrawn = AtomicBoolean(false)
-    private lateinit var model: AppModel
+    internal lateinit var model: AppModel
+        private set
     var hideSystemNavigation = false
     var playbackHidesSystemNavigation = false
 

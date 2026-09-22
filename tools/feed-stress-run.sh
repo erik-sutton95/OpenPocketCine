@@ -62,6 +62,9 @@ EOF
     if [[ -n "$INJECT" ]]; then
         echo "    TEST_RUNNER_OPV_FEED_STRESS_INJECT=${INJECT} \\"
     fi
+    if [[ -n "${INJECT_MODE:-}" ]]; then
+        echo "    TEST_RUNNER_OPV_FEED_STRESS_INJECT_MODE=${INJECT_MODE} \\"
+    fi
     cat <<EOF
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview \\
       -destination 'platform=iOS,id=${DEVICE:-<coredevice-id>}' -allowProvisioningUpdates \\
@@ -88,6 +91,9 @@ run_tests() {
     )
     if [[ -n "$INJECT" ]]; then
         env_args+=(TEST_RUNNER_OPV_FEED_STRESS_INJECT="$INJECT")
+    fi
+    if [[ -n "${INJECT_MODE:-}" ]]; then
+        env_args+=(TEST_RUNNER_OPV_FEED_STRESS_INJECT_MODE="$INJECT_MODE")
     fi
     if [[ -n "${SCENARIOS:-}" ]]; then
         env_args+=(TEST_RUNNER_OPV_FEED_STRESS_SCENARIOS="$SCENARIOS")

@@ -1,10 +1,156 @@
 # Connection stress matrix
 
-Surface: maintainer tooling and docs. Issue [#401](https://github.com/erik-sutton95/OpenPocketCine/issues/401).
+Surface: portable core tests, both shells' test tooling, Android diagnostic
+observations and docs. Issue [#401](https://github.com/erik-sutton95/OpenPocketCine/issues/401).
 `tools/connection-stress/harness.py` schedules bounded experiments on a maintainer
-laptop. A script or local agent owns device input and measurement. The runner
-does not change either app, send camera opcodes, or replace the production
+laptop. A script or local agent owns device input and measurement. The matrix
+does not send camera opcodes or replace the production
 [repair owner](connection-reliability.md).
+
+## Coverage layers
+
+| Runner | What actually runs | What it does not qualify |
+| --- | --- | --- |
+| `just connection-chaos` | Real Swift packet assembler, SET mailbox, handshake admission and watchdog with seeded virtual transport and concurrent settings offers | Native UI, radio, decoder, physical timing, Android's local SET queue |
+| iOS `INJECT_MODE=overlap` | Existing physical XCTest reconnect, real UI/control scenarios during local packet loss/bursts/output suppression | RF loss, congestion, roaming, camera-side ACK loss |
+| `just android-feed-stress` | Saved-camera reconnect, Settings plus ISO SET workload, real joystick input and background/foreground during bounded local video loss | Changing ISO values, assist/rotation parity, recording, RF or ACK loss, congestion |
+| `just connection-stress run` | Cross-platform connection matrix through an external script or agent adapter | Paths the adapter cannot operate or measure |
+
+Both phones are targets. These native feed runners are separate from the matrix
+driver protocol. Use one hardware owner; with one camera, run the phones in
+sequence. Camera control and feed use local Wi-Fi, so throttling the laptop's
+internet alone does not impair the camera route.
+
+## Portable packet and command chaos
+
+Requires Swift in addition to Python and `just`:
+
+```sh
+just connection-chaos --seed 401 --seeds 128
+just connection-chaos --seed 401 --seeds 1 --profile combined
+just connection-chaos --seed 401 --seeds 1 --profile combined --canary
+```
+
+The canary intentionally prevents post-fault pictures and **must exit 1**. A
+green canary is a broken check. The eight profiles are baseline, 10% random
+loss, burst loss, 0–120 ms jitter/reordering, duplication, bandwidth saturation,
+6.5-second blackout and their combination. Congestion limits the virtual link
+to 8 KB/s with an 8 KiB queue against about 25 KB/s of offered picture traffic.
+
+Each case has a 16-second virtual timeline: two healthy seconds, eight faulted
+seconds, then recovery. It offers 100 settings requests per second until 14 s,
+through three actual mailbox keys, while video and synthetic status/replies
+share the impaired queue. An endpoint replacement tests retired replies and
+handshake admission. Checks require bounded queues, valid assembled payloads,
+newly produced post-fault pictures, latest-value command convergence and no
+repair while picture is fresh. Blackout must exercise endpoint recovery. The
+watchdog's repair decisions are recorded; successful camera repairs and decoder
+output are not simulated as measured results.
+
+Artifacts under `.local/connection-chaos/<run>/`: per-case JSON, `summary.json`,
+`summary.md` and a private `swift-test.log`. Reports include exact seeds, profile,
+source revision, failures and replay commands. Recovery times are virtual
+assembly times. They are not camera performance measurements. Missing cases or
+a failed Swift process cannot produce a passing report. `just check` runs a
+smaller eight-seed corpus per profile and the Python report regressions.
+
+## Combined native feed runners
+
+For iPhone + Pocket 4 Pro, pair once in the Debug app and keep exactly one saved
+Pocket 4 Pro. Use an unlocked USB phone with Developer Mode:
+
+```sh
+INJECT_MODE=overlap INJECT='loss:0.02,burst:4:100,outputSilenceMs:2500' \
+  just ios-feed-stress '<iPhone device id>' seed=401 limit=600 record=0
+```
+
+The existing bounded fault window overlaps every selected core UI/control
+scenario, separated by 30 continuous healthy seconds. Longer scenarios can
+outlast automatic disarm. Picture checks are deferred
+while intentionally impaired. After confirmed disarm, two new windows must
+advance delivered access units, decoder output and presentation in the same
+recorder run, with ages below two seconds. Configured faults must actually fire,
+and all selected scenarios must finish; insufficient time fails coverage.
+`mediaReturn` and `steadyFeed` keep their separate proof modes and cannot run in
+overlap mode. See [iOS feed instructions](feed-stress-testing.md) for restoration,
+recording opt-in, isolated faults and artifact collection.
+
+For Android + Pocket, enable USB debugging, pair in the Debug app first, and
+keep exactly one saved camera. Keep the standard visible Settings and joystick
+controls available. Wi-Fi/Bluetooth prompts must already be approved:
+
+```sh
+just android-feed-stress --seed 401 --seconds 300 --profile combined
+just android-feed-stress --device '<adb serial>' --seed 401 --profile loss
+```
+
+This builds and installs the Debug app and instrumentation APK without clearing
+saved data. `--skip-build` installs existing local APKs. It requires a physical
+phone; normal `just android-device-test` skips this opt-in test. Profiles are 10%
+loss, 8-of-40 packet bursts, and their combination. The fault gate expires after
+eight seconds even if the test owner stalls. Both platforms observe ACK windows
+before dropping video and never sleep their ACK/receive queues for impairment.
+Release Android builds cannot activate the gate.
+
+Android rotates a seeded schedule of Settings, a small joystick throw, and
+background/foreground. While Settings is open, it reasserts the current ISO 30
+times at 10 Hz through the ordinary app command path; this is command pressure,
+not a slider-input or changing-value test. The scenario requires actual successful
+ISO replies, no observed ISO failure/timeout, and a drained command queue.
+Optimistic HUD state and the number of offers cannot prove command completion.
+Each fault needs a healthy 30-second baseline, actual dropped packets during the
+action, then advancing fresh video/AU/output/presentation samples within 16 s.
+All three scenarios must complete. Recording is never started; unexpected
+recording or severe thermal state fails the run.
+
+Android numeric `summary.json` and `events.ndjson` are pulled into a unique
+private `.local/android-feed-stress/<run>/`. They include installed build identity,
+camera model ID, typed failure, fault-arm/disarm markers, recovery duration,
+stage counters/ages and command outcomes. `instrumentation.log` is private raw
+output. Cleanup disarms faults, rests the stick, closes the activity/session and
+records teardown errors. A host timeout attempts to stop the owned Debug app;
+a disconnected phone cannot guarantee restoration. Inspect the camera after an
+interrupted run. Neither runner deletes media or changes network credentials.
+
+## Turn failures into refactors
+
+Keep this loop tied to evidence:
+
+1. Save seed, build, model, scenario, impairment interval and the first failed
+   stage. A command failure with fresh video is different from a dead endpoint.
+2. Reproduce on the same build, then reduce to one profile/action and a small
+   offline regression where possible. Keep a failing case before changing policy.
+3. Consolidate the responsible policy behind its existing shared interface;
+   remove the replaced implementation and its redundant tests in the same change.
+4. Replay the saved case and full seeded corpus, then compare physical runs on
+   both platforms with the same per-platform configuration. Check the
+   [performance budgets](PERFORMANCE.md), recovery duration, command latency,
+   memory growth and UI responsiveness separately; these runners do not yet
+   automate memory/jank qualification.
+
+The first concrete consolidation candidate is Android's SET path. Inspection
+finds `fireKind`, `inflight`/`inflightPending`, two-second settlement, and reply
+lookup by opcode in `PocketCameraSession`. It does **not** call the portable
+`CameraSetMailbox`, whose sequence-aware admission the core chaos test exercises.
+The architecture table previously overstated that sharing and is corrected.
+Add an Android delayed/superseded-reply regression before migrating this path to
+the shared mailbox; preserve camera-specific matching and command behavior.
+This is a source-backed coverage gap, not a reproduced physical failure.
+
+Numeric frame observations already reuse Android's `LivePipelineCadence`;
+cumulative snapshots do not drain or reset its existing keepalive windows. Do
+not create another recovery state machine inside the runner. Delete allegedly
+unused code only after checking references and platform/feature entry points;
+absence from a stress run is not proof that code is dead.
+
+Current verification: 1,024 virtual cases (seeds 401–528 across eight profiles)
+passed; the missing-post-fault-picture canary failed as intended. Both native
+test targets compile, with Android JVM regressions. No production defect was
+reproduced by this corpus. Physical overlap qualification is pending on **both**
+platforms: neither phone was connected for this extension. Actual Wi-Fi route
+loss, camera-side ACK impairment and congestion during native UI work still
+need an on-path impairment setup and a matrix adapter; local video drops do not
+close that coverage gap.
 
 ## Start offline
 
@@ -61,12 +207,12 @@ reset. Do not start a run over an existing recording.
 
 ## Physical script driver
 
-There is **no bundled native connection driver**. Supply an executable that uses
-your device automation and the app's numeric diagnostics. The existing
-[iOS feed XCTest](feed-stress-testing.md) remains a separate ready-to-run,
-iOS-only feed test; its exit status and historical artifacts cannot substitute
-for this protocol's fresh per-action evidence. Android needs its own device
-adapter. Keep local device selection and adapter state under `.local/`.
+There is **no bundled native connection-matrix driver**. Supply an executable
+that uses your device automation and the app's numeric diagnostics. The
+[iOS feed XCTest](feed-stress-testing.md) and Android feed instrumentation above
+are separate runners. Their exit status and historical artifacts cannot
+substitute for this protocol's fresh per-action evidence. Both platforms need
+an adapter for this matrix. Keep device selection and adapter state under `.local/`.
 
 ```sh
 just connection-stress run --platform android --paths softap,ble --cycles 3 \
