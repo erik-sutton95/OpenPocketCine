@@ -30,8 +30,14 @@ enum OsmoMonitorPresentation {
                     requiresInternetHop: true, timecode: true)
             }
         #endif
+        // Zoom is a body capability: hide controls when the camera only exposes a fixed 1× stop.
+        // Use the model's absolute stops when available (ignores per-mode digital locks),
+        // falling back to the current session stops if no model is connected yet.
+        let bodyStops = session.connectedCamera?.model.zoomStops
+        let stops = bodyStops ?? session.zoomStops
+        let hasZoom = stops.contains { $0 > 1 }
         return MonitorCapabilities(
-            gimbal: session.hasGimbal, zoom: !session.zoomStops.isEmpty,
+            gimbal: session.hasGimbal, zoom: hasZoom,
             focus: session.supportsFocusMode, audio: true,
             headTracking: session.hasGimbal, clipDelete: true, clipStar: true,
             requiresInternetHop: true, timecode: true)

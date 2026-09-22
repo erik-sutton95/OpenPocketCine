@@ -6,9 +6,12 @@ import com.opencapture.openpocketcine.session.CameraStatus
 /** The existing adapter remains the only authority for body-specific features. */
 internal fun AppModel.monitorCapabilities(status: CameraStatus): MonitorCapabilities {
     val body = session.connectedCamera?.model
+    // Zoom is a body capability: hide controls when the camera only exposes a fixed 1× stop.
+    // Prefer the model's absolute stops (ignores per-mode digital locks); fall back to session stops.
+    val absoluteStops = body?.zoomStops ?: session.zoomStops()
     return MonitorCapabilities(
         gimbal = session.hasGimbal,
-        zoom = body?.activeZoomStops(status.resolutionCode, status.shootingMode)?.isNotEmpty() == true,
+        zoom = absoluteStops.any { it > 1.0 },
         focus = body?.supportsFocusMode == true,
         audio = true,
         headTracking = session.hasGimbal,
