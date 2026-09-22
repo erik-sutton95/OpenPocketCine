@@ -251,14 +251,21 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   viewport, and one continuous material to the physical edge. In portrait the disc
   is a bottom half-circle flush to the screen edge, covering camera values and
   system buttons until closed. Minor ticks are equally spaced on the log ring;
-  labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. A very slow turn
-  can rest on whole stops (2×, 3×, 4×, 6×, 9×, 12×); a faster turn does not.
-  Those whole stops also fire the same detent haptic as capture drums.
+  labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. Pointer input and
+  the moving ring retain fractional values without hundredth rounding or
+  whole-stop snapping. Reaching or crossing a whole stop gives one haptic pulse;
+  labels and accessibility steps still use hundredths.
   The disc hub shows hundredths (1.53×); the chip still shows tenths. Past the
   last optical stop (Pocket 4 Pro 6× / 12×) the chip uses the same digital-crop
   amber as the disc ticks.
-- The expanded Motion Control editor passes joystick touches to the original
-  control so positions can be set without minimizing the window. Other outside
+- The expanded Motion Control editor passes joystick and zoom-chip touches to
+  the original controls. Single/double tap keeps the existing zoom stops; a hold
+  opens the existing zoom disc above the editor. Closing the disc restores the
+  full editor. Default portrait placement leaves the zoom chip exposed; manual
+  window positions keep their normal drag bounds and overlap priority. There is
+  no separate zoom slider in Motion Control. Existing
+  lock, FORMAT and D-Log2 recording rules still apply; manual zoom can take over
+  an active or paused program. Other outside
   taps minimize without activating covered controls. Window dragging uses local
   transient placement and one shared-model commit on release.
 - Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
@@ -315,11 +322,16 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Motion Control editor is 340 dp wide. Both the editor and minimized pill
   drag directly after touch slop, with no hold required. Duration dials and sliders
   retain their own gestures; dragging suppresses button activation.
+  iOS keeps the control-action guard independent of position so dragging does
+  not rebuild the editor's controls. Android already defers local position reads
+  to its offset callback. Duration dials retain their hit targets after release;
+  iOS still suppresses release-tap writes for 150 ms without a refresh timer.
   Duration dials are 180 × 44 dp, with moving ticks, a fixed index, and a
   spring settle. They swipe horizontally in 0.5 s steps (12 dp per step), with
   adjustable accessibility actions. Start shows a cancellable 3–2–1 countdown
   before automatic preparation and approach; the settle at A remains separate.
-  All A/B/C rows stay visible; unset rows read Not set. SET captures a waypoint
+  All A/B/C rows stay visible; unset rows read Not set. Unset readouts and Loop's
+  help text use the brighter secondary text color in both shells. SET captures a waypoint
   and RESET replaces it with the camera's current pose and zoom; Clear remains separate. Full-editor
   outside taps minimize without activating underlying controls. Until a real drag,
   full and minimized panels share the default top and recenter with the viewport.
@@ -339,7 +351,8 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   targets stay within −44…70. Measurements are never clipped into fake
   endpoints; capture and native dispatch reject out-of-range targets. Full contract and pending
   physical qualification: [Motion Control takes](programmed-moves.md).
-  Run preps Fast + tilt unlocked. No zoom SET during the slew. No motion debug plate is displayed.
+  Run preps Fast + tilt unlocked. Zoom-changing programs follow the saved zoom
+  path; equal-zoom programs send no zoom SET. No motion debug plate is displayed.
 
 ## Connection reliability audit (2026-09-12)
 
@@ -388,12 +401,71 @@ Native rotation safety: approach uses reachable-arc segments, and exact legs
 spanning at least 180° use timed native sub-moves along the reachable arc. Last-mile dispatch
 rejects ambiguous pan directions from fresh actual feedback. Selfie Flip is a
 presentation/stick mapping concern, not a sign change for native waypoints.
-MIRROR assist reflects waypoint letters and the dashed preview.
+Waypoint letters and the dashed preview follow settled rotate-180 pan orientation
+XOR MIRROR assist on both shells, independent of the camera Selfie Flip setting.
+Stored positions and native commands stay unchanged. Regression tests cover front,
+selfie, manual 180 and MIRROR combinations; physical selfie-overlay qualification
+remains pending on both shells.
 
 Motion Control continuation uses Start/Pause/Resume/Stop in both shells. Pause
 freezes remaining time; Resume requires fresh, settled feedback and has no new
-countdown. Duration dials run from 0.5 to 120 seconds (left increases, right
+countdown. While paused, Restart replaces Clear and starts the saved program
+from A with the normal countdown/preparation, retaining all points and settings.
+Duration dials run from 0.5 to 120 seconds (left increases, right
 decreases). Android physical qualification remains outstanding.
+
+Motion Control Loop (2026-09-21): both shells offer an off-by-default Loop
+switch, chosen before Start. Each timed endpoint reverses the saved path without
+an added pause: A→B→A or A→B→C→B→A, repeating until Stop. Each reverse leg uses its
+original duration and retraces the same smoothed curve. Countdown, approach to A
+and the two-second settle happen only once; the return begins while the existing
+bounded waypoint check verifies the turnaround. Exact reversals also accept a
+fresh endpoint observation within 0.15° and 200 ms, bracketed by ordered approach
+and departure on the finite path across the full feedback window. This handles
+native motor easing without claiming constant-speed timing; missing or invalid
+feedback still stops the move. Smoothed endpoints use a bounded
+history of dispatched timed commands for the same affine feedback-delay fit.
+Pause/Resume keeps the direction and loop; Stop, manual control,
+feedback/waypoint failure and session interruption end it. Closing an active editor
+minimizes to the control pill. Both shells retain points, durations, Smoothness and
+Loop across editor dismissal within the camera session; Clear resets points,
+Smoothness and Loop while keeping duration preferences. Session reset clears the
+program. Both editors cap their preferred height at 420 pt/dp, keep the header
+and action bar fixed, and scroll settings between them. A bottom fade appears
+only while more content remains below. Automated regression coverage is separate
+from physical qualification;
+the operator confirmed the corrected A/B loop on iPhone. Broader physical loop
+qualification and sustained live-view budget checks remain pending on both shells.
+
+Programmed zoom (2026-09-22): both shells follow linear zoom factor over each
+whole leg, including reverse loops. Pocket 4 Pro sends distinct lens positions at
+up to 50 Hz on the existing transport scheduler; other bodies retain 20 Hz. No
+delayed start or native gear schedule remains. Duplicate lens targets consume
+sample slots, and saved endpoints remain pending until admitted. Before timed
+zoom begins, fresh post-preparation feedback must confirm A within two lens ticks.
+Pocket 4 Pro lens feedback has an independent 850 ms deadline; gimbal feedback
+retains 300 ms. Zoom targets B even when the angular path rounds it, pauses/stops
+with the take and resumes from fresh settled lens feedback. Restart restores the
+saved path. D-Log2 blocks zoom-changing programs both idle and recording, with no
+automatic color change. Received color/FORMAT changes stop an unsupported take
+before its next write. Gimbal-only programs remain available in D-Log2.
+
+A physical iPhone/Pocket 4 Pro 20/50 Hz comparison reduced filtered near-still
+video-frame pairs from 21.2% to 1.6%, with 25 fps picture, 40 Hz ACKs and no drops
+or recovery during the 50 Hz legs. This is a single-scene measurement, not broad
+optical qualification. Android code and tests match; physical Android validation
+remains pending because no device is attached. Integrated pause/resume/Restart and
+wider zoom ranges remain under qualification; see [evidence](programmed-moves.md#evidence-and-qualification).
+
+Motion zoom controls (2026-09-22): both shells keep the existing chip and disc
+accessible while the editor remains open, replacing the added in-editor slider.
+General dial input retains fractional values without whole-stop snapping.
+Simulator and native hit-testing checks cover editor retention and the control
+exclusions. Android instrumentation builds but cannot run without an attached
+device. Physical iPhone layout verification remains pending: earlier XCTest
+launches timed out enabling automation, and the phone disconnected before the
+first camera comparison could run. The later native-rate video comparison improved
+programmed-zoom continuity; see [measurement limits](programmed-moves.md#evidence-and-qualification).
 
 ## Multiview session network and shutdown (in validation)
 

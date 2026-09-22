@@ -23,6 +23,30 @@ separate iOS and Android lists.
   and D-Log M estimates carry **≈**. Separate portrait/landscape positions and
   DISP 2 pins are supported. Camera settings and recordings are unchanged.
   Switching clips retires old measurements before accepting the new picture.
+- Motion Control Loop on iOS and Android moves back and forth: A→B→A or
+  A→B→C→B→A, with the same leg durations and smoothed path in either direction.
+  Countdown and the initial settle run once; turnarounds have no added pause,
+  with position verification continuing during the return. Exact reversals accept
+  directly observed arrival and return when native motor easing differs from
+  constant speed, avoiding a false waypoint-verification failure. Pause/Resume and Stop
+  remain available; failures end the loop. The compact editor keeps its header
+  and action bar fixed, with scrollable settings and a bottom overflow fade. Points, durations, Smoothness and Loop
+  remain in the camera session when the editor closes. Close during a run keeps
+  the control pill visible. While paused, Restart replaces Clear and starts the
+  saved program again from A with countdown and preparation. The corrected A/B
+  loop passed an operator iPhone check; broader physical qualification remains pending.
+- Motion Control keeps the existing zoom chip and long-press disc usable while
+  the full editor stays open, so points can be framed without a separate slider.
+  Closing the disc returns to the editor. Both shells remove hundredth
+  rounding and whole-stop snapping from the general zoom dial, preserving
+  fractional input through the camera's integer lens command conversion.
+  Whole-stop haptics fire once per crossing. Physical lens smoothness remains
+  under investigation.
+- Motion Control transitions between different zoom amounts saved at A/B/C,
+  including reverse loops and measured Pause/Resume. B's saved zoom remains exact
+  when the angular path is smoothed. Zoom-changing programs are blocked in D-Log2
+  while idle or recording, with no automatic color-mode change; current camera
+  FORMAT limits also apply. Physical zoom response remains unqualified.
 
 - Anamorphic Desqueeze (**DE-SQ**) on iOS and Android: live view, video playback
   and photo viewing share 1.1×, 1.2×, 1.33×, 1.5×, 1.6×, 1.8× and 2.0× presets,
@@ -297,6 +321,10 @@ separate iOS and Android lists.
   identification mark on clip upload.
 
 ### Fixed
+
+- Motion Control waypoint letters and the dashed path compensate for settled
+  selfie orientation and MIRROR on both shells. Saved positions and motion
+  commands are unchanged. Physical camera verification remains pending.
 
 - Both shells can recover an established live feed after the decoder loses its
   video format while compressed frames keep arriving. The existing watchdog

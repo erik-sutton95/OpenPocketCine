@@ -270,7 +270,7 @@ Choose **Gimbal joystick → Left / Right** in the same Controls tab. D-pad shut
 changes also update the shutter-angle readout when angle display is selected.
 A gimbal stop pulses only after the head moves then stalls (Haptics
 setting). Capture drums, the zoom disc, and duration dials pulse on
-coarse snaps (172° → 180°, 3×, whole seconds), not on every hundredth
+coarse steps and whole-stop crossings (172° → 180°, 3×, whole seconds), not on every hundredth
 or half-second tick. AirPods head tracking is iPhone-only (no headphone IMU)
 on Android). Stick pan stays
 picture-relative. Stick triple-tap 180 inverts pan at the end of the
@@ -317,7 +317,8 @@ The fitted portrait feed is centered vertically, with STBY, timecode and REC SET
 a separate row below the status area. View Assist, FIT/FILL and the joystick
 cluster stay above the camera values in fixed positions when switching FIT/FILL.
 Hold zoom for a continuous dial. The disc hub reads hundredths (1.53×); the chip
-still shows tenths. In landscape the larger zoom disc sits on the trailing screen
+still shows tenths. Dragging retains finer values without snapping to those
+displayed numbers or whole zoom stops. In landscape the larger zoom disc sits on the trailing screen
 edge and covers the controls beneath it until closed. In portrait it sits on the
 bottom screen edge.
 
@@ -331,7 +332,56 @@ countdown before preparation and approach to A. Pause holds the move; Resume
 continues from the stopped position without another countdown. Stop clears the
 continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
 the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
-does not reverse stored mechanical angles; MIRROR changes the preview only.
+does not reverse stored mechanical angles. Waypoint letters and the dashed path
+follow the selfie orientation and MIRROR assist visually; saved positions and
+programmed movements stay the same.
+
+Use the existing **zoom chip** to frame a point without closing or minimizing
+Motion Control. Tap for the usual zoom stops, or hold to open the zoom disc.
+Closing the disc returns to the full editor; SET or RESET then saves the point.
+The camera's zoom limits and D-Log2 recording restrictions still apply. Manual
+zoom takes over and cancels an active or paused motion program.
+
+Each point also saves its zoom. When those amounts differ, Motion Control
+transitions between them over the leg durations; B's zoom is reached even when
+Smoothness rounds the gimbal path. Loop reverses zoom too. Pause stops the zoom
+stream, and Resume waits for fresh, settled lens feedback before continuing.
+Zoom-changing programs are unavailable in **D-Log2**, both while recording and
+idle; Start shows the reason. Choose a compatible color mode yourself—the program
+never switches color mode. Programs without zoom changes still work in D-Log2.
+Saved zoom must fit the current camera FORMAT. Zoom timing and optical smoothness
+remain experimental.
+
+Programmed zoom changes linearly throughout each leg, including reverse loops.
+For example, halfway through a 3×→6× move, the commanded zoom is 4.5×. Zoom begins
+with the movement and reaches the next saved amount at its endpoint. Pocket 4 Pro
+uses more frequent lens targets to reduce visible stepping; the camera must report
+that it reached A's zoom before the timed movement begins. Very small changes are
+limited by the camera's lens-position resolution. Other Pocket bodies retain their
+existing update cadence while their response is qualified. Optical accuracy and
+smoothness across every zoom range remain experimental.
+
+**Loop** (off by default) moves back and forth: A→B→A→B, or
+A→B→C→B→A→B→C. Each reverse leg keeps its original duration and retraces
+the same smoothed path. The countdown, approach to A and two-second settle happen
+only at the initial start. The return starts without an added endpoint pause;
+position checks continue while it moves. Exact reversals allow the camera's
+natural motor easing when fresh feedback confirms arrival and a clean return.
+If feedback cannot verify the endpoint, the move stops.
+Choose Loop before Start. Pause/Resume keeps the current direction; Stop, a motion
+failure or manual takeover ends the loop.
+
+The compact editor keeps its header and Clear, Start/Stop and Pause/Resume
+buttons fixed. **Not set** and the Loop hint use bright gray text for readability
+over live view. While paused, **Restart** replaces Clear: it keeps your program
+and begins again from A with the usual countdown and preparation. The settings scroll above the buttons, with a subtle bottom fade
+when more content remains below.
+
+Closing and reopening the editor retains A/B/C, durations, Smoothness and Loop
+for the current camera session. During a run, Close minimizes to the control pill
+so Pause and Stop stay available. Stop keeps the saved program; Clear removes the
+points and resets Smoothness and Loop. A new camera session starts a fresh program.
+
 Physical Android Motion Control and Pocket 3 qualification remain pending; the
 recorded motion checks are on Pocket 4 Pro/iPhone. See
 [Motion Control qualification](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/programmed-moves.md#evidence-and-qualification).

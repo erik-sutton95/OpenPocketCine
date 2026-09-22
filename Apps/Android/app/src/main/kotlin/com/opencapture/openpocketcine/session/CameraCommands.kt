@@ -463,6 +463,10 @@ object CameraCommands {
         return byteArrayOf(0x03, 0x00, (v and 0xFF).toByte(), ((v shr 8) and 0xFF).toByte())
     }
 
+    /** Mimo held zoom: `01 rate direction 00`; refresh while held, then STOP. */
+    fun zoomRate(rate: Int, increasing: Boolean): ByteArray =
+        byteArrayOf(0x01, rate.coerceIn(72, 78).toByte(), if (increasing) 0x01 else 0x00, 0x00)
+
     fun zoomStop(): ByteArray = byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0x00)
 
     /** Chip stops land on slider lens (Pro 217 / 651 / 1302 / 2604; 2× / 4× interpolate). */

@@ -109,8 +109,11 @@ data class GimbalProgram(
     val durationAB: Double = DEFAULT_DURATION,
     val durationBC: Double = DEFAULT_DURATION,
     val smoothness: Double = 0.0,
+    val loop: Boolean = false,
 ) {
     val canRun: Boolean get() = a != null && b != null
+    val changesZoom: Boolean
+        get() = listOfNotNull(a, b, c).map { it.zoom }.zipWithNext().any { (from, to) -> abs(to - from) > 1e-6 }
 
     val summary: String
         get() =
@@ -307,7 +310,13 @@ class GimbalMoveEngine {
         val targetYaw: Double, val targetPitch: Double, val remainingDeg: Double)
     private data class Leg(val label: String, val from: GimbalWaypoint, val to: GimbalWaypoint, val duration: Double)
     private data class Observation(val time: Double, val pose: GimbalWaypoint)
-    private data class Checkpoint(val time: Double, val incoming: Leg, val outgoing: Leg?, val outgoingAt: Double)
+    private data class Checkpoint(val time: Double, val incoming: Leg, val outgoing: Leg?, val outgoingAt: Double,
+        val usesCommandHistory: Boolean = false, val isTurnaround: Boolean = false)
+    // The overlapping timed targets are affine between dispatches, even on a smoothed path.
+    private data class CommandReference(val time: Double, val from: GimbalWaypoint, val to: GimbalWaypoint,
+        val duration: Double) {
+        fun position(at: Double) = lerp(from, to, (at - time) / duration)
+    }
 
     var running = false
         private set
@@ -319,6 +328,10 @@ class GimbalMoveEngine {
     var failure: String? = null
         private set
     private var program = GimbalProgram()
+    private var reversed = false
+    private var zoomPath = GimbalZoomPath(GimbalProgram())
+    private var zoomElapsedOffset = 0.0
+    private var pendingZoomEndpoint: Double? = null
     private var legs: List<Leg> = emptyList()
     private var index = 0
     private var phase = "HOLD"
@@ -329,13 +342,45 @@ class GimbalMoveEngine {
     private var needsCommand = false
     private val observations = mutableListOf<Observation>()
     private val checkpoints = mutableListOf<Checkpoint>()
+    private val commandHistory = mutableListOf<CommandReference>()
     private var lastReadout: Readout? = null
     private var curve: GimbalProgramCurve? = null
     private var nextCurveCommand = 0.0
 
+    val programmedZoomTarget: Double?
+        get() {
+            if (!running || isPaused || !program.changesZoom) return null
+            pendingZoomEndpoint?.let { return it }
+            if (phase == "APPROACH" || phase == "HOLD") return program.a?.zoom
+            return if (phase == "RUN") zoomPath.position(zoomElapsedOffset + elapsed) else zoomPath.end
+        }
+
+    fun consumeProgrammedZoomTarget(): Double? = programmedZoomTarget.also {
+        if (it != null) pendingZoomEndpoint = null
+    }
+
+    /** Native zoom shares the pass/resume clock, including B on a rounded angular path. */
+    internal val nativeZoomDemand: NativeProgramZoomDemand?
+        get() {
+            if (!program.changesZoom || !running || isPaused || index >= legs.size) return null
+            pendingZoomEndpoint?.let { return NativeProgramZoomDemand(NativeProgramZoomCommand.Track(it), it) }
+            if (phase == "APPROACH" || phase == "HOLD") {
+                val zoom = program.a?.zoom ?: return null
+                return NativeProgramZoomDemand(NativeProgramZoomCommand.Position(zoom), zoom)
+            }
+            return if (phase == "RUN") zoomPath.nativeDemand(zoomElapsedOffset + elapsed)
+                else NativeProgramZoomDemand(NativeProgramZoomCommand.Track(zoomPath.end), zoomPath.end)
+        }
+
+    internal fun consumeNativeZoomDemand(): NativeProgramZoomDemand? = nativeZoomDemand.also {
+        if (it?.command is NativeProgramZoomCommand.Track) pendingZoomEndpoint = null
+    }
+
     fun start(program: GimbalProgram, live: GimbalWaypoint): Boolean {
         cancel()
         this.program = program
+        zoomPath = GimbalZoomPath(program)
+        zoomElapsedOffset = 0.0
         verificationInterruptedByPause = false
         failure = null
         lastReadout = null
@@ -365,6 +410,7 @@ class GimbalMoveEngine {
             return false
         }
         legs = next
+        reversed = false
         curve = GimbalProgramCurve.create(program)
         nextCurveCommand = 0.0
         index = 0
@@ -389,6 +435,7 @@ class GimbalMoveEngine {
         checkpoints.clear()
         observations.clear()
         isPaused = true
+        pendingZoomEndpoint = null
         lastReadout = snapshot(live)
         return true
     }
@@ -405,6 +452,9 @@ class GimbalMoveEngine {
             resumeNeedsCommand = true
             return true
         }
+        zoomPath = zoomPath.remaining(if (phase == "VERIFY") zoomPath.duration else zoomElapsedOffset + elapsed,
+            live.zoom, quantized = curve == null || phase == "VERIFY")
+        zoomElapsedOffset = 0.0
         val activeCurve = curve
         if (activeCurve != null && phase == "RUN") {
             curve = activeCurve.remaining(elapsed, live)
@@ -421,6 +471,7 @@ class GimbalMoveEngine {
         nextCurveCommand = 0.0
         checkpoints.clear()
         observations.clear()
+        commandHistory.clear()
         isPaused = false
         resumeNeedsCommand = true
         return true
@@ -431,9 +482,11 @@ class GimbalMoveEngine {
         running = false
         isPaused = false
         resumeNeedsCommand = false
+        pendingZoomEndpoint = null
         needsCommand = false
         checkpoints.clear()
         observations.clear()
+        commandHistory.clear()
     }
 
     val nextWakeInterval: Double
@@ -504,13 +557,7 @@ class GimbalMoveEngine {
         if (phase == "HOLD") {
             if (angularDistance(live, a) > ARRIVE_DEG) return stop(live, "Camera moved before the take")
             if (elapsed + 1e-9 < HOLD_SECONDS) return output(live)
-            phase = "RUN"
-            elapsed = 0.0
-            curve?.let {
-                nextCurveCommand = 0.05
-                return output(live, it.position(0.1), 0.1)
-            }
-            return startExactLeg(live)
+            return beginPassMotion(live)
         }
         if (phase == "RUN") curve?.let { return tickCurve(it, live) }
         if (phase == "RUN") {
@@ -519,8 +566,13 @@ class GimbalMoveEngine {
             if (elapsed + 1e-9 < leg.duration) return if (streamed) tickLinearLeg(live) else output(live)
             if (streamed && nextCurveCommand < leg.duration) return stop(live, "Move interrupted — waypoint dispatch was late")
             if (elapsed - leg.duration > 0.02 + 1e-9) return stop(live, "Move interrupted — waypoint dispatch was late")
+            if (program.changesZoom) pendingZoomEndpoint = leg.to.zoom
+            if (index + 1 == legs.size && program.loop) {
+                return turnAround(live, clock - (elapsed - leg.duration))
+            }
             checkpoints += Checkpoint(clock - (elapsed - leg.duration), leg, legs.getOrNull(index + 1), clock)
             if (index + 1 < legs.size) {
+                zoomElapsedOffset += leg.duration
                 index += 1
                 elapsed = 0.0
                 return startExactLeg(live)
@@ -536,6 +588,44 @@ class GimbalMoveEngine {
             return output(live, finished = true)
         }
         return output(live)
+    }
+
+    /** Reverse on the deadline and qualify arrival/departure together while moving. */
+    private fun turnAround(live: GimbalWaypoint, boundary: Double): Output {
+        val incoming = legs[index]
+        val streamed = curve != null
+        reversed = !reversed
+        val a = program.a!!
+        val b = program.b!!
+        val c = program.c
+        val pass = when {
+            !reversed -> program
+            c != null -> program.copy(a = c, c = a, durationAB = program.durationBC, durationBC = program.durationAB)
+            else -> program.copy(a = b, b = a)
+        }
+        legs = when {
+            !reversed -> listOfNotNull(Leg("A→B", a, b, program.durationAB),
+                c?.let { Leg("B→C", b, it, program.durationBC) })
+            c != null -> listOf(Leg("C→B", c, b, program.durationBC), Leg("B→A", b, a, program.durationAB))
+            else -> listOf(Leg("B→A", b, a, program.durationAB))
+        }
+        curve = GimbalProgramCurve.create(pass)
+        zoomPath = GimbalZoomPath(pass)
+        zoomElapsedOffset = 0.0
+        index = 0
+        nextCurveCommand = 0.0
+        checkpoints += Checkpoint(boundary, incoming, legs[0], clock, streamed, isTurnaround = true)
+        return beginPassMotion(live)
+    }
+
+    private fun beginPassMotion(live: GimbalWaypoint): Output {
+        phase = "RUN"
+        elapsed = 0.0
+        curve?.let {
+            nextCurveCommand = 0.05
+            return output(live, it.position(0.1), 0.1)
+        }
+        return startExactLeg(live)
     }
 
     private fun startExactLeg(live: GimbalWaypoint): Output {
@@ -573,9 +663,13 @@ class GimbalMoveEngine {
     }
 
     private fun tickCurve(curve: GimbalProgramCurve, live: GimbalWaypoint): Output {
-        index = if (elapsed >= curve.durationAB) 1 else 0
+        if (program.changesZoom && index == 0 && elapsed + 1e-9 >= curve.durationAB) pendingZoomEndpoint = curve.b.zoom
+        index = if (elapsed + 1e-9 >= curve.durationAB) 1 else 0
         if (elapsed + 1e-9 >= curve.duration) {
             if (nextCurveCommand < curve.duration) return stop(live, "Move interrupted — waypoint dispatch was late")
+            if (elapsed - curve.duration > 0.02 + 1e-9) return stop(live, "Move interrupted — waypoint dispatch was late")
+            if (program.changesZoom) pendingZoomEndpoint = curve.c.zoom
+            if (program.loop) return turnAround(live, clock - (elapsed - curve.duration))
             checkpoints += Checkpoint(clock - (elapsed - curve.duration), legs[1], null, clock)
             phase = "VERIFY"
             elapsed = 0.0
@@ -609,6 +703,9 @@ class GimbalMoveEngine {
         if (low > high) return false
         fun reference(sample: Observation, delay: Double): GimbalWaypoint {
             val time = sample.time - delay
+            if (check.usesCommandHistory && commandHistory.isNotEmpty()) {
+                return (commandHistory.lastOrNull { it.time <= time } ?: commandHistory.first()).position(time)
+            }
             return if (time < check.time) {
                 lerp(check.incoming.from, check.incoming.to,
                     1 + (time - check.time) / check.incoming.duration)
@@ -617,9 +714,10 @@ class GimbalMoveEngine {
             }
         }
         val knots = mutableListOf(low, high)
+        val boundaries = if (check.usesCommandHistory) commandHistory.flatMap { listOf(it.time, it.time + it.duration) }
+            else listOf(check.time - check.incoming.duration, check.time, check.outgoingAt, check.outgoingAt + outgoing.duration)
         for (sample in nearby) {
-            for (time in listOf(check.time - check.incoming.duration, check.time,
-                check.outgoingAt, check.outgoingAt + outgoing.duration)) {
+            for (time in boundaries) {
                 val delay = sample.time - time
                 if (delay > low && delay < high) knots += delay
             }
@@ -661,7 +759,46 @@ class GimbalMoveEngine {
                 }
             }
         }
-        return false
+        return turnaroundIsObserved(check, nearby)
+    }
+
+    /** Native endpoint easing need not have constant velocity when contact and reversal are observed. */
+    private fun turnaroundIsObserved(check: Checkpoint, nearby: List<Observation>): Boolean {
+        if (!check.isTurnaround || check.usesCommandHistory) return false
+        val outgoing = check.outgoing ?: return false
+        val endpoint = check.incoming.to
+        fun along(pose: GimbalWaypoint, other: GimbalWaypoint): Double? {
+            val yaw = other.yawDeg - endpoint.yawDeg
+            val pitch = pitchDelta(endpoint, other)
+            val length = hypot(yaw, pitch)
+            if (length <= ARRIVE_DEG) return null
+            val distance = ((pose.yawDeg - endpoint.yawDeg) * yaw + pitchDelta(endpoint, pose) * pitch) / length
+            val nearest = lerp(endpoint, other, distance / length)
+            return if (angularDistance(pose, nearest) <= ARRIVE_DEG + 1e-9) distance else null
+        }
+        return nearby.any { arrival ->
+            if (arrival.time < check.time || arrival.time > check.time + 0.2 + 1e-9 ||
+                angularDistance(arrival.pose, endpoint) > ARRIVE_DEG) return@any false
+            val approach = nearby.filter { it.time <= arrival.time }
+            val departure = nearby.filter { it.time >= arrival.time }
+            if (approach.none { arrival.time - it.time >= 0.08 - 1e-9 && angularDistance(it.pose, endpoint) > ARRIVE_DEG } ||
+                departure.none { it.time - arrival.time >= 0.08 - 1e-9 && angularDistance(it.pose, endpoint) > ARRIVE_DEG }) {
+                return@any false
+            }
+            var nearest = Double.POSITIVE_INFINITY
+            for (sample in approach) {
+                val distance = along(sample.pose, check.incoming.from) ?: return@any false
+                if (distance > nearest + ARRIVE_DEG + 1e-9) return@any false
+                nearest = min(nearest, distance)
+            }
+            var farthest = Double.NEGATIVE_INFINITY
+            for (sample in departure) {
+                val distance = along(sample.pose, outgoing.to) ?: return@any false
+                if (distance < farthest - ARRIVE_DEG - 1e-9) return@any false
+                farthest = max(farthest, distance)
+            }
+            true
+        }
     }
 
     private fun stop(live: GimbalWaypoint, reason: String): Output {
@@ -677,6 +814,11 @@ class GimbalMoveEngine {
         duration: Double = 0.0, finished: Boolean = false): Output {
         if (target != null && !canSendNativeTarget(live, target)) {
             return stop(live, "Camera moved outside the safe rotation path")
+        }
+        if (program.loop && target != null) {
+            val from = commandHistory.lastOrNull()?.position(clock) ?: live
+            commandHistory += CommandReference(clock, from, target, duration)
+            while (commandHistory.size > 1 && commandHistory[1].time < clock - 1) commandHistory.removeAt(0)
         }
         lastReadout = snapshot(live)
         return Output(target, duration, finished = finished)

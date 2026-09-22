@@ -1,16 +1,17 @@
 New and changed
 
 - EV adds a movable exposure gauge in Auto, Manual and playback. It measures brightness relative to middle gray; D-Log M readings are marked as estimates.
+- Motion Control loops through saved zooms and offers Restart while paused. Zoom controls stay accessible; D-Log2 blocks zoom-changing programs.
 - Anamorphic Desqueeze (DE-SQ) offers lens presets and a custom 1.00–2.00× factor for live view, videos and photos.
-- Report a problem remains available before pairing, with optional technical details and screenshots.
 
 Fixes
 
 - EV waits for the new picture when switching playback clips instead of retaining the previous reading.
+- Motion Control drags more smoothly and keeps duration dials usable after moving. Help text is brighter, and loop reversals avoid false waypoint failures.
 - Improved recovery when a running preview loses its video format.
 
 What to test
 
-- Enable EV in Auto and Manual, change the light or exposure, then drag, resize and rotate. Try DISP 2 pins and playback. Confirm LUT changes do not alter EV.
-- Hold DE-SQ for presets, Custom and direction. Check framing, rotation, playback zoom and saved settings.
-- Open Report a problem before connecting. Then check preview recovery after Media, Settings and background use.
+- Enable EV in Auto and Manual, change light or exposure, then drag, resize and rotate. Try DISP 2 pins and playback. Confirm LUT changes do not alter EV.
+- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, change a duration, then close/reopen it. Check saved settings remain and actions stay fixed.
+- Hold DE-SQ for presets, Custom and direction. Check framing and playback, then check preview recovery after Media, Settings and background use.

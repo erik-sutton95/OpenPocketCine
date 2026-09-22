@@ -123,7 +123,7 @@ struct LiveViewScreen: View {
                 }
             )
             #if targetEnvironment(simulator)
-                model.session.status.colorMode = .dLog2
+                if !MonitorUIReview.isActive { model.session.status.colorMode = .dLog2 }
             #endif
             model.syncLiveMonitorColor()
             model.session.decoder.startSimulatorSampleIfNeeded()
@@ -308,7 +308,7 @@ struct LiveViewScreen: View {
             popups(layout)
                 // Clear the container's full-screen hit region as its last
                 // popup leaves; a dismissed picker must not swallow Lock.
-                .zIndex(10)
+                .zIndex(zoomDialMounted ? 16 : 10)
                 // These hosts position bounded panels inside the viewport.
                 // An AX attachment on the hosts promotes a sole panel to that
                 // full frame (and exposes an empty host above other drawers).
@@ -326,9 +326,15 @@ struct LiveViewScreen: View {
                     layout: layout, feed: layout.onFeed,
                     joystickBounds: model.chromeSectionMounts(.gimbalStick)
                         && !captureControlsPresented
-                        ? Self.cgRect(self.gimbalCluster(layout).stick) : .zero
+                        ? Self.cgRect(self.gimbalCluster(layout).stick) : .zero,
+                    zoomBounds: OsmoMonitorPresentation.capabilities(model.session).zoom
+                        && model.chromeSectionMounts(.zoomChip) && !captureControlsPresented
+                        ? Self.cgRect(self.gimbalCluster(layout).zoom) : .zero,
+                    coveredByZoom: zoomDialMounted
                 )
                 .environment(\.interfaceLocked, interfaceLocked)
+                .opacity(zoomDialVisible ? 0.16 : 1)
+                .animation(MonitorMotion.dim(reduceMotion), value: zoomDialVisible)
                 .allowsHitTesting(model.liveChromeInteractive && !zoomDialMounted)
                 .zIndex(15)
             }
@@ -805,7 +811,9 @@ struct LiveViewScreen: View {
         if owner != .capture { model.captureSheet = nil }
         if owner != .drum { model.captureDrum = nil }
         if owner != .assist { model.assist.configureTool = nil }
-        if owner != .gimbal { model.liveGimbalPanel = .none }
+        if owner != .gimbal && !(owner == .zoom && model.liveGimbalPanel == .editor) {
+            model.liveGimbalPanel = .none
+        }
         if owner != .zoom { closeZoomDial() }
     }
 

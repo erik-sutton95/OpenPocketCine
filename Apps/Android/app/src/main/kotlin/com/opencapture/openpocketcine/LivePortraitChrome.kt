@@ -423,6 +423,8 @@ fun LivePortraitChrome(
                 layout = layout,
                 feed = layout.onFeed,
                 joystickBounds = stick,
+                zoomBounds = if (capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) zoom
+                    else ChromeRect(0f, 0f, 0f, 0f),
                 uiLocked = uiLocked,
             )
         }

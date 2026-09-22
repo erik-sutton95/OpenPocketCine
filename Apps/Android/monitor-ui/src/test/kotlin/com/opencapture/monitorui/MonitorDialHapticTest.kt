@@ -1,6 +1,7 @@
 package com.opencapture.monitorui
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -29,6 +30,21 @@ class MonitorDialHapticTest {
         assertTrue(MonitorDialHaptic.shouldTick(5.5, 6.0, stops))
         assertFalse(MonitorDialHaptic.shouldTick(5.0, 5.5, stops))
         assertFalse(MonitorDialHaptic.shouldTick(4.9, 5.0, stops))
+    }
+
+    @Test
+    fun continuousZoomPulsesOnceOnArrivalOrCrossingInEitherDirection() {
+        val stops = MonitorZoomScale.wholeStops
+        for (values in listOf(
+            listOf(2.994, 2.996, 3.001, 3.004, 3.006),
+            listOf(3.006, 3.004, 2.999, 2.996, 2.994),
+            listOf(2.994, 2.996, 3.0, 3.0, 3.004),
+            listOf(3.006, 3.004, 3.0, 3.0, 2.996),
+        )) {
+            assertEquals(listOf(false, true, false, false),
+                values.zipWithNext().map { (from, to) -> MonitorDialHaptic.shouldTick(from, to, stops) },
+                "Only arrival or crossing should pulse: $values")
+        }
     }
 
     @Test
