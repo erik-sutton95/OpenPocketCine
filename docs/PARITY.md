@@ -319,7 +319,8 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   spring settle. They swipe horizontally in 0.5 s steps (12 dp per step), with
   adjustable accessibility actions. Start shows a cancellable 3–2–1 countdown
   before automatic preparation and approach; the settle at A remains separate.
-  All A/B/C rows stay visible; unset rows read Not set. SET captures a waypoint
+  All A/B/C rows stay visible; unset rows read Not set. Unset readouts and Loop's
+  help text use the brighter secondary text color in both shells. SET captures a waypoint
   and RESET replaces it with the camera's current pose and zoom; Clear remains separate. Full-editor
   outside taps minimize without activating underlying controls. Until a real drag,
   full and minimized panels share the default top and recenter with the viewport.

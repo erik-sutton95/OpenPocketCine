@@ -358,7 +358,8 @@ Choose Loop before Start. Pause/Resume keeps the current direction; Stop, a moti
 failure or manual takeover ends the loop.
 
 The compact editor keeps its header and Clear, Start/Stop and Pause/Resume
-buttons fixed. While paused, **Restart** replaces Clear: it keeps your program
+buttons fixed. **Not set** and the Loop hint use bright gray text for readability
+over live view. While paused, **Restart** replaces Clear: it keeps your program
 and begins again from A with the usual countdown and preparation. The settings scroll above the buttons, with a subtle bottom fade
 when more content remains below.
 

@@ -480,6 +480,7 @@ private struct LiveGimbalMoveEditor: View {
 
             MonitorCaptureToggle(
                 "Loop", help: "Repeat back and forth until Stop.",
+                helpColor: MonitorTheme.secondary,
                 isOn: Binding(
                     get: { model.session.gimbalProgram.loop },
                     set: { if canInteract() { model.session.setGimbalLoop($0) } })
@@ -566,7 +567,7 @@ private struct LiveGimbalMoveEditor: View {
                     .background(set ? LiveDesign.accent : Color.white.opacity(0.1), in: Circle())
                 Text(readout(point))
                     .font(MonitorTheme.font(11)).monospacedDigit()
-                    .foregroundStyle(set ? LiveDesign.text : LiveDesign.faint)
+                    .foregroundStyle(set ? LiveDesign.text : MonitorTheme.secondary)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("motion.waypoint.\(slot.letter).readout")

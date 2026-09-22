@@ -563,7 +563,7 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Loop", color = LiveDesign.text, style = LiveType.ui(13f, FontWeight.SemiBold))
-                    Text("Repeat back and forth until Stop.", color = LiveDesign.faint, style = LiveType.ui(9.5f))
+                    Text("Repeat back and forth until Stop.", color = LiveDesign.secondary, style = LiveType.ui(9.5f))
                 }
                 MonitorSwitchGraphic(program.loop)
             }
@@ -625,7 +625,7 @@ private fun waypointRow(
                 Text(slot.letter, color = if (set) LiveDesign.accent else LiveDesign.muted,
                     style = LiveType.ui(10f, FontWeight.Bold))
             }
-            Text(readout, color = if (set) LiveDesign.text else LiveDesign.muted,
+            Text(readout, color = if (set) LiveDesign.text else LiveDesign.secondary,
                 style = LiveType.ui(10f, FontWeight.Medium), maxLines = 1,
                 modifier = Modifier.weight(1f))
             Box(Modifier.height(44.dp).widthIn(min = 44.dp)
