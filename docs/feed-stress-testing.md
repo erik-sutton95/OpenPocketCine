@@ -1,5 +1,10 @@
 # Physical feed stress testing
 
+For a seeded connection matrix with script or agent drivers across platforms,
+see [connection stress testing](connection-stress-testing.md). That runner has
+an explicit device-adapter contract; the XCTest below remains the built-in iOS
+feed workload and is not automatically a connection-matrix adapter.
+
 Surface: **iOS Debug XCTest** and `tools/feed-stress-*`. Not a production
 background task. Not an Android qualification. See the
 [physical stress results](audits/2026-09-14-physical-feed-stress.md) for the tested

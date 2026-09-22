@@ -51,6 +51,9 @@ jobs:
       - name: Sentry release configuration
         run: bash ./tools/sentry-test.sh
 
+      - name: Connection stress harness (offline)
+        run: python3 -m unittest discover -s tools/connection-stress -p 'test_*.py'
+
       - name: Landing-page assets
         run: ./scripts/check-site.sh
 

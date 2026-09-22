@@ -239,6 +239,12 @@ guide; no store release is implied.
 
 ## Development verification
 
+The maintainer [connection stress matrix](connection-stress-testing.md) captures
+allowlisted numeric snapshots, vitals and typed log markers with checkpoint
+timing. Its local summaries retain installed-build identity and distinguish
+simulation from driver-declared physical evidence. It does not upload reports
+or substitute historical journal data for fresh picture progress.
+
 Debug builds accept `OPV_RELIABILITY_VERIFY=incident|gatedIncident|crash|hang|resume` at launch.
 This opens an isolated verification screen, uses a separate consent suite/cache,
 and never constructs the camera UI. `incident` drives the real portable recorder

@@ -7,6 +7,13 @@ incomplete.
 
 ## Connection regression follow-up
 
+The [connection stress matrix](connection-stress-testing.md) is shared maintainer
+tooling for both platforms, with the same evidence and teardown contract. It
+ships a script interface and local agent mailbox, not native device adapters.
+The existing iOS-only feed XCTest exception remains; Android physical adapters
+and both platforms' connection-matrix qualification are pending. Unsupported
+paths are explicit coverage gaps. No operator-visible shell behavior changes.
+
 Android's GATT initialization checks native request admission and advances the
 existing tolerated descriptor fallback through both characteristics before
 arming pairing. Failed local registration of required FFF4 notifications or a

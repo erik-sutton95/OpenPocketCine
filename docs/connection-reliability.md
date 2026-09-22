@@ -187,6 +187,11 @@ short stress harness run, if later recorded, is that phone/camera/build only.
 
 ## Physical protocol (#148)
 
+Repeatable pairing, lifecycle, network/BLE disruption and optional recording
+experiments use the [connection stress matrix](connection-stress-testing.md).
+Its reports separate simulation, driver-declared physical evidence, unsupported
+paths and failed teardown. It adds no repair owner or live-enable writes.
+
 Device: Pocket 4 / 4 Pro + physical iPhone. Simulator is not this bug.
 Build this branch (main + observe line). Console:
 `com.opencapture.openpocketcine`. Also `Documents/control-live.log`.

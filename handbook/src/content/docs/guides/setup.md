@@ -58,6 +58,25 @@ The Compose app is **arm64-v8a only**. Join the
 need a physical phone. More: [Android app](../../apps/android/). Maintainer
 upload: `just android-play-setup`.
 
+## Connection stress tooling
+
+Contributors can inspect a seeded connection matrix and exercise its reporting
+without a camera (Python 3.10+):
+
+```bash
+just connection-stress plan --platform android --cycles 3 --seed 401
+just connection-stress demo --platform ios
+just connection-stress-test
+```
+
+The maintainer
+[connection stress guide](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/connection-stress-testing.md)
+describes script and local-agent drivers for physical SoftAP, phone-hotspot,
+BLE and two-camera experiments. Device adapters must supply fresh numeric
+evidence; none is bundled with this runner. Recording is opt-in, unsupported
+paths remain coverage gaps, and generated artifacts stay local. Offline demos
+are explicitly marked simulation and do not qualify either app on hardware.
+
 ## This handbook
 
 ```bash

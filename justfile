@@ -17,7 +17,7 @@ setup:
 # Run every repository quality check that this tree currently supports.
 # `swift-lint` is available as `just lint` after `just format`; the existing tree is not
 # yet fully swift-format clean, so it is not a merge gate.
-check: hygiene site-check testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test swift-test handbook-build
+check: hygiene site-check testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test connection-stress-test swift-test handbook-build
 
 # Verify release reporting configuration without network or real credentials.
 sentry-test:
@@ -84,6 +84,14 @@ swift-test *args:
 # Summarize a locally captured iOS/Android live journal without printing identities.
 live-log-summary journal:
     python3 tools/analyze-live-log.py "{{journal}}"
+
+# Plan or run bounded connection experiments (script/agent driver; recording opt-in).
+connection-stress *args:
+    python3 tools/connection-stress/harness.py {{args}}
+
+# Offline evidence, driver, deadline and teardown regressions; no phone required.
+connection-stress-test:
+    python3 -m unittest discover -s tools/connection-stress -p 'test_*.py'
 
 # Run all Swift-only checks.
 swift-check: swift-lint swift-test
