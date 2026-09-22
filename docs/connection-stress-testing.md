@@ -82,15 +82,31 @@ controls available. Wi-Fi/Bluetooth prompts must already be approved:
 ```sh
 just android-feed-stress --seed 401 --seconds 300 --profile combined
 just android-feed-stress --device '<adb serial>' --seed 401 --profile loss
+just android-feed-stress --reuse-installed --seed 402 --profile burst
+just android-feed-stress --reuse-installed --seed 402 --profile loss --scenario lifecycle
 ```
 
 This builds and installs the Debug app and instrumentation APK without clearing
-saved data. `--skip-build` installs existing local APKs. It requires a physical
-phone; normal `just android-device-test` skips this opt-in test. Profiles are 10%
+saved data. `--skip-build` installs existing local APKs. `--reuse-installed`
+skips both build and install; the device report still identifies the installed
+build, which may differ from the checkout. This separates repeated camera
+experiments from APK replacement interrupting an existing session. Keep a
+replacement/reconnect failure as its own result rather than replacing it with
+a later passing run. It requires a physical
+phone; normal `just android-device-test` excludes this camera-only class through
+the Gradle runner filter. A runtime assumption alone was reported as a failed
+test by the physical Gradle suite. The dedicated command selects the class
+directly and supplies its opt-in argument. Profiles are 10%
 loss, 8-of-40 packet bursts, and their combination. The fault gate expires after
 eight seconds even if the test owner stalls. Both platforms observe ACK windows
 before dropping video and never sleep their ACK/receive queues for impairment.
 Release Android builds cannot activate the gate.
+
+Before camera actions, the host calls a compatibility probe that launches no
+activity and requires the current test contract. An older test APK cannot
+silently ignore scenario selection. A passing report must match the requested
+seed, duration, profile and complete scenario set; malformed or missing reports
+fail the run.
 
 Android rotates a seeded schedule of Settings, a small joystick throw, and
 background/foreground. While Settings is open, it reasserts the current ISO 30
@@ -100,13 +116,25 @@ ISO replies, no observed ISO failure/timeout, and a drained command queue.
 Optimistic HUD state and the number of offers cannot prove command completion.
 Each fault needs a healthy 30-second baseline, actual dropped packets during the
 action, then advancing fresh video/AU/output/presentation samples within 16 s.
-All three scenarios must complete. Recording is never started; unexpected
+All three scenarios must complete by default. `--scenario` isolates one action;
+the report records requested and completed coverage even on failure. A passing
+isolated run does not qualify the other actions. Recording is never started; unexpected
 recording or severe thermal state fails the run.
+
+If post-fault picture misses the 16-second deadline, the runner retains that
+failure and observes up to 60 more seconds with faults disarmed. This lets the
+production recovery owner finish its escalation before teardown cancels the
+session. `aftermath` distinguishes later recovery from continued failure; later
+recovery never changes the original verdict to a pass.
 
 Android numeric `summary.json` and `events.ndjson` are pulled into a unique
 private `.local/android-feed-stress/<run>/`. They include installed build identity,
-camera model ID, typed failure, fault-arm/disarm markers, recovery duration,
-stage counters/ages and command outcomes. `instrumentation.log` is private raw
+camera model ID, typed failure, fault-arm/disarm markers, monotonic and wall-clock
+timestamps, recovery duration,
+stage counters/ages, the separate session recovery state and command outcomes.
+`phase=LIVE` alone can mean a held monitor while recovery is paused; fresh
+advancing stages and idle recovery are required for a healthy check.
+`instrumentation.log` is private raw
 output. Cleanup disarms faults, rests the stick, closes the activity/session and
 records teardown errors. A host timeout attempts to stop the owned Debug app;
 a disconnected phone cannot guarantee restoration. Inspect the camera after an
@@ -143,14 +171,21 @@ not create another recovery state machine inside the runner. Delete allegedly
 unused code only after checking references and platform/feature entry points;
 absence from a stress run is not proof that code is dead.
 
-Current verification: 1,024 virtual cases (seeds 401–528 across eight profiles)
-passed; the missing-post-fault-picture canary failed as intended. Both native
-test targets compile, with Android JVM regressions. No production defect was
-reproduced by this corpus. Physical overlap qualification is pending on **both**
-platforms: neither phone was connected for this extension. Actual Wi-Fi route
-loss, camera-side ACK impairment and congestion during native UI work still
-need an on-path impairment setup and a matrix adapter; local video drops do not
-close that coverage gap.
+Current verification: 8,000 virtual cases (seeds 401–1400 across eight profiles)
+passed; the earlier missing-post-fault-picture canary failed as intended. Both
+native test targets compile, with Android JVM regressions. No production defect
+was reproduced by this corpus. The [September 22 campaign](audits/2026-09-22-connection-stress-campaign.md)
+records physical Android setup/UI results and the report-to-test coverage gaps.
+Android local-loss overlap reproduced a stale picture with fresh compressed
+frames and successful control replies. A replay recovered only after the
+16-second test deadline and a same-network datalink rejoin; that remains a
+failed recovery-latency case. XCTest could not reach the iPhone, so its physical
+overlap qualification remains pending.
+Separate Android host experiments exercised actual Wi-Fi route loss with
+Settings taps. Selective camera-side ACK impairment and bandwidth congestion
+during native UI work still need an on-path impairment setup. The matrix's
+native adapter remains separate unfinished work; local video drops do not close
+those coverage gaps.
 
 ## Start offline
 

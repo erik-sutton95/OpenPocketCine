@@ -26,6 +26,10 @@ android {
         versionCode = resolvedVersionCode
         versionName = resolvedVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Camera stress runs use android-feed-stress's explicit adb invocation.
+        // Exclude before execution: UTP can report a runtime assumption as failure.
+        testInstrumentationRunnerArguments["notClass"] =
+            "com.opencapture.openpocketcine.FeedStressTest"
         buildConfigField("String", "SOURCE_REVISION", "\"unknown\"")
         buildConfigField("String", "SENTRY_DSN_ANDROID", "\"\"")
 

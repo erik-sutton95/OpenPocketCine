@@ -18,13 +18,43 @@ REPO = Path(__file__).resolve().parents[2]
 PACKAGE = "com.opencapture.openpocketcine.debug"
 
 
+def compatible_contract(report):
+    return (isinstance(report, dict) and report.get("schema") == 2
+            and report.get("scenarios") == "joystick,lifecycle,settings"
+            and report.get("profiles") == "burst,combined,loss")
+
+
+def passing_report(report, *, seed, seconds, profile, scenario):
+    """A green report must belong to this invocation and prove its whole coverage."""
+    if not isinstance(report, dict):
+        return False
+    selected = "joystick,lifecycle,settings" if scenario == "all" else scenario
+    count = report.get("completed_scenarios")
+    drops = report.get("injected_packets")
+    return (report.get("schema") == 2 and report.get("status") == "passed"
+            and report.get("evidence") == "device_instrumentation" and report.get("platform") == "android"
+            and report.get("seed") == seed and report.get("requested_seconds") == seconds
+            and report.get("profile") == profile and report.get("requested_scenarios") == selected
+            and report.get("covered_scenarios") == selected
+            and report.get("recording_allowed") is False and report.get("teardown") == "passed"
+            and type(count) is int and count >= len(selected.split(","))
+            and type(drops) is int and drops > 0
+            and all(isinstance(report.get(key), str) and report[key].strip()
+                    for key in ("build_identity", "source_revision")))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", default=os.environ.get("ANDROID_SERIAL"))
     parser.add_argument("--seed", type=int, default=401)
     parser.add_argument("--seconds", type=int, default=300)
     parser.add_argument("--profile", choices=("loss", "burst", "combined"), default="combined")
-    parser.add_argument("--skip-build", action="store_true", help="Install the existing local debug APKs")
+    parser.add_argument("--scenario", choices=("all", "settings", "joystick", "lifecycle"), default="all",
+                        help="Select an action to isolate failures; default requires all three")
+    install = parser.add_mutually_exclusive_group()
+    install.add_argument("--skip-build", action="store_true", help="Install the existing local debug APKs")
+    install.add_argument("--reuse-installed", action="store_true",
+                         help="Skip build/install and test the installed debug app and test APKs")
     parser.add_argument("--output", default=str(REPO / ".local/android-feed-stress"))
     args = parser.parse_args()
     if not 0 <= args.seed < 2**63 or not 180 <= args.seconds <= 1740:
@@ -64,22 +94,35 @@ def main():
                     raise subprocess.CalledProcessError(code, argv)
 
         try:
-            if not args.skip_build:
-                command(["./gradlew", ":app:assembleDebug", ":app:assembleDebugAndroidTest", "--console=plain"],
-                        900, REPO / "Apps/Android")
-            apk = REPO / "Apps/Android/app/build/outputs/apk"
-            command(target + ["install", "-r", str(apk / "debug/app-debug.apk")], 120)
-            command(target + ["install", "-r", str(apk / "androidTest/debug/app-debug-androidTest.apk")], 120)
+            if not args.reuse_installed:
+                if not args.skip_build:
+                    command(["./gradlew", ":app:assembleDebug", ":app:assembleDebugAndroidTest", "--console=plain"],
+                            900, REPO / "Apps/Android")
+                apk = REPO / "Apps/Android/app/build/outputs/apk"
+                command(target + ["install", "-r", str(apk / "debug/app-debug.apk")], 120)
+                command(target + ["install", "-r", str(apk / "androidTest/debug/app-debug-androidTest.apk")], 120)
             started = True
             command(target + ["shell", "am", "instrument", "-w", "-r",
-                              "-e", "class", "com.opencapture.openpocketcine.FeedStressTest",
+                              "-e", "class", "com.opencapture.openpocketcine.FeedStressTest#runnerContract",
+                              "-e", "opcStress", "1", "-e", "opcRun", root.name,
+                              PACKAGE + ".test/androidx.test.runner.AndroidJUnitRunner"], 45)
+            contract = subprocess.check_output(target + ["exec-out", "run-as", PACKAGE, "cat",
+                                                       f"files/connection-stress/{root.name}/contract.json"],
+                                               stderr=subprocess.DEVNULL, timeout=15)
+            (root / "contract.json").write_bytes(contract)
+            if not compatible_contract(json.loads(contract)):
+                raise Failure("Incompatible installed test APK")
+            command(target + ["shell", "am", "instrument", "-w", "-r",
+                              "-e", "class", "com.opencapture.openpocketcine.FeedStressTest#connectionUiAndControlsUnderPacketLoss",
                               "-e", "opcStress", "1", "-e", "opcSeed", str(args.seed),
                               "-e", "opcSeconds", str(args.seconds), "-e", "opcProfile", args.profile,
+                              "-e", "opcScenario", args.scenario,
                               "-e", "opcRun", root.name,
                               PACKAGE + ".test/androidx.test.runner.AndroidJUnitRunner"], args.seconds + 180)
             status = 0
-        except (subprocess.SubprocessError, KeyboardInterrupt):
-            print("Run failed or interrupted; see the private instrumentation log.", file=sys.stderr)
+        except (subprocess.SubprocessError, KeyboardInterrupt, ValueError, Failure):
+            print("Run failed or interrupted; see the private instrumentation log. "
+                  "A missing/incompatible contract requires rebuilding and installing the test APK.", file=sys.stderr)
         finally:
             if started:
                 if status:
@@ -96,7 +139,10 @@ def main():
                         status = 1
     try:
         summary = json.loads((root / "summary.json").read_text())
-        if summary.get("status") != "passed" or summary.get("injected_packets", 0) <= 0:
+        if not isinstance(summary, dict):
+            raise ValueError("Device report must be an object")
+        if not passing_report(summary, seed=args.seed, seconds=args.seconds,
+                              profile=args.profile, scenario=args.scenario):
             status = 1
         print(f"Result: {'passed' if status == 0 else 'failed'}; "
               f"completed scenarios: {summary.get('completed_scenarios', 0)}")

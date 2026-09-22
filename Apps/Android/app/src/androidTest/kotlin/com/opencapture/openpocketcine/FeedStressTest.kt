@@ -12,6 +12,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.session.LivePipelineCadence
+import com.opencapture.openpocketcine.session.SessionRecoveryUi
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
@@ -39,6 +40,16 @@ class FeedStressTest {
     private val commandFailures = AtomicInteger()
     private class StressFailure(val code: String) : AssertionError(code)
 
+    /** Host compatibility probe: no activity, connection, impairment or controls. */
+    @Test fun runnerContract() {
+        assumeTrue(arguments.getString("opcStress") == "1")
+        check(BuildConfig.DEBUG)
+        val contract = JSONObject().put("schema", 2)
+            .put("scenarios", "joystick,lifecycle,settings")
+            .put("profiles", "burst,combined,loss")
+        File(reportRoot(), "contract.json").writeText(contract.toString())
+    }
+
     @Test fun connectionUiAndControlsUnderPacketLoss() {
         assumeTrue("Use just android-feed-stress with a physical phone and saved Pocket camera",
             arguments.getString("opcStress") == "1")
@@ -46,17 +57,23 @@ class FeedStressTest {
         val seed = arguments.getString("opcSeed", "401").toLong()
         val seconds = arguments.getString("opcSeconds", "300").toLong()
         val profile = arguments.getString("opcProfile", "combined")
+        val requested = arguments.getString("opcScenario", "all")
+        val actions = listOf("settings", "joystick", "lifecycle")
+        require(requested == "all" || requested in actions)
+        val selected = if (requested == "all") actions else listOf(requested)
         require(seconds in 180..1740 && profile in FeedStressFault.PROFILES)
-        val run = arguments.getString("opcRun") ?: UUID.randomUUID().toString().replace("-", "")
-        require(run.matches(Regex("[a-f0-9]{32}")))
-        val root = File(instrumentation.targetContext.filesDir, "connection-stress/$run").also { it.mkdirs() }
+        val root = reportRoot()
         events = File(root, "events.ndjson")
         fault = FeedStressFault(seed, SystemClock::elapsedRealtime)
-        val summary = JSONObject().put("schema", 1).put("evidence", "device_instrumentation")
+        val summary = JSONObject().put("schema", 2).put("evidence", "device_instrumentation")
             .put("platform", "android").put("seed", seed).put("profile", profile)
-            .put("build_identity", BuildConfig.BUILD_IDENTITY).put("source_revision", BuildConfig.SOURCE_REVISION)
+            .put("requested_seconds", seconds)
+            .put("build_identity", installedBuildString("BUILD_IDENTITY"))
+            .put("source_revision", installedBuildString("SOURCE_REVISION"))
+            .put("requested_scenarios", selected.sorted().joinToString(","))
             .put("recording_allowed", false).put("status", "failed")
         var completed = 0
+        val completedActions = mutableSetOf<String>()
         var failure: Throwable? = null
         try {
             scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -81,8 +98,7 @@ class FeedStressTest {
                 }
             }
             val random = Random(seed)
-            val completedActions = mutableSetOf<String>()
-            val schedule = listOf("settings", "joystick", "lifecycle").shuffled(random)
+            val schedule = selected.shuffled(random)
             while (SystemClock.elapsedRealtime() + (if (completed > 0) 60_000 else 25_000) < deadline) {
                 if (completed > 0) waitHealthy(30_000, deadline - 25_000)
                 if (SystemClock.elapsedRealtime() + 25_000 >= deadline) break
@@ -132,12 +148,28 @@ class FeedStressTest {
                 completed += 1
                 completedActions.add(next)
             }
-            summary.put("covered_scenarios", completedActions.sorted().joinToString(","))
             assertTrue(completedActions.containsAll(schedule), "Incomplete scenario coverage; increase the time limit")
             summary.put("status", "passed")
         } catch (caught: Throwable) {
             failure = caught
             summary.put("failure", (caught as? StressFailure)?.code ?: "instrumentation_error")
+            if (caught is StressFailure && caught.code == "fresh_picture_deadline" && action != "setup") {
+                // Keep the failed 16s verdict, but let production escalation run.
+                // Closing the activity here would cancel the owner at its deadline.
+                fault.disarm()
+                mark("failure_observed")
+                val aftermathStart = SystemClock.elapsedRealtime()
+                try {
+                    waitHealthy(2_000, aftermathStart + 60_000)
+                    val elapsed = SystemClock.elapsedRealtime() - aftermathStart
+                    summary.put("aftermath", "recovered").put("aftermath_recovery_ms", elapsed)
+                    mark("aftermath_recovered", elapsed)
+                } catch (aftermathFailure: Throwable) {
+                    summary.put("aftermath", "no_fresh_picture")
+                        .put("aftermath_failure", (aftermathFailure as? StressFailure)?.code ?: "instrumentation_error")
+                    mark("aftermath_ended")
+                }
+            }
         } finally {
             fault.disarm()
             var teardownFailure: Throwable? = null
@@ -158,6 +190,7 @@ class FeedStressTest {
                 failure = failure ?: teardownFailure
             }
             summary.put("teardown", if (teardownFailure == null) "passed" else "failed")
+            summary.put("covered_scenarios", completedActions.sorted().joinToString(","))
             summary.put("completed_scenarios", completed).put("commands_offered", commands)
                 .put("commands_acknowledged", acknowledgments.get()).put("commands_failed", commandFailures.get())
                 .put("injected_packets", fault.dropped).put("last_scenario", action)
@@ -165,6 +198,20 @@ class FeedStressTest {
         }
         failure?.let { throw it }
     }
+
+    private fun reportRoot(): File {
+        val run = arguments.getString("opcRun") ?: UUID.randomUUID().toString().replace("-", "")
+        require(run.matches(Regex("[a-f0-9]{32}")))
+        return File(instrumentation.targetContext.filesDir, "connection-stress/$run").also { it.mkdirs() }
+    }
+
+    // Read the target APK at runtime. Kotlin may inline BuildConfig string
+    // constants from the APK used to compile this test, which can be different
+    // when the host deliberately reuses an installed app.
+    private fun installedBuildString(name: String): String =
+        instrumentation.targetContext.classLoader
+            .loadClass("${MainActivity::class.java.packageName}.BuildConfig")
+            .getField(name).get(null) as String
 
     private fun waitControls(acksBefore: Int, failuresBefore: Int, deadline: Long) {
         while (SystemClock.elapsedRealtime() < deadline) {
@@ -181,6 +228,7 @@ class FeedStressTest {
 
     private fun mark(event: String, recoveryMs: Long? = null) {
         val row = JSONObject().put("sample_ns", System.nanoTime()).put("event", event)
+            .put("wall_time_ms", System.currentTimeMillis())
             .put("scenario", action).put("dropped", fault.dropped)
         recoveryMs?.let { row.put("recovery_ms", it) }
         events.appendText(row.toString() + "\n")
@@ -198,7 +246,8 @@ class FeedStressTest {
             val flowing = current.timeNs > previous.timeNs && stages.all {
                 current.counts.getValue(it) > previous.counts.getValue(it)
             }
-            if (fresh && flowing && model.session.phaseFlow.value == ConnectionPhase.LIVE) {
+            if (fresh && flowing && model.session.phaseFlow.value == ConnectionPhase.LIVE
+                && model.session.recoveryState.value == SessionRecoveryUi.Idle) {
                 if (healthySince == null) healthySince = SystemClock.elapsedRealtime()
                 advancing += 1
                 if (advancing >= 2 && SystemClock.elapsedRealtime() - healthySince >= duration
@@ -218,7 +267,9 @@ class FeedStressTest {
         if (power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) throw StressFailure("thermal_halt")
         val value = model.session.cadence.snapshot()
         val row = JSONObject().put("sample_ns", value.timeNs).put("scenario", action)
+            .put("wall_time_ms", System.currentTimeMillis())
             .put("phase", model.session.phaseFlow.value.name).put("dropped", fault.dropped)
+            .put("recovery_state", model.session.recoveryState.value.javaClass.simpleName)
             .put("commands_offered", commands).put("thermal", power.currentThermalStatus)
             .put("commands_acknowledged", acknowledgments.get()).put("commands_failed", commandFailures.get())
         for (stage in stages) {
