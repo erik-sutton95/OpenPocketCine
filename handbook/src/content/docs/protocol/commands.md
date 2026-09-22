@@ -12,7 +12,7 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x07/0x07` | GetWifiSsid | `[status][packString]` |
 | `0x07/0x0e` | GetWifiPassword | `[status][packString]` |
 | `0x00/0x81` | register app device-info | on datalink |
-| `0x00/0x88` | app-presence keepalive | ~1 Hz, holds the session |
+| `0x00/0x88` | app registration / keepalive | ~1 Hz with the full `17 … APP` payload; video stops ~8–10 s after the last one ([details](../duml-transport/#registration-holds-live-video)) |
 | `0x00/0x99` | subscribe to a status key | battery, storage, mode, ... |
 | `0x02/0x0c` | enter/exit playback | `01 01 00 01` / `01 01 00 00`. Hold with `0x00/0x88` ~1 Hz. Do not poll `0x02/0x8E` while held. |
 | `0x00/0x26` | media list request | cursor `@10` u32-LE; ctr `@4`. Trigger `4a040e10`. Newest page needs no playback; older pages do. |

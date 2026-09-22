@@ -95,6 +95,23 @@ do not cancel a live rebuild; a cancelled body must not force-enable after
 ticks on the ACK thread (`noteGimbalStick`); JNI watchdog JSON must include
 `secondsSinceGimbalThrow`.
 
+## Registration heartbeat
+
+The camera stops video ~8–10 s after the app's last registration (`0x00/0x88`
+`17 … APP`) and does not restart it for `0x09/0xa8` alone; telemetry continues.
+Both shells send that frame from the 1 Hz keepalive whenever a datalink exists.
+Do not gate it on scene activity, Media, Settings, a foreground check or repair
+state. The watchdog's encoder-pause rung re-registers before its enable. The short
+`1a 00 00 00 00` keepalive Mimo sends does not hold video by itself (physical
+test, 2026-09-22).
+
+Video, telemetry and commands ride UDP 9004. On iOS a BLE drop while video is
+fresh on the camera path reconnects BLE beside the live picture instead of
+starting full session recovery; a failed reconnect escalates only if video is
+also stale. A 2026-09-22 soak logged a BLE drop on return from Control Center
+that tore down a healthy 25 fps stream. The new branch is not yet physically
+exercised: toggling Bluetooth in Control Center did not surface a drop to the app.
+
 ## Enable write
 
 Arm pktType `0x02` ingest on UDP handshake ack, not on the enable write.

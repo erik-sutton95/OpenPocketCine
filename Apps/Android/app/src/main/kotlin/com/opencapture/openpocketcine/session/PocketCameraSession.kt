@@ -953,15 +953,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 while (true) {
                     ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_KEEPALIVE, 0x802B))
                     val live = _phase.value == ConnectionPhase.LIVE && datalink != null
-                    if (ssid != null && !holdsMonitor) {
-                        if (!isBrowsingMedia && !mediaReturnPending && shouldStartUDPRebuild) {
-                            endGimbalStick()
-                            startFeedRecovery {
-                                rebuildDatalinkKeepingPicture("keepalive UDP repair")
-                            }
+                    if (ssid != null && !holdsMonitor && !isBrowsingMedia && !mediaReturnPending &&
+                        shouldStartUDPRebuild
+                    ) {
+                        endGimbalStick()
+                        startFeedRecovery {
+                            rebuildDatalinkKeepingPicture("keepalive UDP repair")
                         }
-                        withContext(Dispatchers.IO) { datalink?.keepalive() }
-                    } else if (live && !isBrowsingMedia) {
+                    }
+                    // The camera stops video ~10 s after the last app registration
+                    // and ignores enables until a new handshake (Pocket 4 Pro RVI,
+                    // 2026-09-22). No UI or repair state may gate this heartbeat.
+                    if (ssid != null || live) {
                         withContext(Dispatchers.IO) { datalink?.keepalive() }
                     }
                     val window = cadence.takeKeepaliveWindow(live, isBrowsingMedia)
@@ -1414,6 +1417,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 "resendLiveViewEnable" -> {
                     endGimbalStick()
                     logRecovery(RecoveryAction.ENABLE, RecoveryEffect.REQUESTED, RecoveryReason.WATCHDOG)
+                    datalink?.reRegister()
                     if (!sendRecoverEnable(force = true, reason = "watchdog")) {
                         SwiftCore.feedWatchdogTick(coreWatchdog, "{\"rollbackLastAction\":true}")
                     }
@@ -1453,6 +1457,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             LiveViewEnablePolicy.Action.RESEND_ENABLE -> {
                 endGimbalStick()
                 logRecovery(RecoveryAction.ENABLE, RecoveryEffect.REQUESTED, RecoveryReason.WATCHDOG)
+                datalink?.reRegister()
                 if (!sendRecoverEnable(force = true, reason = "watchdog")) {
                     feedWatchdog.restore(watchdogBeforeTick)
                 }

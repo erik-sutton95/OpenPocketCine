@@ -415,6 +415,17 @@ final class DatalinkDriver {
         sendAck()
     }
 
+    /// The camera stops video ~10 s after the last registration while telemetry
+    /// continues, and ignores `0x09/0xa8` until it sees one again. Re-registering
+    /// on the same socket restarted video with no new handshake (Pocket 4 Pro,
+    /// 2026-09-22); the field repair used to spend a 5-16 s endpoint rebuild.
+    func reRegister() {
+        if closed || rebuilding || !handshakeAcked { return }
+        sendDuml(Commands.appDeviceInfo(seq: 0))
+        sendDuml(Commands.appPresenceFrame(seq: 0))
+        sendAck()
+    }
+
     func enterPlayback() { sendDuml(Commands.enterPlayback(seq: 0)) }
     func exitPlayback() { sendDuml(Commands.exitPlayback(seq: 0)) }
 
@@ -1829,9 +1840,21 @@ final class DatalinkDriver {
             completion: .idempotent)
         try await Task.sleep(for: .milliseconds(400))
         switch tcp.state {
-        case .ready: return
+        case .ready:
+            Self.drain(tcp)
+            return
         case .failed(let e): throw e
         default: throw DatalinkError.notReady
+        }
+    }
+
+    /// The camera writes 0x21/0x06 frames to 7001 about 3 times a second for
+    /// the whole session. Mimo reads them; leaving them unread fills the
+    /// receive window on long takes. The content is not used.
+    nonisolated private static func drain(_ tcp: NWConnection) {
+        tcp.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { _, _, complete, error in
+            guard !complete, error == nil else { return }
+            drain(tcp)
         }
     }
 

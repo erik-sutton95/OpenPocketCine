@@ -405,6 +405,21 @@ class DatalinkDriver internal constructor(
         }
     }
 
+    /**
+     * The camera stops video ~10 s after the last registration while telemetry
+     * continues and ignores enables until it sees one again. Re-registering on the
+     * same socket restarted video with no new handshake (Pocket 4 Pro, 2026-09-22).
+     */
+    fun reRegister() {
+        enqueueTx {
+            if (!rebuilding && handshakeAcked) {
+                sendCommandLocked(SwiftCore.CMD_APP_DEVICE_INFO, null)
+                sendCommandLocked(SwiftCore.CMD_APP_PRESENCE, null)
+                sendWindowAckOnTx()
+            }
+        }
+    }
+
     fun keepalive() {
         enqueueTx {
             // Check at emission, since a repair can begin after this tick queued.

@@ -455,7 +455,7 @@ public enum FeedIncidentNativeBreadcrumb: Sendable {
     public static let allowedValues: [String: Set<String>] = [
         "sceneState": ["active", "inactive"],
         "assistState": ["off", "identity", "replacement"],
-        "path": ["unexpectedDisconnect"],
+        "path": ["unexpectedDisconnect", "bleDroppedVideoLive"],
         "repairPhase": [
             "requested", "blocked", "locallySent", "peerResponse", "pictureRestored",
         ],

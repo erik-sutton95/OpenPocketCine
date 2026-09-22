@@ -291,6 +291,14 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- The live picture no longer drops about 10 seconds after opening Control
+  Center, a system alert or another overlay. The camera stops video when the app
+  stops re-registering with it, and that 1 Hz heartbeat was paused whenever the
+  app was not in front. It now always runs, and when video does stop the first
+  repair re-registers, which restored the picture in about 2 seconds on an
+  iPhone instead of a 16-second median reconnect. The camera's TCP link is now
+  read continuously, as DJI Mimo does.
+
 - Live picture recovers sooner after the camera stops sending video. Recovery
   sends one restart request instead of two before renegotiating the connection;
   in 1,960 field incidents the second request almost never helped and delayed

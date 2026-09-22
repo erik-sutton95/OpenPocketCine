@@ -1087,7 +1087,42 @@ final class CameraSession {
             guard !Task.isCancelled else { return }
             failAllWaiters(Fail.disconnected)  // BLE dropped; don't sit on a command timeout
             if case .live = phase {
-                beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
+                if liveVideoIsFresh(), let camera = connectedCamera {
+                    reconnectBleKeepingLive(camera)
+                } else {
+                    beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
+                }
+            }
+        }
+    }
+
+    private func liveVideoIsFresh() -> Bool {
+        WiFiJoiner.isCameraPathReady()
+            && datalink?.lastVideoPacketAt.map {
+                Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
+    }
+
+    /// Video, telemetry and commands ride UDP 9004. A BLE drop (seen returning
+    /// from Control Center, 2026-09-22) used to tear down a healthy 25 fps
+    /// stream for a full BLE re-pair and Wi-Fi re-join. Reconnect BLE beside
+    /// the live picture; the watchdog still owns any later datalink stall.
+    private func reconnectBleKeepingLive(_ camera: FoundCamera) {
+        ControlLiveLog.line("session: BLE dropped with live video; reconnecting BLE only")
+        recordFeedBreadcrumb(.pathChange, detail: "bleDroppedVideoLive")
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await self.ble.connect(camera)
+                guard case .live = self.phase else { return }
+                self.startFrameRouter()
+                ControlLiveLog.line("session: BLE reconnected beside live video")
+            } catch {
+                guard case .live = self.phase else { return }
+                ControlLiveLog.line("session: BLE reconnect failed (\(error.localizedDescription))")
+                if !self.liveVideoIsFresh() {
+                    self.beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
+                }
             }
         }
     }
@@ -3693,8 +3728,13 @@ final class CameraSession {
             while !Task.isCancelled {
                 if recoverLostCameraPathIfNeeded() { return }
                 ble.send(Commands.sessionKeepalive())
+                // The camera stops video ~10 s after the last app registration
+                // while telemetry continues, and an enable does not restart it
+                // (Pocket 4 Pro, 2026-09-22 RVI). Scene, sheet and repair state
+                // must never gate this; an inactive scene (Control Center, a
+                // system alert) used to drop the picture after 10 s.
+                datalink?.keepalive()
                 if ssid != nil, holdsMonitor {
-                    datalink?.keepalive()
                     publishPipelineStats()
                     if phase == .live, gimbalControlSceneActive, !isBrowsingMedia {
                         recoverFirstPictureIfNeeded(allowTransportRecovery: false)
@@ -3708,7 +3748,6 @@ final class CameraSession {
                             await self?.repairDatalink(reason: "keepalive")
                         }
                     }
-                    datalink?.keepalive()
                     publishPipelineStats()
                     if !isBrowsingMedia {
                         recoverLiveViewIfNeeded()
@@ -4477,6 +4516,7 @@ final class CameraSession {
             log.info("\(line, privacy: .public)")
             ControlLiveLog.line(line)
             logFeedObserve(snap: snap, watchdog: action)
+            datalink?.reRegister()
             if !sendRecoverEnable(force: true, reason: "watchdog") {
                 feedWatchdog = watchdogBeforeTick
             }

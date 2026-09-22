@@ -26,8 +26,20 @@ then `connect`). Camera 9004 is the remote — do not bind the client to
 | Command | Meaning |
 | --- | --- |
 | `0x00/0x81` | register app device-info |
-| `0x00/0x88` | app-presence keepalive (~1 Hz, holds the session) |
+| `0x00/0x88` | app registration (`17 … APP`); repeat ~1 Hz, see below |
 | `0x00/0x99` | subscribe to a status key (battery, storage, mode, …) |
+
+### Registration holds live video
+
+Observed on Pocket 4 Pro (2026-09-22, phone RVI captures): the camera stops
+sending pktType `0x02` video about 8–10 s after the app's last registration
+(`0x00/0x88` with the `17 … APP` payload, or `0x00/0x81` device info), while
+`0x01` telemetry and `0x03` replies continue on the same socket. A
+`0x09/0xa8` enable alone does not restart it; sending the registration again
+does, immediately, without a new handshake. The short `0x00/0x88` form
+`1a 00 00 00 00` that DJI Mimo sends each second does not hold video by itself;
+Mimo also repeats `0x00/0x81` every second. Send one of the registration frames
+about once a second for the whole live session, whatever the app's UI state.
 
 ## Wrapping headers
 

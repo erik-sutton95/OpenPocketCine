@@ -1105,7 +1105,21 @@ iOS-only diagnostics exception: incident samples add `statusAge`,
 `uplinkReplyAge`, `sendErrorAge` and `sendErrorCode`, and Sentry events add
 `trigger`, `recoveredBy` and `gap`. Android's Kotlin incident models are unchanged.
 
-Physical qualification is pending for all of the above.
+Registration heartbeat, both shells: the 1 Hz `0x00/0x88` registration runs
+whenever a datalink exists, and the watchdog's encoder-pause rung re-registers
+before its enable. iOS previously skipped the heartbeat whenever the scene was
+inactive or a foreground check ran; Android skipped it while `holdsMonitor` and
+Media overlapped. Proven on iPhone + Pocket 4 Pro with RVI captures (Control
+Center 20 s: old build lost video for 22.1 s, fixed build none; forced 30 s
+heartbeat loss: re-register restored video in 2.0 s, twice). Android is not
+physically verified.
+
+iOS-only: a BLE drop with fresh UDP video reconnects BLE beside the picture.
+Android's `onLinkLost` still starts full session recovery; explicit exception
+until the camera's behaviour without BLE is measured on Android. Not physically
+exercised on iOS either (see live-session).
+
+Physical qualification is pending for the rest of the above.
 
 ### iOS live-display ownership follow-up (2026-09-20)
 
