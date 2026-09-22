@@ -1,11 +1,33 @@
 package com.opencapture.monitorui
 
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MonitorAssistPaletteRevealTest {
+    @Test fun obstructionUsesFullBoundsUntilCollapseHasActuallySettled() {
+        val compact = IntSize(62, 89)
+        val full = IntSize(62, 420)
+        assertEquals(full, MonitorAssistPaletteReveal.reservationSize(true, false, false, 0f, compact, full))
+        assertEquals(full, MonitorAssistPaletteReveal.reservationSize(false, true, false, 0f, compact, full))
+        assertEquals(full, MonitorAssistPaletteReveal.reservationSize(false, false, true, 0f, compact, full))
+        assertEquals(full, MonitorAssistPaletteReveal.reservationSize(false, false, false, .2f, compact, full))
+        assertEquals(compact, MonitorAssistPaletteReveal.reservationSize(false, false, false, 0f, compact, full))
+    }
+
+    @Test fun reservedBoundsUseTheSameWindowClampingAndBottomAnchorAsThePopup() {
+        val slot = IntRect(40, 500, 102, 589)
+        assertEquals(IntRect(40, 169, 102, 589),
+            MonitorAssistPaletteReveal.popupBounds(slot, 400, IntSize(62, 420)))
+        assertEquals(IntRect(0, 500, 400, 589),
+            MonitorAssistPaletteReveal.popupBounds(slot, 400, IntSize(400, 89)))
+        assertEquals(IntRect(40, 0, 102, 700),
+            MonitorAssistPaletteReveal.popupBounds(slot, 400, IntSize(62, 700)))
+    }
+
     @Test fun tapThresholdAndFlickChooseTheSettledState() {
         assertFalse(MonitorAssistPaletteReveal.shouldOpen(0.4f, 0f))
         assertTrue(MonitorAssistPaletteReveal.shouldOpen(0.5f, 0f))

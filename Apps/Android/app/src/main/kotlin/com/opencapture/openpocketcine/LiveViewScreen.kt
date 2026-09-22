@@ -435,6 +435,7 @@ fun LiveViewScreen(model: AppModel) {
         val pictureContent =
             if (desqueezeVisible) layout.onFeed.fittedContent(assist.presentedAspect(pictureAspect))
             else if (fillCrop) portraitFillCropContent(layout.feed) else layout.onFeed
+        var assistPaletteBounds by remember(vw, vh) { mutableStateOf<ChromeRect?>(null) }
         val showGimbalButton =
             model.monitorCapabilities(status).gimbal &&
                 model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
@@ -686,7 +687,7 @@ fun LiveViewScreen(model: AppModel) {
                     available = !recovery.isRecovering && !model.session.isFeedRecovering,
                     feed = if (desqueezeVisible) pictureContent else layout.onFeed,
                     mode = model.currentDispMode,
-                    avoid = collapsedPalette,
+                    avoid = if (showsAssist) assistPaletteBounds ?: collapsedPalette else null,
                     modifier = Modifier.zIndex(1f),
                 )
             }
@@ -730,6 +731,7 @@ fun LiveViewScreen(model: AppModel) {
                     fpsLabel = fpsLabel,
                     bars = bars,
                     sourceIsVertical = verticalPicture,
+                    onAssistBoundsChanged = { assistPaletteBounds = it },
                 )
                 }
             } else {
@@ -759,6 +761,7 @@ fun LiveViewScreen(model: AppModel) {
                     zoomDialReadout = zoomDialReadout,
                     zoomPinching = zoomPinching,
                     onStatusChipFrame = { section, rect -> statusChipFrames[section] = rect },
+                    onAssistBoundsChanged = { assistPaletteBounds = it },
                 )
                 }
             }
@@ -1273,6 +1276,7 @@ internal fun LandscapeChrome(
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
     onStatusChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
     capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
+    onAssistBoundsChanged: (ChromeRect?) -> Unit = {},
 ) {
     var stripQuick by remember { mutableStateOf(false) }
     var topQuick by remember { mutableStateOf(false) }
@@ -1470,6 +1474,7 @@ internal fun LandscapeChrome(
                     portrait = false, locked = uiLocked || !hits,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    onBoundsChanged = onAssistBoundsChanged,
                 )
             }
         }

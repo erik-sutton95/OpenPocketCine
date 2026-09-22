@@ -46,7 +46,7 @@ final class EVMeterAssistTests: XCTestCase {
         XCTAssertFalse(restored.evMeter)
     }
 
-    func testFixedMeterStaysInsideTheLeftFeedEdgeAndVerticallyCentered() {
+    func testSlimMeterStaysInsideTheLeftFeedEdgeAndAboveCenter() {
         for feed in [
             CGRect(x: 40, y: 80, width: 800, height: 450),
             CGRect(x: 10, y: 200, width: 370, height: 208),
@@ -56,21 +56,40 @@ final class EVMeterAssistTests: XCTestCase {
             let frame = CameraEVMeter.frame(in: feed)
             XCTAssertTrue(feed.contains(frame))
             XCTAssertEqual(frame.minX, feed.minX + 6)
-            XCTAssertEqual(frame.midY, feed.midY)
-            XCTAssertEqual(frame.width, 36)
-            XCTAssertEqual(frame.height, min(156, feed.height - 12))
+            XCTAssertLessThanOrEqual(frame.midY, feed.midY)
+            XCTAssertEqual(frame.width, 28)
+            XCTAssertEqual(frame.height, min(180, feed.height - 12))
         }
         XCTAssertEqual(CameraEVMeter.frame(in: .zero), .zero)
     }
 
-    func testLandscapeScaleFitsAboveTheCollapsedAssistPaletteWithoutMoving() {
+    func testMeterMovesUpToClearToolbarBeforeReducingItsHeight() {
         let feed = CGRect(x: 40, y: 80, width: 800, height: 450)
         let palette = CGRect(x: 18, y: 350, width: 100, height: 120)
         let frame = CameraEVMeter.frame(in: feed, avoiding: palette)
         XCTAssertEqual(frame.minX, feed.minX + 6)
-        XCTAssertEqual(frame.midY, feed.midY)
-        XCTAssertEqual(frame.maxY, palette.minY - 8)
+        XCTAssertEqual(frame.height, 180)
+        XCTAssertEqual(frame.maxY, palette.minY - 12)
         XCTAssertFalse(frame.intersects(palette))
+    }
+
+    func testMeterNeverOverlapsExpandedToolbarEvenWhenVerticalSpaceIsLimited() {
+        let feed = CGRect(x: 0, y: 0, width: 400, height: 300)
+        for palette in [
+            CGRect(x: 0, y: 125, width: 100, height: 175),
+            CGRect(x: 0, y: 0, width: 100, height: 180),
+            CGRect(x: 0, y: 40, width: 100, height: 240),
+        ] {
+            let frame = CameraEVMeter.frame(in: feed, avoiding: palette)
+            if !frame.isEmpty {
+                XCTAssertTrue(feed.contains(frame))
+                XCTAssertFalse(frame.intersects(palette.insetBy(dx: 0, dy: -11.9)))
+                XCTAssertGreaterThanOrEqual(frame.height, 72)
+            }
+        }
+        XCTAssertEqual(
+            CameraEVMeter.frame(in: feed, avoiding: feed), .zero,
+            "A fully covered left edge hides the meter until the palette closes")
     }
 
     func testChangingPlaybackItemsRetiresThePreviousScopeSamplesBeforeLoading() {

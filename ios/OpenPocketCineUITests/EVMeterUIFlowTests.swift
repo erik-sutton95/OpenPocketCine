@@ -55,6 +55,7 @@ final class EVMeterUIFlowTests: XCTestCase {
                 predicate: NSPredicate { _, _ in presented() > before + 20 }, object: app)
             XCTAssertEqual(XCTWaiter.wait(for: [progress], timeout: 5), .completed)
             XCTAssertTrue(app.frame.contains(meter.frame))
+            assertMeterClearsToolbar(meter, in: app)
             let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
             attachment.name = "ev-meter-physical-\(orientation.rawValue)"
             attachment.lifetime = .keepAlways
@@ -85,15 +86,21 @@ final class EVMeterUIFlowTests: XCTestCase {
         XCTAssertFalse(meter.exists)
         chip.tap()
         XCTAssertTrue(meter.waitForExistence(timeout: 3))
+        assertMeterClearsToolbar(meter, in: app)
+        let toolbar = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        toolbar.name = "camera-ev-toolbar"
+        toolbar.lifetime = .keepAlways
+        add(toolbar)
         app.buttons["monitor.assists.collapse"].tap()
         XCTAssertFalse(app.otherElements["monitor.ev.resize"].exists)
         for orientation in [UIDeviceOrientation.landscapeLeft, .portrait, .landscapeRight] {
             XCUIDevice.shared.orientation = orientation
             Thread.sleep(forTimeInterval: 1)
             XCTAssertTrue(app.frame.contains(meter.frame))
-            XCTAssertEqual(meter.frame.width, 36, accuracy: 1)
+            XCTAssertEqual(meter.frame.width, 28, accuracy: 1)
             XCTAssertGreaterThan(meter.frame.height, meter.frame.width * 1.5)
             XCTAssertLessThan(meter.frame.midX, app.frame.midX)
+            assertMeterClearsToolbar(meter, in: app)
             let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
             attachment.name = "camera-ev-\(orientation.rawValue)"
             attachment.lifetime = .keepAlways
@@ -106,6 +113,13 @@ final class EVMeterUIFlowTests: XCTestCase {
         display.tap()
         XCTAssertTrue(meter.waitForExistence(timeout: 3))
         XCTAssertEqual(meter.value as? String, "Camera exposure −0.7 EV")
+    }
+
+    private func assertMeterClearsToolbar(_ meter: XCUIElement, in app: XCUIApplication) {
+        for button in app.buttons.allElementsBoundByIndex
+        where button.identifier.hasPrefix("monitor.assist") && button.isHittable {
+            XCTAssertFalse(meter.frame.intersects(button.frame), button.identifier)
+        }
     }
 
     private func revealEV(in app: XCUIApplication) throws -> XCUIElement {

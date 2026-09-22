@@ -210,6 +210,7 @@ fun LivePortraitChrome(
     capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
     readoutFrame: ChromeRect = livePortraitReadoutFrame(layout, zones),
+    onAssistBoundsChanged: (ChromeRect?) -> Unit = {},
 ) {
     var stripQuick by remember { mutableStateOf(false) }
     var topQuick by remember { mutableStateOf(false) }
@@ -304,6 +305,7 @@ fun LivePortraitChrome(
                     portrait = true, locked = uiLocked || !chromeInteractive,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    onBoundsChanged = onAssistBoundsChanged,
                 )
             }
         }

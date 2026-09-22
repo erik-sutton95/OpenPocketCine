@@ -17,8 +17,10 @@ separate iOS and Android lists.
 
 ### Added
 
-- Camera **EV** meter on iOS and Android: a thin vertical gauge stays inside
-  the feed's left edge, centered vertically, with the number above the scale.
+- Camera **EV** meter on iOS and Android: a slim white line with a sun marker,
+  +3/−3 endpoints and the number above it. It sits inside the feed's left edge,
+  slightly above center, and moves or shortens to clear the View Assist toolbar.
+  Its toolbar button reads **EV**.
   Toggle EV in View Assist for DISP 1; hidden in DISP 2 and playback. It reads camera
   metering telemetry independently from configured EV compensation, with no
   image analysis or extra polling. Missing values show a dash. Activation is

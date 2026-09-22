@@ -1181,12 +1181,14 @@ or sustained thermal performance.
 ## Camera EV meter
 
 Both shells offer a tap-only **EV** toggle beside ND in View Assist and settings.
-The saved on/off choice controls the camera meter in DISP 1. It is fixed just inside
-the actual picture's left edge (6 pt/dp inset), vertically centered on the
-picture, including portrait and desqueeze. The thin plate is 36 × 156 pt/dp;
-short feeds reduce its height to preserve the inset. The scale also shortens
-symmetrically around feed center to clear the collapsed assist palette. The number is above the
-vertical scale, with +3 at the top, zero in the middle and −3 at the bottom.
+The toolbar button uses the text **EV**. The saved on/off choice controls the
+camera meter in DISP 1. Its transparent 28 × 180 pt/dp footprint stays just inside
+the actual picture's left edge (6 pt/dp inset), nominally 16 pt/dp above vertical
+center, including portrait and desqueeze. A thin white line and small sun marker
+use the same dark glow as other HUD readouts. The signed number is above, with +3 and −3
+at the line's ends. It moves upward before shortening to leave 12 pt/dp around
+the actual assist toolbar, including expansion. If neither side of the toolbar
+leaves 72 pt/dp of height, it hides temporarily until the toolbar closes.
 It has no drag/resize controls, inspector, DISP 2 pin or playback presentation.
 Legacy EV placement/size preferences and pins are ignored; activation is retained.
 
@@ -1203,4 +1205,8 @@ precise metering algorithm and calibration are not inferred from the trace.
 The revised EV toggle, native reading, portrait/both-landscape bounds and live
 frame progress passed a physical iPhone 16 Pro Max check on 2026-09-22. This
 short check does not qualify sustained thermal performance or all camera modes.
+The subsequent slim sun-marker design, EV text button, toolbar clearance,
+portrait/both-landscape bounds and continued frames passed a fresh physical
+iPhone check on the same date. The final white/shared-glow styling passed
+simulator checks; its live rerun could not reach a connected monitor.
 **Android physical qualification remains pending** because no device is attached.

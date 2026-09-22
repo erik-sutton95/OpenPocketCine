@@ -5,16 +5,28 @@ import SwiftUI
 /// Fixed camera telemetry chrome. It has no assist state, gestures or pixel sampling.
 enum CameraEVMeter {
     static func frame(in feed: CGRect, avoiding obstacle: CGRect? = nil) -> CGRect {
-        guard feed.width >= 48, feed.height >= 60 else { return .zero }
+        let width: CGFloat = 28
+        let minimumHeight: CGFloat = 72
+        guard feed.width >= width + 12, feed.height >= minimumHeight + 12 else { return .zero }
         let x = feed.minX + 6
-        var height = min(156, feed.height - 12)
-        if let obstacle, obstacle.minX < x + 36, obstacle.maxX > x,
-            obstacle.minY > feed.midY
-        {
-            // Preserve the center while leaving the collapsed assist controls clear.
-            height = min(height, max(min(60, feed.height - 12), 2 * (obstacle.minY - feed.midY - 8)))
+        let top = feed.minY + 6
+        let bottom = feed.maxY - 6
+        let preferredY = feed.midY - 16 - min(180, bottom - top) / 2
+        func fitting(top: CGFloat, bottom: CGFloat) -> CGRect {
+            let height = min(180, bottom - top)
+            guard height >= minimumHeight else { return .zero }
+            return CGRect(
+                x: x, y: min(max(preferredY, top), bottom - height), width: width, height: height)
         }
-        return CGRect(x: x, y: feed.midY - height / 2, width: 36, height: height)
+        let preferred = fitting(top: top, bottom: bottom)
+        guard let obstacle, !obstacle.isEmpty,
+            obstacle.minX < preferred.maxX, obstacle.maxX > preferred.minX,
+            obstacle.minY - 12 < preferred.maxY, obstacle.maxY + 12 > preferred.minY
+        else { return preferred }
+        // Move up before shortening; the expanded palette may occupy the whole left edge.
+        let above = fitting(top: top, bottom: min(bottom, obstacle.minY - 12))
+        if !above.isEmpty { return above }
+        return fitting(top: max(top, obstacle.maxY + 12), bottom: bottom)
     }
 }
 
@@ -34,6 +46,7 @@ struct CameraEVMeterOverlay: View {
             .accessibilityLabel("EV meter")
             .accessibilityValue(reading.accessibilityValue)
             .accessibilityIdentifier("monitor.ev.meter")
+            .accessibilityHidden(frame.isEmpty)
             .position(x: frame.midX, y: frame.midY)
             .opacity(frame.isEmpty ? 0 : 1)
             .allowsHitTesting(false)

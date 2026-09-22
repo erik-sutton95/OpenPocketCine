@@ -22,6 +22,7 @@ struct LiveViewScreen: View {
     @State private var zoomDialMounted = false
     @State private var zoomDismissTask: Task<Void, Never>?
     @State private var assistsExpanded = false
+    @State private var assistsRevealing = false
     @State private var zoomGestureAnchor = 1.0
 
     /// OpenZCine `DisplayChromeVisibility.cleanDefaults`: status + strips + lock off;
@@ -470,7 +471,11 @@ struct LiveViewScreen: View {
                         .intersection(layout.onFeed)
                         : layout.onFeed,
                     avoiding: model.chromeSectionMounts(.toolBar)
-                        ? layout.presentation?.assists.cgRect ?? layout.assist : nil
+                        ? FieldMonitorAssistPalette.visibleFrame(
+                            in: layout,
+                            toolCount: LiveAssistTool.toolbarCases.count
+                                + (model.session.status.isPhoto ? 0 : 1),
+                            expanded: assistsExpanded || assistsRevealing) : nil
                 )
                 .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
             }
@@ -646,7 +651,8 @@ struct LiveViewScreen: View {
                 FieldMonitorAssistPalette(
                     layout: layout, isLocked: interfaceLocked,
                     otherOverlayPresented: topMenu != nil || zoomDialVisible,
-                    expanded: $assistsExpanded
+                    expanded: $assistsExpanded,
+                    onExpansionActivityChange: { assistsRevealing = $0 }
                 )
                 .opacity(interfaceLocked ? 0.4 : 1)
                 .allowsHitTesting(!interfaceLocked)

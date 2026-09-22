@@ -78,13 +78,13 @@ class CameraExposureMeterTest {
         assertEquals(-1, CameraStatus().meteredEv)
     }
 
-    @Test fun fixedGaugeUsesFeedLeftEdgeAndVerticalCenterInDispOneOnly() {
-        for (feed in listOf(ChromeRect(80f, 200f, 300f, 170f), ChromeRect(170f, 30f, 600f, 320f))) {
+    @Test fun fixedGaugeUsesFeedLeftEdgeAndUpwardPreferredCenterInDispOneOnly() {
+        for (feed in listOf(ChromeRect(80f, 200f, 300f, 300f), ChromeRect(170f, 30f, 600f, 320f))) {
             val frame = CameraExposureMeter.frame(feed, PocketDispMode.LIVE)!!
             assertEquals(feed.minX + 6f, frame.minX)
-            assertEquals(feed.midY, frame.midY)
-            assertEquals(36f, frame.width)
-            assertEquals(156f, frame.height)
+            assertEquals(feed.midY - 16f, frame.midY)
+            assertEquals(28f, frame.width)
+            assertEquals(180f, frame.height)
             assertNull(CameraExposureMeter.frame(feed, PocketDispMode.CLEAN))
         }
         val shortFeed = ChromeRect(40f, 25f, 200f, 100f)
@@ -92,32 +92,52 @@ class CameraExposureMeterTest {
         assertEquals(88f, short.height)
         assertEquals(shortFeed.minY + 6f, short.minY)
         assertEquals(shortFeed.maxY - 6f, short.maxY)
-        assertNull(CameraExposureMeter.frame(ChromeRect(0f, 0f, 47f, 156f), PocketDispMode.LIVE))
-        assertNull(CameraExposureMeter.frame(ChromeRect(0f, 0f, 100f, 59f), PocketDispMode.LIVE))
-        val minimum = CameraExposureMeter.frame(ChromeRect(0f, 0f, 48f, 60f), PocketDispMode.LIVE)!!
-        assertEquals(36f, minimum.width)
-        assertEquals(48f, minimum.height)
+        assertNull(CameraExposureMeter.frame(ChromeRect(0f, 0f, 39f, 180f), PocketDispMode.LIVE))
+        assertNull(CameraExposureMeter.frame(ChromeRect(0f, 0f, 100f, 83f), PocketDispMode.LIVE))
+        val minimum = CameraExposureMeter.frame(ChromeRect(0f, 0f, 40f, 84f), PocketDispMode.LIVE)!!
+        assertEquals(28f, minimum.width)
+        assertEquals(72f, minimum.height)
     }
 
-    @Test fun gaugeShortensForTheCollapsedPaletteWithoutMovingItsCenterOrLeftEdge() {
-        val feed = ChromeRect(20f, 40f, 500f, 240f)
-        val palette = ChromeRect(22f, 220f, 54f, 100f)
+    @Test fun gaugeMovesAboveCollapsedPaletteBeforeShorteningItsScale() {
+        val feed = ChromeRect(20f, 40f, 500f, 300f)
+        val palette = ChromeRect(22f, 240f, 54f, 100f)
         val normal = CameraExposureMeter.frame(feed, PocketDispMode.LIVE)!!
-        val shortened = CameraExposureMeter.frame(feed, PocketDispMode.LIVE, palette)!!
-        assertEquals(104f, shortened.height)
-        assertEquals(normal.minX, shortened.minX)
-        assertEquals(normal.width, shortened.width)
-        assertEquals(feed.midY, shortened.midY)
-        assertEquals(palette.minY - 8f, shortened.maxY)
-        // Sideways or above-center chrome does not compress the scale.
+        val above = CameraExposureMeter.frame(feed, PocketDispMode.LIVE, palette)!!
+        assertEquals(180f, above.height)
+        assertEquals(normal.minX, above.minX)
+        assertEquals(28f, above.width)
+        assertEquals(palette.minY - 12f, above.maxY)
+        assertFalse(above.intersects(palette))
+        assertTrue(above.midY < normal.midY)
+        // A toolbar beside or far below the preferred gauge does not move it.
         assertEquals(normal, CameraExposureMeter.frame(feed, PocketDispMode.LIVE, palette.copy(x = 100f)))
-        assertEquals(normal, CameraExposureMeter.frame(feed, PocketDispMode.LIVE, palette.copy(y = feed.midY)))
-        assertEquals(normal, CameraExposureMeter.frame(feed, PocketDispMode.LIVE, palette.copy(y = 300f)))
-        val minimum = CameraExposureMeter.frame(feed, PocketDispMode.LIVE, palette.copy(y = feed.midY + 10f))!!
-        assertEquals(60f, minimum.height)
-        assertEquals(feed.midY, minimum.midY)
-        val tinyFeed = ChromeRect(20f, 40f, 48f, 60f)
-        assertEquals(48f, CameraExposureMeter.frame(tinyFeed, PocketDispMode.LIVE, palette.copy(y = 75f))!!.height)
+        assertEquals(normal, CameraExposureMeter.frame(feed, PocketDispMode.LIVE, palette.copy(y = 400f)))
+        val limited = CameraExposureMeter.frame(feed, PocketDispMode.LIVE, palette.copy(y = 220f))!!
+        assertEquals(162f, limited.height)
+        assertEquals(feed.minY + 6f, limited.minY)
+        assertEquals(208f, limited.maxY)
+    }
+
+    @Test fun gaugeUsesBelowIntervalWhenExpandedPaletteLeavesNoRoomAbove() {
+        val feed = ChromeRect(20f, 40f, 500f, 400f)
+        val expanded = ChromeRect(22f, 50f, 54f, 180f)
+        val below = CameraExposureMeter.frame(feed, PocketDispMode.LIVE, expanded)!!
+        assertEquals(180f, below.height)
+        assertEquals(expanded.maxY + 12f, below.minY)
+        assertFalse(below.intersects(expanded))
+        assertTrue(below.maxY <= feed.maxY - 6f)
+    }
+
+    @Test fun gaugeHidesWhenExpandedPaletteLeavesNeitherIntervalTallEnough() {
+        val feed = ChromeRect(20f, 40f, 500f, 400f)
+        val expanded = ChromeRect(22f, 80f, 54f, 300f)
+        assertNull(CameraExposureMeter.frame(feed, PocketDispMode.LIVE, expanded))
+        val exactMinimum = ChromeRect(22f, 130f, 54f, 300f)
+        val minimum = CameraExposureMeter.frame(feed, PocketDispMode.LIVE, exactMinimum)!!
+        assertEquals(72f, minimum.height)
+        assertEquals(exactMinimum.minY - 12f, minimum.maxY)
+        assertFalse(minimum.intersects(exactMinimum))
     }
 
     @Test fun evTogglePersistsButDisplaysOnlyInDispOneAndDoesNotJoinImageAnalysis() {

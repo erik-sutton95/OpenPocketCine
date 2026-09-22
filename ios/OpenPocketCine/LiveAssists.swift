@@ -36,7 +36,9 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     /// Playback drops horizon (needs the camera) and MAG (no on-feed key).
     /// AUDIO rides last, matching the live strip's trailing section.
     static var playbackToolbarCases: [LiveAssistTool] {
-        toolbarCases.filter { $0 != .level && $0 != .magnification && $0 != .evMeter } + [.audioMeters]
+        toolbarCases.filter { $0 != .level && $0 != .magnification && $0 != .evMeter } + [
+            .audioMeters
+        ]
     }
 
     /// OpenZCine `activeCases` minus photography-only, AUDIO, and Level.
@@ -119,7 +121,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .vectorscope: .crosshair
         case .trafficLights: .sun
         case .ndMeter: .aperture
-        case .evMeter: .plus
+        case .evMeter: nil
         case .audioMeters: .slidersVertical
         case .guides: .squareDashed
         case .grid: .grid3x3
@@ -1897,7 +1899,11 @@ struct AssistToolIcon: View {
     var size: CGFloat? = 19
 
     var body: some View {
-        if let icon = tool.monitorIcon {
+        if tool == .evMeter {
+            Text("EV")
+                .font(MonitorTheme.font(size.map { $0 * 0.7 } ?? 17, weight: .semibold))
+                .frame(width: size, height: size)
+        } else if let icon = tool.monitorIcon {
             icon.frame(width: size, height: size)
         } else if let icon = tool.opcIcon {
             icon.frame(width: size, height: size)

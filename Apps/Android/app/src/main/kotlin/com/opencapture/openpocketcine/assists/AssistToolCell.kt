@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine.assists
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -14,9 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -96,9 +93,10 @@ internal fun AssistScrollChevron(leading: Boolean, visible: Boolean, modifier: M
     )
 }
 
-/** The supplied design owns assist glyphs; EV adds a matching meter scale. */
+/** The supplied design owns assist glyphs; EV uses its readable abbreviation. */
 @Composable
-internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifier = Modifier) {
+internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifier = Modifier,
+    evFontSize: Float = 13.3f) {
     val icon = when (tool) {
         LiveAssistTool.LUT -> com.opencapture.monitorui.MonitorAssistIcon.LUT
         LiveAssistTool.PEAK -> com.opencapture.monitorui.MonitorAssistIcon.PEAKING
@@ -117,18 +115,8 @@ internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifi
         LiveAssistTool.ND, LiveAssistTool.EV, LiveAssistTool.DESQ -> null
     }
     if (tool == LiveAssistTool.EV) {
-        Canvas(modifier) {
-            val stroke = size.minDimension / 12f
-            val left = size.width * 0.14f
-            val right = size.width * 0.86f
-            val y = size.height * 0.62f
-            drawLine(tint, Offset(left, y), Offset(right, y), stroke, StrokeCap.Round)
-            for (index in 0..4) {
-                val x = left + (right - left) * index / 4f
-                drawLine(tint, Offset(x, y), Offset(x, y - size.height * 0.15f), stroke, StrokeCap.Round)
-            }
-            drawLine(tint, Offset(size.width * .5f, size.height * .15f),
-                Offset(size.width * .5f, size.height * .75f), stroke, StrokeCap.Round)
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Text("EV", style = LiveType.ui(evFontSize, FontWeight.SemiBold), color = tint, maxLines = 1)
         }
     } else if (icon == null) OpcIcon(if (tool == LiveAssistTool.DESQ) OpcIcon.MAXIMIZE else OpcIcon.APERTURE, null, modifier, tint)
     else com.opencapture.monitorui.MonitorAssistIcon(icon, tint, modifier)
