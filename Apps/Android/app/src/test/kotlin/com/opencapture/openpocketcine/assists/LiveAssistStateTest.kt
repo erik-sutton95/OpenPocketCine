@@ -7,6 +7,38 @@ import kotlin.test.assertTrue
 
 class LiveAssistStateTest {
     @Test
+    fun evPersistsVisibilityPinsSizeAndIndependentOrientationCenters() {
+        var pins: Set<String> = emptySet()
+        var playback: Set<String> = emptySet()
+        val state = LiveAssistState(onPersistPins = { pins = it }, onPersistPlayback = { playback = it })
+        assertFalse(state.evMeter)
+        assertEquals(null, state.centerFor(LiveAssistTool.EV, false))
+        assertEquals(null, state.centerFor(LiveAssistTool.EV, true))
+        state.toggle(LiveAssistTool.EV)
+        state.togglePin(LiveAssistTool.EV)
+        state.togglePlayback(LiveAssistTool.EV)
+        state.setScale(LiveAssistTool.EV, 1.25)
+        state.storeCenter(LiveAssistTool.EV, StoredCenter(.2, .4), portrait = false)
+        state.storeCenter(LiveAssistTool.EV, StoredCenter(.6, .8), portrait = true)
+        val restored = LiveAssistState(state.encoded(), pinnedNames = pins, playbackNames = playback)
+        assertTrue(restored.evMeter)
+        restored.clean = true
+        assertTrue(restored.isVisible(LiveAssistTool.EV))
+        assertTrue(restored.isPlaybackVisible(LiveAssistTool.EV))
+        assertTrue(restored.playbackNeedsScopeTap())
+        assertTrue(restored.playbackNeedsProcessedFeed())
+        assertFalse(restored.playbackNeedsLookOverlay())
+        assertEquals(1.25, restored.evScale)
+        assertEquals(StoredCenter(.2, .4), restored.centerFor(LiveAssistTool.EV, false))
+        assertEquals(StoredCenter(.6, .8), restored.centerFor(LiveAssistTool.EV, true))
+        assertEquals(LiveAssistTool.EV, restored.scopeStack.last())
+        restored.togglePin(LiveAssistTool.EV)
+        assertFalse(restored.isVisible(LiveAssistTool.EV))
+        restored.syncVisible(emptySet())
+        assertFalse(restored.evMeter)
+    }
+
+    @Test
     fun lutExposureSliderUsesAbsoluteSnappedValuesWithoutAccumulating() {
         val state = LiveAssistState()
         state.updateLutExposure(1.1)
@@ -32,6 +64,7 @@ class LiveAssistStateTest {
                 LiveAssistTool.VECTOR,
                 LiveAssistTool.LIGHTS,
                 LiveAssistTool.ND,
+                LiveAssistTool.EV,
                 LiveAssistTool.GUIDES,
                 LiveAssistTool.GRID,
                 LiveAssistTool.CROSS,

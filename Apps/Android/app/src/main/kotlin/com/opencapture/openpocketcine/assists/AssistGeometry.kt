@@ -75,6 +75,7 @@ object ScopePanelSize {
     val vectorscope = AssistSize(190f, 190f)
     val trafficLights = AssistSize(74f, 168f)
     val ndMeter = AssistSize(84f, 30f)
+    val evMeter = AssistSize(220f, 64f)
     val audio = AssistSize(28f, 168f)
     val falseColorReference = AssistSize(264f, 52f)
 }

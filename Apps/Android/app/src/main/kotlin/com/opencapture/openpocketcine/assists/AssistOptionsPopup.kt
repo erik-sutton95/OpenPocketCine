@@ -209,6 +209,7 @@ private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colo
         LiveAssistTool.VECTOR -> VectorscopeOptions(state)
         LiveAssistTool.LIGHTS -> LightsOptions(state)
         LiveAssistTool.ND -> NdOptions(state)
+        LiveAssistTool.EV -> OptionCopy(EVMeterReading.HELP)
         LiveAssistTool.DESQ -> DesqueezeOptions(state)
         LiveAssistTool.GUIDES -> GuidesOptions(state)
         LiveAssistTool.GRID -> GridOptions(state)

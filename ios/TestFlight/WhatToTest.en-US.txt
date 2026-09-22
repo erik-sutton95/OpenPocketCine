@@ -1,15 +1,16 @@
 New and changed
 
-- Anamorphic Desqueeze (DE-SQ) works in live view, video playback and photos. Choose a lens preset or a custom 1.00–2.00× factor in 0.01 steps.
-- Report a problem is visible on the pairing screen, even before your first connection, with optional technical details and screenshots.
+- EV adds a movable exposure gauge in Auto, Manual and playback. It measures brightness relative to middle gray; D-Log M readings are marked as estimates.
+- Anamorphic Desqueeze (DE-SQ) offers lens presets and a custom 1.00–2.00× factor for live view, videos and photos.
+- Report a problem remains available before pairing, with optional technical details and screenshots.
 
 Fixes
 
+- EV waits for the new picture when switching playback clips instead of retaining the previous reading.
 - Improved recovery when a running preview loses its video format.
-- Connection setup and stalled-picture recovery have bounded waits. An established feed keeps its last picture while recovering; returning from Media starts live view once.
 
 What to test
 
-- Tap DE-SQ to toggle; hold for presets, Custom and direction. Try LUT, grids, rotation and playback zoom. Check your custom factor survives a restart and files remain unchanged.
-- Before connecting a camera, open Report a problem in portrait and landscape. Close it and confirm pairing is still available. Share Diagnostics remains in the pairing menu.
-- Connect three times, then return from Media, Settings and the background. Watch preview recovery and report any freeze with the time it happened and technical details.
+- Enable EV in Auto and Manual, change the light or exposure, then drag, resize and rotate. Try DISP 2 pins and playback. Confirm LUT changes do not alter EV.
+- Hold DE-SQ for presets, Custom and direction. Check framing, rotation, playback zoom and saved settings.
+- Open Report a problem before connecting. Then check preview recovery after Media, Settings and background use.

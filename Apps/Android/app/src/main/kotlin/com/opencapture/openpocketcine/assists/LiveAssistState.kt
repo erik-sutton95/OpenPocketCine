@@ -48,6 +48,8 @@ class LiveAssistState(
         private set
     var ndMeter by mutableStateOf(false)
         private set
+    var evMeter by mutableStateOf(false)
+        private set
     var audioMeters by mutableStateOf(false)
         private set
     var guides by mutableStateOf(false)
@@ -176,6 +178,9 @@ class LiveAssistState(
     var ndCenter by mutableStateOf<StoredCenter?>(null)
     var ndCenterPortrait by mutableStateOf<StoredCenter?>(null)
     var ndNotation by mutableStateOf(NDFilterNotation.FACTOR)
+    var evScale by mutableDoubleStateOf(1.0)
+    var evCenter by mutableStateOf<StoredCenter?>(null)
+    var evCenterPortrait by mutableStateOf<StoredCenter?>(null)
     /** Last written slot, for reading pre-schema saves only. Overlay placement uses [audioCenterFor]. */
     var audioCenter by mutableStateOf<StoredCenter?>(null)
         private set
@@ -236,6 +241,7 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> vectorscope
             LiveAssistTool.LIGHTS -> trafficLights
             LiveAssistTool.ND -> ndMeter
+            LiveAssistTool.EV -> evMeter
             LiveAssistTool.AUDIO -> audioMeters
             LiveAssistTool.GUIDES -> guides
             LiveAssistTool.GRID -> grid
@@ -285,6 +291,7 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> vectorscope = !vectorscope
             LiveAssistTool.LIGHTS -> trafficLights = !trafficLights
             LiveAssistTool.ND -> ndMeter = !ndMeter
+            LiveAssistTool.EV -> evMeter = !evMeter
             LiveAssistTool.AUDIO -> audioMeters = !audioMeters
             LiveAssistTool.GUIDES -> {
                 guides = !guides
@@ -455,6 +462,7 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> if (portrait) vectorCenterPortrait else vectorCenter
             LiveAssistTool.LIGHTS -> if (portrait) lightsCenterPortrait else lightsCenter
             LiveAssistTool.ND -> if (portrait) ndCenterPortrait else ndCenter
+            LiveAssistTool.EV -> if (portrait) evCenterPortrait else evCenter
             LiveAssistTool.FALSE ->
                 if (portrait) falseColorReferenceCenterPortrait else falseColorReferenceCenter
             LiveAssistTool.AUDIO -> audioCenterFor(portrait)
@@ -474,6 +482,7 @@ class LiveAssistState(
             LiveAssistTool.LIGHTS ->
                 if (portrait) lightsCenterPortrait = center else lightsCenter = center
             LiveAssistTool.ND -> if (portrait) ndCenterPortrait = center else ndCenter = center
+            LiveAssistTool.EV -> if (portrait) evCenterPortrait = center else evCenter = center
             LiveAssistTool.FALSE ->
                 if (portrait) falseColorReferenceCenterPortrait = center
                 else falseColorReferenceCenter = center
@@ -495,6 +504,7 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> vectorScale = clamped
             LiveAssistTool.LIGHTS -> lightsScale = clamped
             LiveAssistTool.ND -> ndScale = clamped
+            LiveAssistTool.EV -> evScale = clamped
             else -> return
         }
         persist()
@@ -512,6 +522,7 @@ class LiveAssistState(
         vectorscope = LiveAssistTool.VECTOR in tools
         trafficLights = LiveAssistTool.LIGHTS in tools
         ndMeter = LiveAssistTool.ND in tools
+        evMeter = LiveAssistTool.EV in tools
         audioMeters = LiveAssistTool.AUDIO in tools
         guides = LiveAssistTool.GUIDES in tools
         grid = LiveAssistTool.GRID in tools
@@ -591,6 +602,9 @@ class LiveAssistState(
             .put("ndScale", ndScale)
             .put("ndCenter", encodeCenter(ndCenter))
             .put("ndCenterPortrait", encodeCenter(ndCenterPortrait))
+            .put("evScale", evScale)
+            .put("evCenter", encodeCenter(evCenter))
+            .put("evCenterPortrait", encodeCenter(evCenterPortrait))
             .put("audioCenter", encodeCenter(audioCenter))
             .put("audioCentersSchema", 1)
             .put("audioPortraitCenter", encodeCenter(audioPortraitCenter))
@@ -621,7 +635,7 @@ class LiveAssistState(
         vectorscope = LiveAssistTool.VECTOR in on
         trafficLights = LiveAssistTool.LIGHTS in on
         ndMeter = LiveAssistTool.ND in on
-        ndMeter = LiveAssistTool.ND in on
+        evMeter = LiveAssistTool.EV in on
         audioMeters = LiveAssistTool.AUDIO in on
         guides = LiveAssistTool.GUIDES in on
         grid = LiveAssistTool.GRID in on
@@ -688,6 +702,9 @@ class LiveAssistState(
         ndScale = MovablePanelMath.clampedScale(obj.optDouble("ndScale", 1.0))
         ndCenter = decodeCenter(obj.optJSONObject("ndCenter"))
         ndCenterPortrait = decodeCenter(obj.optJSONObject("ndCenterPortrait"))
+        evScale = MovablePanelMath.clampedScale(obj.optDouble("evScale", 1.0))
+        evCenter = decodeCenter(obj.optJSONObject("evCenter"))
+        evCenterPortrait = decodeCenter(obj.optJSONObject("evCenterPortrait"))
         audioCenter = decodeCenter(obj.optJSONObject("audioCenter"))
         val hasOrientationSlots = obj.has("audioCentersSchema") ||
             obj.has("audioPortraitCenter") || obj.has("audioLandscapeCenter")
@@ -721,6 +738,7 @@ class LiveAssistState(
                 LiveAssistTool.HISTO,
                 LiveAssistTool.LIGHTS,
                 LiveAssistTool.ND,
+                LiveAssistTool.EV,
             )
 
         val defaultScopeStack: List<LiveAssistTool>
@@ -746,6 +764,7 @@ class LiveAssistState(
                 LiveAssistTool.VECTOR,
                 LiveAssistTool.LIGHTS,
                 LiveAssistTool.ND,
+                LiveAssistTool.EV,
             )
 
         fun from(context: Context): LiveAssistState {

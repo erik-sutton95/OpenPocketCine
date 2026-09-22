@@ -5,8 +5,7 @@ import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
-/// OpenZCine `MonitorAssistTool` — cinema live-monitor set. MAG is retired; EV / PLAY are
-/// photography-only and stay off the video toolbar.
+/// Cinema live-monitor set. MAG is retired; PLAY stays off the video toolbar.
 enum LiveAssistTool: String, CaseIterable, Identifiable {
     case lut = "LUT"
     case peaking = "PEAK"
@@ -32,7 +31,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var isRetired: Bool { self == .magnification }
-    var isPhotographyOnly: Bool { self == .instantReview || self == .evMeter }
+    var isPhotographyOnly: Bool { self == .instantReview }
 
     /// Playback drops horizon (needs the camera) and MAG (no on-feed key).
     /// AUDIO rides last, matching the live strip's trailing section.
@@ -47,7 +46,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         [
             [.lut, .peaking, .falseColor],
             [.zebra, .waveform, .parade],
-            [.histogram, .vectorscope, .trafficLights, .ndMeter],
+            [.histogram, .vectorscope, .trafficLights, .ndMeter, .evMeter],
             [.guides, .grid, .crosshair],
             [.desqueeze, .mirror],
         ]
@@ -79,7 +78,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     var hasConfiguration: Bool {
         switch self {
         // Mirror stays tap-only; audio options affect presentation only.
-        case .mirror, .evMeter, .instantReview, .magnification, .level:
+        case .mirror, .instantReview, .magnification, .level:
             false
         default: true
         }
@@ -325,6 +324,7 @@ final class LiveAssistState {
             vectorscope: isVisible(.vectorscope),
             trafficLights: isVisible(.trafficLights),
             ndMeter: isVisible(.ndMeter),
+            evMeter: isVisible(.evMeter),
             lutDimension: isVisible(.lut) ? lutDimension : 0,
             lutRGBA: isVisible(.lut) ? lutRGBA : Data(),
             peakingColor: peakingColor,
@@ -362,6 +362,7 @@ final class LiveAssistState {
         fx.vectorscope = isPlaybackVisible(.vectorscope)
         fx.trafficLights = isPlaybackVisible(.trafficLights)
         fx.ndMeter = isPlaybackVisible(.ndMeter)
+        fx.evMeter = isPlaybackVisible(.evMeter)
         fx.lutDimension = isPlaybackVisible(.lut) ? lutDimension : 0
         fx.lutRGBA = isPlaybackVisible(.lut) ? lutRGBA : Data()
         fx.splitComparison = splitComparison && isPlaybackVisible(.lut)
@@ -1344,28 +1345,11 @@ struct FeedAlignedAssists: View {
                         }
                     }
                 }
-                VStack {
-                    Spacer()
-                    HStack(alignment: .bottom, spacing: 8) {
-                        extraScopes(assist)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 86)
-                }
             }
         }
         .allowsHitTesting(false)
     }
 
-    @ViewBuilder
-    private func extraScopes(_ assist: LiveAssistState) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !model.isWatchingFeed, assist.evMeter {
-                EVMeterOverlay()
-            }
-        }
-    }
 }
 
 /// OpenZCine `desqueezedRect` — framing aids sit on the visible (shrunk) picture, not the full frame.
@@ -1846,28 +1830,6 @@ struct FalseColorLegend: View {
     var body: some View {
         FalseColorAssist.referenceDisplay(scale: scale, colorMode: colorMode)
             .allowsHitTesting(false)
-    }
-}
-
-/// Photography EV needle. Pocket has no Nikon stills meter — the strip is drawn at 0 so the
-/// control is not dead. Do not treat this as camera-fed exposure.
-struct EVMeterOverlay: View {
-    var body: some View {
-        HStack(spacing: 10) {
-            Text("+0.0")
-                .font(MonitorTheme.font(11.5, weight: .semibold)).monospacedDigit()
-                .foregroundStyle(LiveDesign.text)
-                .frame(width: 34, alignment: .trailing)
-            Capsule().fill(LiveDesign.hairlineStrong).frame(width: 120, height: 3)
-                .overlay(alignment: .center) {
-                    Capsule().fill(LiveDesign.accent).frame(width: 2, height: 12)
-                }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .liveChromeCapsule()
-        .allowsHitTesting(false)
-        .accessibilityLabel("EV meter unavailable on Pocket")
     }
 }
 

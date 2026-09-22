@@ -9,21 +9,40 @@ import androidx.compose.runtime.setValue
 
 /**
  * Latest scope tap published off the GLES thread (main-thread). Compose
- * observes [bundle]; WAVE / PARADE / HISTO / VECTOR / LIGHTS read it.
+ * observes [bundle]; WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND / EV read it.
  */
 object LiveScopeSampleBus {
+    /** A replaced source cannot publish a queued sample or clear its successor. */
+    internal class Source
+    private var source: Source? = null
     var bundle by mutableStateOf(ScopeAssistBundle.EMPTY)
         private set
 
     var generation by mutableIntStateOf(0)
         private set
 
-    fun publish(next: ScopeAssistBundle) {
-        bundle = next
-        generation += 1
+    @Synchronized internal fun openSource(): Source = Source().also {
+        source = it
+        reset()
     }
 
-    fun reset() {
+    @Synchronized internal fun isCurrent(candidate: Source?): Boolean =
+        candidate != null && candidate === source
+
+    @Synchronized internal fun publish(candidate: Source?, next: ScopeAssistBundle): Boolean {
+        if (!isCurrent(candidate)) return false
+        bundle = next
+        generation += 1
+        return true
+    }
+
+    @Synchronized internal fun closeSource(candidate: Source?) {
+        if (!isCurrent(candidate)) return
+        source = null
+        reset()
+    }
+
+    private fun reset() {
         bundle = ScopeAssistBundle.EMPTY
         generation = 0
         ScopeTapHzLog.reset()
@@ -69,6 +88,7 @@ internal data class ScopeTapPolicy(
     val vectorscope: Boolean = false,
     val trafficLights: Boolean = false,
     val ndMeter: Boolean = false,
+    val evMeter: Boolean = false,
     val trafficThreshold: Double = 0.0,
     val colorMode: Int = com.opencapture.openpocketcine.session.CameraCommands.COLOR_NORMAL,
     val iso: Int = ScopeExposureCeiling.REFERENCE_EI,
@@ -76,7 +96,7 @@ internal data class ScopeTapPolicy(
     val allowsTransferInference: Boolean = true,
 ) {
     val activeScopeCount: Int
-        get() = listOf(waveform, parade, histogram, vectorscope, trafficLights, ndMeter).count { it }
+        get() = listOf(waveform, parade, histogram, vectorscope, trafficLights, ndMeter, evMeter).count { it }
 
     val needsTap: Boolean
         get() = activeScopeCount > 0 || previewOwner != null

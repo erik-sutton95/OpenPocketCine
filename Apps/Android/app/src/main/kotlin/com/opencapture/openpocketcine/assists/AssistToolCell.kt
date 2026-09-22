@@ -96,7 +96,7 @@ internal fun AssistScrollChevron(leading: Boolean, visible: Boolean, modifier: M
     )
 }
 
-/** The supplied design owns assist glyphs; the existing ND extension uses Lucide. */
+/** The supplied design owns assist glyphs; EV adds a matching meter scale. */
 @Composable
 internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifier = Modifier) {
     val icon = when (tool) {
@@ -114,8 +114,22 @@ internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifi
         LiveAssistTool.CROSS -> com.opencapture.monitorui.MonitorAssistIcon.CROSSHAIR
         LiveAssistTool.MIRROR -> com.opencapture.monitorui.MonitorAssistIcon.MIRROR
         LiveAssistTool.AUDIO -> com.opencapture.monitorui.MonitorAssistIcon.AUDIO_METERS
-        LiveAssistTool.ND, LiveAssistTool.DESQ -> null
+        LiveAssistTool.ND, LiveAssistTool.EV, LiveAssistTool.DESQ -> null
     }
-    if (icon == null) OpcIcon(if (tool == LiveAssistTool.DESQ) OpcIcon.MAXIMIZE else OpcIcon.APERTURE, null, modifier, tint)
+    if (tool == LiveAssistTool.EV) {
+        Canvas(modifier) {
+            val stroke = size.minDimension / 12f
+            val left = size.width * 0.14f
+            val right = size.width * 0.86f
+            val y = size.height * 0.62f
+            drawLine(tint, Offset(left, y), Offset(right, y), stroke, StrokeCap.Round)
+            for (index in 0..4) {
+                val x = left + (right - left) * index / 4f
+                drawLine(tint, Offset(x, y), Offset(x, y - size.height * 0.15f), stroke, StrokeCap.Round)
+            }
+            drawLine(tint, Offset(size.width * .5f, size.height * .15f),
+                Offset(size.width * .5f, size.height * .75f), stroke, StrokeCap.Round)
+        }
+    } else if (icon == null) OpcIcon(if (tool == LiveAssistTool.DESQ) OpcIcon.MAXIMIZE else OpcIcon.APERTURE, null, modifier, tint)
     else com.opencapture.monitorui.MonitorAssistIcon(icon, tint, modifier)
 }

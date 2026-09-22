@@ -162,6 +162,22 @@ LUTs and picture warnings follow the correction, and framing guides align with
 the corrected picture. Desqueeze changes only the display: recordings, shared
 files and scope measurements keep the original image.
 
+## EV meter
+
+Tap **EV** beside ND in View Assist for a live exposure gauge in Auto or Manual.
+The signed value measures the picture's median brightness in stops relative to
+middle gray: positive is brighter, negative is darker. The cyan needle spans
+−3 to +3 stops; the number keeps showing readings beyond that range. This is a
+picture reference, separate from the camera's EV compensation control, and does
+not change camera settings or guarantee that highlights are unclipped.
+
+Drag the meter to place it and use the corner grip to resize it. Size and
+portrait/landscape positions are saved. You can pin EV in DISP 2 or use it during
+playback. Hold EV for its preview and help. A dash without a needle means no
+valid picture measurement is available. **EV ≈** marks D-Log M readings, which
+use an estimated curve pending live-preview calibration. LUTs do not alter the
+measurement.
+
 ## Moving scopes
 
 Newly enabled windowed scopes start in the center, ready for you to place them.
@@ -170,7 +186,7 @@ Saved positions remain yours. AUDIO starts on the left at vertical center and
 can also be dragged. Hold AUDIO for Vertical / Horizontal bars and optional
 left/right dBFS readings; these affect the meter display, not camera recording.
 
-Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
+Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, ND, or EV directly to move it. Drag its
 corner grip to resize. Scopes can sit partly under the top and bottom bars.
 Scopes can reach closer to the bottom edge and sit underneath the entire joystick,
 zoom, and gimbal-controls cluster in portrait or landscape. The cluster stays above

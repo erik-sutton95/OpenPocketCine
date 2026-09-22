@@ -8,7 +8,7 @@ class ScopePanelPlacementTest {
     @Test
     fun allPanelBodiesAndVerticalResizeWellsStayInsideControlsAcrossSizesAndDensities() {
         val bases = listOf(ScopePanelSize.waveform, ScopePanelSize.parade, ScopePanelSize.histogram,
-            ScopePanelSize.vectorscope, ScopePanelSize.trafficLights, ScopePanelSize.ndMeter)
+            ScopePanelSize.vectorscope, ScopePanelSize.trafficLights, ScopePanelSize.ndMeter, ScopePanelSize.evMeter)
         for ((width, height) in listOf(402f to 874f, 874f to 402f, 667f to 375f)) {
             for (density in listOf(1f, 2.75f, 3f)) {
                 val safe = AssistRect(78f * density, 104f * density,
@@ -70,7 +70,7 @@ class ScopePanelPlacementTest {
         for (density in listOf(1f, 2.75f, 3f)) {
             val safe = AssistRect(8f * density, 70f * density, 386f * density, 676f * density)
             val grip = MovablePanelMath.GRIP_EXTERIOR_DP * density
-            for (base in listOf(ScopePanelSize.parade, ScopePanelSize.trafficLights, ScopePanelSize.ndMeter)) {
+            for (base in listOf(ScopePanelSize.parade, ScopePanelSize.trafficLights, ScopePanelSize.ndMeter, ScopePanelSize.evMeter)) {
                 for (scale in listOf(0.6, 1.0, 1.6)) {
                     val preferred = MovablePanelMath.panelSize(base, scale)
                     val size = MovablePanelMath.fittedSize(

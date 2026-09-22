@@ -1162,6 +1162,9 @@ private struct LiveScopeOverlays: View {
                 chromeClearance: clearance
             )
         }
+        if model.assist.isVisible(.evMeter) {
+            EVMeterOverlay(bounds: canvas, chromeClearance: clearance)
+        }
         if !model.isWatchingFeed, !model.session.status.isPhoto,
             model.assist.isVisible(.audioMeters)
         {

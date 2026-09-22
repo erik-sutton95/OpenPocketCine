@@ -17,6 +17,13 @@ separate iOS and Android lists.
 
 ### Added
 
+- **EV** view assist on iOS and Android: a movable, resizable gauge measures
+  median source-picture brightness relative to middle gray in Auto, Manual and
+  playback. Signed stops accompany a −3…+3 needle; missing samples show a dash,
+  and D-Log M estimates carry **≈**. Separate portrait/landscape positions and
+  DISP 2 pins are supported. Camera settings and recordings are unchanged.
+  Switching clips retires old measurements before accepting the new picture.
+
 - Anamorphic Desqueeze (**DE-SQ**) on iOS and Android: live view, video playback
   and photo viewing share 1.1×, 1.2×, 1.33×, 1.5×, 1.6×, 1.8× and 2.0× presets,
   plus a remembered Custom factor from 1.00× to 2.00× in 0.01 steps. Horizontal

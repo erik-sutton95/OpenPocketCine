@@ -6,6 +6,22 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class InspectorScopePolicyTest {
+    @Test fun evUsesTheSharedHistogramWithoutPointCloudsAndCountsTowardDenseBudget() {
+        val ev = ScopeTapPolicy(evMeter = true)
+        assertTrue(ev.needsTap)
+        assertEquals(1, ev.activeScopeCount)
+        assertFalse(ev.includePoints)
+        assertFalse(ev.includeVectorPoints)
+        assertEquals(40_000_000L, ev.minIntervalNs(1.0))
+        val withND = ev.copy(ndMeter = true)
+        assertEquals(2, withND.activeScopeCount)
+        assertEquals(40_000_000L, withND.minIntervalNs(1.0))
+        assertEquals(100_000_000L, withND.copy(histogram = true).minIntervalNs(1.0))
+        assertEquals(300_000_000L, withND.copy(histogram = true).minIntervalNs(3.0))
+        assertEquals(200_000_000L, ev.copy(inspectorOnly = true).minIntervalNs(1.0))
+        assertFalse(ev.copy(evMeter = false).needsTap)
+    }
+
     @Test fun inspectorOnlyTapReusesOneConsumerWithFiveHertzCeiling() {
         val policy = ScopeTapPolicy(inspectorOnly = true, waveform = true)
         assertTrue(policy.needsTap)

@@ -31,6 +31,7 @@
             model.assist.vectorscope = false
             model.assist.trafficLights = false
             model.assist.ndMeter = false
+            model.assist.evMeter = false
             model.assist.audioMeters = false
             model.assist.guides = false
             model.assist.grid = false
@@ -43,6 +44,7 @@
             HistogramAssist.store.options = .default
             VectorscopeAssist.store.options = .default
             AudioAssist.store.options = .init()
+            EVMeterStore.shared.options = .init()
             FalseColorReferencePositionStore.shared.positions = FalseColorReferencePositions()
             WaveformAssist.store.sessionCenter = nil
             WaveformAssist.store.sessionCenterPortrait = nil

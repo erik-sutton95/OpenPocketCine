@@ -1,9 +1,9 @@
 package com.opencapture.openpocketcine.assists
 
 /**
- * OpenZCine cinema live-monitor set. Pocket omits LEVEL, MAG, EV, PLAY.
+ * OpenZCine cinema live-monitor set. Pocket omits LEVEL, MAG, PLAY.
  *
- * Toolbar: LUT PEAK FALSE | ZEBRA WAVE PARADE | HISTO VECTOR LIGHTS ND |
+ * Toolbar: LUT PEAK FALSE | ZEBRA WAVE PARADE | HISTO VECTOR LIGHTS ND EV |
  * GUIDES GRID CROSS DE-SQ | MIRROR | AUDIO.
  */
 enum class LiveAssistTool {
@@ -17,6 +17,7 @@ enum class LiveAssistTool {
     VECTOR,
     LIGHTS,
     ND,
+    EV,
     AUDIO,
     GUIDES,
     GRID,
@@ -44,6 +45,7 @@ enum class LiveAssistTool {
                 VECTOR -> "Vectorscope"
                 LIGHTS -> "Traffic Lights"
                 ND -> "ND Suggestion"
+                EV -> "Exposure Meter"
                 AUDIO -> "Audio Levels"
                 GUIDES -> "Guides"
                 GRID -> "Grid"
@@ -65,7 +67,7 @@ enum class LiveAssistTool {
             listOf(
                 listOf(LUT, PEAK, FALSE),
                 listOf(ZEBRA, WAVE, PARADE),
-                listOf(HISTO, VECTOR, LIGHTS, ND),
+                listOf(HISTO, VECTOR, LIGHTS, ND, EV),
                 listOf(GUIDES, GRID, CROSS, DESQ),
                 listOf(MIRROR),
             )

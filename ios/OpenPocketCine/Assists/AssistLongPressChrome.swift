@@ -65,13 +65,18 @@ enum AssistLongPressChrome {
         case .vectorscope: VectorscopeAssist.longPressMenu(assist: assist)
         case .trafficLights: TrafficLightsAssist.longPressMenu(assist: assist)
         case .ndMeter: NDAssist.longPressMenu(assist: assist)
+        case .evMeter:
+            Text(EVMeterAssist.helpCopy)
+                .font(MonitorTheme.font(13))
+                .foregroundStyle(MonitorTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
         case .guides: GuidesAssist.longPressMenu(assist: assist)
         case .grid: GridAssist.longPressMenu(assist: assist)
         case .crosshair: CrosshairAssist.longPressMenu(assist: assist)
         case .mirror: MirrorAssist.longPressMenu(assist: assist)
         case .audioMeters: AudioAssist.longPressMenu(assist: assist)
         case .desqueeze: DesqueezeAssist.longPressMenu(assist: assist)
-        case .level, .evMeter, .instantReview, .magnification:
+        case .level, .instantReview, .magnification:
             EmptyView()
         }
     }

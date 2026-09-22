@@ -263,6 +263,11 @@ fun LiveViewScreen(model: AppModel) {
         }
     }
     val useVulkan = vulkanSession != null && !vulkanFailed
+    val scopeSourceIdentity = model.session.connectedCamera ?: model.session
+    val scopeSourceActive = model.liveOperatorPanel != LiveOperatorPanel.MEDIA
+    LaunchedEffect(vulkanSession, useVulkan, scopeSourceIdentity, hasPicture, scopeSourceActive) {
+        vulkanSession?.configureScopeSource(scopeSourceIdentity, hasPicture, scopeSourceActive && useVulkan)
+    }
     LaunchedEffect(model.session, useVulkan, vulkanSession) {
         var lastCount = 0
         var lastAt = 0L
@@ -559,6 +564,7 @@ fun LiveViewScreen(model: AppModel) {
                     backdrop = backdrop,
                     sourceIdentity = model.session.connectedCamera ?: model.session,
                     sourceReady = hasPicture,
+                    sourceActive = scopeSourceActive,
                     plan = effectsPlan,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onPresented = { model.session.noteLiveFrame() },
@@ -1077,6 +1083,7 @@ private fun LiveFeedPresenter(
     backdrop: MonitorBackdropFeed,
     sourceIdentity: Any,
     sourceReady: Boolean,
+    sourceActive: Boolean,
     plan: FeedEffectsRenderPlan,
     onDecoderSurface: (Surface) -> Unit,
     onPresented: () -> Unit = {},
@@ -1107,7 +1114,9 @@ private fun LiveFeedPresenter(
             textureViewOut.value(null)
         }
     }
-    LaunchedEffect(sourceIdentity, sourceReady) { session.configurePreviewSource(sourceIdentity, sourceReady) }
+    LaunchedEffect(sourceIdentity, sourceReady, sourceActive) {
+        session.configurePreviewSource(sourceIdentity, sourceReady, sourceActive)
+    }
     LaunchedEffect(plan) { session.updatePlan(plan) }
     LaunchedEffect(stretchToRect) { session.setStretchToRect(stretchToRect) }
 

@@ -28,7 +28,7 @@ import kotlinx.coroutines.isActive
 @Composable
 internal fun AssistInspectorScopePreview(tool: LiveAssistTool, state: LiveAssistState, colorMode: Int, playback: Boolean = false) {
     if (tool !in listOf(LiveAssistTool.WAVE, LiveAssistTool.PARADE, LiveAssistTool.HISTO,
-            LiveAssistTool.VECTOR, LiveAssistTool.LIGHTS)) return
+            LiveAssistTool.VECTOR, LiveAssistTool.LIGHTS, LiveAssistTool.EV)) return
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val owner = remember { Any() }
     var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
@@ -54,7 +54,7 @@ internal fun AssistInspectorScopePreview(tool: LiveAssistTool, state: LiveAssist
             delay(200)
         }
     }
-    Box(Modifier.fillMaxWidth().height(if (tool == LiveAssistTool.LIGHTS) 72.dp else 132.dp)
+    Box(Modifier.fillMaxWidth().height(if (tool == LiveAssistTool.LIGHTS || tool == LiveAssistTool.EV) 72.dp else 132.dp)
         .clip(RoundedCornerShape(10.dp)).background(LiveDesign.background)) {
         when (tool) {
             LiveAssistTool.WAVE -> WaveformPanel(state, colorMode, Modifier.fillMaxSize(), bundle)
@@ -62,6 +62,7 @@ internal fun AssistInspectorScopePreview(tool: LiveAssistTool, state: LiveAssist
             LiveAssistTool.HISTO -> HistogramPanel(state, Modifier.fillMaxSize(), bundle)
             LiveAssistTool.VECTOR -> VectorscopePanel(state, Modifier.fillMaxSize(), bundle)
             LiveAssistTool.LIGHTS -> TrafficLightsPanel(state, Modifier.fillMaxSize(), bundle)
+            LiveAssistTool.EV -> EVMeterPanel(state, Modifier.fillMaxSize(), bundle)
             else -> Unit
         }
     }

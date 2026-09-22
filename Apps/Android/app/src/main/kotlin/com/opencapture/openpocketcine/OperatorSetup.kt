@@ -374,6 +374,7 @@ internal enum class CleanPinTool(val key: String, val title: String) {
     VECTORSCOPE("VECTOR", "Vectorscope"),
     TRAFFIC_LIGHTS("LIGHTS", "Traffic Lights"),
     ND("ND", "ND Suggestion"),
+    EV("EV", "Exposure Meter"),
     GUIDES("GUIDES", "Guides"),
     GRID("GRID", "Grid"),
     CROSSHAIR("CROSS", "Crosshair"),

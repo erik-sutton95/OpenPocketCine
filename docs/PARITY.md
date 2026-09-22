@@ -234,7 +234,7 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   56 pt/dp edge band with a maximum 720 pt/dp per second scroll rate. Lift,
   cancellation, catalog reordering, layout changes and selection exit stop the
   gesture; normal browsing retains scrolling and pull-to-refresh.
-- Fresh windowed scopes (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND) and the
+- Fresh windowed scopes (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND / EV) and the
   floating false-color reference key open at
   the canvas center. Existing saved centers remain unchanged. AUDIO first opens
   on the left at vertical center; it is draggable and provides Vertical / Horizontal
@@ -264,7 +264,7 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 - Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
   the active mode supports digital zoom. Other cameras retain their supported
   single-tap stops. Holding the chip still opens the continuous dial.
-- Movable scope panels (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND): drag
+- Movable scope panels (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND / EV): drag
   immediately after 4 pt/dp of movement. Drag the corner directly to resize;
   preferred scale 0.6…1.6. A shared placement rectangle excludes record/media/
   settings lanes plus 8 pt/dp padding. The joystick, zoom, and gimbal-controls
@@ -1098,3 +1098,32 @@ Physical Android qualification remains an exception because no Android device
 was attached; the maintainer authorized merging with that check outstanding.
 This functional acceptance does not establish measured camera-connected cadence
 or sustained thermal performance.
+
+## EV view assist
+
+Both shells expose **EV** beside ND in View Assist, settings, DISP 2 pins and
+playback. It measures median source-picture luma relative to 18% middle gray
+using the ND assist's transfer-aware histogram calculation. Positive means
+brighter and negative means darker; it works in Auto and Manual without writing
+camera settings. It is separate from the camera's EV compensation control.
+
+The UI 2.0 scope plate starts centered at 220 × 64 pt/dp. Direct drag and corner
+resize preserve the size and separate portrait/landscape positions. A cyan
+needle spans −3…+3 stops; the signed one-decimal number retains readings beyond
+the scale. Missing/invalid samples show a dash without a needle. D-Log M shows
+**EV ≈** because its live-preview curve remains an estimate. The reading is a
+middle-gray reference, not a calibrated sensor meter or a clipping guarantee.
+
+EV requests the existing bounded scope tap, including when only its inspector
+is open; hidden unpinned EV does not request samples in DISP 2. It adds no decoder,
+camera command, full-resolution readback or independent sampling timer. Existing
+25/10 Hz and thermal scope limits apply.
+
+Qualification: automated measurement, scope-demand, source-reset, persistence
+and shell checks pass. Simulator drag, resize, rotation and help checks pass.
+Physical iPhone 16 Pro Max: a live EV reading, portrait/both-landscape bounds
+and camera-frame progress passed automated XCTest on 2026-09-22. An earlier
+run stopped at startup because the phone was already in a serious thermal state;
+the retry passed after cooling. This short check does not qualify sustained
+thermal performance or Auto/Manual response to lighting changes. **Android
+physical qualification remains pending** because no device was attached.

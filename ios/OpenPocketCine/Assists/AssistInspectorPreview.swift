@@ -17,6 +17,7 @@ extension LiveImageEffects {
         case .vectorscope: next.vectorscope = true
         case .trafficLights: next.trafficLights = true
         case .ndMeter: next.ndMeter = true
+        case .evMeter: next.evMeter = true
         default: next.inspectorSample = AssistInspectorPreviewPolicy.isImage(tool)
         }
         return next
@@ -79,6 +80,7 @@ enum AssistInspectorPreviewPolicy {
         result.vectorscope = false
         result.trafficLights = false
         result.ndMeter = false
+        result.evMeter = false
         result.faceAF = false
         result.inspectorSample = false
         result.colorMode = transfer.colorMode
@@ -247,6 +249,9 @@ struct AssistInspectorPreview: View {
                 notation: NDAssist.store.notation
             )
             .frame(width: 120, height: 44)
+        case .evMeter:
+            EVMeterGauge(reading: EVMeterAssist.reading(from: model.monitorSamples))
+                .frame(width: 220, height: 64)
         case .audioMeters:
             if let levels = audioInspectorLevels {
                 audioPreview(levels: levels, sensitivity: nil)

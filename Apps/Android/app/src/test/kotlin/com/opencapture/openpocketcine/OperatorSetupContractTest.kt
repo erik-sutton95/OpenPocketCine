@@ -148,6 +148,7 @@ class OperatorSetupContractTest {
                 "VECTOR",
                 "LIGHTS",
                 "ND",
+                "EV",
                 "GUIDES",
                 "GRID",
                 "CROSS",
