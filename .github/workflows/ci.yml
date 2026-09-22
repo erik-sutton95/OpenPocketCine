@@ -241,7 +241,7 @@ jobs:
 
       # Do not use skiptools/swift-android-action: it references actions/cache@v5 and
       # reactivecircus/android-emulator-runner@v2, which SHA pinning rejects even when
-      # those steps are skipped. Ubuntu 24.04 runners already ship Swift 6.3.3.
+      # those steps are skipped. The script installs Swift 6.3.3 if the runner's differs.
       # The runner image does not export ANDROID_NDK_HOME; the install script
       # needs NDK 27 for the Swift Android SDK sysroot.
       - name: Set up Android NDK 27
