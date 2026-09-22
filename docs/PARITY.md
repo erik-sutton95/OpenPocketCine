@@ -315,6 +315,10 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Motion Control editor is 340 dp wide. Both the editor and minimized pill
   drag directly after touch slop, with no hold required. Duration dials and sliders
   retain their own gestures; dragging suppresses button activation.
+  iOS keeps the control-action guard independent of position so dragging does
+  not rebuild the editor's controls. Android already defers local position reads
+  to its offset callback. Duration dials retain their hit targets after release;
+  iOS still suppresses release-tap writes for 150 ms without a refresh timer.
   Duration dials are 180 × 44 dp, with moving ticks, a fixed index, and a
   spring settle. They swipe horizontally in 0.5 s steps (12 dp per step), with
   adjustable accessibility actions. Start shows a cancellable 3–2–1 countdown

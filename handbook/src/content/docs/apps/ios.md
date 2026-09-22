@@ -312,7 +312,8 @@ Motion Control shows A, B and C with their reported pan, tilt and zoom, or
 position the camera before saving a point. Other outside taps minimize the editor
 without activating the controls behind it. Durations use half-second dials up to
 120 seconds. Swipe left to increase duration and right to decrease it. Drag the expanded window or minimized pill directly; no hold is needed.
-Duration dials and sliders keep their own gestures. Dragging
+Duration dials and sliders keep their own gestures. After moving the window,
+swipe a duration dial to adjust that leg. Dragging
 does not activate Start/Stop or expand. Start shows a cancellable three-second
 countdown before preparation and approach to A. Pause holds the move; Resume
 continues from the stopped position without another countdown. Stop clears the

@@ -30,11 +30,41 @@ the same PR.
 | Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` (same family as the phone layer — a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
 
 Motion Control window dragging keeps transient placement in the floating widget and
-commits its center to the shared model once on release. Android marker prediction
+commits its center to the shared model once on release. The iOS control-action
+guard is an equatable value containing only drag eligibility and the release
+deadline; it never captures changing placement. Translation therefore preserves
+the editor's control subtree. Duration-dial hit testing recovers on release,
+while writes still check the short release-tap deadline at event time, without a
+refresh timer. On iOS 18+, native scroll geometry owns the overflow fade; the
+legacy content-bottom preference is produced only for the iOS 17 fallback.
+Android reads its local drag position in the deferred offset callback. Android marker prediction
 observes its 25 Hz timeline in a separate drawing leaf, so marker refresh does not
 recompose the editor. This changes presentation invalidation only, not command
 cadence or take scheduling. Native snapshot tests distinguish local drag updates
-from shared-model writes; they are not physical frame-time measurements.
+from shared-model writes; hosted iOS tests also check retained control bodies and
+native view identity during translation. These structural checks are separate
+from physical frame-time measurements.
+
+The September 22 iPhone 16 Pro Max / Pocket 4 Pro drag comparison used a Debug
+build and four alternating 140 pt horizontal drags at 100 pt/s per widget, with
+the histogram enabled throughout. Instruments measured application UI updates
+during each gesture segment:
+
+| Capture | Histogram p95 | Motion median | Motion p95 | Motion updates over 16.67 ms |
+| --- | --- | --- | --- | --- |
+| Before the guard fix | 7.70 ms | 9.24 ms | 30.40 ms | 101 / 428 (23.6%) |
+| Stable guard and native-only scroll measurement on iOS 18+ | 7.10 ms | 4.89 ms | 14.58 ms | 6 / 449 (1.3%) |
+
+The editor remains heavier than the histogram; the exploratory target of at
+most 1.5 times the histogram p95 was not met. These bounded captures establish
+improvement over Motion Control's own baseline, not scope-equivalent smoothness,
+touch-to-display latency or sustained 60/120 Hz operation. During the final
+8.8-second Motion Control segment, the journal reported 24.9–25.1 GPU fps,
+40 Hz ACKs (maximum gap 26 ms), maximum video gap 50 ms, no queue/incomplete-AU
+drops and no frozen reports. Maximum GPU present gap was 114 ms. A separate
+physical check confirmed that a duration dial changed its leg after a window
+drag without moving the window or starting a take. Android presentation code
+and cadence are unchanged; these measurements qualify only iOS.
 
 Programmed takes run on the background transport scheduler, using complete-frame
 attitude receipts before the UI hop. Smoothed paths write 20 Hz native targets

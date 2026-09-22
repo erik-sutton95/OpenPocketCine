@@ -3,12 +3,28 @@ import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
+/// Only interaction eligibility belongs in the environment. Capturing the
+/// floating modifier also captures its changing placement and rebuilds controls
+/// at pointer cadence, even though their values have not changed.
+struct MotionControlInteraction: Equatable, Sendable {
+    var isDragging = false
+    var blockedUntil: TimeInterval = 0
+
+    func allowsInteraction(at uptime: TimeInterval) -> Bool {
+        !isDragging && uptime >= blockedUntil
+    }
+
+    func callAsFunction() -> Bool {
+        allowsInteraction(at: ProcessInfo.processInfo.systemUptime)
+    }
+}
+
 private struct MotionControlInteractionKey: EnvironmentKey {
-    static let defaultValue: @MainActor @Sendable () -> Bool = { true }
+    static let defaultValue = MotionControlInteraction()
 }
 
 extension EnvironmentValues {
-    fileprivate var motionControlCanInteract: @MainActor @Sendable () -> Bool {
+    var motionControlCanInteract: MotionControlInteraction {
         get { self[MotionControlInteractionKey.self] }
         set { self[MotionControlInteractionKey.self] = newValue }
     }
@@ -193,7 +209,7 @@ struct LiveGimbalOverlay: View {
 /// Direct drag like movable scopes. The pill uses a high-priority drag so the
 /// compact chrome follows the finger; the editor uses a regular drag so
 /// waypoint buttons, duration dials and the smoothness slider keep theirs.
-private struct LiveGimbalFloatMove: ViewModifier {
+struct LiveGimbalFloatMove: ViewModifier {
     @Binding var stored: CGPoint?
     var sizeHint: CGSize
     var bounds: CGRect
@@ -255,9 +271,7 @@ private struct LiveGimbalFloatMove: ViewModifier {
             )
             .environment(
                 \.motionControlCanInteract,
-                {
-                    !dragging && ProcessInfo.processInfo.systemUptime >= blockedUntil
-                }
+                MotionControlInteraction(isDragging: dragging, blockedUntil: blockedUntil)
             )
             .position(center)
             .onChange(of: bounds) { _, _ in cancelDrag() }
@@ -338,6 +352,24 @@ private struct MotionSettingsOverflowReporter: ViewModifier {
     }
 }
 
+/// The native scroll-geometry callback replaces this preference on iOS 18+;
+/// do not keep resolving unused content geometry while the window moves.
+private struct MotionSettingsBottomReporter: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+        } else {
+            content.background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: MotionSettingsBottomKey.self,
+                        value: proxy.frame(in: .named("motion.settings")).maxY)
+                }
+            }
+        }
+    }
+}
+
 private struct LiveGimbalMoveEditor: View {
     var maximumHeight: CGFloat
     @Environment(AppModel.self) private var model
@@ -357,13 +389,7 @@ private struct LiveGimbalMoveEditor: View {
                 settings
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background {
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: MotionSettingsBottomKey.self,
-                                value: proxy.frame(in: .named("motion.settings")).maxY)
-                        }
-                    }
+                    .modifier(MotionSettingsBottomReporter())
             }
             .coordinateSpace(name: "motion.settings")
             .scrollIndicators(.hidden)
@@ -637,7 +663,9 @@ private struct LiveGimbalMoveEditor: View {
             value: value, range: floor...GimbalProgram.maxDuration, step: 0.5,
             format: GimbalProgram.durationLabel,
             enabled: {
-                canInteract() && model.liveGimbalPanel == .editor
+                // Render eligibility must recover on release without waiting
+                // for another render after the tap-suppression deadline.
+                !canInteract.isDragging && model.liveGimbalPanel == .editor
                     && model.session.canSetGimbalConfiguration
                     && model.session.connectedCamera?.id == cameraID
                     && model.session.phase.label == phase
