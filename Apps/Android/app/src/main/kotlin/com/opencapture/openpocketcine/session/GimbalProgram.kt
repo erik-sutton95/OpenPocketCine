@@ -363,13 +363,18 @@ class GimbalMoveEngine {
     internal val nativeZoomDemand: NativeProgramZoomDemand?
         get() {
             if (!program.changesZoom || !running || isPaused || index >= legs.size) return null
+            pendingZoomEndpoint?.let { return NativeProgramZoomDemand(NativeProgramZoomCommand.Track(it), it) }
             if (phase == "APPROACH" || phase == "HOLD") {
                 val zoom = program.a?.zoom ?: return null
                 return NativeProgramZoomDemand(NativeProgramZoomCommand.Position(zoom), zoom)
             }
             return if (phase == "RUN") zoomPath.nativeDemand(zoomElapsedOffset + elapsed)
-                else NativeProgramZoomDemand(NativeProgramZoomCommand.Stop, zoomPath.end)
+                else NativeProgramZoomDemand(NativeProgramZoomCommand.Track(zoomPath.end), zoomPath.end)
         }
+
+    internal fun consumeNativeZoomDemand(): NativeProgramZoomDemand? = nativeZoomDemand.also {
+        if (it?.command is NativeProgramZoomCommand.Track) pendingZoomEndpoint = null
+    }
 
     fun start(program: GimbalProgram, live: GimbalWaypoint): Boolean {
         cancel()

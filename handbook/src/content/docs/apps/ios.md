@@ -338,17 +338,14 @@ never switches color mode. Programs without zoom changes still work in D-Log2.
 Saved zoom must fit the current camera FORMAT. Zoom timing and optical smoothness
 remain experimental.
 
-Pocket 4 Pro programmed zoom holds one of the camera's continuous speeds for each
-leg, without changing speed midway. When that speed would reach the next zoom
-amount early, zoom waits before starting so it finishes at the waypoint. Your
-gimbal movement duration stays unchanged; zoom may cover only part of that time,
-including on reverse loop legs. The camera offers seven fixed native speeds.
-A duration too short for the saved zoom range disables Start. Tiny differences below approximately 1.05% of
-the starting zoom are also unavailable; use the same zoom at those points or
-increase the difference. The camera must report that it reached A's zoom before
-the timed zoom begins. These native rates improve continuity; lens endpoint
-accuracy remains experimental. Other Pocket bodies retain the existing zoom
-path while their native speed response is qualified.
+Programmed zoom changes linearly throughout each leg, including reverse loops.
+For example, halfway through a 3×→6× move, the commanded zoom is 4.5×. Zoom begins
+with the movement and reaches the next saved amount at its endpoint. Pocket 4 Pro
+uses more frequent lens targets to reduce visible stepping; the camera must report
+that it reached A's zoom before the timed movement begins. Very small changes are
+limited by the camera's lens-position resolution. Other Pocket bodies retain their
+existing update cadence while their response is qualified. Optical accuracy and
+smoothness across every zoom range remain experimental.
 
 **Loop** (off by default) moves back and forth: A→B→A→B, or
 A→B→C→B→A→B→C. Each reverse leg keeps its original duration and retraces

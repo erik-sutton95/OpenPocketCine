@@ -655,13 +655,18 @@ final class DatalinkDriver {
             } else if let step = run.engine.tick(dt: dt, live: pose, telemetryAge: age) {
                 output = step
             } else { return nil }
-            if run.zoom?.usesNativeRate == true, let demand = run.engine.nativeZoomDemand,
+            if run.zoom?.usesHighRateTargets == true, let demand = run.engine.nativeZoomDemand,
                 let reason = run.zoom?.nativeFailure(for: demand, at: now) {
                 output = run.engine.interrupt(live: pose, reason: reason)
             }
             var zoomFrame: Duml.Frame?
-            if run.zoom?.usesNativeRate == true, let demand = run.engine.nativeZoomDemand {
-                zoomFrame = run.zoom?.nativeCommand(for: demand, at: now)?.frame
+            if run.zoom?.usesHighRateTargets == true, let demand = run.engine.nativeZoomDemand {
+                let tracking: Bool
+                if case .track = demand.command { tracking = true } else { tracking = false }
+                if !tracking || run.zoom?.canSampleNativeTarget(at: now) == true {
+                    _ = run.engine.consumeNativeZoomDemand()
+                    zoomFrame = run.zoom?.nativeCommand(for: demand, at: now)?.frame
+                }
             } else if run.zoom?.canSample(at: now) == true,
                 let target = run.engine.consumeProgrammedZoomTarget(),
                 let lens = run.zoom?.lensTarget(for: target, at: now) {

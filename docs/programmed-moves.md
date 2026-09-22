@@ -86,32 +86,27 @@ Pointer input retains fractional values; hundredths are only a readout format.
 Save each point at the desired zoom. A zoom-changing take sets A's zoom during
 preparation, then schedules A→B and optional B→C against their chosen durations.
 Zoom targets B's saved amount even when Smoothness rounds the angular path past B.
-On Pocket 4 Pro, the background scheduler uses the camera's continuous zoom
-speed-and-direction commands, refreshed at no more than 20 Hz. Preparing A still
-uses one absolute position command. Each timed leg holds one native speed for its
-entire moving portion. Changing between adjacent native speeds is visibly abrupt,
-so the app does not switch gears mid-leg, seek intermediate positions or pulse
-STOP to synthesize a different speed. Native zoom has seven speed settings.
-The app chooses the slowest gear that can cover the zoom range by the waypoint,
-and delays the zoom start when that gear would otherwise arrive early. The chosen
-gimbal duration is unchanged. This waiting interval can occur at the start of a
-reverse loop leg as well; zoom does not necessarily move throughout the whole leg.
-A leg faster than the highest native speed allows cannot start. Zoom differences
-requiring less than 50 ms at the slowest speed (about 1.05% of the starting amount)
-are also rejected, including a paused remainder that becomes too small. Keep those
-points at the same zoom or increase the difference. Phase transitions wake the
-existing scheduler directly; identical refreshes yield their slot to the next
-transition.
-STOP is immediate. Before the first timed rate, a post-preparation lens report must
-place A within two lens ticks; a lost setup command cannot silently offset the take.
-The calibrated rate schedule is specific to Pocket 4 Pro; other bodies retain
-the existing absolute-target path until their native rate response is measured.
-No extra GET loop, color change, ACK timer or live-view enable is added.
-The camera's absolute wire format remains an integer lens position (217 units
-per 1×); native continuous zoom controls speed rather than a floating-point
-position. Lens feedback must remain fresh within 850 ms during native moves,
-allowing for the body's measured 2.5 Hz lens subscription. Gimbal feedback has
-its existing separate 300 ms deadline.
+Zoom factor follows `A + (B - A) × elapsed / duration` throughout each leg,
+including reverse loops. A 3×→6× move reaches commanded amounts of 3.75×, 4.5×
+and 5.25× at one quarter, one half and three quarters of its duration. Zoom begins
+with the timed movement, with no delayed start or native gear changes.
+
+On Pocket 4 Pro, the existing background scheduler emits distinct absolute lens
+targets at up to 50 Hz. A physical comparison found the former 20 Hz position
+stream left roughly one in five 25 fps pictures without a zoom update. The 50 Hz
+path substantially reduced these stationary frames without changing ACK or HUD
+cadence. Other bodies retain the existing 20 Hz absolute-target path pending
+physical qualification. No extra timer, GET loop, color change or live-view enable
+is added. STOP remains immediate.
+
+Preparation uses one absolute command. Before the first timed target, a fresh
+post-preparation lens report must place A within two lens ticks. Endpoints remain
+pending until admitted, including when an angular curve rounds B or a late tick
+crosses a loop boundary. Duplicate lens targets consume their sample slot without
+sending another command. Small changes are permitted; the camera's wire position
+still has integer resolution of 217 units per 1×. Lens feedback must remain fresh
+within 850 ms on Pocket 4 Pro, allowing its measured 2.5 Hz subscription. Gimbal
+feedback has its existing separate 300 ms deadline.
 
 Loop reverses the zoom path with the gimbal. Pause and Stop retire future zoom
 commands and send the existing zoom STOP after lens ownership has begun. Resume
@@ -237,9 +232,10 @@ checks remain strict. A paused take is not an uninterrupted timing qualification
 
 Native targets bypass the held-stick stream, which is rested before a move.
 Manual and head-tracking stick control retain their existing 25 Hz pump. The
-40 Hz ACK queue remains unchanged. Motion supervision and waypoint overlays
-run at up to 25 Hz; session progress remains 5 Hz without a debug overlay.
-Zoom-changing takes add at most 20 Hz zoom rate/target refreshes on that same scheduler,
+40 Hz ACK queue remains unchanged. Waypoint overlays run at up to 25 Hz;
+session progress remains 5 Hz without a debug overlay. The transport supervisor
+also wakes for lens deadlines: zoom-changing takes add at most 50 Hz targets on
+Pocket 4 Pro (20 Hz on other bodies) on that same scheduler,
 using the existing zoom watchdog grace. STOP remains immediate. No extra GET loop,
 decoder reset or
 live-view enable is introduced. See [performance](PERFORMANCE.md).
@@ -334,11 +330,32 @@ The operator subsequently confirmed improved continuity but reported occasional
 mid-leg jumps. Replaying the same native video found 12 stable interior speed
 steps above a 1.5× ratio; most were approximately 1.9–2.1×, matching the switch
 between native gears 72 and 73. Swift transport-cadence and Android runner
-regressions reproduced two speeds within a 3×→6×/2.5-second leg. The planner now
-uses one gear for the moving portion and delays its start to preserve the saved
-leg duration. These regression tests pass without a mid-leg rate change. The
-new physical comparison was blocked by camera Wi-Fi failing to rejoin before
-any zoom command was sent; optical validation of this follow-up remains pending.
+regressions reproduced two speeds within a 3×→6×/2.5-second leg. An intermediate
+planner used one gear for the moving portion and delayed its
+start to preserve the saved duration. The operator rejected the resulting late
+start. That policy is superseded by the full-duration linear target path above.
+
+The subsequent full-duration comparison used four stationary-gimbal 3×↔6× legs,
+five seconds each, at 20 Hz and 50 Hz absolute targets. Production replay decoded
+674 and 700 frames without incomplete-AU drops or decoder errors. In the moving
+windows, registration with at least 30 inliers admitted 217 and 185 adjacent-frame
+pairs: near-still changes fell from 21.2% to 1.6%. These filtered, single-scene
+measurements establish an improvement for this setup, not universal smoothness.
+All 1,006 position requests in the 50 Hz capture received successful replies.
+During those legs, GPU delivery was 24.9–25.6 fps, ACK submission held 40 Hz with
+at most a 26 ms gap, the maximum video gap was 72 ms, and there were no queue or
+incomplete-AU drops or recovery. Public SDK common-zoom commands were separately
+rejected with status `E0` on this body; they are not used by the implementation.
+
+The real iOS Motion Control scheduler then completed five five-second 3×↔6× legs
+and part of a sixth before explicit cancellation, with stationary gimbal endpoints.
+All 1,338 zoom requests received success replies. Replay decoded 1,013 frames
+without errors or incomplete access units; 266 reliable registered moving pairs
+contained 1.9% near-still changes. The timed program held 24.8–25.4 GPU fps,
+40 Hz ACK submission (maximum gap 28 ms), maximum video gap 56 ms, and zero queue
+or incomplete-AU drops, recovery, or waypoint verification failures. This proves
+the production zoom scheduler and loop integration for that run, not simultaneous
+angular movement, every zoom range, pause/resume/Restart, or Android hardware.
 
 `just gimbal-test` exercises camera-timed command dispatch, sparse feedback at
 reversals, motor easing, early-only waypoint observations, late dispatch, missing feedback,

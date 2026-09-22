@@ -472,213 +472,166 @@ class NativeGimbalProgramRunnerTest {
         assertEquals("Zoom moves are unavailable in D-Log2", updates.last().failure)
     }
 
-    @Test fun nativeZoomRefreshesAtTwentyHzReversesOnScheduledLegsAndAlwaysStopsOnCancel() {
-        val tx = Tx()
-        val zooms = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
-        val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
-        val events = mutableListOf<String>()
-        val start = a.copy(zoom = 3.0)
-        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-            { NativeGimbalFeedback(start, tx.now, tx.now) }, { _, _ -> true }, { events += "gimbal stop" },
-            stopZoom = { events += "zoom stop" }, usesNativeZoom = true,
-            sendNativeZoom = { command, _ -> zooms += tx.now to command; true })
-        val token = runner.start(GimbalProgram(start, start.copy(zoom = 6.0), durationAB = 2.5, loop = true)) { updates += it }
-        tx.through(2.24)
-        assertEquals(listOf<Pair<Double, NativeProgramZoomCommand>>(0.25 to NativeProgramZoomCommand.Position(3.0)), zooms)
-        tx.through(7.3)
-        assertTrue(zooms.drop(1).all { it.second is NativeProgramZoomCommand.Rate || it.second == NativeProgramZoomCommand.Stop })
-        val firstIn = zooms.first { it.second is NativeProgramZoomCommand.Rate }.first
-        val firstOut = zooms.first { (it.second as? NativeProgramZoomCommand.Rate)?.increasing == false }.first
-        assertEquals(2.5, firstOut - firstIn, 1e-7)
-        assertEquals(1, zooms.count { it.second is NativeProgramZoomCommand.Position })
-        zooms.zipWithNext().forEach { (first, next) -> assertTrue(next.first - first.first >= 0.05 - 1e-8) }
-        assertTrue(zooms.zipWithNext().any { (first, next) -> first.second == next.second }, "Held rates need refreshing")
-        assertTrue(updates.size <= 38, "Native zoom must not add 20 Hz UI callbacks")
-        val count = zooms.size
-        assertTrue(runner.cancel(token))
-        tx.schedule(0.0) { events += "manual" }
-        tx.through(10.0)
-        assertEquals(count, zooms.size)
-        assertEquals(listOf("zoom stop", "gimbal stop", "manual"), events)
+    @Test fun highRateZoomTracksLinearABCAndLoopLegsAtFiftyHzWithoutExtraUiProgress() {
+        for (smoothness in listOf(0.0, 1.0)) {
+            val tx = Tx()
+            val commands = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
+            val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+            val events = mutableListOf<String>()
+            val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+                { NativeGimbalFeedback(a, tx.now, tx.now) }, { _, _ -> true }, { events += "gimbal stop" },
+                stopZoom = { events += "zoom stop" }, usesHighRateZoom = true,
+                sendNativeZoom = { command, _ -> commands += tx.now to command; true })
+            val token = runner.start(GimbalProgram(a, a.copy(zoom = 3.0), a.copy(zoom = 2.0),
+                1.1, 1.3, smoothness = smoothness, loop = true)) { updates += it }
+            tx.through(2.24)
+            assertEquals(listOf<Pair<Double, NativeProgramZoomCommand>>(0.25 to NativeProgramZoomCommand.Position(1.0)), commands)
+            tx.through(12.0)
+            val tracked = commands.filter { it.second is NativeProgramZoomCommand.Track }
+            assertTrue(tracked.size > 400)
+            assertEquals(2.27, tracked.first().first, 1e-8, "The first changed target follows RUN by just one sample")
+            assertEquals(1.0 + 2.0 * 0.02 / 1.1, (tracked.first().second as NativeProgramZoomCommand.Track).factor, 1e-8)
+            val boundaries = listOf(3.35 to 3.0, 4.65 to 2.0, 5.95 to 3.0, 7.05 to 1.0,
+                8.15 to 3.0, 9.45 to 2.0, 10.75 to 3.0, 11.85 to 1.0)
+            for ((time, command) in tracked) {
+                var elapsed = (time - 2.25) % 4.8
+                var expected = 1.0
+                for ((from, to, duration) in listOf(Triple(1.0, 3.0, 1.1), Triple(3.0, 2.0, 1.3),
+                        Triple(2.0, 3.0, 1.3), Triple(3.0, 1.0, 1.1))) {
+                    if (elapsed <= duration + 1e-8) { expected = from + (to - from) * (elapsed / duration).coerceIn(0.0, 1.0); break }
+                    elapsed -= duration
+                }
+                val actual = (command as NativeProgramZoomCommand.Track).factor
+                assertTrue(kotlin.math.abs(expected - actual) < 1e-7 || boundaries.any {
+                    time - it.first in -1e-8..0.02000001 && kotlin.math.abs(actual - it.second) < 1e-8
+                }, "time=$time expected=$expected actual=$actual smoothness=$smoothness")
+            }
+            for ((time, zoom) in boundaries) assertTrue(tracked.any {
+                it.first - time in -1e-8..0.02000001 && kotlin.math.abs((it.second as NativeProgramZoomCommand.Track).factor - zoom) < 1e-8
+            }, "Every endpoint must be admitted within one sample: $time $zoom")
+            tracked.zipWithNext().forEach { (first, next) ->
+                assertTrue(next.first - first.first >= 0.02 - 1e-8)
+                assertTrue(CamFov.pinchLens((first.second as NativeProgramZoomCommand.Track).factor) !=
+                    CamFov.pinchLens((next.second as NativeProgramZoomCommand.Track).factor))
+            }
+            assertTrue(updates.size <= 61, "Zoom adds no 50 Hz UI callbacks")
+            assertTrue(updates.none { it.finished || it.failure != null })
+            val count = commands.size
+            assertTrue(runner.cancel(token))
+            tx.schedule(0.0) { events += "manual" }
+            tx.through(14.0)
+            assertEquals(count, commands.size)
+            assertEquals(listOf("zoom stop", "gimbal stop", "manual"), events)
+        }
     }
 
-    @Test fun nativeZoomStopsAtEndAndAgainWhenTheTakeFinishesNormally() {
+    @Test fun highRateZoomReachesTheFinalSavedLensBeforeNormalCompletionStopsIt() {
         val tx = Tx()
-        val zooms = mutableListOf<NativeProgramZoomCommand>()
+        val commands = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
         val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
-        var finalStops = 0
+        var stops = 0
         val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
             { NativeGimbalFeedback(a, tx.now, tx.now) }, { _, _ -> true }, {},
-            usesNativeZoom = true, sendNativeZoom = { command, _ -> zooms += command; true },
-            stopZoom = { finalStops++ })
+            usesHighRateZoom = true, sendNativeZoom = { command, _ -> commands += tx.now to command; true }, stopZoom = { stops++ })
         runner.start(GimbalProgram(a, a.copy(zoom = 3.0), durationAB = 1.0)) { updates += it }
         tx.through(5.0)
         assertTrue(updates.last().finished)
         assertEquals(null, updates.last().failure)
-        assertEquals(NativeProgramZoomCommand.Stop, zooms.last())
-        assertEquals(1, finalStops, "Normal completion must release held zoom even when gimbal output.stop is false")
+        assertEquals(NativeProgramZoomCommand.Track(3.0), commands.last().second)
+        assertTrue(commands.last().first in 3.25 - 1e-8..3.27 + 1e-8)
+        assertEquals(1, stops)
     }
 
-    @Test fun freshAngularReportsCannotKeepNativeZoomAliveAfterLensReportsStop() {
+    @Test fun duplicateLensSamplesAdvanceTheDeadlineAndReleasePendingB() {
         val tx = Tx()
-        val zooms = mutableListOf<NativeProgramZoomCommand>()
+        var reads = 0
+        val commands = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
+        val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
+        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
+            { reads++; NativeGimbalFeedback(a, tx.now, tx.now) }, { _, _ -> true }, {},
+            usesHighRateZoom = true, sendNativeZoom = { command, _ -> commands += tx.now to command; true })
+        runner.start(GimbalProgram(a, a.copy(zoom = 1.001), a.copy(zoom = 3.0), 1.0, 1.0)) { updates += it }
+        tx.through(3.25)
+        assertEquals(1, commands.size, "All A-B samples share the prepared lens tick")
+        tx.through(5.0)
+        assertTrue(updates.last().finished)
+        assertEquals(null, updates.last().failure)
+        assertEquals(NativeProgramZoomCommand.Track(3.0), commands.last().second)
+        assertTrue(reads < 1_000, "Duplicate targets and retained endpoints cannot create busy polling")
+        commands.zipWithNext().forEach { (first, next) -> assertTrue(next.first - first.first >= 0.02 - 1e-8) }
+    }
+
+    @Test fun freshAngularReportsCannotKeepHighRateZoomAliveAfterLensReportsStop() {
+        val tx = Tx()
+        val commands = mutableListOf<NativeProgramZoomCommand>()
         val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
         var stops = 0
         val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
             { NativeGimbalFeedback(a, tx.now, minOf(tx.now, 2.5)) }, { _, _ -> true }, {},
-            usesNativeZoom = true, sendNativeZoom = { command, _ -> zooms += command; true }, stopZoom = { stops++ })
+            usesHighRateZoom = true, sendNativeZoom = { command, _ -> commands += command; true }, stopZoom = { stops++ })
         runner.start(GimbalProgram(a, a.copy(zoom = 3.0), durationAB = 1.0, loop = true)) { updates += it }
         tx.through(3.4)
         assertTrue(updates.last().finished)
         assertEquals("Move interrupted — camera zoom feedback lost", updates.last().failure)
         assertEquals(1, stops)
-        val count = zooms.size
+        val count = commands.size
         tx.through(8.0)
-        assertEquals(count, zooms.size)
+        assertEquals(count, commands.size)
     }
 
-    @Test fun nativeZoomPauseStopsImmediatelyAndResumeUsesNewMeasuredZoomWithoutPreparingAAgain() {
+    @Test fun highRatePauseStopsAndResumeTracksLinearlyFromMeasuredZoom() {
         val tx = Tx()
-        var zoom = 3.0
-        val commands = mutableListOf<NativeProgramZoomCommand>()
+        var measured = 3.0
+        val start = a.copy(zoom = measured)
+        val commands = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
         val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
         var stops = 0
-        val start = a.copy(zoom = zoom)
         val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-            { NativeGimbalFeedback(start.copy(zoom = zoom), tx.now, kotlin.math.floor(tx.now / 0.4) * 0.4) }, { _, _ -> true }, {},
-            usesNativeZoom = true, sendNativeZoom = { command, _ -> commands += command; true }, stopZoom = { stops++ })
-        val token = runner.start(GimbalProgram(start, start.copy(zoom = 6.0), durationAB = 2.5, loop = true)) { updates += it }
+            { NativeGimbalFeedback(start.copy(zoom = measured), tx.now, kotlin.math.floor(tx.now / 0.4) * 0.4) }, { _, _ -> true }, {},
+            usesHighRateZoom = true, sendNativeZoom = { command, _ -> commands += tx.now to command; true }, stopZoom = { stops++ })
+        val token = runner.start(GimbalProgram(start, start.copy(zoom = 6.0), durationAB = 2.5)) { updates += it }
         tx.through(3.75)
         assertTrue(runner.pause(token))
         tx.through(3.76)
         assertEquals(1, stops)
+        val paused = updates.last().readout!!
+        val remaining = kotlin.math.ceil((paused.setDuration - paused.elapsed - 1e-9) * 10) / 10
         val count = commands.size
-        zoom = 5.2
+        measured = 5.2
         tx.through(4.5)
         assertEquals(count, commands.size)
         assertTrue(runner.resume(token))
-        tx.through(4.51)
+        tx.through(4.71)
         assertFalse(updates.last().paused)
-        assertEquals(5.2, updates.last().live?.zoom)
-        assertEquals(1, commands.count { it is NativeProgramZoomCommand.Position })
-        tx.through(5.0)
-        assertTrue(commands.last() is NativeProgramZoomCommand.Rate)
+        val resumed = commands.drop(count)
+        assertEquals(NativeProgramZoomCommand.Track(5.2), resumed.first().second)
+        for ((time, command) in resumed) {
+            val expected = 5.2 + 0.8 * (time - resumed.first().first) / remaining
+            assertEquals(expected, (command as NativeProgramZoomCommand.Track).factor, 1e-7)
+        }
+        assertEquals(1, commands.count { it.second is NativeProgramZoomCommand.Position })
         assertTrue(runner.cancel(token))
-        tx.through(5.01)
+        tx.through(4.72)
         assertEquals(2, stops)
     }
 
-    @Test fun rejectedNativeRateStopsPriorOwnedZoomAndFencesFurtherWrites() {
+    @Test fun rejectedTrackingWriteStopsPriorOwnedZoomAndFencesFurtherWrites() {
         val tx = Tx()
         val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
         val commands = mutableListOf<NativeProgramZoomCommand>()
         var stops = 0
         val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-            { NativeGimbalFeedback(a, tx.now, tx.now) }, { _, _ -> true }, {}, usesNativeZoom = true,
-            sendNativeZoom = { command, _ -> commands += command; command !is NativeProgramZoomCommand.Rate },
-            stopZoom = { stops++ })
+            { NativeGimbalFeedback(a, tx.now, tx.now) }, { _, _ -> true }, {}, usesHighRateZoom = true,
+            sendNativeZoom = { command, _ -> commands += command; command !is NativeProgramZoomCommand.Track }, stopZoom = { stops++ })
         runner.start(GimbalProgram(a, a.copy(zoom = 3.0), durationAB = 1.0)) { updates += it }
         tx.through(5.0)
-        assertEquals(3, commands.size, "Preparation, waiting STOP, then the rejected rate")
+        assertEquals(2, commands.size)
         assertEquals(1, stops)
         assertEquals("Move interrupted — zoom command failed", updates.last().failure)
         assertTrue(updates.last().finished)
     }
 
-    @Test fun impossibleNativeResumeCancelsBeforeSendingAnotherGimbalOrZoomCommand() {
-        val tx = Tx()
-        var zoom = 3.0
-        var targets = 0
-        val commands = mutableListOf<NativeProgramZoomCommand>()
-        val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
-        val start = a.copy(zoom = zoom)
-        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-            { NativeGimbalFeedback(start.copy(zoom = zoom), tx.now, tx.now) }, { _, _ -> targets++; true }, {},
-            usesNativeZoom = true, sendNativeZoom = { command, _ -> commands += command; true })
-        val token = runner.start(GimbalProgram(start, start.copy(zoom = 6.0), durationAB = 2.5)) { updates += it }
-        tx.through(4.64)
-        assertTrue(runner.pause(token))
-        tx.through(4.65)
-        zoom = 1.0
-        tx.through(5.0)
-        val commandsBeforeResume = commands.size
-        val targetsBeforeResume = targets
-        assertTrue(runner.resume(token))
-        tx.through(5.1)
-        assertEquals("Increase the move duration for this zoom range", updates.last().failure)
-        assertTrue(updates.last().finished)
-        assertEquals(commandsBeforeResume, commands.size)
-        assertEquals(targetsBeforeResume, targets)
-    }
-
-    @Test fun nativeDispatchPreservesIntegratedDistanceAtRealWakeCadenceAndStopsAtTheDeadline() {
-        for ((duration, distanceInSlowSeconds) in listOf(2.5 to kotlin.math.ln(2.0) / 0.208,
-                1.0 to 1.01, 0.5 to 0.93, 0.5 to 0.98, 0.5 to 3.495)) {
-            val tx = Tx()
-            val start = a.copy(zoom = 3.0)
-            val destination = start.copy(zoom = 3.0 * kotlin.math.exp(distanceInSlowSeconds * 0.208))
-            val commands = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
-            val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
-            var reads = 0
-            val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-                { reads++; NativeGimbalFeedback(start, tx.now, tx.now) }, { _, _ -> true }, {},
-                usesNativeZoom = true, sendNativeZoom = { command, _ -> commands += tx.now to command; true })
-            runner.start(GimbalProgram(start, destination, durationAB = duration)) { updates += it }
-            tx.through(3.0 + duration)
-            assertTrue(updates.last().finished)
-            assertEquals(null, updates.last().failure)
-            var logDistance = 0.0
-            commands.zipWithNext().forEach { (first, next) ->
-                val rate = first.second as? NativeProgramZoomCommand.Rate
-                if (rate != null) logDistance += (next.first - first.first) * (rate.speed - 71) * 0.208
-            }
-            assertEquals(destination.zoom, start.zoom * kotlin.math.exp(logDistance), 1e-8,
-                "Native writes must preserve the scheduled distance with one moving speed")
-            val rates = commands.filter { it.second is NativeProgramZoomCommand.Rate }
-            rates.zipWithNext().forEach { (first, next) -> assertTrue(next.first - first.first >= 0.05 - 1e-8) }
-            val finalStop = commands.last { it.second == NativeProgramZoomCommand.Stop }
-            assertEquals(2.25 + duration, finalStop.first, 1e-8)
-            assertTrue(reads < 1_000, "Exact deadlines must not introduce microsecond busy polling")
-        }
-    }
-
-    @Test fun nativeTimedLegKeepsOneSpeedForEveryActualRateWrite() {
-        val tx = Tx()
-        val start = a.copy(zoom = 3.0)
-        val commands = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
-        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-            { NativeGimbalFeedback(start, tx.now, tx.now) }, { _, _ -> true }, {},
-            usesNativeZoom = true, sendNativeZoom = { command, _ -> commands += tx.now to command; true })
-        runner.start(GimbalProgram(start, start.copy(zoom = 6.0), durationAB = 2.5)) {}
-        tx.through(5.6)
-        val rates = commands.mapNotNull { it.second as? NativeProgramZoomCommand.Rate }
-        assertTrue(rates.size > 20, "Exercise held-rate refreshes through the production runner")
-        assertEquals(1, rates.map { it.speed }.distinct().size,
-            "Changing native gears midway produces the visible velocity jump")
-        assertTrue(rates.all { it.increasing })
-    }
-
-    @Test fun shortIdleGapStopsAtBAndReversesAtItsExactStartInsteadOfRefreshingTheOldRate() {
-        val tx = Tx()
-        val start = a.copy(zoom = 3.0)
-        val middle = start.copy(zoom = 6.0)
-        val end = start.copy(zoom = 6.0 * kotlin.math.exp(-0.208 * 0.49))
-        val commands = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
-        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-            { NativeGimbalFeedback(start, tx.now, tx.now) }, { _, _ -> true }, {},
-            usesNativeZoom = true, sendNativeZoom = { command, _ -> commands += tx.now to command; true })
-        runner.start(GimbalProgram(start, middle, end, durationAB = 2.5, durationBC = 0.5)) {}
-        tx.through(6.0)
-        val stopAtB = commands.first { it.first >= 4.75 - 1e-8 && it.second == NativeProgramZoomCommand.Stop }
-        assertEquals(4.75, stopAtB.first, 1e-8)
-        val reverse = commands.first { (it.second as? NativeProgramZoomCommand.Rate)?.increasing == false }
-        assertEquals(4.76, reverse.first, 1e-8)
-        val precedingRate = commands.last { it.first < reverse.first && it.second is NativeProgramZoomCommand.Rate }
-        assertTrue(reverse.first - precedingRate.first >= 0.05 - 1e-8)
-        assertEquals(5.25, commands.last { it.second == NativeProgramZoomCommand.Stop }.first, 1e-8)
-    }
-
-    @Test fun unconfirmedStartingZoomFailsBeforeTimedMotionIncludingDelayedZoomStarts() {
+    @Test fun unconfirmedStartingZoomFailsBeforeTimedMotion() {
         for (duration in listOf(2.5, 10.0)) {
             val tx = Tx()
             val start = a.copy(zoom = 3.0)
@@ -688,7 +641,7 @@ class NativeGimbalProgramRunnerTest {
             var stops = 0
             val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
                 { NativeGimbalFeedback(start.copy(zoom = 1.0), tx.now, tx.now) }, { _, _ -> targets++; true }, {},
-                usesNativeZoom = true, sendNativeZoom = { command, _ -> commands += command; true }, stopZoom = { stops++ })
+                usesHighRateZoom = true, sendNativeZoom = { command, _ -> commands += command; true }, stopZoom = { stops++ })
             runner.start(GimbalProgram(start, start.copy(zoom = 6.0), durationAB = duration)) { updates += it }
             tx.through(3.0)
             assertEquals(0, targets)
@@ -699,26 +652,19 @@ class NativeGimbalProgramRunnerTest {
         }
     }
 
-    @Test fun pausingBeforeFirstRateClearsPreparationAfterResumeReanchorsTheLens() {
+    @Test fun equalZoomLegStopsUntilTheNextChangingLegAndTinyResumeStillTracks() {
         val tx = Tx()
-        val start = a.copy(zoom = 3.0)
-        var measured = start
-        val commands = mutableListOf<NativeProgramZoomCommand>()
+        val commands = mutableListOf<Pair<Double, NativeProgramZoomCommand>>()
         val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
         val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-            { NativeGimbalFeedback(measured, tx.now, tx.now) }, { _, _ -> true }, {},
-            usesNativeZoom = true, sendNativeZoom = { command, _ -> commands += command; true })
-        val token = runner.start(GimbalProgram(start, start.copy(zoom = 6.0), durationAB = 10.0)) { updates += it }
-        tx.through(3.0)
-        assertTrue(runner.pause(token))
-        tx.through(3.01)
-        measured = start.copy(zoom = 5.0)
-        tx.through(3.4)
-        assertTrue(runner.resume(token))
-        tx.through(14.0)
-        assertTrue(commands.any { it is NativeProgramZoomCommand.Rate })
+            { NativeGimbalFeedback(a, tx.now, tx.now) }, { _, _ -> true }, {}, usesHighRateZoom = true,
+            sendNativeZoom = { command, _ -> commands += tx.now to command; true })
+        runner.start(GimbalProgram(a, a, a.copy(zoom = 3.0), 1.0, 1.0)) { updates += it }
+        tx.through(3.24)
+        assertEquals(NativeProgramZoomCommand.Stop, commands.last().second)
+        tx.through(5.0)
+        assertEquals(NativeProgramZoomCommand.Track(3.0), commands.last().second)
         assertTrue(updates.last().finished)
         assertEquals(null, updates.last().failure)
-        assertEquals(1, commands.count { it is NativeProgramZoomCommand.Position })
     }
 }

@@ -425,29 +425,25 @@ from physical qualification;
 the operator confirmed the corrected A/B loop on iPhone. Broader physical loop
 qualification and sustained live-view budget checks remain pending on both shells.
 
-Programmed zoom (2026-09-22): differing saved zoom amounts drive at most 20 Hz
-zoom rate refreshes alongside the timed gimbal path in both shells. Pocket 4 Pro uses
-native continuous speed/direction during timed legs, with one absolute command
-to prepare A. Each leg holds one speed throughout its moving portion, avoiding
-visible jumps between native gears. Zoom waits before starting when necessary to
-reach the waypoint on time; gimbal durations remain unchanged. Takes
-faster than the native speed ceiling or with under-50-ms native travel are blocked.
-Exact transition deadlines share the transport timer and reserve their dispatch
-slot; STOP bypasses rate refresh admission. Fresh lens feedback must confirm A
-within two lens ticks before timed zoom begins. Other bodies retain absolute
-targets pending native-rate calibration. Native lens feedback has an 850 ms
-freshness deadline, independently of the 300 ms gimbal feedback deadline. Zoom targets
-B's amount even when the angular path rounds B, reverses in Loop, pauses/stops
+Programmed zoom (2026-09-22): both shells follow linear zoom factor over each
+whole leg, including reverse loops. Pocket 4 Pro sends distinct lens positions at
+up to 50 Hz on the existing transport scheduler; other bodies retain 20 Hz. No
+delayed start or native gear schedule remains. Duplicate lens targets consume
+sample slots, and saved endpoints remain pending until admitted. Before timed
+zoom begins, fresh post-preparation feedback must confirm A within two lens ticks.
+Pocket 4 Pro lens feedback has an independent 850 ms deadline; gimbal feedback
+retains 300 ms. Zoom targets B even when the angular path rounds it, pauses/stops
 with the take and resumes from fresh settled lens feedback. Restart restores the
-saved zoom path. D-Log2 blocks zoom-changing programs while idle and recording;
-no automatic color change occurs. Raw camera color/FORMAT changes can stop a take
-before its next zoom write. Gimbal-only programs remain available in D-Log2.
-A physical iPhone/Pocket 4 Pro comparison showed substantially fewer still frames
-and smaller frame-to-frame jumps with native zoom. Endpoint accuracy and integrated
-Restart still await qualification. Android code, tests and build match; physical
-Android validation remains pending because no device is attached. The follow-up
-that removes mid-leg speed switching passes both platform regressions; its
-physical video comparison was blocked by the camera Wi-Fi rejoin failure.
+saved path. D-Log2 blocks zoom-changing programs both idle and recording, with no
+automatic color change. Received color/FORMAT changes stop an unsupported take
+before its next write. Gimbal-only programs remain available in D-Log2.
+
+A physical iPhone/Pocket 4 Pro 20/50 Hz comparison reduced filtered near-still
+video-frame pairs from 21.2% to 1.6%, with 25 fps picture, 40 Hz ACKs and no drops
+or recovery during the 50 Hz legs. This is a single-scene measurement, not broad
+optical qualification. Android code and tests match; physical Android validation
+remains pending because no device is attached. Integrated pause/resume/Restart and
+wider zoom ranges remain under qualification; see [evidence](programmed-moves.md#evidence-and-qualification).
 
 Motion zoom controls (2026-09-22): both shells keep the existing chip and disc
 accessible while the editor remains open, replacing the added in-editor slider.

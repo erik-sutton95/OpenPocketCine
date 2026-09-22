@@ -239,7 +239,7 @@ class DatalinkDriver internal constructor(
             }
         },
         zoomResumeReady = { readNativeZoomObservation().canResume(it) },
-        usesNativeZoom = CameraModel.looksLikePocket4Pro(cameraModel.name),
+        usesHighRateZoom = CameraModel.looksLikePocket4Pro(cameraModel.name),
         sendNativeZoom = { command, program ->
             val now = SystemClock.elapsedRealtimeNanos() / 1e9
             if (closed.get() || programmedZoomFailure(program) != null ||

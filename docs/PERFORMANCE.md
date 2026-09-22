@@ -47,14 +47,21 @@ of 20 Hz timed-command references plus the active predecessor, and uses the
 existing affine delay fit during the bounded checkpoint window. The editor's
 scroll fade updates local presentation state only; neither scrolling nor fading
 adds a timer, command stream or shared-model publication. When saved zoom amounts
-differ, the existing motion scheduler also emits zoom rate/target refreshes at no more than
-20 Hz. Native phase deadlines use the same timer; STOP bypasses refresh admission. Pocket 4 Pro uses refreshed native continuous rates, with one absolute
-position during preparation; other bodies retain 50 ms look-ahead absolute
-targets and bounded endpoint retention. Native rate legs hold one speed while
-moving; a delayed start fits the waypoint deadline without gear changes or repeated start/stop modulation. Zoom
-runs on the transport queue, with no 20 Hz UI callback. The existing zoom/SET
-watchdog grace sees these writes through a monotonic timestamp. Color, lens and
-FORMAT evidence is read before the UI hop; no extra GET or ACK timer is added.
+differ, the existing motion scheduler emits distinct absolute lens targets at up to
+50 Hz on Pocket 4 Pro and 20 Hz on other bodies. STOP bypasses target admission.
+Zoom factor follows elapsed time over the full leg; quantized duplicate targets
+consume a sample slot without another write. Pending waypoint targets cannot be
+skipped by a late tick. Preparation uses one absolute position. Zoom runs on the
+transport queue, with no per-target UI callback. The existing zoom/SET watchdog
+grace sees these writes through a monotonic timestamp. Color, lens and FORMAT
+evidence is read before the UI hop; no extra GET, scheduler or ACK timer is added.
+
+The September 22 Pocket 4 Pro/iPhone 50 Hz comparison sustained 24.9–25.6 GPU fps
+through four five-second 3×↔6× legs, 40 Hz ACK submission (maximum gap 26 ms),
+maximum video gap 72 ms, and zero queue/incomplete-AU drops or recovery. This
+supports the bounded programmed-zoom budget increase on this body. Manual zoom
+keeps its 20 Hz budget; Android physical and sustained thermal qualification remain
+pending. See [measurement limits](programmed-moves.md#evidence-and-qualification).
 
 Media drag selection uses the native display clock only while a held selection
 gesture requests edge scrolling. Ordinary vertical scrolling while selecting uses

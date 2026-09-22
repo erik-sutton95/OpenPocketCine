@@ -16,7 +16,6 @@ public struct GimbalProgramZoom: Sendable {
     private var stableLens: UInt16?
     private var lastNativeCommand: NativeProgramZoomCommand?
     private var nativeWakeAt: TimeInterval = .infinity
-    private var nativeRateSentAt: TimeInterval = -.infinity
     private var preparationZoom: Double?
     private var preparationSentAt: TimeInterval?
 
@@ -27,9 +26,8 @@ public struct GimbalProgramZoom: Sendable {
     }
 
     public var liveZoom: Double? { status.zoomFactor }
-    /// Rate timing is calibrated on Pocket 4 Pro; other bodies retain the
-    /// existing absolute path until their response is measured.
-    public var usesNativeRate: Bool { model?.isPocket4Pro == true }
+    /// The 50 Hz target path is measured on Pocket 4 Pro. Other bodies retain 20 Hz.
+    public var usesHighRateTargets: Bool { model?.isPocket4Pro == true }
     private var maximumZoom: Double {
         model?.activeZoomStops(resolution: status.videoResolution,
             shootingMode: status.shootingMode).last ?? 1
@@ -45,9 +43,6 @@ public struct GimbalProgramZoom: Sendable {
         }) else { return "Saved zoom exceeds the current FORMAT limit" }
         guard let liveZoom, liveZoom.isFinite, (1...maximum).contains(liveZoom)
         else { return "Wait for camera zoom feedback" }
-        if usesNativeRate, let reason = GimbalZoomPath(program: program).legs.compactMap({
-            NativeProgramZoom.timingFailure(from: $0.from, to: $0.to, duration: $0.duration)
-        }).first { return reason }
         return nil
     }
 
@@ -71,7 +66,7 @@ public struct GimbalProgramZoom: Sendable {
         guard measuresZoom, let liveZoom else { return }
         let lens = CamFov.pinchLens(for: liveZoom)
         if let previous = zoomReceivedAt, now <= previous { return }
-        if let previous = zoomReceivedAt, now - previous > (usesNativeRate ? 0.85 : 0.3) {
+        if let previous = zoomReceivedAt, now - previous > (usesHighRateTargets ? 0.85 : 0.3) {
             stableLens = nil
             stableSince = nil
         }
@@ -102,18 +97,21 @@ public struct GimbalProgramZoom: Sendable {
         lastLens = nil
         lastNativeCommand = nil
         nativeWakeAt = .infinity
-        nativeRateSentAt = -.infinity
         preparationZoom = nil
         preparationSentAt = nil
     }
 
     public func nextWakeInterval(at now: TimeInterval) -> TimeInterval {
-        usesNativeRate ? max(0.000_001, nativeWakeAt - now)
+        usesHighRateTargets ? max(0.000_001, nativeWakeAt - now)
             : max(0.000_001, sampledAt + Self.interval - now)
     }
 
     public func canSample(at now: TimeInterval) -> Bool {
         now.isFinite && now - sampledAt >= Self.interval - 1e-9
+    }
+
+    public func canSampleNativeTarget(at now: TimeInterval) -> Bool {
+        now.isFinite && now - sampledAt >= NativeProgramZoom.interval - 1e-9
     }
 
     public mutating func lensTarget(for factor: Double, at now: TimeInterval) -> UInt16? {
@@ -130,7 +128,7 @@ public struct GimbalProgramZoom: Sendable {
 
     public func nativeFailure(at now: TimeInterval) -> String? {
         if let failureReason { return failureReason }
-        guard usesNativeRate else { return nil }
+        guard usesHighRateTargets else { return nil }
         // Lens reports arrive at 2.5 Hz. Angular reports cannot refresh them.
         guard let zoomReceivedAt, now.isFinite, now >= zoomReceivedAt,
             now - zoomReceivedAt <= 0.85 else { return "Move interrupted — camera zoom feedback lost" }
@@ -161,22 +159,23 @@ public struct GimbalProgramZoom: Sendable {
             guard factor.isFinite, (1...maximumZoom).contains(factor), command != lastNativeCommand else { return nil }
             preparationZoom = factor
             preparationSentAt = now
-        case .rate(let speed, _):
-            guard (NativeProgramZoom.slowestSpeed...NativeProgramZoom.fastestSpeed).contains(speed) else { return nil }
-            let due = nativeRateSentAt + Self.interval
-            if command == lastNativeCommand {
-                // Reserve the wire slot for the exact transition, rather than
-                // refreshing an old rate immediately before the waypoint.
-                guard demand.nextChange >= Self.interval - 1e-9 else { return nil }
-            }
+            sampledAt = now
+            lastLens = CamFov.pinchLens(for: factor)
+        case .track(let factor):
+            guard factor.isFinite, (1...maximumZoom).contains(factor) else { return nil }
+            let due = sampledAt + NativeProgramZoom.interval
             guard now >= due - 1e-9 else {
-                nativeWakeAt = min(nativeWakeAt, due)
+                nativeWakeAt = due
                 return nil
             }
-            nativeRateSentAt = now
-            nativeWakeAt = min(nativeWakeAt, now + Self.interval)
+            sampledAt = now
+            nativeWakeAt = now + NativeProgramZoom.interval
             preparationZoom = nil
             preparationSentAt = nil
+            let lens = CamFov.pinchLens(for: factor)
+            // A duplicate still consumes its sample slot and any retained endpoint.
+            guard lens != lastLens else { return nil }
+            lastLens = lens
         case .stop:
             // STOP is immediate, including short idle gaps between native legs.
             guard hasSentTarget, command != lastNativeCommand else { return nil }

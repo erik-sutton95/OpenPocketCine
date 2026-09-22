@@ -34,7 +34,7 @@ internal data class GimbalZoomPath(val legs: List<Leg>) {
             }
             remaining = maxOf(0.0, remaining - leg.duration)
         }
-        return NativeProgramZoomDemand(NativeProgramZoomCommand.Stop, end)
+        return NativeProgramZoomDemand(NativeProgramZoomCommand.Track(end), end)
     }
 
     fun remaining(time: Double, zoom: Double, quantized: Boolean): GimbalZoomPath {

@@ -42,7 +42,7 @@ struct GimbalZoomPath: Equatable, Sendable {
             }
             remaining = max(0, remaining - leg.duration)
         }
-        return .init(command: .stop, destination: end)
+        return .init(command: .track(end), destination: end)
     }
 
     func remaining(after time: TimeInterval, from zoom: Double, quantized: Bool) -> Self {

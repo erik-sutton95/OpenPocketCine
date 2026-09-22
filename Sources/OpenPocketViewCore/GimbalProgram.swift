@@ -469,15 +469,25 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         return target
     }
 
-    /// Continuous zoom shares the pass/resume clock, including B when the
+    /// Linear lens targets share the pass/resume clock, including B when the
     /// angular curve rounds that point. Reversals need no dwell.
     public var nativeZoomDemand: NativeProgramZoomDemand? {
         guard program.changesZoom, running, !isPaused, index < legs.count else { return nil }
+        if let pendingZoomEndpoint {
+            return .init(command: .track(pendingZoomEndpoint), destination: pendingZoomEndpoint)
+        }
         if phase == "APPROACH" || phase == "HOLD", let zoom = program.a?.zoom {
             return .init(command: .position(zoom), destination: zoom)
         }
         return phase == "RUN" ? zoomPath.nativeDemand(at: zoomElapsedOffset + elapsed)
-            : .init(command: .stop, destination: zoomPath.end)
+            : .init(command: .track(zoomPath.end), destination: zoomPath.end)
+    }
+
+    /// Consume only after sample admission, including duplicate quantized targets.
+    public mutating func consumeNativeZoomDemand() -> NativeProgramZoomDemand? {
+        let demand = nativeZoomDemand
+        if demand != nil { pendingZoomEndpoint = nil }
+        return demand
     }
 
     /// A shell capability change can invalidate a take before another command is sent.
