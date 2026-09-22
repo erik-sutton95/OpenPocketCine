@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.openpocketcine.session.GimbalProgram
+import com.opencapture.openpocketcine.session.CameraCommands
 import kotlin.math.round
 
 /**
@@ -29,6 +30,6 @@ internal class MotionControlDragGesture(private val immediate: Boolean, private 
 internal fun motionDurationAfterDrag(start: Double, translationDp: Float, floor: Double): Double =
     GimbalProgram.steppedDuration(start, -round(translationDp / 12f).toDouble() * 0.5, floor)
 
-/** MIRROR assist changes display only; native body coordinates and capture stay unchanged. */
-internal fun motionOverlayX(normalizedX: Double, mirrored: Boolean): Double =
-    if (mirrored) 1.0 - normalizedX else normalizedX
+/** Match settled selfie rotation and MIRROR in display space; native coordinates stay unchanged. */
+internal fun motionOverlayX(normalizedX: Double, poseInvertPan: Boolean, mirrored: Boolean): Double =
+    if (CameraCommands.liveInvertPan(poseInvertPan, mirrored)) 1.0 - normalizedX else normalizedX

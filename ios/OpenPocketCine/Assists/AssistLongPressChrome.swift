@@ -71,7 +71,7 @@ enum AssistLongPressChrome {
         case .mirror: MirrorAssist.longPressMenu(assist: assist)
         case .audioMeters: AudioAssist.longPressMenu(assist: assist)
         case .desqueeze: DesqueezeAssist.longPressMenu(assist: assist)
-        case .level, .evMeter, .instantReview, .magnification:
+        case .level, .instantReview, .magnification, .evMeter:
             EmptyView()
         }
     }

@@ -26,9 +26,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,11 +41,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalConfiguration
@@ -73,7 +78,8 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     usageSeed: Map<String, Int> = emptyMap(),
     idOf: (T) -> String = { it.toString() },
     usage: MonitorToolUsageState = MonitorToolUsageState(),
-    onUsageChange: (MonitorToolUsageState) -> Unit = {}) {
+    onUsageChange: (MonitorToolUsageState) -> Unit = {},
+    onBoundsInRootChanged: (Rect?) -> Unit = {}) {
     var expanded by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var pinnedIds by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -82,6 +88,8 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     val scope = rememberCoroutineScope()
     val nowLocked by rememberUpdatedState(locked)
     val nowUsage by rememberUpdatedState(usage)
+    val nowBoundsChanged by rememberUpdatedState(onBoundsInRootChanged)
+    DisposableEffect(Unit) { onDispose { nowBoundsChanged(null) } }
     val liveRanked = remember(tools, usage) {
         MonitorAssistUsage.ranked(tools, idOf, usage, usageSeed)
     }
@@ -136,19 +144,30 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     }
     val scrollState = rememberScrollState()
     var slotInWindow by remember { mutableStateOf(IntRect.Zero) }
+    var windowToRoot by remember { mutableStateOf(Offset.Zero) }
+    var popupWindowWidth by remember(config.screenWidthDp, density.density) {
+        mutableIntStateOf(with(density) { config.screenWidthDp.dp.roundToPx() })
+    }
     val popupPosition = remember(slotInWindow) {
         object : PopupPositionProvider {
             override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
                 layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
-                val slot = slotInWindow
-                val left = slot.left.coerceIn(0, maxOf(0, windowSize.width - popupContentSize.width))
-                // Compact liveModuleFrame slot is the bottom-leading rest. Expanded
-                // plate height is popupContentSize, so this grows upward from that edge.
-                val top = (slot.bottom - popupContentSize.height).coerceAtLeast(0)
-                return IntOffset(left, top)
+                popupWindowWidth = windowSize.width
+                val bounds = MonitorAssistPaletteReveal.popupBounds(slotInWindow, windowSize.width, popupContentSize)
+                return IntOffset(bounds.left, bounds.top)
             }
         }
     }
+    val reservedSize = with(density) {
+        MonitorAssistPaletteReveal.reservationSize(expanded, dragging, progress.isRunning, reveal,
+            IntSize(compactW.roundToPx(), compactH.roundToPx()), IntSize(fullW.roundToPx(), fullH.roundToPx()))
+    }
+    val reservedBounds = if (slotInWindow.width > 0 && slotInWindow.height > 0) {
+        val bounds = MonitorAssistPaletteReveal.popupBounds(slotInWindow, popupWindowWidth, reservedSize)
+        Rect(bounds.left + windowToRoot.x, bounds.top + windowToRoot.y,
+            bounds.right + windowToRoot.x, bounds.bottom + windowToRoot.y)
+    } else null
+    SideEffect { nowBoundsChanged(reservedBounds) }
     val labelOpacity = ((reveal - 0.7f) / 0.3f).coerceIn(0f, 1f)
     val extraOpacity = MonitorAssistPaletteReveal.extraToolOpacity(reveal)
     val compactCount = MonitorAssistPaletteReveal.compactToolCount(portrait)
@@ -316,7 +335,9 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     }
     Box(modifier.size(compactW, compactH), contentAlignment = Alignment.BottomStart) {
         Box(Modifier.matchParentSize().onGloballyPositioned { coords ->
+            val root = coords.positionInRoot()
             val pos = coords.positionInWindow()
+            windowToRoot = root - pos
             val next = IntRect(
                 left = pos.x.roundToInt(),
                 top = pos.y.roundToInt(),

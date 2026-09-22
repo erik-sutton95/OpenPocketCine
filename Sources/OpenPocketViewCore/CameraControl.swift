@@ -326,8 +326,18 @@ public enum CameraReply: Equatable, Sendable {
 
 /// `cam_expo_param` shutter / ISO / EV fields (Mimo 2026-08-14). `@13` is not ISO.
 public enum ExpoParam {
-    /// `@2–3` = `denom | 0x8000` u16-LE. Not `@16`.
+    /// Auto uses applied shutter `@20–22`; `@2–4` retains the manual setting.
+    /// Only integer reciprocals fit this readout. Missing/unsupported Auto values
+    /// must not fall back to the remembered manual shutter.
     public static func shutterDenom(_ value: [UInt8]) -> Int? {
+        if ExpoMode.parseExpoParam(value) == .auto {
+            guard value.count >= 23, value[21] & 0x80 != 0, value[22] == 0 else {
+                return nil
+            }
+            let raw = UInt16(value[20]) | (UInt16(value[21]) << 8)
+            let denom = Int(raw & 0x7FFF)
+            return (1...16_000).contains(denom) ? denom : nil
+        }
         guard value.count >= 4 else { return nil }
         let raw = UInt16(value[2]) | (UInt16(value[3]) << 8)
         let denom = Int(raw & 0x7FFF)
@@ -344,6 +354,13 @@ public enum ExpoParam {
     public static func evComp(_ value: [UInt8]) -> EvComp? {
         guard value.count > 6 else { return nil }
         return EvComp(rawValue: value[6])
+    }
+
+    /// `@15` is the camera's metered EV, independently reported from configured `@6`.
+    /// Same third-stop encoding; absent/unsupported values must not become zero.
+    public static func meteredEv(_ value: [UInt8]) -> EvComp? {
+        guard value.count > 15 else { return nil }
+        return EvComp(rawValue: value[15])
     }
 
     /// `@16` u16-LE = ISO number. Auto `@16` floats with the meter.

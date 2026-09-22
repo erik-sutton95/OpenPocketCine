@@ -358,6 +358,7 @@ final class LiveFrameSampleBus {
     }
 
     func clearPlaybackSource() {
+        playbackBundle = nil
         playbackSourcePixelBuffer = nil
         playbackSourceTransfer = .rec709
         inspectorSourceEpoch &+= 1

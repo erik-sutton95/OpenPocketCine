@@ -9,7 +9,8 @@ final class AssistBarChromeTests: XCTestCase {
             LiveAssistTool.toolbarCases,
             [
                 .lut, .peaking, .falseColor, .zebra, .waveform, .parade, .histogram,
-                .vectorscope, .trafficLights, .ndMeter, .guides, .grid, .crosshair, .desqueeze,
+                .vectorscope, .trafficLights, .ndMeter, .evMeter, .guides, .grid, .crosshair,
+                .desqueeze,
                 .mirror,
             ]
         )
@@ -21,7 +22,7 @@ final class AssistBarChromeTests: XCTestCase {
     }
 
     func testLongPressEnabledForRemainingTools() {
-        let tapOnly: Set<LiveAssistTool> = [.mirror]
+        let tapOnly: Set<LiveAssistTool> = [.mirror, .evMeter]
         for tool in LiveAssistTool.settingsCases where !tapOnly.contains(tool) {
             XCTAssertTrue(tool.hasConfiguration, "\(tool.rawValue) should open options")
         }

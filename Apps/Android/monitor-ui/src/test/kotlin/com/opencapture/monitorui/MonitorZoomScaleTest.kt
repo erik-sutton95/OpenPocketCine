@@ -21,12 +21,16 @@ class MonitorZoomScaleTest {
         assertEquals(ticks[1] - ticks[0], ticks[2] - ticks[1], 1e-9)
     }
 
-    @Test fun slowRotationSnapsToWholeStopsAndFastRotationDoesNot() {
-        assertEquals(3.0, MonitorZoomScale.slowSnap(2.98, 2.97, maximum = 12.0), 1e-9)
-        assertEquals(3.0, MonitorZoomScale.slowSnap(3.02, 3.00, maximum = 12.0), 1e-9)
-        assertEquals(3.08, MonitorZoomScale.slowSnap(3.08, 3.00, maximum = 12.0), 1e-9)
-        assertEquals(3.12, MonitorZoomScale.slowSnap(3.12, 3.00, maximum = 12.0), 1e-9)
-        assertEquals(1.52, MonitorZoomScale.slowSnap(1.52, 1.51, maximum = 12.0), 1e-9)
-        assertEquals(6.0, MonitorZoomScale.slowSnap(6.02, 6.00, maximum = 12.0), 1e-9)
+    @Test fun continuousLogarithmicInputPreservesSmallStepsAcrossWholeStops() {
+        for (stop in MonitorZoomScale.wholeStops.filter { it > 1.0 && it < 12.0 }) {
+            val requested = (-20..20).map { stop + it * 0.0007 }
+            val delivered = requested.map { value ->
+                MonitorZoomScale.valueAt(MonitorZoomScale.position(value, 1.0, 12.0), 1.0, 12.0)
+            }
+            requested.zip(delivered).forEach { (request, value) -> assertEquals(request, value, 1e-12) }
+            delivered.zipWithNext().forEach { (first, second) -> assertEquals(0.0007, second - first, 1e-12) }
+        }
+        assertEquals(1.0, MonitorZoomScale.valueAt(-0.1, 1.0, 3.0))
+        assertEquals(3.0, MonitorZoomScale.valueAt(1.1, 1.0, 3.0))
     }
 }

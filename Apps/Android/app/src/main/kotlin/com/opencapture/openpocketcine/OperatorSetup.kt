@@ -391,6 +391,7 @@ internal enum class AssistCard(val title: String) {
     PARADE("Parade"),
     VECTORSCOPE("Vectorscope"),
     TRAFFIC_LIGHTS("Traffic Lights"),
+    EV("EV Meter"),
     DESQUEEZE("Anamorphic Desqueeze"),
 }
 
@@ -923,6 +924,15 @@ private fun AssistRows(model: AppModel, statusColorMode: Int, onOpenLut: () -> U
                 TrafficLightsAssistCard(assist)
             }
         }
+    }
+
+    SettingsRowCard(title = "EV Meter") {
+        SettingsSwitchInlineRow(
+            "Enabled",
+            isOn = assist.evMeter,
+            help = "Show the camera's exposure meter at the picture's left edge in DISP 1. Auto and Manual use the camera reading without changing exposure settings.",
+            showTopDivider = false,
+        ) { assist.toggle(LiveAssistTool.EV) }
     }
 
     SettingsRowCard(title = "Anamorphic Desqueeze", onReset = {

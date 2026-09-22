@@ -32,6 +32,7 @@ class LiveAssistStateTest {
                 LiveAssistTool.VECTOR,
                 LiveAssistTool.LIGHTS,
                 LiveAssistTool.ND,
+                LiveAssistTool.EV,
                 LiveAssistTool.GUIDES,
                 LiveAssistTool.GRID,
                 LiveAssistTool.CROSS,
@@ -45,11 +46,12 @@ class LiveAssistStateTest {
     }
 
     @Test
-    fun audioHasMonitorOptionsAndMirrorStaysTapOnly() {
+    fun audioHasMonitorOptionsWhileEvAndMirrorStayTapOnly() {
         assertTrue(LiveAssistTool.AUDIO.hasConfiguration)
+        assertFalse(LiveAssistTool.EV.hasConfiguration)
         assertFalse(LiveAssistTool.MIRROR.hasConfiguration)
         for (tool in LiveAssistTool.settingsCases) {
-            if (tool == LiveAssistTool.AUDIO || tool == LiveAssistTool.MIRROR) continue
+            if (tool == LiveAssistTool.AUDIO || tool == LiveAssistTool.EV || tool == LiveAssistTool.MIRROR) continue
             assertTrue(tool.hasConfiguration, "${tool.name} should open options")
         }
     }
@@ -186,7 +188,9 @@ class LiveAssistStateTest {
         assertTrue(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.FALSE))
         assertTrue(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.ZEBRA))
         assertEquals(LiveAssistTool.AUDIO, LiveAssistTool.playbackToolbarCases.last())
-        assertEquals(LiveAssistTool.toolbarCases, LiveAssistTool.playbackToolbarCases.dropLast(1))
+        assertFalse(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.EV))
+        assertEquals(LiveAssistTool.toolbarCases.filter { it != LiveAssistTool.EV },
+            LiveAssistTool.playbackToolbarCases.dropLast(1))
     }
 
     @Test

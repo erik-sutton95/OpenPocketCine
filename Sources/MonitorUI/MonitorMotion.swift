@@ -4,30 +4,36 @@
     /// Keep the original pointer sequence available to a control beneath a
     /// floating editor. The editor remains a sibling above this backdrop.
     public struct MonitorMotionDismissBackdrop: View {
-        private var exclusion: CGRect
+        private var exclusions: [CGRect]
         private var dismiss: () -> Void
 
         public init(excluding exclusion: CGRect, onDismiss: @escaping () -> Void) {
-            self.exclusion = exclusion
+            self.init(excluding: [exclusion], onDismiss: onDismiss)
+        }
+
+        public init(excluding exclusions: [CGRect], onDismiss: @escaping () -> Void) {
+            self.exclusions = exclusions
             self.dismiss = onDismiss
         }
 
         public var body: some View {
             Color.clear
-                .contentShape(MotionDismissShape(exclusion: exclusion), eoFill: true)
+                .contentShape(MotionDismissShape(exclusions: exclusions), eoFill: true)
                 .onTapGesture(perform: dismiss)
                 .accessibilityAddTraits(.isButton)
         }
     }
 
     private struct MotionDismissShape: Shape {
-        var exclusion: CGRect
+        var exclusions: [CGRect]
 
         func path(in rect: CGRect) -> Path {
             Path { path in
                 path.addRect(rect)
-                let hole = exclusion.intersection(rect)
-                if !hole.isNull, !hole.isEmpty { path.addRect(hole) }
+                for exclusion in exclusions {
+                    let hole = exclusion.intersection(rect)
+                    if !hole.isNull, !hole.isEmpty { path.addRect(hole) }
+                }
             }
         }
     }

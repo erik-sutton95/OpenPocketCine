@@ -345,7 +345,7 @@ fun MediaPlayerScreen(
     var wasPlayingBeforeScrub by remember { mutableStateOf(false) }
     var lastScrubSeekAt by remember { mutableLongStateOf(0L) }
     var reachedEnd by remember { mutableStateOf(false) }
-    var ready by remember { mutableStateOf(false) }
+    var ready by remember(active.id) { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(true) }
@@ -1048,6 +1048,7 @@ fun MediaPlayerScreen(
                 )
                 com.opencapture.openpocketcine.assists.MonitorAssistCluster(
                     portrait = portraitPlayback, locked = false,
+                    playback = true,
                     isOn = assist::isPlaybackVisible, onToggle = { assist.togglePlayback(it) },
                     onLongPress = { assist.configureTool = it },
                     requestExpand = assistMode, onExpansionHandled = { assistMode = false },

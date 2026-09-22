@@ -1,17 +1,18 @@
 New and changed
 
-- Motion Control can loop a programmed move with linear zoom.
+- View Assist EV toggles a slim white line and sun marker with +3/−3 ends. It reads the camera directly and moves clear of the toolbar in DISP 1.
+- Motion Control loops through saved zooms and offers Restart while paused. Zoom controls stay accessible; D-Log2 blocks zoom-changing programs.
 - Anamorphic Desqueeze (DE-SQ) offers lens presets and a custom 1.00–2.00× factor for live view, videos and photos.
-- Report a problem is available before your first camera connection, with optional technical details and screenshots.
 
 Fixes
 
-- Improved recovery when an established preview loses its video format.
-- Pairing no longer times out on phones where the camera approval never appeared, and opening the camera's own gallery opens Media here.
-- Preview no longer drops while Media is open during a repair, stalled video recovers in about 2 seconds, and a dropped decoder frame now triggers repair instead of a smeared picture.
+- EV is separate from compensation settings. It shows a dash when camera metering is unavailable; DISP 2 and playback hide it.
+- Auto exposure shows the camera's applied shutter under EV. Missing or unsupported shutter readings leave only EV visible.
+- Pairing no longer times out on phones where the camera approval never appeared.
+- Stalled video recovers in about 2 seconds, and opening the camera's own gallery opens Media here.
 
 What to test
 
-- Try a short looping move with zoom; check start, pause, resume and stop with clearance around the gimbal.
-- Toggle DE-SQ and try presets, Custom, LUTs and playback. Check the custom factor survives a restart and shared files remain unchanged.
-- Open Report a problem before pairing. Then connect three times and check picture recovery after Media, Settings and background use.
+- Toggle EV, rotate and expand/collapse the toolbar; check that it stays clear of the meter. Compare EV and Auto shutter with the camera as lighting changes, then switch to Manual and back.
+- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, change a duration, then close/reopen it and check saved settings remain.
+- Hold DE-SQ for presets, Custom and direction. Check framing with LUTs and guides in live view, videos and photos.

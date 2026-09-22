@@ -8,9 +8,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.opencapture.monitorui.MonitorToolUsageState
 import com.opencapture.openpocketcine.LiveDesign
+import com.opencapture.openpocketcine.ChromeRect
+import com.opencapture.openpocketcine.LocalLiveCanvasOrigin
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs
 
@@ -25,16 +28,20 @@ import com.opencapture.openpocketcine.OperatorPrefs
 fun MonitorAssistCluster(portrait: Boolean, locked: Boolean, isOn: (LiveAssistTool) -> Boolean,
     onToggle: (LiveAssistTool) -> Unit, onLongPress: (LiveAssistTool) -> Unit,
     modifier: Modifier = Modifier, requestExpand: Boolean = false, onExpansionHandled: () -> Unit = {},
-    showsAudio: Boolean = true, inspectorOpen: Boolean = false) {
+    showsAudio: Boolean = true, inspectorOpen: Boolean = false, playback: Boolean = false,
+    onBoundsChanged: (ChromeRect?) -> Unit = {}) {
     if (inspectorOpen) return
     val context = LocalContext.current
+    val density = LocalDensity.current.density
+    val origin = LocalLiveCanvasOrigin.current
     var usage by remember { mutableStateOf(OperatorPrefs.assistToolUsage(context)) }
-    val tools = if (showsAudio) LiveAssistTool.settingsCases else LiveAssistTool.toolbarCases
+    val catalog = if (playback) LiveAssistTool.playbackToolbarCases else LiveAssistTool.settingsCases
+    val tools = if (showsAudio) catalog else catalog.filter { it != LiveAssistTool.AUDIO }
     com.opencapture.monitorui.MonitorAssistPalette(
         tools = tools, usageSeed = ASSIST_USAGE_SEED,
         portrait = portrait, locked = locked, isOn = isOn, title = { it.title }, label = { it.chipLabel },
         hasOptions = { it.hasConfiguration }, onToggle = onToggle, onOptions = onLongPress,
-        glyph = { tool, tint, iconModifier -> AssistToolGlyph(tool, tint, iconModifier) },
+        glyph = { tool, tint, iconModifier -> AssistToolGlyph(tool, tint, iconModifier, evFontSize = 17f) },
         chevron = { expanded, vertical ->
             val icon = if (vertical) { if (expanded) OpcIcon.CHEVRON_DOWN else OpcIcon.CHEVRON_UP }
                 else { if (expanded) OpcIcon.CHEVRON_LEFT else OpcIcon.CHEVRON_RIGHT }
@@ -44,6 +51,12 @@ fun MonitorAssistCluster(portrait: Boolean, locked: Boolean, isOn: (LiveAssistTo
         onUsageChange = { next: MonitorToolUsageState ->
             usage = next
             OperatorPrefs.setAssistToolUsage(context, next)
+        },
+        onBoundsInRootChanged = { bounds ->
+            onBoundsChanged(bounds?.let {
+                ChromeRect((it.left - origin.x) / density, (it.top - origin.y) / density,
+                    it.width / density, it.height / density)
+            })
         },
     )
 }

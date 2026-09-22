@@ -17,7 +17,9 @@ Format / Color / Mode tabs on the details drawer; landscape has no extra
 category row, and shooting mode is its own top control (not FORMAT). ISO,
 shutter, white balance, focus and audio stay along the bottom and remain
 visible while a top picker is open. Auto exposure keeps EV as the value and
-shows the camera-chosen shutter under it (`EV 1/200s`). Tap a value for the full details drawer;
+shows the camera-reported applied shutter under it (`EV 1/200s`), updating as
+Auto adjusts exposure. Missing or unsupported shutter data leaves the caption
+as `EV`. Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value. Camera controls hold your selection while the
 camera confirms it, so an older status update does not briefly move the dial back.
 A rejected or unconfirmed change returns to the reported camera value after settling.
@@ -63,7 +65,8 @@ Image previews use the raw feed and work with all scopes off.
 On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
 when digital zoom is available. Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. The disc hub reads hundredths (1.53×)
-and the chip still shows tenths. Its limits and recording restrictions
+and the chip still shows tenths. Dragging retains finer values without snapping
+to those displayed numbers or whole zoom stops. Its limits and recording restrictions
 remain camera-specific. In landscape the larger disc sits on the trailing
 screen edge and covers the controls beneath it until closed. In portrait it
 sits on the bottom screen edge. Gimbal cameras expose Mode, Speed, Ramp and
@@ -161,6 +164,23 @@ existing saved pins stay unchanged.
 LUTs and picture warnings follow the correction, and framing guides align with
 the corrected picture. Desqueeze changes only the display: recordings, shared
 files and scope measurements keep the original image.
+
+## EV meter
+
+Enable **EV** in View Assist to show a slim white exposure line with a sun
+marker and a dark glow in **DISP 1**. The camera's signed EV number sits above the line, with
++3 and −3 at its ends. The text **EV** identifies its toolbar button.
+The meter sits just inside the picture's left edge, slightly above center.
+It moves upward or shortens to clear the View Assist toolbar, including expansion.
+If the toolbar leaves no room, the meter returns when the toolbar closes.
+Tap EV again to hide it; the on/off choice is saved. The meter disappears in
+**DISP 2** and playback.
+
+The reading comes directly from the camera's exposure telemetry in Auto and
+Manual. It is separate from the EV compensation setting in the camera controls.
+No image analysis, LUT conversion or additional camera polling is needed for
+this meter. A dash without a needle means the camera has not supplied a supported
+value. It never substitutes the compensation setting or an image-derived estimate.
 
 ## Moving scopes
 
@@ -263,7 +283,7 @@ space after rotation or resizing, including saved positions. Long-press a View A
   D-pad shutter changes also update the shutter-angle readout when angle display is selected.
   A gimbal stop pulses only after the head moves then stalls
   (Haptics setting). Capture drums, the zoom disc, and duration
-  dials pulse on coarse snaps (172° → 180°, 3×, whole seconds),
+  dials pulse on coarse steps and whole-stop crossings (172° → 180°, 3×, whole seconds),
   not on every hundredth or half-second tick. Stick
   pan stays picture-relative. The rotate-180 button inverts pan at the
   end of the rotation (like Mimo). Extra-mirror live view when that 180
@@ -333,13 +353,63 @@ Motion Control shows A, B and C with their reported pan, tilt and zoom, or
 position the camera before saving a point. Other outside taps minimize the editor
 without activating the controls behind it. Durations use half-second dials up to
 120 seconds. Swipe left to increase duration and right to decrease it. Drag the expanded window or minimized pill directly; no hold is needed.
-Duration dials and sliders keep their own gestures. Dragging
+Duration dials and sliders keep their own gestures. After moving the window,
+swipe a duration dial to adjust that leg. Dragging
 does not activate Start/Stop or expand. Start shows a cancellable three-second
 countdown before preparation and approach to A. Pause holds the move; Resume
 continues from the stopped position without another countdown. Stop clears the
 continuation. Manual control or disconnect also cancels a paused move. Long pan returns follow
 the reachable arc rather than wrapping through the gimbal stop. Selfie Flip
-does not reverse stored mechanical angles; MIRROR changes the preview only.
+does not reverse stored mechanical angles. Waypoint letters and the dashed path
+follow the selfie orientation and MIRROR assist visually; saved positions and
+programmed movements stay the same.
+
+Use the existing **zoom chip** to frame a point without closing or minimizing
+Motion Control. Tap for the usual zoom stops, or hold to open the zoom disc.
+Closing the disc returns to the full editor; SET or RESET then saves the point.
+The camera's zoom limits and D-Log2 recording restrictions still apply. Manual
+zoom takes over and cancels an active or paused motion program.
+
+Each point also saves its zoom. When those amounts differ, Motion Control
+transitions between them over the leg durations; B's zoom is reached even when
+Smoothness rounds the gimbal path. Loop reverses zoom too. Pause stops the zoom
+stream, and Resume waits for fresh, settled lens feedback before continuing.
+Zoom-changing programs are unavailable in **D-Log2**, both while recording and
+idle; Start shows the reason. Choose a compatible color mode yourself—the program
+never switches color mode. Programs without zoom changes still work in D-Log2.
+Saved zoom must fit the current camera FORMAT. Zoom timing and optical smoothness
+remain experimental.
+
+Programmed zoom changes linearly throughout each leg, including reverse loops.
+For example, halfway through a 3×→6× move, the commanded zoom is 4.5×. Zoom begins
+with the movement and reaches the next saved amount at its endpoint. Pocket 4 Pro
+uses more frequent lens targets to reduce visible stepping; the camera must report
+that it reached A's zoom before the timed movement begins. Very small changes are
+limited by the camera's lens-position resolution. Other Pocket bodies retain their
+existing update cadence while their response is qualified. Optical accuracy and
+smoothness across every zoom range remain experimental.
+
+**Loop** (off by default) moves back and forth: A→B→A→B, or
+A→B→C→B→A→B→C. Each reverse leg keeps its original duration and retraces
+the same smoothed path. The countdown, approach to A and two-second settle happen
+only at the initial start. The return starts without an added endpoint pause;
+position checks continue while it moves. Exact reversals allow the camera's
+natural motor easing when fresh feedback confirms arrival and a clean return.
+If feedback cannot verify the endpoint, the move stops.
+Choose Loop before Start. Pause/Resume keeps the current direction; Stop, a motion
+failure or manual takeover ends the loop.
+
+The compact editor keeps its header and Clear, Start/Stop and Pause/Resume
+buttons fixed. **Not set** and the Loop hint use bright gray text for readability
+over live view. While paused, **Restart** replaces Clear: it keeps your program
+and begins again from A with the usual countdown and preparation. The settings scroll above the buttons, with a subtle bottom fade
+when more content remains below.
+
+Closing and reopening the editor retains A/B/C, durations, Smoothness and Loop
+for the current camera session. During a run, Close minimizes to the control pill
+so Pause and Stop stay available. Stop keeps the saved program; Clear removes the
+points and resets Smoothness and Loop. A new camera session starts a fresh program.
+
 The recorded physical motion checks are on Pocket 4 Pro; Pocket 3 and broader
 firmware qualification remain pending. See
 [Motion Control qualification](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/programmed-moves.md#evidence-and-qualification).

@@ -5,6 +5,19 @@ import Testing
 
 @Suite
 struct AndroidSessionWireTests {
+    @Test func cameraMeterRoundTripsSeparatelyFromConfiguredEV() {
+        var status = CameraStatus()
+        status.evComp = .zero
+        status.meteredEv = EvComp(thirds: -4)
+        let decoded = AndroidSessionWire.status(fromJSON: AndroidSessionWire.statusJSON(status))
+        #expect(decoded.evComp == .zero)
+        #expect(decoded.meteredEv?.thirds == -4)
+        #expect(AndroidSessionWire.status(fromJSON: "{}").meteredEv == nil)
+        #expect(AndroidSessionWire.status(fromJSON: "{\"evComp\":16}").meteredEv == nil)
+        #expect(AndroidSessionWire.status(fromJSON: "{\"meteredEv\":-1}").meteredEv == nil)
+        #expect(AndroidSessionWire.status(fromJSON: "{\"meteredEv\":272}").meteredEv == nil)
+    }
+
     @Test func shutterCommandPreservesPhotoAndSupportsTimelapseStop() {
         for extra: String? in [nil, "", "1"] {
             let frame = AndroidSessionWire.encodeCommand(kind: .shootPhoto, seq: 7, extra: extra)

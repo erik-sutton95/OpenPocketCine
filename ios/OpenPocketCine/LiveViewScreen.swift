@@ -22,6 +22,7 @@ struct LiveViewScreen: View {
     @State private var zoomDialMounted = false
     @State private var zoomDismissTask: Task<Void, Never>?
     @State private var assistsExpanded = false
+    @State private var assistsRevealing = false
     @State private var zoomGestureAnchor = 1.0
 
     /// OpenZCine `DisplayChromeVisibility.cleanDefaults`: status + strips + lock off;
@@ -123,7 +124,7 @@ struct LiveViewScreen: View {
                 }
             )
             #if targetEnvironment(simulator)
-                model.session.status.colorMode = .dLog2
+                if !MonitorUIReview.isActive { model.session.status.colorMode = .dLog2 }
             #endif
             model.syncLiveMonitorColor()
             model.session.decoder.startSimulatorSampleIfNeeded()
@@ -317,7 +318,7 @@ struct LiveViewScreen: View {
             popups(layout)
                 // Clear the container's full-screen hit region as its last
                 // popup leaves; a dismissed picker must not swallow Lock.
-                .zIndex(10)
+                .zIndex(zoomDialMounted ? 16 : 10)
                 // These hosts position bounded panels inside the viewport.
                 // An AX attachment on the hosts promotes a sole panel to that
                 // full frame (and exposes an empty host above other drawers).
@@ -335,9 +336,15 @@ struct LiveViewScreen: View {
                     layout: layout, feed: layout.onFeed,
                     joystickBounds: model.chromeSectionMounts(.gimbalStick)
                         && !captureControlsPresented
-                        ? Self.cgRect(self.gimbalCluster(layout).stick) : .zero
+                        ? Self.cgRect(self.gimbalCluster(layout).stick) : .zero,
+                    zoomBounds: OsmoMonitorPresentation.capabilities(model.session).zoom
+                        && model.chromeSectionMounts(.zoomChip) && !captureControlsPresented
+                        ? Self.cgRect(self.gimbalCluster(layout).zoom) : .zero,
+                    coveredByZoom: zoomDialMounted
                 )
                 .environment(\.interfaceLocked, interfaceLocked)
+                .opacity(zoomDialVisible ? 0.16 : 1)
+                .animation(MonitorMotion.dim(reduceMotion), value: zoomDialVisible)
                 .allowsHitTesting(model.liveChromeInteractive && !zoomDialMounted)
                 .zIndex(15)
             }
@@ -461,6 +468,26 @@ struct LiveViewScreen: View {
                 interfaceLocked: interfaceLocked,
                 chromeClearance: scopeClearance(layout: layout)
             )
+
+            if model.assist.isVisible(.evMeter) {
+                CameraEVMeterOverlay(
+                    feed: model.assist.isVisible(.desqueeze)
+                        ? DesqueezeAssist.presentationRect(
+                            sourceSize: CGSize(
+                                width: model.session.decoder.pictureAspect, height: 1),
+                            in: layout.onFeed, effects: model.assist.effects
+                        )
+                        .intersection(layout.onFeed)
+                        : layout.onFeed,
+                    avoiding: model.chromeSectionMounts(.toolBar)
+                        ? FieldMonitorAssistPalette.visibleFrame(
+                            in: layout,
+                            toolCount: LiveAssistTool.toolbarCases.count
+                                + (model.session.status.isPhoto ? 0 : 1),
+                            expanded: assistsExpanded || assistsRevealing) : nil
+                )
+                .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
+            }
 
             // The collapse backdrop is above the picture/scopes and below
             // fixed controls. A Record or Settings tap keeps its own action.
@@ -633,7 +660,8 @@ struct LiveViewScreen: View {
                 FieldMonitorAssistPalette(
                     layout: layout, isLocked: interfaceLocked,
                     otherOverlayPresented: topMenu != nil || zoomDialVisible,
-                    expanded: $assistsExpanded
+                    expanded: $assistsExpanded,
+                    onExpansionActivityChange: { assistsRevealing = $0 }
                 )
                 .opacity(interfaceLocked ? 0.4 : 1)
                 .allowsHitTesting(!interfaceLocked)
@@ -814,7 +842,9 @@ struct LiveViewScreen: View {
         if owner != .capture { model.captureSheet = nil }
         if owner != .drum { model.captureDrum = nil }
         if owner != .assist { model.assist.configureTool = nil }
-        if owner != .gimbal { model.liveGimbalPanel = .none }
+        if owner != .gimbal && !(owner == .zoom && model.liveGimbalPanel == .editor) {
+            model.liveGimbalPanel = .none
+        }
         if owner != .zoom { closeZoomDial() }
     }
 

@@ -17,6 +17,39 @@ separate iOS and Android lists.
 
 ### Added
 
+- Camera **EV** meter on iOS and Android: a slim white line with a sun marker,
+  +3/−3 endpoints and the number above it. It sits inside the feed's left edge,
+  slightly above center, and moves or shortens to clear the View Assist toolbar.
+  Its toolbar button reads **EV**.
+  Toggle EV in View Assist for DISP 1; hidden in DISP 2 and playback. It reads camera
+  metering telemetry independently from configured EV compensation, with no
+  image analysis or extra polling. Missing values show a dash. Activation is
+  saved; placement stays fixed, with no drag, resize or pin controls.
+- Motion Control Loop on iOS and Android moves back and forth: A→B→A or
+  A→B→C→B→A, with the same leg durations and smoothed path in either direction.
+  Countdown and the initial settle run once; turnarounds have no added pause,
+  with position verification continuing during the return. Exact reversals accept
+  directly observed arrival and return when native motor easing differs from
+  constant speed, avoiding a false waypoint-verification failure. Pause/Resume and Stop
+  remain available; failures end the loop. The compact editor keeps its header
+  and action bar fixed, with scrollable settings and a bottom overflow fade. Points, durations, Smoothness and Loop
+  remain in the camera session when the editor closes. Close during a run keeps
+  the control pill visible. While paused, Restart replaces Clear and starts the
+  saved program again from A with countdown and preparation. The corrected A/B
+  loop passed an operator iPhone check; broader physical qualification remains pending.
+- Motion Control keeps the existing zoom chip and long-press disc usable while
+  the full editor stays open, so points can be framed without a separate slider.
+  Closing the disc returns to the editor. Both shells remove hundredth
+  rounding and whole-stop snapping from the general zoom dial, preserving
+  fractional input through the camera's integer lens command conversion.
+  Whole-stop haptics fire once per crossing. Physical lens smoothness remains
+  under investigation.
+- Motion Control transitions between different zoom amounts saved at A/B/C,
+  including reverse loops and measured Pause/Resume. B's saved zoom remains exact
+  when the angular path is smoothed. Zoom-changing programs are blocked in D-Log2
+  while idle or recording, with no automatic color-mode change; current camera
+  FORMAT limits also apply. Physical zoom response remains unqualified.
+
 - Anamorphic Desqueeze (**DE-SQ**) on iOS and Android: live view, video playback
   and photo viewing share 1.1×, 1.2×, 1.33×, 1.5×, 1.6×, 1.8× and 2.0× presets,
   plus a remembered Custom factor from 1.00× to 2.00× in 0.01 steps. Horizontal
@@ -314,6 +347,16 @@ separate iOS and Android lists.
   longer freezes the picture until the next keyframe, and frames that arrived
   before a gap are no longer discarded. On Android, a decoder input miss now
   requests repair instead of leaving a smeared picture.
+
+- Auto exposure on iOS and Android reads applied shutter telemetry for the EV
+  caption instead of retaining the remembered manual shutter. Missing or
+  unsupported applied values clear the shutter caption; Manual controls keep
+  their configured readback. The operator confirmed the fix on iPhone 16 Pro Max
+  on 2026-09-22; Android physical validation remains pending.
+
+- Motion Control waypoint letters and the dashed path compensate for settled
+  selfie orientation and MIRROR on both shells. Saved positions and motion
+  commands are unchanged. Physical camera verification remains pending.
 
 - Both shells can recover an established live feed after the decoder loses its
   video format while compressed frames keep arriving. The existing watchdog

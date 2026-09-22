@@ -1,17 +1,18 @@
 New and changed
 
-- Anamorphic Desqueeze (DE-SQ) works in live view, video playback and photos. Choose a lens preset or a custom 1.00–2.00× factor in 0.01 steps.
-- Report a problem is visible on the pairing screen, even before your first connection, with optional technical details and screenshots.
+- View Assist EV toggles a slim white line and sun marker with +3/−3 ends. It reads the camera directly and moves clear of the toolbar in DISP 1.
+- Motion Control loops through saved zooms and offers Restart while paused. Zoom controls stay accessible; D-Log2 blocks zoom-changing programs.
+- Anamorphic Desqueeze (DE-SQ) offers lens presets and a custom 1.00–2.00× factor for live view, videos and photos.
 
 Fixes
 
-- Improved recovery when a running preview loses its video format.
-- Opening Control Center or a system alert no longer drops the preview after about 10 seconds, and stalled video now recovers in about 2 seconds.
-- Returning from another app keeps the camera link, and opening the camera's own gallery opens Media here; leaving either side returns to live.
-- Connection setup and stalled-picture recovery have bounded waits. An established feed keeps its last picture while recovering; returning from Media starts live view once.
+- EV is separate from compensation settings. It shows a dash when camera metering is unavailable; DISP 2 and playback hide it.
+- Auto exposure shows the camera's applied shutter under EV. Missing or unsupported shutter readings leave only EV visible.
+- Live preview no longer drops after Control Center, alerts or returning from another app; stalled video recovers in about 2 seconds.
+- Opening the camera's own gallery opens Media here; leaving on either side returns to live.
 
 What to test
 
-- Tap DE-SQ to toggle; hold for presets, Custom and direction. Try LUT, grids, rotation and playback zoom. Check your custom factor survives a restart and files remain unchanged.
-- Before connecting a camera, open Report a problem in portrait and landscape. Close it and confirm pairing is still available. Share Diagnostics remains in the pairing menu.
-- Connect three times, then return from Media, Settings and the background. Watch preview recovery and report any freeze with the time it happened and technical details.
+- Toggle EV, rotate and expand/collapse the toolbar; check that it stays clear of the meter. Compare EV and Auto shutter with the camera as lighting changes, then switch to Manual and back.
+- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, change a duration, then close/reopen it and check saved settings remain.
+- Hold DE-SQ for presets, Custom and direction. Check framing with LUTs and guides in live view, videos and photos.

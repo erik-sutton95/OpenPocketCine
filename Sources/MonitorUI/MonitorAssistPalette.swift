@@ -23,11 +23,13 @@
         private let usageSeed: [String: Int]
         private let onToggle: (String) -> Void
         private let onOptions: (String) -> Void
+        private let onExpansionActivityChange: (Bool) -> Void
         private let icon: (String) -> Icon
         @Binding private var expanded: Bool
         @Binding private var usage: MonitorToolUsage
         @State private var progress: Double = 0
         @State private var dragging = false
+        @State private var settleGeneration = 0
         @State private var grabOffset: Double = 0
         @State private var pinnedIDs: [String] = []
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -39,6 +41,7 @@
             usage: Binding<MonitorToolUsage>,
             expanded: Binding<Bool>, onToggle: @escaping (String) -> Void,
             onOptions: @escaping (String) -> Void,
+            onExpansionActivityChange: @escaping (Bool) -> Void = { _ in },
             @ViewBuilder icon: @escaping (String) -> Icon
         ) {
             self.tools = tools
@@ -48,6 +51,7 @@
             _expanded = expanded
             self.onToggle = onToggle
             self.onOptions = onOptions
+            self.onExpansionActivityChange = onExpansionActivityChange
             self.icon = icon
         }
 
@@ -68,15 +72,16 @@
                         height: full.portrait ? visibleH : full.height,
                         alignment: .topLeading)
                 expansionControl(
-                    compact: compact, full: full, visibleWidth: visibleW, visibleHeight: visibleH)
-                    .offset(
-                        x: full.portrait
-                            ? MonitorAssistPaletteLayout.padding
-                            : visibleW - MonitorAssistPaletteLayout.padding
-                                - MonitorAssistPaletteLayout.expansionButtonWidth,
-                        y: full.portrait
-                            ? -(visibleH - MonitorAssistPaletteLayout.padding - 24)
-                            : -MonitorAssistPaletteLayout.padding)
+                    compact: compact, full: full, visibleWidth: visibleW, visibleHeight: visibleH
+                )
+                .offset(
+                    x: full.portrait
+                        ? MonitorAssistPaletteLayout.padding
+                        : visibleW - MonitorAssistPaletteLayout.padding
+                            - MonitorAssistPaletteLayout.expansionButtonWidth,
+                    y: full.portrait
+                        ? -(visibleH - MonitorAssistPaletteLayout.padding - 24)
+                        : -MonitorAssistPaletteLayout.padding)
             }
             .frame(width: full.width, height: full.height, alignment: .bottomLeading)
             .coordinateSpace(name: "assistPalette")
@@ -90,18 +95,39 @@
             .onAppear {
                 progress = expanded ? 1 : 0
                 pinnedIDs = rankedIDs
+                onExpansionActivityChange(expanded)
+            }
+            .onDisappear {
+                settleGeneration += 1
+                onExpansionActivityChange(false)
             }
             .onChange(of: expanded) { _, open in
-                guard !dragging else { return }
+                guard !dragging, progress != (open ? 1 : 0) else { return }
                 if open, pinnedIDs.isEmpty { pinnedIDs = rankedIDs }
-                withAnimation(MonitorMotion.drawerSpring(reduceMotion)) { progress = open ? 1 : 0 }
+                settle(to: open, animation: MonitorMotion.drawerSpring(reduceMotion))
             }
             .onChange(of: progress) { _, value in
                 if !expanded, !dragging, value <= 0.02 { pinnedIDs = rankedIDs }
             }
             .onChange(of: layout.portrait) { _, _ in
                 dragging = false
+                settleGeneration += 1
                 progress = expanded ? 1 : 0
+                onExpansionActivityChange(expanded)
+            }
+        }
+
+        private func settle(to open: Bool, animation: Animation?) {
+            // Keep nearby chrome clear until the reveal has finished collapsing.
+            settleGeneration += 1
+            let generation = settleGeneration
+            onExpansionActivityChange(true)
+            withAnimation(animation, completionCriteria: .removed) {
+                progress = open ? 1 : 0
+            } completion: {
+                if generation == settleGeneration, !expanded, !dragging {
+                    onExpansionActivityChange(false)
+                }
             }
         }
 
@@ -138,7 +164,8 @@
                                             column: column, row: row)
                                         if items.indices.contains(index) {
                                             toolButton(
-                                                items[index], index: index, full: full, labels: labels)
+                                                items[index], index: index, full: full,
+                                                labels: labels)
                                         } else {
                                             Color.clear.frame(
                                                 width: full.cellWidth, height: full.cellHeight)
@@ -153,7 +180,8 @@
             .frame(
                 width: full.scrollWidth,
                 height: full.portrait ? nil : full.scrollHeight,
-                alignment: .topLeading)
+                alignment: .topLeading
+            )
             .frame(maxHeight: full.scrollHeight)
             .scrollBounceBehavior(.basedOnSize)
             .padding(MonitorAssistPaletteLayout.padding)
@@ -185,7 +213,11 @@
                     alignment: full.portrait ? .center : .leading
                 )
                 .contentShape(Rectangle())
-                .gesture(revealDrag(compact: compact, full: full, visibleWidth: visibleWidth, visibleHeight: visibleHeight))
+                .gesture(
+                    revealDrag(
+                        compact: compact, full: full, visibleWidth: visibleWidth,
+                        visibleHeight: visibleHeight)
+                )
                 .accessibilityLabel(
                     open ? "Show all View Assist tools" : "Collapse View Assist tools"
                 )
@@ -193,7 +225,8 @@
                 .accessibilityAction {
                     expanded.toggle()
                 }
-                .accessibilityIdentifier(open ? "monitor.assists.expand" : "monitor.assists.collapse")
+                .accessibilityIdentifier(
+                    open ? "monitor.assists.expand" : "monitor.assists.collapse")
         }
 
         private func revealDrag(
@@ -208,6 +241,8 @@
                     if !dragging {
                         guard distance >= MonitorAssistPaletteReveal.slop else { return }
                         dragging = true
+                        settleGeneration += 1
+                        onExpansionActivityChange(true)
                         if full.portrait {
                             grabOffset = MonitorAssistPaletteReveal.portraitGrabOffset(
                                 fingerY: finger, visibleHeight: visibleHeight,
@@ -247,11 +282,10 @@
                         progress: progress, velocityAlongExpand: velocity,
                         projectedProgress: projected)
                     expanded = open
-                    withAnimation(
-                        MonitorMotion.drawerSpring(reduceMotion, velocity: velocity, span: span)
-                    ) {
-                        progress = open ? 1 : 0
-                    }
+                    settle(
+                        to: open,
+                        animation: MonitorMotion.drawerSpring(
+                            reduceMotion, velocity: velocity, span: span))
                 }
         }
 
@@ -273,7 +307,8 @@
             .foregroundStyle(
                 tool.enabled
                     ? MonitorTheme.edrAccent(gain: hdrGain)
-                    : MonitorTheme.edrSecondary(gain: hdrGain))
+                    : MonitorTheme.edrSecondary(gain: hdrGain)
+            )
             .frame(width: full.cellWidth, height: full.cellHeight)
             .background(
                 tool.enabled ? MonitorTheme.accent.opacity(0.13) : .clear,

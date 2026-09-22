@@ -269,6 +269,8 @@ data class CameraStatus(
     val availableIsoIndices: List<Int> = emptyList(),
     /** `cam_expo_param` `@6` EV raw (`0x10` = 0.0). `-1` unknown. */
     val evComp: Int = -1,
+    /** Camera-meter indication at `cam_expo_param` `@15`; independent of configured EV `@6`. */
+    val meteredEv: Int = -1,
     /** `0x8E` pid `0x000F` Auto ISO ceiling. `-1` unknown. */
     val isoLimit: Int = -1,
     /** Legal `0x02/0x42` values from `camcap_color_mode`. */
@@ -376,6 +378,7 @@ data class CameraStatus(
                 audioDspBlob.isNotEmpty() ||
                 zoomFactorRaw > 0 ||
                 evComp >= 0 ||
+                meteredEv >= 0 ||
                 isoLimit >= 0 ||
                 availableColorModes.isNotEmpty() ||
                 availableVideoFormats.isNotEmpty() ||
@@ -502,6 +505,7 @@ data class CameraStatus(
             availableShutterDenoms = prev.availableShutterDenoms,
             availableIsoIndices = prev.availableIsoIndices,
             evComp = prev.evComp,
+            meteredEv = prev.meteredEv,
             isoLimit = prev.isoLimit,
             availableColorModes = prev.availableColorModes,
             availableVideoFormats = prev.availableVideoFormats,
@@ -560,6 +564,7 @@ data class CameraStatus(
             .put("availableShutterDenoms", JSONArray(availableShutterDenoms))
             .put("availableIsoIndices", JSONArray(availableIsoIndices))
             .put("evComp", evComp)
+            .put("meteredEv", meteredEv)
             .put("isoLimit", isoLimit)
             .put("availableColorModes", JSONArray(availableColorModes))
             .put("availableVideoFormats", videoFormatsJson())
@@ -658,6 +663,7 @@ data class CameraStatus(
                     availableShutterDenoms = intList(obj.optJSONArray("availableShutterDenoms")),
                     availableIsoIndices = intList(obj.optJSONArray("availableIsoIndices")),
                     evComp = obj.optInt("evComp", -1),
+                    meteredEv = obj.optInt("meteredEv", -1).takeIf { it in 0x07..0x19 } ?: -1,
                     isoLimit = obj.optInt("isoLimit", -1),
                     availableColorModes = intList(obj.optJSONArray("availableColorModes")),
                     availableVideoFormats = videoFormatList(obj.optJSONArray("availableVideoFormats")),

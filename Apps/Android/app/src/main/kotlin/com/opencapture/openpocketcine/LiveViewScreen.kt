@@ -274,6 +274,11 @@ fun LiveViewScreen(model: AppModel) {
         }
     }
     val useVulkan = vulkanSession != null && !vulkanFailed
+    val scopeSourceIdentity = model.session.connectedCamera ?: model.session
+    val scopeSourceActive = model.liveOperatorPanel != LiveOperatorPanel.MEDIA
+    LaunchedEffect(vulkanSession, useVulkan, scopeSourceIdentity, hasPicture, scopeSourceActive) {
+        vulkanSession?.configureScopeSource(scopeSourceIdentity, hasPicture, scopeSourceActive && useVulkan)
+    }
     LaunchedEffect(model.session, useVulkan, vulkanSession) {
         var lastCount = 0
         var lastAt = 0L
@@ -441,6 +446,7 @@ fun LiveViewScreen(model: AppModel) {
         val pictureContent =
             if (desqueezeVisible) layout.onFeed.fittedContent(assist.presentedAspect(pictureAspect))
             else if (fillCrop) portraitFillCropContent(layout.feed) else layout.onFeed
+        var assistPaletteBounds by remember(vw, vh) { mutableStateOf<ChromeRect?>(null) }
         val showGimbalButton =
             model.monitorCapabilities(status).gimbal &&
                 model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
@@ -570,6 +576,7 @@ fun LiveViewScreen(model: AppModel) {
                     backdrop = backdrop,
                     sourceIdentity = model.session.connectedCamera ?: model.session,
                     sourceReady = hasPicture,
+                    sourceActive = scopeSourceActive,
                     plan = effectsPlan,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onPresented = { model.session.noteLiveFrame() },
@@ -680,6 +687,22 @@ fun LiveViewScreen(model: AppModel) {
                 }
             }
 
+            if (assist.evMeter && model.currentDispMode == PocketDispMode.LIVE) {
+                val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
+                    model.liveOperatorPanel == null && assist.configureTool == null
+                val collapsedPalette = if (!showsAssist) null else if (zones != null) {
+                    portraitAssistToolbar(zones.assistToolbar.minY, minOf(vw, vh) >= 600f)
+                } else layout.assist
+                LiveCameraExposureMeter(
+                    raw = status.meteredEv,
+                    available = !recovery.isRecovering && !model.session.isFeedRecovering,
+                    feed = if (desqueezeVisible) pictureContent else layout.onFeed,
+                    mode = model.currentDispMode,
+                    avoid = if (showsAssist) assistPaletteBounds ?: collapsedPalette else null,
+                    modifier = Modifier.zIndex(1f),
+                )
+            }
+
             LiveFaceFramePump(
                 surfaceView = vulkanSurfaceView,
                 textureView = glesTextureView,
@@ -719,6 +742,7 @@ fun LiveViewScreen(model: AppModel) {
                     fpsLabel = fpsLabel,
                     bars = bars,
                     sourceIsVertical = verticalPicture,
+                    onAssistBoundsChanged = { assistPaletteBounds = it },
                 )
                 }
             } else {
@@ -748,6 +772,7 @@ fun LiveViewScreen(model: AppModel) {
                     zoomDialReadout = zoomDialReadout,
                     zoomPinching = zoomPinching,
                     onStatusChipFrame = { section, rect -> statusChipFrames[section] = rect },
+                    onAssistBoundsChanged = { assistPaletteBounds = it },
                 )
                 }
             }
@@ -1088,6 +1113,7 @@ private fun LiveFeedPresenter(
     backdrop: MonitorBackdropFeed,
     sourceIdentity: Any,
     sourceReady: Boolean,
+    sourceActive: Boolean,
     plan: FeedEffectsRenderPlan,
     onDecoderSurface: (Surface) -> Unit,
     onPresented: () -> Unit = {},
@@ -1118,7 +1144,9 @@ private fun LiveFeedPresenter(
             textureViewOut.value(null)
         }
     }
-    LaunchedEffect(sourceIdentity, sourceReady) { session.configurePreviewSource(sourceIdentity, sourceReady) }
+    LaunchedEffect(sourceIdentity, sourceReady, sourceActive) {
+        session.configurePreviewSource(sourceIdentity, sourceReady, sourceActive)
+    }
     LaunchedEffect(plan) { session.updatePlan(plan) }
     LaunchedEffect(stretchToRect) { session.setStretchToRect(stretchToRect) }
 
@@ -1259,6 +1287,7 @@ internal fun LandscapeChrome(
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
     onStatusChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
     capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
+    onAssistBoundsChanged: (ChromeRect?) -> Unit = {},
 ) {
     var stripQuick by remember { mutableStateOf(false) }
     var topQuick by remember { mutableStateOf(false) }
@@ -1440,6 +1469,8 @@ internal fun LandscapeChrome(
                 layout = layout,
                 feed = layout.onFeed,
                 joystickBounds = stick,
+                zoomBounds = if (capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) zoom
+                    else ChromeRect(0f, 0f, 0f, 0f),
                 uiLocked = uiLocked,
             )
         }
@@ -1454,6 +1485,7 @@ internal fun LandscapeChrome(
                     portrait = false, locked = uiLocked || !hits,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    onBoundsChanged = onAssistBoundsChanged,
                 )
             }
         }
