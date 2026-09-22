@@ -49,6 +49,15 @@ class HarnessTests(unittest.TestCase):
         for cycle in range(1, 4):
             self.assertEqual(set(h.PATHS), {r["path"] for r in a["cases"] if r["cycle"] == cycle})
 
+    def test_accepts_repository_generated_installed_build_identity(self):
+        for platform in ("ios", "android"):
+            identity = subprocess.check_output(
+                [sys.executable, str(Path(h.__file__).parents[1] / "build-identity.py"),
+                 "--platform", platform, "--configuration", "test"], text=True).strip()
+            raw = {"platform": platform, "build": {"source_revision": "abcdef0-dirty",
+                   "build_identity": identity, "camera_models": ["pocket4pro"]}}
+            self.assertEqual(h.build_metadata(raw, platform)["build_identity"], identity)
+
     def test_complete_matrix_and_record_off(self):
         code, report, driver = self.run_plan(paths=h.PATHS, cycles=3)
         self.assertEqual(code, 0)

@@ -63,7 +63,7 @@ def build_metadata(raw, platform):
         revision, identity = build["source_revision"], build["build_identity"]
         if not isinstance(revision, str) or not re.fullmatch(r"[a-f0-9]{7,40}(?:-dirty)?", revision):
             raise Failure("invalid_evidence")
-        if not isinstance(identity, str) or not re.fullmatch(r"[a-f0-9]{64}", identity):
+        if not isinstance(identity, str) or not re.fullmatch(platform + r"-[a-f0-9]{32}", identity):
             raise Failure("invalid_evidence")
         models = build["camera_models"]
         if not isinstance(models, list) or not 1 <= len(models) <= 2:
@@ -480,7 +480,8 @@ class DemoDriver:
         if action == "capabilities":
             response.update(evidence="simulation", paths=list(PATHS), record=True)
             response.update(platform=request["platform"], build={"source_revision": "0000000",
-                            "build_identity": "0" * 64, "camera_models": ["unknown"]})
+                            "build_identity": request["platform"] + "-" + "0" * 32,
+                            "camera_models": ["unknown"]})
         elif action == "pair":
             self.disturbed = False
         elif action in ("foreground", "network_on", "ble_on"):
