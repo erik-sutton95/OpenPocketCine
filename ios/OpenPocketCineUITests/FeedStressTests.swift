@@ -20,6 +20,7 @@ final class FeedStressTests: XCTestCase {
     private var failures: [String] = []
     private var rng = FeedStressSeed(state: 20_260_914)
     private var finished = false
+    private var ownsApp = false
     private var identityProofOriginalLUT: Bool?
     private var selectedScenarios = FeedStressScenario.core
 
@@ -29,11 +30,11 @@ final class FeedStressTests: XCTestCase {
     }
 
     override func tearDown() {
-        if app != nil {
+        if ownsApp {
             finishSafely()
             app.terminate()
+            XCUIDevice.shared.orientation = .portrait
         }
-        XCUIDevice.shared.orientation = .portrait
         super.tearDown()
     }
 
@@ -78,6 +79,12 @@ final class FeedStressTests: XCTestCase {
                     "steadyFeed must run alone, without recording/injection, for at most 1560s")
             }
         }
+        let matchedFault =
+            selectedScenarios.contains(.faultMediaReturn)
+            || selectedScenarios.contains(.faultAutomaticRecovery)
+        if matchedFault, !injectOptIn || overlapInjection {
+            throw FeedStressError.halted("Matched fault scenarios require isolated injection")
+        }
         rng = FeedStressSeed(state: seed == 0 ? 1 : seed)
         deadline = Date().addingTimeInterval(limitS)
 
@@ -91,19 +98,53 @@ final class FeedStressTests: XCTestCase {
         if let inject = env["OPV_FEED_STRESS_INJECT"], !inject.isEmpty {
             app.launchEnvironment["OPV_FEED_STRESS_INJECT"] = inject
         }
-        XCUIDevice.shared.orientation = .portrait
         addUIInterruptionMonitor(
             withDescription: "Bluetooth, local network, camera Wi-Fi Join"
         ) { alert in
             Self.handleAuthorizedSystemAlert(alert)
         }
-        app.launch()
+        if let attachedRun = env["OPV_FEED_STRESS_ATTACH_RUN"], !attachedRun.isEmpty {
+            // The host cold-launches this exact recorder before starting XCTest.
+            // Attaching avoids Xcode's target-app launch/debugger path, while
+            // retaining real accessibility input and all picture assertions.
+            guard app.state == .runningForeground || app.state == .runningBackground else {
+                throw FeedStressError.halted("Attached stress app is not running")
+            }
+            app.activate()
+            let attached = try requireSnapshot()
+            let recording = recordOptIn ? "1" : "0"
+            let injection = env["OPV_FEED_STRESS_INJECT"] ?? ""
+            let runtimeLimit = Int(limitS) + (steadyOnly ? 240 : 60)
+            let configuration = Data(
+                "\(seed)|\(runtimeLimit)|\(recording)|\(injection)".utf8
+            ).base64EncodedString()
+            guard attached["run"] == attachedRun,
+                attached["config"] == configuration,
+                attachedRun.hasPrefix("s\(seed)-"),
+                attached["halt"] == "0",
+                let age = Double(attached["t"] ?? ""), (0..<60).contains(age)
+            else {
+                throw FeedStressError.halted(
+                    "Attached recorder is stale or does not match this run")
+            }
+        } else {
+            app.launch()
+        }
+        ownsApp = true
+        if env["OPV_FEED_STRESS_ATTACH_RUN"] != nil {
+            postFeedStress("com.opencapture.opc.feed-stress.attached-v1")
+        }
+        XCUIDevice.shared.orientation = .portrait
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.02)).tap()
 
         try waitForLiveMonitor()
         try enablePeakingForDecodeProof()
         if selectedScenarios.contains(where: {
-            [FeedStressScenario.mediaReturn, .steadyFeed].contains($0)
+            [
+                FeedStressScenario.mediaReturn, .steadyFeed, .faultMediaReturn,
+                .faultAutomaticRecovery,
+            ]
+            .contains($0)
         }) {
             try establishIdentityProofMode()
         }
@@ -124,7 +165,9 @@ final class FeedStressTests: XCTestCase {
             cycle += 1
             var scenarios = selectedScenarios
             if recordOptIn { scenarios.append(.briefRecord) }
-            if injectOptIn && !overlapInjection { scenarios.append(.injectFault) }
+            if injectOptIn && !overlapInjection && !matchedFault {
+                scenarios.append(.injectFault)
+            }
             scenarios.shuffle(using: &rng)
             for scenario in scenarios {
                 if Date() > deadline { break }
@@ -149,7 +192,7 @@ final class FeedStressTests: XCTestCase {
                 } catch {
                     record(scenario, "fail", extra: "cycle=\(cycle) \(error)")
                     failures.append("cycle \(cycle) \(scenario.rawValue): \(error)")
-                    if overlapInjection { break stressLoop }
+                    if overlapInjection || matchedFault { break stressLoop }
                 }
                 dismissChrome()
             }
@@ -158,11 +201,11 @@ final class FeedStressTests: XCTestCase {
         if completedScenarios == 0 {
             failures.append("no scenario completed successfully")
         }
-        if overlapInjection {
+        if overlapInjection || matchedFault {
             let required = (selectedScenarios + (recordOptIn ? [.briefRecord] : [])).map(\.rawValue)
             let missing = Set(required).subtracting(coveredScenarios).sorted()
             if !missing.isEmpty {
-                failures.append("incomplete overlap coverage: \(missing.joined(separator: ","))")
+                failures.append("incomplete requested coverage: \(missing.joined(separator: ","))")
             }
         }
 
@@ -186,6 +229,10 @@ final class FeedStressTests: XCTestCase {
         case .injectFault: try injectFault()
         case .mediaReturn: try mediaReturn()
         case .steadyFeed: try steadyFeed()
+        case .settingsSweep: try settingsSweep()
+        case .gimbalStorm: try gimbalStorm()
+        case .faultMediaReturn: try faultMediaReturn()
+        case .faultAutomaticRecovery: try faultAutomaticRecovery()
         }
     }
 
@@ -278,6 +325,86 @@ final class FeedStressTests: XCTestCase {
             why: "after bounded stick lift")
     }
 
+    /// Opt-in repeated value changes through the same visible drums operators use.
+    /// The runtime restores its captured ISO/WB baseline during teardown.
+    private func settingsSweep() throws {
+        // Opening ISO requests its lazily loaded ceiling before any mutation.
+        let iso = app.buttons["monitor.capture.iso"]
+        guard iso.waitForExistence(timeout: 4), iso.isHittable else {
+            throw FeedStressError.missingControl("ISO chip")
+        }
+        iso.tap()
+        let captureDeadline = Date().addingTimeInterval(8)
+        var captured = false
+        while Date() < captureDeadline {
+            if try requireActiveSnapshot()["settingsBaseline"] == "1" {
+                captured = true
+                break
+            }
+            sleepStep(0.25)
+        }
+        closeCapturePanel()
+        guard captured else {
+            throw FeedStressError.halted("Original ISO, ISO limit and WB are not captured")
+        }
+        for name in ["iso", "wb", "iso", "wb"] {
+            let chip = app.buttons["monitor.capture.\(name)"]
+            guard chip.waitForExistence(timeout: 4), chip.isHittable else {
+                throw FeedStressError.missingControl("\(name) chip")
+            }
+            chip.tap()
+            let panel = app.descendants(matching: .any)["monitor.capture.panel"].firstMatch
+            guard panel.waitForExistence(timeout: 4) else {
+                throw FeedStressError.missingControl("\(name) panel")
+            }
+            let drum = app.descendants(matching: .any)["Value"].firstMatch
+            guard drum.waitForExistence(timeout: 4), drum.isHittable else {
+                throw FeedStressError.missingControl("\(name) value drum")
+            }
+            let original = drum.value as? String
+            var changed = false
+            for left in [true, true, false, false] {
+                if left { drum.swipeLeft() } else { drum.swipeRight() }
+                sleepStep(0.2)
+                if let value = drum.value as? String, value != original { changed = true }
+            }
+            guard changed else { throw FeedStressError.halted("\(name) drum value never changed") }
+            closeCapturePanel()
+            sleepStep(4.2)
+            let settled = try requireActiveSnapshot()
+            _ = try waitProgress(
+                from: settled, source: true, decode: true, present: true, timeout: 8,
+                why: "picture after repeated \(name) changes")
+        }
+    }
+
+    /// Short large throws in opposing directions, always followed by finger lift.
+    /// Clear the gimbal's movement area before explicitly selecting this workload.
+    private func gimbalStorm() throws {
+        let stick = app.descendants(matching: .any)["monitor.system.gimbal"].firstMatch
+        guard stick.waitForExistence(timeout: 4), stick.isHittable else {
+            throw FeedStressError.missingControl("gimbal stick")
+        }
+        let center = stick.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let offsets = [
+            CGVector(dx: 0.9, dy: 0.5), CGVector(dx: 0.1, dy: 0.5),
+            CGVector(dx: 0.5, dy: 0.1), CGVector(dx: 0.5, dy: 0.9),
+        ]
+        for _ in 0..<3 {
+            for offset in offsets {
+                if thermalHalt() { throw FeedStressError.halted("thermal during gimbal workload") }
+                center.press(
+                    forDuration: 0.15, thenDragTo: stick.coordinate(withNormalizedOffset: offset),
+                    withVelocity: .slow, thenHoldForDuration: 0.35)
+                sleepStep(0.15)
+            }
+        }
+        let lifted = try requireActiveSnapshot()
+        _ = try waitProgress(
+            from: lifted, source: true, decode: true, present: true, timeout: 8,
+            why: "picture after repeated large stick throws")
+    }
+
     private func lifecycleInterrupt() throws {
         XCUIDevice.shared.press(.home)
         sleepStep(2.0)
@@ -320,17 +447,26 @@ final class FeedStressTests: XCTestCase {
         // No assist/chrome mutation between catalog dismissal and proof.
         // Fresh identity enqueues themselves verify the established live path.
         let returned = try requireActiveSnapshot()
-        let recovered = try waitIdentityProgress(from: returned, timeout: 16)
+        let recovered = try confirmIdentityRecovery(from: returned)
+        attachEvidence("media-live-return", detail: "returned=\(returned) restored=\(recovered)")
+    }
+
+    private func confirmIdentityRecovery(
+        from baseline: [String: String], timeout: TimeInterval = 16
+    )
+        throws -> [String: String]
+    {
+        let recovered = try waitIdentityProgress(from: baseline, timeout: timeout)
         var previous = recovered
         for _ in 0..<3 {
             let current = try nextActiveSnapshot(after: previous)
             guard identityProgressed(from: previous, to: current) else {
                 throw FeedStressError.noProgress(
-                    "Media returned only a transient picture: \(current)")
+                    "Recovery returned only a transient picture: \(current)")
             }
             previous = current
         }
-        attachEvidence("media-live-return", detail: "returned=\(returned) restored=\(previous)")
+        return previous
     }
 
     private func dismissMediaIfVisible() {
@@ -372,9 +508,10 @@ final class FeedStressTests: XCTestCase {
             if thermalHalt() { throw FeedStressError.halted("thermal during live return") }
             sleepStep(0.5)
             let current = try requireActiveSnapshot()
+            guard Date() < end else { break }
             if identityProgressed(from: start, to: current) { return current }
         }
-        throw FeedStressError.noProgress("No fresh source/decode/identity enqueue after Media")
+        throw FeedStressError.noProgress("No fresh source/decode/identity enqueue within deadline")
     }
 
     private func identityProgressed(from start: [String: String], to end: [String: String]) -> Bool
@@ -523,6 +660,64 @@ final class FeedStressTests: XCTestCase {
             why: "recover after bounded inject")
     }
 
+    /// Probe the reported Media workaround after actual bounded video impairment.
+    /// Preserve the pre-Media counters so recovery is not attributed to Media
+    /// when picture had already returned before entry.
+    private func faultMediaReturn() throws {
+        let fault = try matchedFaultWindow()
+        attachEvidence("fault-before-media", detail: "disarmed=\(fault.snapshot)")
+        try mediaReturn()
+    }
+
+    /// Same fault and identity-output proof as the Media probe, without a UI
+    /// action after disarm. Late recovery never replaces the original failure.
+    private func faultAutomaticRecovery() throws {
+        let fault = try matchedFaultWindow()
+        let stopped = fault.snapshot
+        attachEvidence("fault-before-automatic", detail: "disarmed=\(stopped)")
+        do {
+            let recovered = try confirmIdentityRecovery(
+                from: stopped, timeout: max(0, fault.pictureDeadline.timeIntervalSinceNow))
+            attachEvidence(
+                "fault-automatic-return", detail: "disarmed=\(stopped) restored=\(recovered)")
+        } catch {
+            let failure = error
+            attachEvidence("fault-automatic-deadline")
+            let remaining = min(60, deadline.addingTimeInterval(30).timeIntervalSinceNow)
+            if remaining > 0, !thermalHalt() {
+                do {
+                    let late = try requireActiveSnapshot()
+                    _ = try confirmIdentityRecovery(from: late, timeout: remaining)
+                    attachEvidence("fault-automatic-aftermath-recovered")
+                } catch {
+                    attachEvidence("fault-automatic-aftermath-unrecovered", detail: "\(error)")
+                }
+            }
+            throw failure
+        }
+    }
+
+    private func matchedFaultWindow() throws -> (
+        snapshot: [String: String], pictureDeadline: Date
+    ) {
+        try assertIdentityProofMode()
+        try waitForHealthyBaseline(minimum: 30)
+        postFeedStress("com.opencapture.opc.feed-stress.arm-inject")
+        defer { postFeedStress("com.opencapture.opc.feed-stress.disarm-inject") }
+        let armed = try waitForInjectionState(armed: true)
+        sleepStep(3.5)
+        postFeedStress("com.opencapture.opc.feed-stress.disarm-inject")
+        let stopped = try waitForInjectionState(armed: false)
+        // Attachment capture can take seconds. It must spend, not extend, the
+        // automatic first-picture budget that starts at confirmed disarm.
+        let pictureDeadline = Date().addingTimeInterval(16)
+        guard injectedCount(stopped) > injectedCount(armed) else {
+            throw FeedStressError.halted("No fault before matched recovery probe")
+        }
+        attachEvidence("matched-fault-window", detail: "armed=\(armed) disarmed=\(stopped)")
+        return (stopped, pictureDeadline)
+    }
+
     /// The existing bounded injection window now overlaps real UI actions.
     /// No extra camera enable, ACK sleep or production fault hook is introduced.
     private func runOverlappingFault(_ scenario: FeedStressScenario) throws {
@@ -543,19 +738,40 @@ final class FeedStressTests: XCTestCase {
         guard injectedCount(stopped) > injectedCount(armed) else {
             throw FeedStressError.halted("No injected fault overlapped \(scenario.rawValue)")
         }
-        try waitForFreshRecovery(from: stopped)
+        do {
+            try waitForFreshRecovery(from: stopped)
+        } catch {
+            let failure = error
+            attachEvidence("fault-recovery-deadline")
+            // Keep the failed 16-second verdict, but let the production owner
+            // finish before teardown. No UI action or manual repair is added.
+            let remaining = min(60, deadline.addingTimeInterval(30).timeIntervalSinceNow)
+            if remaining > 0, !thermalHalt() {
+                do {
+                    let late = try requireActiveSnapshot()
+                    try waitForFreshRecovery(from: late, timeout: remaining)
+                    attachEvidence("fault-aftermath-recovered")
+                } catch {
+                    attachEvidence("fault-aftermath-unrecovered", detail: "\(error)")
+                }
+            }
+            throw failure
+        }
     }
 
     /// Two new windows must advance every stage after disarm. Old counters,
     /// repeated snapshots and packet arrival without assembled pictures cannot pass.
-    private func waitForFreshRecovery(from baseline: [String: String]) throws {
-        let expires = Date().addingTimeInterval(16)
+    private func waitForFreshRecovery(
+        from baseline: [String: String], timeout: TimeInterval = 16
+    ) throws {
+        let expires = Date().addingTimeInterval(timeout)
         var previous = baseline
         var healthyWindows = 0
         while Date() < expires {
             if thermalHalt() { throw FeedStressError.halted("thermal") }
             sleepStep(0.5)
             let current = try requireSnapshot()
+            guard Date() < expires else { break }
             guard let run = baseline["run"], !run.isEmpty,
                 current["run"] == run, current["halt"] == "0"
             else { throw FeedStressError.halted("Recorder ended or restarted during recovery") }
@@ -770,7 +986,7 @@ final class FeedStressTests: XCTestCase {
     private func finishSafely() {
         guard !finished else { return }
         finished = true
-        guard app != nil, app.state == .runningForeground || app.state == .runningBackground
+        guard ownsApp, app.state == .runningForeground || app.state == .runningBackground
         else { return }
         if app.state == .runningBackground { app.activate() }
         dismissChrome()
@@ -948,10 +1164,17 @@ private enum FeedStressScenario: String {
     case injectFault
     case mediaReturn
     case steadyFeed
+    case settingsSweep
+    case gimbalStorm
+    case faultMediaReturn
+    case faultAutomaticRecovery
 
     // Keep the historical default list/order and seed behavior unchanged.
     static var selectable: [FeedStressScenario] {
-        core + [.mediaReturn, .steadyFeed]
+        core + [
+            .mediaReturn, .steadyFeed, .settingsSweep, .gimbalStorm, .faultMediaReturn,
+            .faultAutomaticRecovery,
+        ]
     }
 
     static let core: [FeedStressScenario] = [

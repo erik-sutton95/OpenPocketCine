@@ -5,6 +5,11 @@ preflight and report review. This is a partial campaign for
 [#401](https://github.com/erik-sutton95/OpenPocketCine/issues/401), not a completed
 two-phone camera soak or a claim that every dropout has been reproduced.
 
+This report retains the initial campaign's access cutoff. After the iPhone was
+connected by USB, [the iPhone follow-up](2026-09-22-iphone-connection-stress.md)
+ran physical feed, controls, Media-return and loss/recovery tests. Its results
+supersede the iPhone access limitation below, without changing the Android data.
+
 ## Evidence and access
 
 The tested starting source is `cc219a6c462265836d4d19b7a075649635baab5b`.

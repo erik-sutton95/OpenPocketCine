@@ -87,10 +87,13 @@ For concurrent UI/control work on phones, the guide documents iPhone
 `just android-feed-stress --seed 401 --seconds 300`. Both reconnect a saved
 camera and overlap bounded local video faults with operator actions. Android
 also requires actual ISO command replies; iOS has broader UI scenario coverage.
-Physical Android trials exposed delayed picture recovery; the guide records
-the results and remaining coverage. Complete qualification remains open on both
-platforms. Local video drops do not reproduce Wi-Fi route loss or network congestion. Pair first,
-connect the unlocked phone by USB, and follow the guide's model requirements.
+Physical trials exposed delayed picture recovery on both platforms; the guide
+records the results and remaining coverage. The iPhone runner also provides
+opt-in stronger gimbal/ISO/WB workloads, matched automatic-versus-Media recovery
+probes and a verified attachment path when normal XCTest app launch fails.
+Complete qualification remains open on both platforms. Local video drops do not
+reproduce Wi-Fi route loss or network congestion. Pair first, connect the
+unlocked phone by USB, and follow the guide's model requirements.
 The ordinary `just android-device-test` suite excludes the camera-only stress
 class; use the dedicated command to opt into camera control and fault injection.
 

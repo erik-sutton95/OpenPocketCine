@@ -179,8 +179,13 @@ records physical Android setup/UI results and the report-to-test coverage gaps.
 Android local-loss overlap reproduced a stale picture with fresh compressed
 frames and successful control replies. A replay recovered only after the
 16-second test deadline and a same-network datalink rejoin; that remains a
-failed recovery-latency case. XCTest could not reach the iPhone, so its physical
-overlap qualification remains pending.
+failed recovery-latency case. After USB connection, the
+[iPhone follow-up](audits/2026-09-22-iphone-connection-stress.md) reproduced
+delayed foreground and overlapping-fault recovery, passed a five-minute steady
+baseline and five impaired-feed/Media-return cycles. The iOS runner also offers
+ISO/WB sweeps, larger repeated gimbal throws and an attachment launcher when
+normal XCTest app startup fails; see [the feed runner guide](feed-stress-testing.md).
+Complete all-action overlap qualification remains pending on both platforms.
 Separate Android host experiments exercised actual Wi-Fi route loss with
 Settings taps. Selective camera-side ACK impairment and bandwidth congestion
 during native UI work still need an on-path impairment setup. The matrix's

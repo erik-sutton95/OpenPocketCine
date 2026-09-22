@@ -81,6 +81,11 @@ run_tests() {
         echo "DEVICE is required (xcrun xctrace list devices / xcrun devicectl list devices)." >&2
         exit 2
     fi
+    if [[ -n "${ATTACH_XCTESTRUN:-}" ]]; then
+        DEVICE="$DEVICE" SEED="$SEED" LIMIT="$LIMIT" RECORD="$RECORD" \
+          INJECT="$INJECT" DEST="$DEST" python3 "$ROOT/tools/connection-stress/ios_attach.py"
+        return
+    fi
     print_recipe
     cd "$ROOT"
     env_args=(

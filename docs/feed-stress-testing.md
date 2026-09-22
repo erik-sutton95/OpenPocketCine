@@ -31,8 +31,9 @@ Xcode device run.
 
 The seeded sequence repeats until `limit` (60–1740 s): Settings open/close,
 assist toggles, rotation, camera-setting changes, short joystick throws, and
-foreground/background. Teardown rests the stick, restores captured assist/ISO/WB
-and portrait, and stops a recording this run started. A killed app or dropped USB
+foreground/background. Teardown rests the stick, attempts to restore captured
+assist/ISO/WB and portrait, and stops a recording this run started. Camera replies
+must confirm setting restoration; the summary alone does not. A killed app or dropped USB
 cannot guarantee teardown — inspect the camera after an interrupted run. Camera
 media is never deleted or formatted.
 
@@ -135,3 +136,76 @@ The runner pulls previous runs too. Analyze the named run directory independentl
 the report is descriptive and XCTest's exit status is authoritative. Record any
 optimization overrides separately: an optimized Debug diagnostic run is not a
 shipping Release measurement.
+
+## Attach to a directly launched app
+
+When `XCUIApplication.launch()` fails but CoreDevice can launch the app, set
+`ATTACH_XCTESTRUN` to an existing device `.xctestrun` file. First build the current
+`OpenPocketCineUIReview` scheme with `build-for-testing`, then install both
+`OpenPocketCine.app` and `OpenPocketCineUITests-Runner.app` from that build using
+`xcrun devicectl device install app`. Keep the matching build products together.
+The host reuses those installed artifacts; it does not install or replace them.
+
+```sh
+DEVICE='<iPhone id>' ATTACH_XCTESTRUN='<absolute path to device .xctestrun>' \
+  SCENARIOS=steadyFeed SEED=401 LIMIT=300 RECORD=0 \
+  DEST=.local/ios-feed-stress tools/feed-stress-run.sh run
+```
+
+The host cold-launches through CoreDevice, checks the new numeric header, and
+asks XCTest to attach to that exact run. The test independently verifies the
+recorder's seed, duration, recording allowance, injection configuration and age
+before taking ownership. Rejected attachment does not restore or terminate an
+unrelated running app. The host requires the current runner contract, exactly
+one non-skipped passing target test, matching final artifacts, teardown and full
+requested scenario coverage. Old installed runners, missing pulls and later
+recovery after a failed deadline cannot produce a pass.
+
+Raw XCTest output, attachments and device metadata remain in the private output
+directory. Interrupts stop the host process group and attempt to stop the owned
+phone runner/app; interrupted camera-setting restoration is not guaranteed.
+Keep one owner for hardware and Xcode throughout the run.
+
+## Stronger controls and the Media workaround
+
+Additional opt-in scenarios leave the historical default sequence unchanged:
+
+- `settingsSweep`: repeated ISO and WB drum swipes, including ISO ceiling when
+  Auto ISO is selected. The original values must be available before mutation.
+  Teardown attempts to restore the captured ISO, ceiling and WB. Check camera replies in
+  the journal; changed UI values alone do not establish command completion.
+- `gimbalStorm`: twelve large opposing stick throws with short holds and a
+  finger lift after each. Clear the camera's movement area first.
+- `faultMediaReturn`: isolated injection followed by Media catalog entry/return.
+  Pre-Media counters establish whether picture was still stalled. Fresh source,
+  native decoder output and identity enqueue must resume after returning.
+  Compare with automatic recovery under the same fault before attributing the
+  improvement to Media. This case requires injection and cannot use overlap mode.
+- `faultAutomaticRecovery`: the same fault window and identity-output proof as
+  `faultMediaReturn`, followed by passive automatic recovery. It requires fresh
+  output within 16 seconds, then three advancing windows. A missed deadline
+  remains failed while up to 60 seconds of passive aftermath is collected.
+  Run the pair with the same build, seed and fault plan; compare time from
+  disarm as well as each scenario's deadline, since Media navigation takes time.
+  Both matched probes stop at their first failed cycle.
+
+```sh
+SCENARIOS=settingsSweep,gimbalStorm just ios-feed-stress '<iPhone id>' limit=300
+SCENARIOS=faultMediaReturn INJECT='loss:0.10,burst:8:40,outputSilenceMs:2500' \
+  just ios-feed-stress '<iPhone id>' seed=9404 limit=300 record=0
+SCENARIOS=faultAutomaticRecovery INJECT='loss:0.10,burst:8:40,outputSilenceMs:2500' \
+  just ios-feed-stress '<iPhone id>' seed=9404 limit=300 record=0
+```
+
+Overlap failures retain the 16-second failed check, then observe up to 60 more
+seconds with injection disarmed. The remaining recorder budget can shorten that
+observation. Numeric attachments distinguish delayed recovery from continued
+failure; no additional UI action or manual repair is added during observation.
+
+System-level conditioning is a separate experiment. In Xcode's Devices window,
+select the phone and **Device Conditions → Network Link**. Record the profile's
+actual bandwidth, latency and loss values, confirm **Start → Stop**, and stop
+conditioning after the bounded interval. Verify effects in camera packet/AU
+counters; the enabled UI alone is not proof that the camera route was impaired.
+This can exercise the phone's network path, including outbound traffic, but does
+not measure RF signal strength, actual range or competition on a shared channel.

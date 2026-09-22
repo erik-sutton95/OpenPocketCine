@@ -17,10 +17,16 @@ assist/rotation/changing-settings or opt-in recording coverage. Its fault hook
 is Debug-gated, and cumulative cadence snapshots preserve existing windows.
 The [September 22 campaign](audits/2026-09-22-connection-stress-campaign.md)
 reproduced delayed Android picture recovery under local loss; no complete
-all-action overlap run passed. iPhone automation was unreachable. Separate
+all-action overlap run passed. The later USB-connected
+[iPhone follow-up](audits/2026-09-22-iphone-connection-stress.md) passed a
+five-minute steady baseline and five impaired-feed/Media-return cycles, and
+reproduced delayed foreground and overlapping-fault recovery. Stronger gimbal
+throws, ISO/WB sweeps, matched automatic/Media recovery probes and the verified
+attachment launcher are iOS-only test tooling; Android does not yet have
+equivalent workloads. Separate
 Android host experiments exercised actual Wi-Fi interruptions with Settings
 taps; these are not native matrix adapters or congestion qualification.
-Both complete overlap qualifications and the matrix's native adapters remain
+Complete overlap qualifications and the matrix's native adapters remain
 pending. Unsupported paths remain explicit coverage gaps.
 The portable chaos suite does not cover Android's still-local SET mailbox;
 consolidation is tracked in the guide. No operator-visible shell behavior changes.
