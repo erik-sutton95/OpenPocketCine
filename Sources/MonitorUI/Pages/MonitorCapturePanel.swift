@@ -194,12 +194,14 @@
     public struct MonitorCaptureToggle: View {
         private let title: String
         private let help: String
+        private let helpColor: Color?
         @Binding private var isOn: Bool
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-        public init(_ title: String, help: String, isOn: Binding<Bool>) {
+        public init(_ title: String, help: String, helpColor: Color? = nil, isOn: Binding<Bool>) {
             self.title = title
             self.help = help
+            self.helpColor = helpColor
             _isOn = isOn
         }
 
@@ -209,7 +211,7 @@
                     Text(title).font(MonitorTheme.font(11.5, weight: .semibold))
                         .foregroundStyle(MonitorTheme.text)
                     Text(help).font(MonitorTheme.font(9.5)).lineSpacing(2)
-                        .foregroundStyle(MonitorTheme.faint)
+                        .foregroundStyle(helpColor ?? MonitorTheme.faint)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

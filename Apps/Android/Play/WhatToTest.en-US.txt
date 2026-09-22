@@ -1,7 +1,7 @@
 New and changed
 
-- Anamorphic Desqueeze (DE-SQ) works in live view, video playback and photos, with lens presets and a custom 1.00–2.00× factor.
-- Report a problem is visible on the pairing screen before your first connection, with optional technical details and screenshots.
+- Motion Control loops through saved zooms and offers Restart while paused. The zoom chip and long-press disc stay accessible; D-Log2 blocks zoom-changing programs.
+- Anamorphic Desqueeze (DE-SQ) works in live view, videos and photos, with lens presets and a custom 1.00–2.00× factor.
 
 Fixes
 
@@ -11,5 +11,5 @@ Fixes
 What to test
 
 - In Auto, change the lighting and compare the shutter under EV with the camera. Switch to Manual, select a shutter, then return to Auto and repeat.
-- Tap DE-SQ to toggle; hold for presets, Custom and direction. Check live view and playback with LUTs and grids.
-- Open Report a problem before pairing. Then connect and check preview recovery after Media, Settings and background use.
+- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, adjust a duration, then close/reopen it and check saved settings remain.
+- Try DE-SQ with LUTs, guides and playback. Check preview recovery after Media, Settings and background use.

@@ -109,6 +109,7 @@ final class DatalinkDriver {
         var token: UInt64
         var epoch: UInt64
         var engine: GimbalMoveEngine
+        var zoom: GimbalProgramZoom?
         var timer: DispatchSourceTimer
         var lastTickAt: TimeInterval
         var logsAllTargets: Bool
@@ -141,6 +142,8 @@ final class DatalinkDriver {
         var nativeProgramEpoch: UInt64 = 0
         var nativeProgramPose: GimbalWaypoint?
         var nativeProgramPoseAt: TimeInterval?
+        var nativeZoomFeedback: [String: (frame: Duml.Frame, receivedAt: TimeInterval)] = [:]
+        var nativeZoomSentAt: TimeInterval?
         var gimbalStickHeld = false
         var gimbalSendRest = false
         var lastGimbalStickAt: TimeInterval = 0
@@ -181,8 +184,12 @@ final class DatalinkDriver {
     var secondsSinceLastRebuild: TimeInterval? {
         lastRebuildAt.map { Date().timeIntervalSince($0) }
     }
+    var secondsSinceNativeZoomSet: TimeInterval? {
+        wire.withLock { $0.nativeZoomSentAt }.map { ProcessInfo.processInfo.systemUptime - $0 }
+    }
     var secondsSinceLastCommand: TimeInterval? {
-        lastCommandSendAt.map { Date().timeIntervalSince($0) }
+        [lastCommandSendAt.map { Date().timeIntervalSince($0) }, secondsSinceNativeZoomSet]
+            .compactMap { $0 }.min()
     }
     var needsRebuild: Bool {
         if rebuilding { return false }
@@ -461,7 +468,7 @@ final class DatalinkDriver {
 
     /// The take's engine and feedback clock live on the UDP queue, independent of UI work.
     func startNativeProgram(
-        program: GimbalProgram, token: UInt64,
+        program: GimbalProgram, token: UInt64, zoom: GimbalProgramZoom? = nil,
         onProgress:
             @escaping @MainActor @Sendable (UInt64, GimbalMoveEngine, GimbalWaypoint) -> Void
     ) -> Bool {
@@ -470,11 +477,17 @@ final class DatalinkDriver {
         onUDPQueueSync {
             let now = ProcessInfo.processInfo.systemUptime
             var engine = GimbalMoveEngine()
+            var zoom = zoom
             let pose = wire.withLock { w -> GimbalWaypoint? in
+                for sample in w.nativeZoomFeedback.values.sorted(by: { $0.receivedAt < $1.receivedAt }) {
+                    zoom?.observe(sample.frame, at: sample.receivedAt)
+                }
                 guard let conn = w.conn, case .ready = conn.state,
-                    let pose = w.nativeProgramPose, let receivedAt = w.nativeProgramPoseAt,
-                    now >= receivedAt, now - receivedAt <= 0.3
+                    var pose = w.nativeProgramPose, let receivedAt = w.nativeProgramPoseAt,
+                    now >= receivedAt, now - receivedAt <= 0.3, zoom?.failureReason == nil
                 else { return nil }
+                if let factor = zoom?.liveZoom { pose.zoom = factor }
+                w.nativeProgramPose = pose
                 return pose
             }
             guard let pose, engine.start(program: program, live: pose) else { return }
@@ -497,7 +510,7 @@ final class DatalinkDriver {
             let epoch = wire.withLock { w in
                 w.nativeProgramEpoch &+= 1
                 w.nativeProgram = NativeProgramRun(
-                    token: token, epoch: w.nativeProgramEpoch, engine: engine,
+                    token: token, epoch: w.nativeProgramEpoch, engine: engine, zoom: zoom,
                     timer: timer, lastTickAt: now,
                     logsAllTargets: GimbalProgramCurve(program: program) == nil,
                     finalTarget: program.c ?? program.b, onProgress: onProgress)
@@ -532,11 +545,16 @@ final class DatalinkDriver {
             }
             guard let (run, pose) = snapshot else { return }
             run.timer.cancel()
+            if run.zoom?.hasSentTarget == true { _ = sendNativeProgramFrame(Commands.setZoomStop()) }
             guard sendNativeProgramFrame(Commands.gimbalTimedStop()) else {
                 _ = cancelNativeProgramOnQueue(token: token, reportInterruption: true)
                 return
             }
-            wire.withLock { $0.nativeProgram?.pausedAt = ProcessInfo.processInfo.systemUptime }
+            wire.withLock {
+                let now = ProcessInfo.processInfo.systemUptime
+                $0.nativeProgram?.pausedAt = now
+                $0.nativeProgram?.zoom?.notePause(at: now)
+            }
             publishNativeProgram(run, pose: pose)
             paused = true
         }
@@ -557,12 +575,14 @@ final class DatalinkDriver {
                     let stableSince = run.pauseStableSince, receivedAt - stableSince >= 0.2 - 1e-9,
                     let anchor = run.pauseAnchor,
                     GimbalMoveEngine.angularDistance(anchor, pose) <= 0.100001,
+                    run.zoom?.canResume(at: now) ?? true,
                     run.engine.resume(live: pose)
                 else { return nil }
                 w.nativeProgramEpoch &+= 1
                 run.epoch = w.nativeProgramEpoch
                 run.timer = DispatchSource.makeTimerSource(queue: q)
                 run.lastTickAt = now - 0.000001
+                run.zoom?.resetDispatch()
                 run.lastProgressAt = -.infinity
                 run.pausedAt = nil
                 run.pauseAnchor = nil
@@ -591,7 +611,7 @@ final class DatalinkDriver {
     /// Runs on q: invalidate queued timer handlers before placing STOP on the wire.
     @discardableResult
     nonisolated private func cancelNativeProgramOnQueue(
-        token: UInt64? = nil, reportInterruption: Bool = false
+        token: UInt64? = nil, reportInterruption: Bool = false, reason: String? = nil
     ) -> Bool {
         let removed = wire.withLock { w -> (NativeProgramRun, GimbalWaypoint?)? in
             guard var run = w.nativeProgram, token == nil || run.token == token else { return nil }
@@ -604,8 +624,10 @@ final class DatalinkDriver {
         var run = removed.0
         let pose = removed.1
         run.timer.cancel()
-        if reportInterruption, let pose { _ = run.engine.tick(dt: .infinity, live: pose) }
+        if let reason, let pose { _ = run.engine.interrupt(live: pose, reason: reason) }
+        else if reportInterruption, let pose { _ = run.engine.tick(dt: .infinity, live: pose) }
         run.engine.cancel()
+        if run.zoom?.hasSentTarget == true { _ = sendNativeProgramFrame(Commands.setZoomStop()) }
         _ = sendNativeProgramFrame(Commands.gimbalTimedStop())
         if let pose { publishNativeProgram(run, pose: pose) }
         return true
@@ -614,7 +636,7 @@ final class DatalinkDriver {
     nonisolated private func tickNativeProgram(epoch: UInt64) {
         let now = ProcessInfo.processInfo.systemUptime
         let step = wire.withLock {
-            w -> (NativeProgramRun, GimbalWaypoint, GimbalMoveEngine.Output, Bool)? in
+            w -> (NativeProgramRun, GimbalWaypoint, GimbalMoveEngine.Output, Bool, Duml.Frame?)? in
             guard w.nativeProgramEpoch == epoch, var run = w.nativeProgram,
                 !run.engine.isPaused, let pose = w.nativeProgramPose
             else { return nil }
@@ -627,13 +649,33 @@ final class DatalinkDriver {
                 ControlLiveLog.line(
                     "gimbal-native: interrupted dt=\(dt) feedbackAge=\(age) ready=\(ready)")
             }
-            guard let output = run.engine.tick(dt: dt, live: pose, telemetryAge: age) else {
-                return nil
+            var output: GimbalMoveEngine.Output
+            if let reason = run.zoom?.nativeFailure(at: now) {
+                output = run.engine.interrupt(live: pose, reason: reason)
+            } else if let step = run.engine.tick(dt: dt, live: pose, telemetryAge: age) {
+                output = step
+            } else { return nil }
+            if run.zoom?.usesHighRateTargets == true, let demand = run.engine.nativeZoomDemand,
+                let reason = run.zoom?.nativeFailure(for: demand, at: now) {
+                output = run.engine.interrupt(live: pose, reason: reason)
+            }
+            var zoomFrame: Duml.Frame?
+            if run.zoom?.usesHighRateTargets == true, let demand = run.engine.nativeZoomDemand {
+                let tracking: Bool
+                if case .track = demand.command { tracking = true } else { tracking = false }
+                if !tracking || run.zoom?.canSampleNativeTarget(at: now) == true {
+                    _ = run.engine.consumeNativeZoomDemand()
+                    zoomFrame = run.zoom?.nativeCommand(for: demand, at: now)?.frame
+                }
+            } else if run.zoom?.canSample(at: now) == true,
+                let target = run.engine.consumeProgrammedZoomTarget(),
+                let lens = run.zoom?.lensTarget(for: target, at: now) {
+                zoomFrame = Commands.setZoomLens(lens)
             }
             let publish = output.finished || now - run.lastProgressAt >= 0.2
             if publish { run.lastProgressAt = now }
             w.nativeProgram = run
-            return (run, pose, output, publish)
+            return (run, pose, output, publish, zoomFrame)
         }
         guard let step else { return }
         var run = step.0
@@ -650,6 +692,10 @@ final class DatalinkDriver {
                 return
             }
         }
+        if let zoomFrame = step.4, !sendNativeProgramFrame(zoomFrame) {
+            _ = cancelNativeProgramOnQueue(token: run.token, reportInterruption: true)
+            return
+        }
         if output.finished {
             run.epoch = wire.withLock { w in
                 w.nativeProgramEpoch &+= 1
@@ -657,10 +703,13 @@ final class DatalinkDriver {
                 return w.nativeProgramEpoch
             }
             run.timer.cancel()
+            if run.zoom?.hasSentTarget == true { _ = sendNativeProgramFrame(Commands.setZoomStop()) }
             if output.stop { _ = sendNativeProgramFrame(Commands.gimbalTimedStop()) }
         } else {
+            let interval = min(run.engine.nextWakeInterval,
+                run.zoom?.nextWakeInterval(at: now) ?? .infinity)
             let remaining =
-                run.lastTickAt + run.engine.nextWakeInterval - ProcessInfo.processInfo.systemUptime
+                run.lastTickAt + interval - ProcessInfo.processInfo.systemUptime
             run.timer.schedule(
                 deadline: .now() + max(0.000_001, remaining), repeating: .never,
                 leeway: .milliseconds(1))
@@ -701,6 +750,9 @@ final class DatalinkDriver {
         }
         guard let (conn, bytes, seq) = packet, case .ready = conn.state else { return false }
         conn.send(content: Data(bytes), completion: .idempotent)
+        if frame.cmdSet == 0x02, frame.cmdId == 0xB8 {
+            wire.withLock { $0.nativeZoomSentAt = ProcessInfo.processInfo.systemUptime }
+        }
         if let target = logTarget {
             let now = ProcessInfo.processInfo.systemUptime
             ControlLiveLog.line(
@@ -711,16 +763,28 @@ final class DatalinkDriver {
     }
 
     nonisolated private func noteNativeProgramPose(_ frames: [Duml.Frame]) {
-        for frame in frames
-        where frame.cmdSet == 0x04 && frame.cmdId == 0x05 && frame.payload.count >= 22 {
+        for frame in frames {
+            let zoomKey = GimbalProgramZoom.feedbackKey(frame)
+            let receivedAt = ProcessInfo.processInfo.systemUptime
+            let zoomFailure = wire.withLock { w -> String? in
+                if let zoomKey {
+                    w.nativeZoomFeedback[zoomKey] = (frame, receivedAt)
+                    w.nativeProgram?.zoom?.observe(frame, at: receivedAt)
+                }
+                if let zoom = w.nativeProgram?.zoom?.liveZoom { w.nativeProgramPose?.zoom = zoom }
+                return w.nativeProgram?.zoom?.failureReason
+            }
+            if let zoomFailure { _ = cancelNativeProgramOnQueue(reason: zoomFailure) }
+            guard frame.cmdSet == 0x04, frame.cmdId == 0x05, frame.payload.count >= 22 else { continue }
             guard
-                let pose = GimbalWaypoint.from(
+                var pose = GimbalWaypoint.from(
                     yawTenth: GimbalStick.yawTenthDeg(frame.payload),
                     pitchTenth: GimbalStick.pitchTenthDeg(frame.payload), zoom: 1,
                     nativePitchTenth: GimbalStick.i16LE(frame.payload, at: 0))
             else { continue }
             let now = ProcessInfo.processInfo.systemUptime
             wire.withLock { w in
+                if let zoom = w.nativeProgram?.zoom?.liveZoom { pose.zoom = zoom }
                 if var run = w.nativeProgram, run.engine.isPaused,
                     let pausedAt = run.pausedAt, now > pausedAt
                 {
@@ -859,6 +923,7 @@ final class DatalinkDriver {
             wire.withLock {
                 $0.nativeProgramPose = nil
                 $0.nativeProgramPoseAt = nil
+                $0.nativeZoomFeedback = [:]
             }
         }
         receiveArmed = false

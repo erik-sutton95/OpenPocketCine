@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.Slider
@@ -37,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -50,9 +52,15 @@ import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
@@ -64,6 +72,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,6 +83,7 @@ import com.opencapture.monitorui.MonitorDurationDialMetrics
 import com.opencapture.monitorui.MonitorInspector
 import com.opencapture.monitorui.MonitorOptionGroup
 import com.opencapture.monitorui.MonitorPalette
+import com.opencapture.monitorui.MonitorSwitchGraphic
 import com.opencapture.monitorui.MonitorValueDrum
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.session.GimbalHudCopy
@@ -95,6 +105,7 @@ enum class LiveGimbalPanel {
 }
 
 private const val EDITOR_WIDTH_DP = 340f
+private const val EDITOR_HEIGHT_DP = 420f
 private const val HOLD_MS = 300L
 
 @Composable
@@ -235,6 +246,7 @@ fun LiveGimbalOverlay(
     feed: ChromeRect,
     uiLocked: Boolean,
     joystickBounds: ChromeRect = ChromeRect(0f, 0f, 0f, 0f),
+    zoomBounds: ChromeRect = ChromeRect(0f, 0f, 0f, 0f),
 ) {
     if (uiLocked) return
     val panel = model.liveGimbalPanel
@@ -255,8 +267,10 @@ fun LiveGimbalOverlay(
                 layout.viewportHeight - max(8f, layout.safeTop) - max(8f, layout.safeBottom),
             ),
         )
-    val defaultTopCenter = Offset(layout.viewportWidth / 2f,
-        max(16f, (layout.viewportHeight - 430f) / 2f))
+    val defaultEditor = motionEditorDefaultFrame(bounds, zoomBounds, layout.viewportHeight > layout.viewportWidth)
+    val editorMaximumHeight = defaultEditor.height
+    val editorHeight = min(EDITOR_HEIGHT_DP, editorMaximumHeight)
+    val defaultTopCenter = Offset(defaultEditor.midX, defaultEditor.minY)
     Box(Modifier.fillMaxSize().zIndex(if (panel == LiveGimbalPanel.EDITOR) 1f else 0f)) {
         if (panel == LiveGimbalPanel.EDITOR || panel == LiveGimbalPanel.RUN_PILL || running) {
             LiveGimbalWaypointMarks(model, feed, program)
@@ -264,19 +278,20 @@ fun LiveGimbalOverlay(
         if (panel == LiveGimbalPanel.EDITOR) {
             MonitorMotionDismissBackdrop(
                 viewport = Rect(0f, 0f, layout.viewportWidth, layout.viewportHeight),
-                excluding = Rect(joystickBounds.minX, joystickBounds.minY,
-                    joystickBounds.minX + joystickBounds.width, joystickBounds.minY + joystickBounds.height),
+                excluding = listOf(joystickBounds, zoomBounds).map { rect ->
+                    Rect(rect.minX, rect.minY, rect.minX + rect.width, rect.minY + rect.height)
+                },
                 onDismiss = { model.liveGimbalPanel = LiveGimbalPanel.RUN_PILL },
             )
             GimbalFloatMove(
                 model = model,
-                sizeHintW = EDITOR_WIDTH_DP,
-                sizeHintH = 280f,
+                sizeHintW = min(EDITOR_WIDTH_DP, bounds.width),
+                sizeHintH = editorHeight,
                 bounds = bounds,
                 defaultTopCenter = defaultTopCenter,
                 identity = Triple(panel, cameraId, phase),
             ) {
-                LiveGimbalEditor(model, program, running, maxHeightDp = bounds.height)
+                LiveGimbalEditor(model, program, running, maxWidthDp = bounds.width, maxHeightDp = editorMaximumHeight)
             }
         }
         if (panel == LiveGimbalPanel.RUN_PILL) {
@@ -295,9 +310,21 @@ fun LiveGimbalOverlay(
     }
 }
 
+/** Keep the portrait default between system edge gestures and Zoom; manual drags use the full viewport. */
+internal fun motionEditorDefaultFrame(bounds: ChromeRect, zoom: ChromeRect, portrait: Boolean): ChromeRect {
+    val originalHeight = min(EDITOR_HEIGHT_DP, bounds.height)
+    val reservedTop = if (portrait) max(bounds.minY, 44f) else bounds.minY
+    val bottom = if (portrait && !zoom.isEmpty) min(bounds.maxY, max(reservedTop + 1f, zoom.minY - 8f)) else bounds.maxY
+    val height = min(originalHeight, bottom - reservedTop)
+    val top = (bounds.minY + (bounds.height - originalHeight) / 2f).coerceIn(reservedTop, bottom - height)
+    val width = min(EDITOR_WIDTH_DP, bounds.width)
+    return ChromeRect(bounds.midX - width / 2f, top, width, height)
+}
+
 /** The existing 25 Hz display prediction invalidates only marker content. */
 @Composable
 private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: GimbalProgram) {
+    val poseInvertPan by model.session.gimbalPoseInvertPan.collectAsState()
     var frameTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) { delay(40); frameTick += 1 }
@@ -315,7 +342,7 @@ private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: 
                 for (sample in preview) {
                     val (nx, ny, onScreen) = GimbalMoveEngine.project(sample, live, aspect)
                     if (!onScreen) { connected = false; continue }
-                    val x = (feed.minX + motionOverlayX(nx, model.assist.mirror).toFloat() * feed.width).dp.toPx()
+                    val x = (feed.minX + motionOverlayX(nx, poseInvertPan, model.assist.mirror).toFloat() * feed.width).dp.toPx()
                     val y = (feed.minY + ny.toFloat() * feed.height).dp.toPx()
                     if (connected) path.lineTo(x, y) else path.moveTo(x, y)
                     connected = true
@@ -329,10 +356,12 @@ private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: 
             val (nx, ny, onScreen) = GimbalMoveEngine.project(point, live, aspect)
             Box(
                 Modifier
-                    .offset(
-                        (feed.minX + motionOverlayX(nx, model.assist.mirror).toFloat() * feed.width - 13f).dp,
-                        (feed.minY + ny.toFloat() * feed.height - 13f).dp,
-                    )
+                    .offset {
+                        IntOffset(
+                            (feed.minX + motionOverlayX(nx, poseInvertPan, model.assist.mirror).toFloat() * feed.width - 13f).dp.roundToPx(),
+                            (feed.minY + ny.toFloat() * feed.height - 13f).dp.roundToPx(),
+                        )
+                    }
                     .size(26.dp)
                     .background(
                         LiveDesign.accent.copy(alpha = if (onScreen) 0.92f else 0.45f),
@@ -447,21 +476,29 @@ private data class GimbalInteractionContext(
 }
 
 @Composable
-private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: Boolean, maxHeightDp: Float) {
+private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: Boolean,
+    maxWidthDp: Float, maxHeightDp: Float) {
     val countdown by model.session.gimbalMoveCountdown.collectAsState()
     val paused by model.session.gimbalMovePaused.collectAsState()
     val phase by model.session.phaseFlow.collectAsState()
+    val status by model.session.status.collectAsState()
+    val zoomNote = model.session.programmedZoomUnavailableReason(status)
     val cameraId = model.session.connectedCamera?.id
+    val scroll = rememberScrollState()
+    val density = LocalDensity.current
+    val remainingThreshold = with(density) { 2.dp.roundToPx() }
+    val moreBelow by remember(scroll, remainingThreshold) {
+        derivedStateOf { scroll.canScrollForward && scroll.maxValue - scroll.value > remainingThreshold }
+    }
     Column(
         Modifier
-            .width(EDITOR_WIDTH_DP.dp)
-            .heightIn(max = maxHeightDp.dp)
-            .monitorMaterial(MonitorMaterial.Expanded, RoundedCornerShape(16.dp))
-            .verticalScroll(rememberScrollState())
-            .padding(top = 10.dp, start = 12.dp, end = 12.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+            .width(min(EDITOR_WIDTH_DP, maxWidthDp).dp)
+            .height(min(EDITOR_HEIGHT_DP, maxHeightDp).dp)
+            .testTag("motion.editor")
+            .monitorMaterial(MonitorMaterial.Expanded, RoundedCornerShape(16.dp)),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp).testTag("motion.header"),
+            verticalAlignment = Alignment.CenterVertically) {
             Text("MOTION CONTROL", color = LiveDesign.text,
                 style = LiveType.ui(9f, FontWeight.SemiBold).copy(letterSpacing = 1.6.sp),
                 modifier = Modifier.weight(1f))
@@ -479,49 +516,86 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
                 )
             }
             LivePopupCloseButton(
-                onClick = { model.liveGimbalPanel = LiveGimbalPanel.NONE },
+                onClick = {
+                    model.liveGimbalPanel = if (running) LiveGimbalPanel.RUN_PILL else LiveGimbalPanel.NONE
+                },
                 size = 30.dp,
+                modifier = Modifier.testTag("motion.close"),
             )
         }
-        waypointRow(model, program, GimbalWaypointSlot.A, duration = null, floor = null, running, cameraId, phase)
-        waypointRow(
-            model,
-            program,
-            GimbalWaypointSlot.B,
-            duration = program.durationAB,
-            floor = GimbalProgram.minTravelDuration(program.a, program.b),
-            running, cameraId, phase,
-        )
-        waypointRow(
-            model,
-            program,
-            GimbalWaypointSlot.C,
-            duration = program.durationBC,
-            floor = GimbalProgram.minTravelDuration(program.b, program.c),
-            running, cameraId, phase,
-        )
-        if (program.b != null && program.c != null) {
-            Text(String.format(java.util.Locale.US, "Smoothness %.2f", program.smoothness),
-                color = LiveDesign.text, style = LiveType.ui(13f, FontWeight.SemiBold))
-            Slider(value = program.smoothness.toFloat(),
-                onValueChange = { model.session.setGimbalSmoothness(it.toDouble()) },
-                valueRange = 0f..1f, steps = 19)
+        Column(
+            Modifier.weight(1f).fillMaxWidth()
+                .testTag("motion.settings")
+                .semantics { if (moreBelow) stateDescription = "More settings below" }
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    if (moreBelow) {
+                        drawRect(Brush.verticalGradient(listOf(Color.Black, Color.Transparent),
+                            startY = max(0f, size.height - 24.dp.toPx()), endY = size.height),
+                            blendMode = BlendMode.DstIn)
+                    }
+                }
+                .verticalScroll(scroll)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            waypointRow(model, program, GimbalWaypointSlot.A, duration = null, floor = null, running, cameraId, phase)
+            waypointRow(model, program, GimbalWaypointSlot.B, duration = program.durationAB,
+                floor = GimbalProgram.minTravelDuration(program.a, program.b), running, cameraId, phase)
+            waypointRow(model, program, GimbalWaypointSlot.C, duration = program.durationBC,
+                floor = GimbalProgram.minTravelDuration(program.b, program.c), running, cameraId, phase)
+            if (program.b != null && program.c != null) {
+                Text(String.format(java.util.Locale.US, "Smoothness %.2f", program.smoothness),
+                    color = LiveDesign.text, style = LiveType.ui(13f, FontWeight.SemiBold))
+                Slider(value = program.smoothness.toFloat(),
+                    onValueChange = { model.session.setGimbalSmoothness(it.toDouble()) },
+                    valueRange = 0f..1f, steps = 19)
+            }
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 44.dp)
+                    .testTag("motion.loop")
+                    .toggleable(value = program.loop, enabled = !running, role = Role.Switch,
+                        onValueChange = model.session::setGimbalLoop)
+                    .alpha(if (running) .45f else 1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Loop", color = LiveDesign.text, style = LiveType.ui(13f, FontWeight.SemiBold))
+                    Text("Repeat back and forth until Stop.", color = LiveDesign.secondary, style = LiveType.ui(9.5f))
+                }
+                MonitorSwitchGraphic(program.loop)
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        zoomNote?.let {
+            Text(it, color = LiveDesign.muted, style = LiveType.ui(10f),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("motion.zoomNote"))
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).testTag("motion.actions"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!running) {
-                Chip("Clear", selected = false, modifier = Modifier.weight(1f)) { model.session.clearGimbalProgram() }
+                Chip("Clear", selected = false, modifier = Modifier.weight(1f).height(44.dp).testTag("motion.clear")) {
+                    model.session.clearGimbalProgram()
+                }
                 Chip(GimbalHudCopy.RUN, selected = model.session.canRunProgrammedMove,
-                    modifier = Modifier.weight(1f).testTag("motion.startStop"),
+                    modifier = Modifier.weight(1f).height(44.dp).testTag("motion.startStop"),
                     enabled = model.session.canRunProgrammedMove) { model.session.runProgrammedMove() }
             } else {
                 if (countdown == null) {
+                    if (paused) {
+                        Chip("Restart", selected = false,
+                            modifier = Modifier.weight(1f).height(44.dp).testTag("motion.restart")) {
+                            model.session.restartProgrammedMove()
+                        }
+                    }
                     Chip(if (paused) "Resume" else "Pause", selected = true,
-                        modifier = Modifier.weight(1f).testTag("motion.pauseResume")) {
+                        modifier = Modifier.weight(1f).height(44.dp).testTag("motion.pauseResume")) {
                         if (paused) model.session.resumeProgrammedMove() else model.session.pauseProgrammedMove()
                     }
                 }
                 Chip(countdown?.let { "Stop · $it" } ?: "Stop", selected = true,
-                    modifier = Modifier.weight(1f).testTag("motion.startStop")) { model.session.cancelProgrammedMove() }
+                    modifier = Modifier.weight(1f).height(44.dp).testTag("motion.startStop")) { model.session.cancelProgrammedMove() }
             }
         }
     }
@@ -551,7 +625,7 @@ private fun waypointRow(
                 Text(slot.letter, color = if (set) LiveDesign.accent else LiveDesign.muted,
                     style = LiveType.ui(10f, FontWeight.Bold))
             }
-            Text(readout, color = if (set) LiveDesign.text else LiveDesign.muted,
+            Text(readout, color = if (set) LiveDesign.text else LiveDesign.secondary,
                 style = LiveType.ui(10f, FontWeight.Medium), maxLines = 1,
                 modifier = Modifier.weight(1f))
             Box(Modifier.height(44.dp).widthIn(min = 44.dp)
@@ -634,6 +708,7 @@ private fun LiveGimbalRunPill(model: AppModel, program: GimbalProgram, running: 
         Box(
             Modifier
                 .size(44.dp, 40.dp)
+                .testTag("motion.expand")
                 .chromeClickable(onClick = { model.liveGimbalPanel = LiveGimbalPanel.EDITOR }),
             contentAlignment = Alignment.Center,
         ) {

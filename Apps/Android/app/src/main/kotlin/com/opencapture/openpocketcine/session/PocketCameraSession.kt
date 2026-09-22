@@ -203,6 +203,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val focusPoint: StateFlow<Pair<Float, Float>> = _focusPoint.asStateFlow()
     private val _gimbalPoseViewFlip = MutableStateFlow(false)
     val gimbalPoseViewFlip: StateFlow<Boolean> = _gimbalPoseViewFlip.asStateFlow()
+    private val _gimbalPoseInvertPan = MutableStateFlow(false)
+    val gimbalPoseInvertPan: StateFlow<Boolean> = _gimbalPoseInvertPan.asStateFlow()
     private val gimbalLimitWatch = GimbalLimitWatch()
     private var lastGimbalCommand = 0f to 0f
     private val _gimbalLimitPulse = MutableStateFlow(0)
@@ -256,7 +258,14 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val hasGimbal: Boolean
         get() = connectedCamera?.model?.hasGimbal == true
     val canRunProgrammedMove: Boolean
-        get() = firstPictureSettled && decoder.lastPresentedAt != null && !isLiveVideoStale() && _gimbalProgram.value.canRun
+        get() = firstPictureSettled && decoder.lastPresentedAt != null && !isLiveVideoStale() &&
+            _gimbalProgram.value.canRun && programmedZoomUnavailableReason() == null
+
+    fun programmedZoomUnavailableReason(status: CameraStatus = _status.value): String? {
+        val link = datalink
+        return if (link != null) link.programmedZoomFailure(_gimbalProgram.value) else
+            nativeProgramZoomFailure(_gimbalProgram.value, connectedCamera?.model ?: CameraModel.default, status)
+    }
 
     fun gimbalDebugText(): String = GimbalMoveEngine.formatDebug(_gimbalProgram.value, liveGimbalWaypoint, lastMoveReadout)
     fun predictedGimbalWaypoint(nowSeconds: Double): GimbalWaypoint? = gimbalOverlayMotion.pose(nowSeconds)
@@ -384,6 +393,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastPinchLens: Int? = null
     private var lastPinchLogTenths: Double? = null
     private var lastZoomWireAt = 0L
+    private val lastZoomActivityAt: Long?
+        get() = maxOf(lastZoomWireAt, datalink?.lastProgrammedZoomAt ?: 0L).takeIf { it > 0L }
     private var pendingZoomPayload: ByteArray? = null
     private var zoomFlushJob: Job? = null
     private val faceDetector = LiveFaceDetector()
@@ -801,6 +812,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     camera.model.pairingToken,
                     cadence,
                     videoHistory,
+                    camera.model,
                 ).also { created ->
                     val inputOwner = decoder.claimInputOwner()
                     created.onVideoEpochChanged = { epoch -> decoder.advanceInputEpoch(inputOwner, epoch) }
@@ -996,7 +1008,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 return false
             }
             if (CamFov.shouldHoldWatchdog(
-                    lastZoomWireAt.takeIf { it > 0L }?.let { (now - it) / 1000.0 },
+                    lastZoomActivityAt?.let { (now - it) / 1000.0 },
                     zoomPinchPreview != null,
                 )
             ) {
@@ -1353,7 +1365,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 sawPicture = decoder.lastPresentedAt != null,
                 hadVideo = videoHistory.hadVideo(packets, videoAgeMs),
                 lastFocusTrackAt = lastFocusTrackAt,
-                lastZoomAt = lastZoomWireAt.takeIf { it > 0L },
+                lastZoomAt = lastZoomActivityAt,
                 zoomPinchActive = zoomPinchPreview != null,
                 lastGimbalThrowAt = lastGimbalThrowAt,
                 gimbalStickHeld = gimbalStickHeld,
@@ -1393,7 +1405,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     age(datalink?.lastRebuildAt)?.let { append(",\"secondsSinceLastRebuild\":$it") }
                     age(lastIdrRequest.takeIf { it > 0L })?.let { append(",\"secondsSinceLastEnable\":$it") }
                     age(lastFocusTrackAt)?.let { append(",\"secondsSinceFocusTrackSet\":$it") }
-                    age(lastZoomWireAt.takeIf { it > 0L })?.let { append(",\"secondsSinceZoomSet\":$it") }
+                    age(lastZoomActivityAt)?.let { append(",\"secondsSinceZoomSet\":$it") }
                     append(",\"zoomPinchActive\":${zoomPinchPreview != null}")
                     age(lastGimbalThrowAt)?.let { append(",\"secondsSinceGimbalThrow\":$it") }
                     append(",\"gimbalStickHeld\":$gimbalStickHeld")
@@ -2506,6 +2518,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setZoom(factor: Double) {
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val from = CamFov.displayLabel(_zoomReadout.value)
         val to = CamFov.displayLabel(factor)
         Log.i(TAG, "zoom: setZoom $from → $to live=${datalink != null}")
@@ -2537,6 +2550,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setZoomSlider(factor: Double) {
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val position = CamFov.pinchLens(factor)
         val tenths = CamFov.displayTenths(factor)
         if (lastPinchLogTenths != tenths) {
@@ -2561,6 +2575,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun updateZoomPinch(magnification: Double) {
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         if (zoomPinchPreview == null) {
             zoomPinchAnchor = _status.value.zoomFactor ?: zoomOptimistic ?: zoomStop
             zoomPin = null
@@ -3247,6 +3262,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             CaptureLists.colorWheel(family, live.availableColorModes, cam?.name ?: "")
                 .map { it.first }
         if (mode !in allowed) return
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         if (mode == CameraCommands.COLOR_DLOG2) {
             teleColorSent = false
             zoomColorHopPending = false
@@ -3609,6 +3625,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     /** iOS `CameraSetMailbox.zoomCoalesceHold` — 20 Hz latest-wins slider. */
     private fun fireZoom(payload: ByteArray, announce: Boolean, name: String) {
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val dl = datalink
         if (dl == null) {
             _controlNote.value = "Zoom not available"
@@ -3966,6 +3983,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _gimbalProgram.value = _gimbalProgram.value.copy(smoothness = value.coerceIn(0.0, 1.0))
     }
 
+    fun setGimbalLoop(enabled: Boolean) {
+        cancelProgrammedMove()
+        _gimbalProgram.value = _gimbalProgram.value.copy(loop = enabled)
+    }
+
     fun clearGimbalProgram() {
         cancelProgrammedMove()
         val keep = _gimbalProgram.value
@@ -3989,12 +4011,25 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             return
         }
         val program = _gimbalProgram.value
+        link.programmedZoomFailure(program)?.let {
+            _controlNote.value = it
+            return
+        }
         if (live.pose.nativePitchDeg == null || listOfNotNull(program.a, program.b, program.c)
                 .any { it.nativePitchDeg == null }) {
             _controlNote.value = "Set the gimbal points again"
             return
         }
         restGimbalStickWire()
+        zoomFlushJob?.cancel()
+        zoomFlushJob = null
+        pendingZoomPayload = null
+        pendingZoomAfterHop = null
+        zoomColorHopGeneration += 1
+        zoomColorHopPending = false
+        restoreDLog2OnWide = false
+        zoomPinchPreview = null
+        refreshZoomHud()
         _gimbalMoveRunning.value = true
         _gimbalMovePaused.value = false
         moveDriving = true
@@ -4009,7 +4044,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             if (moveDatalink !== link || !_gimbalMoveRunning.value) return@launch
             if (!canRunProgrammedMove) {
                 cancelProgrammedMove()
-                _controlNote.value = "Wait for live video before running a move"
+                _controlNote.value = link.programmedZoomFailure(program) ?: "Wait for live video before running a move"
                 return@launch
             }
             prepProgrammedMoveGimbal()
@@ -4044,6 +4079,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (!_gimbalMovePaused.value) return
         val token = moveToken ?: return
         moveDatalink?.resumeNativeProgram(token)
+    }
+
+    fun restartProgrammedMove() {
+        if (!_gimbalMoveRunning.value || !_gimbalMovePaused.value) return
+        cancelProgrammedMove()
+        runProgrammedMove()
     }
 
     fun cancelProgrammedMove() {
@@ -4190,6 +4231,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun syncGimbalPose() {
         _gimbalPoseViewFlip.value = gimbalStickMapping.poseViewFlip
+        _gimbalPoseInvertPan.value = gimbalStickMapping.invertPan
     }
 
     private fun tickGimbalLimit() {
@@ -4659,7 +4701,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             return
         }
         if (CamFov.shouldHoldWatchdog(
-                lastZoomWireAt.takeIf { it > 0L }?.let { (now - it) / 1000.0 },
+                lastZoomActivityAt?.let { (now - it) / 1000.0 },
                 zoomPinchPreview != null,
             )
         ) {

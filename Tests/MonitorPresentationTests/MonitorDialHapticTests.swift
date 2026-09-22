@@ -31,6 +31,18 @@ struct MonitorDialHapticTests {
         #expect(MonitorDialHaptic.shouldTick(previous: 4.5, next: 5.0))
     }
 
+    @Test func continuousZoomTicksOnceWhenCrossingOrReachingAStop() {
+        for values in [
+            [2.994, 2.996, 3.001], [3.006, 3.004, 2.999],
+            [2.996, 3.0, 3.004], [3.004, 3.0, 2.996],
+        ] {
+            let ticks = zip(values, values.dropFirst()).filter { previous, next in
+                MonitorDialHaptic.shouldTick(previous: previous, next: next, majors: [3])
+            }.count
+            #expect(ticks == 1)
+        }
+    }
+
     @Test func denseShutterSpeedOnlyTicksRoundDenoms() {
         #expect(MonitorDialHaptic.shouldTick(previous: "1/49", next: "1/50", optionCount: 40))
         #expect(!MonitorDialHaptic.shouldTick(previous: "1/47", next: "1/49", optionCount: 40))

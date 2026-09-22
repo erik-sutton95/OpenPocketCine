@@ -220,7 +220,7 @@
             let zoom = value
             return MonitorZoomCanvasSnapshot(
                 radius: radius, attachment: attachment, scale: scale,
-                position: scale.position(scale.quantized(zoom)),
+                position: scale.position(zoom),
                 opticalMaximum: opticalStops.max() ?? scale.minimum,
                 marks: marks.filter { $0 >= scale.minimum && $0 <= scale.maximum }.map {
                     MonitorZoomCanvasMark(value: $0, fraction: scale.position($0), label: label($0))

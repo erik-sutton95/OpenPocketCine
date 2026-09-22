@@ -137,7 +137,8 @@ final class CameraSession {
     /// Last zoom `0xB8` SET. Same grace as AF-C while the lens slews.
     @ObservationIgnored private var lastZoomSetAt: Date?
     private var secondsSinceZoomSet: TimeInterval? {
-        lastZoomSetAt.map { Date().timeIntervalSince($0) }
+        [lastZoomSetAt.map { Date().timeIntervalSince($0) }, datalink?.secondsSinceNativeZoomSet]
+            .compactMap { $0 }.min()
     }
     /// Last non-rest gimbal throw. Motion can pause HEVC.
     @ObservationIgnored private var lastGimbalThrowAt: Date?
@@ -1535,6 +1536,7 @@ final class CameraSession {
     /// Pinch HUD (0.1×) + slider (every distinct lens tick, ~20 Hz latest-wins).
     /// Gesture owns the chip until lift; cam_fov does not re-anchor mid-pinch.
     func updateZoomPinch(magnification: Double) {
+        if gimbalMoveRunning { cancelProgrammedMove() }
         if zoomPinchPreview == nil {
             zoomPinchAnchor = status.zoomFactor ?? zoomOptimistic ?? zoomStop
             zoomPinchSlew = nil
@@ -1575,6 +1577,7 @@ final class CameraSession {
 
     /// Cycle button. Body stops are sliders (Pro 217 / 651 / 1302 / 2604).
     func setZoom(_ factor: Double) {
+        if gimbalMoveRunning { cancelProgrammedMove() }
         let from = CamFov.displayLabel(factor: zoomReadout)
         let to = CamFov.displayLabel(factor: factor)
         ControlLiveLog.line(
@@ -1606,6 +1609,7 @@ final class CameraSession {
 
     /// Pinch hybrid: `0A 4E` + unquantized lens. Coalesces to the newest tick.
     func setZoomSlider(_ factor: Double) {
+        if gimbalMoveRunning { cancelProgrammedMove() }
         let position = CamFov.pinchLens(for: factor)
         let tenths = CamFov.displayTenths(factor)
         if lastPinchLogTenths != tenths {
@@ -1632,6 +1636,7 @@ final class CameraSession {
 
     /// Directional slew. 100 toward 12×; 300 from 12× to the 9.15× detent.
     func setZoomSlew(_ value: UInt16) {
+        if gimbalMoveRunning { cancelProgrammedMove() }
         let to = value == CamFov.slewTele ? 12.0 : value == CamFov.slewWide ? CamFov.slewDetent : 0
         ControlLiveLog.line(
             "zoom: setZoomSlew \(value) locked=\(isLocked) live=\(datalink != nil)"
@@ -1647,6 +1652,7 @@ final class CameraSession {
     /// it (camera may ignore). Same opcode as the slew, so the per-opcode queue
     /// keeps it from overtaking.
     func setZoomStop() {
+        if gimbalMoveRunning { cancelProgrammedMove() }
         ControlLiveLog.line(
             "zoom: setZoomStop locked=\(isLocked) live=\(datalink != nil)"
         )
@@ -2468,6 +2474,7 @@ final class CameraSession {
             return
         }
         guard colorModes.contains(mode) else { return }
+        if gimbalMoveRunning { cancelProgrammedMove() }
         let from = status.colorMode
         if mode == .dLog2 {
             teleColorSent = false
@@ -2705,8 +2712,17 @@ final class CameraSession {
             durationAB: gimbalProgram.durationAB, durationBC: gimbalProgram.durationBC)
     }
 
+    func setGimbalLoop(_ enabled: Bool) {
+        cancelProgrammedMove()
+        gimbalProgram.loop = enabled
+    }
+
+    var programmedZoomUnavailableReason: String? {
+        GimbalProgramZoom(program: gimbalProgram, model: connectedCamera?.model, status: status).failureReason
+    }
+
     var canRunProgrammedMove: Bool {
-        !isFeedWarming && !isLiveVideoStale && gimbalProgram.canRun
+        programmedZoomUnavailableReason == nil && !isFeedWarming && !isLiveVideoStale && gimbalProgram.canRun
             && [gimbalProgram.a, gimbalProgram.b, gimbalProgram.c]
                 .compactMap { $0 }.allSatisfy { $0.nativePitchDeg != nil }
     }
@@ -2715,6 +2731,10 @@ final class CameraSession {
         guard gimbalControlSceneActive, hasGimbal, !isLocked else { return }
         if gimbalMoveRunning {
             cancelProgrammedMove()
+            return
+        }
+        if let reason = programmedZoomUnavailableReason {
+            controlNote = reason
             return
         }
         guard canRunProgrammedMove, let live = liveGimbalWaypoint, live.nativePitchDeg != nil,
@@ -2731,6 +2751,19 @@ final class CameraSession {
             return
         }
         moveEngine = validation
+        if take.changesZoom {
+            // Retire manual requests and any delayed wide-angle color restoration.
+            let key = CameraSetMailbox.zoomOpcodeKey
+            inflight[key] = nil
+            inflightPending[key] = nil
+            lateWait[key] = nil
+            setMailbox.cancel(key)
+            zoomPinchPreview = nil
+            zoomPinchSlew = nil
+            pendingZoomAfterHop = nil
+            restoreDLog2OnWide = false
+            zoomPin = nil
+        }
         controlNote = nil
         cancelNativeHeadTrack()
         restGimbalStickWire()
@@ -2761,7 +2794,14 @@ final class CameraSession {
             self.nativeTargetGeneration &+= 1
             let token = self.nativeTargetGeneration
             self.nativeMoveToken = token
-            let started = datalink.startNativeProgram(program: take, token: token) {
+            let zoom = take.changesZoom ? GimbalProgramZoom(
+                program: take, model: self.connectedCamera?.model, status: self.status) : nil
+            if let reason = zoom?.failureReason {
+                self.cancelProgrammedMove()
+                self.controlNote = reason
+                return
+            }
+            let started = datalink.startNativeProgram(program: take, token: token, zoom: zoom) {
                 [weak self] token, engine, pose in
                 guard let self, self.nativeMoveToken == token, self.gimbalMoveRunning else {
                     return
@@ -2787,6 +2827,12 @@ final class CameraSession {
                 self.cancelProgrammedMove()
             }
         }
+    }
+
+    func restartProgrammedMove() {
+        guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning, gimbalMovePaused else { return }
+        cancelProgrammedMove()
+        runProgrammedMove()
     }
 
     func pauseOrResumeProgrammedMove() {

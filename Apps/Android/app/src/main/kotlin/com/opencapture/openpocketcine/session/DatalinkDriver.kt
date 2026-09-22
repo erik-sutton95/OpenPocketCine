@@ -162,6 +162,7 @@ class DatalinkDriver internal constructor(
     private val pairingToken: String,
     private val cadence: LivePipelineCadence = LivePipelineCadence(),
     private val videoHistory: LiveSessionVideoHistory = LiveSessionVideoHistory(),
+    private val cameraModel: CameraModel = CameraModel.default,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
@@ -187,6 +188,10 @@ class DatalinkDriver internal constructor(
     private var closeNeedsStickRest = false
     private val nativeFeedbackEpoch = AtomicLong(0)
     private val nativeProgramFeedback = AtomicReference<Pair<Long, NativeGimbalFeedback>?>(null)
+    private val nativeZoomStatus = AtomicReference<Pair<Long, NativeProgramZoomObservation>?>(null)
+    private val nativeZoomOwned = AtomicBoolean(false)
+    private val lastNativeZoomWriteAt = AtomicLong(0)
+    internal val lastProgrammedZoomAt: Long? get() = lastNativeZoomWriteAt.get().takeIf { it > 0L }
     private val nativeProgramProgress = AtomicReference<(() -> Unit)?>(null)
     private val nativeProgramProgressQueued = AtomicBoolean(false)
     private val nativeProgramRunner = NativeGimbalProgramRunner(
@@ -208,6 +213,45 @@ class DatalinkDriver internal constructor(
         stop = {
             if (!closed.get()) sendDumlLocked(0x04, CameraCommands.CMD_GIMBAL_ANGLE,
                 CameraCommands.gimbalTimedStop(), 0, CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
+        },
+        zoomFailure = ::programmedZoomFailure,
+        zoomTargetFailure = { factor, program -> nativeProgramZoomFailure(program, cameraModel, readNativeZoomStatus(), factor) },
+        sendZoom = { lens, program ->
+            if (closed.get() || programmedZoomFailure(program) != null) false else {
+                sendDumlLocked(0x02, CameraCommands.CMD_ZOOM, CameraCommands.zoomLens(lens), CameraCommands.FLAG_REQUEST,
+                    CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP).also { sent ->
+                    if (sent) {
+                        nativeZoomOwned.set(true)
+                        lastNativeZoomWriteAt.set(SystemClock.elapsedRealtime())
+                    }
+                }
+            }
+        },
+        stopZoom = {
+            if (nativeZoomOwned.getAndSet(false) && !closed.get()) {
+                sendDumlLocked(0x02, CameraCommands.CMD_ZOOM, CameraCommands.zoomStop(), CameraCommands.FLAG_REQUEST,
+                    CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP)
+            }
+        },
+        noteZoomPause = { now ->
+            nativeZoomStatus.updateAndGet { current ->
+                current?.takeIf { it.first == nativeFeedbackEpoch.get() }?.let { it.first to it.second.notePause(now) }
+            }
+        },
+        zoomResumeReady = { readNativeZoomObservation().canResume(it) },
+        usesHighRateZoom = CameraModel.looksLikePocket4Pro(cameraModel.name),
+        sendNativeZoom = { command, program ->
+            val now = SystemClock.elapsedRealtimeNanos() / 1e9
+            if (closed.get() || programmedZoomFailure(program) != null ||
+                nativeProgramZoomFeedbackFailure(readNativeZoomObservation().receivedAt, now) != null) false else {
+                sendDumlLocked(0x02, CameraCommands.CMD_ZOOM, command.payload, CameraCommands.FLAG_REQUEST,
+                    CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP).also { sent ->
+                    if (sent) {
+                        nativeZoomOwned.set(true)
+                        lastNativeZoomWriteAt.set(SystemClock.elapsedRealtime())
+                    }
+                }
+            }
         },
     )
     /** One hop at a time; admission already caps pending AUs. Unbounded execute would replay a GOP. */
@@ -547,7 +591,19 @@ class DatalinkDriver internal constructor(
     }
 
     private fun readNativeProgramFeedback(): NativeGimbalFeedback? =
-        nativeProgramFeedback.get()?.takeIf { it.first == nativeFeedbackEpoch.get() }?.second
+        nativeProgramFeedback.get()?.takeIf { it.first == nativeFeedbackEpoch.get() }?.second?.let { sample ->
+            val zoom = readNativeZoomObservation()
+            zoom.status.zoomFactor?.let { sample.copy(pose = sample.pose.copy(zoom = it), zoomReceivedAt = zoom.receivedAt) } ?: sample
+        }
+
+    private fun readNativeZoomObservation(): NativeProgramZoomObservation =
+        nativeZoomStatus.get()?.takeIf { it.first == nativeFeedbackEpoch.get() }?.second ?: NativeProgramZoomObservation()
+
+    private fun readNativeZoomStatus(): CameraStatus =
+        readNativeZoomObservation().status
+
+    internal fun programmedZoomFailure(program: GimbalProgram): String? =
+        nativeProgramZoomFailure(program, cameraModel, readNativeZoomStatus())
 
     internal val latestNativeProgramFeedback: NativeGimbalFeedback?
         get() = readNativeProgramFeedback()
@@ -556,6 +612,7 @@ class DatalinkDriver internal constructor(
         onProgress: (NativeGimbalProgramRunner.Progress) -> Unit): Long {
         nativeProgramUsed.set(true)
         return nativeProgramRunner.start(program) { progress ->
+            if (progress.finished) nativeZoomOwned.set(false)
             // A stalled UI only retains the newest immutable progress snapshot.
             nativeProgramProgress.set { if (nativeProgramRunner.isCurrentProgress(progress)) onProgress(progress) }
             if (nativeProgramProgressQueued.compareAndSet(false, true)) {
@@ -622,6 +679,7 @@ class DatalinkDriver internal constructor(
             nativeProgramRunner.invalidate()
             retireVideoEpoch()
             nativeProgramFeedback.set(null)
+            nativeZoomStatus.set(null)
             nativeProgramProgress.set(null)
             clearNativeCurveTargets()
             synchronized(gimbalLock) {
@@ -646,6 +704,8 @@ class DatalinkDriver internal constructor(
             if (SwiftCore.isAvailable) {
                 if (nativeProgramUsed.get()) sendDumlLocked(0x04, CameraCommands.CMD_GIMBAL_ANGLE,
                     CameraCommands.gimbalTimedStop(), 0, CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
+                if (nativeZoomOwned.getAndSet(false)) sendDumlLocked(0x02, CameraCommands.CMD_ZOOM,
+                    CameraCommands.zoomStop(), CameraCommands.FLAG_REQUEST, CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP)
                 if (closeNeedsStickRest) synchronized(sendLock) {
                     sendGimbalStickLocked(CameraCommands.GIMBAL_STICK_CENTER, CameraCommands.GIMBAL_STICK_CENTER)
                 }
@@ -740,9 +800,14 @@ class DatalinkDriver internal constructor(
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
     private fun discardUdp(keepPoke: Boolean) {
         if (!closed.get()) nativeProgramRunner.interrupt()
+        // Best effort on the retiring socket, before its epoch can be replaced.
+        if (nativeZoomOwned.getAndSet(false)) sendDumlLocked(0x02, CameraCommands.CMD_ZOOM,
+            CameraCommands.zoomStop(), CameraCommands.FLAG_REQUEST, CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP)
         retireVideoEpoch()
         ackDispatch.invalidate()
         nativeProgramFeedback.set(null)
+        nativeZoomStatus.set(null)
+        nativeZoomOwned.set(false)
         nativeCurveDispatch.clear()
         synchronized(gimbalLock) {
             gimbalTickDispatch.invalidate()
@@ -1111,7 +1176,16 @@ class DatalinkDriver internal constructor(
         if (frames.isEmpty()) return
         lastStatusElapsed.set(SystemClock.elapsedRealtime())
         frames.forEach { frame ->
-            NativeGimbalFeedback.from(frame, SystemClock.elapsedRealtimeNanos() / 1e9)?.let {
+            if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
+                nativeZoomStatus.updateAndGet { current ->
+                    if (closed.get() || receiveEpoch != nativeFeedbackEpoch.get()) current else {
+                        val status = current?.takeIf { it.first == receiveEpoch }?.second ?: NativeProgramZoomObservation()
+                        receiveEpoch to status.observing(frame, cameraModel, SystemClock.elapsedRealtimeNanos() / 1e9)
+                    }
+                }
+            }
+            NativeGimbalFeedback.from(frame, SystemClock.elapsedRealtimeNanos() / 1e9,
+                readNativeZoomStatus().zoomFactor ?: 1.0)?.let {
                 if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
                     nativeProgramFeedback.set(receiveEpoch to it)
                 }

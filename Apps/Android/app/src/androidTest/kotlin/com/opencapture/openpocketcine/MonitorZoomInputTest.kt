@@ -32,6 +32,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.max
+import kotlin.math.round
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -136,6 +137,8 @@ class MonitorZoomInputTest {
             val afterDisc = snapshot(probe)
             assertTrue(afterDisc.values.isNotEmpty() && abs(afterDisc.values.last() - 2.0) > 0.08,
                 "Disc-start drag must change zoom from 2.00, got ${afterDisc.values}")
+            assertTrue(afterDisc.values.any { abs(it - round(it * 100.0) / 100.0) > 1e-6 },
+                "Touch zoom must retain sub-hundredth values instead of snapping to the displayed label")
             assertEquals(0, afterDisc.downs, "Popup must own the disc-start pointer")
             assertEquals(0, afterDisc.events)
             assertEquals(0, afterDisc.clicks)
