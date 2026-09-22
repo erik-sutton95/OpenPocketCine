@@ -299,6 +299,11 @@ final class CameraSession {
     var mediaNote: String?
     /// While true, keepalive must not re-enable live view or recover the feed.
     var isBrowsingMedia = false
+    /// The camera body is showing its own gallery during an established live
+    /// session. Like DJI Mimo, the live screen opens Media while this is true and
+    /// closes it (returning the camera to live) when it turns false (#273).
+    private(set) var cameraGalleryOpen = false
+    @ObservationIgnored private var cameraGalleryAwayTicks = 0
     var mediaDownloadProgress: [String: Double] = [:]
     var mediaCacheRevision: UInt64 = 0
     var mediaLocalFavorites: Set<String> = []
@@ -3749,6 +3754,7 @@ final class CameraSession {
                         }
                     }
                     publishPipelineStats()
+                    followCameraGallery()
                     if !isBrowsingMedia {
                         recoverLiveViewIfNeeded()
                     }
@@ -4165,8 +4171,30 @@ final class CameraSession {
     /// First-picture enable, then the feed watchdog. Cumulative `videoPackets` is
     /// not a stall signal — after 3–5 min it stays huge even if UDP 9004 went quiet.
     /// A frozen first GOP still has `lastPresentedAt` — that must not skip recover.
+    /// 1 Hz. Playback before any picture is stray (a previous session left the
+    /// camera there) and keeps the exit below; playback after picture is the
+    /// operator opening the camera's gallery, which used to be kicked back to
+    /// live within a second.
+    private func followCameraGallery() {
+        if phase == .live, decoder.lastPresentedAt != nil, status.inPlayback {
+            cameraGalleryAwayTicks = 0
+            if !cameraGalleryOpen {
+                ControlLiveLog.line("media: camera gallery open — following")
+                cameraGalleryOpen = true
+            }
+        } else if cameraGalleryOpen {
+            cameraGalleryAwayTicks += 1
+            if cameraGalleryAwayTicks >= 3 || phase != .live {
+                ControlLiveLog.line("media: camera gallery closed — returning to live")
+                cameraGalleryOpen = false
+            }
+        }
+    }
+
     private func recoverLiveViewIfNeeded() {
         guard !isBrowsingMedia, !holdsMonitor, cameraMedia.resumeLiveTask == nil else { return }
+        // Media opens on the next UI pass; exit and repairs must not fight it.
+        if cameraGalleryOpen { return }
         if needsForegroundRecover { return }
         if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         guard WiFiJoiner.isCameraPathReady() else { return }

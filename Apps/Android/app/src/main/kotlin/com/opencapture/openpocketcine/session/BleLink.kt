@@ -90,6 +90,7 @@ class BleLink(context: Context) {
     private var activeAttempt: CallbackOperationOwner.Token<BluetoothGatt>? = null
     private var connectContinuation: CancellableContinuation<Unit>? = null
     private var connectTimeout: Runnable? = null
+    private var discoveryStartedFor: BluetoothGatt? = null
     private val writeQueue = ArrayDeque<ByteArray>()
     private var writing = false
     private val connectSettled = AtomicBoolean(false)
@@ -285,7 +286,15 @@ class BleLink(context: Context) {
     }
 
     @SuppressLint("MissingPermission")
+    private fun startDiscovery(gatt: BluetoothGatt) {
+        if (discoveryStartedFor === gatt || this.gatt !== gatt) return
+        discoveryStartedFor = gatt
+        if (!gatt.discoverServices()) closeGatt(IllegalStateException("service discovery failed"))
+    }
+
+    @SuppressLint("MissingPermission")
     private fun closeGatt(error: Throwable) {
+        discoveryStartedFor = null
         finishConnect(error)
         connectSettled.set(false)
         activeAttempt?.resource = null
@@ -448,10 +457,26 @@ class BleLink(context: Context) {
                         closeGatt(IllegalStateException("the camera disconnected"))
                     } else if (newState == BluetoothProfile.STATE_CONNECTED) {
                         initialization?.connected()
-                        gatt.requestMtu(512)
-                        if (!gatt.discoverServices()) closeGatt(IllegalStateException("service discovery failed"))
+                        // Android GATT runs one request at a time. discoverServices()
+                        // issued while the MTU exchange was pending was silently dropped
+                        // on a Xiaomi / Android 12 phone: connected at 846 ms, then the
+                        // 10 s connect deadline expired in discovery (#369, #351).
+                        // Osmosis discovers from onMtuChanged; do the same, with a
+                        // fallback for stacks that never report the MTU.
+                        if (gatt.requestMtu(512)) {
+                            handler.postDelayed(
+                                { operations.runIfCurrent(attempt, gatt) { startDiscovery(gatt) } },
+                                MTU_DISCOVERY_FALLBACK_MS,
+                            )
+                        } else {
+                            startDiscovery(gatt)
+                        }
                     }
                 }
+            }
+
+            override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+                onGattCallback(attempt, gatt) { startDiscovery(gatt) }
             }
 
             @SuppressLint("MissingPermission")
@@ -590,6 +615,8 @@ class BleLink(context: Context) {
     }
 
     companion object {
+        /** An MTU reply normally lands in tens of ms; never let it block discovery. */
+        const val MTU_DISCOVERY_FALLBACK_MS = 1_500L
         private const val TAG = "BleLink"
         private val SERVICE_FFF0 = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb")
         private val CHAR_FFF4 = UUID.fromString("0000fff4-0000-1000-8000-00805f9b34fb")

@@ -50,6 +50,7 @@ enum MediaOperatorCopy {
     static let listing = "Listing camera clips…"
     static let notConnected = "Connect the camera to list clips."
     static let playbackFailed = "Camera did not enter playback."
+    static let browsingOnCamera = "Playback is open on the camera. Close to return to live view."
     static let noClips = "No clips on the camera."
     static let listFailed = "Could not list camera clips."
     static let notDeletable = "That clip cannot be deleted from here."
@@ -771,6 +772,16 @@ extension CameraSession {
             isBrowsingMedia = true
             mediaFetchInProgress = false
             mediaNote = mediaFiles.isEmpty ? MediaOperatorCopy.notConnected : nil
+            return
+        }
+        if cameraGalleryOpen {
+            // The camera owns playback (#273). DJI Mimo sends no enter-playback or
+            // listing here; ours showed "Playback in progress" on the body and took
+            // its gallery away. Show the cached catalog; closing still exits playback.
+            isBrowsingMedia = true
+            mediaFetchInProgress = false
+            mediaNote = MediaOperatorCopy.browsingOnCamera
+            ControlLiveLog.line("media: opened for camera gallery — no enter playback")
             return
         }
         isBrowsingMedia = true

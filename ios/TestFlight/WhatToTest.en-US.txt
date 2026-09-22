@@ -7,7 +7,7 @@ Fixes
 
 - Improved recovery when a running preview loses its video format.
 - Opening Control Center or a system alert no longer drops the preview after about 10 seconds, and stalled video now recovers in about 2 seconds.
-- Returning from another app renegotiates the video link instead of fully reconnecting.
+- Returning from another app keeps the camera link, and opening the camera's own gallery opens Media here; leaving either side returns to live.
 - Connection setup and stalled-picture recovery have bounded waits. An established feed keeps its last picture while recovering; returning from Media starts live view once.
 
 What to test

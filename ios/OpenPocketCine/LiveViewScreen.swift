@@ -157,6 +157,15 @@ struct LiveViewScreen: View {
                 model.session.cancelProgrammedMove()
             }
         }
+        // Camera-body gallery follows DJI Mimo: open Media with it, and close
+        // Media (which returns the camera to live) when the body leaves it.
+        .onChange(of: model.session.cameraGalleryOpen) { _, open in
+            if open, model.liveOperatorPanel == nil {
+                model.liveOperatorPanel = .media
+            } else if !open, model.liveOperatorPanel == .media {
+                model.liveOperatorPanel = nil
+            }
+        }
         .onChange(of: model.liveOperatorPanel) { oldPanel, panel in
             model.session.incidentSettingsCovered = panel == .settings
             if oldPanel == .settings { model.session.recordFeedBreadcrumb(.settingsExit) }

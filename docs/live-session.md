@@ -112,6 +112,18 @@ also stale. A 2026-09-22 soak logged a BLE drop on return from Control Center
 that tore down a healthy 25 fps stream. The new branch is not yet physically
 exercised: toggling Bluetooth in Control Center did not surface a drop to the app.
 
+## Camera-body gallery (#273)
+
+The body's own gallery sets the status playback bit (`flags & 0x4000_0000`) and
+stops video. Playback seen before any picture is stray and still gets an exit.
+After picture, iOS follows it like DJI Mimo: Media opens without
+`0x02/0x0c` enter or listing (Mimo sends neither; our enter showed "Playback in
+progress" on the body and took its gallery away), watchdog and stray exit stand
+down, and after three ticks back in capture Media closes and the normal live
+resume runs. Closing Media in the app exits playback as before. Physically
+verified on iPhone + Pocket 4 Pro, 2026-09-23 (live resumed 1 s after the body
+left its gallery). Android does not follow yet.
+
 ## Enable write
 
 Arm pktType `0x02` ingest on UDP handshake ack, not on the enable write.
