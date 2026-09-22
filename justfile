@@ -85,6 +85,11 @@ swift-test *args:
 live-log-summary journal:
     python3 tools/analyze-live-log.py "{{journal}}"
 
+# Measure the production status wire codec with synthetic data on this host.
+# Informational timing only; does not measure Android JNI, UI, FPS or energy.
+performance-status-probe:
+    bash tools/performance-status-probe.sh
+
 # Run all Swift-only checks.
 swift-check: swift-lint swift-test
 

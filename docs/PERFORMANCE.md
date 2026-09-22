@@ -9,6 +9,10 @@ Numbers that already have a home stay there. This file is the SLO index and the
 rules that are not in those homes. Changing a budget is a code + docs change in
 the same PR.
 
+The [September 22 subsystem audit](audits/2026-09-22-performance-audit.md) separates
+source-level fix candidates from historical physical measurements and records
+the remaining CPU/GPU, battery and thermal profiling matrix for issue #402.
+
 ## Budgets
 
 | Surface | Budget | Owner |
