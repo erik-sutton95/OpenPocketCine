@@ -84,6 +84,14 @@ class MediaLibraryController(
             note = if (files.isEmpty()) MediaOperatorCopy.NOT_CONNECTED else null
             return
         }
+        if (session.cameraGalleryOpen.value) {
+            // The camera owns playback (#273). DJI Mimo sends no enter or listing;
+            // ours put "Playback in progress" on the body. Show the cached catalog.
+            fetchInProgress = false
+            note = MediaOperatorCopy.BROWSING_ON_CAMERA
+            Log.i(TAG, "media: opened for camera gallery — no enter playback")
+            return
+        }
         fetchInProgress = true
         listedCount = files.size
         note = MediaOperatorCopy.LISTING

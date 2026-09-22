@@ -124,6 +124,17 @@ import kotlinx.coroutines.isActive
 @Composable
 fun LiveViewScreen(model: AppModel) {
     val status by model.session.status.collectAsState()
+    val cameraGalleryOpen by model.session.cameraGalleryOpen.collectAsState()
+    var followedGallery by remember { mutableStateOf(cameraGalleryOpen) }
+    LaunchedEffect(cameraGalleryOpen) {
+        if (cameraGalleryOpen == followedGallery) return@LaunchedEffect
+        followedGallery = cameraGalleryOpen
+        if (cameraGalleryOpen && model.liveOperatorPanel == null) {
+            model.liveOperatorPanel = LiveOperatorPanel.MEDIA
+        } else if (!cameraGalleryOpen && model.liveOperatorPanel == LiveOperatorPanel.MEDIA) {
+            model.liveOperatorPanel = null
+        }
+    }
     val controlNote by model.session.controlNote.collectAsState()
     val controlBusy by model.session.controlBusy.collectAsState()
     val focusPoint by model.session.focusPoint.collectAsState()

@@ -1119,8 +1119,8 @@ Android's `onLinkLost` still starts full session recovery; explicit exception
 until the camera's behaviour without BLE is measured on Android. Not physically
 exercised on iOS either (see live-session).
 
-Camera-body gallery follow (#273) is iOS-only for now; Android still sends the
-stray-playback exit, so the body gallery is kicked back to live. Android BLE
+Camera-body gallery follow (#273) is on both shells, verified on iPhone + Pocket 4
+Pro and Galaxy S25 + Nano. Android BLE
 setup now discovers services from `onMtuChanged` (1.5 s fallback) instead of
 overlapping the MTU request (#369, #351); verified on a Galaxy S25 (ready in
 842 ms), not yet on the reporters' phones.

@@ -196,6 +196,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val _status = MutableStateFlow(CameraStatus())
     val status: StateFlow<CameraStatus> = _status.asStateFlow()
 
+    /**
+     * The camera body shows its own gallery during an established live session.
+     * Like DJI Mimo, Live opens Media while this is true and closes it (returning
+     * the camera to live) when it turns false (#273, matches iOS).
+     */
+    private val _cameraGalleryOpen = MutableStateFlow(false)
+    val cameraGalleryOpen: StateFlow<Boolean> = _cameraGalleryOpen.asStateFlow()
+    private var cameraGalleryAwayTicks = 0
+
     private val _controlNote = MutableStateFlow<String?>(null)
     val controlNote: StateFlow<String?> = _controlNote.asStateFlow()
 
@@ -968,6 +977,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                         withContext(Dispatchers.IO) { datalink?.keepalive() }
                     }
                     val window = cadence.takeKeepaliveWindow(live, isBrowsingMedia)
+                    followCameraGallery()
                     if (live && !isBrowsingMedia) {
                         publishPipelineStats()
                         noteFeedIncidentSnapshot(window)
@@ -1158,6 +1168,28 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     /** 0x09/0xa8 is live-start and the only PLI — 1 Hz spam resets the GOP and blacks the feed. */
+    /**
+     * 1 Hz. Playback before any picture is stray and keeps the exit; playback
+     * after picture is the operator opening the camera's gallery, which used to
+     * be kicked back to live within a second.
+     */
+    private fun followCameraGallery() {
+        val live = _phase.value == ConnectionPhase.LIVE
+        if (live && decoder.lastPresentedAt != null && _status.value.inPlayback) {
+            cameraGalleryAwayTicks = 0
+            if (!_cameraGalleryOpen.value) {
+                DiagnosticCenter.log("info", "media", "gallery", "media: camera gallery open — following")
+                _cameraGalleryOpen.value = true
+            }
+        } else if (_cameraGalleryOpen.value) {
+            cameraGalleryAwayTicks += 1
+            if (cameraGalleryAwayTicks >= 3 || !live) {
+                DiagnosticCenter.log("info", "media", "gallery", "media: camera gallery closed — returning to live")
+                _cameraGalleryOpen.value = false
+            }
+        }
+    }
+
     private fun recoverLiveViewIfNeeded() {
         if (isBrowsingMedia || mediaReturnPending || holdsMonitor) {
             logRecoverSkip(if (isBrowsingMedia || mediaReturnPending) "browsing" else "holdsMonitor")
@@ -1175,6 +1207,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             logRecoverSkip("recoveryJob")
             return
         }
+        // Media opens on the next UI pass; the stray exit and repairs must not fight it.
+        if (_cameraGalleryOpen.value) return
         if (com.opencapture.openpocketcine.media.MediaLiveResume.strayPlaybackAction(
                 browsing = isBrowsingMedia,
                 inPlayback = _status.value.inPlayback,
@@ -2985,6 +3019,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     fun beginMediaBrowse() {
         markBrowsingMedia(true)
+        // The camera owns playback: DJI Mimo sends no enter or listing here, and
+        // ours put "Playback in progress" on the body. Closing still exits.
+        if (_cameraGalleryOpen.value) {
+            DiagnosticCenter.log("info", "media", "gallery", "media: opened for camera gallery — no enter playback")
+            return
+        }
         scope.launch {
             sendDumlWait(0x02, CameraCommands.CMD_PLAYBACK, CameraCommands.enterPlayback(), "Playback")
             listMedia()

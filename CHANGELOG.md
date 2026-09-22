@@ -293,7 +293,7 @@ separate iOS and Android lists.
 
 - Opening the gallery on the camera now opens Media in the app, like DJI Mimo,
   instead of being kicked back to live within a second. Leaving on either side
-  returns the camera to live view (iOS; Android follows later).
+  returns the camera to live view.
 
 - Android pairing no longer times out on phones where Bluetooth service
   discovery overlapped the MTU request (camera approval never appeared).

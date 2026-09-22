@@ -122,7 +122,8 @@ progress" on the body and took its gallery away), watchdog and stray exit stand
 down, and after three ticks back in capture Media closes and the normal live
 resume runs. Closing Media in the app exits playback as before. Physically
 verified on iPhone + Pocket 4 Pro, 2026-09-23 (live resumed 1 s after the body
-left its gallery). Android does not follow yet.
+left its gallery). Android follows the same way (`cameraGalleryOpen`,
+`MediaLibraryController.beginBrowse`), verified on a Galaxy S25 with the Nano.
 
 ## Enable write
 

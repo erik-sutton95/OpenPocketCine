@@ -7,7 +7,7 @@ New and changed
 Fixes
 
 - Improved recovery when an established preview loses its video format.
-- Pairing no longer times out on phones where the camera approval never appeared.
+- Pairing no longer times out on phones where the camera approval never appeared, and opening the camera's own gallery opens Media here.
 - Preview no longer drops while Media is open during a repair, stalled video recovers in about 2 seconds, and a dropped decoder frame now triggers repair instead of a smeared picture.
 
 What to test
