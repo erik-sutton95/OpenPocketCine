@@ -265,6 +265,9 @@ class HevcDecoder internal constructor(
         if (!randomAccess.shouldAccept(idr)) return false
         val queued = queue(accessUnit, keyframe)
         if (queued && idr) randomAccess.onIrapAccepted()
+        // A dropped frame is a missing reference: later P-frames would smear
+        // until the next IRAP, which Pocket only sends when asked.
+        if (!queued) randomAccess.noteBrokenReferences()
         return queued
     }
 

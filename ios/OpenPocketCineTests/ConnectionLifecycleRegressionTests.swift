@@ -52,7 +52,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         XCTAssertFalse(decoder.nativeOutputExpected, "Exercise clean compressed HEVC, without VT")
 
         _ = assembler.ingest(packet(0, Self.syntheticKeyframe))
-        for frame in UInt8(1)...10 {
+        for frame in 1...UInt8(SoftAPVideoAssembler.pendingLimit + 2) {
             _ = assembler.ingest(packet(frame, Self.syntheticPFrame))
         }
         let retained = assembler.takeDelivery()
@@ -69,7 +69,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         XCTAssertNotNil(decoder.lastPresentedAt, "Retain the available picture while repairing")
         XCTAssertTrue(decoder.referenceRecoveryNeeded)
 
-        for frame in UInt8(11)...15 {
+        for frame in UInt8(SoftAPVideoAssembler.pendingLimit + 3)...UInt8(SoftAPVideoAssembler.pendingLimit + 7) {
             _ = assembler.ingest(packet(frame, Self.syntheticPFrame))
             XCTAssertTrue(assembler.takeDelivery().accessUnits.isEmpty)
         }
@@ -96,8 +96,8 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
 
         // The next genuine IRAP reopens admission and restores the decoder's
         // reference chain, without another discontinuity or speculative PLI.
-        _ = assembler.ingest(packet(16, Self.syntheticKeyframe))
-        _ = assembler.ingest(packet(17, Self.syntheticPFrame))
+        _ = assembler.ingest(packet(UInt8(SoftAPVideoAssembler.pendingLimit + 8), Self.syntheticKeyframe))
+        _ = assembler.ingest(packet(UInt8(SoftAPVideoAssembler.pendingLimit + 9), Self.syntheticPFrame))
         let recovered = assembler.takeDelivery()
         XCTAssertFalse(recovered.awaitingRandomAccess)
         recovered.deliver(
@@ -111,6 +111,21 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         XCTAssertTrue(decoder.canReleaseIDRHold)
     }
 
+    func testInvalidSessionAfterPictureIsKnownReferenceLoss() {
+        let decoder = HevcDecoder()
+        let display = DisplayLayerView(decoder.displayLayer)
+        display.frame = CGRect(x: 0, y: 0, width: 64, height: 64)
+        display.layoutSubviews()
+        defer { decoder.reset() }
+        XCTAssertTrue(decoder.decode(accessUnit: Hevc.stripDjiMarker(Self.syntheticKeyframe)))
+        XCTAssertNotNil(decoder.lastPresentedAt)
+        XCTAssertFalse(decoder.referenceRecoveryNeeded)
+        decoder.noteDecodeError(status: -12903, origin: "callback")
+        XCTAssertTrue(
+            decoder.referenceRecoveryNeeded,
+            "-12903 rejects every later frame; the watchdog must not wait 2 s to infer it")
+    }
+
     func testOverflowWithAFreshIRAPSuffixRestoresReferencesInTheSameDelivery() {
         let assembler = SoftAPVideoAssembler()
         let decoder = HevcDecoder()
@@ -119,11 +134,11 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         display.layoutSubviews()
         defer { decoder.reset() }
         _ = assembler.ingest(packet(0, Self.syntheticKeyframe))
-        for frame in UInt8(1)...6 {
+        for frame in 1...UInt8(SoftAPVideoAssembler.pendingLimit - 2) {
             _ = assembler.ingest(packet(frame, Self.syntheticPFrame))
         }
-        _ = assembler.ingest(packet(7, Self.syntheticKeyframe))
-        for frame in UInt8(8)...10 {
+        _ = assembler.ingest(packet(UInt8(SoftAPVideoAssembler.pendingLimit - 1), Self.syntheticKeyframe))
+        for frame in UInt8(SoftAPVideoAssembler.pendingLimit)...UInt8(SoftAPVideoAssembler.pendingLimit + 2) {
             _ = assembler.ingest(packet(frame, Self.syntheticPFrame))
         }
         let suffix = assembler.takeDelivery()

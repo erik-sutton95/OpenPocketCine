@@ -84,7 +84,7 @@ identifiers, raw diagnostics, XCTest attachments and footage out of Git.
 A later passing short run would be regression evidence for that phone, camera,
 and build only. It would not qualify Android and would not prove renderer-only
 repair (not implemented). Packet-without-complete-AU stall is a portable
-watchdog policy (enable ×2 then endpoint); this harness does not inject that
+watchdog policy (one enable then endpoint); this harness does not inject that
 case as a proven camera take.
 
 ## Latest qualification

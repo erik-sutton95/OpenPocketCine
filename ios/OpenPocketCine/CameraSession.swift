@@ -3796,7 +3796,13 @@ final class CameraSession {
                     accessUnitAge: datalink?.lastAccessUnitAt.map { wall.timeIntervalSince($0) },
                     decodeAcceptAge: decode.acceptedAge, decodedOutputAge: decode.outputAge,
                     assistOutputAge: decode.assistOutputAge,
-                    presentAge: decoder.monitorPresentedAt.map { wall.timeIntervalSince($0) }),
+                    presentAge: decoder.monitorPresentedAt.map { wall.timeIntervalSince($0) },
+                    statusAge: datalink?.lastStatusAt.map { wall.timeIntervalSince($0) },
+                    sendErrorAge: datalink?.lastSendError.map { wall.timeIntervalSince($0.at) },
+                    sendErrorCode: datalink?.lastSendError?.code,
+                    uplinkReplyAge: datalink?.lastSelfieFlipReplyAt.map {
+                        wall.timeIntervalSince($0)
+                    }),
                 queue: datalink?.incidentQueue ?? FeedIncidentQueue(),
                 decoder: FeedIncidentDecoder(
                     generation: decoder.sourceFrameGeneration,
@@ -4850,10 +4856,14 @@ final class CameraSession {
         ControlLiveLog.line(
             "session: foreground path=\(pathReady ? 1 : 0) identity=\(wrongNetwork ? "changed" : currentSSID == nil ? "unknown" : "same") videoFresh=\(videoFresh ? 1 : 0) pictureFresh=\(hasFreshRecoveryPicture(since: now.addingTimeInterval(-FeedWatchdog.stallThreshold), now: now) ? 1 : 0)"
         )
-        guard pathReady, !wrongNetwork else {
+        guard !wrongNetwork else {
             beginSessionRecovery(reason: "foreground camera network changed", trigger: .softAPLost)
             return
         }
+        // Wi-Fi reassociates after suspension. The 1 Hz path check owns the
+        // absent path with its 8 s grace; tearing BLE down here reconnected
+        // on nearly every return from another app.
+        guard pathReady else { return }
         if hasFreshRecoveryPicture(
             since: now.addingTimeInterval(-FeedWatchdog.stallThreshold), now: now)
         {
@@ -4862,8 +4872,26 @@ final class CameraSession {
         // A watchdog repair that started before the scene event retains ownership.
         // The next keepalive tick can escalate it after this check releases the slot.
         guard feedRecoveryTask == nil, datalink?.isRebuilding != true else { return }
-        guard videoFresh else {
-            beginSessionRecovery(reason: "foreground live link expired", trigger: .datalinkLost)
+        var videoResumed = videoFresh
+        let resumeDeadline = now.addingTimeInterval(FeedWatchdog.stallThreshold)
+        while !videoResumed, Date() < resumeDeadline {
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            guard isLivePictureRepairCurrent(pictureOwner) else { return }
+            videoResumed =
+                datalink?.lastVideoPacketAt.map {
+                    Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
+                } == true
+        }
+        // The path may have dropped during the wait; its 8 s grace owns that.
+        guard WiFiJoiner.isCameraPathReady(), !sessionRecovery.isRecovering else { return }
+        guard videoResumed else {
+            // Suspension usually leaves only the UDP endpoint stale. Renegotiate
+            // it with BLE and the picture kept; its failure escalates to the
+            // full session spine.
+            ControlLiveLog.line("session: foreground video stale, renegotiating endpoint")
+            startFeedRecovery { [weak self] in
+                await self?.repairDatalink(reason: "foreground")
+            }
             return
         }
         ControlLiveLog.line("session: foreground fresh video, repairing presentation")
@@ -5060,7 +5088,7 @@ final class CameraSession {
             return
         }
         FeedIncidentRuntime.noteUnexpectedDisconnect(now: ProcessInfo.processInfo.systemUptime)
-        recordFeedRepair("session", phase: .requested, reason: "connectionInterrupted")
+        recordFeedRepair("session", phase: .requested, reason: String(describing: trigger))
         recoveryCameraID = cameraID
         if recoveryDeviceName.isEmpty {
             recoveryDeviceName =

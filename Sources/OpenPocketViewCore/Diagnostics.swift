@@ -170,8 +170,22 @@ public enum PrivacyRedactor: Sendable {
         return false
     }
 
+    // Log lines are redacted on the UDP queue that also runs the 40 Hz ACK
+    // pump; compiling eight expressions per line was measurable there.
+    private static let regexLock = NSLock()
+    nonisolated(unsafe) private static var regexCache: [String: NSRegularExpression] = [:]
+
+    private static func regex(_ pattern: String) -> NSRegularExpression? {
+        regexLock.lock()
+        defer { regexLock.unlock() }
+        if let cached = regexCache[pattern] { return cached }
+        let compiled = try? NSRegularExpression(pattern: pattern)
+        regexCache[pattern] = compiled
+        return compiled
+    }
+
     private static func replace(_ text: String, pattern: String, template: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        guard let regex = regex(pattern) else { return text }
         let range = NSRange(text.startIndex..., in: text)
         return regex.stringByReplacingMatches(in: text, range: range, withTemplate: template)
     }
@@ -179,7 +193,7 @@ public enum PrivacyRedactor: Sendable {
     private static func replace(
         _ text: String, pattern: String, transform: ([String]) -> String
     ) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        guard let regex = regex(pattern) else { return text }
         let ns = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
         var out = text

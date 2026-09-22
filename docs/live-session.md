@@ -82,7 +82,7 @@ chrome must not flash Reconnecting. After a UDP rebuild
 Lift the stick on every recover (enable, UDP rebuild, SET-timeout, foreground).
 After lift, gimbal grace is at most stall+3 s after the last video packet.
 While `gimbalStickHeld`, do not GOP-cut even if throw is still refreshing.
-Two failed encoder-pause enables rebuild UDP
+A failed encoder-pause enable rebuilds UDP
 once (that brought the picture back); keepalive must not flap the
 5-tuple while DUML status is live. SET ACK timeout with young status is
 the same encoder-pause — do not rebuild UDP. A permitted keepalive rebuild
@@ -148,7 +148,7 @@ repair: when native decode is expected and complete AUs keep arriving, two
 seconds without decoder output can request one owned enable after the usual
 grace gates ([feed-watchdog](feed-watchdog.md#fresh-input-with-silent-native-output)).
 Packets without a complete AU do not native-rebuild; they take the existing
-enable ×2 then endpoint ladder (portable tests, physical qualification pending).
+enable then endpoint ladder (portable tests, physical qualification pending).
 A dropped GOP with live HUD was #177. The 2026-09-14 Settings-return freeze
 is **cause unknown** (no VT status in that report). Android API 34+ SurfaceView follows
 visibility by default — covering the well with Operator Setup or clips
@@ -215,7 +215,7 @@ Leftover TRAIL P-frames and HEVC IDR_N_LP (`0x28`, also AVC PPS with
 left Waiting for live view up. Pocket HEVC IRAP is often **BLA_W_LP (16)**
 (`0x20`), not only type 20. IDR hold and the pending-AU cap must treat
 IRAP 16–21 as a GOP start or the canvas freezes while UDP stays live.
-The live pending queue is bounded (eight AUs) and keeps an independently
+The live pending queue is bounded (50 AUs, 2 s) and keeps an independently
 decodable suffix when it can. An IRAP in that suffix still releases IDR hold
 on decode. A later incomplete AU cannot be repaired by replaying an older
 complete GOP. When a retained older IRAP predates the loss, its delivery must
@@ -294,8 +294,12 @@ through the 8 s reassociation grace (`bindProcessToNetwork` still pinned).
 One `open()` may take four UDP binds; do not wrap it in a 30 s timeout.
 
 Foreground verifies the retained camera network and source/presentation freshness.
-A healthy Control Center return keeps its connection. Stale picture with a lost
-route, or failed bounded presentation resume, starts the full saved-camera spine.
+A healthy Control Center return keeps its connection. A changed network starts the
+full saved-camera spine. A missing path is left to the 1 Hz path check and its 8 s
+reassociation grace. With the path up, video gets `stallThreshold` to resume; if it
+does not, the endpoint is renegotiated with BLE and the picture kept, and only a
+failed negotiation or picture deadline escalates to the full spine. Suspension
+used to reach the full BLE reconnect on nearly every return from another app.
 It does not add a separate UDP rebuild or enable alongside the watchdog. Old
 decoder or socket callbacks and cached redraws do not settle recovery. Full-session
 recovery remains visible until a new source picture reaches presentation, with

@@ -9,8 +9,11 @@ internal object LiveViewPresentTiming {
     const val FRAME_RATE_HINT = 60
     const val OPERATING_RATE = 120
 
-    /** Never block the UDP ingest thread waiting for a P-frame slot. */
-    const val INPUT_WAIT_US = 0L
+    /**
+     * Half a 25 fps frame. Decode runs on its own `opc.hevc` executor, not the
+     * UDP ingest thread; a 0 µs wait dropped P-frames the next frame needed.
+     */
+    const val INPUT_WAIT_US = 20_000L
 
     /** IDR must land — the GOP has no second chance for tens of seconds. */
     const val KEYFRAME_WAIT_US = 50_000L

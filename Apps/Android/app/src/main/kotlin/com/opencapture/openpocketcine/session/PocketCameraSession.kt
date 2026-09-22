@@ -5511,7 +5511,7 @@ internal object LiveViewEnablePolicy {
             if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < ESCALATE_MS) {
                 return Action.NONE
             }
-            if (state.encoderPauseEnables < 2) {
+            if (state.encoderPauseEnables < 1) {
                 state.encoderPauseEnables += 1
                 return fire(state, Action.RESEND_ENABLE, snap.now)
             }

@@ -12,11 +12,14 @@ import Foundation
 /// the socket paused. SoftAP bind stays.
 ///
 /// Encoder pause: DUML status still landing, HEVC silent, past GOP/AF-C
-/// grace. Two `0x09/0xa8`, then one UDP rebuild. Keepalive must not flap
+/// grace. One `0x09/0xa8`, then one UDP rebuild. Keepalive must not flap
 /// while status is young. `escalateAfter` between actions — do not 1 Hz loop.
+/// Field data (1,960 incidents, 2026-09): when an enable restarts HEVC it does
+/// so within 4 s; a second enable almost never did and delayed the endpoint
+/// rebuild that fixed 292 of 521 transport stalls by ~5 s.
 ///
 /// After picture the ladder is bounded and ends in a **new handshake**:
-/// enable ×2 (encoder pause only) → one session-preserving UDP rebuild →
+/// enable ×1 (encoder pause only) → one session-preserving UDP rebuild →
 /// `fullSessionRejoin`. A rebuild keeps session/seq; a camera that dropped
 /// the session never answers it, and the old ladder sat in Reconnecting on
 /// 60 s rebuild cycles until the operator force-quit (#218). The rejoin is
@@ -172,8 +175,8 @@ public struct FeedWatchdog: Equatable, Sendable {
 
     public var stage: Stage = .idle
     public private(set) var lastActionAt: TimeInterval = 0
-    /// Encoder-pause `0x09/0xa8`s this stall. Two then one UDP rebuild.
-    private var encoderPauseEnables = 0
+    /// Encoder-pause `0x09/0xa8` already sent this stall. Then one UDP rebuild.
+    private var encoderPauseEnableSent = false
 
     public init() {}
 
@@ -411,9 +414,14 @@ public struct FeedWatchdog: Equatable, Sendable {
             return .none
         }
 
+        // Measure the hold at the stage that stopped: fresh fragments with no
+        // complete AU must not renew the 8 s window after every enable. A
+        // just-sent enable still gets stallThreshold for its keyframe.
+        let enableHadTime = (snap.secondsSinceLastEnable ?? 0) >= Self.stallThreshold
         if Self.shouldHoldForGOPReset(
             secondsSinceLastEnable: snap.secondsSinceLastEnable,
-            lastVideoPacketAge: snap.lastVideoPacketAge
+            lastVideoPacketAge: assemblyStalled && enableHadTime
+                ? snap.lastAccessUnitAge : snap.lastVideoPacketAge
         ) {
             return .none
         }
@@ -446,7 +454,7 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
 
         // After picture: one bounded ladder, escalateAfter between rungs.
-        // Encoder pause (status still on 9004, HEVC silent): two enables
+        // Encoder pause (status still on 9004, HEVC silent): one enable
         // first (#148: reopening at 2 s left lastVideo=none). Then one
         // session-preserving UDP rebuild (22:16 brought the picture back).
         // Then a new handshake — never a second bind inside rebuildBackoff,
@@ -464,8 +472,8 @@ public struct FeedWatchdog: Equatable, Sendable {
         }
         switch stage {
         case .idle, .resendEnable, .rebuildVT:
-            if Self.controlReceiveAlive(snap) || assemblyStalled, encoderPauseEnables < 2 {
-                encoderPauseEnables += 1
+            if Self.controlReceiveAlive(snap) || assemblyStalled, !encoderPauseEnableSent {
+                encoderPauseEnableSent = true
                 return fire(.resendLiveViewEnable, at: snap.now)
             }
             // A UDP rebuild (ours, keepalive, foreground, SET timeout) is
@@ -560,6 +568,6 @@ public struct FeedWatchdog: Equatable, Sendable {
     private mutating func resetIdle() {
         stage = .idle
         lastActionAt = 0
-        encoderPauseEnables = 0
+        encoderPauseEnableSent = false
     }
 }

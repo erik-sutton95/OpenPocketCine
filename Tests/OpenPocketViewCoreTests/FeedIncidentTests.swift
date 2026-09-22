@@ -353,6 +353,33 @@ import Testing
         #expect(!envelope.grouping.errorClass.contains("hunter2"))
     }
 
+    @Test func envelopeNamesTriggerAndTheRepairThatRecovered() throws {
+        var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-ladder" })
+        _ = recorder.beginSession(Fixture.context())
+        var bundle = try #require(
+            recorder.recordSnapshot(Fixture.stall(now: 4, outputAge: 3))?.bundle)
+        bundle.repairs = [
+            FeedRepairRecord(monotonicAt: 1, action: "enable", phase: .locallySent),
+            FeedRepairRecord(monotonicAt: 4, action: "session", phase: .requested, reason: "bleDropped"),
+            FeedRepairRecord(monotonicAt: 5, action: "enable", phase: .locallySent),
+            FeedRepairRecord(monotonicAt: 9, action: "endpoint", phase: .requested),
+        ]
+        bundle.header.outcome = .recovered
+        let envelope = FeedIncidentExport.envelope(from: bundle)
+        #expect(envelope.trigger == "bleDropped", "repairs before the incident are not its trigger")
+        #expect(envelope.recoveredBy == "endpoint")
+
+        #expect(FeedIncidentExport.gapBucket(0.4) == "0-2s")
+        #expect(FeedIncidentExport.gapBucket(16.3) == "10-20s")
+        #expect(FeedIncidentExport.gapBucket(20) == "20-40s")
+        #expect(FeedIncidentExport.gapBucket(900) == "120s+")
+
+        bundle.header.outcome = .exhausted
+        #expect(FeedIncidentExport.envelope(from: bundle).recoveredBy == "none")
+        bundle.repairs = []
+        #expect(FeedIncidentExport.envelope(from: bundle).trigger == "none")
+    }
+
     @Test func coveredUnobservableFeedCannotClaimRecoveryOrHealthyExposure() {
         var recorder = FeedIncidentRecorder()
         _ = recorder.beginSession(Fixture.context())

@@ -7,6 +7,7 @@ New and changed
 Fixes
 
 - Improved recovery when an established preview loses its video format.
+- Preview comes back faster when the camera stops sending video, and a dropped decoder frame now triggers repair instead of a smeared picture.
 
 What to test
 

@@ -105,6 +105,17 @@ Healthy exposure accumulates only while an **observable** stage is fresh.
 If neither decoder output nor presentation is expected (identity path under
 Settings), that interval is not healthy exposure and is not recovery.
 
+iOS samples also carry `statusAge` (any camera DUML frame on the UDP socket),
+`uplinkReplyAge` (the camera's reply to the 1 Hz Flip GET, proof it still hears
+us) and `sendErrorAge` / `sendErrorCode` (last UDP send the stack rejected on
+the current socket, POSIX code). A stale `packetAge` with fresh `statusAge`
+means only the video stream stopped. Android does not record these yet.
+
+Sentry events titled `feed incident <stage>: <kind>` keep that grouping. Tags
+`trigger` (first repair reason, e.g. `bleDropped`), `recoveredBy` (last repair
+action before recovery) and `gap` (picture gap bucket) are searchable; the full
+timeline is the event's JSON attachment.
+
 These rows are counters, not scanout. Cached FPS cannot satisfy them.
 Share Diagnostics can attach the local extra; keep the app open briefly
 after a dropout so aftermath can land. No camera-time network: iOS

@@ -291,6 +291,15 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Live picture recovers sooner after the camera stops sending video. Recovery
+  sends one restart request instead of two before renegotiating the connection;
+  in 1,960 field incidents the second request almost never helped and delayed
+  the fix by about 5 seconds. On iOS, returning from another app renegotiates
+  the video link instead of fully reconnecting, a short main-thread pause no
+  longer freezes the picture until the next keyframe, and frames that arrived
+  before a gap are no longer discarded. On Android, a decoder input miss now
+  requests repair instead of leaving a smeared picture.
+
 - Both shells can recover an established live feed after the decoder loses its
   video format while compressed frames keep arriving. The existing watchdog
   still owns the single repair and bounded escalation; startup and grace gates

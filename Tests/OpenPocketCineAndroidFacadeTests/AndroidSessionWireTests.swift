@@ -41,8 +41,7 @@ struct AndroidSessionWireTests {
                     handle: handle, snapshotJSON: "{\"rollbackLastAction\":true}") == "none")
         }
         #expect(tick(101) == "resendLiveViewEnable")
-        #expect(tick(106) == "resendLiveViewEnable")
-        #expect(tick(111) == "reopenDatalink")
+        #expect(tick(106) == "reopenDatalink")
     }
 
     @Test

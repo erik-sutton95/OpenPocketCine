@@ -492,8 +492,15 @@ final class HevcDecoder {
         }
         if displayLayer.requiresFlushToResumeDecoding { displayLayer.flush() }
         // Backpressure is not a failed layer. flush() here hitch-blacked a live GOP.
-        guard displayLayer.isReadyForMoreMediaData else { return false }
-        guard commitPictureFlipIfNeeded() else { return true }
+        guard displayLayer.isReadyForMoreMediaData else {
+            // A dropped compressed frame is a missing reference, not backpressure only.
+            if hasSubmittedRandomAccess { noteCompressedDiscontinuity() }
+            return false
+        }
+        // A compressed frame skipped during the mirror hold left later P-frames
+        // without their reference. Decode it, just do not show it.
+        let mirrorHold = !commitPictureFlipIfNeeded()
+        if mirrorHold { Self.markDoNotDisplay(sample) }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         displayLayer.enqueue(sample)
@@ -511,6 +518,7 @@ final class HevcDecoder {
             hasSubmittedRandomAccess = true
             referenceRecoveryNeeded = false
         }
+        if mirrorHold { return true }
         finishLayerHandoffIfNeeded()
         lastSourceFrameAt = Date()
         notePresentedFrame(sampleRate: true)
@@ -1329,6 +1337,20 @@ final class HevcDecoder {
         }
     }
 
+    private static func markDoNotDisplay(_ sample: CMSampleBuffer) {
+        guard
+            let attachments = CMSampleBufferGetSampleAttachmentsArray(
+                sample, createIfNecessary: true),
+            CFArrayGetCount(attachments) > 0
+        else { return }
+        let dict = unsafeBitCast(
+            CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+        CFDictionarySetValue(
+            dict,
+            Unmanaged.passUnretained(kCMSampleAttachmentKey_DoNotDisplay).toOpaque(),
+            Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
+    }
+
     /// Extra-mirror the host view with the next present. `false` keeps the last picture.
     @discardableResult
     private func commitPictureFlipIfNeeded() -> Bool {
@@ -1437,7 +1459,7 @@ final class HevcDecoder {
         return false
     }
 
-    private func noteDecodeError(
+    func noteDecodeError(
         status: OSStatus = 0, origin: String = "display", flags: UInt32 = 0
     ) {
         decoderErrors += 1
@@ -1449,7 +1471,15 @@ final class HevcDecoder {
         lastDecodeStatus = status
         lastDecodeOrigin = origin
         lastDecodeFlags = flags
-        if Self.shouldRebuildSession(status: status) { nativeSessionFailed = true }
+        if Self.shouldRebuildSession(status: status) {
+            // Every later frame is now rejected until a rebuild. Report it as
+            // known reference loss so the watchdog repairs on its next tick,
+            // not after two seconds of inferred output silence.
+            if origin != "create", !nativeSessionFailed, lastPresentedAt != nil {
+                referenceRecoveryNeeded = true
+            }
+            nativeSessionFailed = true
+        }
         if changed || lastErrorJournalAt.map({ now.timeIntervalSince($0) >= 1 }) ?? true {
             lastErrorJournalAt = now
             ControlLiveLog.line(
