@@ -131,7 +131,7 @@ internal object FeedEffectsRenderPlanFactory {
             it.tool in listOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.FALSE, LiveAssistTool.ZEBRA, LiveAssistTool.DESQ)
         }?.owner
         val inspectorOnly = inspector != null && listOf(LiveAssistTool.WAVE, LiveAssistTool.PARADE,
-            LiveAssistTool.HISTO, LiveAssistTool.VECTOR, LiveAssistTool.LIGHTS, LiveAssistTool.ND, LiveAssistTool.EV).none(shown)
+            LiveAssistTool.HISTO, LiveAssistTool.VECTOR, LiveAssistTool.LIGHTS, LiveAssistTool.ND).none(shown)
         val waveform = shown(LiveAssistTool.WAVE) || inspector == LiveAssistTool.WAVE
         val parade = shown(LiveAssistTool.PARADE) || inspector == LiveAssistTool.PARADE
         val histogram = shown(LiveAssistTool.HISTO) || inspector == LiveAssistTool.HISTO
@@ -212,7 +212,6 @@ internal object FeedEffectsRenderPlanFactory {
                     vectorscope = vectorscope,
                     trafficLights = trafficLights,
                     ndMeter = shown(LiveAssistTool.ND),
-                    evMeter = shown(LiveAssistTool.EV) || inspector == LiveAssistTool.EV,
                     trafficThreshold = assist.crushClipCompensation.pixelFractionThreshold,
                     colorMode = colorMode,
                     iso = if (iso in 50..102_400) iso else ScopeExposureCeiling.REFERENCE_EI,

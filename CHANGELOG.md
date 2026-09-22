@@ -17,12 +17,12 @@ separate iOS and Android lists.
 
 ### Added
 
-- **EV** view assist on iOS and Android: a movable, resizable gauge measures
-  median source-picture brightness relative to middle gray in Auto, Manual and
-  playback. Signed stops accompany a −3…+3 needle; missing samples show a dash,
-  and D-Log M estimates carry **≈**. Separate portrait/landscape positions and
-  DISP 2 pins are supported. Camera settings and recordings are unchanged.
-  Switching clips retires old measurements before accepting the new picture.
+- Camera **EV** meter on iOS and Android: a thin vertical gauge stays inside
+  the feed's left edge, centered vertically, with the number above the scale.
+  Toggle EV in View Assist for DISP 1; hidden in DISP 2 and playback. It reads camera
+  metering telemetry independently from configured EV compensation, with no
+  image analysis or extra polling. Missing values show a dash. Activation is
+  saved; placement stays fixed, with no drag, resize or pin controls.
 - Motion Control Loop on iOS and Android moves back and forth: A→B→A or
   A→B→C→B→A, with the same leg durations and smoothed path in either direction.
   Countdown and the initial settle run once; turnarounds have no added pause,

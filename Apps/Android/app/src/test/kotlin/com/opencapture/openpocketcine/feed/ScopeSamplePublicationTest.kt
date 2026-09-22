@@ -1,20 +1,18 @@
 package com.opencapture.openpocketcine.feed
 
-import com.opencapture.openpocketcine.assists.EVMeterReading
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ScopeSamplePublicationTest {
-    @Test fun changingClipsClearsTheMeterAndRejectsAnAlreadyQueuedOldResult() {
+    @Test fun changingClipsClearsScopesAndRejectsAnAlreadyQueuedOldResult() {
         val first = LiveScopeSampleBus.openSource()
         val oldFrame = picture(200)
         assertTrue(LiveScopeSampleBus.publish(first, oldFrame))
         val queuedPublish = { LiveScopeSampleBus.publish(first, oldFrame) }
         val second = LiveScopeSampleBus.openSource()
         try {
-            assertEquals("—", EVMeterReading.from(LiveScopeSampleBus.bundle).label)
             assertFalse(queuedPublish())
             assertTrue(LiveScopeSampleBus.bundle.isEmpty)
             val newFrame = picture(80)

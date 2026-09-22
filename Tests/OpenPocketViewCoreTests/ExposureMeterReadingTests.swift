@@ -1,46 +1,64 @@
-import Foundation
 import Testing
 
 @testable import OpenPocketViewCore
 
 @Suite struct ExposureMeterReadingTests {
-    @Test func missingAndInvalidReadingsHaveNoNeedle() {
-        for stops: Double? in [nil, .nan, .infinity, -.infinity] {
-            let reading = ExposureMeterReading(stops: stops)
+    @Test func cameraMeterStaysSeparateFromConfiguredCompensation() {
+        for mode: UInt8 in [0x01, 0x04] {
+            var value = [UInt8](repeating: 0, count: 44)
+            value[6] = 0x10
+            value[7] = mode
+            value[15] = 0x0E
+            var status = CameraStatus()
+            #expect(
+                CameraStatusDecoder.applySubscribePush(
+                    SubscribePush.pack(name: "cam_expo_param", value: value), to: &status))
+            #expect(status.evComp == .zero)
+            #expect(status.meteredEv?.thirds == -2)
+            let reading = ExposureMeterReading(cameraValue: status.meteredEv)
+            #expect(reading.label == "−0.7")
+            #expect(reading.stops == -2.0 / 3)
+            #expect(reading.needleFraction == 7.0 / 18)
+        }
+    }
+
+    @Test func meterUsesEveryReportedThirdStop() {
+        for raw: UInt8 in 0x07...0x19 {
+            var value = [UInt8](repeating: 0, count: 46)
+            value[15] = raw
+            let ev = ExpoParam.meteredEv(value)
+            #expect(ev?.thirds == Int(raw) - 16)
+            let reading = ExposureMeterReading(cameraValue: ev)
+            #expect(reading.needleFraction == Double(Int(raw) - 7) / 18)
+            #expect(reading.label == ev?.label)
+        }
+        #expect(ExposureMeterReading(cameraValue: .zero).label == "0.0")
+    }
+
+    @Test func shortAndInvalidReportsClearTheMeterWithoutCompensationFallback() {
+        var status = CameraStatus()
+        status.meteredEv = .zero
+        for length in [8, 15, 16, 44, 46] {
+            var value = [UInt8](repeating: 0xFF, count: length)
+            value[6] = 0x13
+            #expect(
+                CameraStatusDecoder.applySubscribePush(
+                    SubscribePush.pack(name: "cam_expo_param", value: value), to: &status))
+            #expect(status.evComp?.thirds == 3)
+            #expect(status.meteredEv == nil)
+            let reading = ExposureMeterReading(cameraValue: status.meteredEv)
             #expect(reading.label == "—")
             #expect(reading.needleFraction == nil)
         }
-        let empty = ExposureMeterReading(
-            lumaHistogram: [Int](repeating: 0, count: 256), transfer: .rec709)
-        #expect(empty.stops == nil)
+        #expect(ExpoParam.meteredEv([]) == nil)
+        #expect(CameraStatus().meteredEv == nil)
     }
 
-    @Test func needleClampsWithoutLosingTheNumber() {
-        let under = ExposureMeterReading(stops: -4.2)
-        #expect(under.label == "−4.2")
-        #expect(under.needleFraction == 0)
-        let over = ExposureMeterReading(stops: 5.1)
-        #expect(over.label == "+5.1")
-        #expect(over.needleFraction == 1)
-        #expect(ExposureMeterReading(stops: -0.01).label == "0.0")
-        #expect(ExposureMeterReading(stops: 0).needleFraction == 0.5)
-    }
-
-    @Test func medianTracksBothSidesOfGrayInEveryTransfer() throws {
-        for transfer: MonitorTransfer in [.rec709, .hdr, .dlog, .dlogm, .dlog2] {
-            let gray = Int((transfer.middleGrayEncoded * 255).rounded())
-            func reading(_ code: Int) -> ExposureMeterReading {
-                var bins = [Int](repeating: 0, count: 256)
-                bins[code] = 100
-                // A small clipped highlight must not dominate the median meter.
-                bins[255] = 5
-                return ExposureMeterReading(lumaHistogram: bins, transfer: transfer)
-            }
-            let middle = try #require(reading(gray).stops)
-            #expect(abs(middle) < 0.15)
-            #expect(try #require(reading(gray - 10).stops) < middle)
-            #expect(try #require(reading(gray + 10).stops) > middle)
-            #expect(reading(gray).isEstimated == (transfer == .dlogm))
-        }
+    @Test func cameraMeterUsesTheExistingHudCadence() {
+        let previous = CameraStatus()
+        var next = previous
+        next.meteredEv = EvComp(thirds: 2)
+        #expect(!LiveChromeThrottle.shouldNotify(previous: previous, next: next, elapsed: 0.19))
+        #expect(LiveChromeThrottle.shouldNotify(previous: previous, next: next, elapsed: 0.2))
     }
 }

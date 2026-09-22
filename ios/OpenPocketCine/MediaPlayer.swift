@@ -1198,9 +1198,6 @@ struct MediaPlayerView: View {
         if model.assist.isPlaybackVisible(.ndMeter) {
             NDMeterOverlay(bounds: canvas, feed: videoRect, chromeClearance: clearance)
         }
-        if model.assist.isPlaybackVisible(.evMeter) {
-            EVMeterOverlay(bounds: canvas, chromeClearance: clearance)
-        }
         if model.assist.isPlaybackVisible(.audioMeters) {
             AudioMeterOverlay(
                 levels: playbackAudioLevels, sensitivity: nil,

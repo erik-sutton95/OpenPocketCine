@@ -18,7 +18,6 @@ struct LiveImageEffects: Equatable, Sendable {
     var vectorscope = false
     var trafficLights = false
     var ndMeter = false
-    var evMeter = false
     var lutDimension = 0
     var lutRGBA = Data()
 
@@ -80,9 +79,9 @@ struct LiveImageEffects: Equatable, Sendable {
         needsGPUFeed && !replacesIdentityFeed
     }
 
-    /// WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND / EV share the source tap.
+    /// WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND share the source tap.
     var needsScopes: Bool {
-        histogram || waveform || parade || vectorscope || trafficLights || ndMeter || evMeter
+        histogram || waveform || parade || vectorscope || trafficLights || ndMeter
     }
 
     var needsScopePoints: Bool {
@@ -90,7 +89,7 @@ struct LiveImageEffects: Equatable, Sendable {
     }
 
     var activeScopeCount: Int {
-        [histogram, waveform, parade, vectorscope, trafficLights, ndMeter, evMeter].filter { $0 }
+        [histogram, waveform, parade, vectorscope, trafficLights, ndMeter].filter { $0 }
             .count
     }
 
@@ -1211,8 +1210,9 @@ final class CIFeedView: UIView {
 
     func syncHDRDisplay() {
         let format = LiveHDRDisplay.drawablePixelFormat()
-        if metalLayer.pixelFormat != format || metalLayer.wantsExtendedDynamicRangeContent
-            != LiveHDRDisplay.isEnabled
+        if metalLayer.pixelFormat != format
+            || metalLayer.wantsExtendedDynamicRangeContent
+                != LiveHDRDisplay.isEnabled
         {
             invalidatePendingPresents()
             resetPresentDedup()

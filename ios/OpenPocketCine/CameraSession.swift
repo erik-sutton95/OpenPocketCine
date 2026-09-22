@@ -897,6 +897,7 @@ final class CameraSession {
     private func run(_ camera: FoundCamera) async throws {
         var timeline = ConnectTimeline(now: ProcessInfo.processInfo.systemUptime)
         connectedCamera = camera
+        status.meteredEv = nil
         rawAccessUnits = 0
         rawFramesEnqueued = 0
         lastIdrRequest = Date.distantPast
@@ -4975,6 +4976,8 @@ final class CameraSession {
     }
 
     private func prepareForDatalinkRecovery() -> Date {
+        // The held picture may return before this endpoint's first exposure report.
+        status.meteredEv = nil
         // The new handshake restarts DUML sequence numbering. Old retries,
         // pending sliders, and GET continuations belong to the retired session.
         let retired =
@@ -5076,6 +5079,7 @@ final class CameraSession {
     func startFeedRecovery(_ work: @escaping @MainActor () async -> Void) {
         let inFlight = datalink?.isRebuilding == true || feedRecoveryTask != nil
         guard FeedWatchdog.shouldStartFeedRecovery(rebuildInFlight: inFlight) else { return }
+        status.meteredEv = nil
         feedRecoveryGeneration += 1
         let generation = feedRecoveryGeneration
         feedRecovering = true
@@ -5404,6 +5408,7 @@ final class CameraSession {
 
     /// Drop the live UDP session so the next connect cannot inherit a half-closed driver.
     private func disposeDatalink() {
+        status.meteredEv = nil
         let link = datalink
         datalink = nil
         guard let link else { return }
@@ -5653,6 +5658,7 @@ final class CameraSession {
     func restartLiveViewAfterMedia() -> Bool {
         guard datalink?.isClosed == false else { return false }
         guard startCapturedLiveView(reason: "media browse ended") else { return false }
+        status.meteredEv = nil
         liveViewEnableSent = true
         liveViewEnableSends += 1
         lastIdrRequest = Date()

@@ -199,7 +199,7 @@ fun AssistOptionsPopup(
 @Composable
 private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colorMode: Int) {
     when (tool) {
-        LiveAssistTool.LUT -> Spacer(Modifier.height(0.dp))
+        LiveAssistTool.LUT, LiveAssistTool.EV -> Spacer(Modifier.height(0.dp))
         LiveAssistTool.PEAK -> PeakingOptions(state)
         LiveAssistTool.FALSE -> FalseColorOptions(state, colorMode)
         LiveAssistTool.ZEBRA -> ZebraOptions(state, colorMode)
@@ -209,7 +209,6 @@ private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colo
         LiveAssistTool.VECTOR -> VectorscopeOptions(state)
         LiveAssistTool.LIGHTS -> LightsOptions(state)
         LiveAssistTool.ND -> NdOptions(state)
-        LiveAssistTool.EV -> OptionCopy(EVMeterReading.HELP)
         LiveAssistTool.DESQ -> DesqueezeOptions(state)
         LiveAssistTool.GUIDES -> GuidesOptions(state)
         LiveAssistTool.GRID -> GridOptions(state)

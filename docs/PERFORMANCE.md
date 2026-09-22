@@ -123,6 +123,11 @@ default. The probe was removed; production waypoint projection performs no
 image registration. Background transport checks without the probe sustained
 approximately 25 fps through normal and fast smoothed takes.
 
+The fixed DISP 1 EV meter consumes existing camera exposure telemetry at the
+5 Hz HUD budget. It requests no scope samples, decoded pixel buffers, histogram,
+transfer conversion, polling command or independent timer. Its availability and
+DISP visibility do not change the image-processing demand.
+
 ## Threading
 
 UDP receive re-arms on the network queue, not after a main-actor hop. A busy HUD

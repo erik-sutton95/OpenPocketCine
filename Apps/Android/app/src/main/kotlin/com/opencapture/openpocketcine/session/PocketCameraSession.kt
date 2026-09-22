@@ -658,6 +658,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private suspend fun run(camera: FoundCamera) {
         if (!SwiftCore.isAvailable) error("Swift core is not loaded — run just android-core")
+        // A new transport needs a fresh exposure report, even when reconnecting the same camera.
+        _status.value = _status.value.copy(meteredEv = -1)
         connectedCamera = camera
         rawAccessUnits = 0
         lastIdrRequest = 0L
@@ -1720,6 +1722,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             ownsPicture = { ownsLivePicture(owner) },
             commandAdmission = endpointCommandAdmission,
             prepare = {
+                _status.value = _status.value.copy(meteredEv = -1)
                 retireEndpointCommands()
                 liveViewEnableSends = 0
                 resetFirstPictureFormatPoke()
@@ -1749,6 +1752,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         ) {
             // Reject every queued pre-negotiation image, including one decoded
             // while open was awaiting its handshake. The next IDR owns picture.
+            _status.value = _status.value.copy(meteredEv = -1)
             startedAt = decoder.beginPresentationProbe()
             sendCapturedLiveView(reason)
             if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
@@ -1771,6 +1775,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         cancelProgrammedMove()
         val inFlight = datalink?.isRebuilding == true || feedRecoveryJob != null
         if (!LiveViewEnablePolicy.shouldStartFeedRecovery(inFlight)) return
+        _status.value = _status.value.copy(meteredEv = -1)
         val job =
             scope.launch(start = CoroutineStart.LAZY) {
                 try {
@@ -2015,6 +2020,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         cancelProgrammedMove()
         val link = datalink
         datalink = null
+        _status.value = _status.value.copy(meteredEv = -1)
         if (link == null) return
         link.onAccessUnit = null
         link.onStatusFrame = null
@@ -2984,6 +2990,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun restartLiveViewAfterMedia(): Boolean {
         val link = datalink ?: return false
         if (isBrowsingMedia || link.isClosed || link.isRebuilding) return false
+        _status.value = _status.value.copy(meteredEv = -1)
         return sendCapturedLiveView("media browse ended")
     }
 

@@ -346,6 +346,13 @@ public enum ExpoParam {
         return EvComp(rawValue: value[6])
     }
 
+    /// `@15` is the camera's metered EV, independently reported from configured `@6`.
+    /// Same third-stop encoding; absent/unsupported values must not become zero.
+    public static func meteredEv(_ value: [UInt8]) -> EvComp? {
+        guard value.count > 15 else { return nil }
+        return EvComp(rawValue: value[15])
+    }
+
     /// `@16` u16-LE = ISO number. Auto `@16` floats with the meter.
     public static func isoValue(_ value: [UInt8]) -> Int? {
         guard value.count >= 18 else { return nil }

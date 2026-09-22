@@ -5,7 +5,7 @@ package com.opencapture.openpocketcine.session
  * subscribe pushes / GET replies the camera already sends.
  *
  * `cam_expo_param` uses the labeled Mimo offsets: shutter `@2–3` (`denom|0x8000`),
- * ISO index `@5`, EV `@6`, expo mode `@7`, ISO number `@16`.
+ * ISO index `@5`, configured EV `@6`, expo mode `@7`, metered EV `@15`, ISO number `@16`.
  */
 object StatusExtras {
     fun apply(
@@ -48,8 +48,9 @@ object StatusExtras {
     }
 
     fun applyExpo(value: ByteArray, status: CameraStatus): CameraStatus {
-        if (value.size < 18) return status
-        var next = status
+        if (value.size < 18) return status.copy(meteredEv = -1)
+        val meter = value[15].toInt() and 0xFF
+        var next = status.copy(meteredEv = meter.takeIf { it in 0x07..0x19 } ?: -1)
         if (value.size > 7) {
             val mode = value[7].toInt() and 0xFF
             if (mode == CameraCommands.EXPO_AUTO || mode == CameraCommands.EXPO_MANUAL) {

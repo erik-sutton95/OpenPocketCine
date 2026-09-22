@@ -178,9 +178,6 @@ class LiveAssistState(
     var ndCenter by mutableStateOf<StoredCenter?>(null)
     var ndCenterPortrait by mutableStateOf<StoredCenter?>(null)
     var ndNotation by mutableStateOf(NDFilterNotation.FACTOR)
-    var evScale by mutableDoubleStateOf(1.0)
-    var evCenter by mutableStateOf<StoredCenter?>(null)
-    var evCenterPortrait by mutableStateOf<StoredCenter?>(null)
     /** Last written slot, for reading pre-schema saves only. Overlay placement uses [audioCenterFor]. */
     var audioCenter by mutableStateOf<StoredCenter?>(null)
         private set
@@ -253,6 +250,7 @@ class LiveAssistState(
     /** Pins filter DISP 2; they never flip [isOn]. */
     fun isVisible(tool: LiveAssistTool): Boolean {
         if (!isOn(tool)) return false
+        if (tool == LiveAssistTool.EV && clean) return false
         return if (clean) pinned.contains(tool) else true
     }
 
@@ -326,6 +324,7 @@ class LiveAssistState(
         playbackVisibleTools.any { it in lookOverlayTools }
 
     fun togglePlayback(tool: LiveAssistTool) {
+        if (tool !in LiveAssistTool.playbackToolbarCases) return
         playbackVisibleTools =
             if (tool in playbackVisibleTools) playbackVisibleTools - tool else playbackVisibleTools + tool
         onPersistPlayback?.invoke(playbackVisibleTools.map { it.name }.toSet())
@@ -462,7 +461,6 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> if (portrait) vectorCenterPortrait else vectorCenter
             LiveAssistTool.LIGHTS -> if (portrait) lightsCenterPortrait else lightsCenter
             LiveAssistTool.ND -> if (portrait) ndCenterPortrait else ndCenter
-            LiveAssistTool.EV -> if (portrait) evCenterPortrait else evCenter
             LiveAssistTool.FALSE ->
                 if (portrait) falseColorReferenceCenterPortrait else falseColorReferenceCenter
             LiveAssistTool.AUDIO -> audioCenterFor(portrait)
@@ -482,7 +480,6 @@ class LiveAssistState(
             LiveAssistTool.LIGHTS ->
                 if (portrait) lightsCenterPortrait = center else lightsCenter = center
             LiveAssistTool.ND -> if (portrait) ndCenterPortrait = center else ndCenter = center
-            LiveAssistTool.EV -> if (portrait) evCenterPortrait = center else evCenter = center
             LiveAssistTool.FALSE ->
                 if (portrait) falseColorReferenceCenterPortrait = center
                 else falseColorReferenceCenter = center
@@ -504,7 +501,6 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> vectorScale = clamped
             LiveAssistTool.LIGHTS -> lightsScale = clamped
             LiveAssistTool.ND -> ndScale = clamped
-            LiveAssistTool.EV -> evScale = clamped
             else -> return
         }
         persist()
@@ -602,9 +598,6 @@ class LiveAssistState(
             .put("ndScale", ndScale)
             .put("ndCenter", encodeCenter(ndCenter))
             .put("ndCenterPortrait", encodeCenter(ndCenterPortrait))
-            .put("evScale", evScale)
-            .put("evCenter", encodeCenter(evCenter))
-            .put("evCenterPortrait", encodeCenter(evCenterPortrait))
             .put("audioCenter", encodeCenter(audioCenter))
             .put("audioCentersSchema", 1)
             .put("audioPortraitCenter", encodeCenter(audioPortraitCenter))
@@ -702,9 +695,6 @@ class LiveAssistState(
         ndScale = MovablePanelMath.clampedScale(obj.optDouble("ndScale", 1.0))
         ndCenter = decodeCenter(obj.optJSONObject("ndCenter"))
         ndCenterPortrait = decodeCenter(obj.optJSONObject("ndCenterPortrait"))
-        evScale = MovablePanelMath.clampedScale(obj.optDouble("evScale", 1.0))
-        evCenter = decodeCenter(obj.optJSONObject("evCenter"))
-        evCenterPortrait = decodeCenter(obj.optJSONObject("evCenterPortrait"))
         audioCenter = decodeCenter(obj.optJSONObject("audioCenter"))
         val hasOrientationSlots = obj.has("audioCentersSchema") ||
             obj.has("audioPortraitCenter") || obj.has("audioLandscapeCenter")
@@ -738,7 +728,6 @@ class LiveAssistState(
                 LiveAssistTool.HISTO,
                 LiveAssistTool.LIGHTS,
                 LiveAssistTool.ND,
-                LiveAssistTool.EV,
             )
 
         val defaultScopeStack: List<LiveAssistTool>
@@ -764,7 +753,6 @@ class LiveAssistState(
                 LiveAssistTool.VECTOR,
                 LiveAssistTool.LIGHTS,
                 LiveAssistTool.ND,
-                LiveAssistTool.EV,
             )
 
         fun from(context: Context): LiveAssistState {
@@ -780,10 +768,10 @@ class LiveAssistState(
         }
 
         private fun parsePins(names: Set<String>): Set<LiveAssistTool> =
-            names.mapNotNull(LiveAssistTool::fromPersisted).toSet()
+            names.mapNotNull(LiveAssistTool::fromPersisted).filter { it in LiveAssistTool.cleanPinCases }.toSet()
 
         private fun parsePlayback(names: Set<String>): Set<LiveAssistTool> =
-            names.mapNotNull(LiveAssistTool::fromPersisted).toSet()
+            names.mapNotNull(LiveAssistTool::fromPersisted).filter { it in LiveAssistTool.playbackToolbarCases }.toSet()
 
         private fun encodeGuides(guides: ScopeGuides): JSONObject =
             JSONObject().put("clip", guides.clip).put("crush", guides.crush).put("middle", guides.middle)

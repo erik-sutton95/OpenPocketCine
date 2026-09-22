@@ -459,6 +459,22 @@ struct LiveViewScreen: View {
                 chromeClearance: scopeClearance(layout: layout)
             )
 
+            if model.assist.isVisible(.evMeter) {
+                CameraEVMeterOverlay(
+                    feed: model.assist.isVisible(.desqueeze)
+                        ? DesqueezeAssist.presentationRect(
+                            sourceSize: CGSize(
+                                width: model.session.decoder.pictureAspect, height: 1),
+                            in: layout.onFeed, effects: model.assist.effects
+                        )
+                        .intersection(layout.onFeed)
+                        : layout.onFeed,
+                    avoiding: model.chromeSectionMounts(.toolBar)
+                        ? layout.presentation?.assists.cgRect ?? layout.assist : nil
+                )
+                .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
+            }
+
             // The collapse backdrop is above the picture/scopes and below
             // fixed controls. A Record or Settings tap keeps its own action.
             if assistsExpanded, model.chromeSectionMounts(.toolBar), !interfaceLocked,
@@ -1169,9 +1185,6 @@ private struct LiveScopeOverlays: View {
                 feed: picture,
                 chromeClearance: clearance
             )
-        }
-        if model.assist.isVisible(.evMeter) {
-            EVMeterOverlay(bounds: canvas, chromeClearance: clearance)
         }
         if !model.isWatchingFeed, !model.session.status.isPhoto,
             model.assist.isVisible(.audioMeters)

@@ -22,7 +22,7 @@ final class AssistBarChromeTests: XCTestCase {
     }
 
     func testLongPressEnabledForRemainingTools() {
-        let tapOnly: Set<LiveAssistTool> = [.mirror]
+        let tapOnly: Set<LiveAssistTool> = [.mirror, .evMeter]
         for tool in LiveAssistTool.settingsCases where !tapOnly.contains(tool) {
             XCTAssertTrue(tool.hasConfiguration, "\(tool.rawValue) should open options")
         }

@@ -17,12 +17,12 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     case vectorscope = "VECTOR"
     case trafficLights = "LIGHTS"
     case ndMeter = "ND"
+    case evMeter = "EV"
     case audioMeters = "AUDIO"
     case guides = "GUIDES"
     case grid = "GRID"
     case crosshair = "CROSS"
     case level = "LEVEL"
-    case evMeter = "EV"
     case desqueeze = "DE-SQ"
     case mirror = "MIRROR"
     case instantReview = "PLAY"
@@ -36,7 +36,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     /// Playback drops horizon (needs the camera) and MAG (no on-feed key).
     /// AUDIO rides last, matching the live strip's trailing section.
     static var playbackToolbarCases: [LiveAssistTool] {
-        toolbarCases.filter { $0 != .level && $0 != .magnification } + [.audioMeters]
+        toolbarCases.filter { $0 != .level && $0 != .magnification && $0 != .evMeter } + [.audioMeters]
     }
 
     /// OpenZCine `activeCases` minus photography-only, AUDIO, and Level.
@@ -59,8 +59,8 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         toolbarCases + [.audioMeters]
     }
 
-    /// Tools the operator can keep on the DISP 2 picture. Same cinema set as settings.
-    static var cleanPinCases: [LiveAssistTool] { settingsCases }
+    /// Tools the operator can keep on DISP 2. Camera EV stays exclusive to DISP 1.
+    static var cleanPinCases: [LiveAssistTool] { settingsCases.filter { $0 != .evMeter } }
 
     /// Compact label for the Display ▸ DISP 2 pin grid.
     var displaySettingsTitle: String {
@@ -78,7 +78,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     var hasConfiguration: Bool {
         switch self {
         // Mirror stays tap-only; audio options affect presentation only.
-        case .mirror, .instantReview, .magnification, .level:
+        case .mirror, .instantReview, .magnification, .level, .evMeter:
             false
         default: true
         }
@@ -119,12 +119,12 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .vectorscope: .crosshair
         case .trafficLights: .sun
         case .ndMeter: .aperture
+        case .evMeter: .plus
         case .audioMeters: .slidersVertical
         case .guides: .squareDashed
         case .grid: .grid3x3
         case .crosshair: .plus
         case .level: .circle
-        case .evMeter: .plus
         case .desqueeze: .chevronsUpDown
         case .mirror: .flipHorizontal2
         case .magnification: .zoomIn
@@ -144,12 +144,12 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .vectorscope: "Vectorscope"
         case .trafficLights: "Traffic Lights"
         case .ndMeter: "ND Suggestion"
+        case .evMeter: "EV Meter"
         case .audioMeters: "Audio Levels"
         case .guides: "Guides"
         case .grid: "Grid"
         case .crosshair: "Crosshair"
         case .level: "Horizon"
-        case .evMeter: "EV Meter"
         case .desqueeze: "Anamorphic Desqueeze"
         case .mirror: "Mirror"
         case .magnification: "Magnify"
@@ -212,6 +212,7 @@ final class LiveAssistState {
     var vectorscope = false
     var trafficLights = false
     var ndMeter = false
+    var evMeter = false
     var audioMeters = false
     var grid = false
     var crosshair = false
@@ -219,7 +220,6 @@ final class LiveAssistState {
     var level = false
     var desqueeze = false
     var mirror = false
-    var evMeter = false
     var instantReview = false
     var guideAspect: GuideAspect = .cinema
     var guideFamily: GuideFamily = .film
@@ -324,7 +324,6 @@ final class LiveAssistState {
             vectorscope: isVisible(.vectorscope),
             trafficLights: isVisible(.trafficLights),
             ndMeter: isVisible(.ndMeter),
-            evMeter: isVisible(.evMeter),
             lutDimension: isVisible(.lut) ? lutDimension : 0,
             lutRGBA: isVisible(.lut) ? lutRGBA : Data(),
             peakingColor: peakingColor,
@@ -362,7 +361,6 @@ final class LiveAssistState {
         fx.vectorscope = isPlaybackVisible(.vectorscope)
         fx.trafficLights = isPlaybackVisible(.trafficLights)
         fx.ndMeter = isPlaybackVisible(.ndMeter)
-        fx.evMeter = isPlaybackVisible(.evMeter)
         fx.lutDimension = isPlaybackVisible(.lut) ? lutDimension : 0
         fx.lutRGBA = isPlaybackVisible(.lut) ? lutRGBA : Data()
         fx.splitComparison = splitComparison && isPlaybackVisible(.lut)
@@ -400,6 +398,7 @@ final class LiveAssistState {
         case .vectorscope: vectorscope
         case .trafficLights: trafficLights
         case .ndMeter: ndMeter
+        case .evMeter: evMeter
         case .audioMeters: audioMeters
         case .guides: guides
         case .grid: grid
@@ -407,7 +406,6 @@ final class LiveAssistState {
         case .level: level
         case .desqueeze: desqueeze
         case .mirror: mirror
-        case .evMeter: evMeter
         case .instantReview: instantReview
         case .magnification: false
         }
@@ -416,7 +414,7 @@ final class LiveAssistState {
     /// OpenZCine `MonitorChromePolicy.isToolVisible`. Pins filter DISP 2; they never flip `isOn`.
     func isVisible(_ tool: LiveAssistTool) -> Bool {
         guard isOn(tool) else { return false }
-        if clean { return cleanViewPinnedTools.contains(tool) }
+        if clean { return tool != .evMeter && cleanViewPinnedTools.contains(tool) }
         return true
     }
 
@@ -433,10 +431,11 @@ final class LiveAssistState {
     }
 
     func isPlaybackVisible(_ tool: LiveAssistTool) -> Bool {
-        playbackVisibleTools.contains(tool)
+        tool != .evMeter && playbackVisibleTools.contains(tool)
     }
 
     func togglePlayback(_ tool: LiveAssistTool) {
+        guard tool != .evMeter else { return }
         if playbackVisibleTools.contains(tool) {
             playbackVisibleTools.remove(tool)
         } else {
@@ -476,6 +475,7 @@ final class LiveAssistState {
         case .vectorscope: vectorscope.toggle()
         case .trafficLights: trafficLights.toggle()
         case .ndMeter: ndMeter.toggle()
+        case .evMeter: evMeter.toggle()
         case .audioMeters: audioMeters.toggle()
         case .guides:
             guides.toggle()
@@ -485,7 +485,6 @@ final class LiveAssistState {
         case .level: level.toggle()
         case .desqueeze: desqueeze.toggle()
         case .mirror: mirror.toggle()
-        case .evMeter: evMeter.toggle()
         case .instantReview: instantReview.toggle()
         case .magnification: break
         }
@@ -1207,6 +1206,7 @@ enum OperatorPrefs {
             s.vectorscope = on.contains(LiveAssistTool.vectorscope.rawValue)
             s.trafficLights = on.contains(LiveAssistTool.trafficLights.rawValue)
             s.ndMeter = on.contains(LiveAssistTool.ndMeter.rawValue)
+            s.evMeter = on.contains(LiveAssistTool.evMeter.rawValue)
             s.audioMeters = on.contains(LiveAssistTool.audioMeters.rawValue)
             s.guides = on.contains(LiveAssistTool.guides.rawValue)
             s.grid = on.contains(LiveAssistTool.grid.rawValue)
@@ -1214,7 +1214,6 @@ enum OperatorPrefs {
             s.level = on.contains(LiveAssistTool.level.rawValue)
             s.desqueeze = on.contains(LiveAssistTool.desqueeze.rawValue)
             s.mirror = on.contains(LiveAssistTool.mirror.rawValue)
-            s.evMeter = on.contains(LiveAssistTool.evMeter.rawValue)
             s.instantReview = on.contains(LiveAssistTool.instantReview.rawValue)
             s.guideAspect = GuideAspect(rawValue: guideAspect) ?? .cinema
             s.guideFamily = GuideFamily(rawValue: guideFamily) ?? .film

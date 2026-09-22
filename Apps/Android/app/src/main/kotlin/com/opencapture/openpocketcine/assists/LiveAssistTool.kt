@@ -45,7 +45,7 @@ enum class LiveAssistTool {
                 VECTOR -> "Vectorscope"
                 LIGHTS -> "Traffic Lights"
                 ND -> "ND Suggestion"
-                EV -> "Exposure Meter"
+                EV -> "EV Meter"
                 AUDIO -> "Audio Levels"
                 GUIDES -> "Guides"
                 GRID -> "Grid"
@@ -54,11 +54,11 @@ enum class LiveAssistTool {
                 MIRROR -> "Mirror"
             }
 
-    /** Audio exposes monitor orientation; mirror has no H/V-flip submenu. */
+    /** The fixed camera EV meter and mirror are tap-only toggles. */
     val hasConfiguration: Boolean
         get() =
             when (this) {
-                MIRROR -> false
+                EV, MIRROR -> false
                 else -> true
             }
 
@@ -75,12 +75,12 @@ enum class LiveAssistTool {
         /** AUDIO is appended as its own trailing section. */
         val toolbarCases: List<LiveAssistTool> = toolbarGroups.flatten()
 
-        /** Playback drops nothing Pocket already omits; AUDIO rides last like live. */
-        val playbackToolbarCases: List<LiveAssistTool> = toolbarCases + AUDIO
+        /** Camera-native EV has no clip telemetry; AUDIO rides last like live. */
+        val playbackToolbarCases: List<LiveAssistTool> = toolbarCases.filter { it != EV } + AUDIO
 
         val settingsCases: List<LiveAssistTool> = toolbarCases + AUDIO
 
-        val cleanPinCases: List<LiveAssistTool> = settingsCases
+        val cleanPinCases: List<LiveAssistTool> = settingsCases.filter { it != EV }
 
         fun fromPersisted(raw: String): LiveAssistTool? =
             entries.firstOrNull { it.name == raw || it.chipLabel == raw }

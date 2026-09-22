@@ -675,6 +675,22 @@ fun LiveViewScreen(model: AppModel) {
                 }
             }
 
+            if (assist.evMeter && model.currentDispMode == PocketDispMode.LIVE) {
+                val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
+                    model.liveOperatorPanel == null && assist.configureTool == null
+                val collapsedPalette = if (!showsAssist) null else if (zones != null) {
+                    portraitAssistToolbar(zones.assistToolbar.minY, minOf(vw, vh) >= 600f)
+                } else layout.assist
+                LiveCameraExposureMeter(
+                    raw = status.meteredEv,
+                    available = !recovery.isRecovering && !model.session.isFeedRecovering,
+                    feed = if (desqueezeVisible) pictureContent else layout.onFeed,
+                    mode = model.currentDispMode,
+                    avoid = collapsedPalette,
+                    modifier = Modifier.zIndex(1f),
+                )
+            }
+
             LiveFaceFramePump(
                 surfaceView = vulkanSurfaceView,
                 textureView = glesTextureView,

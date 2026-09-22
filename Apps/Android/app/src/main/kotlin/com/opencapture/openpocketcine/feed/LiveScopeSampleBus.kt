@@ -9,7 +9,7 @@ import androidx.compose.runtime.setValue
 
 /**
  * Latest scope tap published off the GLES thread (main-thread). Compose
- * observes [bundle]; WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND / EV read it.
+ * observes [bundle]; WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND read it.
  */
 object LiveScopeSampleBus {
     /** A replaced source cannot publish a queued sample or clear its successor. */
@@ -88,7 +88,6 @@ internal data class ScopeTapPolicy(
     val vectorscope: Boolean = false,
     val trafficLights: Boolean = false,
     val ndMeter: Boolean = false,
-    val evMeter: Boolean = false,
     val trafficThreshold: Double = 0.0,
     val colorMode: Int = com.opencapture.openpocketcine.session.CameraCommands.COLOR_NORMAL,
     val iso: Int = ScopeExposureCeiling.REFERENCE_EI,
@@ -96,7 +95,7 @@ internal data class ScopeTapPolicy(
     val allowsTransferInference: Boolean = true,
 ) {
     val activeScopeCount: Int
-        get() = listOf(waveform, parade, histogram, vectorscope, trafficLights, ndMeter, evMeter).count { it }
+        get() = listOf(waveform, parade, histogram, vectorscope, trafficLights, ndMeter).count { it }
 
     val needsTap: Boolean
         get() = activeScopeCount > 0 || previewOwner != null

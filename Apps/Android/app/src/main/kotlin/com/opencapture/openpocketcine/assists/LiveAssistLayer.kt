@@ -270,17 +270,11 @@ private fun StackedScopePanel(
                     state.centerFor(LiveAssistTool.ND, portrait),
                     { state.setScale(LiveAssistTool.ND, it) },
                 )
-            LiveAssistTool.EV ->
-                ScopePanelSpec(
-                    ScopePanelSize.evMeter,
-                    state.evScale,
-                    state.centerFor(LiveAssistTool.EV, portrait),
-                    { state.setScale(LiveAssistTool.EV, it) },
-                )
             LiveAssistTool.LUT,
             LiveAssistTool.PEAK,
             LiveAssistTool.FALSE,
             LiveAssistTool.ZEBRA,
+            LiveAssistTool.EV,
             LiveAssistTool.AUDIO,
             LiveAssistTool.GUIDES,
             LiveAssistTool.GRID,
@@ -312,11 +306,11 @@ private fun StackedScopePanel(
                 LiveAssistTool.HISTO -> HistogramPanel(state, Modifier.fillMaxSize())
                 LiveAssistTool.LIGHTS -> TrafficLightsPanel(state, Modifier.fillMaxSize())
                 LiveAssistTool.ND -> NDMeterPanel(state, Modifier.fillMaxSize())
-                LiveAssistTool.EV -> EVMeterPanel(state, Modifier.fillMaxSize())
                 LiveAssistTool.LUT,
                 LiveAssistTool.PEAK,
                 LiveAssistTool.FALSE,
                 LiveAssistTool.ZEBRA,
+                LiveAssistTool.EV,
                 LiveAssistTool.AUDIO,
                 LiveAssistTool.GUIDES,
                 LiveAssistTool.GRID,

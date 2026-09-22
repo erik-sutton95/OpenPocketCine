@@ -165,19 +165,17 @@ files and scope measurements keep the original image.
 
 ## EV meter
 
-Tap **EV** beside ND in View Assist for a live exposure gauge in Auto or Manual.
-The signed value measures the picture's median brightness in stops relative to
-middle gray: positive is brighter, negative is darker. The cyan needle spans
-−3 to +3 stops; the number keeps showing readings beyond that range. This is a
-picture reference, separate from the camera's EV compensation control, and does
-not change camera settings or guarantee that highlights are unclipped.
+Enable **EV** in View Assist to show a thin vertical meter just inside the
+picture's left edge, centered vertically on the feed in **DISP 1**. The camera's signed EV number sits above
+the −3…+3 scale. Its position is fixed; the scale shortens to clear the collapsed assist
+palette on smaller screens. Tap EV again to hide it. The on/off choice is saved.
+The meter disappears in **DISP 2** and playback.
 
-Drag the meter to place it and use the corner grip to resize it. Size and
-portrait/landscape positions are saved. You can pin EV in DISP 2 or use it during
-playback. Hold EV for its preview and help. A dash without a needle means no
-valid picture measurement is available. **EV ≈** marks D-Log M readings, which
-use an estimated curve pending live-preview calibration. LUTs do not alter the
-measurement.
+The reading comes directly from the camera's exposure telemetry in Auto and
+Manual. It is separate from the EV compensation setting in the camera controls.
+No image analysis, LUT conversion or additional camera polling is needed for
+this meter. A dash without a needle means the camera has not supplied a supported
+value. It never substitutes the compensation setting or an image-derived estimate.
 
 ## Moving scopes
 
@@ -187,7 +185,7 @@ Saved positions remain yours. AUDIO starts on the left at vertical center and
 can also be dragged. Hold AUDIO for Vertical / Horizontal bars and optional
 left/right dBFS readings; these affect the meter display, not camera recording.
 
-Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, ND, or EV directly to move it. Drag its
+Drag WAVE, PARADE, HISTO, VECTOR, LIGHTS, or ND directly to move it. Drag its
 corner grip to resize. Scopes can sit partly under the top and bottom bars.
 Scopes can reach closer to the bottom edge and sit underneath the entire joystick,
 zoom, and gimbal-controls cluster in portrait or landscape. The cluster stays above

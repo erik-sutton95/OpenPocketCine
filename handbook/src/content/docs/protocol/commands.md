@@ -83,3 +83,23 @@ Video fallback still requires a confirmed model and normal Video mode. The chang
 has automated coverage on both platforms. The operator confirmed the corrected
 vertical 3K picker on an iPhone on 2026-09-11; Android and on-camera fps-change
 verification remain pending.
+
+## Camera-metered EV
+
+The existing `0x00/0x99` subscription for `cam_expo_param` reports two distinct
+EV fields. Offset 6 is the configured compensation (`0x02/0x2E` SET readback).
+Offset 15 is the camera's metered exposure indication. Both use third-stop codes:
+`(raw - 16) / 3`, with supported bytes `07`…`19` representing −3…+3 EV.
+The DISP 1 meter reads offset 15 only. It never uses configured compensation or
+preview pixels as a fallback, and sends no additional GET or subscription.
+Short payloads and codes outside that range produce an unavailable reading.
+
+The [Action 6 controls survey](../../devices/action-6/controls/#configured-ev-versus-metered-exposure)
+correlates the two fields with the Mimo HUD. A September 22 Pocket 4 Pro Mimo
+zoom capture has 750 CRC-valid 46-byte exposure pushes in Manual, all with
+configured EV `10`; offset 15 independently varies `0B`…`19`. A native-app
+Pocket 4 Pro trace confirms independent values `14` and `19`. Nano has 235
+46-byte pushes with configured `10` and metered `0E`…`11`. Four Pocket 3 takes
+contain 900 **44-byte** pushes with both fields fixed at `10`; its layout is
+supported, but independent metered movement remains unqualified. These traces
+support the field separation, not the camera's metering algorithm or calibration.

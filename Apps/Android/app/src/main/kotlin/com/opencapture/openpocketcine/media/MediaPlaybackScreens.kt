@@ -1048,6 +1048,7 @@ fun MediaPlayerScreen(
                 )
                 com.opencapture.openpocketcine.assists.MonitorAssistCluster(
                     portrait = portraitPlayback, locked = false,
+                    playback = true,
                     isOn = assist::isPlaybackVisible, onToggle = { assist.togglePlayback(it) },
                     onLongPress = { assist.configureTool = it },
                     requestExpand = assistMode, onExpansionHandled = { assistMode = false },

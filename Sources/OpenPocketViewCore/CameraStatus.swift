@@ -34,6 +34,8 @@ public struct CameraStatus: Equatable, Sendable {
     public var isoIndex: IsoIndex?
     /// EV from `cam_expo_param` `@6` (`0x02/0x2E` echo). nil unknown / out of −3…+3.
     public var evComp: EvComp?
+    /// Camera-metered EV from `cam_expo_param` `@15`, not the configured compensation.
+    public var meteredEv: EvComp?
     /// Last `0x8E` pid `0x000F` GET reply (Auto ISO ceiling).
     public var isoLimit: IsoLimit?
     /// Shutter as 1/N from `cam_expo_param` `@2–3` (`denom | 0x8000`). `-1` unknown. Not `@16`.
@@ -315,6 +317,7 @@ public enum CameraStatusDecoder {
             if let idx = ExpoParam.isoIndex(item.value) { status.isoIndex = idx }
             if let iso = ExpoParam.isoValue(item.value) { status.iso = iso }
             status.evComp = ExpoParam.evComp(item.value)
+            status.meteredEv = ExpoParam.meteredEv(item.value)
             return true
         case "cam_video_param_v2" where item.value.count >= 2:
             if let fps = fps(index: item.value[1]) { status.fps = fps }

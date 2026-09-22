@@ -25,11 +25,12 @@ import com.opencapture.openpocketcine.OperatorPrefs
 fun MonitorAssistCluster(portrait: Boolean, locked: Boolean, isOn: (LiveAssistTool) -> Boolean,
     onToggle: (LiveAssistTool) -> Unit, onLongPress: (LiveAssistTool) -> Unit,
     modifier: Modifier = Modifier, requestExpand: Boolean = false, onExpansionHandled: () -> Unit = {},
-    showsAudio: Boolean = true, inspectorOpen: Boolean = false) {
+    showsAudio: Boolean = true, inspectorOpen: Boolean = false, playback: Boolean = false) {
     if (inspectorOpen) return
     val context = LocalContext.current
     var usage by remember { mutableStateOf(OperatorPrefs.assistToolUsage(context)) }
-    val tools = if (showsAudio) LiveAssistTool.settingsCases else LiveAssistTool.toolbarCases
+    val catalog = if (playback) LiveAssistTool.playbackToolbarCases else LiveAssistTool.settingsCases
+    val tools = if (showsAudio) catalog else catalog.filter { it != LiveAssistTool.AUDIO }
     com.opencapture.monitorui.MonitorAssistPalette(
         tools = tools, usageSeed = ASSIST_USAGE_SEED,
         portrait = portrait, locked = locked, isOn = isOn, title = { it.title }, label = { it.chipLabel },
