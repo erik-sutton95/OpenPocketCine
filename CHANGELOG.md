@@ -17,6 +17,14 @@ separate iOS and Android lists.
 
 ### Added
 
+- **LEVEL** View Assist on iOS and Android: roll and tilt gauges against
+  gravity from the camera's own attitude sensor, labelled WORLD, with a round
+  bubble for top-down and straight-up shots. Shows **No level data** instead of
+  a false level when attitude stops.
+- Gimbal drawer **Double-tap**: keep **Recenter**, or choose **Level** so a
+  joystick double-tap (and gamepad Circle/B) moves the lens to world level or
+  straight down / up, with a toast that confirms the result. Experimental until
+  checked on more cameras.
 - Experimental **Multiview on Android**, matching iOS: the grid button on
   **Your cameras**, the two-step Local Wi-Fi / phone hotspot setup, up to four
   identity-verified camera tiles with Auto LUT, per-tile and group recording,

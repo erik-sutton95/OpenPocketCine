@@ -165,6 +165,41 @@ LUTs and picture warnings follow the correction, and framing guides align with
 the corrected picture. Desqueeze changes only the display: recordings, shared
 files and scope measurements keep the original image.
 
+## Level
+
+Enable **LEVEL** in View Assist to see how level the picture is against
+gravity. The reading comes from the camera's own attitude sensor, not the
+phone, and is labelled **WORLD**.
+
+- Two gauges show roll along the bottom of the picture and tilt on the right
+  edge. Each covers ±8° with ticks every 2°. The bead turns green within 0.6°
+  of level; otherwise it is amber and chevrons point back toward level.
+- Within about 25° of pointing straight down or up, the gauges give way to a
+  round bubble that shows how far the lens is from plumb. Use it for top-down
+  shots.
+- If the camera stops reporting attitude, the gauges show `--` and
+  **No level data**. They never turn green without data.
+
+Tap LEVEL again to hide it; the on/off choice is saved. LEVEL is not shown in
+playback.
+
+### Double-tap Level
+
+In the gimbal drawer, **Double-tap** chooses what a double-tap on the joystick
+and Circle/B on a game controller do:
+
+- **Recenter** (default): the camera's own recenter, relative to the handle.
+- **Level**: one move to the nearest world target, which is the horizon, or
+  straight down or up once the lens is past 45°. A toast says
+  **Leveled to world**, **Leveled top-down** or **Leveled straight up** when the
+  tilt is within 0.5°, or reports how far off it stopped.
+
+Level corrects tilt only. In Follow and Tilt locked the gimbal already holds the
+horizon; in FPV roll follows the handle and the toast says so. With the handle
+upright the lens reaches about 44° down, so angle the handle forward for a
+top-down shot, then double-tap. Stick input cancels the move. Level and the
+roll direction are experimental until checked on more cameras.
+
 ## EV meter
 
 Enable **EV** in View Assist to show a slim white exposure line with a sun
@@ -274,7 +309,7 @@ space after rotation or resizing, including saved positions. Long-press a View A
   Scopes can be moved beneath the
   compass Head Lock control in either orientation. Responsiveness remains
   experimental. A connected game controller's selected stick drives the same path (Left by default).
-  Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y
+  Cross/A records. Circle/B recenters, or levels with **Double-tap → Level**. Square/X is rotate-180. Triangle/Y
   tracks a face in frame or cancels. L1/R1 jump zoom out/in. L2/R2
   hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter.
   A toast says Gamepad connected or disconnected; unplug rests the

@@ -1,14 +1,10 @@
 New and changed
 
-- Experimental Multiview is now on Android: tap the grid button on Your cameras and add up to four Pocket or Nano cameras.
-- Each tile shows the live picture, settings and timecode, with its own LUT and record button. Double-tap a tile for full Live View.
-
-Fixes
-
-- In Multiview, a Pocket that ignores its Wi-Fi identity check right after pairing gets one wake and a retry.
+- New LEVEL View Assist: roll and tilt gauges from the camera's own sensor, with a round bubble for top-down shots.
+- Gimbal drawer → Double-tap → Level makes a joystick double-tap (and gamepad Circle/B) move the lens to world level or straight down.
 
 What to test
 
-- Set up Phone hotspot (Mobile Hotspot, WPA2) or Local Wi-Fi, then add two or more cameras. Approve pairing on a camera if asked.
-- Try Record all, each tile's record button, Grid/Center stage, FIT/FILL, DISP, LUTs and Live View and back.
-- Close Multiview and check each camera returns to its own Wi-Fi.
+- Turn on LEVEL and roll the handle in FPV. Check the roll gauge moves the right way and turns green only when level.
+- Angle the handle forward, double-tap the joystick with Double-tap set to Level, and check the toast says Leveled top-down or how far off it stopped.
+- In Multiview, try Record all and Live View and back.

@@ -1,6 +1,6 @@
 New features
 
-- Multiview preview recovery and camera support were reorganized internally; iPhone and iPad behavior should not change.
-- Please re-check: add two or more cameras in Multiview and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview.
-- Interrupt a preview (walk out of range or switch apps) and check the tile recovers or offers Reconnect.
+- New LEVEL View Assist: roll and tilt gauges from the camera's own sensor. Roll the handle in FPV and check the roll gauge moves the right way.
+- Point the lens straight down: a round bubble replaces the gauges. Check it centers when the shot is truly top-down.
+- Gimbal drawer → Double-tap → Level. Angle the handle forward, double-tap the joystick, and check the toast says Leveled top-down (or how far off it stopped).
 - Close Multiview and check each camera returns to its own Wi-Fi.

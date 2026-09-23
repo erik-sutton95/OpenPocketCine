@@ -1,7 +1,7 @@
 # Level gauges and world-axis gimbal leveling
 
 **Date:** 2026-09-23
-**Status:** design
+**Status:** implemented; physical checks pending (roll sign, top-down snap)
 **Product:** discussion [#419](https://github.com/erik-sutton95/OpenPocketCine/discussions/419)
 **Style reference:** OpenZCine `LevelAxisGauge` (`ios/Runner/MonitorOverlays.swift`,
 Android `LiveFrameMetadataOverlays.kt` `drawGaugeLevel`)
