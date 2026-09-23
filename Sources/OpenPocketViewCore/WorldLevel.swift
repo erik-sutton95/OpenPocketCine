@@ -138,6 +138,8 @@ public struct WorldLevelSnap: Sendable, Equatable {
     public static let settleGrace: TimeInterval = 1.5
     public static let noLevelData = "No level data"
     public static let fpvRollNote = " · roll follows the handle in FPV"
+    /// No live native pitch, or yaw in the unreachable pan gap.
+    public static let unreachableNote = "Couldn't level from this pose"
 
     public let target: WorldLevelTarget
     public let deadline: TimeInterval

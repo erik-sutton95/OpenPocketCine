@@ -751,6 +751,7 @@ enum OperatorPrefs {
     private static let virtualJoystickResponseCurveKey =
         "OpenPocketCine.VirtualJoystickResponseCurve"
     private static let gimbalRampKey = "OpenPocketCine.GimbalRamp"
+    private static let gimbalDoubleTapKey = "OpenPocketCine.GimbalDoubleTap"
     private static let dispLiveKey = "OpenPocketCine.DispChrome.Live"
     private static let dispCleanKey = "OpenPocketCine.DispChrome.Clean"
     private static let cleanPinsKey = "OpenPocketCine.CleanViewPins.v1"
@@ -845,6 +846,15 @@ enum OperatorPrefs {
     static var headTrackingEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: headTrackingKey) }
         set { UserDefaults.standard.set(newValue, forKey: headTrackingKey) }
+    }
+
+    /// Stick double-tap / gamepad Circle/B. Absent key is Recenter.
+    static var gimbalDoubleTap: GimbalDoubleTap {
+        get {
+            GimbalDoubleTap(rawValue: UserDefaults.standard.integer(forKey: gimbalDoubleTapKey))
+                ?? .recenter
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: gimbalDoubleTapKey) }
     }
 
     static var gimbalRamp: GimbalRamp {

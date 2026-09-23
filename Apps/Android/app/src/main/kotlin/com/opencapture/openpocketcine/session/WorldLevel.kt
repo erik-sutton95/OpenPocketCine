@@ -154,6 +154,8 @@ data class WorldLevelSnap(val target: WorldLevelTarget, val deadline: Double) {
         const val SETTLE_GRACE = 1.5
         const val NO_LEVEL_DATA = "No level data"
         const val FPV_ROLL_NOTE = " · roll follows the handle in FPV"
+        /** No live native pitch, or yaw in the unreachable pan gap. */
+        const val UNREACHABLE_NOTE = "Couldn't level from this pose"
 
         /** 0.1 s per 2°, clamped 0.5…3.0 s on the 0.1 s wire grid. */
         fun duration(distanceDeg: Double): Double = (roundAway(abs(distanceDeg) * 0.5) / 10).coerceIn(0.5, 3.0)

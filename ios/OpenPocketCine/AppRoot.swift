@@ -115,6 +115,12 @@ final class AppModel {
     /// Canvas-space centre of the programmed-move editor / Run pill. Nil until the operator drags it.
     var gimbalFloatCenter: CGPoint?
     /// Canvas-space centre of the programmed-move debug plate.
+    var gimbalDoubleTap: GimbalDoubleTap = OperatorPrefs.gimbalDoubleTap {
+        didSet {
+            OperatorPrefs.gimbalDoubleTap = gimbalDoubleTap
+            session.gimbalDoubleTap = gimbalDoubleTap
+        }
+    }
     var gimbalRamp: GimbalRamp = OperatorPrefs.gimbalRamp {
         didSet {
             OperatorPrefs.gimbalRamp = gimbalRamp

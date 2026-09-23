@@ -38,3 +38,23 @@ final class LevelAssistTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class GimbalDoubleTapTests: XCTestCase {
+    func testDoubleTapPreferenceDefaultsToRecenterAndPersists() {
+        let key = "OpenPocketCine.GimbalDoubleTap"
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer { UserDefaults.standard.set(saved, forKey: key) }
+        UserDefaults.standard.removeObject(forKey: key)
+        XCTAssertEqual(OperatorPrefs.gimbalDoubleTap, .recenter)
+        OperatorPrefs.gimbalDoubleTap = .level
+        XCTAssertEqual(OperatorPrefs.gimbalDoubleTap, .level)
+    }
+
+    func testLevelDoubleTapWithoutAttitudeRefusesAndSaysSo() {
+        let session = CameraSession()
+        session.gimbalDoubleTap = .level
+        session.performGimbalDoubleTap()
+        XCTAssertEqual(session.controlNote, WorldLevelSnap.noLevelData)
+    }
+}

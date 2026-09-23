@@ -6,9 +6,10 @@ private enum GimbalSettingsTab: String, CaseIterable {
     case mode = "Mode"
     case speed = "Speed"
     case ramp = "Ramp"
+    case doubleTap = "Double-tap"
 }
 
-/// Trailing gimbal pane: Mode / Speed / Ramp tabs, one drum per tab, motion
+/// Trailing gimbal pane: Mode / Speed / Ramp / Double-tap tabs, one drum per tab, motion
 /// control footer. Actions stay on the session; this file is presentation only.
 struct LiveGimbalSheetHost: View {
     @Environment(AppModel.self) private var model
@@ -81,6 +82,10 @@ struct LiveGimbalSheetHost: View {
                         drum(
                             GimbalRamp.pickerOrder, selected: model.gimbalRamp,
                             title: { $0.label }, select: { model.gimbalRamp = $0 })
+                    case .doubleTap:
+                        drum(
+                            GimbalDoubleTap.pickerOrder, selected: model.gimbalDoubleTap,
+                            title: { $0.label }, select: { model.gimbalDoubleTap = $0 })
                     }
                 }
             }
