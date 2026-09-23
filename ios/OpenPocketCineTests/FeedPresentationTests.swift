@@ -356,6 +356,32 @@ final class FeedPresentationTests: XCTestCase {
         XCTAssertFalse(feed.lastPresentWasOverlay)
     }
 
+    func testBilinearPresentsAtSourceSizeAndOtherUpscalersKeepThePanel() {
+        let panel = CGSize(width: 2796, height: 1290)
+        let source = CGSize(width: 1280, height: 720)
+        for upscaler in [FeedUpscaler.off, .lanczos] {
+            XCTAssertEqual(
+                CIFeedView.presentDrawableSize(
+                    source: source, panel: panel, upscaler: upscaler, hdr: false), source)
+        }
+        for upscaler in [FeedUpscaler.spatial, .superResolution] {
+            XCTAssertEqual(
+                CIFeedView.presentDrawableSize(
+                    source: source, panel: panel, upscaler: upscaler, hdr: false), panel)
+        }
+        XCTAssertEqual(
+            CIFeedView.presentDrawableSize(source: source, panel: panel, upscaler: .off, hdr: true),
+            panel, "HDR gain stays at panel size")
+        XCTAssertEqual(
+            CIFeedView.presentDrawableSize(source: .zero, panel: panel, upscaler: .off, hdr: false),
+            panel)
+        XCTAssertEqual(
+            CIFeedView.presentDrawableSize(
+                source: CGSize(width: 3840, height: 2160), panel: CGSize(width: 1000, height: 700),
+                upscaler: .off, hdr: false),
+            CGSize(width: 1000, height: 563), "Never larger than the panel")
+    }
+
     private func makeFeed() throws -> CIFeedView {
         guard MTLCreateSystemDefaultDevice() != nil else { throw XCTSkip("Metal required") }
         let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))

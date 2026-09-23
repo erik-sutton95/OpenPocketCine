@@ -169,7 +169,10 @@ final class FeedPresentScaler {
         // Write straight into the drawable. A private-scratch + runtime-shader
         // flip returned false on device and left the opaque metal view black
         // over the working VT picture. Bake already flipped for MPS.
-        Self.encodeClear(target, overlay: overlay, commandBuffer: commandBuffer)
+        // A 1:1 copy (source-sized drawable) writes every pixel, so it has no bars to clear.
+        if source.width != target.width || source.height != target.height {
+            Self.encodeClear(target, overlay: overlay, commandBuffer: commandBuffer)
+        }
         var transform = Self.mpsFitTransform(
             sourceWidth: source.width, sourceHeight: source.height,
             targetWidth: target.width, targetHeight: target.height)
