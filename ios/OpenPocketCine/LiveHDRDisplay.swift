@@ -92,11 +92,19 @@ enum LiveHDRDisplay {
         if layer.pixelFormat != format {
             layer.pixelFormat = format
         }
-        layer.wantsExtendedDynamicRangeContent = enabled
-        layer.colorspace =
-            enabled ? CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3) : nil
+        // Runs on every feed present: write only changes so a steady layer stays clean.
+        if layer.wantsExtendedDynamicRangeContent != enabled {
+            layer.wantsExtendedDynamicRangeContent = enabled
+        }
+        let colorspaceName = enabled ? CGColorSpace.extendedLinearDisplayP3 : nil
+        if layer.colorspace?.name != colorspaceName {
+            layer.colorspace = colorspaceName.flatMap { CGColorSpace(name: $0) }
+        }
         if #available(iOS 26.0, *) {
-            layer.preferredDynamicRange = enabled ? .high : .automatic
+            let range: CALayer.DynamicRange = enabled ? .high : .automatic
+            if layer.preferredDynamicRange != range {
+                layer.preferredDynamicRange = range
+            }
         }
     }
 

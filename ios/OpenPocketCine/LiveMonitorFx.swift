@@ -1148,6 +1148,9 @@ final class CIFeedView: UIView {
     private(set) var failedPresents = 0
     private var presentationMetrics = FeedPresentationMetrics(
         startedAt: ProcessInfo.processInfo.systemUptime)
+    /// View bounds in pixels. The drawable can be smaller; see ``presentDrawableSize``.
+    private var panelPixelSize = CGSize.zero
+    private var lastSourceSize = CGSize.zero
 
     var isRendering: Bool {
         !FeedPresentPolicy.isFrozen(
@@ -1182,6 +1185,9 @@ final class CIFeedView: UIView {
         // Timeout can still wait one second. Acquisition runs on drawableQueue,
         // with one reservation covering both acquisition and GPU completion.
         metalLayer.allowsNextDrawableTimeout = true
+        // A source-sized drawable is aspect-fitted by the compositor, like the
+        // identity layer. A panel-sized drawable has the bounds' aspect, so this is a no-op there.
+        metalLayer.contentsGravity = .resizeAspect
         LiveHDRDisplay.configure(metalLayer)
     }
 
@@ -1194,12 +1200,38 @@ final class CIFeedView: UIView {
         let size = bounds.size
         if size.width > 1, size.height > 1 {
             let next = CGSize(width: size.width * scale, height: size.height * scale)
-            if metalLayer.drawableSize != next {
+            if panelPixelSize != next {
                 invalidatePendingPresents()
                 resetPresentDedup()
-                metalLayer.drawableSize = next
+                panelPixelSize = next
             }
+            applyDrawableSize()
         }
+    }
+
+    /// Bilinear (Off / Fast) SDR presents at bake size: the compositor already
+    /// scales this layer while compositing, so a panel-sized MPS bilinear pass and
+    /// clear only added memory traffic for the same filter. Quality / AI need panel
+    /// pixels to enlarge into, and HDR keeps its gain pass at panel size.
+    static func presentDrawableSize(
+        source: CGSize, panel: CGSize, upscaler: FeedUpscaler, hdr: Bool
+    ) -> CGSize {
+        guard !hdr, upscaler == .off || upscaler == .lanczos,
+            source.width > 1, source.height > 1
+        else { return panel }
+        let fitted = FeedFrameBaker.bakeSize(source: source, drawable: panel)
+        return CGSize(width: fitted.width.rounded(), height: fitted.height.rounded())
+    }
+
+    private func applyDrawableSize() {
+        guard panelPixelSize.width > 1, panelPixelSize.height > 1 else { return }
+        let next = Self.presentDrawableSize(
+            source: lastSourceSize, panel: panelPixelSize,
+            upscaler: FeedUpscaleSwitch.rendererReadsUpscaler, hdr: LiveHDRDisplay.isEnabled)
+        guard next.width > 1, next.height > 1, metalLayer.drawableSize != next else { return }
+        invalidatePendingPresents()
+        resetPresentDedup()
+        metalLayer.drawableSize = next
     }
 
     func setOverlayChrome(_ overlay: Bool) {
@@ -1261,6 +1293,10 @@ final class CIFeedView: UIView {
             return hasPresentedFrame
         }
         syncHDRDisplay()
+        if isEnabled, image.extent.width > 1, image.extent.height > 1 {
+            lastSourceSize = image.extent.size
+            applyDrawableSize()
+        }
         let size = metalLayer.drawableSize
         let hasDrawable = size.width > 1 && size.height > 1
         guard
