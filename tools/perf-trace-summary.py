@@ -109,7 +109,7 @@ def frame_name(frame):
     return f"{name} [{lib}]" if lib else name
 
 
-def cpu(trace, process, top):
+def cpu(trace, process, top, only_thread=None):
     cols, rows = table(trace, "time-profile")
     threads = collections.Counter()
     leaf = collections.Counter()
@@ -129,7 +129,6 @@ def cpu(trace, process, top):
         if t is not None:
             span[0] = t if span[0] is None else min(span[0], t)
             span[1] = t if span[1] is None else max(span[1], t)
-        total += w
         thread = cell.get("thread")
         tname = thread.attrib.get("fmt", "?") if thread is not None else "?"
         # Collapse anonymous worker ids so pools aggregate.
@@ -137,6 +136,9 @@ def cpu(trace, process, top):
         parts = label.split(" ")
         if len(parts) > 1 and parts[-1].startswith("0x"):
             label = " ".join(parts[:-1]) or label
+        if only_thread and label != only_thread:
+            continue
+        total += w
         threads[label] += w
         stack = cell.get("stack")
         frames = stack.findall("frame") if stack is not None else []
@@ -161,10 +163,11 @@ def main():
     ap.add_argument("--process", default="OpenPocketCine")
     ap.add_argument("--top", type=int, default=25)
     ap.add_argument("--json")
+    ap.add_argument("--thread", help='only samples from this thread label, e.g. "Main Thread"')
     args = ap.parse_args()
     impact, wifi = power(args.trace, args.process)
     therm = thermal(args.trace)
-    prof = cpu(args.trace, args.process, args.top)
+    prof = cpu(args.trace, args.process, args.top, args.thread)
     summary = {"power_impact_mean": impact, "wifi_bytes": wifi, "thermal_seconds": therm, **prof}
     if args.json:
         with open(args.json, "w") as fh:
