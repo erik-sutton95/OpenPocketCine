@@ -87,6 +87,7 @@ internal class LiveFeedEffectsSession(
     @Volatile private var scopeActive = false
     private var scopeAttached = false
     @Volatile private var nextScopeAtNs = 0L
+    @Volatile private var lastScopeWorkNs = 0L
     @Volatile private var previousBundle = ScopeAssistBundle.EMPTY
 
     fun attachDisplay(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
@@ -152,6 +153,7 @@ internal class LiveFeedEffectsSession(
         displayTexture = null
         previousBundle = ScopeAssistBundle.EMPTY
         nextScopeAtNs = 0L
+        lastScopeWorkNs = 0L
     }
 
     @Synchronized private fun setScopeAttached(attached: Boolean) {
@@ -205,12 +207,14 @@ internal class LiveFeedEffectsSession(
         val backdropTicket = if (previewSource.isCurrent(sourceEpoch)) {
             backdrop?.acquire(this, now, thermal)
         } else null
-        if (policy.activeScopeCount == 0 && previewTicket == null && backdropTicket == null) {
+        val scopeDue = policy.scopeWorkDue(now, lastScopeWorkNs, thermal)
+        if (!scopeDue && previewTicket == null && backdropTicket == null) {
             sampleBusy.set(false)
             return
         }
-        nextScopeAtNs = now + PocketScopeSampler.chromeSampleIntervalNs(
-            policy.activeScopeCount, thermal, backdropTicket != null || backdrop?.hasDemand(this) == true)
+        if (scopeDue) lastScopeWorkNs = now
+        nextScopeAtNs = now + policy.tapIntervalNs(
+            thermal, backdropTicket != null || backdrop?.hasDemand(this) == true)
         var handedOff = false
         try {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, tapTarget.framebufferId)
@@ -248,7 +252,7 @@ internal class LiveFeedEffectsSession(
                             InspectorPreviewFrame.fromTap(packed, width, height, bottomUp = true))
                         previewSubmitted = true
                     }
-                    if (policy.activeScopeCount == 0 || !previewSource.isCurrent(sourceEpoch) ||
+                    if (!scopeDue || !previewSource.isCurrent(sourceEpoch) ||
                         !LiveScopeSampleBus.isCurrent(scopeOwner)) return@execute
                     var transfer = MonitorTransfer.fromColorMode(policy.colorMode)
                     ScopeExposureCeiling.syncISO(policy.iso)
