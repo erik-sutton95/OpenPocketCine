@@ -85,33 +85,55 @@
                 canvas = image.cropped(to: clip).composited(over: canvas)
             }
             canvas = canvas.cropped(to: extent)
-            var images: [MonitorGlassDensity: CGImage] = [:]
-            var products: [FilterKey: CGImage] = [:]
+            // Build every distinct blur product, stack them in one atlas and
+            // render that once. Each Core Image render carries fixed CPU setup
+            // (graph tiling, intermediate surfaces, a synchronous GPU wait), so
+            // one render instead of four is most of this job's CPU. The crops
+            // share the atlas bitmap (no copy).
+            var keys: [FilterKey] = []
             for role in MonitorGlassDensity.allCases {
                 let key = FilterKey(radius: role.blurRadius, saturation: role.saturation)
-                if let cached = products[key] {
-                    images[role] = cached
-                    continue
-                }
+                if !keys.contains(key) { keys.append(key) }
+            }
+            var atlas = CIImage.empty()
+            for (index, key) in keys.enumerated() {
                 // Clamp the complete canvas before convolution. Panel clipping
                 // happens afterward, so edges can sample beyond the panel bounds.
                 let filtered = canvas.clampedToExtent()
                     .applyingFilter(
                         "CIGaussianBlur",
                         parameters: [
-                            kCIInputRadiusKey: role.blurRadius * scale
+                            kCIInputRadiusKey: key.radius * scale
                         ]
                     )
                     .applyingFilter(
                         "CIColorControls",
                         parameters: [
-                            kCIInputSaturationKey: role.saturation
+                            kCIInputSaturationKey: key.saturation
                         ]
                     )
                     .cropped(to: extent)
-                guard let image = context.createCGImage(filtered, from: extent) else { return nil }
-                images[role] = image
+                    .transformed(
+                        by: CGAffineTransform(
+                            translationX: 0, y: CGFloat(index) * extent.height))
+                atlas = filtered.composited(over: atlas)
+            }
+            let atlasRect = CGRect(
+                x: 0, y: 0, width: extent.width, height: extent.height * CGFloat(keys.count))
+            guard let rendered = context.createCGImage(atlas, from: atlasRect) else { return nil }
+            var products: [FilterKey: CGImage] = [:]
+            for (index, key) in keys.enumerated() {
+                // CGImage rows run top-down; atlas slot 0 is at the bottom.
+                let top = CGFloat(keys.count - 1 - index) * extent.height
+                guard
+                    let image = rendered.cropping(
+                        to: CGRect(x: 0, y: top, width: extent.width, height: extent.height))
+                else { return nil }
                 products[key] = image
+            }
+            var images: [MonitorGlassDensity: CGImage] = [:]
+            for role in MonitorGlassDensity.allCases {
+                images[role] = products[FilterKey(radius: role.blurRadius, saturation: role.saturation)]
             }
             return MonitorBackdropSnapshot(canvasSize: canvasSize, images: images)
         }

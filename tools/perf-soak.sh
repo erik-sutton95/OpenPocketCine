@@ -39,6 +39,9 @@ for i in "${!PROFILES[@]}"; do
   [[ $rec == 1 ]] && tag="$profile-rec"
   log="$OUT/$tag.log"
   echo "== $profile (hold ${HOLD}s, trace ${TRACE}s, $CONFIG)"
+  # Install this build explicitly so A/B runs from different worktrees never mix.
+  xcrun devicectl device install app --device "$DEVICE" \
+    "$DERIVED/Build/Products/$CONFIG-iphoneos/OpenPocketCine.app" >"$OUT/$tag.install.log" 2>&1
   xcrun devicectl device process launch --device "$DEVICE" --terminate-existing \
     com.opencapture.openpocketcine >"$OUT/$tag.launch.log" 2>&1
   sleep 3
