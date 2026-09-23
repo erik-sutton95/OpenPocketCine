@@ -590,7 +590,9 @@ final class CameraSession {
     func receiveMultiview(_ frame: Duml.Frame) {
         guard isMultiviewBorrowed else { return }
         applyIncomingStatus(frame)
-        isFeedWarming = decoder.lastPresentedAt == nil
+        // Per tile status frame: an unchanged write re-renders the tile chrome.
+        let warming = decoder.lastPresentedAt == nil
+        if warming != isFeedWarming { isFeedWarming = warming }
     }
     func releaseMultiview() {
         guard isMultiviewBorrowed else { return }
@@ -1562,15 +1564,19 @@ final class CameraSession {
         guard new.zoomFactorRaw > 0 || new.zoomLens != nil else { return }
         if let factor = new.zoomFactor {
             if !zoomStopTouched {
+                // Raw zoom moves every status frame during a slew; the stop
+                // rarely does. Write only on change so zoom readers stay quiet.
+                var stop = zoomStop
                 if abs(factor - CamFov.maxFactor) < 0.15 {
-                    zoomStop = 12
+                    stop = 12
                 } else if abs(factor - 6) < 0.2 {
-                    zoomStop = 6
+                    stop = 6
                 } else if abs(factor - 3) < 0.2 {
-                    zoomStop = 3
+                    stop = 3
                 } else if factor < 2.5 {
-                    zoomStop = 1
+                    stop = 1
                 }
+                if stop != zoomStop { zoomStop = stop }
             }
         }
         let now = Date()
@@ -4550,7 +4556,8 @@ final class CameraSession {
         )
         let watchdogBeforeTick = feedWatchdog
         let action = feedWatchdog.tick(snap)
-        feedRecovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
+        let recovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
+        if recovering != feedRecovering { feedRecovering = recovering }
         switch action {
         case .none:
             if decoder.awaitingIDR, decoder.canReleaseIDRHold,
