@@ -1541,9 +1541,15 @@ final class CameraSession {
     /// the confirmation test because the live factor comes back off a lens
     /// position, a hair off what was asked.
     private func reconcileZoomPin(_ live: Double?) {
+        // Reconcile a copy: `zoomPin` is observed, and an inout access notifies
+        // every zoom reader (chip, caption, watcher relay) on each status frame
+        // even when nothing changes. Reconcile only ever releases the pin.
+        guard zoomPin != nil else { return }
+        var pin = zoomPin
         _ = CameraValuePin.reconcile(
-            &zoomPin, reported: live, now: Date.timeIntervalSinceReferenceDate,
+            &pin, reported: live, now: Date.timeIntervalSinceReferenceDate,
             confirms: CamFov.matches)
+        if pin == nil { zoomPin = nil }
     }
 
     private func noteZoomIfChanged(_ new: CameraStatus) {
