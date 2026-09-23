@@ -23,15 +23,16 @@ data class CameraModel(
     val needsFirstPictureFormatPoke: Boolean = false,
     /** Video-mode chip cycle. 4 Pro 1/3/6/12; Pocket 4/3 1/2/4; Nano 1. */
     val zoomStops: List<Double> = listOf(1.0, 2.0, 4.0),
+    /** Portable `CameraModel.hasGimbal`. Pocket 3-axis gimbal; Nano has none. */
+    val hasGimbal: Boolean = family == "pocket",
+    /** Portable `CameraModel.supportsZoom`. Nano is a fixed 1× prime. */
+    val supportsZoom: Boolean = family == "pocket",
     /** Pocket `0x02/0x68 08` before `0x09/0xa8`. Not Nano (own gate), not Action 6. */
     val sendsLiveViewPrepare: Boolean = !usesNanoLiveViewGate && !looksLikeAction6(name),
     /** Action 6 aperture strategy (`0x8E` pid `0x44`) and iris readback. */
     val supportsAperture: Boolean = looksLikeAction6(name),
 ) {
     val zoomMax: Double get() = activeZoomStops().lastOrNull() ?: 1.0
-
-    /** Pocket 3-axis gimbal. Nano has none. */
-    val hasGimbal: Boolean get() = family == "pocket"
 
     val isoAutoRangeFloor: Int get() = Companion.isoAutoRangeFloorFor(name)
 
@@ -180,6 +181,9 @@ data class CameraModel(
                     needsFirstPictureFormatPoke =
                         obj.optBoolean("needsFirstPictureFormatPoke", looksLikePocket3(name)),
                     zoomStops = zoomStopsFromJson(obj, name, obj.optString("family", "pocket")),
+                    // The facade always sends these; a missing key fails closed.
+                    hasGimbal = obj.optBoolean("hasGimbal", false),
+                    supportsZoom = obj.optBoolean("supportsZoom", false),
                     sendsLiveViewPrepare = obj.optBoolean(
                         "sendsLiveViewPrepare",
                         !obj.optBoolean("usesNanoLiveViewGate", false) && !looksLikeAction6(name),

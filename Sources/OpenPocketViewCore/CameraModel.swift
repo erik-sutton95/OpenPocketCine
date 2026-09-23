@@ -106,13 +106,19 @@ public struct CameraModel: Equatable, Sendable {
     /// Pocket 3-axis gimbal. Nano has none — hide stick, mode, and A·B·C.
     public var hasGimbal: Bool { family == .pocket }
 
-    /// Pocket tap-focus burst (`0x22`/`0x30`/`0x68`/`0x32`). Nano has no AF, and the
-    /// Action 6 survey found no AF or focus-distance control.
-    public var supportsTapFocus: Bool { family != .nano && !isAction6 }
+    /// Pocket tap-focus burst (`0x22`/`0x30`/`0x68`/`0x32`). Captured on Pocket only:
+    /// Nano has no AF, the Action 6 survey found no AF or focus-distance control, and
+    /// other Action / 360 / drones / unknown bodies fail closed.
+    public var supportsTapFocus: Bool { family == .pocket }
 
-    /// AF-S / AF-C (`0x02/0x24`) and AF-C track (`0x8E` pid `0x3B`). Nano and Action 6
-    /// have neither; Action 6 shows aperture in that slot (`supportsAperture`).
-    public var supportsFocusMode: Bool { family != .nano && !isAction6 }
+    /// AF-S / AF-C (`0x02/0x24`) and AF-C track (`0x8E` pid `0x3B`). Pocket only, as
+    /// above; Action 6 shows aperture in that slot (`supportsAperture`).
+    public var supportsFocusMode: Bool { family == .pocket }
+
+    /// Zoom chip, hold disc, pinch, gamepad zoom and zoom SETs. Nano is a fixed 1×
+    /// prime (DJI spec); Action 6 `02/B8` uses a different, unimplemented encoding;
+    /// every other non-Pocket body fails closed.
+    public var supportsZoom: Bool { family == .pocket }
 
     public var family: CameraBodyFamily {
         CameraBodyFamily.resolve(modelId: nil, name: name)

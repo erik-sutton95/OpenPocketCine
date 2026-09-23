@@ -343,6 +343,12 @@ separate iOS and Android lists.
 - Android clip playback: Delete and Cancel in the "Delete this clip from the
   camera?" dialog now respond instead of playing or pausing the clip behind it.
 
+- Osmo Nano no longer shows zoom controls. The zoom chip, pinch, hold disc and
+  game controller zoom are hidden or inert, and no zoom command is sent. DISP
+  settings list Zoom Chip and Gimbal Stick only when the connected camera has
+  them. Gimbal, zoom and focus controls stay off for Action, 360, drones and
+  unknown cameras until they are verified (#124, #413).
+
 - Opening the gallery on the camera now opens Media in the app, like DJI Mimo,
   instead of being kicked back to live within a second. Leaving on either side
   returns the camera to live view.

@@ -837,16 +837,21 @@ struct SettingsRootView: View {
             help: "Rail settings button. Always an escape hatch.",
             isOn: chrome.wrappedValue.railSettings
         ) { chrome.wrappedValue.railSettings.toggle() }
-        SettingsSwitchInlineRow(
-            title: "Zoom Chip",
-            help: "Live zoom readout on the feed.",
-            isOn: chrome.wrappedValue.zoomChip
-        ) { chrome.wrappedValue.zoomChip.toggle() }
-        SettingsSwitchInlineRow(
-            title: "Gimbal Stick",
-            help: "On-screen gimbal stick.",
-            isOn: chrome.wrappedValue.gimbalStick
-        ) { chrome.wrappedValue.gimbalStick.toggle() }
+        let capabilities = OsmoMonitorPresentation.capabilities(model.session)
+        if capabilities.zoom {
+            SettingsSwitchInlineRow(
+                title: "Zoom Chip",
+                help: "Live zoom readout on the feed.",
+                isOn: chrome.wrappedValue.zoomChip
+            ) { chrome.wrappedValue.zoomChip.toggle() }
+        }
+        if capabilities.gimbal {
+            SettingsSwitchInlineRow(
+                title: "Gimbal Stick",
+                help: "On-screen gimbal stick.",
+                isOn: chrome.wrappedValue.gimbalStick
+            ) { chrome.wrappedValue.gimbalStick.toggle() }
+        }
         SettingsSwitchInlineRow(
             title: "AF Box",
             help: "Focus and face-tracking brackets on the feed.",

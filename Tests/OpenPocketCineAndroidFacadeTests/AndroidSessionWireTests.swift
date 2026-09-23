@@ -228,6 +228,16 @@ struct AndroidSessionWireTests {
     }
 
     @Test
+    func cameraModelJSONCarriesBodyCapabilities() {
+        let pro = AndroidSessionWire.cameraModelJSON(modelId: 0x0022, name: nil)
+        #expect(pro.contains("\"hasGimbal\":true"))
+        #expect(pro.contains("\"supportsZoom\":true"))
+        let nano = AndroidSessionWire.cameraModelJSON(modelId: 0x0019, name: nil)
+        #expect(nano.contains("\"hasGimbal\":false"))
+        #expect(nano.contains("\"supportsZoom\":false"))
+    }
+
+    @Test
     func statusJSONRoundTripsAvailableVideoFormats() {
         var status = CameraStatus()
         status.availableVideoFormats = [

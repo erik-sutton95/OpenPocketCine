@@ -226,8 +226,9 @@ space after rotation or resizing, including saved positions. Long-press a View A
   imported Custom looks remain available. Returning to Video restores the
   saved conversion unless you changed your LUT selection. Opening a recorded
   clip still uses that clip's color profile.
-- Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
-  with 4K max 2×; Nano 1×). Pocket 3's ceiling is per-FORMAT, not one
+- Camera writes (record, ISO, EV, zoom and gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
+  with 4K max 2×). Nano is a fixed 1× lens: no zoom chip, pinch, disc or
+  controller zoom, and no gimbal stick or tap focus. Pocket 3's ceiling is per-FORMAT, not one
   generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×, 3K 1:1 2×**
   ([survey](https://openpocketcine.app/docs/devices/pocket-3/controls/#zoom-and-med-tele)).
   Zoom must not drop the live picture. FORMAT lists

@@ -208,6 +208,8 @@ final class CameraSession {
     @ObservationIgnored private var gimbalOverlayMotion = GimbalOverlayMotion()
     /// Pocket 3-axis only. Nano hides the gimbal button and sheet.
     var hasGimbal: Bool { connectedCamera?.model.hasGimbal ?? false }
+    /// Nano is a fixed 1× prime: no zoom chrome and no zoom SET from any input.
+    var supportsZoom: Bool { connectedCamera?.model.supportsZoom ?? false }
     var gimbalMode: GimbalMode = .follow
     var gimbalSpeed: GimbalSpeed = .defaultSpeed
     var gimbalRamp: GimbalRamp = OperatorPrefs.gimbalRamp
@@ -1578,6 +1580,7 @@ final class CameraSession {
     /// Pinch HUD (0.1×) + slider (every distinct lens tick, ~20 Hz latest-wins).
     /// Gesture owns the chip until lift; cam_fov does not re-anchor mid-pinch.
     func updateZoomPinch(magnification: Double) {
+        guard supportsZoom else { return }
         if gimbalMoveRunning { cancelProgrammedMove() }
         if zoomPinchPreview == nil {
             zoomPinchAnchor = status.zoomFactor ?? zoomOptimistic ?? zoomStop
@@ -1619,6 +1622,7 @@ final class CameraSession {
 
     /// Cycle button. Body stops are sliders (Pro 217 / 651 / 1302 / 2604).
     func setZoom(_ factor: Double) {
+        guard supportsZoom else { return }
         if gimbalMoveRunning { cancelProgrammedMove() }
         let from = CamFov.displayLabel(factor: zoomReadout)
         let to = CamFov.displayLabel(factor: factor)
@@ -1698,7 +1702,7 @@ final class CameraSession {
         ControlLiveLog.line(
             "zoom: setZoomStop locked=\(isLocked) live=\(datalink != nil)"
         )
-        guard !isLocked else { return }
+        guard !isLocked, supportsZoom else { return }
         lastZoomSetAt = Date()
         let frame = Commands.setZoomStop()
         fireCamera(
@@ -1722,6 +1726,7 @@ final class CameraSession {
     /// Chip tap is urgent. Slider / pinch pipelines at 20 Hz without waiting
     /// for ACK (Mimo). D-Log2→D-Log must be on the body before this SET.
     private func fireZoom(_ write: CamFov.ChipWrite, target: Double?, announce: Bool) {
+        guard supportsZoom else { return }
         let frame: Duml.Frame
         let name: String
         switch write {

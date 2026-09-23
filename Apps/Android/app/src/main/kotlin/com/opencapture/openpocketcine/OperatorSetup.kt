@@ -1506,8 +1506,13 @@ private val dispToggleSpecs =
 private fun DispToggles(model: AppModel, mode: PocketDispMode, view: View) {
     val chrome = model.chrome(mode)
     val status by model.session.status.collectAsState()
+    val capabilities = model.monitorCapabilities(status)
     dispToggleSpecs.filter {
-        it.section != PocketDispSection.GIMBAL_STICK || model.monitorCapabilities(status).gimbal
+        when (it.section) {
+            PocketDispSection.GIMBAL_STICK -> capabilities.gimbal
+            PocketDispSection.ZOOM_CHIP -> capabilities.zoom
+            else -> true
+        }
     }.forEach { spec ->
         SettingsSwitchInlineRow(
             title = spec.title,

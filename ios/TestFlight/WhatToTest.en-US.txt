@@ -1,8 +1,8 @@
 New and changed
 
+- On Osmo Nano, zoom is hidden: no zoom chip, pinch zoom, hold disc or controller zoom. DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
 - Osmo Action 6 support: live view, Normal 10-bit and D-Log M color, and the official D-Log M LUT. Not yet checked on a real Action 6.
 - On Action 6, an APERTURE control takes the place of FOCUS. It shows the live f-number and sets Auto, f/2.6, f/2.8, Starburst f/4 or SuperNight f/2.0.
-- Camera EV meter: a slim line inside the left edge of the feed shows the camera's own exposure reading.
 
 Fixes
 
@@ -11,5 +11,6 @@ Fixes
 
 What to test
 
+- Connect a Nano: check there is no zoom chip and that pinch and controller L1/R1 and L2/R2 do not zoom. Switch to a Pocket without relaunching and check zoom and the gimbal stick return.
 - If you have an Action 6: pair it, confirm live view appears, then try APERTURE, COLOR, Photo and Timelapse.
 - Leave live view running for a few minutes and check the picture does not freeze.

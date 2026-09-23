@@ -8,7 +8,7 @@ internal fun AppModel.monitorCapabilities(status: CameraStatus): MonitorCapabili
     val body = session.connectedCamera?.model
     return MonitorCapabilities(
         gimbal = session.hasGimbal,
-        zoom = body?.activeZoomStops(status.resolutionCode, status.shootingMode)?.isNotEmpty() == true,
+        zoom = session.supportsZoom,
         focus = body?.supportsFocusMode == true,
         iris = body?.supportsAperture == true,
         audio = true,

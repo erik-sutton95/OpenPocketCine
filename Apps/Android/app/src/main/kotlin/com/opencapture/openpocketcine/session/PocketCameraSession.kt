@@ -277,6 +277,9 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     val gimbalMoveRunning: StateFlow<Boolean> = _gimbalMoveRunning.asStateFlow()
     val hasGimbal: Boolean
         get() = connectedCamera?.model?.hasGimbal == true
+    /** Nano is a fixed 1× prime: no zoom chrome and no zoom SET from any input. */
+    val supportsZoom: Boolean
+        get() = connectedCamera?.model?.supportsZoom == true
     val canRunProgrammedMove: Boolean
         get() = firstPictureSettled && decoder.lastPresentedAt != null && !isLiveVideoStale() &&
             _gimbalProgram.value.canRun && programmedZoomUnavailableReason() == null
@@ -2653,6 +2656,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     }
 
     fun setZoom(factor: Double) {
+        if (!supportsZoom) return
         if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val from = CamFov.displayLabel(_zoomReadout.value)
         val to = CamFov.displayLabel(factor)
@@ -2710,6 +2714,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     }
 
     fun updateZoomPinch(magnification: Double) {
+        if (!supportsZoom) return
         if (_gimbalMoveRunning.value) cancelProgrammedMove()
         if (zoomPinchPreview == null) {
             zoomPinchAnchor = _status.value.zoomFactor ?: zoomOptimistic ?: zoomStop
@@ -3769,6 +3774,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
 
     /** iOS `CameraSetMailbox.zoomCoalesceHold` — 20 Hz latest-wins slider. */
     private fun fireZoom(payload: ByteArray, announce: Boolean, name: String) {
+        if (!supportsZoom) return
         if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val dl = datalink
         if (dl == null) {
