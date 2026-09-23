@@ -20,6 +20,10 @@
         public var onWatchFeed: (() -> Void)?
         public var onRename: ((String, String) -> Void)?
         public var onForget: ((String) -> Void)?
+        /// Camera id, setup id. Nil hides setup chips.
+        public var onConnectSetup: ((String, String) -> Void)?
+        public var onAddSetup: ((String) -> Void)?
+        public var onForgetSetup: ((String, String) -> Void)?
 
         @State private var renameItem: CameraListItem?
         @State private var removeItem: CameraListItem?
@@ -32,7 +36,10 @@
             onCancel: @escaping () -> Void, onMedia: @escaping () -> Void,
             onSettings: @escaping () -> Void, onMultiview: (() -> Void)? = nil,
             onWatchFeed: (() -> Void)? = nil, onRename: ((String, String) -> Void)? = nil,
-            onForget: ((String) -> Void)? = nil
+            onForget: ((String) -> Void)? = nil,
+            onConnectSetup: ((String, String) -> Void)? = nil,
+            onAddSetup: ((String) -> Void)? = nil,
+            onForgetSetup: ((String, String) -> Void)? = nil
         ) {
             self.brandName = brandName
             self.paired = paired
@@ -49,6 +56,9 @@
             self.onWatchFeed = onWatchFeed
             self.onRename = onRename
             self.onForget = onForget
+            self.onConnectSetup = onConnectSetup
+            self.onAddSetup = onAddSetup
+            self.onForgetSetup = onForgetSetup
         }
 
         @Environment(\.monitorWindowGeometry) private var windowGeometry
@@ -263,9 +273,22 @@
             } else {
                 remove = { item in removeItem = item }
             }
+            var connectSetup: (@MainActor @Sendable (CameraListItem, CameraSetupChip) -> Void)?
+            if let onConnectSetup {
+                connectSetup = { item, setup in if !busy { onConnectSetup(item.id, setup.id) } }
+            }
+            var addSetup: (@MainActor @Sendable (CameraListItem) -> Void)?
+            if let onAddSetup {
+                addSetup = { item in if !busy { onAddSetup(item.id) } }
+            }
+            var forgetSetup: (@MainActor @Sendable (CameraListItem, CameraSetupChip) -> Void)?
+            if let onForgetSetup {
+                forgetSetup = { item, setup in if !busy { onForgetSetup(item.id, setup.id) } }
+            }
             let actions = CameraCatalogActions(
                 activate: { activate($0, saved: saved) }, cancel: { onCancel() },
-                rename: rename, remove: remove)
+                rename: rename, remove: remove, connectSetup: connectSetup, addSetup: addSetup,
+                forgetSetup: forgetSetup)
             return CameraCatalogRows.make(items, saved: saved, busy: busy, actions: actions)
         }
 
@@ -281,6 +304,9 @@
         let cancel: @MainActor @Sendable () -> Void
         let rename: (@MainActor @Sendable (CameraListItem) -> Void)?
         let remove: (@MainActor @Sendable (CameraListItem) -> Void)?
+        var connectSetup: (@MainActor @Sendable (CameraListItem, CameraSetupChip) -> Void)? = nil
+        var addSetup: (@MainActor @Sendable (CameraListItem) -> Void)? = nil
+        var forgetSetup: (@MainActor @Sendable (CameraListItem, CameraSetupChip) -> Void)? = nil
     }
 
     enum CameraCatalogRows {
@@ -364,6 +390,9 @@
                         }
                     }
                 }
+                if saved, let connect = actions.connectSetup, !item.setups.isEmpty {
+                    setupChips(connect: connect)
+                }
                 HStack(spacing: 7) {
                     if item.isBusy {
                         CameraProgressLabel(title: item.status)
@@ -413,5 +442,71 @@
                     lineWidth: 1))
         }
 
+        /// OpenZCine-style setup tabs: one per way in, plus Add setup. Scrolls sideways
+        /// rather than truncating on a portrait phone.
+        private func setupChips(
+            connect: @escaping @MainActor @Sendable (CameraListItem, CameraSetupChip) -> Void
+        ) -> some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(item.setups) { setup in
+                        Button {
+                            connect(item, setup)
+                        } label: {
+                            chipLabel(setup.title, active: setup.isActive)
+                        }
+                        .buttonStyle(.plain).disabled(busy)
+                        .contextMenu {
+                            if setup.canForget, let forget = actions.forgetSetup {
+                                Button("Forget \(setup.title) setup", role: .destructive) {
+                                    forget(item, setup)
+                                }
+                            }
+                        }
+                        .accessibilityLabel("Connect \(item.name) over \(setup.title)")
+                        .accessibilityIdentifier("cameras.setup.\(setup.id)")
+                    }
+                    if item.canAddSetup, let add = actions.addSetup {
+                        Button {
+                            add(item)
+                        } label: {
+                            HStack(spacing: 6) {
+                                CameraPageGlyph(icon: .plus).frame(width: 11, height: 11)
+                                Text("Add setup")
+                            }
+                            .font(MonitorTheme.font(11, weight: .semibold))
+                            .foregroundStyle(MonitorTheme.muted)
+                            .padding(.horizontal, 12).frame(minHeight: 34)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 9).stroke(
+                                    MonitorTheme.secondary.opacity(0.22),
+                                    style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                            )
+                            .padding(.vertical, 5).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).disabled(busy)
+                        .accessibilityLabel("Add a setup for \(item.name)")
+                        .accessibilityIdentifier("cameras.addSetup")
+                    }
+                }
+            }
+        }
+
+        private func chipLabel(_ title: String, active: Bool) -> some View {
+            Text(title).font(MonitorTheme.font(11, weight: .semibold))
+                .foregroundStyle(active ? Color.white : MonitorTheme.muted)
+                .padding(.horizontal, 12).frame(minHeight: 34)
+                .background(
+                    active ? MonitorTheme.accent.opacity(0.16) : Color.white.opacity(0.05),
+                    in: RoundedRectangle(cornerRadius: 9)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9).stroke(
+                        active ? MonitorTheme.accent.opacity(0.45) : Color.white.opacity(0.06),
+                        lineWidth: 1)
+                )
+                // 34 pt chip, 44 pt tap target.
+                .padding(.vertical, 5).contentShape(Rectangle())
+        }
     }
 #endif

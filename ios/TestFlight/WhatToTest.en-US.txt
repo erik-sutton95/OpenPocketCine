@@ -1,6 +1,6 @@
 New features
 
-- Multiview preview recovery and camera support were reorganized internally; iPhone and iPad behavior should not change.
-- Please re-check: add two or more cameras in Multiview and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview.
-- Interrupt a preview (walk out of range or switch apps) and check the tile recovers or offers Reconnect.
+- Your cameras: tap Add setup on a saved camera, enter this phone's Personal Hotspot name and password, and check the camera joins the hotspot and goes live.
+- Then tap that camera's Camera Wi-Fi chip and check it returns to its own Wi-Fi and connects as before.
+- Multiview's shared Wi-Fi join was reorganized internally: add two or more cameras and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview and recover after an interruption.
 - Close Multiview and check each camera returns to its own Wi-Fi.

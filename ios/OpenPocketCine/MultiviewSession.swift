@@ -790,125 +790,21 @@ final class MultiviewSession {
             stage = "camera Wi-Fi identity"
             let identity = try await client.exchange(Commands.getWifiSsid(id: client.next()))
                 .payload
-            guard identity.count > 2, identity[0] == 0 else { throw Failure.rejected }
-            if camera.hasMultiviewPreview && !experimental {
-                tile.status = "Selecting Video mode"
-                client.send(MulticamCommands.videoMode(seq: client.next()))
-                try await Task.sleep(for: .seconds(2))
-            }
-            stage = "station role"
-
-            let role = try await client.exchange(MulticamCommands.wifiWorkMode(seq: client.next()))
-                .payload
-            let decision = MulticamStationPolicy.decision(
-                reply: role,
-                allowMissingQuery: experimental || camera.acceptsMissingMultiviewRoleQuery(role))
-            let missingRoleQuery = decision == .setWithoutReadback
-            ControlLiveLog.line(
-                "multiview: station experimental=\(experimental) decision=\(decision)")
-            if decision != .alreadyStation {
-                guard decision != .reject else {
-                    throw ProvisioningFailure.message(
-                        "This camera did not report a supported Wi-Fi mode. Shared Wi-Fi setup is experimental for this model."
-                    )
-                }
-                let switched = try await client.exchange(
-                    MulticamCommands.stationMode(true, seq: client.next())
-                )
-                .payload
-                let accepted = MulticamStationPolicy.acceptsSetter(
-                    switched, missingQuery: missingRoleQuery)
-                guard accepted else {
-                    throw ProvisioningFailure.message(
-                        "The camera did not accept shared Wi-Fi mode.")
-                }
-                // The bounded experimental path also permits the captured missing-getter shape.
-                // Its join result and subsequent LAN identity check remain required.
-                if !missingRoleQuery {
-                    var stationReady = false
-                    for _ in 0..<6 {
-                        let reported = try await client.exchange(
-                            MulticamCommands.wifiWorkMode(seq: client.next())
-                        ).payload
-                        if reported == [0, 1] {
-                            stationReady = true
-                            break
-                        }
-                        guard reported == [0, 0] else { throw Failure.rejected }
-                        try await Task.sleep(for: .seconds(2))
-                    }
-                    guard stationReady else {
-                        throw ProvisioningFailure.message(
-                            "Camera Wi-Fi is still starting. Retry with the camera nearby.")
-                    }
-                }
-            }
+            stage = "station join"
+            var join = StationJoin(
+                model: camera.model, ssid: ssid, password: password, hotspot: usePhoneHotspot)
+            join.experimental = experimental
+            let outcome = try await join.run(
+                identity: identity, exchange: { try await client.exchange($0, timeout: $1) },
+                send: client.send, next: client.next, status: { tile.status = $0 },
+                hotspotReady: { SharedWiFiPath.address(hotspot: true) != nil },
+                verifyOnNetwork: {
+                    try await self.discoverPreview(tile, camera: camera, identity: identity)
+                    return true
+                }, log: { ControlLiveLog.line("multiview: \($0)") })
             tile.identity = identity
-            stage = "camera Wi-Fi join"
-            tile.status = "Waiting for camera Wi-Fi"
-            try await Task.sleep(for: .seconds(MulticamJoinPolicy.prepareSettleSeconds))
-            for attempt in 1...MulticamJoinPolicy.maximumAttempts {
-                tile.status =
-                    "Joining Wi-Fi · attempt \(attempt) of \(MulticamJoinPolicy.maximumAttempts)"
-                let joined: Duml.Frame
-                do {
-                    joined = try await client.exchange(
-                        MulticamCommands.join(ssid: ssid, password: password, seq: client.next()),
-                        timeout: MulticamJoinPolicy.replyTimeoutSeconds)
-                } catch {
-                    if error is CancellationError { throw error }
-                    ControlLiveLog.line(
-                        "multiview: join reply timeout; checking verified LAN identity")
-                    // A lost BLE reply is not proof that association failed.
-                    if !usePhoneHotspot || SharedWiFiPath.address(hotspot: true) != nil {
-                        do {
-                            try await discoverPreview(tile, camera: camera, identity: identity)
-                            MultiviewNetworkStore.save(
-                                ssid: ssid, password: password, hotspot: usePhoneHotspot)
-                            return
-                        } catch { if error is CancellationError { throw error } }
-                    }
-                    if attempt < MulticamJoinPolicy.maximumAttempts {
-                        try await Task.sleep(for: .seconds(MulticamJoinPolicy.retryDelaySeconds))
-                        continue
-                    }
-                    tile.identity = nil
-                    throw ProvisioningFailure.message(
-                        "Camera Wi-Fi did not respond. Retry setup with the camera nearby.")
-                }
-                // Only the fixed-size result is logged, never the credential request.
-                let result = joined.payload.prefix(4).map { String(format: "%02x", $0) }.joined(
-                    separator: " ")
-                ControlLiveLog.line("multiview: Wi-Fi join attempt=\(attempt) result=\(result)")
-                switch MulticamJoinPolicy.decision(reply: joined.payload, attempt: attempt) {
-                case .connected: break
-                case .retry:
-                    tile.status = "Retrying Wi-Fi connection"
-                    try await Task.sleep(for: .seconds(MulticamJoinPolicy.retryDelaySeconds))
-                    continue
-                case .rejected:
-                    tile.identity = nil
-                    throw ProvisioningFailure.message(
-                        "The camera could not join the shared Wi-Fi. Check its name and password, and make sure the network is in range."
-                    )
-                }
-                break
-            }
-            tile.identity = identity
-            if usePhoneHotspot {
-                tile.status = "Waiting for Personal Hotspot"
-                let deadline = Date().addingTimeInterval(15)
-                while SharedWiFiPath.address(hotspot: true) == nil && Date() < deadline {
-                    try await Task.sleep(for: .milliseconds(250))
-                }
-                guard SharedWiFiPath.address(hotspot: true) != nil else {
-                    throw ProvisioningFailure.message(
-                        "Enable Personal Hotspot and Allow Others to Join, then retry. The hotspot network is not available yet."
-                    )
-                }
-            }
             MultiviewNetworkStore.save(ssid: ssid, password: password, hotspot: usePhoneHotspot)
-            tile.identity = identity
+            if outcome == .verified { return }
             client.close()
             stage = "LAN discovery"
             try await discoverPreview(tile, camera: camera, identity: identity)

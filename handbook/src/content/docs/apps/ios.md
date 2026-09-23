@@ -335,6 +335,18 @@ new discoveries. Select a camera to see its connection progress and **Cancel**.
 **Pair new camera** opens the guided flow; select a discovered camera, then
 **Continue**. Media and Settings remain available without connecting.
 
+Each saved camera shows its **setups** as chips: **Camera Wi-Fi** (the camera's
+own access point) and, once added, **Phone hotspot**. Tap a chip to connect that
+way; the row's **Connect** uses the setup you used last. **Add setup** saves this
+phone's Personal Hotspot name and password for that camera, then connects: the
+camera leaves its own Wi-Fi and joins the hotspot with the same captured
+commands as Multiview, and the app only goes live on the address that returns
+that camera's identity. Turn on **Allow Others to Join** and **Maximize
+Compatibility** in Settings → Personal Hotspot first. The next **Camera Wi-Fi**
+connect switches the camera back to its own access point. Touch and hold the
+**Phone hotspot** chip to forget it. The hotspot setup is offered for Pocket 3,
+Pocket 4 / 4 Pro and Nano, and is experimental until physically checked.
+
 **Multiview** is an experimental iPhone/iPad stage for several cameras on shared
 Wi-Fi. From **Your cameras**, tap the grid icon to set up the network and add
 cameras. Each camera has its own preview and recording controls; Record all

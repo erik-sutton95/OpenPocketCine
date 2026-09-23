@@ -14,12 +14,16 @@ public struct CameraListItem: Equatable, Identifiable, Sendable {
     public var isAvailable: Bool
     public var signalBars: Int?
     public var details: [CameraPresentationDetail]
+    /// OpenZCine-style ways to reach this saved body; empty hides the chip row.
+    public var setups: [CameraSetupChip]
+    public var canAddSetup: Bool
 
     public init(
         id: String, name: String, subtitle: String, badge: String = "",
         status: String, actionTitle: String, isPrimary: Bool = false,
         isBusy: Bool = false, isAvailable: Bool = true, signalBars: Int? = nil,
-        details: [CameraPresentationDetail] = []
+        details: [CameraPresentationDetail] = [], setups: [CameraSetupChip] = [],
+        canAddSetup: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -32,6 +36,24 @@ public struct CameraListItem: Equatable, Identifiable, Sendable {
         self.isAvailable = isAvailable
         self.signalBars = signalBars.map { min(4, max(0, $0)) }
         self.details = details
+        self.setups = setups
+        self.canAddSetup = canAddSetup
+    }
+}
+
+/// One connection setup on a saved camera. Tapping connects over it.
+public struct CameraSetupChip: Equatable, Identifiable, Sendable {
+    public var id: String
+    public var title: String
+    /// The setup the row's main Connect uses.
+    public var isActive: Bool
+    public var canForget: Bool
+
+    public init(id: String, title: String, isActive: Bool, canForget: Bool = false) {
+        self.id = id
+        self.title = title
+        self.isActive = isActive
+        self.canForget = canForget
     }
 }
 

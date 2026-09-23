@@ -14,10 +14,14 @@ enum OsmoCameraPageAdapter {
             let connecting = busy && model.session.connectionTargetID == saved.id
             let progress =
                 model.session.isReconnecting && model.isScanning
-                ? "Looking for camera…" : model.session.phase.label
+                ? "Looking for camera…"
+                : model.session.setupProgress ?? model.session.phase.label
+            let preferred = saved.preferredSetup
+            let network = preferred == .phoneHotspot ? saved.hotspotSSID : saved.lastSSID
+            let body = CameraModel.resolve(modelId: saved.modelId, name: saved.advertisedName)
             return CameraListItem(
                 id: saved.id.uuidString, name: saved.displayName,
-                subtitle: saved.modelName + (saved.lastSSID.map { " · \($0)" } ?? ""),
+                subtitle: saved.modelName + (network.map { " · \($0)" } ?? ""),
                 badge: connecting
                     ? "CONNECTING"
                     : saved.id == latest ? "LAST USED" : nearby ? "PAIRED" : "OFFLINE",
@@ -25,7 +29,14 @@ enum OsmoCameraPageAdapter {
                     ? progress
                     : nearby ? "Nearby · ready to connect" : "Not found — power it on to reconnect",
                 actionTitle: nearby ? "Connect" : "Reconnect", isPrimary: saved.id == latest,
-                isBusy: connecting, isAvailable: nearby)
+                isBusy: connecting, isAvailable: nearby,
+                setups: saved.setups.map {
+                    CameraSetupChip(
+                        id: $0.rawValue, title: $0.title, isActive: $0 == preferred,
+                        canForget: $0 == .phoneHotspot)
+                },
+                // Hotspot provisioning reuses Multiview's captured preview profiles only.
+                canAddSetup: saved.hotspotSSID == nil && MulticamSupport.hasPreview(body))
         }
     }
 

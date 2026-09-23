@@ -380,7 +380,34 @@ final class AppModel {
     }
 
     func reconnect(_ camera: SavedCamera) {
+        reconnect(camera, setup: camera.preferredSetup)
+    }
+
+    func reconnect(_ camera: SavedCamera, setup: CameraConnectionSetup) {
+        // Switching setups is a new connection, never a live-session no-op.
+        if session.connectedCamera?.id == camera.id, session.connectionSetup != setup {
+            session.disconnect()
+        }
+        if setup == .phoneHotspot {
+            savedCameras = SavedCameras.startingHotspot(for: camera.id, in: savedCameras)
+            SavedCameraStore.save(savedCameras)
+        }
+        session.connectionSetup = setup
         session.reconnect(to: camera.id)
+    }
+
+    /// Password goes to the Keychain entry Multiview also reads; the name stays per camera.
+    func addHotspotSetup(_ camera: SavedCamera, ssid: String, password: String) {
+        MultiviewNetworkStore.save(ssid: ssid, password: password, hotspot: true)
+        savedCameras = SavedCameras.settingHotspot(camera.id, ssid: ssid, in: savedCameras)
+        SavedCameraStore.save(savedCameras)
+        guard let updated = savedCameras.first(where: { $0.id == camera.id }) else { return }
+        reconnect(updated, setup: .phoneHotspot)
+    }
+
+    func forgetHotspotSetup(_ camera: SavedCamera) {
+        savedCameras = SavedCameras.settingHotspot(camera.id, ssid: nil, in: savedCameras)
+        SavedCameraStore.save(savedCameras)
     }
 
     func forget(_ camera: SavedCamera) {
@@ -595,7 +622,7 @@ final class AppModel {
                 return
             }
         }
-        let record = SavedCamera(
+        var record = SavedCamera(
             id: found.id,
             advertisedName: found.name,
             modelName: found.model.name,
@@ -603,6 +630,7 @@ final class AppModel {
             lastConnectedAt: Date(),
             modelId: found.modelId
         )
+        record.lastSetup = session.connectionSetup
         savedCameras = SavedCameras.upserting(record, into: savedCameras)
         SavedCameraStore.save(savedCameras)
         isPairingNewCamera = false

@@ -826,6 +826,29 @@ final class MonitorUIFlowTests: XCTestCase {
         capture("share-upcoming-destinations")
     }
 
+    /// #406: saved cameras show their setups; Add setup opens the hotspot form. Chips are
+    /// not tapped here because they start a real connection.
+    func testSavedCameraSetupChipsAndAddSetupSheet() {
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
+        app.launch()
+        rotate(.portrait)
+        let hotspot = app.buttons["cameras.setup.phoneHotspot"]
+        XCTAssertTrue(hotspot.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(identifier: "cameras.setup.cameraWiFi").count, 2)
+        XCTAssertGreaterThanOrEqual(hotspot.frame.height, 43.5)
+        // Only the Nano fixture lacks a hotspot setup.
+        let add = app.buttons["cameras.addSetup"]
+        XCTAssertEqual(app.buttons.matching(identifier: "cameras.addSetup").count, 1)
+        capture("camera-setup-chips")
+        add.tap()
+        let ssid = app.textFields["hotspotSetup.ssid"]
+        XCTAssertTrue(ssid.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["hotspotSetup.connect"].isEnabled)
+        capture("camera-add-hotspot-setup")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+    }
+
     private func reveal(_ tab: XCUIElement, in rail: XCUIElement, portrait: Bool) {
         for _ in 0..<6 where !tab.isHittable {
             if portrait {

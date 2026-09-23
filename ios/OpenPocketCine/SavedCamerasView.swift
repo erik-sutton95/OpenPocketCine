@@ -9,6 +9,7 @@ struct SavedCamerasView: View {
     @Environment(\.monitorWindowGeometry) private var windowGeometry
     let compact: Bool
     @State private var showMultiview = false
+    @State private var hotspotSetupFor: SavedCamera?
     @State private var orientation = InterfaceOrientationObserver()
 
     private var connectionBusy: Bool { model.isBusy || model.session.isReconnecting }
@@ -57,11 +58,32 @@ struct SavedCamerasView: View {
                 onForget: { id in
                     guard !connectionBusy, let camera = saved(id) else { return }
                     model.forget(camera)
+                },
+                onConnectSetup: { id, setup in
+                    guard !connectionBusy, let camera = saved(id),
+                        let setup = CameraConnectionSetup(rawValue: setup)
+                    else { return }
+                    model.reconnect(camera, setup: setup)
+                },
+                onAddSetup: { id in
+                    guard !connectionBusy else { return }
+                    hotspotSetupFor = saved(id)
+                },
+                onForgetSetup: { id, setup in
+                    guard !connectionBusy, let camera = saved(id),
+                        setup == CameraConnectionSetup.phoneHotspot.rawValue
+                    else { return }
+                    model.forgetHotspotSetup(camera)
                 })
         }
         .ignoresSafeArea()
         .onAppear { orientation.start() }
         .onDisappear { orientation.stop() }
+        .sheet(item: $hotspotSetupFor) { camera in
+            HotspotSetupSheet(camera: camera) { ssid, password in
+                model.addHotspotSetup(camera, ssid: ssid, password: password)
+            }
+        }
         .fullScreenCover(
             isPresented: $showMultiview,
             onDismiss: { model.session.startScan() }, content: { MultiviewView() })

@@ -75,6 +75,13 @@ final class CameraSession {
     private(set) var connectedCamera: FoundCamera?
     /// Camera-AP SSID after a successful join. Re-read over BLE on the next connect.
     private(set) var joinedSSID: String?
+    /// Setup for the next connect (#406); session recovery reuses it. Disconnect resets it.
+    var connectionSetup: CameraConnectionSetup = .cameraWiFi
+    /// Hotspot address that answered with this body's BLE identity.
+    private(set) var stationHost: String?
+    /// Hotspot provisioning step; the camera home shows it over the phase label.
+    private(set) var setupProgress: String?
+    @ObservationIgnored private var stationSeq: UInt16 = 1200
 
     /// Only used by the host's explicit Show Wi-Fi code sheet. Never advertised or logged.
     var watcherWiFiJoinCode: String? {
@@ -728,6 +735,8 @@ final class CameraSession {
         scanTask?.cancel()
         abortInFlightRun()
         connectedCamera = nil
+        connectionSetup = .cameraWiFi
+        stationHost = nil
         phase = .idle
         statusFlushTask?.cancel()
         statusFlushTask = nil
@@ -846,6 +855,7 @@ final class CameraSession {
     /// resumes a pending `ble.connect` so the old Task cannot keep writing 0x07/45.
     private func abortInFlightRun(preserveDecoder: Bool = false, preserveSoftAP: Bool = false) {
         cameraPathRecovery.reset()
+        setupProgress = nil
         foregroundGeneration += 1
         foregroundCheckTask?.cancel()
         foregroundCheckTask = nil
@@ -957,9 +967,20 @@ final class CameraSession {
         // pairing used to. Warm path (SoftAP still up + cached creds) skips the
         // settle sleeps; 0x53/0x10 still goes out.
         startKeepalive(ssid: nil)
+        let saved = SavedCameraStore.load().first { $0.id == camera.id }
+        if connectionSetup == .phoneHotspot {
+            let ssid = try await runPhoneHotspot(camera, saved: saved)
+            timeline.mark("hs", now: ProcessInfo.processInfo.systemUptime)
+            log.info("\(timeline.line(), privacy: .public)")
+            try Task.checkCancellation()
+            startKeepalive(ssid: ssid)
+            return
+        }
         phase = .readingWifiCreds
+        let restoreAP = saved?.lastSetup == .phoneHotspot
+        if restoreAP { await restoreCameraAccessPoint() }
         let credsFromCache = resolvedWifiCreds(for: camera).skipBle
-        let skipAPSettle = WiFiJoiner.isCameraPathReady() && credsFromCache
+        let skipAPSettle = !restoreAP && cameraPathReady() && credsFromCache
         if !skipAPSettle {
             try await Task.sleep(for: .milliseconds(200))
         }
@@ -1021,10 +1042,7 @@ final class CameraSession {
         if let existing, CameraSoftAP.shouldReuseDatalink(isClosed: existing.isClosed) {
             dl = existing
         } else {
-            dl = DatalinkDriver(
-                port: UInt16(camera.model.datalinkPort),
-                tcpPoke: camera.model.tcpPoke,
-                pairingToken: camera.model.pairingToken)
+            dl = makeDatalink(camera)
             wireDatalink(dl)
             datalink = dl
         }
@@ -1066,7 +1084,7 @@ final class CameraSession {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                let pathReady = WiFiJoiner.isCameraPathReady()
+                let pathReady = cameraPathReady()
                 if CameraSoftAP.shouldKickAfterHandshakeTimeout(pathReady: pathReady) {
                     throw error
                 }
@@ -1080,6 +1098,128 @@ final class CameraSession {
                     for: .milliseconds(CameraSoftAP.handshakeRetryPauseMilliseconds))
             }
         }
+    }
+
+    // ---- phone-hotspot setup (#406) --------------------------------------------------------------
+
+    /// Camera path for the active setup: the SoftAP subnet, or this phone's hotspot bridge.
+    private func cameraPathReady() -> Bool {
+        connectionSetup == .phoneHotspot
+            ? SharedWiFiPath.address(hotspot: true) != nil : WiFiJoiner.isCameraPathReady()
+    }
+
+    private func makeDatalink(_ camera: FoundCamera, host: String? = nil) -> DatalinkDriver {
+        let host = host ?? (connectionSetup == .phoneHotspot ? stationHost : nil)
+        return DatalinkDriver(
+            port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
+            pairingToken: camera.model.pairingToken, stationHost: host,
+            stationHotspot: host != nil)
+    }
+
+    private func nextStationSeq() -> UInt16 {
+        stationSeq &+= 1
+        return stationSeq
+    }
+
+    private func exchangeBle(_ frame: Duml.Frame, timeout: TimeInterval) async throws
+        -> Duml.Frame
+    {
+        try await waitFrame(
+            frame.cmdSet, frame.cmdId, timeout: .seconds(timeout), consumeHold: false
+        ) { [ble] in ble.send(frame) }
+    }
+
+    /// A camera last sent to the phone hotspot may still be in station role with its own
+    /// access point down. `07/48 00` is the reset Multiview sends on close. A missing or
+    /// refused reply is not fatal: an AP already up still serves the normal join.
+    private func restoreCameraAccessPoint() async {
+        let reply = try? await exchangeBle(
+            MulticamCommands.stationMode(false, seq: nextStationSeq()), timeout: 12)
+        let accepted = reply?.payload == [0] || reply?.payload == [0, 0]
+        ControlLiveLog.line("wifi: restore camera access point accepted=\(accepted)")
+    }
+
+    /// Moves the camera onto this phone's Personal Hotspot with the captured Multiview
+    /// sequence, then goes live on the address that proves this body's identity.
+    private func runPhoneHotspot(_ camera: FoundCamera, saved: SavedCamera?) async throws
+        -> String
+    {
+        guard let ssid = saved?.hotspotSSID,
+            let network = MultiviewNetworkStore.load(ssid: ssid, hotspot: true)
+        else { throw Fail.hotspotNotSetUp }
+        phase = .joiningWifi
+        defer { setupProgress = nil }
+        // The phone hosts the hotspot; it must not stay on a camera access point.
+        if let joined = joinedSSID {
+            WiFiJoiner.leave(ssid: joined)
+            joinedSSID = nil
+        }
+        if camera.model.family == .nano {
+            setupProgress = "Waking camera Wi-Fi"
+            let wake = try await exchangeBle(
+                Commands.session5310(id: nextStationSeq()), timeout: 12)
+            guard wake.payload == [1, 0, 0, 0] else { throw Fail.nanoWake }
+            try await Task.sleep(for: .seconds(1))
+        }
+        let identity = try await exchangeBle(
+            Commands.getWifiSsid(id: nextStationSeq()), timeout: 12
+        ).payload
+        var join = StationJoin(
+            model: camera.model, ssid: ssid, password: network.password, hotspot: true)
+        join.probeExistingStation = true
+        let outcome = try await join.run(
+            identity: identity, exchange: { try await self.exchangeBle($0, timeout: $1) },
+            send: { self.ble.send($0) }, next: nextStationSeq,
+            status: { self.setupProgress = $0 },
+            hotspotReady: { SharedWiFiPath.address(hotspot: true) != nil },
+            verifyOnNetwork: { try await self.openStationDatalink(camera, identity: identity) },
+            log: { ControlLiveLog.line("hotspot: \($0)") })
+        if outcome == .joined {
+            setupProgress = "Finding camera on the hotspot"
+            guard try await openStationDatalink(camera, identity: identity) else {
+                throw Fail.hotspotCameraMissing
+            }
+        }
+        return ssid
+    }
+
+    /// An address counts only when its datalink answers `07/07` with the identity read over
+    /// BLE: another camera can share the hotspot. Then register and send the one enable.
+    private func openStationDatalink(_ camera: FoundCamera, identity: [UInt8]) async throws
+        -> Bool
+    {
+        guard SharedWiFiPath.address(hotspot: true) != nil else { return false }
+        let known = stationHost.map { [$0] } ?? []
+        let found =
+            (try? await MultiviewDiscovery().candidates(excluding: [], hotspot: true)) ?? []
+        for host in known + found.filter({ !known.contains($0) }) {
+            try Task.checkCancellation()
+            disposeDatalink()
+            let dl = makeDatalink(camera, host: host)
+            wireDatalink(dl)
+            datalink = dl
+            do {
+                try await dl.open(identityOnly: true)
+                let reply = try await waitFrame(
+                    0x07, 0x07, timeout: .seconds(8), consumeHold: false
+                ) { _ = dl.send(Commands.getWifiSsid(id: 0)) }
+                guard reply.payload == identity, shouldCommitLiveHandshake(dl) else { continue }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                continue
+            }
+            ControlLiveLog.line("hotspot: camera identity verified on the hotspot")
+            stationHost = host
+            dl.completeRegistration()
+            phase = .live
+            applyLinkPresentation()
+            beginIDRHoldIfNeeded()
+            sendInitialLiveViewEnable(displayAttached: decoder.isDisplayReady, pathProven: true)
+            return true
+        }
+        disposeDatalink()
+        return false
     }
 
     // ---- BLE frame routing -----------------------------------------------------------------------
@@ -1104,7 +1244,7 @@ final class CameraSession {
     }
 
     private func liveVideoIsFresh() -> Bool {
-        WiFiJoiner.isCameraPathReady()
+        cameraPathReady()
             && datalink?.lastVideoPacketAt.map {
                 Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
             } == true
@@ -3939,7 +4079,7 @@ final class CameraSession {
             } == true
         let shouldRecover = cameraPathRecovery.tick(
             now: ProcessInfo.processInfo.systemUptime,
-            pathReady: WiFiJoiner.isCameraPathReady(), videoFresh: videoFresh,
+            pathReady: cameraPathReady(), videoFresh: videoFresh,
             sessionActive: phase == .live && gimbalControlSceneActive
                 && !holdsMonitor && !sessionRecovery.isRecovering && !isMultiviewBorrowed
                 && connectedCamera != nil,
@@ -4056,7 +4196,7 @@ final class CameraSession {
     /// unless handshake already proved the socket (`pathProven`).
     private func sendInitialLiveViewEnable(displayAttached: Bool, pathProven: Bool = false) {
         if isBrowsingMedia { return }
-        let pathReady = pathProven || WiFiJoiner.isCameraPathReady()
+        let pathReady = pathProven || cameraPathReady()
         if pathProven
             ? CameraSoftAP.shouldSendLiveViewEnableAfterHandshake(alreadySent: liveViewEnableSent)
             : CameraSoftAP.shouldSendLiveViewEnable(
@@ -4211,7 +4351,7 @@ final class CameraSession {
             sawPicture: hasStableLivePicture,
             statusFresh: statusFresh,
             secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
-            pathReady: WiFiJoiner.isCameraPathReady()
+            pathReady: cameraPathReady()
         )
     }
 
@@ -4244,7 +4384,7 @@ final class CameraSession {
         if cameraGalleryOpen { return }
         if needsForegroundRecover { return }
         if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
-        guard WiFiJoiner.isCameraPathReady() else { return }
+        guard cameraPathReady() else { return }
         if MediaLiveResume.strayPlaybackAction(
             browsing: isBrowsingMedia, inPlayback: status.inPlayback) != nil
         {
@@ -4481,7 +4621,7 @@ final class CameraSession {
             lastAccessUnitAge: datalink?.lastAccessUnitAt.map { now.timeIntervalSince($0) },
             lastStatusAge: datalink?.lastStatusAt.map { now.timeIntervalSince($0) },
             flowHealthy: datalink?.isFlowHealthy ?? false,
-            pathReady: WiFiJoiner.isCameraPathReady(),
+            pathReady: cameraPathReady(),
             hasFormat: decoder.hasFormat,
             decoderFailed: decoder.isDecoderWedged || decoder.displayLayer.status == .failed,
             live: live,
@@ -4623,7 +4763,7 @@ final class CameraSession {
                     self.isLivePictureRepairCurrent(pictureOwner),
                     Date().timeIntervalSince(started) < FeedWatchdog.decoderRepairDeadline
                 {
-                    if self.decoder.isPresentationReady, WiFiJoiner.isCameraPathReady(),
+                    if self.decoder.isPresentationReady, cameraPathReady(),
                         !self.isBrowsingMedia, !self.status.inPlayback,
                         !self.liveEnableGate.inFlight
                     {
@@ -4716,7 +4856,7 @@ final class CameraSession {
             recordFeedRepair("enable", phase: .blocked, reason: "playback")
             return false
         }
-        let pathReady = WiFiJoiner.isCameraPathReady()
+        let pathReady = cameraPathReady()
         let decoderReady = decoder.isPresentationReady
         guard FeedWatchdog.shouldSendRecoverEnable(pathReady: pathReady, decoderReady: decoderReady)
         else {
@@ -4962,8 +5102,11 @@ final class CameraSession {
     private func recoverAfterForeground(currentSSID: String?, pictureOwner: Int) async {
         guard isLivePictureRepairCurrent(pictureOwner) else { return }
         let now = Date()
-        let pathReady = WiFiJoiner.isCameraPathReady()
-        let wrongNetwork = currentSSID.map { !$0.isEmpty && $0 != joinedSSID } ?? false
+        let pathReady = cameraPathReady()
+        // The hotspot host is not associated to the camera's network, so SSID says nothing.
+        let wrongNetwork =
+            connectionSetup == .cameraWiFi
+            && (currentSSID.map { !$0.isEmpty && $0 != joinedSSID } ?? false)
         let videoFresh =
             datalink?.lastVideoPacketAt.map {
                 now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
@@ -4998,7 +5141,7 @@ final class CameraSession {
                 } == true
         }
         // The path may have dropped during the wait; its 8 s grace owns that.
-        guard WiFiJoiner.isCameraPathReady(), !sessionRecovery.isRecovering else { return }
+        guard cameraPathReady(), !sessionRecovery.isRecovering else { return }
         guard videoResumed else {
             // Suspension usually leaves only the UDP endpoint stale. Renegotiate
             // it with BLE and the picture kept; its failure escalates to the
@@ -5216,7 +5359,7 @@ final class CameraSession {
         }
         holdsMonitor = true
         abortInFlightRun(
-            preserveDecoder: true, preserveSoftAP: WiFiJoiner.isCameraPathReady())
+            preserveDecoder: true, preserveSoftAP: cameraPathReady())
         feedRecoveryTask?.cancel()
         feedRecovering = false
         sessionRecoveryGeneration += 1
@@ -5462,13 +5605,12 @@ final class CameraSession {
         var attemptedDatalink: DatalinkDriver?
         do {
             try Task.checkCancellation()
-            try await WiFiJoiner.waitUntilCameraPathReady(timeout: 8)
+            // Station drivers check the hotspot path themselves in open().
+            if connectionSetup == .cameraWiFi {
+                try await WiFiJoiner.waitUntilCameraPathReady(timeout: 8)
+            }
             try Task.checkCancellation()
-            let dl = DatalinkDriver(
-                port: UInt16(camera.model.datalinkPort),
-                tcpPoke: camera.model.tcpPoke,
-                pairingToken: camera.model.pairingToken
-            )
+            let dl = makeDatalink(camera)
             wireDatalink(dl)
             datalink = dl
             attemptedDatalink = dl
@@ -5735,7 +5877,9 @@ final class CameraSession {
     }
 
     func rejoinSoftAPAfterInternetHop() async {
-        guard let ssid = cachedSSID ?? joinedSSID, let pass = cachedPassword else { return }
+        guard connectionSetup == .cameraWiFi, let ssid = cachedSSID ?? joinedSSID,
+            let pass = cachedPassword
+        else { return }
         let wpa3 = connectedCamera?.model.wpa3 ?? true
         try? await WiFiJoiner.join(ssid: ssid, passphrase: pass, wpa3: wpa3)
         try? await WiFiJoiner.waitUntilCameraPathReady(timeout: 20)
@@ -6079,6 +6223,9 @@ final class CameraSession {
         case mimoSession
         case staleSoftAP
         case wrongCamera
+        case hotspotNotSetUp
+        case hotspotCameraMissing
+        case nanoWake
         var errorDescription: String? {
             switch self {
             case .creds: "couldn't read the camera's Wi-Fi credentials"
@@ -6097,6 +6244,12 @@ final class CameraSession {
                 "iPhone is still on the other camera's Wi-Fi (Pocket and Nano both use 192.168.2.1). Forget that network in Settings → Wi-Fi, then tap Connect. The other camera can stay on."
             case .wrongCamera:
                 "Bluetooth reached a different camera than the one you tapped. Pocket and Nano are separate — pick the Nano or Pocket row in the list."
+            case .hotspotNotSetUp:
+                "this camera's phone hotspot setup is missing its password on this device. Add the hotspot setup again"
+            case .hotspotCameraMissing:
+                "the camera joined the hotspot but did not answer on it. Keep Personal Hotspot open with Maximize Compatibility on, then try again"
+            case .nanoWake:
+                "the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again"
             }
         }
     }

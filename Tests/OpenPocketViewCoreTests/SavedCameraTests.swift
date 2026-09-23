@@ -255,4 +255,39 @@ import Testing
         #expect(ConnectionPhase.pocketWizardStepCount == 4)
         #expect(ConnectionPhase.failed("x").pocketWizardStep == 1)
     }
+
+    @Test func hotspotSetupIsPerCameraAndSurvivesReconnect() throws {
+        let id = UUID()
+        let other = camera(name: "OsmoPocket3-BBBB")
+        var records = SavedCameras.settingHotspot(
+            id, ssid: "  Rig Phone ", in: [camera(id: id), other])
+        let rig = try #require(records.first { $0.id == id })
+        #expect(rig.hotspotSSID == "Rig Phone")
+        #expect(rig.setups == [.cameraWiFi, .phoneHotspot])
+        #expect(records.first { $0.id == other.id }?.setups == [.cameraWiFi])
+        // Connect prefers camera Wi-Fi until a hotspot connect is stamped.
+        #expect(rig.preferredSetup == .cameraWiFi)
+        records = SavedCameras.startingHotspot(for: id, in: records)
+        #expect(records.first { $0.id == id }?.preferredSetup == .phoneHotspot)
+        // A live reconnect record carries neither field; merge keeps both.
+        records = SavedCameras.upserting(camera(id: id, ssid: nil), into: records)
+        #expect(records.first { $0.id == id }?.hotspotSSID == "Rig Phone")
+        #expect(records.first { $0.id == id }?.lastSetup == .phoneHotspot)
+        // Forget keeps lastSetup: the camera may still need its access point restored.
+        records = SavedCameras.settingHotspot(id, ssid: " ", in: records)
+        let forgotten = try #require(records.first { $0.id == id })
+        #expect(forgotten.setups == [.cameraWiFi])
+        #expect(forgotten.lastSetup == .phoneHotspot)
+        #expect(forgotten.preferredSetup == .cameraWiFi)
+    }
+
+    @Test func recordsSavedBeforeSetupsStillDecode() throws {
+        let legacy = """
+            [{"id":"\(UUID().uuidString)","advertisedName":"OsmoPocket4P-AAAA",
+            "modelName":"Osmo Pocket 4 Pro","lastConnectedAt":0}]
+            """
+        let decoded = try JSONDecoder().decode([SavedCamera].self, from: Data(legacy.utf8))
+        #expect(decoded[0].setups == [.cameraWiFi])
+        #expect(decoded[0].preferredSetup == .cameraWiFi)
+    }
 }

@@ -1311,3 +1311,17 @@ recording, promotion, Grid, Fill, DISP clean, Live View round trip, watchdog
 repair and camera Wi-Fi return (one Nano reset failed and succeeded on the next
 close). Pending on Android: Local Wi-Fi join, landscape/tablet, four cameras,
 Pocket 3, app-switch recovery and thermal behavior.
+
+### Per-camera connection setups (discussion #406)
+
+iOS saved cameras carry OpenZCine-style setup chips: **Camera Wi-Fi** and an
+optional **Phone hotspot** added per camera. The hotspot connect reuses the
+Multiview station sequence, now shared as core `StationJoin`, then verifies the
+camera's `07/07` identity on the hotspot subnet before registering. A Camera
+Wi-Fi connect after a hotspot connect sends `07/48 00` first to restore the
+access point. Core and iOS simulator checks pass.
+
+Exceptions: Android keeps the single camera Wi-Fi path; its Multiview already
+provisions the phone hotspot and a port would reuse `StationJoin` through the
+facade. Physical iPhone proof of the hotspot setup and the access-point restore
+is pending; no camera was attached for this change.

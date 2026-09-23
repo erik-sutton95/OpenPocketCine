@@ -121,11 +121,13 @@
             }
             model.session.liveSignalBars = 4
             model.session.liveFPS = "25.00"
+            var studio = SavedCamera(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+                advertisedName: "Studio camera", modelName: "Osmo Pocket 4 Pro",
+                lastConnectedAt: .distantPast, modelId: 0x22)
+            studio.hotspotSSID = "Rig iPhone"
             model.savedCameras = [
-                SavedCamera(
-                    id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-                    advertisedName: "Studio camera", modelName: "Osmo Pocket 4 Pro",
-                    lastConnectedAt: .distantPast, modelId: 0x22),
+                studio,
                 SavedCamera(
                     id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
                     advertisedName: "Travel camera", modelName: "Osmo Nano",

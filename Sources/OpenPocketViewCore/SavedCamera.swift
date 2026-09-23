@@ -1,7 +1,21 @@
 import Foundation
 
-/// One Pocket we’ve already connected to. One record per body — Pocket has a single
-/// BLE → camera-AP path, so there are no OpenZCine-style multi-setup chips.
+/// How a saved body is reached (#406). Every record has camera Wi-Fi; phone hotspot is
+/// the OpenZCine-style second setup that moves the camera onto this phone's hotspot.
+public enum CameraConnectionSetup: String, Codable, CaseIterable, Sendable {
+    case cameraWiFi
+    case phoneHotspot
+
+    public var title: String {
+        switch self {
+        case .cameraWiFi: "Camera Wi-Fi"
+        case .phoneHotspot: "Phone hotspot"
+        }
+    }
+}
+
+/// One Pocket we’ve already connected to. One record per body; its setups are chips on
+/// the saved-camera row.
 public struct SavedCamera: Codable, Equatable, Identifiable, Sendable {
     /// CoreBluetooth peripheral identifier (iOS hides the BLE MAC).
     public var id: UUID
@@ -16,6 +30,12 @@ public struct SavedCamera: Codable, Equatable, Identifiable, Sendable {
     public var lastConnectedAt: Date
     /// Operator-chosen name. The advertised name stays on `advertisedName`.
     public var customName: String?
+    /// Personal Hotspot name for the phone-hotspot setup; nil means camera Wi-Fi only.
+    /// The password stays in this device's Keychain.
+    public var hotspotSSID: String?
+    /// Last setup a connect started with. `.phoneHotspot` also means the camera may still be
+    /// in station role, so the next camera Wi-Fi connect restores its access point first.
+    public var lastSetup: CameraConnectionSetup?
 
     public init(
         id: UUID,
@@ -40,6 +60,15 @@ public struct SavedCamera: Codable, Equatable, Identifiable, Sendable {
             return customName
         }
         return advertisedName.isEmpty ? modelName : advertisedName
+    }
+
+    public var setups: [CameraConnectionSetup] {
+        hotspotSSID == nil ? [.cameraWiFi] : [.cameraWiFi, .phoneHotspot]
+    }
+
+    /// The row's main Connect: the last setup used, when it still exists.
+    public var preferredSetup: CameraConnectionSetup {
+        lastSetup == .phoneHotspot && hotspotSSID != nil ? .phoneHotspot : .cameraWiFi
     }
 }
 
@@ -218,6 +247,8 @@ public enum SavedCameras {
             if merged.lastSSID == nil { merged.lastSSID = existing.lastSSID }
             if merged.advertisedName.isEmpty { merged.advertisedName = existing.advertisedName }
             if merged.modelId == nil { merged.modelId = existing.modelId }
+            if merged.hotspotSSID == nil { merged.hotspotSSID = existing.hotspotSSID }
+            if merged.lastSetup == nil { merged.lastSetup = existing.lastSetup }
         }
         let others = records.filter { $0.id != camera.id }
         return canonicalized([merged] + others)
@@ -239,6 +270,35 @@ public enum SavedCameras {
                 updated.customName = custom
                 return updated
             })
+    }
+
+    /// Add, change or forget (nil/blank) the phone-hotspot setup. `lastSetup` is kept: a
+    /// camera left in station role still needs its access point restored.
+    public static func settingHotspot(_ id: UUID, ssid: String?, in records: [SavedCamera])
+        -> [SavedCamera]
+    {
+        let trimmed = ssid?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return canonicalized(
+            records.map { record in
+                guard record.id == id else { return record }
+                var updated = record
+                updated.hotspotSSID = (trimmed?.isEmpty == false) ? trimmed : nil
+                return updated
+            })
+    }
+
+    /// Stamp a hotspot connect before it can move the camera to station role. A lost
+    /// setter reply can still mean the role changed. Camera Wi-Fi is stamped only once
+    /// live, so a failed restore is retried on the next connect.
+    public static func startingHotspot(for id: UUID, in records: [SavedCamera])
+        -> [SavedCamera]
+    {
+        records.map { record in
+            guard record.id == id else { return record }
+            var updated = record
+            updated.lastSetup = .phoneHotspot
+            return updated
+        }
     }
 
     public static func canonicalized(_ records: [SavedCamera]) -> [SavedCamera] {
