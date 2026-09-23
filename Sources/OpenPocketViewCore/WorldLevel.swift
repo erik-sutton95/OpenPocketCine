@@ -62,6 +62,11 @@ public struct LevelReading: Sendable, Equatable {
     public mutating func ingest(_ payload: [UInt8], now: TimeInterval) {
         guard let q = WorldLevel.attitude(payload), now.isFinite else { return }
         let sample = WorldLevel.gravity(q)
+        // After a gap, start over: pre-gap gravity must not bleed into a new pose.
+        if now - acceptedAt > Self.staleAfter {
+            g = nil
+            bubble = false
+        }
         if let prev = g {
             guard now - acceptedAt >= Self.minInterval else { return }
             let k = Self.smoothing
@@ -84,7 +89,14 @@ public struct LevelReading: Sendable, Equatable {
         return Self.tilt(g)
     }
 
-    /// `viewFlip`: TT180 extra-mirror XOR MIRROR, so readings follow the picture.
+    /// Signed pitch-plane angle, look-up positive, unfolded past ±90° (lens past
+    /// nadir reads −92, not −88). The snap plans and judges on this; `nil` when stale.
+    public func pitchDeg(now: TimeInterval) -> Double? {
+        guard let g, now - acceptedAt <= Self.staleAfter else { return nil }
+        return WorldLevel.deg(atan2(-g.x, -g.y))
+    }
+
+    /// `viewFlip`: TT180 XOR MIRROR (picture-relative, like the stick), so readings follow the picture.
     public func mode(now: TimeInterval, viewFlip: Bool) -> Mode {
         guard let g, now - acceptedAt <= Self.staleAfter else { return .unavailable }
         let side = viewFlip ? -1.0 : 1.0
@@ -130,6 +142,9 @@ public struct WorldLevelSnap: Sendable, Equatable {
     public enum Outcome: Sendable, Equatable {
         case pending
         case arrived
+        /// Judged more than `LevelReading.staleAfter` past the deadline (attitude
+        /// stopped mid-move): drop silently, never a late toast or stop.
+        case expired
         /// Remaining error to 0.1°, or `nil` when the reading went stale.
         case failed(errorDeg: Double?)
     }
@@ -169,7 +184,9 @@ public struct WorldLevelSnap: Sendable, Equatable {
         return (WorldLevelSnap(target: target, deadline: now + duration + settleGrace), frame)
     }
 
+    /// `tiltDeg` is the unfolded `LevelReading.pitchDeg`.
     public func evaluate(tiltDeg: Double?, now: TimeInterval) -> Outcome {
+        if now - deadline > LevelReading.staleAfter { return .expired }
         guard let tiltDeg else { return .failed(errorDeg: nil) }
         let error = abs(tiltDeg - target.tiltDeg)
         if error <= Self.toleranceDeg { return .arrived }

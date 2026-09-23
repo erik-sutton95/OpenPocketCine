@@ -2631,7 +2631,7 @@ final class CameraSession {
     func levelGimbalToWorld() {
         guard !isLocked else { return }
         let now = ProcessInfo.processInfo.systemUptime
-        guard let tilt = levelReading.tiltDeg(now: now) else {
+        guard let tilt = levelReading.pitchDeg(now: now) else {
             controlNote = WorldLevelSnap.noLevelData
             return
         }
@@ -2657,14 +2657,19 @@ final class CameraSession {
     private func judgeWorldLevelSnap() {
         guard let snap = worldLevelSnap else { return }
         // The operator or a programmed move took the gimbal: drop it silently.
+        // A stick takeover also ends the camera's timed move so it cannot fight the stick.
         if gimbalStickHeld || gimbalMoveRunning {
             worldLevelSnap = nil
+            if gimbalStickHeld { _ = datalink?.sendUntracked(Commands.gimbalTimedStop()) }
             return
         }
         let now = ProcessInfo.processInfo.systemUptime
         let fpv = gimbalMode == .fpv ? WorldLevelSnap.fpvRollNote : ""
-        switch snap.evaluate(tiltDeg: levelReading.tiltDeg(now: now), now: now) {
+        switch snap.evaluate(tiltDeg: levelReading.pitchDeg(now: now), now: now) {
         case .pending:
+            return
+        case .expired:
+            worldLevelSnap = nil
             return
         case .arrived:
             controlNote = snap.target.successNote + fpv

@@ -174,4 +174,39 @@ class WorldLevelTest {
         assertEquals(GimbalDoubleTap.RECENTER, GimbalDoubleTap.fromRaw(7))
         assertEquals("Level", GimbalDoubleTap.LEVEL.label)
     }
+
+    @Test
+    fun freshSampleAfterAGapIsNotBlendedWithStaleGravity() {
+        val reading = LevelReading()
+        reading.ingest(payload(0.0), 1.0)
+        reading.ingest(payload(10.0), 3.0)
+        assertEquals(10.0, reading.tiltDeg(3.0)!!, 1e-6)
+        val bubble = LevelReading()
+        bubble.ingest(payload(-70.0), 1.0)
+        bubble.ingest(payload(-62.0), 3.0)
+        assertIs<LevelMode.Gauges>(bubble.mode(3.0, false))
+    }
+
+    @Test
+    fun pitchIsUnfoldedPastPlumbForTheSnap() {
+        val reading = LevelReading()
+        reading.ingest(payload(-92.0), 1.0)
+        assertEquals(-88.0, reading.tiltDeg(1.0)!!, 0.01)
+        val pitch = reading.pitchDeg(1.0)!!
+        assertEquals(-92.0, pitch, 0.01)
+        assertNull(reading.pitchDeg(2.5))
+        val (snap, frame) = assertNotNull(WorldLevelSnap.plan(pitch, GimbalWaypoint(0.0, -92.0, 1.0, -88.0), 0.0))
+        assertEquals(WorldLevelTarget.PLUMB_DOWN, snap.target)
+        assertContentEquals(CameraCommands.gimbalTimedTarget(0.0, -90.0, 0.5), frame)
+        assertEquals(SnapOutcome.Arrived, snap.evaluate(-90.3, 0.2))
+    }
+
+    @Test
+    fun snapExpiresInsteadOfJudgingLongAfterItsDeadline() {
+        val snap = assertNotNull(
+            WorldLevelSnap.plan(-80.0, GimbalWaypoint(0.0, -80.0, 1.0, -100.0), 0.0)).first
+        assertEquals(SnapOutcome.Failed(5.0), snap.evaluate(-85.0, snap.deadline + 0.5))
+        assertEquals(SnapOutcome.Expired, snap.evaluate(-85.0, snap.deadline + 1.01))
+        assertEquals(SnapOutcome.Expired, snap.evaluate(-90.0, snap.deadline + 60))
+    }
 }

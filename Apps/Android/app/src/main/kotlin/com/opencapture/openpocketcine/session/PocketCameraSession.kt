@@ -2739,7 +2739,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
      */
     fun levelGimbalToWorld() {
         val now = SystemClock.elapsedRealtimeNanos() / 1e9
-        val tilt = levelReading.tiltDeg(now)
+        val tilt = levelReading.pitchDeg(now)
         if (tilt == null) {
             _controlNote.value = WorldLevelSnap.NO_LEVEL_DATA
             return
@@ -2769,28 +2769,35 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     private fun judgeWorldLevelSnap() {
         val snap = worldLevelSnap ?: return
         // The operator or a programmed move took the gimbal: drop it silently.
+        // A stick takeover also ends the camera's timed move so it cannot fight the stick.
         if (gimbalStickHeld || moveDriving) {
             worldLevelSnap = null
+            if (gimbalStickHeld) sendTimedStop()
             return
         }
         val now = SystemClock.elapsedRealtimeNanos() / 1e9
         val fpv = if (_gimbalMode.value == GimbalMode.FPV) WorldLevelSnap.FPV_ROLL_NOTE else ""
-        val note = when (val outcome = snap.evaluate(levelReading.tiltDeg(now), now)) {
+        val note = when (val outcome = snap.evaluate(levelReading.pitchDeg(now), now)) {
             SnapOutcome.Pending -> return
+            SnapOutcome.Expired -> null
             SnapOutcome.Arrived -> snap.target.successNote + fpv
             is SnapOutcome.Failed -> {
-                datalink?.sendDuml(
-                    cmdSet = 0x04,
-                    cmdId = CameraCommands.CMD_GIMBAL_ANGLE,
-                    payload = CameraCommands.gimbalTimedStop(),
-                    flags = 0,
-                    receiver = CameraCommands.RX_GIMBAL,
-                )
+                sendTimedStop()
                 WorldLevelSnap.failureNote(outcome.errorDeg) + fpv
             }
         }
         worldLevelSnap = null
-        _controlNote.value = note
+        if (note != null) _controlNote.value = note
+    }
+
+    private fun sendTimedStop() {
+        datalink?.sendDuml(
+            cmdSet = 0x04,
+            cmdId = CameraCommands.CMD_GIMBAL_ANGLE,
+            payload = CameraCommands.gimbalTimedStop(),
+            flags = 0,
+            receiver = CameraCommands.RX_GIMBAL,
+        )
     }
 
     fun recenterGimbal() {

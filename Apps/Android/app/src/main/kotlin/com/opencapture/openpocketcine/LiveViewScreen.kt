@@ -143,6 +143,7 @@ fun LiveViewScreen(model: AppModel) {
     val zoomPinching by model.session.zoomPinching.collectAsState()
     val trackingHud by model.session.trackingHud.collectAsState()
     val poseViewFlip by model.session.gimbalPoseViewFlip.collectAsState()
+    val poseInvertPan by model.session.gimbalPoseInvertPan.collectAsState()
     val gimbalLimitPulse by model.session.gimbalLimitPulse.collectAsState()
     val operatorHaptics = LocalOperatorHaptics.current
     var tick by remember { mutableIntStateOf(0) }
@@ -706,7 +707,8 @@ fun LiveViewScreen(model: AppModel) {
             if (assist.isVisible(LiveAssistTool.LEVEL)) {
                 LiveLevelOverlay(
                     reading = model.session.levelReading,
-                    viewFlip = liveViewFlip,
+                    // Picture-relative like the stick: TT180 mirrors the shown picture in both Selfie Flip states.
+                    viewFlip = CameraCommands.liveInvertPan(poseInvertPan, assist.mirror),
                     feed = layout.onFeed,
                     viewport = ChromeRect(0f, 0f, vw, vh),
                     portrait = portrait,

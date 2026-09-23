@@ -1633,8 +1633,10 @@ struct FeedLevelView: View {
         TimelineView(.periodic(from: .now, by: LevelAssist.refresh)) { _ in
             let mode = model.session.levelReading.mode(
                 now: ProcessInfo.processInfo.systemUptime,
-                viewFlip: GimbalStick.liveViewFlip(
-                    poseViewFlip: model.session.gimbalPoseViewFlip,
+                // Picture-relative like the stick: TT180 mirrors the shown
+                // picture in both Selfie Flip states.
+                viewFlip: GimbalStick.liveInvertPan(
+                    poseInvert: model.session.gimbalPoseInvertPan,
                     assistMirror: model.assist.isVisible(.mirror)))
             content(mode)
                 .accessibilityElement(children: .ignore)

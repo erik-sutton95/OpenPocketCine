@@ -73,6 +73,11 @@ class LevelReading {
         val q = WorldLevel.attitude(payload) ?: return
         if (!now.isFinite()) return
         val sample = WorldLevel.gravity(q)
+        // After a gap, start over: pre-gap gravity must not bleed into a new pose.
+        if (now - acceptedAt > STALE_AFTER) {
+            g = null
+            bubble = false
+        }
         val prev = g
         g = if (prev == null) sample else {
             if (now - acceptedAt < MIN_INTERVAL) return
@@ -94,7 +99,17 @@ class LevelReading {
         return if (now - acceptedAt <= STALE_AFTER) tilt(g) else null
     }
 
-    /** [viewFlip]: TT180 extra-mirror XOR MIRROR, so readings follow the picture. */
+    /**
+     * Signed pitch-plane angle, look-up positive, unfolded past ±90° (lens past
+     * nadir reads −92, not −88). The snap plans and judges on this; null when stale.
+     */
+    @Synchronized
+    fun pitchDeg(now: Double): Double? {
+        val g = g ?: return null
+        return if (now - acceptedAt <= STALE_AFTER) WorldLevel.deg(atan2(-g.x, -g.y)) else null
+    }
+
+    /** [viewFlip]: TT180 XOR MIRROR (picture-relative, like the stick). */
     @Synchronized
     fun mode(now: Double, viewFlip: Boolean): LevelMode {
         val g = g ?: return LevelMode.Unavailable
@@ -136,13 +151,17 @@ enum class WorldLevelTarget(val tiltDeg: Double, val successNote: String) {
 sealed interface SnapOutcome {
     data object Pending : SnapOutcome
     data object Arrived : SnapOutcome
+    /** Judged more than a stale window past the deadline (attitude stopped): drop silently. */
+    data object Expired : SnapOutcome
     /** Remaining error to 0.1°, or null when the reading went stale. */
     data class Failed(val errorDeg: Double?) : SnapOutcome
 }
 
 /** One-shot `0x04/0x14` move to the nearest world target. Roll is not commanded. */
 data class WorldLevelSnap(val target: WorldLevelTarget, val deadline: Double) {
+    /** [tiltDeg] is the unfolded [LevelReading.pitchDeg]. */
     fun evaluate(tiltDeg: Double?, now: Double): SnapOutcome {
+        if (now - deadline > LevelReading.STALE_AFTER) return SnapOutcome.Expired
         tiltDeg ?: return SnapOutcome.Failed(null)
         val error = abs(tiltDeg - target.tiltDeg)
         if (error <= TOLERANCE_DEG) return SnapOutcome.Arrived

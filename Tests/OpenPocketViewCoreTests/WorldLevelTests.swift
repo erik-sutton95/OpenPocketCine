@@ -183,4 +183,40 @@ import Testing
         #expect(GimbalDoubleTap(rawValue: 0) == .recenter)
         #expect(GimbalDoubleTap.level.label == "Level")
     }
+
+    @Test func freshSampleAfterAGapIsNotBlendedWithStaleGravity() throws {
+        var reading = LevelReading()
+        reading.ingest(Self.payload(tilt: 0), now: 1)
+        reading.ingest(Self.payload(tilt: 10), now: 3)
+        #expect(abs(try #require(reading.tiltDeg(now: 3)) - 10) < 1e-6)
+        var bubble = LevelReading()
+        bubble.ingest(Self.payload(tilt: -70), now: 1)
+        bubble.ingest(Self.payload(tilt: -62), now: 3)
+        #expect(Self.gauges(bubble.mode(now: 3, viewFlip: false)) != nil)
+    }
+
+    @Test func pitchIsUnfoldedPastPlumbForTheSnap() throws {
+        var reading = LevelReading()
+        reading.ingest(Self.payload(tilt: -92), now: 1)
+        #expect(abs(try #require(reading.tiltDeg(now: 1)) + 88) < 0.01)
+        let pitch = try #require(reading.pitchDeg(now: 1))
+        #expect(abs(pitch + 92) < 0.01)
+        #expect(reading.pitchDeg(now: 2.5) == nil)
+        // Past nadir the lens must come back up: native pitch decreases.
+        let pose = GimbalWaypoint(yawDeg: 0, pitchDeg: -92, zoom: 1, nativePitchDeg: -88)
+        let (snap, frame) = try #require(WorldLevelSnap.plan(tiltDeg: pitch, pose: pose, now: 0))
+        #expect(snap.target == .plumbDown)
+        let expected = try #require(
+            Commands.gimbalTimedTarget(yawDeg: 0, nativePitchDeg: -90, duration: 0.5))
+        #expect(frame.payload == expected.payload)
+        #expect(snap.evaluate(tiltDeg: -90.3, now: 0.2) == .arrived)
+    }
+
+    @Test func snapExpiresInsteadOfJudgingLongAfterItsDeadline() throws {
+        let pose = GimbalWaypoint(yawDeg: 0, pitchDeg: -80, zoom: 1, nativePitchDeg: -100)
+        let snap = try #require(WorldLevelSnap.plan(tiltDeg: -80, pose: pose, now: 0)).snap
+        #expect(snap.evaluate(tiltDeg: -85, now: snap.deadline + 0.5) == .failed(errorDeg: 5))
+        #expect(snap.evaluate(tiltDeg: -85, now: snap.deadline + 1.01) == .expired)
+        #expect(snap.evaluate(tiltDeg: -90, now: snap.deadline + 60) == .expired)
+    }
 }
