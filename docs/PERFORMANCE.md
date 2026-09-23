@@ -229,7 +229,12 @@ render overrun.
 
 Covered chrome follows `monitorPresentationVisibility`: opacity, hit-testing and
 accessibility track coverage; decorative pulses stop without remounting the host
-or native feed. Page and feed owners stay outside that modifier. `MonitorCanvas`
+or native feed. Page and feed owners stay outside that modifier. While Settings or
+Media covers live, iOS drops scope-tap demand (`LiveAssistState.liveCovered`);
+looks, Face AF, Watch and relay keep theirs, the VT decoder stays up, and reveal
+needs no enable. Live chrome reads REC and focus/tracking state in leaf scopes,
+so 5 Hz status and per-frame AF-C faces do not re-evaluate the chrome slot or a
+covering page. `MonitorCanvas`
 evaluates picture, assist and chrome builders in separate child bodies so a
 slot's telemetry does not subscribe the parent geometry owner. Hosted tests
 verify independent updates and native view identity through coverage and rotation.

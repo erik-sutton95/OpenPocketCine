@@ -133,6 +133,7 @@ struct LiveViewScreen: View {
         }
         .onDisappear {
             model.captureDrum = nil
+            model.assist.liveCovered = false
             orientationObserver.stop()
             closeZoomDial()
             zoomDismissTask?.cancel()
@@ -165,6 +166,9 @@ struct LiveViewScreen: View {
             } else if !open, model.liveOperatorPanel == .media {
                 model.liveOperatorPanel = nil
             }
+        }
+        .onChange(of: liveChromeVisible, initial: true) { _, visible in
+            model.assist.liveCovered = !visible
         }
         .onChange(of: model.liveOperatorPanel) { oldPanel, panel in
             model.session.incidentSettingsCovered = panel == .settings

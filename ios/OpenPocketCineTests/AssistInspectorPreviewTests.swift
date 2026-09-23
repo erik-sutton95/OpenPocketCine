@@ -42,6 +42,21 @@ final class AssistInspectorPreviewTests: XCTestCase {
         XCTAssertFalse(assist.playbackEffects.waveform)
     }
 
+    func testCoveredLiveDropsScopeDemandButKeepsPictureEffects() {
+        let assist = LiveAssistState()
+        assist.clean = false
+        assist.waveform = true
+        assist.trafficLights = true
+        assist.peaking = true
+        assist.liveCovered = true
+        XCTAssertFalse(assist.effects.needsScopes)
+        XCTAssertTrue(assist.effects.peaking, "Looks keep their demand beneath pages")
+        XCTAssertTrue(assist.effects.needsSample)
+        assist.liveCovered = false
+        XCTAssertTrue(assist.effects.waveform)
+        XCTAssertTrue(assist.effects.trafficLights)
+    }
+
     func testImageSamplingBelongsToTheActiveInspectorAndStopsWhenInactive() {
         let assist = LiveAssistState()
         assist.configureTool = .peaking
