@@ -1692,7 +1692,7 @@ private struct LevelBubble: View {
         let distance = (x * x + y * y).squareRoot()
         let isLevel = distance < LevelAssist.threshold
         let clamp = distance > span ? span / distance : 1
-        let tint = isLevel ? LiveDesign.good : LiveDesign.accent
+        let tint = isLevel ? LiveDesign.good : LiveDesign.amber
         ZStack {
             Canvas { ctx, size in
                 let mid = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -1742,7 +1742,7 @@ private struct LevelAxisGauge: View {
     private var isHorizontal: Bool { orientation == .horizontal }
     private var reading: Double { value ?? 0 }
     private var isLevel: Bool { value.map { abs($0) < threshold } ?? false }
-    private var tint: Color { isLevel ? LiveDesign.good : LiveDesign.accent }
+    private var tint: Color { isLevel ? LiveDesign.good : LiveDesign.amber }
     private var beadOffset: CGFloat { CGFloat(max(-1, min(1, reading / maxAngle)) * span) }
 
     private var urgency: Int {
@@ -1840,7 +1840,7 @@ private struct LevelAxisGauge: View {
     private func chevronGlyph(_ icon: OpcIcon, index: Int) -> some View {
         icon
             .frame(width: 10, height: 10)
-            .foregroundStyle(LiveDesign.accent)
+            .foregroundStyle(LiveDesign.amber)
             .opacity(1.0 - Double(index) * 0.22)
     }
 
