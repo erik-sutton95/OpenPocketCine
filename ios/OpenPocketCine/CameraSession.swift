@@ -3317,21 +3317,32 @@ final class CameraSession {
                 from: faceTracks[i].box, toward: faceTracks[i].target, dt: dt,
                 sceneMoving: sceneMoving)
         }
-        sceneFaces = faceTracks.map(\.box)
+        setSceneFaces(faceTracks.map(\.box))
         if isTrackingActive {
-            faceBox = nil
+            setFaceBox(nil)
             return
         }
         let sinceHit = FaceTrackHold.secondsSinceHit(lastHit: lastFaceHitAt, now: now)
         if FaceTrackHold.shouldDrop(secondsSinceHit: sinceHit, sceneMoving: sceneMoving) {
-            faceBox = nil
+            setFaceBox(nil)
             faceTarget = nil
             lastFaceHitAt = nil
             return
         }
         guard let target = faceTarget else { return }
-        faceBox = FaceTrackHold.follow(
-            from: faceBox, toward: target, dt: dt, sceneMoving: sceneMoving)
+        setFaceBox(
+            FaceTrackHold.follow(
+                from: faceBox, toward: target, dt: dt, sceneMoving: sceneMoving))
+    }
+
+    // Face boxes are written per decoded frame. Unchanged writes still notify
+    // every focus overlay reader, so publish only real motion.
+    private func setFaceBox(_ box: TrackingBox?) {
+        if faceBox != box { faceBox = box }
+    }
+
+    private func setSceneFaces(_ boxes: [TrackingBox]) {
+        if sceneFaces != boxes { sceneFaces = boxes }
     }
 
     private func applyDetectedFaces(_ hits: [FaceHit]) {
@@ -3367,15 +3378,15 @@ final class CameraSession {
             next.append(FaceTrack(box: hit.box, target: hit.box, lastHit: now))
         }
         faceTracks = next
-        sceneFaces = next.map(\.box)
+        setSceneFaces(next.map(\.box))
         if isTrackingActive {
-            faceBox = nil
+            setFaceBox(nil)
             faceTarget = nil
             lastFaceHitAt = nil
             return
         }
         guard wantsFaceAF else {
-            faceBox = nil
+            setFaceBox(nil)
             faceTarget = nil
             lastFaceHitAt = nil
             return
@@ -3434,7 +3445,7 @@ final class CameraSession {
             secondsSinceHit: sinceHit, sceneMoving: sceneMoving)
         guard let chosen else {
             if FaceTrackHold.shouldDrop(secondsSinceHit: sinceHit, sceneMoving: sceneMoving) {
-                faceBox = nil
+                setFaceBox(nil)
                 faceTarget = nil
                 lastFaceHitAt = nil
             }
@@ -3448,12 +3459,12 @@ final class CameraSession {
     }
 
     private func clearFaceAF() {
-        faceBox = nil
+        setFaceBox(nil)
         faceTarget = nil
         lastFaceAt = nil
         lastFaceHitAt = nil
         faceTracks = []
-        sceneFaces = []
+        setSceneFaces([])
         facePriorityAcquireAt = nil
     }
 
