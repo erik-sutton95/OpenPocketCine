@@ -125,7 +125,13 @@ reduced: the soak confirms a live picture with the profile's assists at start
 and end, and no change touches decode pacing, the ACK pump or enable ownership.
 Wi-Fi receive volume is unchanged (about 60 MB per run), as expected.
 
-WAKE_PLACEHOLDER
+After the glass moved to per-picture wakes with no thermal slowdown
+(`e632f3cd`), `pro` measured 1.98 G instructions/s, CPU impact 1.64 and GPU
+impact 1.0 in Fair: the same cost as the polled build, with the glass now
+following every feed frame. One of about twenty runs stalled at "Opening
+datalink" for 90 s right after the previous run's REC stop; the immediate
+retry connected normally. Treat it as a camera-side observation to watch, not
+a measured regression.
 
 ## Not changed (proposals)
 
