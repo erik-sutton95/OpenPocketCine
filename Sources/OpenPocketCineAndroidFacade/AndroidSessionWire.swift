@@ -151,16 +151,8 @@ public enum AndroidSessionWire {
             }
             return out
         }
-        func optionalNumber(_ key: String) -> Double? {
-            guard let v = fields[key]?.drop(while: \.isWhitespace), v.first != "n" else {
-                return nil
-            }
-            let body = v.hasPrefix("-") ? v.dropFirst() : v
-            let digits = body.prefix(while: { $0.isNumber || ".eE+".contains($0) })
-            return Double(v[v.startIndex..<digits.endIndex])
-        }
         func number(_ key: String, default def: Double) -> Double {
-            optionalNumber(key) ?? def
+            jsonNumber(fields, key: key, default: def)
         }
         func optionalFlag(_ key: String) -> Bool? {
             guard let v = fields[key] else { return nil }
@@ -1277,7 +1269,9 @@ public enum AndroidSessionWire {
     }
 
     private static func feedWatchdogSnapshot(_ json: String) -> FeedWatchdog.Snapshot {
-        FeedWatchdog.Snapshot(
+        // 1 Hz on Android: index once instead of ~25 full-string scans.
+        let json = flatJSONFields(json)
+        return FeedWatchdog.Snapshot(
             now: jsonNumber(json, key: "now", default: 0),
             lastDecodedFrameAge: jsonOptionalNumber(json, key: "lastDecodedFrameAge"),
             lastVideoPacketAge: jsonOptionalNumber(json, key: "lastVideoPacketAge"),
@@ -1357,6 +1351,29 @@ public enum AndroidSessionWire {
 
     private static func jsonNumber(_ json: String, key: String, default def: Double) -> Double {
         jsonOptionalNumber(json, key: key) ?? def
+    }
+
+    // Same semantics over a `flatJSONFields` index, for payloads read field by field.
+    private static func jsonBool(_ fields: [String: Substring], key: String, default def: Bool)
+        -> Bool
+    {
+        guard let v = fields[key] else { return def }
+        if v.hasPrefix("true") { return true }
+        if v.hasPrefix("false") { return false }
+        return def
+    }
+
+    private static func jsonOptionalNumber(_ fields: [String: Substring], key: String) -> Double? {
+        guard let v = fields[key]?.drop(while: \.isWhitespace), v.first != "n" else { return nil }
+        let body = v.hasPrefix("-") ? v.dropFirst() : v
+        let digits = body.prefix(while: { $0.isNumber || ".eE+".contains($0) })
+        return Double(v[v.startIndex..<digits.endIndex])
+    }
+
+    private static func jsonNumber(
+        _ fields: [String: Substring], key: String, default def: Double
+    ) -> Double {
+        jsonOptionalNumber(fields, key: key) ?? def
     }
 
     /// String value from Kotlin `JSONObject`; parsing undoes `quote` escapes such as `\/`.
