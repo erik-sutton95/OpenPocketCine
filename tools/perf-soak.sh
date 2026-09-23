@@ -4,7 +4,7 @@
 #   DEVICE=<udid> tools/perf-soak.sh [profile ...]
 #
 # Profiles (PerfSoakTests): clean, lut, pro (default), heavy; append +rec to record a take.
-# Env: HOLD (s, default 90), TRACE (s, default HOLD-10), CONFIG (Release),
+# Env: DETACH (1: XCTest exits before tracing, default), HOLD (s, default 90), TRACE (s, default HOLD-10), CONFIG (Release),
 #      TEMPLATE ("Power Profiler"), EXTRA ("Time Profiler" instrument added),
 #      COOL (s between profiles, default 60), OUT (.local/perf/<stamp>).
 # Traces and logs stay under ignored .local/. Never records on the camera.
@@ -36,6 +36,9 @@ for i in "${!PROFILES[@]}"; do
   rec=0
   if [[ "$profile" == *+rec ]]; then rec=1; profile="${profile%+rec}"; fi
   tag="$profile"
+  # A REC take must be stopped by the test, so +rec keeps XCTest attached.
+  det="${DETACH:-1}"
+  [[ $rec == 1 ]] && det=0
   [[ $rec == 1 ]] && tag="$profile-rec"
   log="$OUT/$tag.log"
   echo "== $profile (hold ${HOLD}s, trace ${TRACE}s, $CONFIG)"
@@ -45,7 +48,7 @@ for i in "${!PROFILES[@]}"; do
   xcrun devicectl device process launch --device "$DEVICE" --terminate-existing \
     com.opencapture.openpocketcine >"$OUT/$tag.launch.log" 2>&1
   sleep 3
-  TEST_RUNNER_OPV_PERF_ATTACH=1 TEST_RUNNER_OPV_PERF_RECORD="$rec" TEST_RUNNER_OPV_PERF_SOAK=1 TEST_RUNNER_OPV_PERF_PROFILE="$profile" TEST_RUNNER_OPV_PERF_SOAK_S="$HOLD" \
+  TEST_RUNNER_OPV_PERF_DETACH="$det" TEST_RUNNER_OPV_PERF_ATTACH=1 TEST_RUNNER_OPV_PERF_RECORD="$rec" TEST_RUNNER_OPV_PERF_SOAK=1 TEST_RUNNER_OPV_PERF_PROFILE="$profile" TEST_RUNNER_OPV_PERF_SOAK_S="$HOLD" \
     xcodebuild test-without-building -xctestrun "$XCTESTRUN" -destination "platform=iOS,id=$DEVICE" \
     -only-testing:OpenPocketCineUITests/PerfSoakTests -resultBundlePath "$OUT/$tag.xcresult" \
     >"$log" 2>&1 &
@@ -55,6 +58,8 @@ for i in "${!PROFILES[@]}"; do
     kill -0 "$test_pid" 2>/dev/null || { echo "test ended before hold"; tail -30 "$log"; break; }
     sleep 1
   done
+  # Detached (default): the test configures and exits; trace with XCTest gone.
+  [[ "$det" == 1 ]] && { wait "$test_pid" || true; sleep 3; }
   if grep -q PERF_SOAK_HOLD_BEGIN "$log"; then
     grep -o 'PERF_SOAK_HOLD_BEGIN.*' "$log" | head -1
     extra_args=()
@@ -63,7 +68,14 @@ for i in "${!PROFILES[@]}"; do
       --attach OpenPocketCine --time-limit "${TRACE}s" --output "$OUT/$tag.trace" \
       >"$OUT/$tag.xctrace.log" 2>&1 || tail -5 "$OUT/$tag.xctrace.log"
   fi
-  wait "$test_pid" && echo "test passed" || echo "test FAILED (see $log)"
+  if [[ "$det" == 1 ]]; then
+    grep -q "Test Suite 'Selected tests' passed" "$log" && echo "test passed" || echo "test FAILED (see $log)"
+    # Stop a detached REC take and the app.
+    xcrun devicectl device process terminate --device "$DEVICE" \
+      --pid "$(xcrun devicectl device info processes --device "$DEVICE" 2>/dev/null | awk '/OpenPocketCine.app\/OpenPocketCine$/ {print $1; exit}')" >/dev/null 2>&1 || true
+  else
+    wait "$test_pid" && echo "test passed" || echo "test FAILED (see $log)"
+  fi
   if [[ -d "$OUT/$tag.trace" ]]; then
     xcrun xctrace symbolicate --input "$OUT/$tag.trace" \
       --dsym "$DERIVED/Build/Products/$CONFIG-iphoneos/OpenPocketCine.app.dSYM" >/dev/null 2>&1 || true

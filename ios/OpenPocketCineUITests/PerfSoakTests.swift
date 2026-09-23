@@ -35,7 +35,10 @@ final class PerfSoakTests: XCTestCase {
         // The host launches the app first (devicectl); XCTest's own target-app
         // launch fails for Release builds on device, so attach instead.
         if env["OPV_PERF_ATTACH"] == "1" { app.activate() } else { app.launch() }
-        defer { app.terminate() }
+        // Detached: configure, then leave the app running with XCTest gone, so
+        // the host trace does not include UI-automation accessibility work.
+        let detach = env["OPV_PERF_DETACH"] == "1"
+        defer { if !detach { app.terminate() } }
         // Camera Wi-Fi join / Bluetooth / local network prompts (same set as FeedStressTests).
         addUIInterruptionMonitor(withDescription: "camera connection alerts") { alert in
             for title in ["Join", "Allow", "OK"] where alert.buttons[title].exists {
@@ -104,6 +107,7 @@ final class PerfSoakTests: XCTestCase {
             Thread.sleep(forTimeInterval: 3)
         }
         print("PERF_SOAK_HOLD_BEGIN profile=\(name) on=\(applied.joined(separator: ",")) rec=\(recordTake) hold=\(Int(hold))")
+        if detach { return }
         // ponytail: plain sleep, no queries; the host trace is the measurement.
         Thread.sleep(forTimeInterval: hold)
         print("PERF_SOAK_HOLD_END profile=\(name)")
