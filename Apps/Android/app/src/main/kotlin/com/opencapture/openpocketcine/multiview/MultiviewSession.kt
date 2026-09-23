@@ -692,17 +692,14 @@ class MultiviewSession(
                     // A lost BLE reply is not proof that association failed.
                     if (!usePhoneHotspot || path.address(true) != null) {
                         try {
-                            client.close()
                             discoverPreview(tile, camera, identity)
                             networkStore.save(ssid, password, usePhoneHotspot)
                             return
                         } catch (error: CancellationException) {
                             throw error
                         } catch (_: Exception) {
-                            // Fall through to the bounded retry.
+                            // Not found on the LAN: fall through to the bounded join retry.
                         }
-                        // The link was closed for discovery; its retries need a fresh one.
-                        throw MultiviewFailure.Message("Camera Wi-Fi did not respond. Retry setup with the camera nearby.")
                     }
                     if (attempt < maximumJoinAttempts) {
                         delay(retryDelayMs)
