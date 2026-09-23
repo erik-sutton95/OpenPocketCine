@@ -47,6 +47,8 @@ import Testing
         #expect(!out.contains("HomeNet"))
         #expect(!out.contains("A@B.CO"))
         #expect(!out.contains("1.2.3.4"))
+        // ICU (?i) folds the long s; the anchor check must too.
+        #expect(!PrivacyRedactor.redact("pa\u{017F}sword=x9secret").contains("x9secret"))
         let plain = "feed present gpuFPS=24.9 gpuGapMs=41 seq=42054"
         #expect(PrivacyRedactor.redact(plain) == plain)
     }

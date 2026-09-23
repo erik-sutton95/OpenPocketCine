@@ -104,7 +104,8 @@ public enum PrivacyRedactor: Sendable {
         // Each expression runs only when its literal anchor is present; every
         // match needs that anchor, so the result is unchanged. Journal lines
         // arrive several times a second while live and rarely carry any.
-        let lower = text.lowercased()
+        // Case folding, like the expressions' (?i), so folded forms keep their anchor.
+        let lower = text.folding(options: .caseInsensitive, locale: nil)
         var out = text
         if lower.contains("/users") || lower.contains("/home") {
             out = replace(out, pattern: #"(?i)(/Users|/home)/[^/\s]+"#, template: "$1/<redacted>")
