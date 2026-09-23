@@ -106,6 +106,13 @@ enum PlaybackDisplayLink {
         if !itemHasPresented { return true }
         return hasNewPixelBuffer
     }
+
+    /// A paused, presented item has nothing to poll. Park the link (a 120 Hz
+    /// link also holds ProMotion at 120 Hz) and let the output's media-data
+    /// notification wake it on play or seek, as Apple's video-output sample does.
+    static func shouldPark(itemHasPresented: Bool, playerRate: Float) -> Bool {
+        itemHasPresented && playerRate == 0
+    }
 }
 
 /// Pixel buffers pulled from the player for the live compositor.
@@ -174,7 +181,14 @@ final class PlaybackFeedSession: NSObject {
             guard
                 PlaybackDisplayLink.shouldPull(
                     itemHasPresented: self.itemHasPresented, hasNewPixelBuffer: hasNew)
-            else { return }
+            else {
+                if PlaybackDisplayLink.shouldPark(
+                    itemHasPresented: self.itemHasPresented, playerRate: self.player?.rate ?? 0)
+                {
+                    self.parkLink()
+                }
+                return
+            }
             self.schedulePull(force: self.effects.needsSample && !self.itemHasPresented)
         }
     }
@@ -189,6 +203,7 @@ final class PlaybackFeedSession: NSObject {
         }
         boundItem = item
         loggedRaster = false
+        displayLink?.isPaused = false
         // LUT chip stays on across next/prev. Drop the previous clip's metal
         // ownership and force a bake of this item — otherwise the toolbar
         // stays armed while the new picture is ungraded identity.
@@ -340,6 +355,7 @@ final class PlaybackFeedSession: NSObject {
     }
 
     private func startLink() {
+        displayLink?.isPaused = false
         guard displayLink == nil else { return }
         let link = CADisplayLink(target: linkTarget, selector: #selector(DisplayLinkTarget.tick))
         link.preferredFrameRateRange = PlaybackDisplayLink.pollRange
@@ -369,11 +385,18 @@ final class PlaybackFeedSession: NSObject {
         displayLink = nil
     }
 
+    private func parkLink() {
+        guard let displayLink, !displayLink.isPaused else { return }
+        displayLink.isPaused = true
+        output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
+    }
+
     /// New item is current and (usually) playing. Kick the output — the first
     /// `prepare` pull often ran before a pixel buffer existed.
     @MainActor
     func noteItemReady() {
         guard effects.needsSample || LiveHDRDisplay.isEnabled else { return }
+        displayLink?.isPaused = false
         output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
         schedulePull(force: true)
     }
@@ -616,6 +639,7 @@ final class PlaybackFeedHostView: UIView {
 extension PlaybackFeedSession: AVPlayerItemOutputPullDelegate {
     nonisolated func outputMediaDataWillChange(_ sender: AVPlayerItemOutput) {
         pull(force: true, sourceEpoch: itemEpoch)
+        DispatchQueue.main.async { [weak self] in self?.displayLink?.isPaused = false }
     }
 }
 

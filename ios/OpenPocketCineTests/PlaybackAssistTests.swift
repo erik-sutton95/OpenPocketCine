@@ -190,6 +190,16 @@ final class PlaybackAssistTests: XCTestCase {
             PlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: true))
     }
 
+    func testPausedPlaybackParksTheDisplayLinkOnceTheSourceIsReady() {
+        XCTAssertTrue(PlaybackDisplayLink.shouldPark(itemHasPresented: true, playerRate: 0))
+        XCTAssertFalse(
+            PlaybackDisplayLink.shouldPark(itemHasPresented: true, playerRate: 1),
+            "playing keeps display-rate polling")
+        XCTAssertFalse(
+            PlaybackDisplayLink.shouldPark(itemHasPresented: false, playerRate: 0),
+            "a new item keeps force-pulling until it presents")
+    }
+
     func testScopesOnlyPlaybackIsReadyWithoutAMetalCompletion() {
         XCTAssertTrue(
             PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: false, hdrDisplay: false),
