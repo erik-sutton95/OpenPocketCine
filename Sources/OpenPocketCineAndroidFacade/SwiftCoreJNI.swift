@@ -399,6 +399,44 @@
                 requestJSON: swiftString(env, requestJSON) ?? "{}"))
     }
 
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multicamDecision")
+    public func swiftCoreMulticamDecision(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        kind: jstring?, requestJSON: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.multicamDecision(
+                kind: swiftString(env, kind) ?? "",
+                requestJSON: swiftString(env, requestJSON) ?? "{}"))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multiviewRecoveryCreate")
+    public func swiftCoreMultiviewRecoveryCreate(
+        env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?
+    ) -> jlong {
+        jlong(AndroidSessionWire.multiviewRecoveryCreate())
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multiviewRecoveryCall")
+    public func swiftCoreMultiviewRecoveryCall(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        handle: jlong, op: jstring?, snapshotJSON: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.multiviewRecoveryCall(
+                handle: Int64(handle), op: swiftString(env, op) ?? "",
+                snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
+    }
+
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multiviewRecoveryDestroy")
+    public func swiftCoreMultiviewRecoveryDestroy(
+        env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
+    ) {
+        AndroidSessionWire.multiviewRecoveryDestroy(handle: Int64(handle))
+    }
+
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_conformPreviewJSON")
     public func swiftCoreConformPreviewJSON(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, request: jstring?

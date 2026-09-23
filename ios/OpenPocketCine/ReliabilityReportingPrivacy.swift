@@ -61,7 +61,7 @@ enum ReliabilityReportingPrivacy {
         "incidentCount", "sourceRevision", "hardwareClass", "cameraFirmware", "assistState",
         "decoderGeneration",
         "socketGeneration", "worstGapSeconds", "healthyExposureSeconds", "incidentCount",
-        "testSource", "buildIdentity",
+        "testSource", "buildIdentity", "trigger", "recoveredBy",
     ]
 
     static let contextAllowlist: [String: Set<String>] = [
@@ -71,6 +71,7 @@ enum ReliabilityReportingPrivacy {
         "feed": [
             "schemaVersion", "failingStage", "errorClass", "outcome", "kind",
             "assistState", "hardwareClass", "testSource", "buildIdentity", "cameraFamily",
+            "trigger", "recoveredBy", "worstGapSeconds",
         ],
     ]
 
@@ -114,7 +115,7 @@ enum ReliabilityReportingPrivacy {
     static let tagAllowlist: Set<String> = [
         "failingStage", "errorClass", "outcome", "kind",
         "sourceRevision", "cameraFamily", "cameraFirmware", "hardwareClass",
-        "testSource", "buildIdentity",
+        "testSource", "buildIdentity", "trigger", "recoveredBy", "gap",
     ]
 
     static func scrubBreadcrumb(_ breadcrumb: Breadcrumb) -> Breadcrumb? {

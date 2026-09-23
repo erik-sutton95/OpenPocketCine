@@ -22,7 +22,7 @@ the remaining CPU/GPU, battery and thermal profiling matrix for issue #402.
 | Watcher relay (iOS) | Same camera Wi-Fi for host and watchers; no peer-to-peer fallback. One encode; two admitted source frames; two video sends per authorized watcher, separate from control traffic; one pending state send at 5 Hz. Encode and fan-out off MainActor. Forced relay keyframes ≤1 Hz. | [`watcher-relay.md`](watcher-relay.md) |
 | Window ACK | pktType `0x04` at **40 Hz**, three groups: video `0x02` seq, ackedData `0x03` seq, telemetry extra | [`live-session.md`](live-session.md) |
 | Live enable | **Enable-once.** Further enables follow the watchdog only | `AGENTS.md`, [`feed-watchdog.md`](feed-watchdog.md) |
-| Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff. Encoder pause permits two enables, then one rebuild that negotiates a fresh handshake. Full-session automatic recovery has a separate 180 s total cap | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md), `SessionRecoveryPolicy` |
+| Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff. Encoder pause permits one enable, then one rebuild that negotiates a fresh handshake. Full-session automatic recovery has a separate 180 s total cap | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md), `SessionRecoveryPolicy` |
 | HUD chrome | 5 Hz (`LiveChromeThrottle.statusInterval` = 0.2 s). REC, format, color, zoom, and the other `isImmediate` fields bypass | `LiveChromeThrottle` |
 | Scope tap | 25 Hz with 1–2 scopes, 10 Hz with 3+ (`PocketScopeSampler`). 200-wide downsample (213×120 on 720p SoftAP). Thermal ×3 serious / ×5 critical. A 50 Hz proxy still skips. No scope histogram work with scopes off; the separate floating-chrome budget can request the small tap. No 1280×720 histogram or readback per frame | [`ANDROID.md`](../ANDROID.md) I/O; iOS present path matches the rate |
 | Floating chrome | Controlled Gaussian blur, saturation and tint on a bounded GPU product that tracks the visible picture. One passive displayed-look job per visible source, latest-wins, capped at 60 Hz (thermal ×3 serious / ×5 critical). Admission survives source, option and view changes. iOS canvas products are at most 320 px on their longest side; Android reuses the 213×120-class raw tap (25 Hz when that tap is the source) and production look shaders. No full-resolution window/swapchain capture, second decoder or per-widget CPU readback. Hidden sources stop backdrop work. Page surfaces remain opaque. | `MonitorUI`, Android `monitor-ui`, platform backdrop source owners |
@@ -34,17 +34,68 @@ the remaining CPU/GPU, battery and thermal profiling matrix for issue #402.
 | Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` (same family as the phone layer — a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
 
 Motion Control window dragging keeps transient placement in the floating widget and
-commits its center to the shared model once on release. Android marker prediction
+commits its center to the shared model once on release. The iOS control-action
+guard is an equatable value containing only drag eligibility and the release
+deadline; it never captures changing placement. Translation therefore preserves
+the editor's control subtree. Duration-dial hit testing recovers on release,
+while writes still check the short release-tap deadline at event time, without a
+refresh timer. On iOS 18+, native scroll geometry owns the overflow fade; the
+legacy content-bottom preference is produced only for the iOS 17 fallback.
+Android reads its local drag position in the deferred offset callback. Android marker prediction
 observes its 25 Hz timeline in a separate drawing leaf, so marker refresh does not
 recompose the editor. This changes presentation invalidation only, not command
 cadence or take scheduling. Native snapshot tests distinguish local drag updates
-from shared-model writes; they are not physical frame-time measurements.
+from shared-model writes; hosted iOS tests also check retained control bodies and
+native view identity during translation. These structural checks are separate
+from physical frame-time measurements.
+
+The September 22 iPhone 16 Pro Max / Pocket 4 Pro drag comparison used a Debug
+build and four alternating 140 pt horizontal drags at 100 pt/s per widget, with
+the histogram enabled throughout. Instruments measured application UI updates
+during each gesture segment:
+
+| Capture | Histogram p95 | Motion median | Motion p95 | Motion updates over 16.67 ms |
+| --- | --- | --- | --- | --- |
+| Before the guard fix | 7.70 ms | 9.24 ms | 30.40 ms | 101 / 428 (23.6%) |
+| Stable guard and native-only scroll measurement on iOS 18+ | 7.10 ms | 4.89 ms | 14.58 ms | 6 / 449 (1.3%) |
+
+The editor remains heavier than the histogram; the exploratory target of at
+most 1.5 times the histogram p95 was not met. These bounded captures establish
+improvement over Motion Control's own baseline, not scope-equivalent smoothness,
+touch-to-display latency or sustained 60/120 Hz operation. During the final
+8.8-second Motion Control segment, the journal reported 24.9–25.1 GPU fps,
+40 Hz ACKs (maximum gap 26 ms), maximum video gap 50 ms, no queue/incomplete-AU
+drops and no frozen reports. Maximum GPU present gap was 114 ms. A separate
+physical check confirmed that a duration dial changed its leg after a window
+drag without moving the window or starting a take. Android presentation code
+and cadence are unchanged; these measurements qualify only iOS.
 
 Programmed takes run on the background transport scheduler, using complete-frame
 attitude receipts before the UI hop. Smoothed paths write 20 Hz native targets
 directly at monotonic deadlines under exclusive ownership; UI progress is 5 Hz. Marker/curve projection uses the existing 25 Hz overlay timeline;
 measured motion prediction is display-only. No new ACK timer or video enable
 is introduced. Native stream targets are not logged individually at 20 Hz.
+Loop reversal dispatches on the existing timed boundary, without a stationary
+verification hold. Smoothed turnaround verification stores at most one second
+of 20 Hz timed-command references plus the active predecessor, and uses the
+existing affine delay fit during the bounded checkpoint window. The editor's
+scroll fade updates local presentation state only; neither scrolling nor fading
+adds a timer, command stream or shared-model publication. When saved zoom amounts
+differ, the existing motion scheduler emits distinct absolute lens targets at up to
+50 Hz on Pocket 4 Pro and 20 Hz on other bodies. STOP bypasses target admission.
+Zoom factor follows elapsed time over the full leg; quantized duplicate targets
+consume a sample slot without another write. Pending waypoint targets cannot be
+skipped by a late tick. Preparation uses one absolute position. Zoom runs on the
+transport queue, with no per-target UI callback. The existing zoom/SET watchdog
+grace sees these writes through a monotonic timestamp. Color, lens and FORMAT
+evidence is read before the UI hop; no extra GET, scheduler or ACK timer is added.
+
+The September 22 Pocket 4 Pro/iPhone 50 Hz comparison sustained 24.9–25.6 GPU fps
+through four five-second 3×↔6× legs, 40 Hz ACK submission (maximum gap 26 ms),
+maximum video gap 72 ms, and zero queue/incomplete-AU drops or recovery. This
+supports the bounded programmed-zoom budget increase on this body. Manual zoom
+keeps its 20 Hz budget; Android physical and sustained thermal qualification remain
+pending. See [measurement limits](programmed-moves.md#evidence-and-qualification).
 
 Media drag selection uses the native display clock only while a held selection
 gesture requests edge scrolling. Ordinary vertical scrolling while selecting uses
@@ -75,6 +126,11 @@ This does not establish causation, but the cost is unsuitable for enabling by
 default. The probe was removed; production waypoint projection performs no
 image registration. Background transport checks without the probe sustained
 approximately 25 fps through normal and fast smoothed takes.
+
+The fixed DISP 1 EV meter consumes existing camera exposure telemetry at the
+5 Hz HUD budget. It requests no scope samples, decoded pixel buffers, histogram,
+transfer conversion, polling command or independent timer. Its availability and
+DISP visibility do not change the image-processing demand.
 
 ## Threading
 

@@ -177,6 +177,7 @@ class OperatorSetupContractTest {
                 "Parade",
                 "Vectorscope",
                 "Traffic Lights",
+                "EV Meter",
                 "Anamorphic Desqueeze",
             ),
             AssistCard.entries.map { it.title },

@@ -157,19 +157,8 @@ class LiveViewEnablePolicyTest {
                 lastBleNotifyAt = now + 5_000 - 100,
             )
         assertEquals(
-            LiveViewEnablePolicy.Action.RESEND_ENABLE,
-            LiveViewEnablePolicy.tick(state, fiveSecondsLater),
-        )
-        val tenSecondsLater =
-            snap.copy(
-                now = now + 10_000,
-                lastEnableAt = now + 5_000,
-                lastStatusAt = now + 10_000 - 200,
-                lastBleNotifyAt = now + 10_000 - 100,
-            )
-        assertEquals(
             LiveViewEnablePolicy.Action.REBUILD_UDP,
-            LiveViewEnablePolicy.tick(state, tenSecondsLater),
+            LiveViewEnablePolicy.tick(state, fiveSecondsLater),
         )
     }
 
@@ -1043,7 +1032,7 @@ class LiveViewEnablePolicyTest {
             LiveViewEnablePolicy.tick(state, snap.copy(now = now + 1_000, lastVideoPacketAt = now + 1_000)),
         )
         assertEquals(
-            LiveViewEnablePolicy.Action.RESEND_ENABLE,
+            LiveViewEnablePolicy.Action.REBUILD_UDP,
             LiveViewEnablePolicy.tick(
                 state,
                 snap.copy(
@@ -1099,21 +1088,13 @@ class LiveViewEnablePolicyTest {
                 lastStatusAt = now + 5_000 - 200,
                 lastBleNotifyAt = now + 5_000 - 100,
             )
-        assertEquals(LiveViewEnablePolicy.Action.RESEND_ENABLE, LiveViewEnablePolicy.tick(state, second))
-        val rebuild =
-            snap.copy(
-                now = now + 10_000,
-                lastEnableAt = now + 5_000,
-                lastStatusAt = now + 10_000 - 200,
-                lastBleNotifyAt = now + 10_000 - 100,
-            )
-        assertEquals(LiveViewEnablePolicy.Action.REBUILD_UDP, LiveViewEnablePolicy.tick(state, rebuild))
+        assertEquals(LiveViewEnablePolicy.Action.REBUILD_UDP, LiveViewEnablePolicy.tick(state, second))
         val rejoin =
             snap.copy(
-                now = now + 15_000,
-                lastEnableAt = now + 5_000,
-                lastStatusAt = now + 15_000 - 200,
-                lastBleNotifyAt = now + 15_000 - 100,
+                now = now + 10_000,
+                lastEnableAt = now,
+                lastStatusAt = now + 10_000 - 200,
+                lastBleNotifyAt = now + 10_000 - 100,
             )
         assertEquals(LiveViewEnablePolicy.Action.FULL_REJOIN, LiveViewEnablePolicy.tick(state, rejoin))
     }

@@ -17,6 +17,55 @@ separate iOS and Android lists.
 
 ### Added
 
+- **Osmo Action 6** support on iOS and Android, implemented from the
+  2026-09-21 Mimo survey: live view (one `0x09/0xa8` enable to receiver `0x41`,
+  AVC, no Nano gate or Pocket prepare), Normal 10-bit / D-Log M color with the
+  official Action 6 cube, Photo and Timelapse capture bytes, and the
+  Action-specific album favorite layout. An **APERTURE** tile takes the FOCUS
+  slot: live iris readout and the aperture strategies the camera offers.
+  Gimbal, tap focus and focus modes are hidden. Not yet checked on a physical
+  Action 6; see the Action 6 handbook page for what is and is not wired.
+- Experimental **Multiview on Android**, matching iOS: the grid button on
+  **Your cameras**, the two-step Local Wi-Fi / phone hotspot setup, up to four
+  identity-verified camera tiles with Auto LUT, per-tile and group recording,
+  Grid/Center stage, Fit/Fill, DISP clean, bounded preview recovery, saved
+  layout preferences, camera Wi-Fi return on close, and double-tap into full
+  Live View for a tile. Protocol and recovery policy come from the shared Swift
+  core. Checked on a Galaxy S25 with a Pocket 4 Pro and Nano; see the Multiview
+  handbook for Android differences and open checks.
+- Camera **EV** meter on iOS and Android: a slim white line with a sun marker,
+  +3/−3 endpoints and the number above it. It sits inside the feed's left edge,
+  slightly above center, and moves or shortens to clear the View Assist toolbar.
+  Its toolbar button reads **EV**.
+  Toggle EV in View Assist for DISP 1; hidden in DISP 2 and playback. It reads camera
+  metering telemetry independently from configured EV compensation, with no
+  image analysis or extra polling. Missing values show a dash. Activation is
+  saved; placement stays fixed, with no drag, resize or pin controls.
+- Motion Control Loop on iOS and Android moves back and forth: A→B→A or
+  A→B→C→B→A, with the same leg durations and smoothed path in either direction.
+  Countdown and the initial settle run once; turnarounds have no added pause,
+  with position verification continuing during the return. Exact reversals accept
+  directly observed arrival and return when native motor easing differs from
+  constant speed, avoiding a false waypoint-verification failure. Pause/Resume and Stop
+  remain available; failures end the loop. The compact editor keeps its header
+  and action bar fixed, with scrollable settings and a bottom overflow fade. Points, durations, Smoothness and Loop
+  remain in the camera session when the editor closes. Close during a run keeps
+  the control pill visible. While paused, Restart replaces Clear and starts the
+  saved program again from A with countdown and preparation. The corrected A/B
+  loop passed an operator iPhone check; broader physical qualification remains pending.
+- Motion Control keeps the existing zoom chip and long-press disc usable while
+  the full editor stays open, so points can be framed without a separate slider.
+  Closing the disc returns to the editor. Both shells remove hundredth
+  rounding and whole-stop snapping from the general zoom dial, preserving
+  fractional input through the camera's integer lens command conversion.
+  Whole-stop haptics fire once per crossing. Physical lens smoothness remains
+  under investigation.
+- Motion Control transitions between different zoom amounts saved at A/B/C,
+  including reverse loops and measured Pause/Resume. B's saved zoom remains exact
+  when the angular path is smoothed. Zoom-changing programs are blocked in D-Log2
+  while idle or recording, with no automatic color-mode change; current camera
+  FORMAT limits also apply. Physical zoom response remains unqualified.
+
 - Anamorphic Desqueeze (**DE-SQ**) on iOS and Android: live view, video playback
   and photo viewing share 1.1×, 1.2×, 1.33×, 1.5×, 1.6×, 1.8× and 2.0× presets,
   plus a remembered Custom factor from 1.00× to 2.00× in 0.01 steps. Horizontal
@@ -290,6 +339,49 @@ separate iOS and Android lists.
   identification mark on clip upload.
 
 ### Fixed
+
+- Android clip playback: Delete and Cancel in the "Delete this clip from the
+  camera?" dialog now respond instead of playing or pausing the clip behind it.
+
+- Osmo Nano no longer shows zoom controls. The zoom chip, pinch, hold disc and
+  game controller zoom are hidden or inert, and no zoom command is sent. DISP
+  settings list Zoom Chip and Gimbal Stick only when the connected camera has
+  them. Gimbal, zoom and focus controls stay off for Action, 360, drones and
+  unknown cameras until they are verified (#124, #413).
+
+- Opening the gallery on the camera now opens Media in the app, like DJI Mimo,
+  instead of being kicked back to live within a second. Leaving on either side
+  returns the camera to live view.
+
+- Android pairing no longer times out on phones where Bluetooth service
+  discovery overlapped the MTU request (camera approval never appeared).
+
+- The live picture no longer drops about 10 seconds after opening Control
+  Center, a system alert or another overlay. The camera stops video when the app
+  stops re-registering with it, and that 1 Hz heartbeat was paused whenever the
+  app was not in front. It now always runs, and when video does stop the first
+  repair re-registers, which restored the picture in about 2 seconds on an
+  iPhone instead of a 16-second median reconnect. The camera's TCP link is now
+  read continuously, as DJI Mimo does.
+
+- Live picture recovers sooner after the camera stops sending video. Recovery
+  sends one restart request instead of two before renegotiating the connection;
+  in 1,960 field incidents the second request almost never helped and delayed
+  the fix by about 5 seconds. On iOS, returning from another app renegotiates
+  the video link instead of fully reconnecting, a short main-thread pause no
+  longer freezes the picture until the next keyframe, and frames that arrived
+  before a gap are no longer discarded. On Android, a decoder input miss now
+  requests repair instead of leaving a smeared picture.
+
+- Auto exposure on iOS and Android reads applied shutter telemetry for the EV
+  caption instead of retaining the remembered manual shutter. Missing or
+  unsupported applied values clear the shutter caption; Manual controls keep
+  their configured readback. The operator confirmed the fix on iPhone 16 Pro Max
+  on 2026-09-22; Android physical validation remains pending.
+
+- Motion Control waypoint letters and the dashed path compensate for settled
+  selfie orientation and MIRROR on both shells. Saved positions and motion
+  commands are unchanged. Physical camera verification remains pending.
 
 - Both shells can recover an established live feed after the decoder loses its
   video format while compressed frames keep arriving. The existing watchdog

@@ -176,21 +176,12 @@ final class PlaybackFeedSession: NSObject {
     /// rebuild the player graph — same as Android `PlaybackFeedView`.
     @MainActor
     func prepare(_ item: AVPlayerItem) {
-        if let boundItem, boundItem !== item {
-            boundItem.remove(output)
-        }
+        beginSourceChange()
         if !item.outputs.contains(where: { $0 === output }) {
             item.add(output)
         }
         boundItem = item
-        lastBuffer = nil
-        lastBackdropBuffer = nil
-        sampleBus?.clearPlaybackSource()
-        lastSubmittedNs = 0
-        pendingKick = false
         loggedRaster = false
-        itemEpoch += 1
-        assistEngine.reset()
         // LUT chip stays on across next/prev. Drop the previous clip's metal
         // ownership and force a bake of this item — otherwise the toolbar
         // stays armed while the new picture is ungraded identity.
@@ -199,6 +190,25 @@ final class PlaybackFeedSession: NSObject {
             applyLayerPlan(metalHasPresented: false)
         }
         output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
+    }
+
+    /// Retire a clip as soon as Next/Previous starts loading, including a slow
+    /// download. Keep the native host; old samples cannot become the new meter.
+    @MainActor
+    func beginSourceChange() {
+        boundItem?.remove(output)
+        boundItem = nil
+        itemEpoch &+= 1
+        // Drain an admitted pull before clearing its retained buffer. Engine
+        // completions are asynchronous and are rejected by the item epoch.
+        pullQueue.sync {
+            lastBuffer = nil
+            lastSubmittedNs = 0
+            pendingKick = false
+        }
+        lastBackdropBuffer = nil
+        sampleBus?.clearPlaybackSource()
+        assistEngine.reset()
     }
 
     func reserveHostGeneration() -> Int {
@@ -365,8 +375,10 @@ final class PlaybackFeedSession: NSObject {
     }
 
     private func schedulePull(force: Bool) {
+        let sourceEpoch = itemEpoch
         pullQueue.async { [weak self] in
-            self?.pull(force: force)
+            guard let self, self.itemEpoch == sourceEpoch else { return }
+            self.pull(force: force, sourceEpoch: sourceEpoch)
         }
     }
 
@@ -376,7 +388,8 @@ final class PlaybackFeedSession: NSObject {
         schedulePull(force: true)
     }
 
-    private func pull(force: Bool) {
+    private func pull(force: Bool, sourceEpoch: UInt64) {
+        guard boundItem != nil else { return }
         guard effects.needsSample || LiveHDRDisplay.isEnabled else { return }
         let time = outputTime()
         let timeNs = Self.timeNs(time)
@@ -394,11 +407,11 @@ final class PlaybackFeedSession: NSObject {
                 )
             }
             lastBuffer = working
-            submit(working, timeNs: timeNs)
+            submit(working, timeNs: timeNs, sourceEpoch: sourceEpoch)
             return
         }
         if let lastBuffer, force {
-            submit(lastBuffer, timeNs: timeNs)
+            submit(lastBuffer, timeNs: timeNs, sourceEpoch: sourceEpoch)
             return
         }
         // Output added after decode has started (or the item is parked) holds
@@ -427,9 +440,9 @@ final class PlaybackFeedSession: NSObject {
         return boundItem?.currentTime() ?? player?.currentTime() ?? .zero
     }
 
-    private func submit(_ buffer: CVPixelBuffer, timeNs: Int64) {
+    private func submit(_ buffer: CVPixelBuffer, timeNs: Int64, sourceEpoch: UInt64? = nil) {
         lastSubmittedNs = timeNs
-        let sourceEpoch = itemEpoch
+        let sourceEpoch = sourceEpoch ?? itemEpoch
         assistEngine.submit(buffer, effects: effects, transfer: transfer, timeNs: timeNs) {
             [weak self] result in
             Task { @MainActor [weak self] in
@@ -594,7 +607,7 @@ final class PlaybackFeedHostView: UIView {
 
 extension PlaybackFeedSession: AVPlayerItemOutputPullDelegate {
     nonisolated func outputMediaDataWillChange(_ sender: AVPlayerItemOutput) {
-        pull(force: true)
+        pull(force: true, sourceEpoch: itemEpoch)
     }
 }
 

@@ -23,8 +23,7 @@ public enum MonitorDialHaptic: Sendable {
             return whole <= hi + 1e-9 && whole > lo + 1e-9
         }
         return majors.contains { stop in
-            (abs(next - stop) < 0.005 && abs(previous - stop) >= 0.005)
-                || (stop > lo && stop <= hi)
+            (previous < stop && next >= stop) || (previous > stop && next <= stop)
         }
     }
 

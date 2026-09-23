@@ -62,6 +62,9 @@ EOF
     if [[ -n "$INJECT" ]]; then
         echo "    TEST_RUNNER_OPV_FEED_STRESS_INJECT=${INJECT} \\"
     fi
+    if [[ -n "${INJECT_MODE:-}" ]]; then
+        echo "    TEST_RUNNER_OPV_FEED_STRESS_INJECT_MODE=${INJECT_MODE} \\"
+    fi
     cat <<EOF
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview \\
       -destination 'platform=iOS,id=${DEVICE:-<coredevice-id>}' -allowProvisioningUpdates \\
@@ -78,6 +81,11 @@ run_tests() {
         echo "DEVICE is required (xcrun xctrace list devices / xcrun devicectl list devices)." >&2
         exit 2
     fi
+    if [[ -n "${ATTACH_XCTESTRUN:-}" ]]; then
+        DEVICE="$DEVICE" SEED="$SEED" LIMIT="$LIMIT" RECORD="$RECORD" \
+          INJECT="$INJECT" DEST="$DEST" python3 "$ROOT/tools/connection-stress/ios_attach.py"
+        return
+    fi
     print_recipe
     cd "$ROOT"
     env_args=(
@@ -88,6 +96,9 @@ run_tests() {
     )
     if [[ -n "$INJECT" ]]; then
         env_args+=(TEST_RUNNER_OPV_FEED_STRESS_INJECT="$INJECT")
+    fi
+    if [[ -n "${INJECT_MODE:-}" ]]; then
+        env_args+=(TEST_RUNNER_OPV_FEED_STRESS_INJECT_MODE="$INJECT_MODE")
     fi
     if [[ -n "${SCENARIOS:-}" ]]; then
         env_args+=(TEST_RUNNER_OPV_FEED_STRESS_SCENARIOS="$SCENARIOS")

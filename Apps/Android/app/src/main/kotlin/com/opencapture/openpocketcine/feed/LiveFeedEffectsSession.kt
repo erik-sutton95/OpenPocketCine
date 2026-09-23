@@ -83,11 +83,15 @@ internal class LiveFeedEffectsSession(
         }
     private val sampleBusy = AtomicBoolean(false)
     private val previewSource = InspectorPreviewSource()
+    @Volatile private var scopeSource: LiveScopeSampleBus.Source? = null
+    @Volatile private var scopeActive = false
+    private var scopeAttached = false
     @Volatile private var nextScopeAtNs = 0L
     @Volatile private var previousBundle = ScopeAssistBundle.EMPTY
 
     fun attachDisplay(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
         detachDisplay()
+        setScopeAttached(true)
         backdrop?.attach(this)
         displayTexture = surfaceTexture
         displayWidth = width.coerceAtLeast(1)
@@ -118,6 +122,7 @@ internal class LiveFeedEffectsSession(
         val h = height.coerceAtLeast(16)
         if (w == sourceWidth && h == sourceHeight) return
         previewSource.invalidate()
+        resetScopeSource()
         InspectorPreviewPipeline.sourceChanged(playback)
         backdrop?.invalidate(this)
         sourceWidth = w
@@ -125,14 +130,18 @@ internal class LiveFeedEffectsSession(
         requestRender()
     }
 
-    fun configurePreviewSource(identity: Any, ready: Boolean) {
-        if (previewSource.configure(identity, ready)) {
+    @Synchronized fun configurePreviewSource(identity: Any, ready: Boolean, active: Boolean = true) {
+        val changed = previewSource.configure(identity, ready && active)
+        if (changed || scopeActive != active) {
+            scopeActive = active
+            resetScopeSource()
             InspectorPreviewPipeline.sourceChanged(playback)
             backdrop?.invalidate(this)
         }
     }
 
     fun detachDisplay() {
+        setScopeAttached(false)
         previewSource.invalidate()
         InspectorPreviewPipeline.sourceChanged(playback)
         backdrop?.invalidate(this)
@@ -143,7 +152,17 @@ internal class LiveFeedEffectsSession(
         displayTexture = null
         previousBundle = ScopeAssistBundle.EMPTY
         nextScopeAtNs = 0L
-        mainHandler.post { LiveScopeSampleBus.reset() }
+    }
+
+    @Synchronized private fun setScopeAttached(attached: Boolean) {
+        scopeAttached = attached
+        resetScopeSource()
+    }
+
+    @Synchronized private fun resetScopeSource() {
+        LiveScopeSampleBus.closeSource(scopeSource)
+        previousBundle = ScopeAssistBundle.EMPTY
+        scopeSource = if (scopeActive && scopeAttached) LiveScopeSampleBus.openSource() else null
     }
 
     private fun requestRender() {
@@ -170,20 +189,20 @@ internal class LiveFeedEffectsSession(
         if ((!policy.needsTap && backdrop?.hasDemand(this) != true) || tapTarget == null || tapPixels == null || tapScratch == null) return
         val now = System.nanoTime()
         if (now < nextScopeAtNs) return
+        val sourceEpoch = previewSource.captureEpoch() ?: return
+        val scopeOwner = scopeSource
+        if (!LiveScopeSampleBus.isCurrent(scopeOwner)) return
         if (!sampleBusy.compareAndSet(false, true)) return
-        val sourceEpoch = previewSource.captureEpoch()
-        val previewTicket = if (sourceEpoch != null) {
-            InspectorPreviewPipeline.acquire(policy.previewOwner, playback, now)?.takeIf {
-                if (previewSource.isCurrent(sourceEpoch)) true
-                else { InspectorPreviewPipeline.cancel(it); false }
-            }
-        } else null
+        val previewTicket = InspectorPreviewPipeline.acquire(policy.previewOwner, playback, now)?.takeIf {
+            if (previewSource.isCurrent(sourceEpoch)) true
+            else { InspectorPreviewPipeline.cancel(it); false }
+        }
         val thermal =
             runCatching {
                 val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
                 PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
             }.getOrDefault(1.0)
-        val backdropTicket = if (sourceEpoch != null && previewSource.isCurrent(sourceEpoch)) {
+        val backdropTicket = if (previewSource.isCurrent(sourceEpoch)) {
             backdrop?.acquire(this, now, thermal)
         } else null
         if (policy.activeScopeCount == 0 && previewTicket == null && backdropTicket == null) {
@@ -229,7 +248,8 @@ internal class LiveFeedEffectsSession(
                             InspectorPreviewFrame.fromTap(packed, width, height, bottomUp = true))
                         previewSubmitted = true
                     }
-                    if (policy.activeScopeCount == 0) return@execute
+                    if (policy.activeScopeCount == 0 || !previewSource.isCurrent(sourceEpoch) ||
+                        !LiveScopeSampleBus.isCurrent(scopeOwner)) return@execute
                     var transfer = MonitorTransfer.fromColorMode(policy.colorMode)
                     ScopeExposureCeiling.syncISO(policy.iso)
                     val (minC, maxC) = PocketScopeSampler.minMaxRGB(packed)
@@ -251,8 +271,11 @@ internal class LiveFeedEffectsSession(
                             previous = previous,
                             iso = ScopeExposureCeiling.resolvedISO(),
                         )
-                    previousBundle = sampled
-                    mainHandler.post { LiveScopeSampleBus.publish(sampled) }
+                    mainHandler.post {
+                        if (previewSource.isCurrent(sourceEpoch) && LiveScopeSampleBus.publish(scopeOwner, sampled)) {
+                            previousBundle = sampled
+                        }
+                    }
                     ScopeTapHzLog.note(
                         TAG,
                         scopes = policy.activeScopeCount,

@@ -17,7 +17,7 @@ setup:
 # Run every repository quality check that this tree currently supports.
 # `swift-lint` is available as `just lint` after `just format`; the existing tree is not
 # yet fully swift-format clean, so it is not a merge gate.
-check: hygiene site-check testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test swift-test handbook-build
+check: hygiene site-check testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test connection-stress-test swift-test handbook-build
 
 # Verify release reporting configuration without network or real credentials.
 sentry-test:
@@ -89,6 +89,22 @@ live-log-summary journal:
 # Informational timing only; does not measure Android JNI, UI, FPS or energy.
 performance-status-probe:
     bash tools/performance-status-probe.sh
+
+# Plan or run bounded connection experiments (script/agent driver; recording opt-in).
+connection-stress *args:
+    python3 tools/connection-stress/harness.py {{args}}
+
+# Offline evidence, driver, deadline and teardown regressions; no phone required.
+connection-stress-test:
+    python3 -m unittest discover -s tools/connection-stress -p 'test_*.py'
+
+# Seeded faults + 100 settings offers/s against real Swift connection code; no device.
+connection-chaos *args:
+    python3 tools/connection-stress/chaos.py {{args}}
+
+# Physical Android + saved Pocket: bounded packet loss during UI and command work.
+android-feed-stress *args:
+    python3 tools/connection-stress/android.py {{args}}
 
 # Run all Swift-only checks.
 swift-check: swift-lint swift-test
@@ -294,4 +310,4 @@ relay-test:
 
 # Fast programmed-motion regression loop.
 gimbal-test:
-    swift test --filter 'Gimbal(Repeatability|SafeRoute)Tests'
+    swift test --filter 'Gimbal(Repeatability|SafeRoute|Loop|LoopVerification|ProgramZoom)Tests'

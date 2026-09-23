@@ -86,6 +86,15 @@ object SwiftCore {
     const val CMD_NANO_LIVE_VIEW_GATE = 60
     /** Untracked pid `0x38` GET. `waitKey` is 0 so it cannot steal other `0x8E` waiters. */
     const val CMD_GET_SELFIE_FLIP = 61
+    /** Multiview station Wi-Fi (`MulticamCommands`). Station extra `1` joins, `0` returns to AP. */
+    const val CMD_MULTICAM_WIFI_WORK_MODE = 62
+    const val CMD_MULTICAM_STATION_MODE = 63
+    const val CMD_MULTICAM_VIDEO_MODE = 64
+    /** Extra is `ssid + "\u001f" + password`; invalid input encodes nothing. */
+    const val CMD_MULTICAM_JOIN = 65
+    const val CMD_MULTICAM_WIFI_SCAN = 66
+    /** Action 6 `0x8E` pid `0x0044`. Extra is the [com.opencapture.openpocketcine.session.ApertureStrategy] byte. */
+    const val CMD_SET_APERTURE_STRATEGY = 67
 
     /** DUML set/cmd key the camera ACKs for [kind]. */
     fun waitKey(kind: Int): Int =
@@ -101,7 +110,7 @@ object SwiftCore {
             CMD_GET_VOCAL_BOOST, CMD_SET_VOCAL_BOOST,
             CMD_SET_ISO_LIMIT, CMD_GET_ISO_LIMIT, CMD_SET_FOV,
             CMD_SET_FOCUS_TRACK, CMD_GET_FOCUS_TRACK,
-            CMD_GET_GLAMOUR, CMD_SET_GLAMOUR,
+            CMD_GET_GLAMOUR, CMD_SET_GLAMOUR, CMD_SET_APERTURE_STRATEGY,
             -> 0x028E
             CMD_AUDIO_DSP_GET -> 0x02A0
             CMD_AUDIO_DSP_SET, CMD_AUDIO_DSP_PATCH_WIND, CMD_AUDIO_DSP_PATCH_DIRECTIONAL -> 0x029F
@@ -242,6 +251,19 @@ object SwiftCore {
      * (`keepSocket`, `rebindUDP`, `fail`, `wait`, `resendEnable`, …).
      */
     external fun cameraSoftAPDecision(kind: String, requestJSON: String): String?
+
+    /**
+     * Multiview join / station / scan / discovery / model gates. Byte arrays are
+     * lowercase hex. See `AndroidSessionWire.multicamDecision` for kinds.
+     */
+    external fun multicamDecision(kind: String, requestJSON: String): String?
+
+    external fun multiviewRecoveryCreate(): Long
+
+    /** `op`: `action` (watchdog snapshot JSON), `beginRejoin`, `fail`, `failed`, `reset`. */
+    external fun multiviewRecoveryCall(handle: Long, op: String, snapshotJSON: String): String?
+
+    external fun multiviewRecoveryDestroy(handle: Long)
 
     /** Probe JSON for playback conform preview. See `AndroidSessionWire.conformPreviewJSON`. */
     external fun conformPreviewJSON(request: String): String?

@@ -48,9 +48,15 @@ class MonitorFloatingDrag<Position> {
 /** Original pointer input reaches the excluded control; other outside taps minimize. */
 @Composable
 fun MonitorMotionDismissBackdrop(viewport: Rect, excluding: Rect, onDismiss: () -> Unit) {
+    MonitorMotionDismissBackdrop(viewport, listOf(excluding), onDismiss)
+}
+
+/** Each visible control keeps its own cutout; the space between still dismisses. */
+@Composable
+fun MonitorMotionDismissBackdrop(viewport: Rect, excluding: List<Rect>, onDismiss: () -> Unit) {
     val density = LocalDensity.current
     val dismiss by rememberUpdatedState(onDismiss)
-    val pieces = remember(viewport, excluding) { monitorDismissRegions(viewport, listOf(excluding)) }
+    val pieces = remember(viewport, excluding) { monitorDismissRegions(viewport, excluding) }
     val configuration = LocalViewConfiguration.current
     val exactTargets = remember(configuration) {
         object : ViewConfiguration by configuration {

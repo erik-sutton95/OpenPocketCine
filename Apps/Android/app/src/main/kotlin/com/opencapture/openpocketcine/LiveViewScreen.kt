@@ -124,6 +124,17 @@ import kotlinx.coroutines.isActive
 @Composable
 fun LiveViewScreen(model: AppModel) {
     val status by model.session.status.collectAsState()
+    val cameraGalleryOpen by model.session.cameraGalleryOpen.collectAsState()
+    var followedGallery by remember { mutableStateOf(cameraGalleryOpen) }
+    LaunchedEffect(cameraGalleryOpen) {
+        if (cameraGalleryOpen == followedGallery) return@LaunchedEffect
+        followedGallery = cameraGalleryOpen
+        if (cameraGalleryOpen && model.liveOperatorPanel == null) {
+            model.liveOperatorPanel = LiveOperatorPanel.MEDIA
+        } else if (!cameraGalleryOpen && model.liveOperatorPanel == LiveOperatorPanel.MEDIA) {
+            model.liveOperatorPanel = null
+        }
+    }
     val controlNote by model.session.controlNote.collectAsState()
     val controlBusy by model.session.controlBusy.collectAsState()
     val focusPoint by model.session.focusPoint.collectAsState()
@@ -175,12 +186,16 @@ fun LiveViewScreen(model: AppModel) {
     LaunchedEffect(
         sheet,
         model.session.connectedCamera?.model?.supportsFocusMode,
+        model.session.connectedCamera?.model?.supportsAperture,
         model.session.connectedCamera?.model?.family,
         model.session.connectedCamera?.model?.name,
     ) {
         if (sheet == LiveSheet.FOCUS &&
             !CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model)
         ) {
+            sheet = null
+        }
+        if (sheet == LiveSheet.APERTURE && model.session.connectedCamera?.model?.supportsAperture != true) {
             sheet = null
         }
     }
@@ -263,6 +278,11 @@ fun LiveViewScreen(model: AppModel) {
         }
     }
     val useVulkan = vulkanSession != null && !vulkanFailed
+    val scopeSourceIdentity = model.session.connectedCamera ?: model.session
+    val scopeSourceActive = model.liveOperatorPanel != LiveOperatorPanel.MEDIA
+    LaunchedEffect(vulkanSession, useVulkan, scopeSourceIdentity, hasPicture, scopeSourceActive) {
+        vulkanSession?.configureScopeSource(scopeSourceIdentity, hasPicture, scopeSourceActive && useVulkan)
+    }
     LaunchedEffect(model.session, useVulkan, vulkanSession) {
         var lastCount = 0
         var lastAt = 0L
@@ -430,6 +450,7 @@ fun LiveViewScreen(model: AppModel) {
         val pictureContent =
             if (desqueezeVisible) layout.onFeed.fittedContent(assist.presentedAspect(pictureAspect))
             else if (fillCrop) portraitFillCropContent(layout.feed) else layout.onFeed
+        var assistPaletteBounds by remember(vw, vh) { mutableStateOf<ChromeRect?>(null) }
         val showGimbalButton =
             model.monitorCapabilities(status).gimbal &&
                 model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
@@ -559,6 +580,7 @@ fun LiveViewScreen(model: AppModel) {
                     backdrop = backdrop,
                     sourceIdentity = model.session.connectedCamera ?: model.session,
                     sourceReady = hasPicture,
+                    sourceActive = scopeSourceActive,
                     plan = effectsPlan,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onPresented = { model.session.noteLiveFrame() },
@@ -669,6 +691,22 @@ fun LiveViewScreen(model: AppModel) {
                 }
             }
 
+            if (assist.evMeter && model.currentDispMode == PocketDispMode.LIVE) {
+                val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
+                    model.liveOperatorPanel == null && assist.configureTool == null
+                val collapsedPalette = if (!showsAssist) null else if (zones != null) {
+                    portraitAssistToolbar(zones.assistToolbar.minY, minOf(vw, vh) >= 600f)
+                } else layout.assist
+                LiveCameraExposureMeter(
+                    raw = status.meteredEv,
+                    available = !recovery.isRecovering && !model.session.isFeedRecovering,
+                    feed = if (desqueezeVisible) pictureContent else layout.onFeed,
+                    mode = model.currentDispMode,
+                    avoid = if (showsAssist) assistPaletteBounds ?: collapsedPalette else null,
+                    modifier = Modifier.zIndex(1f),
+                )
+            }
+
             LiveFaceFramePump(
                 surfaceView = vulkanSurfaceView,
                 textureView = glesTextureView,
@@ -708,6 +746,7 @@ fun LiveViewScreen(model: AppModel) {
                     fpsLabel = fpsLabel,
                     bars = bars,
                     sourceIsVertical = verticalPicture,
+                    onAssistBoundsChanged = { assistPaletteBounds = it },
                 )
                 }
             } else {
@@ -737,6 +776,7 @@ fun LiveViewScreen(model: AppModel) {
                     zoomDialReadout = zoomDialReadout,
                     zoomPinching = zoomPinching,
                     onStatusChipFrame = { section, rect -> statusChipFrames[section] = rect },
+                    onAssistBoundsChanged = { assistPaletteBounds = it },
                 )
                 }
             }
@@ -1077,6 +1117,7 @@ private fun LiveFeedPresenter(
     backdrop: MonitorBackdropFeed,
     sourceIdentity: Any,
     sourceReady: Boolean,
+    sourceActive: Boolean,
     plan: FeedEffectsRenderPlan,
     onDecoderSurface: (Surface) -> Unit,
     onPresented: () -> Unit = {},
@@ -1107,7 +1148,9 @@ private fun LiveFeedPresenter(
             textureViewOut.value(null)
         }
     }
-    LaunchedEffect(sourceIdentity, sourceReady) { session.configurePreviewSource(sourceIdentity, sourceReady) }
+    LaunchedEffect(sourceIdentity, sourceReady, sourceActive) {
+        session.configurePreviewSource(sourceIdentity, sourceReady, sourceActive)
+    }
     LaunchedEffect(plan) { session.updatePlan(plan) }
     LaunchedEffect(stretchToRect) { session.setStretchToRect(stretchToRect) }
 
@@ -1248,6 +1291,7 @@ internal fun LandscapeChrome(
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
     onStatusChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
     capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
+    onAssistBoundsChanged: (ChromeRect?) -> Unit = {},
 ) {
     var stripQuick by remember { mutableStateOf(false) }
     var topQuick by remember { mutableStateOf(false) }
@@ -1258,7 +1302,9 @@ internal fun LandscapeChrome(
     val showsLock = model.chromeSectionMounts(PocketDispSection.LOCK_BUTTON) || uiLocked
     val showsBatteries = model.chromeSectionMounts(PocketDispSection.BATTERIES)
     val showsSettings = !captureOpen && (model.chromeSectionMounts(PocketDispSection.RAIL_SETTINGS) || status.isRecording)
-    val showsMedia = !captureOpen && model.chromeSectionMounts(PocketDispSection.RAIL_MEDIA)
+    // Media browsing is not adapted to shared Wi-Fi; a borrowed Multiview tile hides it.
+    val showsMedia = !captureOpen && model.chromeSectionMounts(PocketDispSection.RAIL_MEDIA) &&
+        !model.session.isMultiviewBorrowed
     val showsRecord = model.chromeSectionMounts(PocketDispSection.RAIL_RECORD) || status.isRecording
     val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
         model.liveOperatorPanel == null && assist.configureTool == null
@@ -1306,7 +1352,10 @@ internal fun LandscapeChrome(
                 )
             }
         }
-        if (showsLock) {
+        val multiviewExit = model.multiviewExit
+        if (multiviewExit != null) {
+            Box(Modifier.liveModuleFrame(layout.lock)) { MultiviewReturnButton(onClick = multiviewExit) }
+        } else if (showsLock) {
             Box(Modifier.liveModuleFrame(layout.lock).chromeEditStroke(editing != null, true)) {
                 LockButton(uiLocked, onClick = onLock)
             }
@@ -1429,6 +1478,8 @@ internal fun LandscapeChrome(
                 layout = layout,
                 feed = layout.onFeed,
                 joystickBounds = stick,
+                zoomBounds = if (capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) zoom
+                    else ChromeRect(0f, 0f, 0f, 0f),
                 uiLocked = uiLocked,
             )
         }
@@ -1443,6 +1494,7 @@ internal fun LandscapeChrome(
                     portrait = false, locked = uiLocked || !hits,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    onBoundsChanged = onAssistBoundsChanged,
                 )
             }
         }
@@ -1458,6 +1510,7 @@ internal fun LandscapeChrome(
                     },
                     quickBottomClearanceDp = layout.safeBottom,
                     showFocus = capabilities.focus,
+                    showAperture = capabilities.iris,
                     facePriority = model.facePriorityExposureEnabled, shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = {
                         val next = CaptureShutterPolicy.opening(it, status.shootingMode)

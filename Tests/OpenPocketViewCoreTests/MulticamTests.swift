@@ -138,3 +138,52 @@ struct MulticamTests {
         #expect(throws: RTMPIngest.Failure.self) { try RTMPIngest.values(Array(bytes.dropLast())) }
     }
 }
+
+struct MulticamSupportTests {
+    @Test func previewIsLimitedToCapturedLiveEnableBodies() {
+        for (id, name) in [
+            (0x20, "Osmo Pocket 3"), (0x21, "Osmo Pocket 4"), (0x22, "Osmo Pocket 4 Pro"),
+            (0x19, "Osmo Nano"),
+        ] {
+            let model = CameraModel.resolve(modelId: id, name: name)
+            #expect(MulticamSupport.appears(model), "\(name)")
+            #expect(MulticamSupport.hasPreview(model), "\(name)")
+        }
+        for (id, name) in [(0x15, "Osmo Action 5 Pro"), (0x17, "Osmo 360")] {
+            let model = CameraModel.resolve(modelId: id, name: name)
+            #expect(MulticamSupport.appears(model), "\(name)")
+            #expect(!MulticamSupport.hasPreview(model), "\(name)")
+        }
+        let drone = CameraModel.resolve(modelId: 0x7E, name: "DJI Neo")
+        #expect(!MulticamSupport.appears(drone))
+        #expect(!MulticamSupport.hasPreview(drone))
+    }
+
+    @Test func missingRoleQueryOnlyForPocket3AndNanoE0() {
+        for (name, accepted) in [
+            ("OsmoPocket3-Test", true), ("OsmoNano-Test", true),
+            ("OsmoPocket4P-Test", false), ("OsmoAction4-Test", false),
+        ] {
+            let model = CameraModel.resolve(modelId: nil, name: name)
+            #expect(MulticamSupport.acceptsMissingRoleQuery(model, reply: [0xe0]) == accepted)
+            for reply: [UInt8] in [[], [0], [0xe0, 0], [0, 0]] {
+                #expect(!MulticamSupport.acceptsMissingRoleQuery(model, reply: reply))
+            }
+        }
+    }
+
+    @Test func recoveryAllowsTwoRejoinsThenFails() {
+        var recovery = MultiviewRecovery()
+        let budget = (0..<3).map { _ in recovery.beginRejoin() }
+        #expect(budget == [true, true, false])
+        #expect(recovery.rejoins == 2)
+        #expect(recovery.failed)
+        let stalled = FeedWatchdog.Snapshot(
+            now: 100, lastDecodedFrameAge: 20, lastVideoPacketAge: 20,
+            lastStatusAge: 20, flowHealthy: false, pathReady: true, hasFormat: true,
+            decoderFailed: false, live: true, sawPicture: true,
+            secondsSinceLastEnable: 50)
+        let action = recovery.action(stalled)
+        #expect(action == .none)
+    }
+}

@@ -26,7 +26,7 @@ class LiveViewPresentTimingTest {
 
     @Test
     fun pFramesDoNotBlockIngestButIdrMayWait() {
-        assertEquals(0L, LiveViewPresentTiming.inputWaitUs(false))
+        assertEquals(20_000L, LiveViewPresentTiming.inputWaitUs(false))
         assertEquals(50_000L, LiveViewPresentTiming.inputWaitUs(true))
     }
 }

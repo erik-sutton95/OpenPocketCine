@@ -5,8 +5,7 @@ import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
-/// OpenZCine `MonitorAssistTool` — cinema live-monitor set. MAG is retired; EV / PLAY are
-/// photography-only and stay off the video toolbar.
+/// Cinema live-monitor set. MAG is retired; PLAY stays off the video toolbar.
 enum LiveAssistTool: String, CaseIterable, Identifiable {
     case lut = "LUT"
     case peaking = "PEAK"
@@ -18,12 +17,12 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     case vectorscope = "VECTOR"
     case trafficLights = "LIGHTS"
     case ndMeter = "ND"
+    case evMeter = "EV"
     case audioMeters = "AUDIO"
     case guides = "GUIDES"
     case grid = "GRID"
     case crosshair = "CROSS"
     case level = "LEVEL"
-    case evMeter = "EV"
     case desqueeze = "DE-SQ"
     case mirror = "MIRROR"
     case instantReview = "PLAY"
@@ -32,12 +31,14 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var isRetired: Bool { self == .magnification }
-    var isPhotographyOnly: Bool { self == .instantReview || self == .evMeter }
+    var isPhotographyOnly: Bool { self == .instantReview }
 
     /// Playback drops horizon (needs the camera) and MAG (no on-feed key).
     /// AUDIO rides last, matching the live strip's trailing section.
     static var playbackToolbarCases: [LiveAssistTool] {
-        toolbarCases.filter { $0 != .level && $0 != .magnification } + [.audioMeters]
+        toolbarCases.filter { $0 != .level && $0 != .magnification && $0 != .evMeter } + [
+            .audioMeters
+        ]
     }
 
     /// OpenZCine `activeCases` minus photography-only, AUDIO, and Level.
@@ -47,7 +48,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         [
             [.lut, .peaking, .falseColor],
             [.zebra, .waveform, .parade],
-            [.histogram, .vectorscope, .trafficLights, .ndMeter],
+            [.histogram, .vectorscope, .trafficLights, .ndMeter, .evMeter],
             [.guides, .grid, .crosshair],
             [.desqueeze, .mirror],
         ]
@@ -60,8 +61,8 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         toolbarCases + [.audioMeters]
     }
 
-    /// Tools the operator can keep on the DISP 2 picture. Same cinema set as settings.
-    static var cleanPinCases: [LiveAssistTool] { settingsCases }
+    /// Tools the operator can keep on DISP 2. Camera EV stays exclusive to DISP 1.
+    static var cleanPinCases: [LiveAssistTool] { settingsCases.filter { $0 != .evMeter } }
 
     /// Compact label for the Display ▸ DISP 2 pin grid.
     var displaySettingsTitle: String {
@@ -79,7 +80,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     var hasConfiguration: Bool {
         switch self {
         // Mirror stays tap-only; audio options affect presentation only.
-        case .mirror, .evMeter, .instantReview, .magnification, .level:
+        case .mirror, .instantReview, .magnification, .level, .evMeter:
             false
         default: true
         }
@@ -120,12 +121,12 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .vectorscope: .crosshair
         case .trafficLights: .sun
         case .ndMeter: .aperture
+        case .evMeter: nil
         case .audioMeters: .slidersVertical
         case .guides: .squareDashed
         case .grid: .grid3x3
         case .crosshair: .plus
         case .level: .circle
-        case .evMeter: .plus
         case .desqueeze: .chevronsUpDown
         case .mirror: .flipHorizontal2
         case .magnification: .zoomIn
@@ -145,12 +146,12 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .vectorscope: "Vectorscope"
         case .trafficLights: "Traffic Lights"
         case .ndMeter: "ND Suggestion"
+        case .evMeter: "EV Meter"
         case .audioMeters: "Audio Levels"
         case .guides: "Guides"
         case .grid: "Grid"
         case .crosshair: "Crosshair"
         case .level: "Horizon"
-        case .evMeter: "EV Meter"
         case .desqueeze: "Anamorphic Desqueeze"
         case .mirror: "Mirror"
         case .magnification: "Magnify"
@@ -213,6 +214,7 @@ final class LiveAssistState {
     var vectorscope = false
     var trafficLights = false
     var ndMeter = false
+    var evMeter = false
     var audioMeters = false
     var grid = false
     var crosshair = false
@@ -220,7 +222,6 @@ final class LiveAssistState {
     var level = false
     var desqueeze = false
     var mirror = false
-    var evMeter = false
     var instantReview = false
     var guideAspect: GuideAspect = .cinema
     var guideFamily: GuideFamily = .film
@@ -399,6 +400,7 @@ final class LiveAssistState {
         case .vectorscope: vectorscope
         case .trafficLights: trafficLights
         case .ndMeter: ndMeter
+        case .evMeter: evMeter
         case .audioMeters: audioMeters
         case .guides: guides
         case .grid: grid
@@ -406,7 +408,6 @@ final class LiveAssistState {
         case .level: level
         case .desqueeze: desqueeze
         case .mirror: mirror
-        case .evMeter: evMeter
         case .instantReview: instantReview
         case .magnification: false
         }
@@ -415,7 +416,7 @@ final class LiveAssistState {
     /// OpenZCine `MonitorChromePolicy.isToolVisible`. Pins filter DISP 2; they never flip `isOn`.
     func isVisible(_ tool: LiveAssistTool) -> Bool {
         guard isOn(tool) else { return false }
-        if clean { return cleanViewPinnedTools.contains(tool) }
+        if clean { return tool != .evMeter && cleanViewPinnedTools.contains(tool) }
         return true
     }
 
@@ -432,10 +433,11 @@ final class LiveAssistState {
     }
 
     func isPlaybackVisible(_ tool: LiveAssistTool) -> Bool {
-        playbackVisibleTools.contains(tool)
+        tool != .evMeter && playbackVisibleTools.contains(tool)
     }
 
     func togglePlayback(_ tool: LiveAssistTool) {
+        guard tool != .evMeter else { return }
         if playbackVisibleTools.contains(tool) {
             playbackVisibleTools.remove(tool)
         } else {
@@ -475,6 +477,7 @@ final class LiveAssistState {
         case .vectorscope: vectorscope.toggle()
         case .trafficLights: trafficLights.toggle()
         case .ndMeter: ndMeter.toggle()
+        case .evMeter: evMeter.toggle()
         case .audioMeters: audioMeters.toggle()
         case .guides:
             guides.toggle()
@@ -484,7 +487,6 @@ final class LiveAssistState {
         case .level: level.toggle()
         case .desqueeze: desqueeze.toggle()
         case .mirror: mirror.toggle()
-        case .evMeter: evMeter.toggle()
         case .instantReview: instantReview.toggle()
         case .magnification: break
         }
@@ -1206,6 +1208,7 @@ enum OperatorPrefs {
             s.vectorscope = on.contains(LiveAssistTool.vectorscope.rawValue)
             s.trafficLights = on.contains(LiveAssistTool.trafficLights.rawValue)
             s.ndMeter = on.contains(LiveAssistTool.ndMeter.rawValue)
+            s.evMeter = on.contains(LiveAssistTool.evMeter.rawValue)
             s.audioMeters = on.contains(LiveAssistTool.audioMeters.rawValue)
             s.guides = on.contains(LiveAssistTool.guides.rawValue)
             s.grid = on.contains(LiveAssistTool.grid.rawValue)
@@ -1213,7 +1216,6 @@ enum OperatorPrefs {
             s.level = on.contains(LiveAssistTool.level.rawValue)
             s.desqueeze = on.contains(LiveAssistTool.desqueeze.rawValue)
             s.mirror = on.contains(LiveAssistTool.mirror.rawValue)
-            s.evMeter = on.contains(LiveAssistTool.evMeter.rawValue)
             s.instantReview = on.contains(LiveAssistTool.instantReview.rawValue)
             s.guideAspect = GuideAspect(rawValue: guideAspect) ?? .cinema
             s.guideFamily = GuideFamily(rawValue: guideFamily) ?? .film
@@ -1344,28 +1346,11 @@ struct FeedAlignedAssists: View {
                         }
                     }
                 }
-                VStack {
-                    Spacer()
-                    HStack(alignment: .bottom, spacing: 8) {
-                        extraScopes(assist)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 86)
-                }
             }
         }
         .allowsHitTesting(false)
     }
 
-    @ViewBuilder
-    private func extraScopes(_ assist: LiveAssistState) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !model.isWatchingFeed, assist.evMeter {
-                EVMeterOverlay()
-            }
-        }
-    }
 }
 
 /// OpenZCine `desqueezedRect` — framing aids sit on the visible (shrunk) picture, not the full frame.
@@ -1849,28 +1834,6 @@ struct FalseColorLegend: View {
     }
 }
 
-/// Photography EV needle. Pocket has no Nikon stills meter — the strip is drawn at 0 so the
-/// control is not dead. Do not treat this as camera-fed exposure.
-struct EVMeterOverlay: View {
-    var body: some View {
-        HStack(spacing: 10) {
-            Text("+0.0")
-                .font(MonitorTheme.font(11.5, weight: .semibold)).monospacedDigit()
-                .foregroundStyle(LiveDesign.text)
-                .frame(width: 34, alignment: .trailing)
-            Capsule().fill(LiveDesign.hairlineStrong).frame(width: 120, height: 3)
-                .overlay(alignment: .center) {
-                    Capsule().fill(LiveDesign.accent).frame(width: 2, height: 12)
-                }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .liveChromeCapsule()
-        .allowsHitTesting(false)
-        .accessibilityLabel("EV meter unavailable on Pocket")
-    }
-}
-
 struct AssistToolRow: View {
     @Bindable var assist: LiveAssistState
     var isLocked = false
@@ -1936,7 +1899,11 @@ struct AssistToolIcon: View {
     var size: CGFloat? = 19
 
     var body: some View {
-        if let icon = tool.monitorIcon {
+        if tool == .evMeter {
+            Text("EV")
+                .font(MonitorTheme.font(size.map { $0 * 0.7 } ?? 17, weight: .semibold))
+                .frame(width: size, height: size)
+        } else if let icon = tool.monitorIcon {
             icon.frame(width: size, height: size)
         } else if let icon = tool.opcIcon {
             icon.frame(width: size, height: size)

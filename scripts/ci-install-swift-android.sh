@@ -11,6 +11,8 @@ readonly SDK_ID="swift-6.3.3-RELEASE_android"
 readonly SDK_URL="https://download.swift.org/swift-6.3.3-release/android-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_android.artifactbundle.tar.gz"
 readonly SDK_CHECKSUM="d160cc3206dd1886dae3fef2337af5e25ec034692cd0ec225721c56cc69da7f5"
 readonly TARGET="aarch64-unknown-linux-android29"
+readonly TOOLCHAIN_URL="https://download.swift.org/swift-6.3.3-release/ubuntu2404/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-ubuntu24.04.tar.gz"
+readonly TOOLCHAIN_CHECKSUM="da8272a5fddccd65b1529ed0e52e04526e2eadd4237d58d6220efeb973c6cd19"
 
 fail() {
   printf 'error: %s\n' "$*" >&2
@@ -18,6 +20,23 @@ fail() {
 }
 
 swift_cmd="$(command -v swift || true)"
+# The Android SDK must match the compiler exactly, and runner images move their
+# preinstalled Swift (ubuntu-latest jumped to 6.4). Install the pinned toolchain
+# whenever PATH has another version.
+if [[ -z "$swift_cmd" ]] || [[ "$("$swift_cmd" --version 2>/dev/null)" != *"${SWIFT_VERSION}"* ]]; then
+  toolchain_dir="${RUNNER_TEMP:-$HOME}/swift-${SWIFT_VERSION}"
+  if [[ ! -x "$toolchain_dir/usr/bin/swift" ]]; then
+    mkdir -p "$toolchain_dir"
+    archive="$toolchain_dir.tar.gz"
+    curl -fsSL --retry 3 -o "$archive" "$TOOLCHAIN_URL"
+    echo "${TOOLCHAIN_CHECKSUM}  ${archive}" | sha256sum -c - >/dev/null \
+      || fail "Swift ${SWIFT_VERSION} toolchain checksum mismatch"
+    tar -xzf "$archive" -C "$toolchain_dir" --strip-components=1
+    rm -f "$archive"
+  fi
+  swift_cmd="$toolchain_dir/usr/bin/swift"
+  [[ -z "${GITHUB_PATH:-}" ]] || echo "$toolchain_dir/usr/bin" >> "$GITHUB_PATH"
+fi
 [[ -n "$swift_cmd" && -x "$swift_cmd" ]] || fail "swift is not on PATH"
 # GitHub Ubuntu images extract the toolchain to /usr/share/swift and only
 # symlink swift/swiftc into /usr/local/bin. Those names are often links to

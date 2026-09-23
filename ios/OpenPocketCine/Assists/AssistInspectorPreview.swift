@@ -17,6 +17,7 @@ extension LiveImageEffects {
         case .vectorscope: next.vectorscope = true
         case .trafficLights: next.trafficLights = true
         case .ndMeter: next.ndMeter = true
+        case .evMeter: break
         default: next.inspectorSample = AssistInspectorPreviewPolicy.isImage(tool)
         }
         return next

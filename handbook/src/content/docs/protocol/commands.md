@@ -5,6 +5,18 @@ description: DUML set/cmd values used on the connection spine, camera control, m
 
 Commands we know for the connection spine, status, camera control, media, and live view. Framing is in [DUML frame](../duml-frame/). This is not a complete vendor dictionary — only what OpenPocketCine has confirmed.
 
+For `cam_expo_param`, distinguish configured shutter at offsets **2–4** from
+applied shutter at **20–22**. The [Action 6 observation](../../devices/action-6/modes/#manual-photo-and-the-full-shutter-representation)
+shows a remembered 1/8000 while Auto applies 1/25. Both app shells use applied
+shutter for the Auto EV caption and keep configured shutter for Manual controls.
+The Auto readout accepts integer reciprocals (`0x8000` bit set, decimal byte
+zero, denominator 1–16000); absent, fractional or seconds values leave only
+`EV` visible. It never substitutes the remembered manual setting. ISO telemetry
+continues reading offsets 16–17, and requested EV remains at offset 6.
+These paths have synthetic regression coverage. The operator confirmed the fix
+on iPhone 16 Pro Max with build source `0645792d` on 2026-09-22; the camera
+model was not recorded. Android physical verification remains pending.
+
 | set/cmd | meaning | notes |
 |---|---|---|
 | `0x07/0x45` | SetPairingPIN | pairing handshake |
@@ -12,7 +24,7 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x07/0x07` | GetWifiSsid | `[status][packString]` |
 | `0x07/0x0e` | GetWifiPassword | `[status][packString]` |
 | `0x00/0x81` | register app device-info | on datalink |
-| `0x00/0x88` | app-presence keepalive | ~1 Hz, holds the session |
+| `0x00/0x88` | app registration / keepalive | ~1 Hz with the full `17 … APP` payload; video stops ~8–10 s after the last one ([details](../duml-transport/#registration-holds-live-video)) |
 | `0x00/0x99` | subscribe to a status key | battery, storage, mode, ... |
 | `0x02/0x0c` | enter/exit playback | `01 01 00 01` / `01 01 00 00`. Hold with `0x00/0x88` ~1 Hz. Do not poll `0x02/0x8E` while held. |
 | `0x00/0x26` | media list request | cursor `@10` u32-LE; ctr `@4`. Trigger `4a040e10`. Newest page needs no playback; older pages do. |
@@ -23,7 +35,7 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x0d/0x02` | **battery push** | percent at payload offset 20 |
 | `0x02/0xdc` | **storage push** | SD + internal capacity/free |
 | `0x02/0x80` | active-store + playback bit | unsolicited |
-| `0x09/0xa8` | **live-view enable** | starts pktType-0x02 video. Pocket `rcv=0x08`; Nano `rcv=0x41` |
+| `0x09/0xa8` | **live-view enable** | starts pktType-0x02 video. Pocket `rcv=0x08`; Nano and Action 6 `rcv=0x41` |
 | `0x02/0x09` | **Nano live gate** | Mimo `00…03` with enable, `00…04` on stop. ACK `00`. Pocket unused |
 | `0x02/0x02` | **record start/stop** | `[01]` start / `[00]` stop (Osmosis Nano; Pocket 4 uses `rcv=0x01`) |
 | `0x02/0x01` | **photo shutter** | Pocket 3 ordinary Photo `[01]`; Pocket 4 Pro SuperPhoto `[0F]`, Live Photo `[01]`, countdown cancel `[00]` ([survey](../../devices/pocket-4-pro/photo/#storage-and-shutter)); `d9` in Video mode |
@@ -37,7 +49,7 @@ Commands we know for the connection spine, status, camera control, media, and li
 | `0x02/0x2A` | **ISO index** | `00` Auto, `02`=50, `03`=100 … `0B`=25600; Pocket 3 Low-Light also uses `10`=9600 and `11`=16000 ([physical survey](../../devices/pocket-3/settings/#white-balance-and-exposure)); no GET — expo `@5` index / `@16` value |
 | `0x02/0x42` | **color mode** | Wheel follows the body. Pocket 4 Pro `3F` Normal / `3C` HDR / `17` D-Log / `41` D-Log2. Pocket 4 `3F` / `3C` / `17` D-Log (no D-Log2). Pocket 3 `00` Normal / `3C` HDR (HLG) / `3D` D-Log M — `3F` is Pocket 4 Normal and is rejected; `00` is Rec.709, not D-Log M; `17` is not D-Log M. Nano `camcap_color_mode` `00 3F 3D` = Normal 8-bit / Normal 10-bit / D-Log M (same `00`/`3D` as Pocket 3 Rec.709 / D-Log M; `3F` is Nano 10-bit, not Pocket 4 Normal). No GET — `cam_image_effect` `@2` |
 | `0x02/0x18` | **resolution + fps** | 5 B; normal Video `[res][fps_idx] 00 00 00`. Pocket 3 Slow Motion uses trailer `00 04 00` at 100/120fps and `00 08 00` at 240fps ([survey](../../devices/pocket-3/modes/#shooting-modes-and-formats)). Aspect is the **res byte**, not a second SET (`0A` 1080p 16:9 / `10` 4K 16:9; media catalog also `2D` 2.7K 16:9, `0C`/`5F`/`67` 4:3, `69`/`6A`/`6B` 1:1, `42`/`43`/`6C` 9:16). fps `01`=24 `02`=25 `03`=30 `04`=48 `05`=50 `06`=60; SlowMo `07`=120 `08`=240 `0A`=100 `13`=200 (Pocket 4 Pro Slow Motion). No GET — `cam_video_param_v2` `@0–1`. Legal pairs for the current shooting mode arrive as `camcap_video_format` (`01` + inner u16-LE + count + count×`[res][fps][00]`). Pocket 4 Pro Video (`mimo-live-start-20260828`) is 4K then 1080p, 24–60 only. Qualify SlowMo pairs from that model’s capability take or a physical mode-specific capture; Pocket 3 accepted pairs and trailers are recorded in its [survey](../../devices/pocket-3/modes/#shooting-modes-and-formats). The [Pocket 4 Pro survey](../../devices/pocket-4-pro/slow-motion/#format-set-payloads) confirms six Slow Motion pairs, including 4K/200 `10 13 00 04 00` and 4K/240 `10 08 00 08 00`. |
-| `0x02/0xb8` | **zoom SET** | slider `0A 4E` + lens `@14` (217 = 1×, 651 = 3×, 2604 = 12× on Pocket 4 Pro). Chip cycle follows the body: 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 Video limits depend on resolution: 4K 2×, 2.7K 3×, 1080p 4× (all three endpoints physically confirmed in the [survey](../../devices/pocket-3/controls/#zoom-and-med-tele)); Nano 1×. SlowMo / TimeLapse / SuperNight: digital zoom off (Pro keeps 1×/3× optical). Pocket 4 Pro Mimo 1×→12× pinch uses this form, ~20 Hz. Pocket 3 held-slider motion instead uses `01 <rate> <direction> 00`, stopped by `FF 00 00 00`; see [Pocket 3 evidence](../../devices/pocket-3/controls/#zoom-and-med-tele). Older takes also have slew `03 00` + 100/300. ACK `00`. No GET. **D-Log2 rejects every zoom SET** — hop `0x02/0x42` to D-Log (`17`) first and wait for `cam_image_effect` `@2` before `0xB8` |
+| `0x02/0xb8` | **zoom SET** | slider `0A 4E` + lens `@14` (217 = 1×, 651 = 3×, 2604 = 12× on Pocket 4 Pro). Chip cycle follows the body: 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 Video limits depend on resolution: 4K 2×, 2.7K 3×, 1080p 4× (all three endpoints physically confirmed in the [survey](../../devices/pocket-3/controls/#zoom-and-med-tele)); Nano 1×. SlowMo / TimeLapse / SuperNight: digital zoom off (Pro keeps 1×/3× optical). Pocket 4 Pro Mimo 1×→12× pinch uses this form, ~20 Hz. Programmed linear zoom uses distinct positions at up to 50 Hz on Pocket 4 Pro; a physical five-second 3×↔6× comparison reduced stationary preview frames while retaining 40 Hz window ACKs. Pocket 3 and Pocket 4 Pro held zoom use `01 <speed> <direction> 00`, stopped by `FF 00 00 00`. Speeds are the seven native values `48`–`4E`; direction `01` increases and `00` decreases. A Pocket 4 Pro Mimo rocker take matched 141 requests to successful replies. See [Pocket 3 evidence](../../devices/pocket-3/controls/#zoom-and-med-tele). Older takes also have slew `03 00` + 100/300. ACK `00`. No GET. **D-Log2 rejects every zoom SET** — hop `0x02/0x42` to D-Log (`17`) first and wait for `cam_image_effect` `@2` before `0xB8` |
 | `0x00/0x99` `cam_fov` | **zoom factor (read)** | 25 B push; u32-LE `@0`. Operator 1× = 12287, 12× = 2341 — **inverted vs `@0/1024`**. Display from lens `@14` (monotonic). |
 | `0x02/0x24` | **focus mode** | `01` Single / `02` Continuous; no GET — `cam_lens_state` `@0` `B1`/`B2` |
 | `0x02/0x2C` | **white balance** | 5 B `[mode][K/100 u16-LE][tint i16-LE]`. Auto `00` keeps tint (kelvin 0; Mimo `00 00 00 14 00` at +20). Custom `06`. ACK `00` flags `0xc0` ~10 ms. One in flight (100 ms coalesce) — do not flood. No GET — `cam_image_effect` `@4` mode, `@5–8` Custom K/tint. Auto `@5–6` is live-measured; do not SET it. Named presets are app Kelvin shortcuts, not extra mode bytes. **Pocket 3 caveat:** this survey only confirms zero trailing SET values; status bytes 7–8 varied without a tint control, so the tint interpretation above is unconfirmed for this model ([evidence](../../devices/pocket-3/settings/#white-balance-and-exposure)). |
@@ -83,3 +95,23 @@ Video fallback still requires a confirmed model and normal Video mode. The chang
 has automated coverage on both platforms. The operator confirmed the corrected
 vertical 3K picker on an iPhone on 2026-09-11; Android and on-camera fps-change
 verification remain pending.
+
+## Camera-metered EV
+
+The existing `0x00/0x99` subscription for `cam_expo_param` reports two distinct
+EV fields. Offset 6 is the configured compensation (`0x02/0x2E` SET readback).
+Offset 15 is the camera's metered exposure indication. Both use third-stop codes:
+`(raw - 16) / 3`, with supported bytes `07`…`19` representing −3…+3 EV.
+The DISP 1 meter reads offset 15 only. It never uses configured compensation or
+preview pixels as a fallback, and sends no additional GET or subscription.
+Short payloads and codes outside that range produce an unavailable reading.
+
+The [Action 6 controls survey](../../devices/action-6/controls/#configured-ev-versus-metered-exposure)
+correlates the two fields with the Mimo HUD. A September 22 Pocket 4 Pro Mimo
+zoom capture has 750 CRC-valid 46-byte exposure pushes in Manual, all with
+configured EV `10`; offset 15 independently varies `0B`…`19`. A native-app
+Pocket 4 Pro trace confirms independent values `14` and `19`. Nano has 235
+46-byte pushes with configured `10` and metered `0E`…`11`. Four Pocket 3 takes
+contain 900 **44-byte** pushes with both fields fixed at `10`; its layout is
+supported, but independent metered movement remains unqualified. These traces
+support the field separation, not the camera's metering algorithm or calibration.

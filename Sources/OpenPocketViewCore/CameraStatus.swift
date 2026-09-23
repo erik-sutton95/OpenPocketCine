@@ -34,9 +34,12 @@ public struct CameraStatus: Equatable, Sendable {
     public var isoIndex: IsoIndex?
     /// EV from `cam_expo_param` `@6` (`0x02/0x2E` echo). nil unknown / out of −3…+3.
     public var evComp: EvComp?
+    /// Camera-metered EV from `cam_expo_param` `@15`, not the configured compensation.
+    public var meteredEv: EvComp?
     /// Last `0x8E` pid `0x000F` GET reply (Auto ISO ceiling).
     public var isoLimit: IsoLimit?
-    /// Shutter as 1/N from `cam_expo_param` `@2–3` (`denom | 0x8000`). `-1` unknown. Not `@16`.
+    /// Shutter as 1/N: applied `cam_expo_param` `@20–22` in Auto, configured
+    /// `@2–3` otherwise. `-1` unknown or unsupported by the integer readout.
     public var shutterDenom: Int = -1
     /// Legal 1/N denoms from `camcap_shutter`, camera order. Empty until the cap push.
     public var availableShutterDenoms: [Int] = []
@@ -109,8 +112,13 @@ public struct CameraStatus: Equatable, Sendable {
     public var gimbalModeFamily: GimbalModeFamily?
     /// Last `0x04/0x50` GET reply. Cannot tell FPV from Tilt Locked.
     public var gimbalParams: GimbalParamState?
-    /// Mechanical iris readout. Pocket has none; `cam_blur_aperture` is beauty blur, not f-stop.
-    public var irisLabel: String?
+    /// Action 6 mechanical iris, hundredths of an f-number (`cam_expo_param` `@13`).
+    /// Pocket has none; `cam_blur_aperture` is beauty blur, not f-stop.
+    public var irisHundredths: Int?
+    /// Action 6 requested aperture strategy (`cam_aperture_ctrl_strategy`).
+    public var apertureStrategy: ApertureStrategy?
+    /// Action 6 `camcap_aperture_ctrl_strategy`; empty until pushed.
+    public var availableApertureStrategies: [ApertureStrategy] = []
     public init() {}
 
     /// Osmo live bar: hours:minutes:seconds. Frames stay in `timecode` (`@6`).
@@ -311,11 +319,27 @@ public enum CameraStatusDecoder {
             return !formats.isEmpty
         case "cam_expo_param" where item.value.count >= 8:
             if let mode = ExpoMode.parseExpoParam(item.value) { status.expoMode = mode }
-            if let denom = ExpoParam.shutterDenom(item.value) { status.shutterDenom = denom }
+            if ExpoMode.parseExpoParam(item.value) == .auto {
+                status.shutterDenom = ExpoParam.shutterDenom(item.value) ?? -1
+            } else if let denom = ExpoParam.shutterDenom(item.value) {
+                status.shutterDenom = denom
+            }
             if let idx = ExpoParam.isoIndex(item.value) { status.isoIndex = idx }
             if let iso = ExpoParam.isoValue(item.value) { status.iso = iso }
             status.evComp = ExpoParam.evComp(item.value)
+            status.meteredEv = ExpoParam.meteredEv(item.value)
+            if model?.supportsAperture == true {
+                status.irisHundredths = ApertureStrategy.irisHundredths(item.value)
+            }
             return true
+        case ApertureStrategy.stateKey:
+            guard let strategy = ApertureStrategy.parseState(item.value) else { return false }
+            status.apertureStrategy = strategy
+            return true
+        case ApertureStrategy.capabilityKey:
+            let choices = ApertureStrategy.parseCapability(item.value)
+            if !choices.isEmpty { status.availableApertureStrategies = choices }
+            return !choices.isEmpty
         case "cam_video_param_v2" where item.value.count >= 2:
             if let fps = fps(index: item.value[1]) { status.fps = fps }
             status.videoResolution = VideoResolution(rawValue: item.value[0])

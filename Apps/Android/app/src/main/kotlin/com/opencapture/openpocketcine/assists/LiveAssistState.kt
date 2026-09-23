@@ -48,6 +48,8 @@ class LiveAssistState(
         private set
     var ndMeter by mutableStateOf(false)
         private set
+    var evMeter by mutableStateOf(false)
+        private set
     var audioMeters by mutableStateOf(false)
         private set
     var guides by mutableStateOf(false)
@@ -236,6 +238,7 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> vectorscope
             LiveAssistTool.LIGHTS -> trafficLights
             LiveAssistTool.ND -> ndMeter
+            LiveAssistTool.EV -> evMeter
             LiveAssistTool.AUDIO -> audioMeters
             LiveAssistTool.GUIDES -> guides
             LiveAssistTool.GRID -> grid
@@ -247,6 +250,7 @@ class LiveAssistState(
     /** Pins filter DISP 2; they never flip [isOn]. */
     fun isVisible(tool: LiveAssistTool): Boolean {
         if (!isOn(tool)) return false
+        if (tool == LiveAssistTool.EV && clean) return false
         return if (clean) pinned.contains(tool) else true
     }
 
@@ -285,6 +289,7 @@ class LiveAssistState(
             LiveAssistTool.VECTOR -> vectorscope = !vectorscope
             LiveAssistTool.LIGHTS -> trafficLights = !trafficLights
             LiveAssistTool.ND -> ndMeter = !ndMeter
+            LiveAssistTool.EV -> evMeter = !evMeter
             LiveAssistTool.AUDIO -> audioMeters = !audioMeters
             LiveAssistTool.GUIDES -> {
                 guides = !guides
@@ -319,6 +324,7 @@ class LiveAssistState(
         playbackVisibleTools.any { it in lookOverlayTools }
 
     fun togglePlayback(tool: LiveAssistTool) {
+        if (tool !in LiveAssistTool.playbackToolbarCases) return
         playbackVisibleTools =
             if (tool in playbackVisibleTools) playbackVisibleTools - tool else playbackVisibleTools + tool
         onPersistPlayback?.invoke(playbackVisibleTools.map { it.name }.toSet())
@@ -512,6 +518,7 @@ class LiveAssistState(
         vectorscope = LiveAssistTool.VECTOR in tools
         trafficLights = LiveAssistTool.LIGHTS in tools
         ndMeter = LiveAssistTool.ND in tools
+        evMeter = LiveAssistTool.EV in tools
         audioMeters = LiveAssistTool.AUDIO in tools
         guides = LiveAssistTool.GUIDES in tools
         grid = LiveAssistTool.GRID in tools
@@ -621,7 +628,7 @@ class LiveAssistState(
         vectorscope = LiveAssistTool.VECTOR in on
         trafficLights = LiveAssistTool.LIGHTS in on
         ndMeter = LiveAssistTool.ND in on
-        ndMeter = LiveAssistTool.ND in on
+        evMeter = LiveAssistTool.EV in on
         audioMeters = LiveAssistTool.AUDIO in on
         guides = LiveAssistTool.GUIDES in on
         grid = LiveAssistTool.GRID in on
@@ -761,10 +768,10 @@ class LiveAssistState(
         }
 
         private fun parsePins(names: Set<String>): Set<LiveAssistTool> =
-            names.mapNotNull(LiveAssistTool::fromPersisted).toSet()
+            names.mapNotNull(LiveAssistTool::fromPersisted).filter { it in LiveAssistTool.cleanPinCases }.toSet()
 
         private fun parsePlayback(names: Set<String>): Set<LiveAssistTool> =
-            names.mapNotNull(LiveAssistTool::fromPersisted).toSet()
+            names.mapNotNull(LiveAssistTool::fromPersisted).filter { it in LiveAssistTool.playbackToolbarCases }.toSet()
 
         private fun encodeGuides(guides: ScopeGuides): JSONObject =
             JSONObject().put("clip", guides.clip).put("crush", guides.crush).put("middle", guides.middle)

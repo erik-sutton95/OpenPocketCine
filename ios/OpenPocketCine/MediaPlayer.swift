@@ -1574,6 +1574,7 @@ struct MediaPlayerView: View {
     }
 
     private func loadActiveClip() async {
+        playbackFeed.beginSourceChange()
         isClipReady = false
         loadError = nil
         reachedEnd = false

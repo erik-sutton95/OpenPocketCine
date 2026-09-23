@@ -4,7 +4,7 @@ import OpenPocketViewCore
 import SwiftUI
 
 /// OpenZCine `MonitorCaptureStrip` + `CaptureSettingButton` for Pocket:
-/// ISO — SHUTTER — MODE — WB — FOCUS — AUDIO. Parent already sizes this to ~2/3 width.
+/// ISO — SHUTTER — MODE — WB — FOCUS (APERTURE on Action 6) — AUDIO. Parent already sizes this to ~2/3 width.
 struct LiveCameraControlBar: View {
     var columns = 6
     @Environment(AppModel.self) private var model
@@ -30,6 +30,10 @@ struct LiveCameraControlBar: View {
             .onChange(of: model.session.supportsFocusMode) { _, on in
                 if !on, model.captureSheet == .focus { model.captureSheet = nil }
             }
+            .onChange(of: model.session.supportsAperture) { _, on in
+                if !on, model.captureSheet == .aperture { model.captureSheet = nil }
+                if !on, model.captureDrum?.sheet == .aperture { model.captureDrum = nil }
+            }
             .onChange(of: model.session.status.isPhoto) { _, photo in
                 if photo, model.captureSheet == .audio { model.captureSheet = nil }
                 if photo, model.captureDrum?.sheet == .audio { model.captureDrum = nil }
@@ -43,7 +47,8 @@ struct LiveCameraControlBar: View {
     private var showsAudio: Bool { !model.session.status.isPhoto }
 
     private var visibleTileCount: Int {
-        4 + (model.session.supportsFocusMode ? 1 : 0) + (showsAudio ? 1 : 0)
+        4 + (model.session.supportsFocusMode ? 1 : 0) + (model.session.supportsAperture ? 1 : 0)
+            + (showsAudio ? 1 : 0)
     }
 
     private var gridColumns: Int { columns == 3 ? 3 : max(visibleTileCount, 1) }
@@ -71,6 +76,9 @@ struct LiveCameraControlBar: View {
             tile(.wb, label: "WB", value: wbValue, widest: "10000K", valueIcon: wbIcon)
             if model.session.supportsFocusMode {
                 tile(.focus, label: "FOCUS", value: focusValue, widest: "Showcase")
+            }
+            if model.session.supportsAperture {
+                tile(.aperture, label: "APERTURE", value: apertureValue, widest: "Starburst f/4")
             }
             if showsAudio {
                 tile(.audio, label: "AUDIO", value: audioValue, widest: "Spatial")
@@ -172,6 +180,15 @@ struct LiveCameraControlBar: View {
             mode: model.session.status.focusMode,
             track: model.session.status.focusTrack
         )?.chip ?? "—"
+    }
+
+    /// Live mechanical iris first; the requested strategy until `cam_expo_param` lands.
+    private var apertureValue: String {
+        let status = model.session.status
+        if let iris = status.irisHundredths {
+            return ApertureStrategy.fNumberLabel(hundredths: iris)
+        }
+        return status.apertureStrategy?.label ?? "—"
     }
 
     private var expoValue: String {

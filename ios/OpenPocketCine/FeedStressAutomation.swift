@@ -124,11 +124,13 @@ enum FeedStressAutomation {
     private let feedStressArmInject = "com.opencapture.opc.feed-stress.arm-inject"
     private let feedStressDisarmInject = "com.opencapture.opc.feed-stress.disarm-inject"
     private let feedStressTeardown = "com.opencapture.opc.feed-stress.teardown"
+    private let feedStressAttached = "com.opencapture.opc.feed-stress.attached-v1"
 
     private let feedStressScenarios = [
         "settingsOpenClose", "assistToggles", "rotation", "cameraSettingChanges",
         "boundedJoystick", "lifecycleInterrupt", "briefRecord", "injectFault",
-        "mediaReturn", "steadyFeed",
+        "mediaReturn", "steadyFeed", "settingsSweep", "gimbalStorm", "faultMediaReturn",
+        "faultAutomaticRecovery",
     ]
 
     private let feedStressDarwinCallback: CFNotificationCallback = { _, observer, name, _, _ in
@@ -170,6 +172,7 @@ enum FeedStressAutomation {
         var recording = false
         var cameraFamily = "unknown"
         var reconnect = "idle"
+        var settingsBaselineReady = false
     }
 
     private struct FeedStressPlan {
@@ -183,6 +186,7 @@ enum FeedStressAutomation {
     private struct FeedStressBaseline {
         var captured = false
         var isoIndex: IsoIndex?
+        var isoLimit: IsoLimit?
         var whiteBalance: WhiteBalance?
         var peaking = false
         var falseColor = false
@@ -212,6 +216,7 @@ enum FeedStressAutomation {
         private var installed = false
         private var seed: UInt64 = 20_260_914
         private var limitS: TimeInterval = 300
+        private var configurationToken = ""
         private var startedAt: TimeInterval = 0
         private var wallStart = Date()
         private var runId = ""
@@ -243,6 +248,11 @@ enum FeedStressAutomation {
                 limitS = TimeInterval(env["OPV_FEED_STRESS_LIMIT_S"] ?? "") ?? 300
                 if limitS < 60 { limitS = 60 }
                 if limitS > 1_800 { limitS = 1_800 }
+                let recording = env["OPV_FEED_STRESS_RECORD"] == "1" ? "1" : "0"
+                let injection = env["OPV_FEED_STRESS_INJECT"] ?? ""
+                configurationToken = Data(
+                    "\(seed)|\(Int(limitS))|\(recording)|\(injection)".utf8
+                ).base64EncodedString()
                 startedAt = ProcessInfo.processInfo.systemUptime
                 wallStart = Date()
                 rng = FeedStressRNG(state: seed == 0 ? 1 : seed)
@@ -481,8 +491,10 @@ enum FeedStressAutomation {
                 "halt=\(state.halt.isEmpty ? "0" : state.halt)",
                 "t=\(String(format: "%.1f", now - startedAt))",
                 "run=\(runId)",
+                "config=\(configurationToken)",
                 "family=\(state.cameraFamily)",
                 "reconnect=\(state.reconnect)",
+                "settingsBaseline=\(state.settingsBaselineReady ? 1 : 0)",
             ].joined(separator: " ")
         }
 
@@ -566,14 +578,27 @@ enum FeedStressAutomation {
 
         @MainActor
         private func captureBaselineIfNeeded() {
-            guard !baseline.captured else { return }
             guard let model = AppModelDiagnosticsAnchor.model else { return }
             guard model.session.phase == .live else { return }
             let status = model.session.status
+            if baseline.captured {
+                // Different status fields can arrive on different callbacks.
+                // The settings sweep refuses mutation until all are captured.
+                if baseline.isoIndex == nil { baseline.isoIndex = status.isoIndex }
+                if baseline.isoLimit == nil { baseline.isoLimit = status.isoLimit }
+                if baseline.whiteBalance == nil { baseline.whiteBalance = status.whiteBalance }
+                let needsLimit = CaptureLists.offersIsoAuto(from: status)
+                let ready =
+                    baseline.isoIndex != nil && baseline.whiteBalance != nil
+                    && (!needsLimit || baseline.isoLimit != nil)
+                lock.withLock { $0.settingsBaselineReady = ready }
+                return
+            }
             guard status.isoIndex != nil || status.iso > 0 else { return }
             baseline = FeedStressBaseline(
                 captured: true,
                 isoIndex: status.isoIndex,
+                isoLimit: status.isoLimit,
                 whiteBalance: status.whiteBalance,
                 peaking: model.assist.isOn(.peaking),
                 falseColor: model.assist.isOn(.falseColor),
@@ -589,7 +614,7 @@ enum FeedStressAutomation {
                 [feedStressBeginPrefix + $0, feedStressPassPrefix + $0, feedStressFailPrefix + $0]
             }
             names.append(contentsOf: [
-                feedStressArmInject, feedStressDisarmInject, feedStressTeardown,
+                feedStressArmInject, feedStressDisarmInject, feedStressTeardown, feedStressAttached,
             ])
             for name in names {
                 CFNotificationCenterAddObserver(
@@ -612,6 +637,8 @@ enum FeedStressAutomation {
                 mark("inject", "disarm", result: "")
             } else if name == feedStressTeardown {
                 runTeardown(reason: "test")
+            } else if name == feedStressAttached {
+                mark("runner", "attached-v1", result: "pass")
             }
         }
 
@@ -692,6 +719,9 @@ enum FeedStressAutomation {
             session.endGimbalStick(cancelMove: true)
             if let iso = baseline.isoIndex, iso != session.status.isoIndex {
                 session.setISO(iso)
+            }
+            if let limit = baseline.isoLimit, limit != session.status.isoLimit {
+                session.setIsoLimit(limit)
             }
             if let wb = baseline.whiteBalance {
                 switch wb.mode {

@@ -199,7 +199,7 @@ fun AssistOptionsPopup(
 @Composable
 private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colorMode: Int) {
     when (tool) {
-        LiveAssistTool.LUT -> Spacer(Modifier.height(0.dp))
+        LiveAssistTool.LUT, LiveAssistTool.EV -> Spacer(Modifier.height(0.dp))
         LiveAssistTool.PEAK -> PeakingOptions(state)
         LiveAssistTool.FALSE -> FalseColorOptions(state, colorMode)
         LiveAssistTool.ZEBRA -> ZebraOptions(state, colorMode)

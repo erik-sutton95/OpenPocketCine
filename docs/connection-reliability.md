@@ -50,7 +50,7 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 
 | Owner | Production? | What it does |
 | --- | --- | --- |
-| `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video packet/AU → enable ×2 (status young) → one UDP rebuild with fresh handshake/registration/subscription. Separately, when native decode is expected, fresh complete AUs with silent decoder output request one decoder rebuild and one enable (not a UDP rebuild). The repair retains the last picture and requires fresh source/presentation; negotiation failure or a 16 s picture deadline transfers to full recovery. Holds 4 s after any tracked SET. Blocked enables do not spend a ladder rung. |
+| `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video packet/AU → one enable (status young) → one UDP rebuild with fresh handshake/registration/subscription. Separately, when native decode is expected, fresh complete AUs with silent decoder output request one decoder rebuild and one enable (not a UDP rebuild). The repair retains the last picture and requires fresh source/presentation; negotiation failure or a 16 s picture deadline transfers to full recovery. Holds 4 s after any tracked SET. Blocked enables do not spend a ladder rung. |
 | `LinkDiagnoser` | **Observe only** | Classify → cheapest repair. SoftAP lost → rejoin; BLE lost → full reconnect; present stall → none. |
 | `CameraSoftAP.firstPictureStep` | **Yes**, runs **before** the watchdog | After the initial enable and one resend, fresh traffic without picture reaches the existing 16 s deadline and transfers to negotiated recovery; Pocket 3 FORMAT ownership is preserved. |
 | Keepalive / SET-timeout / foreground | **Yes**, gated | Extra UDP rebuilds only when status is stale (`statusFresh` false) and no repair is in flight. Do not cancel a live rebuild to start another. A successful replacement-endpoint negotiation receives one enable from its repair caller, including keepalive. `still holding for IDR` is not a repair owner. |
@@ -66,7 +66,7 @@ one recovery enable; Android maps it to `rebuildDecoderKeepingPicture`. Those
 are source mappings, not a completed physical proof. Fresh native output with
 stale presentation does not trigger a camera PLI. Packet-without-complete-AU
 stall (established picture stale, AUs stale, native output stale when expected)
-uses the existing enable ×2 then endpoint ladder — never a native decoder
+uses the existing enable then endpoint ladder — never a native decoder
 rebuild without complete AUs. That mapping is in portable tests; **physical
 qualification is pending**. Renderer-only local repair is **not implemented**.
 `fullSessionRejoin` remains the policy's last rung; both shells map it to
@@ -161,7 +161,7 @@ Physical take 2026-08-28 (`es_iphone16`): first `feed: observe` was
 `lastVideo=nones` and `flip: skip udp notLive`.
 
 Repairs (this branch): skip parameter-set enable while UDP video is alive
-(debounce `escalateAfter`); encoder-pause sends two `0x09/0xa8` then one
+(debounce `escalateAfter`); encoder-pause sends one `0x09/0xa8` then one
 UDP rebuild (22:16 brought HEVC back; #148 was a 2 s-too-fast reopen).
 Keepalive must not flap that socket while status is young. SET ACK
 timeout with young status is the same — do not rebuild UDP. After a
@@ -186,6 +186,11 @@ Decoder-output recovery and typed incidents do not replace that take. A passing
 short stress harness run, if later recorded, is that phone/camera/build only.
 
 ## Physical protocol (#148)
+
+Repeatable pairing, lifecycle, network/BLE disruption and optional recording
+experiments use the [connection stress matrix](connection-stress-testing.md).
+Its reports separate simulation, driver-declared physical evidence, unsupported
+paths and failed teardown. It adds no repair owner or live-enable writes.
 
 Device: Pocket 4 / 4 Pro + physical iPhone. Simulator is not this bug.
 Build this branch (main + observe line). Console:

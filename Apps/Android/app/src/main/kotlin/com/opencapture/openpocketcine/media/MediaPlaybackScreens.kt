@@ -345,7 +345,7 @@ fun MediaPlayerScreen(
     var wasPlayingBeforeScrub by remember { mutableStateOf(false) }
     var lastScrubSeekAt by remember { mutableLongStateOf(0L) }
     var reachedEnd by remember { mutableStateOf(false) }
-    var ready by remember { mutableStateOf(false) }
+    var ready by remember(active.id) { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(true) }
@@ -1048,6 +1048,7 @@ fun MediaPlayerScreen(
                 )
                 com.opencapture.openpocketcine.assists.MonitorAssistCluster(
                     portrait = portraitPlayback, locked = false,
+                    playback = true,
                     isOn = assist::isPlaybackVisible, onToggle = { assist.togglePlayback(it) },
                     onLongPress = { assist.configureTool = it },
                     requestExpand = assistMode, onExpansionHandled = { assistMode = false },
@@ -1107,28 +1108,29 @@ fun MediaPlayerScreen(
                 )
             }
 
-            }
-            }
-        }
-
-        if (confirmDelete) {
-            MediaConfirmPopup(
-                title = "Delete this clip from the camera?",
-                confirmTitle = "Delete",
-                onDismiss = { confirmDelete = false },
-                onConfirm = {
-                    confirmDelete = false
-                    scope.launch {
-                        val dying = active
-                        controller.delete(dying)
-                        when {
-                            canNext -> active = playlist[index + 1]
-                            canPrev -> active = playlist[index - 1]
-                            else -> onClose()
+            // Inside the overlay window: in the host window it sits under the gesture well.
+            if (confirmDelete) {
+                MediaConfirmPopup(
+                    title = "Delete this clip from the camera?",
+                    confirmTitle = "Delete",
+                    onDismiss = { confirmDelete = false },
+                    onConfirm = {
+                        confirmDelete = false
+                        scope.launch {
+                            val dying = active
+                            controller.delete(dying)
+                            when {
+                                canNext -> active = playlist[index + 1]
+                                canPrev -> active = playlist[index - 1]
+                                else -> onClose()
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
+            }
+
+            }
+            }
         }
     }
     }

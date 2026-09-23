@@ -7,17 +7,11 @@ public struct MonitorZoomScale: Equatable, Sendable {
     public let maximum: Double
     public static let angularSpan = 210.0 * Double.pi / 180
     public static let tickIncrement = 0.01
-    /// Equal-angle minor ticks across the full ring. Hub still steps hundredths.
+    /// Equal-angle minor ticks across the full ring. Only labels use hundredths.
     public static let minorTickCount = 18
     public static let labeledTicks = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0]
-    /// Integer majors the slow disc magnet can rest on. 1.5× is labeled, not whole.
+    /// Integer majors for visual marks and haptic crossings.
     public static let wholeStops = [1.0, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0]
-    /// Max hundredths of travel in one pointer sample to count as "very slow".
-    public static let slowSnapStep = 0.025
-    /// Attract when this close to a whole stop.
-    public static let slowSnapIn = 0.03
-    /// Stay on a whole stop until the unconstrained value leaves this far.
-    public static let slowSnapHold = 0.06
 
     public static func minorTickPositions() -> [Double] {
         (0...minorTickCount).map { Double($0) / Double(minorTickCount) }
@@ -41,25 +35,9 @@ public struct MonitorZoomScale: Equatable, Sendable {
     public func dragged(from value: Double, angleDelta: Double, current: Double? = nil)
         -> Double
     {
-        guard angleDelta.isFinite else { return quantized(self.value(at: position(value))) }
-        let next = quantized(self.value(at: position(value) - angleDelta / Self.angularSpan))
-        guard let current else { return next }
-        return slowSnap(next, current: quantized(current))
-    }
-
-    /// Light magnet on 2× / 3× / 4× … only when the pointer is barely moving.
-    public func slowSnap(_ next: Double, current: Double) -> Double {
-        let here = quantized(current)
-        let there = quantized(next)
-        guard abs(there - here) <= Self.slowSnapStep else { return there }
-        let stops = Self.wholeStops.filter { $0 >= minimum - 0.001 && $0 <= maximum + 0.001 }
-        if let held = stops.first(where: { abs(here - $0) < Self.tickIncrement / 2 }) {
-            return abs(there - held) < Self.slowSnapHold ? quantized(held) : there
-        }
-        if let stop = stops.first(where: { abs(there - $0) <= Self.slowSnapIn }) {
-            return quantized(stop)
-        }
-        return there
+        _ = current
+        guard angleDelta.isFinite else { return self.value(at: position(value)) }
+        return self.value(at: position(value) - angleDelta / Self.angularSpan)
     }
 
     public func quantized(_ value: Double) -> Double {

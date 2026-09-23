@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,6 +79,7 @@ fun SavedCamerasExperience(model: AppModel) {
         emptyMessage = "Pair a new camera to start monitoring.",
         scanning = phase == ConnectionPhase.SCANNING,
         actions = {
+            MultiviewHeaderButton(enabled = !busy, onClick = model::openMultiview)
             MonitorIconButton(
                 OpcIcon.FILM,
                 "Media library",
@@ -320,5 +322,44 @@ private fun PairNewCameraFooter(enabled: Boolean, onClick: () -> Unit) {
             style = MonitorTypography.text(13f, FontWeight.SemiBold),
             maxLines = 1,
         )
+    }
+}
+
+/** iOS `CamerasPage` grid header action: accented, titled when the header has room. */
+@Composable
+private fun MultiviewHeaderButton(enabled: Boolean, onClick: () -> Unit) {
+    val window = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val width = window.width / density
+    val height = window.height / density
+    val tablet = minOf(width, height) >= 600f
+    val fullLabels = tablet || width > height
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier.height(if (tablet) 48.dp else 43.dp)
+            .alpha(if (enabled) 1f else 0.38f)
+            .clip(shape)
+            .background(MonitorPalette.accent.copy(alpha = 0.12f))
+            .border(1.dp, MonitorPalette.accent.copy(alpha = 0.3f), shape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics { contentDescription = "Open Multiview" }
+            .padding(horizontal = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OpcIcon(
+            OpcIcon.LAYOUT_GRID,
+            contentDescription = null,
+            tint = MonitorPalette.accent,
+            modifier = Modifier.size(if (tablet) 26.dp else 23.dp),
+        )
+        if (fullLabels) {
+            Text(
+                "Multi-view",
+                color = MonitorPalette.text,
+                style = MonitorTypography.text(12.5f, FontWeight.SemiBold),
+                maxLines = 1,
+            )
+        }
     }
 }

@@ -467,8 +467,9 @@ enum ReliabilityReporting {
     ) -> Event {
         let event = Event(level: .error)
         event.eventId = eventID
+        // Kind is in the fingerprint, so the issue title stays stable per group.
         event.message = SentryMessage(
-            formatted: "feed incident \(envelope.grouping.failingStage)")
+            formatted: "feed incident \(envelope.grouping.failingStage): \(envelope.kind)")
         event.fingerprint = ReliabilityReportingPrivacy.fingerprint(
             schema: envelope.schemaVersion,
             kind: envelope.kind,
@@ -481,6 +482,9 @@ enum ReliabilityReporting {
             "kind": envelope.kind,
             "testSource": envelope.testSource,
             "buildIdentity": envelope.buildIdentity,
+            "trigger": envelope.trigger,
+            "recoveredBy": envelope.recoveredBy,
+            "gap": FeedIncidentExport.gapBucket(envelope.worstGapSeconds),
         ]
         event.extra = [
             "schemaVersion": envelope.schemaVersion,
@@ -497,6 +501,8 @@ enum ReliabilityReporting {
             "healthyExposureSeconds": envelope.healthyExposureSeconds,
             "testSource": envelope.testSource,
             "buildIdentity": envelope.buildIdentity,
+            "trigger": envelope.trigger,
+            "recoveredBy": envelope.recoveredBy,
         ]
         event.context = [
             "feed": [
@@ -509,6 +515,9 @@ enum ReliabilityReporting {
                 "hardwareClass": envelope.grouping.hardwareClass,
                 "testSource": envelope.testSource,
                 "buildIdentity": envelope.buildIdentity,
+                "trigger": envelope.trigger,
+                "recoveredBy": envelope.recoveredBy,
+                "worstGapSeconds": envelope.worstGapSeconds,
             ]
         ]
         return ReliabilityReportingPrivacy.scrub(event)

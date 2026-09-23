@@ -1,15 +1,16 @@
 New and changed
 
-- Anamorphic Desqueeze (DE-SQ) works in live view, video playback and photos. Choose a lens preset or a custom 1.00–2.00× factor in 0.01 steps.
-- Report a problem is visible on the pairing screen, even before your first connection, with optional technical details and screenshots.
+- On Osmo Nano, zoom is hidden: no zoom chip, pinch zoom, hold disc or controller zoom. DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
+- Osmo Action 6 support: live view, Normal 10-bit and D-Log M color, the official D-Log M LUT, and an APERTURE control in place of FOCUS. Not yet checked on a real Action 6.
+- Experimental Multiview is now on Android: tap the grid button on Your cameras and add up to four Pocket or Nano cameras.
 
 Fixes
 
-- Improved recovery when a running preview loses its video format.
-- Live view starts again without the low-latency setting when the phone's decoder refuses it, instead of staying black.
+- Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
+- Live video no longer stops shortly after connecting while the app is busy.
 
 What to test
 
-- Tap DE-SQ to toggle; hold for presets, Custom and direction. Try LUT, grids, rotation and playback zoom. Check your custom factor survives a restart and files remain unchanged.
-- Before connecting a camera, open Report a problem in portrait and landscape. Close it and confirm pairing is still available. Share Diagnostics remains in the pairing menu.
-- Connect three times and check recovery after Media, Settings and background use. If live view previously stayed black on your phone, retry and report whether a picture now appears.
+- Connect a Nano: check there is no zoom chip and that pinch and controller L1/R1 and L2/R2 do not zoom. Switch to a Pocket without relaunching and check zoom and the gimbal stick return.
+- If you have an Action 6: pair it, confirm live view appears, then try APERTURE, COLOR, Photo and Timelapse.
+- In Media, open a clip, tap the trash icon, and try Cancel, then Delete.

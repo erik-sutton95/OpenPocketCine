@@ -150,6 +150,11 @@ class HevcDecoder internal constructor(
         }
     }
 
+    /** Drop [expected] only if it is still the output; a newer host may already own the decoder. */
+    fun detachSurface(expected: Surface) {
+        synchronized(lock) { if (surface === expected) surface = null }
+    }
+
     fun claimInputOwner(): Long = inputOwnership.claim()
 
     fun advanceInputEpoch(inputOwner: Long, epoch: Long) = inputOwnership.advance(inputOwner, epoch)
@@ -265,6 +270,9 @@ class HevcDecoder internal constructor(
         if (!randomAccess.shouldAccept(idr)) return false
         val queued = queue(accessUnit, keyframe)
         if (queued && idr) randomAccess.onIrapAccepted()
+        // A dropped frame is a missing reference: later P-frames would smear
+        // until the next IRAP, which Pocket only sends when asked.
+        if (!queued) randomAccess.noteBrokenReferences()
         return queued
     }
 

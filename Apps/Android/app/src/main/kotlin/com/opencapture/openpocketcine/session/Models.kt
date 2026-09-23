@@ -23,11 +23,16 @@ data class CameraModel(
     val needsFirstPictureFormatPoke: Boolean = false,
     /** Video-mode chip cycle. 4 Pro 1/3/6/12; Pocket 4/3 1/2/4; Nano 1. */
     val zoomStops: List<Double> = listOf(1.0, 2.0, 4.0),
+    /** Portable `CameraModel.hasGimbal`. Pocket 3-axis gimbal; Nano has none. */
+    val hasGimbal: Boolean = family == "pocket",
+    /** Portable `CameraModel.supportsZoom`. Nano is a fixed 1× prime. */
+    val supportsZoom: Boolean = family == "pocket",
+    /** Pocket `0x02/0x68 08` before `0x09/0xa8`. Not Nano (own gate), not Action 6. */
+    val sendsLiveViewPrepare: Boolean = !usesNanoLiveViewGate && !looksLikeAction6(name),
+    /** Action 6 aperture strategy (`0x8E` pid `0x44`) and iris readback. */
+    val supportsAperture: Boolean = looksLikeAction6(name),
 ) {
     val zoomMax: Double get() = activeZoomStops().lastOrNull() ?: 1.0
-
-    /** Pocket 3-axis gimbal. Nano has none. */
-    val hasGimbal: Boolean get() = family == "pocket"
 
     val isoAutoRangeFloor: Int get() = Companion.isoAutoRangeFloorFor(name)
 
@@ -80,6 +85,10 @@ data class CameraModel(
         fun supportsSlowMoFormatTrailer(name: String): Boolean =
             looksLikePocket3(name) || looksLikePocket4Pro(name)
 
+        /** Osmo Action 6 (BLE `0x0018`). Handbook `devices/action-6/`. */
+        fun looksLikeAction6(name: String): Boolean =
+            name.lowercase().replace(" ", "").contains("action6")
+
         fun looksLikeNano(name: String, family: String = ""): Boolean {
             if (family == "nano") return true
             return name.lowercase().contains("nano")
@@ -101,6 +110,9 @@ data class CameraModel(
         fun colorModesFor(name: String, family: String): List<Int> {
             if (family == "nano") {
                 return listOf(CameraCommands.COLOR_NORMAL, CameraCommands.COLOR_NORMAL10, CameraCommands.COLOR_DLOG_M)
+            }
+            if (looksLikeAction6(name)) {
+                return listOf(CameraCommands.COLOR_NORMAL10, CameraCommands.COLOR_DLOG_M)
             }
             val n = name.lowercase().replace(" ", "")
             if (n.contains("pocket4p") || n.contains("4pro")) {
@@ -169,6 +181,14 @@ data class CameraModel(
                     needsFirstPictureFormatPoke =
                         obj.optBoolean("needsFirstPictureFormatPoke", looksLikePocket3(name)),
                     zoomStops = zoomStopsFromJson(obj, name, obj.optString("family", "pocket")),
+                    // The facade always sends these; a missing key fails closed.
+                    hasGimbal = obj.optBoolean("hasGimbal", false),
+                    supportsZoom = obj.optBoolean("supportsZoom", false),
+                    sendsLiveViewPrepare = obj.optBoolean(
+                        "sendsLiveViewPrepare",
+                        !obj.optBoolean("usesNanoLiveViewGate", false) && !looksLikeAction6(name),
+                    ),
+                    supportsAperture = obj.optBoolean("supportsAperture", looksLikeAction6(name)),
                 )
             }.getOrElse { default }
         }
@@ -269,6 +289,8 @@ data class CameraStatus(
     val availableIsoIndices: List<Int> = emptyList(),
     /** `cam_expo_param` `@6` EV raw (`0x10` = 0.0). `-1` unknown. */
     val evComp: Int = -1,
+    /** Camera-meter indication at `cam_expo_param` `@15`; independent of configured EV `@6`. */
+    val meteredEv: Int = -1,
     /** `0x8E` pid `0x000F` Auto ISO ceiling. `-1` unknown. */
     val isoLimit: Int = -1,
     /** Legal `0x02/0x42` values from `camcap_color_mode`. */
@@ -302,6 +324,12 @@ data class CameraStatus(
     val audioMetersRight: Double = -60.0,
     val audioPeakLeft: Double = -60.0,
     val audioPeakRight: Double = -60.0,
+    /** Action 6 iris, hundredths of an f-number (`cam_expo_param` `@13`). `-1` unknown. */
+    val irisHundredths: Int = -1,
+    /** Action 6 `cam_aperture_ctrl_strategy` ([ApertureStrategy]). `-1` unknown. */
+    val apertureStrategy: Int = -1,
+    /** Action 6 `camcap_aperture_ctrl_strategy`. Empty until pushed. */
+    val availableApertureStrategies: List<Int> = emptyList(),
 ) {
     val shootingModeLabel: String
         get() =
@@ -376,6 +404,7 @@ data class CameraStatus(
                 audioDspBlob.isNotEmpty() ||
                 zoomFactorRaw > 0 ||
                 evComp >= 0 ||
+                meteredEv >= 0 ||
                 isoLimit >= 0 ||
                 availableColorModes.isNotEmpty() ||
                 availableVideoFormats.isNotEmpty() ||
@@ -502,6 +531,7 @@ data class CameraStatus(
             availableShutterDenoms = prev.availableShutterDenoms,
             availableIsoIndices = prev.availableIsoIndices,
             evComp = prev.evComp,
+            meteredEv = prev.meteredEv,
             isoLimit = prev.isoLimit,
             availableColorModes = prev.availableColorModes,
             availableVideoFormats = prev.availableVideoFormats,
@@ -518,6 +548,14 @@ data class CameraStatus(
             audioMetersRight = prev.audioMetersRight,
             audioPeakLeft = prev.audioPeakLeft,
             audioPeakRight = prev.audioPeakRight,
+        )
+
+    /** The JNI status JSON does not carry the Action 6 aperture fields; keep them across it. */
+    fun carryingAperture(prev: CameraStatus): CameraStatus =
+        copy(
+            irisHundredths = prev.irisHundredths,
+            apertureStrategy = prev.apertureStrategy,
+            availableApertureStrategies = prev.availableApertureStrategies,
         )
 
     fun toJson(): String =
@@ -560,6 +598,7 @@ data class CameraStatus(
             .put("availableShutterDenoms", JSONArray(availableShutterDenoms))
             .put("availableIsoIndices", JSONArray(availableIsoIndices))
             .put("evComp", evComp)
+            .put("meteredEv", meteredEv)
             .put("isoLimit", isoLimit)
             .put("availableColorModes", JSONArray(availableColorModes))
             .put("availableVideoFormats", videoFormatsJson())
@@ -658,6 +697,7 @@ data class CameraStatus(
                     availableShutterDenoms = intList(obj.optJSONArray("availableShutterDenoms")),
                     availableIsoIndices = intList(obj.optJSONArray("availableIsoIndices")),
                     evComp = obj.optInt("evComp", -1),
+                    meteredEv = obj.optInt("meteredEv", -1).takeIf { it in 0x07..0x19 } ?: -1,
                     isoLimit = obj.optInt("isoLimit", -1),
                     availableColorModes = intList(obj.optJSONArray("availableColorModes")),
                     availableVideoFormats = videoFormatList(obj.optJSONArray("availableVideoFormats")),

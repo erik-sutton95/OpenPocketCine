@@ -13,15 +13,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.openpocketcine.assists.LiveAssistTool
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.Test
@@ -181,12 +184,7 @@ class LiveChromeSemanticsTest {
     private fun render(content: @Composable () -> Unit): List<String> {
         var spoken = emptyList<String>()
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
-            scenario.moveToState(Lifecycle.State.RESUMED)
-            scenario.onActivity { activity ->
-                activity.setContent {
-                    Box(Modifier.fillMaxSize()) { Column { content() } }
-                }
-            }
+            val fixture = mountFixture(scenario, content)
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             val deadline = SystemClock.uptimeMillis() + 5_000
             var previous: List<String>? = null
@@ -195,7 +193,7 @@ class LiveChromeSemanticsTest {
             // rather than the first non-empty one.
             while (SystemClock.uptimeMillis() < deadline) {
                 instrumentation.waitForIdleSync()
-                val found = instrumentation.uiAutomation.rootInActiveWindow?.let(::descriptions).orEmpty()
+                val found = currentFixture(fixture)?.let(::descriptions).orEmpty()
                 if (found.isNotEmpty() && found == previous) {
                     spoken = found
                     break
@@ -215,15 +213,12 @@ class LiveChromeSemanticsTest {
     private fun actionsOf(label: String, content: @Composable () -> Unit): List<Int> {
         var actions: List<Int>? = null
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
-            scenario.moveToState(Lifecycle.State.RESUMED)
-            scenario.onActivity { activity ->
-                activity.setContent { Box(Modifier.fillMaxSize()) { Column { content() } } }
-            }
+            val fixture = mountFixture(scenario, content)
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             val deadline = SystemClock.uptimeMillis() + 5_000
             while (SystemClock.uptimeMillis() < deadline) {
                 instrumentation.waitForIdleSync()
-                val root = instrumentation.uiAutomation.rootInActiveWindow
+                val root = currentFixture(fixture)
                 val found = root?.let { nodeSpeaking(it, label) }
                 if (found != null) {
                     actions = found.actionList.map { it.id }
@@ -248,15 +243,12 @@ class LiveChromeSemanticsTest {
     private fun clickableDescriptions(content: @Composable () -> Unit): List<String> {
         var found = emptyList<String>()
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
-            scenario.moveToState(Lifecycle.State.RESUMED)
-            scenario.onActivity { activity ->
-                activity.setContent { Box(Modifier.fillMaxSize()) { Column { content() } } }
-            }
+            val fixture = mountFixture(scenario, content)
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             val deadline = SystemClock.uptimeMillis() + 5_000
             while (SystemClock.uptimeMillis() < deadline) {
                 instrumentation.waitForIdleSync()
-                val root = instrumentation.uiAutomation.rootInActiveWindow
+                val root = currentFixture(fixture)
                 val collected = root?.let(::clickableLabels).orEmpty()
                 if (collected.isNotEmpty()) {
                     found = collected
@@ -266,6 +258,36 @@ class LiveChromeSemanticsTest {
             }
         }
         return found
+    }
+
+    private fun mountFixture(
+        scenario: ActivityScenario<BackdropRenderActivity>,
+        content: @Composable () -> Unit,
+    ): String {
+        val identity = "semantics-fixture-${UUID.randomUUID()}"
+        scenario.moveToState(Lifecycle.State.RESUMED)
+        scenario.onActivity { activity ->
+            activity.setContent {
+                Box(Modifier.fillMaxSize().testTag(identity).semantics { testTagsAsResourceId = true }) {
+                    Column { content() }
+                }
+            }
+        }
+        return identity
+    }
+
+    // Two stable reads can still be the activity's initial backdrop or an old
+    // window. Scope every assertion to this mount without changing spoken labels.
+    private fun currentFixture(identity: String): AccessibilityNodeInfo? {
+        fun find(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+            if (node.packageName?.toString() != TEST_PACKAGE) return null
+            if (node.viewIdResourceName == identity) return node
+            for (index in 0 until node.childCount) {
+                node.getChild(index)?.let { child -> find(child)?.let { return it } }
+            }
+            return null
+        }
+        return InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow?.let(::find)
     }
 
     private fun clickableLabels(node: AccessibilityNodeInfo): List<String> {

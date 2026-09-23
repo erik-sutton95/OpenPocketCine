@@ -391,6 +391,7 @@ internal enum class AssistCard(val title: String) {
     PARADE("Parade"),
     VECTORSCOPE("Vectorscope"),
     TRAFFIC_LIGHTS("Traffic Lights"),
+    EV("EV Meter"),
     DESQUEEZE("Anamorphic Desqueeze"),
 }
 
@@ -923,6 +924,15 @@ private fun AssistRows(model: AppModel, statusColorMode: Int, onOpenLut: () -> U
                 TrafficLightsAssistCard(assist)
             }
         }
+    }
+
+    SettingsRowCard(title = "EV Meter") {
+        SettingsSwitchInlineRow(
+            "Enabled",
+            isOn = assist.evMeter,
+            help = "Show the camera's exposure meter at the picture's left edge in DISP 1. Auto and Manual use the camera reading without changing exposure settings.",
+            showTopDivider = false,
+        ) { assist.toggle(LiveAssistTool.EV) }
     }
 
     SettingsRowCard(title = "Anamorphic Desqueeze", onReset = {
@@ -1496,8 +1506,13 @@ private val dispToggleSpecs =
 private fun DispToggles(model: AppModel, mode: PocketDispMode, view: View) {
     val chrome = model.chrome(mode)
     val status by model.session.status.collectAsState()
+    val capabilities = model.monitorCapabilities(status)
     dispToggleSpecs.filter {
-        it.section != PocketDispSection.GIMBAL_STICK || model.monitorCapabilities(status).gimbal
+        when (it.section) {
+            PocketDispSection.GIMBAL_STICK -> capabilities.gimbal
+            PocketDispSection.ZOOM_CHIP -> capabilities.zoom
+            else -> true
+        }
     }.forEach { spec ->
         SettingsSwitchInlineRow(
             title = spec.title,

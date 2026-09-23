@@ -50,7 +50,7 @@ If recover already wiped the picture (or the layer is `.failed`):
 
 Every hold above also applies to **any tracked SET** for `cameraSetGrace` (4 s after the last `datalink.send`): record, FORMAT, COLOR, WB, tracking box `0xA6`, audio. The camera can pause HEVC for a moment on any of them; a long-press track that GOP-cut or rebound the socket was #219. The hold lifts once the failed stage has been silent for `stall + grace`, so a SET burst cannot block recovery indefinitely. Use packet age for transport silence, complete-AU age for assembly silence, and native-output age for decoder silence. Fresh traffic upstream does not renew the failed stage's grace; actively held zoom/stick still suppresses repair.
 
-If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw / SET grace, that is an encoder pause — two `0x09/0xa8` (`resendLiveViewEnable`) with `escalateAfter` (5 s) between them, then one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148); the rebuild here is after ~10 s of pause. 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop.
+If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw / SET grace, that is an encoder pause — one `0x09/0xa8` (`resendLiveViewEnable`), then after `escalateAfter` (5 s) one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148). 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop. Field evidence, 1,960 TestFlight incidents to 2026-09-22: of 521 transport stalls, 292 recovered only after the rebuild (reopen at median 11.2 s, picture 16.3 s), 56 after the first enable (41 within 4 s) and 17 after the second, most of those coinciding with the rebuild. The second enable was removed; expected picture after a failed enable is about 5 s sooner.
 
 **A replacement UDP endpoint requires a handshake.** The former `rebuildUDP`
 kept session/sequence state while allocating another local port. A September 12
@@ -63,7 +63,17 @@ cannot enable or report success. That same repair owner waits up to 16 seconds
 for fresh source and presentation after negotiation; otherwise it transfers to
 bounded full `SessionRecovery`. The retained image cannot satisfy that check.
 
-After picture, the ladder remains enable ×2 for encoder pause, then one
+**Registration timeout (2026-09-22, physical).** Pocket 4 Pro stops video about
+8–10 s after the last `0x00/0x88` registration while status stays fresh, and
+ignores enables until it sees a registration again. That is the field transport
+stall signature. The 1 Hz heartbeat therefore runs whenever a datalink exists;
+scene, sheet and repair state no longer gate it (Control Center used to kill the
+picture after 10 s). The encoder-pause rung re-registers before its enable. With
+the heartbeat forced off for 30 s on an iPhone, that rung restored video on the
+same socket 2.0 s after each stop, twice, with no endpoint rebuild. See the
+[protocol note](../handbook/src/content/docs/protocol/duml-transport.md).
+
+After picture, the ladder is one enable for encoder pause, then one
 negotiated UDP rebuild. A rebuild already performed by another gated caller
 counts as that rung. The existing `fullSessionRejoin`
 (`rejoinDatalinkKeepingLive`) rung can replace the whole driver on the same
@@ -151,15 +161,22 @@ If overflow retains an older IRAP while admission still awaits a new random-acce
 frame, deliver the discontinuity after that retained batch: the available image
 may paint, but cannot falsely clear the outstanding repair demand. A safe current
 suffix receives the discontinuity before its AUs. Each loss emits one callback.
-The live AU queue keeps at most eight pending units and prefers an independently
-decodable IRAP suffix. Dropping a later incomplete AU cannot reconstruct future
-P-frames from an older GOP; that is discarded pending work, not proof of a
-permanent stall. Requests, blocked attempts and local sends are distinct
+The live AU queue keeps at most 50 pending units (2 s) and prefers an independently
+decodable IRAP suffix. The former eight-unit cap turned a 320 ms main-thread hitch
+into reference loss. A later incomplete AU no longer discards complete AUs queued
+before it: they still decode, and one may be the repairing IRAP. Only its
+dependants wait for the next random-access frame.
+An invalid VT session (`-12903`) after picture is known reference loss, so the
+decoder rung fires on the next tick instead of after two seconds of silence.
+The mirror-flip hold decodes compressed frames with `DoNotDisplay` instead of
+skipping them, keeping the reference chain intact.
+An enable older than `stallThreshold` no longer holds the 8 s GOP window while
+fragments arrive but no AU completes; the hold follows the stage that stopped. Requests, blocked attempts and local sends are distinct
 diagnostic effects; a local send does not prove peer receipt.
 
 Packet-only traffic with no complete AU does **not** take the decoder-rebuild
 rung. When picture and AUs are stale (and native output is stale if expected),
-the existing enable ×2 then endpoint ladder runs. That is implemented in
+the existing enable then endpoint ladder runs. That is implemented in
 `FeedWatchdog.tick` and portable tests; it is **not** a physical camera proof.
 A presentation stall while decoder output is fresh still does **not** PLI
 (renderer-only repair is not implemented).
@@ -173,4 +190,4 @@ this branch.
 
 Watch Console for `feed: stall` vs `feed: black`. After a stall you should see one UDP rebuild (VT kept), then picture without leaving Live. `recoverBlack=1` means the last frame was already gone. A LUT toggle after the first assist must **not** log another `0x09/0xa8`.
 
-If `lastStatus` stays young while `lastVideo` ages, past GOP / AF-C grace, send two `0x09/0xa8` then one UDP rebuild. Keepalive must not flap while status is young. If both age and `flow=dead`, it is the UDP path. If `lastVideo` / `lastAU` stay young and **decoder output** ages, it is the decoder-rebuild rung (`recovery: action=decoder`), not UDP. If decoder output stays young and the picture is still frozen, it is presentation — do not PLI (no renderer-only owner yet). If the canvas is black, recover wiped the layer or the layer failed — that path must keep the last frame.
+If `lastStatus` stays young while `lastVideo` ages, past GOP / AF-C grace, send one `0x09/0xa8` then one UDP rebuild. Keepalive must not flap while status is young. If both age and `flow=dead`, it is the UDP path. If `lastVideo` / `lastAU` stay young and **decoder output** ages, it is the decoder-rebuild rung (`recovery: action=decoder`), not UDP. If decoder output stays young and the picture is still frozen, it is presentation — do not PLI (no renderer-only owner yet). If the canvas is black, recover wiped the layer or the layer failed — that path must keep the last frame.

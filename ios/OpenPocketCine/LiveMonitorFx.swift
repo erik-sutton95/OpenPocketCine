@@ -79,7 +79,7 @@ struct LiveImageEffects: Equatable, Sendable {
         needsGPUFeed && !replacesIdentityFeed
     }
 
-    /// WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND — OpenZCine `scopesActive`.
+    /// WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND share the source tap.
     var needsScopes: Bool {
         histogram || waveform || parade || vectorscope || trafficLights || ndMeter
     }
@@ -89,7 +89,8 @@ struct LiveImageEffects: Equatable, Sendable {
     }
 
     var activeScopeCount: Int {
-        [histogram, waveform, parade, vectorscope, trafficLights, ndMeter].filter { $0 }.count
+        [histogram, waveform, parade, vectorscope, trafficLights, ndMeter].filter { $0 }
+            .count
     }
 
     /// GPU feed, CPU scopes, or AF-C face detect. Any one starts VT for a pixel buffer.
@@ -1209,8 +1210,9 @@ final class CIFeedView: UIView {
 
     func syncHDRDisplay() {
         let format = LiveHDRDisplay.drawablePixelFormat()
-        if metalLayer.pixelFormat != format || metalLayer.wantsExtendedDynamicRangeContent
-            != LiveHDRDisplay.isEnabled
+        if metalLayer.pixelFormat != format
+            || metalLayer.wantsExtendedDynamicRangeContent
+                != LiveHDRDisplay.isEnabled
         {
             invalidatePendingPresents()
             resetPresentDedup()

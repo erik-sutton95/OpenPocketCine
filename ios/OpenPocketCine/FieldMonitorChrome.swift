@@ -295,6 +295,7 @@ struct FieldMonitorAssistPalette: View {
     var isLocked: Bool
     var otherOverlayPresented = false
     @Binding var expanded: Bool
+    var onExpansionActivityChange: (Bool) -> Void = { _ in }
     private var tools: [LiveAssistTool] {
         if model.session.status.isPhoto {
             return LiveAssistTool.toolbarCases
@@ -309,10 +310,19 @@ struct FieldMonitorAssistPalette: View {
             || model.isEditingChrome
     }
 
-    private var paletteGeometry: (layout: MonitorAssistPaletteLayout, frame: MonitorRect) {
+    static func visibleFrame(in layout: LiveMonitorLayout, toolCount: Int, expanded: Bool) -> CGRect
+    {
+        let (metrics, frame) = geometry(in: layout, toolCount: toolCount)
+        return metrics.resolving(expanded: expanded)
+            .anchored(leading: frame.x, bottom: frame.maxY).cgRect
+    }
+
+    private static func geometry(
+        in layout: LiveMonitorLayout, toolCount: Int
+    ) -> (layout: MonitorAssistPaletteLayout, frame: MonitorRect) {
         if let presentation = layout.presentation {
             return MonitorAssistPaletteLayout.fieldMonitor(
-                presentation, toolCount: tools.count, safeTop: layout.safeArea.top)
+                presentation, toolCount: toolCount, safeTop: layout.safeArea.top)
         }
         let tablet = UIDevice.current.userInterfaceIdiom == .pad
         let portrait = layout.viewport.height > layout.viewport.width
@@ -327,7 +337,7 @@ struct FieldMonitorAssistPalette: View {
                 layout.assist.maxY - max(layout.safeArea.top, 8))
             : layout.assist.maxY - max(layout.safeArea.top, 8)
         let metrics = MonitorAssistPaletteLayout(
-            portrait: portrait, tablet: tablet, expanded: true, toolCount: tools.count,
+            portrait: portrait, tablet: tablet, expanded: true, toolCount: toolCount,
             maximumWidth: maximumWidth, maximumHeight: maximumHeight)
         return (
             metrics,
@@ -337,8 +347,7 @@ struct FieldMonitorAssistPalette: View {
 
     var body: some View {
         @Bindable var model = model
-        let metrics = paletteGeometry.layout
-        let frame = paletteGeometry.frame
+        let (metrics, frame) = Self.geometry(in: layout, toolCount: tools.count)
         MonitorAssistPalette(
             tools: tools.map {
                 MonitorToolItem(
@@ -357,6 +366,7 @@ struct FieldMonitorAssistPalette: View {
                     x: frame.x, y: frame.y, width: frame.width, height: frame.height)
                 model.assist.configureTool = tool
             },
+            onExpansionActivityChange: onExpansionActivityChange,
             icon: { id in
                 if let tool = LiveAssistTool(rawValue: id) {
                     AssistToolIcon(tool: tool, size: nil)

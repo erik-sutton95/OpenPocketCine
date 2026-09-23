@@ -190,8 +190,18 @@ public enum FeedIncidentExport: Sendable {
         return PrivacyRedactor.redact(lines.joined(separator: "\n"))
     }
 
+    /// Coarse, searchable picture-gap tag. Exact seconds stay in extras.
+    public static func gapBucket(_ seconds: TimeInterval) -> String {
+        let edges: [TimeInterval] = [2, 5, 10, 20, 40, 120]
+        guard let upper = edges.first(where: { seconds < $0 }) else { return "120s+" }
+        let lower = edges.last(where: { $0 < upper }) ?? 0
+        return "\(Int(lower))-\(Int(upper))s"
+    }
+
     public static func envelope(from bundle: FeedIncidentBundle) -> FeedIncidentVendorEnvelope {
         let header = bundle.header
+        // The 1 Hz snapshot opens an incident up to a tick after its first repair.
+        let own = bundle.repairs.filter { $0.monotonicAt >= header.startedAtMonotonic - 1.5 }
         let grouping = FeedIncidentGrouping(
             schemaVersion: header.schemaVersion,
             failingStage: header.failingStage.rawValue,
@@ -214,6 +224,8 @@ public enum FeedIncidentExport: Sendable {
             decoderGeneration: header.decoderGeneration,
             socketGeneration: header.socketGeneration,
             testSource: header.resolvedTestSource.rawValue,
-            buildIdentity: header.resolvedBuildIdentity)
+            buildIdentity: header.resolvedBuildIdentity,
+            trigger: own.lazy.compactMap(\.reason).first ?? "none",
+            recoveredBy: header.outcome == .recovered ? own.last?.action ?? "none" : "none")
     }
 }

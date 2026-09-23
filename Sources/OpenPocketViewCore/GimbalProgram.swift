@@ -55,6 +55,7 @@ public struct GimbalProgram: Equatable, Sendable {
     public var durationAB: TimeInterval
     public var durationBC: TimeInterval
     public var smoothness: Double
+    public var loop: Bool
 
     public static let durationStep: TimeInterval = 0.5
     public static let minDuration: TimeInterval = 0.5
@@ -69,7 +70,8 @@ public struct GimbalProgram: Equatable, Sendable {
         c: GimbalWaypoint? = nil,
         durationAB: TimeInterval = defaultDuration,
         durationBC: TimeInterval = defaultDuration,
-        smoothness: Double = 0
+        smoothness: Double = 0,
+        loop: Bool = false
     ) {
         self.a = a
         self.b = b
@@ -77,9 +79,15 @@ public struct GimbalProgram: Equatable, Sendable {
         self.durationAB = Self.clampedDuration(durationAB)
         self.durationBC = Self.clampedDuration(durationBC)
         self.smoothness = smoothness
+        self.loop = loop
     }
 
     public var canRun: Bool { a != nil && b != nil }
+
+    public var changesZoom: Bool {
+        let zooms = [a, b, c].compactMap { $0?.zoom }
+        return zip(zooms, zooms.dropFirst()).contains { abs($0 - $1) > 1e-6 }
+    }
 
     /// Operator row: Not set / A·B / A·B·C / Partial.
     public var summary: String {
@@ -279,6 +287,21 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         var incoming: Leg
         var outgoing: Leg?
         var outgoingAt: TimeInterval
+        var usesCommandHistory = false
+        var isTurnaround = false
+    }
+
+    /// Timed targets form an affine reference even when look-ahead commands
+    /// overlap. Keep only the recent path needed to qualify a moving turnaround.
+    private struct CommandReference: Equatable, Sendable {
+        var time: TimeInterval
+        var from: GimbalWaypoint
+        var to: GimbalWaypoint
+        var duration: TimeInterval
+
+        func position(at time: TimeInterval) -> GimbalWaypoint {
+            GimbalMoveEngine.lerp(from, to, u: (time - self.time) / duration)
+        }
     }
 
     public private(set) var running = false
@@ -287,6 +310,10 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     private var resumeNeedsCommand = false
     public private(set) var failure: String?
     private var program = GimbalProgram()
+    private var isReversing = false
+    private var zoomPath = GimbalZoomPath(program: GimbalProgram())
+    private var zoomElapsedOffset: TimeInterval = 0
+    private var pendingZoomEndpoint: Double?
     private var legs: [Leg] = []
     private var index = 0
     private var phase = "HOLD"
@@ -297,6 +324,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     private var needsCommand = false
     private var observations: [Observation] = []
     private var checkpoints: [Checkpoint] = []
+    private var commandHistory: [CommandReference] = []
     private var lastReadout: Readout?
     private var curve: GimbalProgramCurve?
     private var nextCurveCommand: TimeInterval = 0
@@ -306,6 +334,9 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     public mutating func start(program: GimbalProgram, live: GimbalWaypoint) -> Bool {
         cancel()
         self.program = program
+        zoomPath = GimbalZoomPath(program: program)
+        zoomElapsedOffset = 0
+        isReversing = false
         verificationInterruptedByPause = false
         failure = nil
         lastReadout = nil
@@ -346,6 +377,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         elapsed = 0
         observations = []
         checkpoints = []
+        commandHistory = []
         let approachSteps = max(1, Int(ceil(abs(a.yawDeg - live.yawDeg) / 120)))
         approachTargets = (1...approachSteps).map {
             Self.lerp(live, a, u: Double($0) / Double(approachSteps))
@@ -366,6 +398,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         checkpoints = []
         observations = []
         isPaused = true
+        pendingZoomEndpoint = nil
         lastReadout = snapshot(live: live)
         return true
     }
@@ -383,6 +416,9 @@ public struct GimbalMoveEngine: Equatable, Sendable {
             resumeNeedsCommand = true
             return true
         }
+        zoomPath = zoomPath.remaining(after: phase == "VERIFY" ? zoomPath.duration : zoomElapsedOffset + elapsed,
+            from: live.zoom, quantized: curve == nil || phase == "VERIFY")
+        zoomElapsedOffset = 0
         if let curve, phase == "RUN" {
             self.curve = curve.remaining(after: elapsed, from: live)
             index = self.curve!.durationAB > 0 ? 0 : 1
@@ -398,6 +434,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         nextCurveCommand = 0
         checkpoints = []
         observations = []
+        commandHistory = []
         isPaused = false
         resumeNeedsCommand = true
         return true
@@ -408,9 +445,54 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         running = false
         isPaused = false
         resumeNeedsCommand = false
+        pendingZoomEndpoint = nil
         needsCommand = false
         checkpoints = []
         observations = []
+        commandHistory = []
+    }
+
+    /// Absolute lens samples share the take clock and a short command look-ahead.
+    /// The shell quantizes and sends them at no more than 20 Hz.
+    public var programmedZoomTarget: Double? {
+        guard program.changesZoom, running, !isPaused, index < legs.count else { return nil }
+        if let pendingZoomEndpoint { return pendingZoomEndpoint }
+        if phase == "APPROACH" || phase == "HOLD" { return program.a?.zoom }
+        return phase == "RUN" ? zoomPath.position(at: zoomElapsedOffset + elapsed) : zoomPath.end
+    }
+
+    /// Call only when the shell admits a lens sample; duplicate lens values also
+    /// consume the endpoint. A late tick must not skip a saved zoom amount.
+    public mutating func consumeProgrammedZoomTarget() -> Double? {
+        let target = programmedZoomTarget
+        if target != nil { pendingZoomEndpoint = nil }
+        return target
+    }
+
+    /// Linear lens targets share the pass/resume clock, including B when the
+    /// angular curve rounds that point. Reversals need no dwell.
+    public var nativeZoomDemand: NativeProgramZoomDemand? {
+        guard program.changesZoom, running, !isPaused, index < legs.count else { return nil }
+        if let pendingZoomEndpoint {
+            return .init(command: .track(pendingZoomEndpoint), destination: pendingZoomEndpoint)
+        }
+        if phase == "APPROACH" || phase == "HOLD", let zoom = program.a?.zoom {
+            return .init(command: .position(zoom), destination: zoom)
+        }
+        return phase == "RUN" ? zoomPath.nativeDemand(at: zoomElapsedOffset + elapsed)
+            : .init(command: .track(zoomPath.end), destination: zoomPath.end)
+    }
+
+    /// Consume only after sample admission, including duplicate quantized targets.
+    public mutating func consumeNativeZoomDemand() -> NativeProgramZoomDemand? {
+        let demand = nativeZoomDemand
+        if demand != nil { pendingZoomEndpoint = nil }
+        return demand
+    }
+
+    /// A shell capability change can invalidate a take before another command is sent.
+    public mutating func interrupt(live: GimbalWaypoint, reason: String) -> Output {
+        stop(live: live, reason: reason)
     }
 
     /// Wake on the command deadline, not a fixed sleep after a 25 Hz tick.
@@ -491,13 +573,7 @@ public struct GimbalMoveEngine: Equatable, Sendable {
                 return stop(live: live, reason: "Camera moved before the take")
             }
             if elapsed + 1e-9 < Self.holdSeconds { return output(live: live) }
-            phase = "RUN"
-            elapsed = 0
-            if let curve {
-                nextCurveCommand = 0.05
-                return output(live: live, target: curve.position(at: 0.1), duration: 0.1)
-            }
-            return startExactLeg(live: live)
+            return beginPass(live: live)
         }
         if phase == "RUN", let curve { return tickCurve(curve, live: live) }
         if phase == "RUN" {
@@ -512,10 +588,15 @@ public struct GimbalMoveEngine: Equatable, Sendable {
             guard elapsed - leg.duration <= 0.02 + 1e-9 else {
                 return stop(live: live, reason: "Move interrupted — waypoint dispatch was late")
             }
+            if program.changesZoom { pendingZoomEndpoint = leg.to.zoom }
+            if index + 1 == legs.count, program.loop {
+                return turnAround(live: live, boundary: clock - (elapsed - leg.duration))
+            }
             checkpoints.append(Checkpoint(
                 time: clock - (elapsed - leg.duration), incoming: leg,
                 outgoing: index + 1 < legs.count ? legs[index + 1] : nil, outgoingAt: clock))
             if index + 1 < legs.count {
+                zoomElapsedOffset += leg.duration
                 index += 1
                 elapsed = 0
                 return startExactLeg(live: live)
@@ -533,6 +614,48 @@ public struct GimbalMoveEngine: Equatable, Sendable {
             return output(live: live, finished: true)
         }
         return output(live: live)
+    }
+
+    private mutating func beginPass(live: GimbalWaypoint) -> Output {
+        phase = "RUN"
+        elapsed = 0
+        if let curve {
+            nextCurveCommand = 0.05
+            return output(live: live, target: curve.position(at: 0.1), duration: 0.1)
+        }
+        return startExactLeg(live: live)
+    }
+
+    /// Reverse at the timed boundary. Qualify arrival and departure together
+    /// while moving, using the same bounded feedback delay as an exact B.
+    private mutating func turnAround(live: GimbalWaypoint, boundary: TimeInterval) -> Output {
+        let incoming = legs[index]
+        let streamed = curve != nil
+        isReversing.toggle()
+        var path = program
+        if isReversing {
+            path.a = program.c ?? program.b
+            path.b = program.c == nil ? program.a : program.b
+            path.c = program.c == nil ? nil : program.a
+            if program.c != nil {
+                path.durationAB = program.durationBC
+                path.durationBC = program.durationAB
+            }
+        }
+        let firstLabel = isReversing ? (program.c == nil ? "B→A" : "C→B") : "A→B"
+        legs = [Leg(label: firstLabel, from: path.a!, to: path.b!, duration: path.durationAB)]
+        if let c = path.c {
+            legs.append(Leg(label: isReversing ? "B→A" : "B→C",
+                from: path.b!, to: c, duration: path.durationBC))
+        }
+        curve = GimbalProgramCurve(program: path)
+        zoomPath = GimbalZoomPath(program: path)
+        zoomElapsedOffset = 0
+        index = 0
+        nextCurveCommand = 0
+        checkpoints.append(Checkpoint(time: boundary, incoming: incoming,
+            outgoing: legs[0], outgoingAt: clock, usesCommandHistory: streamed, isTurnaround: true))
+        return beginPass(live: live)
     }
 
     private mutating func startExactLeg(live: GimbalWaypoint) -> Output {
@@ -579,10 +702,20 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     }
 
     private mutating func tickCurve(_ curve: GimbalProgramCurve, live: GimbalWaypoint) -> Output {
-        index = elapsed >= curve.durationAB ? 1 : 0
+        if program.changesZoom, index == 0, elapsed + 1e-9 >= curve.durationAB {
+            pendingZoomEndpoint = curve.b.zoom
+        }
+        index = elapsed + 1e-9 >= curve.durationAB ? 1 : 0
         if elapsed + 1e-9 >= curve.duration {
             guard nextCurveCommand >= curve.duration else {
                 return stop(live: live, reason: "Move interrupted — waypoint dispatch was late")
+            }
+            guard elapsed - curve.duration <= 0.02 + 1e-9 else {
+                return stop(live: live, reason: "Move interrupted — waypoint dispatch was late")
+            }
+            if program.changesZoom { pendingZoomEndpoint = curve.c.zoom }
+            if program.loop {
+                return turnAround(live: live, boundary: clock - (elapsed - curve.duration))
             }
             checkpoints.append(Checkpoint(time: clock - (elapsed - curve.duration),
                 incoming: legs[1], outgoing: nil, outgoingAt: clock))
@@ -602,9 +735,10 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         return output(live: live, target: target, duration: 0.1)
     }
 
-    /// Receipt times do not share the camera acquisition clock. Exact B uses
-    /// one bounded delay fit across a complete observation window; final C uses
-    /// directly observed stable arrival. Neither widens the angular tolerance.
+    /// Receipt times do not share the camera acquisition clock. Moving
+    /// waypoints use one bounded delay fit across a complete observation window;
+    /// single-take final arrival uses directly observed stability. Neither
+    /// widens the angular tolerance.
     private func checkpointIsConsistent(_ check: Checkpoint) -> Bool {
         if check.outgoing == nil {
             // Final arrival is stationary and directly observable. Receipt time
@@ -626,15 +760,21 @@ public struct GimbalMoveEngine: Equatable, Sendable {
         guard low <= high else { return false }
         func reference(_ sample: Observation, delay: Double) -> GimbalWaypoint {
             let time = sample.time - delay
+            if check.usesCommandHistory, let first = commandHistory.first {
+                return (commandHistory.last { $0.time <= time } ?? first).position(at: time)
+            }
             return time < check.time
                 ? Self.lerp(check.incoming.from, check.incoming.to,
                     u: 1 + (time - check.time) / check.incoming.duration)
                 : Self.lerp(outgoing.from, outgoing.to, u: (time - check.outgoingAt) / outgoing.duration)
         }
         var knots = [low, high]
+        let boundaries = check.usesCommandHistory
+            ? commandHistory.flatMap { [$0.time, $0.time + $0.duration] }
+            : [check.time - check.incoming.duration, check.time,
+                check.outgoingAt, check.outgoingAt + outgoing.duration]
         for sample in nearby {
-            for time in [check.time - check.incoming.duration, check.time,
-                check.outgoingAt, check.outgoingAt + outgoing.duration] {
+            for time in boundaries {
                 let delay = sample.time - time
                 if delay > low, delay < high { knots.append(delay) }
             }
@@ -675,6 +815,50 @@ public struct GimbalMoveEngine: Equatable, Sendable {
                 }
             }
         }
+        return directlyObservedTurnaround(check, observations: nearby)
+    }
+
+    /// A real endpoint observation also qualifies an exact loop reversal when
+    /// the firmware eases its motors. This proves contact and departure, not
+    /// constant-speed timing. Curved windows retain their command-history fit.
+    private func directlyObservedTurnaround(_ check: Checkpoint, observations: [Observation]) -> Bool {
+        guard check.isTurnaround, !check.usesCommandHistory, let outgoing = check.outgoing else { return false }
+        let endpoint = check.incoming.to
+        func along(_ pose: GimbalWaypoint, toward other: GimbalWaypoint) -> Double? {
+            let yaw = other.yawDeg - endpoint.yawDeg
+            let pitch = Self.pitchDelta(from: endpoint, to: other)
+            let length = hypot(yaw, pitch)
+            guard length > Self.arriveDeg else { return nil }
+            let distance = ((pose.yawDeg - endpoint.yawDeg) * yaw
+                + Self.pitchDelta(from: endpoint, to: pose) * pitch) / length
+            let nearest = Self.lerp(endpoint, other, u: distance / length)
+            return Self.angularDistance(pose, nearest) <= Self.arriveDeg + 1e-9 ? distance : nil
+        }
+        for (index, arrival) in observations.enumerated() {
+            guard arrival.time >= check.time, arrival.time <= check.time + 0.2 + 1e-9,
+                Self.angularDistance(arrival.pose, endpoint) <= Self.arriveDeg else { continue }
+            let before = observations[..<index]
+            let after = observations[(index + 1)...]
+            guard before.contains(where: { arrival.time - $0.time >= 0.08 - 1e-9
+                && Self.angularDistance($0.pose, endpoint) > Self.arriveDeg }),
+                after.contains(where: { $0.time - arrival.time >= 0.08 - 1e-9
+                    && Self.angularDistance($0.pose, endpoint) > Self.arriveDeg }) else { continue }
+            var closest = Double.infinity
+            let approaches = (Array(before) + [arrival]).allSatisfy { sample in
+                guard let distance = along(sample.pose, toward: check.incoming.from),
+                    distance <= closest + Self.arriveDeg + 1e-9 else { return false }
+                closest = min(closest, distance)
+                return true
+            }
+            var farthest = -Double.infinity
+            let departs = ([arrival] + Array(after)).allSatisfy { sample in
+                guard let distance = along(sample.pose, toward: outgoing.to),
+                    distance >= farthest - Self.arriveDeg - 1e-9 else { return false }
+                farthest = max(farthest, distance)
+                return true
+            }
+            if approaches && departs { return true }
+        }
         return false
     }
 
@@ -695,6 +879,13 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     ) -> Output {
         if let target, !Self.canSendNativeTarget(from: live, to: target) {
             return stop(live: live, reason: "Camera moved outside the safe rotation path")
+        }
+        if program.loop, let target {
+            let from = commandHistory.last?.position(at: clock) ?? live
+            commandHistory.append(CommandReference(time: clock, from: from, to: target, duration: duration))
+            while commandHistory.count > 1, commandHistory[1].time < clock - 1 {
+                commandHistory.removeFirst()
+            }
         }
         lastReadout = snapshot(live: live)
         return Output(target: target, duration: duration, finished: finished)

@@ -61,6 +61,7 @@ import com.opencapture.openpocketcine.assists.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
+import com.opencapture.openpocketcine.session.ApertureStrategy
 import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
@@ -210,6 +211,7 @@ fun LivePortraitChrome(
     capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
     readoutFrame: ChromeRect = livePortraitReadoutFrame(layout, zones),
+    onAssistBoundsChanged: (ChromeRect?) -> Unit = {},
 ) {
     var stripQuick by remember { mutableStateOf(false) }
     var topQuick by remember { mutableStateOf(false) }
@@ -222,7 +224,8 @@ fun LivePortraitChrome(
     val showsStatus = model.chromeSectionMounts(PocketDispSection.STATUS_BAR)
     val showsLock = model.chromeSectionMounts(PocketDispSection.LOCK_BUTTON) || uiLocked
     val showsRecord = model.chromeSectionMounts(PocketDispSection.RAIL_RECORD) || status.isRecording
-    val showsMedia = !topQuick && !stripQuick && model.chromeSectionMounts(PocketDispSection.RAIL_MEDIA)
+    val showsMedia = !topQuick && !stripQuick && model.chromeSectionMounts(PocketDispSection.RAIL_MEDIA) &&
+        !model.session.isMultiviewBorrowed
     val showsSettings = !topQuick && !stripQuick && (model.chromeSectionMounts(PocketDispSection.RAIL_SETTINGS) || status.isRecording)
     val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
         model.liveOperatorPanel == null && assist.configureTool == null
@@ -304,6 +307,7 @@ fun LivePortraitChrome(
                     portrait = true, locked = uiLocked || !chromeInteractive,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    onBoundsChanged = onAssistBoundsChanged,
                 )
             }
         }
@@ -330,6 +334,7 @@ fun LivePortraitChrome(
                     quickBottomClearanceDp = layout.viewportHeight - zones.systemBar.minY + 12f,
                     showFocus =
                         capabilities.focus,
+                    showAperture = capabilities.iris,
                     facePriority = model.facePriorityExposureEnabled,
                     shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = {
@@ -423,6 +428,8 @@ fun LivePortraitChrome(
                 layout = layout,
                 feed = layout.onFeed,
                 joystickBounds = stick,
+                zoomBounds = if (capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) zoom
+                    else ChromeRect(0f, 0f, 0f, 0f),
                 uiLocked = uiLocked,
             )
         }
@@ -507,7 +514,9 @@ fun LivePortraitSystemBar(
         Box(Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
             Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (showsLock) LockButton(uiLocked, Modifier.size(48.dp), onClick = onLock)
+                val multiviewExit = model.multiviewExit
+                if (multiviewExit != null) MultiviewReturnButton(Modifier.size(48.dp), onClick = multiviewExit)
+                else if (showsLock) LockButton(uiLocked, Modifier.size(48.dp), onClick = onLock)
                 if (chromeInteractive) DispButton(clean = model.assistClean, modifier = Modifier.size(48.dp), onClick = {
                     if (!uiLocked) { val clean = !model.assistClean; model.setDisplayMode(clean); assist.clean = clean }
                 })
@@ -541,7 +550,10 @@ fun LivePortraitSystemBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(Modifier.weight(1f))
-                if (showsLock) {
+                val multiviewExit = model.multiviewExit
+                if (multiviewExit != null) {
+                    MultiviewReturnButton(onClick = multiviewExit)
+                } else if (showsLock) {
                     LockButton(uiLocked, onClick = onLock)
                     Spacer(Modifier.weight(1f))
                 }
@@ -630,6 +642,7 @@ fun LiveCaptureStrip(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     showFocus: Boolean = true,
+    showAperture: Boolean = false,
     facePriority: Boolean = false,
     shutterUsesAngle: Boolean = false,
     onOpen: (LiveSheet) -> Unit,
@@ -660,6 +673,7 @@ fun LiveCaptureStrip(
         add(value(LiveSheet.EXPO, "EXPOSURE", if (status.expoMode == CameraCommands.EXPO_MANUAL) "M" else if (auto) "A" else "—"))
         add(value(LiveSheet.WB, "WB", CaptureLists.wbChipValue(status)))
         if (showFocus) add(value(LiveSheet.FOCUS, "FOCUS", status.focusLabel))
+        if (showAperture) add(value(LiveSheet.APERTURE, "APERTURE", ApertureStrategy.tileValue(status)))
         if (CaptureShutterPolicy.showsAudioControls(status.shootingMode)) {
             add(value(LiveSheet.AUDIO, "AUDIO", status.audioLabel))
         }

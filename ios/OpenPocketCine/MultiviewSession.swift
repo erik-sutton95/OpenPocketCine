@@ -1023,7 +1023,8 @@ final class MultiviewSession {
         let driver = DatalinkDriver(
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken,
-            stationHost: tile.cameraAddress, stationHotspot: usePhoneHotspot)
+            stationHost: tile.cameraAddress, stationHotspot: usePhoneHotspot,
+            subscriptionKeys: Commands.subscriptionKeys(for: camera.model))
         tile.driver = driver
         driver.onStatusFrame = { [weak tile, weak driver] frame in
             guard let tile, let driver, tile.driver === driver else { return }
@@ -1088,7 +1089,7 @@ final class MultiviewSession {
         }
         let nanoGate = camera.model.usesNanoLiveViewGate
         if nanoGate { driver.send(Commands.nanoLiveViewGate(start: true)) }
-        if CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: nanoGate) {
+        if camera.model.sendsLiveViewPrepare {
             driver.send(Commands.liveViewPrepare())
         }
         driver.startLiveView(receiver: camera.model.liveViewEnableReceiver)
@@ -1337,14 +1338,8 @@ final class MultiviewSession {
 /// Discovery is broader than the preview command profiles captured so far.
 extension FoundCamera {
     func acceptsMissingMultiviewRoleQuery(_ reply: [UInt8]) -> Bool {
-        (model.family == .nano || model.isPocket3) && reply == [0xe0]
+        MulticamSupport.acceptsMissingRoleQuery(model, reply: reply)
     }
-    var appearsInMultiview: Bool {
-        !model.isDrone && (model.name.lowercased().contains("osmo") || model.family != .other)
-    }
-    var hasMultiviewPreview: Bool {
-        guard appearsInMultiview, model.usesCapturedLiveEnable else { return false }
-        let name = model.name.lowercased().replacingOccurrences(of: " ", with: "")
-        return model.isPocket3 || name.contains("pocket4") || model.family == .nano
-    }
+    var appearsInMultiview: Bool { MulticamSupport.appears(model) }
+    var hasMultiviewPreview: Bool { MulticamSupport.hasPreview(model) }
 }

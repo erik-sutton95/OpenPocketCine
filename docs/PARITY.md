@@ -7,6 +7,30 @@ incomplete.
 
 ## Connection regression follow-up
 
+The [connection stress matrix](connection-stress-testing.md) is shared maintainer
+tooling for both platforms, with the same evidence and teardown contract. It
+ships a script interface and local agent mailbox. Separate native feed runners
+now target both platforms: iOS overlaps existing loss/burst/output suppression
+with its UI scenarios; Android combines local video loss with Settings/ISO SET
+pressure, joystick input and lifecycle changes. Android does not yet match iOS
+assist/rotation/changing-settings or opt-in recording coverage. Its fault hook
+is Debug-gated, and cumulative cadence snapshots preserve existing windows.
+The [September 22 campaign](audits/2026-09-22-connection-stress-campaign.md)
+reproduced delayed Android picture recovery under local loss; no complete
+all-action overlap run passed. The later USB-connected
+[iPhone follow-up](audits/2026-09-22-iphone-connection-stress.md) passed a
+five-minute steady baseline and five impaired-feed/Media-return cycles, and
+reproduced delayed foreground and overlapping-fault recovery. Stronger gimbal
+throws, ISO/WB sweeps, matched automatic/Media recovery probes and the verified
+attachment launcher are iOS-only test tooling; Android does not yet have
+equivalent workloads. Separate
+Android host experiments exercised actual Wi-Fi interruptions with Settings
+taps; these are not native matrix adapters or congestion qualification.
+Complete overlap qualifications and the matrix's native adapters remain
+pending. Unsupported paths remain explicit coverage gaps.
+The portable chaos suite does not cover Android's still-local SET mailbox;
+consolidation is tracked in the guide. No operator-visible shell behavior changes.
+
 Android's GATT initialization checks native request admission and advances the
 existing tolerated descriptor fallback through both characteristics before
 arming pairing. Failed local registration of required FFF4 notifications or a
@@ -79,12 +103,12 @@ write the exception in the table in the same PR.
 | Page navigation | Return through the current overlay, selection or page without triggering camera actions. | User-approved Android exception: Settings, Media library and pairing omit large page-level Back buttons and reclaim their space. Android system Back / back gesture owns return navigation; contextual Close, Cancel and nested workflow actions remain. Photo/video playback restores its visible return control on both platforms. iOS keeps its other page Back buttons. | Android physical navigation checks; iOS unchanged. |
 | Shooting-mode capture | Photo (`05` / `17`) and reported Live Photo (`4D`) use still controls without recording confirmation. Hide video color, FPS/angle, codec/bit-depth, timecode/duration and audio surfaces; retain photographic controls and saved assist preferences. Low-Light / SuperNight (`28`) remains video. Mode, recording, connection or lock changes dismiss stale panels/confirmation; current camera capabilities constrain format selection. Pocket 4 Pro index `13` displays 200p, with its captured Slow Motion trailer. | Native picker rendering. Regular Pocket 4 remains unqualified by the [Pocket 4 Pro Mimo survey](../handbook/src/content/docs/devices/pocket-4-pro/index.md). Standard/SuperPhoto editing, timers and storage UI remain separate follow-up work. | Physical iPhone + Pocket 4 Pro: Photo chrome in portrait/both landscapes, 3× SlowMo 200p readout and picker ceiling, live-frame progress and return to Video passed automated XCTest (2026-09-15). No capture was triggered. Android physical qualification remains pending: no device attached. |
 | Connection FTUE and spine | BLE → SoftAP → UDP; **enable-once**; ephemeral local port; arm `0x02` on handshake ack (Mimo HEVC at join+17 ms; enable is later PLI); disconnect drops driver + decoder; session recovery holds last frame. Replacement UDP endpoints negotiate a fresh handshake/register/subscribe before one caller-owned enable; socket readiness is not peer migration. Pocket 3 first picture: wait for the legal FORMAT table, one 1080→boot `0x02/0x18` after a black enable, then one `0x09/0xa8`. Not Pocket 4. Xtra rebrands bind UDP **10004** with no TCP-7001 poke. Join Wi-Fi names VPNs / ad blockers on both shells; WAITING FOR LIVE VIEW repeats `LocalVPNFilter.liveHint` after 8 s with no picture when a local VPN is on. | iOS `NEHotspotConfiguration` vs Android `WifiNetworkSpecifier` + `bindProcessToNetwork`; Network.framework vs Android sockets. Android identifies Xtra by BLE MAC OUI `EC:9E:EA`; iOS has no MAC and uses the advertised name (`xtra` / `edge`). Android SoftAP `onLost` starts `SessionRecovery`; iOS samples absent camera path plus stale video at 1 Hz, with an eight-second reassociation grace before full recovery. Android VPN detect is `TRANSPORT_VPN`; iOS is CFNetwork scoped tunnel names (also fires for Private Relay `utun` — live hint still waits 8 s). | **physical** both |
-| Saved camera home | PAIRED and NEARBY groups, full-width camera rows, selected-row progress and Cancel, Pair new camera and global Media/Settings actions. Pairing selection advances with Continue; reported connection phases remain authoritative. | iOS Multiview opens with one tap; hold its header button for Watch a feed. Android sharing and Multiview remain deferred. | UI 2.0 simulator/emulator checks; physical qualification pending. |
+| Saved camera home | PAIRED and NEARBY groups, full-width camera rows, selected-row progress and Cancel, Pair new camera and global Media/Settings actions. Pairing selection advances with Continue; reported connection phases remain authoritative. | Multiview opens with one tap on both shells; iOS holds its header button for Watch a feed. Android sharing remains deferred. | UI 2.0 simulator/emulator checks; physical qualification pending. |
 | Gimbal drawer | Trailing inspector with Mode / Speed / Ramp; full landscape height and bounded portrait height. Motion Control footer retains existing experimental editor and actions. Capability hides this surface on bodies without a gimbal. | Native option controls and compositor implementation. | UI 2.0 simulator/emulator checks; physical qualification pending. |
 | Live chrome | DISP 1/2 maps, Field Monitor geometry (portrait 3×2 camera values, landscape row, fit/fill, corner controls), picker chrome, record as bottom sheet, zoom chip, gimbal 1–5 gain, expo stick throw (on-screen and a connected game controller), stick pan picture-relative (invert pan on rotate-180 at settle, not joystick 180; extra-mirror = TT180 && Selfie Flip off; MIRROR assist XORs), rec lamp `pressShutter`. Game controller (discussion #159): selected Left/Right stick is the gimbal stick (Left by default); Cross/A records (skips the rec-confirmation sheet); Circle/B recenters; Square/X is rotate-180; Triangle/Y tracks a face in frame or cancels; L1/R1 jump zoom out/in (out does not wrap to tele); L2/R2 hold-to-zoom (deeper trigger is faster); D-pad up/down ISO, left/right shutter; shutter-angle readouts follow the resulting camera value. Controls offers a saved Gimbal joystick Left/Right choice. Toast Gamepad connected/disconnected. Unplug rests stick and zoom. Controls **Gamepad** row is Connected / Not connected. Limit haptic is a rising-edge pulse after the head moves then stalls (phone plus controller rumble). Mapping, extra deadzone slider, and Linear/Smooth/Cinematic curves are not a Controls picker (fixed map; existing 0.08 deadzone + expo + 1–5 gain). iPad hides the system time / battery bar (HUD chips stay). Control toast parks under the mounted top bar (DISP 1 / operator-shown status bar) and on the feed edge when that bar is off (DISP 2). | iOS compositor-owned material vs Android composited translucent tint (no backdrop frame capture); Lucide icons plus the exact custom View Assist catalog. User-approved Android exception: hide both system bars in live view and photo/video playback; other pages hide the status bar while retaining system navigation (buttons or gestures, as configured on the phone). Chrome reserves navigation and display-cutout insets; the platform owns transient status-bar reveal. DualSense rumble uses `GCDeviceHaptics` on iOS and the pad `Vibrator` on Android (phone vibrator if the pad has none). iOS binds `GCController`; Android `KeyEvent`/`MotionEvent` plus `InputManager` for connect. Both shells GET Selfie Flip pid `0x0038` ~1 Hz on the live UDP ACK pump (untracked; not the shared `0x8E` SET/GET waiter) and echo pktType-`0x03` seq in window-ACK group 1 so those replies do not stall. A keepalive BLE Flip GET fires when UDP replies go stale (≥2 s). | **physical** both |
 | Assists | Toolbar 1:1 (LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, ND, AUDIO, GUIDES, GRID, CROSS, DE-SQ, MIRROR); collapsed palette ranked by use; expanded catalog; leading options inspector; WAVE hold-without-drag opens options; scope plate metrics (`ScopeMiniChrome`); ND is a small HUD chip that first opens in the center, directly draggable like other scope panels; long-press Units switches Stops / ND32 / ND 0.3 (suggestion only, not a SET); number fields in those options (Zebra Highlight / Midtone) lift above the keyboard; number-pad Done dismisses the pad (tap outside still dismisses the popup). GUIDES / GRID / CROSS map to the recorded picture rect (1:1 is the square inside a 16:9 live well), not letterbox padding. | Metal vs Vulkan vs GLES; Vision vs ML Kit Face Detection; native compositors; inspectors reuse existing scope products and bounded source samples | Existing effects: **physical** both; new chrome: UI 2.0 qualification below. Guide-to-picture geometry: core tests; **physical** pending both. |
 | Camera SETs | `CameraSetMailbox` fire-and-forget + 300 ms retransmit + 2 s settle; missed ACK does not revert HUD. FORMAT pin holds the chip/sheet until `cam_video_param_v2` reports the pair — other HUD copies are not confirmation. Empty `camcap_shutter` uses a documented video ladder (not the live 1/N alone) so Speed and Angle can SET; a published table still wins. WB `0x02/0x2C` Auto keeps tint (`00 00 00 <tint i16>`); Custom is kelvin+tint; one in flight (100 ms coalesce). COLOR drum follows the body (D-Log2 is Pocket 4 Pro only; Pocket 4 Normal/HDR/D-Log; Pocket 3 Normal/HDR/D-Log M; Nano 8-bit/10-bit/D-Log M). Auto ISO range floor is 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro (wide); SET bytes unchanged. ISO D-Log ↔ D-Log2 hop; audio blobs and tap-focus stay round-trips. Two genuine SET timeouts in 5 s may rebuild UDP only when video **and** status are stale (encoder-pause with young `0x01` must not tear the socket). | JNI vs Swift `fireCamera` | **physical** both. Pocket 3 empty-cap shutter/FORMAT: core tests; physical pending. |
-| Zoom | Pocket 4 Pro single tap cycles 1× / 3× and double tap cycles 6× / 12×. Other cameras retain their supported single-tap stops. Hold opens the continuous logarithmic dial through the same coalesced pinch path and safety checks. Supported body stops: Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Nano 1× (DJI spec). Pocket 3 is per-FORMAT and measured on a body — 1080 1×/2×/4×, 2.7K and 2160 1:1 1×/2×/3×, 4K and 3K 1:1 1×/2× (see Pocket 3 zoom ceiling per FORMAT). A FORMAT whose ceiling is below the held stop walks the chip back and says so once — `4K caps zoom at 2×` — instead of dropping silently. SlowMo / TimeLapse / SuperNight drop digital zoom (Pro keeps 1×/3× optical). `CamFov` hybrid readout; pinch clamps to that max at 20 Hz without ACK wait. Idle D-Log2 hops to D-Log on the first step off 1× (`0x02/0x42`) and **holds every `0xB8` until `cam_image_effect` is D-Log** — color ACK and an optimistic HUD pin are not enough; the body ignores zoom while still D-Log2. The chip stays at live 1× until that hop lands. While rolling in D-Log2 the chip is gray (0.4, same as lock) but still hittable: tap and pinch toast `Can't change color while recording — D-Log2 can't zoom` and send neither zoom nor color. D-Log / Rec.709 / HLG still zoom while rolling. Chip / pinch must not drop the live picture (same-raster VPS is not an IDR hold; 4 s watchdog grace while the lens slews). | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
+| Zoom | Pocket 4 Pro single tap cycles 1× / 3× and double tap cycles 6× / 12×. Other cameras retain their supported single-tap stops. Hold opens the continuous logarithmic dial through the same coalesced pinch path and safety checks. Supported body stops: Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×. Nano is a fixed 1× prime (DJI spec): `supportsZoom` is false, so the chip, disc, pinch and gamepad zoom are hidden or inert and no `0xB8` SET is sent (#413). Pocket 3 is per-FORMAT and measured on a body — 1080 1×/2×/4×, 2.7K and 2160 1:1 1×/2×/3×, 4K and 3K 1:1 1×/2× (see Pocket 3 zoom ceiling per FORMAT). A FORMAT whose ceiling is below the held stop walks the chip back and says so once — `4K caps zoom at 2×` — instead of dropping silently. SlowMo / TimeLapse / SuperNight drop digital zoom (Pro keeps 1×/3× optical). `CamFov` hybrid readout; pinch clamps to that max at 20 Hz without ACK wait. Idle D-Log2 hops to D-Log on the first step off 1× (`0x02/0x42`) and **holds every `0xB8` until `cam_image_effect` is D-Log** — color ACK and an optimistic HUD pin are not enough; the body ignores zoom while still D-Log2. The chip stays at live 1× until that hop lands. While rolling in D-Log2 the chip is gray (0.4, same as lock) but still hittable: tap and pinch toast `Can't change color while recording — D-Log2 can't zoom` and send neither zoom nor color. D-Log / Rec.709 / HLG still zoom while rolling. Chip / pinch must not drop the live picture (same-raster VPS is not an IDR hold; 4 s watchdog grace while the lens slews). | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
 | Tracking | Long-press+drag search box `0x02/0xA6`; tap face bracket → ActiveTrack; green cancel X and focus-reset. Gamepad Triangle/Y tracks the AF-C face in frame, or cancels if already tracking. | Vision vs ML Kit Face Detection | **physical** both |
 | Motion Control speed | No operator rate calibration. No artificial speed ceiling; duration controls retain a 0.5 s floor. Native maximum repeatable speed is not yet qualified. | Both shells | **physical** both |
 | Head tracking | iOS: Controls **Head Tracking (Experimental)**, off by default. A Lucide compass above the right-side joystick cluster is **Calibrate Head Lock** (VoiceOver / settings keep that name). It captures shared forward from a still head and fresh native camera pose. The same 44 pt control becomes a square STOP. Nose direction maps to native pan/tilt targets; the native command horizon is 100 ms. Roll is readout only. STOP clears Head Lock. Manual control, Motion Control takes and inactive scenes take priority. Stale measurements and callbacks cannot keep driving. One motion request owns permission-pending startup; missing samples show motion/permission guidance and an explicit retry. Scopes may sit beneath the compass in either orientation. | Android has no AirPods IMU — no Controls row and no live compass. Layout helpers still park a `headTrack` region above the cluster. Native head response remains under physical qualification; [contract](head-tracking.md). | **physical** iOS |
@@ -94,11 +118,12 @@ write the exception in the table in the same PR.
 | Media | Camera catalog, SoftAP HTTP cache, 720p LRF/XRF proxy playback, View Assist parked on the live Field Monitor assist slot, LUT / PEAK / FALSE / ZEBRA grade that proxy (identity player + overlay/replace feed), live HEVC held while library or Operator Setup covers the monitor (do not drop pktType `0x02` ingest — #177; Android keeps the SurfaceView attached under that overlay — #248). Next/prev keeps the processed-feed host so an armed LUT rebakes the new item without cycling the chip. Shot color lives in the media cache (`color.json`) so Auto LUT works disconnected. **Proxy** tag when only the 720p sidecar is on the phone. Storage **Full Resolution Caching** (on by default) also caches the original on open. Playback LUT replace hides the identity player once the GPU owns the cube (live already does). Pocket 3 `/v2` is always storage 0 (single microSD), even when the list handle has the internal bit. Newest catalog page lists even if `0x02/0x0c` ACKs E0 after a take; older pages still need playback. | Frame.io upload and LUT bake on export: iOS only. iOS Share **Bake LUT** has **Bake exposure** (on by default) so the LUT exposure pull is written into the file; off keeps the cube at 0.0. iOS Share **Convert log** (off by default) is a technical D-Log ↔ D-Log2 transform, exclusive with Bake LUT; Rec.709 display stays Bake LUT. Android share/save uses the original (`MediaHTTP.deliveryPath`). Playback uses the shared UI 2.0 header/footer and a separate 82% metadata drawer; Android does not capture a backdrop for glass. GPU backends: iOS `CIFeedView` vs Android GLES. iOS playback stacks `AVPlayerLayer` and `CIFeedView` as siblings — Metal nested in `AVPlayerLayer` is a black LUT plate. Android playback already matches live: ExoPlayer writes an OES surface and `LiveFeedEffectsSession` grades LUT/FALSE/PEAK/ZEBRA in GLES (`PlaybackFeedView`); TextureView is only the window. | **physical** both |
 | Present path | `FeedPresentPolicy`: skip duplicate timestamps, latest-wins bake, freeze ≠ flush (2 s keep last sample), unhide replace-grade before the drawable, offscreen `isEnabled = false`, one `0x09/0xa8` in flight (`SerialSessionGate`), one Metal/GLES present in flight (`maxInFlightMetalPresents`). LUT 50/50 is a cube option, not a decoder/swapchain tear — split without a cube must not cover identity. LUT cubes at the 720p feed raster then stretches Rec.709 (`bakeSize` then bilinear). Decoder-output age and present age are separate; GPU completion / layer enqueue is not display scanout. | iOS Metal / `CIFeedView` vs Android Vulkan / GLES `LiveFeedEffectsSession`; debug line is `control-live.log` / logcat, not operator chrome. Extra-mirror commits on the feed host at present (TT180) after holding the last picture 3 frames / 120 ms so the current orientation is not X-flipped in place. iOS `CAMetalLayer.allowsNextDrawableTimeout` (no MainActor block). Android already gates GPU split on a loaded cube. | **physical** both for existing present policy. Decoder-output follow-up: **qualification pending** (see Decoder-output recovery). |
 | Diagnostics | Operator Setup → System → **Report a problem** (native Sentry form) or **Diagnostic options → Save diagnostic report**; Connection setup always shows **Report a problem** below the target and retains **Share Diagnostics** in its overflow menu. Journal in app documents. Typed feed-incident spool is local on both shells (Share extras, bounded retention). | iOS copies a compact paste on screenshot for TestFlight feedback (Apple cannot attach files to that form). Android has no TestFlight screenshot hook — Share only. MetricKit is iOS. Automatic error reports require a configured HTTPS DSN and explicit consent. iOS hosted incident delivery, crash symbolication and the upload gate were physically verified in a development build. Both shells provide an adjacent Reporting Privacy link and optional consent copy naming Sentry/OpenCapture. Android adapter qualification and release-CI enablement are tracked in [deployment](sentry-deployment.md). | Local spool: unit tests. **Physical qualification pending both.** No Android device attached; Earlier iOS baseline was blocked; later operator-assisted Pocket 4 Pro runs passed 11 focused lifecycle cycles and 21 mixed checks. iOS synthetic cloud delivery and symbolication are proven; Android physical reporting and distributed-release enablement remain pending. |
-| Decoder-output recovery | Fresh complete AUs + silent native output: one decoder rebuild and one enable; retain last image; 16 s picture deadline then datalink rejoin. Fresh native output does not PLI. Blocked enable is not a spent rung. Settings cover does not drop `0x02` ingest. | iOS VideoToolbox vs Android MediaCodec. Packet-without-complete-AU stall uses the existing enable ×2 / endpoint ladder (portable tests). Renderer-only local repair is **not implemented**. Seeded physical stress harness is **iOS Debug XCTest only**. | iPhone + Pocket 4 Pro: 11 focused lifecycle cycles and 21 mixed checks passed after fixing iOS foreground/watchdog ownership. See [physical results](audits/2026-09-14-physical-feed-stress.md). Broader performance qualification and physical Android remain pending. |
-| Multiview prototype | Experimental shared Wi-Fi with independent per-camera BLE provisioning, bounded identity-verified LAN discovery, normal UDP preview, per-camera and group recording with fresh status confirmation. | iOS only; Android deferred. Pocket 3/4/4 Pro and Nano have preview profiles. Action/360 and unprofiled Osmo can attempt network-only setup. Audio, phone hotspot, unprofiled models and four-camera thermal behavior remain unverified. | Physical iPhone: Pocket 4 Pro, Pocket 3 and Nano preview together, automatic discovery, all three record starts/stops and tally borders confirmed. Dedicated parallel-setup, saved-stage restoration and AP-return checks remain pending. |
-| Multiview stage polish | Camera-list grid icon, four-slot grid/Center stage, portrait centered vertical thumbnail strip / landscape trailing strip, floating close/layout/network controls, Clean DISP and supported Auto LUT, Live View record lamp, centered network setup and Add picker, device-only credentials, bounded recovery and borrowed Live View. | iOS experimental only; Android deferred. Borrowed Live View disables Sharing; the relay lifecycle and watcher controls remain single-camera only. Returning to the stage cancels programmed motion and head tracking. Hotspot status is interface detection, not a reliable Settings-switch flag. No frame-accurate synchronization. | Physical iPhone: setup navigation, scan cancellation, all Add buttons, password bounds, touch targets, three-camera portrait/landscape Fit/Fill and tally checks pass. All three feeds resumed after app switching; Pocket 3 took roughly a minute. Borrowed full controls, hotspot transitions and repeated Wi-Fi joins still need physical verification. |
+| Decoder-output recovery | Fresh complete AUs + silent native output: one decoder rebuild and one enable; retain last image; 16 s picture deadline then datalink rejoin. Fresh native output does not PLI. Blocked enable is not a spent rung. Settings cover does not drop `0x02` ingest. | iOS VideoToolbox vs Android MediaCodec. Packet-without-complete-AU stall uses the existing enable / endpoint ladder (portable tests). Renderer-only local repair is **not implemented**. Seeded physical runners now cover iOS Debug XCTest and opt-in Android instrumentation; see the connection stress guide. | iPhone + Pocket 4 Pro: 11 focused lifecycle cycles and 21 mixed checks passed after fixing iOS foreground/watchdog ownership. See [physical results](audits/2026-09-14-physical-feed-stress.md). The [September 22 Android campaign](audits/2026-09-22-connection-stress-campaign.md) reproduced delayed post-loss picture recovery, including a ~20.5 s presentation gap. Complete overlap and broader performance qualification remain pending. |
+| Multiview prototype | Experimental shared Wi-Fi with independent per-camera BLE provisioning, bounded identity-verified LAN discovery, normal UDP preview, per-camera and group recording with fresh status confirmation. | iOS and Android. Pocket 3/4/4 Pro and Nano have preview profiles. Action/360 and unprofiled Osmo can attempt network-only setup. Audio, phone hotspot, unprofiled models and four-camera thermal behavior remain unverified. | Physical iPhone: Pocket 4 Pro, Pocket 3 and Nano preview together, automatic discovery, all three record starts/stops and tally borders confirmed. Dedicated parallel-setup, saved-stage restoration and AP-return checks remain pending. |
+| Multiview stage polish | Camera-list grid icon, four-slot grid/Center stage, portrait centered vertical thumbnail strip / landscape trailing strip, floating close/layout/network controls, Clean DISP and supported Auto LUT, Live View record lamp, centered network setup and Add picker, device-only credentials, bounded recovery and borrowed Live View. | Experimental on iOS and Android. Android names the source Phone hotspot (Android offers no Personal Hotspot API or password) and binds LAN sockets to the Wi-Fi network. Borrowed Live View disables Sharing; the relay lifecycle and watcher controls remain single-camera only. Returning to the stage cancels programmed motion and head tracking. Hotspot status is interface detection, not a reliable Settings-switch flag. No frame-accurate synchronization. | Physical iPhone: setup navigation, scan cancellation, all Add buttons, password bounds, touch targets, three-camera portrait/landscape Fit/Fill and tally checks pass. All three feeds resumed after app switching; Pocket 3 took roughly a minute. Borrowed full controls, hotspot transitions and repeated Wi-Fi joins still need physical verification. |
 | Nano transport assembly | Shared length-based assembly across transport groups and length-aware private AVC metadata parsing. | Both shells use shared assembly. Android passes raw access units to MediaCodec, so applying the private metadata filter to its decoder input and physical regression remain pending. | iPhone captured-stream replay: 359/359 decoded, zero errors. Nano normal monitor physically confirmed smooth by the operator; live counters matched ~25 fps with no missing decoded pictures. Android and Pocket regression pending. |
 | Nano frame-queue protection | Preserve AVC parameter sets and IDR when trimming a live frame backlog. | iOS queue uses a latched codec; Android has a different buffering path. The iOS regression fix is not yet physically verified as a stutter fix. | iOS synthetic overload regression plus physical cadence comparison pending |
+| Action 6 body | Live `0x09/0xa8` to `0x41` with no Nano gate and no Pocket `0x02/0x68`; Normal 10-bit `3F` / D-Log M `3D`; Photo `05`; Timelapse `0x02/0x01`; Action `0x02/0xBF` favorite layout; aperture state/capability subscriptions appended after the base keys. APERTURE tile takes the FOCUS slot (`supportsAperture`): live iris `cam_expo_param` `@13`, strategy choices from `camcap_aperture_ctrl_strategy` (captured fallback per exposure/mode), SET `0x02/0x8E` pid `0x0044`. Gimbal, tap focus and focus modes hidden. | Android mirrors the flags, color map and parsers in Kotlin; iOS reads them from the core. | **physical** pending both (loaner returned; Mimo survey only) |
 | Explicit skip | — | VideoToolbox, MetalFX super-res, iOS 26 Liquid Glass API, Frame.io OAuth, LEVEL / De-SQ / MAG | n/a |
 
 Datalink bind, ACK, enable-write, and decoder latch facts live in
@@ -140,8 +165,15 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Gated by Haptics.
 - Camera-value pickers (ISO, shutter/EV, exposure, WB, focus, audio) grow from
   bottom-center. Auto-exposure EV keeps the compensation as the value and shows
-  the camera-chosen shutter in the caption (`EV 1/200s`); a missing denom stays
-  `EV`. FORMAT, COLOR and shooting mode hang from the top well of those
+  the applied shutter in the caption (`EV 1/200s`), using `cam_expo_param`
+  offsets 20–22 in Auto on both shells. Offsets 2–4 retain the manual setting.
+  Missing or unsupported applied values clear the caption to `EV`; the current
+  readout supports integer reciprocals only. ISO continues using offsets 16–17.
+  Updates retain the existing 5 Hz HUD budget without polling or additional
+  camera commands. Regression coverage exercises changing Auto telemetry and
+  Manual settling. The operator confirmed the fix on iPhone 16 Pro Max with
+  build source `0645792d` on 2026-09-22; the camera model was not recorded.
+  Android physical qualification remains pending. FORMAT, COLOR and shooting mode hang from the top well of those
   controls: portrait details sit under the info bar and keep Format / Color / Mode
   category tabs; landscape attaches to the screen top with no extra category row.
   Portrait floating lower corners are 16; landscape attached bottom edges stay
@@ -251,14 +283,21 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   viewport, and one continuous material to the physical edge. In portrait the disc
   is a bottom half-circle flush to the screen edge, covering camera values and
   system buttons until closed. Minor ticks are equally spaced on the log ring;
-  labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. A very slow turn
-  can rest on whole stops (2×, 3×, 4×, 6×, 9×, 12×); a faster turn does not.
-  Those whole stops also fire the same detent haptic as capture drums.
+  labeled marks stay at 1 / 1.5 / 2 / 3 / 4 / 6 / 9 / 12. Pointer input and
+  the moving ring retain fractional values without hundredth rounding or
+  whole-stop snapping. Reaching or crossing a whole stop gives one haptic pulse;
+  labels and accessibility steps still use hundredths.
   The disc hub shows hundredths (1.53×); the chip still shows tenths. Past the
   last optical stop (Pocket 4 Pro 6× / 12×) the chip uses the same digital-crop
   amber as the disc ticks.
-- The expanded Motion Control editor passes joystick touches to the original
-  control so positions can be set without minimizing the window. Other outside
+- The expanded Motion Control editor passes joystick and zoom-chip touches to
+  the original controls. Single/double tap keeps the existing zoom stops; a hold
+  opens the existing zoom disc above the editor. Closing the disc restores the
+  full editor. Default portrait placement leaves the zoom chip exposed; manual
+  window positions keep their normal drag bounds and overlap priority. There is
+  no separate zoom slider in Motion Control. Existing
+  lock, FORMAT and D-Log2 recording rules still apply; manual zoom can take over
+  an active or paused program. Other outside
   taps minimize without activating covered controls. Window dragging uses local
   transient placement and one shared-model commit on release.
 - Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
@@ -307,7 +346,12 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   stick. The gimbal button sits beside the plain zoom value above the stick. On width-constrained iPad, record sits
   on the canvas floor: the cluster stays on the right edge and lifts above
   the record button. The stick does not move when the button appears.
-  Nano hides stick, button, and the gimbal sheet (`hasGimbal`).
+  Nano hides stick, button, and the gimbal sheet (`hasGimbal`) and the zoom chip
+  (`supportsZoom`). The DISP Zoom Chip / Gimbal Stick toggles are hidden on bodies
+  without the capability; a saved toggle never remounts them. Gimbal, zoom, tap focus
+  and focus mode are Pocket-only in `CameraModel`; Action, 360, drones and unknown
+  bodies fail closed (#124). Android reads `hasGimbal` / `supportsZoom` from the
+  facade JSON.
   The gimbal inspector opens from the trailing edge: width min(460, 0.92×viewport),
   full landscape height, at most 52% portrait height, with independently scrolling options.
   Mode / Speed / Ramp tabs each present their dial in the same shared inspector;
@@ -315,11 +359,16 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   Motion Control editor is 340 dp wide. Both the editor and minimized pill
   drag directly after touch slop, with no hold required. Duration dials and sliders
   retain their own gestures; dragging suppresses button activation.
+  iOS keeps the control-action guard independent of position so dragging does
+  not rebuild the editor's controls. Android already defers local position reads
+  to its offset callback. Duration dials retain their hit targets after release;
+  iOS still suppresses release-tap writes for 150 ms without a refresh timer.
   Duration dials are 180 × 44 dp, with moving ticks, a fixed index, and a
   spring settle. They swipe horizontally in 0.5 s steps (12 dp per step), with
   adjustable accessibility actions. Start shows a cancellable 3–2–1 countdown
   before automatic preparation and approach; the settle at A remains separate.
-  All A/B/C rows stay visible; unset rows read Not set. SET captures a waypoint
+  All A/B/C rows stay visible; unset rows read Not set. Unset readouts and Loop's
+  help text use the brighter secondary text color in both shells. SET captures a waypoint
   and RESET replaces it with the camera's current pose and zoom; Clear remains separate. Full-editor
   outside taps minimize without activating underlying controls. Until a real drag,
   full and minimized panels share the default top and recenter with the viewport.
@@ -339,7 +388,8 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   targets stay within −44…70. Measurements are never clipped into fake
   endpoints; capture and native dispatch reject out-of-range targets. Full contract and pending
   physical qualification: [Motion Control takes](programmed-moves.md).
-  Run preps Fast + tilt unlocked. No zoom SET during the slew. No motion debug plate is displayed.
+  Run preps Fast + tilt unlocked. Zoom-changing programs follow the saved zoom
+  path; equal-zoom programs send no zoom SET. No motion debug plate is displayed.
 
 ## Connection reliability audit (2026-09-12)
 
@@ -388,12 +438,71 @@ Native rotation safety: approach uses reachable-arc segments, and exact legs
 spanning at least 180° use timed native sub-moves along the reachable arc. Last-mile dispatch
 rejects ambiguous pan directions from fresh actual feedback. Selfie Flip is a
 presentation/stick mapping concern, not a sign change for native waypoints.
-MIRROR assist reflects waypoint letters and the dashed preview.
+Waypoint letters and the dashed preview follow settled rotate-180 pan orientation
+XOR MIRROR assist on both shells, independent of the camera Selfie Flip setting.
+Stored positions and native commands stay unchanged. Regression tests cover front,
+selfie, manual 180 and MIRROR combinations; physical selfie-overlay qualification
+remains pending on both shells.
 
 Motion Control continuation uses Start/Pause/Resume/Stop in both shells. Pause
 freezes remaining time; Resume requires fresh, settled feedback and has no new
-countdown. Duration dials run from 0.5 to 120 seconds (left increases, right
+countdown. While paused, Restart replaces Clear and starts the saved program
+from A with the normal countdown/preparation, retaining all points and settings.
+Duration dials run from 0.5 to 120 seconds (left increases, right
 decreases). Android physical qualification remains outstanding.
+
+Motion Control Loop (2026-09-21): both shells offer an off-by-default Loop
+switch, chosen before Start. Each timed endpoint reverses the saved path without
+an added pause: A→B→A or A→B→C→B→A, repeating until Stop. Each reverse leg uses its
+original duration and retraces the same smoothed curve. Countdown, approach to A
+and the two-second settle happen only once; the return begins while the existing
+bounded waypoint check verifies the turnaround. Exact reversals also accept a
+fresh endpoint observation within 0.15° and 200 ms, bracketed by ordered approach
+and departure on the finite path across the full feedback window. This handles
+native motor easing without claiming constant-speed timing; missing or invalid
+feedback still stops the move. Smoothed endpoints use a bounded
+history of dispatched timed commands for the same affine feedback-delay fit.
+Pause/Resume keeps the direction and loop; Stop, manual control,
+feedback/waypoint failure and session interruption end it. Closing an active editor
+minimizes to the control pill. Both shells retain points, durations, Smoothness and
+Loop across editor dismissal within the camera session; Clear resets points,
+Smoothness and Loop while keeping duration preferences. Session reset clears the
+program. Both editors cap their preferred height at 420 pt/dp, keep the header
+and action bar fixed, and scroll settings between them. A bottom fade appears
+only while more content remains below. Automated regression coverage is separate
+from physical qualification;
+the operator confirmed the corrected A/B loop on iPhone. Broader physical loop
+qualification and sustained live-view budget checks remain pending on both shells.
+
+Programmed zoom (2026-09-22): both shells follow linear zoom factor over each
+whole leg, including reverse loops. Pocket 4 Pro sends distinct lens positions at
+up to 50 Hz on the existing transport scheduler; other bodies retain 20 Hz. No
+delayed start or native gear schedule remains. Duplicate lens targets consume
+sample slots, and saved endpoints remain pending until admitted. Before timed
+zoom begins, fresh post-preparation feedback must confirm A within two lens ticks.
+Pocket 4 Pro lens feedback has an independent 850 ms deadline; gimbal feedback
+retains 300 ms. Zoom targets B even when the angular path rounds it, pauses/stops
+with the take and resumes from fresh settled lens feedback. Restart restores the
+saved path. D-Log2 blocks zoom-changing programs both idle and recording, with no
+automatic color change. Received color/FORMAT changes stop an unsupported take
+before its next write. Gimbal-only programs remain available in D-Log2.
+
+A physical iPhone/Pocket 4 Pro 20/50 Hz comparison reduced filtered near-still
+video-frame pairs from 21.2% to 1.6%, with 25 fps picture, 40 Hz ACKs and no drops
+or recovery during the 50 Hz legs. This is a single-scene measurement, not broad
+optical qualification. Android code and tests match; physical Android validation
+remains pending because no device is attached. Integrated pause/resume/Restart and
+wider zoom ranges remain under qualification; see [evidence](programmed-moves.md#evidence-and-qualification).
+
+Motion zoom controls (2026-09-22): both shells keep the existing chip and disc
+accessible while the editor remains open, replacing the added in-editor slider.
+General dial input retains fractional values without whole-stop snapping.
+Simulator and native hit-testing checks cover editor retention and the control
+exclusions. Android instrumentation builds but cannot run without an attached
+device. Physical iPhone layout verification remains pending: earlier XCTest
+launches timed out enabling automation, and the phone disconnected before the
+first camera comparison could run. The later native-rate video comparison improved
+programmed-zoom continuity; see [measurement limits](programmed-moves.md#evidence-and-qualification).
 
 ## Multiview session network and shutdown (in validation)
 
@@ -420,7 +529,7 @@ completion/cancellation. Failed resets survive closure and relaunch. Concurrent
 scan cancellation and stage closure share one reset task per camera.
 Automated session-choice, cancellation/retry and persistence tests cover these
 transitions. Physical network selection, provisioning and AP return remain pending.
-Android Multiview remains deferred.
+Android matches this session model (see Android Multiview below).
 
 ## First-picture random-access gate
 
@@ -483,7 +592,7 @@ an old LUT image does not establish a recovered camera. A failed foreground deco
 existing bounded session-rejoin budget. Each failed tile offers one Reconnect
 action plus Remove. Reconnect tries saved identity/LAN discovery first, then
 camera network setup if needed, preserving the LUT choice. Android Multiview
-remains deferred. Pocket 3 LUT-on foreground freeze was reproduced physically;
+uses the same ladder through the core `MultiviewRecovery`. Pocket 3 LUT-on foreground freeze was reproduced physically;
 post-fix physical app-switch testing confirmed all three feeds resumed. Pocket 3
 required a full rejoin and took roughly a minute; this is recovery proof, not a
 claim of seamless foreground return.
@@ -505,7 +614,7 @@ Close control sits at the upper screen corner, and the shared Fit/Fill control
 has a visible FIT/FILL label in the bottom bar in both orientations. The
 choice is saved with the stage; older saved stages default to Fit. Viewport size
 drives orientation on iPhone and iPad. Tile/decoder identity is retained during
-layout changes. Android Multiview remains deferred. Physical iPhone verification
+layout changes. Android uses the same shared geometry (Kotlin port with exact-value tests). Physical iPhone verification
 on 2026-09-10 covered a three-camera stage, Fit → Fill → landscape → portrait → Fit,
 with the bottom controls visible and the reported timecodes retained. A follow-up
 physical iPhone check confirmed the main tile stays 16:9 in both modes, the Close
@@ -517,8 +626,8 @@ tile including compact secondary previews. Borders follow per-camera reported
 recording state, not a pending Record all request. Empty and stopped tiles have
 no tally. Physical iPhone verification on 2026-09-10 confirmed red borders on
 Pocket 4 Pro, Pocket 3 and Nano after Record all, and none after Stop all. The
-journal confirmed all three starts and all three stops. Android Multiview remains
-deferred.
+journal confirmed all three starts and all three stops. Android shows the same
+tally; Galaxy S25 + Pocket 4 Pro start/stop confirmed on 2026-09-23.
 
 ### Pocket 3 FORMAT fallback
 
@@ -1015,8 +1124,8 @@ configured build remains pending.
 
 ## Multiview network and grid layout (in validation)
 
-The dedicated Multiview network button is iOS-only under the existing Android
-Multiview exception. Physical verification of this button is pending.
+The dedicated Multiview network button exists on both shells. Physical
+verification of this button is pending.
 
 The iOS 2×2 Multiview grid fills the space between floating controls with four
 equal tiles. Tile shapes follow the viewport; FIT preserves the full picture and
@@ -1060,6 +1169,49 @@ outstanding: no device was connected during this task. Simulator tests are not
 physical qualification. Remaining OS crashes and live-camera outages
 are recorded in the [Sentry audit](audits/2026-09-19-testflight-111-sentry.md).
 
+### Field-driven stall recovery (2026-09-22)
+
+Evidence: 1,960 TestFlight feed incidents (14 days) pulled from Sentry. Shared
+core, both shells through the JNI facade: the encoder-pause ladder sends one
+enable, not two, before the endpoint rebuild, and the post-enable GOP hold follows
+the stage that stopped once the enable is older than `stallThreshold`.
+
+iOS-only implementation fixes, each with an Android counterpart that differs:
+the SoftAP AU queue keeps complete AUs across a later gap and holds 50 (was 8);
+`-12903` after picture is known reference loss; the mirror-flip hold decodes
+compressed frames with `DoNotDisplay`; foreground return renegotiates the
+endpoint (keeping BLE) instead of a full reconnect when video is stale on the
+same network. Android's queue lives in `CompressedAccessUnitAdmission` and its
+foreground path in `PocketCameraSession`; they were not changed here and are an
+explicit exception. Android did change: a MediaCodec input miss marks references
+broken, and the P-frame input wait is 20 ms instead of 0.
+
+iOS-only diagnostics exception: incident samples add `statusAge`,
+`uplinkReplyAge`, `sendErrorAge` and `sendErrorCode`, and Sentry events add
+`trigger`, `recoveredBy` and `gap`. Android's Kotlin incident models are unchanged.
+
+Registration heartbeat, both shells: the 1 Hz `0x00/0x88` registration runs
+whenever a datalink exists, and the watchdog's encoder-pause rung re-registers
+before its enable. iOS previously skipped the heartbeat whenever the scene was
+inactive or a foreground check ran; Android skipped it while `holdsMonitor` and
+Media overlapped. Proven on iPhone + Pocket 4 Pro with RVI captures (Control
+Center 20 s: old build lost video for 22.1 s, fixed build none; forced 30 s
+heartbeat loss: re-register restored video in 2.0 s, twice). Android is not
+physically verified.
+
+iOS-only: a BLE drop with fresh UDP video reconnects BLE beside the picture.
+Android's `onLinkLost` still starts full session recovery; explicit exception
+until the camera's behaviour without BLE is measured on Android. Not physically
+exercised on iOS either (see live-session).
+
+Camera-body gallery follow (#273) is on both shells, verified on iPhone + Pocket 4
+Pro and Galaxy S25 + Nano. Android BLE
+setup now discovers services from `onMtuChanged` (1.5 s fallback) instead of
+overlapping the MTU request (#369, #351); verified on a Galaxy S25 (ready in
+842 ms), not yet on the reporters' phones.
+
+Physical qualification is pending for the rest of the above.
+
 ### iOS live-display ownership follow-up (2026-09-20)
 
 Retired single-camera and Multiview hosts cannot resize a display layer adopted
@@ -1098,3 +1250,70 @@ Physical Android qualification remains an exception because no Android device
 was attached; the maintainer authorized merging with that check outstanding.
 This functional acceptance does not establish measured camera-connected cadence
 or sustained thermal performance.
+
+## Camera EV meter
+
+Both shells offer a tap-only **EV** toggle beside ND in View Assist and settings.
+The toolbar button uses the text **EV**. The saved on/off choice controls the
+camera meter in DISP 1. Its transparent 28 × 180 pt/dp footprint stays just inside
+the actual picture's left edge (6 pt/dp inset), nominally 16 pt/dp above vertical
+center, including portrait and desqueeze. A thin white line and small sun marker
+use the same dark glow as other HUD readouts. The signed number is above, with +3 and −3
+at the line's ends. It moves upward before shortening to leave 12 pt/dp around
+the actual assist toolbar, including expansion. If neither side of the toolbar
+leaves 72 pt/dp of height, it hides temporarily until the toolbar closes.
+It has no drag/resize controls, inspector, DISP 2 pin or playback presentation.
+Legacy EV placement/size preferences and pins are ignored; activation is retained.
+
+`cam_expo_param` offset 15 supplies camera-metered EV in third stops, separately
+from configured compensation at offset 6. Missing/unsupported bytes show a dash
+without a needle. No histogram, transfer curve, scope demand or polling is added;
+the existing 5 Hz status publication carries updates. Camera settings and
+recordings are unchanged. See the [protocol evidence](../handbook/src/content/docs/protocol/commands.md#camera-metered-ev).
+
+Qualification: Pocket 4 Pro and Nano captures show the meter changing while
+configured EV remains fixed. Pocket 3's 44-byte layout is supported by captures,
+but independent meter movement on that body remains unqualified. The field's
+precise metering algorithm and calibration are not inferred from the trace.
+The revised EV toggle, native reading, portrait/both-landscape bounds and live
+frame progress passed a physical iPhone 16 Pro Max check on 2026-09-22. This
+short check does not qualify sustained thermal performance or all camera modes.
+The subsequent slim sun-marker design, EV text button, toolbar clearance,
+portrait/both-landscape bounds and continued frames passed a fresh physical
+iPhone check on the same date. The final white/shared-glow styling passed
+simulator checks; its live rerun could not reach a connected monitor.
+**Android physical qualification remains pending** because no device is attached.
+
+## Android Multiview (in validation)
+
+Android Multiview follows the iOS stage 1:1: camera-list grid button, two-step
+network popup, empty four-slot Center stage, camera picker, tile readouts and
+timecode, per-tile LUT/record, Record all/Stop all, red tally, Grid/Center
+stage, Fit/Fill, DISP clean, WI-FI button, bounded repair, device-only saved
+networks, saved layout preferences, camera Wi-Fi return with a persistent
+cleanup ledger, and double-tap into borrowed Live View (grid button replaces
+lock, Media hidden). Stage geometry is `MultiviewPresentationLayout` ported to
+Kotlin; station commands, join/station/scan/discovery/support decisions and
+`MultiviewRecovery` come from the Swift core over JNI.
+
+Android-only differences:
+
+- Source copy is **Phone hotspot**; Android has no hotspot password API.
+  Hotspot detection is the tethering interface (`swlan*`, `ap*`, `wlan1`).
+- Local Wi-Fi reuses the current Wi-Fi by SSID, otherwise requests it with
+  `WifiNetworkSpecifier` (WPA2). LAN sockets bind to the Wi-Fi `Network`.
+- Identity fallback: a missing BLE `07/07` reply gets one `53/10` wake and one
+  retry. Observed on Pocket 4 Pro after returning to its own AP (2026-09-23).
+  iOS sends the wake only to Nano; consider porting if iOS reproduces it.
+- The watchdog snapshot includes the Android decoder's output clock and
+  reference-loss flag (as single-camera Android does); `rebuildVTSession`
+  rebuilds the codec, keeps the picture and requests an IRAP.
+- Returning from borrowed Live View rebuilds every tile decoder and requests a
+  keyframe, since all tile surfaces are recreated.
+
+Physical Galaxy S25, 2026-09-23 (Pocket 4 Pro + Nano, phone hotspot): setup,
+provisioning, discovery, identity check, preview, Auto LUT, tile and group
+recording, promotion, Grid, Fill, DISP clean, Live View round trip, watchdog
+repair and camera Wi-Fi return (one Nano reset failed and succeeded on the next
+close). Pending on Android: Local Wi-Fi join, landscape/tablet, four cameras,
+Pocket 3, app-switch recovery and thermal behavior.

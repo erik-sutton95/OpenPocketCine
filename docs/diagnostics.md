@@ -105,6 +105,17 @@ Healthy exposure accumulates only while an **observable** stage is fresh.
 If neither decoder output nor presentation is expected (identity path under
 Settings), that interval is not healthy exposure and is not recovery.
 
+iOS samples also carry `statusAge` (any camera DUML frame on the UDP socket),
+`uplinkReplyAge` (the camera's reply to the 1 Hz Flip GET, proof it still hears
+us) and `sendErrorAge` / `sendErrorCode` (last UDP send the stack rejected on
+the current socket, POSIX code). A stale `packetAge` with fresh `statusAge`
+means only the video stream stopped. Android does not record these yet.
+
+Sentry events titled `feed incident <stage>: <kind>` keep that grouping. Tags
+`trigger` (first repair reason, e.g. `bleDropped`), `recoveredBy` (last repair
+action before recovery) and `gap` (picture gap bucket) are searchable; the full
+timeline is the event's JSON attachment.
+
 These rows are counters, not scanout. Cached FPS cannot satisfy them.
 Share Diagnostics can attach the local extra; keep the app open briefly
 after a dropout so aftermath can land. No camera-time network: iOS
@@ -238,6 +249,19 @@ delivery has not been tested. Release enablement is described in the deployment
 guide; no store release is implied.
 
 ## Development verification
+
+The maintainer [connection stress matrix](connection-stress-testing.md) captures
+allowlisted numeric snapshots, vitals and typed log markers with checkpoint
+timing. Its local summaries retain installed-build identity and distinguish
+simulation from driver-declared physical evidence. It does not upload reports
+or substitute historical journal data for fresh picture progress.
+
+The same guide covers core packet/command chaos and native feed/UI stress.
+Android reuses cumulative `LivePipelineCadence` snapshots without consuming
+keepalive windows. Native fault-arm/disarm markers, actual command results and
+fresh recovery samples distinguish configured faults from faults that fired.
+Raw build/instrumentation logs stay private; simulation results and compile
+checks cannot qualify a physical connection.
 
 Debug builds accept `OPV_RELIABILITY_VERIFY=incident|gatedIncident|crash|hang|resume` at launch.
 This opens an isolated verification screen, uses a separate consent suite/cache,

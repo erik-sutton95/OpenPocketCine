@@ -14,10 +14,8 @@ import Testing
         snap.now = 101
         #expect(dog.tick(snap) == .none)
         snap.now = 105
-        #expect(dog.tick(snap) == .resendLiveViewEnable)
-        snap.now = 110
         #expect(dog.tick(snap) == .reopenDatalink)
-        snap.now = 111
+        snap.now = 106
         snap.lastAccessUnitAge = 0.01
         snap.lastDecoderOutputAge = 0.01
         snap.lastDecodedFrameAge = 0.01
@@ -264,6 +262,21 @@ import Testing
             "after lift, past gimbal grace is an encoder pause")
     }
 
+    @Test func packetsWithoutCompletePicturesDoNotRenewTheEnableHold() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(now: 100, frameAge: 9, videoAge: 0.01)
+        snap.lastAccessUnitAge = 9
+        snap.decoderOutputExpected = true
+        snap.lastDecoderOutputAge = 9
+        snap.secondsSinceLastEnable = 5
+        #expect(
+            !FeedWatchdog.shouldHoldForGOPReset(secondsSinceLastEnable: 5, lastVideoPacketAge: 9),
+            "no complete AU since before the enable: it did not cut a GOP")
+        #expect(
+            dog.tick(snap) == .resendLiveViewEnable,
+            "fresh fragments must not hold the 8 s GOP window for a stalled assembly")
+    }
+
     @Test func encoderPauseWithFreshStatusResendsEnable() {
         var dog = FeedWatchdog()
         var snap = Self.snap(
@@ -281,7 +294,7 @@ import Testing
         #expect(dog.stage == .resendEnable)
     }
 
-    @Test func enableThatProducesNoHEVCRebuildsUDPAfterTwoEnables() {
+    @Test func enableThatProducesNoHEVCRebuildsUDPAfterOneEnable() {
         var dog = FeedWatchdog()
         var snap = Self.snap(
             now: 10, frameAge: 2.8, videoAge: 2.8, statusAge: 0.0, bleAge: 70)
@@ -312,32 +325,23 @@ import Testing
         snap.lastStatusAge = 0.0
         snap.secondsSinceLastEnable = 5.1
         #expect(
-            dog.tick(snap) == .resendLiveViewEnable,
-            "still encoder-paused after escalateAfter — one more enable, not a 5-tuple tear")
-        #expect(dog.stage == .resendEnable)
-        snap.now = 20.2
-        snap.lastDecodedFrameAge = 13.0
-        snap.lastVideoPacketAge = 13.0
-        snap.lastAccessUnitAge = 13.0
-        snap.secondsSinceLastEnable = 5.1
-        #expect(
             dog.tick(snap) == .reopenDatalink,
-            "two failed enables: 22:16 UDP rebuild brought the picture back")
+            "one failed enable: field enables that work restart HEVC within 4 s")
         #expect(dog.isRecovering)
-        snap.now = 22.3
-        snap.lastDecodedFrameAge = 15.1
-        snap.lastVideoPacketAge = 15.1
-        snap.lastAccessUnitAge = 15.1
+        snap.now = 17.2
+        snap.lastDecodedFrameAge = 10.0
+        snap.lastVideoPacketAge = 10.0
+        snap.lastAccessUnitAge = 10.0
         snap.secondsSinceLastEnable = 2.1
         snap.secondsSinceLastRebuild = 2.1
         #expect(
             dog.tick(snap) == .none,
             "recent rebuild: do not GOP-cut or flap UDP; shell already enabled")
         #expect(dog.isRecovering)
-        snap.now = 25.3
-        snap.lastDecodedFrameAge = 18.1
-        snap.lastVideoPacketAge = 18.1
-        snap.lastAccessUnitAge = 18.1
+        snap.now = 20.2
+        snap.lastDecodedFrameAge = 13.0
+        snap.lastVideoPacketAge = 13.0
+        snap.lastAccessUnitAge = 13.0
         snap.secondsSinceLastEnable = 5.1
         snap.secondsSinceLastRebuild = 5.1
         #expect(
@@ -345,10 +349,10 @@ import Testing
             "rebuild kept the session and 9004 stayed silent — new handshake, not a 60 s wait (#218)"
         )
         #expect(dog.stage == .fullRejoin)
-        snap.now = 30.4
-        snap.lastDecodedFrameAge = 23.2
-        snap.lastVideoPacketAge = 23.2
-        snap.lastAccessUnitAge = 23.2
+        snap.now = 25.3
+        snap.lastDecodedFrameAge = 18.1
+        snap.lastVideoPacketAge = 18.1
+        snap.lastAccessUnitAge = 18.1
         snap.secondsSinceLastEnable = 10.2
         snap.secondsSinceLastRebuild = 10.2
         #expect(dog.tick(snap) == .none, "rejoin fired — shell owns the new session")
@@ -378,20 +382,14 @@ import Testing
         snap.lastAccessUnitAge = 9.3
         snap.lastStatusAge = 0.0
         snap.secondsSinceLastEnable = 5.1
-        #expect(dog.tick(snap) == .resendLiveViewEnable)
-        snap.now = 20.2
-        snap.lastDecodedFrameAge = 14.4
-        snap.lastVideoPacketAge = 14.4
-        snap.lastAccessUnitAge = 14.4
-        snap.secondsSinceLastEnable = 5.1
         snap.secondsSinceLastRebuild = 2.0
         #expect(
             dog.tick(snap) == .none,
             "status young + recent rebuild: BLE age must not disable the 60s backoff")
-        snap.now = 23.3
-        snap.lastDecodedFrameAge = 17.5
-        snap.lastVideoPacketAge = 17.5
-        snap.lastAccessUnitAge = 17.5
+        snap.now = 18.2
+        snap.lastDecodedFrameAge = 12.4
+        snap.lastVideoPacketAge = 12.4
+        snap.lastAccessUnitAge = 12.4
         snap.secondsSinceLastEnable = 8.2
         snap.secondsSinceLastRebuild = 5.1
         #expect(

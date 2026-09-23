@@ -4,8 +4,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.bridge.SwiftCore
-import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -156,12 +156,16 @@ internal class LiveSessionVideoHistory {
  * session/seq counters, 40 Hz ACK pump, and HEVC depacketizer handle.
  */
 class DatalinkDriver internal constructor(
-    private val joiner: CameraApJoiner,
+    private val joiner: CameraNetworkPath,
     private val port: Int,
     private val tcpPoke: Boolean,
     private val pairingToken: String,
     private val cadence: LivePipelineCadence = LivePipelineCadence(),
     private val videoHistory: LiveSessionVideoHistory = LiveSessionVideoHistory(),
+    private val cameraModel: CameraModel = CameraModel.default,
+    private val debugVideoPacketAdmission: (() -> Boolean)? = null,
+    /** Camera SoftAP by default; Multiview passes the verified shared-Wi-Fi address. */
+    private val host: String = CAMERA_HOST,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
@@ -187,6 +191,10 @@ class DatalinkDriver internal constructor(
     private var closeNeedsStickRest = false
     private val nativeFeedbackEpoch = AtomicLong(0)
     private val nativeProgramFeedback = AtomicReference<Pair<Long, NativeGimbalFeedback>?>(null)
+    private val nativeZoomStatus = AtomicReference<Pair<Long, NativeProgramZoomObservation>?>(null)
+    private val nativeZoomOwned = AtomicBoolean(false)
+    private val lastNativeZoomWriteAt = AtomicLong(0)
+    internal val lastProgrammedZoomAt: Long? get() = lastNativeZoomWriteAt.get().takeIf { it > 0L }
     private val nativeProgramProgress = AtomicReference<(() -> Unit)?>(null)
     private val nativeProgramProgressQueued = AtomicBoolean(false)
     private val nativeProgramRunner = NativeGimbalProgramRunner(
@@ -208,6 +216,45 @@ class DatalinkDriver internal constructor(
         stop = {
             if (!closed.get()) sendDumlLocked(0x04, CameraCommands.CMD_GIMBAL_ANGLE,
                 CameraCommands.gimbalTimedStop(), 0, CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
+        },
+        zoomFailure = ::programmedZoomFailure,
+        zoomTargetFailure = { factor, program -> nativeProgramZoomFailure(program, cameraModel, readNativeZoomStatus(), factor) },
+        sendZoom = { lens, program ->
+            if (closed.get() || programmedZoomFailure(program) != null) false else {
+                sendDumlLocked(0x02, CameraCommands.CMD_ZOOM, CameraCommands.zoomLens(lens), CameraCommands.FLAG_REQUEST,
+                    CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP).also { sent ->
+                    if (sent) {
+                        nativeZoomOwned.set(true)
+                        lastNativeZoomWriteAt.set(SystemClock.elapsedRealtime())
+                    }
+                }
+            }
+        },
+        stopZoom = {
+            if (nativeZoomOwned.getAndSet(false) && !closed.get()) {
+                sendDumlLocked(0x02, CameraCommands.CMD_ZOOM, CameraCommands.zoomStop(), CameraCommands.FLAG_REQUEST,
+                    CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP)
+            }
+        },
+        noteZoomPause = { now ->
+            nativeZoomStatus.updateAndGet { current ->
+                current?.takeIf { it.first == nativeFeedbackEpoch.get() }?.let { it.first to it.second.notePause(now) }
+            }
+        },
+        zoomResumeReady = { readNativeZoomObservation().canResume(it) },
+        usesHighRateZoom = CameraModel.looksLikePocket4Pro(cameraModel.name),
+        sendNativeZoom = { command, program ->
+            val now = SystemClock.elapsedRealtimeNanos() / 1e9
+            if (closed.get() || programmedZoomFailure(program) != null ||
+                nativeProgramZoomFeedbackFailure(readNativeZoomObservation().receivedAt, now) != null) false else {
+                sendDumlLocked(0x02, CameraCommands.CMD_ZOOM, command.payload, CameraCommands.FLAG_REQUEST,
+                    CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP).also { sent ->
+                    if (sent) {
+                        nativeZoomOwned.set(true)
+                        lastNativeZoomWriteAt.set(SystemClock.elapsedRealtime())
+                    }
+                }
+            }
         },
     )
     /** One hop at a time; admission already caps pending AUs. Unbounded execute would replay a GOP. */
@@ -287,7 +334,7 @@ class DatalinkDriver internal constructor(
      * subscribe, 40 Hz ACK pump, then `0x09/0xa8`, then ingest 0x02.
      * Do not sit on a 2 s ACK settle — that drops the camera GOP.
      */
-    fun open(afterHandshake: (() -> Unit)? = null) {
+    fun open(identityOnly: Boolean = false, afterHandshake: (() -> Unit)? = null) {
         check(SwiftCore.isAvailable) { "Swift core is not loaded" }
         check(!closed.get()) { "datalink closed" }
         val lifetime = DatalinkOpenLoop(SystemClock::elapsedRealtime,
@@ -349,8 +396,12 @@ class DatalinkDriver internal constructor(
                 Log.i(TAG, "datalink: handshake acked session=$sessionId")
                 udpSeq = checkNotNull(handshakeAdmission.initialCommandSequence())
                 sendAck()
-                register()
-                subscribe()
+                // Multiview registers only after the LAN peer proves it is the
+                // camera paired over BLE ([completeRegistration]).
+                if (!identityOnly) {
+                    register()
+                    subscribe()
+                }
                 startAckPump()
                 // Mimo 20260828: HEVC 17 ms after DHCP, 0xa8 at +3 s. Arm ingest
                 // on handshake ack — do not wait subscribe settle or enable.
@@ -359,7 +410,7 @@ class DatalinkDriver internal constructor(
                 // ignored (iOS hops to MainActor after subscribe; Mimo comes
                 // from gallery). Always wait the settle — leftover 0x01 must
                 // not collapse it to 0 ms.
-                settleAfterSubscribe(SUBSCRIBE_SETTLE_MS)
+                if (!identityOnly) settleAfterSubscribe(SUBSCRIBE_SETTLE_MS)
                 // Stay on this IO thread. Posting 0x09/0xa8 to Main trips
                 // StrictMode (NetworkOnMainThread) and the camera never
                 // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
@@ -401,6 +452,28 @@ class DatalinkDriver internal constructor(
             }
             false
         }
+    }
+
+    /**
+     * The camera stops video ~10 s after the last registration while telemetry
+     * continues and ignores enables until it sees one again. Re-registering on the
+     * same socket restarted video with no new handshake (Pocket 4 Pro, 2026-09-22).
+     */
+    fun reRegister() {
+        enqueueTx {
+            if (!rebuilding && handshakeAcked) {
+                sendCommandLocked(SwiftCore.CMD_APP_DEVICE_INFO, null)
+                sendCommandLocked(SwiftCore.CMD_APP_PRESENCE, null)
+                sendWindowAckOnTx()
+            }
+        }
+    }
+
+    /** iOS `completeRegistration`: only after station discovery verifies the BLE identity. */
+    fun completeRegistration() {
+        if (closed.get()) return
+        register()
+        subscribe()
     }
 
     fun keepalive() {
@@ -547,7 +620,19 @@ class DatalinkDriver internal constructor(
     }
 
     private fun readNativeProgramFeedback(): NativeGimbalFeedback? =
-        nativeProgramFeedback.get()?.takeIf { it.first == nativeFeedbackEpoch.get() }?.second
+        nativeProgramFeedback.get()?.takeIf { it.first == nativeFeedbackEpoch.get() }?.second?.let { sample ->
+            val zoom = readNativeZoomObservation()
+            zoom.status.zoomFactor?.let { sample.copy(pose = sample.pose.copy(zoom = it), zoomReceivedAt = zoom.receivedAt) } ?: sample
+        }
+
+    private fun readNativeZoomObservation(): NativeProgramZoomObservation =
+        nativeZoomStatus.get()?.takeIf { it.first == nativeFeedbackEpoch.get() }?.second ?: NativeProgramZoomObservation()
+
+    private fun readNativeZoomStatus(): CameraStatus =
+        readNativeZoomObservation().status
+
+    internal fun programmedZoomFailure(program: GimbalProgram): String? =
+        nativeProgramZoomFailure(program, cameraModel, readNativeZoomStatus())
 
     internal val latestNativeProgramFeedback: NativeGimbalFeedback?
         get() = readNativeProgramFeedback()
@@ -556,6 +641,7 @@ class DatalinkDriver internal constructor(
         onProgress: (NativeGimbalProgramRunner.Progress) -> Unit): Long {
         nativeProgramUsed.set(true)
         return nativeProgramRunner.start(program) { progress ->
+            if (progress.finished) nativeZoomOwned.set(false)
             // A stalled UI only retains the newest immutable progress snapshot.
             nativeProgramProgress.set { if (nativeProgramRunner.isCurrentProgress(progress)) onProgress(progress) }
             if (nativeProgramProgressQueued.compareAndSet(false, true)) {
@@ -622,6 +708,7 @@ class DatalinkDriver internal constructor(
             nativeProgramRunner.invalidate()
             retireVideoEpoch()
             nativeProgramFeedback.set(null)
+            nativeZoomStatus.set(null)
             nativeProgramProgress.set(null)
             clearNativeCurveTargets()
             synchronized(gimbalLock) {
@@ -646,6 +733,8 @@ class DatalinkDriver internal constructor(
             if (SwiftCore.isAvailable) {
                 if (nativeProgramUsed.get()) sendDumlLocked(0x04, CameraCommands.CMD_GIMBAL_ANGLE,
                     CameraCommands.gimbalTimedStop(), 0, CameraCommands.RX_GIMBAL, CameraCommands.SENDER_APP)
+                if (nativeZoomOwned.getAndSet(false)) sendDumlLocked(0x02, CameraCommands.CMD_ZOOM,
+                    CameraCommands.zoomStop(), CameraCommands.FLAG_REQUEST, CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP)
                 if (closeNeedsStickRest) synchronized(sendLock) {
                     sendGimbalStickLocked(CameraCommands.GIMBAL_STICK_CENTER, CameraCommands.GIMBAL_STICK_CENTER)
                 }
@@ -695,13 +784,13 @@ class DatalinkDriver internal constructor(
         joiner.bindSocket(sock)
         val bindHost = Inet4Address.getByName(WILDCARD_BIND_HOST)
         sock.bind(InetSocketAddress(bindHost, UDP_BIND_PORT))
-        runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(CAMERA_HOST), port)) }
+        runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(host), port)) }
             .onFailure { Log.w(TAG, "datalink: UDP connect failed — sending unconnected", it) }
         val dhcp = joiner.cameraLocalIPv4() ?: "-"
         val label = if (sock.isConnected) "connected" else "unconnected"
         Log.i(
             TAG,
-            "datalink: UDP $label $CAMERA_HOST:$port dhcp=$dhcp " +
+            "datalink: UDP $label ${if (host == CAMERA_HOST) host else "station"}:$port dhcp=$dhcp " +
                 "local=${sock.localSocketAddress} rcvbuf=${sock.receiveBufferSize}",
         )
         socket = sock
@@ -740,9 +829,14 @@ class DatalinkDriver internal constructor(
     /** Drop the live UDP socket only. TCP 7001 stays up when [keepPoke] is true. */
     private fun discardUdp(keepPoke: Boolean) {
         if (!closed.get()) nativeProgramRunner.interrupt()
+        // Best effort on the retiring socket, before its epoch can be replaced.
+        if (nativeZoomOwned.getAndSet(false)) sendDumlLocked(0x02, CameraCommands.CMD_ZOOM,
+            CameraCommands.zoomStop(), CameraCommands.FLAG_REQUEST, CameraCommands.RX_CAMERA, CameraCommands.SENDER_APP)
         retireVideoEpoch()
         ackDispatch.invalidate()
         nativeProgramFeedback.set(null)
+        nativeZoomStatus.set(null)
+        nativeZoomOwned.set(false)
         nativeCurveDispatch.clear()
         synchronized(gimbalLock) {
             gimbalTickDispatch.invalidate()
@@ -788,7 +882,7 @@ class DatalinkDriver internal constructor(
             ensureActive = lifetime::ensureActive,
             connect = { sock ->
                 joiner.bindSocket(sock)
-                sock.connect(InetSocketAddress(CAMERA_HOST, 7001), 2_000)
+                sock.connect(InetSocketAddress(host, 7001), 2_000)
             },
             initialize = { sock ->
                 val frame = SwiftCore.command(SwiftCore.CMD_SET_PAIRING_PIN, extra = pairingToken)
@@ -820,7 +914,7 @@ class DatalinkDriver internal constructor(
 
     private fun subscribe() {
         var subId = 0x69DFL
-        for (key in SUBSCRIPTION_KEYS) {
+        for (key in subscriptionKeys(cameraModel)) {
             sendCommand(SwiftCore.CMD_SUBSCRIBE, "$key\u001f$subId")
             subId += 1
         }
@@ -1003,7 +1097,7 @@ class DatalinkDriver internal constructor(
             if (sock.isConnected) {
                 DatagramPacket(bytes, bytes.size)
             } else {
-                DatagramPacket(bytes, bytes.size, InetAddress.getByName(CAMERA_HOST), port)
+                DatagramPacket(bytes, bytes.size, InetAddress.getByName(host), port)
             }
         synchronized(sendLock) {
             val attempt = runCatching { sock.send(packet) }
@@ -1086,6 +1180,9 @@ class DatalinkDriver internal constructor(
             lastVideoElapsed.set(SystemClock.elapsedRealtime())
             videoHistory.noteVideoPacket()
             val n = rawVideoPackets.incrementAndGet()
+            // Local post-ACK impairment, not an RF or camera-side ACK-loss simulation.
+            // Release builds cannot activate it; instrumentation owns the bounded gate.
+            if (BuildConfig.DEBUG && debugVideoPacketAdmission?.invoke() == false) return
             if (n <= 8) {
                 Log.i(TAG, "datalink: video pktType=0x02 #$n bytes=${datagram.size}")
             }
@@ -1111,7 +1208,16 @@ class DatalinkDriver internal constructor(
         if (frames.isEmpty()) return
         lastStatusElapsed.set(SystemClock.elapsedRealtime())
         frames.forEach { frame ->
-            NativeGimbalFeedback.from(frame, SystemClock.elapsedRealtimeNanos() / 1e9)?.let {
+            if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
+                nativeZoomStatus.updateAndGet { current ->
+                    if (closed.get() || receiveEpoch != nativeFeedbackEpoch.get()) current else {
+                        val status = current?.takeIf { it.first == receiveEpoch }?.second ?: NativeProgramZoomObservation()
+                        receiveEpoch to status.observing(frame, cameraModel, SystemClock.elapsedRealtimeNanos() / 1e9)
+                    }
+                }
+            }
+            NativeGimbalFeedback.from(frame, SystemClock.elapsedRealtimeNanos() / 1e9,
+                readNativeZoomStatus().zoomFactor ?: 1.0)?.let {
                 if (!closed.get() && receiveEpoch == nativeFeedbackEpoch.get()) {
                     nativeProgramFeedback.set(receiveEpoch to it)
                 }
@@ -1145,7 +1251,7 @@ class DatalinkDriver internal constructor(
 
     companion object {
         private const val TAG = "DatalinkDriver"
-        private const val CAMERA_HOST = "192.168.2.1"
+        internal const val CAMERA_HOST = "192.168.2.1"
         internal const val WILDCARD_BIND_HOST = "0.0.0.0"
 
         /** Handshake miss after rebind/path-lost. Pairing or recovery, not a crash. */
@@ -1173,6 +1279,14 @@ class DatalinkDriver internal constructor(
         private const val ACK_INTERVAL_MS = 25L
         /** Camera ignores 0x09/0xa8 until subscribe is processed. */
         private const val SUBSCRIBE_SETTLE_MS = 150L
+        /** Core `Commands.subscriptionKeys(for:)`: body-only keys append so base subIds never move. */
+        internal fun subscriptionKeys(model: CameraModel): List<String> =
+            if (model.supportsAperture) {
+                SUBSCRIPTION_KEYS + listOf(ApertureStrategy.STATE_KEY, ApertureStrategy.CAPABILITY_KEY)
+            } else {
+                SUBSCRIPTION_KEYS
+            }
+
         private val SUBSCRIPTION_KEYS =
             listOf(
                 "camcap_mode_profile",

@@ -137,7 +137,8 @@ final class CameraSession {
     /// Last zoom `0xB8` SET. Same grace as AF-C while the lens slews.
     @ObservationIgnored private var lastZoomSetAt: Date?
     private var secondsSinceZoomSet: TimeInterval? {
-        lastZoomSetAt.map { Date().timeIntervalSince($0) }
+        [lastZoomSetAt.map { Date().timeIntervalSince($0) }, datalink?.secondsSinceNativeZoomSet]
+            .compactMap { $0 }.min()
     }
     /// Last non-rest gimbal throw. Motion can pause HEVC.
     @ObservationIgnored private var lastGimbalThrowAt: Date?
@@ -207,6 +208,8 @@ final class CameraSession {
     @ObservationIgnored private var gimbalOverlayMotion = GimbalOverlayMotion()
     /// Pocket 3-axis only. Nano hides the gimbal button and sheet.
     var hasGimbal: Bool { connectedCamera?.model.hasGimbal ?? false }
+    /// Nano is a fixed 1× prime: no zoom chrome and no zoom SET from any input.
+    var supportsZoom: Bool { connectedCamera?.model.supportsZoom ?? false }
     var gimbalMode: GimbalMode = .follow
     var gimbalSpeed: GimbalSpeed = .defaultSpeed
     var gimbalRamp: GimbalRamp = OperatorPrefs.gimbalRamp
@@ -299,6 +302,11 @@ final class CameraSession {
     var mediaNote: String?
     /// While true, keepalive must not re-enable live view or recover the feed.
     var isBrowsingMedia = false
+    /// The camera body is showing its own gallery during an established live
+    /// session. Like DJI Mimo, the live screen opens Media while this is true and
+    /// closes it (returning the camera to live) when it turns false (#273).
+    private(set) var cameraGalleryOpen = false
+    @ObservationIgnored private var cameraGalleryAwayTicks = 0
     var mediaDownloadProgress: [String: Double] = [:]
     var mediaCacheRevision: UInt64 = 0
     var mediaLocalFavorites: Set<String> = []
@@ -896,6 +904,7 @@ final class CameraSession {
     private func run(_ camera: FoundCamera) async throws {
         var timeline = ConnectTimeline(now: ProcessInfo.processInfo.systemUptime)
         connectedCamera = camera
+        status.meteredEv = nil
         rawAccessUnits = 0
         rawFramesEnqueued = 0
         lastIdrRequest = Date.distantPast
@@ -1017,7 +1026,8 @@ final class CameraSession {
             dl = DatalinkDriver(
                 port: UInt16(camera.model.datalinkPort),
                 tcpPoke: camera.model.tcpPoke,
-                pairingToken: camera.model.pairingToken)
+                pairingToken: camera.model.pairingToken,
+                subscriptionKeys: Commands.subscriptionKeys(for: camera.model))
             wireDatalink(dl)
             datalink = dl
         }
@@ -1087,7 +1097,42 @@ final class CameraSession {
             guard !Task.isCancelled else { return }
             failAllWaiters(Fail.disconnected)  // BLE dropped; don't sit on a command timeout
             if case .live = phase {
-                beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
+                if liveVideoIsFresh(), let camera = connectedCamera {
+                    reconnectBleKeepingLive(camera)
+                } else {
+                    beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
+                }
+            }
+        }
+    }
+
+    private func liveVideoIsFresh() -> Bool {
+        WiFiJoiner.isCameraPathReady()
+            && datalink?.lastVideoPacketAt.map {
+                Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
+            } == true
+    }
+
+    /// Video, telemetry and commands ride UDP 9004. A BLE drop (seen returning
+    /// from Control Center, 2026-09-22) used to tear down a healthy 25 fps
+    /// stream for a full BLE re-pair and Wi-Fi re-join. Reconnect BLE beside
+    /// the live picture; the watchdog still owns any later datalink stall.
+    private func reconnectBleKeepingLive(_ camera: FoundCamera) {
+        ControlLiveLog.line("session: BLE dropped with live video; reconnecting BLE only")
+        recordFeedBreadcrumb(.pathChange, detail: "bleDroppedVideoLive")
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await self.ble.connect(camera)
+                guard case .live = self.phase else { return }
+                self.startFrameRouter()
+                ControlLiveLog.line("session: BLE reconnected beside live video")
+            } catch {
+                guard case .live = self.phase else { return }
+                ControlLiveLog.line("session: BLE reconnect failed (\(error.localizedDescription))")
+                if !self.liveVideoIsFresh() {
+                    self.beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
+                }
             }
         }
     }
@@ -1535,6 +1580,8 @@ final class CameraSession {
     /// Pinch HUD (0.1×) + slider (every distinct lens tick, ~20 Hz latest-wins).
     /// Gesture owns the chip until lift; cam_fov does not re-anchor mid-pinch.
     func updateZoomPinch(magnification: Double) {
+        guard supportsZoom else { return }
+        if gimbalMoveRunning { cancelProgrammedMove() }
         if zoomPinchPreview == nil {
             zoomPinchAnchor = status.zoomFactor ?? zoomOptimistic ?? zoomStop
             zoomPinchSlew = nil
@@ -1575,6 +1622,8 @@ final class CameraSession {
 
     /// Cycle button. Body stops are sliders (Pro 217 / 651 / 1302 / 2604).
     func setZoom(_ factor: Double) {
+        guard supportsZoom else { return }
+        if gimbalMoveRunning { cancelProgrammedMove() }
         let from = CamFov.displayLabel(factor: zoomReadout)
         let to = CamFov.displayLabel(factor: factor)
         ControlLiveLog.line(
@@ -1606,6 +1655,7 @@ final class CameraSession {
 
     /// Pinch hybrid: `0A 4E` + unquantized lens. Coalesces to the newest tick.
     func setZoomSlider(_ factor: Double) {
+        if gimbalMoveRunning { cancelProgrammedMove() }
         let position = CamFov.pinchLens(for: factor)
         let tenths = CamFov.displayTenths(factor)
         if lastPinchLogTenths != tenths {
@@ -1632,6 +1682,7 @@ final class CameraSession {
 
     /// Directional slew. 100 toward 12×; 300 from 12× to the 9.15× detent.
     func setZoomSlew(_ value: UInt16) {
+        if gimbalMoveRunning { cancelProgrammedMove() }
         let to = value == CamFov.slewTele ? 12.0 : value == CamFov.slewWide ? CamFov.slewDetent : 0
         ControlLiveLog.line(
             "zoom: setZoomSlew \(value) locked=\(isLocked) live=\(datalink != nil)"
@@ -1647,10 +1698,11 @@ final class CameraSession {
     /// it (camera may ignore). Same opcode as the slew, so the per-opcode queue
     /// keeps it from overtaking.
     func setZoomStop() {
+        if gimbalMoveRunning { cancelProgrammedMove() }
         ControlLiveLog.line(
             "zoom: setZoomStop locked=\(isLocked) live=\(datalink != nil)"
         )
-        guard !isLocked else { return }
+        guard !isLocked, supportsZoom else { return }
         lastZoomSetAt = Date()
         let frame = Commands.setZoomStop()
         fireCamera(
@@ -1674,6 +1726,7 @@ final class CameraSession {
     /// Chip tap is urgent. Slider / pinch pipelines at 20 Hz without waiting
     /// for ACK (Mimo). D-Log2→D-Log must be on the body before this SET.
     private func fireZoom(_ write: CamFov.ChipWrite, target: Double?, announce: Bool) {
+        guard supportsZoom else { return }
         let frame: Duml.Frame
         let name: String
         switch write {
@@ -2193,6 +2246,20 @@ final class CameraSession {
 
     var supportsTapFocus: Bool { connectedCamera?.model.supportsTapFocus ?? true }
     var supportsFocusMode: Bool { connectedCamera?.model.supportsFocusMode ?? true }
+    var supportsAperture: Bool { connectedCamera?.model.supportsAperture ?? false }
+
+    /// Action 6 `0x8E` pid `0x0044`. HUD holds the request; the subscribe push corrects it.
+    func setApertureStrategy(_ strategy: ApertureStrategy) {
+        guard supportsAperture else { return }
+        status.apertureStrategy = strategy
+        fireCamera(
+            strategy.setFrame, name: "Aperture \(strategy.label)",
+            onSettle: { [weak self] ok in
+                ControlLiveLog.line(
+                    "aperture: SET \(strategy.label) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))"
+                )
+            })
+    }
 
     func setFocusMode(_ mode: FocusMode) {
         guard supportsFocusMode else { return }
@@ -2468,6 +2535,7 @@ final class CameraSession {
             return
         }
         guard colorModes.contains(mode) else { return }
+        if gimbalMoveRunning { cancelProgrammedMove() }
         let from = status.colorMode
         if mode == .dLog2 {
             teleColorSent = false
@@ -2705,8 +2773,17 @@ final class CameraSession {
             durationAB: gimbalProgram.durationAB, durationBC: gimbalProgram.durationBC)
     }
 
+    func setGimbalLoop(_ enabled: Bool) {
+        cancelProgrammedMove()
+        gimbalProgram.loop = enabled
+    }
+
+    var programmedZoomUnavailableReason: String? {
+        GimbalProgramZoom(program: gimbalProgram, model: connectedCamera?.model, status: status).failureReason
+    }
+
     var canRunProgrammedMove: Bool {
-        !isFeedWarming && !isLiveVideoStale && gimbalProgram.canRun
+        programmedZoomUnavailableReason == nil && !isFeedWarming && !isLiveVideoStale && gimbalProgram.canRun
             && [gimbalProgram.a, gimbalProgram.b, gimbalProgram.c]
                 .compactMap { $0 }.allSatisfy { $0.nativePitchDeg != nil }
     }
@@ -2715,6 +2792,10 @@ final class CameraSession {
         guard gimbalControlSceneActive, hasGimbal, !isLocked else { return }
         if gimbalMoveRunning {
             cancelProgrammedMove()
+            return
+        }
+        if let reason = programmedZoomUnavailableReason {
+            controlNote = reason
             return
         }
         guard canRunProgrammedMove, let live = liveGimbalWaypoint, live.nativePitchDeg != nil,
@@ -2731,6 +2812,19 @@ final class CameraSession {
             return
         }
         moveEngine = validation
+        if take.changesZoom {
+            // Retire manual requests and any delayed wide-angle color restoration.
+            let key = CameraSetMailbox.zoomOpcodeKey
+            inflight[key] = nil
+            inflightPending[key] = nil
+            lateWait[key] = nil
+            setMailbox.cancel(key)
+            zoomPinchPreview = nil
+            zoomPinchSlew = nil
+            pendingZoomAfterHop = nil
+            restoreDLog2OnWide = false
+            zoomPin = nil
+        }
         controlNote = nil
         cancelNativeHeadTrack()
         restGimbalStickWire()
@@ -2761,7 +2855,14 @@ final class CameraSession {
             self.nativeTargetGeneration &+= 1
             let token = self.nativeTargetGeneration
             self.nativeMoveToken = token
-            let started = datalink.startNativeProgram(program: take, token: token) {
+            let zoom = take.changesZoom ? GimbalProgramZoom(
+                program: take, model: self.connectedCamera?.model, status: self.status) : nil
+            if let reason = zoom?.failureReason {
+                self.cancelProgrammedMove()
+                self.controlNote = reason
+                return
+            }
+            let started = datalink.startNativeProgram(program: take, token: token, zoom: zoom) {
                 [weak self] token, engine, pose in
                 guard let self, self.nativeMoveToken == token, self.gimbalMoveRunning else {
                     return
@@ -2787,6 +2888,12 @@ final class CameraSession {
                 self.cancelProgrammedMove()
             }
         }
+    }
+
+    func restartProgrammedMove() {
+        guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning, gimbalMovePaused else { return }
+        cancelProgrammedMove()
+        runProgrammedMove()
     }
 
     func pauseOrResumeProgrammedMove() {
@@ -3693,8 +3800,13 @@ final class CameraSession {
             while !Task.isCancelled {
                 if recoverLostCameraPathIfNeeded() { return }
                 ble.send(Commands.sessionKeepalive())
+                // The camera stops video ~10 s after the last app registration
+                // while telemetry continues, and an enable does not restart it
+                // (Pocket 4 Pro, 2026-09-22 RVI). Scene, sheet and repair state
+                // must never gate this; an inactive scene (Control Center, a
+                // system alert) used to drop the picture after 10 s.
+                datalink?.keepalive()
                 if ssid != nil, holdsMonitor {
-                    datalink?.keepalive()
                     publishPipelineStats()
                     if phase == .live, gimbalControlSceneActive, !isBrowsingMedia {
                         recoverFirstPictureIfNeeded(allowTransportRecovery: false)
@@ -3708,8 +3820,8 @@ final class CameraSession {
                             await self?.repairDatalink(reason: "keepalive")
                         }
                     }
-                    datalink?.keepalive()
                     publishPipelineStats()
+                    followCameraGallery()
                     if !isBrowsingMedia {
                         recoverLiveViewIfNeeded()
                     }
@@ -3796,7 +3908,13 @@ final class CameraSession {
                     accessUnitAge: datalink?.lastAccessUnitAt.map { wall.timeIntervalSince($0) },
                     decodeAcceptAge: decode.acceptedAge, decodedOutputAge: decode.outputAge,
                     assistOutputAge: decode.assistOutputAge,
-                    presentAge: decoder.monitorPresentedAt.map { wall.timeIntervalSince($0) }),
+                    presentAge: decoder.monitorPresentedAt.map { wall.timeIntervalSince($0) },
+                    statusAge: datalink?.lastStatusAt.map { wall.timeIntervalSince($0) },
+                    sendErrorAge: datalink?.lastSendError.map { wall.timeIntervalSince($0.at) },
+                    sendErrorCode: datalink?.lastSendError?.code,
+                    uplinkReplyAge: datalink?.lastSelfieFlipReplyAt.map {
+                        wall.timeIntervalSince($0)
+                    }),
                 queue: datalink?.incidentQueue ?? FeedIncidentQueue(),
                 decoder: FeedIncidentDecoder(
                     generation: decoder.sourceFrameGeneration,
@@ -3924,7 +4042,8 @@ final class CameraSession {
         }
     }
 
-    /// Pocket + Nano capture (`0x09/0xa8`). Action live start is uncaptured — do not invent it.
+    /// Pocket, Nano and Action 6 capture (`0x09/0xa8`). Other Action / 360 live start is
+    /// uncaptured — do not invent it.
     func startCapturedLiveView(reason: String) -> Bool {
         if isBrowsingMedia, reason != "media browse ended" { return false }
         guard liveEnableGate.begin() else {
@@ -3945,7 +4064,7 @@ final class CameraSession {
         if nanoGate {
             datalink?.send(Commands.nanoLiveViewGate(start: true))
         }
-        if CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: nanoGate) {
+        if connectedCamera?.model.sendsLiveViewPrepare ?? true {
             datalink?.send(Commands.liveViewPrepare())
         }
         datalink?.startLiveView(
@@ -4120,8 +4239,30 @@ final class CameraSession {
     /// First-picture enable, then the feed watchdog. Cumulative `videoPackets` is
     /// not a stall signal — after 3–5 min it stays huge even if UDP 9004 went quiet.
     /// A frozen first GOP still has `lastPresentedAt` — that must not skip recover.
+    /// 1 Hz. Playback before any picture is stray (a previous session left the
+    /// camera there) and keeps the exit below; playback after picture is the
+    /// operator opening the camera's gallery, which used to be kicked back to
+    /// live within a second.
+    private func followCameraGallery() {
+        if phase == .live, decoder.lastPresentedAt != nil, status.inPlayback {
+            cameraGalleryAwayTicks = 0
+            if !cameraGalleryOpen {
+                ControlLiveLog.line("media: camera gallery open — following")
+                cameraGalleryOpen = true
+            }
+        } else if cameraGalleryOpen {
+            cameraGalleryAwayTicks += 1
+            if cameraGalleryAwayTicks >= 3 || phase != .live {
+                ControlLiveLog.line("media: camera gallery closed — returning to live")
+                cameraGalleryOpen = false
+            }
+        }
+    }
+
     private func recoverLiveViewIfNeeded() {
         guard !isBrowsingMedia, !holdsMonitor, cameraMedia.resumeLiveTask == nil else { return }
+        // Media opens on the next UI pass; exit and repairs must not fight it.
+        if cameraGalleryOpen { return }
         if needsForegroundRecover { return }
         if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
         guard WiFiJoiner.isCameraPathReady() else { return }
@@ -4471,6 +4612,7 @@ final class CameraSession {
             log.info("\(line, privacy: .public)")
             ControlLiveLog.line(line)
             logFeedObserve(snap: snap, watchdog: action)
+            datalink?.reRegister()
             if !sendRecoverEnable(force: true, reason: "watchdog") {
                 feedWatchdog = watchdogBeforeTick
             }
@@ -4850,10 +4992,14 @@ final class CameraSession {
         ControlLiveLog.line(
             "session: foreground path=\(pathReady ? 1 : 0) identity=\(wrongNetwork ? "changed" : currentSSID == nil ? "unknown" : "same") videoFresh=\(videoFresh ? 1 : 0) pictureFresh=\(hasFreshRecoveryPicture(since: now.addingTimeInterval(-FeedWatchdog.stallThreshold), now: now) ? 1 : 0)"
         )
-        guard pathReady, !wrongNetwork else {
+        guard !wrongNetwork else {
             beginSessionRecovery(reason: "foreground camera network changed", trigger: .softAPLost)
             return
         }
+        // Wi-Fi reassociates after suspension. The 1 Hz path check owns the
+        // absent path with its 8 s grace; tearing BLE down here reconnected
+        // on nearly every return from another app.
+        guard pathReady else { return }
         if hasFreshRecoveryPicture(
             since: now.addingTimeInterval(-FeedWatchdog.stallThreshold), now: now)
         {
@@ -4862,8 +5008,26 @@ final class CameraSession {
         // A watchdog repair that started before the scene event retains ownership.
         // The next keepalive tick can escalate it after this check releases the slot.
         guard feedRecoveryTask == nil, datalink?.isRebuilding != true else { return }
-        guard videoFresh else {
-            beginSessionRecovery(reason: "foreground live link expired", trigger: .datalinkLost)
+        var videoResumed = videoFresh
+        let resumeDeadline = now.addingTimeInterval(FeedWatchdog.stallThreshold)
+        while !videoResumed, Date() < resumeDeadline {
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            guard isLivePictureRepairCurrent(pictureOwner) else { return }
+            videoResumed =
+                datalink?.lastVideoPacketAt.map {
+                    Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
+                } == true
+        }
+        // The path may have dropped during the wait; its 8 s grace owns that.
+        guard WiFiJoiner.isCameraPathReady(), !sessionRecovery.isRecovering else { return }
+        guard videoResumed else {
+            // Suspension usually leaves only the UDP endpoint stale. Renegotiate
+            // it with BLE and the picture kept; its failure escalates to the
+            // full session spine.
+            ControlLiveLog.line("session: foreground video stale, renegotiating endpoint")
+            startFeedRecovery { [weak self] in
+                await self?.repairDatalink(reason: "foreground")
+            }
             return
         }
         ControlLiveLog.line("session: foreground fresh video, repairing presentation")
@@ -4929,6 +5093,8 @@ final class CameraSession {
     }
 
     private func prepareForDatalinkRecovery() -> Date {
+        // The held picture may return before this endpoint's first exposure report.
+        status.meteredEv = nil
         // The new handshake restarts DUML sequence numbering. Old retries,
         // pending sliders, and GET continuations belong to the retired session.
         let retired =
@@ -5030,6 +5196,7 @@ final class CameraSession {
     func startFeedRecovery(_ work: @escaping @MainActor () async -> Void) {
         let inFlight = datalink?.isRebuilding == true || feedRecoveryTask != nil
         guard FeedWatchdog.shouldStartFeedRecovery(rebuildInFlight: inFlight) else { return }
+        status.meteredEv = nil
         feedRecoveryGeneration += 1
         let generation = feedRecoveryGeneration
         feedRecovering = true
@@ -5060,7 +5227,7 @@ final class CameraSession {
             return
         }
         FeedIncidentRuntime.noteUnexpectedDisconnect(now: ProcessInfo.processInfo.systemUptime)
-        recordFeedRepair("session", phase: .requested, reason: "connectionInterrupted")
+        recordFeedRepair("session", phase: .requested, reason: String(describing: trigger))
         recoveryCameraID = cameraID
         if recoveryDeviceName.isEmpty {
             recoveryDeviceName =
@@ -5321,7 +5488,8 @@ final class CameraSession {
             let dl = DatalinkDriver(
                 port: UInt16(camera.model.datalinkPort),
                 tcpPoke: camera.model.tcpPoke,
-                pairingToken: camera.model.pairingToken
+                pairingToken: camera.model.pairingToken,
+                subscriptionKeys: Commands.subscriptionKeys(for: camera.model)
             )
             wireDatalink(dl)
             datalink = dl
@@ -5358,6 +5526,7 @@ final class CameraSession {
 
     /// Drop the live UDP session so the next connect cannot inherit a half-closed driver.
     private func disposeDatalink() {
+        status.meteredEv = nil
         let link = datalink
         datalink = nil
         guard let link else { return }
@@ -5607,6 +5776,7 @@ final class CameraSession {
     func restartLiveViewAfterMedia() -> Bool {
         guard datalink?.isClosed == false else { return false }
         guard startCapturedLiveView(reason: "media browse ended") else { return false }
+        status.meteredEv = nil
         liveViewEnableSent = true
         liveViewEnableSends += 1
         lastIdrRequest = Date()

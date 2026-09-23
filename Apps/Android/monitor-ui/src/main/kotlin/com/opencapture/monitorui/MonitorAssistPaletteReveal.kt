@@ -1,5 +1,7 @@
 package com.opencapture.monitorui
 
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -10,6 +12,18 @@ object MonitorAssistPaletteReveal {
     const val SLOP = 8f
     const val FLICK = 280f
     const val COAST = 0.22f
+
+    /** Reserve the full plate before its first reveal frame and through the collapse spring. */
+    fun reservationSize(expanded: Boolean, dragging: Boolean, animating: Boolean, progress: Float,
+        compact: IntSize, full: IntSize): IntSize =
+        if (expanded || dragging || animating || progress > 0.001f) full else compact
+
+    /** The same bottom-leading window placement drives rendering and obstruction bounds. */
+    fun popupBounds(slot: IntRect, windowWidth: Int, size: IntSize): IntRect {
+        val left = slot.left.coerceIn(0, maxOf(0, windowWidth - size.width))
+        val top = (slot.bottom - size.height).coerceAtLeast(0)
+        return IntRect(left, top, left + size.width, top + size.height)
+    }
 
     fun lerp(a: Float, b: Float, t: Float): Float {
         val clamped = min(1f, max(0f, t))

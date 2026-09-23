@@ -144,14 +144,25 @@ internal suspend fun ensureEndpointCommandCurrent(currentGeneration: Long) {
  * BLE → pair → Wi-Fi creds → camera AP → datalink → live HEVC/AVC.
  * Mirrors iOS `CameraSession` recovery, feed watchdog, and operator commands.
  */
-class PocketCameraSession(context: Context) : CameraSessionSeam {
+class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : CameraSessionSeam {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val ble = BleLink(context)
     private val joiner = CameraApJoiner(context)
-    private val cadence = LivePipelineCadence()
+    internal val cadence = LivePipelineCadence()
+    /** Instrumentation only. Invoked after ACK observation; never blocks or delays the receive thread. */
+    @Volatile internal var debugVideoPacketAdmission: (() -> Boolean)? = null
+    /** Main-thread instrumentation observes actual ACKs/timeouts, never the optimistic HUD. */
+    internal var debugCameraSetResult: ((Int, Boolean) -> Unit)? = null
+    internal val pendingCameraSetCount: Int get() = inflight.size + inflightPending.size
     private val videoHistory = LiveSessionVideoHistory()
-    val decoder = HevcDecoder(cadence).also { dec ->
+    /**
+     * Multiview lends a tile's decoder and verified transport to Live View.
+     * The stage stays the sole repair owner (iOS `isMultiviewBorrowed`).
+     */
+    val isMultiviewBorrowed = borrowing != null
+    private var borrowedSurface: Surface? = null
+    val decoder = borrowing ?: HevcDecoder(cadence).also { dec ->
         dec.onParameterSetsChanged = {
             scope.launch {
                 val now = SystemClock.elapsedRealtime()
@@ -191,6 +202,15 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private val _status = MutableStateFlow(CameraStatus())
     val status: StateFlow<CameraStatus> = _status.asStateFlow()
 
+    /**
+     * The camera body shows its own gallery during an established live session.
+     * Like DJI Mimo, Live opens Media while this is true and closes it (returning
+     * the camera to live) when it turns false (#273, matches iOS).
+     */
+    private val _cameraGalleryOpen = MutableStateFlow(false)
+    val cameraGalleryOpen: StateFlow<Boolean> = _cameraGalleryOpen.asStateFlow()
+    private var cameraGalleryAwayTicks = 0
+
     private val _controlNote = MutableStateFlow<String?>(null)
     val controlNote: StateFlow<String?> = _controlNote.asStateFlow()
 
@@ -203,6 +223,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val focusPoint: StateFlow<Pair<Float, Float>> = _focusPoint.asStateFlow()
     private val _gimbalPoseViewFlip = MutableStateFlow(false)
     val gimbalPoseViewFlip: StateFlow<Boolean> = _gimbalPoseViewFlip.asStateFlow()
+    private val _gimbalPoseInvertPan = MutableStateFlow(false)
+    val gimbalPoseInvertPan: StateFlow<Boolean> = _gimbalPoseInvertPan.asStateFlow()
     private val gimbalLimitWatch = GimbalLimitWatch()
     private var lastGimbalCommand = 0f to 0f
     private val _gimbalLimitPulse = MutableStateFlow(0)
@@ -255,8 +277,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     val gimbalMoveRunning: StateFlow<Boolean> = _gimbalMoveRunning.asStateFlow()
     val hasGimbal: Boolean
         get() = connectedCamera?.model?.hasGimbal == true
+    /** Nano is a fixed 1× prime: no zoom chrome and no zoom SET from any input. */
+    val supportsZoom: Boolean
+        get() = connectedCamera?.model?.supportsZoom == true
     val canRunProgrammedMove: Boolean
-        get() = firstPictureSettled && decoder.lastPresentedAt != null && !isLiveVideoStale() && _gimbalProgram.value.canRun
+        get() = firstPictureSettled && decoder.lastPresentedAt != null && !isLiveVideoStale() &&
+            _gimbalProgram.value.canRun && programmedZoomUnavailableReason() == null
+
+    fun programmedZoomUnavailableReason(status: CameraStatus = _status.value): String? {
+        val link = datalink
+        return if (link != null) link.programmedZoomFailure(_gimbalProgram.value) else
+            nativeProgramZoomFailure(_gimbalProgram.value, connectedCamera?.model ?: CameraModel.default, status)
+    }
 
     fun gimbalDebugText(): String = GimbalMoveEngine.formatDebug(_gimbalProgram.value, liveGimbalWaypoint, lastMoveReadout)
     fun predictedGimbalWaypoint(nowSeconds: Double): GimbalWaypoint? = gimbalOverlayMotion.pose(nowSeconds)
@@ -354,6 +386,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var whiteBalancePin: WhiteBalancePin? = null
     private var focusPin: FocusPin? = null
     private var isoLimitPin: IsoLimitPin? = null
+    private var aperturePin: CameraValuePin<Int>? = null
     private var gimbalStickMapping = GimbalStickMapping()
     /** Last pid `0x38` GET reply. BLE fallback fires when this goes stale. */
     @Volatile private var lastSelfieFlipReplyElapsed = 0L
@@ -384,6 +417,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private var lastPinchLens: Int? = null
     private var lastPinchLogTenths: Double? = null
     private var lastZoomWireAt = 0L
+    private val lastZoomActivityAt: Long?
+        get() = maxOf(lastZoomWireAt, datalink?.lastProgrammedZoomAt ?: 0L).takeIf { it > 0L }
     private var pendingZoomPayload: ByteArray? = null
     private var zoomFlushJob: Job? = null
     private val faceDetector = LiveFaceDetector()
@@ -534,10 +569,54 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun attachSurface(surface: Surface?) {
+        if (isMultiviewBorrowed) {
+            // The returning tile may already own the decoder; only drop our own output.
+            if (surface == null) borrowedSurface?.let(decoder::detachSurface) else decoder.attachSurface(surface)
+            borrowedSurface = surface
+            return
+        }
         decoder.attachSurface(surface)
     }
 
+    /** Borrow the tile's transport and decoder; Multiview remains the sole repair owner. */
+    fun updateMultiview(camera: FoundCamera?, driver: DatalinkDriver?, status: CameraStatus) {
+        if (!isMultiviewBorrowed) return
+        connectedCamera = camera
+        datalink = driver
+        _status.value = status
+        hasVideoFormat = decoder.hasFormat
+        _phase.value = ConnectionPhase.LIVE
+    }
+
+    fun adoptMultiviewPose(pose: GimbalStickMapping) {
+        if (!isMultiviewBorrowed) return
+        gimbalStickMapping = pose
+        syncGimbalPose()
+    }
+
+    fun receiveMultiview(frame: DumlFrame) {
+        if (!isMultiviewBorrowed) return
+        ingestDatalinkFrame(frame)
+    }
+
+    fun releaseMultiview() {
+        if (!isMultiviewBorrowed) return
+        endGimbalStick()
+        cancelProgrammedMove()
+        cancelTracking()
+        faceAFArmJob?.cancel()
+        faceAFArmJob = null
+        inflight.clear()
+        inflightPending.clear()
+        failAllWaiters(kotlinx.coroutines.CancellationException("Multiview took the camera back"))
+        datalink = null
+    }
+
     override fun disconnect() {
+        if (isMultiviewBorrowed) {
+            releaseMultiview()
+            return
+        }
         ReliabilityReporting.setCameraSessionActive(false)
         cancelSessionRecovery(clearHoldsMonitor = true)
         reconnectTarget = null
@@ -587,6 +666,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         whiteBalancePin = null
         focusPin = null
         isoLimitPin = null
+        aperturePin = null
         gimbalStickMapping = GimbalStickMapping()
         lastSelfieFlipReplyElapsed = 0L
         lastAssistMirror = false
@@ -647,6 +727,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private suspend fun run(camera: FoundCamera) {
         if (!SwiftCore.isAvailable) error("Swift core is not loaded — run just android-core")
+        // A new transport needs a fresh exposure report, even when reconnecting the same camera.
+        _status.value = _status.value.copy(meteredEv = -1)
         connectedCamera = camera
         rawAccessUnits = 0
         lastIdrRequest = 0L
@@ -801,6 +883,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     camera.model.pairingToken,
                     cadence,
                     videoHistory,
+                    camera.model,
+                    debugVideoPacketAdmission = { debugVideoPacketAdmission?.invoke() ?: true },
                 ).also { created ->
                     val inputOwner = decoder.claimInputOwner()
                     created.onVideoEpochChanged = { epoch -> decoder.advanceInputEpoch(inputOwner, epoch) }
@@ -947,18 +1031,22 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 while (true) {
                     ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_KEEPALIVE, 0x802B))
                     val live = _phase.value == ConnectionPhase.LIVE && datalink != null
-                    if (ssid != null && !holdsMonitor) {
-                        if (!isBrowsingMedia && !mediaReturnPending && shouldStartUDPRebuild) {
-                            endGimbalStick()
-                            startFeedRecovery {
-                                rebuildDatalinkKeepingPicture("keepalive UDP repair")
-                            }
+                    if (ssid != null && !holdsMonitor && !isBrowsingMedia && !mediaReturnPending &&
+                        shouldStartUDPRebuild
+                    ) {
+                        endGimbalStick()
+                        startFeedRecovery {
+                            rebuildDatalinkKeepingPicture("keepalive UDP repair")
                         }
-                        withContext(Dispatchers.IO) { datalink?.keepalive() }
-                    } else if (live && !isBrowsingMedia) {
+                    }
+                    // The camera stops video ~10 s after the last app registration
+                    // and ignores enables until a new handshake (Pocket 4 Pro RVI,
+                    // 2026-09-22). No UI or repair state may gate this heartbeat.
+                    if (ssid != null || live) {
                         withContext(Dispatchers.IO) { datalink?.keepalive() }
                     }
                     val window = cadence.takeKeepaliveWindow(live, isBrowsingMedia)
+                    followCameraGallery()
                     if (live && !isBrowsingMedia) {
                         publishPipelineStats()
                         noteFeedIncidentSnapshot(window)
@@ -996,7 +1084,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 return false
             }
             if (CamFov.shouldHoldWatchdog(
-                    lastZoomWireAt.takeIf { it > 0L }?.let { (now - it) / 1000.0 },
+                    lastZoomActivityAt?.let { (now - it) / 1000.0 },
                     zoomPinchPreview != null,
                 )
             ) {
@@ -1149,6 +1237,28 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     /** 0x09/0xa8 is live-start and the only PLI — 1 Hz spam resets the GOP and blacks the feed. */
+    /**
+     * 1 Hz. Playback before any picture is stray and keeps the exit; playback
+     * after picture is the operator opening the camera's gallery, which used to
+     * be kicked back to live within a second.
+     */
+    private fun followCameraGallery() {
+        val live = _phase.value == ConnectionPhase.LIVE
+        if (live && decoder.lastPresentedAt != null && _status.value.inPlayback) {
+            cameraGalleryAwayTicks = 0
+            if (!_cameraGalleryOpen.value) {
+                DiagnosticCenter.log("info", "media", "gallery", "media: camera gallery open — following")
+                _cameraGalleryOpen.value = true
+            }
+        } else if (_cameraGalleryOpen.value) {
+            cameraGalleryAwayTicks += 1
+            if (cameraGalleryAwayTicks >= 3 || !live) {
+                DiagnosticCenter.log("info", "media", "gallery", "media: camera gallery closed — returning to live")
+                _cameraGalleryOpen.value = false
+            }
+        }
+    }
+
     private fun recoverLiveViewIfNeeded() {
         if (isBrowsingMedia || mediaReturnPending || holdsMonitor) {
             logRecoverSkip(if (isBrowsingMedia || mediaReturnPending) "browsing" else "holdsMonitor")
@@ -1166,6 +1276,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             logRecoverSkip("recoveryJob")
             return
         }
+        // Media opens on the next UI pass; the stray exit and repairs must not fight it.
+        if (_cameraGalleryOpen.value) return
         if (com.opencapture.openpocketcine.media.MediaLiveResume.strayPlaybackAction(
                 browsing = isBrowsingMedia,
                 inPlayback = _status.value.inPlayback,
@@ -1353,7 +1465,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 sawPicture = decoder.lastPresentedAt != null,
                 hadVideo = videoHistory.hadVideo(packets, videoAgeMs),
                 lastFocusTrackAt = lastFocusTrackAt,
-                lastZoomAt = lastZoomWireAt.takeIf { it > 0L },
+                lastZoomAt = lastZoomActivityAt,
                 zoomPinchActive = zoomPinchPreview != null,
                 lastGimbalThrowAt = lastGimbalThrowAt,
                 gimbalStickHeld = gimbalStickHeld,
@@ -1393,7 +1505,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                     age(datalink?.lastRebuildAt)?.let { append(",\"secondsSinceLastRebuild\":$it") }
                     age(lastIdrRequest.takeIf { it > 0L })?.let { append(",\"secondsSinceLastEnable\":$it") }
                     age(lastFocusTrackAt)?.let { append(",\"secondsSinceFocusTrackSet\":$it") }
-                    age(lastZoomWireAt.takeIf { it > 0L })?.let { append(",\"secondsSinceZoomSet\":$it") }
+                    age(lastZoomActivityAt)?.let { append(",\"secondsSinceZoomSet\":$it") }
                     append(",\"zoomPinchActive\":${zoomPinchPreview != null}")
                     age(lastGimbalThrowAt)?.let { append(",\"secondsSinceGimbalThrow\":$it") }
                     append(",\"gimbalStickHeld\":$gimbalStickHeld")
@@ -1408,6 +1520,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
                 "resendLiveViewEnable" -> {
                     endGimbalStick()
                     logRecovery(RecoveryAction.ENABLE, RecoveryEffect.REQUESTED, RecoveryReason.WATCHDOG)
+                    datalink?.reRegister()
                     if (!sendRecoverEnable(force = true, reason = "watchdog")) {
                         SwiftCore.feedWatchdogTick(coreWatchdog, "{\"rollbackLastAction\":true}")
                     }
@@ -1447,6 +1560,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             LiveViewEnablePolicy.Action.RESEND_ENABLE -> {
                 endGimbalStick()
                 logRecovery(RecoveryAction.ENABLE, RecoveryEffect.REQUESTED, RecoveryReason.WATCHDOG)
+                datalink?.reRegister()
                 if (!sendRecoverEnable(force = true, reason = "watchdog")) {
                     feedWatchdog.restore(watchdogBeforeTick)
                 }
@@ -1708,6 +1822,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             ownsPicture = { ownsLivePicture(owner) },
             commandAdmission = endpointCommandAdmission,
             prepare = {
+                _status.value = _status.value.copy(meteredEv = -1)
                 retireEndpointCommands()
                 liveViewEnableSends = 0
                 resetFirstPictureFormatPoke()
@@ -1737,6 +1852,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         ) {
             // Reject every queued pre-negotiation image, including one decoded
             // while open was awaiting its handshake. The next IDR owns picture.
+            _status.value = _status.value.copy(meteredEv = -1)
             startedAt = decoder.beginPresentationProbe()
             sendCapturedLiveView(reason)
             if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
@@ -1756,9 +1872,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun startFeedRecovery(work: suspend () -> Unit) {
+        if (isMultiviewBorrowed) return
         cancelProgrammedMove()
         val inFlight = datalink?.isRebuilding == true || feedRecoveryJob != null
         if (!LiveViewEnablePolicy.shouldStartFeedRecovery(inFlight)) return
+        _status.value = _status.value.copy(meteredEv = -1)
         val job =
             scope.launch(start = CoroutineStart.LAZY) {
                 try {
@@ -1921,7 +2039,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             }
             val nanoGate = usesNanoLiveViewGate(camera)
             if (nanoGate) datalink?.sendNanoGate(start = true)
-            val prepare = LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)
+            val prepare = camera?.model?.sendsLiveViewPrepare != false &&
+                LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)
             if (prepare) datalink?.sendCommand(SwiftCore.CMD_TAP_FOCUS_HINT)
             datalink?.startLiveView(receiver)
             val now = SystemClock.elapsedRealtime()
@@ -2003,6 +2122,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         cancelProgrammedMove()
         val link = datalink
         datalink = null
+        _status.value = _status.value.copy(meteredEv = -1)
         if (link == null) return
         link.onAccessUnit = null
         link.onStatusFrame = null
@@ -2057,6 +2177,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         reason: String,
         trigger: SessionRecoveryTrigger = SessionRecoveryTrigger.BLE_DROPPED,
     ) {
+        if (isMultiviewBorrowed) return
         if (!SessionRecoveryPolicy.shouldBegin(trigger)) return
         if (_recoveryState.value is SessionRecoveryUi.PausedAfterDrops) return
         if (_recoveryState.value is SessionRecoveryUi.WaitingForOperator) return
@@ -2209,6 +2330,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prev.toJson())
         var next = if (json != null) CameraStatus.fromJson(json) else prev
         if (json == null || !next.hasHudFields) next = next.preservingExtras(prev)
+        next = next.carryingAperture(prev)
         val cam = connectedCamera?.model
         next = StatusExtras.apply(frame, next, cam?.name ?: "", cam?.family ?: "")
         val reported = StatusExtras.apply(frame, CameraStatus(), cam?.name ?: "", cam?.family ?: "")
@@ -2226,6 +2348,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             (reported.wbMode != CameraCommands.WB_CUSTOM || reported.wbKelvin >= 2000))
         next = absorbStaleFocus(next, reported.focusMode >= 0, reported.focusTrack >= 0)
         next = absorbStaleIsoLimit(next, reported.isoLimit >= 0)
+        aperturePin?.let { pin ->
+            val (held, remaining) = CameraValuePin.reconcile(
+                pin, reported.apertureStrategy.takeIf { it >= 0 }, SystemClock.elapsedRealtime(),
+            )
+            aperturePin = remaining
+            if (held != null) next = next.copy(apertureStrategy = held)
+        }
         if (next.selfieFlip != prev.selfieFlip) {
             gimbalStickMapping = gimbalStickMapping.copy(selfieFlip = next.selfieFlip == true)
             syncGimbalPose()
@@ -2431,6 +2560,27 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         )
     }
 
+    /** Action 6 aperture strategy. Pinned until the camera reports it; a missed ACK leaves the HUD. */
+    fun setApertureStrategy(raw: Int) {
+        if (connectedCamera?.model?.supportsAperture != true) return
+        val previous = _status.value.apertureStrategy
+        val requestPin = CameraValuePin(raw, SystemClock.elapsedRealtime() + CameraValuePin.SETTLE_MS)
+        aperturePin = requestPin
+        _status.value = _status.value.copy(apertureStrategy = raw)
+        fireKind(
+            SwiftCore.CMD_SET_APERTURE_STRATEGY,
+            "$raw",
+            "Aperture",
+            coalesce = true,
+            onFail = {
+                if (aperturePin === requestPin && _status.value.apertureStrategy == raw) {
+                    aperturePin = null
+                    _status.value = _status.value.copy(apertureStrategy = previous)
+                }
+            },
+        )
+    }
+
     /** GET `0x8E` pid `0x000F`. Swift core already packs the bytes. */
     fun getIsoLimit() {
         if (_controlBusy.value) return
@@ -2506,6 +2656,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setZoom(factor: Double) {
+        if (!supportsZoom) return
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val from = CamFov.displayLabel(_zoomReadout.value)
         val to = CamFov.displayLabel(factor)
         Log.i(TAG, "zoom: setZoom $from → $to live=${datalink != null}")
@@ -2537,6 +2689,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun setZoomSlider(factor: Double) {
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val position = CamFov.pinchLens(factor)
         val tenths = CamFov.displayTenths(factor)
         if (lastPinchLogTenths != tenths) {
@@ -2561,6 +2714,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun updateZoomPinch(magnification: Double) {
+        if (!supportsZoom) return
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         if (zoomPinchPreview == null) {
             zoomPinchAnchor = _status.value.zoomFactor ?: zoomOptimistic ?: zoomStop
             zoomPin = null
@@ -2969,11 +3124,18 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     fun restartLiveViewAfterMedia(): Boolean {
         val link = datalink ?: return false
         if (isBrowsingMedia || link.isClosed || link.isRebuilding) return false
+        _status.value = _status.value.copy(meteredEv = -1)
         return sendCapturedLiveView("media browse ended")
     }
 
     fun beginMediaBrowse() {
         markBrowsingMedia(true)
+        // The camera owns playback: DJI Mimo sends no enter or listing here, and
+        // ours put "Playback in progress" on the body. Closing still exits.
+        if (_cameraGalleryOpen.value) {
+            DiagnosticCenter.log("info", "media", "gallery", "media: opened for camera gallery — no enter playback")
+            return
+        }
         scope.launch {
             sendDumlWait(0x02, CameraCommands.CMD_PLAYBACK, CameraCommands.enterPlayback(), "Playback")
             listMedia()
@@ -3032,7 +3194,9 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             sendDumlWait(
                 0x02,
                 CameraCommands.CMD_MEDIA_FAVORITE,
-                CameraCommands.setMediaFavorite(handle, favorite, mediaListCounter),
+                CameraCommands.setMediaFavorite(
+                    handle, favorite, mediaListCounter, connectedCamera?.model?.name.orEmpty(),
+                ),
                 "Favorite",
             )
         }
@@ -3247,6 +3411,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             CaptureLists.colorWheel(family, live.availableColorModes, cam?.name ?: "")
                 .map { it.first }
         if (mode !in allowed) return
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         if (mode == CameraCommands.COLOR_DLOG2) {
             teleColorSent = false
             zoomColorHopPending = false
@@ -3609,6 +3774,8 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     /** iOS `CameraSetMailbox.zoomCoalesceHold` — 20 Hz latest-wins slider. */
     private fun fireZoom(payload: ByteArray, announce: Boolean, name: String) {
+        if (!supportsZoom) return
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val dl = datalink
         if (dl == null) {
             _controlNote.value = "Zoom not available"
@@ -3966,6 +4133,11 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         _gimbalProgram.value = _gimbalProgram.value.copy(smoothness = value.coerceIn(0.0, 1.0))
     }
 
+    fun setGimbalLoop(enabled: Boolean) {
+        cancelProgrammedMove()
+        _gimbalProgram.value = _gimbalProgram.value.copy(loop = enabled)
+    }
+
     fun clearGimbalProgram() {
         cancelProgrammedMove()
         val keep = _gimbalProgram.value
@@ -3989,12 +4161,25 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             return
         }
         val program = _gimbalProgram.value
+        link.programmedZoomFailure(program)?.let {
+            _controlNote.value = it
+            return
+        }
         if (live.pose.nativePitchDeg == null || listOfNotNull(program.a, program.b, program.c)
                 .any { it.nativePitchDeg == null }) {
             _controlNote.value = "Set the gimbal points again"
             return
         }
         restGimbalStickWire()
+        zoomFlushJob?.cancel()
+        zoomFlushJob = null
+        pendingZoomPayload = null
+        pendingZoomAfterHop = null
+        zoomColorHopGeneration += 1
+        zoomColorHopPending = false
+        restoreDLog2OnWide = false
+        zoomPinchPreview = null
+        refreshZoomHud()
         _gimbalMoveRunning.value = true
         _gimbalMovePaused.value = false
         moveDriving = true
@@ -4009,7 +4194,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             if (moveDatalink !== link || !_gimbalMoveRunning.value) return@launch
             if (!canRunProgrammedMove) {
                 cancelProgrammedMove()
-                _controlNote.value = "Wait for live video before running a move"
+                _controlNote.value = link.programmedZoomFailure(program) ?: "Wait for live video before running a move"
                 return@launch
             }
             prepProgrammedMoveGimbal()
@@ -4044,6 +4229,12 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         if (!_gimbalMovePaused.value) return
         val token = moveToken ?: return
         moveDatalink?.resumeNativeProgram(token)
+    }
+
+    fun restartProgrammedMove() {
+        if (!_gimbalMoveRunning.value || !_gimbalMovePaused.value) return
+        cancelProgrammedMove()
+        runProgrammedMove()
     }
 
     fun cancelProgrammedMove() {
@@ -4190,6 +4381,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
 
     private fun syncGimbalPose() {
         _gimbalPoseViewFlip.value = gimbalStickMapping.poseViewFlip
+        _gimbalPoseInvertPan.value = gimbalStickMapping.invertPan
     }
 
     private fun tickGimbalLimit() {
@@ -4535,6 +4727,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             _controlNote.value = "not live"
             onFail?.invoke()
             onSettle?.invoke(false)
+            if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(SwiftCore.waitKey(kind), false)
             return
         }
         _controlNote.value = null
@@ -4593,6 +4786,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         inflight.remove(key)
         val parsed = CameraReply.parse(reply.payload)
         val ok = parsed.isSuccess
+        if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(key, ok)
         if (!ok) {
             send.onFail?.invoke()
             _controlNote.value = "${send.name}: ${parsed.message}"
@@ -4605,6 +4799,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     private fun settleInflightTimeout(key: Int, send: InflightSend) {
         if (inflight[key] !== send) return
         inflight.remove(key)
+        if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(key, false)
         // iOS `ControlHud.timeoutNote(announce: false)` — never toast a SET timeout.
         Log.i(TAG, "control: ${send.name} — SET timeout, leave HUD")
         val zoomKey = SwiftCore.waitKey(SwiftCore.CMD_SET_ZOOM_LENS)
@@ -4659,7 +4854,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
             return
         }
         if (CamFov.shouldHoldWatchdog(
-                lastZoomWireAt.takeIf { it > 0L }?.let { (now - it) / 1000.0 },
+                lastZoomActivityAt?.let { (now - it) / 1000.0 },
                 zoomPinchPreview != null,
             )
         ) {
@@ -5502,7 +5697,7 @@ internal object LiveViewEnablePolicy {
             if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < ESCALATE_MS) {
                 return Action.NONE
             }
-            if (state.encoderPauseEnables < 2) {
+            if (state.encoderPauseEnables < 1) {
                 state.encoderPauseEnables += 1
                 return fire(state, Action.RESEND_ENABLE, snap.now)
             }

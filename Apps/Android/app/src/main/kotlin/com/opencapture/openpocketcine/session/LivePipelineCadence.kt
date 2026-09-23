@@ -16,7 +16,7 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
      */
     enum class Leg { DECODE, PRESENT }
 
-    private class Counter(var count: Int = 0, var last: Long? = null, var maxGap: Long = 0)
+    private class Counter(var count: Int = 0, var total: Long = 0, var last: Long? = null, var maxGap: Long = 0)
 
     /** Mean and max together: max alone is one hiccup, mean alone hides it. */
     private class Transit(var count: Int = 0, var totalNs: Long = 0, var maxNs: Long = 0) {
@@ -75,6 +75,17 @@ internal class LivePipelineCadence(private val nowNs: () -> Long = System::nanoT
         c.maxGap = maxOf(c.maxGap, (now - (c.last ?: started)).coerceAtLeast(0))
         c.last = now
         c.count += 1
+        c.total += 1
+    }
+
+    data class Snapshot(val timeNs: Long, val counts: Map<Stage, Long>, val ageMs: Map<Stage, Double>)
+
+    /** Read without draining the keepalive window. Totals live as long as this session's cadence. */
+    @Synchronized fun snapshot(): Snapshot {
+        val now = nowNs()
+        return Snapshot(now, counters.mapValues { it.value.total }, counters.mapValues {
+            it.value.last?.let { last -> (now - last).coerceAtLeast(0) / 1e6 } ?: -1.0
+        })
     }
 
     /**

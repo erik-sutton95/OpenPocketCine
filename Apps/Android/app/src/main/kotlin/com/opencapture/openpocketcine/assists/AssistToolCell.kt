@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine.assists
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -14,9 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -96,9 +93,10 @@ internal fun AssistScrollChevron(leading: Boolean, visible: Boolean, modifier: M
     )
 }
 
-/** The supplied design owns assist glyphs; the existing ND extension uses Lucide. */
+/** The supplied design owns assist glyphs; EV uses its readable abbreviation. */
 @Composable
-internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifier = Modifier) {
+internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifier = Modifier,
+    evFontSize: Float = 13.3f) {
     val icon = when (tool) {
         LiveAssistTool.LUT -> com.opencapture.monitorui.MonitorAssistIcon.LUT
         LiveAssistTool.PEAK -> com.opencapture.monitorui.MonitorAssistIcon.PEAKING
@@ -114,8 +112,12 @@ internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifi
         LiveAssistTool.CROSS -> com.opencapture.monitorui.MonitorAssistIcon.CROSSHAIR
         LiveAssistTool.MIRROR -> com.opencapture.monitorui.MonitorAssistIcon.MIRROR
         LiveAssistTool.AUDIO -> com.opencapture.monitorui.MonitorAssistIcon.AUDIO_METERS
-        LiveAssistTool.ND, LiveAssistTool.DESQ -> null
+        LiveAssistTool.ND, LiveAssistTool.EV, LiveAssistTool.DESQ -> null
     }
-    if (icon == null) OpcIcon(if (tool == LiveAssistTool.DESQ) OpcIcon.MAXIMIZE else OpcIcon.APERTURE, null, modifier, tint)
+    if (tool == LiveAssistTool.EV) {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Text("EV", style = LiveType.ui(evFontSize, FontWeight.SemiBold), color = tint, maxLines = 1)
+        }
+    } else if (icon == null) OpcIcon(if (tool == LiveAssistTool.DESQ) OpcIcon.MAXIMIZE else OpcIcon.APERTURE, null, modifier, tint)
     else com.opencapture.monitorui.MonitorAssistIcon(icon, tint, modifier)
 }

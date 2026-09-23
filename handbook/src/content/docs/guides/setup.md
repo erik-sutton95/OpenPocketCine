@@ -58,6 +58,45 @@ The Compose app is **arm64-v8a only**. Join the
 need a physical phone. More: [Android app](../../apps/android/). Maintainer
 upload: `just android-play-setup`.
 
+## Connection stress tooling
+
+Contributors can inspect a seeded connection matrix and exercise its reporting
+without a camera (Python 3.10+):
+
+```bash
+just connection-stress plan --platform android --cycles 3 --seed 401
+just connection-stress demo --platform ios
+just connection-stress-test
+```
+
+The maintainer
+[connection stress guide](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/connection-stress-testing.md)
+describes script and local-agent drivers for physical SoftAP, phone-hotspot,
+BLE and two-camera experiments. Device adapters must supply fresh numeric
+evidence; none is bundled with this runner. Recording is opt-in, unsupported
+paths remain coverage gaps, and generated artifacts stay local. Offline demos
+are explicitly marked simulation and do not qualify either app on hardware.
+
+With Swift installed, `just connection-chaos --seed 401 --seeds 128` exercises
+the real portable packet assembler, command mailbox and recovery policy under
+loss, reordering, congestion and outages while settings requests continue.
+Its virtual timing is not camera performance evidence.
+
+For concurrent UI/control work on phones, the guide documents iPhone
+`INJECT_MODE=overlap` with `just ios-feed-stress`, and
+`just android-feed-stress --seed 401 --seconds 300`. Both reconnect a saved
+camera and overlap bounded local video faults with operator actions. Android
+also requires actual ISO command replies; iOS has broader UI scenario coverage.
+Physical trials exposed delayed picture recovery on both platforms; the guide
+records the results and remaining coverage. The iPhone runner also provides
+opt-in stronger gimbal/ISO/WB workloads, matched automatic-versus-Media recovery
+probes and a verified attachment path when normal XCTest app launch fails.
+Complete qualification remains open on both platforms. Local video drops do not
+reproduce Wi-Fi route loss or network congestion. Pair first, connect the
+unlocked phone by USB, and follow the guide's model requirements.
+The ordinary `just android-device-test` suite excludes the camera-only stress
+class; use the dedicated command to opt into camera control and fault injection.
+
 ## This handbook
 
 ```bash
