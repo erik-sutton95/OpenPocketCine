@@ -4,25 +4,25 @@ import XCTest
 @testable import OpenPocketCine
 
 final class AssistBarChromeTests: XCTestCase {
-    func testToolbarIncludesDesqueezeAndOmitsLevel() {
+    func testToolbarIncludesDesqueezeAndLevel() {
         XCTAssertEqual(
             LiveAssistTool.toolbarCases,
             [
                 .lut, .peaking, .falseColor, .zebra, .waveform, .parade, .histogram,
                 .vectorscope, .trafficLights, .ndMeter, .evMeter, .guides, .grid, .crosshair,
-                .desqueeze,
+                .level, .desqueeze,
                 .mirror,
             ]
         )
-        XCTAssertFalse(LiveAssistTool.toolbarCases.contains(.level))
+        XCTAssertTrue(LiveAssistTool.toolbarCases.contains(.level))
         XCTAssertTrue(LiveAssistTool.toolbarCases.contains(.desqueeze))
-        XCTAssertFalse(LiveAssistTool.settingsCases.contains(.level))
+        XCTAssertTrue(LiveAssistTool.settingsCases.contains(.level))
         XCTAssertTrue(LiveAssistTool.settingsCases.contains(.desqueeze))
         XCTAssertEqual(LiveAssistTool.settingsCases.last, .audioMeters)
     }
 
     func testLongPressEnabledForRemainingTools() {
-        let tapOnly: Set<LiveAssistTool> = [.mirror, .evMeter]
+        let tapOnly: Set<LiveAssistTool> = [.mirror, .evMeter, .level]
         for tool in LiveAssistTool.settingsCases where !tapOnly.contains(tool) {
             XCTAssertTrue(tool.hasConfiguration, "\(tool.rawValue) should open options")
         }

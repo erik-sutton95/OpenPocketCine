@@ -226,7 +226,7 @@ final class ChromeEditorReturnTests: XCTestCase {
             [.lut, .peaking, .desqueeze, .mirror]
         )
         XCTAssertTrue(LiveAssistTool.cleanPinCases.contains(.desqueeze))
-        XCTAssertFalse(LiveAssistTool.cleanPinCases.contains(.level))
+        XCTAssertTrue(LiveAssistTool.cleanPinCases.contains(.level))
         XCTAssertFalse(LiveAssistTool.cleanPinCases.contains(.magnification))
     }
 
