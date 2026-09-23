@@ -19,7 +19,8 @@ final class MultiviewSession {
         var networkVerified = false
         var cameraAddress = ""
         var identity: [UInt8]?
-        var responses: [UInt16: Duml.Frame] = [:]
+        // Per ACK frame bookkeeping; no view reads it.
+        @ObservationIgnored var responses: [UInt16: Duml.Frame] = [:]
         var camera: FoundCamera?
         var status = "Add camera"
         var failureMessage: String?
@@ -107,7 +108,15 @@ final class MultiviewSession {
         var recordingAvailable = false
         var recordingNote: String?
         var controlHost: String?
-        var recordingObservation: (active: Bool, received: Date)?
+        /// Stamped per 0x02/0x80 frame. Views read `recordingActive`, which
+        /// only changes on a REC flip, instead of re-rendering per timestamp.
+        @ObservationIgnored var recordingObservation: (active: Bool, received: Date)? {
+            didSet {
+                let active = recordingObservation?.active
+                if active != recordingActive { recordingActive = active }
+            }
+        }
+        private(set) var recordingActive: Bool?
         init() {
             decoder.feedUpscaler = .off
             decoder.onPresentedFrame = { [weak self] in
@@ -134,7 +143,6 @@ final class MultiviewSession {
             ControlLiveLog.line("multiview: assist VT handoff enable")
         }
         var previewStarted: Date?
-        var lastFrame = Date.distantPast
     }
     let tiles = (0..<4).map { _ in Tile() }
     var found: [FoundCamera] = []
@@ -150,7 +158,7 @@ final class MultiviewSession {
     var groupRecordingBusy = false
     var groupRecordingNote: String?
     var recordingTiles: [Tile] { tiles.filter { $0.camera != nil } }
-    var anyRecording: Bool { recordingTiles.contains { $0.recordingObservation?.active == true } }
+    var anyRecording: Bool { recordingTiles.contains { $0.recordingActive == true } }
     var canRecordTogether: Bool {
         !busy && !groupRecordingBusy && !recordingTiles.isEmpty
             && recordingTiles.allSatisfy { $0.recordingAvailable && !$0.recordingBusy }
@@ -276,11 +284,12 @@ final class MultiviewSession {
                 for tile in self.tiles {
                     tile.driver?.keepalive()
                     tile.recoverAssistHandoff()
-                    tile.recordingAvailable =
+                    let available =
                         tile.controlHost != nil
                         && tile.recordingObservation.map {
                             Date().timeIntervalSince($0.received) < 3
                         } == true
+                    if tile.recordingAvailable != available { tile.recordingAvailable = available }
                     self.monitorPreview(tile)
                 }
             }
@@ -1120,10 +1129,13 @@ final class MultiviewSession {
         driver.onAccessUnit = { [weak tile, weak driver] bytes in
             guard let tile, let driver, tile.driver === driver else { return }
             if tile.decoder.decode(accessUnit: bytes) {
-                if !tile.hasPicture { ControlLiveLog.line("multiview: station preview enqueued") }
-                tile.lastFrame = Date()
-                tile.hasPicture = true
-                tile.status = "Live · Video mode"
+                // Per access unit: re-writing these notified the whole tile view
+                // at the feed rate.
+                if !tile.hasPicture {
+                    ControlLiveLog.line("multiview: station preview enqueued")
+                    tile.hasPicture = true
+                }
+                if tile.status != "Live · Video mode" { tile.status = "Live · Video mode" }
             }
         }
         let nanoGate = camera.model.usesNanoLiveViewGate

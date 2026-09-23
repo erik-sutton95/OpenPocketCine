@@ -149,12 +149,15 @@ final class WatcherRelayClient {
             )
         case .none: break
         }
+        // 4 Hz tick: write only on change so watcher chrome is not re-rendered per tick.
         if now - fpsSince >= 1 {
-            receivedFPS = Int((Double(frameCount) / (now - fpsSince)).rounded())
+            let fps = Int((Double(frameCount) / (now - fpsSince)).rounded())
+            if fps != receivedFPS { receivedFPS = fps }
             frameCount = 0
             fpsSince = now
         }
-        waitingForPicture = status == .live && now - (lastPictureAt ?? acceptedAt ?? now) >= 3
+        let waiting = status == .live && now - (lastPictureAt ?? acceptedAt ?? now) >= 3
+        if waiting != waitingForPicture { waitingForPicture = waiting }
         if let controlRequestedAt, now - controlRequestedAt >= 15 {
             controlRequested = false
             self.controlRequestedAt = nil
@@ -312,7 +315,8 @@ final class WatcherRelayClient {
                 fail(denied.reason)
             }
         case .state:
-            state = try JSONDecoder().decode(WatcherRelayState.self, from: msg.payload)
+            let next = try JSONDecoder().decode(WatcherRelayState.self, from: msg.payload)
+            if next != state { state = next }
             recovery?.received(now: ProcessInfo.processInfo.systemUptime)
         case .controlToken:
             token = try JSONDecoder().decode(WatcherRelayControlToken.self, from: msg.payload)
