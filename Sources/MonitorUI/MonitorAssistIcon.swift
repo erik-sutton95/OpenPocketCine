@@ -18,6 +18,7 @@
         case crosshair
         case mirror
         case audioMeters = "audio-meters"
+        case level
 
         public var body: some View {
             Canvas { context, size in
@@ -27,7 +28,7 @@
             .accessibilityHidden(true)
         }
 
-        // All 14 authoritative glyphs are single paths, fill="none", opacity 1,
+        // All authoritative glyphs are single paths, fill="none", opacity 1,
         // stroke="currentColor", stroke-width="2", round caps and joins. Loading
         // the SVG retains the prototype's exact geometry and stroke treatment.
         // Parsing occurs once per catalog, never during an animation or feed tick.

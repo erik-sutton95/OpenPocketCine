@@ -489,6 +489,14 @@ struct LiveViewScreen: View {
                 .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
             }
 
+            if model.assist.isVisible(.level) {
+                FeedLevelView(
+                    feed: layout.onFeed,
+                    viewport: CGRect(origin: .zero, size: layout.viewport),
+                    portrait: layout.viewport.height > layout.viewport.width)
+                    .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
+            }
+
             // The collapse backdrop is above the picture/scopes and below
             // fixed controls. A Record or Settings tap keeps its own action.
             if assistsExpanded, model.chromeSectionMounts(.toolBar), !interfaceLocked,

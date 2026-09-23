@@ -286,6 +286,9 @@ final class CameraSession {
     /// Last `0x04/0x05` hex + i16 dump (pitch-field hunt; payload is ~50 B).
     @ObservationIgnored var lastGimbalAttitudeHex = ""
     @ObservationIgnored var lastGimbalAttitudeDump = ""
+    /// World level from the attitude quaternion. LEVEL polls it at 10 Hz;
+    /// ingest at push rate must not invalidate observers.
+    @ObservationIgnored private(set) var levelReading = LevelReading()
     /// Pose-only stick invert (TT180). Shell XORs MIRROR assist.
     private(set) var gimbalPoseInvertPan = false
     /// Increments on a rising-edge gimbal-limit contact. Shell plays haptics.
@@ -5599,6 +5602,7 @@ final class CameraSession {
             }
             lastGimbalAttitudeHex = Duml.hex(frame.payload, limit: 80)
             lastGimbalAttitudeDump = GimbalStick.attitudeAngleDump(frame.payload)
+            levelReading.ingest(frame.payload, now: ProcessInfo.processInfo.systemUptime)
             let wasTT180 = gimbalStickMapping.commanded180
             gimbalStickMapping.applyAttitude(frame.payload)
             syncGimbalPose()

@@ -1,4 +1,3 @@
-import CoreMotion
 import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
@@ -33,7 +32,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     var isRetired: Bool { self == .magnification }
     var isPhotographyOnly: Bool { self == .instantReview }
 
-    /// Playback drops horizon (needs the camera) and MAG (no on-feed key).
+    /// Playback drops LEVEL (needs live camera attitude) and MAG (no on-feed key).
     /// AUDIO rides last, matching the live strip's trailing section.
     static var playbackToolbarCases: [LiveAssistTool] {
         toolbarCases.filter { $0 != .level && $0 != .magnification && $0 != .evMeter } + [
@@ -41,7 +40,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         ]
     }
 
-    /// OpenZCine `activeCases` minus photography-only, AUDIO, and Level.
+    /// OpenZCine `activeCases` minus photography-only and AUDIO.
     /// AUDIO is appended as its own trailing section in `LiveAssistBar`.
     /// ND sits with the exposure meters (HISTO / VECTOR / LIGHTS).
     static var toolbarGroups: [[LiveAssistTool]] {
@@ -49,7 +48,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
             [.lut, .peaking, .falseColor],
             [.zebra, .waveform, .parade],
             [.histogram, .vectorscope, .trafficLights, .ndMeter, .evMeter],
-            [.guides, .grid, .crosshair],
+            [.guides, .grid, .crosshair, .level],
             [.desqueeze, .mirror],
         ]
     }
@@ -73,9 +72,6 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         default: title
         }
     }
-
-    /// Pocket does not ship Level (unproven gimbal roll).
-    var isPocketOmitted: Bool { self == .level }
 
     var hasConfiguration: Bool {
         switch self {
@@ -104,6 +100,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .crosshair: .crosshair
         case .mirror: .mirror
         case .audioMeters: .audioMeters
+        case .level: .level
         default: nil
         }
     }
@@ -151,7 +148,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .guides: "Guides"
         case .grid: "Grid"
         case .crosshair: "Crosshair"
-        case .level: "Horizon"
+        case .level: "Level"
         case .desqueeze: "Anamorphic Desqueeze"
         case .mirror: "Mirror"
         case .magnification: "Magnify"
@@ -198,11 +195,6 @@ enum GuideAspect: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum LevelStyle: String, CaseIterable, Codable {
-    case horizon = "Horizon"
-    case gauge = "Gauge"
-}
-
 @Observable
 final class LiveAssistState {
     var peaking = false
@@ -230,7 +222,6 @@ final class LiveAssistState {
     var gridThirds = true
     var gridPhi = false
     var gridDiagonal = false
-    var levelStyle: LevelStyle = .horizon
     var peakingColor: PeakingPaint = .red
     var peakingSensitivity: PeakingSense = .medium
     var falseColorScale: FalseColorScaleKind = .stops
@@ -375,7 +366,6 @@ final class LiveAssistState {
         OperatorPrefs.load(into: self)
         cleanViewPinnedTools = OperatorPrefs.cleanViewPinnedTools
         playbackVisibleTools = OperatorPrefs.playbackVisibleAssistTools
-        level = false
         if monitorColorMode == nil {
             monitorColorMode = OperatorPrefs.lastMonitorColorMode
         }
@@ -1145,7 +1135,6 @@ enum OperatorPrefs {
         var gridThirds: Bool
         var gridPhi: Bool
         var gridDiagonal: Bool
-        var levelStyle: String
         var peakingColor: String
         var peakingSensitivity: String
         var falseColorScale: String
@@ -1175,7 +1164,6 @@ enum OperatorPrefs {
             gridThirds = s.gridThirds
             gridPhi = s.gridPhi
             gridDiagonal = s.gridDiagonal
-            levelStyle = s.levelStyle.rawValue
             peakingColor = s.peakingColor.rawValue
             peakingSensitivity = s.peakingSensitivity.rawValue
             falseColorScale = s.falseColorScale.rawValue
@@ -1225,7 +1213,6 @@ enum OperatorPrefs {
             s.gridThirds = gridThirds
             s.gridPhi = gridPhi
             s.gridDiagonal = gridDiagonal
-            s.levelStyle = LevelStyle(rawValue: levelStyle) ?? .horizon
             s.peakingColor = PeakingPaint(rawValue: peakingColor) ?? .red
             s.peakingSensitivity = PeakingSense(rawValue: peakingSensitivity) ?? .medium
             s.falseColorScale = FalseColorScaleKind(rawValue: falseColorScale) ?? .stops
@@ -1596,108 +1583,156 @@ struct FeedSplitComparisonMarks: View {
     }
 }
 
-/// Horizon overlay. OpenZCine reads PTP `AngleLevelYawing`; Pocket `0x04/0x05` gimbal bytes are
-/// on the wire but the roll layout is not proven — CoreMotion on this phone is the fallback.
+/// LEVEL: camera world attitude (`LevelReading`), not this phone. Gauges show
+/// picture roll and look-up tilt from the horizon (OpenZCine `LevelGaugeView`);
+/// near plumb a bubble shows the lens offset from straight down / up. Stale or
+/// missing attitude shows `No level data` and never reads green.
+enum LevelAssist {
+    static let refresh: TimeInterval = 0.1
+    static let worldCaption = "WORLD"
+    static let bubbleSpanDeg = 10.0
+    static let bubbleRadius: CGFloat = 64
+    static let threshold = 0.6
+
+    /// OpenZCine #47: seat against the on-screen part of the feed.
+    static func seats(feed: CGRect, viewport: CGRect, portrait: Bool) -> (roll: CGPoint, tilt: CGPoint) {
+        var visible = feed.intersection(viewport)
+        if visible.isNull || visible.isEmpty { visible = feed }
+        return (
+            CGPoint(x: visible.midX, y: visible.maxY - (portrait ? 30 : 104)),
+            CGPoint(x: visible.maxX - 44, y: visible.midY)
+        )
+    }
+
+    static func accessibilityValue(_ mode: LevelReading.Mode) -> String {
+        switch mode {
+        case .unavailable: WorldLevelSnap.noLevelData
+        case .gauges(let roll, let tilt): String(format: "Roll %+.1f°, tilt %+.1f°", roll, tilt)
+        case .bubble(let x, let y): String(format: "Off plumb %+.1f° / %+.1f°", x, y)
+        }
+    }
+}
+
 struct FeedLevelView: View {
-    let style: LevelStyle
     let feed: CGRect
-    @State private var device = DeviceLevel()
+    let viewport: CGRect
+    let portrait: Bool
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        Group {
-            if style == .gauge {
-                LevelGaugeView(roll: device.roll, pitch: device.pitch, feed: feed)
-            } else {
-                LevelHorizonView(roll: device.roll)
-                    .position(x: feed.midX, y: feed.midY)
-            }
-        }
-        .onAppear { device.start() }
-        .onDisappear { device.stop() }
-    }
-}
-
-/// OpenZCine `DeviceLevel` — gravity in the device frame, mapped for Portrait / LandscapeRight.
-@Observable
-final class DeviceLevel {
-    var roll: Double = 0
-    var pitch: Double = 0
-    var isPortrait = false
-    @ObservationIgnored private let manager = CMMotionManager()
-
-    static func displayRoll(gravityX: Double, gravityY: Double, isPortrait: Bool) -> Double {
-        let radians =
-            isPortrait
-            ? atan2(gravityX, -gravityY)
-            : atan2(-gravityY, -gravityX)
-        return radians * 180 / .pi
-    }
-
-    func start() {
-        refreshOrientation()
-        guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
-        manager.deviceMotionUpdateInterval = 1.0 / 30.0
-        manager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
-            guard let self, let g = motion?.gravity else { return }
-            self.refreshOrientation()
-            let newRoll = Self.displayRoll(gravityX: g.x, gravityY: g.y, isPortrait: isPortrait)
-            let newPitch = atan2(g.z, (g.x * g.x + g.y * g.y).squareRoot()) * 180 / .pi
-            roll = roll * 0.75 + newRoll * 0.25
-            pitch = pitch * 0.75 + newPitch * 0.25
-        }
-    }
-
-    func stop() {
-        if manager.isDeviceMotionActive { manager.stopDeviceMotionUpdates() }
-    }
-
-    private func refreshOrientation() {
-        let portrait =
-            UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.interfaceOrientation.isPortrait ?? false
-        isPortrait = portrait
-    }
-}
-
-/// Rolling horizon: two accent wings around a centre ring, rotating with roll; green when level.
-struct LevelHorizonView: View {
-    let roll: Double
-
-    var body: some View {
-        let level = abs(roll) < 0.8
-        let color = level ? LiveDesign.good : LiveDesign.accent
-        HStack(spacing: 10) {
-            Capsule().fill(color).frame(width: 64, height: 2)
-            Circle().stroke(color, lineWidth: 1.6).frame(width: 10, height: 10)
-            Capsule().fill(color).frame(width: 64, height: 2)
-        }
-        .rotationEffect(.degrees(roll))
-        .animation(.easeOut(duration: 0.18), value: level)
-    }
-}
-
-/// OpenZCine `LevelGaugeView` — graduated roll + pitch tracks, correction chevrons, degree readout.
-private struct LevelGaugeView: View {
-    let roll: Double
-    let pitch: Double
-    let feed: CGRect
-
-    var body: some View {
-        ZStack {
-            LevelAxisGauge(orientation: .horizontal, value: roll)
-                .position(x: feed.midX, y: feed.maxY - 104)
-            LevelAxisGauge(orientation: .vertical, value: pitch)
-                .position(x: feed.maxX - 44, y: feed.midY)
+        TimelineView(.periodic(from: .now, by: LevelAssist.refresh)) { _ in
+            let mode = model.session.levelReading.mode(
+                now: ProcessInfo.processInfo.systemUptime,
+                viewFlip: GimbalStick.liveViewFlip(
+                    poseViewFlip: model.session.gimbalPoseViewFlip,
+                    assistMirror: model.assist.isVisible(.mirror)))
+            content(mode)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Level")
+                .accessibilityValue(LevelAssist.accessibilityValue(mode))
+                .accessibilityIdentifier("monitor.level")
         }
         .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func content(_ mode: LevelReading.Mode) -> some View {
+        let seats = LevelAssist.seats(feed: feed, viewport: viewport, portrait: portrait)
+        switch mode {
+        case .bubble(let x, let y):
+            let visible = feed.intersection(viewport).isNull ? feed : feed.intersection(viewport)
+            ZStack {
+                LevelBubble(x: x, y: y)
+                LevelCaption(text: LevelAssist.worldCaption)
+                    .offset(y: LevelAssist.bubbleRadius + 30)
+            }
+            .position(x: visible.midX, y: visible.midY)
+        case .gauges(let roll, let tilt):
+            gauges(roll: roll, tilt: tilt, seats: seats, caption: LevelAssist.worldCaption)
+        case .unavailable:
+            gauges(roll: nil, tilt: nil, seats: seats, caption: WorldLevelSnap.noLevelData)
+        }
+    }
+
+    private func gauges(roll: Double?, tilt: Double?, seats: (roll: CGPoint, tilt: CGPoint), caption: String)
+        -> some View
+    {
+        ZStack {
+            LevelAxisGauge(orientation: .horizontal, value: roll)
+                .position(seats.roll)
+            LevelCaption(text: caption)
+                .position(x: seats.roll.x, y: seats.roll.y + 20)
+            LevelAxisGauge(orientation: .vertical, value: tilt)
+                .position(seats.tilt)
+        }
+    }
+}
+
+private struct LevelCaption: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(MonitorTheme.font(9, weight: .semibold))
+            .kerning(0.5)
+            .foregroundStyle(LiveDesign.muted)
+            .shadow(color: .black.opacity(0.8), radius: 1.5, y: 0.5)
+            .fixedSize()
+    }
+}
+
+/// Lens offset from plumb: ±10° ring, 5° inner ring, bead toward the high side.
+private struct LevelBubble: View {
+    let x: Double
+    let y: Double
+
+    var body: some View {
+        let r = LevelAssist.bubbleRadius
+        let span = LevelAssist.bubbleSpanDeg
+        let distance = (x * x + y * y).squareRoot()
+        let isLevel = distance < LevelAssist.threshold
+        let clamp = distance > span ? span / distance : 1
+        let tint = isLevel ? LiveDesign.good : LiveDesign.accent
+        ZStack {
+            Canvas { ctx, size in
+                let mid = CGPoint(x: size.width / 2, y: size.height / 2)
+                ctx.stroke(
+                    Path(ellipseIn: CGRect(x: mid.x - r, y: mid.y - r, width: 2 * r, height: 2 * r)),
+                    with: .color(.white.opacity(0.22)), lineWidth: 2)
+                ctx.stroke(
+                    Path(ellipseIn: CGRect(x: mid.x - r / 2, y: mid.y - r / 2, width: r, height: r)),
+                    with: .color(.white.opacity(0.34)), lineWidth: 1)
+                var cross = Path()
+                cross.move(to: CGPoint(x: mid.x - 9, y: mid.y))
+                cross.addLine(to: CGPoint(x: mid.x + 9, y: mid.y))
+                cross.move(to: CGPoint(x: mid.x, y: mid.y - 9))
+                cross.addLine(to: CGPoint(x: mid.x, y: mid.y + 9))
+                ctx.stroke(cross, with: .color(.white.opacity(0.75)), lineWidth: 2)
+            }
+            .frame(width: 2 * r + 4, height: 2 * r + 4)
+            Circle()
+                .fill(tint)
+                .frame(width: 13, height: 13)
+                .overlay(Circle().stroke(.black.opacity(0.45), lineWidth: 2))
+                .shadow(color: .black.opacity(0.5), radius: 3)
+                .offset(x: CGFloat(x * clamp / span) * r, y: -CGFloat(y * clamp / span) * r)
+            Text(String(format: "%+.1f° / %+.1f°", abs(x) < 0.05 ? 0 : x, abs(y) < 0.05 ? 0 : y))
+                .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(isLevel ? LiveDesign.good : LiveDesign.text.opacity(0.85))
+                .fixedSize()
+                .offset(y: r + 14)
+        }
+        .animation(.easeOut(duration: 0.12), value: isLevel)
+        .animation(.easeOut(duration: 0.09), value: x)
+        .animation(.easeOut(duration: 0.09), value: y)
     }
 }
 
 private struct LevelAxisGauge: View {
     enum Orientation { case horizontal, vertical }
     let orientation: Orientation
-    let value: Double
+    /// `nil` is no level data: bare track, `--`, never green.
+    let value: Double?
 
     private let span = 84.0
     private let maxAngle = 8.0
@@ -1705,12 +1740,13 @@ private struct LevelAxisGauge: View {
     private let threshold = 0.6
 
     private var isHorizontal: Bool { orientation == .horizontal }
-    private var isLevel: Bool { abs(value) < threshold }
+    private var reading: Double { value ?? 0 }
+    private var isLevel: Bool { value.map { abs($0) < threshold } ?? false }
     private var tint: Color { isLevel ? LiveDesign.good : LiveDesign.accent }
-    private var beadOffset: CGFloat { CGFloat(max(-1, min(1, value / maxAngle)) * span) }
+    private var beadOffset: CGFloat { CGFloat(max(-1, min(1, reading / maxAngle)) * span) }
 
     private var urgency: Int {
-        switch abs(value) {
+        switch abs(reading) {
         case ..<(maxAngle / 3): 1
         case ..<(2 * maxAngle / 3): 2
         default: 3
@@ -1724,12 +1760,12 @@ private struct LevelAxisGauge: View {
                 .frame(
                     width: isHorizontal ? trackLen : 26,
                     height: isHorizontal ? 26 : trackLen)
-            if !isLevel { chevrons }
-            bead
+            if value != nil, !isLevel { chevrons }
+            if value != nil { bead }
             readout
         }
         .animation(.easeOut(duration: 0.12), value: isLevel)
-        .animation(.easeOut(duration: 0.09), value: value)
+        .animation(.easeOut(duration: 0.09), value: reading)
     }
 
     private var graduations: some View {
@@ -1778,13 +1814,13 @@ private struct LevelAxisGauge: View {
     }
 
     private var chevrons: some View {
-        let toNegative = value > 0
+        let toNegative = reading > 0
         let icon: OpcIcon =
             isHorizontal
             ? (toNegative ? .chevronLeft : .chevronRight)
             : (toNegative ? .chevronDown : .chevronUp)
         let gap: CGFloat = 16
-        let sign = CGFloat(value > 0 ? 1 : -1)
+        let sign = CGFloat(reading > 0 ? 1 : -1)
         return Group {
             if isHorizontal {
                 HStack(spacing: -2) {
@@ -1809,10 +1845,13 @@ private struct LevelAxisGauge: View {
     }
 
     private var readout: some View {
-        let shown = abs(value) < 0.05 ? 0 : value
-        return Text(String(format: "%+.1f°", shown))
+        let text = value.map { String(format: "%+.1f°", abs($0) < 0.05 ? 0 : $0) } ?? "--"
+        return Text(text)
             .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
-            .foregroundStyle(isLevel ? LiveDesign.good : LiveDesign.text.opacity(0.85))
+            .foregroundStyle(
+                value == nil
+                    ? LiveDesign.muted : isLevel ? LiveDesign.good : LiveDesign.text.opacity(0.85)
+            )
             .fixedSize()
             .offset(
                 x: isHorizontal ? 0 : -42,
