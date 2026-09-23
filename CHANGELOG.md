@@ -999,6 +999,15 @@ separate iOS and Android lists.
 
 ### Changed
 
+- **Power and heat pass** (iOS measured on device, Android build-verified):
+  the floating-chrome glass backdrop blurs with Metal Performance Shaders and
+  draws as layers instead of per-panel CPU canvases; REC and scan pulses run on
+  a 30 Hz timeline instead of holding ProMotion at 120 Hz; Face AF idles at
+  10 Hz without a face; journal redaction, DUML scanning and NAL classification
+  copy and scan less; paused playback stops redrawing on both platforms;
+  Android scopes, GLES programs, status publication and 4K playback grading
+  follow their budgets. Picture cadence and quality are unchanged. Method and
+  device A/B results: `docs/audits/2026-09-23-automated-perf-pass.md`.
 - FORMAT lists every `camcap_video_format` pair the body advertises, not only
   1080p / 4K 16:9. Catalog labels cover Nano 2.7K/4:3, Pocket 3 1:1/9:16/2.7K,
   Pocket 4 / 4 Pro 9:16 3K, Action 6 4K 1:1, and SlowMo 100/120/240. Unknown

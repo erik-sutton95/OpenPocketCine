@@ -11,7 +11,8 @@ the same PR.
 
 The [September 22 subsystem audit](audits/2026-09-22-performance-audit.md) separates
 source-level fix candidates from historical physical measurements and records
-the remaining CPU/GPU, battery and thermal profiling matrix for issue #402.
+the remaining CPU/GPU, battery and thermal profiling matrix for issue #402. The [September 23 automated pass](audits/2026-09-23-automated-perf-pass.md)
+adds the `just perf-soak` device harness and records the first Release A/B.
 
 ## Budgets
 

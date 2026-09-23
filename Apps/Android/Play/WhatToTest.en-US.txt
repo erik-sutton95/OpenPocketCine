@@ -1,6 +1,6 @@
 New and changed
 
-- On Osmo Nano, zoom is hidden: no zoom chip, pinch zoom, hold disc or controller zoom. DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
+- Scopes, paused playback and camera status updates use less power. Clips without a proxy are graded at monitoring size.
 - Osmo Action 6 support: live view, Normal 10-bit and D-Log M color, the official D-Log M LUT, and an APERTURE control in place of FOCUS. Not yet checked on a real Action 6.
 - Experimental Multiview is now on Android: tap the grid button on Your cameras and add up to four Pocket or Nano cameras.
 
@@ -11,6 +11,6 @@ Fixes
 
 What to test
 
-- Connect a Nano: check there is no zoom chip and that pinch and controller L1/R1 and L2/R2 do not zoom. Switch to a Pocket without relaunching and check zoom and the gimbal stick return.
+- Pause a clip with a LUT on, then seek and change the look: the picture should update right away.
 - If you have an Action 6: pair it, confirm live view appears, then try APERTURE, COLOR, Photo and Timelapse.
 - In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
