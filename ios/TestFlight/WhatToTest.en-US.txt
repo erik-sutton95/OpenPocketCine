@@ -1,6 +1,14 @@
-New features
+New and changed
+
+- On Osmo Nano, zoom is hidden: no zoom chip, pinch zoom, hold disc or controller zoom. Pocket cameras zoom as before.
+- DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
+
+Fixes
 
 - Multiview preview recovery and camera support were reorganized internally; iPhone and iPad behavior should not change.
-- Please re-check: add two or more cameras in Multiview and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview.
-- Interrupt a preview (walk out of range or switch apps) and check the tile recovers or offers Reconnect.
-- Close Multiview and check each camera returns to its own Wi-Fi.
+
+What to test
+
+- Connect a Nano: check there is no zoom chip, pinch does not zoom, and controller L1/R1 and L2/R2 do nothing.
+- Switch to a Pocket without relaunching and check the zoom chip and gimbal stick come back.
+- Add two or more cameras in Multiview and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview.
