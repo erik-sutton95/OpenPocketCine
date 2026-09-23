@@ -5619,11 +5619,14 @@ final class CameraSession {
                 let resolved = GimbalControl.modeFromFamily(family, current: gimbalMode)
                 // Follow-family alone cannot confirm the tilt-lock choice.
                 let reportedMode: GimbalMode? = family == .follow ? nil : resolved
-                gimbalMode =
+                // Per attitude frame: write only on change so the gimbal sheet
+                // does not re-render at the attitude rate.
+                let mode =
                     CameraValuePin.reconcile(
                         &gimbalModePin, reported: reportedMode,
                         now: Date.timeIntervalSinceReferenceDate
                     ) ?? resolved
+                if mode != gimbalMode { gimbalMode = mode }
             }
             lastGimbalAttitudeHex = Duml.hex(frame.payload, limit: 80)
             lastGimbalAttitudeDump = GimbalStick.attitudeAngleDump(frame.payload)
@@ -5690,15 +5693,17 @@ final class CameraSession {
             let reportedMode: GimbalMode? =
                 gimbalFollowFamilyConfirmed && (gimbalMode == .follow || gimbalMode == .tiltLocked)
                 ? resolved : nil
-            gimbalMode =
+            let mode =
                 CameraValuePin.reconcile(
                     &gimbalModePin, reported: reportedMode, now: Date.timeIntervalSinceReferenceDate
                 ) ?? resolved
+            if mode != gimbalMode { gimbalMode = mode }
             if let speed = params.speed {
-                gimbalSpeed =
+                let reconciled =
                     CameraValuePin.reconcile(
                         &gimbalSpeedPin, reported: speed, now: Date.timeIntervalSinceReferenceDate
                     ) ?? speed
+                if reconciled != gimbalSpeed { gimbalSpeed = reconciled }
             }
         }
         status = s
@@ -5735,9 +5740,13 @@ final class CameraSession {
 
     private func syncGimbalPose() {
         gimbalStickMapping.selfieFlip = status.selfieFlip?.isOn ?? false
-        gimbalPoseViewFlip = gimbalStickMapping.poseViewFlip
-        gimbalPoseInvertPan = gimbalStickMapping.invertPan
-        decoder.poseViewFlip = gimbalPoseViewFlip
+        // Runs per gimbal attitude frame: an unchanged write still notifies
+        // `livePictureViewFlip` readers and the stick pads.
+        let viewFlip = gimbalStickMapping.poseViewFlip
+        if gimbalPoseViewFlip != viewFlip { gimbalPoseViewFlip = viewFlip }
+        let invertPan = gimbalStickMapping.invertPan
+        if gimbalPoseInvertPan != invertPan { gimbalPoseInvertPan = invertPan }
+        decoder.poseViewFlip = viewFlip
         decoder.syncPictureFlip()
     }
 
