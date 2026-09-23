@@ -703,6 +703,17 @@ fun LiveViewScreen(model: AppModel) {
                 )
             }
 
+            if (assist.isVisible(LiveAssistTool.LEVEL)) {
+                LiveLevelOverlay(
+                    reading = model.session.levelReading,
+                    viewFlip = liveViewFlip,
+                    feed = layout.onFeed,
+                    viewport = ChromeRect(0f, 0f, vw, vh),
+                    portrait = portrait,
+                    modifier = Modifier.zIndex(1f),
+                )
+            }
+
             LiveFaceFramePump(
                 surfaceView = vulkanSurfaceView,
                 textureView = glesTextureView,

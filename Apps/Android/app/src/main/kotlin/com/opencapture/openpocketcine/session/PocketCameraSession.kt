@@ -211,6 +211,8 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     val cameraGalleryOpen: StateFlow<Boolean> = _cameraGalleryOpen.asStateFlow()
     private var cameraGalleryAwayTicks = 0
 
+    /** World level from the attitude quaternion; LEVEL polls it at 10 Hz. */
+    val levelReading = LevelReading()
     private val _controlNote = MutableStateFlow<String?>(null)
     val controlNote: StateFlow<String?> = _controlNote.asStateFlow()
 
@@ -2358,6 +2360,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
                 _gimbalMode.value = held ?: resolved
             }
             gimbalStickMapping = gimbalStickMapping.applyAttitude(frame.payload)
+            levelReading.ingest(frame.payload, SystemClock.elapsedRealtimeNanos() / 1e9)
             if (frame.payload.size >= 22) {
                 val now = SystemClock.elapsedRealtime()
                 val previousAt = lastValidGimbalAttitudeAt

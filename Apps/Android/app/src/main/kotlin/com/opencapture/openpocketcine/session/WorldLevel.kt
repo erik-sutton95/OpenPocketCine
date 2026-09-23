@@ -59,12 +59,16 @@ sealed interface LevelMode {
     data class Bubble(val xDeg: Double, val yDeg: Double) : LevelMode
 }
 
-/** Smoothed world level for the LEVEL assist and the Double-tap Level snap. */
+/**
+ * Smoothed world level for the LEVEL assist and the Double-tap Level snap.
+ * Written on the session thread, read by the overlay on main: synchronized.
+ */
 class LevelReading {
     private var g: WorldLevel.Vec? = null
     private var acceptedAt = Double.NEGATIVE_INFINITY
     private var bubble = false
 
+    @Synchronized
     fun ingest(payload: ByteArray, now: Double) {
         val q = WorldLevel.attitude(payload) ?: return
         if (!now.isFinite()) return
@@ -84,12 +88,14 @@ class LevelReading {
     }
 
     /** Smoothed look-up tilt, or null when stale. */
+    @Synchronized
     fun tiltDeg(now: Double): Double? {
         val g = g ?: return null
         return if (now - acceptedAt <= STALE_AFTER) tilt(g) else null
     }
 
     /** [viewFlip]: TT180 extra-mirror XOR MIRROR, so readings follow the picture. */
+    @Synchronized
     fun mode(now: Double, viewFlip: Boolean): LevelMode {
         val g = g ?: return LevelMode.Unavailable
         if (now - acceptedAt > STALE_AFTER) return LevelMode.Unavailable
