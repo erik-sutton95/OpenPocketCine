@@ -1,10 +1,6 @@
-New and changed
+New features
 
-- New LEVEL View Assist: roll and tilt gauges from the camera's own sensor, with a round bubble for top-down shots.
-- Gimbal drawer → Double-tap → Level makes a joystick double-tap (and gamepad Circle/B) move the lens to world level or straight down.
-
-What to test
-
-- Turn on LEVEL and roll the handle in FPV. Check the roll gauge moves the right way and turns green only when level.
-- Angle the handle forward, double-tap the joystick with Double-tap set to Level, and check the toast says Leveled top-down or how far off it stopped.
+- New LEVEL View Assist: roll and tilt gauges from the camera's own sensor. Roll the handle in FPV and check the roll gauge moves the right way.
+- Point the lens straight down: a round bubble replaces the gauges. Check it centers when the shot is truly top-down.
+- Gimbal drawer → Double-tap → Level. Angle the handle forward, double-tap the joystick, and check the toast says Leveled top-down (or how far off it stopped).
 - In Multiview, try Record all and Live View and back.

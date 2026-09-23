@@ -75,8 +75,8 @@ non-finite components, or `|norm - 1| > 1e-3`.
   nearer target to the current tilt.
 
 Android mirrors `LevelReading` in Kotlin next to the existing attitude parse
-(`CameraCommands.kt`, `VideoFormat.kt`), following the EV meter pattern from
-#411. Both implementations share the same captured-frame fixtures in tests.
+(`CameraCommands.kt`, `VideoFormat.kt`), following the EV meter pattern
+from #411. Both implementations share the same captured-frame fixtures in tests.
 
 ## 2. LEVEL view assist
 

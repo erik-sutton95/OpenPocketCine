@@ -19,7 +19,7 @@
 - Stale after 1.0 s without a valid sample.
 - Snap tolerance +/-0.5 degrees; deadline = duration + 1.5 s; duration 0.1 s per 2 degrees clamped 0.5 to 3.0 s, rounded to 0.1 s.
 - Snap target: horizon when `|tilt| < 45`, otherwise plumb down (tilt < 0) or plumb up.
-- Copy: `WORLD`, `No level data`, `Leveled to world`, `Leveled top-down`, `Leveled straight up`, `Couldn't level: %.1f° off`, FPV suffix ` · roll follows the handle in FPV`, drawer tab `Double-tap`, options `Recenter` / `Level`.
+- Copy: `WORLD`, `No level data`, `Leveled to world`, `Leveled top-down`, `Leveled straight up`, `Couldn't level: %.1f° off`, FPV suffix `· roll follows the handle in FPV` (leading space), drawer tab `Double-tap`, options `Recenter` / `Level`.
 - No em-dashes in any copy or docs. No Co-Authored-By trailers in commits.
 - Parity: both shells in the same PR; watcher exception recorded in `docs/PARITY.md`.
 
@@ -36,11 +36,13 @@
 ### Task 1: Core world level reading and snap
 
 **Files:**
+
 - Create: `Sources/OpenPocketViewCore/WorldLevel.swift`
 - Modify: `Sources/OpenPocketViewCore/CameraControl.swift` (add `GimbalDoubleTap` beside `GimbalRamp`)
 - Test: `Tests/OpenPocketViewCoreTests/WorldLevelTests.swift`
 
 **Interfaces:**
+
 - Produces:
   - `WorldLevel.attitude(_ payload: [UInt8]) -> HeadTrack.Quat?`
   - `WorldLevel.gravity(_ q: HeadTrack.Quat) -> (x: Double, y: Double, z: Double)`
@@ -53,6 +55,7 @@
 - [ ] **Step 1: Write the failing tests** using the four captured fixtures (hex strings below) plus synthetic quaternions built with `HeadTrack.Quat.axisAngle` and packed back into a 50-byte payload by a test helper.
 
 Fixtures (50 B `0x04/0x05` payloads, expected tilt from the fit):
+
 - level front, tilt 1.788: `F606000006008600FAFF00020E6DBE041EBA0000EAFF0400EA71193910F57F3F41C41B3C7F917FBC00000000010000000000`
 - look-up, tilt 42.552: `5B0500002AFF8600D3000002965BC9057BBD000056FE0200382CF83C23B86D3F15519F3DBC22B9BE00000000000000000005`
 - selfie-side, tilt -10.111: `5EF900000E008600F4FF0002D20CBF0470BE00006A0035006FF1173C92967DBFC5AFD6BD7077B3BD00000000000000000005`
@@ -68,11 +71,13 @@ Tests: decode each fixture within 0.01 degrees of expected tilt and |roll| < 0.0
 ### Task 2: Kotlin mirror
 
 **Files:**
+
 - Create: `Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/session/WorldLevel.kt`
 - Modify: `Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/session/GimbalProgram.kt` (add `GimbalDoubleTap` beside `GimbalRamp`)
 - Test: `Apps/Android/app/src/test/kotlin/com/opencapture/openpocketcine/session/WorldLevelTest.kt`
 
 **Interfaces:**
+
 - Produces: `WorldLevel.attitude(ByteArray): Quat?`, `class LevelReading { fun ingest(payload: ByteArray, now: Double); fun mode(now: Double, viewFlip: Boolean): LevelMode; fun tiltDeg(now: Double): Double? }`, `sealed interface LevelMode { Unavailable, Gauges(rollDeg, tiltDeg), Bubble(xDeg, yDeg) }`, `enum class WorldLevelTarget`, `class WorldLevelSnap { companion fun plan(tiltDeg, pose: GimbalWaypoint, now): Pair<WorldLevelSnap, ByteArray>?; fun evaluate(tiltDeg: Double?, now: Double): SnapOutcome }`, `enum class GimbalDoubleTap(raw, label)`.
 
 - [ ] **Step 1:** Port the Task 1 tests to JUnit with the same fixtures and expectations.
@@ -84,6 +89,7 @@ Tests: decode each fixture within 0.01 degrees of expected tilt and |roll| < 0.0
 ### Task 3: iOS LEVEL assist on camera attitude
 
 **Files:**
+
 - Modify: `ios/OpenPocketCine/LiveAssists.swift` (tool groups, `isPocketOmitted`, `hasConfiguration`, title `Level`, remove `LevelStyle`, `DeviceLevel`, `LevelHorizonView`; `FeedLevelView` takes `LevelReading.Mode`; add bubble and unavailable views and `WORLD` caption; mount in feed overlay beside crosshair)
 - Modify: `ios/OpenPocketCine/CameraSession.swift` (`levelReading` ingest in the `0x04/0x05` branch; published `levelMode` refreshed at most 10 Hz and on a 1 s stale tick)
 - Modify: `ios/OpenPocketCine/Assists/AssistLongPressChrome.swift` (LEVEL help copy)
@@ -95,6 +101,7 @@ Tests: decode each fixture within 0.01 degrees of expected tilt and |roll| < 0.0
 ### Task 4: Android LEVEL assist
 
 **Files:**
+
 - Modify: `assists/LiveAssistTool.kt` (`LEVEL` in guides group, title `Level`, `hasConfiguration` true for help copy), `assists/LiveAssistState.kt` (flag, toggle, persist, restore), `assists/AssistOptionsPopup.kt` (help copy), `assists/AssistToolCell.kt` (glyph)
 - Create: `LiveLevelOverlay.kt` (Compose Canvas port of OpenZCine `drawGaugeLevel` plus bubble and unavailable), `monitor-ui` `monitor-assist-level.svg` and vector drawable, `MonitorAssistIcon.LEVEL`
 - Modify: `session/PocketCameraSession.kt` (`levelReading` ingest, `levelMode` StateFlow with stale tick), `LiveViewScreen.kt` (mount overlay when `assist.isVisible(LEVEL)`)
@@ -105,6 +112,7 @@ Tests: decode each fixture within 0.01 degrees of expected tilt and |roll| < 0.0
 ### Task 5: Double-tap setting and world snap (both shells)
 
 **Files:**
+
 - iOS: `LiveAssists.swift` `OperatorPrefs.gimbalDoubleTap`; `AppRoot.swift` model property; `CameraSession.swift` `gimbalDoubleTap`, `gimbalDoubleTap()`, `levelGimbalToWorld()`, snap evaluation on each attitude frame, cancel on stick / recenter / program; `LiveGimbalStick.swift` and `handleGamepadAction(.recenter)` call `gimbalDoubleTap()`; `LiveGimbalSheetHost.swift` new `Double-tap` tab.
 - Android: `OperatorPrefs.kt`, `AppModel.kt`, `PocketCameraSession.kt` (same functions), `LiveGimbalChrome.kt` tab, `LivePortraitChrome.kt` / `LiveViewScreen.kt` `onRecenter` and gamepad `RECENTER` route to `gimbalDoubleTap()`.
 - Tests: core snap already covered; Android `GimbalGamepadTest` / contract tests updated if they pin recenter routing; `OperatorSetupContractTest` for the new pref key.
