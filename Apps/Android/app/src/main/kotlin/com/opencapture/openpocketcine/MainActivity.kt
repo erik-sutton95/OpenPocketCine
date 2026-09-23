@@ -219,14 +219,16 @@ private fun OpenPocketCineApp(model: AppModel) {
         }
         onDispose { runCatching { windowManager.removeScreenRecordingCallback(callback) } }
     }
-    val hideNavigation = showLive && model.liveOperatorPanel == null
+    val hideNavigation = (showLive && model.liveOperatorPanel == null) || model.showsMultiview
     LaunchedEffect(activity, hideNavigation) {
         (activity as? MainActivity)?.hideSystemNavigation = hideNavigation
         (activity as? MainActivity)?.updateSystemBars()
     }
 
     Box(Modifier.fillMaxSize().startupBackdrop()) {
-        if (showLive) {
+        if (model.showsMultiview && !showLive) {
+            com.opencapture.openpocketcine.multiview.MultiviewScreen(model, onClose = model::closeMultiview)
+        } else if (showLive) {
             LiveViewScreen(model)
         } else {
             LinkExperience(
@@ -237,13 +239,15 @@ private fun OpenPocketCineApp(model: AppModel) {
             )
         }
         LaunchSplashOverlay(visible = launchSplashVisible)
-        if (model.homePanel != null && !showLive) {
+        if (model.homePanel != null && !showLive && !model.showsMultiview) {
             AppPanelHost(model)
         }
         var showAutomaticPrompt by remember {
             mutableStateOf(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
         }
-        if (!launchSplashVisible && !showLive && showAutomaticPrompt && model.homePanel != AppPanel.PRIVACY) {
+        if (!launchSplashVisible && !showLive && !model.showsMultiview && showAutomaticPrompt &&
+            model.homePanel != AppPanel.PRIVACY
+        ) {
             AutomaticReportsPrompt(
                 onPrivacy = { model.homePanel = AppPanel.PRIVACY },
                 onEnable = {

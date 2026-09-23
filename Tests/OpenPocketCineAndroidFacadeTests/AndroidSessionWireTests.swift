@@ -326,3 +326,121 @@ struct AndroidSessionWireTests {
             ) == "true")
     }
 }
+
+@Suite
+struct MulticamWireTests {
+    @Test func multicamCommandsEncodeCoreFrames() {
+        let work = AndroidSessionWire.encodeCommand(kind: .multicamWifiWorkMode, seq: 9, extra: nil)
+        #expect(work?.cmdSet == 7 && work?.cmdId == 0x39 && work?.payload == [0])
+        #expect(work?.seq == 9)
+        let station = AndroidSessionWire.encodeCommand(
+            kind: .multicamStationMode, seq: 9, extra: "1")
+        #expect(station?.cmdSet == 7 && station?.cmdId == 0x48 && station?.payload == [1])
+        #expect(
+            AndroidSessionWire.encodeCommand(kind: .multicamStationMode, seq: 9, extra: "0")?
+                .payload == [0])
+        #expect(
+            AndroidSessionWire.encodeCommand(kind: .multicamStationMode, seq: 9, extra: nil) == nil)
+        let video = AndroidSessionWire.encodeCommand(kind: .multicamVideoMode, seq: 9, extra: nil)
+        #expect(video?.cmdSet == 2 && video?.cmdId == 0xe1 && video?.payload == [1])
+        let join = AndroidSessionWire.encodeCommand(
+            kind: .multicamJoin, seq: 9, extra: "Studio\u{1f}secret")
+        #expect(join == (try? MulticamCommands.join(ssid: "Studio", password: "secret", seq: 9)))
+        #expect(join?.cmdSet == 7 && join?.cmdId == 0x47)
+        #expect(
+            AndroidSessionWire.encodeCommand(kind: .multicamJoin, seq: 9, extra: "\u{1f}pw") == nil)
+        #expect(
+            AndroidSessionWire.encodeCommand(kind: .multicamJoin, seq: 9, extra: "Studio") == nil)
+        let scan = AndroidSessionWire.encodeCommand(kind: .multicamWiFiScan, seq: 9, extra: nil)
+        #expect(scan?.receiver == 0x1b && scan?.cmdSet == 7 && scan?.cmdId == 0xab)
+        #expect(scan?.payload == [])
+    }
+
+    @Test func multicamDecisionKinds() {
+        func decide(_ kind: String, _ json: String) -> String {
+            AndroidSessionWire.multicamDecision(kind: kind, requestJSON: json)
+        }
+        #expect(decide("joinDecision", #"{"reply":"0000","attempt":1}"#) == "connected")
+        #expect(decide("joinDecision", #"{"reply":"01ff","attempt":1}"#) == "retry")
+        #expect(decide("joinDecision", #"{"reply":"01ff","attempt":3}"#) == "rejected")
+        #expect(decide("joinDecision", #"{"reply":"","attempt":1}"#) == "rejected")
+        #expect(
+            decide("stationDecision", #"{"reply":"0001","allowMissingQuery":false}"#)
+                == "alreadyStation")
+        #expect(
+            decide("stationDecision", #"{"reply":"0000","allowMissingQuery":false}"#)
+                == "setAndVerify")
+        #expect(
+            decide("stationDecision", #"{"reply":"e0","allowMissingQuery":true}"#)
+                == "setWithoutReadback")
+        #expect(decide("stationDecision", #"{"reply":"e0","allowMissingQuery":false}"#) == "reject")
+        #expect(decide("acceptsSetter", #"{"reply":"00","missingQuery":true}"#) == "true")
+        #expect(decide("acceptsSetter", #"{"reply":"00","missingQuery":false}"#) == "false")
+        let scan: [UInt8] =
+            [1, 0x11, 0, 0, 9, 0, 0, 0, 0, 0] + Array("Cam".utf8)
+            + [9, 0, 0, 0, 0, 0] + Array("Two".utf8)
+        let payload = scan.map { String(format: "%02x", $0) }.joined()
+        #expect(decide("wifiScanNames", "{\"payload\":\"\(payload)\"}") == "Cam\u{1f}Two")
+        #expect(decide("wifiScanNames", #"{"payload":""}"#) == "")
+        #expect(
+            decide(
+                "discoveryHosts",
+                #"{"address":"192.168.1.10","mask":"255.255.255.248","excluding":"192.168.1.9, 192.168.1.11"}"#
+            )
+                == "192.168.1.12,192.168.1.13,192.168.1.14")
+        #expect(
+            decide("discoveryHosts", #"{"address":"10.0.0.2","mask":"255.255.0.0","excluding":""}"#)
+                == "unsupported")
+        #expect(
+            decide("support", #"{"modelId":34,"name":"Osmo Pocket 4 Pro"}"#)
+                == #"{"appears":true,"preview":true,"missingRoleQueryE0":false}"#)
+        // JSONObject.quote escapes `/` as `\/`; the name still resolves.
+        #expect(
+            decide("support", #"{"name":"OsmoPocket3 \/ A"}"#)
+                == #"{"appears":true,"preview":true,"missingRoleQueryE0":true}"#)
+        #expect(
+            decide("support", #"{"modelId":23,"name":"Osmo 360"}"#)
+                == #"{"appears":true,"preview":false,"missingRoleQueryE0":false}"#)
+        #expect(
+            decide("support", #"{"modelId":126,"name":"DJI Neo"}"#)
+                == #"{"appears":false,"preview":false,"missingRoleQueryE0":false}"#)
+        #expect(
+            decide("joinPolicy", "{}")
+                == #"{"maximumAttempts":3,"prepareSettleSeconds":10,"replyTimeoutSeconds":45,"retryDelaySeconds":5}"#
+        )
+        #expect(decide("nope", "{}") == "")
+    }
+
+    @Test func multiviewRecoveryHandleRunsBoundedLadder() {
+        let handle = AndroidSessionWire.multiviewRecoveryCreate()
+        defer { AndroidSessionWire.multiviewRecoveryDestroy(handle: handle) }
+        func call(_ op: String, _ json: String = "{}") -> String {
+            AndroidSessionWire.multiviewRecoveryCall(handle: handle, op: op, snapshotJSON: json)
+        }
+        func firstPicture(_ now: Int) -> String {
+            call(
+                "action",
+                """
+                {"now":\(now),"live":true,"pathReady":true,"flowHealthy":true,"hadVideo":false,
+                "sawPicture":false,"hasFormat":false,"secondsSinceLastEnable":50}
+                """)
+        }
+        #expect(firstPicture(100) == "resendLiveViewEnable")
+        #expect(firstPicture(110) == "reopenDatalink")
+        #expect(firstPicture(120) == "none")
+        #expect(firstPicture(130) == "fullSessionRejoin")
+        #expect(call("failed") == "false")
+        #expect(call("beginRejoin") == "true")
+        #expect(call("beginRejoin") == "true")
+        #expect(call("beginRejoin") == "false")
+        #expect(call("failed") == "true")
+        #expect(firstPicture(200) == "none")
+        #expect(call("reset") == "")
+        #expect(call("failed") == "false")
+        #expect(call("fail") == "")
+        #expect(call("failed") == "true")
+        #expect(call("bogus") == "")
+        AndroidSessionWire.multiviewRecoveryDestroy(handle: handle)
+        #expect(call("failed") == "")
+    }
+}

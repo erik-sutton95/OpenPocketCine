@@ -1,13 +1,15 @@
-import OpenPocketViewCore
+import Foundation
 
 /// Each tile owns one bounded repair ladder. A healthy take resets its budget.
-struct MultiviewRecovery {
-    var watchdog = FeedWatchdog()
-    private(set) var rejoins = 0
-    private(set) var failed = false
+public struct MultiviewRecovery {
+    public var watchdog = FeedWatchdog()
+    public private(set) var rejoins = 0
+    public private(set) var failed = false
     private var healthySince: Double?
 
-    mutating func action(_ snapshot: FeedWatchdog.Snapshot) -> FeedWatchdog.Action {
+    public init() {}
+
+    public mutating func action(_ snapshot: FeedWatchdog.Snapshot) -> FeedWatchdog.Action {
         guard !failed else { return .none }
         if FeedWatchdog.udpReceiveAlive(snapshot) {
             if healthySince == nil { healthySince = snapshot.now }
@@ -31,7 +33,7 @@ struct MultiviewRecovery {
         }
         return action
     }
-    mutating func beginRejoin() -> Bool {
+    public mutating func beginRejoin() -> Bool {
         guard !failed, rejoins < 2 else {
             failed = true
             return false
@@ -40,5 +42,5 @@ struct MultiviewRecovery {
         watchdog = FeedWatchdog()
         return true
     }
-    mutating func fail() { failed = true }
+    public mutating func fail() { failed = true }
 }

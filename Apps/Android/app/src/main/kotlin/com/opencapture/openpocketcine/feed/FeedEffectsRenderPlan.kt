@@ -245,6 +245,46 @@ internal object FeedEffectsRenderPlanFactory {
         )
     }
 
+    /**
+     * Multiview tile: the camera-specific DJI Auto conversion only, no assists.
+     * iOS `MultiviewSession.Tile.updateLUT`. Returns the plan and its caption.
+     */
+    fun multiviewAutoLut(
+        context: Context,
+        enabled: Boolean,
+        colorMode: Int,
+        family: String,
+        cameraName: String?,
+    ): Pair<FeedEffectsRenderPlan, String> {
+        val source = LutLookResolver.resolve(LutCatalog.AUTO, true, colorMode, family, cameraName)
+        if (source == LutLookSource.Off) {
+            val caption = if (colorMode < 0) "Waiting for camera color" else "Auto · no conversion needed"
+            return FeedEffectsRenderPlan.IDENTITY to caption
+        }
+        val caption = "Auto · " + LutLookResolver.sourceTitle(source)
+        if (!enabled) return FeedEffectsRenderPlan.IDENTITY to caption
+        val cube = lutCube(context, source, 0.0, colorMode) ?: return FeedEffectsRenderPlan.IDENTITY to "LUT unavailable"
+        val identity = FeedEffectsRenderPlan.IDENTITY
+        return FeedEffectsRenderPlan(
+            lutCube = cube,
+            falseColorPaint = null,
+            falseColorWeight = null,
+            peaking = false,
+            peakingColor = identity.peakingColor,
+            peakingRatioThreshold = identity.peakingRatioThreshold,
+            peakingNoiseGate = identity.peakingNoiseGate,
+            zebraHighlightOn = false,
+            zebraHighlightCode = identity.zebraHighlightCode,
+            zebraHighlightColor = identity.zebraHighlightColor,
+            zebraMidtoneOn = false,
+            zebraMidtoneCode = identity.zebraMidtoneCode,
+            zebraMidtoneHalf = identity.zebraMidtoneHalf,
+            zebraMidtoneColor = identity.zebraMidtoneColor,
+            splitComparison = false,
+            splitVertical = identity.splitVertical,
+        ) to caption
+    }
+
     private fun lutCube(
         context: Context,
         source: LutLookSource,

@@ -27,14 +27,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class AppModel(context: Context) {
+/** [borrowing] builds a Live View model over a Multiview tile's decoder (iOS `CameraSession(borrowing:)`). */
+class AppModel(context: Context, borrowing: com.opencapture.openpocketcine.session.HevcDecoder? = null) {
     private val appContext = context.applicationContext
     init {
         DiagnosticCenter.install(appContext)
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = SharedPreferencesSavedCameraStore(context)
-    val session = PocketCameraSession(context)
+    val session = PocketCameraSession(context, borrowing)
+    /** Set while this Live View borrows a Multiview tile; replaces the lock button. */
+    var multiviewExit by mutableStateOf<(() -> Unit)?>(null)
     val assist = LiveAssistState.from(appContext)
 
     var savedCameras by mutableStateOf(store.load())
@@ -43,6 +46,8 @@ class AppModel(context: Context) {
     var showsLaunchSplash by mutableStateOf(true)
     var coreVersion by mutableStateOf<String?>(null)
     var homePanel by mutableStateOf<AppPanel?>(null)
+    /** The Multiview stage covers the camera home until it closes. */
+    var showsMultiview by mutableStateOf(false)
     var liveOperatorPanel by mutableStateOf<LiveOperatorPanel?>(null)
     var operatorSettingsTab by mutableStateOf(OperatorSettingsTab.LINK)
     var chromeEditorMode by mutableStateOf<PocketDispMode?>(null)
@@ -468,6 +473,19 @@ class AppModel(context: Context) {
         isPairingNewCamera = false
     }
 
+    /** iOS `SavedCamerasView.onMultiview`: the single-camera session hands the radio to the stage. */
+    fun openMultiview() {
+        if (session.phaseFlow.value.isBusy() || session.isReconnecting.value) return
+        session.disconnect()
+        session.ble.stopScan()
+        showsMultiview = true
+    }
+
+    fun closeMultiview() {
+        showsMultiview = false
+        session.startScan()
+    }
+
     fun disconnect() {
         session.disconnect()
         if (!SavedCameras.launchShowsWizard(savedCameras)) session.startScan()
@@ -477,4 +495,11 @@ class AppModel(context: Context) {
         gimbalGamepad.stopListening()
         session.close()
     }
+
+    /** The tile's LUT choice travels into and out of its borrowed Live View. */
+    fun setBorrowedLut(enabled: Boolean) {
+        if (assist.lutOn != enabled) assist.toggle(com.opencapture.openpocketcine.assists.LiveAssistTool.LUT)
+    }
+
+    fun borrowedLutEnabled(): Boolean = assist.lutOn
 }

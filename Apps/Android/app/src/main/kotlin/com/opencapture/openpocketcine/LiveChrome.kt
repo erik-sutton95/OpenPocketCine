@@ -1409,6 +1409,28 @@ fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Un
     }
 }
 
+/** Replaces [LockButton] while Live View borrows a Multiview tile. iOS `multiviewExit`. */
+@Composable
+fun MultiviewReturnButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .size(LiveChromeMetrics.LOCK.dp)
+            .chromeClickable(onClick = onClick)
+            .semantics {
+                contentDescription = "Return to Multiview"
+                role = Role.Button
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        OpcIcon(
+            icon = OpcIcon.LAYOUT_GRID,
+            contentDescription = null,
+            tint = LiveDesign.text,
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
 @Composable
 fun DispButton(
     clean: Boolean,

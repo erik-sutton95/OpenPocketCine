@@ -410,6 +410,13 @@ public enum AndroidSessionWire {
         case setMediaFavorite = 59
         case nanoLiveViewGate = 60
         case getSelfieFlip = 61
+        case multicamWifiWorkMode = 62
+        /// Extra `1` selects station Wi-Fi, `0` returns to the camera AP.
+        case multicamStationMode = 63
+        case multicamVideoMode = 64
+        /// Extra is `ssid\u{1f}password`.
+        case multicamJoin = 65
+        case multicamWiFiScan = 66
     }
 
     public static func encodeCommand(kind: CommandKind, seq: UInt16, extra: String?) -> Duml.Frame?
@@ -637,6 +644,21 @@ public enum AndroidSessionWire {
         case .nanoLiveViewGate:
             guard extra != nil else { return nil }
             return Commands.nanoLiveViewGate(start: isOn(extra), seq: seq)
+        case .multicamWifiWorkMode:
+            return MulticamCommands.wifiWorkMode(seq: seq)
+        case .multicamStationMode:
+            guard extra != nil else { return nil }
+            return MulticamCommands.stationMode(isOn(extra), seq: seq)
+        case .multicamVideoMode:
+            return MulticamCommands.videoMode(seq: seq)
+        case .multicamJoin:
+            let parts = (extra ?? "").split(
+                separator: "\u{1f}", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { return nil }
+            return try? MulticamCommands.join(
+                ssid: String(parts[0]), password: String(parts[1]), seq: seq)
+        case .multicamWiFiScan:
+            return MulticamWiFiScan.request(seq: seq)
         }
     }
 
@@ -845,6 +867,14 @@ public enum AndroidSessionWire {
 
     private static let watchdogStore = WatchdogStore()
 
+    private final class RecoveryStore: @unchecked Sendable {
+        let lock = NSLock()
+        var boxes: [Int64: MultiviewRecovery] = [:]
+        var next: Int64 = 1
+    }
+
+    private static let recoveryStore = RecoveryStore()
+
     /// Android JNI: `CameraSoftAP` decisions so Kotlin does not clone the ladder.
     /// `kind` is the function name. Bool results are `true` / `false`. Enums use
     /// `HandshakeTimeoutStep` / `FirstPictureStep` raw values.
@@ -1040,6 +1070,111 @@ public enum AndroidSessionWire {
         }
     }
 
+    /// Android JNI: Multiview join, station role, scan, discovery, and model gates.
+    /// Byte arrays are lowercase hex. Lists join with `\u{1f}` (names) or `,` (hosts).
+    /// `support` and `joinPolicy` return compact JSON objects. Unknown kind is `""`.
+    public static func multicamDecision(kind: String, requestJSON: String) -> String {
+        let json = requestJSON
+        func flag(_ value: Bool) -> String { value ? "true" : "false" }
+        func bytes(_ key: String) -> [UInt8] {
+            jsonString(json, key: key).flatMap { hexBytes($0) } ?? []
+        }
+        switch kind {
+        case "joinDecision":
+            switch MulticamJoinPolicy.decision(
+                reply: bytes("reply"), attempt: Int(jsonNumber(json, key: "attempt", default: 0)))
+            {
+            case .connected: return "connected"
+            case .retry: return "retry"
+            case .rejected: return "rejected"
+            }
+        case "stationDecision":
+            switch MulticamStationPolicy.decision(
+                reply: bytes("reply"),
+                allowMissingQuery: jsonBool(json, key: "allowMissingQuery", default: false))
+            {
+            case .alreadyStation: return "alreadyStation"
+            case .setAndVerify: return "setAndVerify"
+            case .setWithoutReadback: return "setWithoutReadback"
+            case .reject: return "reject"
+            }
+        case "acceptsSetter":
+            return flag(
+                MulticamStationPolicy.acceptsSetter(
+                    bytes("reply"),
+                    missingQuery: jsonBool(json, key: "missingQuery", default: false)))
+        case "wifiScanNames":
+            return MulticamWiFiScan.names(bytes("payload")).joined(separator: "\u{1f}")
+        case "discoveryHosts":
+            let excluding = (jsonString(json, key: "excluding") ?? "").split(separator: ",").map {
+                $0.trimmingCharacters(in: .whitespaces)
+            }
+            guard
+                let hosts = MulticamDiscovery.hosts(
+                    address: jsonString(json, key: "address") ?? "",
+                    mask: jsonString(json, key: "mask") ?? "",
+                    excluding: Set(excluding.filter { !$0.isEmpty }))
+            else { return "unsupported" }
+            return hosts.joined(separator: ",")
+        case "support":
+            let model = CameraModel.resolve(
+                modelId: jsonOptionalNumber(json, key: "modelId").map { Int($0) },
+                name: jsonString(json, key: "name"))
+            return """
+                {"appears":\(flag(MulticamSupport.appears(model))),"preview":\(flag(MulticamSupport.hasPreview(model))),"missingRoleQueryE0":\(flag(MulticamSupport.acceptsMissingRoleQuery(model, reply: [0xe0])))}
+                """
+        case "joinPolicy":
+            return """
+                {"maximumAttempts":\(MulticamJoinPolicy.maximumAttempts),"prepareSettleSeconds":\(MulticamJoinPolicy.prepareSettleSeconds),"replyTimeoutSeconds":\(Int(MulticamJoinPolicy.replyTimeoutSeconds)),"retryDelaySeconds":\(MulticamJoinPolicy.retryDelaySeconds)}
+                """
+        default:
+            return ""
+        }
+    }
+
+    public static func multiviewRecoveryCreate() -> Int64 {
+        let store = recoveryStore
+        store.lock.lock()
+        defer { store.lock.unlock() }
+        let handle = store.next
+        store.next += 1
+        store.boxes[handle] = MultiviewRecovery()
+        return handle
+    }
+
+    public static func multiviewRecoveryDestroy(handle: Int64) {
+        let store = recoveryStore
+        store.lock.lock()
+        store.boxes.removeValue(forKey: handle)
+        store.lock.unlock()
+    }
+
+    /// One tile's bounded repair ladder. `op` is `action` (watchdog snapshot JSON,
+    /// returns the `feedWatchdogTick` action names), `beginRejoin` / `failed`
+    /// (`true` / `false`), `fail`, or `reset`. Unknown handle or op is `""`.
+    public static func multiviewRecoveryCall(handle: Int64, op: String, snapshotJSON: String)
+        -> String
+    {
+        let store = recoveryStore
+        store.lock.lock()
+        defer { store.lock.unlock() }
+        if op == "reset" {
+            store.boxes[handle] = MultiviewRecovery()
+            return ""
+        }
+        guard var recovery = store.boxes[handle] else { return "" }
+        defer { store.boxes[handle] = recovery }
+        switch op {
+        case "action": return actionName(recovery.action(feedWatchdogSnapshot(snapshotJSON)))
+        case "beginRejoin": return recovery.beginRejoin() ? "true" : "false"
+        case "fail":
+            recovery.fail()
+            return ""
+        case "failed": return recovery.failed ? "true" : "false"
+        default: return ""
+        }
+    }
+
     public static func feedWatchdogCreate() -> Int64 {
         let store = watchdogStore
         store.lock.lock()
@@ -1099,8 +1234,11 @@ public enum AndroidSessionWire {
     private static func feedWatchdogAction(
         snapshotJSON: String, watchdog: inout FeedWatchdog
     ) -> String {
-        let json = snapshotJSON
-        let snap = FeedWatchdog.Snapshot(
+        actionName(watchdog.tick(feedWatchdogSnapshot(snapshotJSON)))
+    }
+
+    private static func feedWatchdogSnapshot(_ json: String) -> FeedWatchdog.Snapshot {
+        FeedWatchdog.Snapshot(
             now: jsonNumber(json, key: "now", default: 0),
             lastDecodedFrameAge: jsonOptionalNumber(json, key: "lastDecodedFrameAge"),
             lastVideoPacketAge: jsonOptionalNumber(json, key: "lastVideoPacketAge"),
@@ -1129,7 +1267,10 @@ public enum AndroidSessionWire {
             referenceRecoveryNeeded: jsonBool(json, key: "referenceRecoveryNeeded", default: false),
             repairReady: jsonBool(json, key: "repairReady", default: true)
         )
-        switch watchdog.tick(snap) {
+    }
+
+    private static func actionName(_ action: FeedWatchdog.Action) -> String {
+        switch action {
         case .none: return "none"
         case .resendLiveViewEnable: return "resendLiveViewEnable"
         case .rebuildVTSession: return "rebuildVTSession"
@@ -1177,6 +1318,12 @@ public enum AndroidSessionWire {
 
     private static func jsonNumber(_ json: String, key: String, default def: Double) -> Double {
         jsonOptionalNumber(json, key: key) ?? def
+    }
+
+    /// String value from Kotlin `JSONObject`; parsing undoes `quote` escapes such as `\/`.
+    private static func jsonString(_ json: String, key: String) -> String? {
+        let object = try? JSONSerialization.jsonObject(with: Data(json.utf8))
+        return (object as? [String: Any])?[key] as? String
     }
 }
 

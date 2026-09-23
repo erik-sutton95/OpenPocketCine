@@ -198,7 +198,10 @@ class BleLink(context: Context) {
 
     @SuppressLint("MissingPermission")
     suspend fun connect(camera: FoundCamera) {
-        val device = foundDevices[camera.address] ?: error("camera disappeared")
+        // Multiview links and saved-cleanup resets connect by address without this link's scan.
+        val device = foundDevices[camera.address]
+            ?: runCatching { adapter?.getRemoteDevice(camera.address) }.getOrNull()
+            ?: error("camera disappeared")
         stopScan()
         suspendCancellableCoroutine { cont ->
             val attempt = operations.begin()

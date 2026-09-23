@@ -6,7 +6,6 @@ import android.os.SystemClock
 import android.util.Log
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.bridge.SwiftCore
-import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -157,7 +156,7 @@ internal class LiveSessionVideoHistory {
  * session/seq counters, 40 Hz ACK pump, and HEVC depacketizer handle.
  */
 class DatalinkDriver internal constructor(
-    private val joiner: CameraApJoiner,
+    private val joiner: CameraNetworkPath,
     private val port: Int,
     private val tcpPoke: Boolean,
     private val pairingToken: String,
@@ -165,6 +164,8 @@ class DatalinkDriver internal constructor(
     private val videoHistory: LiveSessionVideoHistory = LiveSessionVideoHistory(),
     private val cameraModel: CameraModel = CameraModel.default,
     private val debugVideoPacketAdmission: (() -> Boolean)? = null,
+    /** Camera SoftAP by default; Multiview passes the verified shared-Wi-Fi address. */
+    private val host: String = CAMERA_HOST,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
@@ -333,7 +334,7 @@ class DatalinkDriver internal constructor(
      * subscribe, 40 Hz ACK pump, then `0x09/0xa8`, then ingest 0x02.
      * Do not sit on a 2 s ACK settle — that drops the camera GOP.
      */
-    fun open(afterHandshake: (() -> Unit)? = null) {
+    fun open(identityOnly: Boolean = false, afterHandshake: (() -> Unit)? = null) {
         check(SwiftCore.isAvailable) { "Swift core is not loaded" }
         check(!closed.get()) { "datalink closed" }
         val lifetime = DatalinkOpenLoop(SystemClock::elapsedRealtime,
@@ -395,8 +396,12 @@ class DatalinkDriver internal constructor(
                 Log.i(TAG, "datalink: handshake acked session=$sessionId")
                 udpSeq = checkNotNull(handshakeAdmission.initialCommandSequence())
                 sendAck()
-                register()
-                subscribe()
+                // Multiview registers only after the LAN peer proves it is the
+                // camera paired over BLE ([completeRegistration]).
+                if (!identityOnly) {
+                    register()
+                    subscribe()
+                }
                 startAckPump()
                 // Mimo 20260828: HEVC 17 ms after DHCP, 0xa8 at +3 s. Arm ingest
                 // on handshake ack — do not wait subscribe settle or enable.
@@ -405,7 +410,7 @@ class DatalinkDriver internal constructor(
                 // ignored (iOS hops to MainActor after subscribe; Mimo comes
                 // from gallery). Always wait the settle — leftover 0x01 must
                 // not collapse it to 0 ms.
-                settleAfterSubscribe(SUBSCRIBE_SETTLE_MS)
+                if (!identityOnly) settleAfterSubscribe(SUBSCRIBE_SETTLE_MS)
                 // Stay on this IO thread. Posting 0x09/0xa8 to Main trips
                 // StrictMode (NetworkOnMainThread) and the camera never
                 // starts HEVC — pkts=0, WAITING FOR LIVE VIEW.
@@ -462,6 +467,13 @@ class DatalinkDriver internal constructor(
                 sendWindowAckOnTx()
             }
         }
+    }
+
+    /** iOS `completeRegistration`: only after station discovery verifies the BLE identity. */
+    fun completeRegistration() {
+        if (closed.get()) return
+        register()
+        subscribe()
     }
 
     fun keepalive() {
@@ -772,13 +784,13 @@ class DatalinkDriver internal constructor(
         joiner.bindSocket(sock)
         val bindHost = Inet4Address.getByName(WILDCARD_BIND_HOST)
         sock.bind(InetSocketAddress(bindHost, UDP_BIND_PORT))
-        runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(CAMERA_HOST), port)) }
+        runCatching { sock.connect(InetSocketAddress(InetAddress.getByName(host), port)) }
             .onFailure { Log.w(TAG, "datalink: UDP connect failed — sending unconnected", it) }
         val dhcp = joiner.cameraLocalIPv4() ?: "-"
         val label = if (sock.isConnected) "connected" else "unconnected"
         Log.i(
             TAG,
-            "datalink: UDP $label $CAMERA_HOST:$port dhcp=$dhcp " +
+            "datalink: UDP $label ${if (host == CAMERA_HOST) host else "station"}:$port dhcp=$dhcp " +
                 "local=${sock.localSocketAddress} rcvbuf=${sock.receiveBufferSize}",
         )
         socket = sock
@@ -870,7 +882,7 @@ class DatalinkDriver internal constructor(
             ensureActive = lifetime::ensureActive,
             connect = { sock ->
                 joiner.bindSocket(sock)
-                sock.connect(InetSocketAddress(CAMERA_HOST, 7001), 2_000)
+                sock.connect(InetSocketAddress(host, 7001), 2_000)
             },
             initialize = { sock ->
                 val frame = SwiftCore.command(SwiftCore.CMD_SET_PAIRING_PIN, extra = pairingToken)
@@ -1085,7 +1097,7 @@ class DatalinkDriver internal constructor(
             if (sock.isConnected) {
                 DatagramPacket(bytes, bytes.size)
             } else {
-                DatagramPacket(bytes, bytes.size, InetAddress.getByName(CAMERA_HOST), port)
+                DatagramPacket(bytes, bytes.size, InetAddress.getByName(host), port)
             }
         synchronized(sendLock) {
             val attempt = runCatching { sock.send(packet) }
@@ -1239,7 +1251,7 @@ class DatalinkDriver internal constructor(
 
     companion object {
         private const val TAG = "DatalinkDriver"
-        private const val CAMERA_HOST = "192.168.2.1"
+        internal const val CAMERA_HOST = "192.168.2.1"
         internal const val WILDCARD_BIND_HOST = "0.0.0.0"
 
         /** Handshake miss after rebind/path-lost. Pairing or recovery, not a crash. */

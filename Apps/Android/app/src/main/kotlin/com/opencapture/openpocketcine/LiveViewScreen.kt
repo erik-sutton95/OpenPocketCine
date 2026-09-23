@@ -1298,7 +1298,9 @@ internal fun LandscapeChrome(
     val showsLock = model.chromeSectionMounts(PocketDispSection.LOCK_BUTTON) || uiLocked
     val showsBatteries = model.chromeSectionMounts(PocketDispSection.BATTERIES)
     val showsSettings = !captureOpen && (model.chromeSectionMounts(PocketDispSection.RAIL_SETTINGS) || status.isRecording)
-    val showsMedia = !captureOpen && model.chromeSectionMounts(PocketDispSection.RAIL_MEDIA)
+    // Media browsing is not adapted to shared Wi-Fi; a borrowed Multiview tile hides it.
+    val showsMedia = !captureOpen && model.chromeSectionMounts(PocketDispSection.RAIL_MEDIA) &&
+        !model.session.isMultiviewBorrowed
     val showsRecord = model.chromeSectionMounts(PocketDispSection.RAIL_RECORD) || status.isRecording
     val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
         model.liveOperatorPanel == null && assist.configureTool == null
@@ -1346,7 +1348,10 @@ internal fun LandscapeChrome(
                 )
             }
         }
-        if (showsLock) {
+        val multiviewExit = model.multiviewExit
+        if (multiviewExit != null) {
+            Box(Modifier.liveModuleFrame(layout.lock)) { MultiviewReturnButton(onClick = multiviewExit) }
+        } else if (showsLock) {
             Box(Modifier.liveModuleFrame(layout.lock).chromeEditStroke(editing != null, true)) {
                 LockButton(uiLocked, onClick = onLock)
             }

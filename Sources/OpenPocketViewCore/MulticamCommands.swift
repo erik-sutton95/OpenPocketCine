@@ -103,3 +103,21 @@ public enum MulticamStationPolicy {
         reply == [0, 0] || (missingQuery && reply == [0])
     }
 }
+
+/// Which bodies Multiview lists and previews. Unknown preview commands are not guessed.
+public enum MulticamSupport {
+    public static func appears(_ model: CameraModel) -> Bool {
+        !model.isDrone && (model.name.lowercased().contains("osmo") || model.family != .other)
+    }
+
+    public static func hasPreview(_ model: CameraModel) -> Bool {
+        guard appears(model), model.usesCapturedLiveEnable else { return false }
+        let name = model.name.lowercased().replacingOccurrences(of: " ", with: "")
+        return model.isPocket3 || name.contains("pocket4") || model.family == .nano
+    }
+
+    /// Pocket 3 and Nano answer the role getter with `e0`; verified on hardware only.
+    public static func acceptsMissingRoleQuery(_ model: CameraModel, reply: [UInt8]) -> Bool {
+        (model.family == .nano || model.isPocket3) && reply == [0xe0]
+    }
+}

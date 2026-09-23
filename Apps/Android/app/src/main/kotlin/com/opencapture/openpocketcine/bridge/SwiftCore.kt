@@ -86,6 +86,13 @@ object SwiftCore {
     const val CMD_NANO_LIVE_VIEW_GATE = 60
     /** Untracked pid `0x38` GET. `waitKey` is 0 so it cannot steal other `0x8E` waiters. */
     const val CMD_GET_SELFIE_FLIP = 61
+    /** Multiview station Wi-Fi (`MulticamCommands`). Station extra `1` joins, `0` returns to AP. */
+    const val CMD_MULTICAM_WIFI_WORK_MODE = 62
+    const val CMD_MULTICAM_STATION_MODE = 63
+    const val CMD_MULTICAM_VIDEO_MODE = 64
+    /** Extra is `ssid + "\u001f" + password`; invalid input encodes nothing. */
+    const val CMD_MULTICAM_JOIN = 65
+    const val CMD_MULTICAM_WIFI_SCAN = 66
 
     /** DUML set/cmd key the camera ACKs for [kind]. */
     fun waitKey(kind: Int): Int =
@@ -242,6 +249,19 @@ object SwiftCore {
      * (`keepSocket`, `rebindUDP`, `fail`, `wait`, `resendEnable`, …).
      */
     external fun cameraSoftAPDecision(kind: String, requestJSON: String): String?
+
+    /**
+     * Multiview join / station / scan / discovery / model gates. Byte arrays are
+     * lowercase hex. See `AndroidSessionWire.multicamDecision` for kinds.
+     */
+    external fun multicamDecision(kind: String, requestJSON: String): String?
+
+    external fun multiviewRecoveryCreate(): Long
+
+    /** `op`: `action` (watchdog snapshot JSON), `beginRejoin`, `fail`, `failed`, `reset`. */
+    external fun multiviewRecoveryCall(handle: Long, op: String, snapshotJSON: String): String?
+
+    external fun multiviewRecoveryDestroy(handle: Long)
 
     /** Probe JSON for playback conform preview. See `AndroidSessionWire.conformPreviewJSON`. */
     external fun conformPreviewJSON(request: String): String?

@@ -144,7 +144,7 @@ internal suspend fun ensureEndpointCommandCurrent(currentGeneration: Long) {
  * BLE → pair → Wi-Fi creds → camera AP → datalink → live HEVC/AVC.
  * Mirrors iOS `CameraSession` recovery, feed watchdog, and operator commands.
  */
-class PocketCameraSession(context: Context) : CameraSessionSeam {
+class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : CameraSessionSeam {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val ble = BleLink(context)
@@ -156,7 +156,13 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     internal var debugCameraSetResult: ((Int, Boolean) -> Unit)? = null
     internal val pendingCameraSetCount: Int get() = inflight.size + inflightPending.size
     private val videoHistory = LiveSessionVideoHistory()
-    val decoder = HevcDecoder(cadence).also { dec ->
+    /**
+     * Multiview lends a tile's decoder and verified transport to Live View.
+     * The stage stays the sole repair owner (iOS `isMultiviewBorrowed`).
+     */
+    val isMultiviewBorrowed = borrowing != null
+    private var borrowedSurface: Surface? = null
+    val decoder = borrowing ?: HevcDecoder(cadence).also { dec ->
         dec.onParameterSetsChanged = {
             scope.launch {
                 val now = SystemClock.elapsedRealtime()
@@ -559,10 +565,54 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     fun attachSurface(surface: Surface?) {
+        if (isMultiviewBorrowed) {
+            // The returning tile may already own the decoder; only drop our own output.
+            if (surface == null) borrowedSurface?.let(decoder::detachSurface) else decoder.attachSurface(surface)
+            borrowedSurface = surface
+            return
+        }
         decoder.attachSurface(surface)
     }
 
+    /** Borrow the tile's transport and decoder; Multiview remains the sole repair owner. */
+    fun updateMultiview(camera: FoundCamera?, driver: DatalinkDriver?, status: CameraStatus) {
+        if (!isMultiviewBorrowed) return
+        connectedCamera = camera
+        datalink = driver
+        _status.value = status
+        hasVideoFormat = decoder.hasFormat
+        _phase.value = ConnectionPhase.LIVE
+    }
+
+    fun adoptMultiviewPose(pose: GimbalStickMapping) {
+        if (!isMultiviewBorrowed) return
+        gimbalStickMapping = pose
+        syncGimbalPose()
+    }
+
+    fun receiveMultiview(frame: DumlFrame) {
+        if (!isMultiviewBorrowed) return
+        ingestDatalinkFrame(frame)
+    }
+
+    fun releaseMultiview() {
+        if (!isMultiviewBorrowed) return
+        endGimbalStick()
+        cancelProgrammedMove()
+        cancelTracking()
+        faceAFArmJob?.cancel()
+        faceAFArmJob = null
+        inflight.clear()
+        inflightPending.clear()
+        failAllWaiters(kotlinx.coroutines.CancellationException("Multiview took the camera back"))
+        datalink = null
+    }
+
     override fun disconnect() {
+        if (isMultiviewBorrowed) {
+            releaseMultiview()
+            return
+        }
         ReliabilityReporting.setCameraSessionActive(false)
         cancelSessionRecovery(clearHoldsMonitor = true)
         reconnectTarget = null
@@ -1817,6 +1867,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
     }
 
     private fun startFeedRecovery(work: suspend () -> Unit) {
+        if (isMultiviewBorrowed) return
         cancelProgrammedMove()
         val inFlight = datalink?.isRebuilding == true || feedRecoveryJob != null
         if (!LiveViewEnablePolicy.shouldStartFeedRecovery(inFlight)) return
@@ -2120,6 +2171,7 @@ class PocketCameraSession(context: Context) : CameraSessionSeam {
         reason: String,
         trigger: SessionRecoveryTrigger = SessionRecoveryTrigger.BLE_DROPPED,
     ) {
+        if (isMultiviewBorrowed) return
         if (!SessionRecoveryPolicy.shouldBegin(trigger)) return
         if (_recoveryState.value is SessionRecoveryUi.PausedAfterDrops) return
         if (_recoveryState.value is SessionRecoveryUi.WaitingForOperator) return

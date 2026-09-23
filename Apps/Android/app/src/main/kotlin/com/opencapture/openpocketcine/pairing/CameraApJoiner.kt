@@ -13,6 +13,7 @@ import android.util.Log
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.LocalVPNFilter
 import com.opencapture.openpocketcine.session.CallbackOperationOwner
+import com.opencapture.openpocketcine.session.CameraNetworkPath
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.Socket
@@ -28,7 +29,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  * reassociation like OpenZCine — Android often replaces the Network object a
  * few seconds after join without the camera actually leaving.
  */
-class CameraApJoiner(context: Context) {
+class CameraApJoiner(context: Context) : CameraNetworkPath {
     private val appContext = context.applicationContext
     private val connectivity =
         appContext.getSystemService(ConnectivityManager::class.java)
@@ -71,19 +72,19 @@ class CameraApJoiner(context: Context) {
         }
     }
 
-    fun bindSocket(socket: DatagramSocket) {
+    override fun bindSocket(socket: DatagramSocket) {
         val network = synchronized(lock) { boundNetwork } ?: return
         runCatching { network.bindSocket(socket) }
             .onFailure { Log.w(TAG, "wifi: UDP bindSocket failed", it) }
     }
 
-    fun bindSocket(socket: Socket) {
+    override fun bindSocket(socket: Socket) {
         val network = synchronized(lock) { boundNetwork } ?: return
         runCatching { network.bindSocket(socket) }
             .onFailure { Log.w(TAG, "wifi: TCP bindSocket failed", it) }
     }
 
-    fun isProcessBound(): Boolean =
+    override fun isProcessBound(): Boolean =
         synchronized(lock) {
             isPathReady(
                 hasBoundNetwork = boundNetwork != null,
@@ -103,7 +104,7 @@ class CameraApJoiner(context: Context) {
      * Phone IPv4 on the camera AP (`192.168.2.2…254`). iOS
      * `WiFiJoiner.cameraLocalIPv4` / `CameraSoftAP.isAssociatedIPv4`.
      */
-    fun cameraLocalIPv4(): String? {
+    override fun cameraLocalIPv4(): String? {
         val network = synchronized(lock) { boundNetwork } ?: return null
         val props = connectivity.getLinkProperties(network) ?: return null
         return cameraLocalIPv4(
