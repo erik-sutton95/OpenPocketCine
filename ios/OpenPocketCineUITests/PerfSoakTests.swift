@@ -42,11 +42,19 @@ final class PerfSoakTests: XCTestCase {
             return false
         }
 
+        if env["OPV_PERF_DUMP"] == "1" {
+            // Diagnostic: print what is on screen, then stop.
+            print("PERF_SOAK_DUMP\n\(app.debugDescription)")
+            attach("perf-soak-dump", app)
+            return
+        }
         let record = app.buttons["monitor.system.record"]
         let settings = app.buttons["monitor.system.settings"]
         let liveDeadline = Date().addingTimeInterval(90)
         // Release has no stress auto-reconnect: tap the nearby saved camera's Connect.
-        let connect = app.buttons["Connect"].firstMatch
+        let connect = app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH 'Connect OsmoPocket4'")
+        ).firstMatch
         var lastConnectTap = Date.distantPast
         while !(record.exists || settings.exists) && Date() < liveDeadline {
             if connect.exists && connect.isHittable && Date().timeIntervalSince(lastConnectTap) > 20 {
