@@ -119,7 +119,11 @@ its backdrop throttled itself, which favours the baseline):
 | `pro` | 3.16 to 1.93 (-39%) | 6.06 to 1.63 (-73%) | 1.16 to 1.0 | Serious / Fair |
 | `clean` | 2.07 to 0.83 (-60%) | 2.39 to 0.92 (-61%) | 0.1 to 0.1 | n/a / Fair |
 | `heavy` | 3.13 to 1.89 (-40%) | 5.53 to 2.01 (-64%) | 1.02 to 1.0 | Serious / n/a |
-| `pro` + REC take | 3.05 to 1.91 (-37%) | 7.12 to 2.96 (-58%) | 2.0 to 1.99 | Serious / Fair |
+| `pro` + REC prompt (see below) | 3.05 to 1.91 (-37%) | 7.12 to 2.96 (-58%) | 2.0 to 1.99 | Serious / Fair |
+
+The `+rec` rows above did not record: REC asks "Start recording?" and the
+soak had not confirmed it, so those runs measured that prompt open over live
+view. The soak now confirms Start and Stop; real takes are below.
 
 Across both series the candidate never left Fair while the baseline reached
 Serious in most runs on the same charger and room. Picture cadence was not
@@ -134,6 +138,29 @@ following every feed frame. One of about twenty runs stalled at "Opening
 datalink" for 90 s right after the previous run's REC stop; the immediate
 retry connected normally. Treat it as a camera-side observation to watch, not
 a measured regression.
+
+Final build after the observation sweep (eight hot-path fixes: face boxes,
+gimbal pose, stick flags re-running the app root, scope panels, zoom pin,
+Multiview tiles, watcher client, tracking) and the Core Animation REC tally:
+
+| Profile | Instructions (G/s) | CPU impact | GPU impact | Thermal |
+| --- | --- | --- | --- | --- |
+| `pro` | 1.75 (baseline 3.16 to 3.73) | 1.0 (baseline 6.1 to 8.0) | 1.0 | Fair |
+| `clean` | 0.72 (baseline 2.01 to 2.08) | 0.16 (baseline 2.1 to 2.4) | 0.1 | Fair |
+| real REC take, `pro` | 1.86 (baseline 3.47) | 2.53 (baseline 8.62) | 2.15 (baseline 2.57) | Fair / Serious |
+
+### Recording loses direct-to-display (open)
+
+Metal System Trace shows the live view scanned out **direct to display** at
+25 surface swaps per second (the feed rate; ProMotion follows it) without a
+GPU composition pass. During a REC take the same screen drops to composited
+output at 52 to 60 swaps per second, which is why GPU impact doubles while
+recording. iOS reports "layer must have only clear content above" and "layer
+must be opaque". Removing the REC tally or all pulses did not restore direct
+scanout, so another REC-only change reaches the feed layer; finding it is the
+top remaining power item for long takes. Pulsing the tally through SwiftUI
+separately cost about a third of REC CPU (3.2 to 2.1 impact with it off); it
+now runs as a Core Animation opacity animation (2.53).
 
 Rendering a single source's look straight into the glass canvas (`37d440df`,
 no CGImage readback or re-upload) then brought `pro` to CPU impact 1.01 at

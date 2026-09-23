@@ -231,8 +231,9 @@ render overrun.
 
 Covered chrome follows `monitorPresentationVisibility`: opacity, hit-testing and
 accessibility track coverage; decorative pulses stop without remounting the host
-or native feed. Decorative pulses (REC tally, record lamp glow, scan dots) sample
-an eased phase on a 30 Hz timeline, never a `repeatForever` animation: a
+or native feed. Decorative pulses (record lamp glow, scan dots) sample an eased phase
+on a 30 Hz timeline and the full-screen REC tally pulses as a Core Animation
+opacity animation, never a `repeatForever` SwiftUI animation: a
 repeating animation holds the view graph and render server at 120 Hz on ProMotion
 for a whole take. Page and feed owners stay outside that modifier. While Settings or
 Media covers live, iOS drops scope-tap demand (`LiveAssistState.liveCovered`);

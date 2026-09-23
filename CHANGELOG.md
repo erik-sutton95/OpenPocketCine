@@ -1001,8 +1001,9 @@ separate iOS and Android lists.
 
 - **Power and heat pass** (iOS measured on device, Android build-verified):
   the floating-chrome glass backdrop blurs with Metal Performance Shaders and
-  draws as layers instead of per-panel CPU canvases; REC and scan pulses run on
-  a 30 Hz timeline instead of holding ProMotion at 120 Hz; Face AF idles at
+  draws as layers instead of per-panel CPU canvases; REC and scan pulses no longer
+  hold ProMotion at 120 Hz (the REC tally pulses in Core Animation); observed
+  state no longer re-renders SwiftUI on every frame or status packet; Face AF idles at
   10 Hz without a face; journal redaction, DUML scanning and NAL classification
   copy and scan less; paused playback stops redrawing on both platforms;
   Android scopes, GLES programs, status publication and 4K playback grading
