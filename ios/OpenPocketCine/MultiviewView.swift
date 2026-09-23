@@ -447,11 +447,11 @@ struct MultiviewView: View {
                                     if tile.recordingBusy {
                                         ProgressView().tint(.white)
                                     } else {
-                                        (tile.recordingObservation?.active == true
+                                        (tile.recordingActive == true
                                             ? OpcIcon.square : OpcIcon.play)
                                             .frame(width: 20, height: 20)
                                             .foregroundStyle(
-                                                tile.recordingObservation?.active == true
+                                                tile.recordingActive == true
                                                     ? .red : .white)
                                     }
                                 }.frame(width: 44, height: 44)
@@ -459,7 +459,7 @@ struct MultiviewView: View {
                             }
                             .buttonStyle(.zcTapTarget)
                             .accessibilityLabel(
-                                tile.recordingObservation?.active == true
+                                tile.recordingActive == true
                                     ? "Stop recording" : "Start recording"
                             )
                             .disabled(
@@ -506,7 +506,7 @@ struct MultiviewView: View {
                 .allowsHitTesting(false)
         }
         .overlay {
-            if tile.camera != nil, tile.recordingObservation?.active == true {
+            if tile.camera != nil, tile.recordingActive == true {
                 LiveRecordingTally(cornerRadius: LiveDesign.cornerRadius)
                     .accessibilityHidden(true)
             }
