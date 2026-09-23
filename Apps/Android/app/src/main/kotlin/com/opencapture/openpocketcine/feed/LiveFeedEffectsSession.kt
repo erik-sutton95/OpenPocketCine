@@ -354,8 +354,10 @@ internal class LiveFeedEffectsSession(
                     onDecoderSurface(decoderSurface)
                 }
             }
-            sourceTarget = SourceTarget.create(srcW, srcH)
-            gradedTarget = SourceTarget.create(srcW, srcH)
+            // Decode stays native; looks run on the FeedPresentPolicy working raster.
+            val work = FeedPresentPolicy.workingSize(srcW, srcH)
+            sourceTarget = SourceTarget.create(work.first, work.second)
+            gradedTarget = SourceTarget.create(work.first, work.second)
             tapTarget = SourceTarget.create(tapSize.first, tapSize.second)
             val tapBytes = tapSize.first * tapSize.second * 4
             tapPixels = ByteBuffer.allocateDirect(tapBytes).order(ByteOrder.nativeOrder())
@@ -396,10 +398,11 @@ internal class LiveFeedEffectsSession(
                     srcW = sourceWidth
                     srcH = sourceHeight
                     oesSurfaceTexture.setDefaultBufferSize(srcW, srcH)
+                    val work = FeedPresentPolicy.workingSize(srcW, srcH)
                     sourceTarget?.release()
-                    sourceTarget = SourceTarget.create(srcW, srcH)
+                    sourceTarget = SourceTarget.create(work.first, work.second)
                     gradedTarget?.release()
-                    gradedTarget = SourceTarget.create(srcW, srcH)
+                    gradedTarget = SourceTarget.create(work.first, work.second)
                     val nextTap = PocketScopeSampler.tapSize(srcW, srcH)
                     tapTarget?.release()
                     tapTarget = SourceTarget.create(nextTap.first, nextTap.second)
@@ -441,7 +444,8 @@ internal class LiveFeedEffectsSession(
                     val source = checkNotNull(sourceTarget)
                     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, source.framebufferId)
                     GLES20.glViewport(0, 0, source.width, source.height)
-                    copy.draw(oesTexture, texMatrix)
+                    val spread = FeedPresentPolicy.downsampleSpread(srcW, source.width)
+                    copy.draw(oesTexture, texMatrix, spread / source.width, spread / source.height)
                     val content =
                         if (letterboxSource && !stretchToRect) {
                             liveFeedContentRect(
