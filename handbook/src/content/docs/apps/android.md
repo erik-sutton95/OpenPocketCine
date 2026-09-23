@@ -310,9 +310,12 @@ only the 720p sidecar is on the phone. Storage **Full Resolution Caching**
 matches iOS. Pocket 3 `/v2` is storage 0; the newest catalog page lists
 after a take even if enter-playback ACKs E0. Share/save is the original
 camera file — LUT bake, Bake exposure, and Convert log are iOS only.
-Multiview and Sharing are unavailable on Android. The
-[Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) describes the experimental
-iPhone/iPad feature and its validation limits.
+Sharing is unavailable on Android. Experimental **Multiview** opens from the grid
+button in the **Your cameras** header and matches the iPhone flow: choose Local
+Wi-Fi or this phone's hotspot, add up to four cameras, and double-tap a live tile
+for full Live View. The
+[Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) describes setup,
+Android differences and validation limits.
 Platform differences, including Frame.io and MetalFX, are listed in
 [`docs/PARITY.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/PARITY.md).
 

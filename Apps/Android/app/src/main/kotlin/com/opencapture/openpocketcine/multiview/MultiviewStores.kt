@@ -118,7 +118,8 @@ object MultiviewStageStore {
             return true
         }
         if (stage.validated == null) return false
-        return prefs(context).edit().putString(KEY, encode(stage)).commit()
+        prefs(context).edit(commit = true) { putString(KEY, encode(stage)) }
+        return true
     }
 
     fun encode(stage: Stage): String =

@@ -1,10 +1,11 @@
 ---
 title: Multiview prototype
-description: Experimental local multicamera monitoring on iPhone and iPad.
+description: Experimental local multicamera monitoring on iPhone, iPad and Android.
 ---
 
 **Experimental development build. Multicamera validation is still in progress.**
-Multiview is available on iPhone and iPad; Android support remains deferred.
+Multiview is available on iPhone, iPad and Android phones. See
+[Android differences](#android-differences) for what changes on Android.
 
 From **Your cameras**, tap the grid icon at the top-right of the camera list.
 A centered two-step popup sets up the shared network, then Center stage opens
@@ -209,7 +210,7 @@ camera; remove that tile to use group recording with the other cameras.
 The local diagnostic journal records the selected fallback, failed step and join
 result without network credentials. Use **Operator Setup → System → Share
 Diagnostics** to share a redacted report; nothing is uploaded automatically.
-Android Multiview and physical testing on unprofiled models remain pending.
+Physical testing on unprofiled models remains pending.
 
 ## Session setup and saved preferences
 
@@ -257,3 +258,30 @@ Every recording camera has a red border around its tile, including the smaller
 Center stage tiles. Each border follows that camera's recording report, whether
 recording was started in Multiview or on the camera. It clears when the camera
 reports recording has stopped.
+
+## Android differences
+
+Android follows the same stage, setup popup, camera picker, tile controls,
+recording, recovery and cleanup behavior described above. The differences:
+
+- **Phone hotspot** replaces Personal Hotspot. Turn on this phone's Wi-Fi
+  hotspot in Settings with a WPA2 password (Samsung: **Mobile Hotspot**), then
+  enter its name and password. Android does not give apps the hotspot password.
+  Detection looks for the tethering interface (for example `swlan0`).
+- **Local Wi-Fi** uses the phone's current Wi-Fi when its name matches.
+  Otherwise Android shows its own join prompt for the selected network (WPA2).
+  Sockets are bound to that Wi-Fi so LAN traffic does not leave over mobile data.
+- Saved network passwords are sealed with a device-only Android Keystore key.
+- If a Pocket does not answer its Wi-Fi identity query right after pairing,
+  Android sends the Wi-Fi wake command once and asks again. This was observed
+  on a Pocket 4 Pro that had just returned to its own Wi-Fi.
+- Returning from a tile's Live View rebuilds each tile's decoder and requests a
+  keyframe, because every tile gets a new video surface.
+
+Physically checked on a Galaxy S25 (2026-09-23) with a Pocket 4 Pro and a Nano on
+the phone's hotspot: setup, provisioning, identity-verified discovery, preview,
+Auto LUT, record start/stop (tile and Stop all), tile promotion, Grid, Fill,
+DISP clean, Live View round trip, watchdog repair after a lost reference and
+closing with camera Wi-Fi return (a failed reset succeeded on the next close).
+Local Wi-Fi joining, landscape and tablet layouts, four cameras and a Pocket 3
+remain to be checked on Android.

@@ -328,9 +328,12 @@ private fun PairNewCameraFooter(enabled: Boolean, onClick: () -> Unit) {
 /** iOS `CamerasPage` grid header action: accented, titled when the header has room. */
 @Composable
 private fun MultiviewHeaderButton(enabled: Boolean, onClick: () -> Unit) {
-    val config = androidx.compose.ui.platform.LocalConfiguration.current
-    val tablet = minOf(config.screenWidthDp, config.screenHeightDp) >= 600
-    val fullLabels = tablet || config.screenWidthDp > config.screenHeightDp
+    val window = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val width = window.width / density
+    val height = window.height / density
+    val tablet = minOf(width, height) >= 600f
+    val fullLabels = tablet || width > height
     val shape = RoundedCornerShape(12.dp)
     Row(
         Modifier.height(if (tablet) 48.dp else 43.dp)

@@ -59,7 +59,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -195,8 +197,8 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             arrangement = session.layout.arrangement, selected = session.focusedIndex,
         )
         Box(
-            Modifier.fillMaxSize()
-                .semantics { if (overlayOpen) stateDescription = "Covered" },
+            // iOS hides the stage from VoiceOver while a popup covers it.
+            Modifier.fillMaxSize().then(if (overlayOpen) Modifier.clearAndSetSemantics { } else Modifier),
         ) {
             session.tiles.forEachIndexed { index, tile ->
                 val frame = layout.tiles[index]
@@ -1147,7 +1149,7 @@ private fun ModalCard(
             Modifier.widthIn(max = width).fillMaxWidth().heightIn(max = height)
                 .shadow(24.dp, TileShape)
                 .liveChromeGlass(TileShape)
-                .semantics { contentDescription = tag },
+                .testTag(tag),
             content = content,
         )
     }

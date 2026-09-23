@@ -59,7 +59,7 @@ class SharedWiFi(context: Context) : CameraNetworkPath {
     fun currentSsid(): String? {
         val raw = runCatching { wifi?.connectionInfo?.ssid }.getOrNull() ?: return null
         val name = raw.removeSurrounding("\"")
-        return name.takeIf { it.isNotEmpty() && it != WifiManager.UNKNOWN_SSID.removeSurrounding("<", ">") && it != "<unknown ssid>" }
+        return name.takeIf { it.isNotEmpty() && it != "<unknown ssid>" }
     }
 
     fun address(hotspot: Boolean = this.hotspot): String? = ipv4(hotspot)?.first

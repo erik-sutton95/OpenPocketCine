@@ -17,6 +17,14 @@ separate iOS and Android lists.
 
 ### Added
 
+- Experimental **Multiview on Android**, matching iOS: the grid button on
+  **Your cameras**, the two-step Local Wi-Fi / phone hotspot setup, up to four
+  identity-verified camera tiles with Auto LUT, per-tile and group recording,
+  Grid/Center stage, Fit/Fill, DISP clean, bounded preview recovery, saved
+  layout preferences, camera Wi-Fi return on close, and double-tap into full
+  Live View for a tile. Protocol and recovery policy come from the shared Swift
+  core. Checked on a Galaxy S25 with a Pocket 4 Pro and Nano; see the Multiview
+  handbook for Android differences and open checks.
 - Camera **EV** meter on iOS and Android: a slim white line with a sun marker,
   +3/−3 endpoints and the number above it. It sits inside the feed's left edge,
   slightly above center, and moves or shortens to clear the View Assist toolbar.

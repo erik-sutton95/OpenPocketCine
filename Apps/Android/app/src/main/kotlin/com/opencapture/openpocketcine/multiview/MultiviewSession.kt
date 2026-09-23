@@ -109,7 +109,8 @@ class MultiviewSession(
 ) {
     private val app = context.applicationContext
 
-    inner class Tile(val index: Int) {
+    /** Nested, not inner: Compose needs stability metadata on this type (an inner class has none). */
+    class Tile(val index: Int, private val app: Context) {
         val id: String = UUID.randomUUID().toString()
         val decoder = HevcDecoder()
         var liveModel by mutableStateOf<AppModel?>(null)
@@ -246,7 +247,7 @@ class MultiviewSession(
         }
     }
 
-    val tiles: List<Tile> = List(4) { Tile(it) }
+    val tiles: List<Tile> = List(4) { Tile(it, app) }
     private val scanner = BleLink(app)
     val found = mutableStateListOf<FoundCamera>()
     var busy by mutableStateOf(false)
@@ -325,8 +326,16 @@ class MultiviewSession(
             tile.poseViewFlip = tile.pose.poseViewFlip
             tile.updateLUT()
         }
-        // Every tile feed remounts with a fresh surface. Check each picture like a foreground return.
-        for (tile in tiles) if (tile.publishing) tile.checkForegroundDecoder = true
+        // Every tile feed remounts with a fresh surface. A fresh codec takes the IRAP this
+        // enable requests, rather than waiting for the watchdog to find a frozen picture.
+        for (tile in tiles) {
+            val driver = tile.driver ?: continue
+            val camera = tile.camera ?: continue
+            if (!tile.publishing) continue
+            tile.decoder.rebuildPresentation()
+            sendEnable(tile, driver, camera)
+            tile.checkForegroundDecoder = true
+        }
         foregroundAt = SystemClock.elapsedRealtime()
     }
 

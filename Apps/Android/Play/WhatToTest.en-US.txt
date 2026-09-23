@@ -1,18 +1,14 @@
 New and changed
 
-- View Assist EV toggles a slim white line and sun marker with +3/−3 ends. It reads the camera directly and moves clear of the toolbar in DISP 1.
-- Motion Control loops through saved zooms and offers Restart while paused. Zoom controls stay accessible; D-Log2 blocks zoom-changing programs.
-- Anamorphic Desqueeze (DE-SQ) offers lens presets and a custom 1.00–2.00× factor for live view, videos and photos.
+- Experimental Multiview is now on Android: tap the grid button on Your cameras and add up to four Pocket or Nano cameras.
+- Each tile shows the live picture, settings and timecode, with its own LUT and record button. Double-tap a tile for full Live View.
 
 Fixes
 
-- EV is separate from compensation settings. It shows a dash when camera metering is unavailable; DISP 2 and playback hide it.
-- Auto exposure shows the camera's applied shutter under EV. Missing or unsupported shutter readings leave only EV visible.
-- Pairing no longer times out on phones where the camera approval never appeared.
-- Stalled video recovers in about 2 seconds, and opening the camera's own gallery opens Media here.
+- In Multiview, a Pocket that ignores its Wi-Fi identity check right after pairing gets one wake and a retry.
 
 What to test
 
-- Toggle EV, rotate and expand/collapse the toolbar; check that it stays clear of the meter. Compare EV and Auto shutter with the camera as lighting changes, then switch to Manual and back.
-- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, change a duration, then close/reopen it and check saved settings remain.
-- Hold DE-SQ for presets, Custom and direction. Check framing with LUTs and guides in live view, videos and photos.
+- Set up Phone hotspot (Mobile Hotspot, WPA2) or Local Wi-Fi, then add two or more cameras. Approve pairing on a camera if asked.
+- Try Record all, each tile's record button, Grid/Center stage, FIT/FILL, DISP, LUTs and Live View and back.
+- Close Multiview and check each camera returns to its own Wi-Fi.

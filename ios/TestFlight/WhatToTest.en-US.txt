@@ -1,18 +1,6 @@
-New and changed
+New features
 
-- View Assist EV toggles a slim white line and sun marker with +3/−3 ends. It reads the camera directly and moves clear of the toolbar in DISP 1.
-- Motion Control loops through saved zooms and offers Restart while paused. Zoom controls stay accessible; D-Log2 blocks zoom-changing programs.
-- Anamorphic Desqueeze (DE-SQ) offers lens presets and a custom 1.00–2.00× factor for live view, videos and photos.
-
-Fixes
-
-- EV is separate from compensation settings. It shows a dash when camera metering is unavailable; DISP 2 and playback hide it.
-- Auto exposure shows the camera's applied shutter under EV. Missing or unsupported shutter readings leave only EV visible.
-- Live preview no longer drops after Control Center, alerts or returning from another app; stalled video recovers in about 2 seconds.
-- Opening the camera's own gallery opens Media here; leaving on either side returns to live.
-
-What to test
-
-- Toggle EV, rotate and expand/collapse the toolbar; check that it stays clear of the meter. Compare EV and Auto shutter with the camera as lighting changes, then switch to Manual and back.
-- Save A/B/C at different zooms; try both loop directions, Pause/Resume and Restart. Drag the editor, change a duration, then close/reopen it and check saved settings remain.
-- Hold DE-SQ for presets, Custom and direction. Check framing with LUTs and guides in live view, videos and photos.
+- Multiview preview recovery and camera support were reorganized internally; iPhone and iPad behavior should not change.
+- Please re-check: add two or more cameras in Multiview and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview.
+- Interrupt a preview (walk out of range or switch apps) and check the tile recovers or offers Reconnect.
+- Close Multiview and check each camera returns to its own Wi-Fi.
