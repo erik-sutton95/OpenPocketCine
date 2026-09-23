@@ -3257,10 +3257,13 @@ final class CameraSession {
         else { return }
         guard let box = TrackingBox.parseLivePush(payload) else { return }
         lastSubjectPushAt = Date()
-        subjectBox = smoothedSubject(toward: box)
-        isTracking = true
+        // Per ActiveTrack push: unchanged writes would still re-render the
+        // tracking layer, so publish only what moved.
+        let subject = smoothedSubject(toward: box)
+        if subjectBox != subject { subjectBox = subject }
+        if !isTracking { isTracking = true }
         trackingSawLock = true
-        searchBox = nil
+        if searchBox != nil { searchBox = nil }
         adoptCameraFocus(x: box.centerX, y: box.centerY, fromTrackingBox: true)
         if trackingPollTask == nil { beginTrackingPoll() }
     }
@@ -3488,16 +3491,17 @@ final class CameraSession {
         else { return }
         switch TrackingPoll.parse(payload) {
         case .locked(let cameraBox):
-            isTracking = true
+            if !isTracking { isTracking = true }
             trackingSawLock = true
             if let cameraBox {
-                subjectBox = smoothedSubject(toward: cameraBox)
+                let subject = smoothedSubject(toward: cameraBox)
+                if subjectBox != subject { subjectBox = subject }
             } else if subjectBox == nil, let search = searchBox {
                 subjectBox = TrackingBox.subject(from: search)
             }
-            searchBox = nil
+            if searchBox != nil { searchBox = nil }
         case .idle:
-            isTracking = false
+            if isTracking { isTracking = false }
             if trackingSawLock {
                 clearLocalTracking()
             }
