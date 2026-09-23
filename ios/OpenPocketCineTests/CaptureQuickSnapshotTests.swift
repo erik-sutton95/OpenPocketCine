@@ -108,6 +108,25 @@ final class CaptureQuickSnapshotTests: XCTestCase {
         }
     }
 
+    func testApertureTakesTheFocusSlotOnlyOnAction6() throws {
+        let action6 = CameraModel.resolve(modelId: 0x0018, name: "Osmo Action 6")
+        let pocket4 = CameraModel.resolve(modelId: 0x0021, name: "Osmo Pocket 4")
+        var status = CameraStatus()
+        status.expoMode = .manual
+        let fallback = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(.aperture, status: status, cameraModel: action6))
+        XCTAssertEqual(fallback.options, ["f/2.6", "f/2.8", "Starburst f/4"])
+        XCTAssertEqual(fallback.selection, "")
+        status.availableApertureStrategies = [.auto, .f28]
+        status.apertureStrategy = .f28
+        let pushed = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(.aperture, status: status, cameraModel: action6))
+        XCTAssertEqual(pushed.options, ["Auto", "f/2.8"])
+        XCTAssertEqual(pushed.selection, "f/2.8")
+        XCTAssertNil(CaptureQuickSnapshot.primary(.aperture, status: status, cameraModel: pocket4))
+        XCTAssertNil(CaptureQuickSnapshot.primary(.aperture, status: status))
+    }
+
     func testPreviewOfUnknownValueOnlySelectsAfterCrossingADetentAndCanReturnToUnknown() throws {
         var status = CameraStatus()
         status.expoMode = .auto

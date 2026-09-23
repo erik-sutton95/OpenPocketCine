@@ -847,7 +847,7 @@ class CaptureSheetTest {
         assertEquals("Exposure", LiveSheet.EXPO.subtitle)
         assertEquals("Shooting mode", LiveSheet.MODE.subtitle)
         assertEquals(
-            setOf("ISO", "SHUTTER", "WB", "FOCUS", "EXPO", "AUDIO", "COLOR", "FORMAT", "MODE"),
+            setOf("ISO", "SHUTTER", "WB", "FOCUS", "APERTURE", "EXPO", "AUDIO", "COLOR", "FORMAT", "MODE"),
             LiveSheet.entries.map { it.name }.toSet(),
         )
     }

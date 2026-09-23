@@ -79,7 +79,7 @@ public enum AndroidSessionWire {
         }
         let zoomStops = model.zoomStops.map { String($0) }.joined(separator: ",")
         return """
-            {"name":"\(escaped)","datalinkPort":\(model.datalinkPort),"tcpPoke":\(bool(model.tcpPoke)),"wpa3":\(bool(model.wpa3)),"verified":\(bool(model.verified)),"isDrone":\(bool(model.isDrone)),"pairingToken":"\(model.pairingToken)","family":"\(family)","liveViewEnableReceiver":\(Int(model.liveViewEnableReceiver)),"usesNanoLiveViewGate":\(bool(model.usesNanoLiveViewGate)),"supportsTapFocus":\(bool(model.supportsTapFocus)),"supportsFocusMode":\(bool(model.supportsFocusMode)),"usesCapturedLiveEnable":\(bool(model.usesCapturedLiveEnable)),"needsFirstPictureFormatPoke":\(bool(model.needsFirstPictureFormatPoke)),"zoomStops":[\(zoomStops)]}
+            {"name":"\(escaped)","datalinkPort":\(model.datalinkPort),"tcpPoke":\(bool(model.tcpPoke)),"wpa3":\(bool(model.wpa3)),"verified":\(bool(model.verified)),"isDrone":\(bool(model.isDrone)),"pairingToken":"\(model.pairingToken)","family":"\(family)","liveViewEnableReceiver":\(Int(model.liveViewEnableReceiver)),"usesNanoLiveViewGate":\(bool(model.usesNanoLiveViewGate)),"supportsTapFocus":\(bool(model.supportsTapFocus)),"supportsFocusMode":\(bool(model.supportsFocusMode)),"usesCapturedLiveEnable":\(bool(model.usesCapturedLiveEnable)),"needsFirstPictureFormatPoke":\(bool(model.needsFirstPictureFormatPoke)),"sendsLiveViewPrepare":\(bool(model.sendsLiveViewPrepare)),"supportsAperture":\(bool(model.supportsAperture)),"isAction6":\(bool(model.isAction6)),"zoomStops":[\(zoomStops)]}
             """
     }
 
@@ -417,6 +417,8 @@ public enum AndroidSessionWire {
         /// Extra is `ssid\u{1f}password`.
         case multicamJoin = 65
         case multicamWiFiScan = 66
+        /// Action 6 `0x02/0x8E` pid `0x0044`. Extra is the `ApertureStrategy` byte.
+        case setApertureStrategy = 67
     }
 
     public static func encodeCommand(kind: CommandKind, seq: UInt16, extra: String?) -> Duml.Frame?
@@ -659,6 +661,10 @@ public enum AndroidSessionWire {
                 ssid: String(parts[0]), password: String(parts[1]), seq: seq)
         case .multicamWiFiScan:
             return MulticamWiFiScan.request(seq: seq)
+        case .setApertureStrategy:
+            guard let raw = parseUInt8(extra), let strategy = ApertureStrategy(rawValue: raw)
+            else { return nil }
+            return Commands.paramSet(.apertureStrategy, value: [strategy.rawValue], seq: seq)
         }
     }
 

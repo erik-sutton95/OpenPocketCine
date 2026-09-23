@@ -1024,7 +1024,8 @@ final class CameraSession {
             dl = DatalinkDriver(
                 port: UInt16(camera.model.datalinkPort),
                 tcpPoke: camera.model.tcpPoke,
-                pairingToken: camera.model.pairingToken)
+                pairingToken: camera.model.pairingToken,
+                subscriptionKeys: Commands.subscriptionKeys(for: camera.model))
             wireDatalink(dl)
             datalink = dl
         }
@@ -2240,6 +2241,20 @@ final class CameraSession {
 
     var supportsTapFocus: Bool { connectedCamera?.model.supportsTapFocus ?? true }
     var supportsFocusMode: Bool { connectedCamera?.model.supportsFocusMode ?? true }
+    var supportsAperture: Bool { connectedCamera?.model.supportsAperture ?? false }
+
+    /// Action 6 `0x8E` pid `0x0044`. HUD holds the request; the subscribe push corrects it.
+    func setApertureStrategy(_ strategy: ApertureStrategy) {
+        guard supportsAperture else { return }
+        status.apertureStrategy = strategy
+        fireCamera(
+            strategy.setFrame, name: "Aperture \(strategy.label)",
+            onSettle: { [weak self] ok in
+                ControlLiveLog.line(
+                    "aperture: SET \(strategy.label) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))"
+                )
+            })
+    }
 
     func setFocusMode(_ mode: FocusMode) {
         guard supportsFocusMode else { return }
@@ -4022,7 +4037,8 @@ final class CameraSession {
         }
     }
 
-    /// Pocket + Nano capture (`0x09/0xa8`). Action live start is uncaptured — do not invent it.
+    /// Pocket, Nano and Action 6 capture (`0x09/0xa8`). Other Action / 360 live start is
+    /// uncaptured — do not invent it.
     func startCapturedLiveView(reason: String) -> Bool {
         if isBrowsingMedia, reason != "media browse ended" { return false }
         guard liveEnableGate.begin() else {
@@ -4043,7 +4059,7 @@ final class CameraSession {
         if nanoGate {
             datalink?.send(Commands.nanoLiveViewGate(start: true))
         }
-        if CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: nanoGate) {
+        if connectedCamera?.model.sendsLiveViewPrepare ?? true {
             datalink?.send(Commands.liveViewPrepare())
         }
         datalink?.startLiveView(
@@ -5467,7 +5483,8 @@ final class CameraSession {
             let dl = DatalinkDriver(
                 port: UInt16(camera.model.datalinkPort),
                 tcpPoke: camera.model.tcpPoke,
-                pairingToken: camera.model.pairingToken
+                pairingToken: camera.model.pairingToken,
+                subscriptionKeys: Commands.subscriptionKeys(for: camera.model)
             )
             wireDatalink(dl)
             datalink = dl

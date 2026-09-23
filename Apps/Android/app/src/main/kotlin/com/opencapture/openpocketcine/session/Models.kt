@@ -23,6 +23,10 @@ data class CameraModel(
     val needsFirstPictureFormatPoke: Boolean = false,
     /** Video-mode chip cycle. 4 Pro 1/3/6/12; Pocket 4/3 1/2/4; Nano 1. */
     val zoomStops: List<Double> = listOf(1.0, 2.0, 4.0),
+    /** Pocket `0x02/0x68 08` before `0x09/0xa8`. Not Nano (own gate), not Action 6. */
+    val sendsLiveViewPrepare: Boolean = !usesNanoLiveViewGate && !looksLikeAction6(name),
+    /** Action 6 aperture strategy (`0x8E` pid `0x44`) and iris readback. */
+    val supportsAperture: Boolean = looksLikeAction6(name),
 ) {
     val zoomMax: Double get() = activeZoomStops().lastOrNull() ?: 1.0
 
@@ -80,6 +84,10 @@ data class CameraModel(
         fun supportsSlowMoFormatTrailer(name: String): Boolean =
             looksLikePocket3(name) || looksLikePocket4Pro(name)
 
+        /** Osmo Action 6 (BLE `0x0018`). Handbook `devices/action-6/`. */
+        fun looksLikeAction6(name: String): Boolean =
+            name.lowercase().replace(" ", "").contains("action6")
+
         fun looksLikeNano(name: String, family: String = ""): Boolean {
             if (family == "nano") return true
             return name.lowercase().contains("nano")
@@ -101,6 +109,9 @@ data class CameraModel(
         fun colorModesFor(name: String, family: String): List<Int> {
             if (family == "nano") {
                 return listOf(CameraCommands.COLOR_NORMAL, CameraCommands.COLOR_NORMAL10, CameraCommands.COLOR_DLOG_M)
+            }
+            if (looksLikeAction6(name)) {
+                return listOf(CameraCommands.COLOR_NORMAL10, CameraCommands.COLOR_DLOG_M)
             }
             val n = name.lowercase().replace(" ", "")
             if (n.contains("pocket4p") || n.contains("4pro")) {
@@ -169,6 +180,11 @@ data class CameraModel(
                     needsFirstPictureFormatPoke =
                         obj.optBoolean("needsFirstPictureFormatPoke", looksLikePocket3(name)),
                     zoomStops = zoomStopsFromJson(obj, name, obj.optString("family", "pocket")),
+                    sendsLiveViewPrepare = obj.optBoolean(
+                        "sendsLiveViewPrepare",
+                        !obj.optBoolean("usesNanoLiveViewGate", false) && !looksLikeAction6(name),
+                    ),
+                    supportsAperture = obj.optBoolean("supportsAperture", looksLikeAction6(name)),
                 )
             }.getOrElse { default }
         }
@@ -304,6 +320,12 @@ data class CameraStatus(
     val audioMetersRight: Double = -60.0,
     val audioPeakLeft: Double = -60.0,
     val audioPeakRight: Double = -60.0,
+    /** Action 6 iris, hundredths of an f-number (`cam_expo_param` `@13`). `-1` unknown. */
+    val irisHundredths: Int = -1,
+    /** Action 6 `cam_aperture_ctrl_strategy` ([ApertureStrategy]). `-1` unknown. */
+    val apertureStrategy: Int = -1,
+    /** Action 6 `camcap_aperture_ctrl_strategy`. Empty until pushed. */
+    val availableApertureStrategies: List<Int> = emptyList(),
 ) {
     val shootingModeLabel: String
         get() =
@@ -522,6 +544,14 @@ data class CameraStatus(
             audioMetersRight = prev.audioMetersRight,
             audioPeakLeft = prev.audioPeakLeft,
             audioPeakRight = prev.audioPeakRight,
+        )
+
+    /** The JNI status JSON does not carry the Action 6 aperture fields; keep them across it. */
+    fun carryingAperture(prev: CameraStatus): CameraStatus =
+        copy(
+            irisHundredths = prev.irisHundredths,
+            apertureStrategy = prev.apertureStrategy,
+            availableApertureStrategies = prev.availableApertureStrategies,
         )
 
     fun toJson(): String =

@@ -20,6 +20,13 @@ public enum Commands {
     ]
     public static let firstSubId: UInt32 = 0x69DF
 
+    /// Base keys plus body-only ones, appended so base subIds never move.
+    /// Action 6 adds the aperture strategy state + capability (survey 2026-09-21).
+    public static func subscriptionKeys(for model: CameraModel?) -> [String] {
+        guard model?.supportsAperture == true else { return subscriptionKeys }
+        return subscriptionKeys + [ApertureStrategy.stateKey, ApertureStrategy.capabilityKey]
+    }
+
     static func rx(type: UInt8, id: UInt8) -> UInt8 { (id << 5) | type }
 
     // ---- BLE session sequence (written to fff5, paced) ----------------------------------------
@@ -171,9 +178,18 @@ public enum Commands {
     }
 
     /// `0x02/0xBF` star. `01 01 [handle:u32] [counter:u32] 00 [on:u8] 00 00 00`.
+    /// Action 6 moves On/Off to byte 1 and holds byte 11 at `01`; its On and Off
+    /// takes both carried `01 00 00 00 00 01 00 00 00` after the handle, so that
+    /// tail is sent verbatim (handbook `devices/action-6/coverage`).
     public static func setMediaFavorite(
-        handle: UInt32, on: Bool, counter: UInt32, seq: UInt16 = 0
+        handle: UInt32, on: Bool, counter: UInt32, model: CameraModel? = nil, seq: UInt16 = 0
     ) -> Duml.Frame {
+        if model?.isAction6 == true {
+            let payload: [UInt8] =
+                [0x01, on ? 0x01 : 0x00] + le32(handle)
+                + [0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]
+            return camera(0xBF, payload, seq: seq)
+        }
         var payload: [UInt8] = [0x01, 0x01]
         payload += le32(handle)
         payload += le32(counter)
@@ -183,8 +199,9 @@ public enum Commands {
 
     /// Pocket live-view enable target (system type 0x08, id 0).
     public static let liveViewEnableReceiverPocket: UInt8 = rx(type: 0x08, id: 0)
-    /// Nano live-view enable target. Mimo `mimo-nano-live-20260818`: `rcv=0x41`
-    /// (type 1, id 2). Pocket `0x08` ACKs `E0` on Nano and no pktType-0x02 starts.
+    /// Nano and Action 6 live-view enable target. Mimo `mimo-nano-live-20260818`:
+    /// `rcv=0x41` (type 1, id 2). Pocket `0x08` ACKs `E0` on Nano and no pktType-0x02
+    /// starts. Action 6 survey 2026-09-21: all nine Mimo enables use `0x41`.
     public static let liveViewEnableReceiverNano: UInt8 = 0x41
 
     /// `0x09/0xa8` **start live view** / IDR. Bytes from Mimo. Pocket `rcv=0x08`;
