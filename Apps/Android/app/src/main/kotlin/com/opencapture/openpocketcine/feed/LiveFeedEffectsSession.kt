@@ -383,8 +383,10 @@ internal class LiveFeedEffectsSession(
                 if (!running.get()) break
                 val nextPlan = plan.get()
                 if (nextPlan !== activePlan || effects == null) {
-                    effects?.release()
-                    effects = FeedEffectsGlProgram(appContext, nextPlan, flipInputVertically = false)
+                    if (effects?.adopt(nextPlan) != true) {
+                        effects?.release()
+                        effects = FeedEffectsGlProgram(appContext, nextPlan, flipInputVertically = false)
+                    }
                     activePlan = nextPlan
                     planDirty = false
                     needsPresent = true
