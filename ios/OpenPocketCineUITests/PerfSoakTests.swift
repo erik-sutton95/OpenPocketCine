@@ -109,7 +109,14 @@ final class PerfSoakTests: XCTestCase {
         print("PERF_SOAK_HOLD_BEGIN profile=\(name) on=\(applied.joined(separator: ",")) rec=\(recordTake) hold=\(Int(hold))")
         if detach { return }
         // ponytail: plain sleep, no queries; the host trace is the measurement.
-        Thread.sleep(forTimeInterval: hold)
+        if recordTake {
+            // One mid-take screenshot proves the REC chrome renders.
+            Thread.sleep(forTimeInterval: hold / 2)
+            attach("perf-soak-\(name)-recording", app)
+            Thread.sleep(forTimeInterval: hold / 2)
+        } else {
+            Thread.sleep(forTimeInterval: hold)
+        }
         print("PERF_SOAK_HOLD_END profile=\(name)")
         if recordTake {
             record.tap()

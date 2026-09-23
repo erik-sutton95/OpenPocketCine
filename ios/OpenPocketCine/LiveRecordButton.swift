@@ -143,6 +143,10 @@ struct LiveRecordingTally: View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .strokeBorder(LiveDesign.rec, lineWidth: Self.lineWidth)
             .shadow(color: LiveDesign.rec.opacity(0.55), radius: 14)
+            // Flatten the full-screen stroke and glow once; the pulse then only
+            // changes the flattened layer's opacity instead of re-rendering a
+            // screen-sized shadow each step. Extended range keeps EDR chrome.
+            .drawingGroup(colorMode: LiveHDRDisplay.isEnabled ? .extendedLinear : .nonLinear)
             .monitorPulse(period: MonitorMotion.recPulseDuration)
             .allowsHitTesting(false)
     }
