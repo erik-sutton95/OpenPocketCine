@@ -1108,28 +1108,29 @@ fun MediaPlayerScreen(
                 )
             }
 
-            }
-            }
-        }
-
-        if (confirmDelete) {
-            MediaConfirmPopup(
-                title = "Delete this clip from the camera?",
-                confirmTitle = "Delete",
-                onDismiss = { confirmDelete = false },
-                onConfirm = {
-                    confirmDelete = false
-                    scope.launch {
-                        val dying = active
-                        controller.delete(dying)
-                        when {
-                            canNext -> active = playlist[index + 1]
-                            canPrev -> active = playlist[index - 1]
-                            else -> onClose()
+            // Inside the overlay window: in the host window it sits under the gesture well.
+            if (confirmDelete) {
+                MediaConfirmPopup(
+                    title = "Delete this clip from the camera?",
+                    confirmTitle = "Delete",
+                    onDismiss = { confirmDelete = false },
+                    onConfirm = {
+                        confirmDelete = false
+                        scope.launch {
+                            val dying = active
+                            controller.delete(dying)
+                            when {
+                                canNext -> active = playlist[index + 1]
+                                canPrev -> active = playlist[index - 1]
+                                else -> onClose()
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
+            }
+
+            }
+            }
         }
     }
     }

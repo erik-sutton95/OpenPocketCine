@@ -332,6 +332,9 @@ separate iOS and Android lists.
 
 ### Fixed
 
+- Android clip playback: Delete and Cancel in the "Delete this clip from the
+  camera?" dialog now respond instead of playing or pausing the clip behind it.
+
 - Opening the gallery on the camera now opens Media in the app, like DJI Mimo,
   instead of being kicked back to live within a second. Leaving on either side
   returns the camera to live view.

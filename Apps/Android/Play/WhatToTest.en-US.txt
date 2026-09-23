@@ -5,10 +5,11 @@ New and changed
 
 Fixes
 
+- Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
 - In Multiview, a Pocket that ignores its Wi-Fi identity check right after pairing gets one wake and a retry.
 
 What to test
 
 - Set up Phone hotspot (Mobile Hotspot, WPA2) or Local Wi-Fi, then add two or more cameras. Approve pairing on a camera if asked.
-- Try Record all, each tile's record button, Grid/Center stage, FIT/FILL, DISP, LUTs and Live View and back.
-- Close Multiview and check each camera returns to its own Wi-Fi.
+- Try Record all, tile record buttons, Grid/Center stage, FIT/FILL, DISP, LUTs and Live View, then close Multiview and check each camera is back on its own Wi-Fi.
+- In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
