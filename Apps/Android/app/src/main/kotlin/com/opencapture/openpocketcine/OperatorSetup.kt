@@ -426,7 +426,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
     val phase by model.session.phaseFlow.collectAsState()
     val failure by model.session.failure.collectAsState()
     val recovery by model.session.recoveryState.collectAsState()
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     var tick by remember { mutableIntStateOf(0) }
     var lastFrames by remember { mutableIntStateOf(0) }
     var lastTickAt by remember { mutableLongStateOf(0L) }
@@ -1263,7 +1263,7 @@ private fun ScopeGuideRows(guides: ScopeGuides, onChange: (ScopeGuides) -> Unit)
 private fun ControlsRows(model: AppModel) {
     val view = LocalView.current
     val context = LocalContext.current
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     var gimbalGamepadStick by remember {
         mutableStateOf(OperatorPrefs.gimbalGamepadStick(context))
     }
@@ -1505,7 +1505,7 @@ private val dispToggleSpecs =
 @Composable
 private fun DispToggles(model: AppModel, mode: PocketDispMode, view: View) {
     val chrome = model.chrome(mode)
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     val capabilities = model.monitorCapabilities(status)
     dispToggleSpecs.filter {
         when (it.section) {

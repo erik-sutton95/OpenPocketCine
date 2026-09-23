@@ -136,10 +136,26 @@ an eye landmark (iOS `FaceStructurePolicy`); ML Kit tracking IDs stay
 off so `FaceTrackHold` owns persistence.
 WAVE / PARADE accumulate into a 250×153 bitmap off the UI thread; VECTOR uses
 the 128-bin raster.
+An inspector-only scope admits the tap and scope work at 5 Hz in both the GLES
+and Vulkan schedulers (`ScopeTapPolicy.tapIntervalNs` / `scopeWorkDue`); a
+visible backdrop may keep the faster raw tap, but not faster scope work.
+GLES keeps compiled programs and uploaded cubes when a plan change leaves the
+cubes and peaking set alone (`FeedEffectsGlProgram.adopt`), and skips the grade
+pass when no look is on.
+
+### HUD status
+
+Compose collects `PocketCameraSession.chromeStatus`: DUML telemetry reaches it
+at most every 200 ms (`LiveChromeThrottle`, iOS parity). Operator fields and
+control writes publish immediately. Control code reads `status`.
 
 ### Media decode
 
 Playback grades the 720p LRF/XRF proxy in GLES (ExoPlayer → OES → TextureView).
+An original without a proxy decodes natively but grades on the
+`FeedPresentPolicy.workingSize` raster (1440 wide, aspect kept, four-tap
+downsample). A paused or held frame is not re-presented; a new picture, look,
+size or upscaler change presents at once.
 Share / Save to Photos caches the original (`MediaHTTP.deliveryPath`).
 Playback cache streams LRF/XRF (and originals) to disk (`downloadFile`).
 `fetchBytes` is thumbs/SCR only and is capped at 8 MiB — a missing

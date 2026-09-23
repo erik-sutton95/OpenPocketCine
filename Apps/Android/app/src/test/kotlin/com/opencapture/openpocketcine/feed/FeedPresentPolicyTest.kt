@@ -13,6 +13,18 @@ class FeedPresentPolicyTest {
     }
 
     @Test
+    fun workingRasterCapsOriginalsAndKeepsAspect() {
+        assertEquals(1280 to 720, FeedPresentPolicy.workingSize(1280, 720))
+        assertEquals(1440 to 810, FeedPresentPolicy.workingSize(3840, 2160))
+        assertEquals(1440 to 810, FeedPresentPolicy.workingSize(2688, 1512))
+        assertEquals(1440 to 2560, FeedPresentPolicy.workingSize(2160, 3840))
+        assertEquals(1440 to 1080, FeedPresentPolicy.workingSize(1440, 1080))
+        assertEquals(0.25f, FeedPresentPolicy.downsampleSpread(3840, 1440))
+        assertEquals(0f, FeedPresentPolicy.downsampleSpread(1920, 1440))
+        assertEquals(0f, FeedPresentPolicy.downsampleSpread(1280, 1280))
+    }
+
+    @Test
     fun shouldRenderRequiresVisibleEnabledDrawable() {
         assertTrue(FeedPresentPolicy.shouldRender(true, true, false, true))
         assertFalse(FeedPresentPolicy.shouldRender(false, true, false, true))

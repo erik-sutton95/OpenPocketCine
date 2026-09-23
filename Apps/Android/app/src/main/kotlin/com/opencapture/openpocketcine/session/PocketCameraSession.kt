@@ -51,6 +51,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.TimeoutCancellationException
@@ -200,7 +201,13 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     val found: StateFlow<List<FoundCamera>> = ble.found
     val radioOn: StateFlow<Boolean> get() = ble.radioOn
     private val _status = MutableStateFlow(CameraStatus())
+    /** Camera truth. Control code reads this; Compose collects [chromeStatus]. */
     val status: StateFlow<CameraStatus> = _status.asStateFlow()
+    private val _chromeStatus = MutableStateFlow(CameraStatus())
+    /** [status] at the 5 Hz HUD budget ([LiveChromeThrottle]); operator fields bypass. */
+    val chromeStatus: StateFlow<CameraStatus> = _chromeStatus.asStateFlow()
+    /** The last DUML telemetry write. Only it may wait for the HUD interval. */
+    private var telemetryStatus: CameraStatus? = null
 
     /**
      * The camera body shows its own gallery during an established live session.
@@ -457,6 +464,17 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
 
     init {
+        scope.launch {
+            var publishedAt = 0L
+            _status.collectLatest { next ->
+                val shown = _chromeStatus.value
+                if (next == shown) return@collectLatest
+                delay(LiveChromeThrottle.holdMs(shown, next, next === telemetryStatus, publishedAt,
+                    SystemClock.elapsedRealtime()))
+                _chromeStatus.value = next
+                publishedAt = SystemClock.elapsedRealtime()
+            }
+        }
         ble.onLinkLost = {
             if (_phase.value == ConnectionPhase.LIVE || holdsMonitor) {
                 beginSessionRecovery("BLE dropped", SessionRecoveryTrigger.BLE_DROPPED)
@@ -2455,6 +2473,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             if (next.inPlayback != prev.inPlayback) {
                 Log.i(TAG, "live: inPlayback=${if (next.inPlayback) 1 else 0}")
             }
+            telemetryStatus = next
             _status.value = next
             publishFaceDetectWanted()
         }

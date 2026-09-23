@@ -111,6 +111,19 @@ internal data class ScopeTapPolicy(
         return if (inspectorOnly) maxOf(existing, (200_000_000L * thermalMultiplier.coerceAtLeast(1.0)).toLong()) else existing
     }
 
+    /**
+     * Raw tap cadence for both schedulers. An inspector-only scope never drives it past
+     * 5 Hz; visible backdrop chrome may still ask for the faster 213×120 tap.
+     */
+    fun tapIntervalNs(thermalMultiplier: Double, backdropDemand: Boolean): Long =
+        PocketScopeSampler.chromeSampleIntervalNs(
+            if (inspectorOnly) 0 else activeScopeCount, thermalMultiplier, backdropDemand)
+
+    /** Scope accumulation admission, independent of a faster backdrop-driven raw tap. */
+    fun scopeWorkDue(nowNs: Long, lastScopeWorkNs: Long, thermalMultiplier: Double): Boolean =
+        activeScopeCount > 0 &&
+            (lastScopeWorkNs == 0L || nowNs - lastScopeWorkNs >= minIntervalNs(thermalMultiplier))
+
     companion object {
         val IDLE = ScopeTapPolicy()
     }

@@ -38,8 +38,10 @@ internal class InspectorPreviewRenderer : AutoCloseable {
             pixels = ByteBuffer.allocateDirect(width * height * 4)
         }
         if (lookKey != plan.playbackLookKey) {
-            effects?.release()
-            effects = FeedEffectsGlProgram(app, plan)
+            if (effects?.adopt(plan) != true) {
+                effects?.release()
+                effects = FeedEffectsGlProgram(app, plan)
+            }
             lookKey = plan.playbackLookKey
         }
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, input)

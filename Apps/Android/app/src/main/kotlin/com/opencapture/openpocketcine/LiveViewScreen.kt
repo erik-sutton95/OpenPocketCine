@@ -123,7 +123,7 @@ import kotlinx.coroutines.isActive
 
 @Composable
 fun LiveViewScreen(model: AppModel) {
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     val cameraGalleryOpen by model.session.cameraGalleryOpen.collectAsState()
     var followedGallery by remember { mutableStateOf(cameraGalleryOpen) }
     LaunchedEffect(cameraGalleryOpen) {
