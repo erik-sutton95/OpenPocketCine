@@ -245,6 +245,7 @@ private struct MonitorVideoBackdrop: ViewModifier {
     @State private var snapshot: MonitorBackdropSnapshot?
     @State private var renderedKey: WorkKey?
     @State private var owner: UUID?
+    @State private var source = MonitorBackdropSource()
 
     private static let idlePollThreshold = 15
     private static let idleIntervalMultiplier: UInt64 = 6
@@ -265,7 +266,8 @@ private struct MonitorVideoBackdrop: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .monitorBackdrop(renderedKey == key && key.active ? snapshot : nil, in: globalFrame)
+            .monitorBackdrop(source: source)
+            .onChange(of: key, initial: true) { publish() }
             .onGeometryChange(for: CGRect.self) {
                 $0.frame(in: .global)
             } action: {
@@ -280,6 +282,7 @@ private struct MonitorVideoBackdrop: ViewModifier {
                 applicationActive = false
                 if let owner { renderer.deactivate(owner) }
                 snapshot = nil
+                publish()
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
@@ -289,7 +292,15 @@ private struct MonitorVideoBackdrop: ViewModifier {
             .onDisappear {
                 if let owner { renderer.deactivate(owner) }
                 snapshot = nil
+                publish()
             }
+    }
+
+    /// The shared source shows a product only for the key it was rendered for.
+    private func publish() {
+        let visible = renderedKey == key && key.active ? snapshot : nil
+        if source.snapshot != nil || visible != nil { source.snapshot = visible }
+        if source.frame != globalFrame { source.frame = globalFrame }
     }
 
     @MainActor
@@ -325,6 +336,7 @@ private struct MonitorVideoBackdrop: ViewModifier {
                     if result.snapshot != nil || snapshot != nil { idlePolls = 0 }
                     snapshot = result.snapshot
                     renderedKey = expected
+                    publish()
                 }
             }
             let spent = DispatchTime.now().uptimeNanoseconds &- started

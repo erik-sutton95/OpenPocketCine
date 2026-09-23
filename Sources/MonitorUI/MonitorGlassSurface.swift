@@ -57,7 +57,13 @@
         let density: MonitorGlassDensity
         let reduceTransparencyOverride: Bool?
         @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-        @Environment(\.monitorBackdrop) private var backdrop
+        @Environment(\.monitorBackdrop) private var injected
+        @Environment(\.monitorBackdropSource) private var source
+
+        private var backdrop: MonitorBackdropEnvironment {
+            guard let source else { return injected }
+            return MonitorBackdropEnvironment(snapshot: source.snapshot, frame: source.frame)
+        }
         @Environment(\.monitorPresentationIsVisible) private var isVisible
 
         var body: some View {
