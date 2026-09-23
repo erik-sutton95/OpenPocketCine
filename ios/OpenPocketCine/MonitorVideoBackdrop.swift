@@ -2,6 +2,7 @@ import CoreImage
 import CoreVideo
 import MonitorPresentation
 import MonitorUI
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
@@ -43,6 +44,28 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         // Retain the objects, not just their addresses: a released native
         // buffer's identity may be recycled for a different frame.
         let sources: [MonitorVideoBackdropSource]
+        /// State FALSE / ZEBRA read outside `LiveImageEffects`.
+        let externalLook: [Int]
+    }
+
+    /// FALSE and ZEBRA thresholds follow the exposure ceiling (ISO and the
+    /// live-tap ratchet), and FALSE paints only once its maps warm. Key that
+    /// state so a held source with those looks settles instead of re-rendering
+    /// at the backdrop cap. Read before rendering: a change during the render
+    /// makes the next comparison miss once, never keeps a stale look.
+    static func externalLookState(_ sources: [MonitorVideoBackdropSource]) -> [Int] {
+        sources.flatMap { source -> [Int] in
+            let effects = source.effects
+            guard effects.falseColor || effects.zebra else { return [] }
+            let maps =
+                effects.falseColor
+                ? PocketFalseColorMap.overlayPairData(
+                    scale: effects.falseColorScale, mode: effects.colorMode)?.clipByte ?? -1
+                : 0
+            return [
+                ScopeExposureCeiling.clipByte(transfer: MonitorTransfer(effects.colorMode)), maps,
+            ]
+        }
     }
 
     private struct CachedResult {
@@ -108,7 +131,8 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         else { return nil }
         let seconds = max(MonitorBackdropPolicy.minimumInterval, minimumInterval())
         nextAdmission =
-            now &+ max(
+            now
+            &+ max(
                 MonitorBackdropPolicy.minimumIntervalNanoseconds,
                 UInt64((seconds * 1_000_000_000).rounded(.up)))
         return ticket
@@ -150,21 +174,19 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         guard !Task.isCancelled, let ticket = reserve(owner) else { return nil }
         defer { complete(ticket) }
         let sources = prepare()
-        let input = Input(canvasSize: canvasSize, surroundRGB: surroundRGB, sources: sources)
         let result: Result = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 queue.async { [self] in
                     var isUnchanged = false
                     let snapshot: MonitorBackdropSnapshot? = autoreleasepool {
                         guard isCurrent(ticket) else { return nil }
+                        let input = Input(
+                            canvasSize: canvasSize, surroundRGB: surroundRGB, sources: sources,
+                            externalLook: Self.externalLookState(sources))
                         var canCache =
                             !sources.isEmpty
                             && sources.allSatisfy {
-                                // False-color maps warm asynchronously; both
-                                // FALSE and ZEBRA also read external exposure
-                                // state absent from LiveImageEffects.
-                                !$0.effects.falseColor && !$0.effects.zebra
-                                    && !FeedWorkingRaster.isReusableOutput($0.buffer)
+                                !FeedWorkingRaster.isReusableOutput($0.buffer)
                             }
                         if let previous = cachedSnapshot(for: input, ticket: ticket), canCache {
                             isUnchanged = true

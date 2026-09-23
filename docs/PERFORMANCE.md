@@ -267,9 +267,10 @@ paused or held source. The key includes ordered retained buffers, effects,
 canvas size, placements, clips and surround color. Identical inputs skip native
 look/blur rendering and snapshot publication while preserving admission timing.
 Owner changes, failure and changed inputs invalidate the entry. Mutable working
-raster buffers and false-color/zebra looks bypass this cache: the former can
-change pixels in place, and the latter depend on additional asynchronously
-updated color/exposure state. This optimization does not change the producer,
+raster buffers bypass this cache because they can change pixels in place.
+False-color/zebra looks also read the exposure ceiling and asynchronously warmed
+false-color maps, so the key includes the ceiling byte and the ready map's clip;
+a held source with those looks settles instead of re-rendering at the cap. This optimization does not change the producer,
 decoder, source cadence or the existing GPU rendering path.
 
 Decoder prefers hardware (`c2.qti` / Exynos, VideoToolbox) over a software
