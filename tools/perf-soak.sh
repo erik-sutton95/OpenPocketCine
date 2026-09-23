@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Physical iPhone + saved Pocket 4 Pro power/CPU/GPU soak.
+#
+#   DEVICE=<udid> tools/perf-soak.sh [profile ...]
+#
+# Profiles (PerfSoakTests): clean, lut, pro (default), heavy.
+# Env: HOLD (s, default 90), TRACE (s, default HOLD-10), CONFIG (Release),
+#      TEMPLATE ("Power Profiler"), EXTRA ("Time Profiler" instrument added),
+#      COOL (s between profiles, default 60), OUT (.local/perf/<stamp>).
+# Traces and logs stay under ignored .local/. Never records on the camera.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DEVICE="${DEVICE:?DEVICE=<udid> required (xcrun xctrace list devices)}"
+HOLD="${HOLD:-90}"
+TRACE="${TRACE:-$((HOLD - 10))}"
+CONFIG="${CONFIG:-Release}"
+TEMPLATE="${TEMPLATE:-Power Profiler}"
+EXTRA="${EXTRA:-Time Profiler}"
+COOL="${COOL:-60}"
+OUT="${OUT:-$ROOT/.local/perf/$(date +%Y%m%d-%H%M%S)}"
+PROFILES=("$@")
+[[ ${#PROFILES[@]} -gt 0 ]] || PROFILES=(pro)
+mkdir -p "$OUT"
+cd "$ROOT"
+
+just ios-generate >/dev/null
+DERIVED="$OUT/derived"
+xcodebuild build-for-testing -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview \
+  -configuration "$CONFIG" -destination "platform=iOS,id=$DEVICE" -allowProvisioningUpdates \
+  -derivedDataPath "$DERIVED" >"$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log"; exit 1; }
+XCTESTRUN="$(ls "$DERIVED"/Build/Products/*.xctestrun | head -1)"
+
+for i in "${!PROFILES[@]}"; do
+  profile="${PROFILES[$i]}"
+  log="$OUT/$profile.log"
+  echo "== $profile (hold ${HOLD}s, trace ${TRACE}s, $CONFIG)"
+  xcrun devicectl device process launch --device "$DEVICE" --terminate-existing \
+    com.opencapture.openpocketcine >"$OUT/$profile.launch.log" 2>&1
+  sleep 3
+  TEST_RUNNER_OPV_PERF_ATTACH=1 TEST_RUNNER_OPV_PERF_SOAK=1 TEST_RUNNER_OPV_PERF_PROFILE="$profile" TEST_RUNNER_OPV_PERF_SOAK_S="$HOLD" \
+    xcodebuild test-without-building -xctestrun "$XCTESTRUN" -destination "platform=iOS,id=$DEVICE" \
+    -only-testing:OpenPocketCineUITests/PerfSoakTests -resultBundlePath "$OUT/$profile.xcresult" \
+    >"$log" 2>&1 &
+  test_pid=$!
+  # Wait for the hold marker (or the test ending early).
+  until grep -q PERF_SOAK_HOLD_BEGIN "$log" 2>/dev/null; do
+    kill -0 "$test_pid" 2>/dev/null || { echo "test ended before hold"; tail -30 "$log"; break; }
+    sleep 1
+  done
+  if grep -q PERF_SOAK_HOLD_BEGIN "$log"; then
+    grep -o 'PERF_SOAK_HOLD_BEGIN.*' "$log" | head -1
+    extra_args=()
+    [[ -n "$EXTRA" ]] && extra_args=(--instrument "$EXTRA")
+    xcrun xctrace record --device "$DEVICE" --template "$TEMPLATE" "${extra_args[@]}" \
+      --attach OpenPocketCine --time-limit "${TRACE}s" --output "$OUT/$profile.trace" \
+      >"$OUT/$profile.xctrace.log" 2>&1 || tail -5 "$OUT/$profile.xctrace.log"
+  fi
+  wait "$test_pid" && echo "test passed" || echo "test FAILED (see $log)"
+  if [[ -d "$OUT/$profile.trace" ]]; then
+    xcrun xctrace symbolicate --input "$OUT/$profile.trace" \
+      --dsym "$DERIVED/Build/Products/$CONFIG-iphoneos/OpenPocketCine.app.dSYM" >/dev/null 2>&1 || true
+    python3 "$ROOT/tools/perf-trace-summary.py" "$OUT/$profile.trace" | tee "$OUT/$profile.summary.txt" || true
+  fi
+  [[ $i -lt $((${#PROFILES[@]} - 1)) ]] && sleep "$COOL"
+done
+echo "artifacts: $OUT"

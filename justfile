@@ -169,6 +169,10 @@ ios-ui-test device *args: ios-generate
 ios-physical-ui-test device test="OpenPocketCineUITests/PhysicalNavigationTests": ios-generate
     TEST_RUNNER_OPV_PHYSICAL_UI_REVIEW=1 xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS,id={{device}}' -allowProvisioningUpdates -only-testing:{{test}} test
 
+# Release power/CPU/GPU soak on a physical iPhone + saved Pocket 4 Pro; traces stay in .local/perf.
+perf-soak device *profiles="clean pro":
+    DEVICE='{{device}}' bash tools/perf-soak.sh {{profiles}}
+
 # Seeded physical live-feed stress; optional recording is off by default.
 ios-feed-stress device seed="20260914" limit="300" record="0": ios-generate
     DEVICE='{{device}}' SEED='{{seed}}' LIMIT='{{limit}}' RECORD='{{record}}' bash tools/feed-stress-run.sh run
