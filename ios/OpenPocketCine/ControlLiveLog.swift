@@ -23,11 +23,13 @@ enum ControlLiveLog {
     }
 
     /// Already-redacted structured line (exceptions, DiagnosticCenter).
-    nonisolated static func appendRedacted(_ text: String) {
+    /// `logNow` writes os_log on the caller first, for a process about to abort.
+    nonisolated static func appendRedacted(_ text: String, logNow: Bool = false) {
         let stampedAt = Date()
+        if logNow { log.info("\(text, privacy: .public)") }
         queue.async {
             let safe = PrivacyRedactor.redact(text)
-            log.info("\(safe, privacy: .public)")
+            if !logNow { log.info("\(safe, privacy: .public)") }
             append(stampedAt, safe)
         }
     }
