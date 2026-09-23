@@ -313,18 +313,17 @@ private struct MonitorVideoBackdrop: ViewModifier {
             renderer.deactivate(identity)
             if owner == identity { owner = nil }
         }
-        // Polls without a new product: a held/paused source, or a
-        // compressed-layer-only feed with no passive buffer.
+        // A new source picture wakes the loop at once, so the glass follows the
+        // feed frame for frame; the timeout only polls a held/paused source or a
+        // compressed-layer-only feed with no passive buffer. No thermal slowdown:
+        // glass behind the picture must never lag it.
+        let wake = MonitorBackdropWake()
         var idlePolls = 0
         while !Task.isCancelled {
-            let thermal = ProcessInfo.processInfo.thermalState
-            // ponytail: after ~250 ms with nothing new, poll at 10 Hz instead of
-            // 60 Hz. A resumed source waits at most 100 ms for its first plate;
-            // a moving source never idles (25 fps publishes every other poll).
+            // ponytail: after ~250 ms with nothing new, time out at 10 Hz instead
+            // of 60 Hz. Frame wakes are unaffected, so a resumed source is immediate.
             let idle = idlePolls >= Self.idlePollThreshold ? Self.idleIntervalMultiplier : 1
-            let intervalNs =
-                MonitorBackdropPolicy.intervalNanoseconds(
-                    serious: thermal == .serious, critical: thermal == .critical) * idle
+            let intervalNs = MonitorBackdropPolicy.minimumIntervalNanoseconds * idle
             let started = DispatchTime.now().uptimeNanoseconds
             idlePolls += 1
             if let result = await renderer.render(
@@ -340,10 +339,61 @@ private struct MonitorVideoBackdrop: ViewModifier {
                 }
             }
             let spent = DispatchTime.now().uptimeNanoseconds &- started
-            if spent < intervalNs {
-                do {
-                    try await Task.sleep(for: .nanoseconds(Int64(intervalNs - spent)))
-                } catch { return }
+            if spent < intervalNs { await wake.wait(timeoutNs: intervalNs - spent) }
+        }
+    }
+}
+
+extension Notification.Name {
+    /// A backdrop source has a new picture. Posted by decoders and playback.
+    static let monitorBackdropSourceAdvanced = Notification.Name(
+        "com.opencapture.opc.monitor-backdrop.source-advanced")
+}
+
+/// Wakes a backdrop loop on the next source picture, or after a timeout.
+/// A picture that lands while a job renders is remembered, not dropped.
+@MainActor
+private final class MonitorBackdropWake {
+    nonisolated(unsafe) private var observer: NSObjectProtocol?
+    private var pending = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var generation = 0
+
+    init() {
+        observer = NotificationCenter.default.addObserver(
+            forName: .monitorBackdropSourceAdvanced, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.fire() }
+        }
+    }
+
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+    }
+
+    private func fire() {
+        guard let waiter else {
+            pending = true
+            return
+        }
+        self.waiter = nil
+        waiter.resume()
+    }
+
+    func wait(timeoutNs: UInt64) async {
+        if pending {
+            pending = false
+            return
+        }
+        generation += 1
+        let expected = generation
+        await withCheckedContinuation { continuation in
+            waiter = continuation
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: timeoutNs)
+                guard let self, self.generation == expected, let waiter = self.waiter else { return }
+                self.waiter = nil
+                waiter.resume()
             }
         }
     }

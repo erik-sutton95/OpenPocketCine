@@ -44,13 +44,6 @@ public enum MonitorBackdropPolicy {
     /// real limiter. Do not sample a second decoder or a window capture.
     public static let minimumInterval: Double = 1.0 / 60.0
     public static let minimumIntervalNanoseconds: UInt64 = 16_666_667
-
-    /// Native owners map their thermal state to this platform-neutral multiplier.
-    public static func interval(serious: Bool, critical: Bool) -> Double {
-        minimumInterval * (critical ? 5 : serious ? 3 : 1)
-    }
-
-    public static func intervalNanoseconds(serious: Bool, critical: Bool) -> UInt64 {
-        minimumIntervalNanoseconds * (critical ? 5 : serious ? 3 : 1)
-    }
+    // No thermal multiplier: glass behind the picture follows every source
+    // frame. Lagging glass is distracting, and the GPU blur is cheap.
 }

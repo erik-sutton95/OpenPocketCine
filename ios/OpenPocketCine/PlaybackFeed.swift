@@ -459,6 +459,7 @@ final class PlaybackFeedSession: NSObject {
             }
             lastBuffer = working
             submit(working, timeNs: timeNs, sourceEpoch: sourceEpoch)
+            NotificationCenter.default.post(name: .monitorBackdropSourceAdvanced, object: nil)
             return
         }
         if let lastBuffer, force {

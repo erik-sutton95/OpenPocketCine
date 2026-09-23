@@ -986,6 +986,7 @@ final class HevcDecoder {
             lastDecodedBuffer = result.source
             lastDecodedTimeNs = result.timeNs
             onSourceFrame?(result.source)
+            NotificationCenter.default.post(name: .monitorBackdropSourceAdvanced, object: nil)
         }
         if !result.shouldPresent { return false }
         var presentedIdentity = false
