@@ -35,7 +35,8 @@ for i in "${!PROFILES[@]}"; do
   profile="${PROFILES[$i]}"
   rec=0
   if [[ "$profile" == *+rec ]]; then rec=1; profile="${profile%+rec}"; fi
-  tag="$profile$([[ $rec == 1 ]] && echo -rec)"
+  tag="$profile"
+  [[ $rec == 1 ]] && tag="$profile-rec"
   log="$OUT/$tag.log"
   echo "== $profile (hold ${HOLD}s, trace ${TRACE}s, $CONFIG)"
   xcrun devicectl device process launch --device "$DEVICE" --terminate-existing \
