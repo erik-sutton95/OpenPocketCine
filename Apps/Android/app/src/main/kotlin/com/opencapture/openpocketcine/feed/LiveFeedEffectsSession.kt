@@ -70,6 +70,7 @@ internal class LiveFeedEffectsSession(
     private val frameLock = java.lang.Object()
     @Volatile private var frameAvailable = false
     @Volatile private var oesFramePending = false
+    @Volatile private var redrawRequested = false
     @Volatile private var planDirty = true
     @Volatile private var displayTexture: SurfaceTexture? = null
     @Volatile private var displayWidth = 0
@@ -169,6 +170,7 @@ internal class LiveFeedEffectsSession(
 
     private fun requestRender() {
         synchronized(frameLock) {
+            redrawRequested = true
             frameAvailable = true
             frameLock.notifyAll()
         }
@@ -362,6 +364,10 @@ internal class LiveFeedEffectsSession(
             var hasOesFrame = false
             var signaledFirstFrame = false
             var lastOesTimestampNs = 0L
+            // A held (paused, stalled) source is not redrawn: the 100 ms wake below only
+            // retries tap consumers. New pictures, looks, sizes and upscaler changes present.
+            var needsPresent = false
+            var presentedUpscaler: FeedUpscaler? = null
             while (running.get()) {
                 val pullOes: Boolean
                 synchronized(frameLock) {
@@ -371,6 +377,8 @@ internal class LiveFeedEffectsSession(
                     pullOes = oesFramePending
                     oesFramePending = false
                     frameAvailable = false
+                    if (redrawRequested) needsPresent = true
+                    redrawRequested = false
                 }
                 if (!running.get()) break
                 val nextPlan = plan.get()
@@ -379,7 +387,9 @@ internal class LiveFeedEffectsSession(
                     effects = FeedEffectsGlProgram(appContext, nextPlan, flipInputVertically = false)
                     activePlan = nextPlan
                     planDirty = false
+                    needsPresent = true
                 }
+                if (FeedUpscaleSwitch.rendererReads != presentedUpscaler) needsPresent = true
                 if (sourceWidth != srcW || sourceHeight != srcH) {
                     srcW = sourceWidth
                     srcH = sourceHeight
@@ -406,11 +416,12 @@ internal class LiveFeedEffectsSession(
                         lastOesTimestampNs = timestampNs
                         oesSurfaceTexture.getTransformMatrix(texMatrix)
                         hasOesFrame = true
+                        needsPresent = true
                         previewSource.didLatch(previewLatch)
                     }
                 }
                 if (!hasOesFrame) continue
-                if (skipDuplicate && !planDirty) continue
+                if (skipDuplicate && !needsPresent) continue
                 val width = displayWidth
                 val height = displayHeight
                 if (
@@ -423,55 +434,25 @@ internal class LiveFeedEffectsSession(
                 ) {
                     continue
                 }
-                val source = checkNotNull(sourceTarget)
                 val copy = oesCopy ?: continue
-                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, source.framebufferId)
-                GLES20.glViewport(0, 0, source.width, source.height)
-                copy.draw(oesTexture, texMatrix)
-                val content =
-                    if (letterboxSource && !stretchToRect) {
-                        liveFeedContentRect(
-                            width.toFloat(),
-                            height.toFloat(),
-                            source.width,
-                            source.height,
-                        )
-                    } else {
-                        null
-                    }
-                val presentWidth = content?.width ?: width
-                val presentHeight = content?.height ?: height
-                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
-                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
-                if (content != null) {
-                    GLES20.glViewport(content.left, content.top, content.width, content.height)
-                } else {
-                    GLES20.glViewport(0, 0, width, height)
-                }
-                // First picture is a bilinear blit of 720p RGB. Cube then stretch
-                // on that submit missed the enable IDR (WAITING FOR LIVE VIEW).
-                if (!signaledFirstFrame) {
-                    effects.draw(
-                        source.textureId,
-                        source.width.toFloat(),
-                        source.height.toFloat(),
-                        presentWidth.toFloat(),
-                        presentHeight.toFloat(),
-                        look = false,
-                        upscale = false,
-                    )
-                } else {
-                    val graded = checkNotNull(gradedTarget)
-                    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, graded.framebufferId)
-                    GLES20.glViewport(0, 0, graded.width, graded.height)
-                    effects.draw(
-                        source.textureId,
-                        source.width.toFloat(),
-                        source.height.toFloat(),
-                        presentWidth.toFloat(),
-                        presentHeight.toFloat(),
-                        look = true,
-                    )
+                if (needsPresent) {
+                    val source = checkNotNull(sourceTarget)
+                    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, source.framebufferId)
+                    GLES20.glViewport(0, 0, source.width, source.height)
+                    copy.draw(oesTexture, texMatrix)
+                    val content =
+                        if (letterboxSource && !stretchToRect) {
+                            liveFeedContentRect(
+                                width.toFloat(),
+                                height.toFloat(),
+                                source.width,
+                                source.height,
+                            )
+                        } else {
+                            null
+                        }
+                    val presentWidth = content?.width ?: width
+                    val presentHeight = content?.height ?: height
                     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
                     GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                     if (content != null) {
@@ -479,20 +460,55 @@ internal class LiveFeedEffectsSession(
                     } else {
                         GLES20.glViewport(0, 0, width, height)
                     }
-                    effects.draw(
-                        graded.textureId,
-                        source.width.toFloat(),
-                        source.height.toFloat(),
-                        presentWidth.toFloat(),
-                        presentHeight.toFloat(),
-                        look = false,
-                    )
-                }
-                check(EGL14.eglSwapBuffers(eglDisplay, eglSurface)) { "live present failed" }
-                onFramePresented(lastOesTimestampNs)
-                if (!signaledFirstFrame) {
-                    signaledFirstFrame = true
-                    mainHandler.post(onFirstFrame)
+                    // First picture is a bilinear blit of 720p RGB. Cube then stretch
+                    // on that submit missed the enable IDR (WAITING FOR LIVE VIEW).
+                    if (!signaledFirstFrame) {
+                        effects.draw(
+                            source.textureId,
+                            source.width.toFloat(),
+                            source.height.toFloat(),
+                            presentWidth.toFloat(),
+                            presentHeight.toFloat(),
+                            look = false,
+                            upscale = false,
+                        )
+                    } else {
+                        val graded = checkNotNull(gradedTarget)
+                        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, graded.framebufferId)
+                        GLES20.glViewport(0, 0, graded.width, graded.height)
+                        effects.draw(
+                            source.textureId,
+                            source.width.toFloat(),
+                            source.height.toFloat(),
+                            presentWidth.toFloat(),
+                            presentHeight.toFloat(),
+                            look = true,
+                        )
+                        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+                        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                        if (content != null) {
+                            GLES20.glViewport(content.left, content.top, content.width, content.height)
+                        } else {
+                            GLES20.glViewport(0, 0, width, height)
+                        }
+                        effects.draw(
+                            graded.textureId,
+                            source.width.toFloat(),
+                            source.height.toFloat(),
+                            presentWidth.toFloat(),
+                            presentHeight.toFloat(),
+                            look = false,
+                        )
+                    }
+                    check(EGL14.eglSwapBuffers(eglDisplay, eglSurface)) { "live present failed" }
+                    onFramePresented(lastOesTimestampNs)
+                    presentedUpscaler = FeedUpscaleSwitch.rendererReads
+                    // The first present is the look-free blit; the graded one follows.
+                    needsPresent = !signaledFirstFrame
+                    if (!signaledFirstFrame) {
+                        signaledFirstFrame = true
+                        mainHandler.post(onFirstFrame)
+                    }
                 }
                 maybeTapScopes(
                     policy = nextPlan.scopeTap,
