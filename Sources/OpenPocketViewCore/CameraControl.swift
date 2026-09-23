@@ -1443,6 +1443,22 @@ public enum GimbalRamp: Int, CaseIterable, Sendable, Hashable {
     public static let pickerOrder: [GimbalRamp] = [.off, .soft, .medium]
 }
 
+/// What the stick double-tap and gamepad Circle/B do: body recenter
+/// (`FE 08`) or a one-shot snap to world level (`WorldLevelSnap`).
+public enum GimbalDoubleTap: Int, CaseIterable, Sendable, Hashable {
+    case recenter = 0
+    case level = 1
+
+    public var label: String {
+        switch self {
+        case .recenter: "Recenter"
+        case .level: "Level"
+        }
+    }
+
+    public static let pickerOrder: [GimbalDoubleTap] = [.recenter, .level]
+}
+
 /// SET frames and reconciliation of the camera's independent mode/tilt reports.
 public enum GimbalControl {
     public static func setModeFrames(_ mode: GimbalMode) -> [Duml.Frame] {
