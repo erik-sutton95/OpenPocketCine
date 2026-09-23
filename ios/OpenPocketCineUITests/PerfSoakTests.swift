@@ -104,6 +104,9 @@ final class PerfSoakTests: XCTestCase {
         let recordTake = env["OPV_PERF_RECORD"] == "1"
         if recordTake {
             record.tap()
+            // REC asks "Start recording?" first; confirm it.
+            let start = app.buttons["Start"]
+            if start.waitForExistence(timeout: 3) { start.tap() }
             Thread.sleep(forTimeInterval: 3)
         }
         print("PERF_SOAK_HOLD_BEGIN profile=\(name) on=\(applied.joined(separator: ",")) rec=\(recordTake) hold=\(Int(hold))")
@@ -120,6 +123,8 @@ final class PerfSoakTests: XCTestCase {
         print("PERF_SOAK_HOLD_END profile=\(name)")
         if recordTake {
             record.tap()
+            let stop = app.buttons["Stop"]
+            if stop.waitForExistence(timeout: 3) { stop.tap() }
             Thread.sleep(forTimeInterval: 2)
         }
 

@@ -19,10 +19,16 @@ import xml.etree.ElementTree as ET
 
 def table(trace, schema):
     xpath = f'/trace-toc/run[@number="1"]/data/table[@schema="{schema}"]'
-    out = subprocess.run(
-        ["xcrun", "xctrace", "export", "--input", trace, "--xpath", xpath],
-        capture_output=True, check=False,
-    ).stdout
+    out = b""
+    # ponytail: xctrace export sometimes returns nothing (seen while another
+    # xctrace runs); three tries, then treat the table as absent.
+    for _ in range(3):
+        out = subprocess.run(
+            ["xcrun", "xctrace", "export", "--input", trace, "--xpath", xpath],
+            capture_output=True, check=False,
+        ).stdout
+        if b"<row" in out:
+            break
     if not out.strip():
         return [], []
     root = ET.fromstring(out)
