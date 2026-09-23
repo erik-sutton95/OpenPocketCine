@@ -221,7 +221,6 @@
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         cmdSet: jint, cmdId: jint, payload: jbyteArray?, previousJSON: jstring?
     ) -> jstring? {
-        var status = AndroidSessionWire.status(fromJSON: swiftString(env, previousJSON) ?? "{}")
         let frame = Duml.Frame(
             sender: 0,
             receiver: 0,
@@ -231,7 +230,12 @@
             cmdId: UInt8(truncatingIfNeeded: cmdId),
             payload: swiftBytes(env, payload) ?? []
         )
-        guard CameraStatusDecoder.apply(frame, to: &status) else { return nil }
+        // Recognition depends only on the frame, so reject non-status frames before copying
+        // and parsing the previous status.
+        var probe = CameraStatus()
+        guard CameraStatusDecoder.apply(frame, to: &probe) else { return nil }
+        var status = AndroidSessionWire.status(fromJSON: swiftString(env, previousJSON) ?? "{}")
+        CameraStatusDecoder.apply(frame, to: &status)
         return javaString(env, AndroidSessionWire.statusJSON(status))
     }
 
@@ -257,16 +261,12 @@
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, annexB: jbyteArray?
     ) -> jboolean {
         let bytes = swiftBytes(env, annexB) ?? []
-        let nals = Hevc.nalUnits(bytes)
-        let avc = LiveVideo.detect(nals: nals) == .avc
-        for nal in nals {
-            guard let first = nal.first else { continue }
-            if avc ? Avc.isKeyframeNal(Avc.nalType(first)) : Hevc.isKeyframeNal(Hevc.nalType(first))
-            {
-                return 1
-            }
+        let headers = Hevc.nalHeaders(bytes)
+        let avc = LiveVideo.detect(headers: headers) == .avc
+        let keyframe = headers.contains {
+            avc ? Avc.isKeyframeNal(Avc.nalType($0)) : Hevc.isKeyframeNal(Hevc.nalType($0))
         }
-        return 0
+        return keyframe ? 1 : 0
     }
 
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_depacketizerCreate")

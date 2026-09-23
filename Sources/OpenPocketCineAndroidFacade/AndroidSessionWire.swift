@@ -112,36 +112,28 @@ public enum AndroidSessionWire {
 
     public static func status(fromJSON json: String) -> CameraStatus {
         var status = CameraStatus()
+        // One pass indexes every top-level value. Per-key `range(of:)` rescans cost ~800 µs
+        // per status frame on the host probe (`just performance-status-probe`).
+        let fields = flatJSONFields(json)
         func int(_ key: String, default def: Int) -> Int {
-            guard let range = json.range(of: "\"\(key)\":") else { return def }
-            let tail = json[range.upperBound...]
-            var digits = ""
-            for ch in tail {
-                if ch == "-" && digits.isEmpty {
-                    digits.append(ch)
-                    continue
-                }
-                if ch.isNumber { digits.append(ch) } else { break }
-            }
-            return Int(digits) ?? def
+            guard let v = fields[key] else { return def }
+            let body = v.hasPrefix("-") ? v.dropFirst() : v
+            let digits = body.prefix(while: \.isNumber)
+            return Int(v[v.startIndex..<digits.endIndex]) ?? def
         }
         func flag(_ key: String) -> Bool {
-            json.contains("\"\(key)\":true")
+            fields[key]?.hasPrefix("true") == true
         }
         func str(_ key: String) -> String? {
-            guard let range = json.range(of: "\"\(key)\":\"") else { return nil }
-            var s = ""
-            for ch in json[range.upperBound...] {
-                if ch == "\"" { break }
-                s.append(ch)
-            }
-            return s.isEmpty ? nil : s
+            guard let v = fields[key], v.hasPrefix("\"") else { return nil }
+            let s = v.dropFirst().prefix(while: { $0 != "\"" })
+            return s.isEmpty ? nil : String(s)
         }
         func intArray(_ key: String) -> [Int] {
-            guard let range = json.range(of: "\"\(key)\":[") else { return [] }
+            guard let v = fields[key], v.hasPrefix("[") else { return [] }
             var out: [Int] = []
             var digits = ""
-            for ch in json[range.upperBound...] {
+            for ch in v.dropFirst() {
                 if ch == "]" {
                     if let n = Int(digits) { out.append(n) }
                     break
@@ -159,32 +151,13 @@ public enum AndroidSessionWire {
             }
             return out
         }
-        func optionalNumber(_ key: String) -> Double? {
-            guard let range = json.range(of: "\"\(key)\":") else { return nil }
-            var s = ""
-            var started = false
-            for ch in json[range.upperBound...] {
-                if ch.isWhitespace && !started { continue }
-                if !started && ch == "n" { return nil }
-                started = true
-                if ch == "-" && s.isEmpty {
-                    s.append(ch)
-                    continue
-                }
-                if ch.isNumber || ch == "." || ch == "e" || ch == "E" || ch == "+" {
-                    s.append(ch)
-                } else {
-                    break
-                }
-            }
-            return Double(s)
-        }
         func number(_ key: String, default def: Double) -> Double {
-            optionalNumber(key) ?? def
+            jsonNumber(fields, key: key, default: def)
         }
         func optionalFlag(_ key: String) -> Bool? {
-            if json.contains("\"\(key)\":true") { return true }
-            if json.contains("\"\(key)\":false") { return false }
+            guard let v = fields[key] else { return nil }
+            if v.hasPrefix("true") { return true }
+            if v.hasPrefix("false") { return false }
             return nil
         }
         status.batteryPercent = int("batteryPercent", default: -1)
@@ -330,8 +303,8 @@ public enum AndroidSessionWire {
         {
             status.directionalAudio = dir
         }
-        if json.contains("\"audioMetersLeft\":") || json.contains("\"audioMetersRight\":")
-            || json.contains("\"audioPeakLeft\":") || json.contains("\"audioPeakRight\":")
+        if ["audioMetersLeft", "audioMetersRight", "audioPeakLeft", "audioPeakRight"]
+            .contains(where: { fields[$0] != nil })
         {
             let floor = AudioMeterBallistics.floorDB
             status.audioMeters = AudioMeterLevels(
@@ -346,6 +319,61 @@ public enum AndroidSessionWire {
             )
         }
         return status
+    }
+
+    /// Raw value text for each top-level key of a flat object such as `statusJSON`
+    /// (`{"k":v,...}`; values are scalars, strings or int arrays). The first occurrence of a
+    /// key wins, and a key must be followed directly by `:`, matching the former per-key scan.
+    static func flatJSONFields(_ json: String) -> [String: Substring] {
+        var fields: [String: Substring] = [:]
+        let bytes = json.utf8
+        var i = bytes.startIndex
+        var depth = 0
+        var expectKey = false
+        var pendingKey: String?
+        var valueStart = i
+        func closeValue(at end: String.Index) {
+            if let key = pendingKey, fields[key] == nil { fields[key] = json[valueStart..<end] }
+            pendingKey = nil
+        }
+        while i < bytes.endIndex {
+            let c = bytes[i]
+            switch c {
+            case UInt8(ascii: "\""):
+                let open = bytes.index(after: i)
+                var j = open
+                while j < bytes.endIndex, bytes[j] != UInt8(ascii: "\"") {
+                    if bytes[j] == UInt8(ascii: "\\") { j = bytes.index(after: j) }
+                    if j < bytes.endIndex { j = bytes.index(after: j) }
+                }
+                let close = j
+                i = close < bytes.endIndex ? bytes.index(after: close) : close
+                if depth == 1, expectKey {
+                    expectKey = false
+                    if i < bytes.endIndex, bytes[i] == UInt8(ascii: ":") {
+                        pendingKey = String(json[open..<close])
+                        i = bytes.index(after: i)
+                        valueStart = i
+                    }
+                }
+                continue
+            case UInt8(ascii: "{"), UInt8(ascii: "["):
+                depth += 1
+                if depth == 1 { expectKey = true }
+            case UInt8(ascii: "}"), UInt8(ascii: "]"):
+                if depth == 1 { closeValue(at: i) }
+                depth -= 1
+            case UInt8(ascii: ","):
+                if depth == 1 {
+                    closeValue(at: i)
+                    expectKey = true
+                }
+            default:
+                break
+            }
+            i = bytes.index(after: i)
+        }
+        return fields
     }
 
     public enum CommandKind: Int32 {
@@ -787,12 +815,9 @@ public enum AndroidSessionWire {
     }
 
     public static func nalTypeSummary(_ annexB: [UInt8]) -> String {
-        let nals = Hevc.nalUnits(annexB)
-        let avc = LiveVideo.detect(nals: nals) == .avc
-        let types = nals.compactMap { nal -> Int? in
-            guard let first = nal.first else { return nil }
-            return avc ? Avc.nalType(first) : Hevc.nalType(first)
-        }
+        let headers = Hevc.nalHeaders(annexB)
+        let avc = LiveVideo.detect(headers: headers) == .avc
+        let types = headers.map { avc ? Avc.nalType($0) : Hevc.nalType($0) }
         return Set(types).sorted().map(String.init).joined(separator: ",")
     }
 
@@ -1244,7 +1269,9 @@ public enum AndroidSessionWire {
     }
 
     private static func feedWatchdogSnapshot(_ json: String) -> FeedWatchdog.Snapshot {
-        FeedWatchdog.Snapshot(
+        // 1 Hz on Android: index once instead of ~25 full-string scans.
+        let json = flatJSONFields(json)
+        return FeedWatchdog.Snapshot(
             now: jsonNumber(json, key: "now", default: 0),
             lastDecodedFrameAge: jsonOptionalNumber(json, key: "lastDecodedFrameAge"),
             lastVideoPacketAge: jsonOptionalNumber(json, key: "lastVideoPacketAge"),
@@ -1324,6 +1351,29 @@ public enum AndroidSessionWire {
 
     private static func jsonNumber(_ json: String, key: String, default def: Double) -> Double {
         jsonOptionalNumber(json, key: key) ?? def
+    }
+
+    // Same semantics over a `flatJSONFields` index, for payloads read field by field.
+    private static func jsonBool(_ fields: [String: Substring], key: String, default def: Bool)
+        -> Bool
+    {
+        guard let v = fields[key] else { return def }
+        if v.hasPrefix("true") { return true }
+        if v.hasPrefix("false") { return false }
+        return def
+    }
+
+    private static func jsonOptionalNumber(_ fields: [String: Substring], key: String) -> Double? {
+        guard let v = fields[key]?.drop(while: \.isWhitespace), v.first != "n" else { return nil }
+        let body = v.hasPrefix("-") ? v.dropFirst() : v
+        let digits = body.prefix(while: { $0.isNumber || ".eE+".contains($0) })
+        return Double(v[v.startIndex..<digits.endIndex])
+    }
+
+    private static func jsonNumber(
+        _ fields: [String: Substring], key: String, default def: Double
+    ) -> Double {
+        jsonOptionalNumber(fields, key: key) ?? def
     }
 
     /// String value from Kotlin `JSONObject`; parsing undoes `quote` escapes such as `\/`.

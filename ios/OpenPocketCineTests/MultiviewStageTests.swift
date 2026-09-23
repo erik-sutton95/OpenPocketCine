@@ -4,6 +4,28 @@ import XCTest
 @testable import OpenPocketCine
 
 @MainActor final class MultiviewStageTests: XCTestCase {
+    func testBLEDiscoveryFollowsAddAndConnectDemand() {
+        typealias S = MultiviewSession
+        XCTAssertTrue(
+            S.needsDiscovery(
+                running: true, applicationActive: true, hasEmptySlot: true, connecting: false),
+            "an empty slot can open the Add picker")
+        XCTAssertFalse(
+            S.needsDiscovery(
+                running: true, applicationActive: true, hasEmptySlot: false, connecting: false),
+            "a full, settled stage has no discovery consumer")
+        XCTAssertTrue(
+            S.needsDiscovery(
+                running: true, applicationActive: false, hasEmptySlot: false, connecting: true),
+            "scan stays up until a connecting camera finishes")
+        XCTAssertFalse(
+            S.needsDiscovery(
+                running: true, applicationActive: false, hasEmptySlot: true, connecting: false))
+        XCTAssertFalse(
+            S.needsDiscovery(
+                running: false, applicationActive: true, hasEmptySlot: true, connecting: true))
+    }
+
     func testTimecodeRequiresCameraReportAndIsHiddenOnNano() {
         let tile = MultiviewSession.Tile()
         for name in ["OsmoPocket3-Test", "OsmoPocket4P-Test", "OsmoNano-Test"] {

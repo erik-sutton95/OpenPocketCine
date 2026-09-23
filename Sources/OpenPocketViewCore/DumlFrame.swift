@@ -140,7 +140,10 @@ public enum Duml {
     }
 
     // Reflected CRC-8, init 0x77, poly 0x8C, over the 3 header bytes -> byte 3.
-    public static func crc8(_ data: [UInt8]) -> UInt8 {
+    public static func crc8(_ data: [UInt8]) -> UInt8 { crc8(data[...]) }
+
+    /// Slice form so frame scanning checks CRCs without copying the frame.
+    public static func crc8(_ data: ArraySlice<UInt8>) -> UInt8 {
         var c: UInt8 = 0x77
         for byte in data {
             c ^= byte
@@ -150,7 +153,9 @@ public enum Duml {
     }
 
     // Reflected CRC-16, init 0x3692, poly 0x8408, over the whole frame minus the trailing CRC.
-    public static func crc16(_ data: [UInt8]) -> UInt16 {
+    public static func crc16(_ data: [UInt8]) -> UInt16 { crc16(data[...]) }
+
+    public static func crc16(_ data: ArraySlice<UInt8>) -> UInt16 {
         var c: UInt16 = 0x3692
         for byte in data {
             c ^= UInt16(byte)

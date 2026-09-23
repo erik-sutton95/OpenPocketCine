@@ -1572,11 +1572,14 @@ final class DatalinkDriver {
                 if flipReply {
                     flipReplyAt.withLock { $0 = Date() }
                 }
+                // Main only needs DUML frames and the 34-byte telemetry cursor.
+                // Hand over the frames scanned here instead of rescanning on Main.
+                guard !frames.isEmpty || Self.carriesTelemetryCursor(bytes) else { return }
                 Task(priority: .high) { @MainActor in
                     guard let self, !self.closed, self.udpGeneration == generation,
                         self.conn === socket
                     else { return }
-                    self.ingest(bytes)
+                    self.ingest(bytes, frames: frames)
                 }
             }
         )
@@ -1617,10 +1620,14 @@ final class DatalinkDriver {
         }
     }
 
-    private func ingest(_ datagram: [UInt8]) {
+    nonisolated private static func carriesTelemetryCursor(_ datagram: [UInt8]) -> Bool {
+        datagram.count == 34 && datagram[6] == 0x01
+    }
+
+    private func ingest(_ datagram: [UInt8], frames: [Duml.Frame]) {
         // 0x01 telemetry carries a cursor at [10:12]. Video (0x02) has no such field — Mimo echoes
         // the video packet's own transport seq (bytes 4-5) instead, 96% of ACKs in the capture.
-        if datagram.count == 34, datagram[6] == 0x01 {
+        if Self.carriesTelemetryCursor(datagram) {
             let cursor = UInt16(datagram[10]) | (UInt16(datagram[11]) << 8)
             if videoAssembler.seedPeerCursorIfNeeded(cursor) {
                 peerCursor = cursor
@@ -1633,7 +1640,6 @@ final class DatalinkDriver {
             return
         }
         // Forward every DUML frame; the session applies CameraStatusDecoder to the ones it recognises.
-        let frames = DumlTransport.scanFrames(datagram)
         if !frames.isEmpty {
             lastStatusDate = Date()
             noteInboundTraffic()
@@ -2084,9 +2090,8 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
     }
 
     private static func hasRandomAccess(_ au: [UInt8], codec: LiveVideoCodec) -> Bool {
-        Hevc.nalUnits(au).contains { nal in
-            guard let byte = nal.first else { return false }
-            return codec == .avc ? Avc.nalType(byte) == Avc.idr : Hevc.isIRAP(Hevc.nalType(byte))
+        Hevc.nalHeaders(au).contains { byte in
+            codec == .avc ? Avc.nalType(byte) == Avc.idr : Hevc.isIRAP(Hevc.nalType(byte))
         }
     }
 
