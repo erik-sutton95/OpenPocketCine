@@ -213,6 +213,7 @@ object OperatorPrefs {
     private const val VIRTUAL_DEADZONE_PERCENT = "OpenPocketCine.VirtualJoystickDeadzonePercent"
     private const val VIRTUAL_RESPONSE_CURVE = "OpenPocketCine.VirtualJoystickResponseCurve"
     private const val GIMBAL_RAMP = "OpenPocketCine.GimbalRamp"
+    private const val GIMBAL_DOUBLE_TAP = "OpenPocketCine.GimbalDoubleTap"
     private const val DISP_LIVE = "OpenPocketCine.DispChrome.Live"
     private const val DISP_CLEAN = "OpenPocketCine.DispChrome.Clean"
     private const val CLEAN_PINS = "OpenPocketCine.CleanViewPins.v1"
@@ -339,6 +340,14 @@ object OperatorPrefs {
 
     fun setGimbalRamp(context: Context, value: com.opencapture.openpocketcine.session.GimbalRamp) {
         prefs(context).edit { putInt(GIMBAL_RAMP, value.raw) }
+    }
+
+    /** Stick double-tap / gamepad Circle/B. Absent key is Recenter (iOS parity). */
+    fun gimbalDoubleTap(context: Context): com.opencapture.openpocketcine.session.GimbalDoubleTap =
+        com.opencapture.openpocketcine.session.GimbalDoubleTap.fromRaw(prefs(context).getInt(GIMBAL_DOUBLE_TAP, 0))
+
+    fun setGimbalDoubleTap(context: Context, value: com.opencapture.openpocketcine.session.GimbalDoubleTap) {
+        prefs(context).edit { putInt(GIMBAL_DOUBLE_TAP, value.raw) }
     }
 
     fun dispLive(context: Context): PocketDispChrome =

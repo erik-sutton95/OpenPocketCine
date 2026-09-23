@@ -415,7 +415,7 @@ fun LivePortraitChrome(
                     enabled = !captureOpen && !uiLocked && model.liveOperatorPanel == null && chromeInteractive,
                     onMove = model::updateGimbalStick,
                     onRelease = model::endGimbalStick,
-                    onRecenter = { model.session.recenterGimbal() },
+                    onRecenter = { model.session.performGimbalDoubleTap() },
                     onFlip = { model.session.flipGimbal() },
                 )
             }

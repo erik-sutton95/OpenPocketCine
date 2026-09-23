@@ -1469,7 +1469,7 @@ internal fun LandscapeChrome(
                     enabled = !captureOpen && !uiLocked && model.liveOperatorPanel == null && hits,
                     onMove = model::updateGimbalStick,
                     onRelease = model::endGimbalStick,
-                    onRecenter = { model.session.recenterGimbal() },
+                    onRecenter = { model.session.performGimbalDoubleTap() },
                     onFlip = { model.session.flipGimbal() },
                 )
             }

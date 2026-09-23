@@ -18,6 +18,7 @@ import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.openpocketcine.session.GimbalDoubleTap
 import com.opencapture.openpocketcine.session.GimbalRamp
 import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.PocketCameraSession
@@ -92,6 +93,8 @@ class AppModel(context: Context, borrowing: com.opencapture.openpocketcine.sessi
             )
     var gimbalRamp by mutableStateOf(OperatorPrefs.gimbalRamp(appContext))
         private set
+    var gimbalDoubleTap by mutableStateOf(OperatorPrefs.gimbalDoubleTap(appContext))
+        private set
     var liveGimbalPanel by mutableStateOf(LiveGimbalPanel.NONE)
     /** Canvas-space centre of the programmed-move editor / Run pill. Null until first open or drag. */
     var gimbalFloatCenter by mutableStateOf<Offset?>(null)
@@ -99,6 +102,7 @@ class AppModel(context: Context, borrowing: com.opencapture.openpocketcine.sessi
 
     init {
         session.gimbalRamp = gimbalRamp
+        session.gimbalDoubleTap = gimbalDoubleTap
     }
     var dispLive by mutableStateOf(OperatorPrefs.dispLive(appContext))
         private set
@@ -214,6 +218,12 @@ class AppModel(context: Context, borrowing: com.opencapture.openpocketcine.sessi
     fun updateHapticsEnabled(value: Boolean) {
         hapticsEnabled = value
         OperatorPrefs.setHapticsEnabled(appContext, value)
+    }
+
+    fun updateGimbalDoubleTap(value: GimbalDoubleTap) {
+        gimbalDoubleTap = value
+        OperatorPrefs.setGimbalDoubleTap(appContext, value)
+        session.gimbalDoubleTap = value
     }
 
     fun updateGimbalRamp(value: GimbalRamp) {

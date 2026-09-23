@@ -91,6 +91,7 @@ import com.opencapture.openpocketcine.session.GimbalMode
 import com.opencapture.openpocketcine.session.GimbalMoveEngine
 import com.opencapture.openpocketcine.session.GimbalProgramCurve
 import com.opencapture.openpocketcine.session.GimbalProgram
+import com.opencapture.openpocketcine.session.GimbalDoubleTap
 import com.opencapture.openpocketcine.session.GimbalRamp
 import com.opencapture.openpocketcine.session.GimbalSpeed
 import com.opencapture.openpocketcine.session.GimbalWaypointSlot
@@ -230,6 +231,17 @@ fun LiveGimbalSheetHost(
                                 applyIfCurrent {
                                     GimbalRamp.pickerOrder.firstOrNull { it.label == label }
                                         ?.let(model::updateGimbalRamp)
+                                }
+                            }
+                        GimbalSettingsTab.DOUBLE_TAP ->
+                            MonitorValueDrum(
+                                GimbalDoubleTap.pickerOrder.map { it.label }, model.gimbalDoubleTap.label,
+                                interactive = canApply,
+                                onDetent = { haptics.confirm() },
+                            ) { label ->
+                                applyIfCurrent {
+                                    GimbalDoubleTap.pickerOrder.firstOrNull { it.label == label }
+                                        ?.let(model::updateGimbalDoubleTap)
                                 }
                             }
                     }
@@ -455,7 +467,7 @@ internal fun GimbalFloatMove(
 }
 
 private enum class GimbalSettingsTab(val title: String) {
-    MODE("Mode"), SPEED("Speed"), RAMP("Ramp")
+    MODE("Mode"), SPEED("Speed"), RAMP("Ramp"), DOUBLE_TAP("Double-tap")
 }
 
 private data class GimbalInteractionContext(
