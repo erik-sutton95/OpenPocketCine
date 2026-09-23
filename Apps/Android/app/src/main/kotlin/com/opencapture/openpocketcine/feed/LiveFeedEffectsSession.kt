@@ -474,6 +474,16 @@ internal class LiveFeedEffectsSession(
                             look = false,
                             upscale = false,
                         )
+                    } else if (!nextPlan.hasPlaybackLook) {
+                        // No cube or assist: the grade pass would be an exact copy.
+                        effects.draw(
+                            source.textureId,
+                            source.width.toFloat(),
+                            source.height.toFloat(),
+                            presentWidth.toFloat(),
+                            presentHeight.toFloat(),
+                            look = false,
+                        )
                     } else {
                         val graded = checkNotNull(gradedTarget)
                         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, graded.framebufferId)
