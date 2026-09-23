@@ -36,11 +36,15 @@ final class PerfSoakTests: XCTestCase {
         // launch fails for Release builds on device, so attach instead.
         if env["OPV_PERF_ATTACH"] == "1" { app.activate() } else { app.launch() }
         defer { app.terminate() }
-        addUIInterruptionMonitor(withDescription: "system alerts") { alert in
-            let allow = alert.buttons["Allow"]
-            if allow.exists { allow.tap(); return true }
+        // Camera Wi-Fi join / Bluetooth / local network prompts (same set as FeedStressTests).
+        addUIInterruptionMonitor(withDescription: "camera connection alerts") { alert in
+            for title in ["Join", "Allow", "OK"] where alert.buttons[title].exists {
+                alert.buttons[title].tap()
+                return true
+            }
             return false
         }
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
         if env["OPV_PERF_DUMP"] == "1" {
             // Diagnostic: print what is on screen, then stop.
@@ -57,6 +61,8 @@ final class PerfSoakTests: XCTestCase {
         ).firstMatch
         var lastConnectTap = Date.distantPast
         while !(record.exists || settings.exists) && Date() < liveDeadline {
+            let join = springboard.alerts.buttons["Join"]
+            if join.exists { join.tap() }
             if connect.exists && connect.isHittable && Date().timeIntervalSince(lastConnectTap) > 20 {
                 connect.tap()
                 lastConnectTap = Date()
