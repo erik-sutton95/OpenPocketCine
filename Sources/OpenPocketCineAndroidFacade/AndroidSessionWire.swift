@@ -823,12 +823,9 @@ public enum AndroidSessionWire {
     }
 
     public static func nalTypeSummary(_ annexB: [UInt8]) -> String {
-        let nals = Hevc.nalUnits(annexB)
-        let avc = LiveVideo.detect(nals: nals) == .avc
-        let types = nals.compactMap { nal -> Int? in
-            guard let first = nal.first else { return nil }
-            return avc ? Avc.nalType(first) : Hevc.nalType(first)
-        }
+        let headers = Hevc.nalHeaders(annexB)
+        let avc = LiveVideo.detect(headers: headers) == .avc
+        let types = headers.map { avc ? Avc.nalType($0) : Hevc.nalType($0) }
         return Set(types).sorted().map(String.init).joined(separator: ",")
     }
 

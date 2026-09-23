@@ -60,6 +60,10 @@ private let PPS = hex("4401c17312240890")
         #expect(nals.count == 3)
         #expect(nals[0] == VPS && nals[1] == SPS && nals[2] == PPS)
         #expect(nals.map { Hevc.nalType($0[0]) } == [Hevc.vps, Hevc.sps, Hevc.pps])
+        // Header-only view matches the copied NALs, including 4-byte start codes.
+        let padded = [0] + stream + [0, 0, 0, 1, 0x26, 0x01, 0x00]
+        #expect(Hevc.nalHeaders(padded) == Hevc.nalUnits(padded).map { $0[0] })
+        #expect(Hevc.nalRanges(padded).map { Array(padded[$0]) } == Hevc.nalUnits(padded))
     }
 
     @Test func stripsDjiFrameMarker() {

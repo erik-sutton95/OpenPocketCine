@@ -2090,9 +2090,8 @@ final class SoftAPVideoAssembler: @unchecked Sendable {
     }
 
     private static func hasRandomAccess(_ au: [UInt8], codec: LiveVideoCodec) -> Bool {
-        Hevc.nalUnits(au).contains { nal in
-            guard let byte = nal.first else { return false }
-            return codec == .avc ? Avc.nalType(byte) == Avc.idr : Hevc.isIRAP(Hevc.nalType(byte))
+        Hevc.nalHeaders(au).contains { byte in
+            codec == .avc ? Avc.nalType(byte) == Avc.idr : Hevc.isIRAP(Hevc.nalType(byte))
         }
     }
 

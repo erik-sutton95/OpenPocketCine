@@ -261,16 +261,12 @@
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, annexB: jbyteArray?
     ) -> jboolean {
         let bytes = swiftBytes(env, annexB) ?? []
-        let nals = Hevc.nalUnits(bytes)
-        let avc = LiveVideo.detect(nals: nals) == .avc
-        for nal in nals {
-            guard let first = nal.first else { continue }
-            if avc ? Avc.isKeyframeNal(Avc.nalType(first)) : Hevc.isKeyframeNal(Hevc.nalType(first))
-            {
-                return 1
-            }
+        let headers = Hevc.nalHeaders(bytes)
+        let avc = LiveVideo.detect(headers: headers) == .avc
+        let keyframe = headers.contains {
+            avc ? Avc.isKeyframeNal(Avc.nalType($0)) : Hevc.isKeyframeNal(Hevc.nalType($0))
         }
-        return 0
+        return keyframe ? 1 : 0
     }
 
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_depacketizerCreate")
