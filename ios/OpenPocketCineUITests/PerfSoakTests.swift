@@ -83,10 +83,20 @@ final class PerfSoakTests: XCTestCase {
         Thread.sleep(forTimeInterval: 10)
         attach("perf-soak-\(name)-start", app)
 
-        print("PERF_SOAK_HOLD_BEGIN profile=\(name) on=\(applied.joined(separator: ",")) hold=\(Int(hold))")
+        // Optional camera recording (writes a clip to the card) for the REC chrome path.
+        let recordTake = env["OPV_PERF_RECORD"] == "1"
+        if recordTake {
+            record.tap()
+            Thread.sleep(forTimeInterval: 3)
+        }
+        print("PERF_SOAK_HOLD_BEGIN profile=\(name) on=\(applied.joined(separator: ",")) rec=\(recordTake) hold=\(Int(hold))")
         // ponytail: plain sleep, no queries; the host trace is the measurement.
         Thread.sleep(forTimeInterval: hold)
         print("PERF_SOAK_HOLD_END profile=\(name)")
+        if recordTake {
+            record.tap()
+            Thread.sleep(forTimeInterval: 2)
+        }
 
         attach("perf-soak-\(name)-end", app)
         XCTAssertTrue(record.exists || settings.exists, "live monitor lost during soak")

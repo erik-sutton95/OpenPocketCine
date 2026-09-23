@@ -172,7 +172,7 @@
             UIColor(b).getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
             let t = CGFloat(t)
             return Color(
-                .extendedSRGB, red: r1 + (r2 - r1) * t, green: g1 + (g2 - g1) * t,
+                .sRGB, red: r1 + (r2 - r1) * t, green: g1 + (g2 - g1) * t,
                 blue: b1 + (b2 - b1) * t, opacity: a1 + (a2 - a1) * t)
         }
     }

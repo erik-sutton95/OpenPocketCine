@@ -3,7 +3,7 @@
 #
 #   DEVICE=<udid> tools/perf-soak.sh [profile ...]
 #
-# Profiles (PerfSoakTests): clean, lut, pro (default), heavy.
+# Profiles (PerfSoakTests): clean, lut, pro (default), heavy; append +rec to record a take.
 # Env: HOLD (s, default 90), TRACE (s, default HOLD-10), CONFIG (Release),
 #      TEMPLATE ("Power Profiler"), EXTRA ("Time Profiler" instrument added),
 #      COOL (s between profiles, default 60), OUT (.local/perf/<stamp>).
@@ -25,7 +25,7 @@ mkdir -p "$OUT"
 cd "$ROOT"
 
 just ios-generate >/dev/null
-DERIVED="$OUT/derived"
+DERIVED="${DERIVED:-$ROOT/.local/perf/derived}"
 xcodebuild build-for-testing -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview \
   -configuration "$CONFIG" -destination "platform=iOS,id=$DEVICE" -allowProvisioningUpdates \
   -derivedDataPath "$DERIVED" >"$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log"; exit 1; }
@@ -33,14 +33,17 @@ XCTESTRUN="$(ls "$DERIVED"/Build/Products/*.xctestrun | head -1)"
 
 for i in "${!PROFILES[@]}"; do
   profile="${PROFILES[$i]}"
-  log="$OUT/$profile.log"
+  rec=0
+  if [[ "$profile" == *+rec ]]; then rec=1; profile="${profile%+rec}"; fi
+  tag="$profile$([[ $rec == 1 ]] && echo -rec)"
+  log="$OUT/$tag.log"
   echo "== $profile (hold ${HOLD}s, trace ${TRACE}s, $CONFIG)"
   xcrun devicectl device process launch --device "$DEVICE" --terminate-existing \
-    com.opencapture.openpocketcine >"$OUT/$profile.launch.log" 2>&1
+    com.opencapture.openpocketcine >"$OUT/$tag.launch.log" 2>&1
   sleep 3
-  TEST_RUNNER_OPV_PERF_ATTACH=1 TEST_RUNNER_OPV_PERF_SOAK=1 TEST_RUNNER_OPV_PERF_PROFILE="$profile" TEST_RUNNER_OPV_PERF_SOAK_S="$HOLD" \
+  TEST_RUNNER_OPV_PERF_ATTACH=1 TEST_RUNNER_OPV_PERF_RECORD="$rec" TEST_RUNNER_OPV_PERF_SOAK=1 TEST_RUNNER_OPV_PERF_PROFILE="$profile" TEST_RUNNER_OPV_PERF_SOAK_S="$HOLD" \
     xcodebuild test-without-building -xctestrun "$XCTESTRUN" -destination "platform=iOS,id=$DEVICE" \
-    -only-testing:OpenPocketCineUITests/PerfSoakTests -resultBundlePath "$OUT/$profile.xcresult" \
+    -only-testing:OpenPocketCineUITests/PerfSoakTests -resultBundlePath "$OUT/$tag.xcresult" \
     >"$log" 2>&1 &
   test_pid=$!
   # Wait for the hold marker (or the test ending early).
@@ -53,14 +56,14 @@ for i in "${!PROFILES[@]}"; do
     extra_args=()
     [[ -n "$EXTRA" ]] && extra_args=(--instrument "$EXTRA")
     xcrun xctrace record --device "$DEVICE" --template "$TEMPLATE" "${extra_args[@]}" \
-      --attach OpenPocketCine --time-limit "${TRACE}s" --output "$OUT/$profile.trace" \
-      >"$OUT/$profile.xctrace.log" 2>&1 || tail -5 "$OUT/$profile.xctrace.log"
+      --attach OpenPocketCine --time-limit "${TRACE}s" --output "$OUT/$tag.trace" \
+      >"$OUT/$tag.xctrace.log" 2>&1 || tail -5 "$OUT/$tag.xctrace.log"
   fi
   wait "$test_pid" && echo "test passed" || echo "test FAILED (see $log)"
-  if [[ -d "$OUT/$profile.trace" ]]; then
-    xcrun xctrace symbolicate --input "$OUT/$profile.trace" \
+  if [[ -d "$OUT/$tag.trace" ]]; then
+    xcrun xctrace symbolicate --input "$OUT/$tag.trace" \
       --dsym "$DERIVED/Build/Products/$CONFIG-iphoneos/OpenPocketCine.app.dSYM" >/dev/null 2>&1 || true
-    python3 "$ROOT/tools/perf-trace-summary.py" "$OUT/$profile.trace" | tee "$OUT/$profile.summary.txt" || true
+    python3 "$ROOT/tools/perf-trace-summary.py" "$OUT/$tag.trace" | tee "$OUT/$tag.summary.txt" || true
   fi
   [[ $i -lt $((${#PROFILES[@]} - 1)) ]] && sleep "$COOL"
 done
