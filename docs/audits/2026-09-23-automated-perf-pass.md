@@ -50,7 +50,9 @@ The live picture itself was already cheap. Most cost sat in decoration around it
 
 iOS render and chrome:
 
-- Glass backdrop: Core Image now only composites the small canvas; saturation
+- Glass backdrop: with one source, the look's own Core Image context renders it
+  straight into the blur canvas (no readback); Core Image only composites that
+  small canvas; saturation
   and clamped Gaussian blurs run in one Metal command buffer with Metal
   Performance Shaders, then one small readback per product. The Core Image
   atlas path remains the fallback. Chromium pixel oracles still pass.
@@ -133,10 +135,12 @@ datalink" for 90 s right after the previous run's REC stop; the immediate
 retry connected normally. Treat it as a camera-side observation to watch, not
 a measured regression.
 
+Rendering a single source's look straight into the glass canvas (`37d440df`,
+no CGImage readback or re-upload) then brought `pro` to CPU impact 1.01 at
+1.91 G instructions/s in Fair, against 6.06 for the baseline.
+
 ## Not changed (proposals)
 
-- Backdrop look image: still one Core Image render and readback per job. Folding
-  it into the canvas render is exact only for unmanaged (LUT) looks.
 - Covered Metal looks (LUT/PEAK/ZEBRA/FALSE) keep rendering under Settings/Media.
 - Metal present hops between Main and the drawable worker several times per frame.
 - Android R1 (Vulkan work on the UI thread) and R8 (Face AF copy before admission)
