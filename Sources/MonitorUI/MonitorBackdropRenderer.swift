@@ -231,6 +231,10 @@
         ) -> [CGImage]? {
             let width = Int(extent.width)
             let height = Int(extent.height)
+            // Sigmas follow the canvas scale; keep only this size's kernels.
+            if let canvas = textures["canvas"], canvas.width != width || canvas.height != height {
+                blurs.removeAll()
+            }
             guard width > 0, height > 0,
                 let command = queue.makeCommandBuffer(),
                 let source = texture("canvas", width, height, .rgba16Float)
