@@ -395,7 +395,7 @@ fun MediaPlayerScreen(
     }
     BackHandler { handlePlaybackBack() }
     val backdrop = rememberMonitorBackdropFeed(active.id, enabled = ready)
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     var decodeWidth by remember { mutableIntStateOf(1280) }
     var decodeHeight by remember { mutableIntStateOf(720) }
     var clipColorMode by remember { mutableIntStateOf(-1) }

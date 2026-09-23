@@ -120,7 +120,7 @@ private const val DRUM_NOT_LAID_OUT = -1
 @Composable
 fun LUTPicker(model: AppModel, onClose: () -> Unit) {
     val assist = model.assist
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     LUTPicker(
         selection = model.lutSelection,
         onSelect = model::updateLutSelection,
