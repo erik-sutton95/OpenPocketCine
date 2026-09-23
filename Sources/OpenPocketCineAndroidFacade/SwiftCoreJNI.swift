@@ -221,7 +221,6 @@
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         cmdSet: jint, cmdId: jint, payload: jbyteArray?, previousJSON: jstring?
     ) -> jstring? {
-        var status = AndroidSessionWire.status(fromJSON: swiftString(env, previousJSON) ?? "{}")
         let frame = Duml.Frame(
             sender: 0,
             receiver: 0,
@@ -231,7 +230,12 @@
             cmdId: UInt8(truncatingIfNeeded: cmdId),
             payload: swiftBytes(env, payload) ?? []
         )
-        guard CameraStatusDecoder.apply(frame, to: &status) else { return nil }
+        // Recognition depends only on the frame, so reject non-status frames before copying
+        // and parsing the previous status.
+        var probe = CameraStatus()
+        guard CameraStatusDecoder.apply(frame, to: &probe) else { return nil }
+        var status = AndroidSessionWire.status(fromJSON: swiftString(env, previousJSON) ?? "{}")
+        CameraStatusDecoder.apply(frame, to: &status)
         return javaString(env, AndroidSessionWire.statusJSON(status))
     }
 
