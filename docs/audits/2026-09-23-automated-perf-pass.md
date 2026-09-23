@@ -1,0 +1,116 @@
+# Automated performance pass and device soak
+
+Tracking: [#402](https://github.com/erik-sutton95/OpenPocketCine/issues/402).
+Follows the [September 22 source audit](2026-09-22-performance-audit.md).
+Goal: less power and heat on a professional field monitor without lowering the
+live picture's cadence, image quality, readability or control responsiveness.
+
+## Process
+
+The pass is repeatable without an operator once a phone and camera are ready.
+
+| Step | What runs | Output |
+| --- | --- | --- |
+| Device prep (once) | iPhone: Settings > Developer > Enable UI Automation, Auto-Lock Never; saved Pocket 4 Pro powered and nearby | |
+| Build | `tools/perf-soak.sh` does a Release `build-for-testing`, installs that exact app with `devicectl` and launches it | `.local/perf/<run>/` (ignored) |
+| Configure | `PerfSoakTests` attaches to the running app, taps the saved Pocket 4's Connect, accepts the camera Wi-Fi join prompt, waits for live and sets an assist profile | screenshot attachments |
+| Trace | The test exits (detached mode) so UI automation is not measured; the host records Power Profiler + Time Profiler with `xctrace` for `HOLD-10` seconds | `<profile>.trace` |
+| Summarize | `tools/perf-trace-summary.py` reads the trace: per-process CPU/GPU/display power impact, CPU instructions per second, thermal state time, CPU by thread and hottest frames | `<profile>.summary.txt` |
+
+Profiles: `clean` (no assists), `lut`, `pro` (LUT + PEAK + WAVE) and `heavy`
+(LUT, PEAK, ZEBRA, WAVE, HISTO, VECTOR). Append `+rec` to record a take (the
+test stays attached so it can stop REC). Run with
+`just perf-soak <udid> "clean pro"`.
+
+A/B method: the baseline (`05ef6abf`, this branch before any change) and the
+candidate each live in their own worktree with the same harness copied in, so
+editing never changes a build under measurement. Runs alternate candidate and
+baseline with cooldowns between them. The phone stayed on its charger, which
+keeps battery-drain columns at zero and warms the device; compare thermal-state
+time alongside CPU, because the app's own thermal backoff (backdrop x3 at
+Serious) reduces work once the phone is hot.
+
+## Baseline hotspots (iPhone 16 Pro Max, iOS 27, Release, live Pocket 4 Pro)
+
+`pro` profile, XCTest attached, 31.5 s trace, 76% of one core in the app:
+
+| Work | Share of one core | Where |
+| --- | ---: | --- |
+| Floating-chrome glass backdrop: four Core Image blur renders per job | 25% | `MonitorBackdropRenderer`, `createCGImage` |
+| Backdrop look image (display look at 320 px) | 8% | `AssistInspectorImageRenderer.renderImage` |
+| Face AF (Vision landmarks at the 25 Hz feed rate) | 4% | `LiveFaceDetector` |
+| Live picture bake (LUT + PEAK + WAVE composition) | 2.4% | `FeedFrameBaker` |
+| Journal redaction (eight regexes per line) and journal I/O | 2% | `PrivacyRedactor`, `ControlLiveLog` |
+| Session summary re-decoding stored incidents | 1.7% | `FeedIncidentRuntime` |
+| Idle "Your cameras" page: scan dot `repeatForever` pulse | 3% while idle | SwiftUI async renderer |
+
+The live picture itself was already cheap. Most cost sat in decoration around it.
+
+## Changes
+
+iOS render and chrome:
+
+- Glass backdrop: Core Image now only composites the small canvas; saturation
+  and clamped Gaussian blurs run in one Metal command buffer with Metal
+  Performance Shaders, then one small readback per product. The Core Image
+  atlas path remains the fallback. Chromium pixel oracles still pass.
+- Glass panels draw the backdrop as a clipped, layer-backed image instead of a
+  `Canvas` that re-rasterized each panel on the CPU at 25 Hz.
+- REC tally, record lamp glow and scan dots pulse from a 30 Hz timeline instead
+  of `repeatForever`, which held ProMotion at 120 Hz for a whole take.
+- Metal feed presents at bake size for Off/Fast upscaling and HDR off; the
+  compositor does the same bilinear fit. Format descriptions and HDR layer
+  properties are reused instead of rebuilt per frame.
+- Scope trails reuse the previous build; superseded scope builds are skipped.
+- FALSE/ZEBRA backdrops settle on a held source; an idle backdrop polls at 10 Hz.
+- Leaf-scoped REC/focus reads stop 25 Hz chrome re-evaluation with AF-C faces;
+  the app root no longer re-runs at 5 Hz; the hidden warm-up spinner unmounts;
+  scope taps stop while Settings or Media covers live (looks, Face AF, Watch
+  and relay keep running; reveal needs no enable).
+- Face AF detects at 10 Hz after about a second without a face; tracking stays 25 Hz.
+- Watch identity preview downscales in hardware before RGB conversion.
+
+iOS transport, playback and diagnostics:
+
+- DUML CRC checks run on slices; access units classify from NAL headers; frames
+  scanned on the UDP queue are handed to Main instead of rescanned.
+- Journal redaction runs each expression only when its anchor is present, off
+  the caller's queue, with the journal file kept open.
+- The 30 s session checkpoint caches the incident export.
+- Paused graded playback parks its display link; scopes-only playback stops
+  resubmitting the held frame.
+- BLE scanning yields a camera only when its classification changes; Multiview
+  scans only with an Add or connect consumer.
+
+Android (build, unit tests and lint only; no Android device was attached):
+inspector-only scope work at 5 Hz in both schedulers, no redraw of a held GLES
+playback frame, retained GLES programs and cubes across scalar plan changes,
+skipped identity grade pass, 1440 px working raster for playback originals,
+5 Hz Compose status publication, and a one-pass status JSON bridge that rejects
+non-status frames first (host probe: 800 to 15 microseconds per status parse).
+
+## Results
+
+RESULTS_PLACEHOLDER
+
+## Not changed (proposals)
+
+- Backdrop cadence: glass products follow the 25 Hz source. Capping them near
+  12.5 Hz would likely be invisible under the 52 to 86% tint and would halve the
+  remaining backdrop work, but it changes a documented shared budget.
+- Backdrop look image: still one Core Image render and readback per job. Folding
+  it into the canvas render is exact only for unmanaged (LUT) looks.
+- Covered Metal looks (LUT/PEAK/ZEBRA/FALSE) keep rendering under Settings/Media.
+- Metal present hops between Main and the drawable worker several times per frame.
+- Android R1 (Vulkan work on the UI thread) and R8 (Face AF copy before admission)
+  need device testing; Android's live screen recomposes once a second from a
+  top-level `tick` read.
+- `DumlTransport.scanFrames` advances one byte after a valid frame.
+
+## Verification
+
+- `just check` and the full iOS simulator suite (740 tests) on the merged branch.
+- `just android-check` on the Android branch before merge.
+- Physical: every A/B run above is a Release build on the iPhone with a live
+  Pocket 4 Pro; soak screenshots confirm live picture and assists at start.
+  Android changes remain physically unverified.
