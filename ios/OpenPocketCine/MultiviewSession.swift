@@ -182,6 +182,7 @@ final class MultiviewSession {
     private var cleanupJournalWritten = false
     private let ble = BleLink(allowsConcurrentCameras: true)
     private var scanTask: Task<Void, Never>?
+    private var discovering = false
     private var router: Task<Void, Never>?
     private var keepalive: Task<Void, Never>?
     private var monitor: Task<Void, Never>?
@@ -285,8 +286,28 @@ final class MultiviewSession {
             }
         }
     }
+    /// BLE discovery feeds the Add picker and network setup, and stays up while
+    /// a camera connects. A full stage, or an inactive app with nothing
+    /// connecting, has no consumer for an unfiltered duplicate scan.
+    static func needsDiscovery(
+        running: Bool, applicationActive: Bool, hasEmptySlot: Bool, connecting: Bool
+    ) -> Bool {
+        running && (hasEmptySlot || connecting) && (applicationActive || connecting)
+    }
+
+    private var discoveryNeeded: Bool {
+        Self.needsDiscovery(
+            running: running && !closing, applicationActive: applicationActive,
+            hasEmptySlot: tiles.contains { $0.camera == nil }, connecting: connectingCameras)
+    }
+
     func scan() {
         scanTask?.cancel()
+        guard discoveryNeeded else {
+            stopDiscovery()
+            return
+        }
+        discovering = true
         scanTask = Task { [weak self] in
             guard let self else { return }
             guard await ble.waitUntilPoweredOn(), !Task.isCancelled else { return }
@@ -297,6 +318,22 @@ final class MultiviewSession {
             }
         }
     }
+    private func stopDiscovery() {
+        scanTask?.cancel()
+        ble.stopScan()
+        discovering = false
+    }
+
+    /// Follow demand without restarting a running scan (that clears `found`) or
+    /// starting one while the network-setup camera owns this BLE link.
+    private func refreshDiscovery() {
+        if !discoveryNeeded {
+            if discovering { stopDiscovery() }
+        } else if !discovering, !busy, preparedCamera == nil {
+            scan()
+        }
+    }
+
     private func next() -> UInt16 {
         sequence &+= 1
         return sequence
@@ -332,8 +369,7 @@ final class MultiviewSession {
         try await ble.connect(camera)
         try Task.checkCancellation()
         guard running else { throw CancellationError() }
-        scanTask?.cancel()
-        ble.stopScan()
+        stopDiscovery()
         replies.removeAll()
         approved = false
         let frames = ble.frames
@@ -579,6 +615,7 @@ final class MultiviewSession {
                 // Keep camera assignments and sockets. Foreground watchdog owns repair.
             }
         }
+        refreshDiscovery()
     }
 
     func reconnect(_ tile: Tile) async {
@@ -762,11 +799,13 @@ final class MultiviewSession {
         tile.experimentalNetwork = experimental
         tile.networkVerified = false
         tile.status = "Connecting · approve on camera"
+        refreshDiscovery()
         defer {
             tile.connecting = false
             client.close()
             provisioners.removeValue(forKey: tile.id)
             if running { persistStage() }
+            refreshDiscovery()
         }
         persistStage()
         var stage = "host Wi-Fi"
@@ -1176,6 +1215,7 @@ final class MultiviewSession {
         tile.decoder.reset()
         tile.status = "Add camera"
         persistStage()
+        refreshDiscovery()
         return true
     }
     func stop() {
@@ -1192,8 +1232,7 @@ final class MultiviewSession {
         for search in searches.values { search.cancel() }
         searches.removeAll()
         monitor?.cancel()
-        scanTask?.cancel()
-        ble.stopScan()
+        stopDiscovery()
         disconnectBLE()
         ready = false
         password = ""
