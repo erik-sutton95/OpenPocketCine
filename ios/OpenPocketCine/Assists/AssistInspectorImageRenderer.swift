@@ -108,62 +108,72 @@ final class AssistInspectorImageRenderer: @unchecked Sendable {
     /// look on a serial worker. It must not overlap this with `render` on that instance.
     func renderImage(source: CVPixelBuffer, effects: LiveImageEffects) -> CGImage? {
         autoreleasepool {
-            let width = CGFloat(CVPixelBufferGetWidth(source))
-            let height = CGFloat(CVPixelBufferGetHeight(source))
-            guard width > 0, height > 0 else { return nil }
-            let scale = min(
-                1, AssistInspectorPreviewPolicy.maximumImageDimension / max(width, height))
-            let transform = CGAffineTransform(scaleX: scale, y: scale)
-            // Downscale before every compositor graph. Preserve native source
-            // codes for the tool and source attachments for its identity look.
-            let identity = CIImage(cvPixelBuffer: source).transformed(by: transform)
-            let codes = CIImage(
-                cvPixelBuffer: source, options: LiveMonitorWorkingSpace.imageOptions
-            )
-            .transformed(by: transform)
-            if effects.falseColor {
-                PocketFalseColorMap.warm(
-                    scale: effects.falseColorScale, mode: effects.colorMode,
-                    hasLUT: effects.lutDimension >= 2)
-            }
-            let product = LiveMonitorCompositor.applyProduct(
-                to: codes, effects: effects, display: identity)
-            var result = product.image
-            let outputScale = min(
-                1,
-                AssistInspectorPreviewPolicy.maximumImageDimension
-                    / max(result.extent.width, result.extent.height))
-            if outputScale < 1 {
-                result = result.transformed(
-                    by: CGAffineTransform(scaleX: outputScale, y: outputScale))
-            }
-            if effects.mirror {
-                result = result.transformed(by: CGAffineTransform(scaleX: -1, y: 1))
-            }
-            let extent = result.extent
-            guard extent.width.isFinite, extent.height.isFinite,
-                extent.width > 0, extent.height > 0
-            else { return nil }
-            result = result.transformed(
-                by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
-            let context: CIContext
-            if product.unmanagedBake {
-                if cubeContext == nil {
-                    cubeContext = CIContext(options: LiveMonitorWorkingSpace.contextOptions)
-                }
-                guard let cubeContext else { return nil }
-                context = cubeContext
-            } else {
-                if displayContext == nil {
-                    displayContext = CIContext(
-                        options: LiveMonitorWorkingSpace.displayContextOptions)
-                }
-                guard let displayContext else { return nil }
-                context = displayContext
-            }
-            return context.createCGImage(result, from: result.extent)
+            guard let look = lookImage(source: source, effects: effects) else { return nil }
+            return look.context.createCGImage(look.image, from: look.image.extent)
         }
     }
+
+    /// The display look at most 320 px on its longest side, at the origin, and
+    /// the context whose output encoding `renderImage` would produce. A caller
+    /// may render it elsewhere with that context (and `outputColorSpace`) and get
+    /// the same pixels without a CPU readback.
+    func lookImage(source: CVPixelBuffer, effects: LiveImageEffects)
+        -> (image: CIImage, context: CIContext, outputColorSpace: CGColorSpace?)?
+    {
+        let width = CGFloat(CVPixelBufferGetWidth(source))
+        let height = CGFloat(CVPixelBufferGetHeight(source))
+        guard width > 0, height > 0 else { return nil }
+        let scale = min(
+            1, AssistInspectorPreviewPolicy.maximumImageDimension / max(width, height))
+        let transform = CGAffineTransform(scaleX: scale, y: scale)
+        // Downscale before every compositor graph. Preserve native source
+        // codes for the tool and source attachments for its identity look.
+        let identity = CIImage(cvPixelBuffer: source).transformed(by: transform)
+        let codes = CIImage(
+            cvPixelBuffer: source, options: LiveMonitorWorkingSpace.imageOptions
+        )
+        .transformed(by: transform)
+        if effects.falseColor {
+            PocketFalseColorMap.warm(
+                scale: effects.falseColorScale, mode: effects.colorMode,
+                hasLUT: effects.lutDimension >= 2)
+        }
+        let product = LiveMonitorCompositor.applyProduct(
+            to: codes, effects: effects, display: identity)
+        var result = product.image
+        let outputScale = min(
+            1,
+            AssistInspectorPreviewPolicy.maximumImageDimension
+                / max(result.extent.width, result.extent.height))
+        if outputScale < 1 {
+            result = result.transformed(
+                by: CGAffineTransform(scaleX: outputScale, y: outputScale))
+        }
+        if effects.mirror {
+            result = result.transformed(by: CGAffineTransform(scaleX: -1, y: 1))
+        }
+        let extent = result.extent
+        guard extent.width.isFinite, extent.height.isFinite,
+            extent.width > 0, extent.height > 0
+        else { return nil }
+        result = result.transformed(
+            by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
+        if product.unmanagedBake {
+            if cubeContext == nil {
+                cubeContext = CIContext(options: LiveMonitorWorkingSpace.contextOptions)
+            }
+            guard let cubeContext else { return nil }
+            return (result, cubeContext, nil)
+        }
+        if displayContext == nil {
+            displayContext = CIContext(options: LiveMonitorWorkingSpace.displayContextOptions)
+        }
+        guard let displayContext else { return nil }
+        // Default output space: sRGB, as `createCGImage` encodes.
+        return (result, displayContext, Self.sRGB)
+    }
+
+    private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)
 }
 
 private final class InspectorImageWork: @unchecked Sendable {

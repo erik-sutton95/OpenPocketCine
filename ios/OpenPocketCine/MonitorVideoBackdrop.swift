@@ -198,6 +198,20 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
                             snapshot = operation(canvasSize, sources)
                         } else {
                             guard !sources.isEmpty else { return nil }
+                            // One source: its look context renders straight into the
+                            // blur canvas (no CGImage readback and re-upload per frame).
+                            if sources.count == 1, let source = sources.first,
+                                let look = imageRenderer.lookImage(
+                                    source: source.buffer, effects: source.effects),
+                                let direct = backdropRenderer.render(
+                                    canvasSize: canvasSize, look: look.image, frame: source.frame,
+                                    clip: source.clip, lookContext: look.context,
+                                    outputColorSpace: look.outputColorSpace, surroundRGB: surroundRGB)
+                            {
+                                if canCache { cache(direct, input: input, owner: owner, ticket: ticket) }
+                                guard isCurrent(ticket) else { return nil }
+                                return direct
+                            }
                             let layers = sources.compactMap { source -> MonitorBackdropLayer? in
                                 guard isCurrent(ticket),
                                     let image = imageRenderer.renderImage(

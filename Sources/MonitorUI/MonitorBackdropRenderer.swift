@@ -60,57 +60,17 @@
         )
             -> MonitorBackdropSnapshot?
         {
-            guard canvasSize.width.isFinite, canvasSize.height.isFinite,
-                canvasSize.width > 1, canvasSize.height > 1, !layers.isEmpty
-            else { return nil }
-            let scale = min(
-                1,
-                CGFloat(MonitorBackdropPolicy.maximumDimension)
-                    / max(canvasSize.width, canvasSize.height))
-            let extent = CGRect(
-                x: 0, y: 0, width: ceil(canvasSize.width * scale),
-                height: ceil(canvasSize.height * scale))
-            var canvas = CIImage(
-                color: CIColor(
-                    red: CGFloat((surroundRGB >> 16) & 255) / 255,
-                    green: CGFloat((surroundRGB >> 8) & 255) / 255,
-                    blue: CGFloat(surroundRGB & 255) / 255)
-            )
-            .cropped(to: extent)
-            for layer in layers {
-                guard layer.frame.width > 0, layer.frame.height > 0 else { continue }
-                let frame = layer.frame
-                let image = CIImage(cgImage: layer.image).transformed(
-                    by: CGAffineTransform(
-                        scaleX: frame.width * scale / CGFloat(layer.image.width),
-                        y: frame.height * scale / CGFloat(layer.image.height))
-                ).transformed(
-                    by: CGAffineTransform(
-                        translationX: frame.minX * scale,
-                        y: (canvasSize.height - frame.maxY) * scale))
-                let clip = CGRect(
-                    x: layer.clip.minX * scale,
-                    y: (canvasSize.height - layer.clip.maxY) * scale,
-                    width: layer.clip.width * scale, height: layer.clip.height * scale)
-                canvas = image.cropped(to: clip).composited(over: canvas)
-            }
-            canvas = canvas.cropped(to: extent)
-            var keys: [FilterKey] = []
-            for role in MonitorGlassDensity.allCases {
-                let key = FilterKey(radius: role.blurRadius, saturation: role.saturation)
-                if !keys.contains(key) { keys.append(key) }
-            }
+            guard let (scale, extent) = Self.geometry(canvasSize), !layers.isEmpty else { return nil }
+            let canvas = Self.canvas(
+                canvasSize: canvasSize, scale: scale, extent: extent, surroundRGB: surroundRGB,
+                placed: layers.map { (CIImage(cgImage: $0.image), $0.frame, $0.clip) })
+            let keys = Self.productKeys
             if let gpu,
                 let rendered = gpu.render(
-                    canvas: canvas, extent: extent, context: context,
+                    canvas: canvas, extent: extent, context: context, colorSpace: nil,
                     products: keys.map { ($0.radius * scale, $0.saturation) })
             {
-                var images: [MonitorGlassDensity: CGImage] = [:]
-                for role in MonitorGlassDensity.allCases {
-                    let key = FilterKey(radius: role.blurRadius, saturation: role.saturation)
-                    images[role] = keys.firstIndex(of: key).map { rendered[$0] }
-                }
-                return MonitorBackdropSnapshot(canvasSize: canvasSize, images: images)
+                return Self.snapshot(canvasSize: canvasSize, keys: keys, rendered: rendered)
             }
             // Core Image fallback (no Metal / MPS).
             // Build every distinct blur product, stack them in one atlas and
@@ -157,6 +117,103 @@
             var images: [MonitorGlassDensity: CGImage] = [:]
             for role in MonitorGlassDensity.allCases {
                 images[role] = products[FilterKey(radius: role.blurRadius, saturation: role.saturation)]
+            }
+            return MonitorBackdropSnapshot(canvasSize: canvasSize, images: images)
+        }
+
+        /// Single-source fast path: `lookContext` renders the look straight into the
+        /// canvas texture, so there is no CGImage readback, CPU image or re-upload.
+        /// `outputColorSpace` is the encoding that context's `createCGImage` would
+        /// use (nil when unmanaged), which keeps the pixels the same. Nil without
+        /// Metal; the caller then uses the CGImage path.
+        public func render(
+            canvasSize: CGSize, look: CIImage, frame: CGRect, clip: CGRect,
+            lookContext: CIContext, outputColorSpace: CGColorSpace?,
+            surroundRGB: UInt32 = 0x08090A
+        ) -> MonitorBackdropSnapshot? {
+            guard let gpu, let (scale, extent) = Self.geometry(canvasSize),
+                look.extent.width > 0, look.extent.height > 0
+            else { return nil }
+            let canvas = Self.canvas(
+                canvasSize: canvasSize, scale: scale, extent: extent, surroundRGB: surroundRGB,
+                placed: [(look, frame, clip)])
+            let keys = Self.productKeys
+            guard
+                let rendered = gpu.render(
+                    canvas: canvas, extent: extent, context: lookContext,
+                    colorSpace: outputColorSpace,
+                    products: keys.map { ($0.radius * scale, $0.saturation) })
+            else { return nil }
+            return Self.snapshot(canvasSize: canvasSize, keys: keys, rendered: rendered)
+        }
+
+        private static func geometry(_ canvasSize: CGSize) -> (CGFloat, CGRect)? {
+            guard canvasSize.width.isFinite, canvasSize.height.isFinite,
+                canvasSize.width > 1, canvasSize.height > 1
+            else { return nil }
+            let scale = min(
+                1,
+                CGFloat(MonitorBackdropPolicy.maximumDimension)
+                    / max(canvasSize.width, canvasSize.height))
+            let extent = CGRect(
+                x: 0, y: 0, width: ceil(canvasSize.width * scale),
+                height: ceil(canvasSize.height * scale))
+            return (scale, extent)
+        }
+
+        /// Places each image (origin at zero) in its canvas frame and clip over the surround.
+        private static func canvas(
+            canvasSize: CGSize, scale: CGFloat, extent: CGRect, surroundRGB: UInt32,
+            placed: [(image: CIImage, frame: CGRect, clip: CGRect)]
+        ) -> CIImage {
+            // Tagged sRGB: an unmanaged context uses the bytes as-is, a managed look
+            // context round-trips them, so the surround is identical either way.
+            let red = CGFloat((surroundRGB >> 16) & 255) / 255
+            let green = CGFloat((surroundRGB >> 8) & 255) / 255
+            let blue = CGFloat(surroundRGB & 255) / 255
+            let color =
+                CGColorSpace(name: CGColorSpace.sRGB).flatMap {
+                    CIColor(red: red, green: green, blue: blue, colorSpace: $0)
+                } ?? CIColor(red: red, green: green, blue: blue)
+            var canvas = CIImage(color: color).cropped(to: extent)
+            for layer in placed {
+                let frame = layer.frame
+                let size = layer.image.extent.size
+                guard frame.width > 0, frame.height > 0, size.width > 0, size.height > 0
+                else { continue }
+                let image = layer.image.transformed(
+                    by: CGAffineTransform(
+                        scaleX: frame.width * scale / size.width,
+                        y: frame.height * scale / size.height)
+                ).transformed(
+                    by: CGAffineTransform(
+                        translationX: frame.minX * scale,
+                        y: (canvasSize.height - frame.maxY) * scale))
+                let clip = CGRect(
+                    x: layer.clip.minX * scale,
+                    y: (canvasSize.height - layer.clip.maxY) * scale,
+                    width: layer.clip.width * scale, height: layer.clip.height * scale)
+                canvas = image.cropped(to: clip).composited(over: canvas)
+            }
+            return canvas.cropped(to: extent)
+        }
+
+        private static var productKeys: [FilterKey] {
+            var keys: [FilterKey] = []
+            for role in MonitorGlassDensity.allCases {
+                let key = FilterKey(radius: role.blurRadius, saturation: role.saturation)
+                if !keys.contains(key) { keys.append(key) }
+            }
+            return keys
+        }
+
+        private static func snapshot(canvasSize: CGSize, keys: [FilterKey], rendered: [CGImage])
+            -> MonitorBackdropSnapshot
+        {
+            var images: [MonitorGlassDensity: CGImage] = [:]
+            for role in MonitorGlassDensity.allCases {
+                let key = FilterKey(radius: role.blurRadius, saturation: role.saturation)
+                images[role] = keys.firstIndex(of: key).map { rendered[$0] }
             }
             return MonitorBackdropSnapshot(canvasSize: canvasSize, images: images)
         }
@@ -226,7 +283,7 @@
         /// Products are rendered while the previous job's images may still be
         /// displayed, so each readback copies into its own CGImage buffer.
         func render(
-            canvas: CIImage, extent: CGRect, context: CIContext,
+            canvas: CIImage, extent: CGRect, context: CIContext, colorSpace: CGColorSpace?,
             products: [(sigma: Double, saturation: Double)]
         ) -> [CGImage]? {
             let width = Int(extent.width)
@@ -241,7 +298,9 @@
             else { return nil }
             let destination = CIRenderDestination(mtlTexture: source, commandBuffer: command)
             destination.isFlipped = true
-            destination.colorSpace = nil
+            // nil: unmanaged bytes, as the NSNull-working-space CGImage path; a
+            // managed look context passes the sRGB encoding createCGImage uses.
+            destination.colorSpace = colorSpace
             guard (try? context.startTask(toRender: canvas, from: extent, to: destination, at: .zero))
                 != nil
             else { return nil }
