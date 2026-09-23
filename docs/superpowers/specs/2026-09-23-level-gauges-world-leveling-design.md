@@ -65,8 +65,8 @@ non-finite components, or `|norm - 1| > 1e-3`.
 - Smoothing `old * 0.7 + new * 0.3`, samples accepted at most 10 Hz
   (OpenZCine `levelAngleMinInterval`).
 - `mode`:
-  - `.gauges(roll, tilt)` where tilt is the error to the nearer target, horizon
-    (0) or plumb (+/-90).
+  - `.gauges(roll, tilt)` where tilt is measured from the horizon. Plumb error
+    is shown by the bubble, which takes over near plumb.
   - `.bubble(x, y)`: optical-axis offset from nadir or zenith in picture
     x/y degrees. Entered when raw world tilt `|tiltDeg| >= 65` (within 25 degrees of plumb),
     left when `|tiltDeg| < 60` (hysteresis).
