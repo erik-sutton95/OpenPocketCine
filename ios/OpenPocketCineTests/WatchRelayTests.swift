@@ -81,6 +81,12 @@ final class WatchRelayTests: XCTestCase {
         let luma = Self.meanLuma(image!)
         XCTAssertGreaterThan(luma, 70, "crushed identity JPEG luma=\(luma)")
         XCTAssertLessThan(luma, 170, "overexposed identity JPEG luma=\(luma)")
+        // The hardware pre-scale keeps the same VT colour conversion.
+        let scaled = WatchRelay.thumbnailData(
+            from: Self.make420v(y: 106, width: 256, height: 128), maxWidth: 64, quality: 0.95)
+        let scaledImage = scaled.flatMap { UIImage(data: $0) }
+        XCTAssertEqual(scaledImage?.cgImage?.width, 64)
+        XCTAssertEqual(scaledImage.map(Self.meanLuma) ?? 0, luma, accuracy: 3)
     }
 
     func testWatchShutterCopyIsOperatorFacing() {

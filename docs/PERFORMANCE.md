@@ -31,7 +31,7 @@ the remaining CPU/GPU, battery and thermal profiling matrix for issue #402.
 | Gimbal stick | `0x04/0x01` notify at **25 Hz** on the UDP ACK queue while held; one rest packet on lift. A held stick holds encoder-pause recover the same way the zoom disc does (no GOP-cut / UDP rebuild until lift). The live picture well and stick do not animate across orientation. Not MainActor `sendUntracked` (that starved window ACK). AirPods IMU samples ~100 Hz off main; a 25 Hz pump publishes native targets to a latest-only mailbox. Native wire emission has a 40 ms minimum interval on the 25 ms ACK timer (typically 20 Hz). Duplicate targets are suppressed; a not-ready socket cannot accumulate a backlog. HUD at the 5 Hz chrome budget. Head-track yaw/pitch rings (head + gimbal arrows) follow the 25 Hz pump while Head Tracking is on (not the 5 Hz HUD). Motion Control waypoint letters follow the 25 Hz stick budget — not 60 Hz `TimelineView.animation` / `withFrameNanos` on the live canvas (that starved ingest and flashed Reconnecting). Motion Control session progress is 5 Hz; no debug overlay is drawn. Timed-path ticks use monotonic elapsed time; a gap over 120 ms or attitude receipt age over 300 ms aborts the take. Physical precision remains unqualified ([Motion Control takes](programmed-moves.md)). | `GimbalStick.streamInterval`, iOS `DatalinkDriver.tickGimbalStick`, `HeadphoneMotionBridge` |
 | Gimbal mode readback | At most 1 Hz tilt/speed GET, driven by existing attitude receipts; no extra timer | `GimbalParamPoll` |
 | Battery | Sticky `ACTION_BATTERY_CHANGED` (Android); no 1 Hz poll | [`ANDROID.md`](../ANDROID.md) |
-| Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` (same family as the phone layer — a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
+| Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` on a same-format, same-tag VT hardware downscale to the wrist width, never the full live picture (same family as the phone layer; a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
 
 Motion Control window dragging keeps transient placement in the floating widget and
 commits its center to the shared model once on release. The iOS control-action
@@ -272,9 +272,12 @@ paused or held source. The key includes ordered retained buffers, effects,
 canvas size, placements, clips and surround color. Identical inputs skip native
 look/blur rendering and snapshot publication while preserving admission timing.
 Owner changes, failure and changed inputs invalidate the entry. Mutable working
-raster buffers and false-color/zebra looks bypass this cache: the former can
-change pixels in place, and the latter depend on additional asynchronously
-updated color/exposure state. This optimization does not change the producer,
+raster buffers bypass this cache because they can change pixels in place.
+False-color/zebra looks also read the exposure ceiling and asynchronously warmed
+false-color maps, so the key includes the ceiling byte and the ready map's clip;
+a held source with those looks settles instead of re-rendering at the cap. After
+about 250 ms without a new product (held or paused source, or no passive buffer),
+the iOS owner polls at 10 Hz instead of 60 Hz until one lands. This optimization does not change the producer,
 decoder, source cadence or the existing GPU rendering path.
 
 Decoder prefers hardware (`c2.qti` / Exynos, VideoToolbox) over a software
