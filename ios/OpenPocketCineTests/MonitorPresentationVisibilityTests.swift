@@ -136,10 +136,14 @@ final class MonitorPresentationVisibilityTests: XCTestCase {
 
     /// A running pulse keeps changing phase on its 30 Hz timeline; a stopped
     /// one rests at phase 0 without further updates.
+    /// Polls up to a second so a loaded host cannot miss the next 30 Hz step.
     private func isPulsing(_ probe: VisibilityProbe, _ view: UIView) async throws -> Bool {
         let before = probe.pulseChanges
-        try await settle(view)
-        return probe.pulseChanges > before
+        for _ in 0..<10 {
+            try await settle(view)
+            if probe.pulseChanges > before + 1 { return true }
+        }
+        return false
     }
 
     func testPulsePhaseIsAnEasedTriangle() {
