@@ -66,6 +66,14 @@ enum PlaybackFeedHandoff {
         return effectsChanged || !hasLastBuffer || !metalHasPresented
     }
 
+    /// Scopes, Face AF and inspector samples leave the picture on `AVPlayerLayer`,
+    /// so the item is ready once its first source frame is processed. Waiting for
+    /// a Metal completion that never comes resubmitted `lastBuffer` every display
+    /// tick, including while paused.
+    static func sourceReadyWithoutMetal(needsGPUFeed: Bool, hdrDisplay: Bool) -> Bool {
+        !needsGPUFeed && !hdrDisplay
+    }
+
     /// One `PlaybackFeedSession` is shared across SwiftUI identities. A slide
     /// `.id(active.id)` used to spawn a second representable whose
     /// `updateUIView` stole `attach` on the way out — LUT chrome stayed armed
@@ -144,7 +152,6 @@ final class PlaybackFeedSession: NSObject {
     private var transfer = MonitorTransfer.rec709
     private var lastBuffer: CVPixelBuffer?
     private var lastBackdropBuffer: CVPixelBuffer?
-    private var lastSubmittedNs: Int64 = 0
     private var lastOverlayOnly = false
     private var lastUnmanagedBake = false
     private var pendingKick = false
@@ -203,7 +210,6 @@ final class PlaybackFeedSession: NSObject {
         // completions are asynchronous and are rejected by the item epoch.
         pullQueue.sync {
             lastBuffer = nil
-            lastSubmittedNs = 0
             pendingKick = false
         }
         lastBackdropBuffer = nil
@@ -276,7 +282,6 @@ final class PlaybackFeedSession: NSObject {
         if !sampleBus.usesPlaybackSource { sampleBus.clearPlaybackSource() }
         sampleBus.usesPlaybackSource = true
         if changed {
-            lastSubmittedNs = 0
             host?.ciFeed.resetPresentDedup()
             assistEngine.updatePolicy(effects: effects, transfer: transfer)
             if effects.falseColor {
@@ -319,7 +324,6 @@ final class PlaybackFeedSession: NSObject {
         boundItem = nil
         lastBuffer = nil
         lastBackdropBuffer = nil
-        lastSubmittedNs = 0
         sampleBus?.playbackBundle = nil
         sampleBus?.clearPlaybackSource()
         sampleBus?.usesPlaybackSource = false
@@ -441,7 +445,6 @@ final class PlaybackFeedSession: NSObject {
     }
 
     private func submit(_ buffer: CVPixelBuffer, timeNs: Int64, sourceEpoch: UInt64? = nil) {
-        lastSubmittedNs = timeNs
         let sourceEpoch = sourceEpoch ?? itemEpoch
         assistEngine.submit(buffer, effects: effects, transfer: transfer, timeNs: timeNs) {
             [weak self] result in
@@ -481,6 +484,11 @@ final class PlaybackFeedSession: NSObject {
             }
         }
         if !result.needsGPU || !effects.needsGPUFeed {
+            if PlaybackFeedHandoff.sourceReadyWithoutMetal(
+                needsGPUFeed: effects.needsGPUFeed, hdrDisplay: LiveHDRDisplay.isEnabled)
+            {
+                presentedEpoch = itemEpoch
+            }
             applyLayerPlan(metalHasPresented: false)
             return
         }

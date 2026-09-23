@@ -190,6 +190,16 @@ final class PlaybackAssistTests: XCTestCase {
             PlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: true))
     }
 
+    func testScopesOnlyPlaybackIsReadyWithoutAMetalCompletion() {
+        XCTAssertTrue(
+            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: false, hdrDisplay: false),
+            "scopes-only never reaches a Metal completion")
+        XCTAssertFalse(
+            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: true, hdrDisplay: false))
+        XCTAssertFalse(
+            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: false, hdrDisplay: true))
+    }
+
     func testPlaybackVideoOutputGradesNativeYUVNotBGRA() {
         XCTAssertFalse(
             PlaybackVideoOutput.forcesRGBConversion,
