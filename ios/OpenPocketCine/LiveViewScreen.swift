@@ -970,9 +970,13 @@ private struct LiveFeedWarmupCover: View {
         ZStack {
             Color.black
             VStack(spacing: 12) {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(LiveDesign.text.opacity(0.72))
+                // The cover stays mounted at zero opacity for the whole session;
+                // an idle spinner there would keep animating under the picture.
+                if model.session.isFeedWarming {
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(LiveDesign.text.opacity(0.72))
+                }
                 Text("WAITING FOR LIVE VIEW")
                     .font(.system(size: 15, weight: .semibold, design: .monospaced))
                     .foregroundStyle(LiveDesign.text.opacity(0.72))
