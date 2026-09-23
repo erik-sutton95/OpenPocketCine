@@ -207,7 +207,7 @@ internal class LiveFeedEffectsSession(
                 PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
             }.getOrDefault(1.0)
         val backdropTicket = if (previewSource.isCurrent(sourceEpoch)) {
-            backdrop?.acquire(this, now, thermal)
+            backdrop?.acquire(this, now)
         } else null
         val scopeDue = policy.scopeWorkDue(now, lastScopeWorkNs, thermal)
         if (!scopeDue && previewTicket == null && backdropTicket == null) {

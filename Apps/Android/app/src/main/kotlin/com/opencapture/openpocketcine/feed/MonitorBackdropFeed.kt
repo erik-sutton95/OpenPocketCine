@@ -53,7 +53,7 @@ internal class MonitorBackdropFeed(context: Context) {
         }
     }
     fun hasDemand(producer: Any) = gate.hasDemand(producer)
-    fun acquire(producer: Any, nowNs: Long, thermal: Double) = gate.acquire(producer, nowNs, thermal)
+    fun acquire(producer: Any, nowNs: Long) = gate.acquire(producer, nowNs)
     fun cancel(ticket: BackdropFrameAdmission.Ticket?) { if (ticket != null) gate.complete(ticket) }
 
     fun submit(ticket: BackdropFrameAdmission.Ticket, frame: InspectorPreviewFrame, plan: FeedEffectsRenderPlan) {

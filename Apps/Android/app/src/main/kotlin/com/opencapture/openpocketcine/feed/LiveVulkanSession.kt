@@ -498,7 +498,7 @@ internal class LiveVulkanSession(
                 scopeIntervalNs = policy.minIntervalNs(thermal)
                 if (now - lastSampleNs >= intervalNs && sampleBusy.compareAndSet(false, true)) {
                     previewTicket = InspectorPreviewPipeline.acquire(policy.previewOwner, playback = false, now)
-                    backdropTicket = backdrop?.acquire(this, now, thermal)
+                    backdropTicket = backdrop?.acquire(this, now)
                     scopeDue = policy.scopeWorkDue(now, lastScopeWorkNs, thermal)
                     if (scopeDue || previewTicket != null || backdropTicket != null) true
                     else { sampleBusy.set(false); false }
