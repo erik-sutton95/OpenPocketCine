@@ -4,6 +4,7 @@ import Foundation
 import OpenPocketViewCore
 import UIKit
 import VideoToolbox
+import os
 
 /// Reservations cover encoding and transport together. Invalidating a preview
 /// generation drops its results, but its work keeps a slot until completion.
@@ -251,7 +252,9 @@ struct WatchPreviewPump {
             from buffer: CVPixelBuffer, mirrored: Bool = false, maxWidth: CGFloat, quality: CGFloat
         ) -> Data? {
             var imageOut: CGImage?
-            let status = VTCreateCGImageFromCVPixelBuffer(buffer, options: nil, imageOut: &imageOut)
+            let status = VTCreateCGImageFromCVPixelBuffer(
+                downscaled(buffer, maxWidth: maxWidth) ?? buffer, options: nil,
+                imageOut: &imageOut)
             guard status == noErr, let cg = imageOut,
                 let jpeg = encodedFrameData(
                     scaledImage(cg, mirrored: mirrored, maxWidth: maxWidth), quality: quality)
@@ -261,6 +264,40 @@ struct WatchPreviewPump {
                     maxWidth: maxWidth, quality: quality)
             }
             return jpeg
+        }
+
+        nonisolated private static let scaler = OSAllocatedUnfairLock<VTPixelTransferSession?>(
+            initialState: nil)
+
+        /// Hardware scale in the source's own YUV format and colour tags, so the
+        /// unchanged VT RGB conversion runs on the wrist-sized buffer instead of
+        /// the full live picture. `nil` keeps the full-size path.
+        nonisolated static func downscaled(_ buffer: CVPixelBuffer, maxWidth: CGFloat)
+            -> CVPixelBuffer?
+        {
+            let width = CGFloat(CVPixelBufferGetWidth(buffer))
+            let height = CGFloat(CVPixelBufferGetHeight(buffer))
+            guard width > maxWidth, height > 1 else { return nil }
+            // Even dimensions for 4:2:0.
+            let w = Int((maxWidth / 2).rounded(.down)) * 2
+            let h = Int((height * maxWidth / width / 2).rounded()) * 2
+            var out: CVPixelBuffer?
+            guard w >= 2, h >= 2,
+                CVPixelBufferCreate(
+                    kCFAllocatorDefault, w, h, CVPixelBufferGetPixelFormatType(buffer),
+                    [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &out)
+                    == kCVReturnSuccess, let out
+            else { return nil }
+            let status = scaler.withLock { session -> OSStatus in
+                if session == nil {
+                    VTPixelTransferSessionCreate(allocator: nil, pixelTransferSessionOut: &session)
+                }
+                guard let session else { return kVTAllocationFailedErr }
+                return VTPixelTransferSessionTransferImage(session, from: buffer, to: out)
+            }
+            guard status == noErr else { return nil }
+            CVBufferPropagateAttachments(buffer, out)
+            return out
         }
 
         nonisolated static func thumbnailData(
