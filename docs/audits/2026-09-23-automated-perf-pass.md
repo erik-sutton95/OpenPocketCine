@@ -27,8 +27,8 @@ candidate each live in their own worktree with the same harness copied in, so
 editing never changes a build under measurement. Runs alternate candidate and
 baseline with cooldowns between them. The phone stayed on its charger, which
 keeps battery-drain columns at zero and warms the device; compare thermal-state
-time alongside CPU, because the app's own thermal backoff (backdrop x3 at
-Serious) reduces work once the phone is hot.
+time alongside CPU, because the baseline's own thermal backoff (backdrop x3 at
+Serious) reduced its work once the phone was hot.
 
 ## Baseline hotspots (iPhone 16 Pro Max, iOS 27, Release, live Pocket 4 Pro)
 
@@ -62,7 +62,9 @@ iOS render and chrome:
   compositor does the same bilinear fit. Format descriptions and HDR layer
   properties are reused instead of rebuilt per frame.
 - Scope trails reuse the previous build; superseded scope builds are skipped.
-- FALSE/ZEBRA backdrops settle on a held source; an idle backdrop polls at 10 Hz.
+- FALSE/ZEBRA backdrops settle on a held source. Decoders and playback wake
+  the backdrop on each new picture, and it is never thermal-slowed: the glass
+  follows the feed frame for frame (a held source times out at 10 Hz).
 - Leaf-scoped REC/focus reads stop 25 Hz chrome re-evaluation with AF-C faces;
   the app root no longer re-runs at 5 Hz; the hidden warm-up spinner unmounts;
   scope taps stop while Settings or Media covers live (looks, Face AF, Watch
@@ -91,13 +93,42 @@ non-status frames first (host probe: 800 to 15 microseconds per status parse).
 
 ## Results
 
-RESULTS_PLACEHOLDER
+Primary metrics come from Power Profiler: per-process CPU instructions per
+second and the CPU/GPU power-impact estimates. Sampled CPU milliseconds are
+not an energy proxy here: lighter work runs at lower clocks and on efficiency
+cores, which lengthens milliseconds while instructions and energy fall.
+
+Clean A/B, candidate `2c53132f` (before the review fixes, the stable backdrop
+source and the frame wake), two alternating rounds, 110 s detached traces:
+
+| Profile | Instructions (G/s) | CPU impact | GPU impact | Thermal |
+| --- | --- | --- | --- | --- |
+| `pro` baseline | 3.73, 3.64 | 7.93, 7.96 | 1.36, 1.17 | Serious in later runs |
+| `pro` candidate | 2.65, 2.72 | 3.26, 3.92 | 1.0, 1.0 | Fair throughout |
+| `clean` baseline | 2.01, 2.08 | 2.10, 2.25 | 0.1 | Serious |
+| `clean` candidate | 1.52, 1.52 | 1.0, 1.0 | 0.1 | Fair |
+
+Final round, `9957646d` against the baseline, one run per profile (the
+baseline ran second and started warmer; it spent most runs in Serious, where
+its backdrop throttled itself, which favours the baseline):
+
+| Profile | Instructions (G/s) | CPU impact | GPU impact | Thermal (baseline / candidate) |
+| --- | --- | --- | --- | --- |
+| `pro` | 3.16 to 1.93 (-39%) | 6.06 to 1.63 (-73%) | 1.16 to 1.0 | Serious / Fair |
+| `clean` | 2.07 to 0.83 (-60%) | 2.39 to 0.92 (-61%) | 0.1 to 0.1 | n/a / Fair |
+| `heavy` | 3.13 to 1.89 (-40%) | 5.53 to 2.01 (-64%) | 1.02 to 1.0 | Serious / n/a |
+| `pro` + REC take | 3.05 to 1.91 (-37%) | 7.12 to 2.96 (-58%) | 2.0 to 1.99 | Serious / Fair |
+
+Across both series the candidate never left Fair while the baseline reached
+Serious in most runs on the same charger and room. Picture cadence was not
+reduced: the soak confirms a live picture with the profile's assists at start
+and end, and no change touches decode pacing, the ACK pump or enable ownership.
+Wi-Fi receive volume is unchanged (about 60 MB per run), as expected.
+
+WAKE_PLACEHOLDER
 
 ## Not changed (proposals)
 
-- Backdrop cadence: glass products follow the 25 Hz source. Capping them near
-  12.5 Hz would likely be invisible under the 52 to 86% tint and would halve the
-  remaining backdrop work, but it changes a documented shared budget.
 - Backdrop look image: still one Core Image render and readback per job. Folding
   it into the canvas render is exact only for unmanaged (LUT) looks.
 - Covered Metal looks (LUT/PEAK/ZEBRA/FALSE) keep rendering under Settings/Media.
