@@ -850,27 +850,7 @@ struct AppRoot: View {
                 model.handleWatcherRelayCommand(command, from: id)
             }
         }
-        .confirmationDialog(
-            model.session.status.isRecording ? "Stop recording?" : "Start recording?",
-            isPresented: Bindable(model).watcherRecordConfirm,
-            titleVisibility: .visible
-        ) {
-            Button(
-                model.session.status.isRecording ? "Stop" : "Start",
-                role: model.session.status.isRecording ? .destructive : nil
-            ) {
-                guard model.watcherRecordRequest == model.watcherRecordContext,
-                    model.watcherRecordContext.canConfirm
-                else { return }
-                model.watcherRecordRequest = nil
-                model.session.pressShutter()
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .onChange(of: model.watcherRecordContext) { _, _ in
-            model.watcherRecordConfirm = false
-            model.watcherRecordRequest = nil
-        }
+        .modifier(WatcherRecordConfirmation(model: model))
         .confirmationDialog(
             "Allow \(model.relayHost.pendingControlRequest?.name ?? "a watcher") to control the camera?",
             isPresented: Binding(
@@ -909,6 +889,37 @@ struct AppRoot: View {
             model.assist.inspectorSceneActive = true
             model.session.noteSceneBecameActive()
         }
+    }
+}
+
+/// Watcher record confirmation reads `CameraStatus` in its own scope. On the
+/// app root, every 5 Hz status publish re-evaluated the whole root body.
+private struct WatcherRecordConfirmation: ViewModifier {
+    @Bindable var model: AppModel
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                model.session.status.isRecording ? "Stop recording?" : "Start recording?",
+                isPresented: $model.watcherRecordConfirm,
+                titleVisibility: .visible
+            ) {
+                Button(
+                    model.session.status.isRecording ? "Stop" : "Start",
+                    role: model.session.status.isRecording ? .destructive : nil
+                ) {
+                    guard model.watcherRecordRequest == model.watcherRecordContext,
+                        model.watcherRecordContext.canConfirm
+                    else { return }
+                    model.watcherRecordRequest = nil
+                    model.session.pressShutter()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .onChange(of: model.watcherRecordContext) { _, _ in
+                model.watcherRecordConfirm = false
+                model.watcherRecordRequest = nil
+            }
     }
 }
 

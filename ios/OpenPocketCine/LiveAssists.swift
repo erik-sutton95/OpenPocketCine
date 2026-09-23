@@ -279,6 +279,14 @@ final class LiveAssistState {
     /// Inspector-only sampling follows the active scene and its visible source.
     /// Picture effects keep their existing lifetime beneath operator pages.
     var inspectorSceneActive = true
+    /// Settings or Media covers the live page. Scope taps and rasters have no
+    /// viewer there; looks, Face AF, Watch and relay keep their demand, and the
+    /// shared VT decoder stays up, so reveal needs no enable.
+    var liveCovered = false
+
+    private func showsScopes(_ tool: LiveAssistTool) -> Bool {
+        !liveCovered && isVisible(tool)
+    }
 
     @ObservationIgnored private var lutCube: CubeLUT?
     @ObservationIgnored private var lutDimension = 0
@@ -320,12 +328,12 @@ final class LiveAssistState {
             peaking: isVisible(.peaking),
             zebra: isVisible(.zebra),
             falseColor: isVisible(.falseColor),
-            histogram: isVisible(.histogram),
-            waveform: isVisible(.waveform),
-            parade: isVisible(.parade),
-            vectorscope: isVisible(.vectorscope),
-            trafficLights: isVisible(.trafficLights),
-            ndMeter: isVisible(.ndMeter),
+            histogram: showsScopes(.histogram),
+            waveform: showsScopes(.waveform),
+            parade: showsScopes(.parade),
+            vectorscope: showsScopes(.vectorscope),
+            trafficLights: showsScopes(.trafficLights),
+            ndMeter: showsScopes(.ndMeter),
             lutDimension: isVisible(.lut) ? lutDimension : 0,
             lutRGBA: isVisible(.lut) ? lutRGBA : Data(),
             peakingColor: peakingColor,

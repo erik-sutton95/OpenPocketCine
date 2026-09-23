@@ -105,7 +105,6 @@ struct LiveViewScreen: View {
         .animation(.easeInOut(duration: 0.22), value: orientationObserver.orientation)
         .animation(.easeInOut(duration: 0.18), value: model.assist.clean)
         .animation(.easeOut(duration: 0.16), value: model.chromeEditorMode)
-        .animation(.easeOut(duration: 0.20), value: model.session.isFocusResetAvailable)
         .animation(.easeOut(duration: 0.22), value: model.session.isFeedWarming)
         .onAppear {
             let app = model
@@ -134,6 +133,7 @@ struct LiveViewScreen: View {
         }
         .onDisappear {
             model.captureDrum = nil
+            model.assist.liveCovered = false
             orientationObserver.stop()
             closeZoomDial()
             zoomDismissTask?.cancel()
@@ -166,6 +166,9 @@ struct LiveViewScreen: View {
             } else if !open, model.liveOperatorPanel == .media {
                 model.liveOperatorPanel = nil
             }
+        }
+        .onChange(of: liveChromeVisible, initial: true) { _, visible in
+            model.assist.liveCovered = !visible
         }
         .onChange(of: model.liveOperatorPanel) { oldPanel, panel in
             model.session.incidentSettingsCovered = panel == .settings
@@ -282,14 +285,16 @@ struct LiveViewScreen: View {
             // Keep controls mounted beneath zoom so their identity and
             // recording-confirmation state survive opening and closing it.
             ZStack(alignment: .topLeading) {
-                if model.chromeSectionMounts(.railRecord) || model.session.status.isRecording {
-                    LiveRecordButton(diameter: layout.record.width)
-                        // Record explicitly exposes its decorative lamp to AX.
-                        // Override that opt-in at the bounded control, before
-                        // viewport positioning, so coverage hides it as well.
-                        .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
-                        .chromeEditable(.railRecord, editing: editingMode)
-                        .liveModuleFrame(layout.record)
+                LiveStatusScope { status in
+                    if model.chromeSectionMounts(.railRecord) || status.isRecording {
+                        LiveRecordButton(diameter: layout.record.width)
+                            // Record explicitly exposes its decorative lamp to AX.
+                            // Override that opt-in at the bounded control, before
+                            // viewport positioning, so coverage hides it as well.
+                            .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
+                            .chromeEditable(.railRecord, editing: editingMode)
+                            .liveModuleFrame(layout.record)
+                    }
                 }
                 LiveDispToggle(size: layout.disp.size)
                     .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
@@ -446,22 +451,26 @@ struct LiveViewScreen: View {
 
             // Pinch + DISP swipe (OpenZCine feed well). Under chip + scopes;
             // chrome `Color.clear` must not cover this well.
-            LiveZoomPinchWell(
-                feed: model.assist.isVisible(.desqueeze)
-                    ? DesqueezeAssist.presentationRect(
-                        sourceSize: CGSize(width: model.session.decoder.pictureAspect, height: 1),
-                        in: layout.onFeed, effects: model.assist.effects)
-                    : layout.onFeed,
-                chip: Self.cgRect(self.gimbalCluster(layout).zoom),
-                stick: Self.cgRect(self.gimbalCluster(layout).stick),
-                gimbalButton: Self.cgRect(self.gimbalCluster(layout).controls),
-                reset: model.session.isFocusResetAvailable ? layout.focusReset : .zero,
-                cancel: trackingCancelRect(in: layout),
-                calibrate: model.headTrackingEnabled
-                    && OsmoMonitorPresentation.capabilities(model.session).headTracking
-                    ? layout.gimbalCalibrate : .zero,
-                enabled: !interfaceLocked && model.liveOperatorPanel == nil && chromeInteractive
-            )
+            LiveFocusScope { resetAvailable, subject in
+                LiveZoomPinchWell(
+                    feed: model.assist.isVisible(.desqueeze)
+                        ? DesqueezeAssist.presentationRect(
+                            sourceSize: CGSize(
+                                width: model.session.decoder.pictureAspect, height: 1),
+                            in: layout.onFeed, effects: model.assist.effects)
+                        : layout.onFeed,
+                    chip: Self.cgRect(self.gimbalCluster(layout).zoom),
+                    stick: Self.cgRect(self.gimbalCluster(layout).stick),
+                    gimbalButton: Self.cgRect(self.gimbalCluster(layout).controls),
+                    reset: resetAvailable ? layout.focusReset : .zero,
+                    cancel: trackingCancelRect(subject, in: layout),
+                    calibrate: model.headTrackingEnabled
+                        && OsmoMonitorPresentation.capabilities(model.session).headTracking
+                        ? layout.gimbalCalibrate : .zero,
+                    enabled: !interfaceLocked && model.liveOperatorPanel == nil
+                        && chromeInteractive
+                )
+            }
 
             LiveScopeOverlays(
                 layout: layout,
@@ -470,23 +479,25 @@ struct LiveViewScreen: View {
             )
 
             if model.assist.isVisible(.evMeter) {
-                CameraEVMeterOverlay(
-                    feed: model.assist.isVisible(.desqueeze)
-                        ? DesqueezeAssist.presentationRect(
-                            sourceSize: CGSize(
-                                width: model.session.decoder.pictureAspect, height: 1),
-                            in: layout.onFeed, effects: model.assist.effects
-                        )
-                        .intersection(layout.onFeed)
-                        : layout.onFeed,
-                    avoiding: model.chromeSectionMounts(.toolBar)
-                        ? FieldMonitorAssistPalette.visibleFrame(
-                            in: layout,
-                            toolCount: LiveAssistTool.toolbarCases.count
-                                + (model.session.status.isPhoto ? 0 : 1),
-                            expanded: assistsExpanded || assistsRevealing) : nil
-                )
-                .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
+                LiveStatusScope { status in
+                    CameraEVMeterOverlay(
+                        feed: model.assist.isVisible(.desqueeze)
+                            ? DesqueezeAssist.presentationRect(
+                                sourceSize: CGSize(
+                                    width: model.session.decoder.pictureAspect, height: 1),
+                                in: layout.onFeed, effects: model.assist.effects
+                            )
+                            .intersection(layout.onFeed)
+                            : layout.onFeed,
+                        avoiding: model.chromeSectionMounts(.toolBar)
+                            ? FieldMonitorAssistPalette.visibleFrame(
+                                in: layout,
+                                toolCount: LiveAssistTool.toolbarCases.count
+                                    + (status.isPhoto ? 0 : 1),
+                                expanded: assistsExpanded || assistsRevealing) : nil
+                    )
+                    .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
+                }
             }
 
             // The collapse backdrop is above the picture/scopes and below
@@ -550,16 +561,18 @@ struct LiveViewScreen: View {
                 .position(x: layout.battery.midX, y: layout.battery.midY)
             }
 
-            if model.chromeSectionMounts(.railSettings) || model.session.status.isRecording {
-                LiveSettingsButton(size: layout.settings.width) {
-                    model.liveOperatorPanel = .settings
+            LiveStatusScope { status in
+                if model.chromeSectionMounts(.railSettings) || status.isRecording {
+                    LiveSettingsButton(size: layout.settings.width) {
+                        model.liveOperatorPanel = .settings
+                    }
+                    .chromeEditable(.railSettings, editing: editingMode)
+                    .liveModuleFrame(layout.settings)
+                    .opacity(captureHidesNavigation ? 0 : 1)
+                    .allowsHitTesting(!captureHidesNavigation)
+                    .accessibilityHidden(
+                        captureHidesNavigation || !liveChromeVisible || zoomDialMounted)
                 }
-                .chromeEditable(.railSettings, editing: editingMode)
-                .liveModuleFrame(layout.settings)
-                .opacity(captureHidesNavigation ? 0 : 1)
-                .allowsHitTesting(!captureHidesNavigation)
-                .accessibilityHidden(
-                    captureHidesNavigation || !liveChromeVisible || zoomDialMounted)
             }
             if model.chromeSectionMounts(.railMedia) && !model.session.isMultiviewBorrowed {
                 LiveMediaButton(size: layout.media.width) { model.liveOperatorPanel = .media }
@@ -632,24 +645,22 @@ struct LiveViewScreen: View {
                 .zIndex(3)
             }
 
-            if !interfaceLocked, model.session.isFocusResetAvailable, chromeInteractive {
-                LiveFocusResetButton()
-                    .liveModuleFrame(layout.focusReset)
-                    .zIndex(3)
-                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            LiveFocusScope { resetAvailable, _ in
+                if !interfaceLocked, resetAvailable, chromeInteractive {
+                    LiveFocusResetButton()
+                        .liveModuleFrame(layout.focusReset)
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
             }
+            .zIndex(3)
 
-            if !interfaceLocked, chromeInteractive,
-                case .subject(let box) = model.session.focusOverlay
-            {
-                LiveTrackingCancelButton()
-                    .liveModuleFrame(
-                        LiveTrackingChrome.cancelRect(
-                            box: box, feed: layout.onFeed, mirrored: model.livePictureViewFlip
-                        )
-                    )
-                    .zIndex(4)
+            LiveFocusScope { _, subject in
+                if !interfaceLocked, chromeInteractive, subject != nil {
+                    LiveTrackingCancelButton()
+                        .liveModuleFrame(trackingCancelRect(subject, in: layout))
+                }
             }
+            .zIndex(4)
 
             LiveSessionBanners(
                 feed: layout.onFeed,
@@ -738,21 +749,24 @@ struct LiveViewScreen: View {
         }
 
         if chromeInteractive, !interfaceLocked {
-            LiveCapturePickerHost(
-                sheet: Bindable(model).captureSheet,
-                frames: captureTileFrames,
-                passthroughFrames: captureNavigationFrames(layout),
-                bar: layout.capture,
-                viewport: layout.viewport,
-                safeArea: layout.safeArea,
-                ceilingY: max(
-                    layout.safeArea.top + LivePopupPlacement.assistTopInset,
-                    LivePopupPlacement.edgeMargin
-                ),
-                bottomY: layout.presentation?.portrait == true
-                    ? layout.rail.minY - 12 : layout.viewport.height,
-                topDeckMaxY: layout.topDeck.maxY
-            )
+            LiveStatusScope { status in
+                LiveCapturePickerHost(
+                    sheet: Bindable(model).captureSheet,
+                    frames: captureTileFrames,
+                    passthroughFrames: captureNavigationFrames(
+                        layout, recording: status.isRecording),
+                    bar: layout.capture,
+                    viewport: layout.viewport,
+                    safeArea: layout.safeArea,
+                    ceilingY: max(
+                        layout.safeArea.top + LivePopupPlacement.assistTopInset,
+                        LivePopupPlacement.edgeMargin
+                    ),
+                    bottomY: layout.presentation?.portrait == true
+                        ? layout.rail.minY - 12 : layout.viewport.height,
+                    topDeckMaxY: layout.topDeck.maxY
+                )
+            }
         }
 
         if chromeInteractive, model.captureDrum != nil, !interfaceLocked {
@@ -802,10 +816,10 @@ struct LiveViewScreen: View {
 
     /// Portrait keeps these buttons above the reference drawer's dismiss plane.
     /// Exclude their real rectangles so their original controls receive the tap.
-    private func captureNavigationFrames(_ layout: LiveMonitorLayout) -> [CGRect] {
+    private func captureNavigationFrames(_ layout: LiveMonitorLayout, recording: Bool) -> [CGRect] {
         guard layout.presentation?.portrait == true, model.captureDrum == nil else { return [] }
         var frames: [CGRect] = []
-        if model.chromeSectionMounts(.railSettings) || model.session.status.isRecording {
+        if model.chromeSectionMounts(.railSettings) || recording {
             frames.append(layout.settings)
         }
         if model.chromeSectionMounts(.railMedia), !model.session.isMultiviewBorrowed {
@@ -960,9 +974,13 @@ private struct LiveFeedWarmupCover: View {
         ZStack {
             Color.black
             VStack(spacing: 12) {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(LiveDesign.text.opacity(0.72))
+                // The cover stays mounted at zero opacity for the whole session;
+                // an idle spinner there would keep animating under the picture.
+                if model.session.isFeedWarming {
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(LiveDesign.text.opacity(0.72))
+                }
                 Text("WAITING FOR LIVE VIEW")
                     .font(.system(size: 15, weight: .semibold, design: .monospaced))
                     .foregroundStyle(LiveDesign.text.opacity(0.72))
@@ -1020,6 +1038,8 @@ private struct LiveFeedAssistsPane: View {
                 pictureMirrored: model.livePictureViewFlip
             )
             .opacity(dimmed ? 0.3 : 1)
+            // Focus boxes keep the ease they had when this lived on the screen root.
+            .animation(.easeOut(duration: 0.20), value: model.session.isFocusResetAvailable)
 
             if model.chromeEditorMode != nil {
                 GeometryReader { proxy in
@@ -1237,9 +1257,39 @@ extension LiveViewScreen {
             trailing: max(0, layout.viewport.width - right))
     }
 
-    fileprivate func trackingCancelRect(in layout: LiveMonitorLayout) -> CGRect {
-        guard case .subject(let box) = model.session.focusOverlay else { return .zero }
+    fileprivate func trackingCancelRect(_ subject: TrackingBox?, in layout: LiveMonitorLayout)
+        -> CGRect
+    {
+        guard let subject else { return .zero }
         return LiveTrackingChrome.cancelRect(
-            box: box, feed: layout.onFeed, mirrored: model.livePictureViewFlip)
+            box: subject, feed: layout.onFeed, mirrored: model.livePictureViewFlip)
+    }
+}
+
+/// Reads `CameraStatus` in its own observation scope. Read in the chrome
+/// slot, each 5 Hz publish re-evaluated every closure-bearing chrome child,
+/// including Settings or Media while they cover live.
+private struct LiveStatusScope<Content: View>: View {
+    @Environment(AppModel.self) private var model
+    @ViewBuilder let content: (CameraStatus) -> Content
+
+    var body: some View { content(model.session.status) }
+}
+
+/// Focus recenter availability and the ActiveTrack subject in their own scope.
+/// `focusOverlay` also follows per-frame AF-C faces and 5 Hz status; its
+/// `.subject` case depends only on the tracking fields read here.
+private struct LiveFocusScope<Content: View>: View {
+    @Environment(AppModel.self) private var model
+    @ViewBuilder let content: (_ resetAvailable: Bool, _ subject: TrackingBox?) -> Content
+
+    var body: some View {
+        let session = model.session
+        let resetAvailable = session.isFocusResetAvailable
+        let overlay = FocusOverlayPolicy.resolve(
+            tracking: session.isTracking, search: session.searchBox, subject: session.subjectBox)
+        let subject: TrackingBox? = if case .subject(let box) = overlay { box } else { nil }
+        content(resetAvailable, subject)
+            .animation(.easeOut(duration: 0.20), value: resetAvailable)
     }
 }
