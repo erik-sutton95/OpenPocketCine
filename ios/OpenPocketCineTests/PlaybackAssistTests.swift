@@ -174,6 +174,13 @@ final class PlaybackAssistTests: XCTestCase {
             "LUT cube product presents unmanaged, same as live HevcDecoder")
     }
 
+    func testPausedLinkParksOnlyAfterAPausedSeekCanLand() {
+        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: nil, now: 10))
+        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.1))
+        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.5))
+        XCTAssertTrue(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.61))
+    }
+
     func testPlaybackDisplayLinkDoesNotCapTheCubeAtTwentyFour() {
         XCTAssertGreaterThanOrEqual(
             PlaybackDisplayLink.pollRange.maximum, 60,

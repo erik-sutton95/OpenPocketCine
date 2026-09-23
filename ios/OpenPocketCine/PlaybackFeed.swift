@@ -113,6 +113,17 @@ enum PlaybackDisplayLink {
     static func shouldPark(itemHasPresented: Bool, playerRate: Float) -> Bool {
         itemHasPresented && playerRate == 0
     }
+
+    /// Paused ticks with no new picture before parking. An exact seek while
+    /// paused decodes from the previous keyframe (tens of ms), and the scope
+    /// throttle (up to 500 ms when critical) can drop the first new sample, so
+    /// the link keeps polling this long and forces one last pull before parking.
+    static let parkAfter: CFTimeInterval = 0.6
+
+    static func parkIsDue(idleSince: CFTimeInterval?, now: CFTimeInterval) -> Bool {
+        guard let idleSince else { return false }
+        return now - idleSince >= parkAfter
+    }
 }
 
 /// Pixel buffers pulled from the player for the live compositor.
@@ -168,6 +179,8 @@ final class PlaybackFeedSession: NSObject {
     /// Bumped in `prepare`. `presentedEpoch` catches up in `adoptPresentedFeed`.
     private var itemEpoch: UInt64 = 0
     private var presentedEpoch: UInt64 = 0
+    /// First paused tick without a new picture; see `PlaybackDisplayLink.parkAfter`.
+    private var idleSince: CFTimeInterval?
 
     override init() {
         output = AVPlayerItemVideoOutput(
@@ -185,10 +198,20 @@ final class PlaybackFeedSession: NSObject {
                 if PlaybackDisplayLink.shouldPark(
                     itemHasPresented: self.itemHasPresented, playerRate: self.player?.rate ?? 0)
                 {
-                    self.parkLink()
+                    let now = CACurrentMediaTime()
+                    let idleSince = self.idleSince ?? now
+                    self.idleSince = idleSince
+                    if PlaybackDisplayLink.parkIsDue(idleSince: idleSince, now: now) {
+                        // Resample the held picture so scopes match it after a paused seek.
+                        if self.effects.needsSample { self.schedulePull(force: true) }
+                        self.parkLink()
+                    }
+                } else {
+                    self.idleSince = nil
                 }
                 return
             }
+            self.idleSince = nil
             self.schedulePull(force: self.effects.needsSample && !self.itemHasPresented)
         }
     }
@@ -386,6 +409,7 @@ final class PlaybackFeedSession: NSObject {
     }
 
     private func parkLink() {
+        idleSince = nil
         guard let displayLink, !displayLink.isPaused else { return }
         displayLink.isPaused = true
         output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
