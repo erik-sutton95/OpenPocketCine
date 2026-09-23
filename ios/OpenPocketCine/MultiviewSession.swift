@@ -1023,7 +1023,8 @@ final class MultiviewSession {
         let driver = DatalinkDriver(
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken,
-            stationHost: tile.cameraAddress, stationHotspot: usePhoneHotspot)
+            stationHost: tile.cameraAddress, stationHotspot: usePhoneHotspot,
+            subscriptionKeys: Commands.subscriptionKeys(for: camera.model))
         tile.driver = driver
         driver.onStatusFrame = { [weak tile, weak driver] frame in
             guard let tile, let driver, tile.driver === driver else { return }
@@ -1088,7 +1089,7 @@ final class MultiviewSession {
         }
         let nanoGate = camera.model.usesNanoLiveViewGate
         if nanoGate { driver.send(Commands.nanoLiveViewGate(start: true)) }
-        if CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: nanoGate) {
+        if camera.model.sendsLiveViewPrepare {
             driver.send(Commands.liveViewPrepare())
         }
         driver.startLiveView(receiver: camera.model.liveViewEnableReceiver)

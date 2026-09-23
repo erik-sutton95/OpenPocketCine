@@ -1,14 +1,16 @@
 New and changed
 
-- On Osmo Nano, zoom is hidden: no zoom chip, pinch zoom, hold disc or controller zoom. Pocket cameras zoom as before.
-- DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
+- On Osmo Nano, zoom is hidden: no zoom chip, pinch zoom, hold disc or controller zoom. DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
+- Osmo Action 6 support: live view, Normal 10-bit and D-Log M color, and the official D-Log M LUT. Not yet checked on a real Action 6.
+- On Action 6, an APERTURE control takes the place of FOCUS. It shows the live f-number and sets Auto, f/2.6, f/2.8, Starburst f/4 or SuperNight f/2.0.
 
 Fixes
 
-- Multiview preview recovery and camera support were reorganized internally; iPhone and iPad behavior should not change.
+- Live video no longer stops shortly after connecting while the app is busy.
+- In Auto exposure, SHUTTER shows the shutter the camera actually applied.
 
 What to test
 
-- Connect a Nano: check there is no zoom chip, pinch does not zoom, and controller L1/R1 and L2/R2 do nothing.
-- Switch to a Pocket without relaunching and check the zoom chip and gimbal stick come back.
-- Add two or more cameras in Multiview and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview.
+- Connect a Nano: check there is no zoom chip and that pinch and controller L1/R1 and L2/R2 do not zoom. Switch to a Pocket without relaunching and check zoom and the gimbal stick return.
+- If you have an Action 6: pair it, confirm live view appears, then try APERTURE, COLOR, Photo and Timelapse.
+- Leave live view running for a few minutes and check the picture does not freeze.

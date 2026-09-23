@@ -977,7 +977,7 @@ class MultiviewSession(
             withContext(Dispatchers.IO) {
                 val nanoGate = camera.model.usesNanoLiveViewGate
                 if (nanoGate) driver.sendNanoGate(start = true)
-                if (LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)) {
+                if (camera.model.sendsLiveViewPrepare) {
                     driver.sendCommand(SwiftCore.CMD_TAP_FOCUS_HINT)
                 }
                 driver.startLiveView(camera.model.liveViewEnableReceiver)

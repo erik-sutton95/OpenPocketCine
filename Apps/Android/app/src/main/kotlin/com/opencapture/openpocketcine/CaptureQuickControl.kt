@@ -14,6 +14,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.monitorui.MonitorQuickControl
+import com.opencapture.openpocketcine.session.ApertureStrategy
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraModel
 import com.opencapture.openpocketcine.session.CameraStatus
@@ -49,6 +50,8 @@ internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: 
             else MonitorQuickControl(CaptureLists.wbModeRows, CaptureLists.wbModeRowSelected(status),
                 context = "${status.wbMode}:${CaptureLists.currentKelvin(status)}:${CaptureLists.currentTint(status)}"))
         LiveSheet.FOCUS -> chrome(captureQuickFocusControl(status))
+        LiveSheet.APERTURE -> chrome(MonitorQuickControl(CaptureLists.apertureLabels(status),
+            ApertureStrategy.label(status.apertureStrategy).orEmpty()))
         LiveSheet.EXPO -> chrome(MonitorQuickControl(CaptureLists.expoLabels, CaptureLists.expoLabel(status.expoMode)))
         LiveSheet.AUDIO -> {
             if (CameraCommands.isPhotoMode(status.shootingMode)) null
@@ -152,6 +155,7 @@ internal fun applyCaptureQuickControl(sheet: LiveSheet, value: String, status: C
             else CaptureLists.wbCustomFromStatus(status).let { model.setWhiteBalance(it.first, it.second) }
         }
         LiveSheet.FOCUS -> applyCaptureFocusChoice(value, status, model)
+        LiveSheet.APERTURE -> CaptureLists.apertureFromLabel(value)?.let(model::setApertureStrategy)
         LiveSheet.EXPO -> CaptureLists.expoModeFromLabel(value)?.let(model::setExpoMode)
         LiveSheet.AUDIO -> CaptureLists.audioChannelValue(value)?.let(model::setAudioChannel)
         LiveSheet.FORMAT -> {

@@ -65,10 +65,10 @@ object CameraCommands {
     /**
      * Pocket 3 / Nano SET / `cam_image_effect` `@2`. Pocket 3 (#176): Normal
      * `00`, HDR `3C`, D-Log M `3D`. Nano: Normal 8-bit `00`, Normal 10-bit
-     * `3F`, D-Log M `3D`. Other bodies use the COLOR_* constants as wire bytes.
+     * `3F`, D-Log M `3D`. Action 6 is the Nano pair without `00`. Other bodies use the COLOR_* constants as wire bytes.
      */
     fun wireColorMode(mode: Int, name: String = "", family: String = ""): Int {
-        if (CameraModel.looksLikeNano(name, family)) {
+        if (CameraModel.looksLikeNano(name, family) || CameraModel.looksLikeAction6(name)) {
             return when (mode) {
                 COLOR_NORMAL -> 0x00
                 COLOR_NORMAL10 -> 0x3F
@@ -86,7 +86,7 @@ object CameraCommands {
 
     /** Inverse of [wireColorMode]. */
     fun parseColorMode(byte: Int, name: String = "", family: String = ""): Int {
-        if (CameraModel.looksLikeNano(name, family)) {
+        if (CameraModel.looksLikeNano(name, family) || CameraModel.looksLikeAction6(name)) {
             return when (byte) {
                 0x00 -> COLOR_NORMAL
                 0x3F -> COLOR_NORMAL10
@@ -566,11 +566,18 @@ object CameraCommands {
             u32LE(1) +
             byteArrayOf(0x01, 0x01, 0x00, 0x00)
 
-    fun setMediaFavorite(handle: Int, on: Boolean, counter: Int): ByteArray =
-        byteArrayOf(0x01, 0x01) +
-            u32LE(handle) +
-            u32LE(counter) +
-            byteArrayOf(0x00, if (on) 0x01 else 0x00, 0x00, 0x00, 0x00)
+    /** Action 6 moves On/Off to byte 1 and sends its captured tail verbatim (handbook `devices/action-6/coverage`). */
+    fun setMediaFavorite(handle: Int, on: Boolean, counter: Int, cameraName: String = ""): ByteArray =
+        if (CameraModel.looksLikeAction6(cameraName)) {
+            byteArrayOf(0x01, if (on) 0x01 else 0x00) +
+                u32LE(handle) +
+                byteArrayOf(0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00)
+        } else {
+            byteArrayOf(0x01, 0x01) +
+                u32LE(handle) +
+                u32LE(counter) +
+                byteArrayOf(0x00, if (on) 0x01 else 0x00, 0x00, 0x00, 0x00)
+        }
 
     const val GIMBAL_STICK_CENTER = 1024
     const val GIMBAL_STICK_TRAVEL = 550

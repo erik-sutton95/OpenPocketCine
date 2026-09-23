@@ -61,6 +61,7 @@ import com.opencapture.openpocketcine.assists.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
+import com.opencapture.openpocketcine.session.ApertureStrategy
 import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
@@ -333,6 +334,7 @@ fun LivePortraitChrome(
                     quickBottomClearanceDp = layout.viewportHeight - zones.systemBar.minY + 12f,
                     showFocus =
                         capabilities.focus,
+                    showAperture = capabilities.iris,
                     facePriority = model.facePriorityExposureEnabled,
                     shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = {
@@ -640,6 +642,7 @@ fun LiveCaptureStrip(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     showFocus: Boolean = true,
+    showAperture: Boolean = false,
     facePriority: Boolean = false,
     shutterUsesAngle: Boolean = false,
     onOpen: (LiveSheet) -> Unit,
@@ -670,6 +673,7 @@ fun LiveCaptureStrip(
         add(value(LiveSheet.EXPO, "EXPOSURE", if (status.expoMode == CameraCommands.EXPO_MANUAL) "M" else if (auto) "A" else "—"))
         add(value(LiveSheet.WB, "WB", CaptureLists.wbChipValue(status)))
         if (showFocus) add(value(LiveSheet.FOCUS, "FOCUS", status.focusLabel))
+        if (showAperture) add(value(LiveSheet.APERTURE, "APERTURE", ApertureStrategy.tileValue(status)))
         if (CaptureShutterPolicy.showsAudioControls(status.shootingMode)) {
             add(value(LiveSheet.AUDIO, "AUDIO", status.audioLabel))
         }

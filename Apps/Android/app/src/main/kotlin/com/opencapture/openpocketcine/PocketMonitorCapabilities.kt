@@ -10,6 +10,7 @@ internal fun AppModel.monitorCapabilities(status: CameraStatus): MonitorCapabili
         gimbal = session.hasGimbal,
         zoom = session.supportsZoom,
         focus = body?.supportsFocusMode == true,
+        iris = body?.supportsAperture == true,
         audio = true,
         headTracking = session.hasGimbal,
         clipDelete = true,

@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 
 enum CaptureSheet: String, Identifiable {
-    case iso, shutter, wb, focus, exposure, audio
+    case iso, shutter, wb, focus, aperture, exposure, audio
     case mode
     case resolution, color
     var id: String { rawValue }
@@ -377,6 +377,18 @@ struct CapturePickerPanel: View {
         case .focus:
             if model.session.supportsFocusMode {
                 focusRows
+            }
+        case .aperture:
+            if model.session.supportsAperture {
+                choiceDrum(
+                    CaptureLists.apertureStrategies(from: model.session.status).map(\.label),
+                    selected: model.session.status.apertureStrategy?.label
+                ) { label in
+                    if let strategy = ApertureStrategy.allCases.first(where: { $0.label == label })
+                    {
+                        model.session.setApertureStrategy(strategy)
+                    }
+                }
             }
         case .exposure:
             choiceDrum(
@@ -1188,6 +1200,14 @@ enum CaptureLists {
         return CamCapIso.markedLabels(transfer: status.monitorTransfer)
     }
 
+    /// Camera capability push wins; the captured per-mode set covers the gap before it.
+    static func apertureStrategies(from status: CameraStatus) -> [ApertureStrategy] {
+        status.availableApertureStrategies.isEmpty
+            ? ApertureStrategy.fallback(
+                expoMode: status.expoMode, shootingMode: status.shootingMode)
+            : status.availableApertureStrategies
+    }
+
     static func focusOption(from status: CameraStatus) -> FocusOption? {
         FocusOption.resolve(mode: status.focusMode, track: status.focusTrack)
     }
@@ -1238,6 +1258,7 @@ extension CaptureSheet {
         case .shutter: "SHUTTER"
         case .wb: "WHITE BALANCE"
         case .focus: "FOCUS"
+        case .aperture: "APERTURE"
         case .exposure: "EXPOSURE MODE"
         case .audio: "AUDIO"
         case .mode: "SHOOTING MODE"
@@ -1252,6 +1273,7 @@ extension CaptureSheet {
         case .shutter: "Angle · speed"
         case .wb: "Kelvin · auto · tint"
         case .focus: "AF-S · AF-C · tracking"
+        case .aperture: "Aperture strategy"
         case .exposure: "Exposure"
         case .audio: "Channel · wind · direction · vocal"
         case .mode: "Shooting mode"

@@ -38,6 +38,7 @@ import Testing
         let off: [CameraModel] = [
             .resolve(modelId: 0x19, name: nil),  // Nano
             .resolve(modelId: 0x15, name: nil),  // Action 5 Pro
+            .resolve(modelId: 0x18, name: nil),  // Action 6: zoom `02/B8` encoding differs
             .resolve(modelId: 0x17, name: nil),  // 360
             .resolve(modelId: 0x70, name: nil),  // Mavic 3
             .resolve(modelId: 0x60, name: "Mystery"),  // unknown drone

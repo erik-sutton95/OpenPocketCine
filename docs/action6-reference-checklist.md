@@ -107,6 +107,8 @@ record/photo, storage and media. Mark each command as observed, accepted,
 effect-verified, different or untested; shared opcode names alone establish no
 compatibility. Keep unknown bytes and model restrictions explicit.
 
-This survey changes no shell behavior. Implementing discovered controls and
+This survey changed no shell behavior. The apps implemented from it later; the
+[device page](../handbook/src/content/docs/devices/action-6/index.md#openpocketcine-app-status)
+lists what is wired and that it still needs physical proof. Implementing discovered controls and
 proving them in both apps are subsequent work; Mimo observations do not satisfy
 physical OpenPocketCine verification.

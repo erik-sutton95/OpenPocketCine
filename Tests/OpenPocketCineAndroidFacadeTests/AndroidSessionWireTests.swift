@@ -18,6 +18,18 @@ struct AndroidSessionWireTests {
         #expect(AndroidSessionWire.status(fromJSON: "{\"meteredEv\":272}").meteredEv == nil)
     }
 
+    @Test func action6ModelJSONAndApertureCommand() {
+        let json = AndroidSessionWire.cameraModelJSON(modelId: 0x18, name: nil)
+        #expect(json.contains("\"liveViewEnableReceiver\":65"))
+        #expect(json.contains("\"sendsLiveViewPrepare\":false"))
+        #expect(json.contains("\"supportsAperture\":true"))
+        #expect(json.contains("\"supportsFocusMode\":false"))
+        let set = AndroidSessionWire.encodeCommand(kind: .setApertureStrategy, seq: 1, extra: "3")
+        #expect(set?.payload == [0x01, 0x01, 0x44, 0x00, 0x01, 0x03])
+        #expect(
+            AndroidSessionWire.encodeCommand(kind: .setApertureStrategy, seq: 1, extra: "9") == nil)
+    }
+
     @Test func shutterCommandPreservesPhotoAndSupportsTimelapseStop() {
         for extra: String? in [nil, "", "1"] {
             let frame = AndroidSessionWire.encodeCommand(kind: .shootPhoto, seq: 7, extra: extra)
