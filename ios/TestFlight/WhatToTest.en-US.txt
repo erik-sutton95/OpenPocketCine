@@ -1,6 +1,15 @@
-New features
+New and changed
 
-- Multiview preview recovery and camera support were reorganized internally; iPhone and iPad behavior should not change.
-- Please re-check: add two or more cameras in Multiview and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview.
-- Interrupt a preview (walk out of range or switch apps) and check the tile recovers or offers Reconnect.
-- Close Multiview and check each camera returns to its own Wi-Fi.
+- Osmo Action 6 support: live view, Normal 10-bit and D-Log M color, and the official D-Log M LUT. Not yet checked on a real Action 6.
+- On Action 6, an APERTURE control takes the place of FOCUS. It shows the live f-number and sets Auto, f/2.6, f/2.8, Starburst f/4 or SuperNight f/2.0.
+- Camera EV meter: a slim line inside the left edge of the feed shows the camera's own exposure reading.
+
+Fixes
+
+- Live video no longer stops shortly after connecting while the app is busy.
+- In Auto exposure, SHUTTER shows the shutter the camera actually applied.
+
+What to test
+
+- If you have an Action 6: pair it, confirm live view appears, then try APERTURE, COLOR, Photo and Timelapse.
+- Leave live view running for a few minutes and check the picture does not freeze.

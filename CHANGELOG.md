@@ -17,6 +17,14 @@ separate iOS and Android lists.
 
 ### Added
 
+- **Osmo Action 6** support on iOS and Android, implemented from the
+  2026-09-21 Mimo survey: live view (one `0x09/0xa8` enable to receiver `0x41`,
+  AVC, no Nano gate or Pocket prepare), Normal 10-bit / D-Log M color with the
+  official Action 6 cube, Photo and Timelapse capture bytes, and the
+  Action-specific album favorite layout. An **APERTURE** tile takes the FOCUS
+  slot: live iris readout and the aperture strategies the camera offers.
+  Gimbal, tap focus and focus modes are hidden. Not yet checked on a physical
+  Action 6; see the Action 6 handbook page for what is and is not wired.
 - Experimental **Multiview on Android**, matching iOS: the grid button on
   **Your cameras**, the two-step Local Wi-Fi / phone hotspot setup, up to four
   identity-verified camera tiles with Auto LUT, per-tile and group recording,

@@ -1,14 +1,14 @@
 New and changed
 
+- Osmo Action 6 support: live view, Normal 10-bit and D-Log M color, and the official D-Log M LUT. Not yet checked on a real Action 6.
+- On Action 6, an APERTURE control takes the place of FOCUS. It shows the live f-number and sets Auto, f/2.6, f/2.8, Starburst f/4 or SuperNight f/2.0.
 - Experimental Multiview is now on Android: tap the grid button on Your cameras and add up to four Pocket or Nano cameras.
-- Each tile shows the live picture, settings and timecode, with its own LUT and record button. Double-tap a tile for full Live View.
 
 Fixes
 
-- In Multiview, a Pocket that ignores its Wi-Fi identity check right after pairing gets one wake and a retry.
+- Live video no longer stops shortly after connecting while the app is busy.
 
 What to test
 
-- Set up Phone hotspot (Mobile Hotspot, WPA2) or Local Wi-Fi, then add two or more cameras. Approve pairing on a camera if asked.
-- Try Record all, each tile's record button, Grid/Center stage, FIT/FILL, DISP, LUTs and Live View and back.
-- Close Multiview and check each camera returns to its own Wi-Fi.
+- If you have an Action 6: pair it, confirm live view appears, then try APERTURE, COLOR, Photo and Timelapse.
+- Add two or more cameras in Multiview, then close it and check each camera returns to its own Wi-Fi.

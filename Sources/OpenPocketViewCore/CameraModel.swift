@@ -39,23 +39,41 @@ public struct CameraModel: Equatable, Sendable {
     /// The SetPairingPIN token this device expects: a drone only releases WiFi creds for "DJI FLY".
     public var pairingToken: String { isDrone ? "DJI FLY" : "osmo" }
 
-    /// Pocket and Nano live-view enable is captured (`0x09/0xa8`). Action / 360 is not.
+    /// Pocket, Nano and Action 6 live-view enable is captured (`0x09/0xa8`).
+    /// Other Action bodies and 360 are not.
     public var usesCapturedLiveEnable: Bool {
         switch CameraBodyFamily.resolve(modelId: nil, name: name) {
         case .pocket, .nano: return true
         case .other:
+            if isAction6 { return true }
             let n = name.lowercased()
             return !n.contains("action") && !n.contains("360")
         }
     }
 
-    /// `0x09/0xa8` receiver. Nano is `0x41` (Mimo 2026-08-18); Pocket stays `0x08`.
-    public var liveViewEnableReceiver: UInt8 {
-        family == .nano ? 0x41 : 0x08
+    /// Osmo Action 6 (BLE `0x0018`). Survey 2026-09-21, firmware V01.02.0521:
+    /// handbook `devices/action-6/`.
+    public var isAction6: Bool {
+        name.lowercased().replacingOccurrences(of: " ", with: "").contains("action6")
     }
 
-    /// Mimo Nano pairs `0x02/0x09 …03` with enable. Pocket never sent it.
+    /// `0x09/0xa8` receiver. Nano (Mimo 2026-08-18) and Action 6 (survey
+    /// 2026-09-21) are `0x41`; Pocket stays `0x08`.
+    public var liveViewEnableReceiver: UInt8 {
+        family == .nano || isAction6 ? 0x41 : 0x08
+    }
+
+    /// Mimo Nano pairs `0x02/0x09 …03` with enable. Pocket never sent it; neither
+    /// did Mimo on Action 6.
     public var usesNanoLiveViewGate: Bool { family == .nano }
+
+    /// Pocket `0x02/0x68 08` before `0x09/0xa8`. Not Nano (it has its own gate);
+    /// absent from every Action 6 Mimo startup.
+    public var sendsLiveViewPrepare: Bool { !usesNanoLiveViewGate && !isAction6 }
+
+    /// Aperture strategy (`0x02/0x8E` pid `0x0044`) and iris readback
+    /// (`cam_expo_param` `@13`). Action 6 has a variable iris and no AF.
+    public var supportsAperture: Bool { isAction6 }
 
     /// Pocket 3 / Xtra Muse. BLE id `0x0020` or the advertised name.
     public var isPocket3: Bool {
@@ -88,11 +106,13 @@ public struct CameraModel: Equatable, Sendable {
     /// Pocket 3-axis gimbal. Nano has none — hide stick, mode, and A·B·C.
     public var hasGimbal: Bool { family == .pocket }
 
-    /// Pocket tap-focus burst (`0x22`/`0x30`/`0x68`/`0x32`). Nano has no AF.
-    public var supportsTapFocus: Bool { family != .nano }
+    /// Pocket tap-focus burst (`0x22`/`0x30`/`0x68`/`0x32`). Nano has no AF, and the
+    /// Action 6 survey found no AF or focus-distance control.
+    public var supportsTapFocus: Bool { family != .nano && !isAction6 }
 
-    /// AF-S / AF-C (`0x02/0x24`) and AF-C track (`0x8E` pid `0x3B`). Nano has neither.
-    public var supportsFocusMode: Bool { family != .nano }
+    /// AF-S / AF-C (`0x02/0x24`) and AF-C track (`0x8E` pid `0x3B`). Nano and Action 6
+    /// have neither; Action 6 shows aperture in that slot (`supportsAperture`).
+    public var supportsFocusMode: Bool { family != .nano && !isAction6 }
 
     public var family: CameraBodyFamily {
         CameraBodyFamily.resolve(modelId: nil, name: name)

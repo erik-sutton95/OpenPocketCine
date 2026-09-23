@@ -7,7 +7,8 @@ import SwiftUI
 /// presentation values only; camera status stays authoritative throughout a drag.
 struct CaptureQuickSnapshot: Hashable, Sendable {
     enum Kind: Hashable, Sendable {
-        case iso, isoLimit, ev, shutter, angle, whiteBalanceMode, kelvin, focus, exposure, audio
+        case iso, isoLimit, ev, shutter, angle, whiteBalanceMode, kelvin, focus, aperture
+        case exposure, audio
         case format, color, shootingMode
     }
     let kind: Kind
@@ -156,6 +157,12 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
                 kind: .focus, title: "FOCUS", options: FocusOption.allCases.map(\.chip),
                 selection: CaptureLists.focusOption(from: status)?.chip ?? "",
                 context: String(describing: status.focusTrack))
+        case .aperture:
+            guard cameraModel?.supportsAperture == true else { return nil }
+            return Self(
+                kind: .aperture, title: "APERTURE",
+                options: CaptureLists.apertureStrategies(from: status).map(\.label),
+                selection: status.apertureStrategy?.label ?? "")
         case .exposure:
             return Self(
                 kind: .exposure, title: "EXPOSURE", options: ExpoMode.allCases.map(\.label),
@@ -288,6 +295,12 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
         case .focus:
             if let option = FocusOption.allCases.first(where: { $0.chip == value }) {
                 model.session.setFocusOption(option)
+            }
+        case .aperture:
+            if let strategy = CaptureLists.apertureStrategies(from: status).first(where: {
+                $0.label == value
+            }) {
+                model.session.setApertureStrategy(strategy)
             }
         case .exposure:
             if let mode = ExpoMode.allCases.first(where: { $0.label == value }) {

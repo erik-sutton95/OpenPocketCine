@@ -201,7 +201,10 @@ space after rotation or resizing, including saved positions. Long-press a View A
 ## What it does
 
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
-- HEVC live view on Pocket 4 / 4 Pro; AVC observed on Pocket 3 and Osmo Nano
+- HEVC live view on Pocket 4 / 4 Pro; AVC observed on Pocket 3 and Osmo Nano.
+  Osmo Action 6 AVC live view is wired from the
+  [Action 6 survey](https://openpocketcine.app/docs/devices/action-6/) and is
+  not yet checked on a camera.
 - Scopes, exposure/focus assists, framing tools, customizable DISP chrome.
   False color Scale is CineStop / EL Zone / IRE / Limits. CineStop is
   video-level IRE stripes over grayscale. EL Zone is 15 contiguous stops
@@ -238,7 +241,11 @@ space after rotation or resizing, including saved positions. Long-press a View A
   ([survey evidence](https://openpocketcine.app/docs/devices/pocket-3/connection/#openpocketcine-recording-and-warm-reconnect)).
   The full matrix, camera cold boot and other shooting modes remain unqualified.
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
-  Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
+  Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M;
+  Action 6 is Normal 10-bit / D-Log M. Action 6 has no focus modes: its
+  APERTURE tile sits where FOCUS is on Pocket, shows the live iris, and sets
+  Auto, Fixed f/2.6 or f/2.8, Starburst f/4 or SuperNight f/2.0 as the camera
+  offers them. It has no gimbal, tap focus or zoom in the app.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
   View Assist **ND** is a small chip on the live picture (centered until placed; drag to move). Long-press to switch Stops,
   ND32, or ND 0.3. It meters against middle gray and suggests a screw-on

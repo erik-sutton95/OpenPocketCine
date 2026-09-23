@@ -93,6 +93,8 @@ object SwiftCore {
     /** Extra is `ssid + "\u001f" + password`; invalid input encodes nothing. */
     const val CMD_MULTICAM_JOIN = 65
     const val CMD_MULTICAM_WIFI_SCAN = 66
+    /** Action 6 `0x8E` pid `0x0044`. Extra is the [com.opencapture.openpocketcine.session.ApertureStrategy] byte. */
+    const val CMD_SET_APERTURE_STRATEGY = 67
 
     /** DUML set/cmd key the camera ACKs for [kind]. */
     fun waitKey(kind: Int): Int =
@@ -108,7 +110,7 @@ object SwiftCore {
             CMD_GET_VOCAL_BOOST, CMD_SET_VOCAL_BOOST,
             CMD_SET_ISO_LIMIT, CMD_GET_ISO_LIMIT, CMD_SET_FOV,
             CMD_SET_FOCUS_TRACK, CMD_GET_FOCUS_TRACK,
-            CMD_GET_GLAMOUR, CMD_SET_GLAMOUR,
+            CMD_GET_GLAMOUR, CMD_SET_GLAMOUR, CMD_SET_APERTURE_STRATEGY,
             -> 0x028E
             CMD_AUDIO_DSP_GET -> 0x02A0
             CMD_AUDIO_DSP_SET, CMD_AUDIO_DSP_PATCH_WIND, CMD_AUDIO_DSP_PATCH_DIRECTIONAL -> 0x029F

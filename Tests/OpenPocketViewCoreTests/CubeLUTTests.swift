@@ -210,7 +210,7 @@ import Testing
         #expect(s.evComp == EvComp(thirds: -1))  // @6 == 0x0F
         #expect(s.whiteBalanceKelvin == -1)
         #expect(s.whiteBalance == nil)
-        #expect(s.irisLabel == nil)
+        #expect(s.irisHundredths == nil)
     }
 
     @Test func customLUTIndexKeepsOnlyCubesSortedCaseInsensitively() {

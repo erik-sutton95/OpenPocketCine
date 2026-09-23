@@ -112,8 +112,13 @@ public struct CameraStatus: Equatable, Sendable {
     public var gimbalModeFamily: GimbalModeFamily?
     /// Last `0x04/0x50` GET reply. Cannot tell FPV from Tilt Locked.
     public var gimbalParams: GimbalParamState?
-    /// Mechanical iris readout. Pocket has none; `cam_blur_aperture` is beauty blur, not f-stop.
-    public var irisLabel: String?
+    /// Action 6 mechanical iris, hundredths of an f-number (`cam_expo_param` `@13`).
+    /// Pocket has none; `cam_blur_aperture` is beauty blur, not f-stop.
+    public var irisHundredths: Int?
+    /// Action 6 requested aperture strategy (`cam_aperture_ctrl_strategy`).
+    public var apertureStrategy: ApertureStrategy?
+    /// Action 6 `camcap_aperture_ctrl_strategy`; empty until pushed.
+    public var availableApertureStrategies: [ApertureStrategy] = []
     public init() {}
 
     /// Osmo live bar: hours:minutes:seconds. Frames stay in `timecode` (`@6`).
@@ -323,7 +328,18 @@ public enum CameraStatusDecoder {
             if let iso = ExpoParam.isoValue(item.value) { status.iso = iso }
             status.evComp = ExpoParam.evComp(item.value)
             status.meteredEv = ExpoParam.meteredEv(item.value)
+            if model?.supportsAperture == true {
+                status.irisHundredths = ApertureStrategy.irisHundredths(item.value)
+            }
             return true
+        case ApertureStrategy.stateKey:
+            guard let strategy = ApertureStrategy.parseState(item.value) else { return false }
+            status.apertureStrategy = strategy
+            return true
+        case ApertureStrategy.capabilityKey:
+            let choices = ApertureStrategy.parseCapability(item.value)
+            if !choices.isEmpty { status.availableApertureStrategies = choices }
+            return !choices.isEmpty
         case "cam_video_param_v2" where item.value.count >= 2:
             if let fps = fps(index: item.value[1]) { status.fps = fps }
             status.videoResolution = VideoResolution(rawValue: item.value[0])

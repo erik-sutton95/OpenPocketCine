@@ -242,7 +242,11 @@ the survey. Unknown modes have no fallback. The full
 Pocket 3 format/record/reconnect matrix still needs physical Android checks.
 COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
-10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
+10-bit / D-Log M; Action 6 is Normal 10-bit / D-Log M. Action 6 has no focus
+modes: its APERTURE tile sits where FOCUS is on Pocket, shows the live iris,
+and sets the strategies the camera offers. Action 6 live view is wired from
+the [survey](https://openpocketcine.app/docs/devices/action-6/) and not yet
+checked on a camera. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
 on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
 (centered until placed; drag to move). Long-press to
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests

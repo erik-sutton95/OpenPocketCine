@@ -186,12 +186,16 @@ fun LiveViewScreen(model: AppModel) {
     LaunchedEffect(
         sheet,
         model.session.connectedCamera?.model?.supportsFocusMode,
+        model.session.connectedCamera?.model?.supportsAperture,
         model.session.connectedCamera?.model?.family,
         model.session.connectedCamera?.model?.name,
     ) {
         if (sheet == LiveSheet.FOCUS &&
             !CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model)
         ) {
+            sheet = null
+        }
+        if (sheet == LiveSheet.APERTURE && model.session.connectedCamera?.model?.supportsAperture != true) {
             sheet = null
         }
     }
@@ -1506,6 +1510,7 @@ internal fun LandscapeChrome(
                     },
                     quickBottomClearanceDp = layout.safeBottom,
                     showFocus = capabilities.focus,
+                    showAperture = capabilities.iris,
                     facePriority = model.facePriorityExposureEnabled, shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = {
                         val next = CaptureShutterPolicy.opening(it, status.shootingMode)

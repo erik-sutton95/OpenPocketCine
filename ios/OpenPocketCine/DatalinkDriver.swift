@@ -14,6 +14,7 @@ import os
 /// re-armed on the UDP queue (never the main actor) so a busy UI cannot stall the socket.
 @MainActor
 final class DatalinkDriver {
+    private let subscriptionKeys: [String]
     private let stationHost: String?
     private let stationHotspot: Bool
     #if DEBUG
@@ -221,8 +222,9 @@ final class DatalinkDriver {
 
     init(
         port: UInt16, tcpPoke: Bool, pairingToken: String, stationHost: String? = nil,
-        stationHotspot: Bool = false
+        stationHotspot: Bool = false, subscriptionKeys: [String] = Commands.subscriptionKeys
     ) {
+        self.subscriptionKeys = subscriptionKeys
         self.stationHost = stationHost
         self.stationHotspot = stationHotspot
         self.port = port
@@ -974,7 +976,7 @@ final class DatalinkDriver {
 
     private func subscribe() {
         var subId = Commands.firstSubId
-        for key in Commands.subscriptionKeys {
+        for key in subscriptionKeys {
             sendDuml(Commands.subscribe(key: key, subId: subId, seq: 0))
             subId += 1
         }
