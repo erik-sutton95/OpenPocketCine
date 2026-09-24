@@ -584,7 +584,7 @@ class ReliabilityReportingTest {
         assertEquals(256 * 1_024L, options.maxAttachmentSize)
         assertEquals(0, options.shutdownTimeoutMillis)
         assertTrue(options.release.orEmpty().startsWith("com.opencapture.openpocketcine@"))
-        assertEquals("2", options.dist)
+        assertEquals(com.opencapture.openpocketcine.BuildConfig.VERSION_CODE.toString(), options.dist)
         assertEquals("development", options.environment)
     }
 
