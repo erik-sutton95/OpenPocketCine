@@ -10,7 +10,7 @@ class LiveLevelOverlayTest {
     private fun ChromeRect.inside(o: ChromeRect) = minX >= o.minX && maxX <= o.maxX && minY >= o.minY && maxY <= o.maxY
 
     @Test
-    fun evStripsStayOnTheVisibleFeedWithTiltInTheEvSlot() {
+    fun evStripsStayOnTheVisibleFeedWithTiltMirroredOntoTheRight() {
         val viewport = ChromeRect(0f, 0f, 390f, 844f)
         for ((feed, portrait) in listOf(
             ChromeRect(0f, 0f, 844f, 390f) to false,
@@ -21,12 +21,19 @@ class LiveLevelOverlayTest {
             val frames = LiveLevel.frames(feed, viewport, portrait)
             val ev = assertNotNull(CameraExposureMeter.frame(visible, PocketDispMode.LIVE))
             assertTrue(frames.roll.inside(visible), "$feed")
-            assertEquals(ev, frames.tilt, "tilt takes the EV slot")
+            val tilt = assertNotNull(frames.tilt)
+            assertEquals(visible.maxX - 6f, tilt.maxX, "mirrors EV onto the right edge")
+            assertEquals(ev.y, tilt.y)
+            assertEquals(ev.height, tilt.height)
             assertEquals(LiveLevel.THICKNESS, frames.roll.height)
             assertEquals(visible.midX, frames.roll.midX)
             assertEquals(visible.maxY - if (portrait) 30f else 104f, frames.roll.midY)
-            val beside = assertNotNull(LiveLevel.frames(feed, viewport, portrait, evVisible = true).tilt)
-            assertEquals(ev.maxX + 6f, beside.minX, "one strip right of EV")
+            // Joystick cluster in the lower right: move up before shortening.
+            val cluster = ChromeRect(visible.maxX - 120f, visible.midY, 110f, visible.maxY - visible.midY)
+            LiveLevel.frames(feed, viewport, portrait, cluster).tilt?.let { clear ->
+                assertTrue(clear.maxY <= cluster.minY - 12f, "$feed")
+                assertEquals(visible.maxX - 6f, clear.maxX)
+            }
         }
     }
 

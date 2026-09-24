@@ -34,9 +34,10 @@ import kotlinx.coroutines.delay
 /**
  * LEVEL: camera world attitude ([LevelReading]), not this phone. Mirrors iOS
  * `MonitorLevelGauge`: the EV meter's language (slim white line, glow, number at
- * the start, ±8 ends) with a bubble ring that turns green when level. Tilt takes
- * the EV meter's left-edge slot, one strip over when EV is on; roll runs along the
- * bottom; a bubble replaces both near plumb. No data reads `No level data`.
+ * the start, ±8 ends) with a bubble ring that turns green when level. Tilt is the
+ * EV meter mirrored onto the right edge, clearing the joystick cluster the way EV
+ * clears the toolbar (up first, then shorter); roll runs along the bottom; a bubble
+ * replaces both near plumb. No data reads `No level data`.
  */
 internal object LiveLevel {
     const val REFRESH_MS = 100L
@@ -59,13 +60,10 @@ internal object LiveLevel {
     data class Frames(val roll: ChromeRect, val tilt: ChromeRect?)
 
     /** Strips in dp against the on-screen part of the feed (OpenZCine #47). */
-    fun frames(
-        feed: ChromeRect, viewport: ChromeRect, portrait: Boolean,
-        avoid: ChromeRect? = null, evVisible: Boolean = false,
-    ): Frames {
+    fun frames(feed: ChromeRect, viewport: ChromeRect, portrait: Boolean, cluster: ChromeRect? = null): Frames {
         val v = visible(feed, viewport)
-        val tilt = CameraExposureMeter.frame(v, PocketDispMode.LIVE, avoid)
-            ?.let { if (evVisible) ChromeRect(it.x + THICKNESS + 6f, it.y, it.width, it.height) else it }
+        fun mirror(r: ChromeRect) = ChromeRect(v.minX + v.maxX - r.maxX, r.y, r.width, r.height)
+        val tilt = CameraExposureMeter.frame(v, PocketDispMode.LIVE, cluster?.let(::mirror))?.let(::mirror)
         val rollWidth = minOf(MAX_LENGTH, v.width - 24f).coerceAtLeast(0f)
         val rollMidY = v.maxY - if (portrait) 30f else 104f
         return Frames(ChromeRect(v.midX - rollWidth / 2f, rollMidY - THICKNESS / 2f, rollWidth, THICKNESS), tilt)
@@ -89,8 +87,8 @@ internal fun LiveLevelOverlay(
     viewport: ChromeRect,
     portrait: Boolean,
     modifier: Modifier = Modifier,
-    avoid: ChromeRect? = null,
-    evVisible: Boolean = false,
+    /** Joystick cluster the right-edge tilt strip clears. */
+    cluster: ChromeRect? = null,
 ) {
     var mode by remember { mutableStateOf<LevelMode>(LevelMode.Unavailable) }
     LaunchedEffect(reading, viewFlip) {
@@ -104,7 +102,7 @@ internal fun LiveLevelOverlay(
         modifier.fillMaxSize().monitorReadoutShadow()
             .semantics { contentDescription = LiveLevel.accessibilityLabel(mode) },
     ) {
-        val frames = LiveLevel.frames(feed, viewport, portrait, avoid, evVisible)
+        val frames = LiveLevel.frames(feed, viewport, portrait, cluster)
         when (val m = mode) {
             is LevelMode.Bubble -> {
                 val v = LiveLevel.visible(feed, viewport)

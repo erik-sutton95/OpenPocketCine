@@ -160,7 +160,7 @@ gravity. The reading comes from the camera's own attitude sensor, not the
 phone.
 
 - Two slim meters in the EV meter's style show roll along the bottom of the
-  picture and tilt at its left edge, beside the EV meter when both are on. Each
+  picture and tilt at its right edge, above the joystick. Each
   spans ±8° with a centre mark. The ring and number turn green within 0.6° of
   level.
 - Within about 25° of pointing straight down or up, the gauges give way to a

@@ -1599,21 +1599,21 @@ struct FeedSplitComparisonMarks: View {
 /// missing attitude shows `No level data` and never reads green.
 enum LevelAssist {
     static let refresh: TimeInterval = 0.1
-    /// Gap between the EV strip and the tilt strip when both are on.
-    static let besideEV: CGFloat = MonitorLevelGauge.thickness + 6
 
     /// EV-meter strips on the on-screen part of the feed (OpenZCine #47). Tilt
-    /// takes the EV meter's left-edge slot and toolbar avoidance (clear of the
-    /// right-hand joystick cluster), one strip over when EV is on; roll runs
+    /// is the EV meter mirrored onto the right edge and clears the joystick
+    /// cluster the way EV clears the toolbar (up first, then shorter); roll runs
     /// along the bottom, lifted clear of the landscape / portrait chrome.
-    static func frames(
-        feed: CGRect, viewport: CGRect, portrait: Bool, avoiding: CGRect? = nil, evVisible: Bool = false
-    ) -> (roll: CGRect, tilt: CGRect) {
+    static func frames(feed: CGRect, viewport: CGRect, portrait: Bool, avoiding cluster: CGRect? = nil)
+        -> (roll: CGRect, tilt: CGRect)
+    {
         var visible = feed.intersection(viewport)
         if visible.isNull || visible.isEmpty { visible = feed }
         let t = MonitorLevelGauge.thickness
-        let tilt = CameraEVMeter.frame(in: visible, avoiding: avoiding)
-            .offsetBy(dx: evVisible ? besideEV : 0, dy: 0)
+        func mirror(_ r: CGRect) -> CGRect {
+            r.isEmpty ? r : CGRect(x: visible.minX + visible.maxX - r.maxX, y: r.minY, width: r.width, height: r.height)
+        }
+        let tilt = mirror(CameraEVMeter.frame(in: visible, avoiding: cluster.map(mirror)))
         let rollWidth = max(0, min(MonitorLevelGauge.maxLength, visible.width - 24))
         let rollMidY = visible.maxY - (portrait ? 30 : 104)
         return (
@@ -1635,8 +1635,8 @@ struct FeedLevelView: View {
     let feed: CGRect
     let viewport: CGRect
     let portrait: Bool
+    /// Joystick cluster the right-edge tilt strip clears.
     var avoiding: CGRect?
-    var evVisible = false
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -1660,7 +1660,7 @@ struct FeedLevelView: View {
     @ViewBuilder
     private func content(_ mode: LevelReading.Mode) -> some View {
         let frames = LevelAssist.frames(
-            feed: feed, viewport: viewport, portrait: portrait, avoiding: avoiding, evVisible: evVisible)
+            feed: feed, viewport: viewport, portrait: portrait, avoiding: avoiding)
         switch mode {
         case .bubble(let x, let y):
             let visible = feed.intersection(viewport).isNull ? feed : feed.intersection(viewport)
