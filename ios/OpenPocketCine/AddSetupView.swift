@@ -1,89 +1,53 @@
 import MonitorUI
+import NetworkExtension
 import OpenPocketViewCore
 import SwiftUI
 
-/// "Add setup" on a saved camera (#406): Wi-Fi (a router) or Hotspot (this phone).
-/// A sheet in portrait; a centered card in landscape, like Multiview's network setup.
-/// Saving connects over the new setup at once; Camera Wi-Fi stays as the other chip.
+/// "Add setup" on a saved camera (#406): Wi-Fi (a router) or Hotspot (this phone), in a
+/// native sheet with push navigation. The camera scans for networks by itself, and
+/// saving connects over the new setup at once; Camera Wi-Fi stays as the other chip.
 struct AddSetupView: View {
-    enum Page: Equatable {
+    enum Page: Hashable {
         case choose, networks, hotspot
         case password(String)
     }
 
     let camera: SavedCamera
-    /// Nil when the camera is not nearby over Bluetooth.
-    var scan: (() async throws -> [String])?
+    /// Nil when the camera is not nearby over Bluetooth. Reports each network as it arrives.
+    var scan: ((@escaping @MainActor (String) -> Void) async throws -> Void)?
     var save: (CameraConnectionSetup, String, String) -> Void
     var close: () -> Void
-    @State var page: Page = .choose
+    @State var path: [Page] = []
 
     @State private var currentSSID: String?
+    @State private var configured: [String] = []
     @State private var found: [String] = []
+    @State private var scanTask: Task<Void, Never>?
     @State private var scanning = false
+    @State private var scanFinished = false
     @State private var scanFailed = false
     @State private var otherNetwork = false
     @State private var otherName = ""
     @State private var password = ""
     @State private var hotspotName = ""
     @State private var hotspotPassword = ""
+    @State private var hotspotNameTouched = false
     @State private var reveal = false
     @State private var hotspotActive = false
     @Environment(\.openURL) private var openURL
 
-    private let sheet = Color(red: 22 / 255, green: 23 / 255, blue: 24 / 255)
     private var warning: Color { MonitorTheme.linkHealthColor(.watch) }
     private var good: Color { MonitorTheme.linkHealthColor(.stable) }
 
     var body: some View {
-        GeometryReader { proxy in
-            let landscape = proxy.size.width > proxy.size.height
-            // Portrait: the sheet runs through the home-indicator area like a system sheet.
-            let bottomInset = landscape ? 0 : proxy.safeAreaInsets.bottom
-            ZStack(alignment: landscape ? .center : .bottom) {
-                Color.black.opacity(0.6).ignoresSafeArea().onTapGesture(perform: close)
-                VStack(spacing: 0) {
-                    if !landscape {
-                        Capsule().fill(Color.white.opacity(0.2)).frame(width: 36, height: 5)
-                            .padding(.top, 7)
+        NavigationStack(path: $path) {
+            screen(.choose)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", action: dismiss)
                     }
-                    navBar
-                    Group {
-                        if landscape {
-                            content(landscape: true).padding(.horizontal, 18).padding(.bottom, 16)
-                        } else {
-                            ScrollView {
-                                content(landscape: false).padding(.horizontal, 18)
-                                    .padding(.bottom, 24 + bottomInset)
-                            }
-                            .scrollBounceBehavior(.basedOnSize)
-                        }
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
                 }
-                .frame(
-                    width: landscape ? min(600, proxy.size.width) : proxy.size.width,
-                    height: landscape
-                        ? min(400, proxy.size.height - 12)
-                        : max(0, proxy.size.height - 44 + bottomInset)
-                )
-                .background(
-                    sheet,
-                    in: UnevenRoundedRectangle(
-                        topLeadingRadius: 16, bottomLeadingRadius: landscape ? 16 : 0,
-                        bottomTrailingRadius: landscape ? 16 : 0, topTrailingRadius: 16)
-                )
-                .overlay(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 16, bottomLeadingRadius: landscape ? 16 : 0,
-                        bottomTrailingRadius: landscape ? 16 : 0, topTrailingRadius: 16
-                    )
-                    .stroke(Color.white.opacity(landscape ? 0.08 : 0), lineWidth: 1)
-                )
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("addSetup")
-            }
-            .ignoresSafeArea(.container, edges: landscape ? [] : .bottom)
+                .navigationDestination(for: Page.self) { screen($0) }
         }
         .font(MonitorTheme.font(15))
         .foregroundStyle(MonitorTheme.text)
@@ -100,8 +64,14 @@ struct AddSetupView: View {
         }
         .task {
             let current = await WiFiJoiner.currentSSID()
-            // The camera's own access point is not a network to move it onto.
-            if let current, !current.lowercased().hasPrefix("osmo") { currentSSID = current }
+            if let current, !isCameraNetwork(current) { currentSSID = current }
+            // Networks this app configured before. iOS keeps other saved networks private.
+            let ssids = await withCheckedContinuation { continuation in
+                NEHotspotConfigurationManager.shared.getConfiguredSSIDs {
+                    continuation.resume(returning: $0)
+                }
+            }
+            configured = ssids.filter { !isCameraNetwork($0) }
         }
         .task {
             while !Task.isCancelled {
@@ -109,40 +79,32 @@ struct AddSetupView: View {
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }
-        .onAppear { prefill(page) }
+        .onAppear { path.forEach(prefill) }
+        .onDisappear { scanTask?.cancel() }
+    }
+
+    private func screen(_ page: Page) -> some View {
+        GeometryReader { proxy in
+            let landscape = proxy.size.width > proxy.size.height
+            ScrollView {
+                content(page, landscape: landscape)
+                    .padding(.horizontal, landscape ? 24 : 18).padding(.top, 8)
+                    .padding(.bottom, 24)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .background(MonitorTheme.background.opacity(0.001))
+        .navigationTitle(title(page))
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // Wi-Fi scans the moment it opens; Hotspot only when it needs the name.
+            if page == .networks || (page == .hotspot && hotspotName.isEmpty) { startScan() }
+        }
     }
 
     // MARK: Navigation
 
-    private var navBar: some View {
-        HStack {
-            Button {
-                switch page {
-                case .choose: close()
-                case .networks, .hotspot: open(.choose)
-                case .password: open(.networks)
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    if page != .choose {
-                        MonitorIcon.chevronLeft.frame(width: 18, height: 18)
-                    }
-                    Text(page == .choose ? "Cancel" : "Back")
-                }
-                .foregroundStyle(MonitorTheme.accent)
-                .frame(minWidth: 88, minHeight: 44, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            Text(title).font(MonitorTheme.font(15, weight: .semibold))
-            Spacer()
-            Color.clear.frame(width: 88, height: 44)
-        }
-        .padding(.horizontal, 12).padding(.top, 2)
-    }
-
-    private var title: String {
+    private func title(_ page: Page) -> String {
         switch page {
         case .choose: "Add setup"
         case .networks, .password: "Wi-Fi"
@@ -152,7 +114,16 @@ struct AddSetupView: View {
 
     private func open(_ next: Page) {
         prefill(next)
-        page = next
+        path.append(next)
+    }
+
+    private func dismiss() {
+        scanTask?.cancel()
+        close()
+    }
+
+    private func isCameraNetwork(_ ssid: String) -> Bool {
+        ssid.lowercased().hasPrefix("osmo") || ssid == camera.lastSSID
     }
 
     private func prefill(_ next: Page) {
@@ -161,6 +132,7 @@ struct AddSetupView: View {
         case .password(let ssid):
             password = MultiviewNetworkStore.load(ssid: ssid, hotspot: false)?.password ?? ""
         case .hotspot:
+            guard hotspotName.isEmpty else { return }
             // A hotspot saved by Multiview or another camera is this same phone's.
             let known =
                 camera.hotspotSSID.flatMap { MultiviewNetworkStore.load(ssid: $0, hotspot: true) }
@@ -171,7 +143,63 @@ struct AddSetupView: View {
         }
     }
 
-    @ViewBuilder private func content(landscape: Bool) -> some View {
+    // MARK: Camera scan
+
+    private func startScan() {
+        guard let scan, scanTask == nil, !scanFinished else { return }
+        scanning = true
+        scanFailed = false
+        scanTask = Task {
+            do {
+                try await scan { name in
+                    guard !found.contains(name), !isCameraNetwork(name) else { return }
+                    withAnimation(.snappy) { found.append(name) }
+                    suggestHotspot()
+                }
+            } catch {
+                if !(error is CancellationError) { scanFailed = true }
+            }
+            scanning = false
+            scanFinished = !scanFailed
+            scanTask = nil
+        }
+    }
+
+    private func rescan() {
+        scanFinished = false
+        startScan()
+    }
+
+    /// iOS hides this phone's name (its hotspot name) from apps, but the camera sees the
+    /// hotspot. One phone-like network is taken as this phone's until the operator types.
+    private var phoneNetworks: [String] {
+        found.filter {
+            let name = $0.lowercased()
+            return name.contains("iphone") || name.contains("ipad")
+        }
+    }
+
+    private func suggestHotspot() {
+        guard !hotspotNameTouched, hotspotName.isEmpty, phoneNetworks.count == 1 else { return }
+        hotspotName = phoneNetworks[0]
+        hotspotPassword =
+            MultiviewNetworkStore.load(ssid: phoneNetworks[0], hotspot: true)?.password
+            ?? hotspotPassword
+    }
+
+    /// Saving starts a Bluetooth connect, so a running scan first returns the camera to
+    /// its own Wi-Fi and releases its link.
+    private func finish(_ action: @escaping () -> Void) {
+        let running = scanTask
+        running?.cancel()
+        Task {
+            await running?.value
+            action()
+            close()
+        }
+    }
+
+    @ViewBuilder private func content(_ page: Page, landscape: Bool) -> some View {
         switch page {
         case .choose: choosePage(landscape)
         case .networks: networksPage(landscape)
@@ -198,7 +226,7 @@ struct AddSetupView: View {
                     Text("\(camera.displayName) · \(camera.modelName)")
                         .font(MonitorTheme.font(12.5))
                 }
-                .foregroundStyle(MonitorTheme.muted).padding(.top, 10)
+                .foregroundStyle(MonitorTheme.muted)
                 Text("How should this camera connect?")
                     .font(MonitorTheme.font(22, weight: .semibold))
             }
@@ -277,66 +305,87 @@ struct AddSetupView: View {
 
     // MARK: Wi-Fi
 
+    /// Saved in this app's Keychain (with passwords) or configured by this app before.
     private var savedNetworks: [String] {
-        MultiviewNetworkStore.savedNetworks().filter { $0.hotspot != true }.map(\.ssid)
-            .filter { $0 != currentSSID }
+        var names = MultiviewNetworkStore.savedNetworks().filter { $0.hotspot != true }
+            .map(\.ssid)
+        for name in configured where !names.contains(name) { names.append(name) }
+        return names.filter { $0 != currentSSID && !isCameraNetwork($0) }
+    }
+
+    private func hasPassword(_ ssid: String) -> Bool {
+        MultiviewNetworkStore.load(ssid: ssid, hotspot: false) != nil
     }
 
     private func networksPage(_ landscape: Bool) -> some View {
-        let left = VStack(alignment: .leading, spacing: 7) {
+        let known = VStack(alignment: .leading, spacing: 7) {
             if !landscape {
                 Text("Choose the network").font(MonitorTheme.font(22, weight: .semibold))
-                    .padding(.top, 6)
                 hint("The camera and this iPhone must be on the same Wi-Fi.").padding(.bottom, 8)
             }
             if let currentSSID {
                 sectionLabel("THIS IPHONE IS ON")
-                group { networkRow(currentSSID, detail: "Connected", detailColor: good) }
+                group {
+                    networkRow(
+                        currentSSID,
+                        detail: hasPassword(currentSSID)
+                            ? "Connected · password saved" : "Connected",
+                        detailColor: good)
+                }
             }
             if !savedNetworks.isEmpty {
                 sectionLabel("SAVED ON THIS IPHONE").padding(.top, 6)
                 group {
                     ForEach(Array(savedNetworks.enumerated()), id: \.element) { index, name in
                         if index > 0 { divider }
-                        networkRow(name)
+                        networkRow(name, detail: hasPassword(name) ? "Password saved" : nil)
                     }
                 }
             }
         }
-        let right = VStack(alignment: .leading, spacing: 7) {
-            sectionLabel("MORE").padding(.top, landscape ? 0 : 6)
-            group {
-                Button {
-                    runScan()
-                } label: {
-                    row(
-                        icon: scanning ? nil : .scan, title: "Scan with the camera",
-                        detail: scanning
-                            ? "Scanning… about 20 s"
-                            : scan == nil
-                                ? "Turn the camera on to scan"
-                                : scanFailed ? "Scan did not finish. Try again." : "About 20 s",
-                        showsProgress: scanning)
+        let nearby = VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                sectionLabel("NEARBY")
+                if scanning { ProgressView().controlSize(.mini) }
+                Spacer()
+                if !scanning, scan != nil {
+                    Button("Scan again", action: rescan)
+                        .font(MonitorTheme.font(12, weight: .semibold))
+                        .frame(minHeight: 32)
+                        .accessibilityIdentifier("addSetup.rescan")
                 }
-                .buttonStyle(.plain).disabled(scan == nil || scanning)
-                .accessibilityIdentifier("addSetup.scan")
-                divider
+            }
+            .padding(.top, landscape ? 0 : 6)
+            group {
+                let nearbyNames = found.filter { !savedNetworks.contains($0) && $0 != currentSSID }
+                ForEach(Array(nearbyNames.enumerated()), id: \.element) { index, name in
+                    if index > 0 { divider }
+                    networkRow(name, detail: hasPassword(name) ? "Password saved" : nil)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+                if !nearbyNames.isEmpty { divider }
+                if scan == nil || scanning || nearbyNames.isEmpty {
+                    row(
+                        icon: scanning ? nil : .scan,
+                        title: scanning
+                            ? "The camera is looking for networks…"
+                            : scan == nil
+                                ? "Turn the camera on to find networks" : "No networks found yet",
+                        detail: scanning
+                            ? "Networks appear here as it finds them"
+                            : scanFailed ? "The scan did not finish. Try Scan again." : nil,
+                        showsProgress: scanning, chevron: false
+                    )
+                    .accessibilityIdentifier("addSetup.scanStatus")
+                    divider
+                }
                 Button {
                     otherName = ""
                     otherNetwork = true
                 } label: {
                     row(icon: .plus, title: "Other network…", detail: nil)
                 }
-                .buttonStyle(.plain).disabled(scanning)
-            }
-            if !found.isEmpty {
-                sectionLabel("FOUND BY THE CAMERA").padding(.top, 6)
-                group {
-                    ForEach(Array(found.enumerated()), id: \.element) { index, name in
-                        if index > 0 { divider }
-                        networkRow(name)
-                    }
-                }
+                .buttonStyle(.plain)
             }
             if landscape {
                 hint("The camera and this iPhone must be on the same Wi-Fi.").padding(.top, 4)
@@ -344,32 +393,16 @@ struct AddSetupView: View {
         }
         return Group {
             if landscape {
-                ScrollView {
-                    HStack(alignment: .top, spacing: 14) {
-                        left.frame(maxWidth: .infinity)
-                        right.frame(maxWidth: .infinity)
-                    }
+                HStack(alignment: .top, spacing: 16) {
+                    known.frame(maxWidth: .infinity)
+                    nearby.frame(maxWidth: .infinity)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 7) {
-                    left
-                    right
+                    known
+                    nearby
                 }
             }
-        }
-    }
-
-    private func runScan() {
-        guard let scan, !scanning else { return }
-        scanning = true
-        scanFailed = false
-        Task {
-            do {
-                found = try await scan()
-            } catch {
-                scanFailed = true
-            }
-            scanning = false
         }
     }
 
@@ -381,7 +414,7 @@ struct AddSetupView: View {
         } label: {
             row(icon: .wifi, title: name, detail: detail, detailColor: detailColor, lock: true)
         }
-        .buttonStyle(.plain).disabled(scanning)
+        .buttonStyle(.plain)
         .accessibilityIdentifier("addSetup.network.\(name)")
     }
 
@@ -442,7 +475,7 @@ struct AddSetupView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 16) {
-                    network.padding(.top, 10)
+                    network
                     field
                     checklist
                     connect.padding(.top, 8)
@@ -500,14 +533,54 @@ struct AddSetupView: View {
         .padding(16).frame(maxWidth: .infinity, alignment: .leading).background(card)
         let name = VStack(alignment: .leading, spacing: 6) {
             sectionLabel("HOTSPOT NAME")
-            TextField("Hotspot name", text: $hotspotName)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-                .modifier(InputStyle())
-                .accessibilityIdentifier("addSetup.hotspotName")
-            if !landscape { hint("Same as Settings › General › About › Name.") }
+            TextField(
+                "Hotspot name",
+                text: Binding(
+                    get: { hotspotName },
+                    set: {
+                        hotspotNameTouched = true
+                        hotspotName = $0
+                    })
+            )
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+            .modifier(InputStyle())
+            .accessibilityIdentifier("addSetup.hotspotName")
+            if phoneNetworks.count > 1
+                || (phoneNetworks.count == 1 && phoneNetworks[0] != hotspotName)
+            {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 7) {
+                        ForEach(phoneNetworks, id: \.self) { name in
+                            Button(name) {
+                                hotspotNameTouched = true
+                                hotspotName = name
+                            }
+                            .font(MonitorTheme.font(12, weight: .semibold))
+                            .padding(.horizontal, 12).frame(minHeight: 34)
+                            .background(MonitorTheme.raised, in: RoundedRectangle(cornerRadius: 9))
+                            .padding(.vertical, 5).contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            if scanning, hotspotName.isEmpty {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.mini)
+                    hint("The camera is looking for this iPhone’s hotspot…")
+                }
+            } else if !landscape {
+                hint("This iPhone’s name, as in Settings › General › About › Name.")
+            }
         }
-        let pass = secureField(
-            "HOTSPOT PASSWORD", text: $hotspotPassword, id: "addSetup.hotspotPassword")
+        let pass = VStack(alignment: .leading, spacing: 6) {
+            secureField("HOTSPOT PASSWORD", text: $hotspotPassword, id: "addSetup.hotspotPassword")
+            if !landscape {
+                hint(
+                    "iOS keeps it private: copy it from Settings › Personal Hotspot once. It is remembered here."
+                )
+            }
+        }
         let trimmed = hotspotName.trimmingCharacters(in: .whitespacesAndNewlines)
         let valid =
             hotspotPassword.count >= 8
@@ -534,7 +607,7 @@ struct AddSetupView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 14) {
-                    status.padding(.top, 10)
+                    status
                     checklist
                     name
                     pass
@@ -572,7 +645,7 @@ struct AddSetupView: View {
 
     private func row(
         icon: MonitorIcon?, title: String, detail: String?, detailColor: Color? = nil,
-        lock: Bool = false, showsProgress: Bool = false
+        lock: Bool = false, showsProgress: Bool = false, chevron: Bool = true
     ) -> some View {
         HStack(spacing: 12) {
             if showsProgress {
@@ -591,8 +664,10 @@ struct AddSetupView: View {
             if lock {
                 MonitorIcon.lock.frame(width: 13, height: 13).foregroundStyle(MonitorTheme.faint)
             }
-            MonitorIcon.chevronRight.frame(width: 16, height: 16)
-                .foregroundStyle(MonitorTheme.faint)
+            if chevron {
+                MonitorIcon.chevronRight.frame(width: 16, height: 16)
+                    .foregroundStyle(MonitorTheme.faint)
+            }
         }
         .padding(.horizontal, 16).frame(minHeight: 52).contentShape(Rectangle())
     }
@@ -653,8 +728,7 @@ struct AddSetupView: View {
         -> some View
     {
         Button {
-            action()
-            close()
+            finish(action)
         } label: {
             Text(title).font(MonitorTheme.font(15, weight: .semibold))
                 .foregroundStyle(

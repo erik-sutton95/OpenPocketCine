@@ -92,17 +92,23 @@ struct SavedCamerasView: View {
         .ignoresSafeArea()
         .onAppear { orientation.start() }
         .onDisappear { orientation.stop() }
-        .fullScreenCover(item: $addSetup) { target in
+        .sheet(item: $addSetup) { target in
             let nearby = model.session.found.contains { $0.id == target.camera.id }
             AddSetupView(
                 camera: target.camera,
-                scan: nearby ? { try await model.scanNetworks(with: target.camera) } : nil,
+                scan: nearby
+                    ? { onFound in
+                        try await model.scanNetworks(with: target.camera, onFound: onFound)
+                    }
+                    : nil,
                 save: { setup, ssid, password in
                     model.addSetup(setup, ssid: ssid, password: password, to: target.camera)
                 },
-                close: { addSetup = nil }, page: target.page
+                close: { addSetup = nil }, path: target.page == .choose ? [] : [target.page]
             )
-            .presentationBackground(.clear)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(MonitorTheme.background)
         }
         .fullScreenCover(
             isPresented: $showMultiview,

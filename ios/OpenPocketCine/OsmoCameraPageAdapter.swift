@@ -78,20 +78,19 @@ enum OsmoCameraPageAdapter {
         } else if session.phase == .scanning {
             bluetooth = "Looking for the camera"
         } else {
-            bluetooth = stage > 0 ? "Paired" : "Pairing"
+            bluetooth = ""
         }
+        // One caption at a time under the progress bar: what is happening, then its detail.
         return [
-            .init("Bluetooth link", detail: bluetooth, state: state(0)),
+            .init("Connecting over Bluetooth", detail: bluetooth, state: state(0)),
             .init(
-                setup == .cameraWiFi ? "Join camera Wi-Fi" : "Camera joins \(network)",
-                detail: stage == 1
-                    ? progress ?? session.phase.label : stage > 1 ? "Joined" : "Next",
+                setup == .cameraWiFi ? "Joining camera Wi-Fi" : "Moving the camera to \(network)",
+                detail: stage == 1 ? progress ?? session.phase.label : "",
                 state: state(1)),
             .init(
-                setup == .cameraWiFi ? "Open video link" : "Find the camera",
-                detail: setup == .cameraWiFi ? "Datalink handshake" : "Checks it is this camera",
-                state: state(2)),
-            .init("Live picture", detail: "Opens the monitor", state: state(3)),
+                setup == .cameraWiFi ? "Opening the video link" : "Finding the camera",
+                detail: "", state: state(2)),
+            .init("Starting the picture", detail: "", state: state(3)),
         ]
     }
 

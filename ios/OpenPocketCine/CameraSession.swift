@@ -1109,6 +1109,16 @@ final class CameraSession {
 
     /// Camera path for the active setup: the SoftAP subnet, the operator's Wi-Fi, or this
     /// phone's hotspot bridge.
+    #if targetEnvironment(simulator)
+        /// UI review only: a connecting card without a camera.
+        func reviewConnecting(_ id: UUID, setup: CameraConnectionSetup, progress: String) {
+            connectionTargetID = id
+            connectionSetup = setup
+            setupProgress = progress
+            phase = .joiningWifi
+        }
+    #endif
+
     private func cameraPathReady() -> Bool {
         connectionSetup.movesCamera
             ? SharedWiFiPath.address(hotspot: usesHotspot) != nil

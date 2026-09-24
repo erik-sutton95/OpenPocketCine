@@ -850,9 +850,11 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertTrue(app.buttons["addSetup.phoneHotspot"].isHittable)
             capture("add-setup-choose-\(orientation.rawValue)")
             chooseWiFi.tap()
-            XCTAssertTrue(app.buttons["addSetup.scan"].waitForExistence(timeout: 5))
+            // Wi-Fi scans on open; the simulator has no camera, so it says so.
+            XCTAssertTrue(
+                app.descendants(matching: .any)["addSetup.scanStatus"].waitForExistence(timeout: 5))
             capture("add-setup-wifi-\(orientation.rawValue)")
-            app.buttons["Back"].tap()
+            app.navigationBars.buttons["Add setup"].tap()
             app.buttons["addSetup.phoneHotspot"].tap()
             let name = app.textFields["addSetup.hotspotName"]
             XCTAssertTrue(name.waitForExistence(timeout: 5))
@@ -862,10 +864,25 @@ final class MonitorUIFlowTests: XCTestCase {
                         NSPredicate(format: "label CONTAINS 'Personal Hotspot'")
                     ).count > 0)
             capture("add-setup-hotspot-\(orientation.rawValue)")
-            app.buttons["Back"].tap()
-            app.buttons["Cancel"].tap()
+            app.navigationBars.buttons["Add setup"].tap()
+            app.navigationBars.buttons["Cancel"].tap()
             XCTAssertTrue(add.waitForExistence(timeout: 5))
             app.scrollViews.firstMatch.swipeDown()
+        }
+    }
+
+    func testConnectingCardShowsOneProgressLine() {
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
+        app.launchEnvironment["OPV_UI_REVIEW_CONNECTING"] = "1"
+        app.launch()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            rotate(orientation)
+            let progress = app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label BEGINSWITH 'Moving the camera to Studio-5G'"))
+                .firstMatch
+            XCTAssertTrue(progress.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["Cancel connecting to Studio camera"].exists)
+            capture("connecting-progress-\(orientation.rawValue)")
         }
     }
 

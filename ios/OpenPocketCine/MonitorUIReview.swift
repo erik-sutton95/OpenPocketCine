@@ -134,6 +134,10 @@
                     advertisedName: "Travel camera", modelName: "Osmo Nano",
                     lastConnectedAt: .distantPast, modelId: 0x19),
             ]
+            if ProcessInfo.processInfo.environment["OPV_UI_REVIEW_CONNECTING"] == "1" {
+                model.session.reviewConnecting(
+                    studio.id, setup: .wifi, progress: "Joining Wi-Fi · attempt 1 of 3")
+            }
             model.isPairingNewCamera = screen == "pair"
             if screen == "settings" { model.liveOperatorPanel = .settings }
             if screen == "media" { model.liveOperatorPanel = .media }

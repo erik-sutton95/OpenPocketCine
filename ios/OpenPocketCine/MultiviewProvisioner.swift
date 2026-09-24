@@ -96,38 +96,47 @@ import OpenPocketViewCore
 }
 
 extension MultiviewProvisioner {
-    /// Networks the camera can see: Multiview's captured station role, `07/AB` scan and
-    /// `07/AC` reports, then `07/48 00` on the same link so the camera is back on its own
-    /// Wi-Fi before this returns. The caller stamps the role change first.
-    static func scanNetworks(_ camera: FoundCamera) async throws -> [String] {
+    /// Networks the camera can see, reported as they arrive: Multiview's captured station
+    /// role, repeated `07/AB` scans and their `07/AC` reports, until `rounds` finish or the
+    /// caller cancels. `07/48 00` then returns the camera to its own Wi-Fi on the same link,
+    /// even after cancellation. The caller stamps the role change first.
+    static func scanNetworks(
+        _ camera: FoundCamera, rounds: Int = 4, onFound: @escaping @MainActor (String) -> Void
+    ) async throws {
         let client = MultiviewProvisioner()
         defer { client.close() }
-        var names: [String] = []
+        var seen = Set<String>()
         client.onFrame = { frame in
             guard frame.cmdSet == 7, frame.cmdId == 0xac, frame.sender == 7 else { return }
-            for name in MulticamWiFiScan.names(frame.payload) where !names.contains(name) {
-                names.append(name)
+            for name in MulticamWiFiScan.names(frame.payload) where seen.insert(name).inserted {
+                onFound(name)
             }
         }
         try await client.connect(camera, pairingTimeout: 30)
         if camera.model.family == .nano {
             _ = try await client.exchange(Commands.session5310(id: client.next()))
         }
+        var failure: Error?
         do {
             let role = try await client.exchange(
                 MulticamCommands.stationMode(true, seq: client.next()))
             guard role.payload.first == 0 else { throw MultiviewSession.Failure.rejected }
             try await Task.sleep(for: .seconds(10))
-            _ = try await client.exchange(MulticamWiFiScan.request(seq: client.next()), timeout: 8)
-            try await Task.sleep(for: .seconds(6))
+            for _ in 0..<rounds {
+                // A lost scan reply is not fatal; later rounds and reports still land.
+                _ = try? await client.exchange(
+                    MulticamWiFiScan.request(seq: client.next()), timeout: 8)
+                try await Task.sleep(for: .seconds(5))
+            }
         } catch {
-            _ = try? await client.exchange(MulticamCommands.stationMode(false, seq: client.next()))
-            throw error
+            failure = error
         }
-        let back = try? await client.exchange(
-            MulticamCommands.stationMode(false, seq: client.next()))
+        // Its own task: a cancelled scan must still return the camera to its access point.
+        let back = await Task {
+            try? await client.exchange(MulticamCommands.stationMode(false, seq: client.next()))
+        }.value
         ControlLiveLog.line(
-            "setup: camera scan found=\(names.count) returned=\(back?.payload.first == 0)")
-        return names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            "setup: camera scan found=\(seen.count) returned=\(back?.payload.first == 0)")
+        if let failure { throw failure }
     }
 }

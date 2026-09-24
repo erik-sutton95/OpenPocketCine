@@ -413,11 +413,13 @@ final class AppModel {
 
     /// "Scan with the camera" in Add setup. Stamped first: the scan moves the camera to
     /// station role, so a lost reset is repaired by the next Camera Wi-Fi connect.
-    func scanNetworks(with camera: SavedCamera) async throws -> [String] {
-        guard let found = session.found.first(where: { $0.id == camera.id }) else { return [] }
+    func scanNetworks(
+        with camera: SavedCamera, onFound: @escaping @MainActor (String) -> Void
+    ) async throws {
+        guard let found = session.found.first(where: { $0.id == camera.id }) else { return }
         savedCameras = SavedCameras.startingStation(.wifi, for: camera.id, in: savedCameras)
         SavedCameraStore.save(savedCameras)
-        return try await MultiviewProvisioner.scanNetworks(found)
+        try await MultiviewProvisioner.scanNetworks(found, onFound: onFound)
     }
 
     func forget(_ camera: SavedCamera) {

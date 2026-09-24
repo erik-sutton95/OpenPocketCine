@@ -403,26 +403,20 @@
                     setupChips(connect: connect)
                 }
                 if item.isBusy, !item.steps.isEmpty {
-                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                    // Four across when the card is wide (landscape, iPad); a list otherwise.
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 12) {
-                            ForEach(item.steps) { step in
-                                CameraConnectStepView(step: step, vertical: true)
-                                    .frame(minWidth: 110, maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                        VStack(alignment: .leading, spacing: 12) {
-                            ForEach(item.steps) { CameraConnectStepView(step: $0, vertical: false) }
-                        }
-                    }
+                    CameraConnectProgress(steps: item.steps)
                 }
                 if let failure = item.failure, !item.isBusy {
                     failureBanner(failure)
                 }
                 HStack(spacing: 7) {
                     if item.isBusy, !item.steps.isEmpty {
-                        EmptyView()
+                        Text(CameraConnectProgress.caption(item.steps))
+                            .font(MonitorTheme.font(10.5)).foregroundStyle(MonitorTheme.muted)
+                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            .contentTransition(.opacity)
+                            .animation(
+                                .easeInOut(duration: 0.25),
+                                value: CameraConnectProgress.caption(item.steps))
                     } else if item.isBusy {
                         CameraProgressLabel(title: item.status)
                     } else if item.failure == nil {
@@ -573,46 +567,57 @@
         }
     }
 
-    struct CameraConnectStepView: View {
-        let step: CameraConnectStep
-        let vertical: Bool
+    /// Connection progress as one bar that fills per step with a sweep running through it.
+    /// The card shows `caption` beside Cancel.
+    struct CameraConnectProgress: View {
+        let steps: [CameraConnectStep]
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var sweep = false
 
-        var body: some View {
-            let layout =
-                vertical
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
-                : AnyLayout(HStackLayout(spacing: 12))
-            layout {
-                dot
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(step.title).font(MonitorTheme.font(12.5, weight: .medium))
-                        .foregroundStyle(step.state == .waiting ? MonitorTheme.muted : .white)
-                    Text(step.detail).font(MonitorTheme.font(10.5))
-                        .foregroundStyle(MonitorTheme.muted).lineLimit(2)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityValue(
-                step.state == .done ? "Done" : step.state == .active ? "In progress" : "Waiting")
+        static func caption(_ steps: [CameraConnectStep]) -> String {
+            guard
+                let step = steps.first(where: { $0.state == .active })
+                    ?? steps.last(where: { $0.state == .done })
+            else { return "Connecting" }
+            return step.detail.isEmpty ? step.title : "\(step.title) · \(step.detail)"
         }
 
-        @ViewBuilder private var dot: some View {
-            switch step.state {
-            case .done:
-                MonitorIcon.check.frame(width: 12, height: 12)
-                    .foregroundStyle(MonitorTheme.linkHealthColor(.stable))
-                    .frame(width: 22, height: 22)
-                    .background(
-                        MonitorTheme.linkHealthColor(.stable).opacity(0.16), in: Circle())
-            case .active:
-                Circle().fill(MonitorTheme.accent).frame(width: 8, height: 8)
-                    .monitorPulse(period: MonitorMotion.scanPulseDuration)
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().stroke(MonitorTheme.accent, lineWidth: 2))
-            case .waiting:
-                Circle().stroke(Color.white.opacity(0.18), lineWidth: 2)
-                    .frame(width: 22, height: 22)
+        private var fraction: Double {
+            let done = steps.filter { $0.state == .done }.count
+            let active = steps.contains { $0.state == .active } ? 0.5 : 0
+            return max(0.06, min(1, (Double(done) + active) / Double(max(steps.count, 1))))
+        }
+
+        var body: some View {
+            GeometryReader { proxy in
+                let fill = proxy.size.width * fraction
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.08))
+                    Capsule().fill(MonitorTheme.accent).frame(width: fill)
+                        .overlay(alignment: .leading) {
+                            if !reduceMotion {
+                                LinearGradient(
+                                    colors: [.clear, .white.opacity(0.55), .clear],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                                .frame(width: 70)
+                                .offset(x: sweep ? fill : -70)
+                            }
+                        }
+                        .clipShape(Capsule())
+                        .animation(.easeInOut(duration: 0.45), value: fraction)
+                }
             }
+            .frame(height: 4)
+            .padding(.vertical, 2)
+            .onAppear {
+                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                    sweep = true
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.caption(steps))
+            .accessibilityValue("\(Int(fraction * 100)) percent")
         }
     }
 #endif

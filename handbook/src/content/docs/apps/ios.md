@@ -341,18 +341,21 @@ connect that way; the row's **Connect** uses the setup you used last.
 
 **Add setup** asks how the camera should connect:
 
-- **Wi-Fi**: a router or venue network. Pick the network this iPhone is on, one
-  saved on this iPhone, one found with **Scan with the camera** (about 20 s; the
-  camera returns to its own Wi-Fi afterwards) or **Other network…**, then enter
-  its password. The iPhone joins it too. Use WPA2 or a WPA2/WPA3 mix; guest
-  networks that isolate devices block the picture.
+- **Wi-Fi**: a router or venue network. The camera starts scanning as soon as
+  this page opens, and nearby networks appear as it finds them (the camera
+  returns to its own Wi-Fi afterwards). The network this iPhone is on and
+  networks saved in this app are listed too, with their passwords remembered.
+  **Other network…** takes a hidden name. The iPhone joins the network too. Use
+  WPA2 or a WPA2/WPA3 mix; guest networks that isolate devices block the picture.
 - **Hotspot**: this iPhone's Personal Hotspot. Turn on **Allow Others to Join**
-  and **Maximize Compatibility** in Settings → Personal Hotspot, then enter its
-  name and password.
+  and **Maximize Compatibility** in Settings → Personal Hotspot. iOS does not
+  share the phone's hotspot name or password with apps, so the camera scan fills
+  in the name when it sees the hotspot; paste the password once from Settings and
+  it is remembered.
 
 Connecting moves the camera off its own Wi-Fi with the same captured commands as
 Multiview, and the app only goes live on the address that returns that camera's
-identity. The card shows each step. If a connect fails, the card offers **Edit
+identity. A progress bar on the card shows each step. If a connect fails, the card offers **Edit
 setup**, **Try again** or **Connect over Camera Wi-Fi instead**. The next Camera
 Wi-Fi connect switches the camera back to its own access point. Touch and hold a
 Wi-Fi or Hotspot chip to forget it. Add setup is offered on every Osmo camera,
