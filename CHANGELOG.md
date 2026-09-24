@@ -6,8 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-Cumulative operator-facing notes for the build 63 → 102 open-beta update are in
-the [beta 102 release notes](handbook/src/content/docs/releases/beta-102.md), with
+## [0.1.5] - 2026-09-24
+
+Cumulative operator-facing notes for the open beta build 138 (0.1.0) → 0.1.5
+update are in the [0.1.5 release notes](handbook/src/content/docs/releases/0-1-5.md),
+and for the build 63 → 102 update in the
+[beta 102 release notes](handbook/src/content/docs/releases/beta-102.md), each with
 separate iOS and Android lists.
 
 - Experimental AirPods head tracking now maps shared-forward head direction to
@@ -17,6 +21,10 @@ separate iOS and Android lists.
 
 ### Added
 
+- Android **sideload APK** for devices without Google Play, such as field
+  monitors: one arm64 package for Android 10 or newer on GitHub Releases
+  (`sideload-v0.1.5-1`). It is signed with its own key, so remove a Play copy
+  before installing it. Process: `docs/android-play-ci.md`.
 - **LEVEL** View Assist on iOS and Android: roll and tilt gauges against
   gravity from the camera's own attitude sensor, laid out like a Nikon Z virtual
   horizon (roll along the bottom, tilt right of centre), with a round bubble for

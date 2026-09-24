@@ -1,17 +1,25 @@
+Since open beta build 138
+
 New and changed
 
-- Your cameras: Add setup lets a saved camera connect over your Wi-Fi or this iPhone's Hotspot, on every Osmo camera. Camera Wi-Fi stays as the other setup.
-- New LEVEL View Assist: roll and tilt meters from the camera's own sensor, plus Double-tap → Level in the gimbal drawer to move the lens to level or straight down.
-- Osmo Action 6 support with live view, D-Log M and an APERTURE control (not yet checked on a real Action 6). On Osmo Nano, zoom controls are hidden.
+- Your cameras: Add setup lets a saved camera connect over your Wi-Fi network or this iPhone's Personal Hotspot, on every Osmo camera. Camera Wi-Fi stays as the other setup.
+- A setup connect shows a progress bar with one line of status. If it fails, choose Edit setup, Try again or Camera Wi-Fi; common router causes are named.
+- The next Camera Wi-Fi connect moves the camera back onto its own network.
+- New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots. Shows No level data instead of a false level.
+- Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
+- Osmo Action 6 support: live view, Normal 10-bit and D-Log M color with the official LUT, Photo and Timelapse. Not yet checked on a real Action 6.
+- On Action 6, an APERTURE tile takes the FOCUS slot with a live iris readout. Gimbal and focus controls are hidden.
+- Live monitoring with looks, scopes and glass panels uses much less power and runs cooler. Picture quality and frame rate are unchanged.
 
 Fixes
 
-- Live video no longer stops shortly after connecting while the app is busy.
-- In Auto exposure, SHUTTER shows the shutter the camera actually applied.
-- Live monitoring with looks, scopes and glass panels uses much less power and runs cooler.
+- Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
+- DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
+- The REC and scan pulses no longer hold the display at its highest refresh rate, and paused clips stop redrawing.
 
 What to test
 
+- On a saved camera, try Add setup › Wi-Fi and › Hotspot, then connect with Camera Wi-Fi again and confirm live view returns.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - Monitor for 10 minutes with LUT, PEAK and WAVE on, then record: glass panels and the REC pulse should look as before, and the phone should stay cooler.
-- Try Add setup › Wi-Fi and › Hotspot, then Camera Wi-Fi again. Check Nano has no zoom chip, and Action 6 live view, APERTURE, COLOR, Photo and Timelapse.
+- On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

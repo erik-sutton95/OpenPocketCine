@@ -2,5 +2,5 @@
 //
 // Keep MARKETING_VERSION stable across TestFlight builds; bump it only for a new version train.
 // Xcode Cloud stamps its own build counter onto CURRENT_PROJECT_VERSION at archive time.
-MARKETING_VERSION = 0.1.0
+MARKETING_VERSION = 0.1.5
 CURRENT_PROJECT_VERSION = 1

@@ -142,6 +142,12 @@ HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. Join t
 [public beta on Google Play](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA). Clip export LUT bake, Convert log, and
 GPU scopes are iOS today.
 
+Android devices without the Play Store, including field monitors, install the sideload APK from
+[GitHub Releases](https://github.com/erik-sutton95/OpenPocketCine/releases/tag/sideload-v0.1.5-1).
+The current file is **OpenPocketCine 0.1.5 (1)**. It is one arm64 package for Android 10 or newer.
+Remove any copy installed from Play or an APK mirror first. That copy is signed by Google and
+cannot update this file in place.
+
 Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. **Osmo Action 6** is
 wired from its capture and not yet checked on a camera. Other Osmo models may appear in scan.
 Other Action models and 360 live view are not captured yet.

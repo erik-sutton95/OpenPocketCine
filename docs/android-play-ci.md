@@ -206,6 +206,45 @@ Both are useful: Vitals covers the whole install base, Sentry covers testers who
 opt in. Native Swift `.so` frames are easier to read if you keep a matching AAB
 from the Actions run.
 
+## Sideload APK (no Google Play)
+
+Devices without the Play Store cannot install from the closed-testing track.
+Android field monitors are the usual case. Publish a single arm64 release APK
+on a GitHub Release instead.
+
+- Sign `assembleRelease` with the gitignored sideload keystore,
+  `.local/android/press-release.jks` (store path, passwords and alias in
+  `press-release.env` beside it). Keep both backed up. It is a different
+  certificate from the Play upload key, so a sideload install and a Play
+  install cannot update each other. The operator uninstalls one before
+  installing the other. The August press preview used the same key, so it
+  updates in place.
+- The APK's `versionCode` is `openpocketcine.versionCode`, the sideload floor.
+  Raise it by one before each published APK so the next file installs over
+  the last one. Play builds use the CI stamp and never read it.
+- Set `SENTRY_DSN_ANDROID` to the `openpocketcine-android` DSN when building,
+  so opted-in crash reports reach Sentry.
+- Name the GitHub release `OpenPocketCine <versionName> (<sideload build>)`,
+  the same shape as TestFlight's `0.1.5 (140)`. The sideload build starts at 1
+  for each version name and increases by one for each published APK. It is not
+  the Play version code and not the TestFlight build number.
+- Notes are a short changelist: one to five tester-facing bullets, the same
+  voice as `whatsnew-en-US`, then one line on how to install over the previous
+  sideload build.
+- Tag `sideload-v<versionName>-<build>`, for example `sideload-v0.1.5-1`, on a
+  `main` commit.
+- Attach one file, `OpenPocketCine-<versionName>-<build>-sideload.apk`. It
+  contains only `arm64-v8a` and requires Android 10 (API 29).
+
+```bash
+set -a; source .local/android/press-release.env; set +a
+export ANDROID_KEYSTORE_FILE="$PWD/.local/android/press-release.jks" \
+  ANDROID_KEYSTORE_PASSWORD="$STORE_PASSWORD" ANDROID_KEY_ALIAS="$KEY_ALIAS" \
+  ANDROID_KEY_PASSWORD="$KEY_PASSWORD" SENTRY_DSN_ANDROID='https://…'
+(cd Apps/Android && ./gradlew assembleRelease)
+# → Apps/Android/app/build/outputs/apk/release/app-release.apk
+```
+
 ## Troubleshooting
 
 | Symptom | Likely cause |

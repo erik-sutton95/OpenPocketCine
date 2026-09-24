@@ -1,16 +1,25 @@
+Since open beta build 138
+
 New and changed
 
-- New LEVEL View Assist: roll and tilt meters from the camera's own sensor, plus Double-tap → Level in the gimbal drawer to move the lens to level or straight down.
-- Osmo Action 6 support with live view, D-Log M and an APERTURE control. Not yet checked on a real Action 6.
-- Scopes, paused playback and camera status updates use less power.
+- Experimental Multiview: the grid button on Your cameras monitors up to four Osmo cameras on shared Wi-Fi or a phone hotspot, with Auto LUT and per-tile or group recording.
+- Multiview offers Grid or Center stage, Fit/Fill and clean DISP, and remembers your layout. Double-tap a tile for full Live View; closing returns cameras to their own Wi-Fi.
+- New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots. Shows No level data instead of a false level.
+- Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
+- Osmo Action 6 support: live view, Normal 10-bit and D-Log M color with the official LUT, Photo and Timelapse. Not yet checked on a real Action 6.
+- On Action 6, an APERTURE tile takes the FOCUS slot with a live iris readout. Gimbal and focus controls are hidden.
+- Scopes, paused playback, 4K playback grading and camera status updates use less power.
+- Devices without Google Play can install the sideload APK from the project's GitHub Releases page.
 
 Fixes
 
 - Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
-- Live video no longer stops shortly after connecting while the app is busy.
+- Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
+- DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
 
 What to test
 
+- Open Multiview with two or more cameras: record the group, switch Grid and Center stage, double-tap a tile, then close and connect one camera normally.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
-- If you have an Action 6: pair it, confirm live view appears, then try APERTURE, COLOR, Photo and Timelapse.
 - In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
+- On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

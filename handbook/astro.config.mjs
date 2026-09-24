@@ -121,6 +121,7 @@ export default defineConfig({
         {
           label: 'Release notes', translations: { 'zh-TW': '版本說明' },
           items: [
+            { label: '0.1.5', translations: { 'zh-TW': '0.1.5 版' }, slug: 'releases/0-1-5' },
             { label: 'Open beta 102', translations: { 'zh-TW': '公開測試 102 版' }, slug: 'releases/beta-102' },
           ],
         },
