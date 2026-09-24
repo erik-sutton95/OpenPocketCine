@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreBluetooth
 import CoreGraphics
 import Foundation
 import Observation
@@ -941,7 +942,7 @@ final class CameraSession {
         // leftover P-frames cannot set lastPresentedAt and skip first-picture.
         decoder.beginIDRHold()
         phase = .connectingGatt
-        try await ble.connect(camera)
+        try await connectBleRetryingDrop(camera)
         timeline.mark("gatt", now: ProcessInfo.processInfo.systemUptime)
         try Task.checkCancellation()
         startFrameRouter()
@@ -1133,6 +1134,22 @@ final class CameraSession {
             stationHotspot: host != nil && usesHotspot)
     }
 
+    /// The camera drops a new link for a few seconds after a Wi-Fi role change: seen on a
+    /// Pocket 4 Pro right after Add setup's scan returned it to its access point
+    /// (CBError 7 twice, a manual retry 12 s later connected). Bounded retries.
+    private func connectBleRetryingDrop(_ camera: FoundCamera) async throws {
+        for attempt in 1...3 {
+            do {
+                try await ble.connect(camera)
+                return
+            } catch let error as CBError where error.code == .peripheralDisconnected && attempt < 3
+            {
+                ControlLiveLog.line("ble: camera dropped the new link; retry \(attempt) of 2")
+                try await Task.sleep(for: .seconds(3))
+            }
+        }
+    }
+
     private func nextStationSeq() -> UInt16 {
         stationSeq &+= 1
         return stationSeq
@@ -1154,6 +1171,19 @@ final class CameraSession {
             MulticamCommands.stationMode(false, seq: nextStationSeq()), timeout: 12)
         let accepted = reply?.payload == [0] || reply?.payload == [0, 0]
         ControlLiveLog.line("wifi: restore camera access point accepted=\(accepted)")
+        // Join only once `07/39` reports 00 00 (access point; 00 01 is station). A Pocket 4
+        // Pro confirmed within 0.2 to 2.4 s on hardware; the log keeps the timing.
+        let started = Date()
+        for _ in 0..<15 {
+            let role = try? await exchangeBle(
+                MulticamCommands.wifiWorkMode(seq: nextStationSeq()), timeout: 4)
+            let hex = role?.payload.map { String(format: "%02x", $0) }.joined(separator: " ")
+            ControlLiveLog.line(
+                "wifi: camera role after restore \(hex ?? "no reply") at \(String(format: "%.1f", Date().timeIntervalSince(started))) s"
+            )
+            if role?.payload == [0, 0] { break }
+            try? await Task.sleep(for: .seconds(1))
+        }
     }
 
     /// Moves the camera onto the operator's Wi-Fi or this phone's Personal Hotspot with the
@@ -1197,11 +1227,15 @@ final class CameraSession {
             send: { self.ble.send($0) }, next: nextStationSeq,
             status: { self.setupProgress = $0 },
             hotspotReady: { SharedWiFiPath.address(hotspot: true) != nil },
-            verifyOnNetwork: { try await self.openStationDatalink(camera, identity: identity) },
+            verifyOnNetwork: {
+                try await self.openStationDatalink(camera, identity: identity, within: 0)
+            },
             log: { ControlLiveLog.line("station: \($0)") })
         if outcome == .joined {
             setupProgress = "Finding the camera on \(ssid)"
-            guard try await openStationDatalink(camera, identity: identity) else {
+            // A router hands the camera an address, then its services start: about 40 s
+            // after the join on a Pocket 4 Pro on a home /24 (2026-09-24 device run).
+            guard try await openStationDatalink(camera, identity: identity, within: 60) else {
                 throw Fail.stationCameraMissing(ssid)
             }
         }
@@ -1210,14 +1244,52 @@ final class CameraSession {
 
     /// An address counts only when its datalink answers `07/07` with the identity read over
     /// BLE: other cameras can share the network. Then register and send the one enable.
-    private func openStationDatalink(_ camera: FoundCamera, identity: [UInt8]) async throws
-        -> Bool
+    /// `within` seconds: keep sweeping the subnet until the camera answers or time runs out.
+    private func openStationDatalink(
+        _ camera: FoundCamera, identity: [UInt8], within patience: TimeInterval
+    ) async throws -> Bool {
+        let deadline = Date().addingTimeInterval(patience)
+        var sweep = 0
+        repeat {
+            sweep += 1
+            if try await openStationDatalinkOnce(camera, identity: identity, sweep: sweep) {
+                return true
+            }
+            guard Date() < deadline else { break }
+            try await Task.sleep(for: .seconds(2))
+        } while Date() < deadline
+        return false
+    }
+
+    private func openStationDatalinkOnce(_ camera: FoundCamera, identity: [UInt8], sweep: Int)
+        async throws -> Bool
     {
-        guard cameraPathReady() else { return false }
+        guard cameraPathReady() else {
+            ControlLiveLog.line(
+                "station: sweep \(sweep) no \(usesHotspot ? "hotspot" : "Wi-Fi") address")
+            return false
+        }
         let known = stationHost.map { [$0] } ?? []
-        let found =
-            (try? await MultiviewDiscovery().candidates(excluding: [], hotspot: usesHotspot))
-            ?? []
+        let started = Date()
+        let found: [String]
+        do {
+            found = try await MultiviewDiscovery().candidates(excluding: [], hotspot: usesHotspot)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            ControlLiveLog.line(
+                "station: sweep \(sweep) cannot scan this subnet (\(error.localizedDescription))")
+            found = []
+        }
+        let subnet =
+            SharedWiFiPath.address(hotspot: usesHotspot).flatMap { address in
+                SharedWiFiPath.netmask(hotspot: usesHotspot).flatMap {
+                    MulticamDiscovery.hosts(address: address, mask: $0)?.count
+                }
+            } ?? 0
+        ControlLiveLog.line(
+            "station: sweep \(sweep) hosts=\(subnet) answering=\(found.count) known=\(known.count) in \(String(format: "%.1f", Date().timeIntervalSince(started))) s"
+        )
         for host in known + found.filter({ !known.contains($0) }) {
             try Task.checkCancellation()
             disposeDatalink()
@@ -1229,10 +1301,14 @@ final class CameraSession {
                 let reply = try await waitFrame(
                     0x07, 0x07, timeout: .seconds(8), consumeHold: false
                 ) { _ = dl.send(Commands.getWifiSsid(id: 0)) }
-                guard reply.payload == identity, shouldCommitLiveHandshake(dl) else { continue }
+                guard reply.payload == identity, shouldCommitLiveHandshake(dl) else {
+                    ControlLiveLog.line("station: an answering device is another camera")
+                    continue
+                }
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
+                ControlLiveLog.line("station: an answering device did not open the datalink")
                 continue
             }
             ControlLiveLog.line("station: camera identity verified on the network")

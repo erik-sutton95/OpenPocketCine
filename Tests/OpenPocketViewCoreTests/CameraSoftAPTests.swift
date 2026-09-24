@@ -69,6 +69,15 @@ import Testing
         #expect(
             CameraSoftAPSwitch.ssidToKick(currentSSID: "OsmoNano-BBBB", target: "OsmoNano-BBBB")
                 == nil)
+        // The operator's router is never removed, even once iOS names it (#406).
+        #expect(
+            CameraSoftAPSwitch.ssidToKick(currentSSID: "Mouse House", target: "OsmoNano-BBBB")
+                == nil)
+        // A renamed camera access point is known from saved cameras.
+        #expect(
+            CameraSoftAPSwitch.ssidToKick(
+                currentSSID: "Van cam", target: "OsmoNano-BBBB", knownCameraSSIDs: ["Van cam"])
+                == "Van cam")
     }
 
     @Test func ingestAfterHandshakeNotEnable() {

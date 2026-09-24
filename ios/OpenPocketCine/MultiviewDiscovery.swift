@@ -13,10 +13,11 @@ import OpenPocketViewCore
             let hosts = MulticamDiscovery.hosts(address: address, mask: mask, excluding: excluding)
         else { throw DiscoveryFailure.unsupportedSubnet }
         var found: [String] = []
-        for start in stride(from: 0, to: hosts.count, by: 24) {
+        // 64 probes at a time: a /24 home network is four 0.8 s rounds, not eleven.
+        for start in stride(from: 0, to: hosts.count, by: 64) {
             try Task.checkCancellation()
             guard !cancelled else { throw CancellationError() }
-            let batch = Array(hosts[start..<min(start + 24, hosts.count)])
+            let batch = Array(hosts[start..<min(start + 64, hosts.count)])
             let hits = await withTaskGroup(of: String?.self) { group in
                 for host in batch {
                     group.addTask { await self.probe(host, localAddress: address) ? host : nil }

@@ -59,7 +59,7 @@ enum WiFiJoiner {
             let current = await currentSSID()
             try Task.checkCancellation()
             if let foreign = CameraSoftAPSwitch.ssidToKick(
-                currentSSID: current, target: ssid)
+                currentSSID: current, target: ssid, knownCameraSSIDs: knownOtherSSIDs)
             {
                 journal("wifi: kick \(foreign) then join \(ssid) #\(attempt)")
                 leave(ssid: foreign)
@@ -82,7 +82,11 @@ enum WiFiJoiner {
                     return
                 }
                 journal("wifi: still on \(now ?? "?") after join \(ssid) — retry")
-                if let now { leave(ssid: now) }
+                if let now,
+                    CameraSoftAPSwitch.isCameraNetwork(now, knownCameraSSIDs: knownOtherSSIDs)
+                {
+                    leave(ssid: now)
+                }
                 lastError = JoinError.stillOnOtherBody(now ?? "other camera")
             } catch is CancellationError {
                 throw CancellationError()

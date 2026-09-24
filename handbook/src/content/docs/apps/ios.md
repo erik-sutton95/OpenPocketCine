@@ -359,7 +359,9 @@ connect that way; the row's **Connect** uses the setup you used last.
 
 Connecting moves the camera off its own Wi-Fi with the same captured commands as
 Multiview, and the app only goes live on the address that returns that camera's
-identity. A progress bar on the card shows each step. If a connect fails, the card offers **Edit
+identity. A progress bar on the card shows each step. Over Wi-Fi this can take
+up to a minute: the router first gives the camera an address, then its video
+service starts (about 25 to 40 s for a Pocket 4 Pro on a home network). If a connect fails, the card offers **Edit
 setup**, **Try again** or **Connect over Camera Wi-Fi instead**. The next Camera
 Wi-Fi connect switches the camera back to its own access point. Touch and hold a
 Wi-Fi or Hotspot chip to forget it. Add setup is offered on every Osmo camera,

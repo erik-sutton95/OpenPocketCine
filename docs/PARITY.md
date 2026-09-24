@@ -1322,9 +1322,11 @@ subnet before registering. Bodies without a captured preview profile (Action,
 360) take its experimental path. A Camera Wi-Fi connect after either sends
 `07/48 00` first to restore the access point. Add setup's camera scan returns
 the camera to its access point on the same link. Core, iOS simulator and
-portrait/landscape UI checks pass.
+portrait/landscape UI checks pass. Physical iPhone 16 Pro Max with a Pocket 4 Pro
+(2026-09-24, `PhysicalStationSetupTests`): Add setup › Wi-Fi from the camera scan,
+Wi-Fi from the camera's access point (live 23 s after the join), Camera Wi-Fi
+back (live in 13 s) and Wi-Fi again (24 s) all went live and stayed live.
 
 Exceptions: Android keeps the single camera Wi-Fi path; its Multiview already
 provisions the phone hotspot and a port would reuse `StationJoin` through the
-facade. Physical iPhone proof of the hotspot setup and the access-point restore
-is pending; no camera was attached for this change.
+facade. The hotspot setup and Action 6 still need physical proof.
