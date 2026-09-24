@@ -1,9 +1,10 @@
 #if os(iOS)
     import SwiftUI
 
-    /// LEVEL in the EV meter's language, laid out like a Nikon Z virtual horizon:
+    /// LEVEL laid out like a Nikon Z virtual horizon: a slim opaque dark band with
     /// a white centreline, a cross-bar marker, zero notches and the number at the
-    /// start, under the EV readout glow. Line, marker and number turn green when level.
+    /// start. No glow on the band; the number keeps a faint shadow. Line, marker
+    /// and number turn green when level.
     public struct MonitorLevelGauge: View {
         public enum Axis: Sendable { case horizontal, vertical }
 
@@ -14,18 +15,26 @@
         public static let levelDeg = 0.6
         /// Same green as the app's `LiveDesign.good`.
         public static let good = Color(red: 0.18, green: 0.78, blue: 0.42)
-        /// Marker reach either side of the line.
         static let band: CGFloat = 8
+        static let bandFill = Color.black.opacity(0.45)
         /// Off-level bead in the top-down bubble.
         public static let amber = Color(red: 0.914, green: 0.674, blue: 0.208)
 
         private let axis: Axis
         private let value: Double?
 
-        /// `value` in degrees (positive right / up); `nil` draws the bare line with `—`.
+        /// `value` in degrees (positive right / up); `nil` draws the bare band with `—`.
         public init(axis: Axis, value: Double?) {
             self.axis = axis
             self.value = value
+        }
+
+        /// Faint text-only shadow; the band carries no glow.
+        static func drawReadout(_ text: Text, at point: CGPoint, in context: inout GraphicsContext) {
+            context.drawLayer { layer in
+                layer.addFilter(.shadow(color: .black.opacity(0.6), radius: 1.5))
+                layer.draw(text, at: point)
+            }
         }
 
         public static func label(_ value: Double?) -> String {
@@ -53,16 +62,21 @@
                     let inset = Self.band / 2
                     return vertical ? end - inset - (end - start - 2 * inset) * f : start + inset + (end - start - 2 * inset) * f
                 }
-                context.draw(
+                Self.drawReadout(
                     Text(Self.label(value)).font(MonitorTheme.font(10, weight: .semibold))
                         .monospacedDigit().foregroundStyle(tint),
-                    at: CGPoint(x: size.width / 2, y: 6))
+                    at: CGPoint(x: size.width / 2, y: 6), in: &context)
                 let h = Self.band / 2
+                let bandRect =
+                    vertical
+                    ? CGRect(x: across - h, y: start, width: Self.band, height: end - start)
+                    : CGRect(x: start, y: across - h, width: end - start, height: Self.band)
+                context.fill(Path(roundedRect: bandRect, cornerRadius: h), with: .color(Self.bandFill))
                 var centre = Path()
                 centre.move(to: point(start + h))
                 centre.addLine(to: point(end - h))
                 context.stroke(centre, with: .color(tint.opacity(isLevel ? 1 : 0.8)), lineWidth: 1)
-                // Zero notches just past the marker's reach.
+                // Zero notches just outside the band.
                 let zero = position(0)
                 var notches = Path()
                 for side: CGFloat in [-1, 1] {
@@ -78,7 +92,6 @@
                     context.stroke(bar, with: .color(tint), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 }
             }
-            .monitorReadoutShadow()
         }
     }
 

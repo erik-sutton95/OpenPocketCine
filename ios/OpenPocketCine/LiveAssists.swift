@@ -1695,7 +1695,7 @@ private struct LevelCaption: View {
             .font(MonitorTheme.font(8, weight: .medium))
             .kerning(0.5)
             .foregroundStyle(LiveDesign.muted)
-            .monitorReadoutShadow()
+            .shadow(color: .black.opacity(0.6), radius: 1.5)
             .fixedSize()
     }
 }
