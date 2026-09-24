@@ -1270,7 +1270,9 @@ final class CameraSession {
             return false
         }
         let known = stationHost.map { [$0] } ?? []
-        let phoneNetwork = await WiFiJoiner.currentSSID() ?? "unnamed"
+        // Whether the phone is on the setup's network, never the name: diagnostics are shared.
+        let current = await WiFiJoiner.currentSSID()
+        let phoneNetwork = current == nil ? "unnamed" : current == stationSSID ? "same" : "other"
         let started = Date()
         let found: [String]
         do {
@@ -6350,10 +6352,10 @@ final class CameraSession {
                 "Bluetooth reached a different camera than the one you tapped. Pocket and Nano are separate — pick the Nano or Pocket row in the list."
             case .setupNotSaved:
                 "this setup's password is missing on this device. Edit the setup and enter it again"
-            case .hostWiFi(let ssid):
-                "this iPhone could not join \(ssid). Check the password and that the network is in range"
-            case .stationCameraMissing(let ssid):
-                "the camera joined \(ssid), but this iPhone cannot reach it there. The router may keep wireless devices apart (client or AP isolation, or a separate 2.4 GHz or IoT network). Turn that off, or use the Hotspot setup"
+            case .hostWiFi:
+                "this iPhone could not join the Wi-Fi. Check the password and that the network is in range"
+            case .stationCameraMissing:
+                "the camera joined the Wi-Fi, but this iPhone cannot reach it there. The router may keep wireless devices apart (client or AP isolation, or a separate 2.4 GHz or IoT network). Turn that off, or use the Hotspot setup"
             case .nanoWake:
                 "the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again"
             }

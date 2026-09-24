@@ -78,10 +78,10 @@ enum WiFiJoiner {
                 let now = await currentSSID()
                 try Task.checkCancellation()
                 if CameraSoftAPSwitch.isOnTarget(currentSSID: now, target: ssid) {
-                    journal("wifi: on \(ssid) (current=\(now ?? "nil")) #\(attempt)")
+                    journal("wifi: on \(ssid) (ssid=\(now ?? "nil")) #\(attempt)")
                     return
                 }
-                journal("wifi: still on \(now ?? "?") after join \(ssid) — retry")
+                journal("wifi: still on ssid=\(now ?? "?") after join \(ssid) — retry")
                 if let now,
                     CameraSoftAPSwitch.isCameraNetwork(now, knownCameraSSIDs: knownOtherSSIDs)
                 {
@@ -185,7 +185,7 @@ enum WiFiJoiner {
         }
         let current = await currentSSID() ?? "nil"
         journal(
-            "wifi: no 192.168.2.x after \(Int(timeout)) s current=\(current) ipv4=\(ipv4Addresses().joined(separator: ","))"
+            "wifi: no 192.168.2.x after \(Int(timeout)) s ssid=\(current) ipv4=\(ipv4Addresses().joined(separator: ","))"
         )
         throw JoinError.pathNotReady
     }
