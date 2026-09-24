@@ -43,7 +43,9 @@ final class LevelAssistTests: XCTestCase {
             XCTAssertLessThanOrEqual(frames.tilt.height, MonitorLevelGauge.maxLength)
             XCTAssertEqual(frames.roll.height, MonitorLevelGauge.thickness)
             XCTAssertEqual(frames.roll.midX, visible.midX)
-            XCTAssertEqual(frames.roll.midY, visible.maxY - (portrait ? 30 : 104))
+            XCTAssertEqual(
+                frames.roll.midY,
+                visible.maxY - (portrait ? LevelAssist.rollLiftPortrait : LevelAssist.rollLiftLandscape))
         }
         XCTAssertEqual(MonitorLevelGauge.label(nil), "—")
         XCTAssertEqual(MonitorLevelGauge.label(0.04), "+0.0°")

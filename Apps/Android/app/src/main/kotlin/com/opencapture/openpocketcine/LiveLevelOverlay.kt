@@ -48,6 +48,9 @@ internal object LiveLevel {
     const val BUBBLE_SPAN = 10.0
     const val BUBBLE_RADIUS = 64f
     const val BAND = 8f
+    /** Roll strip centre above the visible picture's bottom edge; tilt mirrors the offset. */
+    const val ROLL_LIFT_LANDSCAPE = 84f
+    const val ROLL_LIFT_PORTRAIT = 22f
     val good = Color(0.18f, 0.78f, 0.42f)
 
     fun visible(feed: ChromeRect, viewport: ChromeRect): ChromeRect {
@@ -64,7 +67,7 @@ internal object LiveLevel {
     fun frames(feed: ChromeRect, viewport: ChromeRect, portrait: Boolean): Frames {
         val v = visible(feed, viewport)
         val rollWidth = minOf(MAX_LENGTH, v.width - 24f).coerceAtLeast(0f)
-        val rollMidY = v.maxY - if (portrait) 30f else 104f
+        val rollMidY = v.maxY - if (portrait) ROLL_LIFT_PORTRAIT else ROLL_LIFT_LANDSCAPE
         val tiltHeight = minOf(MAX_LENGTH, v.height - 12f).coerceAtLeast(0f)
         // Same offset from centre as roll, kept 6 dp inside the picture (portrait fill).
         val tiltMidX = minOf(v.midX + (rollMidY - v.midY), v.maxX - 6f - THICKNESS / 2f)
@@ -137,7 +140,7 @@ private fun DrawScope.text(
     drawText(layout, topLeft = Offset(centre.x - layout.size.width / 2f, centre.y - layout.size.height / 2f))
 }
 
-private val bandFill = Color.Black.copy(alpha = 0.45f)
+private val bandFill = Color.Black.copy(alpha = 0.32f)
 
 /**
  * iOS `MonitorLevelGauge`, laid out like a Nikon Z virtual horizon: opaque dark band,

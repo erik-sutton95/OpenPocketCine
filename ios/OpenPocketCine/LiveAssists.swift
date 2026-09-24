@@ -1599,6 +1599,9 @@ struct FeedSplitComparisonMarks: View {
 /// missing attitude shows `No level data` and never reads green.
 enum LevelAssist {
     static let refresh: TimeInterval = 0.1
+    /// Roll strip centre above the visible picture's bottom edge; tilt mirrors the offset.
+    static let rollLiftLandscape: CGFloat = 84
+    static let rollLiftPortrait: CGFloat = 22
 
     /// Strips on the on-screen part of the feed (OpenZCine #47). Roll runs along
     /// the bottom, lifted clear of the landscape / portrait chrome; tilt centres
@@ -1609,7 +1612,7 @@ enum LevelAssist {
         if visible.isNull || visible.isEmpty { visible = feed }
         let t = MonitorLevelGauge.thickness
         let rollWidth = max(0, min(MonitorLevelGauge.maxLength, visible.width - 24))
-        let rollMidY = visible.maxY - (portrait ? 30 : 104)
+        let rollMidY = visible.maxY - (portrait ? rollLiftPortrait : rollLiftLandscape)
         let tiltHeight = max(0, min(MonitorLevelGauge.maxLength, visible.height - 12))
         let tiltMidX = min(visible.midX + (rollMidY - visible.midY), visible.maxX - 6 - t / 2)
         return (

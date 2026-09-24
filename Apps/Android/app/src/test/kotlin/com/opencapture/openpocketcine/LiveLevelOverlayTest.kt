@@ -28,7 +28,7 @@ class LiveLevelOverlayTest {
             assertEquals(offset, tilt.midX - visible.midX, 0.001f)
             assertEquals(LiveLevel.THICKNESS, frames.roll.height)
             assertEquals(visible.midX, frames.roll.midX)
-            assertEquals(visible.maxY - if (portrait) 30f else 104f, frames.roll.midY)
+            assertEquals(visible.maxY - if (portrait) LiveLevel.ROLL_LIFT_PORTRAIT else LiveLevel.ROLL_LIFT_LANDSCAPE, frames.roll.midY)
         }
     }
 

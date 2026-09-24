@@ -16,7 +16,7 @@
         /// Same green as the app's `LiveDesign.good`.
         public static let good = Color(red: 0.18, green: 0.78, blue: 0.42)
         static let band: CGFloat = 8
-        static let bandFill = Color.black.opacity(0.45)
+        static let bandFill = Color.black.opacity(0.32)
         /// Off-level bead in the top-down bubble.
         public static let amber = Color(red: 0.914, green: 0.674, blue: 0.208)
 
