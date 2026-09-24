@@ -188,6 +188,36 @@ final class BleLink: NSObject {
         }
     }
 
+    private var disconnectWaiters: [UUID: [CheckedContinuation<Void, Never>]] = [:]
+
+    /// `disconnect()` only asks iOS to drop the link. Every central in this app shares one
+    /// link per camera, so a connect from another `BleLink` before iOS reports it down is
+    /// dropped with it (CBError 7). Callers that hand the camera over wait here.
+    func disconnectAndWait(timeout: TimeInterval = 3) async {
+        guard let peripheral = connected, peripheral.state != .disconnected else {
+            disconnect()
+            return
+        }
+        let id = peripheral.identifier
+        scheduleDisconnectDeadline(id, after: timeout)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            disconnectWaiters[id, default: []].append(continuation)
+            disconnect()
+        }
+    }
+
+    /// A camera that never reports the drop must not hold the hand-over forever.
+    private func scheduleDisconnectDeadline(_ id: UUID, after timeout: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            self?.resumeDisconnectWaiters(id)
+        }
+    }
+
+    private func resumeDisconnectWaiters(_ id: UUID) {
+        let waiting = disconnectWaiters.removeValue(forKey: id) ?? []
+        for waiter in waiting { waiter.resume() }
+    }
+
     func disconnect() {
         writeQueue.removeAll()
         notificationAssemblers.removeAll()
@@ -378,6 +408,8 @@ extension BleLink: CBCentralManagerDelegate {
     func centralManager(
         _ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?
     ) {
+        // Before the selection guard: `disconnect()` has already cleared the selection.
+        resumeDisconnectWaiters(peripheral.identifier)
         // Cancelling a leftover Pocket must not abort the Nano scan / handshake.
         guard isSelected(peripheral) else {
             log.info(

@@ -345,6 +345,8 @@ connect that way; the row's **Connect** uses the setup you used last.
   this page opens, and nearby networks appear as it finds them (the camera
   returns to its own Wi-Fi afterwards). The network this iPhone is on and
   networks saved in this app are listed too, with their passwords remembered.
+  iOS names the current network only for apps with precise location permission,
+  so Wi-Fi asks for it the first time; only the network name is used.
   **Other network…** takes a hidden name. The iPhone joins the network too. Use
   WPA2 or a WPA2/WPA3 mix; guest networks that isolate devices block the picture.
 - **Hotspot**: this iPhone's Personal Hotspot. Turn on **Allow Others to Join**

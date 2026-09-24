@@ -36,6 +36,17 @@ One-time App Store Connect / Xcode setup is the wizard:
 That walkthrough reuses the App Store Connect record for `com.opencapture.openpocketcine`,
 connects this GitHub repo, and defines the `main` Archive workflow.
 
+## App ID capabilities
+
+`ios/OpenPocketCine/OpenPocketCine.entitlements` requests **Hotspot Configuration**
+and **Access WiFi Information** (Add setup reads the current Wi-Fi name, with the
+`NSLocationWhenInUseUsageDescription` prompt). Both must be enabled on
+`com.opencapture.openpocketcine`. A local signed build with automatic signing
+(`just ios-device-build`, or a device run from Xcode) enables a newly added
+capability; Xcode Cloud then signs with it. If an archive fails with a
+provisioning profile missing an entitlement, enable it under **Certificates,
+Identifiers & Profiles** and rerun.
+
 ## Watch companion signing
 
 Register both explicit bundle IDs in **Certificates, Identifiers & Profiles** on

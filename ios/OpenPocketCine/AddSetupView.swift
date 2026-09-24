@@ -34,7 +34,9 @@ struct AddSetupView: View {
     @State private var hotspotNameTouched = false
     @State private var reveal = false
     @State private var hotspotActive = false
+    @State private var locationHint: String?
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
 
     private var warning: Color { MonitorTheme.linkHealthColor(.watch) }
     private var good: Color { MonitorTheme.linkHealthColor(.stable) }
@@ -63,8 +65,7 @@ struct AddSetupView: View {
             }
         }
         .task {
-            let current = await WiFiJoiner.currentSSID()
-            if let current, !isCameraNetwork(current) { currentSSID = current }
+            await refreshCurrentNetwork()
             // Networks this app configured before. iOS keeps other saved networks private.
             let ssids = await withCheckedContinuation { continuation in
                 NEHotspotConfigurationManager.shared.getConfiguredSSIDs {
@@ -80,6 +81,10 @@ struct AddSetupView: View {
             }
         }
         .onAppear { path.forEach(prefill) }
+        .onChange(of: scenePhase) { _, phase in
+            // Back from Settings with Location or Precise Location changed.
+            if phase == .active { Task { await refreshCurrentNetwork() } }
+        }
         .onDisappear { scanTask?.cancel() }
     }
 
@@ -99,6 +104,12 @@ struct AddSetupView: View {
         .onAppear {
             // Wi-Fi scans the moment it opens; Hotspot only when it needs the name.
             if page == .networks || (page == .hotspot && hotspotName.isEmpty) { startScan() }
+            if page == .networks {
+                Task {
+                    await WiFiNameAccess.shared.request()
+                    await refreshCurrentNetwork()
+                }
+            }
         }
     }
 
@@ -120,6 +131,21 @@ struct AddSetupView: View {
     private func dismiss() {
         scanTask?.cancel()
         close()
+    }
+
+    private func refreshCurrentNetwork() async {
+        let current = await WiFiJoiner.currentSSID()
+        currentSSID = current.flatMap { isCameraNetwork($0) ? nil : $0 }
+        let access = WiFiNameAccess.shared
+        if current != nil || access.undecided {
+            locationHint = nil
+        } else if access.denied {
+            locationHint = "Allow Location to show this iPhone’s Wi-Fi"
+        } else if access.approximateOnly {
+            locationHint = "Turn on Precise Location to show this iPhone’s Wi-Fi"
+        } else {
+            locationHint = nil
+        }
     }
 
     private func isCameraNetwork(_ ssid: String) -> Bool {
@@ -331,6 +357,23 @@ struct AddSetupView: View {
                         detail: hasPassword(currentSSID)
                             ? "Connected · password saved" : "Connected",
                         detailColor: good)
+                }
+            } else if let locationHint {
+                sectionLabel("THIS IPHONE IS ON")
+                group {
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
+                    } label: {
+                        row(
+                            icon: .wifi, title: locationHint,
+                            detail:
+                                "Settings › OpenPocketCine › Location. Only the Wi-Fi name is used."
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("addSetup.locationHint")
                 }
             }
             if !savedNetworks.isEmpty {

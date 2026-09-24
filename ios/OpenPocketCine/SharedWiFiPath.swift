@@ -33,12 +33,18 @@ enum SharedWiFiPath {
                 }
             }
         }
+        // iOS applied the join. It names the network only with location permission (or
+        // for networks this app configured); an unnamed Wi-Fi address is accepted too.
+        func joined() async -> Bool {
+            let current = await WiFiJoiner.currentSSID()
+            return current == ssid || (current == nil && address() != nil)
+        }
         let deadline = Date().addingTimeInterval(12)
         while Date() < deadline {
-            if await WiFiJoiner.currentSSID() == ssid, address() != nil { break }
+            if await joined(), address() != nil { break }
             try await Task.sleep(for: .milliseconds(200))
         }
-        guard await WiFiJoiner.currentSSID() == ssid else { return nil }
+        guard await joined() else { return nil }
         return address()
     }
 

@@ -850,6 +850,10 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertTrue(app.buttons["addSetup.phoneHotspot"].isHittable)
             capture("add-setup-choose-\(orientation.rawValue)")
             chooseWiFi.tap()
+            // Wi-Fi asks for location (iOS names the current network only with it).
+            let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+                .buttons["Allow While Using App"]
+            if allow.waitForExistence(timeout: 3) { allow.tap() }
             // Wi-Fi scans on open; the simulator has no camera, so it says so.
             XCTAssertTrue(
                 app.descendants(matching: .any)["addSetup.scanStatus"].waitForExistence(timeout: 5))
