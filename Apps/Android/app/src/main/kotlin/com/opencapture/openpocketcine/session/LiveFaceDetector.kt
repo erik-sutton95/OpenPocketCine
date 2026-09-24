@@ -13,12 +13,14 @@ import com.google.mlkit.vision.face.FaceLandmark
 import java.util.concurrent.Executors
 
 /**
- * iOS `LiveFaceDetector`: latest-frame-wins on a 40 ms cadence.
+ * iOS `LiveFaceDetector`: latest-frame-wins on a 40 ms cadence, 100 ms after
+ * about a second without a face (see [pace]).
  *
  * ML Kit Face Detection is the Android stand-in for Vision. The platform
  * `android.media.FaceDetector` is frontal-eyes-only and missed 3/4 views.
  * Boxes are camera/identity space. Compose mirrors them at draw time.
  *
+ * Vulkan hands NV21 bytes (no conversion in ML Kit). GLES / PixelCopy hand bitmaps.
  * Bitmap ownership: a frame handed to ML Kit is recycled **only once its
  * `Task` completes**. ML Kit reads the pixels off-thread on `MlKitThreadPool`
  * inside `ImageConvertUtils.convertToNv21Buffer`, so freeing a bitmap before
@@ -29,6 +31,16 @@ import java.util.concurrent.Executors
  * does.
  */
 class LiveFaceDetector {
+    /** One detector input; [release] runs once ML Kit is done reading it. */
+    class Frame(val image: InputImage, val width: Int, val height: Int, val release: () -> Unit = {}) {
+        companion object {
+            fun of(bitmap: Bitmap) = Frame(InputImage.fromBitmap(bitmap, 0), bitmap.width, bitmap.height, bitmap::recycle)
+
+            fun nv21(bytes: ByteArray, width: Int, height: Int) =
+                Frame(InputImage.fromByteArray(bytes, width, height, 0, InputImage.IMAGE_FORMAT_NV21), width, height)
+        }
+    }
+
     private val lock = Any()
     private val main = Handler(Looper.getMainLooper())
     private val exec = Executors.newSingleThreadExecutor { Thread(it, "opc.face-af") }
@@ -48,16 +60,23 @@ class LiveFaceDetector {
     private var busy = false
     private var closed = false
     private var lastRun = 0L
-    private var pending: Bitmap? = null
+    private var emptyRuns = 0
+    private var pending: Frame? = null
     private var pendingDone: ((List<TrackingBox>) -> Unit)? = null
 
-    fun consider(src: Bitmap, done: (List<TrackingBox>) -> Unit) {
+    /** Whether a frame offered now would be detected; skip the readback otherwise. */
+    fun wantsFrame(): Boolean =
+        synchronized(lock) {
+            !closed && wantsFrame(emptyRuns, SystemClock.elapsedRealtime() - lastRun)
+        }
+
+    fun consider(src: Frame, done: (List<TrackingBox>) -> Unit) {
         synchronized(lock) {
             if (closed) {
-                src.recycle()
+                src.release()
                 return
             }
-            pending?.recycle()
+            pending?.release()
             pending = src
             pendingDone = done
             if (!busy) {
@@ -69,7 +88,7 @@ class LiveFaceDetector {
 
     fun shutdown() {
         main.removeCallbacksAndMessages(null)
-        val abandoned: Bitmap?
+        val abandoned: Frame?
         val stopNow: Boolean
         synchronized(lock) {
             closed = true
@@ -79,7 +98,7 @@ class LiveFaceDetector {
             pendingDone = null
             stopNow = !busy
         }
-        abandoned?.recycle()
+        abandoned?.release()
         // With no task in flight nothing else owns pixels, so tear down now.
         // Otherwise the in-flight completion listener finishes the shutdown,
         // because ML Kit may still be reading that frame.
@@ -87,7 +106,7 @@ class LiveFaceDetector {
     }
 
     private fun pump() {
-        data class Job(val bmp: Bitmap, val done: (List<TrackingBox>) -> Unit)
+        data class Job(val frame: Frame, val done: (List<TrackingBox>) -> Unit)
         val job: Job?
         val abortClosed: Boolean
         synchronized(lock) {
@@ -97,12 +116,12 @@ class LiveFaceDetector {
             pendingDone = null
             if (closed) {
                 busy = false
-                next?.recycle()
+                next?.release()
                 abortClosed = true
                 job = null
             } else if (next == null || cb == null) {
                 busy = false
-                next?.recycle()
+                next?.release()
                 abortClosed = false
                 job = null
             } else {
@@ -115,19 +134,19 @@ class LiveFaceDetector {
             finishShutdown()
             return
         }
-        val (bmp, done) = job ?: return
-        val width = bmp.width
-        val height = bmp.height
+        val (frame, done) = job ?: return
+        val width = frame.width
+        val height = frame.height
         if (width < 16 || height < 16) {
-            bmp.recycle()
+            frame.release()
             main.post { done(emptyList()) }
             scheduleNext()
             return
         }
         val task =
-            runCatching { detector.process(InputImage.fromBitmap(bmp, 0)) }.getOrNull()
+            runCatching { detector.process(frame.image) }.getOrNull()
         if (task == null) {
-            bmp.recycle()
+            frame.release()
             main.post { done(emptyList()) }
             scheduleNext()
             return
@@ -140,14 +159,14 @@ class LiveFaceDetector {
             Runnable {
                 val timedOut = synchronized(lock) { !closed && flightId >= 0 && flight.take(flightId) }
                 if (!timedOut) return@Runnable
-                // Unstick Face AF only. ML Kit may still be reading [bmp].
+                // Unstick Face AF only. ML Kit may still be reading [frame].
                 main.post { done(emptyList()) }
                 scheduleNext()
             }
         if (flightId >= 0) main.postDelayed(timeout, DETECT_TIMEOUT_MS)
         task.addOnCompleteListener(exec) { completed ->
             main.removeCallbacks(timeout)
-            bmp.recycle()
+            frame.release()
             val deliver: Boolean
             val stop: Boolean
             synchronized(lock) {
@@ -174,13 +193,14 @@ class LiveFaceDetector {
                 } else {
                     emptyList()
                 }
+            synchronized(lock) { emptyRuns = if (hits.isEmpty()) emptyRuns + 1 else 0 }
             main.post { done(hits) }
             scheduleNext()
         }
     }
 
     private fun scheduleNext() {
-        val delay = INTERVAL_MS - (SystemClock.elapsedRealtime() - lastRun)
+        val delay = synchronized(lock) { pace(emptyRuns) } - (SystemClock.elapsedRealtime() - lastRun)
         val stop: Boolean
         synchronized(lock) {
             if (closed) {
@@ -246,9 +266,22 @@ class LiveFaceDetector {
 
     companion object {
         const val INTERVAL_MS = 40L
+
+        /** No face for about a second: look at 10 Hz until one appears (iOS parity). */
+        const val IDLE_INTERVAL_MS = 100L
+        const val IDLE_AFTER_EMPTY_RUNS = 25
         const val DETECT_TIMEOUT_MS = 2_000L
         const val TAP_WIDTH = 640
         const val TAP_HEIGHT = 360
         const val MIN_FACE_SIZE = 0.10f
+
+        fun pace(emptyRuns: Int): Long = if (emptyRuns >= IDLE_AFTER_EMPTY_RUNS) IDLE_INTERVAL_MS else INTERVAL_MS
+
+        /**
+         * Tracking takes every frame (latest wins while busy). Idle takes one within
+         * a feed tick of its next run, so the pump skips readbacks that would be dropped.
+         */
+        fun wantsFrame(emptyRuns: Int, sinceLastRunMs: Long): Boolean =
+            sinceLastRunMs >= pace(emptyRuns) - INTERVAL_MS
     }
 }

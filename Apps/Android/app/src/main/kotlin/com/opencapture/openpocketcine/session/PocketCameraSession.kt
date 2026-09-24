@@ -3097,13 +3097,16 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     }
 
     /** iOS `decoder.onSourceFrame` → `considerFaceAF`. */
-    fun considerFaceFrame(bitmap: android.graphics.Bitmap) {
+    /** False when the detector would drop a frame offered now; skip its readback. */
+    fun wantsFaceFrame(): Boolean = faceDetector.wantsFrame()
+
+    fun considerFaceFrame(frame: LiveFaceDetector.Frame) {
         if (!_wantsFaceDetect.value) {
-            bitmap.recycle()
+            frame.release()
             clearFaceAF()
             return
         }
-        faceDetector.consider(bitmap) { hits -> applyDetectedFaces(hits) }
+        faceDetector.consider(frame) { hits -> applyDetectedFaces(hits) }
     }
 
     fun noteLiveFrame() {

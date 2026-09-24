@@ -1,7 +1,6 @@
 package com.opencapture.openpocketcine.feed
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.media.Image
 import android.media.ImageReader
@@ -11,11 +10,9 @@ import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import android.view.Surface
-import androidx.core.graphics.createBitmap
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
-import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -69,7 +66,7 @@ internal class LiveVulkanSession(
     private val tapBytes = ByteArray(TAP_W * TAP_H * 4)
     private val faceWanted = AtomicBoolean(false)
     private val faceLock = Any()
-    private val faceBytes = ByteArray(FACE_W * FACE_H * 4)
+    private val faceBytes = ByteArray(FACE_W * FACE_H * 3 / 2)
     @Volatile private var faceValid = false
     private var lastSampleNs = 0L
     private var lastScopeWorkNs = 0L
@@ -339,12 +336,12 @@ internal class LiveVulkanSession(
         faceWanted.set(true)
     }
 
-    fun takeFaceBitmap(): Bitmap? {
+    /** The newest NV21 readback, once: a taken frame is never handed out again. */
+    fun takeFaceNv21(): ByteArray? {
         synchronized(faceLock) {
             if (!faceValid) return null
-            val bmp = createBitmap(FACE_W, FACE_H, Bitmap.Config.ARGB_8888)
-            bmp.copyPixelsFromBuffer(ByteBuffer.wrap(faceBytes))
-            return bmp
+            faceValid = false
+            return faceBytes.copyOf()
         }
     }
 

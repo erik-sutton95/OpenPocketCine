@@ -133,7 +133,9 @@ Detection (Vision-class, 3/4 views) — not `android.media.FaceDetector`
 and not a PixelCopy of the swapchain (that copy is already mirrored
 when TT180/MIRROR is on, and the overlay mirrors again). Lock requires
 an eye landmark (iOS `FaceStructurePolicy`); ML Kit tracking IDs stay
-off so `FaceTrackHold` owns persistence.
+off so `FaceTrackHold` owns persistence. The Vulkan readback is NV21 from
+`nativeCopyFace`, requested only when `LiveFaceDetector.wantsFrame` says the
+detector will run (10 Hz after a second without a face, 25 Hz while tracking).
 WAVE / PARADE accumulate into a 250×153 bitmap off the UI thread; VECTOR uses
 the 128-bin raster.
 An inspector-only scope admits the tap and scope work at 5 Hz in both the GLES
