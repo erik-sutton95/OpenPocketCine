@@ -113,6 +113,15 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+        // Release code for on-device profiling (`just android-perf-soak`): debug-signed,
+        // profileable from the shell, installs beside release and debug.
+        create("perf") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".perf"
+            versionNameSuffix = "-perf"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
 
     buildFeatures {
