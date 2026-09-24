@@ -1,6 +1,16 @@
-New features
+New and changed
 
-- New LEVEL View Assist: roll and tilt gauges from the camera's own sensor. Roll the handle in FPV and check the roll gauge moves the right way.
-- Point the lens straight down: a round bubble replaces the gauges. Check it centers when the shot is truly top-down.
-- Gimbal drawer → Double-tap → Level. Angle the handle forward, double-tap the joystick, and check the toast says Leveled top-down (or how far off it stopped).
-- Close Multiview and check each camera returns to its own Wi-Fi.
+- New LEVEL View Assist: roll and tilt meters from the camera's own sensor, plus Double-tap → Level in the gimbal drawer to move the lens to level or straight down.
+- Live monitoring with looks, scopes and glass panels uses much less power and runs cooler.
+- Osmo Action 6 support with live view, D-Log M and an APERTURE control (not yet checked on a real Action 6). On Osmo Nano, zoom controls are hidden.
+
+Fixes
+
+- Live video no longer stops shortly after connecting while the app is busy.
+- In Auto exposure, SHUTTER shows the shutter the camera actually applied.
+
+What to test
+
+- Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
+- Monitor for 10 minutes with LUT, PEAK and WAVE on, then record: glass panels and the REC pulse should look as before, and the phone should stay cooler.
+- Connect a Nano and check there is no zoom chip. With an Action 6, confirm live view, then try APERTURE, COLOR, Photo and Timelapse.

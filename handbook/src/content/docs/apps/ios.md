@@ -240,7 +240,10 @@ space after rotation or resizing, including saved positions. Long-press a View A
 ## What it does
 
 - Bluetooth pairing, camera Wi-Fi join, saved cameras, reconnect
-- HEVC live view on Pocket 4 / 4 Pro; AVC observed on Pocket 3 and Osmo Nano
+- HEVC live view on Pocket 4 / 4 Pro; AVC observed on Pocket 3 and Osmo Nano.
+  Osmo Action 6 AVC live view is wired from the
+  [Action 6 survey](https://openpocketcine.app/docs/devices/action-6/) and is
+  not yet checked on a camera.
 - Scopes, exposure/focus assists, framing tools, customizable DISP chrome.
   False color Scale is CineStop / EL Zone / IRE / Limits. CineStop is
   video-level IRE stripes over grayscale. EL Zone is 15 contiguous stops
@@ -262,8 +265,9 @@ space after rotation or resizing, including saved positions. Long-press a View A
   imported Custom looks remain available. Returning to Video restores the
   saved conversion unless you changed your LUT selection. Opening a recorded
   clip still uses that clip's color profile.
-- Camera writes (record, ISO, EV, zoom, gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
-  with 4K max 2×; Nano 1×). Pocket 3's ceiling is per-FORMAT, not one
+- Camera writes (record, ISO, EV, zoom and gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
+  with 4K max 2×). Nano is a fixed 1× lens: no zoom chip, pinch, disc or
+  controller zoom, and no gimbal stick or tap focus. Pocket 3's ceiling is per-FORMAT, not one
   generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×, 3K 1:1 2×**
   ([survey](https://openpocketcine.app/docs/devices/pocket-3/controls/#zoom-and-med-tele)).
   Zoom must not drop the live picture. FORMAT lists
@@ -277,7 +281,11 @@ space after rotation or resizing, including saved positions. Long-press a View A
   ([survey evidence](https://openpocketcine.app/docs/devices/pocket-3/connection/#openpocketcine-recording-and-warm-reconnect)).
   The full matrix, camera cold boot and other shooting modes remain unqualified.
   COLOR follows the body: D-Log2 is Pocket 4 Pro only; Pocket 4 is D-Log;
-  Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M.
+  Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit / 10-bit / D-Log M;
+  Action 6 is Normal 10-bit / D-Log M. Action 6 has no focus modes: its
+  APERTURE tile sits where FOCUS is on Pocket, shows the live iris, and sets
+  Auto, Fixed f/2.6 or f/2.8, Starburst f/4 or SuperNight f/2.0 as the camera
+  offers them. It has no gimbal, tap focus or zoom in the app.
   Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro.
   View Assist **ND** is a small chip on the live picture (centered until placed; drag to move). Long-press to switch Stops,
   ND32, or ND 0.3. It meters against middle gray and suggests a screw-on

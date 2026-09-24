@@ -111,12 +111,6 @@
             reduceMotion ? nil : .easeOut(duration: colorDuration)
         }
 
-        public static func recPulse(_ reduceMotion: Bool) -> Animation? {
-            reduceMotion
-                ? nil
-                : .easeInOut(duration: recPulseDuration / 2).repeatForever(autoreverses: true)
-        }
-
         public static func recShape(_ reduceMotion: Bool) -> Animation? {
             curve(emphasized, duration: recShapeDuration, reduceMotion: reduceMotion)
         }

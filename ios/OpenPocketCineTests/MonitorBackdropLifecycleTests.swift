@@ -2,6 +2,7 @@ import CoreImage
 import CoreVideo
 import MonitorPresentation
 import MonitorUI
+import OpenPocketViewCore
 import XCTest
 
 @testable import OpenPocketCine
@@ -252,12 +253,18 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         XCTAssertEqual(calls.value, 2)
     }
 
-    func testExternallyChangingLooksNeverReuseAnIdenticalInput() async throws {
+    func testZebraReusesAHeldSourceUntilItsExposureCeilingChanges() async throws {
+        ScopeExposureCeiling.reset()
+        defer { ScopeExposureCeiling.reset() }
+        ScopeExposureCeiling.setISO(1600)
         let clock = InspectorPreviewTestClock()
         let calls = BackdropTestCounter()
         let snapshot = try makeSnapshot()
         let stable = try makeSource()
-        var source = try makeSource()
+        var zebra = try makeSource()
+        zebra.effects.zebra = true
+        zebra.effects.colorMode = .dLog2
+        let source = zebra
         let renderer = MonitorVideoBackdropRenderer(
             clock: { clock.now },
             operation: { _, _ in
@@ -266,34 +273,23 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
             })
         let owner = UUID()
         renderer.activate(owner)
-        for falseColor in [true, false] {
-            source.effects.falseColor = falseColor
-            source.effects.zebra = !falseColor
-            for _ in 0..<2 {
-                clock.now += step
-                let result = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
-                    [stable, source]
-                }
-                XCTAssertNotNil(try XCTUnwrap(result).snapshot)
-                XCTAssertFalse(
-                    try XCTUnwrap(result).isUnchanged,
-                    "External exposure or asynchronous maps can change without a new source/effect value"
-                )
+        func render() async throws -> MonitorVideoBackdropRenderer.Result {
+            clock.now += step
+            let result = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
+                [stable, source]
             }
+            return try XCTUnwrap(result)
         }
-        XCTAssertEqual(calls.value, 4)
-        source.effects.zebra = false
-        clock.now += step
-        let restored = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
-            [stable, source]
-        }
-        XCTAssertFalse(try XCTUnwrap(restored).isUnchanged)
-        clock.now += step
-        let repeated = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
-            [stable, source]
-        }
-        XCTAssertTrue(try XCTUnwrap(repeated).isUnchanged)
-        XCTAssertEqual(calls.value, 5, "Removing externally dependent looks restores caching")
+        let first = try await render()
+        let held = try await render()
+        ScopeExposureCeiling.setISO(400)
+        let moved = try await render()
+        let settled = try await render()
+        XCTAssertFalse(first.isUnchanged)
+        XCTAssertTrue(held.isUnchanged, "A held zebra source settles")
+        XCTAssertFalse(moved.isUnchanged, "A new ceiling moves the zebra threshold")
+        XCTAssertTrue(settled.isUnchanged)
+        XCTAssertEqual(calls.value, 2)
     }
 
     func testCachedInputsRetainBuffersUntilInvalidated() async throws {

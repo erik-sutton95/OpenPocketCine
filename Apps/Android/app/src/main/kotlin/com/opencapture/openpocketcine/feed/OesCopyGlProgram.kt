@@ -16,6 +16,7 @@ internal class OesCopyGlProgram(context: Context) {
     private val aPosition: Int
     private val uTex: Int
     private val uMatrix: Int
+    private val uSpread: Int
     private val quad: FloatBuffer =
         ByteBuffer.allocateDirect(QUAD.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
             put(QUAD)
@@ -29,15 +30,21 @@ internal class OesCopyGlProgram(context: Context) {
         aPosition = GLES20.glGetAttribLocation(program, "aFramePosition")
         uTex = GLES20.glGetUniformLocation(program, "uTexSampler")
         uMatrix = GLES20.glGetUniformLocation(program, "uTexMatrix")
-        check(aPosition >= 0 && uTex >= 0 && uMatrix >= 0) { "OES copy program is missing uniforms" }
+        uSpread = GLES20.glGetUniformLocation(program, "uSpread")
+        check(aPosition >= 0 && uTex >= 0 && uMatrix >= 0 && uSpread >= 0) { "OES copy program is missing uniforms" }
     }
 
-    fun draw(oesTexture: Int, texMatrix: FloatArray) {
+    /**
+     * [spreadX] / [spreadY] are normalized destination offsets. Non-zero averages four
+     * bilinear taps so a large downsample (4K original to the working raster) does not alias.
+     */
+    fun draw(oesTexture: Int, texMatrix: FloatArray, spreadX: Float = 0f, spreadY: Float = 0f) {
         GLES20.glUseProgram(program)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTexture)
         GLES20.glUniform1i(uTex, 0)
         GLES20.glUniformMatrix4fv(uMatrix, 1, false, texMatrix, 0)
+        GLES20.glUniform2f(uSpread, spreadX, spreadY)
         GLES20.glEnableVertexAttribArray(aPosition)
         GLES20.glVertexAttribPointer(aPosition, 4, GLES20.GL_FLOAT, false, 16, quad)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)

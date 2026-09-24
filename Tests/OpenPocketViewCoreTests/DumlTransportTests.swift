@@ -159,4 +159,28 @@ import Testing
         #expect(frames.first?.cmdSet == 0x02 && frames.first?.cmdId == 0x0C)
         #expect(frames.first?.payload == [0x01, 0x01, 0x00, 0x01])
     }
+
+    @Test func scanFindsEveryFrameAroundJunkAndRejectsBadCRC() {
+        let a = Duml.Frame(
+            sender: 0x02, receiver: 0x01, seq: 0x1234, flags: 0x40, cmdSet: 0x0D, cmdId: 0x02,
+            payload: [0x55, 0x10, 0x04, 0x00])
+        let b = Duml.Frame(
+            sender: 0x28, receiver: 0x02, seq: 7, flags: 0x80, cmdSet: 0x00, cmdId: 0x99,
+            payload: [])
+        var corrupt = Duml.encode(a)
+        corrupt[corrupt.count - 1] ^= 0xFF
+        var raw: [UInt8] = [0x55, 0x00]
+        raw += Duml.encode(a)
+        raw += [0x55]
+        raw += corrupt
+        raw += Duml.encode(b)
+        raw += [0x55]
+        let frames = DumlTransport.scanFrames(raw)
+        #expect(frames.map { $0.seq } == [0x1234, 7])
+        #expect(frames.first?.payload == a.payload)
+        #expect(frames.first?.flags == 0x40)
+        #expect(frames.last?.sender == 0x28 && frames.last?.cmdId == 0x99)
+        #expect(frames.last?.payload.isEmpty == true)
+        #expect(Duml.crc16(raw[2...]) == Duml.crc16(Array(raw[2...])))
+    }
 }

@@ -19,9 +19,10 @@ internal class BackdropFrameAdmission {
     @Synchronized fun invalidateAll() { epoch += 1 }
     @Synchronized fun generation(): Long = epoch
     @Synchronized fun hasDemand(value: Any): Boolean = active && producer === value
-    @Synchronized fun acquire(value: Any, nowNs: Long, thermal: Double): Ticket? {
+    /** Not thermal-scaled: the glass must follow the feed frame for frame. */
+    @Synchronized fun acquire(value: Any, nowNs: Long): Ticket? {
         if (!hasDemand(value) || busy != null) return null
-        val interval = com.opencapture.monitorui.MonitorBackdropPolicy.intervalNs(thermal)
+        val interval = com.opencapture.monitorui.MonitorBackdropPolicy.MINIMUM_INTERVAL_NS
         if (lastCaptureNs?.let { nowNs - it < interval } == true) return null
         return Ticket(value, epoch).also { busy = it; lastCaptureNs = nowNs }
     }

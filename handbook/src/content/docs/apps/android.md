@@ -266,7 +266,8 @@ Build recipes: [Setup](../../guides/setup/). The living JNI/I/O notes:
 
 Chrome, assists, capture, Operator Setup, and media are meant to match iOS.
 Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×;
-Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). Pocket 3's ceiling is
+Pocket 3 1×/2×/4× with 4K max 2×). Nano is a fixed 1× lens: no zoom chip, pinch,
+disc or controller zoom, and no gimbal stick or tap focus. Pocket 3's ceiling is
 per-FORMAT, not one generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×,
 3K 1:1 2×**
 ([survey](https://openpocketcine.app/docs/devices/pocket-3/controls/#zoom-and-med-tele)). Zoom must not drop the live
@@ -281,7 +282,11 @@ the survey. Unknown modes have no fallback. The full
 Pocket 3 format/record/reconnect matrix still needs physical Android checks.
 COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
-10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
+10-bit / D-Log M; Action 6 is Normal 10-bit / D-Log M. Action 6 has no focus
+modes: its APERTURE tile sits where FOCUS is on Pocket, shows the live iris,
+and sets the strategies the camera offers. Action 6 live view is wired from
+the [survey](https://openpocketcine.app/docs/devices/action-6/) and not yet
+checked on a camera. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
 on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
 (centered until placed; drag to move). Long-press to
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests

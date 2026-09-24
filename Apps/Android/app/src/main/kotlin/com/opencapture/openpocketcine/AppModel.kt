@@ -316,6 +316,8 @@ class AppModel(context: Context, borrowing: com.opencapture.openpocketcine.sessi
 
     fun setIsoLimit(raw: Int) = session.setIsoLimit(raw)
 
+    fun setApertureStrategy(raw: Int) = session.setApertureStrategy(raw)
+
     fun refreshIsoLimit() = session.getIsoLimit()
 
     suspend fun refreshIsoLimitNow(): Boolean = session.refreshIsoLimit()

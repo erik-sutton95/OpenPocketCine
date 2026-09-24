@@ -80,7 +80,9 @@ public enum ShootingMode: UInt8, CaseIterable, Sendable {
     /// Photo SET byte for this body. Unknown bodies keep the historic `0x17` default.
     public static func photoWireByte(for model: CameraModel?) -> UInt8 {
         guard let model else { return photoRawPocket4 }
-        if model.family == .nano || model.isPocket3 { return photoRawPocket3AndNano }
+        if model.family == .nano || model.isPocket3 || model.isAction6 {
+            return photoRawPocket3AndNano
+        }
         return photoRawPocket4
     }
 
@@ -120,7 +122,10 @@ public enum CaptureCommand: Sendable {
         if mode?.isPhoto == true {
             return Commands.shootPhoto()
         }
-        if model?.isPocket3 == true, mode?.usesShutterTriggerOnPocket3 == true {
+        // Action 6 TimeLapse is the same `0x02/0x01` pair (survey 2026-09-21).
+        if model?.isPocket3 == true || model?.isAction6 == true,
+            mode?.usesShutterTriggerOnPocket3 == true
+        {
             return Commands.shutterTrigger(start: !isRecording)
         }
         return isRecording ? Commands.recordStop() : Commands.recordStart()
@@ -138,6 +143,8 @@ public enum CameraParam: UInt16, Sendable {
     case selfieFlip = 0x0038
     case glamour = 0x0039
     case focusTrack = 0x003B
+    /// Action 6 aperture strategy, one byte `ApertureStrategy`. Survey 2026-09-21.
+    case apertureStrategy = 0x0044
     case vocalBoost = 0x004C
 
     /// GET reply `00 00 01 <pid u16-LE> 01 <value>`. SET ACK is a lone `00` — not this.
@@ -548,6 +555,10 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
         }
     }
 
+    /// Action 6 `camcap_color_mode` is `3F` Normal 10-bit / `3D` D-Log M (survey
+    /// 2026-09-21): the Nano wire bytes, without Nano's 8-bit `00`.
+    public static let action6: [ColorMode] = [.normal10, .dLogM]
+
     /// Family fallback. Pocket 4 Pro is the only body with D-Log2 — use
     /// `available(for: CameraModel)` when the name is known.
     public static func available(for family: CameraBodyFamily) -> [ColorMode] {
@@ -561,6 +572,7 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
     /// Nano is the captured `camcap_color_mode` wheel. D-Log2 is 4 Pro only.
     public static func available(for model: CameraModel) -> [ColorMode] {
         if model.family == .nano { return available(for: .nano) }
+        if model.isAction6 { return action6 }
         let n = model.name.lowercased().replacingOccurrences(of: " ", with: "")
         if n.contains("pocket4p") || n.contains("4pro") {
             return [.normal, .hdr, .dLog, .dLog2]
@@ -575,7 +587,7 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
     /// Pocket 3 / Nano SET / `cam_image_effect` `@2`. Other bodies use `rawValue`.
     public func wireByte(for model: CameraModel?) -> UInt8 {
         guard let model else { return rawValue }
-        if model.family == .nano {
+        if model.family == .nano || model.isAction6 {
             switch self {
             case .normal: return 0x00
             case .normal10: return 0x3F
@@ -593,7 +605,7 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
 
     /// Inverse of `wireByte(for:)`. Unknown body bytes still try `rawValue`.
     public static func fromWire(_ byte: UInt8, model: CameraModel?) -> ColorMode? {
-        if let model, model.family == .nano {
+        if let model, model.family == .nano || model.isAction6 {
             switch byte {
             case 0x00: return .normal
             case 0x3F: return .normal10
@@ -662,6 +674,69 @@ public enum ColorMode: UInt8, CaseIterable, Sendable {
     public static func parseImageEffect(_ value: [UInt8], model: CameraModel? = nil) -> ColorMode? {
         guard value.count > 2 else { return nil }
         return fromWire(value[2], model: model)
+    }
+}
+
+/// Action 6 aperture strategy: `0x02/0x8E` pid `0x0044`, one byte. Survey 2026-09-21
+/// (handbook `devices/action-6/settings`). Offered set depends on exposure and mode:
+/// Video Auto `4,2,3`, Manual `1,2,3`, SuperNight `0,2,3` — read `camcap_aperture_ctrl_strategy`.
+public enum ApertureStrategy: UInt8, CaseIterable, Sendable {
+    /// SuperNight "Large Aperture".
+    case f2 = 0x00
+    case f26 = 0x01
+    case f28 = 0x02
+    case starburst = 0x03
+    case auto = 0x04
+
+    public static let capabilityKey = "camcap_aperture_ctrl_strategy"
+    public static let stateKey = "cam_aperture_ctrl_strategy"
+
+    public var label: String {
+        switch self {
+        case .f2: "f/2.0"
+        case .f26: "f/2.6"
+        case .f28: "f/2.8"
+        case .starburst: "Starburst f/4"
+        case .auto: "Auto"
+        }
+    }
+
+    public var setFrame: Duml.Frame { Commands.paramSet(.apertureStrategy, value: [rawValue]) }
+
+    /// `cam_aperture_ctrl_strategy` `01 00 00 <strategy>`.
+    public static func parseState(_ value: [UInt8]) -> ApertureStrategy? {
+        guard value.count >= 4, value[0] == 0x01 else { return nil }
+        return ApertureStrategy(rawValue: value[3])
+    }
+
+    /// `camcap_aperture_ctrl_strategy` `01 <len:u16-LE> <count> <ids…>`. Bytes past
+    /// `count` (Manual trails `03 04`) are not choices.
+    public static func parseCapability(_ value: [UInt8]) -> [ApertureStrategy] {
+        guard value.count >= 5, value[0] == 0x01 else { return [] }
+        let inner = Int(value[1]) | (Int(value[2]) << 8)
+        guard inner >= 2, 3 + inner <= value.count else { return [] }
+        let count = Int(value[3])
+        guard count >= 1, 1 + count <= inner else { return [] }
+        return value[4..<(4 + count)].compactMap { ApertureStrategy(rawValue: $0) }
+    }
+
+    /// Captured sets, used until the capability push lands.
+    public static func fallback(expoMode: ExpoMode?, shootingMode: Int) -> [ApertureStrategy] {
+        if shootingMode == Int(ShootingMode.superNight.rawValue) { return [.f2, .f28, .starburst] }
+        if expoMode == .manual { return [.f26, .f28, .starburst] }
+        return [.auto, .f28, .starburst]
+    }
+
+    /// Mechanical iris, `cam_expo_param` u16-LE `@13` in hundredths (`290` = f/2.9).
+    /// Moves while the blades settle — it is not the requested strategy.
+    public static func irisHundredths(_ expoParam: [UInt8]) -> Int? {
+        guard expoParam.count >= 15 else { return nil }
+        let raw = Int(UInt16(expoParam[13]) | (UInt16(expoParam[14]) << 8))
+        return (100...2_200).contains(raw) ? raw : nil
+    }
+
+    public static func fNumberLabel(hundredths: Int) -> String {
+        String(format: "f/%.1f", Double(hundredths) / 100)
     }
 }
 

@@ -201,22 +201,23 @@ public enum DumlTransport {
                 i += 1
                 continue
             }
-            let f = Array(raw[i..<(i + total)])
-            guard Duml.crc8(Array(f[0..<3])) == f[3] else {
+            // Check CRCs on slices; only an accepted frame copies its payload.
+            let end = i + total
+            guard Duml.crc8(raw[i..<(i + 3)]) == raw[i + 3] else {
                 i += 1
                 continue
             }
-            let got = UInt16(f[total - 2]) | (UInt16(f[total - 1]) << 8)
-            guard Duml.crc16(Array(f[0..<(total - 2)])) == got else {
+            let got = UInt16(raw[end - 2]) | (UInt16(raw[end - 1]) << 8)
+            guard Duml.crc16(raw[i..<(end - 2)]) == got else {
                 i += 1
                 continue
             }
             out.append(
                 Duml.Frame(
-                    sender: f[4], receiver: f[5],
-                    seq: UInt16(f[6]) | (UInt16(f[7]) << 8),
-                    flags: f[8], cmdSet: f[9], cmdId: f[10],
-                    payload: Array(f[11..<(total - 2)])))
+                    sender: raw[i + 4], receiver: raw[i + 5],
+                    seq: UInt16(raw[i + 6]) | (UInt16(raw[i + 7]) << 8),
+                    flags: raw[i + 8], cmdSet: raw[i + 9], cmdId: raw[i + 10],
+                    payload: Array(raw[(i + 11)..<(end - 2)])))
             i += 1
         }
         return out

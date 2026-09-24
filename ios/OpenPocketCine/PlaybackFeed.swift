@@ -66,6 +66,14 @@ enum PlaybackFeedHandoff {
         return effectsChanged || !hasLastBuffer || !metalHasPresented
     }
 
+    /// Scopes, Face AF and inspector samples leave the picture on `AVPlayerLayer`,
+    /// so the item is ready once its first source frame is processed. Waiting for
+    /// a Metal completion that never comes resubmitted `lastBuffer` every display
+    /// tick, including while paused.
+    static func sourceReadyWithoutMetal(needsGPUFeed: Bool, hdrDisplay: Bool) -> Bool {
+        !needsGPUFeed && !hdrDisplay
+    }
+
     /// One `PlaybackFeedSession` is shared across SwiftUI identities. A slide
     /// `.id(active.id)` used to spawn a second representable whose
     /// `updateUIView` stole `attach` on the way out — LUT chrome stayed armed
@@ -97,6 +105,24 @@ enum PlaybackDisplayLink {
     static func shouldPull(itemHasPresented: Bool, hasNewPixelBuffer: Bool) -> Bool {
         if !itemHasPresented { return true }
         return hasNewPixelBuffer
+    }
+
+    /// A paused, presented item has nothing to poll. Park the link (a 120 Hz
+    /// link also holds ProMotion at 120 Hz) and let the output's media-data
+    /// notification wake it on play or seek, as Apple's video-output sample does.
+    static func shouldPark(itemHasPresented: Bool, playerRate: Float) -> Bool {
+        itemHasPresented && playerRate == 0
+    }
+
+    /// Paused ticks with no new picture before parking. An exact seek while
+    /// paused decodes from the previous keyframe (tens of ms), and the scope
+    /// throttle (up to 500 ms when critical) can drop the first new sample, so
+    /// the link keeps polling this long and forces one last pull before parking.
+    static let parkAfter: CFTimeInterval = 0.6
+
+    static func parkIsDue(idleSince: CFTimeInterval?, now: CFTimeInterval) -> Bool {
+        guard let idleSince else { return false }
+        return now - idleSince >= parkAfter
     }
 }
 
@@ -144,7 +170,6 @@ final class PlaybackFeedSession: NSObject {
     private var transfer = MonitorTransfer.rec709
     private var lastBuffer: CVPixelBuffer?
     private var lastBackdropBuffer: CVPixelBuffer?
-    private var lastSubmittedNs: Int64 = 0
     private var lastOverlayOnly = false
     private var lastUnmanagedBake = false
     private var pendingKick = false
@@ -154,6 +179,8 @@ final class PlaybackFeedSession: NSObject {
     /// Bumped in `prepare`. `presentedEpoch` catches up in `adoptPresentedFeed`.
     private var itemEpoch: UInt64 = 0
     private var presentedEpoch: UInt64 = 0
+    /// First paused tick without a new picture; see `PlaybackDisplayLink.parkAfter`.
+    private var idleSince: CFTimeInterval?
 
     override init() {
         output = AVPlayerItemVideoOutput(
@@ -167,7 +194,24 @@ final class PlaybackFeedSession: NSObject {
             guard
                 PlaybackDisplayLink.shouldPull(
                     itemHasPresented: self.itemHasPresented, hasNewPixelBuffer: hasNew)
-            else { return }
+            else {
+                if PlaybackDisplayLink.shouldPark(
+                    itemHasPresented: self.itemHasPresented, playerRate: self.player?.rate ?? 0)
+                {
+                    let now = CACurrentMediaTime()
+                    let idleSince = self.idleSince ?? now
+                    self.idleSince = idleSince
+                    if PlaybackDisplayLink.parkIsDue(idleSince: idleSince, now: now) {
+                        // Resample the held picture so scopes match it after a paused seek.
+                        if self.effects.needsSample { self.schedulePull(force: true) }
+                        self.parkLink()
+                    }
+                } else {
+                    self.idleSince = nil
+                }
+                return
+            }
+            self.idleSince = nil
             self.schedulePull(force: self.effects.needsSample && !self.itemHasPresented)
         }
     }
@@ -182,6 +226,7 @@ final class PlaybackFeedSession: NSObject {
         }
         boundItem = item
         loggedRaster = false
+        displayLink?.isPaused = false
         // LUT chip stays on across next/prev. Drop the previous clip's metal
         // ownership and force a bake of this item — otherwise the toolbar
         // stays armed while the new picture is ungraded identity.
@@ -203,7 +248,6 @@ final class PlaybackFeedSession: NSObject {
         // completions are asynchronous and are rejected by the item epoch.
         pullQueue.sync {
             lastBuffer = nil
-            lastSubmittedNs = 0
             pendingKick = false
         }
         lastBackdropBuffer = nil
@@ -276,7 +320,6 @@ final class PlaybackFeedSession: NSObject {
         if !sampleBus.usesPlaybackSource { sampleBus.clearPlaybackSource() }
         sampleBus.usesPlaybackSource = true
         if changed {
-            lastSubmittedNs = 0
             host?.ciFeed.resetPresentDedup()
             assistEngine.updatePolicy(effects: effects, transfer: transfer)
             if effects.falseColor {
@@ -319,7 +362,6 @@ final class PlaybackFeedSession: NSObject {
         boundItem = nil
         lastBuffer = nil
         lastBackdropBuffer = nil
-        lastSubmittedNs = 0
         sampleBus?.playbackBundle = nil
         sampleBus?.clearPlaybackSource()
         sampleBus?.usesPlaybackSource = false
@@ -336,6 +378,7 @@ final class PlaybackFeedSession: NSObject {
     }
 
     private func startLink() {
+        displayLink?.isPaused = false
         guard displayLink == nil else { return }
         let link = CADisplayLink(target: linkTarget, selector: #selector(DisplayLinkTarget.tick))
         link.preferredFrameRateRange = PlaybackDisplayLink.pollRange
@@ -365,11 +408,19 @@ final class PlaybackFeedSession: NSObject {
         displayLink = nil
     }
 
+    private func parkLink() {
+        idleSince = nil
+        guard let displayLink, !displayLink.isPaused else { return }
+        displayLink.isPaused = true
+        output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
+    }
+
     /// New item is current and (usually) playing. Kick the output — the first
     /// `prepare` pull often ran before a pixel buffer existed.
     @MainActor
     func noteItemReady() {
         guard effects.needsSample || LiveHDRDisplay.isEnabled else { return }
+        displayLink?.isPaused = false
         output.requestNotificationOfMediaDataChange(withAdvanceInterval: 1.0 / 60.0)
         schedulePull(force: true)
     }
@@ -408,6 +459,7 @@ final class PlaybackFeedSession: NSObject {
             }
             lastBuffer = working
             submit(working, timeNs: timeNs, sourceEpoch: sourceEpoch)
+            NotificationCenter.default.post(name: .monitorBackdropSourceAdvanced, object: nil)
             return
         }
         if let lastBuffer, force {
@@ -441,7 +493,6 @@ final class PlaybackFeedSession: NSObject {
     }
 
     private func submit(_ buffer: CVPixelBuffer, timeNs: Int64, sourceEpoch: UInt64? = nil) {
-        lastSubmittedNs = timeNs
         let sourceEpoch = sourceEpoch ?? itemEpoch
         assistEngine.submit(buffer, effects: effects, transfer: transfer, timeNs: timeNs) {
             [weak self] result in
@@ -481,6 +532,11 @@ final class PlaybackFeedSession: NSObject {
             }
         }
         if !result.needsGPU || !effects.needsGPUFeed {
+            if PlaybackFeedHandoff.sourceReadyWithoutMetal(
+                needsGPUFeed: effects.needsGPUFeed, hdrDisplay: LiveHDRDisplay.isEnabled)
+            {
+                presentedEpoch = itemEpoch
+            }
             applyLayerPlan(metalHasPresented: false)
             return
         }
@@ -608,6 +664,7 @@ final class PlaybackFeedHostView: UIView {
 extension PlaybackFeedSession: AVPlayerItemOutputPullDelegate {
     nonisolated func outputMediaDataWillChange(_ sender: AVPlayerItemOutput) {
         pull(force: true, sourceEpoch: itemEpoch)
+        DispatchQueue.main.async { [weak self] in self?.displayLink?.isPaused = false }
     }
 }
 

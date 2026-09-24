@@ -25,14 +25,14 @@ enum OsmoMonitorPresentation {
             if MonitorUIReview.isActive {
                 let gimbal = ProcessInfo.processInfo.environment["OPV_UI_REVIEW_BODY"] != "nano"
                 return MonitorCapabilities(
-                    gimbal: gimbal, zoom: true, focus: true, audio: true,
+                    gimbal: gimbal, zoom: gimbal, focus: gimbal, audio: true,
                     headTracking: gimbal, clipDelete: true, clipStar: true,
                     requiresInternetHop: true, timecode: true)
             }
         #endif
         return MonitorCapabilities(
-            gimbal: session.hasGimbal, zoom: !session.zoomStops.isEmpty,
-            focus: session.supportsFocusMode, audio: true,
+            gimbal: session.hasGimbal, zoom: session.supportsZoom,
+            focus: session.supportsFocusMode, iris: session.supportsAperture, audio: true,
             headTracking: session.hasGimbal, clipDelete: true, clipStar: true,
             requiresInternetHop: true, timecode: true)
     }

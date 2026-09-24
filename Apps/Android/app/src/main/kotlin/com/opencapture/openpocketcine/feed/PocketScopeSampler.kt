@@ -100,13 +100,15 @@ object PocketScopeSampler {
         activeScopeCount: Int, thermalMultiplier: Double, backdropDemand: Boolean,
     ): Long {
         val heat = thermalMultiplier.coerceAtLeast(1.0)
+        // The glass follows the feed (25 Hz tap) and is never thermal-scaled or
+        // slowed by 3+ scopes; scope accumulation keeps its own admission.
+        val backdropNs =
+            maxOf(com.opencapture.monitorui.MonitorBackdropPolicy.MINIMUM_INTERVAL_NS, BASE_MIN_INTERVAL_NS)
         return when {
+            activeScopeCount > 0 && backdropDemand ->
+                minOf(minIntervalNs(activeScopeCount, heat), backdropNs)
             activeScopeCount > 0 -> minIntervalNs(activeScopeCount, heat)
-            backdropDemand ->
-                maxOf(
-                    com.opencapture.monitorui.MonitorBackdropPolicy.intervalNs(heat),
-                    minIntervalNs(1, heat),
-                )
+            backdropDemand -> backdropNs
             else -> (InspectorPreviewAdmission.MIN_INTERVAL_NS * heat).toLong()
         }
     }

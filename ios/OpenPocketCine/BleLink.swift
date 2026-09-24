@@ -40,6 +40,8 @@ struct FoundCamera: Identifiable, Sendable {
 final class BleLink: NSObject {
     private var central: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
+    /// Last classification yielded per peripheral in this scan.
+    private var yielded: [UUID: FoundCamera] = [:]
     private var connected: CBPeripheral?
     /// The only peripheral whose GATT events may drive pairing / GetSSID / notify.
     private var selectedId: UUID?
@@ -119,6 +121,7 @@ final class BleLink: NSObject {
         selectedId = nil
         disconnectForeignDJI(keeping: nil)
         peripherals.removeAll()
+        yielded.removeAll()
         return AsyncStream { cont in
             self.foundStream?.finish()
             self.foundStream = cont
@@ -331,7 +334,7 @@ final class BleLink: NSObject {
             guard let camera = classify(p, adv) else { continue }
             if peripherals[p.identifier] == nil {
                 peripherals[p.identifier] = p
-                foundStream?.yield(camera)
+                yieldIfChanged(camera)
             }
         }
     }
@@ -347,13 +350,21 @@ extension BleLink: CBCentralManagerDelegate {
         advertisementData: [String: Any], rssi RSSI: NSNumber
     ) {
         guard let camera = classify(peripheral, advertisementData) else { return }
-        let first = peripherals[peripheral.identifier] == nil
         peripherals[peripheral.identifier] = peripheral
-        if first {
-            foundStream?.yield(camera)
+        // Later advert often adds the BLE name / model the first packet lacked.
+        yieldIfChanged(camera)
+    }
+
+    /// Duplicate adverts arrive many times a second per camera. Consumers only
+    /// need the first sighting and later name/model changes, not a MainActor
+    /// wake (and saved-camera load) per packet.
+    private func yieldIfChanged(_ camera: FoundCamera) {
+        if let last = yielded[camera.id], last.name == camera.name,
+            last.modelId == camera.modelId
+        {
             return
         }
-        // Later advert often adds the BLE name / model the first packet lacked.
+        yielded[camera.id] = camera
         foundStream?.yield(camera)
     }
 

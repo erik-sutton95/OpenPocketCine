@@ -1300,6 +1300,20 @@ class CameraControlTest {
     }
 
     @Test
+    fun cameraModelJsonReadsPortableBodyCapabilities() {
+        val pro = CameraModel.fromJson("""{"name":"Osmo Pocket 4 Pro","hasGimbal":true,"supportsZoom":true}""")
+        assertEquals(true, pro.hasGimbal)
+        assertEquals(true, pro.supportsZoom)
+        val nano = CameraModel.fromJson("""{"name":"Osmo Nano","family":"nano","hasGimbal":false,"supportsZoom":false}""")
+        assertEquals(false, nano.hasGimbal)
+        assertEquals(false, nano.supportsZoom)
+        // Missing keys fail closed rather than re-deriving from family.
+        val legacy = CameraModel.fromJson("""{"name":"Osmo Pocket 4","family":"pocket"}""")
+        assertEquals(false, legacy.hasGimbal)
+        assertEquals(false, legacy.supportsZoom)
+    }
+
+    @Test
     fun cameraModelJsonParsesPocket3FormatPoke() {
         val parsed =
             CameraModel.fromJson(

@@ -51,6 +51,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.TimeoutCancellationException
@@ -200,7 +201,13 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     val found: StateFlow<List<FoundCamera>> = ble.found
     val radioOn: StateFlow<Boolean> get() = ble.radioOn
     private val _status = MutableStateFlow(CameraStatus())
+    /** Camera truth. Control code reads this; Compose collects [chromeStatus]. */
     val status: StateFlow<CameraStatus> = _status.asStateFlow()
+    private val _chromeStatus = MutableStateFlow(CameraStatus())
+    /** [status] at the 5 Hz HUD budget ([LiveChromeThrottle]); operator fields bypass. */
+    val chromeStatus: StateFlow<CameraStatus> = _chromeStatus.asStateFlow()
+    /** The last DUML telemetry write. Only it may wait for the HUD interval. */
+    private var telemetryStatus: CameraStatus? = null
 
     /**
      * The camera body shows its own gallery during an established live session.
@@ -282,6 +289,9 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     val gimbalMoveRunning: StateFlow<Boolean> = _gimbalMoveRunning.asStateFlow()
     val hasGimbal: Boolean
         get() = connectedCamera?.model?.hasGimbal == true
+    /** Nano is a fixed 1× prime: no zoom chrome and no zoom SET from any input. */
+    val supportsZoom: Boolean
+        get() = connectedCamera?.model?.supportsZoom == true
     val canRunProgrammedMove: Boolean
         get() = firstPictureSettled && decoder.lastPresentedAt != null && !isLiveVideoStale() &&
             _gimbalProgram.value.canRun && programmedZoomUnavailableReason() == null
@@ -388,6 +398,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     private var whiteBalancePin: WhiteBalancePin? = null
     private var focusPin: FocusPin? = null
     private var isoLimitPin: IsoLimitPin? = null
+    private var aperturePin: CameraValuePin<Int>? = null
     private var gimbalStickMapping = GimbalStickMapping()
     /** Last pid `0x38` GET reply. BLE fallback fires when this goes stale. */
     @Volatile private var lastSelfieFlipReplyElapsed = 0L
@@ -458,6 +469,17 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
 
     init {
+        scope.launch {
+            var publishedAt = 0L
+            _status.collectLatest { next ->
+                val shown = _chromeStatus.value
+                if (next == shown) return@collectLatest
+                delay(LiveChromeThrottle.holdMs(shown, next, next === telemetryStatus, publishedAt,
+                    SystemClock.elapsedRealtime()))
+                _chromeStatus.value = next
+                publishedAt = SystemClock.elapsedRealtime()
+            }
+        }
         ble.onLinkLost = {
             if (_phase.value == ConnectionPhase.LIVE || holdsMonitor) {
                 beginSessionRecovery("BLE dropped", SessionRecoveryTrigger.BLE_DROPPED)
@@ -667,6 +689,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
         whiteBalancePin = null
         focusPin = null
         isoLimitPin = null
+        aperturePin = null
         gimbalStickMapping = GimbalStickMapping()
         lastSelfieFlipReplyElapsed = 0L
         lastAssistMirror = false
@@ -2039,7 +2062,8 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             }
             val nanoGate = usesNanoLiveViewGate(camera)
             if (nanoGate) datalink?.sendNanoGate(start = true)
-            val prepare = LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)
+            val prepare = camera?.model?.sendsLiveViewPrepare != false &&
+                LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)
             if (prepare) datalink?.sendCommand(SwiftCore.CMD_TAP_FOCUS_HINT)
             datalink?.startLiveView(receiver)
             val now = SystemClock.elapsedRealtime()
@@ -2329,6 +2353,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
         val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prev.toJson())
         var next = if (json != null) CameraStatus.fromJson(json) else prev
         if (json == null || !next.hasHudFields) next = next.preservingExtras(prev)
+        next = next.carryingAperture(prev)
         val cam = connectedCamera?.model
         next = StatusExtras.apply(frame, next, cam?.name ?: "", cam?.family ?: "")
         val reported = StatusExtras.apply(frame, CameraStatus(), cam?.name ?: "", cam?.family ?: "")
@@ -2346,6 +2371,13 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             (reported.wbMode != CameraCommands.WB_CUSTOM || reported.wbKelvin >= 2000))
         next = absorbStaleFocus(next, reported.focusMode >= 0, reported.focusTrack >= 0)
         next = absorbStaleIsoLimit(next, reported.isoLimit >= 0)
+        aperturePin?.let { pin ->
+            val (held, remaining) = CameraValuePin.reconcile(
+                pin, reported.apertureStrategy.takeIf { it >= 0 }, SystemClock.elapsedRealtime(),
+            )
+            aperturePin = remaining
+            if (held != null) next = next.copy(apertureStrategy = held)
+        }
         if (next.selfieFlip != prev.selfieFlip) {
             gimbalStickMapping = gimbalStickMapping.copy(selfieFlip = next.selfieFlip == true)
             syncGimbalPose()
@@ -2448,6 +2480,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             if (next.inPlayback != prev.inPlayback) {
                 Log.i(TAG, "live: inPlayback=${if (next.inPlayback) 1 else 0}")
             }
+            telemetryStatus = next
             _status.value = next
             publishFaceDetectWanted()
         }
@@ -2553,6 +2586,27 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
         )
     }
 
+    /** Action 6 aperture strategy. Pinned until the camera reports it; a missed ACK leaves the HUD. */
+    fun setApertureStrategy(raw: Int) {
+        if (connectedCamera?.model?.supportsAperture != true) return
+        val previous = _status.value.apertureStrategy
+        val requestPin = CameraValuePin(raw, SystemClock.elapsedRealtime() + CameraValuePin.SETTLE_MS)
+        aperturePin = requestPin
+        _status.value = _status.value.copy(apertureStrategy = raw)
+        fireKind(
+            SwiftCore.CMD_SET_APERTURE_STRATEGY,
+            "$raw",
+            "Aperture",
+            coalesce = true,
+            onFail = {
+                if (aperturePin === requestPin && _status.value.apertureStrategy == raw) {
+                    aperturePin = null
+                    _status.value = _status.value.copy(apertureStrategy = previous)
+                }
+            },
+        )
+    }
+
     /** GET `0x8E` pid `0x000F`. Swift core already packs the bytes. */
     fun getIsoLimit() {
         if (_controlBusy.value) return
@@ -2628,6 +2682,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     }
 
     fun setZoom(factor: Double) {
+        if (!supportsZoom) return
         if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val from = CamFov.displayLabel(_zoomReadout.value)
         val to = CamFov.displayLabel(factor)
@@ -2685,6 +2740,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     }
 
     fun updateZoomPinch(magnification: Double) {
+        if (!supportsZoom) return
         if (_gimbalMoveRunning.value) cancelProgrammedMove()
         if (zoomPinchPreview == null) {
             zoomPinchAnchor = _status.value.zoomFactor ?: zoomOptimistic ?: zoomStop
@@ -3240,7 +3296,9 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             sendDumlWait(
                 0x02,
                 CameraCommands.CMD_MEDIA_FAVORITE,
-                CameraCommands.setMediaFavorite(handle, favorite, mediaListCounter),
+                CameraCommands.setMediaFavorite(
+                    handle, favorite, mediaListCounter, connectedCamera?.model?.name.orEmpty(),
+                ),
                 "Favorite",
             )
         }
@@ -3818,6 +3876,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
 
     /** iOS `CameraSetMailbox.zoomCoalesceHold` — 20 Hz latest-wins slider. */
     private fun fireZoom(payload: ByteArray, announce: Boolean, name: String) {
+        if (!supportsZoom) return
         if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val dl = datalink
         if (dl == null) {

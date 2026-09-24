@@ -83,7 +83,8 @@ struct LiveGimbalStick: View {
                 if mapped.emit {
                     cancelTaps()
                     dragging = true
-                    model.gimbalScreenHeld = true
+                    // Per drag sample; AppRoot observes gimbalAnalogHeld.
+                    if !model.gimbalScreenHeld { model.gimbalScreenHeld = true }
                     knobOffset = CGSize(width: mapped.visualX, height: mapped.visualY)
                     model.session.updateGimbalStick(
                         x: mapped.commandX, y: mapped.commandY,

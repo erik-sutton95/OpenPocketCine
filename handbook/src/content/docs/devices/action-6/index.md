@@ -1,13 +1,32 @@
 ---
 title: Osmo Action 6
-description: Detailed Action 6 hardware survey, captured command sets, firmware limits, and evidence for future implementation.
+description: Action 6 app status, hardware survey, captured command sets, firmware limits, and evidence.
 ---
 
 This reference preserves an **Osmo Action 6 loaner survey from 21 September
 2026**, using **camera firmware V01.02.0521** and **DJI Mimo 2.12.0 (1000061)**
 on an iPhone 16 Pro Max. It documents physical Mimo behavior, command/reply
-exchanges, camera readback, and inspected recordings. It does **not** establish
-Action 6 support in the OpenPocketCine apps.
+exchanges, camera readback, and inspected recordings. The survey alone does
+**not** establish Action 6 support in the OpenPocketCine apps.
+
+## OpenPocketCine app status
+
+Both apps now implement the following from this survey. **None of it has been
+checked on an Action 6 in OpenPocketCine yet**; the loaner was returned before
+the implementation.
+
+| Area | App behavior | Evidence |
+| --- | --- | --- |
+| Live view | One `09/A8` enable to receiver `41`; no Nano `02/09` gate and no Pocket `02/68`; AVC with the Nano private SEI; square or other feed geometry from the decoded picture | [Connection](./connection/#live-enable-and-response-behavior) |
+| Colour | Normal 10-bit `3F` and D-Log M `3D`; D-Log M binds the official Action 6 cube | [Colour](./settings/#colour-selection-and-recording) |
+| Aperture | APERTURE tile in the FOCUS position: live iris from `cam_expo_param` `@13`, strategy SET `02/8E` pid `0044` from `camcap_aperture_ctrl_strategy` | [Aperture](./settings/#aperture-control-and-mechanical-readback) |
+| Capture | Photo `02/E1 05`; Timelapse start/stop `02/01`; other video modes `02/02` | [Commands](./commands/) |
+| Album favorite | Action-specific `02/BF` layout, On/Off in byte 1 | [Coverage](./coverage/#favorite-onoff-and-independent-readback) |
+| Hidden | Gimbal, tap focus and focus modes | No AF control in the base-lens survey |
+
+Not implemented: zoom (`02/B8` uses a different encoding), the Auto aperture
+range (pid `004D`), Portrait Mode `4B`, lapse and Hyperlapse parameters,
+Multiview, and first-time pairing approval.
 
 The loaner's firmware predates several features in current DJI documentation.
 Use the [firmware reference](./specifications/) to distinguish advertised

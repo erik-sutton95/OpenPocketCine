@@ -208,6 +208,8 @@ final class CameraSession {
     @ObservationIgnored private var gimbalOverlayMotion = GimbalOverlayMotion()
     /// Pocket 3-axis only. Nano hides the gimbal button and sheet.
     var hasGimbal: Bool { connectedCamera?.model.hasGimbal ?? false }
+    /// Nano is a fixed 1× prime: no zoom chrome and no zoom SET from any input.
+    var supportsZoom: Bool { connectedCamera?.model.supportsZoom ?? false }
     var gimbalMode: GimbalMode = .follow
     var gimbalSpeed: GimbalSpeed = .defaultSpeed
     var gimbalRamp: GimbalRamp = OperatorPrefs.gimbalRamp
@@ -594,7 +596,9 @@ final class CameraSession {
     func receiveMultiview(_ frame: Duml.Frame) {
         guard isMultiviewBorrowed else { return }
         applyIncomingStatus(frame)
-        isFeedWarming = decoder.lastPresentedAt == nil
+        // Per tile status frame: an unchanged write re-renders the tile chrome.
+        let warming = decoder.lastPresentedAt == nil
+        if warming != isFeedWarming { isFeedWarming = warming }
     }
     func releaseMultiview() {
         guard isMultiviewBorrowed else { return }
@@ -1030,7 +1034,8 @@ final class CameraSession {
             dl = DatalinkDriver(
                 port: UInt16(camera.model.datalinkPort),
                 tcpPoke: camera.model.tcpPoke,
-                pairingToken: camera.model.pairingToken)
+                pairingToken: camera.model.pairingToken,
+                subscriptionKeys: Commands.subscriptionKeys(for: camera.model))
             wireDatalink(dl)
             datalink = dl
         }
@@ -1544,9 +1549,15 @@ final class CameraSession {
     /// the confirmation test because the live factor comes back off a lens
     /// position, a hair off what was asked.
     private func reconcileZoomPin(_ live: Double?) {
+        // Reconcile a copy: `zoomPin` is observed, and an inout access notifies
+        // every zoom reader (chip, caption, watcher relay) on each status frame
+        // even when nothing changes. Reconcile only ever releases the pin.
+        guard zoomPin != nil else { return }
+        var pin = zoomPin
         _ = CameraValuePin.reconcile(
-            &zoomPin, reported: live, now: Date.timeIntervalSinceReferenceDate,
+            &pin, reported: live, now: Date.timeIntervalSinceReferenceDate,
             confirms: CamFov.matches)
+        if pin == nil { zoomPin = nil }
     }
 
     private func noteZoomIfChanged(_ new: CameraStatus) {
@@ -1559,15 +1570,19 @@ final class CameraSession {
         guard new.zoomFactorRaw > 0 || new.zoomLens != nil else { return }
         if let factor = new.zoomFactor {
             if !zoomStopTouched {
+                // Raw zoom moves every status frame during a slew; the stop
+                // rarely does. Write only on change so zoom readers stay quiet.
+                var stop = zoomStop
                 if abs(factor - CamFov.maxFactor) < 0.15 {
-                    zoomStop = 12
+                    stop = 12
                 } else if abs(factor - 6) < 0.2 {
-                    zoomStop = 6
+                    stop = 6
                 } else if abs(factor - 3) < 0.2 {
-                    zoomStop = 3
+                    stop = 3
                 } else if factor < 2.5 {
-                    zoomStop = 1
+                    stop = 1
                 }
+                if stop != zoomStop { zoomStop = stop }
             }
         }
         let now = Date()
@@ -1583,6 +1598,7 @@ final class CameraSession {
     /// Pinch HUD (0.1×) + slider (every distinct lens tick, ~20 Hz latest-wins).
     /// Gesture owns the chip until lift; cam_fov does not re-anchor mid-pinch.
     func updateZoomPinch(magnification: Double) {
+        guard supportsZoom else { return }
         if gimbalMoveRunning { cancelProgrammedMove() }
         if zoomPinchPreview == nil {
             zoomPinchAnchor = status.zoomFactor ?? zoomOptimistic ?? zoomStop
@@ -1624,6 +1640,7 @@ final class CameraSession {
 
     /// Cycle button. Body stops are sliders (Pro 217 / 651 / 1302 / 2604).
     func setZoom(_ factor: Double) {
+        guard supportsZoom else { return }
         if gimbalMoveRunning { cancelProgrammedMove() }
         let from = CamFov.displayLabel(factor: zoomReadout)
         let to = CamFov.displayLabel(factor: factor)
@@ -1703,7 +1720,7 @@ final class CameraSession {
         ControlLiveLog.line(
             "zoom: setZoomStop locked=\(isLocked) live=\(datalink != nil)"
         )
-        guard !isLocked else { return }
+        guard !isLocked, supportsZoom else { return }
         lastZoomSetAt = Date()
         let frame = Commands.setZoomStop()
         fireCamera(
@@ -1727,6 +1744,7 @@ final class CameraSession {
     /// Chip tap is urgent. Slider / pinch pipelines at 20 Hz without waiting
     /// for ACK (Mimo). D-Log2→D-Log must be on the body before this SET.
     private func fireZoom(_ write: CamFov.ChipWrite, target: Double?, announce: Bool) {
+        guard supportsZoom else { return }
         let frame: Duml.Frame
         let name: String
         switch write {
@@ -2246,6 +2264,20 @@ final class CameraSession {
 
     var supportsTapFocus: Bool { connectedCamera?.model.supportsTapFocus ?? true }
     var supportsFocusMode: Bool { connectedCamera?.model.supportsFocusMode ?? true }
+    var supportsAperture: Bool { connectedCamera?.model.supportsAperture ?? false }
+
+    /// Action 6 `0x8E` pid `0x0044`. HUD holds the request; the subscribe push corrects it.
+    func setApertureStrategy(_ strategy: ApertureStrategy) {
+        guard supportsAperture else { return }
+        status.apertureStrategy = strategy
+        fireCamera(
+            strategy.setFrame, name: "Aperture \(strategy.label)",
+            onSettle: { [weak self] ok in
+                ControlLiveLog.line(
+                    "aperture: SET \(strategy.label) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))"
+                )
+            })
+    }
 
     func setFocusMode(_ mode: FocusMode) {
         guard supportsFocusMode else { return }
@@ -3301,10 +3333,13 @@ final class CameraSession {
         else { return }
         guard let box = TrackingBox.parseLivePush(payload) else { return }
         lastSubjectPushAt = Date()
-        subjectBox = smoothedSubject(toward: box)
-        isTracking = true
+        // Per ActiveTrack push: unchanged writes would still re-render the
+        // tracking layer, so publish only what moved.
+        let subject = smoothedSubject(toward: box)
+        if subjectBox != subject { subjectBox = subject }
+        if !isTracking { isTracking = true }
         trackingSawLock = true
-        searchBox = nil
+        if searchBox != nil { searchBox = nil }
         adoptCameraFocus(x: box.centerX, y: box.centerY, fromTrackingBox: true)
         if trackingPollTask == nil { beginTrackingPoll() }
     }
@@ -3361,21 +3396,32 @@ final class CameraSession {
                 from: faceTracks[i].box, toward: faceTracks[i].target, dt: dt,
                 sceneMoving: sceneMoving)
         }
-        sceneFaces = faceTracks.map(\.box)
+        setSceneFaces(faceTracks.map(\.box))
         if isTrackingActive {
-            faceBox = nil
+            setFaceBox(nil)
             return
         }
         let sinceHit = FaceTrackHold.secondsSinceHit(lastHit: lastFaceHitAt, now: now)
         if FaceTrackHold.shouldDrop(secondsSinceHit: sinceHit, sceneMoving: sceneMoving) {
-            faceBox = nil
+            setFaceBox(nil)
             faceTarget = nil
             lastFaceHitAt = nil
             return
         }
         guard let target = faceTarget else { return }
-        faceBox = FaceTrackHold.follow(
-            from: faceBox, toward: target, dt: dt, sceneMoving: sceneMoving)
+        setFaceBox(
+            FaceTrackHold.follow(
+                from: faceBox, toward: target, dt: dt, sceneMoving: sceneMoving))
+    }
+
+    // Face boxes are written per decoded frame. Unchanged writes still notify
+    // every focus overlay reader, so publish only real motion.
+    private func setFaceBox(_ box: TrackingBox?) {
+        if faceBox != box { faceBox = box }
+    }
+
+    private func setSceneFaces(_ boxes: [TrackingBox]) {
+        if sceneFaces != boxes { sceneFaces = boxes }
     }
 
     private func applyDetectedFaces(_ hits: [FaceHit]) {
@@ -3411,15 +3457,15 @@ final class CameraSession {
             next.append(FaceTrack(box: hit.box, target: hit.box, lastHit: now))
         }
         faceTracks = next
-        sceneFaces = next.map(\.box)
+        setSceneFaces(next.map(\.box))
         if isTrackingActive {
-            faceBox = nil
+            setFaceBox(nil)
             faceTarget = nil
             lastFaceHitAt = nil
             return
         }
         guard wantsFaceAF else {
-            faceBox = nil
+            setFaceBox(nil)
             faceTarget = nil
             lastFaceHitAt = nil
             return
@@ -3478,7 +3524,7 @@ final class CameraSession {
             secondsSinceHit: sinceHit, sceneMoving: sceneMoving)
         guard let chosen else {
             if FaceTrackHold.shouldDrop(secondsSinceHit: sinceHit, sceneMoving: sceneMoving) {
-                faceBox = nil
+                setFaceBox(nil)
                 faceTarget = nil
                 lastFaceHitAt = nil
             }
@@ -3492,12 +3538,12 @@ final class CameraSession {
     }
 
     private func clearFaceAF() {
-        faceBox = nil
+        setFaceBox(nil)
         faceTarget = nil
         lastFaceAt = nil
         lastFaceHitAt = nil
         faceTracks = []
-        sceneFaces = []
+        setSceneFaces([])
         facePriorityAcquireAt = nil
     }
 
@@ -3521,16 +3567,17 @@ final class CameraSession {
         else { return }
         switch TrackingPoll.parse(payload) {
         case .locked(let cameraBox):
-            isTracking = true
+            if !isTracking { isTracking = true }
             trackingSawLock = true
             if let cameraBox {
-                subjectBox = smoothedSubject(toward: cameraBox)
+                let subject = smoothedSubject(toward: cameraBox)
+                if subjectBox != subject { subjectBox = subject }
             } else if subjectBox == nil, let search = searchBox {
                 subjectBox = TrackingBox.subject(from: search)
             }
-            searchBox = nil
+            if searchBox != nil { searchBox = nil }
         case .idle:
-            isTracking = false
+            if isTracking { isTracking = false }
             if trackingSawLock {
                 clearLocalTracking()
             }
@@ -4092,7 +4139,8 @@ final class CameraSession {
         }
     }
 
-    /// Pocket + Nano capture (`0x09/0xa8`). Action live start is uncaptured — do not invent it.
+    /// Pocket, Nano and Action 6 capture (`0x09/0xa8`). Other Action / 360 live start is
+    /// uncaptured — do not invent it.
     func startCapturedLiveView(reason: String) -> Bool {
         if isBrowsingMedia, reason != "media browse ended" { return false }
         guard liveEnableGate.begin() else {
@@ -4113,7 +4161,7 @@ final class CameraSession {
         if nanoGate {
             datalink?.send(Commands.nanoLiveViewGate(start: true))
         }
-        if CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: nanoGate) {
+        if connectedCamera?.model.sendsLiveViewPrepare ?? true {
             datalink?.send(Commands.liveViewPrepare())
         }
         datalink?.startLiveView(
@@ -4578,7 +4626,8 @@ final class CameraSession {
         )
         let watchdogBeforeTick = feedWatchdog
         let action = feedWatchdog.tick(snap)
-        feedRecovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
+        let recovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
+        if recovering != feedRecovering { feedRecovering = recovering }
         switch action {
         case .none:
             if decoder.awaitingIDR, decoder.canReleaseIDRHold,
@@ -5537,7 +5586,8 @@ final class CameraSession {
             let dl = DatalinkDriver(
                 port: UInt16(camera.model.datalinkPort),
                 tcpPoke: camera.model.tcpPoke,
-                pairingToken: camera.model.pairingToken
+                pairingToken: camera.model.pairingToken,
+                subscriptionKeys: Commands.subscriptionKeys(for: camera.model)
             )
             wireDatalink(dl)
             datalink = dl
@@ -5661,11 +5711,14 @@ final class CameraSession {
                 let resolved = GimbalControl.modeFromFamily(family, current: gimbalMode)
                 // Follow-family alone cannot confirm the tilt-lock choice.
                 let reportedMode: GimbalMode? = family == .follow ? nil : resolved
-                gimbalMode =
+                // Per attitude frame: write only on change so the gimbal sheet
+                // does not re-render at the attitude rate.
+                let mode =
                     CameraValuePin.reconcile(
                         &gimbalModePin, reported: reportedMode,
                         now: Date.timeIntervalSinceReferenceDate
                     ) ?? resolved
+                if mode != gimbalMode { gimbalMode = mode }
             }
             lastGimbalAttitudeHex = Duml.hex(frame.payload, limit: 80)
             lastGimbalAttitudeDump = GimbalStick.attitudeAngleDump(frame.payload)
@@ -5734,15 +5787,17 @@ final class CameraSession {
             let reportedMode: GimbalMode? =
                 gimbalFollowFamilyConfirmed && (gimbalMode == .follow || gimbalMode == .tiltLocked)
                 ? resolved : nil
-            gimbalMode =
+            let mode =
                 CameraValuePin.reconcile(
                     &gimbalModePin, reported: reportedMode, now: Date.timeIntervalSinceReferenceDate
                 ) ?? resolved
+            if mode != gimbalMode { gimbalMode = mode }
             if let speed = params.speed {
-                gimbalSpeed =
+                let reconciled =
                     CameraValuePin.reconcile(
                         &gimbalSpeedPin, reported: speed, now: Date.timeIntervalSinceReferenceDate
                     ) ?? speed
+                if reconciled != gimbalSpeed { gimbalSpeed = reconciled }
             }
         }
         status = s
@@ -5779,9 +5834,13 @@ final class CameraSession {
 
     private func syncGimbalPose() {
         gimbalStickMapping.selfieFlip = status.selfieFlip?.isOn ?? false
-        gimbalPoseViewFlip = gimbalStickMapping.poseViewFlip
-        gimbalPoseInvertPan = gimbalStickMapping.invertPan
-        decoder.poseViewFlip = gimbalPoseViewFlip
+        // Runs per gimbal attitude frame: an unchanged write still notifies
+        // `livePictureViewFlip` readers and the stick pads.
+        let viewFlip = gimbalStickMapping.poseViewFlip
+        if gimbalPoseViewFlip != viewFlip { gimbalPoseViewFlip = viewFlip }
+        let invertPan = gimbalStickMapping.invertPan
+        if gimbalPoseInvertPan != invertPan { gimbalPoseInvertPan = invertPan }
+        decoder.poseViewFlip = viewFlip
         decoder.syncPictureFlip()
     }
 

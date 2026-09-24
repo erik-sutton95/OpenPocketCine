@@ -19,7 +19,8 @@ final class MultiviewSession {
         var networkVerified = false
         var cameraAddress = ""
         var identity: [UInt8]?
-        var responses: [UInt16: Duml.Frame] = [:]
+        // Per ACK frame bookkeeping; no view reads it.
+        @ObservationIgnored var responses: [UInt16: Duml.Frame] = [:]
         var camera: FoundCamera?
         var status = "Add camera"
         var failureMessage: String?
@@ -107,7 +108,15 @@ final class MultiviewSession {
         var recordingAvailable = false
         var recordingNote: String?
         var controlHost: String?
-        var recordingObservation: (active: Bool, received: Date)?
+        /// Stamped per 0x02/0x80 frame. Views read `recordingActive`, which
+        /// only changes on a REC flip, instead of re-rendering per timestamp.
+        @ObservationIgnored var recordingObservation: (active: Bool, received: Date)? {
+            didSet {
+                let active = recordingObservation?.active
+                if active != recordingActive { recordingActive = active }
+            }
+        }
+        private(set) var recordingActive: Bool?
         init() {
             decoder.feedUpscaler = .off
             decoder.onPresentedFrame = { [weak self] in
@@ -134,7 +143,6 @@ final class MultiviewSession {
             ControlLiveLog.line("multiview: assist VT handoff enable")
         }
         var previewStarted: Date?
-        var lastFrame = Date.distantPast
     }
     let tiles = (0..<4).map { _ in Tile() }
     var found: [FoundCamera] = []
@@ -150,7 +158,7 @@ final class MultiviewSession {
     var groupRecordingBusy = false
     var groupRecordingNote: String?
     var recordingTiles: [Tile] { tiles.filter { $0.camera != nil } }
-    var anyRecording: Bool { recordingTiles.contains { $0.recordingObservation?.active == true } }
+    var anyRecording: Bool { recordingTiles.contains { $0.recordingActive == true } }
     var canRecordTogether: Bool {
         !busy && !groupRecordingBusy && !recordingTiles.isEmpty
             && recordingTiles.allSatisfy { $0.recordingAvailable && !$0.recordingBusy }
@@ -182,6 +190,7 @@ final class MultiviewSession {
     private var cleanupJournalWritten = false
     private let ble = BleLink(allowsConcurrentCameras: true)
     private var scanTask: Task<Void, Never>?
+    private var discovering = false
     private var router: Task<Void, Never>?
     private var keepalive: Task<Void, Never>?
     private var monitor: Task<Void, Never>?
@@ -275,18 +284,39 @@ final class MultiviewSession {
                 for tile in self.tiles {
                     tile.driver?.keepalive()
                     tile.recoverAssistHandoff()
-                    tile.recordingAvailable =
+                    let available =
                         tile.controlHost != nil
                         && tile.recordingObservation.map {
                             Date().timeIntervalSince($0.received) < 3
                         } == true
+                    if tile.recordingAvailable != available { tile.recordingAvailable = available }
                     self.monitorPreview(tile)
                 }
             }
         }
     }
+    /// BLE discovery feeds the Add picker and network setup, and stays up while
+    /// a camera connects. A full stage, or an inactive app with nothing
+    /// connecting, has no consumer for an unfiltered duplicate scan.
+    static func needsDiscovery(
+        running: Bool, applicationActive: Bool, hasEmptySlot: Bool, connecting: Bool
+    ) -> Bool {
+        running && (hasEmptySlot || connecting) && (applicationActive || connecting)
+    }
+
+    private var discoveryNeeded: Bool {
+        Self.needsDiscovery(
+            running: running && !closing, applicationActive: applicationActive,
+            hasEmptySlot: tiles.contains { $0.camera == nil }, connecting: connectingCameras)
+    }
+
     func scan() {
         scanTask?.cancel()
+        guard discoveryNeeded else {
+            stopDiscovery()
+            return
+        }
+        discovering = true
         scanTask = Task { [weak self] in
             guard let self else { return }
             guard await ble.waitUntilPoweredOn(), !Task.isCancelled else { return }
@@ -297,6 +327,22 @@ final class MultiviewSession {
             }
         }
     }
+    private func stopDiscovery() {
+        scanTask?.cancel()
+        ble.stopScan()
+        discovering = false
+    }
+
+    /// Follow demand without restarting a running scan (that clears `found`) or
+    /// starting one while the network-setup camera owns this BLE link.
+    private func refreshDiscovery() {
+        if !discoveryNeeded {
+            if discovering { stopDiscovery() }
+        } else if !discovering, !busy, preparedCamera == nil {
+            scan()
+        }
+    }
+
     private func next() -> UInt16 {
         sequence &+= 1
         return sequence
@@ -332,8 +378,7 @@ final class MultiviewSession {
         try await ble.connect(camera)
         try Task.checkCancellation()
         guard running else { throw CancellationError() }
-        scanTask?.cancel()
-        ble.stopScan()
+        stopDiscovery()
         replies.removeAll()
         approved = false
         let frames = ble.frames
@@ -579,6 +624,7 @@ final class MultiviewSession {
                 // Keep camera assignments and sockets. Foreground watchdog owns repair.
             }
         }
+        refreshDiscovery()
     }
 
     func reconnect(_ tile: Tile) async {
@@ -762,11 +808,13 @@ final class MultiviewSession {
         tile.experimentalNetwork = experimental
         tile.networkVerified = false
         tile.status = "Connecting · approve on camera"
+        refreshDiscovery()
         defer {
             tile.connecting = false
             client.close()
             provisioners.removeValue(forKey: tile.id)
             if running { persistStage() }
+            refreshDiscovery()
         }
         persistStage()
         var stage = "host Wi-Fi"
@@ -1023,7 +1071,8 @@ final class MultiviewSession {
         let driver = DatalinkDriver(
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken,
-            stationHost: tile.cameraAddress, stationHotspot: usePhoneHotspot)
+            stationHost: tile.cameraAddress, stationHotspot: usePhoneHotspot,
+            subscriptionKeys: Commands.subscriptionKeys(for: camera.model))
         tile.driver = driver
         driver.onStatusFrame = { [weak tile, weak driver] frame in
             guard let tile, let driver, tile.driver === driver else { return }
@@ -1080,15 +1129,18 @@ final class MultiviewSession {
         driver.onAccessUnit = { [weak tile, weak driver] bytes in
             guard let tile, let driver, tile.driver === driver else { return }
             if tile.decoder.decode(accessUnit: bytes) {
-                if !tile.hasPicture { ControlLiveLog.line("multiview: station preview enqueued") }
-                tile.lastFrame = Date()
-                tile.hasPicture = true
-                tile.status = "Live · Video mode"
+                // Per access unit: re-writing these notified the whole tile view
+                // at the feed rate.
+                if !tile.hasPicture {
+                    ControlLiveLog.line("multiview: station preview enqueued")
+                    tile.hasPicture = true
+                }
+                if tile.status != "Live · Video mode" { tile.status = "Live · Video mode" }
             }
         }
         let nanoGate = camera.model.usesNanoLiveViewGate
         if nanoGate { driver.send(Commands.nanoLiveViewGate(start: true)) }
-        if CameraSoftAP.shouldSendLiveViewPrepare(usesNanoLiveViewGate: nanoGate) {
+        if camera.model.sendsLiveViewPrepare {
             driver.send(Commands.liveViewPrepare())
         }
         driver.startLiveView(receiver: camera.model.liveViewEnableReceiver)
@@ -1175,6 +1227,7 @@ final class MultiviewSession {
         tile.decoder.reset()
         tile.status = "Add camera"
         persistStage()
+        refreshDiscovery()
         return true
     }
     func stop() {
@@ -1191,8 +1244,7 @@ final class MultiviewSession {
         for search in searches.values { search.cancel() }
         searches.removeAll()
         monitor?.cancel()
-        scanTask?.cancel()
-        ble.stopScan()
+        stopDiscovery()
         disconnectBLE()
         ready = false
         password = ""

@@ -26,6 +26,14 @@ separate iOS and Android lists.
   joystick double-tap (and gamepad Circle/B) moves the lens to world level or
   straight down / up, with a toast that confirms the result. Experimental until
   checked on more cameras.
+- **Osmo Action 6** support on iOS and Android, implemented from the
+  2026-09-21 Mimo survey: live view (one `0x09/0xa8` enable to receiver `0x41`,
+  AVC, no Nano gate or Pocket prepare), Normal 10-bit / D-Log M color with the
+  official Action 6 cube, Photo and Timelapse capture bytes, and the
+  Action-specific album favorite layout. An **APERTURE** tile takes the FOCUS
+  slot: live iris readout and the aperture strategies the camera offers.
+  Gimbal, tap focus and focus modes are hidden. Not yet checked on a physical
+  Action 6; see the Action 6 handbook page for what is and is not wired.
 - Experimental **Multiview on Android**, matching iOS: the grid button on
   **Your cameras**, the two-step Local Wi-Fi / phone hotspot setup, up to four
   identity-verified camera tiles with Auto LUT, per-tile and group recording,
@@ -340,6 +348,15 @@ separate iOS and Android lists.
   identification mark on clip upload.
 
 ### Fixed
+
+- Android clip playback: Delete and Cancel in the "Delete this clip from the
+  camera?" dialog now respond instead of playing or pausing the clip behind it.
+
+- Osmo Nano no longer shows zoom controls. The zoom chip, pinch, hold disc and
+  game controller zoom are hidden or inert, and no zoom command is sent. DISP
+  settings list Zoom Chip and Gimbal Stick only when the connected camera has
+  them. Gimbal, zoom and focus controls stay off for Action, 360, drones and
+  unknown cameras until they are verified (#124, #413).
 
 - Opening the gallery on the camera now opens Media in the app, like DJI Mimo,
   instead of being kicked back to live within a second. Leaving on either side
@@ -991,6 +1008,16 @@ separate iOS and Android lists.
 
 ### Changed
 
+- **Power and heat pass** (iOS measured on device, Android build-verified):
+  the floating-chrome glass backdrop blurs with Metal Performance Shaders and
+  draws as layers instead of per-panel CPU canvases; REC and scan pulses no longer
+  hold ProMotion at 120 Hz (the REC tally pulses in Core Animation); observed
+  state no longer re-renders SwiftUI on every frame or status packet; Face AF idles at
+  10 Hz without a face; journal redaction, DUML scanning and NAL classification
+  copy and scan less; paused playback stops redrawing on both platforms;
+  Android scopes, GLES programs, status publication and 4K playback grading
+  follow their budgets. Picture cadence and quality are unchanged. Method and
+  device A/B results: `docs/audits/2026-09-23-automated-perf-pass.md`.
 - FORMAT lists every `camcap_video_format` pair the body advertises, not only
   1080p / 4K 16:9. Catalog labels cover Nano 2.7K/4:3, Pocket 3 1:1/9:16/2.7K,
   Pocket 4 / 4 Pro 9:16 3K, Action 6 4K 1:1, and SlowMo 100/120/240. Unknown

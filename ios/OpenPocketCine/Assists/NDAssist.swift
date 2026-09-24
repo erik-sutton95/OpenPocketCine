@@ -194,7 +194,6 @@ struct NDLongPressMenu: View {
 }
 
 struct NDMeterOverlay: View {
-    @Environment(AppModel.self) private var model
     var bounds: CGRect
     var feed: CGRect
     var chromeClearance: EdgeInsets
@@ -212,10 +211,21 @@ struct NDMeterOverlay: View {
             bounds: bounds,
             placementBounds: ScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
         ) {
-            NDMeterChip(
-                reading: NDAssist.reading(from: model.frameSamples.displayBundle),
-                notation: store.notation)
+            NDMeterLiveChip(notation: store.notation)
         }
+    }
+}
+
+/// Reads the scope bundle in its own scope so the movable panel around the
+/// chip does not re-evaluate on every bundle (up to 25 Hz).
+private struct NDMeterLiveChip: View {
+    @Environment(AppModel.self) private var model
+    var notation: NDFilterNotation
+
+    var body: some View {
+        NDMeterChip(
+            reading: NDAssist.reading(from: model.frameSamples.displayBundle),
+            notation: notation)
     }
 }
 

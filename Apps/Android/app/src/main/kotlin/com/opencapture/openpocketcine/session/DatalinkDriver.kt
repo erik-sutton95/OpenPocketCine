@@ -914,7 +914,7 @@ class DatalinkDriver internal constructor(
 
     private fun subscribe() {
         var subId = 0x69DFL
-        for (key in SUBSCRIPTION_KEYS) {
+        for (key in subscriptionKeys(cameraModel)) {
             sendCommand(SwiftCore.CMD_SUBSCRIBE, "$key\u001f$subId")
             subId += 1
         }
@@ -1279,6 +1279,14 @@ class DatalinkDriver internal constructor(
         private const val ACK_INTERVAL_MS = 25L
         /** Camera ignores 0x09/0xa8 until subscribe is processed. */
         private const val SUBSCRIBE_SETTLE_MS = 150L
+        /** Core `Commands.subscriptionKeys(for:)`: body-only keys append so base subIds never move. */
+        internal fun subscriptionKeys(model: CameraModel): List<String> =
+            if (model.supportsAperture) {
+                SUBSCRIPTION_KEYS + listOf(ApertureStrategy.STATE_KEY, ApertureStrategy.CAPABILITY_KEY)
+            } else {
+                SUBSCRIPTION_KEYS
+            }
+
         private val SUBSCRIPTION_KEYS =
             listOf(
                 "camcap_mode_profile",

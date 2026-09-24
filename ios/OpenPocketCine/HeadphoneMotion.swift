@@ -596,9 +596,11 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     }
 
     private func publishReadout(now: Date?) {
+        // Per headphone motion sample. Unchanged writes (nil / "" with the
+        // debug HUD off) re-rendered the live chrome at the motion rate.
         guard let model, model.headTrackingEnabled, haveHead else {
-            model?.headTrackImuReadout = ""
-            model?.headTrackAxisPose = nil
+            if model?.headTrackImuReadout.isEmpty == false { model?.headTrackImuReadout = "" }
+            if model?.headTrackAxisPose != nil { model?.headTrackAxisPose = nil }
             return
         }
         let look = HeadTrack.look(current: lastQuat, origin: originQuat)
@@ -614,13 +616,14 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             HeadTrack.bodyLookUpDeg(
                 livePitchDeg: Double($0) / 10, originPitchDeg: originGimbalPitch)
         }
-        model.headTrackAxisPose =
+        let axisPose =
             Self.debugHud
             ? HeadTrackAxisPose(
                 yawDeg: lookRight, pitchDeg: lookUp,
                 gimbalYawDeg: gimbalYawDeg, gimbalPitchDeg: gimbalPitchDeg,
                 locked: calibratedByUser)
             : nil
+        if model.headTrackAxisPose != axisPose { model.headTrackAxisPose = axisPose }
         let hudDue: Bool
         if let now, let last = lastHudAt {
             hudDue = now.timeIntervalSince(last) >= LiveChromeThrottle.statusInterval
@@ -651,7 +654,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         let setMark = calibratedByUser ? "SET" : "no SET"
         if hudDue {
             lastHudAt = now
-            model.headTrackImuReadout =
+            let readout =
                 Self.debugHud
                 ? String(
                     format:
@@ -659,6 +662,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
                     setMark, dY, dP, dR, bodyY, bodyP, rawP, predY, predP, dY - predY,
                     dP - predP)
                 : ""
+            if model.headTrackImuReadout != readout { model.headTrackImuReadout = readout }
         }
         if logDue {
             lastLogAt = now

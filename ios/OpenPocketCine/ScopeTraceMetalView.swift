@@ -3,6 +3,7 @@ import MetalPerformanceShaders
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
+import os
 
 /// OpenZCine `ScopeTraceMetal` — GPU rasterizer for WAVE / PARADE. Push model:
 /// `isPaused + enableSetNeedsDisplay`; a new bundle calls `setNeedsDisplay`.
@@ -214,22 +215,47 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
         var bounds: CGSize = .zero
         var pointCount = 0
         var opacity: Double = 1
+
+        /// Same vertex placement and colour for the same points.
+        func sameProduct(_ other: Self) -> Bool {
+            mode == other.mode && transfer == other.transfer && bounds == other.bounds
+                && opacity == other.opacity
+        }
+    }
+
+    /// One published vertex range. The trail may live in an older ring slot.
+    private struct DrawRange {
+        let buffer: MTLBuffer
+        let start: Int
+        let count: Int
+    }
+
+    private struct LastProduct {
+        let points: [ScopePoint]
+        let inputs: BuildInputs
+        let table: [Float]
+        let range: DrawRange
     }
 
     /// DESIGN §2.4 in-flight vertex ring: the build queue writes vertices
     /// straight into a slot's `contents()`; `draw(in:)` only binds the
-    /// published buffer. Depth 3 means a slot is not rewritten until two newer
-    /// builds — each with its draw scheduled immediately on publish — landed.
+    /// published buffers. A slot is drawn as the current product, then once
+    /// more as the next bundle's trail; depth 4 keeps two newer builds between
+    /// that last use and the rewrite.
     /// ponytail: no semaphore; builds are ≤25 Hz and draws complete within a
     /// frame. Add completion-handler slot tracking if draw cadence ever
     /// decouples from builds.
     private final class VertexRing: @unchecked Sendable {
         private var buffers: [MTLBuffer] = []
         private var index = 0
+        /// Build-queue confined. The trail is the previous bundle's samples
+        /// (``PocketScopeSampler``), so these vertices are redrawn at trail
+        /// opacity instead of rebuilt.
+        var last: LastProduct?
 
         /// Build-queue confined.
         func next(device: MTLDevice, byteCount: Int) -> MTLBuffer? {
-            index = buffers.isEmpty ? 0 : (index + 1) % 3
+            index = buffers.isEmpty ? 0 : (index + 1) % 4
             if index >= buffers.count {
                 guard let buffer = Self.make(device: device, byteCount: byteCount) else {
                     return nil
@@ -255,12 +281,14 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
     private var samples = ScopeSamples.empty
     private var trail = ScopeSamples.empty
     private var layoutLocked = false
-    private var buildGeneration = 0
+    /// Latest-wins: a queued build that a newer request superseded returns
+    /// before any CPU vertex work.
+    private let buildGeneration = OSAllocatedUnfairLock(initialState: 0)
     private let buildQueue = DispatchQueue(label: "opv.scope-trace-vertices", qos: .userInitiated)
     private let ring = VertexRing()
     /// Latest finished build. Main-thread; `draw(in:)` binds and draws only.
-    private var publishedBuffer: MTLBuffer?
-    private var publishedVertexCount = 0
+    private var published: DrawRange?
+    private var publishedTrail: DrawRange?
     private var publishedBounds = CGSize.zero
 
     override init() {
@@ -308,20 +336,24 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
     private func scheduleBuild(view: MTKView) {
         if !layoutLocked, view.bounds.width > 1 { inputs.bounds = view.bounds.size }
         guard let device else { return }
-        buildGeneration += 1
-        let generation = buildGeneration
+        let latest = buildGeneration
+        let generation = latest.withLock {
+            $0 += 1
+            return $0
+        }
         let inputs = inputs
         let samples = samples
         let trail = trail
         let ring = ring
         buildQueue.async { [weak self, weak view] in
+            guard latest.withLock({ $0 }) == generation else { return }
             let built = Self.build(
                 inputs, samples: samples, trail: trail, ring: ring, device: device)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self, self.buildGeneration == generation else { return }
-                    self.publishedBuffer = built?.buffer
-                    self.publishedVertexCount = built?.count ?? 0
+                    guard let self, latest.withLock({ $0 }) == generation else { return }
+                    self.published = built?.current
+                    self.publishedTrail = built?.trail
                     self.publishedBounds = inputs.bounds
                     view?.setNeedsDisplay()
                 }
@@ -342,33 +374,46 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
     nonisolated private static func build(
         _ inputs: BuildInputs, samples: ScopeSamples, trail: ScopeSamples,
         ring: VertexRing, device: MTLDevice
-    ) -> (buffer: MTLBuffer, count: Int)? {
+    ) -> (current: DrawRange, trail: DrawRange?)? {
         let bounds = inputs.bounds
         guard bounds.width > 1, bounds.height > 1 else { return nil }
+        let table: [Float]
+        switch inputs.mode {
+        case .waveform, .parade:
+            table = WaveformAxis.levelTable(for: inputs.transfer)
+        }
+        // Array == short-circuits on shared storage: the trail is usually the
+        // exact array the previous build drew as current.
+        let reused = ring.last.flatMap { last in
+            !samples.points.isEmpty && last.inputs.sameProduct(inputs) && last.table == table
+                && last.points == trail.points ? last.range : nil
+        }
+        let trailPoints = reused == nil ? trail.points : []
         let capacity = ScopeTraceMetal.maxVertexCount(
-            points: samples.points.count + trail.points.count, mode: inputs.mode)
+            points: samples.points.count + trailPoints.count, mode: inputs.mode)
         guard capacity > 0,
             let buffer = ring.next(
                 device: device,
                 byteCount: capacity * MemoryLayout<ScopeTraceMetal.Vertex>.stride)
         else { return nil }
         let rect = plotRect(mode: inputs.mode, bounds: bounds)
-        let table: [Float]
-        switch inputs.mode {
-        case .waveform, .parade:
-            table = WaveformAxis.levelTable(for: inputs.transfer)
-        }
         let out = UnsafeMutableBufferPointer(
             start: buffer.contents().bindMemory(
                 to: ScopeTraceMetal.Vertex.self, capacity: capacity),
             count: capacity)
-        var count = ScopeTraceMetal.fillVertices(
-            out, from: 0, points: trail.points, mode: inputs.mode, rect: rect,
-            opacity: inputs.opacity * ScopeTraceMetal.trailDecay, levelTable: table)
-        count = ScopeTraceMetal.fillVertices(
-            out, from: count, points: samples.points, mode: inputs.mode, rect: rect,
+        // Trail vertices keep full opacity; `draw(in:)` applies the decay.
+        let trailEnd = ScopeTraceMetal.fillVertices(
+            out, from: 0, points: trailPoints, mode: inputs.mode, rect: rect,
             opacity: inputs.opacity, levelTable: table)
-        return (buffer, count)
+        let count = ScopeTraceMetal.fillVertices(
+            out, from: trailEnd, points: samples.points, mode: inputs.mode, rect: rect,
+            opacity: inputs.opacity, levelTable: table)
+        let current = DrawRange(buffer: buffer, start: trailEnd, count: count - trailEnd)
+        ring.last = LastProduct(
+            points: samples.points, inputs: inputs, table: table, range: current)
+        let trailRange =
+            reused ?? (trailEnd > 0 ? DrawRange(buffer: buffer, start: 0, count: trailEnd) : nil)
+        return (current, trailRange)
     }
 
     func draw(in view: MTKView) {
@@ -378,11 +423,8 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
             let command = queue.makeCommandBuffer()
         else { return }
         guard let encoder = command.makeRenderCommandEncoder(descriptor: descriptor) else { return }
-        if publishedVertexCount > 0, let vertexBuffer = publishedBuffer {
+        if let published {
             encoder.setRenderPipelineState(pipeline)
-            encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
-            var gain = LiveHDRDisplay.presentGain
-            encoder.setFragmentBytes(&gain, length: MemoryLayout<Float>.size, index: 0)
             let layout = publishedBounds.width > 1 ? publishedBounds : view.bounds.size
             var viewSize = SIMD2<Float>(
                 Float(view.drawableSize.width), Float(view.drawableSize.height))
@@ -397,7 +439,19 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
             {
                 encoder.setScissorRect(scissor)
             }
-            encoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: publishedVertexCount)
+            // (present gain, opacity): opacity scales premultiplied rgb and alpha.
+            func draw(_ range: DrawRange, opacity: Float) {
+                guard range.count > 0 else { return }
+                var gain = SIMD2<Float>(LiveHDRDisplay.presentGain, opacity)
+                encoder.setVertexBuffer(range.buffer, offset: 0, index: 0)
+                encoder.setFragmentBytes(&gain, length: MemoryLayout<SIMD2<Float>>.size, index: 0)
+                encoder.drawPrimitives(
+                    type: .point, vertexStart: range.start, vertexCount: range.count)
+            }
+            if let publishedTrail {
+                draw(publishedTrail, opacity: Float(ScopeTraceMetal.trailDecay))
+            }
+            draw(published, opacity: 1)
         }
         encoder.endEncoding()
         command.present(drawable)
@@ -426,8 +480,8 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
                 o.color = v.color;
                 return o;
             }
-            fragment float4 trace_f(VOut in [[stage_in]], constant float &gain [[buffer(0)]]) {
-                return float4(in.color.rgb * gain, in.color.a);
+            fragment float4 trace_f(VOut in [[stage_in]], constant float2 &gain [[buffer(0)]]) {
+                return float4(in.color.rgb * (gain.x * gain.y), in.color.a * gain.y);
             }
             """
         return makePipeline(device: device, source: source, pixelFormat: .bgra8Unorm)
@@ -455,8 +509,8 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
                 o.color = v.color;
                 return o;
             }
-            fragment float4 trace_f(VOut in [[stage_in]], constant float &gain [[buffer(0)]]) {
-                return float4(in.color.rgb * gain, in.color.a);
+            fragment float4 trace_f(VOut in [[stage_in]], constant float2 &gain [[buffer(0)]]) {
+                return float4(in.color.rgb * (gain.x * gain.y), in.color.a * gain.y);
             }
             """
         return makePipeline(device: device, source: source, pixelFormat: .rgba16Float)
@@ -570,14 +624,27 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
     }
 
     private var inputs = BuildInputs()
-    private var buildGeneration = 0
+    /// Latest-wins: a superseded queued build returns before CPU binning.
+    private let buildGeneration = OSAllocatedUnfairLock(initialState: 0)
     private let buildQueue = DispatchQueue(label: "opv.vectorscope-density", qos: .userInitiated)
-    /// 2 roles × 2 generations — a texture the GPU sampled last draw is not
-    /// CPU-rewritten on the very next update. Build-queue confined.
+    /// Usually one new texture per update (the trail reuses the previous
+    /// main), two after a skipped revision. A texture the GPU sampled last
+    /// draw is not CPU-rewritten on the very next update. Build-queue confined.
     private let densityPool = ScopeTexturePool(depth: 4)
+    /// Build-queue confined: the trail is the previous bundle's points
+    /// (``PocketScopeSampler``), so its density product is the last main one.
+    private final class LastDensity: @unchecked Sendable {
+        var product:
+            (
+                points: [ScopePoint], zoom: VectorscopeAssist.Zoom, brightness: Int,
+                texture: MTLTexture
+            )?
+    }
+    private let lastDensity = LastDensity()
     /// Blur outputs, reused across draws. Main-thread confined; same-queue
-    /// command ordering makes GPU-side reuse safe.
-    private let blurPool = ScopeTexturePool(depth: 2)
+    /// command ordering makes GPU-side reuse safe. Depth 3: a reused trail
+    /// blur stays live while the next main blur takes the oldest slot.
+    private let blurPool = ScopeTexturePool(depth: 3)
     private var mainTexture: MTLTexture?
     private var trailTexture: MTLTexture?
     private var blurredMain: MTLTexture?
@@ -606,24 +673,40 @@ final class VectorscopeMetalRenderer: NSObject, MTKViewDelegate {
             pointCount: points.count + trailPoints.count)
         guard next != inputs else { return }
         inputs = next
-        buildGeneration += 1
-        let generation = buildGeneration
+        let latest = buildGeneration
+        let generation = latest.withLock {
+            $0 += 1
+            return $0
+        }
         guard let device else { return }
         let zoom = next.zoom
         let brightness = next.brightness
         let pool = densityPool
+        let last = lastDensity
         buildQueue.async { [weak self, weak view] in
+            guard latest.withLock({ $0 }) == generation else { return }
+            // Array == short-circuits on shared storage.
+            let reused = last.product.flatMap {
+                $0.zoom == zoom && $0.brightness == brightness && $0.points == trailPoints
+                    ? $0.texture : nil
+            }
+            let trail =
+                reused
+                ?? Self.densityTexture(
+                    device: device, points: trailPoints, zoom: zoom, brightness: brightness,
+                    pool: pool)
             let main = Self.densityTexture(
                 device: device, points: points, zoom: zoom, brightness: brightness, pool: pool)
-            let trail = Self.densityTexture(
-                device: device, points: trailPoints, zoom: zoom, brightness: brightness, pool: pool)
+            last.product = main.map { (points, zoom, brightness, $0) }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self, self.buildGeneration == generation else { return }
+                    guard let self, latest.withLock({ $0 }) == generation else { return }
+                    // The published main becomes this trail: keep its blur.
+                    let keepsBlur = trail != nil && trail === self.mainTexture
+                    self.blurredTrail = keepsBlur ? self.blurredMain : nil
                     self.mainTexture = main
                     self.trailTexture = trail
                     self.blurredMain = nil
-                    self.blurredTrail = nil
                     view?.setNeedsDisplay()
                 }
             }

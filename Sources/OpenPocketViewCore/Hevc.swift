@@ -23,7 +23,7 @@ public enum Hevc {
 
     /// UDP-queue pending cap must not drop the AU that latches format.
     public static func accessUnitCarriesKeyframe(_ annexB: [UInt8]) -> Bool {
-        nalUnits(annexB).contains { !$0.isEmpty && isKeyframeNal(nalType($0[0])) }
+        nalHeaders(annexB).contains { isKeyframeNal(nalType($0)) }
     }
 
     /// Drop DJI's `00 00 01 ff …` frame marker (NAL type 63): return the buffer from the first
@@ -45,6 +45,17 @@ public enum Hevc {
     /// Split an Annex-B buffer into raw NAL units (start codes removed). Handles 3- and 4-byte
     /// start codes by trimming a trailing zero that belongs to the next start code.
     public static func nalUnits(_ annexB: [UInt8]) -> [[UInt8]] {
+        nalRanges(annexB).map { Array(annexB[$0]) }
+    }
+
+    /// Header byte of every NAL `nalUnits` returns, without copying payloads.
+    /// Keyframe, IRAP and codec checks only read this byte.
+    public static func nalHeaders(_ annexB: [UInt8]) -> [UInt8] {
+        nalRanges(annexB).map { annexB[$0.lowerBound] }
+    }
+
+    /// Non-empty NAL payload ranges within `annexB`.
+    public static func nalRanges(_ annexB: [UInt8]) -> [Range<Int>] {
         var starts: [Int] = []
         var privateMetadata: Set<Int> = []
         var i = 0
@@ -67,12 +78,12 @@ public enum Hevc {
                 i += 1
             }
         }
-        var nals: [[UInt8]] = []
+        var nals: [Range<Int>] = []
         for (k, s) in starts.enumerated() {
             if privateMetadata.contains(s) { continue }
             var e = (k + 1 < starts.count) ? starts[k + 1] - 3 : annexB.count
             while e > s && annexB[e - 1] == 0 { e -= 1 }  // ponytail: drops a genuine trailing 0x00 too; harmless for decode
-            if e > s { nals.append(Array(annexB[s..<e])) }
+            if e > s { nals.append(s..<e) }
         }
         return nals
     }

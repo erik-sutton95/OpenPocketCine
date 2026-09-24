@@ -35,7 +35,7 @@ model was not recorded. Android physical verification remains pending.
 | `0x0d/0x02` | **battery push** | percent at payload offset 20 |
 | `0x02/0xdc` | **storage push** | SD + internal capacity/free |
 | `0x02/0x80` | active-store + playback bit | unsolicited |
-| `0x09/0xa8` | **live-view enable** | starts pktType-0x02 video. Pocket `rcv=0x08`; Nano `rcv=0x41` |
+| `0x09/0xa8` | **live-view enable** | starts pktType-0x02 video. Pocket `rcv=0x08`; Nano and Action 6 `rcv=0x41` |
 | `0x02/0x09` | **Nano live gate** | Mimo `00…03` with enable, `00…04` on stop. ACK `00`. Pocket unused |
 | `0x02/0x02` | **record start/stop** | `[01]` start / `[00]` stop (Osmosis Nano; Pocket 4 uses `rcv=0x01`) |
 | `0x02/0x01` | **photo shutter** | Pocket 3 ordinary Photo `[01]`; Pocket 4 Pro SuperPhoto `[0F]`, Live Photo `[01]`, countdown cancel `[00]` ([survey](../../devices/pocket-4-pro/photo/#storage-and-shutter)); `d9` in Video mode |

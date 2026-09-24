@@ -50,6 +50,19 @@ class PocketScopeSamplerTest {
             PocketScopeSampler.minIntervalNs(2, 1.0),
             PocketScopeSampler.chromeSampleIntervalNs(2, 1.0, backdropDemand = true),
         )
+        // Heat and 3+ scopes slow scope work, never the glass tap.
+        assertEquals(
+            PocketScopeSampler.BASE_MIN_INTERVAL_NS,
+            PocketScopeSampler.chromeSampleIntervalNs(0, 5.0, backdropDemand = true),
+        )
+        assertEquals(
+            PocketScopeSampler.BASE_MIN_INTERVAL_NS,
+            PocketScopeSampler.chromeSampleIntervalNs(3, 3.0, backdropDemand = true),
+        )
+        assertEquals(
+            PocketScopeSampler.minIntervalNs(3, 3.0),
+            PocketScopeSampler.chromeSampleIntervalNs(3, 3.0, backdropDemand = false),
+        )
     }
 
     private fun scheduledTaps(frames: Int, fps: Int, intervalNs: Long): Int {

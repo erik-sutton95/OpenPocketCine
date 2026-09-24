@@ -29,8 +29,10 @@
 ## Made for the shot
 
 OpenPocketCine is a production monitor and remote for the **DJI Osmo** series. Live view is
-captured today for **Osmo Pocket 4 / 4 Pro** (HEVC) and, on iOS, **Osmo Nano** (AVC). Other Osmo
-bodies can show up in Bluetooth scan; Action and 360 live view is not captured yet.
+captured today for **Osmo Pocket 4 / 4 Pro** (HEVC) and, on iOS, **Osmo Nano** (AVC).
+**Osmo Action 6** (AVC) is wired from a full Mimo capture and still needs its first check on a
+camera. Other Osmo bodies can show up in Bluetooth scan; other Action models and 360 live view
+are not captured yet.
 
 iOS (iPhone and iPad) is the daily driver. Android is available as a
 [public beta on Google Play](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA).
@@ -140,8 +142,9 @@ HEVC live view, and GPU LUT / peaking / false colour / zebra on the feed. Join t
 [public beta on Google Play](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA). Clip export LUT bake, Convert log, and
 GPU scopes are iOS today.
 
-Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. Other Osmo models may
-appear in scan. Action and 360 live view is not captured yet.
+Captured live view: **Osmo Pocket 4 / 4 Pro**, and **Osmo Nano** on iOS. **Osmo Action 6** is
+wired from its capture and not yet checked on a camera. Other Osmo models may appear in scan.
+Other Action models and 360 live view are not captured yet.
 
 ## Roadmap shaped in the open
 

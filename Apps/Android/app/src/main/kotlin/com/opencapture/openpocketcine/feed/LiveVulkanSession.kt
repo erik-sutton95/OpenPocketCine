@@ -72,6 +72,7 @@ internal class LiveVulkanSession(
     private val faceBytes = ByteArray(FACE_W * FACE_H * 4)
     @Volatile private var faceValid = false
     private var lastSampleNs = 0L
+    private var lastScopeWorkNs = 0L
     private var attachedSurface: Surface? = null
     val windowReady: Boolean
         get() = presentGate.windowReady
@@ -481,7 +482,8 @@ internal class LiveVulkanSession(
         val currentSource = scopeFrames.isCurrent(sourceEpoch) && LiveScopeSampleBus.isCurrent(scopeOwner)
         val wantSample = currentSource && (policy.needsTap || backdrop?.hasDemand(this) == true)
         val now = System.nanoTime()
-        var intervalNs = PocketScopeSampler.BASE_MIN_INTERVAL_NS
+        var scopeIntervalNs = PocketScopeSampler.BASE_MIN_INTERVAL_NS
+        var scopeDue = false
         var previewTicket: InspectorPreviewAdmission.Ticket? = null
         var backdropTicket: BackdropFrameAdmission.Ticket? = null
         val takeTap =
@@ -492,12 +494,13 @@ internal class LiveVulkanSession(
                             appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
                         PocketScopeSampler.thermalMultiplier(pm.currentThermalStatus)
                     }.getOrDefault(1.0)
-                intervalNs = PocketScopeSampler.chromeSampleIntervalNs(
-                    policy.activeScopeCount, thermal, backdrop?.hasDemand(this) == true)
+                val intervalNs = policy.tapIntervalNs(thermal, backdrop?.hasDemand(this) == true)
+                scopeIntervalNs = policy.minIntervalNs(thermal)
                 if (now - lastSampleNs >= intervalNs && sampleBusy.compareAndSet(false, true)) {
                     previewTicket = InspectorPreviewPipeline.acquire(policy.previewOwner, playback = false, now)
-                    backdropTicket = backdrop?.acquire(this, now, thermal)
-                    if (policy.activeScopeCount > 0 || previewTicket != null || backdropTicket != null) true
+                    backdropTicket = backdrop?.acquire(this, now)
+                    scopeDue = policy.scopeWorkDue(now, lastScopeWorkNs, thermal)
+                    if (scopeDue || previewTicket != null || backdropTicket != null) true
                     else { sampleBusy.set(false); false }
                 } else false
             } else {
@@ -528,6 +531,7 @@ internal class LiveVulkanSession(
         }
         if (!takeTap) return
         lastSampleNs = now
+        if (scopeDue) lastScopeWorkNs = now
         val transfer = MonitorTransfer.fromColorMode(policy.colorMode)
         val includePoints = policy.includePoints
         val includeVectorPoints = policy.includeVectorPoints
@@ -535,7 +539,7 @@ internal class LiveVulkanSession(
         val iso = policy.iso
         val previous = previousBundle
         val packed =
-            if ((includePoints || includeVectorPoints || previewTicket != null || backdropTicket != null) &&
+            if ((scopeDue && (includePoints || includeVectorPoints) || previewTicket != null || backdropTicket != null) &&
                 OpcVulkan.nativeCopyTap(native, tapBytes)
             ) {
                 tapBytes.copyOf()
@@ -543,14 +547,14 @@ internal class LiveVulkanSession(
                 null
             }
         val histoCopy =
-            if (packed == null) {
+            if (packed == null && scopeDue) {
                 OpcVulkan.nativeCopyHisto(native, histo)
                 histo.copyOf()
             } else {
                 null
             }
         val scopes = policy.activeScopeCount
-        val loggedIntervalNs = intervalNs
+        val loggedIntervalNs = scopeIntervalNs
         sampleExecutor.execute {
             var previewSubmitted = false
             var backdropSubmitted = false
@@ -570,7 +574,7 @@ internal class LiveVulkanSession(
                         previewSubmitted = true
                     } else InspectorPreviewPipeline.cancel(ticket)
                 }
-                if (policy.activeScopeCount == 0 || !scopeFrames.isCurrent(sourceEpoch) ||
+                if (!scopeDue || !scopeFrames.isCurrent(sourceEpoch) ||
                     !LiveScopeSampleBus.isCurrent(scopeOwner)) return@execute
                 val bundle =
                     if (packed != null) {

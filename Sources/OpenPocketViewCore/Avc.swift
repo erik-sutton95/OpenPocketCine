@@ -27,8 +27,7 @@ public enum LiveVideoCodec: Equatable, Sendable {
 public enum LiveVideo {
     /// Preserve parameter sets and random-access frames using the negotiated codec.
     public static func accessUnitCarriesKeyframe(_ annexB: [UInt8], codec: LiveVideoCodec) -> Bool {
-        Hevc.nalUnits(annexB).contains { nal in
-            guard let first = nal.first else { return false }
+        Hevc.nalHeaders(annexB).contains { first in
             switch codec {
             case .avc: return Avc.isKeyframeNal(Avc.nalType(first))
             case .hevc: return Hevc.isKeyframeNal(Hevc.nalType(first))
@@ -60,6 +59,10 @@ public enum LiveVideo {
     }
 
     public static func detect(annexB: [UInt8]) -> LiveVideoCodec? {
-        detect(nals: Hevc.nalUnits(annexB))
+        detect(headers: Hevc.nalHeaders(annexB))
+    }
+
+    public static func detect(headers: [UInt8]) -> LiveVideoCodec? {
+        headers.lazy.compactMap(codec(ofNAL:)).first
     }
 }
