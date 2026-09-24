@@ -9,7 +9,7 @@ New and changed
 - Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
 - Osmo Action 6 support: live view, Normal 10-bit and D-Log M color with the official LUT, Photo and Timelapse. Not yet checked on a real Action 6.
 - On Action 6, an APERTURE tile takes the FOCUS slot with a live iris readout. Gimbal and focus controls are hidden.
-- Live monitoring with looks, scopes and glass panels uses much less power and runs cooler. Picture quality and frame rate are unchanged.
+- Live monitoring with a look, peaking and waveform uses about 85% less processor power, and about 70% less while recording, so the iPhone runs cooler. Picture and frame rate are unchanged.
 
 Fixes
 
