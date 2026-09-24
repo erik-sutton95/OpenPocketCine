@@ -717,8 +717,6 @@ fun LiveViewScreen(model: AppModel) {
                     viewport = ChromeRect(0f, 0f, vw, vh),
                     portrait = portrait,
                     modifier = Modifier.zIndex(1f),
-                    // Joystick, zoom chip and gimbal button share the lower right.
-                    cluster = cluster.bounds,
                 )
             }
 

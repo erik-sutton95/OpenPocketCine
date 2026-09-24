@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.opencapture.monitorui.monitorReadoutShadow
 import com.opencapture.openpocketcine.session.LevelMode
 import com.opencapture.openpocketcine.session.LevelReading
 import com.opencapture.openpocketcine.session.WorldLevelSnap
@@ -34,10 +33,10 @@ import kotlinx.coroutines.delay
 /**
  * LEVEL: camera world attitude ([LevelReading]), not this phone. Mirrors iOS
  * `MonitorLevelGauge`: the EV meter's language in a Nikon Z virtual-horizon layout
- * (dark band, centreline, cross-bar marker, number at the start), green when level. Tilt is the
- * EV meter mirrored onto the right edge, clearing the joystick cluster the way EV
- * clears the toolbar (up first, then shorter); roll runs along the bottom; a bubble
- * replaces both near plumb. No data reads `No level data`.
+ * (dark band, centreline, cross-bar marker, number at the start), green when level.
+ * Roll runs along the bottom; tilt centres vertically, right of centre by the same
+ * distance roll sits below centre. A bubble replaces both near plumb. No data reads
+ * `No level data`.
  */
 internal object LiveLevel {
     const val REFRESH_MS = 100L
@@ -58,16 +57,20 @@ internal object LiveLevel {
         return if (w <= 0f || h <= 0f) feed else ChromeRect(x, y, w, h)
     }
 
-    data class Frames(val roll: ChromeRect, val tilt: ChromeRect?)
+    data class Frames(val roll: ChromeRect, val tilt: ChromeRect)
 
     /** Strips in dp against the on-screen part of the feed (OpenZCine #47). */
-    fun frames(feed: ChromeRect, viewport: ChromeRect, portrait: Boolean, cluster: ChromeRect? = null): Frames {
+    fun frames(feed: ChromeRect, viewport: ChromeRect, portrait: Boolean): Frames {
         val v = visible(feed, viewport)
-        fun mirror(r: ChromeRect) = ChromeRect(v.minX + v.maxX - r.maxX, r.y, r.width, r.height)
-        val tilt = CameraExposureMeter.frame(v, PocketDispMode.LIVE, cluster?.let(::mirror))?.let(::mirror)
         val rollWidth = minOf(MAX_LENGTH, v.width - 24f).coerceAtLeast(0f)
         val rollMidY = v.maxY - if (portrait) 30f else 104f
-        return Frames(ChromeRect(v.midX - rollWidth / 2f, rollMidY - THICKNESS / 2f, rollWidth, THICKNESS), tilt)
+        val tiltHeight = minOf(MAX_LENGTH, v.height - 12f).coerceAtLeast(0f)
+        // Same offset from centre as roll, kept 6 dp inside the picture (portrait fill).
+        val tiltMidX = minOf(v.midX + (rollMidY - v.midY), v.maxX - 6f - THICKNESS / 2f)
+        return Frames(
+            ChromeRect(v.midX - rollWidth / 2f, rollMidY - THICKNESS / 2f, rollWidth, THICKNESS),
+            ChromeRect(tiltMidX - THICKNESS / 2f, v.midY - tiltHeight / 2f, THICKNESS, tiltHeight),
+        )
     }
 
     fun label(value: Double?): String =
@@ -88,8 +91,6 @@ internal fun LiveLevelOverlay(
     viewport: ChromeRect,
     portrait: Boolean,
     modifier: Modifier = Modifier,
-    /** Joystick cluster the right-edge tilt strip clears. */
-    cluster: ChromeRect? = null,
 ) {
     var mode by remember { mutableStateOf<LevelMode>(LevelMode.Unavailable) }
     LaunchedEffect(reading, viewFlip) {
@@ -100,10 +101,10 @@ internal fun LiveLevelOverlay(
     }
     val measurer = rememberTextMeasurer()
     Canvas(
-        modifier.fillMaxSize().monitorReadoutShadow()
+        modifier.fillMaxSize()
             .semantics { contentDescription = LiveLevel.accessibilityLabel(mode) },
     ) {
-        val frames = LiveLevel.frames(feed, viewport, portrait, cluster)
+        val frames = LiveLevel.frames(feed, viewport, portrait)
         when (val m = mode) {
             is LevelMode.Bubble -> {
                 val v = LiveLevel.visible(feed, viewport)
@@ -111,11 +112,11 @@ internal fun LiveLevelOverlay(
             }
             is LevelMode.Gauges -> {
                 drawStrip(frames.roll, vertical = false, m.rollDeg, measurer)
-                frames.tilt?.let { drawStrip(it, vertical = true, m.tiltDeg, measurer) }
+                drawStrip(frames.tilt, vertical = true, m.tiltDeg, measurer)
             }
             LevelMode.Unavailable -> {
                 drawStrip(frames.roll, vertical = false, null, measurer)
-                frames.tilt?.let { drawStrip(it, vertical = true, null, measurer) }
+                drawStrip(frames.tilt, vertical = true, null, measurer)
                 text(measurer, WorldLevelSnap.NO_LEVEL_DATA,
                     Offset(frames.roll.midX.dp.toPx(), (frames.roll.maxY + 6f).dp.toPx()), LiveDesign.muted, 8f)
             }
@@ -124,8 +125,10 @@ internal fun LiveLevelOverlay(
 }
 
 private fun DrawScope.text(measurer: TextMeasurer, s: String, centre: Offset, color: Color, size: Float, bold: Boolean = false) {
+    // Faint text-only shadow (iOS `drawReadout`); the band itself carries no glow.
     val style = TextStyle(color = color, fontSize = size.sp, fontFamily = OpcFonts.sora,
-        fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Medium)
+        fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Medium,
+        shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.6f), blurRadius = 1.5f.dp.toPx()))
     val layout = measurer.measure(s, style)
     drawText(layout, topLeft = Offset(centre.x - layout.size.width / 2f, centre.y - layout.size.height / 2f))
 }

@@ -1600,25 +1600,21 @@ struct FeedSplitComparisonMarks: View {
 enum LevelAssist {
     static let refresh: TimeInterval = 0.1
 
-    /// EV-meter strips on the on-screen part of the feed (OpenZCine #47). Tilt
-    /// is the EV meter mirrored onto the right edge and clears the joystick
-    /// cluster the way EV clears the toolbar (up first, then shorter); roll runs
-    /// along the bottom, lifted clear of the landscape / portrait chrome.
-    static func frames(feed: CGRect, viewport: CGRect, portrait: Bool, avoiding cluster: CGRect? = nil)
-        -> (roll: CGRect, tilt: CGRect)
-    {
+    /// Strips on the on-screen part of the feed (OpenZCine #47). Roll runs along
+    /// the bottom, lifted clear of the landscape / portrait chrome; tilt centres
+    /// vertically, right of centre by the same distance roll sits below centre,
+    /// kept 6 pt inside the picture (portrait fill).
+    static func frames(feed: CGRect, viewport: CGRect, portrait: Bool) -> (roll: CGRect, tilt: CGRect) {
         var visible = feed.intersection(viewport)
         if visible.isNull || visible.isEmpty { visible = feed }
         let t = MonitorLevelGauge.thickness
-        func mirror(_ r: CGRect) -> CGRect {
-            r.isEmpty ? r : CGRect(x: visible.minX + visible.maxX - r.maxX, y: r.minY, width: r.width, height: r.height)
-        }
-        let tilt = mirror(CameraEVMeter.frame(in: visible, avoiding: cluster.map(mirror)))
         let rollWidth = max(0, min(MonitorLevelGauge.maxLength, visible.width - 24))
         let rollMidY = visible.maxY - (portrait ? 30 : 104)
+        let tiltHeight = max(0, min(MonitorLevelGauge.maxLength, visible.height - 12))
+        let tiltMidX = min(visible.midX + (rollMidY - visible.midY), visible.maxX - 6 - t / 2)
         return (
             CGRect(x: visible.midX - rollWidth / 2, y: rollMidY - t / 2, width: rollWidth, height: t),
-            tilt
+            CGRect(x: tiltMidX - t / 2, y: visible.midY - tiltHeight / 2, width: t, height: tiltHeight)
         )
     }
 
@@ -1635,8 +1631,6 @@ struct FeedLevelView: View {
     let feed: CGRect
     let viewport: CGRect
     let portrait: Bool
-    /// Joystick cluster the right-edge tilt strip clears.
-    var avoiding: CGRect?
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -1660,7 +1654,7 @@ struct FeedLevelView: View {
     @ViewBuilder
     private func content(_ mode: LevelReading.Mode) -> some View {
         let frames = LevelAssist.frames(
-            feed: feed, viewport: viewport, portrait: portrait, avoiding: avoiding)
+            feed: feed, viewport: viewport, portrait: portrait)
         switch mode {
         case .bubble(let x, let y):
             let visible = feed.intersection(viewport).isNull ? feed : feed.intersection(viewport)
@@ -1701,7 +1695,7 @@ private struct LevelCaption: View {
             .font(MonitorTheme.font(8, weight: .medium))
             .kerning(0.5)
             .foregroundStyle(LiveDesign.muted)
-            .monitorReadoutShadow()
+            .shadow(color: .black.opacity(0.6), radius: 1.5)
             .fixedSize()
     }
 }

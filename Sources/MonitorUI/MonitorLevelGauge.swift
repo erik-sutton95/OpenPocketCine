@@ -1,7 +1,7 @@
 #if os(iOS)
     import SwiftUI
 
-    /// LEVEL in the EV meter's language, laid out like a Nikon Z virtual horizon:
+    /// LEVEL in the EV meter's type, laid out like a Nikon Z virtual horizon:
     /// a slim dark band with a white centreline, a cross-bar marker, zero notches,
     /// and the number at the start. Centreline, marker and number turn green when level.
     public struct MonitorLevelGauge: View {
@@ -24,6 +24,14 @@
         public init(axis: Axis, value: Double?) {
             self.axis = axis
             self.value = value
+        }
+
+        /// Faint text-only shadow; the band itself carries no glow.
+        static func drawReadout(_ text: Text, at point: CGPoint, in context: inout GraphicsContext) {
+            context.drawLayer { layer in
+                layer.addFilter(.shadow(color: .black.opacity(0.6), radius: 1.5))
+                layer.draw(text, at: point)
+            }
         }
 
         public static func label(_ value: Double?) -> String {
@@ -51,10 +59,10 @@
                     let inset = Self.band / 2
                     return vertical ? end - inset - (end - start - 2 * inset) * f : start + inset + (end - start - 2 * inset) * f
                 }
-                context.draw(
+                Self.drawReadout(
                     Text(Self.label(value)).font(MonitorTheme.font(10, weight: .semibold))
                         .monospacedDigit().foregroundStyle(tint),
-                    at: CGPoint(x: size.width / 2, y: 6))
+                    at: CGPoint(x: size.width / 2, y: 6), in: &context)
                 let h = Self.band / 2
                 let bandRect =
                     vertical
@@ -81,7 +89,6 @@
                     context.stroke(bar, with: .color(tint), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 }
             }
-            .monitorReadoutShadow()
         }
     }
 
@@ -107,11 +114,11 @@
                 let distance = (x * x + y * y).squareRoot()
                 let isLevel = distance < MonitorLevelGauge.levelDeg
                 let tint = isLevel ? MonitorLevelGauge.good : white
-                context.draw(
+                MonitorLevelGauge.drawReadout(
                     Text("\(MonitorLevelGauge.label(x)) / \(MonitorLevelGauge.label(y))")
                         .font(MonitorTheme.font(10, weight: .semibold)).monospacedDigit()
                         .foregroundStyle(tint),
-                    at: CGPoint(x: mid.x, y: 6))
+                    at: CGPoint(x: mid.x, y: 6), in: &context)
                 context.fill(
                     Path(ellipseIn: CGRect(x: mid.x - r, y: mid.y - r, width: 2 * r, height: 2 * r)),
                     with: .color(MonitorLevelGauge.bandFill))
@@ -130,7 +137,6 @@
                     with: .color(tint), lineWidth: 2)
             }
             .frame(width: 2 * Self.radius + 16, height: 2 * Self.radius + 32)
-            .monitorReadoutShadow()
         }
     }
 #endif

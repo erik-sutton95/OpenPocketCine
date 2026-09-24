@@ -18,8 +18,8 @@ separate iOS and Android lists.
 ### Added
 
 - **LEVEL** View Assist on iOS and Android: roll and tilt gauges against
-  gravity from the camera's own attitude sensor, drawn like the EV meter (tilt
-  on the right edge above the joystick, roll along the bottom), with a round bubble for
+  gravity from the camera's own attitude sensor, laid out like a Nikon Z virtual
+  horizon (roll along the bottom, tilt right of centre), with a round bubble for
   top-down and straight-up shots. Shows **No level data** instead of
   a false level when attitude stops.
 - Gimbal drawer **Double-tap**: keep **Recenter**, or choose **Level** so a

@@ -34,17 +34,13 @@ final class LevelAssistTests: XCTestCase {
             XCTAssertTrue(visible.contains(frames.roll), "\(feed)")
             XCTAssertTrue(visible.contains(frames.tilt), "\(feed)")
             XCTAssertEqual(frames.tilt.width, MonitorLevelGauge.thickness)
-            let ev = CameraEVMeter.frame(in: visible)
-            XCTAssertEqual(frames.tilt.maxX, visible.maxX - 6, "mirrors EV onto the right edge")
-            XCTAssertEqual(frames.tilt.minY, ev.minY)
-            XCTAssertEqual(frames.tilt.size, ev.size)
-            // Joystick cluster in the lower right: move up before shortening, like EV and the toolbar.
-            let cluster = CGRect(x: visible.maxX - 120, y: visible.midY, width: 110, height: visible.maxY - visible.midY)
-            let clear = LevelAssist.frames(feed: feed, viewport: viewport, portrait: portrait, avoiding: cluster).tilt
-            if !clear.isEmpty {
-                XCTAssertLessThanOrEqual(clear.maxY, cluster.minY - 12, "\(feed)")
-                XCTAssertEqual(clear.maxX, visible.maxX - 6)
-            }
+            // Tilt centres vertically, right of centre by the roll strip's drop below centre.
+            XCTAssertEqual(frames.tilt.width, MonitorLevelGauge.thickness)
+            XCTAssertEqual(frames.tilt.midY, visible.midY)
+            let offset = min(
+                frames.roll.midY - visible.midY, visible.maxX - 6 - MonitorLevelGauge.thickness / 2 - visible.midX)
+            XCTAssertEqual(frames.tilt.midX - visible.midX, offset, accuracy: 0.001)
+            XCTAssertLessThanOrEqual(frames.tilt.height, MonitorLevelGauge.maxLength)
             XCTAssertEqual(frames.roll.height, MonitorLevelGauge.thickness)
             XCTAssertEqual(frames.roll.midX, visible.midX)
             XCTAssertEqual(frames.roll.midY, visible.maxY - (portrait ? 30 : 104))

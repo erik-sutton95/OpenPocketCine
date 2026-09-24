@@ -172,7 +172,8 @@ gravity. The reading comes from the camera's own attitude sensor, not the
 phone.
 
 - Two slim meters, laid out like a Nikon Z virtual horizon, show roll along
-  the bottom of the picture and tilt at its right edge, above the joystick. A
+  the bottom of the picture and tilt right of centre, the same distance from
+  the middle of the picture as the roll meter. A
   short bar crosses a dark band to show the angle (full scale ±8°), with small
   notches marking level. The line, bar and number turn green within 0.6° of
   level.

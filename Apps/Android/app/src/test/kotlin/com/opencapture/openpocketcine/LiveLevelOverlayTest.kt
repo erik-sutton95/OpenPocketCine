@@ -10,7 +10,7 @@ class LiveLevelOverlayTest {
     private fun ChromeRect.inside(o: ChromeRect) = minX >= o.minX && maxX <= o.maxX && minY >= o.minY && maxY <= o.maxY
 
     @Test
-    fun evStripsStayOnTheVisibleFeedWithTiltMirroredOntoTheRight() {
+    fun stripsSitEquidistantFromTheFeedCentre() {
         val viewport = ChromeRect(0f, 0f, 390f, 844f)
         for ((feed, portrait) in listOf(
             ChromeRect(0f, 0f, 844f, 390f) to false,
@@ -19,21 +19,16 @@ class LiveLevelOverlayTest {
         )) {
             val visible = LiveLevel.visible(feed, viewport)
             val frames = LiveLevel.frames(feed, viewport, portrait)
-            val ev = assertNotNull(CameraExposureMeter.frame(visible, PocketDispMode.LIVE))
             assertTrue(frames.roll.inside(visible), "$feed")
-            val tilt = assertNotNull(frames.tilt)
-            assertEquals(visible.maxX - 6f, tilt.maxX, "mirrors EV onto the right edge")
-            assertEquals(ev.y, tilt.y)
-            assertEquals(ev.height, tilt.height)
+            val tilt = frames.tilt
+            assertTrue(tilt.inside(visible), "$feed")
+            assertEquals(LiveLevel.THICKNESS, tilt.width)
+            assertEquals(visible.midY, tilt.midY, 0.001f)
+            val offset = minOf(frames.roll.midY - visible.midY, visible.maxX - 6f - LiveLevel.THICKNESS / 2f - visible.midX)
+            assertEquals(offset, tilt.midX - visible.midX, 0.001f)
             assertEquals(LiveLevel.THICKNESS, frames.roll.height)
             assertEquals(visible.midX, frames.roll.midX)
             assertEquals(visible.maxY - if (portrait) 30f else 104f, frames.roll.midY)
-            // Joystick cluster in the lower right: move up before shortening.
-            val cluster = ChromeRect(visible.maxX - 120f, visible.midY, 110f, visible.maxY - visible.midY)
-            LiveLevel.frames(feed, viewport, portrait, cluster).tilt?.let { clear ->
-                assertTrue(clear.maxY <= cluster.minY - 12f, "$feed")
-                assertEquals(visible.maxX - 6f, clear.maxX)
-            }
         }
     }
 

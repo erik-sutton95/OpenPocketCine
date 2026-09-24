@@ -480,9 +480,7 @@ struct LiveViewScreen: View {
                 FeedLevelView(
                     feed: meterFeed(layout),
                     viewport: CGRect(origin: .zero, size: layout.viewport),
-                    portrait: layout.viewport.height > layout.viewport.width,
-                    // Joystick, zoom chip and gimbal button share the lower right.
-                    avoiding: Self.cgRect(gimbalCluster(layout).bounds))
+                    portrait: layout.viewport.height > layout.viewport.width)
                     .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
             }
 
