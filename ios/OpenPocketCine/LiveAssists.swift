@@ -1599,18 +1599,26 @@ struct FeedSplitComparisonMarks: View {
 /// missing attitude shows `No level data` and never reads green.
 enum LevelAssist {
     static let refresh: TimeInterval = 0.1
-    static let worldCaption = "WORLD"
-    static let bubbleSpanDeg = 10.0
-    static let bubbleRadius: CGFloat = 64
-    static let threshold = 0.6
+    /// Gap between the EV strip and the tilt strip when both are on.
+    static let besideEV: CGFloat = MonitorLevelGauge.thickness + 6
 
-    /// OpenZCine #47: seat against the on-screen part of the feed.
-    static func seats(feed: CGRect, viewport: CGRect, portrait: Bool) -> (roll: CGPoint, tilt: CGPoint) {
+    /// EV-meter strips on the on-screen part of the feed (OpenZCine #47). Tilt
+    /// takes the EV meter's left-edge slot and toolbar avoidance (clear of the
+    /// right-hand joystick cluster), one strip over when EV is on; roll runs
+    /// along the bottom, lifted clear of the landscape / portrait chrome.
+    static func frames(
+        feed: CGRect, viewport: CGRect, portrait: Bool, avoiding: CGRect? = nil, evVisible: Bool = false
+    ) -> (roll: CGRect, tilt: CGRect) {
         var visible = feed.intersection(viewport)
         if visible.isNull || visible.isEmpty { visible = feed }
+        let t = MonitorLevelGauge.thickness
+        let tilt = CameraEVMeter.frame(in: visible, avoiding: avoiding)
+            .offsetBy(dx: evVisible ? besideEV : 0, dy: 0)
+        let rollWidth = max(0, min(MonitorLevelGauge.maxLength, visible.width - 24))
+        let rollMidY = visible.maxY - (portrait ? 30 : 104)
         return (
-            CGPoint(x: visible.midX, y: visible.maxY - (portrait ? 30 : 104)),
-            CGPoint(x: visible.maxX - 44, y: visible.midY)
+            CGRect(x: visible.midX - rollWidth / 2, y: rollMidY - t / 2, width: rollWidth, height: t),
+            tilt
         )
     }
 
@@ -1627,6 +1635,8 @@ struct FeedLevelView: View {
     let feed: CGRect
     let viewport: CGRect
     let portrait: Bool
+    var avoiding: CGRect?
+    var evVisible = false
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -1649,33 +1659,36 @@ struct FeedLevelView: View {
 
     @ViewBuilder
     private func content(_ mode: LevelReading.Mode) -> some View {
-        let seats = LevelAssist.seats(feed: feed, viewport: viewport, portrait: portrait)
+        let frames = LevelAssist.frames(
+            feed: feed, viewport: viewport, portrait: portrait, avoiding: avoiding, evVisible: evVisible)
         switch mode {
         case .bubble(let x, let y):
             let visible = feed.intersection(viewport).isNull ? feed : feed.intersection(viewport)
-            ZStack {
-                LevelBubble(x: x, y: y)
-                LevelCaption(text: LevelAssist.worldCaption)
-                    .offset(y: LevelAssist.bubbleRadius + 30)
-            }
-            .position(x: visible.midX, y: visible.midY)
+            MonitorLevelBubble(xDeg: x, yDeg: y)
+                .position(x: visible.midX, y: visible.midY)
         case .gauges(let roll, let tilt):
-            gauges(roll: roll, tilt: tilt, seats: seats, caption: LevelAssist.worldCaption)
+            strips(roll: roll, tilt: tilt, frames: frames, caption: nil)
         case .unavailable:
-            gauges(roll: nil, tilt: nil, seats: seats, caption: WorldLevelSnap.noLevelData)
+            strips(roll: nil, tilt: nil, frames: frames, caption: WorldLevelSnap.noLevelData)
         }
     }
 
-    private func gauges(roll: Double?, tilt: Double?, seats: (roll: CGPoint, tilt: CGPoint), caption: String)
+    private func strips(roll: Double?, tilt: Double?, frames: (roll: CGRect, tilt: CGRect), caption: String?)
         -> some View
     {
         ZStack {
-            LevelAxisGauge(orientation: .horizontal, value: roll)
-                .position(seats.roll)
-            LevelCaption(text: caption)
-                .position(x: seats.roll.x, y: seats.roll.y + 20)
-            LevelAxisGauge(orientation: .vertical, value: tilt)
-                .position(seats.tilt)
+            MonitorLevelGauge(axis: .horizontal, value: roll)
+                .frame(width: frames.roll.width, height: frames.roll.height)
+                .position(x: frames.roll.midX, y: frames.roll.midY)
+            if let caption {
+                LevelCaption(text: caption)
+                    .position(x: frames.roll.midX, y: frames.roll.maxY + 6)
+            }
+            if !frames.tilt.isEmpty {
+                MonitorLevelGauge(axis: .vertical, value: tilt)
+                    .frame(width: frames.tilt.width, height: frames.tilt.height)
+                    .position(x: frames.tilt.midX, y: frames.tilt.midY)
+            }
         }
     }
 }
@@ -1685,189 +1698,11 @@ private struct LevelCaption: View {
 
     var body: some View {
         Text(text)
-            .font(MonitorTheme.font(9, weight: .semibold))
+            .font(MonitorTheme.font(8, weight: .medium))
             .kerning(0.5)
             .foregroundStyle(LiveDesign.muted)
-            .shadow(color: .black.opacity(0.8), radius: 1.5, y: 0.5)
+            .monitorReadoutShadow()
             .fixedSize()
-    }
-}
-
-/// Lens offset from plumb: ±10° ring, 5° inner ring, bead toward the high side.
-private struct LevelBubble: View {
-    let x: Double
-    let y: Double
-
-    var body: some View {
-        let r = LevelAssist.bubbleRadius
-        let span = LevelAssist.bubbleSpanDeg
-        let distance = (x * x + y * y).squareRoot()
-        let isLevel = distance < LevelAssist.threshold
-        let clamp = distance > span ? span / distance : 1
-        let tint = isLevel ? LiveDesign.good : LiveDesign.amber
-        ZStack {
-            Canvas { ctx, size in
-                let mid = CGPoint(x: size.width / 2, y: size.height / 2)
-                ctx.stroke(
-                    Path(ellipseIn: CGRect(x: mid.x - r, y: mid.y - r, width: 2 * r, height: 2 * r)),
-                    with: .color(.white.opacity(0.22)), lineWidth: 2)
-                ctx.stroke(
-                    Path(ellipseIn: CGRect(x: mid.x - r / 2, y: mid.y - r / 2, width: r, height: r)),
-                    with: .color(.white.opacity(0.34)), lineWidth: 1)
-                var cross = Path()
-                cross.move(to: CGPoint(x: mid.x - 9, y: mid.y))
-                cross.addLine(to: CGPoint(x: mid.x + 9, y: mid.y))
-                cross.move(to: CGPoint(x: mid.x, y: mid.y - 9))
-                cross.addLine(to: CGPoint(x: mid.x, y: mid.y + 9))
-                ctx.stroke(cross, with: .color(.white.opacity(0.75)), lineWidth: 2)
-            }
-            .frame(width: 2 * r + 4, height: 2 * r + 4)
-            Circle()
-                .fill(tint)
-                .frame(width: 13, height: 13)
-                .overlay(Circle().stroke(.black.opacity(0.45), lineWidth: 2))
-                .shadow(color: .black.opacity(0.5), radius: 3)
-                .offset(x: CGFloat(x * clamp / span) * r, y: -CGFloat(y * clamp / span) * r)
-            Text(String(format: "%+.1f° / %+.1f°", abs(x) < 0.05 ? 0 : x, abs(y) < 0.05 ? 0 : y))
-                .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
-                .foregroundStyle(isLevel ? LiveDesign.good : LiveDesign.text.opacity(0.85))
-                .fixedSize()
-                .offset(y: r + 14)
-        }
-        .animation(.easeOut(duration: 0.12), value: isLevel)
-        .animation(.easeOut(duration: 0.09), value: x)
-        .animation(.easeOut(duration: 0.09), value: y)
-    }
-}
-
-private struct LevelAxisGauge: View {
-    enum Orientation { case horizontal, vertical }
-    let orientation: Orientation
-    /// `nil` is no level data: bare track, `--`, never green.
-    let value: Double?
-
-    private let span = 84.0
-    private let maxAngle = 8.0
-    private let tickStep = 2.0
-    private let threshold = 0.6
-
-    private var isHorizontal: Bool { orientation == .horizontal }
-    private var reading: Double { value ?? 0 }
-    private var isLevel: Bool { value.map { abs($0) < threshold } ?? false }
-    private var tint: Color { isLevel ? LiveDesign.good : LiveDesign.amber }
-    private var beadOffset: CGFloat { CGFloat(max(-1, min(1, reading / maxAngle)) * span) }
-
-    private var urgency: Int {
-        switch abs(reading) {
-        case ..<(maxAngle / 3): 1
-        case ..<(2 * maxAngle / 3): 2
-        default: 3
-        }
-    }
-
-    var body: some View {
-        let trackLen = CGFloat(span * 2 + 28)
-        ZStack {
-            graduations
-                .frame(
-                    width: isHorizontal ? trackLen : 26,
-                    height: isHorizontal ? 26 : trackLen)
-            if value != nil, !isLevel { chevrons }
-            if value != nil { bead }
-            readout
-        }
-        .animation(.easeOut(duration: 0.12), value: isLevel)
-        .animation(.easeOut(duration: 0.09), value: reading)
-    }
-
-    private var graduations: some View {
-        Canvas { ctx, size in
-            let mid = CGPoint(x: size.width / 2, y: size.height / 2)
-            var base = Path()
-            if isHorizontal {
-                base.move(to: CGPoint(x: mid.x - CGFloat(span), y: mid.y))
-                base.addLine(to: CGPoint(x: mid.x + CGFloat(span), y: mid.y))
-            } else {
-                base.move(to: CGPoint(x: mid.x, y: mid.y - CGFloat(span)))
-                base.addLine(to: CGPoint(x: mid.x, y: mid.y + CGFloat(span)))
-            }
-            ctx.stroke(base, with: .color(.white.opacity(0.22)), lineWidth: 2)
-
-            var deg = -maxAngle
-            while deg <= maxAngle + 0.001 {
-                let t = CGFloat(deg / maxAngle * span)
-                let centre = abs(deg) < 0.001
-                let half: CGFloat = centre ? 9 : 5
-                var tick = Path()
-                if isHorizontal {
-                    tick.move(to: CGPoint(x: mid.x + t, y: mid.y - half))
-                    tick.addLine(to: CGPoint(x: mid.x + t, y: mid.y + half))
-                } else {
-                    tick.move(to: CGPoint(x: mid.x - half, y: mid.y - t))
-                    tick.addLine(to: CGPoint(x: mid.x + half, y: mid.y - t))
-                }
-                ctx.stroke(
-                    tick, with: .color(.white.opacity(centre ? 0.75 : 0.34)),
-                    lineWidth: centre ? 2 : 1)
-                deg += tickStep
-            }
-        }
-    }
-
-    private var bead: some View {
-        Circle()
-            .fill(tint)
-            .frame(width: 13, height: 13)
-            .overlay(Circle().stroke(.black.opacity(0.45), lineWidth: 2))
-            .shadow(color: .black.opacity(0.5), radius: 3)
-            .offset(
-                x: isHorizontal ? beadOffset : 0,
-                y: isHorizontal ? 0 : -beadOffset)
-    }
-
-    private var chevrons: some View {
-        let toNegative = reading > 0
-        let icon: OpcIcon =
-            isHorizontal
-            ? (toNegative ? .chevronLeft : .chevronRight)
-            : (toNegative ? .chevronDown : .chevronUp)
-        let gap: CGFloat = 16
-        let sign = CGFloat(reading > 0 ? 1 : -1)
-        return Group {
-            if isHorizontal {
-                HStack(spacing: -2) {
-                    ForEach(Array(0..<urgency), id: \.self) { i in chevronGlyph(icon, index: i) }
-                }
-            } else {
-                VStack(spacing: -2) {
-                    ForEach(Array(0..<urgency), id: \.self) { i in chevronGlyph(icon, index: i) }
-                }
-            }
-        }
-        .offset(
-            x: isHorizontal ? beadOffset - sign * gap : 0,
-            y: isHorizontal ? 0 : -beadOffset + sign * gap)
-    }
-
-    private func chevronGlyph(_ icon: OpcIcon, index: Int) -> some View {
-        icon
-            .frame(width: 10, height: 10)
-            .foregroundStyle(LiveDesign.amber)
-            .opacity(1.0 - Double(index) * 0.22)
-    }
-
-    private var readout: some View {
-        let text = value.map { String(format: "%+.1f°", abs($0) < 0.05 ? 0 : $0) } ?? "--"
-        return Text(text)
-            .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
-            .foregroundStyle(
-                value == nil
-                    ? LiveDesign.muted : isLevel ? LiveDesign.good : LiveDesign.text.opacity(0.85)
-            )
-            .fixedSize()
-            .offset(
-                x: isHorizontal ? 0 : -42,
-                y: isHorizontal ? -24 : 0)
     }
 }
 

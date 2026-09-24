@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -21,21 +22,28 @@ final class LevelAssistTests: XCTestCase {
         XCTAssertTrue(restored.level)
     }
 
-    func testGaugeSeatsStayOnTheVisibleFeed() {
+    func testEVStripsStayOnTheVisibleFeed() {
         let viewport = CGRect(x: 0, y: 0, width: 390, height: 844)
         for (feed, portrait) in [
             (CGRect(x: 0, y: 0, width: 844, height: 390), false),
             (CGRect(x: -200, y: 120, width: 790, height: 444), true),
             (CGRect(x: 0, y: 200, width: 390, height: 219), true),
         ] {
-            let seats = LevelAssist.seats(feed: feed, viewport: viewport, portrait: portrait)
+            let frames = LevelAssist.frames(feed: feed, viewport: viewport, portrait: portrait)
             let visible = feed.intersection(viewport)
-            XCTAssertTrue(visible.contains(seats.roll), "\(feed)")
-            XCTAssertTrue(visible.contains(seats.tilt), "\(feed)")
-            XCTAssertEqual(seats.roll.x, visible.midX)
-            XCTAssertEqual(seats.tilt.x, visible.maxX - 44)
-            XCTAssertEqual(seats.roll.y, visible.maxY - (portrait ? 30 : 104))
+            XCTAssertTrue(visible.contains(frames.roll), "\(feed)")
+            XCTAssertTrue(visible.contains(frames.tilt), "\(feed)")
+            XCTAssertEqual(frames.tilt.width, MonitorLevelGauge.thickness)
+            XCTAssertEqual(frames.tilt, CameraEVMeter.frame(in: visible), "tilt takes the EV slot")
+            let beside = LevelAssist.frames(feed: feed, viewport: viewport, portrait: portrait, evVisible: true).tilt
+            XCTAssertEqual(beside.minX, CameraEVMeter.frame(in: visible).maxX + 6, "one strip right of EV")
+            XCTAssertEqual(frames.roll.height, MonitorLevelGauge.thickness)
+            XCTAssertEqual(frames.roll.midX, visible.midX)
+            XCTAssertEqual(frames.roll.midY, visible.maxY - (portrait ? 30 : 104))
         }
+        XCTAssertEqual(MonitorLevelGauge.label(nil), "—")
+        XCTAssertEqual(MonitorLevelGauge.label(0.04), "+0.0°")
+        XCTAssertEqual(MonitorLevelGauge.label(-2.35), "-2.4°")
     }
 }
 

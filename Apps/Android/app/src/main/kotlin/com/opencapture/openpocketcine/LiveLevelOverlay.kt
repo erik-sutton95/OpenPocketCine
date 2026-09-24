@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.monitorui.monitorReadoutShadow
 import com.opencapture.openpocketcine.session.LevelMode
 import com.opencapture.openpocketcine.session.LevelReading
 import com.opencapture.openpocketcine.session.WorldLevelSnap
@@ -32,17 +33,20 @@ import kotlinx.coroutines.delay
 
 /**
  * LEVEL: camera world attitude ([LevelReading]), not this phone. Mirrors iOS
- * `FeedLevelView`: OpenZCine two-axis gauge (roll bottom, tilt right) and a
- * bubble near plumb. Stale or missing attitude reads `No level data`, never green.
+ * `MonitorLevelGauge`: the EV meter's language (slim white line, glow, number at
+ * the start, ±8 ends) with a bubble ring that turns green when level. Tilt takes
+ * the EV meter's left-edge slot, one strip over when EV is on; roll runs along the
+ * bottom; a bubble replaces both near plumb. No data reads `No level data`.
  */
 internal object LiveLevel {
     const val REFRESH_MS = 100L
-    const val WORLD_CAPTION = "WORLD"
+    const val THICKNESS = 28f
+    const val MAX_LENGTH = 180f
+    const val SPAN = 8.0
     const val THRESHOLD = 0.6
-    const val MAX_ANGLE = 8.0
-    const val AXIS_SPAN = 84f
     const val BUBBLE_SPAN = 10.0
-    const val BUBBLE_RADIUS = 64f
+    const val BUBBLE_RADIUS = 44f
+    val good = Color(0.18f, 0.78f, 0.42f)
 
     fun visible(feed: ChromeRect, viewport: ChromeRect): ChromeRect {
         val x = maxOf(feed.minX, viewport.minX)
@@ -52,21 +56,29 @@ internal object LiveLevel {
         return if (w <= 0f || h <= 0f) feed else ChromeRect(x, y, w, h)
     }
 
-    data class Seats(val roll: Pair<Float, Float>, val tilt: Pair<Float, Float>)
+    data class Frames(val roll: ChromeRect, val tilt: ChromeRect?)
 
-    /** OpenZCine #47: seat against the on-screen part of the feed (dp). */
-    fun seats(feed: ChromeRect, viewport: ChromeRect, portrait: Boolean): Seats {
+    /** Strips in dp against the on-screen part of the feed (OpenZCine #47). */
+    fun frames(
+        feed: ChromeRect, viewport: ChromeRect, portrait: Boolean,
+        avoid: ChromeRect? = null, evVisible: Boolean = false,
+    ): Frames {
         val v = visible(feed, viewport)
-        return Seats(v.midX to v.maxY - if (portrait) 30f else 104f, v.maxX - 44f to v.midY)
+        val tilt = CameraExposureMeter.frame(v, PocketDispMode.LIVE, avoid)
+            ?.let { if (evVisible) ChromeRect(it.x + THICKNESS + 6f, it.y, it.width, it.height) else it }
+        val rollWidth = minOf(MAX_LENGTH, v.width - 24f).coerceAtLeast(0f)
+        val rollMidY = v.maxY - if (portrait) 30f else 104f
+        return Frames(ChromeRect(v.midX - rollWidth / 2f, rollMidY - THICKNESS / 2f, rollWidth, THICKNESS), tilt)
     }
+
+    fun label(value: Double?): String =
+        if (value == null) "—" else String.format(Locale.ROOT, "%+.1f°", if (abs(value) < 0.05) 0.0 else value)
 
     fun accessibilityLabel(mode: LevelMode): String = when (mode) {
         LevelMode.Unavailable -> "Level, ${WorldLevelSnap.NO_LEVEL_DATA}"
         is LevelMode.Gauges -> String.format(Locale.ROOT, "Level, roll %+.1f°, tilt %+.1f°", mode.rollDeg, mode.tiltDeg)
         is LevelMode.Bubble -> String.format(Locale.ROOT, "Level, off plumb %+.1f° / %+.1f°", mode.xDeg, mode.yDeg)
     }
-
-    fun format(value: Double): String = String.format(Locale.ROOT, "%+.1f°", if (abs(value) < 0.05) 0.0 else value)
 }
 
 @Composable
@@ -77,6 +89,8 @@ internal fun LiveLevelOverlay(
     viewport: ChromeRect,
     portrait: Boolean,
     modifier: Modifier = Modifier,
+    avoid: ChromeRect? = null,
+    evVisible: Boolean = false,
 ) {
     var mode by remember { mutableStateOf<LevelMode>(LevelMode.Unavailable) }
     LaunchedEffect(reading, viewFlip) {
@@ -86,108 +100,96 @@ internal fun LiveLevelOverlay(
         }
     }
     val measurer = rememberTextMeasurer()
-    Canvas(modifier.fillMaxSize().semantics { contentDescription = LiveLevel.accessibilityLabel(mode) }) {
-        val seats = LiveLevel.seats(feed, viewport, portrait)
-        fun at(p: Pair<Float, Float>) = Offset(p.first.dp.toPx(), p.second.dp.toPx())
+    Canvas(
+        modifier.fillMaxSize().monitorReadoutShadow()
+            .semantics { contentDescription = LiveLevel.accessibilityLabel(mode) },
+    ) {
+        val frames = LiveLevel.frames(feed, viewport, portrait, avoid, evVisible)
         when (val m = mode) {
             is LevelMode.Bubble -> {
                 val v = LiveLevel.visible(feed, viewport)
-                val centre = Offset(v.midX.dp.toPx(), v.midY.dp.toPx())
-                drawBubble(centre, m.xDeg, m.yDeg, measurer)
-                caption(measurer, LiveLevel.WORLD_CAPTION, Offset(centre.x, centre.y + (LiveLevel.BUBBLE_RADIUS + 30f).dp.toPx()))
+                drawBubble(Offset(v.midX.dp.toPx(), v.midY.dp.toPx()), m.xDeg, m.yDeg, measurer)
             }
             is LevelMode.Gauges -> {
-                drawAxis(at(seats.roll), horizontal = true, m.rollDeg, measurer)
-                drawAxis(at(seats.tilt), horizontal = false, m.tiltDeg, measurer)
-                caption(measurer, LiveLevel.WORLD_CAPTION, at(seats.roll) + Offset(0f, 20f.dp.toPx()))
+                drawStrip(frames.roll, vertical = false, m.rollDeg, measurer)
+                frames.tilt?.let { drawStrip(it, vertical = true, m.tiltDeg, measurer) }
             }
             LevelMode.Unavailable -> {
-                drawAxis(at(seats.roll), horizontal = true, null, measurer)
-                drawAxis(at(seats.tilt), horizontal = false, null, measurer)
-                caption(measurer, WorldLevelSnap.NO_LEVEL_DATA, at(seats.roll) + Offset(0f, 20f.dp.toPx()))
+                drawStrip(frames.roll, vertical = false, null, measurer)
+                frames.tilt?.let { drawStrip(it, vertical = true, null, measurer) }
+                text(measurer, WorldLevelSnap.NO_LEVEL_DATA,
+                    Offset(frames.roll.midX.dp.toPx(), (frames.roll.maxY + 6f).dp.toPx()), LiveDesign.muted, 8f)
             }
         }
     }
 }
 
-private fun DrawScope.readout(measurer: TextMeasurer, text: String, centre: Offset, color: Color, size: Float = 11f) {
-    val style = TextStyle(color = color, fontSize = size.sp, fontFamily = OpcFonts.sora, fontWeight = FontWeight.SemiBold)
-    val layout = measurer.measure(text, style)
+private fun DrawScope.text(measurer: TextMeasurer, s: String, centre: Offset, color: Color, size: Float, bold: Boolean = false) {
+    val style = TextStyle(color = color, fontSize = size.sp, fontFamily = OpcFonts.sora,
+        fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Medium)
+    val layout = measurer.measure(s, style)
     drawText(layout, topLeft = Offset(centre.x - layout.size.width / 2f, centre.y - layout.size.height / 2f))
 }
 
-private fun DrawScope.caption(measurer: TextMeasurer, text: String, centre: Offset) =
-    readout(measurer, text, centre, LiveDesign.muted, 9f)
-
-private fun DrawScope.drawBead(centre: Offset, tint: Color) {
-    drawCircle(Color.Black.copy(alpha = 0.5f), radius = 8f.dp.toPx(), center = centre)
-    drawCircle(tint, radius = 6.5f.dp.toPx(), center = centre)
-    drawCircle(Color.Black.copy(alpha = 0.45f), radius = 6.5f.dp.toPx(), center = centre, style = Stroke(2f.dp.toPx()))
+private fun DrawScope.marker(c: Offset, tint: Color, level: Boolean) {
+    drawCircle(tint, radius = 4.5f.dp.toPx(), center = c, style = Stroke(1.2f.dp.toPx()))
+    if (level) drawCircle(tint, radius = 2f.dp.toPx(), center = c)
 }
 
-/** OpenZCine `drawGaugeAxis`; `value == null` draws the bare track with `--`. */
-private fun DrawScope.drawAxis(seat: Offset, horizontal: Boolean, value: Double?, measurer: TextMeasurer) {
-    val span = LiveLevel.AXIS_SPAN.dp.toPx()
-    fun along(t: Float) = if (horizontal) Offset(seat.x + t, seat.y) else Offset(seat.x, seat.y - t)
-    drawLine(Color.White.copy(alpha = 0.22f), along(-span), along(span), 2f.dp.toPx())
-    var deg = -LiveLevel.MAX_ANGLE
-    while (deg <= LiveLevel.MAX_ANGLE + 0.001) {
-        val c = along((deg / LiveLevel.MAX_ANGLE).toFloat() * span)
-        val centre = abs(deg) < 0.001
-        val half = (if (centre) 9f else 5f).dp.toPx()
-        val a = if (horizontal) Offset(c.x, c.y - half) else Offset(c.x - half, c.y)
-        val b = if (horizontal) Offset(c.x, c.y + half) else Offset(c.x + half, c.y)
-        drawLine(Color.White.copy(alpha = if (centre) 0.75f else 0.34f), a, b, (if (centre) 2f else 1f).dp.toPx())
-        deg += 2.0
+/** iOS `MonitorLevelGauge`: layout in dp inside [rect]; positive reads up / right. */
+private fun DrawScope.drawStrip(rect: ChromeRect, vertical: Boolean, value: Double?, measurer: TextMeasurer) {
+    if (rect.isEmpty) return
+    val white = LiveDesign.text
+    val line = white.copy(alpha = 0.8f)
+    val isLevel = value != null && abs(value) < LiveLevel.THRESHOLD
+    val tint = if (isLevel) LiveLevel.good else white
+    val length = if (vertical) rect.height else rect.width
+    val start = if (vertical) 34f else 22f
+    val end = maxOf(start, length - if (vertical) 18f else 22f)
+    val across = if (vertical) rect.width / 2f else rect.height - 8f
+    fun p(t: Float) = if (vertical) Offset((rect.x + across).dp.toPx(), (rect.y + t).dp.toPx())
+        else Offset((rect.x + t).dp.toPx(), (rect.y + across).dp.toPx())
+    fun position(deg: Double): Float {
+        val f = ((deg.coerceIn(-LiveLevel.SPAN, LiveLevel.SPAN) + LiveLevel.SPAN) / (2 * LiveLevel.SPAN)).toFloat()
+        return if (vertical) end - (end - start) * f else start + (end - start) * f
     }
-    val readoutAt = if (horizontal) Offset(seat.x, seat.y - 24f.dp.toPx()) else Offset(seat.x - 42f.dp.toPx(), seat.y)
-    if (value == null) {
-        readout(measurer, "--", readoutAt, LiveDesign.muted)
-        return
+    text(measurer, LiveLevel.label(value), Offset((rect.x + rect.width / 2f).dp.toPx(), (rect.y + 6f).dp.toPx()), tint, 10f, bold = true)
+    val ends = if (vertical) listOf("+8" to Offset(rect.width / 2f, 23f), "−8" to Offset(rect.width / 2f, rect.height - 5f))
+        else listOf("−8" to Offset(9f, across), "+8" to Offset(rect.width - 9f, across))
+    for ((label, at) in ends) text(measurer, label, Offset((rect.x + at.x).dp.toPx(), (rect.y + at.y).dp.toPx()), white, 8f)
+    val stroke = 1f.dp.toPx()
+    val m = value?.let { position(it) }
+    if (m == null) {
+        drawLine(line, p(start), p(end), stroke)
+    } else {
+        if (minOf(m - 9f, end) > start) drawLine(line, p(start), p(minOf(m - 9f, end)), stroke)
+        if (end > maxOf(m + 9f, start)) drawLine(line, p(maxOf(m + 9f, start)), p(end), stroke)
     }
-    val isLevel = abs(value) < LiveLevel.THRESHOLD
-    val tint = if (isLevel) LiveDesign.good else LiveDesign.amber
-    val bead = along((value / LiveLevel.MAX_ANGLE).coerceIn(-1.0, 1.0).toFloat() * span)
-    drawBead(bead, tint)
-    if (!isLevel) {
-        val sign = if (value > 0) 1f else -1f
-        val urgency = when (abs(value)) {
-            in 0.0..<LiveLevel.MAX_ANGLE / 3 -> 1
-            in LiveLevel.MAX_ANGLE / 3..<LiveLevel.MAX_ANGLE * 2 / 3 -> 2
-            else -> 3
-        }
-        val half = 3f.dp.toPx()
-        repeat(urgency) { i ->
-            val t = -sign * (16f + 8f * i).dp.toPx()
-            val c = if (horizontal) Offset(bead.x + t, bead.y) else Offset(bead.x, bead.y - t)
-            val color = LiveDesign.amber.copy(alpha = 1f - i * 0.22f)
-            // Chevron points back toward level (toward the centre tick).
-            val tip = if (horizontal) Offset(c.x - sign * half, c.y) else Offset(c.x, c.y + sign * half)
-            val w1 = if (horizontal) Offset(c.x + sign * half, c.y - half) else Offset(c.x - half, c.y - sign * half)
-            val w2 = if (horizontal) Offset(c.x + sign * half, c.y + half) else Offset(c.x + half, c.y - sign * half)
-            drawLine(color, w1, tip, 1.5f.dp.toPx())
-            drawLine(color, tip, w2, 1.5f.dp.toPx())
-        }
-    }
-    readout(measurer, LiveLevel.format(value), readoutAt, if (isLevel) LiveDesign.good else LiveDesign.text.copy(alpha = 0.85f))
+    val z = p(position(0.0))
+    val half = 5f.dp.toPx()
+    if (vertical) drawLine(line, Offset(z.x - half, z.y), Offset(z.x + half, z.y), stroke)
+    else drawLine(line, Offset(z.x, z.y - half), Offset(z.x, z.y + half), stroke)
+    if (m != null) marker(p(m), tint, isLevel)
 }
 
-/** Lens offset from plumb: ±10° ring, 5° inner ring, bead toward the high side. */
+/** iOS `MonitorLevelBubble`: thin ±10° ring, centre cross, bubble ring toward the high side. */
 private fun DrawScope.drawBubble(centre: Offset, x: Double, y: Double, measurer: TextMeasurer) {
+    val white = LiveDesign.text
+    val line = white.copy(alpha = 0.8f)
     val r = LiveLevel.BUBBLE_RADIUS.dp.toPx()
-    drawCircle(Color.White.copy(alpha = 0.22f), radius = r, center = centre, style = Stroke(2f.dp.toPx()))
-    drawCircle(Color.White.copy(alpha = 0.34f), radius = r / 2, center = centre, style = Stroke(1f.dp.toPx()))
-    val arm = 9f.dp.toPx()
-    drawLine(Color.White.copy(alpha = 0.75f), Offset(centre.x - arm, centre.y), Offset(centre.x + arm, centre.y), 2f.dp.toPx())
-    drawLine(Color.White.copy(alpha = 0.75f), Offset(centre.x, centre.y - arm), Offset(centre.x, centre.y + arm), 2f.dp.toPx())
+    val mid = Offset(centre.x, centre.y + 8f.dp.toPx())
     val distance = sqrt(x * x + y * y)
     val isLevel = distance < LiveLevel.THRESHOLD
+    val tint = if (isLevel) LiveLevel.good else white
+    text(measurer, "${LiveLevel.label(x)} / ${LiveLevel.label(y)}", Offset(mid.x, mid.y - r - 18f.dp.toPx()), tint, 10f, bold = true)
+    val stroke = 1f.dp.toPx()
+    drawCircle(line, radius = r, center = mid, style = Stroke(stroke))
+    val arm = 5f.dp.toPx()
+    drawLine(line, Offset(mid.x - arm, mid.y), Offset(mid.x + arm, mid.y), stroke)
+    drawLine(line, Offset(mid.x, mid.y - arm), Offset(mid.x, mid.y + arm), stroke)
     val clamp = if (distance > LiveLevel.BUBBLE_SPAN) LiveLevel.BUBBLE_SPAN / distance else 1.0
-    val bead = Offset(
-        centre.x + (x * clamp / LiveLevel.BUBBLE_SPAN).toFloat() * r,
-        centre.y - (y * clamp / LiveLevel.BUBBLE_SPAN).toFloat() * r,
+    marker(
+        Offset(mid.x + (x * clamp / LiveLevel.BUBBLE_SPAN).toFloat() * r, mid.y - (y * clamp / LiveLevel.BUBBLE_SPAN).toFloat() * r),
+        tint, isLevel,
     )
-    drawBead(bead, if (isLevel) LiveDesign.good else LiveDesign.amber)
-    readout(measurer, "${LiveLevel.format(x)} / ${LiveLevel.format(y)}", Offset(centre.x, centre.y + r + 14f.dp.toPx()),
-        if (isLevel) LiveDesign.good else LiveDesign.text.copy(alpha = 0.85f))
 }

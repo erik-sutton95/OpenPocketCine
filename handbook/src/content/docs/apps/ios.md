@@ -169,15 +169,16 @@ files and scope measurements keep the original image.
 
 Enable **LEVEL** in View Assist to see how level the picture is against
 gravity. The reading comes from the camera's own attitude sensor, not the
-phone, and is labelled **WORLD**.
+phone.
 
-- Two gauges show roll along the bottom of the picture and tilt on the right
-  edge. Each covers ±8° with ticks every 2°. The bead turns green within 0.6°
-  of level; otherwise it is amber and chevrons point back toward level.
+- Two slim meters in the EV meter's style show roll along the bottom of the
+  picture and tilt at its left edge, beside the EV meter when both are on. Each
+  spans ±8° with a centre mark. The ring and number turn green within 0.6° of
+  level.
 - Within about 25° of pointing straight down or up, the gauges give way to a
   round bubble that shows how far the lens is from plumb. Use it for top-down
   shots.
-- If the camera stops reporting attitude, the gauges show `--` and
+- If the camera stops reporting attitude, the meters show a dash and
   **No level data**. They never turn green without data.
 
 Tap LEVEL again to hide it; the on/off choice is saved. LEVEL is not shown in

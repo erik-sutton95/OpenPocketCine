@@ -18,8 +18,9 @@ separate iOS and Android lists.
 ### Added
 
 - **LEVEL** View Assist on iOS and Android: roll and tilt gauges against
-  gravity from the camera's own attitude sensor, labelled WORLD, with a round
-  bubble for top-down and straight-up shots. Shows **No level data** instead of
+  gravity from the camera's own attitude sensor, drawn like the EV meter (tilt
+  beside it on the left edge, roll along the bottom), with a round bubble for
+  top-down and straight-up shots. Shows **No level data** instead of
   a false level when attitude stops.
 - Gimbal drawer **Double-tap**: keep **Recenter**, or choose **Level** so a
   joystick double-tap (and gamepad Circle/B) moves the lens to world level or

@@ -471,29 +471,18 @@ struct LiveViewScreen: View {
 
             if model.assist.isVisible(.evMeter) {
                 CameraEVMeterOverlay(
-                    feed: model.assist.isVisible(.desqueeze)
-                        ? DesqueezeAssist.presentationRect(
-                            sourceSize: CGSize(
-                                width: model.session.decoder.pictureAspect, height: 1),
-                            in: layout.onFeed, effects: model.assist.effects
-                        )
-                        .intersection(layout.onFeed)
-                        : layout.onFeed,
-                    avoiding: model.chromeSectionMounts(.toolBar)
-                        ? FieldMonitorAssistPalette.visibleFrame(
-                            in: layout,
-                            toolCount: LiveAssistTool.toolbarCases.count
-                                + (model.session.status.isPhoto ? 0 : 1),
-                            expanded: assistsExpanded || assistsRevealing) : nil
+                    feed: meterFeed(layout), avoiding: meterAvoiding(layout)
                 )
                 .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
             }
 
             if model.assist.isVisible(.level) {
                 FeedLevelView(
-                    feed: layout.onFeed,
+                    feed: meterFeed(layout),
                     viewport: CGRect(origin: .zero, size: layout.viewport),
-                    portrait: layout.viewport.height > layout.viewport.width)
+                    portrait: layout.viewport.height > layout.viewport.width,
+                    avoiding: meterAvoiding(layout),
+                    evVisible: model.assist.isVisible(.evMeter))
                     .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
             }
 
@@ -1232,6 +1221,27 @@ enum LiveCanvasSpace {
 
 extension LiveViewScreen {
     /// One rectangle shared by all movable tools; full-canvas coordinates remain persisted.
+    /// Visible picture the EV and LEVEL strips seat against (de-squeezed when on).
+    private func meterFeed(_ layout: LiveMonitorLayout) -> CGRect {
+        model.assist.isVisible(.desqueeze)
+            ? DesqueezeAssist.presentationRect(
+                sourceSize: CGSize(width: model.session.decoder.pictureAspect, height: 1),
+                in: layout.onFeed, effects: model.assist.effects
+            )
+            .intersection(layout.onFeed)
+            : layout.onFeed
+    }
+
+    /// The View Assist toolbar the left-edge meters move up or shorten to clear.
+    private func meterAvoiding(_ layout: LiveMonitorLayout) -> CGRect? {
+        model.chromeSectionMounts(.toolBar)
+            ? FieldMonitorAssistPalette.visibleFrame(
+                in: layout,
+                toolCount: LiveAssistTool.toolbarCases.count
+                    + (model.session.status.isPhoto ? 0 : 1),
+                expanded: assistsExpanded || assistsRevealing) : nil
+    }
+
     private func scopeClearance(layout: LiveMonitorLayout) -> EdgeInsets {
         let portrait = layout.presentation?.portrait == true
         let floor =
