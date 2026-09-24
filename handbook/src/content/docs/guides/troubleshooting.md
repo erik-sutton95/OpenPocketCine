@@ -153,4 +153,3 @@ fails it names the likely cause:
 If you need MLO or isolation for other devices, add a second network for
 cameras on the same VLAN: 2.4 and 5 GHz, WPA2/WPA3, PMF optional, MLO and fast
 roaming off. Or use the **Hotspot** setup, which does not involve the router.
-
