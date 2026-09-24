@@ -1,4 +1,5 @@
 import Foundation
+import NetworkExtension
 
 /// Current Wi-Fi IPv4 path for cameras joined to the operator's network.
 enum SharedWiFiPath {
@@ -7,6 +8,38 @@ enum SharedWiFiPath {
         guard inet_pton(AF_INET, value, &address) == 1 else { return false }
         let first = UInt8(truncatingIfNeeded: UInt32(bigEndian: address.s_addr) >> 24)
         return first > 0 && first < 224 && first != 127
+    }
+
+    /// Joins this device to the operator's network and waits for its IPv4 address.
+    /// Shared by Multiview and a saved camera's Wi-Fi setup.
+    static func joinHost(ssid: String, password: String) async throws -> String? {
+        if await WiFiJoiner.currentSSID() != ssid {
+            let config =
+                password.isEmpty
+                ? NEHotspotConfiguration(ssid: ssid)
+                : NEHotspotConfiguration(ssid: ssid, passphrase: password, isWEP: false)
+            config.joinOnce = false
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
+                NEHotspotConfigurationManager.shared.apply(config) { error in
+                    if let error,
+                        (error as NSError).code
+                            != NEHotspotConfigurationError.alreadyAssociated.rawValue
+                    {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        }
+        let deadline = Date().addingTimeInterval(12)
+        while Date() < deadline {
+            if await WiFiJoiner.currentSSID() == ssid, address() != nil { break }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        guard await WiFiJoiner.currentSSID() == ssid else { return nil }
+        return address()
     }
 
     static func address(hotspot: Bool = false) -> String? {

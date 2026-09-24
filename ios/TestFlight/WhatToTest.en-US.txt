@@ -1,6 +1,6 @@
 New features
 
-- Your cameras: tap Add setup on a saved camera, enter this phone's Personal Hotspot name and password, and check the camera joins the hotspot and goes live.
-- Then tap that camera's Camera Wi-Fi chip and check it returns to its own Wi-Fi and connects as before.
-- Multiview's shared Wi-Fi join was reorganized internally: add two or more cameras and confirm Pocket 3, Pocket 4, Pocket 4 Pro and Nano still show preview and recover after an interruption.
-- Close Multiview and check each camera returns to its own Wi-Fi.
+- Your cameras: tap Add setup on a saved camera and choose Wi-Fi or Hotspot. Try both, including Scan with the camera, and check the camera goes live on that network.
+- While connecting, check the card's steps make sense. If a connect fails, try Edit setup, Try again and Connect over Camera Wi-Fi instead.
+- Afterwards tap the Camera Wi-Fi chip and check the camera returns to its own Wi-Fi. Action 6 owners: please try Add setup too.
+- Multiview's Wi-Fi join was reorganized internally: add two or more cameras and confirm preview still works and recovers, and that closing Multiview returns each camera to its own Wi-Fi.

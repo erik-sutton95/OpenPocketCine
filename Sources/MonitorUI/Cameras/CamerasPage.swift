@@ -24,6 +24,8 @@
         public var onConnectSetup: ((String, String) -> Void)?
         public var onAddSetup: ((String) -> Void)?
         public var onForgetSetup: ((String, String) -> Void)?
+        /// Camera id, `CameraConnectFailure.Action` id.
+        public var onFailureAction: ((String, String) -> Void)?
 
         @State private var renameItem: CameraListItem?
         @State private var removeItem: CameraListItem?
@@ -39,7 +41,8 @@
             onForget: ((String) -> Void)? = nil,
             onConnectSetup: ((String, String) -> Void)? = nil,
             onAddSetup: ((String) -> Void)? = nil,
-            onForgetSetup: ((String, String) -> Void)? = nil
+            onForgetSetup: ((String, String) -> Void)? = nil,
+            onFailureAction: ((String, String) -> Void)? = nil
         ) {
             self.brandName = brandName
             self.paired = paired
@@ -59,6 +62,7 @@
             self.onConnectSetup = onConnectSetup
             self.onAddSetup = onAddSetup
             self.onForgetSetup = onForgetSetup
+            self.onFailureAction = onFailureAction
         }
 
         @Environment(\.monitorWindowGeometry) private var windowGeometry
@@ -285,10 +289,14 @@
             if let onForgetSetup {
                 forgetSetup = { item, setup in if !busy { onForgetSetup(item.id, setup.id) } }
             }
+            var failureAction: (@MainActor @Sendable (CameraListItem, String) -> Void)?
+            if let onFailureAction {
+                failureAction = { item, action in if !busy { onFailureAction(item.id, action) } }
+            }
             let actions = CameraCatalogActions(
                 activate: { activate($0, saved: saved) }, cancel: { onCancel() },
                 rename: rename, remove: remove, connectSetup: connectSetup, addSetup: addSetup,
-                forgetSetup: forgetSetup)
+                forgetSetup: forgetSetup, failureAction: failureAction)
             return CameraCatalogRows.make(items, saved: saved, busy: busy, actions: actions)
         }
 
@@ -307,6 +315,7 @@
         var connectSetup: (@MainActor @Sendable (CameraListItem, CameraSetupChip) -> Void)? = nil
         var addSetup: (@MainActor @Sendable (CameraListItem) -> Void)? = nil
         var forgetSetup: (@MainActor @Sendable (CameraListItem, CameraSetupChip) -> Void)? = nil
+        var failureAction: (@MainActor @Sendable (CameraListItem, String) -> Void)? = nil
     }
 
     enum CameraCatalogRows {
@@ -393,10 +402,30 @@
                 if saved, let connect = actions.connectSetup, !item.setups.isEmpty {
                     setupChips(connect: connect)
                 }
+                if item.isBusy, !item.steps.isEmpty {
+                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                    // Four across when the card is wide (landscape, iPad); a list otherwise.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(item.steps) { step in
+                                CameraConnectStepView(step: step, vertical: true)
+                                    .frame(minWidth: 110, maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(item.steps) { CameraConnectStepView(step: $0, vertical: false) }
+                        }
+                    }
+                }
+                if let failure = item.failure, !item.isBusy {
+                    failureBanner(failure)
+                }
                 HStack(spacing: 7) {
-                    if item.isBusy {
+                    if item.isBusy, !item.steps.isEmpty {
+                        EmptyView()
+                    } else if item.isBusy {
                         CameraProgressLabel(title: item.status)
-                    } else {
+                    } else if item.failure == nil {
                         Text(item.status).font(MonitorTheme.font(9.5)).foregroundStyle(
                             item.isAvailable ? MonitorTheme.muted : MonitorTheme.faint
                         ).lineLimit(2)
@@ -416,17 +445,25 @@
                             ).frame(width: 36, height: 44)
                         }.disabled(busy).accessibilityLabel("Options for \(item.name)")
                     }
-                    Button {
-                        if item.isBusy { actions.cancel() } else { actions.activate(item) }
-                    } label: {
-                        Text(item.isBusy ? "Cancel" : item.actionTitle)
+                    if let failure = item.failure, !item.isBusy, let act = actions.failureAction {
+                        ForEach(failure.actions) { action in
+                            Button(action.title) { act(item, action.id) }
+                                .buttonStyle(CameraPageButtonStyle(primary: action.primary))
+                                .disabled(busy)
+                        }
+                    } else {
+                        Button {
+                            if item.isBusy { actions.cancel() } else { actions.activate(item) }
+                        } label: {
+                            Text(item.isBusy ? "Cancel" : item.actionTitle)
+                        }
+                        .buttonStyle(CameraPageButtonStyle(primary: item.isPrimary && !item.isBusy))
+                        .disabled(busy && !item.isBusy)
+                        .accessibilityLabel(
+                            item.isBusy
+                                ? "Cancel connecting to \(item.name)"
+                                : "\(item.actionTitle) \(item.name)")
                     }
-                    .buttonStyle(CameraPageButtonStyle(primary: item.isPrimary && !item.isBusy))
-                    .disabled(busy && !item.isBusy)
-                    .accessibilityLabel(
-                        item.isBusy
-                            ? "Cancel connecting to \(item.name)"
-                            : "\(item.actionTitle) \(item.name)")
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 13)
@@ -492,6 +529,32 @@
             }
         }
 
+        private func failureBanner(_ failure: CameraConnectFailure) -> some View {
+            let warning = MonitorTheme.linkHealthColor(.watch)
+            return HStack(alignment: .top, spacing: 12) {
+                MonitorIcon.triangleAlert.frame(width: 20, height: 20).foregroundStyle(warning)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(failure.title).font(MonitorTheme.font(13.5, weight: .semibold))
+                    Text(failure.message).font(MonitorTheme.font(11.5))
+                        .foregroundStyle(MonitorTheme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let link = failure.link, let act = actions.failureAction {
+                        Button(link.title) { act(item, link.id) }
+                            .font(MonitorTheme.font(12, weight: .semibold))
+                            .foregroundStyle(MonitorTheme.accent)
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                            .buttonStyle(.plain).disabled(busy)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14).padding(.top, 12)
+            .padding(.bottom, failure.link == nil ? 12 : 0)
+            .background(warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
+            .overlay(RoundedRectangle(cornerRadius: 11).stroke(warning.opacity(0.3), lineWidth: 1))
+            .accessibilityElement(children: .contain)
+        }
+
         private func chipLabel(_ title: String, active: Bool) -> some View {
             Text(title).font(MonitorTheme.font(11, weight: .semibold))
                 .foregroundStyle(active ? Color.white : MonitorTheme.muted)
@@ -507,6 +570,49 @@
                 )
                 // 34 pt chip, 44 pt tap target.
                 .padding(.vertical, 5).contentShape(Rectangle())
+        }
+    }
+
+    struct CameraConnectStepView: View {
+        let step: CameraConnectStep
+        let vertical: Bool
+
+        var body: some View {
+            let layout =
+                vertical
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+                : AnyLayout(HStackLayout(spacing: 12))
+            layout {
+                dot
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(step.title).font(MonitorTheme.font(12.5, weight: .medium))
+                        .foregroundStyle(step.state == .waiting ? MonitorTheme.muted : .white)
+                    Text(step.detail).font(MonitorTheme.font(10.5))
+                        .foregroundStyle(MonitorTheme.muted).lineLimit(2)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(
+                step.state == .done ? "Done" : step.state == .active ? "In progress" : "Waiting")
+        }
+
+        @ViewBuilder private var dot: some View {
+            switch step.state {
+            case .done:
+                MonitorIcon.check.frame(width: 12, height: 12)
+                    .foregroundStyle(MonitorTheme.linkHealthColor(.stable))
+                    .frame(width: 22, height: 22)
+                    .background(
+                        MonitorTheme.linkHealthColor(.stable).opacity(0.16), in: Circle())
+            case .active:
+                Circle().fill(MonitorTheme.accent).frame(width: 8, height: 8)
+                    .monitorPulse(period: MonitorMotion.scanPulseDuration)
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().stroke(MonitorTheme.accent, lineWidth: 2))
+            case .waiting:
+                Circle().stroke(Color.white.opacity(0.18), lineWidth: 2)
+                    .frame(width: 22, height: 22)
+            }
         }
     }
 #endif

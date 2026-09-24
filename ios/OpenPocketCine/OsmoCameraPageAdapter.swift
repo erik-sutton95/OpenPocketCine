@@ -17,14 +17,17 @@ enum OsmoCameraPageAdapter {
                 ? "Looking for camera…"
                 : model.session.setupProgress ?? model.session.phase.label
             let preferred = saved.preferredSetup
-            let network = preferred == .phoneHotspot ? saved.hotspotSSID : saved.lastSSID
+            let network = saved.ssid(for: preferred)
             let body = CameraModel.resolve(modelId: saved.modelId, name: saved.advertisedName)
+            let failure = connectFailure(model, saved: saved, busy: connecting)
             return CameraListItem(
                 id: saved.id.uuidString, name: saved.displayName,
                 subtitle: saved.modelName + (network.map { " · \($0)" } ?? ""),
                 badge: connecting
                     ? "CONNECTING"
-                    : saved.id == latest ? "LAST USED" : nearby ? "PAIRED" : "OFFLINE",
+                    : failure != nil
+                        ? "NOT CONNECTED"
+                        : saved.id == latest ? "LAST USED" : nearby ? "PAIRED" : "OFFLINE",
                 status: connecting
                     ? progress
                     : nearby ? "Nearby · ready to connect" : "Not found — power it on to reconnect",
@@ -32,12 +35,88 @@ enum OsmoCameraPageAdapter {
                 isBusy: connecting, isAvailable: nearby,
                 setups: saved.setups.map {
                     CameraSetupChip(
-                        id: $0.rawValue, title: $0.title, isActive: $0 == preferred,
-                        canForget: $0 == .phoneHotspot)
+                        id: $0.rawValue, title: chipTitle($0, saved: saved),
+                        isActive: $0
+                            == (connecting || failure != nil
+                                ? model.session.connectionSetup : preferred),
+                        canForget: $0.movesCamera)
                 },
-                // Hotspot provisioning reuses Multiview's captured preview profiles only.
-                canAddSetup: saved.hotspotSSID == nil && MulticamSupport.hasPreview(body))
+                // Every Osmo body answers the captured station sequence (#406).
+                canAddSetup: saved.setups.count < CameraConnectionSetup.allCases.count
+                    && MulticamSupport.appears(body),
+                steps: connecting ? connectSteps(model, saved: saved) : [],
+                failure: failure)
         }
+    }
+
+    static func chipTitle(_ setup: CameraConnectionSetup, saved: SavedCamera) -> String {
+        guard setup == .wifi, let ssid = saved.wifiSSID else { return setup.title }
+        return "Wi-Fi · \(ssid)"
+    }
+
+    /// Four steps on the connecting card: Bluetooth, network, find/handshake, picture.
+    static func connectSteps(_ model: AppModel, saved: SavedCamera) -> [CameraConnectStep] {
+        let session = model.session
+        let setup = session.connectionSetup
+        let network =
+            setup == .cameraWiFi ? "camera Wi-Fi" : saved.ssid(for: setup) ?? setup.title
+        let progress = session.setupProgress
+        let finding = progress?.hasPrefix("Finding") == true
+        let stage: Int
+        switch session.phase {
+        case .idle, .scanning, .failed, .connectingGatt, .pairing, .awaitingApproval: stage = 0
+        case .readingWifiCreds, .joiningWifi: stage = finding ? 2 : 1
+        case .openingDatalink: stage = 2
+        case .live: stage = 4
+        }
+        func state(_ index: Int) -> CameraConnectStep.State {
+            index < stage ? .done : index == stage ? .active : .waiting
+        }
+        let bluetooth: String
+        if session.phase == .awaitingApproval {
+            bluetooth = "Approve on the camera"
+        } else if session.phase == .scanning {
+            bluetooth = "Looking for the camera"
+        } else {
+            bluetooth = stage > 0 ? "Paired" : "Pairing"
+        }
+        return [
+            .init("Bluetooth link", detail: bluetooth, state: state(0)),
+            .init(
+                setup == .cameraWiFi ? "Join camera Wi-Fi" : "Camera joins \(network)",
+                detail: stage == 1
+                    ? progress ?? session.phase.label : stage > 1 ? "Joined" : "Next",
+                state: state(1)),
+            .init(
+                setup == .cameraWiFi ? "Open video link" : "Find the camera",
+                detail: setup == .cameraWiFi ? "Datalink handshake" : "Checks it is this camera",
+                state: state(2)),
+            .init("Live picture", detail: "Opens the monitor", state: state(3)),
+        ]
+    }
+
+    /// A failed connect stays on its card with the ways out, until the next connect.
+    static func connectFailure(_ model: AppModel, saved: SavedCamera, busy: Bool)
+        -> CameraConnectFailure?
+    {
+        guard !busy, case .failed(let reason) = model.session.phase,
+            model.session.connectionTargetID == saved.id
+        else { return nil }
+        let setup = model.session.connectionSetup
+        let message = StartupConnectionCopy.friendly(reason)
+        guard setup.movesCamera else {
+            return .init(
+                title: "Couldn’t connect over Camera Wi-Fi", message: message,
+                actions: [.init(id: "retry", title: "Try again", primary: true)])
+        }
+        return .init(
+            title: "Couldn’t connect over \(saved.ssid(for: setup) ?? setup.title)",
+            message: message,
+            actions: [
+                .init(id: "edit", title: "Edit setup"),
+                .init(id: "retry", title: "Try again", primary: true),
+            ],
+            link: .init(id: "cameraWiFi", title: "Connect over Camera Wi-Fi instead"))
     }
 
     static func nearby(_ model: AppModel) -> [CameraListItem] {

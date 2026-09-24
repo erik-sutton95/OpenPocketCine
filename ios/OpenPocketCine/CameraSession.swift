@@ -77,8 +77,10 @@ final class CameraSession {
     private(set) var joinedSSID: String?
     /// Setup for the next connect (#406); session recovery reuses it. Disconnect resets it.
     var connectionSetup: CameraConnectionSetup = .cameraWiFi
-    /// Hotspot address that answered with this body's BLE identity.
+    /// Wi-Fi or Hotspot address that answered with this body's BLE identity.
     private(set) var stationHost: String?
+    /// Network a Wi-Fi or Hotspot setup moved the camera onto.
+    private(set) var stationSSID: String?
     /// Hotspot provisioning step; the camera home shows it over the phase label.
     private(set) var setupProgress: String?
     @ObservationIgnored private var stationSeq: UInt16 = 1200
@@ -737,6 +739,7 @@ final class CameraSession {
         connectedCamera = nil
         connectionSetup = .cameraWiFi
         stationHost = nil
+        stationSSID = nil
         phase = .idle
         statusFlushTask?.cancel()
         statusFlushTask = nil
@@ -968,8 +971,8 @@ final class CameraSession {
         // settle sleeps; 0x53/0x10 still goes out.
         startKeepalive(ssid: nil)
         let saved = SavedCameraStore.load().first { $0.id == camera.id }
-        if connectionSetup == .phoneHotspot {
-            let ssid = try await runPhoneHotspot(camera, saved: saved)
+        if connectionSetup.movesCamera {
+            let ssid = try await runStation(camera, saved: saved)
             timeline.mark("hs", now: ProcessInfo.processInfo.systemUptime)
             log.info("\(timeline.line(), privacy: .public)")
             try Task.checkCancellation()
@@ -977,7 +980,7 @@ final class CameraSession {
             return
         }
         phase = .readingWifiCreds
-        let restoreAP = saved?.lastSetup == .phoneHotspot
+        let restoreAP = saved?.lastSetup?.movesCamera == true
         if restoreAP { await restoreCameraAccessPoint() }
         let credsFromCache = resolvedWifiCreds(for: camera).skipBle
         let skipAPSettle = !restoreAP && cameraPathReady() && credsFromCache
@@ -1100,20 +1103,24 @@ final class CameraSession {
         }
     }
 
-    // ---- phone-hotspot setup (#406) --------------------------------------------------------------
+    // ---- Wi-Fi and Hotspot setups (#406) ----------------------------------------------------------
 
-    /// Camera path for the active setup: the SoftAP subnet, or this phone's hotspot bridge.
+    private var usesHotspot: Bool { connectionSetup == .phoneHotspot }
+
+    /// Camera path for the active setup: the SoftAP subnet, the operator's Wi-Fi, or this
+    /// phone's hotspot bridge.
     private func cameraPathReady() -> Bool {
-        connectionSetup == .phoneHotspot
-            ? SharedWiFiPath.address(hotspot: true) != nil : WiFiJoiner.isCameraPathReady()
+        connectionSetup.movesCamera
+            ? SharedWiFiPath.address(hotspot: usesHotspot) != nil
+            : WiFiJoiner.isCameraPathReady()
     }
 
     private func makeDatalink(_ camera: FoundCamera, host: String? = nil) -> DatalinkDriver {
-        let host = host ?? (connectionSetup == .phoneHotspot ? stationHost : nil)
+        let host = host ?? (connectionSetup.movesCamera ? stationHost : nil)
         return DatalinkDriver(
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken, stationHost: host,
-            stationHotspot: host != nil)
+            stationHotspot: host != nil && usesHotspot)
     }
 
     private func nextStationSeq() -> UInt16 {
@@ -1139,20 +1146,25 @@ final class CameraSession {
         ControlLiveLog.line("wifi: restore camera access point accepted=\(accepted)")
     }
 
-    /// Moves the camera onto this phone's Personal Hotspot with the captured Multiview
-    /// sequence, then goes live on the address that proves this body's identity.
-    private func runPhoneHotspot(_ camera: FoundCamera, saved: SavedCamera?) async throws
-        -> String
-    {
-        guard let ssid = saved?.hotspotSSID,
-            let network = MultiviewNetworkStore.load(ssid: ssid, hotspot: true)
-        else { throw Fail.hotspotNotSetUp }
+    /// Moves the camera onto the operator's Wi-Fi or this phone's Personal Hotspot with the
+    /// captured Multiview sequence, then goes live on the address that proves this body.
+    private func runStation(_ camera: FoundCamera, saved: SavedCamera?) async throws -> String {
+        guard let ssid = saved?.ssid(for: connectionSetup),
+            let network = MultiviewNetworkStore.load(ssid: ssid, hotspot: usesHotspot)
+        else { throw Fail.setupNotSaved }
         phase = .joiningWifi
+        stationSSID = ssid
         defer { setupProgress = nil }
-        // The phone hosts the hotspot; it must not stay on a camera access point.
+        // Neither setup keeps the phone on a camera access point.
         if let joined = joinedSSID {
             WiFiJoiner.leave(ssid: joined)
             joinedSSID = nil
+        }
+        // Wi-Fi: this phone joins first. Hotspot: the phone hosts it and joins nothing.
+        if !usesHotspot {
+            setupProgress = "Joining \(ssid) on this iPhone"
+            guard try await SharedWiFiPath.joinHost(ssid: ssid, password: network.password) != nil
+            else { throw Fail.hostWiFi(ssid) }
         }
         if camera.model.family == .nano {
             setupProgress = "Waking camera Wi-Fi"
@@ -1165,33 +1177,37 @@ final class CameraSession {
             Commands.getWifiSsid(id: nextStationSeq()), timeout: 12
         ).payload
         var join = StationJoin(
-            model: camera.model, ssid: ssid, password: network.password, hotspot: true)
+            model: camera.model, ssid: ssid, password: network.password, hotspot: usesHotspot)
         join.probeExistingStation = true
+        // Bodies without a captured preview profile (Action, 360) take Multiview's bounded
+        // experimental path: no Pocket video-mode route, missing role getter allowed.
+        join.experimental = !MulticamSupport.hasPreview(camera.model)
         let outcome = try await join.run(
             identity: identity, exchange: { try await self.exchangeBle($0, timeout: $1) },
             send: { self.ble.send($0) }, next: nextStationSeq,
             status: { self.setupProgress = $0 },
             hotspotReady: { SharedWiFiPath.address(hotspot: true) != nil },
             verifyOnNetwork: { try await self.openStationDatalink(camera, identity: identity) },
-            log: { ControlLiveLog.line("hotspot: \($0)") })
+            log: { ControlLiveLog.line("station: \($0)") })
         if outcome == .joined {
-            setupProgress = "Finding camera on the hotspot"
+            setupProgress = "Finding the camera on \(ssid)"
             guard try await openStationDatalink(camera, identity: identity) else {
-                throw Fail.hotspotCameraMissing
+                throw Fail.stationCameraMissing(ssid)
             }
         }
         return ssid
     }
 
     /// An address counts only when its datalink answers `07/07` with the identity read over
-    /// BLE: another camera can share the hotspot. Then register and send the one enable.
+    /// BLE: other cameras can share the network. Then register and send the one enable.
     private func openStationDatalink(_ camera: FoundCamera, identity: [UInt8]) async throws
         -> Bool
     {
-        guard SharedWiFiPath.address(hotspot: true) != nil else { return false }
+        guard cameraPathReady() else { return false }
         let known = stationHost.map { [$0] } ?? []
         let found =
-            (try? await MultiviewDiscovery().candidates(excluding: [], hotspot: true)) ?? []
+            (try? await MultiviewDiscovery().candidates(excluding: [], hotspot: usesHotspot))
+            ?? []
         for host in known + found.filter({ !known.contains($0) }) {
             try Task.checkCancellation()
             disposeDatalink()
@@ -1209,7 +1225,7 @@ final class CameraSession {
             } catch {
                 continue
             }
-            ControlLiveLog.line("hotspot: camera identity verified on the hotspot")
+            ControlLiveLog.line("station: camera identity verified on the network")
             stationHost = host
             dl.completeRegistration()
             phase = .live
@@ -5103,10 +5119,10 @@ final class CameraSession {
         guard isLivePictureRepairCurrent(pictureOwner) else { return }
         let now = Date()
         let pathReady = cameraPathReady()
-        // The hotspot host is not associated to the camera's network, so SSID says nothing.
+        // The hotspot host is not associated to any Wi-Fi, so its SSID says nothing.
+        let expectedSSID = connectionSetup == .cameraWiFi ? joinedSSID : stationSSID
         let wrongNetwork =
-            connectionSetup == .cameraWiFi
-            && (currentSSID.map { !$0.isEmpty && $0 != joinedSSID } ?? false)
+            !usesHotspot && (currentSSID.map { !$0.isEmpty && $0 != expectedSSID } ?? false)
         let videoFresh =
             datalink?.lastVideoPacketAt.map {
                 now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
@@ -6223,8 +6239,9 @@ final class CameraSession {
         case mimoSession
         case staleSoftAP
         case wrongCamera
-        case hotspotNotSetUp
-        case hotspotCameraMissing
+        case setupNotSaved
+        case hostWiFi(String)
+        case stationCameraMissing(String)
         case nanoWake
         var errorDescription: String? {
             switch self {
@@ -6244,10 +6261,12 @@ final class CameraSession {
                 "iPhone is still on the other camera's Wi-Fi (Pocket and Nano both use 192.168.2.1). Forget that network in Settings → Wi-Fi, then tap Connect. The other camera can stay on."
             case .wrongCamera:
                 "Bluetooth reached a different camera than the one you tapped. Pocket and Nano are separate — pick the Nano or Pocket row in the list."
-            case .hotspotNotSetUp:
-                "this camera's phone hotspot setup is missing its password on this device. Add the hotspot setup again"
-            case .hotspotCameraMissing:
-                "the camera joined the hotspot but did not answer on it. Keep Personal Hotspot open with Maximize Compatibility on, then try again"
+            case .setupNotSaved:
+                "this setup's password is missing on this device. Edit the setup and enter it again"
+            case .hostWiFi(let ssid):
+                "this iPhone could not join \(ssid). Check the password and that the network is in range"
+            case .stationCameraMissing(let ssid):
+                "the camera joined \(ssid) but did not answer on it. Check that devices on the network can see each other, then try again"
             case .nanoWake:
                 "the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again"
             }

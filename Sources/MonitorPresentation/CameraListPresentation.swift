@@ -17,13 +17,17 @@ public struct CameraListItem: Equatable, Identifiable, Sendable {
     /// OpenZCine-style ways to reach this saved body; empty hides the chip row.
     public var setups: [CameraSetupChip]
     public var canAddSetup: Bool
+    /// Connection progress while `isBusy`; empty keeps the one-line status.
+    public var steps: [CameraConnectStep]
+    public var failure: CameraConnectFailure?
 
     public init(
         id: String, name: String, subtitle: String, badge: String = "",
         status: String, actionTitle: String, isPrimary: Bool = false,
         isBusy: Bool = false, isAvailable: Bool = true, signalBars: Int? = nil,
         details: [CameraPresentationDetail] = [], setups: [CameraSetupChip] = [],
-        canAddSetup: Bool = false
+        canAddSetup: Bool = false, steps: [CameraConnectStep] = [],
+        failure: CameraConnectFailure? = nil
     ) {
         self.id = id
         self.name = name
@@ -38,6 +42,8 @@ public struct CameraListItem: Equatable, Identifiable, Sendable {
         self.details = details
         self.setups = setups
         self.canAddSetup = canAddSetup
+        self.steps = steps
+        self.failure = failure
     }
 }
 
@@ -153,5 +159,47 @@ public struct CameraPairingPresentation: Equatable, Sendable {
         self.primaryAction = primaryAction
         self.primaryActionEnabled = primaryActionEnabled
         self.backAction = backAction
+    }
+}
+
+public struct CameraConnectStep: Equatable, Identifiable, Sendable {
+    public enum State: Equatable, Sendable { case done, active, waiting }
+    public var title: String
+    public var detail: String
+    public var state: State
+    public var id: String { title }
+
+    public init(_ title: String, detail: String, state: State) {
+        self.title = title
+        self.detail = detail
+        self.state = state
+    }
+}
+
+/// A failed connect on a saved card, with the ways out. Action ids go back to the shell.
+public struct CameraConnectFailure: Equatable, Sendable {
+    public struct Action: Equatable, Identifiable, Sendable {
+        public var id: String
+        public var title: String
+        public var primary: Bool
+
+        public init(id: String, title: String, primary: Bool = false) {
+            self.id = id
+            self.title = title
+            self.primary = primary
+        }
+    }
+
+    public var title: String
+    public var message: String
+    /// Buttons beside the chips; `link` sits inside the banner.
+    public var actions: [Action]
+    public var link: Action?
+
+    public init(title: String, message: String, actions: [Action], link: Action? = nil) {
+        self.title = title
+        self.message = message
+        self.actions = actions
+        self.link = link
     }
 }

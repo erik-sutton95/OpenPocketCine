@@ -125,6 +125,7 @@
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
                 advertisedName: "Studio camera", modelName: "Osmo Pocket 4 Pro",
                 lastConnectedAt: .distantPast, modelId: 0x22)
+            studio.wifiSSID = "Studio-5G"
             studio.hotspotSSID = "Rig iPhone"
             model.savedCameras = [
                 studio,

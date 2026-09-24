@@ -18,10 +18,12 @@ separate iOS and Android lists.
 ### Added
 
 - Per-camera **setups** on iOS **Your cameras** (discussion #406): each saved
-  camera shows **Camera Wi-Fi** and, after **Add setup**, a **Phone hotspot**
-  chip. The hotspot setup moves the camera onto this phone's Personal Hotspot
-  with the Multiview commands and goes live only on the address that proves the
-  camera's identity; the next Camera Wi-Fi connect restores the camera's own
+  camera shows **Camera Wi-Fi** plus, after **Add setup**, **Wi-Fi** (a router;
+  pick a network, scan with the camera or type one) and **Hotspot** chips, on
+  every Osmo camera including Action 6. The camera moves onto that network with
+  the Multiview commands and goes live only on the address that proves its
+  identity. Connecting shows each step; a failure offers Edit setup, Try again
+  or Camera Wi-Fi. The next Camera Wi-Fi connect restores the camera's own
   access point. Experimental pending physical checks; Android is not yet ported.
 - Experimental **Multiview on Android**, matching iOS: the grid button on
   **Your cameras**, the two-step Local Wi-Fi / phone hotspot setup, up to four

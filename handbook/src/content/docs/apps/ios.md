@@ -336,16 +336,28 @@ new discoveries. Select a camera to see its connection progress and **Cancel**.
 **Continue**. Media and Settings remain available without connecting.
 
 Each saved camera shows its **setups** as chips: **Camera Wi-Fi** (the camera's
-own access point) and, once added, **Phone hotspot**. Tap a chip to connect that
-way; the row's **Connect** uses the setup you used last. **Add setup** saves this
-phone's Personal Hotspot name and password for that camera, then connects: the
-camera leaves its own Wi-Fi and joins the hotspot with the same captured
-commands as Multiview, and the app only goes live on the address that returns
-that camera's identity. Turn on **Allow Others to Join** and **Maximize
-Compatibility** in Settings → Personal Hotspot first. The next **Camera Wi-Fi**
-connect switches the camera back to its own access point. Touch and hold the
-**Phone hotspot** chip to forget it. The hotspot setup is offered for Pocket 3,
-Pocket 4 / 4 Pro and Nano, and is experimental until physically checked.
+own access point) and, once added, **Wi-Fi** and **Hotspot**. Tap a chip to
+connect that way; the row's **Connect** uses the setup you used last.
+
+**Add setup** asks how the camera should connect:
+
+- **Wi-Fi**: a router or venue network. Pick the network this iPhone is on, one
+  saved on this iPhone, one found with **Scan with the camera** (about 20 s; the
+  camera returns to its own Wi-Fi afterwards) or **Other network…**, then enter
+  its password. The iPhone joins it too. Use WPA2 or a WPA2/WPA3 mix; guest
+  networks that isolate devices block the picture.
+- **Hotspot**: this iPhone's Personal Hotspot. Turn on **Allow Others to Join**
+  and **Maximize Compatibility** in Settings → Personal Hotspot, then enter its
+  name and password.
+
+Connecting moves the camera off its own Wi-Fi with the same captured commands as
+Multiview, and the app only goes live on the address that returns that camera's
+identity. The card shows each step. If a connect fails, the card offers **Edit
+setup**, **Try again** or **Connect over Camera Wi-Fi instead**. The next Camera
+Wi-Fi connect switches the camera back to its own access point. Touch and hold a
+Wi-Fi or Hotspot chip to forget it. Add setup is offered on every Osmo camera,
+including Action 6; the Wi-Fi and Hotspot setups are experimental until
+physically checked on each model.
 
 **Multiview** is an experimental iPhone/iPad stage for several cameras on shared
 Wi-Fi. From **Your cameras**, tap the grid icon to set up the network and add

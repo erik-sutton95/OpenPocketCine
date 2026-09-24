@@ -1,17 +1,23 @@
 import Foundation
 
-/// How a saved body is reached (#406). Every record has camera Wi-Fi; phone hotspot is
-/// the OpenZCine-style second setup that moves the camera onto this phone's hotspot.
+/// How a saved body is reached (#406). Every record has camera Wi-Fi. Wi-Fi (a router)
+/// and Hotspot (this phone's) are OpenZCine-style extra setups that move the camera off
+/// its own access point onto that network.
 public enum CameraConnectionSetup: String, Codable, CaseIterable, Sendable {
     case cameraWiFi
+    case wifi
     case phoneHotspot
 
     public var title: String {
         switch self {
         case .cameraWiFi: "Camera Wi-Fi"
-        case .phoneHotspot: "Phone hotspot"
+        case .wifi: "Wi-Fi"
+        case .phoneHotspot: "Hotspot"
         }
     }
+
+    /// The camera leaves its access point (station role) for this setup.
+    public var movesCamera: Bool { self != .cameraWiFi }
 }
 
 /// One Pocket we’ve already connected to. One record per body; its setups are chips on
@@ -30,11 +36,12 @@ public struct SavedCamera: Codable, Equatable, Identifiable, Sendable {
     public var lastConnectedAt: Date
     /// Operator-chosen name. The advertised name stays on `advertisedName`.
     public var customName: String?
-    /// Personal Hotspot name for the phone-hotspot setup; nil means camera Wi-Fi only.
-    /// The password stays in this device's Keychain.
+    /// Network names for the Wi-Fi and Hotspot setups; nil means that setup is not added.
+    /// Passwords stay in this device's Keychain.
+    public var wifiSSID: String?
     public var hotspotSSID: String?
-    /// Last setup a connect started with. `.phoneHotspot` also means the camera may still be
-    /// in station role, so the next camera Wi-Fi connect restores its access point first.
+    /// Last setup a connect started with. A setup that moves the camera also means it may
+    /// still be in station role, so the next camera Wi-Fi connect restores its access point.
     public var lastSetup: CameraConnectionSetup?
 
     public init(
@@ -62,13 +69,22 @@ public struct SavedCamera: Codable, Equatable, Identifiable, Sendable {
         return advertisedName.isEmpty ? modelName : advertisedName
     }
 
+    public func ssid(for setup: CameraConnectionSetup) -> String? {
+        switch setup {
+        case .cameraWiFi: lastSSID
+        case .wifi: wifiSSID
+        case .phoneHotspot: hotspotSSID
+        }
+    }
+
     public var setups: [CameraConnectionSetup] {
-        hotspotSSID == nil ? [.cameraWiFi] : [.cameraWiFi, .phoneHotspot]
+        CameraConnectionSetup.allCases.filter { $0 == .cameraWiFi || ssid(for: $0) != nil }
     }
 
     /// The row's main Connect: the last setup used, when it still exists.
     public var preferredSetup: CameraConnectionSetup {
-        lastSetup == .phoneHotspot && hotspotSSID != nil ? .phoneHotspot : .cameraWiFi
+        guard let lastSetup, setups.contains(lastSetup) else { return .cameraWiFi }
+        return lastSetup
     }
 }
 
@@ -247,6 +263,7 @@ public enum SavedCameras {
             if merged.lastSSID == nil { merged.lastSSID = existing.lastSSID }
             if merged.advertisedName.isEmpty { merged.advertisedName = existing.advertisedName }
             if merged.modelId == nil { merged.modelId = existing.modelId }
+            if merged.wifiSSID == nil { merged.wifiSSID = existing.wifiSSID }
             if merged.hotspotSSID == nil { merged.hotspotSSID = existing.hotspotSSID }
             if merged.lastSetup == nil { merged.lastSetup = existing.lastSetup }
         }
@@ -272,31 +289,37 @@ public enum SavedCameras {
             })
     }
 
-    /// Add, change or forget (nil/blank) the phone-hotspot setup. `lastSetup` is kept: a
+    /// Add, change or forget (nil/blank) a Wi-Fi or Hotspot setup. `lastSetup` is kept: a
     /// camera left in station role still needs its access point restored.
-    public static func settingHotspot(_ id: UUID, ssid: String?, in records: [SavedCamera])
-        -> [SavedCamera]
-    {
+    public static func setting(
+        _ setup: CameraConnectionSetup, ssid: String?, for id: UUID, in records: [SavedCamera]
+    ) -> [SavedCamera] {
         let trimmed = ssid?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = (trimmed?.isEmpty == false) ? trimmed : nil
         return canonicalized(
             records.map { record in
                 guard record.id == id else { return record }
                 var updated = record
-                updated.hotspotSSID = (trimmed?.isEmpty == false) ? trimmed : nil
+                switch setup {
+                case .cameraWiFi: break
+                case .wifi: updated.wifiSSID = value
+                case .phoneHotspot: updated.hotspotSSID = value
+                }
                 return updated
             })
     }
 
-    /// Stamp a hotspot connect before it can move the camera to station role. A lost
-    /// setter reply can still mean the role changed. Camera Wi-Fi is stamped only once
+    /// Stamp a setup that moves the camera before it can change the station role (a lost
+    /// setter reply can still mean the role changed). Camera Wi-Fi is stamped only once
     /// live, so a failed restore is retried on the next connect.
-    public static func startingHotspot(for id: UUID, in records: [SavedCamera])
-        -> [SavedCamera]
-    {
-        records.map { record in
+    public static func startingStation(
+        _ setup: CameraConnectionSetup, for id: UUID, in records: [SavedCamera]
+    ) -> [SavedCamera] {
+        guard setup.movesCamera else { return records }
+        return records.map { record in
             guard record.id == id else { return record }
             var updated = record
-            updated.lastSetup = .phoneHotspot
+            updated.lastSetup = setup
             return updated
         }
     }

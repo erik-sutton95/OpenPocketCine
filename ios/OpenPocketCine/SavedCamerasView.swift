@@ -9,7 +9,7 @@ struct SavedCamerasView: View {
     @Environment(\.monitorWindowGeometry) private var windowGeometry
     let compact: Bool
     @State private var showMultiview = false
-    @State private var hotspotSetupFor: SavedCamera?
+    @State private var addSetup: AddSetupTarget?
     @State private var orientation = InterfaceOrientationObserver()
 
     private var connectionBusy: Bool { model.isBusy || model.session.isReconnecting }
@@ -66,23 +66,43 @@ struct SavedCamerasView: View {
                     model.reconnect(camera, setup: setup)
                 },
                 onAddSetup: { id in
-                    guard !connectionBusy else { return }
-                    hotspotSetupFor = saved(id)
+                    guard !connectionBusy, let camera = saved(id) else { return }
+                    addSetup = AddSetupTarget(camera: camera, page: .choose)
                 },
                 onForgetSetup: { id, setup in
                     guard !connectionBusy, let camera = saved(id),
-                        setup == CameraConnectionSetup.phoneHotspot.rawValue
+                        let setup = CameraConnectionSetup(rawValue: setup)
                     else { return }
-                    model.forgetHotspotSetup(camera)
+                    model.forgetSetup(setup, of: camera)
+                },
+                onFailureAction: { id, action in
+                    guard !connectionBusy, let camera = saved(id) else { return }
+                    let failed = model.session.connectionSetup
+                    switch action {
+                    case "edit":
+                        let page: AddSetupView.Page =
+                            failed == .phoneHotspot
+                            ? .hotspot : .password(camera.ssid(for: .wifi) ?? "")
+                        addSetup = AddSetupTarget(camera: camera, page: page)
+                    case "cameraWiFi": model.reconnect(camera, setup: .cameraWiFi)
+                    default: model.reconnect(camera, setup: failed)
+                    }
                 })
         }
         .ignoresSafeArea()
         .onAppear { orientation.start() }
         .onDisappear { orientation.stop() }
-        .sheet(item: $hotspotSetupFor) { camera in
-            HotspotSetupSheet(camera: camera) { ssid, password in
-                model.addHotspotSetup(camera, ssid: ssid, password: password)
-            }
+        .fullScreenCover(item: $addSetup) { target in
+            let nearby = model.session.found.contains { $0.id == target.camera.id }
+            AddSetupView(
+                camera: target.camera,
+                scan: nearby ? { try await model.scanNetworks(with: target.camera) } : nil,
+                save: { setup, ssid, password in
+                    model.addSetup(setup, ssid: ssid, password: password, to: target.camera)
+                },
+                close: { addSetup = nil }, page: target.page
+            )
+            .presentationBackground(.clear)
         }
         .fullScreenCover(
             isPresented: $showMultiview,
@@ -92,4 +112,10 @@ struct SavedCamerasView: View {
     private func saved(_ id: String) -> SavedCamera? {
         model.savedCameras.first { $0.id.uuidString == id }
     }
+}
+
+struct AddSetupTarget: Identifiable {
+    let camera: SavedCamera
+    let page: AddSetupView.Page
+    var id: UUID { camera.id }
 }

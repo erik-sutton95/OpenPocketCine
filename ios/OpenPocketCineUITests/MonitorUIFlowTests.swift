@@ -826,27 +826,47 @@ final class MonitorUIFlowTests: XCTestCase {
         capture("share-upcoming-destinations")
     }
 
-    /// #406: saved cameras show their setups; Add setup opens the hotspot form. Chips are
-    /// not tapped here because they start a real connection.
-    func testSavedCameraSetupChipsAndAddSetupSheet() {
+    /// #406: saved cameras show their setups; Add setup offers Wi-Fi or Hotspot. Chips and
+    /// Connect are not tapped here because they start a real connection.
+    func testSavedCameraSetupChipsAndAddSetupFlow() {
         app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
         app.launch()
-        rotate(.portrait)
-        let hotspot = app.buttons["cameras.setup.phoneHotspot"]
-        XCTAssertTrue(hotspot.waitForExistence(timeout: 10))
-        XCTAssertEqual(app.buttons.matching(identifier: "cameras.setup.cameraWiFi").count, 2)
-        XCTAssertGreaterThanOrEqual(hotspot.frame.height, 43.5)
-        // Only the Nano fixture lacks a hotspot setup.
-        let add = app.buttons["cameras.addSetup"]
-        XCTAssertEqual(app.buttons.matching(identifier: "cameras.addSetup").count, 1)
-        capture("camera-setup-chips")
-        add.tap()
-        let ssid = app.textFields["hotspotSetup.ssid"]
-        XCTAssertTrue(ssid.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["hotspotSetup.connect"].isEnabled)
-        capture("camera-add-hotspot-setup")
-        app.buttons["Cancel"].tap()
-        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            rotate(orientation)
+            let wifi = app.buttons["cameras.setup.wifi"]
+            XCTAssertTrue(wifi.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["cameras.setup.phoneHotspot"].exists)
+            XCTAssertEqual(app.buttons.matching(identifier: "cameras.setup.cameraWiFi").count, 2)
+            XCTAssertGreaterThanOrEqual(wifi.frame.height, 43.5)
+            // Only the Nano fixture has a setup left to add.
+            let add = app.buttons["cameras.addSetup"]
+            XCTAssertEqual(app.buttons.matching(identifier: "cameras.addSetup").count, 1)
+            capture("camera-setup-chips-\(orientation.rawValue)")
+            // Landscape shows one and a half cards; the Nano's chip is below the fold.
+            for _ in 0..<3 where !add.isHittable { app.scrollViews.firstMatch.swipeUp() }
+            add.tap()
+            let chooseWiFi = app.buttons["addSetup.wifi"]
+            XCTAssertTrue(chooseWiFi.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["addSetup.phoneHotspot"].isHittable)
+            capture("add-setup-choose-\(orientation.rawValue)")
+            chooseWiFi.tap()
+            XCTAssertTrue(app.buttons["addSetup.scan"].waitForExistence(timeout: 5))
+            capture("add-setup-wifi-\(orientation.rawValue)")
+            app.buttons["Back"].tap()
+            app.buttons["addSetup.phoneHotspot"].tap()
+            let name = app.textFields["addSetup.hotspotName"]
+            XCTAssertTrue(name.waitForExistence(timeout: 5))
+            XCTAssertTrue(
+                app.otherElements["addSetup.hotspotStatus"].exists
+                    || app.staticTexts.containing(
+                        NSPredicate(format: "label CONTAINS 'Personal Hotspot'")
+                    ).count > 0)
+            capture("add-setup-hotspot-\(orientation.rawValue)")
+            app.buttons["Back"].tap()
+            app.buttons["Cancel"].tap()
+            XCTAssertTrue(add.waitForExistence(timeout: 5))
+            app.scrollViews.firstMatch.swipeDown()
+        }
     }
 
     private func reveal(_ tab: XCUIElement, in rail: XCUIElement, portrait: Bool) {

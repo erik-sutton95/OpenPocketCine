@@ -506,36 +506,8 @@ final class MultiviewSession {
         // The host phone must not try joining its own hotspot. Its local bridge
         // may appear only after the first camera associates.
         if usePhoneHotspot { return }
-        if await WiFiJoiner.currentSSID() != ssid {
-            let config =
-                password.isEmpty
-                ? NEHotspotConfiguration(ssid: ssid)
-                : NEHotspotConfiguration(ssid: ssid, passphrase: password, isWEP: false)
-            config.joinOnce = false
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, Error>) in
-                NEHotspotConfigurationManager.shared.apply(config) { error in
-                    if let error,
-                        (error as NSError).code
-                            != NEHotspotConfigurationError.alreadyAssociated.rawValue
-                    {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume()
-                    }
-                }
-            }
-        }
-        let deadline = Date().addingTimeInterval(12)
-        while Date() < deadline {
-            if await WiFiJoiner.currentSSID() == ssid, SharedWiFiPath.address() != nil { break }
-            try await Task.sleep(for: .milliseconds(200))
-        }
-        guard await WiFiJoiner.currentSSID() == ssid,
-            let address = SharedWiFiPath.address(hotspot: usePhoneHotspot)
-        else {
-            throw Failure.network
-        }
+        guard let address = try await SharedWiFiPath.joinHost(ssid: ssid, password: password)
+        else { throw Failure.network }
         host = address
         ready = true
     }

@@ -10,6 +10,8 @@ import OpenPocketViewCore
     private var sequence: UInt16 = 1200
     private var approved = false
     private var closed = false
+    /// Sees every camera frame first (e.g. `07/AC` scan reports, whatever their flags).
+    var onFrame: ((Duml.Frame) -> Void)?
 
     func next() -> UInt16 {
         sequence &+= 1
@@ -49,6 +51,7 @@ import OpenPocketViewCore
         router = Task { [weak self] in
             for await frame in frames {
                 guard let self, !Task.isCancelled, !closed else { return }
+                onFrame?(frame)
                 if frame.cmdSet == 7, frame.cmdId == 0x46, frame.flags & 128 == 0 {
                     send(Commands.pairApprovalAck(seq: frame.seq))
                     approved = true
@@ -89,5 +92,42 @@ import OpenPocketViewCore
         router?.cancel()
         ble.disconnect()
         replies.removeAll()
+    }
+}
+
+extension MultiviewProvisioner {
+    /// Networks the camera can see: Multiview's captured station role, `07/AB` scan and
+    /// `07/AC` reports, then `07/48 00` on the same link so the camera is back on its own
+    /// Wi-Fi before this returns. The caller stamps the role change first.
+    static func scanNetworks(_ camera: FoundCamera) async throws -> [String] {
+        let client = MultiviewProvisioner()
+        defer { client.close() }
+        var names: [String] = []
+        client.onFrame = { frame in
+            guard frame.cmdSet == 7, frame.cmdId == 0xac, frame.sender == 7 else { return }
+            for name in MulticamWiFiScan.names(frame.payload) where !names.contains(name) {
+                names.append(name)
+            }
+        }
+        try await client.connect(camera, pairingTimeout: 30)
+        if camera.model.family == .nano {
+            _ = try await client.exchange(Commands.session5310(id: client.next()))
+        }
+        do {
+            let role = try await client.exchange(
+                MulticamCommands.stationMode(true, seq: client.next()))
+            guard role.payload.first == 0 else { throw MultiviewSession.Failure.rejected }
+            try await Task.sleep(for: .seconds(10))
+            _ = try await client.exchange(MulticamWiFiScan.request(seq: client.next()), timeout: 8)
+            try await Task.sleep(for: .seconds(6))
+        } catch {
+            _ = try? await client.exchange(MulticamCommands.stationMode(false, seq: client.next()))
+            throw error
+        }
+        let back = try? await client.exchange(
+            MulticamCommands.stationMode(false, seq: client.next()))
+        ControlLiveLog.line(
+            "setup: camera scan found=\(names.count) returned=\(back?.payload.first == 0)")
+        return names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 }
