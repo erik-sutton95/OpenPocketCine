@@ -35,22 +35,6 @@ internal object ScopeTraceRaster {
     val vectorPlotH: Int
         get() = vectorPlot.height.roundToInt().coerceAtLeast(1)
 
-    fun waveform(
-        live: List<ScopePoint>,
-        trail: List<ScopePoint>,
-        table: FloatArray,
-        mode: WaveformMode,
-        intensity: Double,
-    ): ImageBitmap? = waveformArgb(live, trail, table, mode, intensity)?.toImage(wavePlotW, wavePlotH)
-
-    fun parade(
-        live: List<ScopePoint>,
-        trail: List<ScopePoint>,
-        table: FloatArray,
-        mode: ParadeMode,
-        intensity: Double,
-    ): ImageBitmap? = paradeArgb(live, trail, table, mode, intensity)?.toImage(wavePlotW, wavePlotH)
-
     fun vectorscope(
         live: List<ScopePoint>,
         trail: List<ScopePoint>,
@@ -64,25 +48,7 @@ internal object ScopeTraceRaster {
         table: FloatArray,
         mode: WaveformMode,
         intensity: Double,
-    ): IntArray? {
-        if (live.isEmpty() && trail.isEmpty()) return null
-        if (intensity <= 0) return null
-        val w = wavePlotW
-        val h = wavePlotH
-        val plot = AssistRect(0f, 0f, w.toFloat(), h.toFloat())
-        val n = w * h
-        val red = FloatArray(n)
-        val green = FloatArray(n)
-        val blue = FloatArray(n)
-        if (trail.isNotEmpty()) {
-            splatWave(
-                red, green, blue, plot, trail, table, mode,
-                intensity * PocketScopeSampler.TRAIL_DECAY, w, h,
-            )
-        }
-        splatWave(red, green, blue, plot, live, table, mode, intensity, w, h)
-        return packTraces(red, green, blue)
-    }
+    ): IntArray? = TraceLayers().waveformArgb(live, trail, table, mode, intensity)?.copyOf()
 
     fun paradeArgb(
         live: List<ScopePoint>,
@@ -90,24 +56,67 @@ internal object ScopeTraceRaster {
         table: FloatArray,
         mode: ParadeMode,
         intensity: Double,
-    ): IntArray? {
-        if (live.isEmpty() && trail.isEmpty()) return null
-        if (intensity <= 0) return null
-        val w = wavePlotW
-        val h = wavePlotH
-        val plot = AssistRect(0f, 0f, w.toFloat(), h.toFloat())
-        val n = w * h
-        val red = FloatArray(n)
-        val green = FloatArray(n)
-        val blue = FloatArray(n)
-        if (trail.isNotEmpty()) {
-            splatParade(
-                red, green, blue, plot, trail, table, mode,
-                intensity * PocketScopeSampler.TRAIL_DECAY, w, h,
-            )
+    ): IntArray? = TraceLayers().paradeArgb(live, trail, table, mode, intensity)?.copyOf()
+
+    /**
+     * One WAVE / PARADE panel's retained build. The trail is the previous bundle's
+     * samples and the splat is linear in intensity, so the previous build's live layer
+     * times TRAIL_DECAY is the trail: an update splats one sample set into kept buffers
+     * instead of two into fresh ones (iOS reuses its previous build the same way).
+     */
+    class TraceLayers {
+        private val w = wavePlotW
+        private val h = wavePlotH
+        private val plot = AssistRect(0f, 0f, w.toFloat(), h.toFloat())
+        private var live = Array(3) { FloatArray(w * h) }
+        private var previous = Array(3) { FloatArray(w * h) }
+        private var previousPoints: List<ScopePoint>? = null
+        private var previousKey: Any? = null
+        private val out = IntArray(w * h)
+
+        @Synchronized
+        fun waveform(live: List<ScopePoint>, trail: List<ScopePoint>, table: FloatArray, mode: WaveformMode, intensity: Double) =
+            waveformArgb(live, trail, table, mode, intensity)?.toImage(w, h)
+
+        @Synchronized
+        fun parade(live: List<ScopePoint>, trail: List<ScopePoint>, table: FloatArray, mode: ParadeMode, intensity: Double) =
+            paradeArgb(live, trail, table, mode, intensity)?.toImage(w, h)
+
+        /** The returned array is reused by the next build. */
+        @Synchronized
+        fun waveformArgb(live: List<ScopePoint>, trail: List<ScopePoint>, table: FloatArray, mode: WaveformMode, intensity: Double) =
+            build(live, trail, Triple(table, mode, intensity), intensity) { layer, points ->
+                splatWave(layer[0], layer[1], layer[2], plot, points, table, mode, intensity, w, h)
+            }
+
+        /** The returned array is reused by the next build. */
+        @Synchronized
+        fun paradeArgb(live: List<ScopePoint>, trail: List<ScopePoint>, table: FloatArray, mode: ParadeMode, intensity: Double) =
+            build(live, trail, Triple(table, mode, intensity), intensity) { layer, points ->
+                splatParade(layer[0], layer[1], layer[2], plot, points, table, mode, intensity, w, h)
+            }
+
+        private fun build(
+            livePoints: List<ScopePoint>,
+            trailPoints: List<ScopePoint>,
+            key: Any,
+            intensity: Double,
+            splat: (Array<FloatArray>, List<ScopePoint>) -> Unit,
+        ): IntArray? {
+            if (livePoints.isEmpty() && trailPoints.isEmpty() || intensity <= 0) return null
+            if (trailPoints !== previousPoints || key != previousKey) {
+                previous.forEach { it.fill(0f) }
+                splat(previous, trailPoints)
+            }
+            live.forEach { it.fill(0f) }
+            splat(live, livePoints)
+            val any = packTraces(live[0], live[1], live[2], out, previous, PocketScopeSampler.TRAIL_DECAY.toFloat())
+            // This build's live layer is the next build's trail.
+            previous = live.also { live = previous }
+            previousPoints = livePoints
+            previousKey = key
+            return if (any != null) out else null
         }
-        splatParade(red, green, blue, plot, live, table, mode, intensity, w, h)
-        return packTraces(red, green, blue)
     }
 
     fun vectorscopeArgb(
@@ -269,14 +278,21 @@ internal object ScopeTraceRaster {
         blue[i] += b
     }
 
-    /** Transparent where nothing landed — Compose Plus onto one plate fill. */
-    private fun packTraces(red: FloatArray, green: FloatArray, blue: FloatArray): IntArray? {
-        val out = IntArray(red.size)
+    /** Transparent where nothing landed; Compose Plus-blits onto one plate fill. [trail] adds at [decay]. */
+    private fun packTraces(
+        red: FloatArray,
+        green: FloatArray,
+        blue: FloatArray,
+        out: IntArray = IntArray(red.size),
+        trail: Array<FloatArray>? = null,
+        decay: Float = 0f,
+    ): IntArray? {
         var any = false
         for (i in red.indices) {
-            val rr = red[i]
-            val gg = green[i]
-            val bb = blue[i]
+            val rr = if (trail == null) red[i] else red[i] + decay * trail[0][i]
+            val gg = if (trail == null) green[i] else green[i] + decay * trail[1][i]
+            val bb = if (trail == null) blue[i] else blue[i] + decay * trail[2][i]
+            out[i] = 0
             if (rr <= 0f && gg <= 0f && bb <= 0f) continue
             val r = (rr.coerceAtMost(1f) * 255f).roundToInt()
             val g = (gg.coerceAtMost(1f) * 255f).roundToInt()

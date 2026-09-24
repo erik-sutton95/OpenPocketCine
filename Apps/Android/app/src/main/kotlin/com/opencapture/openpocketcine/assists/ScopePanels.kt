@@ -348,13 +348,14 @@ internal fun WaveformPanel(state: LiveAssistState, colorMode: Int, modifier: Mod
     val table = remember(transfer, bundle.iso) { WaveformIre.levelTable(transfer, bundle.iso) }
     val intensity = WaveformAssist.intensity(state.waveBrightness)
     var trace by remember { mutableStateOf<ImageBitmap?>(null) }
+    val layers = remember { ScopeTraceRaster.TraceLayers() }
     LaunchedEffect(bundle.revision, state.waveMode, intensity, table) {
         val live = bundle.samples.points
         val trail = bundle.trailSamples.points
         val mode = state.waveMode
         val next =
             withContext(Dispatchers.Default) {
-                ScopeTraceRaster.waveform(live, trail, table, mode, intensity)
+                layers.waveform(live, trail, table, mode, intensity)
             }
         if (next != null) trace = next
     }
@@ -375,13 +376,14 @@ internal fun ParadePanel(state: LiveAssistState, colorMode: Int, modifier: Modif
     val table = remember(transfer, bundle.iso) { WaveformIre.levelTable(transfer, bundle.iso) }
     val intensity = ParadeAssist.intensity(state.paradeBrightness)
     var trace by remember { mutableStateOf<ImageBitmap?>(null) }
+    val layers = remember { ScopeTraceRaster.TraceLayers() }
     LaunchedEffect(bundle.revision, state.paradeMode, intensity, table) {
         val live = bundle.samples.points
         val trail = bundle.trailSamples.points
         val mode = state.paradeMode
         val next =
             withContext(Dispatchers.Default) {
-                ScopeTraceRaster.parade(live, trail, table, mode, intensity)
+                layers.parade(live, trail, table, mode, intensity)
             }
         if (next != null) trace = next
     }

@@ -149,6 +149,38 @@ class ScopeGeometryTest {
     }
 
     @Test
+    fun retainedTraceReusesThePreviousLiveLayerAsTheTrail() {
+        val table = FloatArray(256) { it * 100f / 255f }
+        fun frame(seed: Int) = List(400) { i ->
+            val v = (i * 37 + seed * 11) % 256
+            com.opencapture.openpocketcine.feed.ScopePoint((i % 200) / 200.0, 0.5, v, 255 - v, (v * 3) % 256, v)
+        }
+        val a = frame(1)
+        val b = frame(2)
+        val c = frame(3)
+        val intensity = WaveformAssist.intensity(100)
+        val layers = ScopeTraceRaster.TraceLayers()
+        for (mode in WaveformMode.entries) {
+            layers.waveformArgb(a, emptyList(), table, mode, intensity)
+            // b's trail is a's samples: the retained live layer stands in for a re-splat.
+            val reused = requireNotNull(layers.waveformArgb(b, a, table, mode, intensity)).copyOf()
+            val fresh = requireNotNull(ScopeTraceRaster.waveformArgb(b, a, table, mode, intensity))
+            assertTrue(reused.indices.all { channelsWithin(reused[it], fresh[it], 1) }, "$mode reuse matches a fresh build")
+            // A trail that is not the previous samples is splatted, not reused.
+            val skipped = requireNotNull(layers.waveformArgb(c, a, table, mode, intensity)).copyOf()
+            val skippedFresh = requireNotNull(ScopeTraceRaster.waveformArgb(c, a, table, mode, intensity))
+            assertTrue(skipped.indices.all { channelsWithin(skipped[it], skippedFresh[it], 1) }, "$mode fallback matches")
+        }
+        layers.paradeArgb(a, emptyList(), table, ParadeMode.RGB, intensity)
+        val parade = requireNotNull(layers.paradeArgb(b, a, table, ParadeMode.RGB, intensity)).copyOf()
+        val paradeFresh = requireNotNull(ScopeTraceRaster.paradeArgb(b, a, table, ParadeMode.RGB, intensity))
+        assertTrue(parade.indices.all { channelsWithin(parade[it], paradeFresh[it], 1) })
+    }
+
+    private fun channelsWithin(x: Int, y: Int, tolerance: Int) =
+        (0 until 32 step 8).all { kotlin.math.abs(((x ushr it) and 0xFF) - ((y ushr it) and 0xFF)) <= tolerance }
+
+    @Test
     fun vectorscopeRasterIsPlotSizedAndTransparentWhereEmpty() {
         val white = com.opencapture.openpocketcine.feed.ScopePoint(0.5, 0.5, 255, 255, 255, 255)
         val px =
