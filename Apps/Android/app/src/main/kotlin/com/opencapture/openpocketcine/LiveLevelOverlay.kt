@@ -33,8 +33,8 @@ import kotlinx.coroutines.delay
 
 /**
  * LEVEL: camera world attitude ([LevelReading]), not this phone. Mirrors iOS
- * `MonitorLevelGauge`: the EV meter's language (slim white line, glow, number at
- * the start, ±8 ends) with a bubble ring that turns green when level. Tilt is the
+ * `MonitorLevelGauge`: the EV meter's language in a Nikon Z virtual-horizon layout
+ * (dark band, centreline, cross-bar marker, number at the start), green when level. Tilt is the
  * EV meter mirrored onto the right edge, clearing the joystick cluster the way EV
  * clears the toolbar (up first, then shorter); roll runs along the bottom; a bubble
  * replaces both near plumb. No data reads `No level data`.
@@ -47,6 +47,7 @@ internal object LiveLevel {
     const val THRESHOLD = 0.6
     const val BUBBLE_SPAN = 10.0
     const val BUBBLE_RADIUS = 44f
+    const val BAND = 8f
     val good = Color(0.18f, 0.78f, 0.42f)
 
     fun visible(feed: ChromeRect, viewport: ChromeRect): ChromeRect {
@@ -129,65 +130,64 @@ private fun DrawScope.text(measurer: TextMeasurer, s: String, centre: Offset, co
     drawText(layout, topLeft = Offset(centre.x - layout.size.width / 2f, centre.y - layout.size.height / 2f))
 }
 
-private fun DrawScope.marker(c: Offset, tint: Color, level: Boolean) {
-    drawCircle(tint, radius = 4.5f.dp.toPx(), center = c, style = Stroke(1.2f.dp.toPx()))
-    if (level) drawCircle(tint, radius = 2f.dp.toPx(), center = c)
-}
+private val bandFill = Color.Black.copy(alpha = 0.45f)
 
-/** iOS `MonitorLevelGauge`: layout in dp inside [rect]; positive reads up / right. */
+/**
+ * iOS `MonitorLevelGauge`, laid out like a Nikon Z virtual horizon: slim dark band,
+ * white centreline, cross-bar marker, zero notches, number at the start. Layout in
+ * dp inside [rect]; positive reads up / right. Green when level.
+ */
 private fun DrawScope.drawStrip(rect: ChromeRect, vertical: Boolean, value: Double?, measurer: TextMeasurer) {
     if (rect.isEmpty) return
     val white = LiveDesign.text
-    val line = white.copy(alpha = 0.8f)
     val isLevel = value != null && abs(value) < LiveLevel.THRESHOLD
     val tint = if (isLevel) LiveLevel.good else white
     val length = if (vertical) rect.height else rect.width
-    val start = if (vertical) 34f else 22f
-    val end = maxOf(start, length - if (vertical) 18f else 22f)
+    val start = if (vertical) 18f else 4f
+    val end = maxOf(start, length - 4f)
     val across = if (vertical) rect.width / 2f else rect.height - 8f
-    fun p(t: Float) = if (vertical) Offset((rect.x + across).dp.toPx(), (rect.y + t).dp.toPx())
-        else Offset((rect.x + t).dp.toPx(), (rect.y + across).dp.toPx())
+    val h = LiveLevel.BAND / 2f
+    fun p(t: Float, off: Float = 0f) = if (vertical) Offset((rect.x + across + off).dp.toPx(), (rect.y + t).dp.toPx())
+        else Offset((rect.x + t).dp.toPx(), (rect.y + across + off).dp.toPx())
     fun position(deg: Double): Float {
         val f = ((deg.coerceIn(-LiveLevel.SPAN, LiveLevel.SPAN) + LiveLevel.SPAN) / (2 * LiveLevel.SPAN)).toFloat()
-        return if (vertical) end - (end - start) * f else start + (end - start) * f
+        return if (vertical) end - h - (end - start - 2 * h) * f else start + h + (end - start - 2 * h) * f
     }
     text(measurer, LiveLevel.label(value), Offset((rect.x + rect.width / 2f).dp.toPx(), (rect.y + 6f).dp.toPx()), tint, 10f, bold = true)
-    val ends = if (vertical) listOf("+8" to Offset(rect.width / 2f, 23f), "−8" to Offset(rect.width / 2f, rect.height - 5f))
-        else listOf("−8" to Offset(9f, across), "+8" to Offset(rect.width - 9f, across))
-    for ((label, at) in ends) text(measurer, label, Offset((rect.x + at.x).dp.toPx(), (rect.y + at.y).dp.toPx()), white, 8f)
+    val topLeft = p(start, -h)
+    val bandSize = if (vertical) androidx.compose.ui.geometry.Size(LiveLevel.BAND.dp.toPx(), (end - start).dp.toPx())
+        else androidx.compose.ui.geometry.Size((end - start).dp.toPx(), LiveLevel.BAND.dp.toPx())
+    drawRoundRect(bandFill, topLeft, bandSize, androidx.compose.ui.geometry.CornerRadius(h.dp.toPx()))
     val stroke = 1f.dp.toPx()
-    val m = value?.let { position(it) }
-    if (m == null) {
-        drawLine(line, p(start), p(end), stroke)
-    } else {
-        if (minOf(m - 9f, end) > start) drawLine(line, p(start), p(minOf(m - 9f, end)), stroke)
-        if (end > maxOf(m + 9f, start)) drawLine(line, p(maxOf(m + 9f, start)), p(end), stroke)
+    drawLine(if (isLevel) tint else tint.copy(alpha = 0.8f), p(start + h), p(end - h), stroke)
+    val zero = position(0.0)
+    for (side in listOf(-1f, 1f)) {
+        drawLine(white.copy(alpha = 0.8f), p(zero, side * (h + 1f)), p(zero, side * (h + 4f)), stroke)
     }
-    val z = p(position(0.0))
-    val half = 5f.dp.toPx()
-    if (vertical) drawLine(line, Offset(z.x - half, z.y), Offset(z.x + half, z.y), stroke)
-    else drawLine(line, Offset(z.x, z.y - half), Offset(z.x, z.y + half), stroke)
-    if (m != null) marker(p(m), tint, isLevel)
+    if (value != null) {
+        val m = position(value)
+        drawLine(tint, p(m, -(h + 2f)), p(m, h + 2f), 2f.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round)
+    }
 }
 
-/** iOS `MonitorLevelBubble`: thin ±10° ring, centre cross, bubble ring toward the high side. */
+/** iOS `MonitorLevelBubble`: dark disc, white cross, ring marker toward the high side. */
 private fun DrawScope.drawBubble(centre: Offset, x: Double, y: Double, measurer: TextMeasurer) {
     val white = LiveDesign.text
-    val line = white.copy(alpha = 0.8f)
     val r = LiveLevel.BUBBLE_RADIUS.dp.toPx()
     val mid = Offset(centre.x, centre.y + 8f.dp.toPx())
     val distance = sqrt(x * x + y * y)
     val isLevel = distance < LiveLevel.THRESHOLD
     val tint = if (isLevel) LiveLevel.good else white
     text(measurer, "${LiveLevel.label(x)} / ${LiveLevel.label(y)}", Offset(mid.x, mid.y - r - 18f.dp.toPx()), tint, 10f, bold = true)
+    drawCircle(bandFill, radius = r, center = mid)
+    val line = if (isLevel) tint else tint.copy(alpha = 0.8f)
     val stroke = 1f.dp.toPx()
-    drawCircle(line, radius = r, center = mid, style = Stroke(stroke))
-    val arm = 5f.dp.toPx()
+    val arm = r - 4f.dp.toPx()
     drawLine(line, Offset(mid.x - arm, mid.y), Offset(mid.x + arm, mid.y), stroke)
     drawLine(line, Offset(mid.x, mid.y - arm), Offset(mid.x, mid.y + arm), stroke)
     val clamp = if (distance > LiveLevel.BUBBLE_SPAN) LiveLevel.BUBBLE_SPAN / distance else 1.0
-    marker(
-        Offset(mid.x + (x * clamp / LiveLevel.BUBBLE_SPAN).toFloat() * r, mid.y - (y * clamp / LiveLevel.BUBBLE_SPAN).toFloat() * r),
-        tint, isLevel,
-    )
+    val reach = r - 6f.dp.toPx()
+    val c = Offset(mid.x + (x * clamp / LiveLevel.BUBBLE_SPAN).toFloat() * reach,
+        mid.y - (y * clamp / LiveLevel.BUBBLE_SPAN).toFloat() * reach)
+    drawCircle(tint, radius = 5f.dp.toPx(), center = c, style = Stroke(2f.dp.toPx()))
 }

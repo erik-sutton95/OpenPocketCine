@@ -1,8 +1,9 @@
 #if os(iOS)
     import SwiftUI
 
-    /// LEVEL in the EV meter's language: slim white line, dark glow, number at the
-    /// start, ±span endpoints, and a bubble ring that turns green when level.
+    /// LEVEL in the EV meter's language, laid out like a Nikon Z virtual horizon:
+    /// a slim dark band with a white centreline, a cross-bar marker, zero notches,
+    /// and the number at the start. Centreline, marker and number turn green when level.
     public struct MonitorLevelGauge: View {
         public enum Axis: Sendable { case horizontal, vertical }
 
@@ -13,11 +14,13 @@
         public static let levelDeg = 0.6
         /// Same green as the app's `LiveDesign.good`.
         public static let good = Color(red: 0.18, green: 0.78, blue: 0.42)
+        static let band: CGFloat = 8
+        static let bandFill = Color.black.opacity(0.45)
 
         private let axis: Axis
         private let value: Double?
 
-        /// `value` in degrees (positive right / up); `nil` draws the bare line with `—`.
+        /// `value` in degrees (positive right / up); `nil` draws the bare band with `—`.
         public init(axis: Axis, value: Double?) {
             self.axis = axis
             self.value = value
@@ -32,77 +35,58 @@
             Canvas { context, size in
                 let white = MonitorTheme.text
                 let isLevel = value.map { abs($0) < Self.levelDeg } ?? false
-                let tint = isLevel ? MonitorLevelGauge.good : white
+                let tint = isLevel ? Self.good : white
                 let vertical = axis == .vertical
                 let length = vertical ? size.height : size.width
-                let start: CGFloat = vertical ? 34 : 22
-                let end = max(start, length - (vertical ? 18 : 22))
-                let across = (vertical ? size.width : size.height) - (vertical ? size.width / 2 : 8)
-                func point(_ t: CGFloat) -> CGPoint {
-                    vertical ? CGPoint(x: size.width / 2, y: t) : CGPoint(x: t, y: across)
+                let start: CGFloat = vertical ? 18 : 4
+                let end = max(start, length - 4)
+                let across = vertical ? size.width / 2 : size.height - 8
+                func point(_ t: CGFloat, _ off: CGFloat = 0) -> CGPoint {
+                    vertical ? CGPoint(x: across + off, y: t) : CGPoint(x: t, y: across + off)
                 }
                 // Positive reads up (vertical) or right (horizontal).
                 func position(_ degrees: Double) -> CGFloat {
-                    let f = CGFloat((min(Self.spanDeg, max(-Self.spanDeg, degrees)) + Self.spanDeg) / (2 * Self.spanDeg))
-                    return vertical ? end - (end - start) * f : start + (end - start) * f
+                    let f = CGFloat(
+                        (min(Self.spanDeg, max(-Self.spanDeg, degrees)) + Self.spanDeg) / (2 * Self.spanDeg))
+                    let inset = Self.band / 2
+                    return vertical ? end - inset - (end - start - 2 * inset) * f : start + inset + (end - start - 2 * inset) * f
                 }
-                let number = Text(Self.label(value)).font(MonitorTheme.font(10, weight: .semibold))
-                    .monospacedDigit().foregroundStyle(tint)
-                context.draw(number, at: CGPoint(x: size.width / 2, y: 6))
-                let ends: [(String, CGPoint)] =
+                context.draw(
+                    Text(Self.label(value)).font(MonitorTheme.font(10, weight: .semibold))
+                        .monospacedDigit().foregroundStyle(tint),
+                    at: CGPoint(x: size.width / 2, y: 6))
+                let h = Self.band / 2
+                let bandRect =
                     vertical
-                    ? [("+8", CGPoint(x: size.width / 2, y: 23)), ("−8", CGPoint(x: size.width / 2, y: size.height - 5))]
-                    : [("−8", CGPoint(x: 9, y: across)), ("+8", CGPoint(x: size.width - 9, y: across))]
-                for (label, at) in ends {
-                    context.draw(
-                        Text(label).font(MonitorTheme.font(8, weight: .medium)).foregroundStyle(white), at: at)
-                }
-                let marker = value.map { position($0) }
-                var line = Path()
-                func segment(_ a: CGFloat, _ b: CGFloat) {
-                    guard b > a else { return }
-                    line.move(to: point(a))
-                    line.addLine(to: point(b))
-                }
-                if let marker {
-                    let lo = min(marker - 9, end)
-                    let hi = max(marker + 9, start)
-                    segment(start, lo)
-                    segment(hi, end)
-                } else {
-                    segment(start, end)
-                }
-                context.stroke(line, with: .color(white.opacity(0.8)), lineWidth: 1)
-                // Zero reference, like a bubble vial's centre marks.
+                    ? CGRect(x: across - h, y: start, width: Self.band, height: end - start)
+                    : CGRect(x: start, y: across - h, width: end - start, height: Self.band)
+                context.fill(Path(roundedRect: bandRect, cornerRadius: h), with: .color(Self.bandFill))
+                var centre = Path()
+                centre.move(to: point(start + h))
+                centre.addLine(to: point(end - h))
+                context.stroke(centre, with: .color(tint.opacity(isLevel ? 1 : 0.8)), lineWidth: 1)
+                // Zero notches just outside the band.
                 let zero = position(0)
-                var tick = Path()
-                let z = point(zero)
-                if vertical {
-                    tick.move(to: CGPoint(x: z.x - 5, y: z.y))
-                    tick.addLine(to: CGPoint(x: z.x + 5, y: z.y))
-                } else {
-                    tick.move(to: CGPoint(x: z.x, y: z.y - 5))
-                    tick.addLine(to: CGPoint(x: z.x, y: z.y + 5))
+                var notches = Path()
+                for side: CGFloat in [-1, 1] {
+                    notches.move(to: point(zero, side * (h + 1)))
+                    notches.addLine(to: point(zero, side * (h + 4)))
                 }
-                context.stroke(tick, with: .color(white.opacity(0.8)), lineWidth: 1)
-                if let marker {
-                    let c = point(marker)
-                    context.stroke(
-                        Path(ellipseIn: CGRect(x: c.x - 4.5, y: c.y - 4.5, width: 9, height: 9)),
-                        with: .color(tint), lineWidth: 1.2)
-                    if isLevel {
-                        context.fill(
-                            Path(ellipseIn: CGRect(x: c.x - 2, y: c.y - 2, width: 4, height: 4)),
-                            with: .color(tint))
-                    }
+                context.stroke(notches, with: .color(white.opacity(0.8)), lineWidth: 1)
+                if let value {
+                    let m = position(value)
+                    var bar = Path()
+                    bar.move(to: point(m, -(h + 2)))
+                    bar.addLine(to: point(m, h + 2))
+                    context.stroke(bar, with: .color(tint), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 }
             }
             .monitorReadoutShadow()
         }
     }
 
-    /// Top-down / straight-up offset in the same language: thin ring (±span),
-    /// centre cross, bubble ring that turns green when within `levelDeg`.
+    /// Top-down / straight-up offset in the same language: dark disc band, white
+    /// cross, cross-bar marker; green when within `levelDeg`.
     public struct MonitorLevelBubble: View {
         public static let radius: CGFloat = 44
         public static let spanDeg = 10.0
@@ -128,27 +112,22 @@
                         .font(MonitorTheme.font(10, weight: .semibold)).monospacedDigit()
                         .foregroundStyle(tint),
                     at: CGPoint(x: mid.x, y: 6))
-                context.stroke(
+                context.fill(
                     Path(ellipseIn: CGRect(x: mid.x - r, y: mid.y - r, width: 2 * r, height: 2 * r)),
-                    with: .color(white.opacity(0.8)), lineWidth: 1)
+                    with: .color(MonitorLevelGauge.bandFill))
                 var cross = Path()
-                cross.move(to: CGPoint(x: mid.x - 5, y: mid.y))
-                cross.addLine(to: CGPoint(x: mid.x + 5, y: mid.y))
-                cross.move(to: CGPoint(x: mid.x, y: mid.y - 5))
-                cross.addLine(to: CGPoint(x: mid.x, y: mid.y + 5))
-                context.stroke(cross, with: .color(white.opacity(0.8)), lineWidth: 1)
+                cross.move(to: CGPoint(x: mid.x - r + 4, y: mid.y))
+                cross.addLine(to: CGPoint(x: mid.x + r - 4, y: mid.y))
+                cross.move(to: CGPoint(x: mid.x, y: mid.y - r + 4))
+                cross.addLine(to: CGPoint(x: mid.x, y: mid.y + r - 4))
+                context.stroke(cross, with: .color(tint.opacity(isLevel ? 1 : 0.8)), lineWidth: 1)
                 let clamp = distance > Self.spanDeg ? Self.spanDeg / distance : 1
                 let c = CGPoint(
-                    x: mid.x + CGFloat(x * clamp / Self.spanDeg) * r,
-                    y: mid.y - CGFloat(y * clamp / Self.spanDeg) * r)
+                    x: mid.x + CGFloat(x * clamp / Self.spanDeg) * (r - 6),
+                    y: mid.y - CGFloat(y * clamp / Self.spanDeg) * (r - 6))
                 context.stroke(
-                    Path(ellipseIn: CGRect(x: c.x - 4.5, y: c.y - 4.5, width: 9, height: 9)),
-                    with: .color(tint), lineWidth: 1.2)
-                if isLevel {
-                    context.fill(
-                        Path(ellipseIn: CGRect(x: c.x - 2, y: c.y - 2, width: 4, height: 4)),
-                        with: .color(tint))
-                }
+                    Path(ellipseIn: CGRect(x: c.x - 5, y: c.y - 5, width: 10, height: 10)),
+                    with: .color(tint), lineWidth: 2)
             }
             .frame(width: 2 * Self.radius + 16, height: 2 * Self.radius + 32)
             .monitorReadoutShadow()

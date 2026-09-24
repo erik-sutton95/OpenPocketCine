@@ -171,9 +171,10 @@ Enable **LEVEL** in View Assist to see how level the picture is against
 gravity. The reading comes from the camera's own attitude sensor, not the
 phone.
 
-- Two slim meters in the EV meter's style show roll along the bottom of the
-  picture and tilt at its right edge, above the joystick. Each
-  spans ±8° with a centre mark. The ring and number turn green within 0.6° of
+- Two slim meters, laid out like a Nikon Z virtual horizon, show roll along
+  the bottom of the picture and tilt at its right edge, above the joystick. A
+  short bar crosses a dark band to show the angle (full scale ±8°), with small
+  notches marking level. The line, bar and number turn green within 0.6° of
   level.
 - Within about 25° of pointing straight down or up, the gauges give way to a
   round bubble that shows how far the lens is from plumb. Use it for top-down
