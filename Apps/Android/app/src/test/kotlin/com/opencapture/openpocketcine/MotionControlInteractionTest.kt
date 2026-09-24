@@ -41,6 +41,17 @@ class MotionControlInteractionTest {
     }
 
     @Test
+    fun heightLimitedEditorNeverCrashesOnFractionalOrTinyBounds() {
+        // Sentry OPENPOCKETCINE-ANDROID-6/7/8: (maxY - minY) rounds so maxY - height lands an ULP
+        // below minY, and coerceIn threw on the empty range.
+        val rounding = ChromeRect(8f, 81.297005f, 700f, 419.5853f)
+        assertEquals(81.297005f, motionEditorDefaultFrame(rounding, ChromeRect(0f, 0f, 0f, 0f), portrait = false).minY)
+        // Portrait bounds ending above the 44 dp gesture reserve must not yield a negative height.
+        val tiny = motionEditorDefaultFrame(ChromeRect(8f, 8f, 300f, 20f), ChromeRect(0f, 0f, 0f, 0f), portrait = true)
+        assertTrue(tiny.height >= 0f)
+    }
+
+    @Test
     fun pillDragKeepsExclusiveOwnershipThroughReleaseEvenAfterReturningToStart() {
         val drag = MotionControlDragGesture(immediate = true, slop = 8f)
         assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(10, 2f))

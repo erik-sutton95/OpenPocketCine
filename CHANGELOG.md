@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Android Live View no longer crashes on some screen sizes while gimbal controls
+  are shown. Float rounding could make the Motion editor's default placement
+  range empty, and `coerceIn` threw (Sentry OPENPOCKETCINE-ANDROID-6/7/8). The
+  exposure meter placement had the same pattern.
+
 ## [0.1.5] - 2026-09-24
 
 Cumulative operator-facing notes for the open beta build 138 (0.1.0) → 0.1.5

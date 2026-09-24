@@ -39,7 +39,8 @@ internal class CameraExposureMeter(raw: Int, available: Boolean = true) {
             fun fit(lower: Float, upper: Float): ChromeRect? {
                 val height = minOf(180f, upper - lower)
                 if (height < 72f) return null
-                val y = (preferredCenter - height / 2f).coerceIn(lower, upper - height)
+                // Not coerceIn: upper - height can round an ULP below lower, and coerceIn throws.
+                val y = maxOf(lower, minOf(preferredCenter - height / 2f, upper - height))
                 return ChromeRect(x, y, 28f, height)
             }
             val preferred = fit(top, bottom) ?: return null

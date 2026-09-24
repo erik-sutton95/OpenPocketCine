@@ -327,8 +327,9 @@ internal fun motionEditorDefaultFrame(bounds: ChromeRect, zoom: ChromeRect, port
     val originalHeight = min(EDITOR_HEIGHT_DP, bounds.height)
     val reservedTop = if (portrait) max(bounds.minY, 44f) else bounds.minY
     val bottom = if (portrait && !zoom.isEmpty) min(bounds.maxY, max(reservedTop + 1f, zoom.minY - 8f)) else bounds.maxY
-    val height = min(originalHeight, bottom - reservedTop)
-    val top = (bounds.minY + (bounds.height - originalHeight) / 2f).coerceIn(reservedTop, bottom - height)
+    val height = max(0f, min(originalHeight, bottom - reservedTop))
+    // Not coerceIn: float rounding can put bottom - height an ULP below reservedTop, and coerceIn throws.
+    val top = max(reservedTop, min(bounds.minY + (bounds.height - originalHeight) / 2f, bottom - height))
     val width = min(EDITOR_WIDTH_DP, bounds.width)
     return ChromeRect(bounds.midX - width / 2f, top, width, height)
 }
