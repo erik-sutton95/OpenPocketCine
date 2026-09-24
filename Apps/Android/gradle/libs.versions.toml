@@ -13,7 +13,7 @@ okhttp = "5.5.0"
 kyantBackdrop = "2.0.1"
 kyantShapes = "1.2.1"
 mlkitFaceDetection = "16.1.7"
-sentry = "8.56.0"
+sentry = "8.57.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
