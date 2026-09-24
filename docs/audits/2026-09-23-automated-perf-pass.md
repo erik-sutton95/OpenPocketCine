@@ -18,8 +18,9 @@ The pass is repeatable without an operator once a phone and camera are ready.
 | Summarize | `tools/perf-trace-summary.py` reads the trace: per-process CPU/GPU/display power impact, CPU instructions per second, thermal state time, CPU by thread and hottest frames | `<profile>.summary.txt` |
 
 Profiles: `clean` (no assists), `lut`, `pro` (LUT + PEAK + WAVE) and `heavy`
-(LUT, PEAK, ZEBRA, WAVE, HISTO, VECTOR). Append `+rec` to record a take (the
-test stays attached so it can stop REC). Run with
+(LUT, PEAK, ZEBRA, WAVE, HISTO, VECTOR). Append `+rec` to record a take; a second
+test pass stops REC after the trace so XCTest is never attached while tracing
+(attached UI automation blocks direct-to-display scanout). Run with
 `just perf-soak <udid> "clean pro"`.
 
 A/B method: the baseline (`05ef6abf`, this branch before any change) and the
@@ -147,20 +148,23 @@ Multiview tiles, watcher client, tracking) and the Core Animation REC tally:
 | --- | --- | --- | --- | --- |
 | `pro` | 1.75 (baseline 3.16 to 3.73) | 1.0 (baseline 6.1 to 8.0) | 1.0 | Fair |
 | `clean` | 0.72 (baseline 2.01 to 2.08) | 0.16 (baseline 2.1 to 2.4) | 0.1 | Fair |
-| real REC take, `pro` | 1.86 (baseline 3.47) | 2.53 (baseline 8.62) | 2.15 (baseline 2.57) | Fair / Serious |
+| real REC take, `pro`, attached (see below) | 1.86 (baseline 3.47) | 2.53 (baseline 8.62) | 2.15 (baseline 2.57) | Fair / Serious |
+| real REC take, `pro`, detached | 1.78 | 1.12 | 2.0 | Fair |
 
-### Recording loses direct-to-display (open)
+### Direct-to-display during REC (resolved: harness artifact)
 
-Metal System Trace shows the live view scanned out **direct to display** at
-25 surface swaps per second (the feed rate; ProMotion follows it) without a
-GPU composition pass. During a REC take the same screen drops to composited
-output at 52 to 60 swaps per second, which is why GPU impact doubles while
-recording. iOS reports "layer must have only clear content above" and "layer
-must be opaque". Removing the REC tally or all pulses did not restore direct
-scanout, so another REC-only change reaches the feed layer; finding it is the
-top remaining power item for long takes. Pulsing the tally through SwiftUI
-separately cost about a third of REC CPU (3.2 to 2.1 impact with it off); it
-now runs as a Core Animation opacity animation (2.53).
+Metal System Trace shows the live view scanned out **direct to display** at 25
+surface swaps per second (the feed rate; ProMotion follows it) with no GPU
+composition pass. Early REC runs showed composited output at 52 to 60 swaps per
+second, but those runs kept XCTest attached to stop the take, and an attached
+UI-automation session alone blocks direct scanout (a non-REC run held attached
+reproduced it). Layer-tree diffs and removing the tally, glow, zoom dim and
+record core did not change it. With the soak detached (the take is stopped by
+a second test pass), a real REC take with the pulsing tally stays direct at 25
+swaps per second: CPU impact 1.12 at 1.78 G instructions/s in Fair. The
+attached baseline and candidate REC rows above share the artifact, so their
+relative difference still holds; their absolute GPU impact does not. Moving the
+tally pulse to Core Animation removed about a third of REC CPU.
 
 Rendering a single source's look straight into the glass canvas (`37d440df`,
 no CGImage readback or re-upload) then brought `pro` to CPU impact 1.01 at

@@ -36,9 +36,9 @@ for i in "${!PROFILES[@]}"; do
   rec=0
   if [[ "$profile" == *+rec ]]; then rec=1; profile="${profile%+rec}"; fi
   tag="$profile"
-  # A REC take must be stopped by the test, so +rec keeps XCTest attached.
+  # XCTest stays detached while tracing even for a take: attached UI automation
+  # blocks direct-to-display scanout. A second test pass stops REC afterwards.
   det="${DETACH:-1}"
-  [[ $rec == 1 ]] && det=0
   [[ $rec == 1 ]] && tag="$profile-rec"
   log="$OUT/$tag.log"
   echo "== $profile (hold ${HOLD}s, trace ${TRACE}s, $CONFIG)"
@@ -46,7 +46,7 @@ for i in "${!PROFILES[@]}"; do
   xcrun devicectl device install app --device "$DEVICE" \
     "$DERIVED/Build/Products/$CONFIG-iphoneos/OpenPocketCine.app" >"$OUT/$tag.install.log" 2>&1
   xcrun devicectl device process launch --device "$DEVICE" --terminate-existing \
-    com.opencapture.openpocketcine >"$OUT/$tag.launch.log" 2>&1
+    ${LAUNCH_ENV:+--environment-variables "$LAUNCH_ENV"} com.opencapture.openpocketcine >"$OUT/$tag.launch.log" 2>&1
   sleep 3
   TEST_RUNNER_OPV_PERF_DETACH="$det" TEST_RUNNER_OPV_PERF_ATTACH=1 TEST_RUNNER_OPV_PERF_RECORD="$rec" TEST_RUNNER_OPV_PERF_SOAK=1 TEST_RUNNER_OPV_PERF_PROFILE="$profile" TEST_RUNNER_OPV_PERF_SOAK_S="$HOLD" \
     xcodebuild test-without-building -xctestrun "$XCTESTRUN" -destination "platform=iOS,id=$DEVICE" \
@@ -67,6 +67,13 @@ for i in "${!PROFILES[@]}"; do
     xcrun xctrace record --device "$DEVICE" --template "$TEMPLATE" "${extra_args[@]}" \
       --attach OpenPocketCine --time-limit "${TRACE}s" --output "$OUT/$tag.trace" \
       >"$OUT/$tag.xctrace.log" 2>&1 || tail -5 "$OUT/$tag.xctrace.log"
+  fi
+  if [[ $rec == 1 && "$det" == 1 ]]; then
+    TEST_RUNNER_OPV_PERF_STOP=1 TEST_RUNNER_OPV_PERF_ATTACH=1 TEST_RUNNER_OPV_PERF_DETACH=1 \
+      TEST_RUNNER_OPV_PERF_SOAK=1 TEST_RUNNER_OPV_PERF_PROFILE="$profile" \
+      xcodebuild test-without-building -xctestrun "$XCTESTRUN" -destination "platform=iOS,id=$DEVICE" \
+      -only-testing:OpenPocketCineUITests/PerfSoakTests -resultBundlePath "$OUT/$tag-stop.xcresult" \
+      >"$OUT/$tag-stop.log" 2>&1 && echo "REC stopped" || echo "REC STOP FAILED: stop the camera by hand ($OUT/$tag-stop.log)"
   fi
   if [[ "$det" == 1 ]]; then
     grep -q "Test Suite 'Selected tests' passed" "$log" && echo "test passed" || echo "test FAILED (see $log)"

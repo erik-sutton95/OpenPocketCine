@@ -57,6 +57,16 @@ final class PerfSoakTests: XCTestCase {
         }
         let record = app.buttons["monitor.system.record"]
         let settings = app.buttons["monitor.system.settings"]
+        if env["OPV_PERF_STOP"] == "1" {
+            // Second pass of a detached take: stop REC, prove it stopped.
+            XCTAssertTrue(record.waitForExistence(timeout: 10), "no live monitor to stop REC")
+            record.tap()
+            let stop = app.buttons["Stop"]
+            if stop.waitForExistence(timeout: 3) { stop.tap() }
+            Thread.sleep(forTimeInterval: 2)
+            attach("perf-soak-\(name)-stopped", app)
+            return
+        }
         let liveDeadline = Date().addingTimeInterval(90)
         // Release has no stress auto-reconnect: tap the nearby saved camera's Connect.
         let connect = app.buttons.matching(
@@ -110,16 +120,10 @@ final class PerfSoakTests: XCTestCase {
             Thread.sleep(forTimeInterval: 3)
         }
         print("PERF_SOAK_HOLD_BEGIN profile=\(name) on=\(applied.joined(separator: ",")) rec=\(recordTake) hold=\(Int(hold))")
+        if recordTake { attach("perf-soak-\(name)-recording", app) }
         if detach { return }
         // ponytail: plain sleep, no queries; the host trace is the measurement.
-        if recordTake {
-            // One mid-take screenshot proves the REC chrome renders.
-            Thread.sleep(forTimeInterval: hold / 2)
-            attach("perf-soak-\(name)-recording", app)
-            Thread.sleep(forTimeInterval: hold / 2)
-        } else {
-            Thread.sleep(forTimeInterval: hold)
-        }
+        Thread.sleep(forTimeInterval: hold)
         print("PERF_SOAK_HOLD_END profile=\(name)")
         if recordTake {
             record.tap()
