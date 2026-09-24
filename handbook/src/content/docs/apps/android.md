@@ -162,11 +162,12 @@ phone.
 - Two slim meters, laid out like a Nikon Z virtual horizon, show roll along
   the bottom of the picture and tilt right of centre, the same distance from
   the middle of the picture as the roll meter. A
-  short bar crosses a dark band to show the angle (full scale ±8°), with small
-  notches marking level. The line, bar and number turn green within 0.6° of
+  short bar crosses a thin white line to show the angle (full scale ±8°), with
+  small notches marking level. The line, bar and number turn green within 0.6° of
   level.
-- Within about 25° of pointing straight down or up, the gauges give way to a
-  round bubble that shows how far the lens is from plumb. Use it for top-down
+- Within about 25° of pointing straight down or up, the meters give way to a
+  round bubble level: a bead that is amber off level and green within 0.6° of
+  plumb. Use it for top-down
   shots.
 - If the camera stops reporting attitude, the meters show a dash and
   **No level data**. They never turn green without data.
