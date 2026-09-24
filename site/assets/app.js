@@ -29,6 +29,29 @@
       if (!target) return;
       e.preventDefault();
       target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+      if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+      target.focus({ preventScroll: true });
+    });
+  }
+
+  // Native disclosure keeps mobile navigation usable even without JavaScript.
+  function initNavMenu() {
+    const menu = document.querySelector(".nav__menu");
+    if (!menu) return;
+    const summary = menu.querySelector("summary");
+    document.addEventListener("click", (event) => {
+      if (!menu.contains(event.target) || event.target.closest("a")) menu.open = false;
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !menu.open) return;
+      menu.open = false;
+      summary.focus();
+    });
+    menu.addEventListener("focusout", (event) => {
+      if (!menu.contains(event.relatedTarget)) menu.open = false;
+    });
+    window.matchMedia("(min-width: 860px)").addEventListener("change", (event) => {
+      if (event.matches) menu.open = false;
     });
   }
 
@@ -86,7 +109,7 @@
   // ---- Magnetic buttons: pills lean toward the cursor, spring back on leave ----
   function initMagnetic() {
     if (reduceMotion || !finePointer) return;
-    document.querySelectorAll(".btn--magnetic, .coffee-cta .bmc-btn").forEach((btn) => {
+    document.querySelectorAll(".btn--magnetic").forEach((btn) => {
       const strength = 0.22, limit = 9;
       btn.addEventListener("pointermove", (e) => {
         const r = btn.getBoundingClientRect();
@@ -307,6 +330,7 @@
 
   function init() {
     initAnchors();
+    initNavMenu();
     initNavMorph();
     initSpotlight();
     initMagnetic();

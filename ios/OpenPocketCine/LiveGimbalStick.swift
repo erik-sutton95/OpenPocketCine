@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -36,6 +37,7 @@ struct LiveGimbalStick: View {
         }
         .animation(.easeOut(duration: 0.12), value: contact)
         .frame(width: size, height: size)
+        .monitorReadoutShadow()
         .contentShape(Circle())
         .gesture(drag, including: interactive ? .gesture : .none)
         .allowsHitTesting(interactive)

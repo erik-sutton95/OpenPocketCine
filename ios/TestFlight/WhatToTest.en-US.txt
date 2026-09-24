@@ -13,12 +13,14 @@ New and changed
 
 Fixes
 
+- The joystick and gimbal controls now have the same dark glow as other live-view controls, making them easier to see over bright footage.
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
 - The REC and scan pulses no longer hold the display at its highest refresh rate, and paused clips stop redrawing.
 
 What to test
 
+- Over a bright scene, check the dark glow around the joystick and gimbal controls, then drag the joystick and open the gimbal drawer.
 - On a saved camera, try Add setup › Wi-Fi and › Hotspot, then connect with Camera Wi-Fi again and confirm live view returns.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - Monitor for 10 minutes with LUT, PEAK and WAVE on, then record: glass panels and the REC pulse should look as before, and the phone should stay cooler.

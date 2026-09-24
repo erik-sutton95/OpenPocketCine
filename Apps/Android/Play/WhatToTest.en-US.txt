@@ -13,6 +13,7 @@ New and changed
 
 Fixes
 
+- The joystick and gimbal controls now have the same dark glow as other live-view controls, making them easier to see over bright footage.
 - Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
@@ -23,5 +24,5 @@ What to test
 - Open Multiview with two or more cameras: record the group, switch Grid and Center stage, double-tap a tile, then close and connect one camera normally.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
-- In AF-C, point the camera at a face: the face box should appear within a moment and follow it.
+- Over a bright scene, check the dark glow around the joystick and gimbal controls, then drag the joystick and open the gimbal drawer.
 - On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

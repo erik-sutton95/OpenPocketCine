@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
+import com.opencapture.monitorui.monitorReadoutShadow
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -125,7 +126,7 @@ fun LiveGimbalButton(
         OpcIcon(
             OpcIcon.CROSSHAIR,
             contentDescription = null,
-            modifier = Modifier.size(18.dp).alpha(if (locked) 0.4f else 1f),
+            modifier = Modifier.size(18.dp).alpha(if (locked) 0.4f else 1f).monitorReadoutShadow(),
             tint = LiveDesign.text,
         )
     }

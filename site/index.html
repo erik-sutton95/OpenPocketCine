@@ -8,13 +8,13 @@
   <meta name="description" content="OpenPocketCine is a free, open-source field-monitor app for DJI Osmo. Pocket 4P and Pocket 4 working. Pocket 3 and Nano partial. Action 5 and 6 untested.">
   <meta name="theme-color" content="#141414">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 
   <link rel="canonical" href="https://openpocketcine.app/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="OpenPocketCine: Open-source field monitor for DJI Osmo">
   <meta property="og:description" content="Free, community-driven field monitor for DJI Osmo. Pocket 4P and Pocket 4 working; Pocket 3 and Nano partial; Action 5 and 6 untested.">
-  <meta property="og:image" content="assets/screens/hero-monitor.webp">
+  <meta property="og:image" content="assets/screens/hero-monitor.webp?v=4d8a6731353b">
   <meta property="og:url" content="https://openpocketcine.app/">
   <meta name="twitter:card" content="summary_large_image">
 
@@ -25,52 +25,58 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="preload" as="image" href="assets/screens/hero-monitor.webp">
-  <link rel="stylesheet" href="assets/app.css?v=0a8a3598b191">
+  <link rel="preload" as="image" href="assets/screens/hero-monitor.webp?v=4d8a6731353b">
+  <link rel="stylesheet" href="assets/app.css?v=1f471ff4d69c">
 </head>
 <body>
+
+  <a class="skip-link" href="#top">Skip to content</a>
 
   <header class="nav nav--dark" id="nav">
     <div class="container nav__inner">
       <a href="#top" class="nav__brand">
-        <img src="assets/icon.png" alt="OpenPocketCine" width="28" height="28">
+        <img src="assets/icon.png" alt="" width="28" height="28">
         <span>OpenPocketCine</span>
       </a>
       <nav class="nav__links" aria-label="Primary">
-        <a href="#scopes">Scopes</a>
-        <a href="#controls">Controls</a>
-        <a href="#tracking">Tracking</a>
-        <a href="#vertical">Assists</a>
-        <a href="#media">Media</a>
-        <a href="#press">Press</a>
+        <a href="#scopes">Features</a>
+        <a href="#platforms">Cameras</a>
         <a href="/docs/">Docs</a>
         <a href="/support/">Support</a>
-        <a href="#open-source">Open Source</a>
       </nav>
       <div class="nav__cta">
-        <a class="nav__github" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener" aria-label="OpenPocketCine on GitHub">★ GitHub</a>
-        <a class="btn btn--primary btn--magnetic" href="https://testflight.apple.com/join/1tmt3aEB" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>Join TestFlight</a>
+        <a class="btn btn--primary" href="#download">Get the beta<span aria-hidden="true">↓</span></a>
       </div>
+      <details class="nav__menu">
+        <summary>Menu<span class="nav__menu-icon" aria-hidden="true"></span></summary>
+        <nav class="nav__panel" aria-label="Mobile">
+          <a href="#scopes">Features</a>
+          <a href="#platforms">Cameras</a>
+          <a href="/docs/">Docs</a>
+          <a href="/support/">Support</a>
+          <a class="btn btn--primary" href="#download">Get the beta<span aria-hidden="true">↓</span></a>
+        </nav>
+      </details>
     </div>
   </header>
 
-  <main id="top">
+  <main id="top" tabindex="-1">
     <section class="hero band band--dark" id="hero" data-band="dark">
       <div class="hero__inner container">
-        <span class="kicker" data-intro>Field monitor · Open source</span>
+        <span class="kicker" data-intro>Free &amp; open source · iOS + Android</span>
         <h1 data-intro>The open field<br>monitor for <span class="sky">Osmo.</span></h1>
-        <p class="lead" data-intro>Pocket&nbsp;4P and Pocket&nbsp;4 are working. Pocket&nbsp;3 and Nano are partial. Action&nbsp;5 and&nbsp;6 are untested.</p>
+        <p class="lead" data-intro>A bigger view. Precise control. The monitoring tools your Osmo deserves, on your phone or iPad.</p>
         <div class="hero__cta" data-intro>
-          <a class="btn btn--primary btn--magnetic" href="https://testflight.apple.com/join/1tmt3aEB" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>Join TestFlight</a>
-          <a class="btn btn--primary btn--magnetic" href="https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&amp;hl=en-US&amp;ah=mXzHtdYCMQTB83vt0jIRLnOOZaA" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>Join Play beta</a>
-          <a class="btn btn--ghost" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">★ Star on GitHub</a>
+          <a class="btn btn--primary" href="https://testflight.apple.com/join/1tmt3aEB" target="_blank" rel="noopener">Join iOS beta<span class="btn__arrow" aria-hidden="true">↗</span></a>
+          <a class="btn btn--primary" href="https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&amp;hl=en-US&amp;ah=mXzHtdYCMQTB83vt0jIRLnOOZaA" target="_blank" rel="noopener">Join Android beta<span class="btn__arrow" aria-hidden="true">↗</span></a>
         </div>
+        <p class="hero__note" data-intro>Open betas for iPhone, iPad &amp; Android. <a href="#platforms">Check your camera<span aria-hidden="true"> →</span></a></p>
       </div>
       <div class="hero__stage" data-intro>
         <div class="hero__mock">
-          <img src="assets/screens/hero-monitor.webp"
-            alt="OpenPocketCine recording on iPhone: red tally, D-Log 2, live readouts, and a Stockholm street feed"
-            width="1800" height="640" fetchpriority="high" decoding="async">
+          <img src="assets/screens/hero-monitor.webp?v=4d8a6731353b"
+            alt="OpenPocketCine on iPhone with DJI's D-Log2 LUT and cinema frame guides over a Pocket 4 Pro sunset shot"
+            width="1600" height="1044" fetchpriority="high" decoding="async">
         </div>
       </div>
     </section>
@@ -106,9 +112,9 @@
           <p class="lead">Waveform, vectorscope, histogram, RGB parade, false color, zebras, focus peaking, Traffic Lights, frame guides, and your own <span class="mono">.cube</span>&nbsp;LUTs. Drawn from the HEVC stream.</p>
         </div>
         <div class="feat-row__visual">
-          <img src="assets/screens/scopes.webp"
-            alt="OpenPocketCine on iPhone with RGB waveform and Traffic Lights over a live D-Log 2 feed"
-            width="1800" height="886" loading="lazy" decoding="async">
+          <img src="assets/screens/scopes.webp?v=588beca0502b"
+            alt="OpenPocketCine with waveform, histogram, and vectorscope over a Pocket 4 Pro city shot"
+            width="1600" height="786" loading="lazy" decoding="async">
         </div>
       </div>
     </section>
@@ -126,13 +132,13 @@
       <div class="container container--wide feat-row feat-row--reverse">
         <div class="feat-row__copy">
           <span class="kicker">Camera controls</span>
-          <h2>Zoom, D-Log, and status on the phone.</h2>
-          <p class="lead">D-Log switches when you zoom. ISO, shutter, white balance, and mode are on screen. Bluetooth plus the camera&rsquo;s Wi-Fi. Record on the body until remote roll is proven.</p>
+          <h2>Your camera.<br>Within reach.</h2>
+          <p class="lead">Adjust ISO, shutter, white balance, focus, and recording format from the monitor. Frame with the gimbal and zoom controls, then start or stop recording from your phone. Available controls follow the connected camera.</p>
         </div>
         <div class="feat-row__visual">
-          <img src="assets/screens/camera-controls.webp"
-            alt="OpenPocketCine with 3x zoom, D-Log, waveform, and Traffic Lights on a city feed"
-            width="1800" height="1176" loading="lazy" decoding="async">
+          <img src="assets/screens/camera-controls.webp?v=5d6940bb1c4a"
+            alt="OpenPocketCine camera readouts, gimbal joystick, and record control over a Stockholm street shot"
+            width="1600" height="566" loading="lazy" decoding="async">
         </div>
       </div>
     </section>
@@ -154,9 +160,9 @@
           <p class="lead">Faces are boxed on the live feed. Tap one to lock the Osmo subject tracker.</p>
         </div>
         <div class="feat-row__visual">
-          <img src="assets/screens/face-tracking.webp"
-            alt="OpenPocketCine on iPhone with a face-tracking box locked on a subject in the live feed"
-            width="1800" height="887" loading="lazy" decoding="async">
+          <img src="assets/screens/face-tracking.webp?v=6bce4826dc11"
+            alt="OpenPocketCine displaying face detection over Pocket 4 Pro footage"
+            width="1600" height="786" loading="lazy" decoding="async">
         </div>
       </div>
     </section>
@@ -178,15 +184,31 @@
           <p class="lead">Zebras, peaking, false color, waveform, Traffic Lights, guides, and grid stay available when the phone is vertical.</p>
         </div>
         <div class="feat-row__visual">
-          <img class="is-portrait" src="assets/screens/vertical.webp"
-            alt="OpenPocketCine in portrait with the full view-assist rail, zebras, and camera readouts"
-            width="720" height="1485" loading="lazy" decoding="async">
+          <img class="is-portrait" src="assets/screens/vertical.webp?v=f0cb9f261837"
+            alt="OpenPocketCine in portrait with a vertical city shot, DJI LUT, and camera controls"
+            width="720" height="1488" loading="lazy" decoding="async">
+        </div>
+      </div>
+    </section>
+
+    <section class="section feat-section band band--light" id="level-exposure" data-band="light">
+      <div class="container container--wide feat-row">
+        <div class="feat-row__copy">
+          <span class="kicker">Level and exposure</span>
+          <h2>Find your horizon.<br>Know your exposure.</h2>
+          <p class="lead">LEVEL reads the camera&rsquo;s attitude to show roll and tilt on the picture. Pair it with the camera EV meter and waveform to check framing and exposure without looking away from the shot.</p>
+          <p>Live camera telemetry, with clear indicators when readings are unavailable.</p>
+        </div>
+        <div class="feat-row__visual">
+          <img src="assets/screens/level-exposure.webp?v=bd5b8f071f79"
+            alt="OpenPocketCine showing the camera level, EV meter, and waveform over a landscape"
+            width="1600" height="786" loading="lazy" decoding="async">
         </div>
       </div>
     </section>
 
     <section class="media-bleed band band--dark" id="media" data-band="dark">
-      <img class="media-bleed__photo" src="assets/screens/media-library.webp"
+      <img class="media-bleed__photo" src="assets/screens/media-library.webp?v=a071e57bf853"
         alt="OpenPocketCine media library on iPhone: all clips, videos, photos, and favorites over a cafe table"
         width="1600" height="1067" loading="lazy" decoding="async">
       <div class="media-bleed__veil" aria-hidden="true"></div>
@@ -197,24 +219,47 @@
       </div>
     </section>
 
+    <section class="section feat-section band band--light band--white" id="ipad" data-band="light">
+      <div class="container container--wide feat-row feat-row--stack">
+        <div class="feat-row__copy">
+          <span class="kicker">Field monitoring on iPad</span>
+          <h2>More room for the shot.</h2>
+          <p class="lead">Bring your Osmo feed to a bigger screen. Place and resize waveform, histogram, and vectorscope around the picture, with camera controls and your LUT close at hand.</p>
+        </div>
+        <div class="feat-row__visual feat-row__visual--ipad">
+          <img src="assets/screens/ipad-scopes.webp?v=e904b8f22774"
+            alt="OpenPocketCine on an iPad Pro held in two hands, with waveform, histogram, and vectorscope over a Pocket 4 Pro city shot"
+            width="1600" height="1125" loading="lazy" decoding="async">
+        </div>
+      </div>
+    </section>
+
     <section class="section feat-section band band--light" id="playback" data-band="light">
       <div class="container container--wide feat-row feat-row--stack">
         <div class="feat-row__copy">
           <span class="kicker">Playback and delivery</span>
           <h2>Monitor the clip. Ship it with the look.</h2>
           <p class="lead">Playback keeps the same scopes and assists as live view. Export with an optional baked LUT, conform slow motion, share natively, or upload to Frame.io.</p>
-          <a class="brand-frameio" href="https://www.frame.io/" target="_blank" rel="noopener">
-            <img src="assets/frameio.png" alt="Frame.io" width="254" height="65">
-          </a>
+          <div class="cloud-destinations" aria-label="Cloud upload destinations">
+            <a class="cloud-destination" href="https://www.frame.io/" target="_blank" rel="noopener">
+              <img src="assets/frameio-icon.svg" alt="" width="32" height="32" loading="lazy">
+              <span><strong>Frame.io</strong><span class="cloud-destination__status">Available now</span></span>
+              <span class="cloud-destination__arrow" aria-hidden="true">↗</span>
+            </a>
+            <div class="cloud-destination cloud-destination--soon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18a4.5 4.5 0 0 1-.6-9A6.5 6.5 0 0 1 18 8a5 5 0 0 1 0 10Z"/></svg>
+              <span><strong>More cloud destinations</strong><span class="cloud-destination__status">Coming soon</span></span>
+            </div>
+          </div>
         </div>
         <div class="feat-row__visual feat-row__visual--pair">
           <div class="feat-pair">
-            <img src="assets/screens/media-playback.webp"
+            <img src="assets/screens/media-playback.webp?v=dae9a55061bd"
               alt="OpenPocketCine clip playback with timeline, LUT, and share controls"
-              width="1400" height="933" loading="lazy" decoding="async">
-            <img src="assets/screens/media-playback-assists.webp"
-              alt="OpenPocketCine clip playback with the full assist rail: LUT, peaking, zebras, waveform, and Traffic Lights"
-              width="1327" height="659" loading="lazy" decoding="async">
+              width="1600" height="1044" loading="lazy" decoding="async">
+            <img src="assets/screens/media-playback-assists.webp?v=5116f091033c"
+              alt="OpenPocketCine playing a Pocket 4 Pro sunset clip with DJI LUT, waveform, and histogram"
+              width="1600" height="786" loading="lazy" decoding="async">
           </div>
         </div>
       </div>
@@ -282,7 +327,7 @@
           </article>
         </div>
         <div class="lineup__meta">
-          <p>iPhone and iPad today. Android is a public beta on Google Play.</p>
+          <p>Open betas for iPhone and iPad on TestFlight, and Android on Google Play.</p>
         </div>
       </div>
     </section>
@@ -366,16 +411,22 @@
 
     <section class="section band band--dark" id="download" data-band="dark">
       <div class="container cta-final">
-        <h2>Source is on GitHub.</h2>
-        <p class="lead">Issues and pull requests are welcome. iOS is on TestFlight. Android is a public beta on Google Play.</p>
-        <div class="hero__cta">
-          <a class="btn btn--primary btn--magnetic" href="https://testflight.apple.com/join/1tmt3aEB" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>Join TestFlight</a>
-          <a class="btn btn--primary btn--magnetic" href="https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&amp;hl=en-US&amp;ah=mXzHtdYCMQTB83vt0jIRLnOOZaA" target="_blank" rel="noopener"><span class="btn__rec" aria-hidden="true"></span>Join Play beta</a>
-          <a class="btn btn--ghost" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">★ Star on GitHub</a>
+        <span class="kicker">Get OpenPocketCine</span>
+        <h2>Your next shoot. A better view.</h2>
+        <p class="lead">Choose your platform and join the open beta.<br>Free to use. Built in the open.</p>
+        <div class="download-options">
+          <a class="download-option" href="https://testflight.apple.com/join/1tmt3aEB" target="_blank" rel="noopener">
+            <span class="download-option__meta">TestFlight · Open beta</span>
+            <strong>iPhone &amp; iPad</strong>
+            <span class="download-option__action">Join iOS beta<span aria-hidden="true">↗</span></span>
+          </a>
+          <a class="download-option" href="https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&amp;hl=en-US&amp;ah=mXzHtdYCMQTB83vt0jIRLnOOZaA" target="_blank" rel="noopener">
+            <span class="download-option__meta">Google Play · Open beta</span>
+            <strong>Android</strong>
+            <span class="download-option__action">Join Android beta<span aria-hidden="true">↗</span></span>
+          </a>
         </div>
-        <div class="coffee-cta">
-          <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="eriksutton" data-color="#FFDD00" data-emoji="☕" data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff"></script>
-        </div>
+        <p class="cta-final__help">New here? <a href="/docs/">Read the setup guide<span aria-hidden="true"> →</span></a></p>
       </div>
     </section>
   </main>
@@ -386,9 +437,13 @@
         <img src="assets/icon.png" alt="OpenPocketCine" width="24" height="24">
         <span>OpenPocketCine</span>
       </div>
+      <nav class="footer__links" aria-label="Footer">
+        <a href="/docs/">Docs</a>
+        <a href="/support/">Support</a>
+        <a href="#press">Press</a>
+        <a href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">GitHub<span aria-hidden="true"> ↗</span></a>
+      </nav>
       <p class="footer__meta">
-        <a href="/docs/">Docs</a> ·
-        <a href="/support/">Support</a> ·
         <a href="/privacy/">Privacy</a> ·
         <a href="/terms/">Terms</a> ·
         Free &amp; open source · Apache-2.0
@@ -412,6 +467,6 @@
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"
     integrity="sha384-Z3REaz79l2IaAZqJsSABtTbhjgOUYyV3p90XNnAPCSHg3EMTz1fouunq9WZRtj3d"
     crossorigin="anonymous"></script>
-  <script src="assets/app.js?v=f5c7d1d9d64d" defer></script>
+  <script src="assets/app.js?v=55d2745cc6f0" defer></script>
 </body>
 </html>

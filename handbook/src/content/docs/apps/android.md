@@ -292,7 +292,8 @@ on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
 a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
-beside zoom (Pocket only). Its trailing drawer has Mode, Speed and Ramp
+beside zoom (Pocket only). The button and joystick use the same dark glow as
+the camera readouts to stay visible over bright footage. Its trailing drawer has Mode, Speed and Ramp
 tabs, each with its own dial, showing Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast,
 and stick ramp. The Motion Control footer opens the experimental editor for an A→B (optional C) take (set A and B, choose each
 leg’s duration; drag the editor directly). With C set, Smoothness rounds B and shows a dashed curve.

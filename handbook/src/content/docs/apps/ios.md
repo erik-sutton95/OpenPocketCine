@@ -293,7 +293,9 @@ space after rotation or resizing, including saved positions. Long-press a View A
   The gimbal stick
   and zoom chip sit together as a cluster at the lower right: above the camera
   values in portrait and over the picture in landscape, on iPhone and iPad. A
-  gimbal-controls button sits beside zoom (Pocket only). Its trailing drawer
+  gimbal-controls button sits beside zoom (Pocket only). The button and joystick
+  use the same dark glow as the camera readouts to stay visible over bright footage.
+  Its trailing drawer
   has Mode, Speed and Ramp tabs, each with its own dial: Follow / Tilt locked / FPV / Direction Lock,
   Slow / Default / Fast, and stick ramp. The Motion Control footer opens the experimental editor for an A→B (optional C) take
   (set A and B, choose each leg’s duration; hold and drag

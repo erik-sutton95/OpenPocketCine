@@ -204,7 +204,11 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
 - Floating chrome follows the reference tint RGB `(20,22,24)`: 0.52 compact,
   0.62 expanded, 0.82 info and 0.86 delivery. Text and icons use tighter,
   darker local black shadows, independently of the plate tint. Readout
-  halos fade instead of clipping at the glyph or tile bounds. Compact
+  halos fade instead of clipping at the glyph or tile bounds.
+  Gimbal-controls icons and the joystick ring/knob use that same local glow on
+  both shells, including the cyan held state. Touch geometry stays unchanged.
+  Physical qualification of the gimbal glow remains pending on both platforms.
+  Compact
   hold/drag camera-value popups use the same detent haptics as the full drums.
   Landscape camera values and the assist plate sit
   `max(home-indicator, 14) + 10` pt/dp above the physical bottom so they

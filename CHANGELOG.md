@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Refreshed the website with current app captures, iPad and level examples,
+  simpler navigation, and equal iOS and Android open-beta choices.
 - Android Live View uses about half the app CPU on a Galaxy S25 with a live
   Pocket 4 Pro (1.83 to 0.88 G cycles/s with a LUT; 2.07 to 1.12 with LUT,
   PEAK and WAVE), at an unchanged 25 fps. Face AF looks for faces at 10 Hz
@@ -23,6 +25,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- The joystick and gimbal controls on iOS and Android now use the same dark
+  glow as other live-view controls, improving separation from bright footage.
 - Android Live View no longer crashes on some screen sizes while gimbal controls
   are shown. Float rounding could make the Motion editor's default placement
   range empty, and `coerceIn` threw (Sentry OPENPOCKETCINE-ANDROID-6/7/8). The

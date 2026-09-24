@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.monitorReadoutShadow
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.snap
@@ -2129,7 +2131,7 @@ fun LiveGimbalStick(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        Canvas(Modifier.fillMaxSize().monitorReadoutShadow()) {
             val stickPx = size.minDimension
             val knobPx = stickPx * knobRatio
             val stroke = 2.dp.toPx()
