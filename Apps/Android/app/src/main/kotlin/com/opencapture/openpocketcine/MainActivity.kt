@@ -51,10 +51,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.InfiniteAnimationPolicy
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -101,7 +103,11 @@ class MainActivity : ComponentActivity() {
         window.isNavigationBarContrastEnforced = false
         window.attributes.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        setContent {
+        // Compose's Popup polls its anchor with an infinite frame loop, so the always-mounted
+        // assist palette alone woke Main every vsync (120 Hz) over live view. Pace every
+        // infinite loop (Popup polls, REC pulse, spinners) like iOS's 30 Hz pulse timeline.
+        val recomposer = window.decorView.createLifecycleAwareWindowRecomposer(PacedInfiniteAnimations, lifecycle)
+        setContent(parent = recomposer) {
             SideEffect { composeFirstFrameDrawn.set(true) }
             OpenPocketCineTheme {
                 val haptics = rememberOperatorHaptics { model.hapticsEnabled }
@@ -368,5 +374,13 @@ private fun LaunchSplashOverlay(visible: Boolean) {
                 }
             }
         }
+    }
+}
+
+/** Infinite frame loops tick at about 30 Hz instead of every vsync; finite animations are untouched. */
+private object PacedInfiniteAnimations : InfiniteAnimationPolicy {
+    override suspend fun <R> onInfiniteOperation(block: suspend () -> R): R {
+        delay(25)
+        return block()
     }
 }
