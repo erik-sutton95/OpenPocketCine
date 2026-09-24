@@ -8,7 +8,7 @@ New and changed
 - Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
 - Osmo Action 6 support: live view, Normal 10-bit and D-Log M color with the official LUT, Photo and Timelapse. Not yet checked on a real Action 6.
 - On Action 6, an APERTURE tile takes the FOCUS slot with a live iris readout. Gimbal and focus controls are hidden.
-- Scopes, paused playback, 4K playback grading and camera status updates use less power.
+- Live View uses about half the CPU: Face AF looks 10 times a second until it finds a face, and scopes, paused playback and status updates use less power.
 - Devices without Google Play can install the sideload APK from the project's GitHub Releases page.
 
 Fixes
@@ -23,4 +23,5 @@ What to test
 - Open Multiview with two or more cameras: record the group, switch Grid and Center stage, double-tap a tile, then close and connect one camera normally.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
+- In AF-C, point the camera at a face: the face box should appear within a moment and follow it.
 - On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

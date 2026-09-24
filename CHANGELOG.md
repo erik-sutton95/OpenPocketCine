@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Android Live View uses about half the app CPU on a Galaxy S25 with a live
+  Pocket 4 Pro (1.83 to 0.88 G cycles/s with a LUT; 2.07 to 1.12 with LUT,
+  PEAK and WAVE), at an unchanged 25 fps. Face AF looks for faces at 10 Hz
+  until one appears and hands ML Kit NV21 converted natively, the always-mounted
+  assist palette no longer wakes Main on every 120 Hz vsync, and status frames
+  stop re-serializing an unchanged status. A `perf` build type and
+  `just android-perf-soak` make the measurement repeatable
+  ([Android pass](docs/audits/2026-09-24-android-perf-pass.md)).
+
 ### Fixed
 
 - Android Live View no longer crashes on some screen sizes while gimbal controls

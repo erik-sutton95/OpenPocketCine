@@ -12,7 +12,8 @@ the same PR.
 The [September 22 subsystem audit](audits/2026-09-22-performance-audit.md) separates
 source-level fix candidates from historical physical measurements and records
 the remaining CPU/GPU, battery and thermal profiling matrix for issue #402. The [September 23 automated pass](audits/2026-09-23-automated-perf-pass.md)
-adds the `just perf-soak` device harness and records the first Release A/B.
+adds the `just perf-soak` device harness and records the first Release A/B. The [September 24 Android pass](audits/2026-09-24-android-perf-pass.md)
+adds `just android-perf-soak` and records the first physical Android A/B.
 
 ## Budgets
 
@@ -33,7 +34,8 @@ adds the `just perf-soak` device harness and records the first Release A/B.
 | Gimbal mode readback | At most 1 Hz tilt/speed GET, driven by existing attitude receipts; no extra timer | `GimbalParamPoll` |
 | Battery | Sticky `ACTION_BATTERY_CHANGED` (Android); no 1 Hz poll | [`ANDROID.md`](../ANDROID.md) |
 | Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` on a same-format, same-tag VT hardware downscale to the wrist width, never the full live picture (same family as the phone layer; a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
-| Face AF (iOS) | Vision on the live VT buffer, latest-wins, one in flight: 25 Hz while a face is present, 10 Hz after about one second (25 runs) with none; the first face restores 25 Hz. Android admission is audit R8. | `LiveFaceDetector.pace` |
+| Face AF | Latest-wins, one in flight: 25 Hz while a face is present, 10 Hz after about one second (25 runs) with none; the first face restores 25 Hz. iOS runs Vision on the live VT buffer. Android asks the detector before any readback (`wantsFrame`), reads back 640×360 only when it will be used, and hands ML Kit NV21 converted in native code (ML Kit's own Bitmap path converted in Java at about 40% of Face AF CPU). | `LiveFaceDetector.pace` (both shells) |
+| Infinite frame loops (Android) | The window Recomposer paces `withInfiniteAnimationFrameNanos` to about 30 Hz (`PacedInfiniteAnimations`). Compose `Popup` polls its anchor with that loop, so the always-mounted assist palette alone woke Main at the 120 Hz display rate over live view. Finite animations keep vsync. Do not add a per-vsync loop to live chrome. | `MainActivity` |
 
 Motion Control window dragging keeps transient placement in the floating widget and
 commits its center to the shared model once on release. The iOS control-action
