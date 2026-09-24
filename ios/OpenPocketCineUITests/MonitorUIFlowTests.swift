@@ -871,6 +871,24 @@ final class MonitorUIFlowTests: XCTestCase {
         }
     }
 
+    /// The simulator never has a hotspot, so a hotspot connect must ask first. Cancel
+    /// leaves the camera untouched.
+    func testHotspotConnectAsksToTurnOnPersonalHotspot() {
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
+        app.launch()
+        rotate(.portrait)
+        let hotspot = app.buttons["cameras.setup.phoneHotspot"]
+        XCTAssertTrue(hotspot.waitForExistence(timeout: 10))
+        hotspot.tap()
+        let alert = app.alerts["Turn on Personal Hotspot"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.buttons["Open Settings"].exists)
+        XCTAssertTrue(alert.buttons["Connect"].exists)
+        capture("hotspot-connect-prompt")
+        alert.buttons["Cancel"].tap()
+        XCTAssertFalse(app.staticTexts["CONNECTING"].exists)
+    }
+
     func testConnectingCardShowsOneProgressLine() {
         app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
         app.launchEnvironment["OPV_UI_REVIEW_CONNECTING"] = "1"

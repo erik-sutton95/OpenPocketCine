@@ -10,6 +10,11 @@ struct SavedCamerasView: View {
     let compact: Bool
     @State private var showMultiview = false
     @State private var addSetup: AddSetupTarget?
+    /// A hotspot connect waiting for the operator to turn Personal Hotspot on.
+    @State private var hotspotPrompt: SavedCamera?
+    @State private var hotspotSettingsFor: SavedCamera?
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
     @State private var orientation = InterfaceOrientationObserver()
 
     private var connectionBusy: Bool { model.isBusy || model.session.isReconnecting }
@@ -27,7 +32,7 @@ struct SavedCamerasView: View {
                     orientation: orientation.orientation),
                 onConnect: { id in
                     guard !connectionBusy, let camera = saved(id) else { return }
-                    model.reconnect(camera)
+                    connect(camera, over: camera.preferredSetup)
                 },
                 onPair: { id in
                     guard !connectionBusy else { return }
@@ -63,7 +68,7 @@ struct SavedCamerasView: View {
                     guard !connectionBusy, let camera = saved(id),
                         let setup = CameraConnectionSetup(rawValue: setup)
                     else { return }
-                    model.reconnect(camera, setup: setup)
+                    connect(camera, over: setup)
                 },
                 onAddSetup: { id in
                     guard !connectionBusy, let camera = saved(id) else { return }
@@ -84,8 +89,8 @@ struct SavedCamerasView: View {
                             failed == .phoneHotspot
                             ? .hotspot : .password(camera.ssid(for: .wifi) ?? "")
                         addSetup = AddSetupTarget(camera: camera, page: page)
-                    case "cameraWiFi": model.reconnect(camera, setup: .cameraWiFi)
-                    default: model.reconnect(camera, setup: failed)
+                    case "cameraWiFi": connect(camera, over: .cameraWiFi)
+                    default: connect(camera, over: failed)
                     }
                 })
         }
@@ -110,9 +115,43 @@ struct SavedCamerasView: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(MonitorTheme.background)
         }
+        .alert(
+            "Turn on Personal Hotspot",
+            isPresented: Binding(
+                get: { hotspotPrompt != nil }, set: { if !$0 { hotspotPrompt = nil } }),
+            presenting: hotspotPrompt
+        ) { camera in
+            Button("Open Settings") {
+                hotspotSettingsFor = camera
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            Button("Connect") { model.reconnect(camera, setup: .phoneHotspot) }
+            Button("Cancel", role: .cancel) {}
+        } message: { camera in
+            Text(
+                "\(camera.displayName) joins this iPhone’s hotspot\(camera.hotspotSSID.map { " “\($0)”" } ?? ""). Turn on Personal Hotspot and Allow Others to Join (Settings or Control Center), then tap Connect."
+            )
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Back from Settings: offer Connect again rather than guessing it is on.
+            guard phase == .active, let camera = hotspotSettingsFor else { return }
+            hotspotSettingsFor = nil
+            hotspotPrompt = camera
+        }
         .fullScreenCover(
             isPresented: $showMultiview,
             onDismiss: { model.session.startScan() }, content: { MultiviewView() })
+    }
+
+    /// iOS reports Personal Hotspot only once a device has joined it, so a hotspot connect
+    /// without that sign asks first. Without it the camera spends its join retries on a
+    /// network that is not there.
+    private func connect(_ camera: SavedCamera, over setup: CameraConnectionSetup) {
+        if setup == .phoneHotspot, SharedWiFiPath.address(hotspot: true) == nil {
+            hotspotPrompt = camera
+        } else {
+            model.reconnect(camera, setup: setup)
+        }
     }
 
     private func saved(_ id: String) -> SavedCamera? {

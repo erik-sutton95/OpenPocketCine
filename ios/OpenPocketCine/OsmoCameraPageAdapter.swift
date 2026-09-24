@@ -102,7 +102,12 @@ enum OsmoCameraPageAdapter {
             model.session.connectionTargetID == saved.id
         else { return nil }
         let setup = model.session.connectionSetup
-        let message = StartupConnectionCopy.friendly(reason)
+        var message = StartupConnectionCopy.friendly(reason)
+        if setup == .phoneHotspot, SharedWiFiPath.address(hotspot: true) == nil {
+            // The usual cause: the hotspot was off, so the camera had nothing to join.
+            message =
+                "The camera could not find this iPhone’s hotspot. Turn on Personal Hotspot and Allow Others to Join, then try again."
+        }
         guard setup.movesCamera else {
             return .init(
                 title: "Couldn’t connect over Camera Wi-Fi", message: message,

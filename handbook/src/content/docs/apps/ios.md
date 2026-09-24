@@ -351,7 +351,9 @@ connect that way; the row's **Connect** uses the setup you used last.
   and **Maximize Compatibility** in Settings → Personal Hotspot. iOS does not
   share the phone's hotspot name or password with apps, so the camera scan fills
   in the name when it sees the hotspot; paste the password once from Settings and
-  it is remembered.
+  it is remembered. iOS only reveals that the hotspot is on once a device has
+  joined it, so connecting over Hotspot first asks you to turn it on (Settings or
+  Control Center), then connects when you tap **Connect**.
 
 Connecting moves the camera off its own Wi-Fi with the same captured commands as
 Multiview, and the app only goes live on the address that returns that camera's

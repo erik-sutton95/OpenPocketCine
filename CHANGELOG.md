@@ -23,7 +23,9 @@ separate iOS and Android lists.
   it finds them) and **Hotspot** (name filled from that scan) chips, on every
   Osmo camera including Action 6. The camera moves onto that network with the
   Multiview commands and goes live only on the address that proves its
-  identity. Connecting shows a progress bar with one line of status; a failure
+  identity. A Hotspot connect first asks you to turn on Personal Hotspot unless
+  the phone already shows it in use. Connecting shows a progress bar with one
+  line of status; a failure
   offers Edit setup, Try again or Camera Wi-Fi. The next Camera Wi-Fi connect restores the camera's own
   access point. Experimental pending physical checks; Android is not yet ported.
 - Experimental **Multiview on Android**, matching iOS: the grid button on
