@@ -13,7 +13,10 @@ All notable changes to this project are documented here. The format is based on
   PEAK and WAVE), at an unchanged 25 fps. Face AF looks for faces at 10 Hz
   until one appears and hands ML Kit NV21 converted natively, the always-mounted
   assist palette no longer wakes Main on every 120 Hz vsync, and status frames
-  stop re-serializing an unchanged status. A `perf` build type and
+  stop re-serializing an unchanged status. Face AF then runs ML Kit on 320×180
+  (it found the same faces as 640×360 in 30 to 54% less time) and WAVE / PARADE
+  reuse the previous build as their trail, bringing LUT to 0.62 and LUT, PEAK
+  and WAVE to 0.81 G cycles/s. A `perf` build type and
   `just android-perf-soak` make the measurement repeatable
   ([Android pass](docs/audits/2026-09-24-android-perf-pass.md)).
 

@@ -128,15 +128,17 @@ HEVC, not `c2.android`). LUT / FALSE / ZEBRA / PEAK add the 3D-cube grade pass.
 WAVE / PARADE /
 VECTOR / HISTO tap a 200-wide downsample (213×120 on 720p) at 25 Hz
 (10 Hz with three or more scopes) and paint in Compose Canvas.
-Face AF samples unmanaged 720p RGB at 640×360 through ML Kit Face
+Face AF samples unmanaged 720p RGB (640×360 readback, 320×180 detector
+input) through ML Kit Face
 Detection (Vision-class, 3/4 views) — not `android.media.FaceDetector`
 and not a PixelCopy of the swapchain (that copy is already mirrored
 when TT180/MIRROR is on, and the overlay mirrors again). Lock requires
 an eye landmark (iOS `FaceStructurePolicy`); ML Kit tracking IDs stay
 off so `FaceTrackHold` owns persistence. The Vulkan readback is NV21 from
-`nativeCopyFace`, requested only when `LiveFaceDetector.wantsFrame` says the
+`nativeCopyFace` (2×2 box to 320×180), requested only when `LiveFaceDetector.wantsFrame` says the
 detector will run (10 Hz after a second without a face, 25 Hz while tracking).
-WAVE / PARADE accumulate into a 250×153 bitmap off the UI thread; VECTOR uses
+WAVE / PARADE accumulate into a 250×153 bitmap off the UI thread, reusing
+the previous build's live layer as the trail (`ScopeTraceRaster.TraceLayers`); VECTOR uses
 the 128-bin raster.
 An inspector-only scope admits the tap and scope work at 5 Hz in both the GLES
 and Vulkan schedulers (`ScopeTapPolicy.tapIntervalNs` / `scopeWorkDue`); a

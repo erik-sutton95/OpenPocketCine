@@ -96,13 +96,59 @@ in frame drew the face box on the face.
 The on-screen fps label briefly reads about 20 when one 66 ms gap lands in its
 window; SurfaceFlinger's present timestamps show 25.0 fps over the same period.
 
+## Follow-up: ML Kit input size and the WAVE trail
+
+After the first pass, ML Kit inference was the largest item: 22% of a core at
+the 10 Hz idle pace and 57% while tracking a face at 25 Hz (sum of its pool
+threads, 640×360 input).
+
+**Input size, measured before changing it.** A throwaway instrumentation probe
+composited a portrait into a 640×360 frame with the face at 8, 10, 12, 14, 16,
+20 and 25% of frame width, then ran the production detector options on NV21 at
+640×360 and at a 320×180 downscale:
+
+| Face width | 640×360 | 320×180 |
+| --- | --- | --- |
+| 8% to 25% | found, eyes + nose, 16 to 17 ms | found, eyes + nose, 11 to 12 ms |
+| no face | 10.2 ms | 4.7 ms |
+
+320 found every face 640 found, down to 8% of frame width (below
+`MIN_FACE_SIZE`, a 41 px box), in 30% less time with a face and 54% less
+without. One synthetic frontal portrait is the limit of that evidence. Live, the
+ML Kit pool fell from 22.2% to 8.1% of a core with no face and from 57.1% to
+46.4% while tracking, and the box landed on the same face.
+
+The detector input is now 320×180 on every path: the 640×360 Vulkan readback is
+box-filtered 2×2 while converting to NV21 (a direct 4× GPU downsample would
+alias), and GLES / PixelCopy capture at 320.
+
+**WAVE / PARADE trail.** `trailSamples` is the previous bundle's `samples`
+instance and the splat is linear in intensity, so the previous build's live
+layer times `TRAIL_DECAY` is the trail. Each panel keeps a
+`ScopeTraceRaster.TraceLayers`: one splat per update into retained buffers, and
+a trail that is not the previous samples is splatted as before. A unit test
+checks reuse and fallback against a fresh build (within one code value). The
+WAVE raster fell from 5.2% to 3.6% of app samples and GC from 4.0% to 2.7%.
+
+App CPU cycles, PR head (`lut`/`pro` rows above) against this follow-up, two
+alternating rounds, 30 s each:
+
+| Scenario | App Gcycles/s | System Gcycles/s |
+| --- | --- | --- |
+| `lut`, no face | 0.89, 0.86 to 0.62, 0.64 (-28%) | 1.37, 1.34 to 1.03, 1.09 |
+| `pro`, no face | 1.12, 1.09 to 0.82, 0.81 (-27%) | 1.65, 1.62 to 1.30, 1.30 |
+| `lut`, tracking a face | 2.07, 2.05 to 1.53, 1.52 (-26%) | 2.75, 2.72 to 2.17, 2.14 |
+
+Against the pass baseline (`c1e8f941`) the app now runs `lut` at 0.62 instead
+of 1.83 Gcycles/s and `pro` at 0.81 instead of 2.07. Presents stayed 25.0 fps
+in every run.
+
 ## Not changed (proposals)
 
-- ML Kit inference itself is now the largest item (about 20% of a core at the
-  10 Hz idle pace, spread over its 8-thread pool).
-- WAVE rasterizes on the CPU at 25 Hz with fresh float buffers and re-splats
-  the trail each update (about 5% of a core plus GC); iOS reuses the previous
-  build as the trail.
+- Tracking a face still costs about 1.5 app Gcycles/s: ML Kit landmarks at
+  25 Hz. Detecting in a crop around the tracked face (with periodic full
+  frames for new faces) would cut it further.
+- WAVE still packs the whole plot and allocates one bitmap per update.
 - With WAVE on, the main window draws about 42 times a second because the
   scope trace and the glass backdrop land in different vsyncs.
 - `LiveCaptureStrip` takes the whole `CameraStatus`, so every status publish

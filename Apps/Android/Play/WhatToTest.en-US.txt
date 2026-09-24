@@ -8,7 +8,7 @@ New and changed
 - Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
 - Osmo Action 6 support: live view, Normal 10-bit and D-Log M color with the official LUT, Photo and Timelapse. Not yet checked on a real Action 6.
 - On Action 6, an APERTURE tile takes the FOCUS slot with a live iris readout. Gimbal and focus controls are hidden.
-- Live View uses about half the CPU: Face AF looks 10 times a second until it finds a face, and scopes, paused playback and status updates use less power.
+- Live View uses about a third of the CPU it did: lighter Face AF, and scopes, paused playback and status updates use less power.
 - Devices without Google Play can install the sideload APK from the project's GitHub Releases page.
 
 Fixes
