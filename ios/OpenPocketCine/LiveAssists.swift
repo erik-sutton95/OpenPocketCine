@@ -1,4 +1,3 @@
-import CoreMotion
 import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
@@ -33,7 +32,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     var isRetired: Bool { self == .magnification }
     var isPhotographyOnly: Bool { self == .instantReview }
 
-    /// Playback drops horizon (needs the camera) and MAG (no on-feed key).
+    /// Playback drops LEVEL (needs live camera attitude) and MAG (no on-feed key).
     /// AUDIO rides last, matching the live strip's trailing section.
     static var playbackToolbarCases: [LiveAssistTool] {
         toolbarCases.filter { $0 != .level && $0 != .magnification && $0 != .evMeter } + [
@@ -41,7 +40,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         ]
     }
 
-    /// OpenZCine `activeCases` minus photography-only, AUDIO, and Level.
+    /// OpenZCine `activeCases` minus photography-only and AUDIO.
     /// AUDIO is appended as its own trailing section in `LiveAssistBar`.
     /// ND sits with the exposure meters (HISTO / VECTOR / LIGHTS).
     static var toolbarGroups: [[LiveAssistTool]] {
@@ -49,7 +48,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
             [.lut, .peaking, .falseColor],
             [.zebra, .waveform, .parade],
             [.histogram, .vectorscope, .trafficLights, .ndMeter, .evMeter],
-            [.guides, .grid, .crosshair],
+            [.guides, .grid, .crosshair, .level],
             [.desqueeze, .mirror],
         ]
     }
@@ -73,9 +72,6 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         default: title
         }
     }
-
-    /// Pocket does not ship Level (unproven gimbal roll).
-    var isPocketOmitted: Bool { self == .level }
 
     var hasConfiguration: Bool {
         switch self {
@@ -104,6 +100,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .crosshair: .crosshair
         case .mirror: .mirror
         case .audioMeters: .audioMeters
+        case .level: .level
         default: nil
         }
     }
@@ -151,7 +148,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
         case .guides: "Guides"
         case .grid: "Grid"
         case .crosshair: "Crosshair"
-        case .level: "Horizon"
+        case .level: "Level"
         case .desqueeze: "Anamorphic Desqueeze"
         case .mirror: "Mirror"
         case .magnification: "Magnify"
@@ -198,11 +195,6 @@ enum GuideAspect: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum LevelStyle: String, CaseIterable, Codable {
-    case horizon = "Horizon"
-    case gauge = "Gauge"
-}
-
 @Observable
 final class LiveAssistState {
     var peaking = false
@@ -230,7 +222,6 @@ final class LiveAssistState {
     var gridThirds = true
     var gridPhi = false
     var gridDiagonal = false
-    var levelStyle: LevelStyle = .horizon
     var peakingColor: PeakingPaint = .red
     var peakingSensitivity: PeakingSense = .medium
     var falseColorScale: FalseColorScaleKind = .stops
@@ -279,6 +270,14 @@ final class LiveAssistState {
     /// Inspector-only sampling follows the active scene and its visible source.
     /// Picture effects keep their existing lifetime beneath operator pages.
     var inspectorSceneActive = true
+    /// Settings or Media covers the live page. Scope taps and rasters have no
+    /// viewer there; looks, Face AF, Watch and relay keep their demand, and the
+    /// shared VT decoder stays up, so reveal needs no enable.
+    var liveCovered = false
+
+    private func showsScopes(_ tool: LiveAssistTool) -> Bool {
+        !liveCovered && isVisible(tool)
+    }
 
     @ObservationIgnored private var lutCube: CubeLUT?
     @ObservationIgnored private var lutDimension = 0
@@ -320,12 +319,12 @@ final class LiveAssistState {
             peaking: isVisible(.peaking),
             zebra: isVisible(.zebra),
             falseColor: isVisible(.falseColor),
-            histogram: isVisible(.histogram),
-            waveform: isVisible(.waveform),
-            parade: isVisible(.parade),
-            vectorscope: isVisible(.vectorscope),
-            trafficLights: isVisible(.trafficLights),
-            ndMeter: isVisible(.ndMeter),
+            histogram: showsScopes(.histogram),
+            waveform: showsScopes(.waveform),
+            parade: showsScopes(.parade),
+            vectorscope: showsScopes(.vectorscope),
+            trafficLights: showsScopes(.trafficLights),
+            ndMeter: showsScopes(.ndMeter),
             lutDimension: isVisible(.lut) ? lutDimension : 0,
             lutRGBA: isVisible(.lut) ? lutRGBA : Data(),
             peakingColor: peakingColor,
@@ -375,7 +374,6 @@ final class LiveAssistState {
         OperatorPrefs.load(into: self)
         cleanViewPinnedTools = OperatorPrefs.cleanViewPinnedTools
         playbackVisibleTools = OperatorPrefs.playbackVisibleAssistTools
-        level = false
         if monitorColorMode == nil {
             monitorColorMode = OperatorPrefs.lastMonitorColorMode
         }
@@ -761,6 +759,7 @@ enum OperatorPrefs {
     private static let virtualJoystickResponseCurveKey =
         "OpenPocketCine.VirtualJoystickResponseCurve"
     private static let gimbalRampKey = "OpenPocketCine.GimbalRamp"
+    private static let gimbalDoubleTapKey = "OpenPocketCine.GimbalDoubleTap"
     private static let dispLiveKey = "OpenPocketCine.DispChrome.Live"
     private static let dispCleanKey = "OpenPocketCine.DispChrome.Clean"
     private static let cleanPinsKey = "OpenPocketCine.CleanViewPins.v1"
@@ -855,6 +854,15 @@ enum OperatorPrefs {
     static var headTrackingEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: headTrackingKey) }
         set { UserDefaults.standard.set(newValue, forKey: headTrackingKey) }
+    }
+
+    /// Stick double-tap / gamepad Circle/B. Absent key is Recenter.
+    static var gimbalDoubleTap: GimbalDoubleTap {
+        get {
+            GimbalDoubleTap(rawValue: UserDefaults.standard.integer(forKey: gimbalDoubleTapKey))
+                ?? .recenter
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: gimbalDoubleTapKey) }
     }
 
     static var gimbalRamp: GimbalRamp {
@@ -1145,7 +1153,6 @@ enum OperatorPrefs {
         var gridThirds: Bool
         var gridPhi: Bool
         var gridDiagonal: Bool
-        var levelStyle: String
         var peakingColor: String
         var peakingSensitivity: String
         var falseColorScale: String
@@ -1175,7 +1182,6 @@ enum OperatorPrefs {
             gridThirds = s.gridThirds
             gridPhi = s.gridPhi
             gridDiagonal = s.gridDiagonal
-            levelStyle = s.levelStyle.rawValue
             peakingColor = s.peakingColor.rawValue
             peakingSensitivity = s.peakingSensitivity.rawValue
             falseColorScale = s.falseColorScale.rawValue
@@ -1225,7 +1231,6 @@ enum OperatorPrefs {
             s.gridThirds = gridThirds
             s.gridPhi = gridPhi
             s.gridDiagonal = gridDiagonal
-            s.levelStyle = LevelStyle(rawValue: levelStyle) ?? .horizon
             s.peakingColor = PeakingPaint(rawValue: peakingColor) ?? .red
             s.peakingSensitivity = PeakingSense(rawValue: peakingSensitivity) ?? .medium
             s.falseColorScale = FalseColorScaleKind(rawValue: falseColorScale) ?? .stops
@@ -1596,227 +1601,113 @@ struct FeedSplitComparisonMarks: View {
     }
 }
 
-/// Horizon overlay. OpenZCine reads PTP `AngleLevelYawing`; Pocket `0x04/0x05` gimbal bytes are
-/// on the wire but the roll layout is not proven — CoreMotion on this phone is the fallback.
+/// LEVEL: camera world attitude (`LevelReading`), not this phone. Gauges show
+/// picture roll and look-up tilt from the horizon (OpenZCine `LevelGaugeView`);
+/// near plumb a bubble shows the lens offset from straight down / up. Stale or
+/// missing attitude shows `No level data` and never reads green.
+enum LevelAssist {
+    static let refresh: TimeInterval = 0.1
+    /// Roll strip centre above the visible picture's bottom edge; tilt mirrors the offset.
+    static let rollLiftLandscape: CGFloat = 84
+    static let rollLiftPortrait: CGFloat = 22
+
+    /// Strips on the on-screen part of the feed (OpenZCine #47). Roll runs along
+    /// the bottom, lifted clear of the landscape / portrait chrome; tilt centres
+    /// vertically, right of centre by the same distance roll sits below centre,
+    /// kept 6 pt inside the picture (portrait fill).
+    static func frames(feed: CGRect, viewport: CGRect, portrait: Bool) -> (roll: CGRect, tilt: CGRect) {
+        var visible = feed.intersection(viewport)
+        if visible.isNull || visible.isEmpty { visible = feed }
+        let t = MonitorLevelGauge.thickness
+        let rollWidth = max(0, min(MonitorLevelGauge.maxLength, visible.width - 24))
+        let rollMidY = visible.maxY - (portrait ? rollLiftPortrait : rollLiftLandscape)
+        let tiltHeight = max(0, min(MonitorLevelGauge.maxLength, visible.height - 12))
+        let tiltMidX = min(visible.midX + (rollMidY - visible.midY), visible.maxX - 6 - t / 2)
+        return (
+            CGRect(x: visible.midX - rollWidth / 2, y: rollMidY - t / 2, width: rollWidth, height: t),
+            CGRect(x: tiltMidX - t / 2, y: visible.midY - tiltHeight / 2, width: t, height: tiltHeight)
+        )
+    }
+
+    static func accessibilityValue(_ mode: LevelReading.Mode) -> String {
+        switch mode {
+        case .unavailable: WorldLevelSnap.noLevelData
+        case .gauges(let roll, let tilt): String(format: "Roll %+.1f°, tilt %+.1f°", roll, tilt)
+        case .bubble(let x, let y): String(format: "Off plumb %+.1f° / %+.1f°", x, y)
+        }
+    }
+}
+
 struct FeedLevelView: View {
-    let style: LevelStyle
     let feed: CGRect
-    @State private var device = DeviceLevel()
+    let viewport: CGRect
+    let portrait: Bool
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        Group {
-            if style == .gauge {
-                LevelGaugeView(roll: device.roll, pitch: device.pitch, feed: feed)
-            } else {
-                LevelHorizonView(roll: device.roll)
-                    .position(x: feed.midX, y: feed.midY)
-            }
-        }
-        .onAppear { device.start() }
-        .onDisappear { device.stop() }
-    }
-}
-
-/// OpenZCine `DeviceLevel` — gravity in the device frame, mapped for Portrait / LandscapeRight.
-@Observable
-final class DeviceLevel {
-    var roll: Double = 0
-    var pitch: Double = 0
-    var isPortrait = false
-    @ObservationIgnored private let manager = CMMotionManager()
-
-    static func displayRoll(gravityX: Double, gravityY: Double, isPortrait: Bool) -> Double {
-        let radians =
-            isPortrait
-            ? atan2(gravityX, -gravityY)
-            : atan2(-gravityY, -gravityX)
-        return radians * 180 / .pi
-    }
-
-    func start() {
-        refreshOrientation()
-        guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
-        manager.deviceMotionUpdateInterval = 1.0 / 30.0
-        manager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
-            guard let self, let g = motion?.gravity else { return }
-            self.refreshOrientation()
-            let newRoll = Self.displayRoll(gravityX: g.x, gravityY: g.y, isPortrait: isPortrait)
-            let newPitch = atan2(g.z, (g.x * g.x + g.y * g.y).squareRoot()) * 180 / .pi
-            roll = roll * 0.75 + newRoll * 0.25
-            pitch = pitch * 0.75 + newPitch * 0.25
-        }
-    }
-
-    func stop() {
-        if manager.isDeviceMotionActive { manager.stopDeviceMotionUpdates() }
-    }
-
-    private func refreshOrientation() {
-        let portrait =
-            UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.interfaceOrientation.isPortrait ?? false
-        isPortrait = portrait
-    }
-}
-
-/// Rolling horizon: two accent wings around a centre ring, rotating with roll; green when level.
-struct LevelHorizonView: View {
-    let roll: Double
-
-    var body: some View {
-        let level = abs(roll) < 0.8
-        let color = level ? LiveDesign.good : LiveDesign.accent
-        HStack(spacing: 10) {
-            Capsule().fill(color).frame(width: 64, height: 2)
-            Circle().stroke(color, lineWidth: 1.6).frame(width: 10, height: 10)
-            Capsule().fill(color).frame(width: 64, height: 2)
-        }
-        .rotationEffect(.degrees(roll))
-        .animation(.easeOut(duration: 0.18), value: level)
-    }
-}
-
-/// OpenZCine `LevelGaugeView` — graduated roll + pitch tracks, correction chevrons, degree readout.
-private struct LevelGaugeView: View {
-    let roll: Double
-    let pitch: Double
-    let feed: CGRect
-
-    var body: some View {
-        ZStack {
-            LevelAxisGauge(orientation: .horizontal, value: roll)
-                .position(x: feed.midX, y: feed.maxY - 104)
-            LevelAxisGauge(orientation: .vertical, value: pitch)
-                .position(x: feed.maxX - 44, y: feed.midY)
+        TimelineView(.periodic(from: .now, by: LevelAssist.refresh)) { _ in
+            let mode = model.session.levelReading.mode(
+                now: ProcessInfo.processInfo.systemUptime,
+                // Picture-relative like the stick: TT180 mirrors the shown
+                // picture in both Selfie Flip states.
+                viewFlip: GimbalStick.liveInvertPan(
+                    poseInvert: model.session.gimbalPoseInvertPan,
+                    assistMirror: model.assist.isVisible(.mirror)))
+            content(mode)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Level")
+                .accessibilityValue(LevelAssist.accessibilityValue(mode))
+                .accessibilityIdentifier("monitor.level")
         }
         .allowsHitTesting(false)
     }
+
+    @ViewBuilder
+    private func content(_ mode: LevelReading.Mode) -> some View {
+        let frames = LevelAssist.frames(
+            feed: feed, viewport: viewport, portrait: portrait)
+        switch mode {
+        case .bubble(let x, let y):
+            let visible = feed.intersection(viewport).isNull ? feed : feed.intersection(viewport)
+            MonitorLevelBubble(xDeg: x, yDeg: y)
+                .position(x: visible.midX, y: visible.midY)
+        case .gauges(let roll, let tilt):
+            strips(roll: roll, tilt: tilt, frames: frames, caption: nil)
+        case .unavailable:
+            strips(roll: nil, tilt: nil, frames: frames, caption: WorldLevelSnap.noLevelData)
+        }
+    }
+
+    private func strips(roll: Double?, tilt: Double?, frames: (roll: CGRect, tilt: CGRect), caption: String?)
+        -> some View
+    {
+        ZStack {
+            MonitorLevelGauge(axis: .horizontal, value: roll)
+                .frame(width: frames.roll.width, height: frames.roll.height)
+                .position(x: frames.roll.midX, y: frames.roll.midY)
+            if let caption {
+                LevelCaption(text: caption)
+                    .position(x: frames.roll.midX, y: frames.roll.maxY + 6)
+            }
+            if !frames.tilt.isEmpty {
+                MonitorLevelGauge(axis: .vertical, value: tilt)
+                    .frame(width: frames.tilt.width, height: frames.tilt.height)
+                    .position(x: frames.tilt.midX, y: frames.tilt.midY)
+            }
+        }
+    }
 }
 
-private struct LevelAxisGauge: View {
-    enum Orientation { case horizontal, vertical }
-    let orientation: Orientation
-    let value: Double
-
-    private let span = 84.0
-    private let maxAngle = 8.0
-    private let tickStep = 2.0
-    private let threshold = 0.6
-
-    private var isHorizontal: Bool { orientation == .horizontal }
-    private var isLevel: Bool { abs(value) < threshold }
-    private var tint: Color { isLevel ? LiveDesign.good : LiveDesign.accent }
-    private var beadOffset: CGFloat { CGFloat(max(-1, min(1, value / maxAngle)) * span) }
-
-    private var urgency: Int {
-        switch abs(value) {
-        case ..<(maxAngle / 3): 1
-        case ..<(2 * maxAngle / 3): 2
-        default: 3
-        }
-    }
+private struct LevelCaption: View {
+    let text: String
 
     var body: some View {
-        let trackLen = CGFloat(span * 2 + 28)
-        ZStack {
-            graduations
-                .frame(
-                    width: isHorizontal ? trackLen : 26,
-                    height: isHorizontal ? 26 : trackLen)
-            if !isLevel { chevrons }
-            bead
-            readout
-        }
-        .animation(.easeOut(duration: 0.12), value: isLevel)
-        .animation(.easeOut(duration: 0.09), value: value)
-    }
-
-    private var graduations: some View {
-        Canvas { ctx, size in
-            let mid = CGPoint(x: size.width / 2, y: size.height / 2)
-            var base = Path()
-            if isHorizontal {
-                base.move(to: CGPoint(x: mid.x - CGFloat(span), y: mid.y))
-                base.addLine(to: CGPoint(x: mid.x + CGFloat(span), y: mid.y))
-            } else {
-                base.move(to: CGPoint(x: mid.x, y: mid.y - CGFloat(span)))
-                base.addLine(to: CGPoint(x: mid.x, y: mid.y + CGFloat(span)))
-            }
-            ctx.stroke(base, with: .color(.white.opacity(0.22)), lineWidth: 2)
-
-            var deg = -maxAngle
-            while deg <= maxAngle + 0.001 {
-                let t = CGFloat(deg / maxAngle * span)
-                let centre = abs(deg) < 0.001
-                let half: CGFloat = centre ? 9 : 5
-                var tick = Path()
-                if isHorizontal {
-                    tick.move(to: CGPoint(x: mid.x + t, y: mid.y - half))
-                    tick.addLine(to: CGPoint(x: mid.x + t, y: mid.y + half))
-                } else {
-                    tick.move(to: CGPoint(x: mid.x - half, y: mid.y - t))
-                    tick.addLine(to: CGPoint(x: mid.x + half, y: mid.y - t))
-                }
-                ctx.stroke(
-                    tick, with: .color(.white.opacity(centre ? 0.75 : 0.34)),
-                    lineWidth: centre ? 2 : 1)
-                deg += tickStep
-            }
-        }
-    }
-
-    private var bead: some View {
-        Circle()
-            .fill(tint)
-            .frame(width: 13, height: 13)
-            .overlay(Circle().stroke(.black.opacity(0.45), lineWidth: 2))
-            .shadow(color: .black.opacity(0.5), radius: 3)
-            .offset(
-                x: isHorizontal ? beadOffset : 0,
-                y: isHorizontal ? 0 : -beadOffset)
-    }
-
-    private var chevrons: some View {
-        let toNegative = value > 0
-        let icon: OpcIcon =
-            isHorizontal
-            ? (toNegative ? .chevronLeft : .chevronRight)
-            : (toNegative ? .chevronDown : .chevronUp)
-        let gap: CGFloat = 16
-        let sign = CGFloat(value > 0 ? 1 : -1)
-        return Group {
-            if isHorizontal {
-                HStack(spacing: -2) {
-                    ForEach(Array(0..<urgency), id: \.self) { i in chevronGlyph(icon, index: i) }
-                }
-            } else {
-                VStack(spacing: -2) {
-                    ForEach(Array(0..<urgency), id: \.self) { i in chevronGlyph(icon, index: i) }
-                }
-            }
-        }
-        .offset(
-            x: isHorizontal ? beadOffset - sign * gap : 0,
-            y: isHorizontal ? 0 : -beadOffset + sign * gap)
-    }
-
-    private func chevronGlyph(_ icon: OpcIcon, index: Int) -> some View {
-        icon
-            .frame(width: 10, height: 10)
-            .foregroundStyle(LiveDesign.accent)
-            .opacity(1.0 - Double(index) * 0.22)
-    }
-
-    private var readout: some View {
-        let shown = abs(value) < 0.05 ? 0 : value
-        return Text(String(format: "%+.1f°", shown))
-            .font(MonitorTheme.font(11, weight: .semibold)).monospacedDigit()
-            .foregroundStyle(isLevel ? LiveDesign.good : LiveDesign.text.opacity(0.85))
+        Text(text)
+            .font(MonitorTheme.font(8, weight: .medium))
+            .kerning(0.5)
+            .foregroundStyle(LiveDesign.muted)
+            .shadow(color: .black.opacity(0.6), radius: 1.5)
             .fixedSize()
-            .offset(
-                x: isHorizontal ? 0 : -42,
-                y: isHorizontal ? -24 : 0)
     }
 }
 

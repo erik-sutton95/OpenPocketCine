@@ -42,6 +42,8 @@ enum FeedIncidentRuntime {
     private static var sessionContext: FeedIncidentSessionContext?
     private static var lastSummaryCheckpoint: TimeInterval = 0
     private static var extrasCache: [(name: String, body: String)] = []
+    /// Queue-confined export of the incident bundles on disk; nil reloads them.
+    private static var storeExtras: [(name: String, body: String)]?
 
     static func install() {
         queue.async {
@@ -175,6 +177,7 @@ enum FeedIncidentRuntime {
                 try? FileManager.default.removeItem(
                     at: dir.appendingPathComponent("session-summary.json"))
             }
+            storeExtras = nil
             extrasLock.lock()
             extrasCache = []
             extrasLock.unlock()
@@ -229,6 +232,7 @@ enum FeedIncidentRuntime {
     private static func persist(_ job: FeedIncidentPersistenceJob?) {
         guard let job = job, let store = preparedStore() else { return }
         try? store.persist(job)
+        storeExtras = nil
         refreshExtrasCache()
     }
 
@@ -236,6 +240,8 @@ enum FeedIncidentRuntime {
         guard let summary = currentSessionSummary(outcome: outcome) else { return }
         guard let dir = preparedStore()?.directory else { return }
         FeedSessionSummaryStore.persist(summary, root: dir)
+        // Summaries live outside the incident bundles, so the 30 s live checkpoint
+        // does not reload and re-decode every stored incident.
         refreshExtrasCache()
         if summary.outcome != "live" { ReliabilityReporting.noteSessionSummary(summary) }
     }
@@ -260,7 +266,8 @@ enum FeedIncidentRuntime {
     }
 
     private static func refreshExtrasCache() {
-        var extras = preparedStore()?.exportExtras() ?? []
+        if storeExtras == nil { storeExtras = preparedStore()?.exportExtras() }
+        var extras = storeExtras ?? []
         if let summary = currentSessionSummary(),
             let data = try? FeedIncidentJSON.encoder().encode(summary),
             let body = String(data: data, encoding: .utf8)

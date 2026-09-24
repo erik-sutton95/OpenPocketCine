@@ -57,7 +57,13 @@
         let density: MonitorGlassDensity
         let reduceTransparencyOverride: Bool?
         @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-        @Environment(\.monitorBackdrop) private var backdrop
+        @Environment(\.monitorBackdrop) private var injected
+        @Environment(\.monitorBackdropSource) private var source
+
+        private var backdrop: MonitorBackdropEnvironment {
+            guard let source else { return injected }
+            return MonitorBackdropEnvironment(snapshot: source.snapshot, frame: source.frame)
+        }
         @Environment(\.monitorPresentationIsVisible) private var isVisible
 
         var body: some View {
@@ -66,21 +72,23 @@
                     shape.fill(reduceTransparencyFill)
                 } else if let snapshot = backdrop.snapshot, let image = snapshot.image(for: density)
                 {
+                    // Layer-backed image, positioned and clipped by the render
+                    // server. A Canvas here re-rasterized every glass panel on
+                    // the CPU at the backdrop rate (25 Hz while live).
                     GeometryReader { proxy in
                         let frame = proxy.frame(in: .global)
-                        Canvas { context, size in
-                            let path = shape.path(in: CGRect(origin: .zero, size: size))
-                            context.clip(to: path)
-                            context.draw(
-                                Image(decorative: image, scale: 1),
-                                in: CGRect(
-                                    x: backdrop.frame.minX - frame.minX,
-                                    y: backdrop.frame.minY - frame.minY,
-                                    width: backdrop.frame.width, height: backdrop.frame.height))
-                            context.fill(
-                                path, with: .color(density.tint.opacity(density.overlayOpacity)))
-                        }
+                        Image(decorative: image, scale: 1)
+                            .resizable()
+                            .frame(width: backdrop.frame.width, height: backdrop.frame.height)
+                            .offset(
+                                x: backdrop.frame.minX - frame.minX,
+                                y: backdrop.frame.minY - frame.minY)
+                            .frame(
+                                width: proxy.size.width, height: proxy.size.height,
+                                alignment: .topLeading)
                     }
+                    .overlay(density.tint.opacity(density.overlayOpacity))
+                    .clipShape(shape)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
                 } else {

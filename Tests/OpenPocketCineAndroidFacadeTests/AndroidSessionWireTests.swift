@@ -18,6 +18,18 @@ struct AndroidSessionWireTests {
         #expect(AndroidSessionWire.status(fromJSON: "{\"meteredEv\":272}").meteredEv == nil)
     }
 
+    @Test func action6ModelJSONAndApertureCommand() {
+        let json = AndroidSessionWire.cameraModelJSON(modelId: 0x18, name: nil)
+        #expect(json.contains("\"liveViewEnableReceiver\":65"))
+        #expect(json.contains("\"sendsLiveViewPrepare\":false"))
+        #expect(json.contains("\"supportsAperture\":true"))
+        #expect(json.contains("\"supportsFocusMode\":false"))
+        let set = AndroidSessionWire.encodeCommand(kind: .setApertureStrategy, seq: 1, extra: "3")
+        #expect(set?.payload == [0x01, 0x01, 0x44, 0x00, 0x01, 0x03])
+        #expect(
+            AndroidSessionWire.encodeCommand(kind: .setApertureStrategy, seq: 1, extra: "9") == nil)
+    }
+
     @Test func shutterCommandPreservesPhotoAndSupportsTimelapseStop() {
         for extra: String? in [nil, "", "1"] {
             let frame = AndroidSessionWire.encodeCommand(kind: .shootPhoto, seq: 7, extra: extra)
@@ -216,6 +228,16 @@ struct AndroidSessionWireTests {
     }
 
     @Test
+    func cameraModelJSONCarriesBodyCapabilities() {
+        let pro = AndroidSessionWire.cameraModelJSON(modelId: 0x0022, name: nil)
+        #expect(pro.contains("\"hasGimbal\":true"))
+        #expect(pro.contains("\"supportsZoom\":true"))
+        let nano = AndroidSessionWire.cameraModelJSON(modelId: 0x0019, name: nil)
+        #expect(nano.contains("\"hasGimbal\":false"))
+        #expect(nano.contains("\"supportsZoom\":false"))
+    }
+
+    @Test
     func statusJSONRoundTripsAvailableVideoFormats() {
         var status = CameraStatus()
         status.availableVideoFormats = [
@@ -225,6 +247,43 @@ struct AndroidSessionWireTests {
         let json = AndroidSessionWire.statusJSON(status)
         let decoded = AndroidSessionWire.status(fromJSON: json)
         #expect(decoded.availableVideoFormats == status.availableVideoFormats)
+    }
+
+    @Test
+    func statusJSONParseIsIdempotentWithDelimitersInsideStrings() {
+        var status = CameraStatus()
+        status.batteryPercent = 81
+        status.batteryMilliAmps = -350
+        status.charging = true
+        status.firmware = "01.02,[iso]:7}"
+        status.timecode = "01:02:03:04"
+        status.iso = 400
+        status.isRecording = true
+        status.expoMode = .manual
+        status.availableShutterDenoms = [25, 50, 100]
+        status.availableVideoFormats = [VideoFormat(resolution: .p4K, frameRate: .fps24)]
+        status.focusX = 0.25
+        status.zoomFactorRaw = 25_000
+        status.glamourEnabled = false
+        status.audioMeters = AudioMeterLevels(
+            left: AudioMeterChannel(levelDB: -12.5, peakDB: -3),
+            right: AudioMeterChannel(levelDB: -60, peakDB: -1e-3))
+        let json = AndroidSessionWire.statusJSON(status)
+        let decoded = AndroidSessionWire.status(fromJSON: json)
+        #expect(AndroidSessionWire.statusJSON(decoded) == json)
+        #expect(decoded.iso == 400)
+        #expect(decoded.charging)
+        #expect(decoded.batteryMilliAmps == -350)
+        #expect(decoded.audioMeters.right.peakDB == -1e-3)
+        // Kotlin JSONObject shape: nulls, escaped slashes, and no audio meter keys.
+        let kotlin =
+            "{\"batteryPercent\":7,\"firmware\":\"v1\\/2\",\"timecode\":null,\"docked\":true}"
+        let fromKotlin = AndroidSessionWire.status(fromJSON: kotlin)
+        #expect(fromKotlin.batteryPercent == 7)
+        #expect(fromKotlin.firmware == "v1\\/2")
+        #expect(fromKotlin.timecode == nil)
+        #expect(fromKotlin.docked)
+        #expect(fromKotlin.audioMeters == CameraStatus().audioMeters)
     }
 
     @Test

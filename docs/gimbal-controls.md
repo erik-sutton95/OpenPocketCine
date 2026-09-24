@@ -31,6 +31,33 @@ name; exact camera firmware was not recorded. Wider model/firmware coverage
 and the integrated menu's physical checks must be recorded in
 [operator parity](PARITY.md). Raw captures remain local and untracked.
 
+## Double-tap Level (world)
+
+The gimbal drawer's **Double-tap** tab chooses what the on-screen stick
+double-tap and gamepad Circle/B do. **Recenter** (default) sends the camera's
+body-relative `0x04/0x4C` `FE 08`. **Level** snaps the lens to the nearest world
+target: horizon when |tilt| < 45°, otherwise plumb down (−90°) or up (+90°).
+
+World tilt comes from the `0x04/0x05` quaternion at `@24…@39` (core
+`WorldLevel.swift`, Android `session/WorldLevel.kt`). It maps world to camera;
+gravity in the camera frame gives tilt and roll. The fit on 1,014 captured
+Follow frames matched display tilt `@20` with a 0.02° median error; roll stayed
+within 1.1° while the gimbal held the horizon.
+
+The snap is one `0x04/0x14` mode `05` target: live joint yaw, native pitch =
+live `@0` minus the world error (captured relation native = 180° − look-up
+tilt, both front and selfie). Duration is 0.1 s per 2°, clamped 0.5 to 3.0 s.
+Arrival is judged on the smoothed quaternion tilt: within ±0.5° by duration +
+1.5 s, or the app sends `gimbalTimedStop` and toasts the remaining error. Stick
+input or a programmed move drops the check. Roll is not commanded (mode `05`
+ignores it); in FPV the toast says roll follows the handle.
+
+Not yet physically confirmed (pending on a Pocket 4 / 4 Pro): roll sign on a
+rolled handle, FPV and Tilt locked behavior of the quaternion, and whether the
+firmware accepts a plumb target with the handle angled. Display tilt reach with
+the handle upright is −44° to +70° (`HeadTrack.Reach`), so top-down needs the
+handle tilted forward.
+
 ## Ramp
 
 Ramp smooths changes in the operator's joystick input. Off applies input

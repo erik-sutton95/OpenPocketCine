@@ -9,25 +9,31 @@ Numbers that already have a home stay there. This file is the SLO index and the
 rules that are not in those homes. Changing a budget is a code + docs change in
 the same PR.
 
+The [September 22 subsystem audit](audits/2026-09-22-performance-audit.md) separates
+source-level fix candidates from historical physical measurements and records
+the remaining CPU/GPU, battery and thermal profiling matrix for issue #402. The [September 23 automated pass](audits/2026-09-23-automated-perf-pass.md)
+adds the `just perf-soak` device harness and records the first Release A/B.
+
 ## Budgets
 
 | Surface | Budget | Owner |
 | --- | --- | --- |
 | Live picture | Present at the camera’s live rate. Typical Pocket/Nano SoftAP is ~25 fps 720p. Do not pace decode at 30 fps. A 4K 50p body may present 50 Hz 720p. Skip duplicate timestamps; latest-wins if a LUT bake is busy. Runtime grade cap 1440 px (`FeedPresentPolicy.maxWorkingWidth`). | [`live-session.md`](live-session.md), `FeedPresentPolicy` |
-| Playback LUT | 720p proxy with the official cube stays at a usable rate on iPhone 13-class (picture first; same class as LUT-off). Native 420 IOSurface → GPU cube at `maxWorkingWidth`. Pull clock follows the display (24–120 Hz); `hasNewPixelBuffer` gates the cube — do not cap the display link at 24. No `AVVideoComposition` for preview. Scope tap stays off the present thread. Android playback is the live GLES session (OES → cube); no TextureView `getBitmap`. | `PlaybackFeedSession`, `PlaybackFeedView` |
+| Playback LUT | 720p proxy with the official cube stays at a usable rate on iPhone 13-class (picture first; same class as LUT-off). Native 420 IOSurface → GPU cube at `maxWorkingWidth`. Pull clock follows the display (24–120 Hz); `hasNewPixelBuffer` gates the cube — do not cap the display link at 24. While a graded clip is paused the display link pauses and wakes on the video output's new-media notification. No `AVVideoComposition` for preview. Scope tap stays off the present thread. Android playback is the live GLES session (OES → cube); no TextureView `getBitmap`. | `PlaybackFeedSession`, `PlaybackFeedView` |
 | Watcher relay (iOS) | Same camera Wi-Fi for host and watchers; no peer-to-peer fallback. One encode; two admitted source frames; two video sends per authorized watcher, separate from control traffic; one pending state send at 5 Hz. Encode and fan-out off MainActor. Forced relay keyframes ≤1 Hz. | [`watcher-relay.md`](watcher-relay.md) |
 | Window ACK | pktType `0x04` at **40 Hz**, three groups: video `0x02` seq, ackedData `0x03` seq, telemetry extra | [`live-session.md`](live-session.md) |
 | Live enable | **Enable-once.** Further enables follow the watchdog only | `AGENTS.md`, [`feed-watchdog.md`](feed-watchdog.md) |
 | Stall / recover | 2 s UDP silence is a stall; 8 s GOP grace after `0x09/0xa8`; 4 s after an AF-C SET; 5 s between enables; 60 s UDP rebuild backoff. Encoder pause permits one enable, then one rebuild that negotiates a fresh handshake. Full-session automatic recovery has a separate 180 s total cap | `FeedWatchdog`, [`feed-watchdog.md`](feed-watchdog.md), `SessionRecoveryPolicy` |
 | HUD chrome | 5 Hz (`LiveChromeThrottle.statusInterval` = 0.2 s). REC, format, color, zoom, and the other `isImmediate` fields bypass | `LiveChromeThrottle` |
-| Scope tap | 25 Hz with 1–2 scopes, 10 Hz with 3+ (`PocketScopeSampler`). 200-wide downsample (213×120 on 720p SoftAP). Thermal ×3 serious / ×5 critical. A 50 Hz proxy still skips. No scope histogram work with scopes off; the separate floating-chrome budget can request the small tap. No 1280×720 histogram or readback per frame | [`ANDROID.md`](../ANDROID.md) I/O; iOS present path matches the rate |
-| Floating chrome | Controlled Gaussian blur, saturation and tint on a bounded GPU product that tracks the visible picture. One passive displayed-look job per visible source, latest-wins, capped at 60 Hz (thermal ×3 serious / ×5 critical). Admission survives source, option and view changes. iOS canvas products are at most 320 px on their longest side; Android reuses the 213×120-class raw tap (25 Hz when that tap is the source) and production look shaders. No full-resolution window/swapchain capture, second decoder or per-widget CPU readback. Hidden sources stop backdrop work. Page surfaces remain opaque. | `MonitorUI`, Android `monitor-ui`, platform backdrop source owners |
+| Scope tap | 25 Hz with 1–2 scopes, 10 Hz with 3+ (`PocketScopeSampler`). 200-wide downsample (213×120 on 720p SoftAP). Scope work thermal ×3 serious / ×5 critical; a backdrop-driven tap is not slowed. A 50 Hz proxy still skips. No scope histogram work with scopes off; the separate floating-chrome budget can request the small tap. No 1280×720 histogram or readback per frame | [`ANDROID.md`](../ANDROID.md) I/O; iOS present path matches the rate |
+| Floating chrome | Controlled Gaussian blur, saturation and tint on a bounded GPU product that tracks the visible picture. One passive displayed-look job per new source picture, latest-wins, capped at 60 Hz. The glass follows the feed frame for frame: no thermal slowdown, and iOS wakes the job when a picture lands instead of polling (lagging glass is distracting). Blur products come from one Metal command buffer per job (Core Image composites only the small canvas; MPS blurs), and the live owner shares them through one retained observable source so a new product never changes the SwiftUI environment. Admission survives source, option and view changes. iOS canvas products are at most 320 px on their longest side; Android reuses the 213×120-class raw tap (25 Hz whenever the glass needs it, even under heat or with 3+ scopes; scope work keeps its own admission) and production look shaders. No full-resolution window/swapchain capture, second decoder or per-widget CPU readback. Hidden sources stop backdrop work. Page surfaces remain opaque. | `MonitorUI`, Android `monitor-ui`, platform backdrop source owners |
 | Inspector preview | Only while the visible source’s inspector is open and the scene is active: at most 5 Hz, latest source, downsample to at most 320 px before image processing, one job in flight; session-retained admission preserves its 200 ms floor and occupied slot across tab changes and remounts. Cancellation invalidates results without releasing unfinished work, and expensive LUT preparation happens only after admission. Playback cannot request samples from a hidden live inspector. Scope previews reuse the existing bounded scope products. | `AssistInspectorPreview` |
 | Zoom pinch | Distinct lens ticks at 20 Hz, no ACK wait | [`PARITY.md`](PARITY.md) |
 | Gimbal stick | `0x04/0x01` notify at **25 Hz** on the UDP ACK queue while held; one rest packet on lift. A held stick holds encoder-pause recover the same way the zoom disc does (no GOP-cut / UDP rebuild until lift). The live picture well and stick do not animate across orientation. Not MainActor `sendUntracked` (that starved window ACK). AirPods IMU samples ~100 Hz off main; a 25 Hz pump publishes native targets to a latest-only mailbox. Native wire emission has a 40 ms minimum interval on the 25 ms ACK timer (typically 20 Hz). Duplicate targets are suppressed; a not-ready socket cannot accumulate a backlog. HUD at the 5 Hz chrome budget. Head-track yaw/pitch rings (head + gimbal arrows) follow the 25 Hz pump while Head Tracking is on (not the 5 Hz HUD). Motion Control waypoint letters follow the 25 Hz stick budget — not 60 Hz `TimelineView.animation` / `withFrameNanos` on the live canvas (that starved ingest and flashed Reconnecting). Motion Control session progress is 5 Hz; no debug overlay is drawn. Timed-path ticks use monotonic elapsed time; a gap over 120 ms or attitude receipt age over 300 ms aborts the take. Physical precision remains unqualified ([Motion Control takes](programmed-moves.md)). | `GimbalStick.streamInterval`, iOS `DatalinkDriver.tickGimbalStick`, `HeadphoneMotionBridge` |
 | Gimbal mode readback | At most 1 Hz tilt/speed GET, driven by existing attitude receipts; no extra timer | `GimbalParamPoll` |
 | Battery | Sticky `ACTION_BATTERY_CHANGED` (Android); no 1 Hz poll | [`ANDROID.md`](../ANDROID.md) |
-| Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` (same family as the phone layer — a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
+| Watch preview | Ack-paced JPEG, drop-stale, **3** outstanding across wrist wake/resume (fps ≈ depth/RTT; one in flight was ~12 fps). Encode on a detached queue so the three slots overlap. Identity JPEG is `VTCreateCGImageFromCVPixelBuffer` on a same-format, same-tag VT hardware downscale to the wrist width, never the full live picture (same family as the phone layer; a DeviceRGB CI bake was a Rec.709 contrast shift). LUT cubes stay unmanaged. Adaptive 320 / 416 / 512 px. A paired, installed companion requests the existing VT decoder even with AF-S and assists off; wrist sleep stops JPEG work without restarting decode. Rec/tally uses `updateApplicationContext` when not reachable. | `WatchRelay` |
+| Face AF (iOS) | Vision on the live VT buffer, latest-wins, one in flight: 25 Hz while a face is present, 10 Hz after about one second (25 runs) with none; the first face restores 25 Hz. Android admission is audit R8. | `LiveFaceDetector.pace` |
 
 Motion Control window dragging keeps transient placement in the floating widget and
 commits its center to the shared model once on release. The iOS control-action
@@ -225,7 +231,16 @@ render overrun.
 
 Covered chrome follows `monitorPresentationVisibility`: opacity, hit-testing and
 accessibility track coverage; decorative pulses stop without remounting the host
-or native feed. Page and feed owners stay outside that modifier. `MonitorCanvas`
+or native feed. Decorative pulses (record lamp glow, scan dots) sample an eased phase
+on a 30 Hz timeline and the full-screen REC tally pulses as a Core Animation
+opacity animation, never a `repeatForever` SwiftUI animation: a
+repeating animation holds the view graph and render server at 120 Hz on ProMotion
+for a whole take. Page and feed owners stay outside that modifier. While Settings or
+Media covers live, iOS drops scope-tap demand (`LiveAssistState.liveCovered`);
+looks, Face AF, Watch and relay keep theirs, the VT decoder stays up, and reveal
+needs no enable. Live chrome reads REC and focus/tracking state in leaf scopes,
+so 5 Hz status and per-frame AF-C faces do not re-evaluate the chrome slot or a
+covering page. `MonitorCanvas`
 evaluates picture, assist and chrome builders in separate child bodies so a
 slot's telemetry does not subscribe the parent geometry owner. Hosted tests
 verify independent updates and native view identity through coverage and rotation.
@@ -263,9 +278,12 @@ paused or held source. The key includes ordered retained buffers, effects,
 canvas size, placements, clips and surround color. Identical inputs skip native
 look/blur rendering and snapshot publication while preserving admission timing.
 Owner changes, failure and changed inputs invalidate the entry. Mutable working
-raster buffers and false-color/zebra looks bypass this cache: the former can
-change pixels in place, and the latter depend on additional asynchronously
-updated color/exposure state. This optimization does not change the producer,
+raster buffers bypass this cache because they can change pixels in place.
+False-color/zebra looks also read the exposure ceiling and asynchronously warmed
+false-color maps, so the key includes the ceiling byte and the ready map's clip;
+a held source with those looks settles instead of re-rendering at the cap. After
+about 250 ms without a new product (held or paused source, or no passive buffer),
+the iOS owner polls at 10 Hz instead of 60 Hz until one lands. This optimization does not change the producer,
 decoder, source cadence or the existing GPU rendering path.
 
 Decoder prefers hardware (`c2.qti` / Exynos, VideoToolbox) over a software

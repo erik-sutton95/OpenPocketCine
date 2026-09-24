@@ -2,6 +2,7 @@ import CoreImage
 import CoreVideo
 import MonitorPresentation
 import MonitorUI
+import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
@@ -43,6 +44,28 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         // Retain the objects, not just their addresses: a released native
         // buffer's identity may be recycled for a different frame.
         let sources: [MonitorVideoBackdropSource]
+        /// State FALSE / ZEBRA read outside `LiveImageEffects`.
+        let externalLook: [Int]
+    }
+
+    /// FALSE and ZEBRA thresholds follow the exposure ceiling (ISO and the
+    /// live-tap ratchet), and FALSE paints only once its maps warm. Key that
+    /// state so a held source with those looks settles instead of re-rendering
+    /// at the backdrop cap. Read before rendering: a change during the render
+    /// makes the next comparison miss once, never keeps a stale look.
+    static func externalLookState(_ sources: [MonitorVideoBackdropSource]) -> [Int] {
+        sources.flatMap { source -> [Int] in
+            let effects = source.effects
+            guard effects.falseColor || effects.zebra else { return [] }
+            let maps =
+                effects.falseColor
+                ? PocketFalseColorMap.overlayPairData(
+                    scale: effects.falseColorScale, mode: effects.colorMode)?.clipByte ?? -1
+                : 0
+            return [
+                ScopeExposureCeiling.clipByte(transfer: MonitorTransfer(effects.colorMode)), maps,
+            ]
+        }
     }
 
     private struct CachedResult {
@@ -108,7 +131,8 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         else { return nil }
         let seconds = max(MonitorBackdropPolicy.minimumInterval, minimumInterval())
         nextAdmission =
-            now &+ max(
+            now
+            &+ max(
                 MonitorBackdropPolicy.minimumIntervalNanoseconds,
                 UInt64((seconds * 1_000_000_000).rounded(.up)))
         return ticket
@@ -150,21 +174,19 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         guard !Task.isCancelled, let ticket = reserve(owner) else { return nil }
         defer { complete(ticket) }
         let sources = prepare()
-        let input = Input(canvasSize: canvasSize, surroundRGB: surroundRGB, sources: sources)
         let result: Result = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 queue.async { [self] in
                     var isUnchanged = false
                     let snapshot: MonitorBackdropSnapshot? = autoreleasepool {
                         guard isCurrent(ticket) else { return nil }
+                        let input = Input(
+                            canvasSize: canvasSize, surroundRGB: surroundRGB, sources: sources,
+                            externalLook: Self.externalLookState(sources))
                         var canCache =
                             !sources.isEmpty
                             && sources.allSatisfy {
-                                // False-color maps warm asynchronously; both
-                                // FALSE and ZEBRA also read external exposure
-                                // state absent from LiveImageEffects.
-                                !$0.effects.falseColor && !$0.effects.zebra
-                                    && !FeedWorkingRaster.isReusableOutput($0.buffer)
+                                !FeedWorkingRaster.isReusableOutput($0.buffer)
                             }
                         if let previous = cachedSnapshot(for: input, ticket: ticket), canCache {
                             isUnchanged = true
@@ -176,6 +198,20 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
                             snapshot = operation(canvasSize, sources)
                         } else {
                             guard !sources.isEmpty else { return nil }
+                            // One source: its look context renders straight into the
+                            // blur canvas (no CGImage readback and re-upload per frame).
+                            if sources.count == 1, let source = sources.first,
+                                let look = imageRenderer.lookImage(
+                                    source: source.buffer, effects: source.effects),
+                                let direct = backdropRenderer.render(
+                                    canvasSize: canvasSize, look: look.image, frame: source.frame,
+                                    clip: source.clip, lookContext: look.context,
+                                    outputColorSpace: look.outputColorSpace, surroundRGB: surroundRGB)
+                            {
+                                if canCache { cache(direct, input: input, owner: owner, ticket: ticket) }
+                                guard isCurrent(ticket) else { return nil }
+                                return direct
+                            }
                             let layers = sources.compactMap { source -> MonitorBackdropLayer? in
                                 guard isCurrent(ticket),
                                     let image = imageRenderer.renderImage(
@@ -223,6 +259,10 @@ private struct MonitorVideoBackdrop: ViewModifier {
     @State private var snapshot: MonitorBackdropSnapshot?
     @State private var renderedKey: WorkKey?
     @State private var owner: UUID?
+    @State private var source = MonitorBackdropSource()
+
+    private static let idlePollThreshold = 15
+    private static let idleIntervalMultiplier: UInt64 = 6
 
     private struct WorkKey: Equatable {
         var configuration: [MonitorVideoBackdropConfiguration]
@@ -240,7 +280,8 @@ private struct MonitorVideoBackdrop: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .monitorBackdrop(renderedKey == key && key.active ? snapshot : nil, in: globalFrame)
+            .monitorBackdrop(source: source)
+            .onChange(of: key, initial: true) { publish() }
             .onGeometryChange(for: CGRect.self) {
                 $0.frame(in: .global)
             } action: {
@@ -255,6 +296,7 @@ private struct MonitorVideoBackdrop: ViewModifier {
                 applicationActive = false
                 if let owner { renderer.deactivate(owner) }
                 snapshot = nil
+                publish()
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
@@ -264,7 +306,15 @@ private struct MonitorVideoBackdrop: ViewModifier {
             .onDisappear {
                 if let owner { renderer.deactivate(owner) }
                 snapshot = nil
+                publish()
             }
+    }
+
+    /// The shared source shows a product only for the key it was rendered for.
+    private func publish() {
+        let visible = renderedKey == key && key.active ? snapshot : nil
+        if source.snapshot != nil || visible != nil { source.snapshot = visible }
+        if source.frame != globalFrame { source.frame = globalFrame }
     }
 
     @MainActor
@@ -277,26 +327,87 @@ private struct MonitorVideoBackdrop: ViewModifier {
             renderer.deactivate(identity)
             if owner == identity { owner = nil }
         }
+        // A new source picture wakes the loop at once, so the glass follows the
+        // feed frame for frame; the timeout only polls a held/paused source or a
+        // compressed-layer-only feed with no passive buffer. No thermal slowdown:
+        // glass behind the picture must never lag it.
+        let wake = MonitorBackdropWake()
+        var idlePolls = 0
         while !Task.isCancelled {
-            let thermal = ProcessInfo.processInfo.thermalState
-            let intervalNs = MonitorBackdropPolicy.intervalNanoseconds(
-                serious: thermal == .serious, critical: thermal == .critical)
+            // ponytail: after ~250 ms with nothing new, time out at 10 Hz instead
+            // of 60 Hz. Frame wakes are unaffected, so a resumed source is immediate.
+            let idle = idlePolls >= Self.idlePollThreshold ? Self.idleIntervalMultiplier : 1
+            let intervalNs = MonitorBackdropPolicy.minimumIntervalNanoseconds * idle
             let started = DispatchTime.now().uptimeNanoseconds
+            idlePolls += 1
             if let result = await renderer.render(
                 owner: identity, canvasSize: expected.frame.size, surroundRGB: expected.surroundRGB,
                 prepare: { sources(expected.frame.size) }),
                 !Task.isCancelled, renderer.isCurrent(result)
             {
                 if !result.isUnchanged {
+                    if result.snapshot != nil || snapshot != nil { idlePolls = 0 }
                     snapshot = result.snapshot
                     renderedKey = expected
+                    publish()
                 }
             }
             let spent = DispatchTime.now().uptimeNanoseconds &- started
-            if spent < intervalNs {
-                do {
-                    try await Task.sleep(for: .nanoseconds(Int64(intervalNs - spent)))
-                } catch { return }
+            if spent < intervalNs { await wake.wait(timeoutNs: intervalNs - spent) }
+        }
+    }
+}
+
+extension Notification.Name {
+    /// A backdrop source has a new picture. Posted by decoders and playback.
+    static let monitorBackdropSourceAdvanced = Notification.Name(
+        "com.opencapture.opc.monitor-backdrop.source-advanced")
+}
+
+/// Wakes a backdrop loop on the next source picture, or after a timeout.
+/// A picture that lands while a job renders is remembered, not dropped.
+@MainActor
+private final class MonitorBackdropWake {
+    nonisolated(unsafe) private var observer: NSObjectProtocol?
+    private var pending = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var generation = 0
+
+    init() {
+        observer = NotificationCenter.default.addObserver(
+            forName: .monitorBackdropSourceAdvanced, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.fire() }
+        }
+    }
+
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+    }
+
+    private func fire() {
+        guard let waiter else {
+            pending = true
+            return
+        }
+        self.waiter = nil
+        waiter.resume()
+    }
+
+    func wait(timeoutNs: UInt64) async {
+        if pending {
+            pending = false
+            return
+        }
+        generation += 1
+        let expected = generation
+        await withCheckedContinuation { continuation in
+            waiter = continuation
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: timeoutNs)
+                guard let self, self.generation == expected, let waiter = self.waiter else { return }
+                self.waiter = nil
+                waiter.resume()
             }
         }
     }

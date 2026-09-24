@@ -395,7 +395,7 @@ fun MediaPlayerScreen(
     }
     BackHandler { handlePlaybackBack() }
     val backdrop = rememberMonitorBackdropFeed(active.id, enabled = ready)
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     var decodeWidth by remember { mutableIntStateOf(1280) }
     var decodeHeight by remember { mutableIntStateOf(720) }
     var clipColorMode by remember { mutableIntStateOf(-1) }
@@ -1108,28 +1108,29 @@ fun MediaPlayerScreen(
                 )
             }
 
-            }
-            }
-        }
-
-        if (confirmDelete) {
-            MediaConfirmPopup(
-                title = "Delete this clip from the camera?",
-                confirmTitle = "Delete",
-                onDismiss = { confirmDelete = false },
-                onConfirm = {
-                    confirmDelete = false
-                    scope.launch {
-                        val dying = active
-                        controller.delete(dying)
-                        when {
-                            canNext -> active = playlist[index + 1]
-                            canPrev -> active = playlist[index - 1]
-                            else -> onClose()
+            // Inside the overlay window: in the host window it sits under the gesture well.
+            if (confirmDelete) {
+                MediaConfirmPopup(
+                    title = "Delete this clip from the camera?",
+                    confirmTitle = "Delete",
+                    onDismiss = { confirmDelete = false },
+                    onConfirm = {
+                        confirmDelete = false
+                        scope.launch {
+                            val dying = active
+                            controller.delete(dying)
+                            when {
+                                canNext -> active = playlist[index + 1]
+                                canPrev -> active = playlist[index - 1]
+                                else -> onClose()
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
+            }
+
+            }
+            }
         }
     }
     }

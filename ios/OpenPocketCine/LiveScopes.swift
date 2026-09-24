@@ -369,43 +369,44 @@ struct WaveformOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.monitorSamples.displayBundle
         let options = WaveformAssist.store.options
         let size = ScopePanelPlacement.size(
             WaveformAssist.panelSize(scale: WaveformAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let intensity = WaveformAssist.intensity(options.brightness)
-        // Transfer rides the bundle — reading session.status here re-rendered
-        // every scope on 5 Hz telemetry pushes (DESIGN §2.3).
-        let transfer = assist.transfer
         let plot = ScopeMiniChrome(
             title: "Wave", chip: options.mode.rawValue.uppercased(),
             size: size
         ) {
-            // Traces first; 0 / 100 and the dotted 5 / 95 buffers sit on top.
-            ZStack(alignment: .topLeading) {
-                if ScopeTraceMetal.isAvailable {
-                    let plot = WaveformAxis.plotRect(in: size)
-                    ScopeTraceMetalView(
-                        samples: assist.samples, trail: assist.trailSamples,
-                        mode: .waveform(options.mode), transfer: transfer,
-                        revision: assist.revision, opacity: intensity,
-                        layoutSize: plot.size
-                    )
-                    .frame(width: plot.width, height: plot.height)
-                    .offset(x: plot.minX, y: plot.minY)
-                } else {
-                    WaveformScopePlot(
-                        samples: assist.samples, trail: assist.trailSamples,
-                        mode: options.mode, transfer: transfer, opacity: intensity
+            ScopeBundleScope { assist in
+                // Transfer rides the bundle — reading session.status here re-rendered
+                // every scope on 5 Hz telemetry pushes (DESIGN §2.3).
+                let transfer = assist.transfer
+                // Traces first; 0 / 100 and the dotted 5 / 95 buffers sit on top.
+                ZStack(alignment: .topLeading) {
+                    if ScopeTraceMetal.isAvailable {
+                        let plot = WaveformAxis.plotRect(in: size)
+                        ScopeTraceMetalView(
+                            samples: assist.samples, trail: assist.trailSamples,
+                            mode: .waveform(options.mode), transfer: transfer,
+                            revision: assist.revision, opacity: intensity,
+                            layoutSize: plot.size
+                        )
+                        .frame(width: plot.width, height: plot.height)
+                        .offset(x: plot.minX, y: plot.minY)
+                    } else {
+                        WaveformScopePlot(
+                            samples: assist.samples, trail: assist.trailSamples,
+                            mode: options.mode, transfer: transfer, opacity: intensity
+                        )
+                        .frame(width: size.width, height: size.height)
+                    }
+                    WaveformGuideOverlay(
+                        clip: options.guides.clip, crush: options.guides.crush,
+                        middle: options.guides.middle, transfer: transfer
                     )
                     .frame(width: size.width, height: size.height)
                 }
-                WaveformGuideOverlay(
-                    clip: options.guides.clip, crush: options.guides.crush,
-                    middle: options.guides.middle, transfer: transfer
-                )
-                .frame(width: size.width, height: size.height)
             }
         }
         .accessibilityLabel(options.mode == .rgb ? "RGB waveform" : "Luma waveform")
@@ -533,8 +534,6 @@ struct ParadeOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.monitorSamples.displayBundle
-        let transfer = assist.transfer
         let options = ParadeAssist.store.options
         let size = ScopePanelPlacement.size(
             ParadeAssist.panelSize(scale: ParadeAssist.store.presentationScale(in: canvas)),
@@ -545,29 +544,32 @@ struct ParadeOverlay: View {
             chip: ParadeAssist.chip(options.mode),
             size: size
         ) {
-            ZStack(alignment: .topLeading) {
-                if ScopeTraceMetal.isAvailable {
-                    let plotRect = WaveformAxis.plotRect(in: size)
-                    ScopeTraceMetalView(
-                        samples: assist.samples, trail: assist.trailSamples,
-                        mode: .parade(options.mode), transfer: transfer,
-                        revision: assist.revision, opacity: intensity,
-                        layoutSize: plotRect.size
-                    )
-                    .frame(width: plotRect.width, height: plotRect.height)
-                    .offset(x: plotRect.minX, y: plotRect.minY)
-                } else {
-                    ParadeScopePlot(
-                        samples: assist.samples, trail: assist.trailSamples,
-                        mode: options.mode, transfer: transfer, opacity: intensity
+            ScopeBundleScope { assist in
+                let transfer = assist.transfer
+                ZStack(alignment: .topLeading) {
+                    if ScopeTraceMetal.isAvailable {
+                        let plotRect = WaveformAxis.plotRect(in: size)
+                        ScopeTraceMetalView(
+                            samples: assist.samples, trail: assist.trailSamples,
+                            mode: .parade(options.mode), transfer: transfer,
+                            revision: assist.revision, opacity: intensity,
+                            layoutSize: plotRect.size
+                        )
+                        .frame(width: plotRect.width, height: plotRect.height)
+                        .offset(x: plotRect.minX, y: plotRect.minY)
+                    } else {
+                        ParadeScopePlot(
+                            samples: assist.samples, trail: assist.trailSamples,
+                            mode: options.mode, transfer: transfer, opacity: intensity
+                        )
+                        .frame(width: size.width, height: size.height)
+                    }
+                    WaveformGuideOverlay(
+                        clip: options.guides.clip, crush: options.guides.crush,
+                        middle: options.guides.middle, transfer: transfer
                     )
                     .frame(width: size.width, height: size.height)
                 }
-                WaveformGuideOverlay(
-                    clip: options.guides.clip, crush: options.guides.crush,
-                    middle: options.guides.middle, transfer: transfer
-                )
-                .frame(width: size.width, height: size.height)
             }
         }
         .accessibilityLabel(ParadeAssist.accessibilityLabel(options.mode))
@@ -642,7 +644,6 @@ struct HistogramOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.monitorSamples.displayBundle
         let options = HistogramAssist.store.options
         let size = ScopePanelPlacement.size(
             HistogramAssist.panelSize(scale: HistogramAssist.store.presentationScale(in: canvas)),
@@ -653,10 +654,12 @@ struct HistogramOverlay: View {
         ) {
             // Draw-only body: curves arrive remapped / blended / smoothed and
             // the traffic reading pre-metered (DESIGN §3.2) — no math on main.
-            HistogramScopePlot(
-                display: assist.histogramDisplay,
-                traffic: assist.traffic,
-                showTrafficLights: options.trafficLights)
+            ScopeBundleScope { assist in
+                HistogramScopePlot(
+                    display: assist.histogramDisplay,
+                    traffic: assist.traffic,
+                    showTrafficLights: options.trafficLights)
+            }
         }
         .accessibilityLabel("RGB histogram, scale 0 to 100")
         if canvas.width > 1, canvas.height > 1 {
@@ -769,7 +772,6 @@ struct VectorscopeOverlay: View {
     var chromeClearance: EdgeInsets = EdgeInsets()
 
     var body: some View {
-        let assist = model.monitorSamples.displayBundle
         let options = VectorscopeAssist.store.options
         let plot = ScopeMiniChrome(
             title: "Vector",
@@ -779,23 +781,26 @@ struct VectorscopeOverlay: View {
                     scale: VectorscopeAssist.store.presentationScale(in: canvas)),
                 canvas: canvas, clearance: chromeClearance)
         ) {
-            ZStack {
-                if ScopeTraceMetal.isAvailable {
-                    Canvas { context, size in
-                        drawVectorscopeGraticule(in: context, rect: vectorscopePlotSquare(in: size))
+            ScopeBundleScope { assist in
+                ZStack {
+                    if ScopeTraceMetal.isAvailable {
+                        Canvas { context, size in
+                            drawVectorscopeGraticule(
+                                in: context, rect: vectorscopePlotSquare(in: size))
+                        }
+                        VectorscopeMetalView(
+                            points: assist.vectorscopePoints,
+                            trailPoints: assist.trailVectorscopePoints,
+                            zoom: options.zoom,
+                            brightness: options.brightness,
+                            revision: assist.revision)
+                    } else {
+                        VectorscopePlot(
+                            points: assist.vectorscopePoints,
+                            trailPoints: assist.trailVectorscopePoints,
+                            zoom: options.zoom,
+                            brightness: options.brightness)
                     }
-                    VectorscopeMetalView(
-                        points: assist.vectorscopePoints,
-                        trailPoints: assist.trailVectorscopePoints,
-                        zoom: options.zoom,
-                        brightness: options.brightness,
-                        revision: assist.revision)
-                } else {
-                    VectorscopePlot(
-                        points: assist.vectorscopePoints,
-                        trailPoints: assist.trailVectorscopePoints,
-                        zoom: options.zoom,
-                        brightness: options.brightness)
                 }
             }
         }
@@ -959,7 +964,9 @@ struct TrafficLightsOverlay: View {
         ) {
             // Metered once in the sampler with the operator threshold riding
             // `LiveImageEffects.trafficThreshold` — render the bundle directly.
-            TrafficLightsMeterMini(reading: model.monitorSamples.bundle.traffic)
+            ScopeBundleScope { _ in
+                TrafficLightsMeterMini(reading: model.monitorSamples.bundle.traffic)
+            }
         }
     }
 }
@@ -1106,6 +1113,16 @@ struct TrafficLightsMeterMini: View {
 }
 
 // MARK: - Chrome + drawing
+
+/// Reads the scope bundle in its own observation scope. Read in an overlay
+/// body, every bundle (up to 25 Hz) re-evaluated the movable panel wrapper
+/// (gestures, shadow, placement) around the plot as well.
+private struct ScopeBundleScope<Content: View>: View {
+    @Environment(AppModel.self) private var model
+    @ViewBuilder let content: (ScopeAssistBundle) -> Content
+
+    var body: some View { content(model.monitorSamples.displayBundle) }
+}
 
 private struct ScopeMiniChrome<Content: View>: View {
     let title: String

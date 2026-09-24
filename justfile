@@ -85,6 +85,11 @@ swift-test *args:
 live-log-summary journal:
     python3 tools/analyze-live-log.py "{{journal}}"
 
+# Measure the production status wire codec with synthetic data on this host.
+# Informational timing only; does not measure Android JNI, UI, FPS or energy.
+performance-status-probe:
+    bash tools/performance-status-probe.sh
+
 # Plan or run bounded connection experiments (script/agent driver; recording opt-in).
 connection-stress *args:
     python3 tools/connection-stress/harness.py {{args}}
@@ -163,6 +168,10 @@ ios-ui-test device *args: ios-generate
 # Opt-in navigation on an attached physical iPhone/iPad; never records or moves a camera.
 ios-physical-ui-test device test="OpenPocketCineUITests/PhysicalNavigationTests": ios-generate
     TEST_RUNNER_OPV_PHYSICAL_UI_REVIEW=1 xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS,id={{device}}' -allowProvisioningUpdates -only-testing:{{test}} test
+
+# Release power/CPU/GPU soak on a physical iPhone + saved Pocket 4 Pro; traces stay in .local/perf.
+perf-soak device *profiles="clean pro":
+    DEVICE='{{device}}' bash tools/perf-soak.sh {{profiles}}
 
 # Seeded physical live-feed stress; optional recording is off by default.
 ios-feed-stress device seed="20260914" limit="300" record="0": ios-generate

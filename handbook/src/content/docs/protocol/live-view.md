@@ -53,6 +53,7 @@ DUML **`0x09/0xa8`**, payload `00 04 02 00 00 00 00 00 00 00`.
 | --- | --- |
 | Pocket | `0x08` |
 | Nano | `0x41` (Mimo 2026-08-18) |
+| Action 6 | `0x41` (Mimo 2026-09-21), no `0x02/0x09` gate and no Pocket `0x02/0x68` |
 
 Sending Pocket `0x08` to Nano ACKs **`E0`** with **zero** pktType-`0x02`. Mimo first got `E0`/`D6` while still in playback, then `00` after exit. Nano also pairs enable with **`0x02/0x09`** `00…03` (stop `00…04`), ACK `00`, `rcv=0x01`. Do not send `0x02/0x0c` to start live view. (App → camera).
 

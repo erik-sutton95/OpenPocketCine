@@ -303,7 +303,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         let stack = PrivacyRedactor.redact(exception.callStackSymbols.joined(separator: " | "))
         let line =
             "fault diagnostics ns-exception name=\(exception.name.rawValue) reason=\(reason) stack=\(stack)"
-        ControlLiveLog.appendRedacted(line)
+        ControlLiveLog.appendRedacted(line, logNow: true)
         if let url = exceptionsURL {
             let row = Data("\(ISO8601DateFormatter().string(from: Date())) \(line)\n".utf8)
             if FileManager.default.fileExists(atPath: url.path),

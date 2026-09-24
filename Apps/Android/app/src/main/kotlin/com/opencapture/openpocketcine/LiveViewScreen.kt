@@ -123,7 +123,7 @@ import kotlinx.coroutines.isActive
 
 @Composable
 fun LiveViewScreen(model: AppModel) {
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     val cameraGalleryOpen by model.session.cameraGalleryOpen.collectAsState()
     var followedGallery by remember { mutableStateOf(cameraGalleryOpen) }
     LaunchedEffect(cameraGalleryOpen) {
@@ -143,6 +143,7 @@ fun LiveViewScreen(model: AppModel) {
     val zoomPinching by model.session.zoomPinching.collectAsState()
     val trackingHud by model.session.trackingHud.collectAsState()
     val poseViewFlip by model.session.gimbalPoseViewFlip.collectAsState()
+    val poseInvertPan by model.session.gimbalPoseInvertPan.collectAsState()
     val gimbalLimitPulse by model.session.gimbalLimitPulse.collectAsState()
     val operatorHaptics = LocalOperatorHaptics.current
     var tick by remember { mutableIntStateOf(0) }
@@ -186,12 +187,16 @@ fun LiveViewScreen(model: AppModel) {
     LaunchedEffect(
         sheet,
         model.session.connectedCamera?.model?.supportsFocusMode,
+        model.session.connectedCamera?.model?.supportsAperture,
         model.session.connectedCamera?.model?.family,
         model.session.connectedCamera?.model?.name,
     ) {
         if (sheet == LiveSheet.FOCUS &&
             !CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model)
         ) {
+            sheet = null
+        }
+        if (sheet == LiveSheet.APERTURE && model.session.connectedCamera?.model?.supportsAperture != true) {
             sheet = null
         }
     }
@@ -687,18 +692,34 @@ fun LiveViewScreen(model: AppModel) {
                 }
             }
 
-            if (assist.evMeter && model.currentDispMode == PocketDispMode.LIVE) {
-                val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
-                    model.liveOperatorPanel == null && assist.configureTool == null
-                val collapsedPalette = if (!showsAssist) null else if (zones != null) {
-                    portraitAssistToolbar(zones.assistToolbar.minY, minOf(vw, vh) >= 600f)
-                } else layout.assist
+            // EV and LEVEL share the left-edge slot and its View Assist toolbar avoidance.
+            val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
+                model.liveOperatorPanel == null && assist.configureTool == null
+            val collapsedPalette = if (!showsAssist) null else if (zones != null) {
+                portraitAssistToolbar(zones.assistToolbar.minY, minOf(vw, vh) >= 600f)
+            } else layout.assist
+            val meterAvoid = if (showsAssist) assistPaletteBounds ?: collapsedPalette else null
+            val meterFeed = if (desqueezeVisible) pictureContent else layout.onFeed
+            val evShown = assist.evMeter && model.currentDispMode == PocketDispMode.LIVE
+            if (evShown) {
                 LiveCameraExposureMeter(
                     raw = status.meteredEv,
                     available = !recovery.isRecovering && !model.session.isFeedRecovering,
-                    feed = if (desqueezeVisible) pictureContent else layout.onFeed,
+                    feed = meterFeed,
                     mode = model.currentDispMode,
-                    avoid = if (showsAssist) assistPaletteBounds ?: collapsedPalette else null,
+                    avoid = meterAvoid,
+                    modifier = Modifier.zIndex(1f),
+                )
+            }
+
+            if (assist.isVisible(LiveAssistTool.LEVEL)) {
+                LiveLevelOverlay(
+                    reading = model.session.levelReading,
+                    // Picture-relative like the stick: TT180 mirrors the shown picture in both Selfie Flip states.
+                    viewFlip = CameraCommands.liveInvertPan(poseInvertPan, assist.mirror),
+                    feed = meterFeed,
+                    viewport = ChromeRect(0f, 0f, vw, vh),
+                    portrait = portrait,
                     modifier = Modifier.zIndex(1f),
                 )
             }
@@ -1458,7 +1479,7 @@ internal fun LandscapeChrome(
                     enabled = !captureOpen && !uiLocked && model.liveOperatorPanel == null && hits,
                     onMove = model::updateGimbalStick,
                     onRelease = model::endGimbalStick,
-                    onRecenter = { model.session.recenterGimbal() },
+                    onRecenter = { model.session.performGimbalDoubleTap() },
                     onFlip = { model.session.flipGimbal() },
                 )
             }
@@ -1506,6 +1527,7 @@ internal fun LandscapeChrome(
                     },
                     quickBottomClearanceDp = layout.safeBottom,
                     showFocus = capabilities.focus,
+                    showAperture = capabilities.iris,
                     facePriority = model.facePriorityExposureEnabled, shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = {
                         val next = CaptureShutterPolicy.opening(it, status.shootingMode)

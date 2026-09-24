@@ -15,6 +15,7 @@ enum class MonitorAssistIcon(val drawable: Int) {
     TRAFFIC_LIGHTS(R.drawable.monitor_assist_traffic_lights), FRAME_GUIDE(R.drawable.monitor_assist_frame_guide),
     GRID(R.drawable.monitor_assist_grid), CROSSHAIR(R.drawable.monitor_assist_crosshair),
     MIRROR(R.drawable.monitor_assist_mirror), AUDIO_METERS(R.drawable.monitor_assist_audio_meters),
+    LEVEL(R.drawable.monitor_assist_level),
 }
 
 @Composable

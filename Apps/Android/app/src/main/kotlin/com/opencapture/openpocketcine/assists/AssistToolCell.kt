@@ -110,6 +110,7 @@ internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifi
         LiveAssistTool.GUIDES -> com.opencapture.monitorui.MonitorAssistIcon.FRAME_GUIDE
         LiveAssistTool.GRID -> com.opencapture.monitorui.MonitorAssistIcon.GRID
         LiveAssistTool.CROSS -> com.opencapture.monitorui.MonitorAssistIcon.CROSSHAIR
+        LiveAssistTool.LEVEL -> com.opencapture.monitorui.MonitorAssistIcon.LEVEL
         LiveAssistTool.MIRROR -> com.opencapture.monitorui.MonitorAssistIcon.MIRROR
         LiveAssistTool.AUDIO -> com.opencapture.monitorui.MonitorAssistIcon.AUDIO_METERS
         LiveAssistTool.ND, LiveAssistTool.EV, LiveAssistTool.DESQ -> null

@@ -36,6 +36,7 @@ class LiveAssistStateTest {
                 LiveAssistTool.GUIDES,
                 LiveAssistTool.GRID,
                 LiveAssistTool.CROSS,
+                LiveAssistTool.LEVEL,
                 LiveAssistTool.DESQ,
                 LiveAssistTool.MIRROR,
             ),
@@ -46,12 +47,14 @@ class LiveAssistStateTest {
     }
 
     @Test
-    fun audioHasMonitorOptionsWhileEvAndMirrorStayTapOnly() {
+    fun audioHasMonitorOptionsWhileEvLevelAndMirrorStayTapOnly() {
         assertTrue(LiveAssistTool.AUDIO.hasConfiguration)
         assertFalse(LiveAssistTool.EV.hasConfiguration)
+        assertFalse(LiveAssistTool.LEVEL.hasConfiguration)
         assertFalse(LiveAssistTool.MIRROR.hasConfiguration)
         for (tool in LiveAssistTool.settingsCases) {
-            if (tool == LiveAssistTool.AUDIO || tool == LiveAssistTool.EV || tool == LiveAssistTool.MIRROR) continue
+            if (tool == LiveAssistTool.AUDIO || tool == LiveAssistTool.EV || tool == LiveAssistTool.LEVEL ||
+                tool == LiveAssistTool.MIRROR) continue
             assertTrue(tool.hasConfiguration, "${tool.name} should open options")
         }
     }
@@ -189,7 +192,8 @@ class LiveAssistStateTest {
         assertTrue(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.ZEBRA))
         assertEquals(LiveAssistTool.AUDIO, LiveAssistTool.playbackToolbarCases.last())
         assertFalse(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.EV))
-        assertEquals(LiveAssistTool.toolbarCases.filter { it != LiveAssistTool.EV },
+        assertFalse(LiveAssistTool.playbackToolbarCases.contains(LiveAssistTool.LEVEL))
+        assertEquals(LiveAssistTool.toolbarCases.filter { it != LiveAssistTool.EV && it != LiveAssistTool.LEVEL },
             LiveAssistTool.playbackToolbarCases.dropLast(1))
     }
 
@@ -321,4 +325,19 @@ class LiveAssistStateTest {
         assertEquals(null, LiveAssistState().audioCenterFor(false))
     }
 
+
+    @Test
+    fun levelTogglesPersistsAndStaysLiveOnly() {
+        var saved: String? = null
+        val state = LiveAssistState(onPersist = { saved = it })
+        assertEquals("Level", LiveAssistTool.LEVEL.title)
+        assertFalse(state.isVisible(LiveAssistTool.LEVEL))
+        state.toggle(LiveAssistTool.LEVEL)
+        assertTrue(state.level)
+        assertTrue(state.isVisible(LiveAssistTool.LEVEL))
+        val restored = LiveAssistState(encoded = saved)
+        assertTrue(restored.level)
+        restored.togglePlayback(LiveAssistTool.LEVEL)
+        assertFalse(restored.isPlaybackVisible(LiveAssistTool.LEVEL))
+    }
 }

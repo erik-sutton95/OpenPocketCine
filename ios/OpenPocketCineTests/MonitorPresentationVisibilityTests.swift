@@ -18,14 +18,15 @@ final class MonitorPresentationVisibilityTests: XCTestCase {
             window.rootViewController = nil
         }
         try await settle(host.view)
-        XCTAssertTrue(probe.pulse)
+        let running = try await isPulsing(probe, host.view)
+        XCTAssertTrue(running)
         XCTAssertTrue(probe.inheritedVisibility)
         XCTAssertEqual(probe.appearances, 1)
         let identity = probe.hostIdentity
 
         probe.visible = false
         try await settle(host.view)
-        XCTAssertFalse(probe.pulse)
+        XCTAssertEqual(probe.phase, 0)
         XCTAssertFalse(
             probe.inheritedVisibility, "A child cannot override covered parent visibility")
         XCTAssertEqual(probe.pageAppearances, 1, "The sibling page remains mounted")
@@ -36,7 +37,8 @@ final class MonitorPresentationVisibilityTests: XCTestCase {
 
         probe.visible = true
         try await settle(host.view)
-        XCTAssertTrue(probe.pulse)
+        let resumed = try await isPulsing(probe, host.view)
+        XCTAssertTrue(resumed)
         XCTAssertEqual(probe.hostIdentity, identity)
         XCTAssertEqual(probe.appearances, 1)
         XCTAssertEqual(probe.disappearances, 0)
@@ -44,10 +46,13 @@ final class MonitorPresentationVisibilityTests: XCTestCase {
 
         probe.scene = .inactive
         try await settle(host.view)
-        XCTAssertFalse(probe.pulse)
+        XCTAssertEqual(probe.phase, 0)
+        let inactive = try await isPulsing(probe, host.view)
+        XCTAssertFalse(inactive)
         probe.scene = .active
         try await settle(host.view)
-        XCTAssertTrue(probe.pulse)
+        let active = try await isPulsing(probe, host.view)
+        XCTAssertTrue(active)
 
         // Recording can stop while the control is covered; reveal must not
         // restart its decorative glow until recording starts again.
@@ -56,16 +61,19 @@ final class MonitorPresentationVisibilityTests: XCTestCase {
         try await settle(host.view)
         probe.visible = true
         try await settle(host.view)
-        XCTAssertFalse(probe.pulse)
+        XCTAssertEqual(probe.phase, 0)
+        let disabled = try await isPulsing(probe, host.view)
+        XCTAssertFalse(disabled)
         probe.enabled = true
         try await settle(host.view)
-        XCTAssertTrue(probe.pulse)
+        let enabled = try await isPulsing(probe, host.view)
+        XCTAssertTrue(enabled)
         XCTAssertEqual(probe.appearances, 1)
 
         probe.mounted = false
         try await settle(host.view)
-        XCTAssertFalse(
-            probe.pulse, "Disappearance resets animation even without another body update")
+        let unmounted = try await isPulsing(probe, host.view)
+        XCTAssertFalse(unmounted, "Disappearance stops the timeline")
         XCTAssertEqual(probe.disappearances, 1)
     }
 
@@ -126,6 +134,28 @@ final class MonitorPresentationVisibilityTests: XCTestCase {
         }
     }
 
+    /// A running pulse keeps changing phase on its 30 Hz timeline; a stopped
+    /// one rests at phase 0 without further updates.
+    /// Polls up to a second so a loaded host cannot miss the next 30 Hz step.
+    private func isPulsing(_ probe: VisibilityProbe, _ view: UIView) async throws -> Bool {
+        let before = probe.pulseChanges
+        for _ in 0..<10 {
+            try await settle(view)
+            if probe.pulseChanges > before + 1 { return true }
+        }
+        return false
+    }
+
+    func testPulsePhaseIsAnEasedTriangle() {
+        typealias Pulse = MonitorDecorativePulse<EmptyView>
+        XCTAssertEqual(Pulse.phase(0, period: 1.6), 0, accuracy: 1e-9)
+        XCTAssertEqual(Pulse.phase(0.8, period: 1.6), 1, accuracy: 1e-9)
+        XCTAssertEqual(Pulse.phase(1.6, period: 1.6), 0, accuracy: 1e-9)
+        XCTAssertEqual(Pulse.phase(0.4, period: 1.6), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(Pulse.phase(0.2, period: 1.6), Pulse.phase(1.4, period: 1.6), accuracy: 1e-9)
+        XCTAssertEqual(Pulse.phase(1, period: 0), 0)
+    }
+
     private func settle(_ view: UIView) async throws {
         view.setNeedsLayout()
         view.layoutIfNeeded()
@@ -140,7 +170,7 @@ private final class VisibilityProbe {
     var enabled = true
     var mounted = true
     var scene = ScenePhase.active
-    var pulse = false
+    var phase = 0.0
     var inheritedVisibility = true
     var appearances = 0
     var disappearances = 0
@@ -174,20 +204,15 @@ private struct VisibilityPulseHost: View {
     @State private var identity = UUID()
 
     var body: some View {
-        Color.red
-            .frame(width: 40, height: 40)
-            .opacity(probe.pulse ? 0.25 : 1)
-            .modifier(
-                MonitorDecorativePulse(
-                    pulse: Binding(
-                        get: { probe.pulse },
-                        set: { value in
-                            probe.pulse = value
-                            probe.pulseChanges += 1
-                        }),
-                    enabled: probe.enabled,
-                    animation: MonitorMotion.recPulse(false))
-            )
+        MonitorDecorativePulse(period: 0.4, enabled: probe.enabled) { phase in
+            Color.red
+                .frame(width: 40, height: 40)
+                .opacity(1 - 0.75 * phase)
+                .onChange(of: phase) { _, value in
+                    probe.phase = value
+                    probe.pulseChanges += 1
+                }
+        }
             .onChange(of: visible, initial: true) { _, value in probe.inheritedVisibility = value }
             .onAppear {
                 probe.appearances += 1

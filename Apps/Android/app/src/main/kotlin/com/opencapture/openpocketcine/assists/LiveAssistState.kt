@@ -50,6 +50,8 @@ class LiveAssistState(
         private set
     var evMeter by mutableStateOf(false)
         private set
+    var level by mutableStateOf(false)
+        private set
     var audioMeters by mutableStateOf(false)
         private set
     var guides by mutableStateOf(false)
@@ -239,6 +241,7 @@ class LiveAssistState(
             LiveAssistTool.LIGHTS -> trafficLights
             LiveAssistTool.ND -> ndMeter
             LiveAssistTool.EV -> evMeter
+            LiveAssistTool.LEVEL -> level
             LiveAssistTool.AUDIO -> audioMeters
             LiveAssistTool.GUIDES -> guides
             LiveAssistTool.GRID -> grid
@@ -290,6 +293,7 @@ class LiveAssistState(
             LiveAssistTool.LIGHTS -> trafficLights = !trafficLights
             LiveAssistTool.ND -> ndMeter = !ndMeter
             LiveAssistTool.EV -> evMeter = !evMeter
+            LiveAssistTool.LEVEL -> level = !level
             LiveAssistTool.AUDIO -> audioMeters = !audioMeters
             LiveAssistTool.GUIDES -> {
                 guides = !guides
@@ -519,6 +523,7 @@ class LiveAssistState(
         trafficLights = LiveAssistTool.LIGHTS in tools
         ndMeter = LiveAssistTool.ND in tools
         evMeter = LiveAssistTool.EV in tools
+        level = LiveAssistTool.LEVEL in tools
         audioMeters = LiveAssistTool.AUDIO in tools
         guides = LiveAssistTool.GUIDES in tools
         grid = LiveAssistTool.GRID in tools
@@ -629,6 +634,7 @@ class LiveAssistState(
         trafficLights = LiveAssistTool.LIGHTS in on
         ndMeter = LiveAssistTool.ND in on
         evMeter = LiveAssistTool.EV in on
+        level = LiveAssistTool.LEVEL in on
         audioMeters = LiveAssistTool.AUDIO in on
         guides = LiveAssistTool.GUIDES in on
         grid = LiveAssistTool.GRID in on

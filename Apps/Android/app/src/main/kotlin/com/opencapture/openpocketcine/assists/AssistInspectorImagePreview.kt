@@ -30,7 +30,7 @@ internal fun AssistInspectorImagePreview(tool: LiveAssistTool, state: LiveAssist
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val status by model.session.status.collectAsState()
+    val status by model.session.chromeStatus.collectAsState()
     val camera = model.session.connectedCamera
     val owner = remember(tool, playback, camera?.id, colorMode, configuration.screenWidthDp,
         configuration.screenHeightDp, density.density, density.fontScale) { Any() }

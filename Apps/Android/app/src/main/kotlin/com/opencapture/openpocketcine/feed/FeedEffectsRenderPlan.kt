@@ -42,6 +42,13 @@ internal class FeedEffectsRenderPlan(
     val falseColorOn: Boolean
         get() = falseColorPaint != null && falseColorWeight != null
 
+    /** Same shader set and cube textures; only uniforms or scope policy differ. */
+    fun sharesGlResources(other: FeedEffectsRenderPlan): Boolean =
+        lutCube === other.lutCube &&
+            falseColorPaint === other.falseColorPaint &&
+            falseColorWeight === other.falseColorWeight &&
+            peaking == other.peaking
+
     /** LUT / PEAK / FALSE / ZEBRA — grade the player, not a CPU overlay. */
     val hasPlaybackLook: Boolean
         get() =

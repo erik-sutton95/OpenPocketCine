@@ -102,6 +102,19 @@ enum class GimbalRamp(val raw: Int, val label: String, val tau: Double) {
     }
 }
 
+/** Stick double-tap and gamepad Circle/B: body recenter or a world-level snap. */
+enum class GimbalDoubleTap(val raw: Int, val label: String) {
+    RECENTER(0, "Recenter"),
+    LEVEL(1, "Level"),
+    ;
+
+    companion object {
+        val pickerOrder = listOf(RECENTER, LEVEL)
+
+        fun fromRaw(value: Int): GimbalDoubleTap = entries.firstOrNull { it.raw == value } ?: RECENTER
+    }
+}
+
 data class GimbalProgram(
     val a: GimbalWaypoint? = null,
     val b: GimbalWaypoint? = null,

@@ -34,7 +34,16 @@ object StatusExtras {
     ): CameraStatus {
         val item = parseSubscribe(payload) ?: return status
         return when (item.name) {
-            "cam_expo_param" -> applyExpo(item.value, status)
+            "cam_expo_param" -> {
+                val next = applyExpo(item.value, status)
+                if (!CameraModel.looksLikeAction6(cameraName)) next
+                else next.copy(irisHundredths = ApertureStrategy.irisHundredths(item.value) ?: -1)
+            }
+            ApertureStrategy.STATE_KEY ->
+                ApertureStrategy.parseState(item.value)?.let { status.copy(apertureStrategy = it) } ?: status
+            ApertureStrategy.CAPABILITY_KEY ->
+                ApertureStrategy.parseCapability(item.value).takeIf { it.isNotEmpty() }
+                    ?.let { status.copy(availableApertureStrategies = it) } ?: status
             "cam_video_param_v2" -> applyVideo(item.value, status)
             "cam_image_effect" -> applyImageEffect(item.value, status, cameraName, family)
             "cam_lens_state" -> applyLens(item.value, status)

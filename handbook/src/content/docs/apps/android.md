@@ -153,6 +153,45 @@ LUTs and picture warnings follow the correction, and framing guides align with
 the corrected picture. Desqueeze changes only the display: recordings, shared
 files and scope measurements keep the original image.
 
+## Level
+
+Enable **LEVEL** in View Assist to see how level the picture is against
+gravity. The reading comes from the camera's own attitude sensor, not the
+phone.
+
+- Two slim meters, laid out like a Nikon Z virtual horizon, show roll along
+  the bottom of the picture and tilt right of centre, the same distance from
+  the middle of the picture as the roll meter. A
+  short bar crosses a slim dark band to show the angle (full scale ±8°), with
+  small notches marking level. The line, bar and number turn green within 0.6° of
+  level.
+- Within about 25° of pointing straight down or up, the meters give way to a
+  round bubble level: a bead that is amber off level and green within 0.6° of
+  plumb. Use it for top-down
+  shots.
+- If the camera stops reporting attitude, the meters show a dash and
+  **No level data**. They never turn green without data.
+
+Tap LEVEL again to hide it; the on/off choice is saved. LEVEL is not shown in
+playback.
+
+### Double-tap Level
+
+In the gimbal drawer, **Double-tap** chooses what a double-tap on the joystick
+and Circle/B on a game controller do:
+
+- **Recenter** (default): the camera's own recenter, relative to the handle.
+- **Level**: one move to the nearest world target, which is the horizon, or
+  straight down or up once the lens is past 45°. A toast says
+  **Leveled to world**, **Leveled top-down** or **Leveled straight up** when the
+  tilt is within 0.5°, or reports how far off it stopped.
+
+Level corrects tilt only. In Follow and Tilt locked the gimbal already holds the
+horizon; in FPV roll follows the handle and the toast says so. With the handle
+upright the lens reaches about 44° down, so angle the handle forward for a
+top-down shot, then double-tap. Stick input cancels the move. Level and the
+roll direction are experimental until checked on more cameras.
+
 ## EV meter
 
 Enable **EV** in View Assist to show a slim white exposure line with a sun
@@ -227,7 +266,8 @@ Build recipes: [Setup](../../guides/setup/). The living JNI/I/O notes:
 
 Chrome, assists, capture, Operator Setup, and media are meant to match iOS.
 Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×;
-Pocket 3 1×/2×/4× with 4K max 2×; Nano 1×). Pocket 3's ceiling is
+Pocket 3 1×/2×/4× with 4K max 2×). Nano is a fixed 1× lens: no zoom chip, pinch,
+disc or controller zoom, and no gimbal stick or tap focus. Pocket 3's ceiling is
 per-FORMAT, not one generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×,
 3K 1:1 2×**
 ([survey](https://openpocketcine.app/docs/devices/pocket-3/controls/#zoom-and-med-tele)). Zoom must not drop the live
@@ -242,7 +282,11 @@ the survey. Unknown modes have no fallback. The full
 Pocket 3 format/record/reconnect matrix still needs physical Android checks.
 COLOR follows the body: D-Log2 is Pocket 4 Pro
 only; Pocket 4 is D-Log; Pocket 3 is D-Log M (HLG is HDR); Nano is 8-bit /
-10-bit / D-Log M. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
+10-bit / D-Log M; Action 6 is Normal 10-bit / D-Log M. Action 6 has no focus
+modes: its APERTURE tile sits where FOCUS is on Pocket, shows the live iris,
+and sets the strategies the camera offers. Action 6 live view is wired from
+the [survey](https://openpocketcine.app/docs/devices/action-6/) and not yet
+checked on a camera. Auto ISO ranges start at 50 on Pocket 3 / Pocket 4 and 100
 on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
 (centered until placed; drag to move). Long-press to
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
@@ -264,7 +308,7 @@ remains under investigation and is not available in the app. Ramp smooths
 joystick-input changes: Off is immediate, Soft eases more gradually than Medium.
 Releasing the stick still stops immediately. A connected
 game controller's selected stick drives the same path (Left by default). Cross/A records.
-Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face
+Circle/B recenters, or levels with **Double-tap → Level**. Square/X is rotate-180. Triangle/Y tracks a face
 in frame or cancels. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom
 (deeper is faster). D-pad up/down ISO, left/right shutter. A toast
 says Gamepad connected or disconnected; unplug rests the stick.

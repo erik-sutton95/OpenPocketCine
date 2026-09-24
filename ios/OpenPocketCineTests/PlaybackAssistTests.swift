@@ -174,6 +174,13 @@ final class PlaybackAssistTests: XCTestCase {
             "LUT cube product presents unmanaged, same as live HevcDecoder")
     }
 
+    func testPausedLinkParksOnlyAfterAPausedSeekCanLand() {
+        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: nil, now: 10))
+        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.1))
+        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.5))
+        XCTAssertTrue(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.61))
+    }
+
     func testPlaybackDisplayLinkDoesNotCapTheCubeAtTwentyFour() {
         XCTAssertGreaterThanOrEqual(
             PlaybackDisplayLink.pollRange.maximum, 60,
@@ -188,6 +195,26 @@ final class PlaybackAssistTests: XCTestCase {
             "after present, the cube only bakes a new player frame")
         XCTAssertTrue(
             PlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: true))
+    }
+
+    func testPausedPlaybackParksTheDisplayLinkOnceTheSourceIsReady() {
+        XCTAssertTrue(PlaybackDisplayLink.shouldPark(itemHasPresented: true, playerRate: 0))
+        XCTAssertFalse(
+            PlaybackDisplayLink.shouldPark(itemHasPresented: true, playerRate: 1),
+            "playing keeps display-rate polling")
+        XCTAssertFalse(
+            PlaybackDisplayLink.shouldPark(itemHasPresented: false, playerRate: 0),
+            "a new item keeps force-pulling until it presents")
+    }
+
+    func testScopesOnlyPlaybackIsReadyWithoutAMetalCompletion() {
+        XCTAssertTrue(
+            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: false, hdrDisplay: false),
+            "scopes-only never reaches a Metal completion")
+        XCTAssertFalse(
+            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: true, hdrDisplay: false))
+        XCTAssertFalse(
+            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: false, hdrDisplay: true))
     }
 
     func testPlaybackVideoOutputGradesNativeYUVNotBGRA() {

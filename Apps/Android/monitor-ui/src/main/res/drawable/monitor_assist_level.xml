@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LEVEL spirit-vial glyph, same stroke language as the Field Monitor assist set. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M5 9h14a3 3 0 0 1 0 6H5a3 3 0 0 1 0-6zM10 9v6M14 9v6" android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

@@ -14,6 +14,19 @@ object FeedPresentPolicy {
     /** 3 frames at 25 fps. Compose delay while the last orientation stays on screen. */
     const val EXTRA_MIRROR_HOLD_MS = 120L
 
+    /**
+     * iOS `FeedWorkingRaster.targetSize`: aspect-preserving cap on the graded raster.
+     * 720p proxies pass through; a 4K original grades at 1440 wide.
+     */
+    fun workingSize(width: Int, height: Int, maxWidth: Int = MAX_WORKING_WIDTH): Pair<Int, Int> {
+        if (width <= maxWidth || width <= 1 || height <= 1) return width to height
+        return maxWidth to maxOf(1, Math.round(height * maxWidth.toDouble() / width).toInt())
+    }
+
+    /** Copy-pass tap offset, in destination pixels, for a downsample of 1.5x or more. */
+    fun downsampleSpread(sourceWidth: Int, targetWidth: Int): Float =
+        if (targetWidth > 0 && sourceWidth * 2 >= targetWidth * 3) 0.25f else 0f
+
     fun shouldHoldPictureAcrossMirror(framesHeld: Int, secondsHeld: Double): Boolean =
         framesHeld <= EXTRA_MIRROR_HOLD_FRAMES && secondsHeld < EXTRA_MIRROR_HOLD_SECONDS
 

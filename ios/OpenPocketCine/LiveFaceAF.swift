@@ -8,11 +8,21 @@ import Vision
 /// Face ovals only. Pose / person head is off until it is reliable.
 final class LiveFaceDetector: @unchecked Sendable {
     static let interval: TimeInterval = 0.04
+    /// No face for about a second: look at 10 Hz until one appears. Tracking
+    /// an acquired face stays at the 25 Hz feed rate; acquisition waits at
+    /// most one extra 60 ms step. Scenes without faces are the common case.
+    static let idleInterval: TimeInterval = 0.1
+    static let idleAfterEmptyRuns = 25
     static let minimumConfidence: Float = 0.70
+
+    static func pace(emptyRuns: Int) -> TimeInterval {
+        emptyRuns >= idleAfterEmptyRuns ? idleInterval : interval
+    }
 
     private let queue = DispatchQueue(label: "opv.face-af", qos: .userInitiated)
     private var busy = false
     private var lastRun = Date.distantPast
+    private var emptyRuns = 0
     private var pending: Pending?
 
     private struct Pending {
@@ -39,11 +49,12 @@ final class LiveFaceDetector: @unchecked Sendable {
     private func pump() {
         guard !busy, let next = pending else { return }
         let now = Date()
-        guard now.timeIntervalSince(lastRun) >= Self.interval else { return }
+        guard now.timeIntervalSince(lastRun) >= Self.pace(emptyRuns: emptyRuns) else { return }
         pending = nil
         busy = true
         lastRun = now
         let result = Self.detect(in: next.buffer, rectanglesOnly: next.rectanglesOnly)
+        emptyRuns = result.faces.isEmpty ? emptyRuns + 1 : 0
         busy = false
         DispatchQueue.main.async { next.completion(result) }
         pump()

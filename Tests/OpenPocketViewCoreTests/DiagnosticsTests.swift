@@ -36,6 +36,23 @@ import Testing
         #expect(out.contains("<ip>"))
     }
 
+    @Test func anchorPrefiltersKeepUppercaseMatchesAndSkipPlainLines() {
+        let home = "/" + "USERS" + "/Someone"
+        let raw =
+            "\(home)/x PASSWORD: s3cret BEARER abc.def SSID=HomeNet WPA:PSK=k MAIL=A@B.CO host=1.2.3.4"
+        let out = PrivacyRedactor.redact(raw)
+        #expect(!out.contains("Someone"))
+        #expect(!out.contains("s3cret"))
+        #expect(!out.contains("abc.def"))
+        #expect(!out.contains("HomeNet"))
+        #expect(!out.contains("A@B.CO"))
+        #expect(!out.contains("1.2.3.4"))
+        // ICU (?i) folds the long s; the anchor check must too.
+        #expect(!PrivacyRedactor.redact("pa\u{017F}sword=x9secret").contains("x9secret"))
+        let plain = "feed present gpuFPS=24.9 gpuGapMs=41 seq=42054"
+        #expect(PrivacyRedactor.redact(plain) == plain)
+    }
+
     @Test func cameraNetworkDetection() {
         #expect(PrivacyRedactor.isCameraNetwork("OsmoPocket3-AAAA"))
         #expect(PrivacyRedactor.isCameraNetwork("Xtra-Muse-1"))

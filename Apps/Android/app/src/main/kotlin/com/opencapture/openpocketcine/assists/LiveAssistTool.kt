@@ -1,10 +1,10 @@
 package com.opencapture.openpocketcine.assists
 
 /**
- * OpenZCine cinema live-monitor set. Pocket omits LEVEL, MAG, PLAY.
+ * OpenZCine cinema live-monitor set. Pocket omits MAG, PLAY.
  *
  * Toolbar: LUT PEAK FALSE | ZEBRA WAVE PARADE | HISTO VECTOR LIGHTS ND EV |
- * GUIDES GRID CROSS DE-SQ | MIRROR | AUDIO.
+ * GUIDES GRID CROSS LEVEL DE-SQ | MIRROR | AUDIO.
  */
 enum class LiveAssistTool {
     LUT,
@@ -22,6 +22,7 @@ enum class LiveAssistTool {
     GUIDES,
     GRID,
     CROSS,
+    LEVEL,
     DESQ,
     MIRROR,
     ;
@@ -50,15 +51,16 @@ enum class LiveAssistTool {
                 GUIDES -> "Guides"
                 GRID -> "Grid"
                 CROSS -> "Crosshair"
+                LEVEL -> "Level"
                 DESQ -> "Anamorphic Desqueeze"
                 MIRROR -> "Mirror"
             }
 
-    /** The fixed camera EV meter and mirror are tap-only toggles. */
+    /** The fixed camera EV meter, LEVEL and mirror are tap-only toggles. */
     val hasConfiguration: Boolean
         get() =
             when (this) {
-                EV, MIRROR -> false
+                EV, LEVEL, MIRROR -> false
                 else -> true
             }
 
@@ -68,15 +70,15 @@ enum class LiveAssistTool {
                 listOf(LUT, PEAK, FALSE),
                 listOf(ZEBRA, WAVE, PARADE),
                 listOf(HISTO, VECTOR, LIGHTS, ND, EV),
-                listOf(GUIDES, GRID, CROSS, DESQ),
+                listOf(GUIDES, GRID, CROSS, LEVEL, DESQ),
                 listOf(MIRROR),
             )
 
         /** AUDIO is appended as its own trailing section. */
         val toolbarCases: List<LiveAssistTool> = toolbarGroups.flatten()
 
-        /** Camera-native EV has no clip telemetry; AUDIO rides last like live. */
-        val playbackToolbarCases: List<LiveAssistTool> = toolbarCases.filter { it != EV } + AUDIO
+        /** Camera EV and LEVEL have no clip telemetry; AUDIO rides last like live. */
+        val playbackToolbarCases: List<LiveAssistTool> = toolbarCases.filter { it != EV && it != LEVEL } + AUDIO
 
         val settingsCases: List<LiveAssistTool> = toolbarCases + AUDIO
 
