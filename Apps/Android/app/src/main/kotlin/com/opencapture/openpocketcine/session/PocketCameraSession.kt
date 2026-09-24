@@ -201,6 +201,10 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     val found: StateFlow<List<FoundCamera>> = ble.found
     val radioOn: StateFlow<Boolean> get() = ble.radioOn
     private val _status = MutableStateFlow(CameraStatus())
+
+    // Most DUML frames are not status frames and leave _status untouched, so its
+    // JSON for the Swift bridge is reused until the value changes.
+    private var statusJson: Pair<CameraStatus, String>? = null
     /** Camera truth. Control code reads this; Compose collects [chromeStatus]. */
     val status: StateFlow<CameraStatus> = _status.asStateFlow()
     private val _chromeStatus = MutableStateFlow(CameraStatus())
@@ -2350,7 +2354,9 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             }
         }
         val prev = _status.value
-        val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prev.toJson())
+        val prevJson = statusJson?.takeIf { it.first === prev }?.second
+            ?: prev.toJson().also { statusJson = prev to it }
+        val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prevJson)
         var next = if (json != null) CameraStatus.fromJson(json) else prev
         if (json == null || !next.hasHudFields) next = next.preservingExtras(prev)
         next = next.carryingAperture(prev)
