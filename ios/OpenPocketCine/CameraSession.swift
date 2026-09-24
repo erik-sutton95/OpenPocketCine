@@ -1270,6 +1270,7 @@ final class CameraSession {
             return false
         }
         let known = stationHost.map { [$0] } ?? []
+        let phoneNetwork = await WiFiJoiner.currentSSID() ?? "unnamed"
         let started = Date()
         let found: [String]
         do {
@@ -1288,7 +1289,7 @@ final class CameraSession {
                 }
             } ?? 0
         ControlLiveLog.line(
-            "station: sweep \(sweep) hosts=\(subnet) answering=\(found.count) known=\(known.count) in \(String(format: "%.1f", Date().timeIntervalSince(started))) s"
+            "station: sweep \(sweep) phone=\(usesHotspot ? "hotspot" : phoneNetwork) hosts=\(subnet) answering=\(found.count) known=\(known.count) in \(String(format: "%.1f", Date().timeIntervalSince(started))) s"
         )
         for host in known + found.filter({ !known.contains($0) }) {
             try Task.checkCancellation()
@@ -6352,7 +6353,7 @@ final class CameraSession {
             case .hostWiFi(let ssid):
                 "this iPhone could not join \(ssid). Check the password and that the network is in range"
             case .stationCameraMissing(let ssid):
-                "the camera joined \(ssid) but did not answer on it. Check that devices on the network can see each other, then try again"
+                "the camera joined \(ssid), but this iPhone cannot reach it there. The router may keep wireless devices apart (client or AP isolation, or a separate 2.4 GHz or IoT network). Turn that off, or use the Hotspot setup"
             case .nanoWake:
                 "the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again"
             }
