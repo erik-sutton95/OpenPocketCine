@@ -209,7 +209,9 @@ experimental history along.
 ## Contributors
 
 <a href="https://github.com/erik-sutton95"><img src="https://images.weserv.nl/?url=github.com/erik-sutton95.png&w=40&h=40&fit=cover&mask=circle" width="40" alt="@erik-sutton95" /></a>
+<a href="https://github.com/Mattufia"><img src="https://images.weserv.nl/?url=github.com/Mattufia.png&w=40&h=40&fit=cover&mask=circle" width="40" alt="@Mattufia" /></a>
 <a href="https://github.com/KonradIT"><img src="https://images.weserv.nl/?url=github.com/KonradIT.png&w=40&h=40&fit=cover&mask=circle" width="40" alt="@KonradIT" /></a>
+<a href="https://github.com/pingyen-captain"><img src="https://images.weserv.nl/?url=github.com/pingyen-captain.png&w=40&h=40&fit=cover&mask=circle" width="40" alt="@pingyen-captain" /></a>
 
 ## Credits
 
