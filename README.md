@@ -12,7 +12,7 @@ Free and open source.
 
 [![CI](https://github.com/erik-sutton95/OpenPocketCine/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-sutton95/OpenPocketCine/actions/workflows/ci.yml) [![Docs](https://img.shields.io/badge/docs-openpocketcine.app-blue)](https://openpocketcine.app/docs/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE) [![Discussions](https://img.shields.io/github/discussions/erik-sutton95/OpenPocketCine?logo=github&label=discussions)](https://github.com/erik-sutton95/OpenPocketCine/discussions)
 
-[![Join the TestFlight](https://img.shields.io/badge/TestFlight-iPhone_%26_iPad-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/1tmt3aEB) [![Get it on Google Play](https://img.shields.io/badge/Google_Play-Android_beta-01875F?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA) [![Download APK](https://img.shields.io/badge/Download_APK-No_Play_Store-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/erik-sutton95/OpenPocketCine/releases/tag/sideload-v0.1.5-1)
+[![Join the TestFlight](https://img.shields.io/badge/TestFlight-iPhone_%26_iPad-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/1tmt3aEB) [![Get it on Google Play](https://img.shields.io/badge/Google_Play-Android_beta-01875F?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA) [![Download APK](https://img.shields.io/badge/Download_APK-No_Play_Store-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/erik-sutton95/OpenPocketCine/releases/tag/sideload-v0.1.5-2)
 
 [Website](https://openpocketcine.app/) · [Docs](https://openpocketcine.app/docs/) · [Roadmap](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas) · [Report a bug](https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml)
 
@@ -133,7 +133,7 @@ Hotspot setups.
 | --- | --- | --- |
 | **iPhone and iPad** | [Join the TestFlight](https://testflight.apple.com/join/1tmt3aEB) | One universal app. |
 | **Android** | [Public beta on Google Play](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA) | Android 10 or newer, arm64. |
-| **Android without Play** | [Sideload APK](https://github.com/erik-sutton95/OpenPocketCine/releases/tag/sideload-v0.1.5-1) (**0.1.5 (1)**) | For field monitors and devices without the Play Store. |
+| **Android without Play** | [Sideload APK](https://github.com/erik-sutton95/OpenPocketCine/releases/tag/sideload-v0.1.5-2) (**0.1.5 (2)**) | For field monitors and devices without the Play Store. |
 
 > [!NOTE]
 > A sideload APK and a Google Play install are signed differently and cannot update each other.
