@@ -26,7 +26,7 @@ public struct StationJoin {
             case .roleStarting: "Camera Wi-Fi is still starting. Retry with the camera nearby."
             case .joinSilent: "Camera Wi-Fi did not respond. Retry setup with the camera nearby."
             case .joinRejected:
-                "The camera could not join the shared Wi-Fi. Check its name and password, and make sure the network is in range."
+                "The camera could not join the Wi-Fi. Check the password and that the network is in range. WPA3-only networks refuse some cameras: use WPA2/WPA3 with PMF optional."
             case .hotspotUnavailable:
                 "Enable Personal Hotspot and Allow Others to Join, then retry. The hotspot network is not available yet."
             }

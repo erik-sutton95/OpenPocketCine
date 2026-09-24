@@ -133,3 +133,24 @@ The first-launch prompt asks whether to enable automatic error reports. You can
 choose Not now and still report a problem manually, or enable automatic reports
 later in System. **Diagnostic options** expands with a chevron for local export
 and deletion. No GitHub account or email application is needed.
+
+## Wi-Fi setup: camera joins but never connects
+
+A saved camera's **Wi-Fi** setup needs the router to let this iPhone and the
+camera reach each other. The app cannot read router settings, so when a connect
+fails it names the likely cause:
+
+- **"The camera could not join the Wi-Fi"**: check the password. WPA3-only
+  networks refuse some cameras (Osmo Nano in testing); use **WPA2/WPA3** with
+  **PMF optional**.
+- **"The camera joined the Wi-Fi, but this iPhone cannot reach it"**: the
+  router keeps wireless devices apart. On Wi-Fi 7 routers turn off **MLO** for
+  that network; a Pocket 4 Pro stayed unreachable from an iPhone 16 Pro Max
+  with MLO on and connected every time with it off (UniFi, 2026-09-24). Also
+  turn off **client or AP isolation**, and keep the camera on the same network
+  (VLAN) as the iPhone, not a separate IoT network.
+
+If you need MLO or isolation for other devices, add a second network for
+cameras on the same VLAN: 2.4 and 5 GHz, WPA2/WPA3, PMF optional, MLO and fast
+roaming off. Or use the **Hotspot** setup, which does not involve the router.
+

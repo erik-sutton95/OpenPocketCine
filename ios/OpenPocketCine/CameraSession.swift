@@ -6355,7 +6355,7 @@ final class CameraSession {
             case .hostWiFi:
                 "this iPhone could not join the Wi-Fi. Check the password and that the network is in range"
             case .stationCameraMissing:
-                "the camera joined the Wi-Fi, but this iPhone cannot reach it there. The router may keep wireless devices apart (client or AP isolation, or a separate 2.4 GHz or IoT network). Turn that off, or use the Hotspot setup"
+                "the camera joined the Wi-Fi, but this iPhone cannot reach it there. The router is keeping the two apart: on a Wi-Fi 7 router turn off MLO for this network (or add a camera network without it), and turn off client isolation. The Hotspot setup avoids the router"
             case .nanoWake:
                 "the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again"
             }
