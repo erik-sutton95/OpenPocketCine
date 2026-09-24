@@ -1001,7 +1001,7 @@ private fun LiveFaceFramePump(
                 // Take a fresh readback first, then ask for the next only when the
                 // detector will use it (10 Hz idle pace skips the GPU readback too).
                 session.takeFaceNv21()?.let {
-                    latest.value(LiveFaceDetector.Frame.nv21(it, LiveVulkanSession.FACE_W, LiveVulkanSession.FACE_H))
+                    latest.value(LiveFaceDetector.Frame.nv21(it, LiveFaceDetector.TAP_WIDTH, LiveFaceDetector.TAP_HEIGHT))
                 }
                 if (wanted.value()) session.requestFaceTap()
                 continue

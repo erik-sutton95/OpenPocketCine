@@ -2571,27 +2571,31 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeCopyFace(JNIEnv* env, j
                                                                 jbyteArray out) {
     auto* r = fromHandle(h);
     constexpr uint32_t kPixels = kFaceW * kFaceH;
+    constexpr uint32_t ow = kFaceW / 2, oh = kFaceH / 2;
     if (!r || !out || !r->faceStaging.mapped) return JNI_FALSE;
     std::lock_guard<std::mutex> g(r->lock);
-    if (env->GetArrayLength(out) < (jint)(kPixels * 3 / 2) || !waitFence(r, "face copy")) return JNI_FALSE;
-    // NV21 (BT.601 video range) for ML Kit: its own Bitmap → NV21 path ran in
-    // Java and was ~40% of Face AF CPU. Copy out of mapped memory once first.
+    if (env->GetArrayLength(out) < (jint)(ow * oh * 3 / 2) || !waitFence(r, "face copy")) return JNI_FALSE;
+    // 320x180 NV21 (BT.601 video range, 2x2 box of the 640x360 readback) for ML Kit.
+    // Its own Bitmap -> NV21 path ran in Java; 320 finds the same faces faster.
     static thread_local std::vector<uint8_t> rgba(kPixels * 4);
     std::memcpy(rgba.data(), r->faceStaging.mapped, rgba.size());
     jbyte* nv = env->GetByteArrayElements(out, nullptr);
     if (!nv) return JNI_FALSE;
     auto* y = reinterpret_cast<uint8_t*>(nv);
-    uint8_t* vu = y + kPixels;
-    for (uint32_t row = 0; row < kFaceH; ++row) {
-        const uint8_t* p = rgba.data() + row * kFaceW * 4;
-        uint8_t* yr = y + row * kFaceW;
-        for (uint32_t x = 0; x < kFaceW; ++x, p += 4) {
-            yr[x] = (uint8_t)(((66 * p[0] + 129 * p[1] + 25 * p[2] + 128) >> 8) + 16);
+    uint8_t* vu = y + ow * oh;
+    auto luma = [&](uint32_t x, uint32_t row) {
+        const uint8_t* p = rgba.data() + (row * kFaceW + x) * 4;
+        return ((66 * p[0] + 129 * p[1] + 25 * p[2] + 128) >> 8) + 16;
+    };
+    for (uint32_t oy = 0; oy < oh; ++oy) {
+        for (uint32_t ox = 0; ox < ow; ++ox) {
+            const uint32_t x = ox * 2, row = oy * 2;
+            y[oy * ow + ox] = (uint8_t)((luma(x, row) + luma(x + 1, row) + luma(x, row + 1) + luma(x + 1, row + 1)) / 4);
         }
-        if (row & 1) continue;
-        p = rgba.data() + row * kFaceW * 4;
-        uint8_t* c = vu + (row / 2) * kFaceW;
-        for (uint32_t x = 0; x < kFaceW; x += 2, p += 8, c += 2) {
+        if (oy & 1) continue;
+        uint8_t* c = vu + (oy / 2) * ow;
+        for (uint32_t ox = 0; ox < ow; ox += 2, c += 2) {
+            const uint8_t* p = rgba.data() + (oy * 2 * kFaceW + ox * 2) * 4;
             c[0] = (uint8_t)(((112 * p[0] - 94 * p[1] - 18 * p[2] + 128) >> 8) + 128);
             c[1] = (uint8_t)(((-38 * p[0] - 74 * p[1] + 112 * p[2] + 128) >> 8) + 128);
         }

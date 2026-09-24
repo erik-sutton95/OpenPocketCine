@@ -13,6 +13,7 @@ import android.view.Surface
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import com.opencapture.openpocketcine.session.LiveFaceDetector
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -66,7 +67,7 @@ internal class LiveVulkanSession(
     private val tapBytes = ByteArray(TAP_W * TAP_H * 4)
     private val faceWanted = AtomicBoolean(false)
     private val faceLock = Any()
-    private val faceBytes = ByteArray(FACE_W * FACE_H * 3 / 2)
+    private val faceBytes = ByteArray(LiveFaceDetector.TAP_WIDTH * LiveFaceDetector.TAP_HEIGHT * 3 / 2)
     @Volatile private var faceValid = false
     private var lastSampleNs = 0L
     private var lastScopeWorkNs = 0L
@@ -636,8 +637,6 @@ internal class LiveVulkanSession(
         private const val TAG = "OpcVulkan"
         const val SOURCE_W = 1280
         const val SOURCE_H = 720
-        const val FACE_W = 640
-        const val FACE_H = 360
         val TAP_W = PocketScopeSampler.tapSize(SOURCE_W, SOURCE_H).first
         val TAP_H = PocketScopeSampler.tapSize(SOURCE_W, SOURCE_H).second
     }

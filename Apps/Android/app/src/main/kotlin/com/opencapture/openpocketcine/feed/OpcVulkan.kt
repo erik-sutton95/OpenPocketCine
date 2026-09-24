@@ -100,6 +100,6 @@ internal object OpcVulkan {
     /** 213×120 RGBA8 tap (PocketScopeSampler.tapSize 1280×720). */
     @JvmStatic external fun nativeCopyTap(handle: Long, out: ByteArray): Boolean
 
-    /** 640×360 identity NV21 for FaceDetector (not a mirrored swapchain copy). */
+    /** 320×180 identity NV21 (2×2 box of the 640×360 readback) for FaceDetector, not a mirrored swapchain copy. */
     @JvmStatic external fun nativeCopyFace(handle: Long, out: ByteArray): Boolean
 }
