@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Pocket 3 **MT** button, beside the zoom chip: takes Med-Tele, the body's 2×
+  lens, on and off without leaving the app. Every tap lands on the lens's base,
+  2× or 1×, taking any digital crop off first. The picture fades to black over
+  the swap and comes back when the new lens shows in the feed. Taps during a
+  swap are queued. The button is dimmed where the camera would silently ignore
+  it: while recording, in D-Log M, and outside Video mode. The zoom chip keeps
+  **TELE** across the whole tele lens, crops included. Proven on Android with a
+  Pocket 3; not yet verified on iOS.
+
 ### Changed
 
 - Android Live View uses about half the app CPU on a Galaxy S25 with a live
@@ -27,6 +38,20 @@ All notable changes to this project are documented here. The format is based on
   are shown. Float rounding could make the Motion editor's default placement
   range empty, and `coerceIn` threw (Sentry OPENPOCKETCINE-ANDROID-6/7/8). The
   exposure meter placement had the same pattern.
+- Pocket 3 zoom under **Med-Tele**, the body's 2× lens. Both shells now read the
+  accepted lens window the camera already reports and offer the range that
+  actually exists: the chip cycles 2× / 3× / 4× instead of wrapping to an
+  unreachable 1×, the held dial spans 2×…4× instead of stopping at its own
+  floor, and the 2× base is captioned TELE rather than warned about as a digital
+  crop. Digital zoom keeps composing on top, so 2× optical with 2× digital reads
+  4×. Modes that lock digital zoom keep the optical 2× base. The optical/digital
+  boundary is now read from the body's reported stops instead of assuming 3×.
+- Android: the assist palette no longer floats over the capture drawer or the
+  gimbal panel.
+- A Pocket 3 without Med-Tele no longer captions its 2.7K 3× as TELE. That 3×
+  is a crop, and it now gets the digital-crop warning like any other. Which
+  stops are optical is decided per body: on a Pocket 3 that is only the Med-Tele
+  2×, while the lens is on.
 
 ## [0.1.5] - 2026-09-24
 

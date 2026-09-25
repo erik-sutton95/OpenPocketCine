@@ -140,7 +140,17 @@ public struct CameraModel: Equatable, Sendable {
     /// 1080 keeps 1×/2×/4× while 2.7K and 2160 1:1 stop at 3× and 4K and 3K 1:1
     /// stop at 2× — see `VideoResolution.pocket3ZoomMax`. With no FORMAT known
     /// yet, offer the body's absolute range.
-    public func activeZoomStops(resolution: VideoResolution?, shootingMode: Int) -> [Double] {
+    ///
+    /// A Pocket 3 wearing Med-Tele overrides the table: the body raises its own
+    /// wide limit and clamps anything below it, so the cycle is the range the
+    /// body reports (2x…4x) and never the 1x the lens cannot reach.
+    /// The cycle only ever crops inside the lens the body is wearing. Taking
+    /// Med-Tele on or off is the MT button's job, never a stop here — see
+    /// `CamFov.medTeleToggleable`.
+    public func activeZoomStops(
+        resolution: VideoResolution?, shootingMode: Int,
+        lensMin: UInt16? = nil, lensMax: UInt16? = nil
+    ) -> [Double] {
         let n = name.lowercased().replacingOccurrences(of: " ", with: "")
         let isPro = n.contains("pocket4p") || n.contains("4pro")
         let isPocket4 = n.contains("pocket4")
@@ -152,6 +162,14 @@ public struct CameraModel: Equatable, Sendable {
             }
         }()
         if isPro { return digitalLocked ? [1, 3] : [1, 3, 6, 12] }
+        if isPocket3, let low = lensMin, let high = lensMax,
+            let stops = CamFov.medTeleStops(lensMin: low, lensMax: high)
+        {
+            // The raised floor is the body's word and holds whatever else is going
+            // on: with digital zoom locked the cycle is the optical base alone,
+            // which under Med-Tele is 2x, not the 1x the lens cannot reach.
+            return digitalLocked ? Array(stops.prefix(1)) : stops
+        }
         if digitalLocked { return [1] }
         if isPocket4 { return [1, 2, 4] }
         if isPocket3 {
@@ -165,6 +183,32 @@ public struct CameraModel: Equatable, Sendable {
         case .pocket: return [1, 2, 4]
         case .nano, .other: return [1]
         }
+    }
+
+    /// Pocket 3 (and its Muse twin): owns the Med-Tele 2x lens the MT button
+    /// swaps in.
+    public var hasMedTele: Bool {
+        let n = name.lowercased().replacingOccurrences(of: " ", with: "")
+        return n.contains("pocket3") || n.contains("muse")
+    }
+
+    /// Which of `cycle`'s stops are a real lens rather than a crop, for the
+    /// caption and the digital-crop warning.
+    ///
+    /// Decided per body, not read off the cycle's contents. A Pocket 3 has one
+    /// second lens, Med-Tele's 2x, and it is on exactly when the body reports a
+    /// wide limit above 1x — so its optics are [1, 2] then and [1] otherwise,
+    /// never [1, 3]: the 3x in its 2.7K cycle is a crop. Elsewhere a floor above
+    /// 1x can only be a lens the body has put in front, and a 3x in the cycle is
+    /// the Pocket 4 Pro's 60 mm tele.
+    public func opticalZoomStops(cycle: [Double], lensMin: UInt16?) -> [Double] {
+        let n = name.lowercased().replacingOccurrences(of: " ", with: "")
+        if n.contains("pocket3") || n.contains("muse") {
+            return lensMin.map { CamFov.isMedTele(lensMin: $0) } == true ? [1, 2] : [1]
+        }
+        let base = cycle.first ?? 1
+        if base > 1.05 { return [1, base] }
+        return cycle.contains(3) ? [1, 3] : [1]
     }
 
     /// The other datalink config to try when `datalinkPort` never answers (9004+poke <-> 10004).

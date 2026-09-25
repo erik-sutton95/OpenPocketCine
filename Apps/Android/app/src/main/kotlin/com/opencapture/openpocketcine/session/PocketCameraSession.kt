@@ -414,6 +414,28 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     private var zoomColorHopUntilElapsed = 0L
     private var zoomColorHopGeneration = 0L
     private var pendingZoomAfterHop: Double? = null
+    /**
+     * The lens the MT button asked for, until the reported floor shows it or
+     * [CamFov.MED_TELE_SWAP_TIMEOUT_MS] runs out — see [toggleMedTele]. Published so the
+     * button lights on the tap: the body takes 230–600 ms (measured) to report the swap,
+     * which read as a button that had not heard the finger.
+     */
+    private val _medTeleAsked = MutableStateFlow<Boolean?>(null)
+    val medTeleAsked: StateFlow<Boolean?> = _medTeleAsked.asStateFlow()
+    private var medTeleAskedAt = 0L
+    /**
+     * Where the operator's taps have left MT while a swap runs behind black. The button
+     * shows it, so every tap reads at once; the body gets it once the last swap lands.
+     */
+    private val _medTeleWanted = MutableStateFlow<Boolean?>(null)
+    val medTeleWanted: StateFlow<Boolean?> = _medTeleWanted.asStateFlow()
+    /** The live view fades to black over an MT swap — the body's lens change is not pretty. */
+    private val _medTeleBlackout = MutableStateFlow(false)
+    val medTeleBlackout: StateFlow<Boolean> = _medTeleBlackout.asStateFlow()
+    private var medTeleBlackoutJob: Job? = null
+    /** An MT swap held back until the crop is off the current lens — see [toggleMedTele]. */
+    private var medTeleSwapQueued: Boolean? = null
+    private var medTeleQueueJob: Job? = null
     private var zoomStop = 1.0
     private var zoomStopTouched = false
     var zoomPinchPreview: Double? = null
@@ -704,6 +726,14 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
         zoomColorHopUntilElapsed = 0L
         zoomColorHopGeneration += 1
         pendingZoomAfterHop = null
+        _medTeleAsked.value = null
+        _medTeleWanted.value = null
+        _medTeleBlackout.value = false
+        medTeleBlackoutJob?.cancel()
+        medTeleBlackoutJob = null
+        medTeleSwapQueued = null
+        medTeleQueueJob?.cancel()
+        medTeleQueueJob = null
         resetZoomHud()
         clearLocalTracking()
         clearFaceAF()
@@ -2490,6 +2520,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             _status.value = next
             publishFaceDetectWanted()
         }
+        absorbMedTele()
         confirmZoomColorHopIfReady()
     }
 
@@ -2676,10 +2707,34 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
 
     fun zoomStops(): List<Double> {
         val model = connectedCamera?.model ?: CameraModel.default
-        return model.activeZoomStops(_status.value.resolutionCode, _status.value.shootingMode)
+        val status = _status.value
+        return model.activeZoomStops(
+            status.resolutionCode,
+            status.shootingMode,
+            status.zoomLensMin,
+            status.zoomLensMax,
+        )
     }
 
     fun zoomMax(): Double = zoomStops().lastOrNull() ?: 1.0
+
+    /**
+     * The widest the body will actually go. Normally 1×, but Pocket 3 Med-Tele parks a
+     * 40 mm lens in front and clamps anything wider back to it, so the dial must not
+     * offer travel the camera will refuse to honour.
+     */
+    fun zoomMin(): Double = zoomStops().firstOrNull() ?: 1.0
+
+    /**
+     * The stops that are optics rather than a crop of them, for the caption and the
+     * digital-crop warning — see [CameraModel.opticalZoomStops].
+     */
+    fun zoomOpticalStops(): List<Double> {
+        // Follow the MT tap, not the report behind it, so TELE moves with the button.
+        val lensMin = _medTeleAsked.value?.let { if (it) CamFov.LENS_1X * 2 else CamFov.LENS_1X }
+            ?: _status.value.zoomLensMin
+        return (connectedCamera?.model ?: CameraModel.default).opticalZoomStops(zoomStops(), lensMin)
+    }
 
     fun zoomNextJump(): Double = CamFov.nextJump(zoomCycleFrom(), zoomStops())
 
@@ -2720,6 +2775,236 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
         refreshZoomHud()
     }
 
+    /**
+     * The MT button: put the Pocket 3's Med-Tele lens on, or take it off, landing on the new
+     * lens's base — 2× on, 1× off — whatever zoom was held before.
+     *
+     * Measured: the swap keeps the digital crop, not the factor — MT 4× (the 2× lens cropped
+     * 2×) comes off as wide 2×, wide 4× goes on as MT 4×. So the crop comes off first, on the
+     * lens still in front, and the swap waits in [medTeleSwapQueued] until the body reports
+     * that lens's base. Sending both at once was tried: the swap overtakes the zoom's slew
+     * and lands cropped, and correcting that afterwards read as a double transition.
+     *
+     * Refused up front in the states [CamFov.medTeleToggleable] rules out, because there the
+     * body refuses silently. It can still refuse elsewhere (older firmware), which is why
+     * [absorbMedTele] gives the ask a deadline and says so when it runs out.
+     *
+     * ActiveTrack survives the send but the subject does not — measured: the body accepts
+     * the swap and silently orphans the track. Clear it here, the same way a tap-to-focus
+     * does, so the box goes at the moment the operator caused it.
+     */
+    fun toggleMedTele() {
+        val status = _status.value
+        val dl = datalink
+        if (dl == null) {
+            _controlNote.value = "Med-Tele not available"
+            return
+        }
+        when {
+            status.isRecording -> {
+                _controlNote.value = "Med-Tele — stop recording first"
+                return
+            }
+            status.colorMode != CameraCommands.COLOR_NORMAL -> {
+                _controlNote.value = "Med-Tele — not in D-Log M"
+                return
+            }
+            status.shootingMode != CameraCommands.SHOOT_VIDEO -> {
+                _controlNote.value = "Med-Tele — Video mode only"
+                return
+            }
+        }
+        // The swap runs behind black: taps while it runs only move where it ends up.
+        val shown = _medTeleWanted.value ?: _medTeleAsked.value ?:
+            (status.zoomLensMin >= 0 && CamFov.isMedTele(status.zoomLensMin))
+        _medTeleWanted.value = !shown
+        if (_medTeleBlackout.value) {
+            Log.i(TAG, "zoom: Med-Tele ${if (shown) "off" else "on"} wanted, waiting for the swap in flight")
+            return
+        }
+        _medTeleBlackout.value = true
+        medTeleBlackoutJob?.cancel()
+        medTeleBlackoutJob = null
+        // Off the base the swap goes now: the body takes over 100 ms to cut, the fade less.
+        // A crop to take off first would show at once, so that waits for black.
+        val live = status.zoomFactor
+        if (live == null || CamFov.matches(live, medTeleBase(shown))) {
+            runMedTeleSwap()
+        } else {
+            medTeleBlackoutJob = scope.launch {
+                delay(MED_TELE_BLACKOUT_MS)
+                runMedTeleSwap()
+            }
+        }
+    }
+
+    /**
+     * Send the swap the operator last asked for, once the picture is black; if the body
+     * already sits there, fade back in.
+     */
+    private fun runMedTeleSwap() {
+        // The last swap is still landing: [medTeleLanded] comes back here once it has.
+        if (_medTeleAsked.value != null || medTeleSwapQueued != null) return
+        val status = _status.value
+        val dl = datalink
+        val wanted = _medTeleWanted.value
+        val onTele = status.zoomLensMin >= 0 && CamFov.isMedTele(status.zoomLensMin)
+        if (dl == null || wanted == null || wanted == onTele) {
+            _medTeleWanted.value = null
+            endMedTeleBlackout("settled")
+            return
+        }
+        val on = wanted
+        Log.i(TAG, "zoom: Med-Tele ${if (on) "on" else "off"} (floor ${status.zoomLensMin})")
+        cancelTracking(sendClear = isTrackingActive)
+        // A coalesced slider write belongs to the lens that is going away. The chip goes
+        // straight to the new lens's base; the body catches up.
+        zoomPin = CameraValuePin(medTeleBase(on), SystemClock.elapsedRealtime() + CameraValuePin.SETTLE_MS)
+        zoomPinchPreview = null
+        pendingZoomPayload = null
+        zoomFlushJob?.cancel()
+        zoomFlushJob = null
+        _medTeleAsked.value = on
+        medTeleAskedAt = SystemClock.elapsedRealtime()
+        _controlNote.value = if (on) "Med-Tele on" else "Med-Tele off"
+        val here = medTeleBase(!on)
+        val live = status.zoomFactor
+        if (live != null && !CamFov.matches(live, here)) {
+            medTeleSwapQueued = on
+            dl.sendDuml(0x02, CameraCommands.CMD_ZOOM, CameraCommands.zoomLens(CamFov.lensPosition(here)))
+            lastZoomWireAt = SystemClock.elapsedRealtime()
+            // Status pushes release the queue as soon as the base shows; this only covers a
+            // body that stops pushing, so the swap is never stranded.
+            medTeleQueueJob = scope.launch {
+                delay(MED_TELE_CROP_RESET_TIMEOUT_MS)
+                if (medTeleSwapQueued == on) sendQueuedMedTeleSwap("timeout")
+            }
+        } else {
+            sendMedTeleSwap(on)
+        }
+        _medTeleWanted.value = null
+        refreshZoomHud()
+        // Never leave the operator on black, whatever the body does.
+        medTeleBlackoutJob?.cancel()
+        medTeleBlackoutJob = scope.launch {
+            delay(CamFov.MED_TELE_SWAP_TIMEOUT_MS + MED_TELE_CROP_RESET_TIMEOUT_MS)
+            endMedTeleBlackout("timeout")
+        }
+    }
+
+    /** The new lens is in the picture: fade in without waiting for the body to say so. */
+    private fun medTeleSwapSeen() {
+        if (!_medTeleBlackout.value || _medTeleWanted.value != null) return
+        medTeleBlackoutJob?.cancel()
+        medTeleBlackoutJob = scope.launch {
+            // The spike is the body's in-between picture; the new lens is the one after.
+            delay(MED_TELE_SWAP_FRAME_MS)
+            endMedTeleBlackout("frame")
+        }
+    }
+
+    /** The body settled on a lens: go again if the operator tapped since, else fade in. */
+    private fun medTeleLanded() {
+        if (!_medTeleBlackout.value) return
+        if (_medTeleWanted.value != null) {
+            runMedTeleSwap()
+            return
+        }
+        medTeleBlackoutJob?.cancel()
+        medTeleBlackoutJob = scope.launch {
+            // Let the backstop zoom, if any, land before the picture shows.
+            delay(MED_TELE_REVEAL_MARGIN_MS)
+            endMedTeleBlackout("landed")
+        }
+    }
+
+    private fun endMedTeleBlackout(why: String) {
+        if (!_medTeleBlackout.value) return
+        Log.i(TAG, "zoom: Med-Tele fade in ($why) after ${SystemClock.elapsedRealtime() - medTeleAskedAt} ms")
+        medTeleBlackoutJob?.cancel()
+        medTeleBlackoutJob = null
+        _medTeleWanted.value = null
+        _medTeleBlackout.value = false
+    }
+
+
+    /** Every MT tap lands on the lens's own base — 2× on, 1× off — never a crop of it. */
+    private fun medTeleBase(on: Boolean): Double = if (on) 2.0 else 1.0
+
+    private fun sendMedTeleSwap(on: Boolean) {
+        val dl = datalink ?: return
+        medTeleAskedAt = SystemClock.elapsedRealtime()
+        decoder.onLensSwap = { scope.launch { medTeleSwapSeen() } }
+        decoder.watchLensSwap()
+        dl.sendDuml(0x02, CameraCommands.CMD_MED_TELE, CameraCommands.medTele(on))
+        lastZoomWireAt = SystemClock.elapsedRealtime()
+    }
+
+    private fun sendQueuedMedTeleSwap(why: String) {
+        val on = medTeleSwapQueued ?: return
+        medTeleSwapQueued = null
+        medTeleQueueJob?.cancel()
+        medTeleQueueJob = null
+        Log.i(
+            TAG,
+            "zoom: crop reset $why after ${SystemClock.elapsedRealtime() - medTeleAskedAt} ms " +
+                "— sending Med-Tele ${if (on) "on" else "off"}",
+        )
+        sendMedTeleSwap(on)
+    }
+
+    /**
+     * Drive an MT tap from the status pushes: release a queued swap once the crop is off,
+     * then settle the ask against the reported floor, the only place Med-Tele shows. If the
+     * floor still disagrees past the deadline the body refused silently and the operator is
+     * told.
+     */
+    private fun absorbMedTele() {
+        val status = _status.value
+        val queued = medTeleSwapQueued
+        if (queued != null) {
+            val live = status.zoomFactor
+            if (live != null && CamFov.matches(live, medTeleBase(!queued))) {
+                sendQueuedMedTeleSwap("landed")
+            }
+            return
+        }
+        val lensMin = status.zoomLensMin
+        val asked = _medTeleAsked.value ?: return
+        if (lensMin >= 0 && CamFov.isMedTele(lensMin) == asked) {
+            _medTeleAsked.value = null
+            val base = medTeleBase(asked)
+            val live = status.zoomFactor
+            markZoomStop(base)
+            Log.i(
+                TAG,
+                "zoom: Med-Tele ${if (asked) "on" else "off"} landed after " +
+                    "${SystemClock.elapsedRealtime() - medTeleAskedAt} ms — floor $lensMin " +
+                    "zoom ${live?.let { CamFov.displayLabel(it) }}",
+            )
+            // Backstop, for a swap sent on the timeout with the crop still on. Only now can
+            // the base be asked for — sent before the floor moved, the body clamps it to the
+            // old lens's window.
+            if (live == null || !CamFov.matches(live, base)) {
+                zoomPin = CameraValuePin(base, SystemClock.elapsedRealtime() + CameraValuePin.SETTLE_MS)
+                fireZoom(
+                    CameraCommands.zoomLens(CamFov.lensPosition(base)),
+                    announce = false,
+                    name = "Zoom ${CamFov.displayLabel(base)}",
+                )
+            }
+            refreshZoomHud()
+            medTeleLanded()
+            return
+        }
+        if (SystemClock.elapsedRealtime() - medTeleAskedAt <= CamFov.MED_TELE_SWAP_TIMEOUT_MS) return
+        _medTeleAsked.value = null
+        _controlNote.value = "Med-Tele didn't switch"
+        Log.i(TAG, "zoom: Med-Tele unconfirmed after ${CamFov.MED_TELE_SWAP_TIMEOUT_MS} ms")
+        _medTeleWanted.value = null
+        endMedTeleBlackout("unconfirmed")
+    }
+
     fun setZoomSlider(factor: Double) {
         if (_gimbalMoveRunning.value) cancelProgrammedMove()
         val position = CamFov.pinchLens(factor)
@@ -2754,7 +3039,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             lastPinchLens = null
             lastPinchLogTenths = null
         }
-        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification, zoomMax())
+        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification, zoomMax(), zoomMin())
         if (blockZoomColorHopIfRecording(factor)) return
         val first = zoomPinchPreview == null
         dropDLog2ForZoom(factor)
@@ -3619,7 +3904,12 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
                     zoomCycleFrom(),
                     connectedCamera
                         ?.model
-                        ?.activeZoomStops(format.resolution.rawValue, modeAtSet)
+                        ?.activeZoomStops(
+                            format.resolution.rawValue,
+                            modeAtSet,
+                            _status.value.zoomLensMin,
+                            _status.value.zoomLensMax,
+                        )
                         .orEmpty(),
                 )
         }
@@ -5095,6 +5385,14 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
 
     companion object {
         private const val TAG = "PocketCameraSession"
+        /** Longest an MT swap waits for its crop reset to show before going anyway. */
+        private const val MED_TELE_CROP_RESET_TIMEOUT_MS = 1_500L
+        /** The fade to black an MT swap runs behind; the UI fades in the same time. */
+        const val MED_TELE_BLACKOUT_MS = 100L
+        /** The picture comes back a little slower than it goes. */
+        const val MED_TELE_FADE_IN_MS = 160L
+        private const val MED_TELE_REVEAL_MARGIN_MS = 60L
+        private const val MED_TELE_SWAP_FRAME_MS = 50L
     }
 }
 

@@ -25,7 +25,11 @@
 #   pocket3ZoomMax   res               -> factor           per-FORMAT ceiling
 #   sizeTitle        res               -> text
 #   activeZoomStops  name family res mode -> stops
+#   medTeleStops     lensMin lensMax   -> stops|-          `-` = Med-Tele off
+#   zoomStopsLens    name family res mode lensMin lensMax -> stops
 #   ceilingNote      size held stops   -> text             FORMAT-drop warning
+#   medTeleToggleable color rec mode -> 1|0           color/mode are decimal
+#   opticalStops     name family cycle lensMin -> stops   lensMin `-` = not reported
 
 factorRaw	0	1.0000
 factorRaw	1000	12.0000
@@ -329,3 +333,45 @@ ceilingNote	2.7K	4.0000	1.0000,2.0000,3.0000	2.7K caps zoom at 3×
 ceilingNote	1080	3.0000	1.0000,2.0000,4.0000	-
 ceilingNote	3K	12.0000	1.0000	3K caps zoom at 1×
 ceilingNote	2160	1.0000	1.0000,2.0000,3.0000	-
+medTeleStops	217	434	-
+medTeleStops	217	868	-
+medTeleStops	434	868	2.0000,3.0000,4.0000
+medTeleStops	434	651	2.0000,3.0000
+medTeleStops	434	434	2.0000
+medTeleStops	0	0	-
+zoomStopsLens	Osmo Pocket 3	pocket	0A	1	217	868	1.0000,2.0000,4.0000
+zoomStopsLens	Osmo Pocket 3	pocket	0A	1	434	868	2.0000,3.0000,4.0000
+zoomStopsLens	Osmo Pocket 3	pocket	2D	1	434	868	2.0000,3.0000,4.0000
+zoomStopsLens	Osmo Pocket 3	pocket	10	1	434	868	2.0000,3.0000,4.0000
+zoomStopsLens	Osmo Pocket 3	pocket	10	1	217	434	1.0000,2.0000
+zoomStopsLens	Osmo Pocket 3	pocket	0A	0	434	868	2.0000
+zoomStopsLens	Osmo Pocket 3	pocket	0A	2	434	868	2.0000
+zoomStopsLens	Osmo Pocket 3	pocket	0A	40	434	868	2.0000
+zoomStopsLens	Osmo Pocket 3	pocket	-1	1	434	868	2.0000,3.0000,4.0000
+zoomStopsLens	Osmo Pocket 4 Pro	pocket	0A	1	434	868	1.0000,3.0000,6.0000,12.0000
+zoomStopsLens	Osmo Pocket 4	pocket	0A	1	434	868	1.0000,2.0000,4.0000
+zoomStopsLens	Osmo Nano	nano	0A	1	434	868	1.0000
+medTeleToggleable	63	0	1	1
+medTeleToggleable	0	0	1	0
+medTeleToggleable	65	0	1	0
+medTeleToggleable	63	1	1	0
+medTeleToggleable	63	0	0	0
+medTeleToggleable	63	0	2	0
+medTeleToggleable	63	0	40	0
+stopWithinCycle	1.0000	2.0000,3.0000,4.0000	2.0000
+stopWithinCycle	2.0000	2.0000,3.0000,4.0000	2.0000
+stopWithinCycle	3.0000	2.0000,3.0000,4.0000	3.0000
+stopWithinCycle	6.0000	2.0000,3.0000,4.0000	4.0000
+stopWithinCycle	1.0000	2.0000	2.0000
+opticalStops	Osmo Pocket 3	pocket	1.0000,2.0000,3.0000	217	1.0000
+opticalStops	Osmo Pocket 3	pocket	1.0000,2.0000,3.0000	-	1.0000
+opticalStops	Osmo Pocket 3	pocket	1.0000,2.0000,4.0000	217	1.0000
+opticalStops	Osmo Pocket 3	pocket	1.0000,2.0000	217	1.0000
+opticalStops	Osmo Pocket 3	pocket	1.0000,2.0000,3.0000,4.0000	217	1.0000
+opticalStops	Osmo Pocket 3	pocket	1.0000,2.0000,3.0000,4.0000	434	1.0000,2.0000
+opticalStops	Osmo Pocket 3	pocket	2.0000,3.0000,4.0000	434	1.0000,2.0000
+opticalStops	Osmo Pocket 3	pocket	2.0000	434	1.0000,2.0000
+opticalStops	Osmo Pocket 4 Pro	pocket	1.0000,3.0000,6.0000,12.0000	217	1.0000,3.0000
+opticalStops	Osmo Pocket 4 Pro	pocket	1.0000,3.0000	-	1.0000,3.0000
+opticalStops	Osmo Pocket 4	pocket	1.0000,2.0000,4.0000	217	1.0000
+opticalStops	Osmo Nano	nano	1.0000	-	1.0000

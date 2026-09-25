@@ -2,6 +2,7 @@ Since open beta build 138
 
 New and changed
 
+- Pocket 3: an MT button beside the zoom chip turns Med-Tele, the 2× lens, on and off. The picture fades to black while the lens swaps.
 - Your cameras: Add setup lets a saved camera connect over your Wi-Fi network or this iPhone's Personal Hotspot, on every Osmo camera. Camera Wi-Fi stays as the other setup.
 - A setup connect shows a progress bar with one line of status. If it fails, choose Edit setup, Try again or Camera Wi-Fi; common router causes are named.
 - The next Camera Wi-Fi connect moves the camera back onto its own network.
@@ -13,12 +14,14 @@ New and changed
 
 Fixes
 
+- Pocket 3: with Med-Tele on, the zoom chip offers 2×, 3× and 4×, and a 3× crop is no longer labelled as a lens.
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
 - The REC and scan pulses no longer hold the display at its highest refresh rate, and paused clips stop redrawing.
 
 What to test
 
+- Pocket 3: tap MT from 1× and from a digital crop, then tap it quickly several times. Check it lands on 2× or 1× and is dimmed while recording or in D-Log M.
 - On a saved camera, try Add setup › Wi-Fi and › Hotspot, then connect with Camera Wi-Fi again and confirm live view returns.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - Monitor for 10 minutes with LUT, PEAK and WAVE on, then record: glass panels and the REC pulse should look as before, and the phone should stay cooler.

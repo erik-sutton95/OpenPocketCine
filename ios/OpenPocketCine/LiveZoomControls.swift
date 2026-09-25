@@ -306,9 +306,20 @@ struct LiveZoomChip: View {
             ?? model.session.zoomStop
     }
     private var title: String { CamFov.displayLabel(factor: displayFactor) }
-    private var opticalStops: [Double] {
-        let stops = tapStops.singleTap
-        return stops.isEmpty ? [1] : stops
+    private var opticalStops: [Double] { model.session.zoomOpticalStops }
+    /// A second lens reads as a bare number otherwise, indistinguishable from a
+    /// crop that lands on the same factor. Name it, so the operator knows the
+    /// detail is real.
+    /// Held across a crop of that lens too, so Med-Tele 4x (the 2x lens, cropped
+    /// 2x) never reads like the same 4x cropped out of the wide lens.
+    private var isOpticalTele: Bool {
+        MonitorZoomCaption.isOnTeleLens(factor: displayFactor, opticalStops: opticalStops)
+    }
+    private var zoomAccessibilityLabel: String {
+        if isOpticalTele, isDigitalCrop { return "Zoom \(title), tele lens, digital crop" }
+        if isDigitalCrop { return "Zoom \(title), digital crop" }
+        if isOpticalTele { return "Zoom \(title), tele lens" }
+        return "Zoom \(title)"
     }
     private var isDigitalCrop: Bool {
         MonitorZoomCaption.isDigital(factor: displayFactor, opticalStops: opticalStops)
@@ -344,17 +355,26 @@ struct LiveZoomChip: View {
 
     var body: some View {
         KeyframeAnimator(initialValue: Double(1), trigger: snapTick) { progress in
-            Text(title)
-                .font(LiveType.ui(size: 18, weight: .bold))
-                .foregroundStyle(isDigitalCrop ? MonitorTheme.digitalCrop : LiveDesign.text)
-                .minimumScaleFactor(0.75)
-                .scaleEffect(reduceMotion ? 1 : MonitorMotion.chipPopScale(at: progress))
-                .frame(
-                    width: 44,
-                    height: 44
-                )
-                .monitorReadoutShadow()
-                .contentShape(Rectangle())
+            VStack(spacing: 0) {
+                if isOpticalTele {
+                    Text("TELE")
+                        .font(LiveType.ui(size: 8, weight: .semibold))
+                        .foregroundStyle(MonitorTheme.accent)
+                        .lineLimit(1)
+                }
+                Text(title)
+                    .font(LiveType.ui(size: 18, weight: .bold))
+                    .foregroundStyle(isDigitalCrop ? MonitorTheme.digitalCrop : LiveDesign.text)
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
+            }
+            .scaleEffect(reduceMotion ? 1 : MonitorMotion.chipPopScale(at: progress))
+            .frame(
+                width: 44,
+                height: 44
+            )
+            .monitorReadoutShadow()
+            .contentShape(Rectangle())
         } keyframes: { _ in
             MoveKeyframe(0)
             LinearKeyframe(1, duration: MonitorMotion.chipPopDuration)
@@ -380,8 +400,7 @@ struct LiveZoomChip: View {
         .opacity(interfaceLocked || zoomBlockedWhileRecording ? 0.4 : 1)
         .allowsHitTesting(!interfaceLocked)
         .disabled(interfaceLocked)
-        .accessibilityLabel(
-            isDigitalCrop ? "Zoom \(title), digital crop" : "Zoom \(title)")
+        .accessibilityLabel(zoomAccessibilityLabel)
         .accessibilityHint(
             tapStops.doubleTap.isEmpty
                 ? "Tap cycles camera zoom stops. Hold opens the continuous zoom dial."

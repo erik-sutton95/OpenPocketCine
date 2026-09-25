@@ -237,6 +237,7 @@ fun LivePortraitChrome(
     val stick = cluster.stick
     val zoom = cluster.zoom
     val gimbalButton = cluster.controls
+    val showsMedTele = editing == null && model.session.connectedCamera?.model?.hasMedTele == true
     val toggle = portraitAspectToggle(layout.viewportWidth, floorY)
     val rail = portraitAssistToolbar(floorY, tablet)
 
@@ -307,6 +308,8 @@ fun LivePortraitChrome(
                     portrait = true, locked = uiLocked || !chromeInteractive,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    // The palette is a Popup, over every menu: it steps aside while one is open.
+                    inspectorOpen = captureOpen || model.liveGimbalPanel != LiveGimbalPanel.NONE,
                     onBoundsChanged = onAssistBoundsChanged,
                 )
             }
@@ -363,6 +366,7 @@ fun LivePortraitChrome(
             )
         }
 
+
         if (!captureOpen && capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) {
             val zoomReadout by model.session.zoomReadout.collectAsState()
             val zoomDialReadout by model.session.zoomDialReadout.collectAsState()
@@ -391,10 +395,12 @@ fun LivePortraitChrome(
                     { model.session.setZoom(LiveZoom.nextJump(model.session.zoomCycleFrom(), stops)) }
                 },
                 maximum = model.session.zoomMax(),
-                opticalStops = if (3.0 in model.session.zoomStops()) listOf(1.0, 3.0) else listOf(1.0),
+                minimum = model.session.zoomMin(),
+                opticalStops = model.session.zoomOpticalStops(),
                 onDial = model.session::updateZoomPinch,
                 onDialEnd = model.session::endZoomPinch,
             )
+            if (showsMedTele) LiveMedTeleToggle(model, status, uiLocked, cluster.medTele)
         }
 
         if (!captureOpen && showGimbalButton && !gimbalButton.isEmpty) {
@@ -606,6 +612,49 @@ fun LivePortraitSystemBar(
                 onClick = model::pressShutter,
             )
         }
+    }
+}
+
+/**
+ * Pocket 3 Med-Tele: the second, 2× lens. Its own button rather than a zoom stop, because
+ * the body decides where the zoom lands after the swap. Dimmed — but still tappable, so
+ * the note can say why — while recording, in D-Log M and outside Video mode, the states
+ * where the body refuses the swap without a word.
+ */
+/** The MT button with the session's state, wherever a chrome seats it. */
+@Composable
+fun LiveMedTeleToggle(model: AppModel, status: CameraStatus, uiLocked: Boolean, frame: ChromeRect) {
+    val medTeleAsked by model.session.medTeleAsked.collectAsState()
+    val medTeleWanted by model.session.medTeleWanted.collectAsState()
+    val medTeleOn = medTeleWanted ?: medTeleAsked ?: (status.zoomLensMin >= 0 && CamFov.isMedTele(status.zoomLensMin))
+    val medTeleReady = !uiLocked &&
+        CamFov.medTeleToggleable(status.colorMode, status.isRecording, status.shootingMode)
+    LivePortraitMedTeleToggle(
+        on = medTeleOn,
+        enabled = !uiLocked,
+        modifier = Modifier.liveModuleFrame(frame).alpha(if (medTeleReady) 1f else 0.4f),
+        onClick = { model.session.toggleMedTele() },
+    )
+}
+
+@Composable
+fun LivePortraitMedTeleToggle(on: Boolean, enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .size(LivePortraitMetrics.TOGGLE.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, if (on) LiveDesign.accent else LiveDesign.hairline, CircleShape)
+            .chromeClickable(enabled = enabled, onClick = onClick)
+            .semantics { contentDescription = if (on) "Turn Med-Tele off" else "Turn Med-Tele on" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "MT",
+            color = if (on) LiveDesign.accent else LiveDesign.text,
+            style = LiveType.ui(9f, FontWeight.Bold),
+            maxLines = 1,
+        )
     }
 }
 

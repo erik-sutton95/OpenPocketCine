@@ -513,6 +513,21 @@ public enum Commands {
         camera(0xB8, [0xFF, 0x00, 0x00, 0x00], seq: seq)
     }
 
+    /// `0x02/0xff` Pocket 3 Med-Tele lens swap. The byte at `@3` is the value
+    /// `cam_status` reports back at `@5` — `0D` wearing the 2× lens, `01` wearing
+    /// the wide — so it reads as "be in this lens mode", not a bitmask.
+    ///
+    /// Measured on a physical Pocket 3 (2026-09-20/21), both directions, effect
+    /// under 1 s, live picture unbroken. The body parks the lens on the new floor
+    /// each way (217 out, 434 in), so **no zoom SET follows a bare swap**.
+    ///
+    /// Silently ignored — no movement, no NACK — while recording and in any colour
+    /// mode but Normal. Accepted with ActiveTrack running, but the subject is lost.
+    /// Gate callers on `CamFov.medTeleToggleable`.
+    public static func setMedTele(_ on: Bool, seq: UInt16 = 0) -> Duml.Frame {
+        camera(0xFF, [0x00, 0x15, 0x00, on ? 0x0D : 0x01, 0x00, 0x00, 0x00], seq: seq)
+    }
+
     // ---- Gimbal (`rcv=0x04`). Flip/mode/speed ACK flags `0x80`; stick flags `0x00`, no ACK. ----
 
     /// `0x04/0x4C` `FE 08` — Mimo recenter-gimbal button

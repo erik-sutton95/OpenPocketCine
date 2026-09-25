@@ -2,6 +2,7 @@ Since open beta build 138
 
 New and changed
 
+- Pocket 3: an MT button beside the zoom chip turns Med-Tele, the 2× lens, on and off. The picture fades to black while the lens swaps.
 - Experimental Multiview: the grid button on Your cameras monitors up to four Osmo cameras on shared Wi-Fi or a phone hotspot, with Auto LUT and per-tile or group recording.
 - Multiview offers Grid or Center stage, Fit/Fill and clean DISP, and remembers your layout. Double-tap a tile for full Live View; closing returns cameras to their own Wi-Fi.
 - New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots. Shows No level data instead of a false level.
@@ -13,6 +14,8 @@ New and changed
 
 Fixes
 
+- Pocket 3: with Med-Tele on, the zoom chip offers 2×, 3× and 4×, and a 3× crop is no longer labelled as a lens.
+- The assist palette no longer floats over the capture drawer or the gimbal panel.
 - Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
@@ -20,8 +23,8 @@ Fixes
 
 What to test
 
+- Pocket 3: tap MT from 1× and from a digital crop, then tap it quickly several times. Check it lands on 2× or 1× and is dimmed while recording or in D-Log M.
 - Open Multiview with two or more cameras: record the group, switch Grid and Center stage, double-tap a tile, then close and connect one camera normally.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
-- In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
 - In AF-C, point the camera at a face: the face box should appear within a moment and follow it.
 - On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

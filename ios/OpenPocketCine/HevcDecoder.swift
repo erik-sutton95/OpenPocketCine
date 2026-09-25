@@ -122,6 +122,9 @@ final class HevcDecoder {
     }
     /// Fired on the main actor after a picture is presented (live VT, layer enqueue, or simulator).
     var onPresentedFrame: (() -> Void)?
+    /// Called when the Med-Tele swap frame comes in — see `watchLensSwap`.
+    var onLensSwap: (() -> Void)?
+    private var lensSwapWatch = LensSwapWatch()
     /// VT source buffer after assist present. Face AF / Vision.
     var onSourceFrame: ((CVPixelBuffer) -> Void)?
     /// Wrist preview. `source` is the VT identity buffer when a cube does not own
@@ -390,6 +393,25 @@ final class HevcDecoder {
         syncAssistPolicy()
     }
 
+    /// The MT command just went out: look for the picture its lens cut makes —
+    /// see `LensSwapWatch`.
+    func watchLensSwap() {
+        lensSwapWatch.arm(nowMs: ProcessInfo.processInfo.systemUptime * 1000)
+    }
+
+    private func watchForLensSwap(bytes: Int, keyframe: Bool) {
+        switch lensSwapWatch.observe(
+            bytes: bytes, keyframe: keyframe, nowMs: ProcessInfo.processInfo.systemUptime * 1000)
+        {
+        case .none: break
+        case .expired(let base):
+            ControlLiveLog.line("lens swap: no frame spotted (base=\(base))")
+        case .swap(let t, let bytes, let base):
+            ControlLiveLog.line("lens swap: frame at +\(Int(t)) ms, \(bytes) bytes over \(base)")
+            onLensSwap?()
+        }
+    }
+
     /// One access unit (Annex-B; the depacketizer already stripped the DJI frame marker).
     /// Pocket is HEVC; Nano is AVC. Returns true if a frame was enqueued for display.
     @discardableResult
@@ -441,6 +463,7 @@ final class HevcDecoder {
             avc
             ? slices.contains { !$0.isEmpty && Avc.nalType($0[0]) == Avc.idr }
             : slices.contains { !$0.isEmpty && Hevc.isIRAP(Hevc.nalType($0[0])) }
+        watchForLensSwap(bytes: accessUnit.count, keyframe: hasIDR)
         if pendingParameterChangeEnable {
             pendingParameterChangeEnable = false
             if EncoderPresentPath.shouldRequestEnableAfterParameterChange(

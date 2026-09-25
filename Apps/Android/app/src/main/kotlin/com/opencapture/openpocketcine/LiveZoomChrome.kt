@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -95,6 +96,7 @@ fun LiveZoomChip(
     dimmed: Boolean = false,
     onCycle: () -> Unit,
     maximum: Double = 1.0,
+    minimum: Double = 1.0,
     onDial: ((Double) -> Unit)? = null,
     onDialEnd: () -> Unit = {},
     opticalStops: List<Double> = listOf(1.0),
@@ -110,7 +112,7 @@ fun LiveZoomChip(
         DisposableEffect(Unit) { onDispose { end() } }
         com.opencapture.openpocketcine.monitor.MonitorZoomDial(dialBase, maximum,
             onChange = { onDial(it / dialBase.coerceAtLeast(1.0)) },
-            onDismiss = { dialOpen = false }, opticalStops = opticalStops)
+            onDismiss = { dialOpen = false }, minimum = minimum, opticalStops = opticalStops)
     }
     val orientation = LocalConfiguration.current.orientation
     LaunchedEffect(locked, orientation) { dialOpen = false }
@@ -121,6 +123,10 @@ fun LiveZoomChip(
         }
     }
     val digital = MonitorZoomCaption.isDigital(held, opticalStops)
+    // A second lens reads as a bare number otherwise, indistinguishable from a crop that
+    // lands on the same factor. Name it for as long as it is in front — cropped too, when
+    // the amber number says the rest is digital.
+    val tele = MonitorZoomCaption.isOnTeleLens(held, opticalStops)
     Box(
         modifier
             .fillMaxSize()
@@ -128,24 +134,40 @@ fun LiveZoomChip(
             .combinedClickable(enabled = !locked, interactionSource = interaction, indication = null,
                 onClick = { haptics.selection(); onCycle() },
                 onDoubleClick = onDigitalCycle?.let { action -> { haptics.selection(); action() } },
-                onLongClick = if (!dimmed && onDial != null && maximum > 1.0) {
+                onLongClick = if (!dimmed && onDial != null && maximum > minimum + 0.01) {
                     { haptics.longPress(); dialBase = dialFactor; dialOpen = true }
                 } else null)
             .semantics {
-                val crop = if (digital) ", digital crop" else ""
+                val optics = when {
+                    tele && digital -> ", tele lens, digital crop"
+                    digital -> ", digital crop"
+                    tele -> ", tele lens"
+                    else -> ""
+                }
                 val extra = if (onDigitalCycle != null) "; double tap for digital zoom" else ""
                 contentDescription =
-                    "Zoom ${LiveZoom.label(held)}$crop. Tap to cycle; hold to adjust$extra"
+                    "Zoom ${LiveZoom.label(held)}$optics. Tap to cycle; hold to adjust$extra"
             },
         contentAlignment = Alignment.Center,
     ) {
         val ink = if (digital) MonitorPalette.digitalCrop else LiveDesign.text
-        Text(
-            LiveZoom.label(held),
-            color = ink.copy(alpha = if (locked || dimmed) 0.4f else 1f),
-            style = LiveType.ui(18f, FontWeight.Medium),
-            maxLines = 1,
-        )
+        val fade = if (locked || dimmed) 0.4f else 1f
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (tele) {
+                Text(
+                    "TELE",
+                    color = MonitorPalette.accent.copy(alpha = fade),
+                    style = LiveType.ui(8f, FontWeight.SemiBold),
+                    maxLines = 1,
+                )
+            }
+            Text(
+                LiveZoom.label(held),
+                color = ink.copy(alpha = fade),
+                style = LiveType.ui(18f, FontWeight.Medium),
+                maxLines = 1,
+            )
+        }
     }
 }
 

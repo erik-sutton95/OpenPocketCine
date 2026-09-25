@@ -3,6 +3,7 @@ package com.opencapture.monitorui
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MonitorFeedbackPolicyTest {
@@ -53,14 +54,31 @@ class MonitorFeedbackPolicyTest {
         assertEquals(listOf(1.0), MonitorZoomTapStops.from(listOf(1.0, Double.NaN, -2.0)).singleTap)
         assertEquals(3.0, MonitorZoomTapStops.from(listOf(1.0, 3.0, 6.0, 12.0), listOf(6.0, 12.0)).next(1.0))
         assertEquals(6.0, MonitorZoomTapStops.from(listOf(1.0, 3.0, 6.0, 12.0), listOf(6.0, 12.0)).next(1.0, extended = true))
-        assertEquals("WIDE", MonitorZoomCaption.label(1.0, listOf(1.0, 3.0, 6.0, 12.0)))
-        assertEquals("TELE", MonitorZoomCaption.label(3.0, listOf(1.0, 3.0, 6.0, 12.0)))
-        assertEquals("DIGITAL · SOFT", MonitorZoomCaption.label(6.0, listOf(1.0, 3.0, 6.0, 12.0)))
-        assertEquals("DIGITAL CROP", MonitorZoomCaption.label(2.0, listOf(1.0, 2.0, 4.0)))
+        // A 3× body: only 1× and 3× are lenses, 6× and 12× are crops of the 3×.
+        assertEquals("WIDE", MonitorZoomCaption.label(1.0, listOf(1.0, 3.0)))
+        assertEquals("TELE", MonitorZoomCaption.label(3.0, listOf(1.0, 3.0)))
+        assertEquals("DIGITAL · SOFT", MonitorZoomCaption.label(6.0, listOf(1.0, 3.0)))
+        assertEquals("WIDE CROP", MonitorZoomCaption.label(2.0, listOf(1.0, 3.0)))
+        // One lens only: every factor past wide is a crop.
+        assertEquals("DIGITAL CROP", MonitorZoomCaption.label(2.0, listOf(1.0)))
+        // Pocket 3 Med-Tele: the second lens lands on 2×, so that is where TELE moves.
+        assertEquals("TELE", MonitorZoomCaption.label(2.0, listOf(1.0, 2.0)))
+        assertEquals("DIGITAL · SOFT", MonitorZoomCaption.label(4.0, listOf(1.0, 2.0)))
+        assertEquals(2.0, MonitorZoomCaption.opticalTele(listOf(1.0, 2.0)))
+        assertNull(MonitorZoomCaption.opticalTele(listOf(1.0)))
+        assertTrue(MonitorZoomCaption.isOpticalTele(2.0, listOf(1.0, 2.0)))
+        assertFalse(MonitorZoomCaption.isOpticalTele(2.0, listOf(1.0)))
+        // Med-Tele 3×/4× are still the tele lens, cropped: TELE stays, the number goes amber.
+        assertTrue(MonitorZoomCaption.isOnTeleLens(2.0, listOf(1.0, 2.0)))
+        assertTrue(MonitorZoomCaption.isOnTeleLens(4.0, listOf(1.0, 2.0)))
+        assertFalse(MonitorZoomCaption.isOnTeleLens(1.0, listOf(1.0, 2.0)))
+        assertFalse(MonitorZoomCaption.isOnTeleLens(4.0, listOf(1.0)))
         assertFalse(MonitorZoomCaption.isDigital(1.0, listOf(1.0, 3.0)))
         assertFalse(MonitorZoomCaption.isDigital(3.0, listOf(1.0, 3.0)))
         assertTrue(MonitorZoomCaption.isDigital(6.0, listOf(1.0, 3.0)))
         assertTrue(MonitorZoomCaption.isDigital(12.0, listOf(1.0, 3.0)))
+        assertFalse(MonitorZoomCaption.isDigital(2.0, listOf(1.0, 2.0)))
+        assertTrue(MonitorZoomCaption.isDigital(3.0, listOf(1.0, 2.0)))
     }
 
     @Test fun allCapturePanelsShareCenterAndBottomWithinSafeBounds() {

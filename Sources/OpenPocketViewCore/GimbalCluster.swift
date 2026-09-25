@@ -18,6 +18,21 @@ public struct GimbalCluster: Equatable, Sendable {
     public static let zoomSize = 44.0
     public static let gap = 8.0
     public static let inset = 16.0
+    /// The Med-Tele button's circle, the size of the gimbal-controls button.
+    public static let medTeleSize = 36.0
+
+    /// Pocket 3 Med-Tele (MT) button: one circle leading of the zoom row, the
+    /// chip and the gimbal button being that row. The lens is the zoom chip's
+    /// business, so the key sits with it in both orientations.
+    public var medTele: MonitorLayoutRegion {
+        var leading = zoom.x
+        if controls.width > 1, abs(controls.midY - zoom.midY) < 1 {
+            leading = min(leading, controls.x)
+        }
+        let size = Self.medTeleSize
+        return MonitorLayoutRegion(
+            x: leading - Self.gap - size, y: zoom.midY - size / 2, width: size, height: size)
+    }
 
     /// Compass Head Lock, trailing-aligned above the zoom row.
     public var headTrack: MonitorLayoutRegion {

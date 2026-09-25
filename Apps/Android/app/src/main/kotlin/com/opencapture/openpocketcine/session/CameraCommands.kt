@@ -365,6 +365,7 @@ object CameraCommands {
     const val CMD_MEDIA_FAVORITE = 0xBF
     const val CMD_NANO_GATE = 0x09
     const val CMD_LIVE_VIEW = 0xA8
+    const val CMD_MED_TELE = 0xFF
 
     const val PID_ISO_LIMIT = 0x000F
 
@@ -540,6 +541,22 @@ object CameraCommands {
     fun clearTracking(): ByteArray = ByteArray(21)
 
     fun pollTracking(): ByteArray = byteArrayOf(0x00)
+
+    /**
+     * Pocket 3 Med-Tele lens swap. The byte at `@3` is the same value `cam_status`
+     * reports back at `@5` — `0x0D` wearing the 2× lens, `0x01` wearing the wide —
+     * so this reads as "be in this lens mode", not an opaque bitmask.
+     *
+     * Measured on a physical Pocket 3 (2026-09-20/21), both directions, effect
+     * under 1 s, live picture unbroken. The body parks the lens exactly on the new
+     * floor each way (217 out, 434 in), so **no zoom SET follows a bare swap**.
+     *
+     * Silently ignored — no movement, no NACK — while recording and in any colour
+     * mode but Normal. Accepted with ActiveTrack running, but the subject is lost.
+     * Callers must gate on those; see `CamFov.medTeleToggleable`.
+     */
+    fun medTele(on: Boolean): ByteArray =
+        byteArrayOf(0x00, 0x15, 0x00, if (on) 0x0D else 0x01, 0x00, 0x00, 0x00)
 
     fun mediaList(counter: Int, cursor: Int): ByteArray {
         val payload = MEDIA_LIST_TEMPLATE.copyOf()

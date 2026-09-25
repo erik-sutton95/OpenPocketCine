@@ -356,6 +356,7 @@ Agents: prefer extending existing `Frameio*Tests` / parity docs over new paralle
 
 | Date | Decision |
 | --- | --- |
+| 2026-09-20 | The optical/digital boundary is data, not a constant: `MonitorZoomCaption` / `MonitorZoomStops` take the body's optical stops and call the largest one TELE. Passing the whole zoom cycle there is a caller bug — a Pro's 6× and 12× are crops of its 3× lens. Adapters derive optical stops from the cycle's floor (a floor above 1.05 can only be a second lens), so Pocket 3 Med-Tele's 2× and a Pocket 4 Pro's 3× read from one rule. |
 | 2026-09-14 | Playback View Assist uses the live Field Monitor assist slot (`MonitorAssistPaletteLayout.fieldMonitor` / `MonitorLayoutPolicy.fieldMonitorAssists`). |
 | 2026-09-14 | Auto-exposure EV caption is shared `MonitorExposureReadout.autoEvCaption` (`EV 1/Ns`). |
 | 2026-09-14 | Head Lock chrome is a 44 pt Lucide compass trailing-aligned above the stick/zoom cluster (`FieldMonitorLayout.headTrack` / `GimbalCluster.headTrack`). iOS-only AirPods IMU; Android keeps the layout region and no live control. |

@@ -370,7 +370,8 @@ half-disc (radius clamps 120…260 phone or 330 tablet and half viewport height�
 with material to the physical edge. Portrait is the same logarithmic scale as a
 bottom half-circle flush to the screen edge. Other chrome fades to 0.16.
 Map this gesture shell onto existing model-specific zoom stops/limits and D-Log2
-safety; never hardcode two lenses on bodies without them. Source 5290–5376,
+safety; never hardcode two lenses on bodies without them — a Pocket 3 does grow
+a second lens under Med-Tele, and that is read from reported stops, not assumed. Source 5290–5376,
 6797–6990.
 
 Stick is 88 with 36 knob; idle white 0.55, held cyan 0.8; release springs to rest.

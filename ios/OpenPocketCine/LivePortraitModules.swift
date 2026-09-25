@@ -105,6 +105,31 @@ struct LivePortraitRecOptionsButton: View {
     }
 }
 
+/// Pocket 3 Med-Tele quick key, leading of the zoom chip. Dimmed where the body would ignore
+/// the swap — see `CamFov.medTeleToggleable` — but still tappable, so the tap
+/// says why.
+struct LivePortraitMedTeleToggle: View {
+    let on: Bool
+    let enabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("MT")
+                .font(LiveType.ui(size: 9, weight: .bold))
+                .foregroundStyle(on ? LiveDesign.accent : LiveDesign.text)
+                .frame(width: GimbalCluster.medTeleSize, height: GimbalCluster.medTeleSize)
+                .background(.black.opacity(0.55), in: Circle())
+                .overlay(
+                    Circle().strokeBorder(on ? LiveDesign.accent : LiveDesign.hairline, lineWidth: 1))
+                .opacity(enabled ? 1 : 0.4)
+        }
+        .buttonStyle(.zcTapTarget)
+        .accessibilityLabel(on ? "Turn Med-Tele off" : "Turn Med-Tele on")
+        .accessibilityValue(on ? "On" : "Off")
+    }
+}
+
 /// Fit/fill quick key. Lives just under a landscape 16:9 well; in fill it
 /// parks above the capture strip / system rail so the rail cannot cover it.
 struct LivePortraitAspectToggle: View {

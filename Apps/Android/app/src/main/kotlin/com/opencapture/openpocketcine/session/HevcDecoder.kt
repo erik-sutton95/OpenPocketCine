@@ -34,6 +34,14 @@ class HevcDecoder internal constructor(
     private var pendingTypes: String = ""
     private var pendingIdr: ByteArray? = null
     private var ptsUs = 0L
+
+    /** Called on the input thread when the Med-Tele swap frame comes in — see [watchLensSwap]. */
+    @Volatile var onLensSwap: (() -> Unit)? = null
+    private val recentAuBytes = IntArray(9)
+    private var recentAuCount = 0
+    private var afterParameterSets = false
+    @Volatile private var lensWatchFrom = 0L
+    private var lensBaseline = 0
     private var decodeLogLeft = 6
     @Volatile private var running = false
     @Volatile var hasFormat = false
@@ -185,12 +193,59 @@ class HevcDecoder internal constructor(
         return ok
     }
 
+    /**
+     * The MT command just went out: look for the picture its lens cut makes. The body sends
+     * no marker and reports the swap 225–600 ms late, but on a Pocket 3 the cut is always one
+     * access unit 2–5× the size of the ones before it, 107–145 ms after the command (smaller
+     * spikes come earlier, before the body can have acted). The new lens is the picture after.
+     */
+    fun watchLensSwap() {
+        lensBaseline = 0
+        lensWatchFrom = SystemClock.elapsedRealtime()
+    }
+
+    private fun watchForLensSwap(bytes: Int, keyframe: Boolean) {
+        // Parameter sets come alone, and the picture right after them is intra: both are big
+        // for their own reasons, so neither can mark a swap or set the baseline.
+        val parameterSets = bytes < 200
+        val skip = parameterSets || afterParameterSets || keyframe
+        afterParameterSets = parameterSets
+        val from = lensWatchFrom
+        if (from != 0L) {
+            val t = SystemClock.elapsedRealtime() - from
+            if (lensBaseline == 0) lensBaseline = recentAuMedian()
+            val base = lensBaseline
+            if (t > LENS_WATCH_MS) {
+                lensWatchFrom = 0L
+                Log.i(TAG, "lens swap: no frame spotted (base=$base)")
+            } else if (!skip && t >= LENS_WATCH_MIN_MS && base > 0 &&
+                bytes >= base * LENS_SPIKE_RATIO &&
+                bytes >= base + LENS_SPIKE_BYTES
+            ) {
+                lensWatchFrom = 0L
+                Log.i(TAG, "lens swap: frame at +$t ms, $bytes bytes over $base")
+                onLensSwap?.invoke()
+            }
+        }
+        if (!skip) {
+            recentAuBytes[recentAuCount % recentAuBytes.size] = bytes
+            recentAuCount += 1
+        }
+    }
+
+    private fun recentAuMedian(): Int {
+        val n = minOf(recentAuCount, recentAuBytes.size)
+        if (n == 0) return 0
+        return recentAuBytes.copyOf(n).sorted()[n / 2]
+    }
+
     private fun decodeLocked(accessUnit: ByteArray): Boolean {
         val types = SwiftCore.hevcNalTypes(accessUnit).orEmpty()
         if (types.isNotEmpty()) nalTypesSeen = mergeTypes(nalTypesSeen, types)
         val keyframe = SwiftCore.hevcIsKeyframe(accessUnit)
         if (keyframe) lastKeyframeAt = System.currentTimeMillis()
         val idr = isIdrPicture(types, accessUnit)
+        watchForLensSwap(accessUnit.size, keyframe || idr)
         val csd = SwiftCore.hevcCsd(accessUnit)
         var sizeCallback: Pair<Int, Int>? = null
         // `hevcCsd` hands back a blob for every access unit, not only parameter-set-bearing ones:
@@ -637,6 +692,13 @@ class HevcDecoder internal constructor(
 
     companion object {
         private const val TAG = "HevcDecoder"
+        /** Longest after the MT command the swap frame can still come in. */
+        private const val LENS_WATCH_MS = 450L
+        /** Sooner than this the body cannot have acted on the command yet. */
+        private const val LENS_WATCH_MIN_MS = 95L
+        /** An access unit the swap cut makes: this far over the recent median, both ways. */
+        private const val LENS_SPIKE_RATIO = 1.4
+        private const val LENS_SPIKE_BYTES = 8_000
         private const val LIVE_WIDTH = 1280
         private const val LIVE_HEIGHT = 720
 

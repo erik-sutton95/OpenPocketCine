@@ -26,6 +26,38 @@ import Testing
         #expect(cluster.headTrack.y < cluster.bounds.minY)
     }
 
+    @Test func medTeleSitsLeadingOfTheFieldMonitorZoomRow() {
+        // Field Monitor: zoom on the stick's leading edge, gimbal button trailing.
+        let stick = MonitorLayoutRegion(x: 600, y: 300, width: 88, height: 88)
+        let zoom = MonitorLayoutRegion(x: 600, y: 256, width: 44, height: 36)
+        let controls = MonitorLayoutRegion(x: 652, y: 256, width: 36, height: 36)
+        let cluster = GimbalCluster(stick: stick, zoom: zoom, controls: controls)
+        #expect(cluster.medTele == MonitorLayoutRegion(x: 556, y: 256, width: 36, height: 36))
+    }
+
+    @Test func portraitMedTeleClearsTheAssistsAndFit() {
+        // A 320-wide portrait Field Monitor, floor 700: stick w-104 / floor-104,
+        // zoom and gimbal button on the row above, FIT at floor-56, assists
+        // ending at x 60.
+        let stick = MonitorLayoutRegion(x: 216, y: 596, width: 88, height: 88)
+        let zoom = MonitorLayoutRegion(x: 216, y: 552, width: 44, height: 36)
+        let controls = MonitorLayoutRegion(x: 268, y: 552, width: 36, height: 36)
+        let mt = GimbalCluster(stick: stick, zoom: zoom, controls: controls).medTele
+        #expect(mt == MonitorLayoutRegion(x: 172, y: 552, width: 36, height: 36))
+        #expect(mt.x > 60)
+        #expect(mt.maxY < 644)
+    }
+
+    @Test func medTeleSitsLeadingOfZoomWithTheGimbalButtonOn() {
+        let cluster = GimbalCluster.inTrailingBottom(
+            well: well, floorY: 330, canvasMaxY: canvasMaxY, showGimbalButton: true)
+        #expect(cluster.controls.width > 1)
+        #expect(abs(cluster.medTele.maxX - (cluster.zoom.x - GimbalCluster.gap)) < 0.05)
+        #expect(cluster.medTele.maxX < cluster.controls.x)
+        #expect(abs(cluster.medTele.midY - cluster.zoom.midY) < 0.05)
+        #expect(cluster.medTele.width == GimbalCluster.medTeleSize)
+    }
+
     @Test func recordOnTheFloorLiftsTheClusterAboveAndKeepsTheTrailingEdge() {
         let record = MonitorLayoutRegion(x: 620, y: 300, width: 83, height: 83)
         let cluster = GimbalCluster.inTrailingBottom(

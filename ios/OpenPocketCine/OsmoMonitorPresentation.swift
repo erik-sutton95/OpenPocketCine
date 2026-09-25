@@ -17,7 +17,11 @@ enum OsmoMonitorPresentation {
     }
 
     static func zoomCaption(_ session: CameraSession) -> String {
-        MonitorZoomCaption.label(factor: session.zoomReadout, opticalStops: session.zoomStops)
+        // The cycle is not the optics: a Pro's 6x and 12x are crops of its 3x
+        // lens. Passing the whole cycle here used to be harmless only because
+        // the caption hardcoded 3x as the tele.
+        MonitorZoomCaption.label(
+            factor: session.zoomReadout, opticalStops: session.zoomOpticalStops)
     }
 
     static func capabilities(_ session: CameraSession) -> MonitorCapabilities {

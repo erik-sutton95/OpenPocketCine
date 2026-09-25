@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -35,6 +36,20 @@ data class GimbalCluster(
             return ChromeRect(minX, minY, max(0f, maxX - minX), max(0f, maxY - minY))
         }
 
+    /**
+     * Pocket 3 Med-Tele (MT) button: one circle leading of the zoom row, the chip
+     * and the gimbal button being that row. The lens is the zoom chip's business,
+     * so the key sits with it in both orientations.
+     */
+    val medTele: ChromeRect
+        get() {
+            var leading = zoom.minX
+            if (controls.width > 1f && abs(controls.midY - zoom.midY) < 1f) {
+                leading = min(leading, controls.minX)
+            }
+            return ChromeRect(leading - GAP - MED_TELE, zoom.midY - MED_TELE / 2f, MED_TELE, MED_TELE)
+        }
+
     fun offset(dx: Float, dy: Float): GimbalCluster =
         GimbalCluster(stick.offset(dx, dy), zoom.offset(dx, dy), controls.offset(dx, dy))
 
@@ -43,6 +58,8 @@ data class GimbalCluster(
         const val ZOOM = 44f
         const val GAP = 8f
         const val INSET = 16f
+        /** The Med-Tele button's circle, the size of the gimbal-controls button. */
+        const val MED_TELE = 36f
 
         fun inTrailingBottom(
             well: ChromeRect,

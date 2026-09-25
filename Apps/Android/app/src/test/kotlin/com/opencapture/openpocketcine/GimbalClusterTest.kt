@@ -75,6 +75,43 @@ class GimbalClusterTest {
     }
 
     @Test
+    fun medTeleSitsLeadingOfTheFieldMonitorZoomRow() {
+        // Field Monitor: zoom on the stick's leading edge, gimbal button trailing.
+        val cluster = GimbalCluster(
+            stick = ChromeRect(600f, 300f, 88f, 88f),
+            zoom = ChromeRect(600f, 256f, 44f, 36f),
+            controls = ChromeRect(652f, 256f, 36f, 36f),
+        )
+        kotlin.test.assertEquals(ChromeRect(556f, 256f, 36f, 36f), cluster.medTele)
+    }
+
+    @Test
+    fun portraitMedTeleClearsTheAssistsAndFit() {
+        val policy = com.opencapture.monitorui.MonitorLayoutPolicy
+        for (width in listOf(320f, 360f, 393f, 440f, 744f)) {
+            val floor = 700f
+            fun r(m: com.opencapture.monitorui.MonitorRect) = ChromeRect(m.x, m.y, m.width, m.height)
+            val stick = policy.portraitStick(width, floor)
+            val zoom = policy.portraitZoom(stick)
+            val mt = GimbalCluster(r(stick), r(zoom), r(policy.portraitGimbal(stick, zoom))).medTele
+            assertTrue(policy.portraitAssists(floor, width >= 600f).maxX < mt.minX)
+            assertTrue(mt.maxY < policy.portraitAspect(width, floor).y)
+        }
+    }
+
+    @Test
+    fun medTeleSitsLeadingOfZoomWithTheGimbalButtonOn() {
+        val cluster = GimbalCluster.inTrailingBottom(
+            well, floorY = 330f, canvasMaxY = canvasMaxY, showGimbalButton = true,
+        )
+        assertTrue(cluster.controls.width > 1f)
+        assertEquals(cluster.zoom.minX - GimbalCluster.GAP, cluster.medTele.maxX, 0.05f)
+        assertTrue(cluster.medTele.maxX < cluster.controls.minX)
+        assertEquals(cluster.zoom.midY, cluster.medTele.midY, 0.05f)
+        assertEquals(GimbalCluster.MED_TELE, cluster.medTele.width, 0.05f)
+    }
+
+    @Test
     fun belowWellKeepsZoomUnderTheStrip() {
         val strip = ChromeRect(0f, 200f, 390f, 220f)
         val cluster = GimbalCluster.belowWell(strip, floorY = 620f)
