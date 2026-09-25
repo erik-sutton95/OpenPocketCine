@@ -106,6 +106,7 @@ import com.opencapture.monitorui.monitorBackdropSource
 import com.opencapture.openpocketcine.feed.MonitorBackdropFeed
 import com.opencapture.openpocketcine.feed.rememberMonitorBackdropFeed
 import com.opencapture.openpocketcine.feed.OpcVulkan
+import com.opencapture.openpocketcine.feed.VulkanCrashGuard
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.media.MediaLibraryScreen
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
@@ -260,7 +261,7 @@ fun LiveViewScreen(model: AppModel) {
     var vulkanFailed by remember { mutableStateOf(false) }
     val vulkanSession =
         remember {
-            if (OpcVulkan.isAvailable) {
+            if (OpcVulkan.isAvailable && !VulkanCrashGuard.isTripped(context)) {
                 LiveVulkanSession(
                     context = context,
                     backdrop = backdrop,

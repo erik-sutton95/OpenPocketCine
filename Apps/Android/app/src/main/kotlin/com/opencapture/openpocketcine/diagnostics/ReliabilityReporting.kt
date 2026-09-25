@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import com.opencapture.openpocketcine.BuildConfig
@@ -341,6 +342,9 @@ internal object ReliabilityReporting {
                             scope.setTag("sourceRevision", BuildConfig.SOURCE_REVISION)
                             scope.setTag("testSource", FeedIncidentOrigin.currentTestSource().wire)
                             scope.setTag("buildIdentity", FeedIncidentOrigin.currentBuildIdentity())
+                            // Native crashes carry no device context; these name the phone and SoC.
+                            scope.setTag("hardwareClass", Build.MODEL ?: "unknown")
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) scope.setTag("soc", "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}")
                         }
                     }
                 }

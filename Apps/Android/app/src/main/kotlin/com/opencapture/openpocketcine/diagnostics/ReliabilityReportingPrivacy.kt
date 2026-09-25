@@ -154,6 +154,7 @@ internal object ReliabilityReportingPrivacy {
             "cameraFamily",
             "cameraFirmware",
             "hardwareClass",
+            "soc",
             "testSource",
             "buildIdentity",
         )

@@ -56,6 +56,8 @@ internal class LiveVulkanSession(
     private val histo = IntArray(1024)
     private var reader: ImageReader? = null
     private var held: Image? = null
+    /** Frames presented from the current [reader]; drives [VulkanCrashGuard]. */
+    @Volatile private var readerFrames = 0
     private val started = AtomicBoolean(false)
     val framesPresented = AtomicInteger(0)
     private val cubeSentinel = Any()
@@ -426,6 +428,7 @@ internal class LiveVulkanSession(
         val h = sourceH.coerceAtLeast(2)
         val next = ImageReader.newInstance(w, h, ImageFormat.PRIVATE, 5)
         reader = next
+        readerFrames = 0
         next.setOnImageAvailableListener(
             { rdr ->
                 val image = rdr.acquireLatestImage() ?: return@setOnImageAvailableListener
@@ -509,6 +512,7 @@ internal class LiveVulkanSession(
         val takeFace = faceWanted.compareAndSet(true, false)
         OpcVulkan.nativeSetNeedTap(native, takeTap)
         OpcVulkan.nativeSetNeedFace(native, takeFace)
+        if (readerFrames == 0) VulkanCrashGuard.arm(appContext)
         val ok = OpcVulkan.nativeSubmit(native, hb)
         hb.close()
         held?.close()
@@ -520,6 +524,7 @@ internal class LiveVulkanSession(
             return
         }
         framesPresented.incrementAndGet()
+        if (++readerFrames == VulkanCrashGuard.FRAMES_TO_CLEAR) VulkanCrashGuard.clear(appContext)
         onFramePresented(image.timestamp)
         if (started.compareAndSet(false, true)) main.post(onFirstFrame)
         if (takeFace) {
