@@ -50,7 +50,7 @@
     menu.addEventListener("focusout", (event) => {
       if (!menu.contains(event.relatedTarget)) menu.open = false;
     });
-    window.matchMedia("(min-width: 860px)").addEventListener("change", (event) => {
+    window.matchMedia("(min-width: 960px)").addEventListener("change", (event) => {
       if (event.matches) menu.open = false;
     });
   }
@@ -109,7 +109,7 @@
   // ---- Magnetic buttons: pills lean toward the cursor, spring back on leave ----
   function initMagnetic() {
     if (reduceMotion || !finePointer) return;
-    document.querySelectorAll(".btn--magnetic").forEach((btn) => {
+    document.querySelectorAll(".btn--magnetic, .coffee-cta .bmc-btn").forEach((btn) => {
       const strength = 0.22, limit = 9;
       btn.addEventListener("pointermove", (e) => {
         const r = btn.getBoundingClientRect();

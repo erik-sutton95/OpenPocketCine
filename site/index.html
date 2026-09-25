@@ -8,7 +8,7 @@
   <meta name="description" content="OpenPocketCine is a free, open-source field-monitor app for DJI Osmo. Pocket 4P and Pocket 4 working. Pocket 3 and Nano partial. Action 5 and 6 untested.">
   <meta name="theme-color" content="#141414">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 
   <link rel="canonical" href="https://openpocketcine.app/">
   <meta property="og:type" content="website">
@@ -26,7 +26,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
 
   <link rel="preload" as="image" href="assets/screens/hero-monitor.webp?v=4d8a6731353b">
-  <link rel="stylesheet" href="assets/app.css?v=1f471ff4d69c">
+  <link rel="stylesheet" href="assets/app.css?v=e593be61c207">
 </head>
 <body>
 
@@ -43,6 +43,7 @@
         <a href="#platforms">Cameras</a>
         <a href="/docs/">Docs</a>
         <a href="/support/">Support</a>
+        <a class="nav__github" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">GitHub<span aria-hidden="true"> ↗</span></a>
       </nav>
       <div class="nav__cta">
         <a class="btn btn--primary" href="#download">Get the beta<span aria-hidden="true">↓</span></a>
@@ -54,6 +55,7 @@
           <a href="#platforms">Cameras</a>
           <a href="/docs/">Docs</a>
           <a href="/support/">Support</a>
+          <a class="nav__github" href="https://github.com/erik-sutton95/OpenPocketCine" target="_blank" rel="noopener">GitHub<span aria-hidden="true"> ↗</span></a>
           <a class="btn btn--primary" href="#download">Get the beta<span aria-hidden="true">↓</span></a>
         </nav>
       </details>
@@ -426,6 +428,9 @@
             <span class="download-option__action">Join Android beta<span aria-hidden="true">↗</span></span>
           </a>
         </div>
+        <div class="coffee-cta">
+          <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="eriksutton" data-color="#FFDD00" data-emoji="☕" data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff"></script>
+        </div>
         <p class="cta-final__help">New here? <a href="/docs/">Read the setup guide<span aria-hidden="true"> →</span></a></p>
       </div>
     </section>
@@ -467,6 +472,6 @@
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"
     integrity="sha384-Z3REaz79l2IaAZqJsSABtTbhjgOUYyV3p90XNnAPCSHg3EMTz1fouunq9WZRtj3d"
     crossorigin="anonymous"></script>
-  <script src="assets/app.js?v=55d2745cc6f0" defer></script>
+  <script src="assets/app.js?v=d31c3b055c9f" defer></script>
 </body>
 </html>

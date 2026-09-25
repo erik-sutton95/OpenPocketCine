@@ -16,10 +16,12 @@ cached styles, animation code, and screenshots in sync with the page.
   Frame.io is an Adobe trademark; the mark identifies the upload destination.
 
 The homepage header groups feature sections under Features, keeps Cameras,
-Docs, and Support, and sends Get the beta to equal iOS and Android options.
+Docs, Support, and GitHub, and sends Get the beta to equal iOS and Android options.
+The original Buy me a coffee button sits beneath the platform download choices.
 Small screens use a native disclosure menu, with Escape and outside-click
-dismissal. Hero links go directly to each platform's open beta. GitHub, press,
-and project support remain in the page and footer. The playback section labels
+dismissal, including GitHub alongside the beta link.
+Hero links go directly to each platform's open beta. Press and project links
+also remain in the page and footer. The playback section labels
 Frame.io as available and additional cloud destinations as coming soon.
 
 The September 2026 app mockups use the 0.1.5 iOS interface and Pocket 4 Pro

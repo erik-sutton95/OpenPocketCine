@@ -132,7 +132,8 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   border: none;
   cursor: pointer;
 }
-.btn {
+.btn,
+.coffee-cta .bmc-btn {
   transition: background .2s ease, color .2s ease, border-color .2s ease, transform .2s var(--ease-out);
   transform: translate(var(--tx, 0), var(--ty, 0));
 }
@@ -199,7 +200,7 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 }
 .nav__brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -0.02em; font-family: var(--display); white-space: nowrap; }
 .nav__brand img { border-radius: 6px; }
-.nav__links { display: none; align-items: center; gap: 28px; margin-left: auto; font-size: 14px; }
+.nav__links { display: none; align-items: center; gap: 22px; margin-left: auto; font-size: 14px; }
 .nav__links a { position: relative; padding-block: 12px; opacity: 0.8; }
 .nav__links a:hover, .nav__links a:focus-visible { opacity: 1; }
 .nav__links a::after {
@@ -209,6 +210,7 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
   transition: right .25s var(--ease-out);
 }
 .nav__links a:hover::after { right: 0; }
+.nav__links .nav__github { font-weight: 600; opacity: 1; white-space: nowrap; }
 .nav__cta { display: none; margin-left: 16px; }
 .nav__cta .btn { min-height: 42px; padding: 8px 16px; font-size: 13px; }
 .nav__menu summary {
@@ -232,7 +234,7 @@ h3 { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.25; letter-spacing: -0.
 .nav__panel > a { min-height: 44px; padding: 10px 16px; border-radius: 6px; }
 .nav__panel > a:not(.btn):hover { background: rgba(160,165,165,.12); }
 .nav__panel .btn { margin-top: 8px; }
-@media (min-width: 860px) {
+@media (min-width: 960px) {
   .nav__links, .nav__cta { display: flex; }
   .nav__menu { display: none; }
 }
@@ -824,6 +826,24 @@ a.cloud-destination:hover, a.cloud-destination:focus-visible { border-color: var
   .download-option { padding: 24px; }
 }
 
+
+.coffee-cta {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 32px;
+}
+.coffee-cta .bmc-btn {
+  justify-content: center;
+  min-width: 0;
+  height: 52px;
+  padding: 0 20px;
+  border-radius: 10px;
+  font-size: 24px;
+}
+.coffee-cta .bmc-btn-text { width: auto; }
+.coffee-cta .bmc-btn:hover,
+.coffee-cta .bmc-btn:focus-visible { background-color: #ebcc00 !important; }
 
 .lineup__intro { text-align: center; margin-bottom: clamp(36px, 5vw, 56px); }
 .lineup__intro .lead { margin: 12px auto 0; }
