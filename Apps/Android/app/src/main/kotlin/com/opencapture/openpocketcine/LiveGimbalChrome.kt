@@ -169,6 +169,8 @@ fun LiveGimbalSheetHost(
         onDismiss = { model.liveGimbalPanel = LiveGimbalPanel.NONE },
         trailing = true,
         hasNavigation = false,
+        // Tabs, one drum and the Motion Control row: the full side panel was mostly empty.
+        fitContent = true,
         safeLeading = safeLeading,
         safeTrailing = safeTrailing,
         safeTop = safeTop,

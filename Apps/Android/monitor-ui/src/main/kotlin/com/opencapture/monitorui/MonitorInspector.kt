@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -96,6 +97,7 @@ fun MonitorInspector(
     safeTop: Float = 0f,
     safeBottom: Float = 0f,
     hasNavigation: Boolean = true,
+    fitContent: Boolean = false,
     close: (@Composable () -> Unit)? = null,
     helpVisible: Boolean? = null,
     onToggleHelp: () -> Unit = {},
@@ -104,6 +106,10 @@ fun MonitorInspector(
     content: @Composable () -> Unit,
 ) {
     val frame = MonitorInspectorPolicy.frame(viewportWidth, viewportHeight, trailing)
+    // [fitContent]: a short body takes only its own height in the portrait side panel
+    // (never more than the frame); landscape keeps the full-height rail.
+    val fit = fitContent && frame.portrait
+    val frameHeight = if (fit) Modifier.heightIn(max = frame.height.dp) else Modifier.height(frame.height.dp)
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     val reveal by animateFloatAsState(
@@ -126,7 +132,7 @@ fun MonitorInspector(
     Box(modifier.fillMaxSize().pointerInput(onDismiss) { detectTapGestures { onDismiss() } }
         .semantics { contentDescription = "Dismiss $title"; role = Role.Button }) {
         Box(
-            Modifier.align(alignment).width(frame.width.dp).height(frame.height.dp)
+            Modifier.align(alignment).width(frame.width.dp).then(frameHeight)
                 .clip(GenericShape { size, _ ->
                     val revealedWidth = if (frame.width > 0f) size.width * shownWidth / frame.width else 0f
                     val left = if (trailing) size.width - revealedWidth else 0f
@@ -135,12 +141,12 @@ fun MonitorInspector(
                 .clip(shape),
         ) {
             Box(
-                Modifier.width(frame.width.dp).height(frame.height.dp)
+                Modifier.width(frame.width.dp).then(frameHeight)
                     .monitorMaterial(MonitorMaterial.Expanded, shape)
                     .pointerInput(Unit) { detectTapGestures { } },
             ) {
                 Column(
-                    Modifier.fillMaxSize()
+                    (if (fit) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                         .padding(
                             start = if (!trailing) edge.dp else 0.dp,
                             end = if (trailing) edge.dp else 0.dp,
@@ -186,15 +192,18 @@ fun MonitorInspector(
                                 .padding(start = 14.dp, end = 10.dp, bottom = 8.dp),
                         ) { navigation(true) }
                     }
-                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                    Row(if (fit) Modifier.fillMaxWidth() else Modifier.weight(1f).fillMaxWidth()) {
                         if (!frame.portrait && hasNavigation) {
                             Box(
                                 Modifier.width(MonitorInspectorPolicy.NAV_WIDTH.dp).fillMaxHeight()
                                     .padding(start = 8.dp, end = 8.dp),
                             ) { navigation(false) }
                         }
-                        Column(Modifier.weight(1f).fillMaxHeight()) {
-                            Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp)) { content() }
+                        Column(if (fit) Modifier.weight(1f) else Modifier.weight(1f).fillMaxHeight()) {
+                            Box(
+                                (if (fit) Modifier else Modifier.weight(1f))
+                                    .fillMaxWidth().padding(horizontal = 12.dp),
+                            ) { content() }
                             footer()
                         }
                     }

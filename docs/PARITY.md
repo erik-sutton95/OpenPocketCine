@@ -723,6 +723,12 @@ walked 1×/2×/3× on 2.7K and 1×/2× on 4K, each chip pin released by a matchi
 `cam_fov` within ~0.5 s. Physical iOS verification of the corrected stops and
 of this note remains pending: no iPhone is available to this project.
 
+### Android portrait gimbal panel height (2026-09-21)
+
+| Fix | Why iOS is not changed |
+| --- | --- |
+| The portrait gimbal side panel takes its content's height (`MonitorInspector(fitContent:)`), not a fixed share of the screen | iOS has the same fixed height (`MonitorInspector`: 52% of a portrait viewport). Fitting it means measuring a `ScrollView`'s content, which cannot be built or checked here. **Open for iOS** |
+
 ### Zoom chip pin expiry (2026-09-18)
 
 The survey left the chip latched: `zoomOptimistic` — the asked-for factor the
