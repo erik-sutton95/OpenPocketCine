@@ -197,6 +197,17 @@ class KnownReferenceLossTest {
     }
 
     @Test
+    fun lossAfterAnAnsweredEnableSkipsTheGopHold() {
+        val s = snapshot().copy(lastEnableAt = snapshot().now - 1_000)
+        assertEquals(LiveViewEnablePolicy.Action.NONE,
+            LiveViewEnablePolicy.tick(LiveViewEnablePolicy.State(), s))
+        assertEquals(LiveViewEnablePolicy.Action.NONE,
+            LiveViewEnablePolicy.tick(LiveViewEnablePolicy.State(), s.copy(lastIrapAt = s.now - 1_500)))
+        assertEquals(LiveViewEnablePolicy.Action.REBUILD_DECODER,
+            LiveViewEnablePolicy.tick(LiveViewEnablePolicy.State(), s.copy(lastIrapAt = s.now - 500)))
+    }
+
+    @Test
     fun readinessControlsStartupAndCooldownKeepTheirExistingAuthority() {
         val s = snapshot()
         val guarded = listOf(
@@ -213,11 +224,17 @@ class KnownReferenceLossTest {
             assertEquals(LiveViewEnablePolicy.Stage.IDLE, state.stage)
         }
         for (stage in listOf(LiveViewEnablePolicy.Stage.FULL_REJOIN, LiveViewEnablePolicy.Stage.COOLDOWN)) {
-            val state = LiveViewEnablePolicy.State().apply { this.stage = stage }
+            val state = LiveViewEnablePolicy.State().apply {
+                this.stage = stage
+                lastActionAt = s.now
+            }
             repeat(3) {
                 assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, s))
                 assertEquals(stage, state.stage)
             }
+            // Cooldown ends: packets without references get one more repair.
+            val later = snapshot(LiveViewEnablePolicy.COOLDOWN_MS)
+            assertEquals(LiveViewEnablePolicy.Action.REBUILD_DECODER, LiveViewEnablePolicy.tick(state, later))
         }
         val state = LiveViewEnablePolicy.State()
         assertEquals(LiveViewEnablePolicy.Action.NONE,

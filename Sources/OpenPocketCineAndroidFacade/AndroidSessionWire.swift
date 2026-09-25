@@ -1298,6 +1298,7 @@ public enum AndroidSessionWire {
             lastDecoderOutputAge: jsonOptionalNumber(json, key: "lastDecoderOutputAge"),
             decoderOutputExpected: jsonBool(json, key: "decoderOutputExpected", default: false),
             referenceRecoveryNeeded: jsonBool(json, key: "referenceRecoveryNeeded", default: false),
+            secondsSinceLastIrap: jsonOptionalNumber(json, key: "secondsSinceLastIrap"),
             repairReady: jsonBool(json, key: "repairReady", default: true)
         )
     }

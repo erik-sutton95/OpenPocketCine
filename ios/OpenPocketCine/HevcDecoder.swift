@@ -54,6 +54,8 @@ final class HevcDecoder {
     }
     var nativeOutputExpected: Bool { shouldStartVT || referenceRecoveryNeeded }
     private(set) var referenceRecoveryNeeded = false
+    /// Last accepted IRAP. Tells the watchdog an enable was already answered.
+    private(set) var lastIrapAt: Date?
     var nativeDecodeTotals: (submitted: Int, accepted: Int, output: Int) { pipelineMetrics.totals }
     var canReleaseIDRHold: Bool { hasSubmittedRandomAccess && !nativeSessionFailed }
 
@@ -484,6 +486,7 @@ final class HevcDecoder {
             if submitted && hasIDR {
                 hasSubmittedRandomAccess = true
                 referenceRecoveryNeeded = false
+                lastIrapAt = Date()
             }
             return submitted
         } else {
@@ -518,6 +521,7 @@ final class HevcDecoder {
         if hasIDR {
             hasSubmittedRandomAccess = true
             referenceRecoveryNeeded = false
+            lastIrapAt = Date()
         }
         if mirrorHold { return true }
         finishLayerHandoffIfNeeded()

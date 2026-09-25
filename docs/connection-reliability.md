@@ -60,7 +60,12 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 fresh, and decoder output is silent or established references are explicitly
 broken. Known reference loss can use the next eligible tick without first
 waiting for two seconds of silence; ordinary startup/IDR holds cannot. All
-existing readiness, motion, command/GOP grace and ownership gates remain.
+existing readiness, motion, command and ownership gates remain. The GOP grace
+applies only while the last enable is unanswered: once the decoder accepts an
+IRAP newer than that enable (`secondsSinceLastIrap`), a new loss is repaired
+without waiting out the rest of the 8 s window. After a rejoin, a loss repair
+waits for `cooldownDuration` (15 s) instead of staying blocked until the
+shell resets the watchdog.
 iOS maps that to `rebuildPresentation` plus
 one recovery enable; Android maps it to `rebuildDecoderKeepingPicture`. Those
 are source mappings, not a completed physical proof. Fresh native output with

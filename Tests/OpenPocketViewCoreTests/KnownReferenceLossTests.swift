@@ -100,15 +100,30 @@ import Testing
         #expect(dog.tick(healthy) == .none, "A presentation-only stall still owns no codec repair")
     }
 
-    @Test func retiredAndCooldownOwnersCannotAcquireAnotherLossRepair() {
-        for stage in [FeedWatchdog.Stage.fullRejoin, .cooldown] {
-            var dog = FeedWatchdog()
-            dog.stage = stage
-            for elapsed in [0.0, 1, 20] {
-                #expect(dog.tick(Self.snapshot(elapsed: elapsed)) == .none)
-                #expect(dog.stage == stage)
-            }
+    @Test func rejoinOwnerRetriesALossRepairOnlyAfterCooldown() {
+        var dog = FeedWatchdog()
+        #expect(dog.tick(Self.snapshot()) == .rebuildVTSession)
+        #expect(dog.tick(Self.snapshot(elapsed: 16)) == .fullSessionRejoin)
+        // Android 0.1.5+90: packets came back after the rejoin with the
+        // references still lost, and the picture sat stale for 21 to 74 s.
+        for elapsed in [16.5, 20, 30.9] {
+            #expect(dog.tick(Self.snapshot(elapsed: elapsed)) == .none)
+            #expect(dog.stage == .fullRejoin, "Continuous packets cannot restart the budget")
         }
+        #expect(dog.tick(Self.snapshot(elapsed: 31)) == .rebuildVTSession)
+    }
+
+    @Test func lossAfterAnAnsweredEnableSkipsTheGOPHold() {
+        var snap = Self.snapshot()
+        snap.secondsSinceLastEnable = 1
+        var dog = FeedWatchdog()
+        #expect(dog.tick(snap) == .none, "The enable is still waiting for its IRAP")
+        snap.secondsSinceLastIrap = 1.5
+        #expect(dog.tick(snap) == .none, "An IRAP from before the enable did not answer it")
+        // 19 of 21 iOS freshInputStaleOutput: one lost AU right after the
+        // requested IRAP landed, then an 8 s freeze behind that enable's hold.
+        snap.secondsSinceLastIrap = 0.5
+        #expect(dog.tick(snap) == .rebuildVTSession)
     }
 
     private static func snapshot(elapsed: Double = 0) -> FeedWatchdog.Snapshot {

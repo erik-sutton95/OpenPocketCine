@@ -28,6 +28,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Live View no longer freezes for up to 8 s after a single lost video packet.
+  The keyframe request is no longer held behind an
+  earlier request the camera already answered. After a reconnect that brings
+  video back without a usable keyframe, the picture is repaired after 15 s
+  instead of staying frozen until the operator leaves.
 - The joystick and gimbal controls on iOS and Android now use the same dark
   glow as other live-view controls, improving separation from bright footage.
 - Android Live View no longer crashes on some screen sizes while gimbal controls

@@ -1506,6 +1506,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
                 lastPresentedAt = decoder.lastPresentedAt,
                 decoderOutputExpected = decoder.decoderOutputExpected,
                 referenceRecoveryNeeded = decoder.referenceRecoveryNeeded,
+                lastIrapAt = decoder.lastIrapAt,
                 repairReady = decoder.isPresentationReady,
             )
         if (coreWatchdog == 0L && SwiftCore.isAvailable) {
@@ -1545,6 +1546,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
                     age(decoder.lastDecoderOutputAt)?.let { append(",\"lastDecoderOutputAge\":$it") }
                     append(",\"decoderOutputExpected\":${decoder.decoderOutputExpected}")
                     append(",\"referenceRecoveryNeeded\":${snap.referenceRecoveryNeeded}")
+                    age(decoder.lastIrapAt)?.let { append(",\"secondsSinceLastIrap\":$it") }
                     append(",\"repairReady\":${decoder.isPresentationReady}")
                     append("}")
                 }
@@ -5238,6 +5240,7 @@ internal object LiveViewEnablePolicy {
         val lastPresentedAt: Long? = null,
         val decoderOutputExpected: Boolean = false,
         val referenceRecoveryNeeded: Boolean = false,
+        val lastIrapAt: Long? = null,
         val repairReady: Boolean = true,
     )
 
@@ -5772,10 +5775,16 @@ internal object LiveViewEnablePolicy {
             if (decoderNeedsRepair &&
                 (auAge ?: Long.MAX_VALUE) < STALL_MS
             ) {
-                if (state.stage == Stage.FULL_REJOIN || state.stage == Stage.COOLDOWN) {
+                // Twin of FeedWatchdog: cooldown ends, and an IRAP after the last
+                // enable answered it, so a new loss gets its own request.
+                if ((state.stage == Stage.FULL_REJOIN || state.stage == Stage.COOLDOWN) &&
+                    snap.now - state.lastActionAt < COOLDOWN_MS
+                ) {
                     return Action.NONE
                 }
-                if (shouldHoldForGopReset(sinceEnable, videoAge)) return Action.NONE
+                val irapAnsweredEnable =
+                    snap.lastIrapAt != null && snap.lastEnableAt != 0L && snap.lastIrapAt > snap.lastEnableAt
+                if (!irapAnsweredEnable && shouldHoldForGopReset(sinceEnable, videoAge)) return Action.NONE
                 if (shouldHoldForControlGrace(snap, outputAge)) return Action.NONE
                 return fire(state, Action.REBUILD_DECODER, snap.now)
             }

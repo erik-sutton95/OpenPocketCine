@@ -4866,6 +4866,7 @@ final class CameraSession {
             lastDecoderOutputAge: decoder.nativeOutputAge,
             decoderOutputExpected: decoder.nativeOutputExpected,
             referenceRecoveryNeeded: decoder.referenceRecoveryNeeded,
+            secondsSinceLastIrap: decoder.lastIrapAt.map { now.timeIntervalSince($0) },
             repairReady: decoder.isDisplayReady && !isBrowsingMedia && !status.inPlayback
                 && !liveEnableGate.inFlight
         )

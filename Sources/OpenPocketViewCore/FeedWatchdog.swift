@@ -80,6 +80,9 @@ public struct FeedWatchdog: Equatable, Sendable {
         /// Explicit compressed discontinuity after valid references, not an
         /// ordinary startup/GOP hold or an intentional decoder replacement.
         public var referenceRecoveryNeeded: Bool
+        /// Age of the last IRAP the decoder accepted. Newer than the last enable
+        /// means that enable was answered, so its GOP-reset window is over.
+        public var secondsSinceLastIrap: TimeInterval?
         /// Shell can execute a repair now; blocked requests spend no ladder rung.
         public var repairReady: Bool
         public var live: Bool
@@ -141,6 +144,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             lastDecoderOutputAge: TimeInterval? = nil,
             decoderOutputExpected: Bool = false,
             referenceRecoveryNeeded: Bool = false,
+            secondsSinceLastIrap: TimeInterval? = nil,
             repairReady: Bool = true
         ) {
             self.now = now
@@ -155,6 +159,7 @@ public struct FeedWatchdog: Equatable, Sendable {
             self.lastDecoderOutputAge = lastDecoderOutputAge
             self.decoderOutputExpected = decoderOutputExpected
             self.referenceRecoveryNeeded = referenceRecoveryNeeded
+            self.secondsSinceLastIrap = secondsSinceLastIrap
             self.repairReady = repairReady
             self.live = live
             self.sawPicture = sawPicture
@@ -237,6 +242,13 @@ public struct FeedWatchdog: Equatable, Sendable {
     ///
     /// If HEVC has been silent *longer* than this enable, the enable did not
     /// restart the encoder — do not sit in the 8s IDR window.
+    public static func irapAnsweredLastEnable(_ snap: Snapshot) -> Bool {
+        guard let irap = snap.secondsSinceLastIrap, let enable = snap.secondsSinceLastEnable else {
+            return false
+        }
+        return irap < enable
+    }
+
     public static func shouldHoldForGOPReset(
         secondsSinceLastEnable: TimeInterval?,
         lastVideoPacketAge: TimeInterval? = nil
@@ -397,11 +409,20 @@ public struct FeedWatchdog: Equatable, Sendable {
                 (snap.lastAccessUnitAge ?? .infinity) < Self.stallThreshold
             {
                 // After the one decoder attempt, ownership passes to the shell
-                // rejoin. Continuous packets must not restart the repair budget.
-                guard stage != .fullRejoin && stage != .cooldown else { return .none }
-                if Self.shouldHoldForGOPReset(
-                    secondsSinceLastEnable: snap.secondsSinceLastEnable,
-                    lastVideoPacketAge: snap.lastVideoPacketAge)
+                // rejoin. Continuous packets must not restart the repair budget
+                // before cooldown ends, but a rejoin that brought packets back
+                // without references must not strand the picture either.
+                if stage == .fullRejoin || stage == .cooldown,
+                    snap.now - lastActionAt < Self.cooldownDuration
+                {
+                    return .none
+                }
+                // An IRAP after the last enable answered it. This loss is new and
+                // needs its own request, not the rest of the old 8 s window.
+                if (!Self.irapAnsweredLastEnable(snap)
+                    && Self.shouldHoldForGOPReset(
+                        secondsSinceLastEnable: snap.secondsSinceLastEnable,
+                        lastVideoPacketAge: snap.lastVideoPacketAge))
                     || Self.shouldHoldForControlGrace(
                         snap, stalledStageAge: snap.lastDecoderOutputAge ?? snap.lastDecodedFrameAge
                     )
