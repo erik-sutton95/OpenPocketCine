@@ -28,6 +28,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android Live View no longer crash-loops on MediaTek phones whose Mali driver
+  faults while importing decoder frames into Vulkan. Two launches that die
+  during that import switch Live View to the non-Vulkan path for that app
+  version, and native crash reports now name the phone model and SoC.
+- Feed incident reports are graded by outcome: only incidents whose recovery
+  gave up are errors, interrupted ones are warnings, and recovered or
+  suppressed ones are info.
 - The joystick and gimbal controls on iOS and Android now use the same dark
   glow as other live-view controls, improving separation from bright footage.
 - Android Live View no longer crashes on some screen sizes while gimbal controls

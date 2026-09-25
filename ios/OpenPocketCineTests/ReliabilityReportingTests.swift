@@ -6,6 +6,13 @@ import XCTest
 @testable import OpenPocketCine
 
 final class ReliabilityReportingTests: XCTestCase {
+    func testOnlyExhaustedIncidentsAreErrors() {
+        XCTAssertEqual(ReliabilityReporting.level(forOutcome: "exhausted"), .error)
+        XCTAssertEqual(ReliabilityReporting.level(forOutcome: "interrupted"), .warning)
+        XCTAssertEqual(ReliabilityReporting.level(forOutcome: "recovered"), .info)
+        XCTAssertEqual(ReliabilityReporting.level(forOutcome: "suppressed"), .info)
+    }
+
     private var suite: UserDefaults!
     private var cacheRoot: URL!
 

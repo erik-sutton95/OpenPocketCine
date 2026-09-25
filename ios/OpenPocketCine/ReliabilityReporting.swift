@@ -462,10 +462,20 @@ enum ReliabilityReporting {
         }
     }
 
+    /// Only an incident the recovery ladder gave up on is an error. Recovered and
+    /// suppressed ones are the reliability baseline, not failures.
+    static func level(forOutcome outcome: String) -> SentryLevel {
+        switch outcome {
+        case FeedIncidentOutcome.exhausted.rawValue: return .error
+        case FeedIncidentOutcome.interrupted.rawValue: return .warning
+        default: return .info
+        }
+    }
+
     private static func makeEvent(
         envelope: FeedIncidentVendorEnvelope, eventID: SentryId
     ) -> Event {
-        let event = Event(level: .error)
+        let event = Event(level: level(forOutcome: envelope.grouping.outcome))
         event.eventId = eventID
         // Kind is in the fingerprint, so the issue title stays stable per group.
         event.message = SentryMessage(

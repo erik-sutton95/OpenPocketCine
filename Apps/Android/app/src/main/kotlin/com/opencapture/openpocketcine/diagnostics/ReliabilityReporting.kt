@@ -533,9 +533,20 @@ internal object ReliabilityReporting {
         }
     }
 
+    /**
+     * Only an incident the recovery ladder gave up on is an error. Recovered and
+     * suppressed ones are the reliability baseline, not failures.
+     */
+    fun level(outcome: String): SentryLevel =
+        when (outcome) {
+            FeedIncidentOutcome.EXHAUSTED.wire -> SentryLevel.ERROR
+            FeedIncidentOutcome.INTERRUPTED.wire -> SentryLevel.WARNING
+            else -> SentryLevel.INFO
+        }
+
     private fun makeEvent(envelope: FeedIncidentVendorEnvelope, eventId: io.sentry.protocol.SentryId): SentryEvent {
         val event = SentryEvent()
-        event.level = SentryLevel.ERROR
+        event.level = level(envelope.grouping.outcome)
         event.eventId = eventId
         event.timestamp = Date(envelope.startedAtWallClockMs)
         event.release = "com.opencapture.openpocketcine@${envelope.appVersion}+${envelope.appBuild}"

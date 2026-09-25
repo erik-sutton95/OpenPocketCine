@@ -47,6 +47,14 @@ class ReliabilityReportingTest {
     }
 
     @Test
+    fun onlyExhaustedIncidentsAreErrors() {
+        assertEquals(SentryLevel.ERROR, ReliabilityReporting.level("exhausted"))
+        assertEquals(SentryLevel.WARNING, ReliabilityReporting.level("interrupted"))
+        assertEquals(SentryLevel.INFO, ReliabilityReporting.level("recovered"))
+        assertEquals(SentryLevel.INFO, ReliabilityReporting.level("suppressed"))
+    }
+
+    @Test
     fun consentDefaultsOffAndRevokePurgesOnlySdkOwnedSpool() {
         assertFalse(ReliabilityReportingConsent.isOptedIn)
         assertFalse(ReliabilityReporting.isOptedIn)
