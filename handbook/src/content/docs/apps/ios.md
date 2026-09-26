@@ -427,9 +427,13 @@ Nano preview and recording have been checked together on iPhone. Pocket 3
 recovery after an app switch required a full rejoin and roughly a minute in the
 recorded test. Android has the matching experimental Multiview stage.
 
-Tap Layout to switch Grid/Center stage; tap **WI-FI** below FIT/FILL for the
-shared network wizard, also used by **Add setup**. Clean
-hides the upper session controls and assist palette; DISP restores them.
+Tap Layout to switch Grid/Center stage; tap Wi-Fi in the header for the shared
+network wizard, also used by **Add setup**. Portrait uses a vertical left toolbar
+and camera details inside each feed. Grid fills four portrait rows or two
+landscape columns. Center stage keeps its wide main feed, with the portrait
+toolbar starting below it. Landscape rotation moves the toolbar opposite the
+cutout while the tiles stay fixed. DISP and Record use their normal Live View
+positions; DISP hides optional chrome and restores it.
 
 Motion Control shows A, B and C with their reported pan, tilt and zoom, or
 **Not set**. The joystick remains usable while the editor is open, so you can

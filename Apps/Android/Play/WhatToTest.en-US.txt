@@ -4,7 +4,7 @@ New and changed
 
 - Multiview network setup groups current, saved and nearby Wi-Fi, scans automatically with a camera, remembers passwords and offers hotspot help and retry on the password screen.
 - Experimental Multiview: the grid button on Your cameras monitors up to four Osmo cameras on shared Wi-Fi or a phone hotspot, with Auto LUT and per-tile or group recording.
-- Multiview offers Grid or Center stage, Fit/Fill and clean DISP, and remembers your layout. Double-tap a tile for full Live View; closing returns cameras to their own Wi-Fi.
+- Multiview fills Grid tiles, puts camera details in feeds and uses a left portrait toolbar. DISP and Record stay in their Live View positions; camera options work in every tile.
 - New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots. Shows No level data instead of a false level.
 - Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
 - Osmo Action 6 support: live view, Normal 10-bit and D-Log M color with the official LUT, Photo and Timelapse. Not yet checked on a real Action 6.
@@ -26,7 +26,7 @@ Fixes
 What to test
 
 - If Live View freezes while the camera stays connected, note the time and send Connection setup → Share Diagnostics: it now includes more detail about the stall.
-- In Multiview, choose a saved or nearby network, type a password in both orientations and cancel a scan. Add two cameras, then close and reconnect one normally.
+- In Multiview, try saved/nearby Wi-Fi and cancel a scan. With two cameras, rotate Grid and Center stage, open camera options and check Clean view, DISP and Record positions.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - In Media, open a clip, tap the trash icon, and try Cancel, then Delete. Over a bright scene, check the dark glow around the joystick and gimbal controls.
 - On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

@@ -89,10 +89,16 @@ only returns the stored row. Button actions retain main-actor ownership. Native
 regression tests invoke the real deferred content off-main. This is for bounded
 option groups, not eager rendering of unbounded media catalogs.
 
-`MultiviewPresentationLayout` computes four persistent tile rectangles and fixed
-transport/control positions. iOS maps the saved arrangement to that policy;
+`MultiviewPresentationLayout` computes four persistent tile rectangles, the
+session header, selected-camera readouts and the three-cell LUT/Fit/Layout
+toolbar. The toolbar changes sides opposite the landscape cutout; the camera
+rectangles remain fixed. Portrait uses a left toolbar, four full-width grid
+rows or a full-width 16:9 main feed above the secondary rows. Record and DISP
+reuse the platform's normal Field Monitor layout rather than the toolbar geometry. iOS maps the saved arrangement to that policy;
 changing selection or layout never creates a second decoder for the selected
-camera. Tap Layout to switch Grid/Center stage; WI-FI opens Shared Wi-Fi.
+camera. Tap Layout to switch Grid/Center stage; the header Wi-Fi button opens Shared Wi-Fi.
+Per-camera options remain available inside every occupied tile, including the
+smaller portrait feeds. One tap selects without changing the arrangement.
 Clean hides the upper session controls and assist palette while retaining DISP
 to restore them. Per-tile recovery, recording acknowledgement and station-network cleanup
 remain in `MultiviewSession`. Its current shared assist control applies Auto LUT

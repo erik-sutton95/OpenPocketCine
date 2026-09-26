@@ -8,14 +8,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -60,6 +59,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -70,6 +70,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -84,15 +86,12 @@ import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LiveViewScreen
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
-import com.opencapture.openpocketcine.glass
 import com.opencapture.openpocketcine.liveChromeGlass
 import com.opencapture.openpocketcine.monitorGlass
+import com.opencapture.openpocketcine.pickerPanelGlass
 import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.FoundCamera
-import com.opencapture.openpocketcine.session.VideoResolution
 import kotlinx.coroutines.launch
 
 private val StageCanvas = MonitorPalette.backgroundDeep
@@ -200,6 +199,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                             session = session, tile = tile, index = index,
                             compact = frame.width < 200f || frame.height < 136f,
                             clean = clean, enabled = !overlayOpen,
+                            confirmRecording = model.recordConfirmationEnabled,
                             onAdd = { empty ->
                                 if (session.networkConfigured) adding = empty else showNetwork = true
                             },
@@ -213,23 +213,27 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             }
             if (!clean) {
                 SessionControls(
-                    session, layout.sessionControlsHorizontal, layout.controlCellSize,
-                    Modifier.rect(layout.sessionControls),
+                    session, layout.controlCellSize, Modifier.rect(layout.sessionControls),
                     onExit = {
                         if (session.tiles.any { it.camera != null }) showLeave = true else closeStage()
                     },
                 )
+                StageTitle(session, Modifier.rect(layout.title))
+                StageReadouts(session.tiles.getOrNull(session.focusedIndex)?.settings, Modifier.rect(layout.readouts))
                 StageAssistPalette(
                     session, layout.assistsHorizontal, layout.controlCellSize, Modifier.rect(layout.assists),
                 )
                 NetworkButton(
+                    name = if (layout.portrait) null else session.ssid.takeIf { it.isNotBlank() } ?: "Shared Wi-Fi",
                     enabled = !session.busy && !session.connectingCameras,
                     modifier = Modifier.rect(layout.network),
                     onClick = { showNetwork = true },
                 )
             }
             DisplayButton(clean, Modifier.rect(layout.display)) { clean = !clean }
-            RecordAllButton(session, Modifier.rect(layout.record)) { scope.launch { session.toggleAllRecording() } }
+            RecordAllButton(session, model.recordConfirmationEnabled, layout.record.width, Modifier.rect(layout.record)) {
+                scope.launch { session.toggleAllRecording() }
+            }
         }
         if (session.closing) {
             Row(
@@ -296,27 +300,46 @@ private fun Modifier.rect(rect: MonitorRect): Modifier =
     offset(rect.x.dp, rect.y.dp).requiredSize(rect.width.dp, rect.height.dp)
 
 @Composable
-private fun SessionControls(
-    session: MultiviewSession,
-    horizontal: Boolean,
-    cell: Float,
-    modifier: Modifier,
-    onExit: () -> Unit,
-) {
-    ControlGroup(horizontal, modifier) {
+private fun SessionControls(session: MultiviewSession, cell: Float, modifier: Modifier, onExit: () -> Unit) {
+    Box(modifier.monitorGlass(ControlShape), contentAlignment = Alignment.Center) {
         GlyphCell(
-            OpcIcon.X, cell, "Close Multiview",
+            OpcIcon.CHEVRON_LEFT, cell, "Close Multiview",
             enabled = !session.busy && !session.groupRecordingBusy, onClick = onExit,
         )
-        GlyphCell(
-            if (session.layout == MultiviewLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID,
-            cell,
-            if (session.layout == MultiviewLayout.GRID) "Show Center stage" else "Show 2 by 2 grid",
-        ) {
-            session.layout = if (session.layout == MultiviewLayout.GRID) {
-                MultiviewLayout.CENTER_STAGE
-            } else {
-                MultiviewLayout.GRID
+    }
+}
+
+@Composable
+private fun StageTitle(session: MultiviewSession, modifier: Modifier) {
+    val assigned = session.tiles.filter { it.camera != null }
+    val recording = assigned.count { it.recordingObservation?.first == true }
+    val recovering = assigned.count { it.recovering || it.failureMessage != null }
+    val connecting = assigned.count { !it.hasPicture && !it.recovering && it.failureMessage == null }
+    val live = assigned.count { it.hasPicture && !it.recovering && it.failureMessage == null }
+    val subtitle = when {
+        session.groupRecordingBusy -> session.groupRecordingNote ?: "Waiting for cameras…"
+        session.groupRecordingNote?.contains("confirmed") == true -> session.groupRecordingNote.orEmpty()
+        recovering > 0 -> "$live live · $recovering reconnecting"
+        recording > 0 -> "$recording of ${assigned.size} recording"
+        connecting > 0 -> "$live live · $connecting connecting"
+        assigned.isEmpty() -> "Add your first camera"
+        else -> "${assigned.size} cameras connected"
+    }
+    Column(modifier, verticalArrangement = Arrangement.Center) {
+        Text("Multiview", color = LiveDesign.text, style = LiveType.display(16f), maxLines = 1)
+        Text(subtitle, color = if (recording > 0) LiveDesign.rec else LiveDesign.muted,
+            style = LiveType.text(9f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun StageReadouts(settings: CameraStatus?, modifier: Modifier) {
+    val values = multiviewExposureReadouts(settings ?: CameraStatus())
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        values.forEach { (label, value) ->
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(value, color = LiveDesign.text, style = LiveType.mono(12f, FontWeight.SemiBold), maxLines = 1)
+                Text(label, color = LiveDesign.muted, style = LiveType.text(7f, FontWeight.SemiBold), maxLines = 1)
             }
         }
     }
@@ -343,6 +366,14 @@ private fun StageAssistPalette(session: MultiviewSession, horizontal: Boolean, c
         ) {
             session.fill = !session.fill
             session.persistStage()
+        }
+        LabeledCell(
+            icon = if (session.layout == MultiviewLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID,
+            label = if (session.layout == MultiviewLayout.GRID) "FOCUS" else "GRID",
+            cell = cell, tint = MonitorPalette.secondary,
+            description = if (session.layout == MultiviewLayout.GRID) "Show Focused stage" else "Show Grid",
+        ) {
+            session.layout = if (session.layout == MultiviewLayout.GRID) MultiviewLayout.CENTER_STAGE else MultiviewLayout.GRID
         }
     }
 }
@@ -406,22 +437,18 @@ private fun LabeledCell(
 }
 
 @Composable
-private fun NetworkButton(enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Column(
+private fun NetworkButton(name: String?, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Row(
         modifier.monitorGlass(ControlShape).alpha(if (enabled) 1f else 0.4f)
             .chromeClickable(enabled = enabled, onClick = onClick)
-            .semantics {
-                contentDescription = "Shared Wi-Fi"
-                role = Role.Button
-            },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+            .semantics { contentDescription = "Shared Wi-Fi"; role = Role.Button }
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
     ) {
         OpcIcon(OpcIcon.WIFI, null, Modifier.size(20.dp), MonitorPalette.secondary)
-        Text(
-            "WI-FI", color = MonitorPalette.secondary,
-            style = LiveType.text(7.5f, FontWeight.SemiBold).copy(letterSpacing = 0.7.sp),
-        )
+        if (name != null) Text(name, color = MonitorPalette.secondary, style = LiveType.text(10f),
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -455,20 +482,52 @@ private fun DisplayButton(clean: Boolean, modifier: Modifier, onClick: () -> Uni
 }
 
 @Composable
-private fun RecordAllButton(session: MultiviewSession, modifier: Modifier, onClick: () -> Unit) {
-    val enabled = session.canRecordTogether
+private fun RecordAllButton(
+    session: MultiviewSession, confirm: Boolean, diameter: Float, modifier: Modifier, onClick: () -> Unit,
+) {
+    var pending by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(session.anyRecording, session.canRecordTogether) { pending = null }
+    pending?.let { stopping ->
+        MultiviewRecordConfirmation(stopping, "All connected cameras", onDismiss = { pending = null }) {
+            pending = null
+            if (session.canRecordTogether && session.anyRecording == stopping) onClick()
+        }
+    }
     Box(
-        modifier.alpha(if (enabled || session.groupRecordingBusy) 1f else 0.4f)
-            .chromeClickable(enabled = enabled, onClick = onClick)
+        modifier.alpha(if (session.canRecordTogether || session.groupRecordingBusy) 1f else 0.4f)
+            .chromeClickable(enabled = session.canRecordTogether) {
+                if (confirm) pending = session.anyRecording else onClick()
+            }
             .semantics {
                 contentDescription = if (session.anyRecording) "Stop all recording" else "Record all"
                 role = Role.Button
-            },
-        contentAlignment = Alignment.Center,
+            }, contentAlignment = Alignment.Center,
     ) {
-        MonitorRecordLamp(recording = session.anyRecording)
+        MonitorRecordLamp(recording = session.anyRecording, modifier = Modifier.size(diameter.dp))
         if (session.groupRecordingBusy) {
             CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+        }
+    }
+}
+
+@Composable
+private fun MultiviewRecordConfirmation(
+    stopping: Boolean, target: String, onDismiss: () -> Unit, onConfirm: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().chromeClickable(onClick = onDismiss), contentAlignment = Alignment.BottomCenter) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp).pickerPanelGlass(ControlShape).padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(if (stopping) "Stop recording?" else "Start recording?", color = LiveDesign.text,
+                    style = LiveType.text(16f, FontWeight.SemiBold))
+                Text(target, color = LiveDesign.muted, style = LiveType.text(13f))
+                TextButton(onClick = onConfirm, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (stopping) "Stop" else "Start", color = if (stopping) LiveDesign.rec else LiveDesign.accent)
+                }
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel", color = LiveDesign.muted) }
+            }
         }
     }
 }
@@ -481,164 +540,115 @@ private fun TileView(
     compact: Boolean,
     clean: Boolean,
     enabled: Boolean,
+    confirmRecording: Boolean,
     onAdd: (MultiviewSession.Tile) -> Unit,
     onOpenLive: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val camera = tile.camera
     val focused = index == session.focusedIndex && camera != null
-    Box(
-        Modifier.fillMaxSize()
-            .background(LiveDesign.surface, TileShape)
-            .border(
-                if (focused) 2.dp else 1.dp,
-                when {
-                    camera == null -> Color.White.copy(alpha = 0.1f)
-                    focused -> LiveDesign.accent
-                    else -> Color.White.copy(alpha = 0.08f)
-                },
-                TileShape,
-            ),
-    ) {
+    var optionsOpen by remember { mutableStateOf(false) }
+    var confirmRecord by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(clean, enabled, camera) { if (clean || !enabled || camera == null) optionsOpen = false }
+    LaunchedEffect(camera, tile.recordingObservation?.first, tile.recordingAvailable, session.closing) { confirmRecord = null }
+    Box(Modifier.fillMaxSize().background(LiveDesign.surface, TileShape)) {
         if (camera != null) {
-            if (tile.liveModel == null) {
-                TileFeed(session, tile, session.fill)
-            }
-            // Above the video (its TextureView would take the touches) and below the controls,
-            // so Add, LUT, Record and Remove keep their button behavior.
+            val readouts = multiviewTileReadouts(
+                index, camera.name, camera.model.name, tile.settings, tile.timecodeReadout,
+                tile.recordingObservation?.first, tile.recordingAvailable,
+                tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage, tile.recordingNote,
+                colorFamily = camera.model.family,
+            )
+            if (tile.liveModel == null) TileFeed(session, tile, session.fill)
+            // A tile retains the same feed owner through layout, selection and rotation.
             Box(
-                Modifier.fillMaxSize().pointerInput(tile, compact, enabled) {
+                Modifier.fillMaxSize().pointerInput(tile, enabled) {
                     if (!enabled) return@pointerInput
                     detectTapGestures(
                         onDoubleTap = { if (tile.controlHost != null) onOpenLive() },
-                        onTap = {
-                            session.focusedIndex = index
-                            if (compact) session.layout = MultiviewLayout.CENTER_STAGE
-                        },
+                        onTap = { session.focusedIndex = index },
                     )
+                }.semantics {
+                    contentDescription = "Select camera ${'A' + index}, ${camera.name}"
+                    stateDescription = if (focused) "Selected" else "Not selected"
+                    role = Role.Button
+                    if (enabled) onClick { session.focusedIndex = index; true }
                 },
             )
-            if ((!tile.hasPicture || tile.failureMessage != null || tile.recovering) && !compact) {
+            MultiviewTileOverlay(
+                readouts = readouts,
+                focused = focused, compact = compact, clean = clean, enabled = enabled,
+                onOptions = { session.focusedIndex = index; optionsOpen = true },
+            )
+            Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) {
+                DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false }) {
+                    tile.failureMessage?.let { message ->
+                        Text(message, modifier = Modifier.widthIn(max = 280.dp).padding(12.dp), style = LiveType.text(12f))
+                    }
+                    MultiviewCameraMenu(
+                        cameraName = camera.name, readouts = readouts,
+                        experimentalRetryEnabled = if (tile.failureMessage != null && !tile.experimentalNetwork && tile.identity == null) {
+                            !session.busy && !tile.connecting && !tile.recovering
+                        } else null,
+                        recording = tile.recordingObservation?.first == true,
+                        lutEnabled = tile.lutEnabled,
+                        canOpen = tile.controlHost != null && !tile.connecting,
+                        canRecord = tile.recordingAvailable && !tile.recordingBusy && !session.groupRecordingBusy && !session.closing,
+                        canReconnect = !session.busy && !tile.connecting && !tile.recovering,
+                        canRemove = !session.busy && !tile.connecting && !session.groupRecordingBusy && !tile.recordingBusy && !session.closing,
+                        onAction = { action ->
+                            optionsOpen = false
+                            when (action) {
+                                MultiviewCameraAction.LIVE_VIEW -> onOpenLive()
+                                MultiviewCameraAction.RECORD -> {
+                                    if (confirmRecording) confirmRecord = tile.recordingObservation?.first == true
+                                    else scope.launch { session.toggleRecording(tile) }
+                                }
+                                MultiviewCameraAction.LUT -> { tile.toggleLUT(); session.persistStage() }
+                                MultiviewCameraAction.RECONNECT -> scope.launch { session.reconnect(tile) }
+                                MultiviewCameraAction.EXPERIMENTAL -> scope.launch { session.tryExperimentalNetwork(tile) }
+                                MultiviewCameraAction.REMOVE -> session.remove(tile)
+                            }
+                        },
+                    )
+                }
+            }
+            if ((!tile.hasPicture || tile.failureMessage != null || tile.recovering) && !compact && !clean) {
                 TileStatusCard(session, tile, Modifier.align(Alignment.Center))
             }
-            Column(Modifier.fillMaxSize().alpha(if (clean) 0f else 1f)) {
-                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            camera.name, color = LiveDesign.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = LiveType.text(13f, FontWeight.SemiBold).shadowed(),
-                        )
-                        tile.timecodeReadout?.let { timecode ->
-                            Text(
-                                "TC $timecode", color = LiveDesign.text, maxLines = 1,
-                                style = LiveType.mono(if (compact) 9f else 11f).shadowed(),
-                                modifier = Modifier.semantics { contentDescription = "Timecode $timecode" },
-                            )
-                        }
-                    }
-                    val assigned = session.tiles.count { it.camera != null }
-                    val empty = session.tiles.firstOrNull { it.camera == null }
-                    if (session.layout == MultiviewLayout.GRID && assigned in 1..2 && empty != null &&
-                        index == session.tiles.indexOfLast { it.camera != null }
-                    ) {
-                        TileIconButton(
-                            OpcIcon.CIRCLE_PLUS, "Add camera", glass = false,
-                            enabled = !clean && !session.busy && !session.groupRecordingBusy,
-                        ) { onAdd(empty) }
-                    }
-                    if (!compact) {
-                        TileIconButton(
-                            OpcIcon.X, "Remove camera preview",
-                            enabled = !clean && !session.busy && !tile.connecting &&
-                                !session.groupRecordingBusy && !tile.recordingBusy && !session.closing,
-                        ) { session.remove(tile) }
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                if (!compact && camera.hasMultiviewPreview) {
-                    Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Bottom) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(
-                                settingsSummary(tile.settings, camera), color = LiveDesign.text, maxLines = 2,
-                                style = LiveType.text(10f, FontWeight.SemiBold).shadowed(),
-                            )
-                            Text(
-                                exposureSummary(tile.settings), color = LiveDesign.text, maxLines = 2,
-                                style = LiveType.text(9f).shadowed(),
-                            )
-                            tile.recordingNote?.takeIf {
-                                it != "Recording" && it != "Recording stopped" && it != "Waiting for camera confirmation"
-                            }?.let { Text(it, color = LiveDesign.text, style = LiveType.text(11f).shadowed()) }
-                            if (tile.hasPicture && tile.status != MultiviewSession.LIVE_STATUS) {
-                                Text(tile.status, color = LiveDesign.text, style = LiveType.text(11f).shadowed())
-                            }
-                        }
-                        Spacer(Modifier.size(3.dp))
-                        Box(
-                            Modifier.size(48.dp, 44.dp).liveChromeGlass(TileShape)
-                                .chromeClickable(enabled = !clean) {
-                                    tile.toggleLUT()
-                                    session.persistStage()
-                                }
-                                .semantics {
-                                    contentDescription = if (tile.lutEnabled) "Disable Auto LUT" else "Enable Auto LUT"
-                                    stateDescription = tile.lutCaption
-                                    role = Role.Button
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "LUT", color = if (tile.lutEnabled) LiveDesign.accent else LiveDesign.text,
-                                style = LiveType.text(13f, FontWeight.Bold),
-                            )
-                        }
-                        Spacer(Modifier.size(8.dp))
-                        val active = tile.recordingObservation?.first == true
-                        val recordEnabled = !clean && !tile.recordingBusy && !session.groupRecordingBusy &&
-                            !session.closing && tile.recordingAvailable
-                        Box(
-                            Modifier.size(44.dp).alpha(if (tile.recordingAvailable) 1f else 0.4f)
-                                .glass(CircleShape)
-                                .chromeClickable(enabled = recordEnabled) {
-                                    scope.launch { session.toggleRecording(tile) }
-                                }
-                                .semantics {
-                                    contentDescription = if (active) "Stop recording" else "Start recording"
-                                    role = Role.Button
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (tile.recordingBusy) {
-                                CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                            } else {
-                                OpcIcon(
-                                    if (active) OpcIcon.SQUARE else OpcIcon.PLAY, null, Modifier.size(20.dp),
-                                    if (active) LiveDesign.rec else Color.White,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         } else {
-            Column(
-                Modifier.fillMaxSize()
-                    .chromeClickable(enabled = enabled && !session.busy && !session.groupRecordingBusy) { onAdd(tile) }
-                    .semantics {
-                        contentDescription = "Add camera"
-                        role = Role.Button
-                    },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-            ) {
-                OpcIcon(OpcIcon.CIRCLE_PLUS, null, Modifier.size(if (compact) 24.dp else 34.dp), Color.White)
-                if (!compact) {
-                    Text("Add camera", color = Color.White, style = LiveType.text(16f, FontWeight.SemiBold))
+            val firstEmpty = session.tiles.firstOrNull { it.camera == null } === tile
+            if (firstEmpty && !clean) {
+                Column(
+                    Modifier.fillMaxSize()
+                        .chromeClickable(enabled = enabled && !session.busy && !session.groupRecordingBusy) { onAdd(tile) }
+                        .semantics { contentDescription = "Add camera"; role = Role.Button },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
+                ) {
+                    OpcIcon(OpcIcon.CIRCLE_PLUS, null, Modifier.size(if (compact) 24.dp else 34.dp), LiveDesign.muted)
+                    Text("Add camera", color = LiveDesign.muted, style = LiveType.text(if (compact) 10f else 14f, FontWeight.SemiBold))
                 }
+            } else if (!clean) {
+                Text("${'A' + index}", color = LiveDesign.muted.copy(alpha = 0.35f),
+                    style = LiveType.text(16f), modifier = Modifier.align(Alignment.Center))
             }
         }
-        if (camera != null && tile.recordingObservation?.first == true) {
-            Box(Modifier.fillMaxSize().border(4.dp, LiveDesign.rec, TileShape))
+        Box(Modifier.fillMaxSize().border(
+            if (tile.recordingObservation?.first == true) 3.dp else if (focused && !clean) 2.dp else 1.dp,
+            when {
+                tile.recordingObservation?.first == true -> LiveDesign.rec
+                focused && !clean -> LiveDesign.accent
+                else -> Color.White.copy(alpha = 0.1f)
+            }, TileShape,
+        ))
+    }
+    confirmRecord?.let { stopping ->
+        MultiviewRecordConfirmation(stopping, camera?.name.orEmpty(), onDismiss = { confirmRecord = null }) {
+            confirmRecord = null
+            if (tile.recordingAvailable && tile.recordingObservation?.first == stopping && !session.closing) {
+                scope.launch { session.toggleRecording(tile) }
+            }
         }
     }
 }
@@ -705,28 +715,6 @@ private fun PillButton(
             },
             style = LiveType.text(15f, FontWeight.SemiBold),
         )
-    }
-}
-
-@Composable
-private fun TileIconButton(
-    icon: OpcIcon,
-    description: String,
-    glass: Boolean = true,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        Modifier.size(44.dp).alpha(if (enabled) 1f else 0.4f)
-            .then(if (glass) Modifier.glass(CircleShape) else Modifier)
-            .chromeClickable(enabled = enabled, onClick = onClick)
-            .semantics {
-                contentDescription = description
-                role = Role.Button
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        OpcIcon(icon, null, Modifier.size(if (glass) 20.dp else 22.dp), Color.White)
     }
 }
 
@@ -828,28 +816,6 @@ private class TileTextureListener(
     }
 
     override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) = onUpdated(surfaceTexture)
-}
-
-private fun androidx.compose.ui.text.TextStyle.shadowed() =
-    copy(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.9f), blurRadius = 6f))
-
-private fun settingsSummary(settings: CameraStatus, camera: FoundCamera): String {
-    val resolution = VideoResolution.fromRaw(settings.resolutionCode)?.label ?: "—"
-    val fps = if (settings.fps > 0) "${settings.fps}p" else "—"
-    val color = if (settings.colorMode < 0) "Color —" else CameraCommands.colorLabel(settings.colorMode, camera.model.family)
-    return "$resolution · $fps · $color"
-}
-
-private fun exposureSummary(settings: CameraStatus): String {
-    val iso = if (settings.iso > 0) "${settings.iso}" else "—"
-    val shutter = if (settings.shutterDenom > 0) "1/${settings.shutterDenom}" else "—"
-    val wb = when {
-        settings.wbMode < 0 -> "—"
-        settings.wbMode == CameraCommands.WB_AUTO -> "Auto"
-        settings.wbKelvin > 0 -> "${settings.wbKelvin}K"
-        else -> "—"
-    }
-    return "ISO $iso · $shutter · WB $wb"
 }
 
 // --- Network setup ---------------------------------------------------------------------------------

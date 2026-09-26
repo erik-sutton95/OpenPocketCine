@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Multiview Grid fills the available stage on iOS and Android. Portrait uses a
+  left toolbar and in-feed camera details; Center stage keeps its main 16:9
+  picture above the toolbar. Landscape moves tools opposite the cutout while
+  keeping camera positions fixed. DISP and Record retain their normal Live View
+  positions. Every camera has an options menu, and recording follows the saved
+  confirmation preference. Clean view retains tally and recovery status.
 - Multiview on iOS and Android uses the Add setup Wi-Fi/hotspot experience:
   current, saved and nearby networks, automatic camera scanning, remembered
   passwords, compatibility help and inline retry. iOS shares the same wizard

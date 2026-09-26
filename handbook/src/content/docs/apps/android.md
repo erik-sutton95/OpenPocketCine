@@ -358,7 +358,11 @@ camera file — LUT bake, Bake exposure, and Convert log are iOS only.
 Sharing is unavailable on Android. Experimental **Multiview** opens from the grid
 button in the **Your cameras** header and matches the iPhone flow: choose Local
 Wi-Fi or this phone's hotspot, add up to four cameras, and double-tap a live tile
-for full Live View. The
+for full Live View. Grid uses four full-feed portrait rows or two landscape
+columns. Portrait keeps the toolbar on the left; Center stage's toolbar starts
+below the wide main feed. Camera details and options sit inside each feed.
+Landscape rotation moves only the toolbar opposite the cutout, and DISP/Record
+stay at Android Live View's normal positions. The
 [Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) describes setup,
 Android differences and validation limits.
 Platform differences, including Frame.io and MetalFX, are listed in

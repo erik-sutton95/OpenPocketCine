@@ -2,6 +2,7 @@ Since open beta build 138
 
 New and changed
 
+- Multiview fills Grid tiles, puts camera details in feeds and uses a left portrait toolbar. DISP and Record stay in their Live View positions; camera options work in every tile.
 - Multiview uses the Add setup Wi-Fi and Hotspot flow: current, saved and nearby networks, remembered passwords, compatibility help and retry without leaving the password screen.
 - Your cameras: Add setup lets a saved camera connect over your Wi-Fi network or this iPhone's Personal Hotspot, on every Osmo camera. Camera Wi-Fi stays as the other setup.
 - A setup connect shows a progress bar with one line of status. If it fails, choose Edit setup, Try again or Camera Wi-Fi; common router causes are named.
@@ -24,7 +25,7 @@ Fixes
 
 What to test
 
-- Over a bright scene, check the dark glow around the joystick and gimbal controls, then drag the joystick and open the gimbal drawer.
+- Rotate Multiview in Grid and Center stage. Check tile information, camera options and Clean view; DISP and Record should stay in their normal Live View positions.
 - Try Wi-Fi and Hotspot in Add setup and Multiview. Check current/saved/nearby networks, type a password in both orientations, cancel a scan, then reconnect.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - Monitor for 10 minutes with LUT, PEAK and WAVE on, then record: glass panels and the REC pulse should look as before, and the phone should stay cooler.
