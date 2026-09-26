@@ -418,6 +418,35 @@ class SentryUploadTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("already on the server", result.stdout)
 
+    def test_ids_already_on_server_from_a_partial_upload_are_accepted(self) -> None:
+        # Xcode Cloud exit 3: the unchanged Watch dSYM kept last build's IDs,
+        # so sentry-cli uploaded only the app and listed only it as OK.
+        dsym = make_dsym(self.dir / "dSYMs")
+        partial = self.dir / "partial-uploader.sh"
+        partial.write_text(
+            "#!/bin/sh\n"
+            'if [ "$1" = debug-files ] && [ "$2" = check ]; then\n'
+            "  printf '%s\\n' "
+            '\'{"type":"dsym","variants":[{"debug_id":"11111111-1111-1111-1111-111111111111",'
+            '"arch":"arm64"},{"debug_id":"22222222-2222-2222-2222-222222222222",'
+            '"arch":"arm64_32"}],"is_usable":true}\'\n'
+            "  exit 0\n"
+            "fi\n"
+            'case " $* " in *" --id "*)\n'
+            "  printf '> Found 1 debug information file\\n'\n"
+            "  printf '> Nothing to upload, all files are on the server\\n'\n"
+            "  exit 0 ;;\n"
+            "esac\n"
+            "printf '> Uploaded 1 missing debug information file\\n'\n"
+            "printf '       OK 11111111-1111-1111-1111-111111111111 (app)\\n'\n"
+            "exit 0\n"
+        )
+        os.chmod(partial, 0o755)
+        env = self.enabled_env(SENTRY_UPLOADER=str(partial))
+        result = run_upload(env, ["--platform", "ios", "--paths", str(dsym)], self.dir)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("already on the server", result.stdout)
+
     def test_zip_is_extracted_before_check(self) -> None:
         native = make_so(self.dir / "jni")
         zip_path = self.dir / "native-debug-symbols.zip"
