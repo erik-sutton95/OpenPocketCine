@@ -28,6 +28,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Live View no longer freezes for up to 8 s after a single lost video packet.
+  The keyframe request is no longer held behind an earlier request the camera
+  already answered. After a reconnect that brings video back without a usable
+  keyframe, the picture is repaired after 15 s instead of staying frozen until
+  the operator leaves.
 - Android Live View no longer crash-loops on MediaTek phones whose Mali driver
   faults while importing decoder frames into Vulkan. Two launches that die
   during that import switch Live View to the non-Vulkan path for that app
