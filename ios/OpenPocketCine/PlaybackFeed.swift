@@ -168,6 +168,7 @@ final class PlaybackFeedSession: NSObject {
     private weak var sampleBus: LiveFrameSampleBus?
     private var effects = LiveImageEffects()
     private var transfer = MonitorTransfer.rec709
+    /// pullQueue-owned. Main must not read or write it, and must not wait on pullQueue.
     private var lastBuffer: CVPixelBuffer?
     private var lastBackdropBuffer: CVPixelBuffer?
     private var lastOverlayOnly = false
@@ -244,11 +245,14 @@ final class PlaybackFeedSession: NSObject {
         boundItem?.remove(output)
         boundItem = nil
         itemEpoch &+= 1
-        // Drain an admitted pull before clearing its retained buffer. Engine
-        // completions are asynchronous and are rejected by the item epoch.
-        pullQueue.sync {
-            lastBuffer = nil
-            pendingKick = false
+        // Clear after an admitted pull, on its queue. Never block Main on the
+        // pull: it calls AVFoundation and Core Image, and a sync here hung
+        // clip changes until the watchdog killed the app (Sentry
+        // OPENPOCKETCINE-IOS-2Q, build 158). New-item pulls queue behind this;
+        // engine completions are asynchronous and are rejected by the item epoch.
+        pullQueue.async { [weak self] in
+            self?.lastBuffer = nil
+            self?.pendingKick = false
         }
         lastBackdropBuffer = nil
         sampleBus?.clearPlaybackSource()
@@ -263,6 +267,11 @@ final class PlaybackFeedSession: NSObject {
     var debugBoundHost: PlaybackFeedHostView? { host }
 
     var debugItemHasPresented: Bool { itemHasPresented }
+
+    /// Test seam: occupy the pull queue the way a slow pull does.
+    func debugOnPullQueue(_ body: @escaping @Sendable () -> Void) {
+        pullQueue.async(execute: body)
+    }
 
     private var itemHasPresented: Bool { itemEpoch > 0 && presentedEpoch == itemEpoch }
 
@@ -292,8 +301,9 @@ final class PlaybackFeedSession: NSObject {
             applyLayerPlan(metalHasPresented: host.ciFeed.hasPresentedFrame)
         } else {
             applyLayerPlan(metalHasPresented: false)
-            if let lastBuffer {
-                submit(lastBuffer, timeNs: 0)
+            pullQueue.async { [weak self] in
+                guard let self, let lastBuffer = self.lastBuffer else { return }
+                self.submit(lastBuffer, timeNs: 0)
             }
         }
         pullIfMetalWaiting()
@@ -360,7 +370,7 @@ final class PlaybackFeedSession: NSObject {
         stopLink()
         boundItem?.remove(output)
         boundItem = nil
-        lastBuffer = nil
+        pullQueue.async { [weak self] in self?.lastBuffer = nil }
         lastBackdropBuffer = nil
         sampleBus?.playbackBundle = nil
         sampleBus?.clearPlaybackSource()

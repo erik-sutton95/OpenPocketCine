@@ -11,6 +11,22 @@ import XCTest
 /// identity on `AVPlayerLayer`, assist image on `CIFeedView` only after a bake
 /// lands. `AVVideoComposition` after `replaceCurrentItem` never showed the look.
 final class PlaybackAssistTests: XCTestCase {
+    /// Sentry OPENPOCKETCINE-IOS-2Q: Main waited on a busy pull during a clip
+    /// change until the watchdog killed the app.
+    @MainActor
+    func testSourceChangeDoesNotWaitForABusyPull() {
+        let session = PlaybackFeedSession()
+        let release = DispatchSemaphore(value: 0)
+        session.debugOnPullQueue { release.wait() }
+        // Bounded, so the old sync blocks 2 s and fails instead of hanging the run.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { release.signal() }
+        let start = CACurrentMediaTime()
+        session.beginSourceChange()
+        XCTAssertLessThan(CACurrentMediaTime() - start, 0.5)
+        release.signal()
+        session.shutdown()
+    }
+
     @MainActor
     func testReadyPlaybackOutputDoesNotSeekToANonnumericTime() async {
         for time in [CMTime.invalid, .indefinite, .positiveInfinity, .negativeInfinity] {
