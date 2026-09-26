@@ -40,6 +40,8 @@ All notable changes to this project are documented here. The format is based on
 - Feed incident reports are graded by outcome: only incidents whose recovery
   gave up are errors, interrupted ones are warnings, and recovered or
   suppressed ones are info.
+- iOS clip playback no longer hangs, and gets closed by the system, when you
+  switch clips while the previous clip's frame is still being processed.
 - The joystick and gimbal controls on iOS and Android now use the same dark
   glow as other live-view controls, improving separation from bright footage.
 - Android Live View no longer crashes on some screen sizes while gimbal controls
