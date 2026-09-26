@@ -2,6 +2,7 @@ Since open beta build 138
 
 New and changed
 
+- Multiview uses the Add setup Wi-Fi and Hotspot flow: current, saved and nearby networks, remembered passwords, compatibility help and retry without leaving the password screen.
 - Your cameras: Add setup lets a saved camera connect over your Wi-Fi network or this iPhone's Personal Hotspot, on every Osmo camera. Camera Wi-Fi stays as the other setup.
 - A setup connect shows a progress bar with one line of status. If it fails, choose Edit setup, Try again or Camera Wi-Fi; common router causes are named.
 - The next Camera Wi-Fi connect moves the camera back onto its own network.
@@ -13,6 +14,7 @@ New and changed
 
 Fixes
 
+- Password entry keeps the setup layout stable when the keyboard opens in portrait. Connecting or cancelling waits for the camera scan to finish returning its Wi-Fi.
 - The joystick and gimbal controls now have the same dark glow as other live-view controls, making them easier to see over bright footage.
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
@@ -23,7 +25,7 @@ Fixes
 What to test
 
 - Over a bright scene, check the dark glow around the joystick and gimbal controls, then drag the joystick and open the gimbal drawer.
-- On a saved camera, try Add setup › Wi-Fi and › Hotspot, then connect with Camera Wi-Fi again and confirm live view returns.
+- Try Wi-Fi and Hotspot in Add setup and Multiview. Check current/saved/nearby networks, type a password in both orientations, cancel a scan, then reconnect.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - Monitor for 10 minutes with LUT, PEAK and WAVE on, then record: glass panels and the REC pulse should look as before, and the phone should stay cooler.
 - On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

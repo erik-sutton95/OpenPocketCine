@@ -114,20 +114,28 @@ Center stage is the default. The record lamp matches Live View and applies to
 all assigned cameras whose status is current. The bottom strip uses the Live
 View glass styling.
 
-On entry, a centered popup stays at most 460 points wide, including landscape.
-Page one chooses local Wi-Fi or Personal Hotspot. Page two lists Wi-Fi networks
-or shows hotspot details without a network picker. Selecting Wi-Fi or continuing
-from hotspot details opens a native password alert. Saved passwords are prefilled
-and kept in this device’s Keychain. The hotspot page reports interface detection;
-iOS does not provide a reliable hotspot-enabled flag, and the interface may
-appear only after a camera joins. Done joins the selected local network and verifies
-the phone’s network name and address before allowing camera setup. The current
-network name and app-saved local networks are offered as choices. Scanning with
-a camera is optional; selecting Local Wi-Fi does not start a scan. Credentials entered
-here are kept in this device’s Keychain and reused for later cameras and sessions.
-iOS does not let an app extract Wi-Fi passwords stored by Settings. For a network
-not previously saved in OpenPocketCine, enter its password once. Personal Hotspot
-must be enabled in Settings; the app cannot turn it on or read its password.
+Choose **Wi-Fi** (Local Wi-Fi on Android) or this phone's **Hotspot**. Wi-Fi
+shows the current network, networks saved by OpenPocketCine and nearby networks
+found by a camera. Opening it starts a bounded scan automatically. You can
+choose a current/saved network or use **Other network…** immediately; a camera
+is not required to enter the host's network. If the scan cannot finish, turn
+on a nearby camera and tap **Scan again**.
+
+The password screen remembers app-saved passwords, provides **Show password**,
+and explains WPA2 compatibility and guest-network isolation. **Connect over
+Wi-Fi** waits for any scan to return its camera to its own Wi-Fi and release
+Bluetooth, then joins and verifies the phone's network before opening the
+stage. A failed join stays on the same screen so you can correct the password
+or retry. On iOS this is the same wizard as a saved camera's **Add setup**.
+
+Passwords stay in this device's Keychain on iOS or encrypted with Android
+Keystore. The app cannot extract passwords saved by the system Settings app;
+enter each new network's password once. Hotspot setup includes Settings help,
+remembered name/password fields and interface detection. Enable the phone's
+hotspot in Settings; the app cannot turn it on or read its password. An
+undetected interface is not proof the hotspot is off: it may appear only once
+a camera joins. Use WPA2 and 2.4 GHz for compatibility. Both forms adapt to
+portrait and landscape.
 
 Adding a camera now uses the selected network directly. Camera Wi-Fi role changes
 wait for confirmation. A missing join reply triggers identity-verified LAN
@@ -170,9 +178,9 @@ or head tracking started in the tile’s Live View.
 Hardware validation of full Live View controls and return-to-tile continuity is
 still required.
 
-Password alerts use compact copy and keep the stage stable during keyboard presentation in landscape. Preview gestures are attached behind tile controls so Add, LUT, Record and Remove keep their normal button behavior.
+Password entry uses a scrollable setup screen that accommodates the keyboard. Preview gestures are attached behind tile controls so Add, LUT, Record and Remove keep their normal button behavior.
 
-Back cancels an in-progress Wi-Fi scan immediately. Personal Hotspot setup refreshes the active hotspot-interface status every second and when returning from Settings. An undetected interface is not proof that the Settings switch is off: it may appear only when a camera joins. Exit and group recording sit in the outer screen corners, clear of the preview tiles.
+Cancelling setup waits for any active camera scan to restore its Wi-Fi and release Bluetooth. Personal Hotspot setup refreshes the active hotspot-interface status every second and when returning from Settings. An undetected interface is not proof that the Settings switch is off: it may appear only when a camera joins. Exit and group recording sit in the outer screen corners, clear of the preview tiles.
 
 The stage uses the same dark glass, typefaces, accent and control-bar sizing as Live View. Setup navigation, network rows and tile controls have at least 44-point touch targets; the entire empty tile opens Add camera. Portrait keeps the focused preview wide enough to expose its controls.
 
@@ -221,7 +229,7 @@ only after you select a network. Layout, selected main slot and Fit/Fill are
 remembered. Brief app switches and returning from a tile's Live View keep the
 current session; they do not restart setup.
 
-After Done, each added camera joins the selected network independently. Remove
+After Connect, each added camera joins the selected network independently. Remove
 all assigned cameras before changing the network using **WI-FI** below FIT/FILL.
 
 Closing Multiview attempts to return cameras to their own Wi-Fi after closing
@@ -229,7 +237,7 @@ monitor connections. Approve a camera connection if prompted. Unfinished cleanup
 remains saved for another close attempt, including cleanup from older builds;
 opening setup does not reconnect old cameras or change their networks. Force
 quitting cannot reliably run cleanup. No stop-recording command is sent.
-A camera used for an optional Wi-Fi scan is also tracked before its role changes;
+A camera used for a Wi-Fi scan is also tracked before its role changes;
 finishing or cancelling the scan attempts to restore its own Wi-Fi.
 Physical checks of this revised setup, provisioning and AP return remain pending.
 
@@ -261,7 +269,7 @@ reports recording has stopped.
 
 ## Android differences
 
-Android follows the same stage, setup popup, camera picker, tile controls,
+Android follows the same stage, network wizard, camera picker, tile controls,
 recording, recovery and cleanup behavior described above. The differences:
 
 - **Phone hotspot** replaces Personal Hotspot. Turn on this phone's Wi-Fi

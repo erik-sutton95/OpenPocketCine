@@ -29,12 +29,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,8 +64,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -98,8 +93,6 @@ import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.VideoResolution
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val StageCanvas = MonitorPalette.backgroundDeep
@@ -171,7 +164,6 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             }
             adding != null -> {
                 adding = null
-                session.releaseNetworkCamera()
             }
             session.tiles.any { it.camera != null } -> showLeave = true
             else -> closeStage()
@@ -264,8 +256,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                     session = session,
                     onCancel = {
                         adding = null
-                        session.releaseNetworkCamera()
-                    },
+                            },
                     onPick = { camera ->
                         adding = null
                         session.enqueueAdd(camera, tile, experimental = !camera.hasMultiviewPreview)
@@ -865,253 +856,23 @@ private fun exposureSummary(settings: CameraStatus): String {
 
 @Composable
 private fun MultiviewNetworkSetup(session: MultiviewSession, cancel: () -> Unit, complete: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    var step by remember { mutableStateOf(0) }
-    var passwordPrompt by remember { mutableStateOf(false) }
-    var draftPassword by remember { mutableStateOf("") }
-    var otherNetwork by remember { mutableStateOf(false) }
-    var networkName by remember { mutableStateOf("") }
-    var scanJob by remember { mutableStateOf<Job?>(null) }
-    var hotspotActive by remember { mutableStateOf(false) }
-    val locked = session.tiles.any { it.camera != null }
-
-    fun cancelScan() {
-        scanJob?.cancel()
-        scanJob = null
-        session.cancelNetworkScan()
-    }
-    fun askPassword() {
-        draftPassword = session.password
-        passwordPrompt = true
-    }
-    fun choose(name: String) {
-        if (name.isEmpty()) return
-        session.selectNetwork(name)
-        askPassword()
-    }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            hotspotActive = session.path.address(true) != null
-            delay(1_000)
-        }
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            scanJob?.cancel()
-            session.cancelNetworkScan()
-            session.releaseNetworkCamera()
-        }
-    }
-
-    ModalCard(maxHeight = 510f, tag = "multiview.networkSetup") {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextAction(if (step == 0) "Cancel" else "Back", enabled = !session.configuringNetwork) {
-                cancelScan()
-                if (step == 0) cancel() else step = 0
-            }
-            Spacer(Modifier.weight(1f))
-            Text("Step ${step + 1} of 2", color = LiveDesign.muted, style = LiveType.text(12f))
-        }
-        Column(
-            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            Text(
-                when {
-                    step == 0 -> "Connect your cameras"
-                    session.usePhoneHotspot -> "Phone hotspot"
-                    else -> "Choose Wi-Fi"
-                },
-                color = LiveDesign.text, style = LiveType.display(22f, FontWeight.SemiBold),
-            )
-            if (step == 0) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        "How will this device and your cameras connect?",
-                        color = LiveDesign.muted, style = LiveType.text(16f),
-                    )
-                    SourceRow("Local Wi-Fi", OpcIcon.WIFI, enabled = !session.configuringNetwork &&
-                        !(locked && session.usePhoneHotspot)) {
-                        session.selectNetworkSource(false)
-                        step = 1
-                        cancelScan()
-                    }
-                    SourceRow("Phone hotspot", OpcIcon.RADIO, enabled = !session.configuringNetwork &&
-                        !(locked && !session.usePhoneHotspot)) {
-                        session.selectNetworkSource(true)
-                        step = 1
-                        cancelScan()
-                    }
-                    Footnote("Local Wi-Fi includes a router or another device’s hotspot. Phone hotspot uses this phone.")
-                }
-            } else if (locked) {
-                Text(session.ssid, color = LiveDesign.text, style = LiveType.text(16f))
-                Footnote("Cameras are using this network. Remove them before changing it.", LiveDesign.text)
-                PillButton("Done", prominent = true, onClick = complete)
-            } else if (session.usePhoneHotspot) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val tint = if (hotspotActive) Color(0xFF34C759) else Color(0xFFFF9F0A)
-                    OpcIcon(if (hotspotActive) OpcIcon.RADIO else OpcIcon.TRIANGLE_ALERT, null, Modifier.size(20.dp), tint)
-                    Text(
-                        if (hotspotActive) "Hotspot is active" else "Hotspot is not detected",
-                        color = tint, style = LiveType.text(16f),
-                    )
-                }
-                Footnote(
-                    "In Settings, turn on this phone’s Wi-Fi hotspot with a WPA2 password. " +
-                        "Detection may start only after a camera joins.",
-                )
-                OutlinedTextField(
-                    value = session.ssid,
-                    onValueChange = { session.selectNetwork(it) },
-                    label = { Text("Hotspot name from Settings") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                PillButton(
-                    "Continue", prominent = true,
-                    enabled = session.ssid.isNotEmpty() && !session.configuringNetwork,
-                ) { askPassword() }
-            } else {
-                Column {
-                    val names = (session.networks + listOfNotNull(session.ssid.takeIf { it.isNotEmpty() }))
-                        .toSet().sorted()
-                    for (name in names) {
-                        Row(
-                            Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                                .alpha(if (session.busy || session.configuringNetwork) 0.4f else 1f)
-                                .chromeClickable(enabled = !session.busy && !session.configuringNetwork) { choose(name) }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            OpcIcon(OpcIcon.WIFI, null, Modifier.size(20.dp), LiveDesign.text)
-                            Text(name, color = LiveDesign.text, style = LiveType.text(16f), modifier = Modifier.weight(1f))
-                            OpcIcon(OpcIcon.CHEVRON_RIGHT, null, Modifier.size(16.dp), LiveDesign.muted)
-                        }
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
-                    }
-                }
-                if (scanJob != null || session.networkScanning) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        CircularProgressIndicator(Modifier.size(18.dp), color = LiveDesign.text, strokeWidth = 2.dp)
-                        Text("Looking for networks…", color = LiveDesign.text, style = LiveType.text(13f))
-                        TextAction("Cancel scan") { cancelScan() }
-                    }
-                } else {
-                    TextAction("Scan with a camera", enabled = !session.busy) {
-                        val previous = scanJob
-                        scanJob = scope.launch {
-                            // Let cancellation cleanup finish before sharing the BLE link again.
-                            previous?.join()
-                            repeat(10) {
-                                val camera = session.found.firstOrNull { it.hasMultiviewPreview }
-                                if (camera != null) {
-                                    session.prepareNetworks(camera)
-                                    scanJob = null
-                                    return@launch
-                                }
-                                delay(300)
-                            }
-                            scanJob = null
-                        }
-                    }
-                    if (session.networks.isEmpty()) {
-                        Footnote("Enter a network name, or turn on a camera to scan for Wi-Fi.")
-                    }
-                }
-                TextAction("Other network…", enabled = !session.busy) {
-                    networkName = ""
-                    otherNetwork = true
-                }
-                Footnote("Choose the Wi-Fi all cameras will use. This device joins it first.")
-            }
-            if (session.configuringNetwork) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CircularProgressIndicator(Modifier.size(18.dp), color = LiveDesign.text, strokeWidth = 2.dp)
-                    Text("Connecting…", color = LiveDesign.text, style = LiveType.text(15f))
-                }
-            }
-            session.networkSetupError?.let { Footnote(it, Color(0xFFFF453A)) }
-        }
-    }
-
-    if (passwordPrompt) {
-        AlertDialog(
-            onDismissRequest = {
-                passwordPrompt = false
-                draftPassword = ""
-            },
-            title = { Text("Wi-Fi password") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Saved securely for all cameras.")
-                    OutlinedTextField(
-                        value = draftPassword,
-                        onValueChange = { draftPassword = it },
-                        label = { Text("Password") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    session.password = draftPassword
-                    draftPassword = ""
-                    passwordPrompt = false
-                    scope.launch { if (session.configureNetwork()) complete() }
-                }) { Text("Done") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    passwordPrompt = false
-                    draftPassword = ""
-                }) { Text("Cancel") }
-            },
-        )
-    }
-    if (otherNetwork) {
-        AlertDialog(
-            onDismissRequest = { otherNetwork = false },
-            title = { Text("Other Wi-Fi network") },
-            text = {
-                OutlinedTextField(
-                    value = networkName,
-                    onValueChange = { networkName = it },
-                    label = { Text("Network name") },
-                    singleLine = true,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    otherNetwork = false
-                    choose(networkName)
-                }) { Text("Next") }
-            },
-            dismissButton = { TextButton(onClick = { otherNetwork = false }) { Text("Cancel") } },
-        )
-    }
-}
-
-@Composable
-private fun SourceRow(title: String, icon: OpcIcon, enabled: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).alpha(if (enabled) 1f else 0.4f)
-            .clip(TileShape).background(LiveDesign.glassBright)
-            .chromeClickable(enabled = enabled, onClick = onClick)
-            .semantics { role = Role.Button }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        OpcIcon(icon, null, Modifier.size(20.dp), LiveDesign.text)
-        Text(title, color = LiveDesign.text, style = LiveType.text(16f), modifier = Modifier.weight(1f))
-        OpcIcon(OpcIcon.CHEVRON_RIGHT, null, Modifier.size(16.dp), LiveDesign.muted)
-    }
+    val saved = remember { session.savedNetworks() }
+    com.opencapture.openpocketcine.pairing.StationNetworkSetup(
+        savedNetworks = saved,
+        currentSsid = session.path::currentSsid,
+        hotspotActive = { session.path.address(true) != null },
+        scan = session::scanNetworks,
+        connect = { network ->
+            session.selectNetworkSource(network.hotspot)
+            session.selectNetwork(network.ssid)
+            session.password = network.password
+            if (session.configureNetwork()) null else session.networkSetupError ?: "Could not connect. Try again."
+        }, cancel = cancel, complete = complete,
+        lockedNetwork = if (session.tiles.any { it.camera != null }) {
+            MultiviewNetworkStore.Network(session.ssid, "", session.usePhoneHotspot)
+        } else null,
+        warning = session.networkSetupError,
+    )
 }
 
 @Composable

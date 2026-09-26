@@ -158,7 +158,15 @@ manual reporting and all camera features available. The System toggle permits
 a later change. An update asks if no reporting choice was previously saved;
 existing Enable and Not now decisions are respected.
 
-Multiview begins each session with Local Wi-Fi or this phone's Personal Hotspot,
-then network name and password. Done confirms the network before cameras are
-added to tiles. Saved credentials never bypass this choice. Local Wi-Fi includes
-a router or another device's hotspot. Camera-based network scanning is optional.
+Multiview begins each session with Wi-Fi or this phone's hotspot. Its setup
+wizard groups the current network, app-saved networks and nearby networks found
+by a camera. Opening Wi-Fi starts a bounded camera scan; manual entry and saved
+networks remain usable while it runs. Passwords have their own screen with a
+show/hide control and network compatibility guidance. Connect waits for scan
+cleanup, joins and confirms the phone's network, then opens the empty stage.
+Failed joins stay on the password screen for correction or retry. Assigned
+cameras lock the session network until removed. Saved credentials never bypass
+confirmation. On iOS, Add setup and Multiview render the same
+`StationNetworkSetupView`; Android's matching form is `StationNetworkSetup`.
+Hotspot instructions use each OS's Settings; its password stays private to the
+OS until the operator enters it, and interface detection is only a hint.

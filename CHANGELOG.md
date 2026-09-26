@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Multiview on iOS and Android uses the Add setup Wi-Fi/hotspot experience:
+  current, saved and nearby networks, automatic camera scanning, remembered
+  passwords, compatibility help and inline retry. iOS shares the same wizard
+  and scan implementation with Add setup. Scan cancellation restores camera
+  Wi-Fi before handing off the Bluetooth link; password entry keeps its layout
+  when the keyboard opens.
 - Refreshed the website with current app captures, iPad and level examples,
   simpler navigation, and equal iOS and Android open-beta choices.
 - Android Live View uses about half the app CPU on a Galaxy S25 with a live

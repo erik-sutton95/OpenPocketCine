@@ -24,6 +24,9 @@ import java.net.Socket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -344,6 +347,46 @@ class MultiviewProvisioner(context: Context) {
             while (!closed) {
                 send(SwiftCore.CMD_SESSION_KEEPALIVE)
                 delay(1_000)
+            }
+        }
+    }
+
+    /** Same bounded camera scan as iOS Add setup, including AP return on this BLE link. */
+    suspend fun scanNetworks(
+        camera: FoundCamera,
+        beforeStationChange: () -> Unit,
+        onRestored: (Boolean) -> Unit,
+        onFound: (String) -> Unit,
+    ) {
+        val seen = mutableSetOf<String>()
+        onWiFiScan = { names -> names.filter { seen.add(it) }.forEach(onFound) }
+        var restoreNeeded = false
+        try {
+            connect(camera, pairingTimeoutMs = 30_000)
+            if (camera.model.family == "nano") exchange(SwiftCore.CMD_SESSION_5310)
+            beforeStationChange()
+            restoreNeeded = true
+            val role = exchange(SwiftCore.CMD_MULTICAM_STATION_MODE, "1")
+            if (role.payload.firstOrNull()?.toInt() != 0) throw MultiviewFailure.Rejected()
+            delay(10_000)
+            repeat(4) {
+                try {
+                    exchange(SwiftCore.CMD_MULTICAM_WIFI_SCAN, timeoutMs = 8_000)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: MultiviewFailure.Timeout) {
+                    // Reports can still arrive after a lost scan acknowledgement.
+                }
+                delay(5_000)
+            }
+        } finally {
+            withContext(NonCancellable) {
+                val restored = restoreNeeded && runCatching {
+                    val reply = exchange(SwiftCore.CMD_MULTICAM_STATION_MODE, "0").payload
+                    reply.contentEquals(byteArrayOf(0)) || reply.contentEquals(byteArrayOf(0, 0))
+                }.getOrDefault(false)
+                close()
+                if (restoreNeeded) onRestored(restored)
             }
         }
     }

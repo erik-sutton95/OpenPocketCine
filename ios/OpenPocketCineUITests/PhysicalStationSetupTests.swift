@@ -82,6 +82,54 @@ final class PhysicalStationSetupTests: XCTestCase {
         XCTAssertTrue(isLive, "not live after \(seconds) s")
     }
 
+    /// Connect the host using the first offered current/saved network while a scan is
+    /// active, then close. Credentials stay in the device's Keychain; this never records.
+    func testMultiviewSharedWiFiSetup() throws {
+        guard ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_WIFI"] == "1" else {
+            throw XCTSkip("Requires TEST_RUNNER_OPV_PHYSICAL_MULTIVIEW_WIFI=1")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        launch(app)
+        let multiview = app.buttons["cameras.multiview"]
+        XCTAssertTrue(multiview.waitForExistence(timeout: 20))
+        Thread.sleep(forTimeInterval: 3)
+        multiview.tap()
+        let wifi = app.buttons["multiview.setup.wifi"]
+        XCTAssertTrue(wifi.waitForExistence(timeout: 10))
+        wifi.tap()
+        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            .buttons["Allow While Using App"]
+        if allow.waitForExistence(timeout: 3) { allow.tap() }
+        let network = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'multiview.setup.network.'")
+        ).firstMatch
+        XCTAssertTrue(network.waitForExistence(timeout: 15))
+        capture("multiview-wifi-scanning")
+        network.tap()
+        let connect = app.buttons["multiview.setup.connect"]
+        XCTAssertTrue(connect.waitForExistence(timeout: 5))
+        XCTAssertTrue(connect.isEnabled)
+        connect.tap()
+        let add = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Add camera'"))
+            .firstMatch
+        let join = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Join"]
+        let deadline = Date().addingTimeInterval(90)
+        while Date() < deadline && !add.exists {
+            if join.exists { join.tap() }
+            Thread.sleep(forTimeInterval: 1)
+        }
+        XCTAssertTrue(add.exists, "Host Wi-Fi must be confirmed before cameras can be added")
+        capture("multiview-wifi-confirmed")
+        // Closing here still verifies AP return for any camera used by the automatic scan.
+        let close = app.buttons["Close Multiview"]
+        XCTAssertTrue(close.exists)
+        close.tap()
+        XCTAssertTrue(multiview.waitForExistence(timeout: 45))
+    }
+
     private func launch(_ app: XCUIApplication) {
         app.launch()
         let decline = app.buttons["reliability.consent.decline"]

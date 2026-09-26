@@ -12,7 +12,6 @@ struct MultiviewView: View {
     @State private var session = MultiviewSession()
     @State private var adding: MultiviewSession.Tile?
     @State private var showNetwork = false
-    @State private var passwordPrompt = false
     @State private var selectedCamera: FoundCamera?
     @State private var manualNetwork = false
     @State private var closing = false
@@ -25,7 +24,6 @@ struct MultiviewView: View {
         NavigationStack {
             GeometryReader { viewport in
                 stageContent(viewport: viewport)
-                    .ignoresSafeArea(passwordPrompt ? .keyboard : [])
                     .toolbar(.hidden, for: .navigationBar)
                     .statusBarHidden(true)
 
@@ -38,16 +36,7 @@ struct MultiviewView: View {
                     }
                     .accessibilityHidden(showNetwork || adding != nil)
                     .overlay {
-                        if showNetwork {
-                            MultiviewNetworkSetup(
-                                session: session, passwordPrompt: $passwordPrompt,
-                                cancel: {
-                                    showNetwork = false
-                                    if !session.networkConfigured {
-                                        Task { if await session.closeStage() { dismiss() } }
-                                    }
-                                }, complete: { showNetwork = false })
-                        } else if let tile = adding {
+                        if let tile = adding {
                             cameraPicker(tile)
                         }
                     }
@@ -93,6 +82,19 @@ struct MultiviewView: View {
             .ignoresSafeArea(.container)
         }
         .interactiveDismissDisabled()
+        .sheet(isPresented: $showNetwork) {
+            MultiviewNetworkSetup(
+                session: session,
+                cancel: {
+                    showNetwork = false
+                    Task { if await session.closeStage() { dismiss() } }
+                }, complete: { showNetwork = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(MonitorTheme.background)
+            .interactiveDismissDisabled()
+        }
     }
 
     private func stageContent(viewport: GeometryProxy) -> some View {
@@ -570,7 +572,6 @@ struct MultiviewView: View {
                         Button("Cancel") {
                             adding = nil
                             selectedCamera = nil
-                            session.releaseNetworkCamera()
                         }
                         .frame(minWidth: 64, minHeight: 44)
                         .contentShape(Rectangle())

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- The debug build installs beside the Play build (applicationIdSuffix
-         ".debug"), so the launcher shows two entries. This label names which
-         one is the local build; the grayscale launcher foreground in this
-         source set is the same signal at a glance. -->
+        ".debug"), so the launcher shows two entries. This label names which
+        one is the local build; the grayscale launcher foreground in this
+        source set is the same signal at a glance. -->
     <string name="app_name">OpenPocketCine Dev</string>
 </resources>

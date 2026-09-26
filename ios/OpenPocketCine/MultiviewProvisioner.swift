@@ -10,6 +10,8 @@ import OpenPocketViewCore
     private var sequence: UInt16 = 1200
     private var approved = false
     private var closed = false
+    private var connectingBLE = false
+    private var connectCancellation: Task<Void, Never>?
     /// Sees every camera frame first (e.g. `07/AC` scan reports, whatever their flags).
     var onFrame: ((Duml.Frame) -> Void)?
 
@@ -45,7 +47,28 @@ import OpenPocketViewCore
         guard ble.isPoweredOn else { throw MultiviewSession.Failure.unavailable }
         try Task.checkCancellation()
         guard !closed else { throw CancellationError() }
-        try await ble.connect(camera)
+        connectingBLE = true
+        do {
+            try await withTaskCancellationHandler {
+                try Task.checkCancellation()
+                try await ble.connect(camera)
+            } onCancel: {
+                Task { @MainActor in
+                    // Only the pre-role GATT wait is interruptible by disconnecting.
+                    guard self.connectingBLE else { return }
+                    self.connectCancellation = Task { await self.ble.disconnectAndWait() }
+                }
+            }
+            connectingBLE = false
+        } catch {
+            connectingBLE = false
+            await connectCancellation?.value
+            connectCancellation = nil
+            throw error
+        }
+        await connectCancellation?.value
+        connectCancellation = nil
+        try Task.checkCancellation()
         guard !closed else { throw CancellationError() }
         let frames = ble.frames
         router = Task { [weak self] in
@@ -111,7 +134,10 @@ extension MultiviewProvisioner {
     /// caller cancels. `07/48 00` then returns the camera to its own Wi-Fi on the same link,
     /// even after cancellation. The caller stamps the role change first.
     static func scanNetworks(
-        _ camera: FoundCamera, rounds: Int = 4, onFound: @escaping @MainActor (String) -> Void
+        _ camera: FoundCamera, rounds: Int = 4,
+        beforeStationChange: @escaping @MainActor () throws -> Void = {},
+        onRestored: @escaping @MainActor (Bool) -> Void = { _ in },
+        onFound: @escaping @MainActor (String) -> Void
     ) async throws {
         let client = MultiviewProvisioner()
         var seen = Set<String>()
@@ -122,12 +148,16 @@ extension MultiviewProvisioner {
             }
         }
         var failure: Error?
+        var restored = false
+        var restoreNeeded = false
         do {
             try await client.connect(camera, pairingTimeout: 30)
             if camera.model.family == .nano {
                 _ = try await client.exchange(Commands.session5310(id: client.next()))
             }
             do {
+                try beforeStationChange()
+                restoreNeeded = true
                 let role = try await client.exchange(
                     MulticamCommands.stationMode(true, seq: client.next()))
                 guard role.payload.first == 0 else { throw MultiviewSession.Failure.rejected }
@@ -142,16 +172,21 @@ extension MultiviewProvisioner {
                 failure = error
             }
             // Its own task: a cancelled scan must still return the camera to its access point.
-            let back = await Task {
-                try? await client.exchange(MulticamCommands.stationMode(false, seq: client.next()))
-            }.value
-            ControlLiveLog.line(
-                "setup: camera scan found=\(seen.count) returned=\(back?.payload.first == 0)")
+            if restoreNeeded {
+                let back = await Task {
+                    try? await client.exchange(
+                        MulticamCommands.stationMode(false, seq: client.next()))
+                }.value
+                restored = back?.payload == [0] || back?.payload == [0, 0]
+                ControlLiveLog.line(
+                    "setup: camera scan found=\(seen.count) returned=\(restored)")
+            }
         } catch {
             failure = error
         }
         // Also its own task: the connect that follows must not share a dying link.
         await Task { await client.closeAndWait() }.value
+        if restoreNeeded { onRestored(restored) }
         if let failure { throw failure }
     }
 }

@@ -875,6 +875,53 @@ final class MonitorUIFlowTests: XCTestCase {
         }
     }
 
+    func testMultiviewReusesStationNetworkWizard() {
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
+        app.launch()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            rotate(orientation)
+            let multiview = app.buttons["cameras.multiview"]
+            XCTAssertTrue(multiview.waitForExistence(timeout: 10))
+            multiview.tap()
+            let wifi = app.buttons["multiview.setup.wifi"]
+            XCTAssertTrue(wifi.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["multiview.setup.phoneHotspot"].isHittable)
+            capture("multiview-setup-choose-\(orientation.rawValue)")
+            wifi.tap()
+            let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+                .buttons["Allow While Using App"]
+            if allow.waitForExistence(timeout: 2) { allow.tap() }
+            XCTAssertTrue(
+                app.descendants(matching: .any)["multiview.setup.scanStatus"]
+                    .waitForExistence(timeout: 5))
+            let other = app.buttons["Other network…"]
+            XCTAssertTrue(other.isHittable, "Manual entry remains available during the scan")
+            other.tap()
+            let alert = app.alerts["Other network"]
+            alert.textFields.firstMatch.typeText("Test network")
+            alert.buttons["Next"].tap()
+            let password = app.secureTextFields["multiview.setup.password"]
+            XCTAssertTrue(password.waitForExistence(timeout: 5))
+            password.tap()
+            capture("multiview-password-focused-\(orientation.rawValue)")
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            password.typeText("short")
+            XCTAssertFalse(app.buttons["multiview.setup.connect"].isEnabled)
+            app.buttons["Show password"].tap()
+            XCTAssertTrue(app.textFields["multiview.setup.password"].exists)
+            capture("multiview-setup-password-\(orientation.rawValue)")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            app.buttons["multiview.setup.phoneHotspot"].tap()
+            XCTAssertTrue(
+                app.textFields["multiview.setup.hotspotName"].waitForExistence(timeout: 5))
+            capture("multiview-setup-hotspot-\(orientation.rawValue)")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            app.navigationBars.buttons["Cancel"].tap()
+            XCTAssertTrue(multiview.waitForExistence(timeout: 10))
+        }
+    }
+
     /// The simulator never has a hotspot, so a hotspot connect must ask first. Cancel
     /// leaves the camera untouched.
     func testHotspotConnectAsksToTurnOnPersonalHotspot() {

@@ -1,5 +1,4 @@
 import Foundation
-import NetworkExtension
 import Observation
 import OpenPocketViewCore
 import UIKit
@@ -151,10 +150,6 @@ final class MultiviewSession {
     var ssid = ""
     var usePhoneHotspot = false
     var password = ""
-    var networks: [String] = []
-    var networkMessage = "Choose a camera to scan for Wi-Fi."
-    var networkScanning = false
-    var preparedCamera: UUID?
     var groupRecordingBusy = false
     var groupRecordingNote: String?
     var recordingTiles: [Tile] { tiles.filter { $0.camera != nil } }
@@ -190,13 +185,9 @@ final class MultiviewSession {
     private var cleanupJournalWritten = false
     private let ble = BleLink(allowsConcurrentCameras: true)
     private var scanTask: Task<Void, Never>?
+    private var networkScanTask: Task<Void, Error>?
     private var discovering = false
-    private var router: Task<Void, Never>?
-    private var keepalive: Task<Void, Never>?
     private var monitor: Task<Void, Never>?
-    private var sequence: UInt16 = 1200
-    private var replies: [UInt16: Duml.Frame] = [:]
-    private var approved = false
     private var running = false
 
     init(
@@ -267,14 +258,6 @@ final class MultiviewSession {
         usePhoneHotspot = false
         UIApplication.shared.isIdleTimerDisabled = true
         restoreStage()
-        Task { [weak self] in
-            let current = await WiFiJoiner.currentSSID()
-            guard let self, self.running, !self.usePhoneHotspot, let current,
-                !current.lowercased().hasPrefix("osmo")
-            else { return }
-            if !self.networks.contains(current) { self.networks.append(current) }
-        }
-        networks = MultiviewNetworkStore.savedNetworks().filter { $0.hotspot != true }.map(\.ssid)
         scan()
         monitor = Task { [weak self] in
             while !Task.isCancelled {
@@ -338,158 +321,58 @@ final class MultiviewSession {
     private func refreshDiscovery() {
         if !discoveryNeeded {
             if discovering { stopDiscovery() }
-        } else if !discovering, !busy, preparedCamera == nil {
+        } else if !discovering, !busy {
             scan()
         }
     }
 
-    private func next() -> UInt16 {
-        sequence &+= 1
-        return sequence
-    }
-    private func exchange(_ frame: Duml.Frame, timeout: TimeInterval = 12) async throws
-        -> Duml.Frame
-    {
-        ControlLiveLog.line(
-            "multiview: sending \(String(frame.cmdSet, radix: 16))/\(String(frame.cmdId, radix: 16))"
-        )
-        try Task.checkCancellation()
-        guard running else { throw CancellationError() }
-        replies.removeValue(forKey: frame.seq)
-        ble.send(frame)
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            try Task.checkCancellation()
-            guard running else { throw CancellationError() }
-            if let result = replies.removeValue(forKey: frame.seq), result.cmdSet == frame.cmdSet,
-                result.cmdId == frame.cmdId
-            {
-                ControlLiveLog.line(
-                    "multiview: reply \(String(frame.cmdSet, radix: 16))/\(String(frame.cmdId, radix: 16)) bytes=\(result.payload.count)"
-                )
-                return result
-            }
-            try await Task.sleep(for: .milliseconds(50))
+    /// The wizard owns selection; this session owns the scan and its persistent cleanup.
+    /// Reuse Add setup's same-link station scan instead of a second BLE implementation.
+    func scanNetworks(onFound: @escaping @MainActor (String) -> Void) async throws {
+        guard running, !closing, !busy, !tiles.contains(where: { $0.camera != nil }) else {
+            throw CancellationError()
         }
-        throw Failure.timeout
-    }
-    private func connect(_ camera: FoundCamera) async throws {
-        guard running else { throw CancellationError() }
-        try await ble.connect(camera)
-        try Task.checkCancellation()
-        guard running else { throw CancellationError() }
-        stopDiscovery()
-        replies.removeAll()
-        approved = false
-        let frames = ble.frames
-        router = Task { [weak self] in
-            for await frame in frames {
-                guard let self, !Task.isCancelled else { return }
-                if frame.cmdSet == 7 && frame.cmdId == 0xac && frame.sender == 7 {
-                    for name in MulticamWiFiScan.names(frame.payload) where !networks.contains(name)
-                    {
-                        networks.append(name)
-                    }
-                    networks.sort { $0.localizedStandardCompare($1) == .orderedAscending }
-                }
-                if frame.cmdSet == 2 && frame.cmdId == 0x80 && frame.payload.count >= 13,
-                    let tile = tiles.first(where: { $0.camera?.id == camera.id })
-                {
-                    var status = CameraStatus()
-                    CameraStatusDecoder.apply(frame, to: &status, model: camera.model)
-                    tile.recordingObservation = (status.isRecording, Date())
-                }
-                if frame.cmdSet == 7 && frame.cmdId == 0x46 && frame.flags & 128 == 0 {
-                    ble.send(Commands.pairApprovalAck(seq: frame.seq))
-                    approved = true
-                } else if frame.flags & 128 != 0 {
-                    if replies.count > 128 { replies.removeAll() }
-                    replies[frame.seq] = frame
-                }
-            }
-        }
-        ble.send(Commands.sessionWake(id: next()))
-        let pair = Commands.setPairingPin(pin: camera.model.pairingToken, id: next())
-        ble.send(pair)
-        let deadline = Date().addingTimeInterval(90)
-        while !approved && Date() < deadline {
-            try Task.checkCancellation()
-            guard running else { throw CancellationError() }
-            if let response = replies.removeValue(forKey: pair.seq) {
-                if response.payload == [0, 1] {
-                    approved = true
-                } else if response.payload != [0, 2] {
-                    throw Failure.rejected
-                }
-            }
-            if !approved { try await Task.sleep(for: .milliseconds(100)) }
-        }
-        guard approved else { throw Failure.timeout }
-        keepalive = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                ble.send(Commands.sessionKeepalive(id: next()))
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
-    }
-    private func disconnectBLE() {
-        keepalive?.cancel()
-        keepalive = nil
-        router?.cancel()
-        router = nil
-        ble.disconnect()
-        replies.removeAll()
-        preparedCamera = nil
-    }
-
-    func prepareNetworks(_ camera: FoundCamera) async {
-        guard camera.hasMultiviewPreview, !busy, running, !closing else { return }
         busy = true
-        networkScanning = true
-        networkMessage = "Connecting · approve on camera if asked"
         defer {
             busy = false
-            networkScanning = false
+            networkScanTask = nil
+            refreshDiscovery()
         }
-        do {
-            if preparedCamera != camera.id {
-                disconnectBLE()
-                try await connect(camera)
-                preparedCamera = camera.id
-                if camera.model.family == .nano {
-                    _ = try await exchange(Commands.session5310(id: next()))
-                }
+        let task = Task {
+            var camera: FoundCamera?
+            for _ in 0..<10 {
+                try Task.checkCancellation()
+                camera = found.first(where: { $0.hasMultiviewPreview })
+                if camera != nil { break }
+                try await Task.sleep(for: .milliseconds(300))
             }
-            networkMessage = "Preparing camera Wi-Fi"
-            // A lost setter reply can still mean the camera changed roles.
-            guard recordStationChange(camera) else {
-                throw ProvisioningFailure.message("Could not save camera Wi-Fi cleanup. Try again.")
-            }
-            let role = try await exchange(MulticamCommands.stationMode(true, seq: next()))
-            guard role.payload.first == 0 else { throw Failure.rejected }
-            try await Task.sleep(for: .seconds(10))
-            networkMessage = "Looking for Wi-Fi networks"
-            _ = try await exchange(MulticamWiFiScan.request(seq: next()), timeout: 8)
-            try await Task.sleep(for: .seconds(6))
-            networkMessage =
-                networks.isEmpty
-                ? "No networks found. Retry the scan or enter a hidden network."
-                : "Choose the same Wi-Fi for this device and your cameras."
-        } catch {
-            networkMessage = "Could not scan. Retry or enter your network name."
+            guard let camera else { throw Failure.unavailable }
+            stopDiscovery()
+            try await MultiviewProvisioner.scanNetworks(
+                camera,
+                beforeStationChange: {
+                    guard self.recordStationChange(camera) else {
+                        throw ProvisioningFailure.message(
+                            "Could not save camera Wi-Fi cleanup. Try again.")
+                    }
+                },
+                onRestored: { restored in
+                    if restored {
+                        self.pendingReset.removeAll { $0.id == camera.id }
+                        if self.pendingReset.isEmpty { self.networkSetupError = nil }
+                        self.persistStage()
+                    } else {
+                        self.networkSetupError =
+                            "Camera Wi-Fi could not be restored. Keep it powered on and close Multiview to retry."
+                    }
+                }, onFound: onFound)
         }
-        disconnectBLE()
-        if let saved = pendingReset.first(where: { $0.id == camera.id }) {
-            let scanMessage = networkMessage
-            networkMessage = "Returning camera to its Wi-Fi"
-            if !(await resetStationOnce(saved)) {
-                networkSetupError =
-                    "Camera Wi-Fi could not be restored. Keep it powered on and close Multiview to retry."
-            }
-            networkMessage = scanMessage
+        networkScanTask = task
+        try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
         }
-        if running, !closing { scan() }
     }
 
     @discardableResult func recordStationChange(_ camera: FoundCamera) -> Bool {
@@ -498,19 +381,6 @@ final class MultiviewSession {
             identity: nil, address: "", experimental: false, lutEnabled: false)
         pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, including: [saved])
         return persistStage()
-    }
-
-    /// The setup view cancels its task first; disconnect also unblocks BLE's
-    /// connection continuation, which cannot observe task cancellation itself.
-    func cancelNetworkScan() {
-        guard networkScanning else { return }
-        disconnectBLE()
-    }
-
-    func releaseNetworkCamera() {
-        guard !busy else { return }
-        disconnectBLE()
-        if running { scan() }
     }
 
     func selectNetworkSource(hotspot: Bool) {
@@ -1113,7 +983,7 @@ final class MultiviewSession {
         searches.removeAll()
         monitor?.cancel()
         stopDiscovery()
-        disconnectBLE()
+        networkScanTask?.cancel()
         ready = false
         password = ""
         for tile in tiles {
@@ -1193,6 +1063,8 @@ final class MultiviewSession {
     func closeStage() async -> Bool {
         guard !closing else { return false }
         closing = true
+        networkScanTask?.cancel()
+        _ = try? await networkScanTask?.value
         if running {
             pendingReset = MultiviewStageStore.cleanupTargets(
                 pendingReset, including: savedCameras())

@@ -29,6 +29,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -255,10 +258,6 @@ class MultiviewSession(
     var ssid by mutableStateOf("")
     var usePhoneHotspot by mutableStateOf(false)
     var password by mutableStateOf("")
-    val networks = mutableStateListOf<String>()
-    var networkMessage by mutableStateOf("Choose a camera to scan for Wi-Fi.")
-    var networkScanning by mutableStateOf(false)
-    private var preparedCamera: String? = null
     var groupRecordingBusy by mutableStateOf(false)
     var groupRecordingNote by mutableStateOf<String?>(null)
     val recordingTiles: List<Tile> get() = tiles.filter { it.camera != null }
@@ -290,8 +289,8 @@ class MultiviewSession(
     private var pendingReset: List<MultiviewStageStore.Camera> = emptyList()
     private val stationResets = HashMap<String, kotlinx.coroutines.Deferred<Boolean>>()
     private var cleanupJournalWritten = false
-    private var networkCamera: MultiviewProvisioner? = null
     private var scanJob: Job? = null
+    private var networkScanJob: Job? = null
     private var monitor: Job? = null
     private var running = false
     private val joinPolicy: JSONObject by lazy {
@@ -352,9 +351,6 @@ class MultiviewSession(
         usePhoneHotspot = false
         path.hotspot = false
         restoreStage()
-        networks.clear()
-        networkStore.savedNetworks().filter { !it.hotspot }.forEach { if (it.ssid !in networks) networks += it.ssid }
-        path.currentSsid()?.takeIf { !it.lowercase().startsWith("osmo") && it !in networks }?.let { networks += it }
         scan()
         monitor = scope.launch {
             while (isActive) {
@@ -407,7 +403,7 @@ class MultiviewSession(
         monitor?.cancel()
         scanJob?.cancel()
         scanner.stopScan()
-        releaseNetworkCameraLink()
+        networkScanJob?.cancel()
         ready = false
         password = ""
         for (tile in tiles) {
@@ -482,7 +478,7 @@ class MultiviewSession(
         configuringNetwork = true
         networkSetupError = null
         try {
-            if (ssid.isEmpty() || ssid.toByteArray().size > 32 || password.toByteArray().size > 63) {
+            if (!com.opencapture.openpocketcine.pairing.validStationCredentials(ssid, password, usePhoneHotspot)) {
                 throw MultiviewFailure.Message("Check the network name and password.")
             }
             joinSharedNetwork()
@@ -500,69 +496,50 @@ class MultiviewSession(
         }
     }
 
-    /** Optional: read nearby Wi-Fi names through one camera. Its role change is journaled first. */
-    suspend fun prepareNetworks(camera: FoundCamera) {
-        if (!camera.hasMultiviewPreview || busy || !running || closing) return
-        busy = true
-        networkScanning = true
-        networkMessage = "Connecting · approve on camera if asked"
-        try {
-            if (preparedCamera != camera.id) {
-                releaseNetworkCameraLink()
-                val client = MultiviewProvisioner(app)
-                networkCamera = client
-                client.onWiFiScan = { names ->
-                    for (name in names) if (name !in networks) networks += name
-                    val sorted = networks.sortedWith(String.CASE_INSENSITIVE_ORDER)
-                    networks.clear()
-                    networks.addAll(sorted)
-                }
-                client.connect(camera)
-                preparedCamera = camera.id
-                if (camera.model.family == "nano") client.exchange(SwiftCore.CMD_SESSION_5310)
-            }
-            val client = networkCamera ?: throw MultiviewFailure.Unavailable()
-            networkMessage = "Preparing camera Wi-Fi"
-            // A lost setter reply can still mean the camera changed roles.
-            if (!recordStationChange(camera)) {
-                throw MultiviewFailure.Message("Could not save camera Wi-Fi cleanup. Try again.")
-            }
-            val role = client.exchange(SwiftCore.CMD_MULTICAM_STATION_MODE, "1")
-            if (role.payload.firstOrNull()?.toInt() != 0) throw MultiviewFailure.Rejected()
-            delay(10_000)
-            networkMessage = "Looking for Wi-Fi networks"
-            client.exchange(SwiftCore.CMD_MULTICAM_WIFI_SCAN, timeoutMs = 8_000)
-            delay(6_000)
-            networkMessage = if (networks.isEmpty()) {
-                "No networks found. Retry the scan or enter a hidden network."
-            } else {
-                "Choose the same Wi-Fi for this device and your cameras."
-            }
-        } catch (error: CancellationException) {
-            networkMessage = "Could not scan. Retry or enter your network name."
-            finishNetworkScan(camera)
-            throw error
-        } catch (_: Exception) {
-            networkMessage = "Could not scan. Retry or enter your network name."
+    /** Shared wizard scan: hold ownership through cancellation and same-link AP cleanup. */
+    suspend fun scanNetworks(onFound: (String) -> Unit) = coroutineScope {
+        if (busy || !running || closing || tiles.any { it.camera != null }) {
+            throw CancellationException("network setup unavailable")
         }
-        finishNetworkScan(camera)
+        busy = true
+        networkScanJob = currentCoroutineContext()[Job]
+        try {
+            var camera: FoundCamera? = null
+            for (attempt in 0 until 10) {
+                currentCoroutineContext().ensureActive()
+                camera = found.firstOrNull { it.hasMultiviewPreview }
+                if (camera != null) break
+                delay(300)
+            }
+            val selected = camera ?: throw MultiviewFailure.Unavailable()
+            scanJob?.cancel()
+            scanner.stopScan()
+            MultiviewProvisioner(app).scanNetworks(
+                selected,
+                beforeStationChange = {
+                    if (!recordStationChange(selected)) {
+                        throw MultiviewFailure.Message("Could not save camera Wi-Fi cleanup. Try again.")
+                    }
+                },
+                onRestored = { restored ->
+                    if (restored) {
+                        pendingReset = pendingReset.filterNot { it.id == selected.id }
+                        if (pendingReset.isEmpty()) networkSetupError = null
+                        persistStage()
+                    } else {
+                        networkSetupError =
+                            "Camera Wi-Fi could not be restored. Keep it powered on and close Multiview to retry."
+                    }
+                }, onFound = onFound,
+            )
+        } finally {
+            busy = false
+            networkScanJob = null
+            if (running && !closing) scan()
+        }
     }
 
-    private suspend fun finishNetworkScan(camera: FoundCamera) {
-        releaseNetworkCameraLink()
-        busy = false
-        networkScanning = false
-        pendingReset.firstOrNull { it.id == camera.id }?.let { saved ->
-            val scanMessage = networkMessage
-            networkMessage = "Returning camera to its Wi-Fi"
-            if (!resetStationOnce(saved)) {
-                networkSetupError =
-                    "Camera Wi-Fi could not be restored. Keep it powered on and close Multiview to retry."
-            }
-            networkMessage = scanMessage
-        }
-        if (running && !closing) scan()
-    }
+    fun savedNetworks(): List<MultiviewNetworkStore.Network> = networkStore.savedNetworks()
 
     private fun recordStationChange(camera: FoundCamera): Boolean {
         val saved = MultiviewStageStore.Camera(
@@ -571,24 +548,6 @@ class MultiviewSession(
         )
         pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, listOf(saved))
         return persistStage()
-    }
-
-    /** The setup popup cancels its job first; closing the BLE link unblocks a pending connect. */
-    fun cancelNetworkScan() {
-        if (!networkScanning) return
-        releaseNetworkCameraLink()
-    }
-
-    fun releaseNetworkCamera() {
-        if (busy) return
-        releaseNetworkCameraLink()
-        if (running) scan()
-    }
-
-    private fun releaseNetworkCameraLink() {
-        networkCamera?.close()
-        networkCamera = null
-        preparedCamera = null
     }
 
     // --- Cameras ---------------------------------------------------------------------------------
@@ -1257,6 +1216,7 @@ class MultiviewSession(
     suspend fun closeStage(): Boolean {
         if (closing) return false
         closing = true
+        networkScanJob?.cancelAndJoin()
         if (running) pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, savedCameras())
         persistStage()
         stop()

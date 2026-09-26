@@ -92,12 +92,23 @@ option groups, not eager rendering of unbounded media catalogs.
 `MultiviewPresentationLayout` computes four persistent tile rectangles and fixed
 transport/control positions. iOS maps the saved arrangement to that policy;
 changing selection or layout never creates a second decoder for the selected
-camera. Tap Layout to switch Grid/Center stage; hold it to open Shared Wi-Fi.
+camera. Tap Layout to switch Grid/Center stage; WI-FI opens Shared Wi-Fi.
 Clean hides the upper session controls and assist palette while retaining DISP
 to restore them. Per-tile recovery, recording acknowledgement and station-network cleanup
 remain in `MultiviewSession`. Its current shared assist control applies Auto LUT
 through the existing per-camera LUT operation. The design's additional multi-feed
 assists require a separate rendering and physical-performance qualification.
+
+Saved-camera Add setup and Multiview use one iOS `StationNetworkSetupView` for
+source choice, current/saved/nearby networks, credentials and scan-to-connect
+handoff. The entry points inject their connection owners. Android Multiview
+uses the equivalent shell form, `StationNetworkSetup`, with injected scan and
+connect actions; its saved-camera setup chips remain a parity exception.
+`MultiviewProvisioner` owns a bounded camera scan and returns the camera to its
+access point on the same BLE link, including cancellation. Multiview journals a
+cleanup obligation immediately before the station setter, removes it only on a
+confirmed return and waits for the scan before stage shutdown. No network form
+owns a live decoder, watchdog or preview-enable path.
 
 Live video and assist views remain mounted beneath settings and media overlays.
 Geometry and chrome changes do not replace their decoder, Metal host, frame bus,

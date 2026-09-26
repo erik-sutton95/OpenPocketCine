@@ -1,8 +1,8 @@
 import CoreLocation
 
 /// iOS names the current Wi-Fi to an app only with precise location permission (and the
-/// Access WiFi Information entitlement). Asked in context, from Add setup › Wi-Fi, never
-/// at launch. Location itself is never read.
+/// Access WiFi Information entitlement). Asked in context, from Add setup › Wi-Fi
+/// or Multiview, never at launch. Location itself is never read.
 @MainActor final class WiFiNameAccess: NSObject, CLLocationManagerDelegate {
     static let shared = WiFiNameAccess()
     private let manager = CLLocationManager()

@@ -425,9 +425,10 @@ requests recording together without frame-accurate synchronization. See the
 session network selection, saved preferences and remaining physical checks. Pocket 3, Pocket 4 Pro and
 Nano preview and recording have been checked together on iPhone. Pocket 3
 recovery after an app switch required a full rejoin and roughly a minute in the
-recorded test. Android Multiview remains unavailable.
+recorded test. Android has the matching experimental Multiview stage.
 
-Tap Layout to switch Grid/Center stage; hold Layout for Shared Wi-Fi. Clean
+Tap Layout to switch Grid/Center stage; tap **WI-FI** below FIT/FILL for the
+shared network wizard, also used by **Add setup**. Clean
 hides the upper session controls and assist palette; DISP restores them.
 
 Motion Control shows A, B and C with their reported pan, tilt and zoom, or

@@ -512,8 +512,8 @@ programmed-zoom continuity; see [measurement limits](programmed-moves.md#evidenc
 ## Multiview session network and shutdown (in validation)
 
 Every new iOS Multiview session opens the network picker with empty camera slots.
-Choose Local Wi-Fi (including another device's hotspot) or this phone's Personal
-Hotspot, choose or enter its name, supply the password, then tap Done. Local
+Choose Wi-Fi (including another device's hotspot) or this phone's Personal
+Hotspot, choose or enter its name, supply the password, then tap Connect. Local
 Wi-Fi joins and verifies the phone's network before setup completes. Added
 cameras use that confirmed session network. Changing the source or network name
 invalidates confirmation; assigned cameras must be removed before changing it.
@@ -528,8 +528,10 @@ independent BLE links. Failed cleanup remains saved for the next close attempt;
 entering a new session does not reset or reconnect cameras in the background.
 Legacy assigned cameras are migrated into the cleanup ledger when needed.
 Force quit cannot guarantee cleanup. No record-stop command is sent.
-Network scanning is optional; selecting Local Wi-Fi does not start a camera scan.
-An explicit scan records its camera before station mode and restores it after
+Opening Wi-Fi starts a bounded camera scan; choosing a current/saved network
+or entering one manually does not wait for results. Connecting or cancelling
+waits for the scanning camera's same-link AP return and BLE release. The scan
+records its camera immediately before station mode and restores it after
 completion/cancellation. Failed resets survive closure and relaunch. Concurrent
 scan cancellation and stage closure share one reset task per camera.
 Automated session-choice, cancellation/retry and persistence tests cover these
@@ -1291,8 +1293,8 @@ simulator checks; its live rerun could not reach a connected monitor.
 
 ## Android Multiview (in validation)
 
-Android Multiview follows the iOS stage 1:1: camera-list grid button, two-step
-network popup, empty four-slot Center stage, camera picker, tile readouts and
+Android Multiview follows the iOS stage: camera-list grid button, shared-network
+setup wizard, empty four-slot Center stage, camera picker, tile readouts and
 timecode, per-tile LUT/record, Record all/Stop all, red tally, Grid/Center
 stage, Fit/Fill, DISP clean, WI-FI button, bounded repair, device-only saved
 networks, saved layout preferences, camera Wi-Fi return with a persistent
@@ -1341,3 +1343,26 @@ back (live in 13 s) and Wi-Fi again (24 s) all went live and stayed live.
 Exceptions: Android keeps the single camera Wi-Fi path; its Multiview already
 provisions the phone hotspot and a port would reuse `StationJoin` through the
 facade. The hotspot setup and Action 6 still need physical proof.
+
+### Shared Multiview network wizard
+
+Both shells now use the Add setup interaction: Wi-Fi/hotspot choice,
+current/saved/nearby network groups, automatic bounded camera scanning, manual
+entry, remembered passwords with show/hide, compatibility guidance and inline
+join errors. Selection remains possible during a scan; Connect waits for cleanup
+before joining the host network. Back/Cancel and stage shutdown retain cleanup
+ownership. Assigned cameras keep network setup read-only. Every new stage still
+requires an explicit network confirmation.
+
+iOS Add setup and Multiview share one `StationNetworkSetupView` and one camera
+scan implementation. Android's `StationNetworkSetup` accepts injected scan and
+connect actions; Android still has no per-camera Add setup entry point. OS
+permission and Settings affordances differ, and Android names the host source
+**Phone hotspot**. Passwords remain in the existing device-only stores. This
+changes setup only; live ACK, watchdog, decoder and enable budgets are unchanged.
+
+Automated qualification includes iOS Add setup and Multiview navigation/password
+entry in portrait and landscape, and Android emulator scan-cancellation cleanup,
+connect ordering and failed-join retry. Repository and platform checks are recorded
+in the PR. Physical qualification remains pending: the available iOS 27 iPhone
+could not mount Xcode's developer disk image, and no Android phone was attached.
