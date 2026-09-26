@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.feed
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import com.opencapture.openpocketcine.BuildConfig
 
 /**
@@ -40,17 +41,20 @@ internal object VulkanCrashGuard {
     @Synchronized
     fun isTripped(context: Context): Boolean = isTripped(launch(context))
 
-    /** Call before the decoder starts filling a new ImageReader. Commits synchronously. */
+    /**
+     * Call before the first frame of a new ImageReader. Commits synchronously:
+     * the flag must be on disk before a driver fault can kill the process.
+     */
     @Synchronized
     fun arm(context: Context) {
         launch(context)
-        prefs(context).edit().putBoolean(KEY_ARMED, true).commit()
+        prefs(context).edit(commit = true) { putBoolean(KEY_ARMED, true) }
     }
 
     @Synchronized
     fun clear(context: Context) {
         launch(context)
-        prefs(context).edit().putBoolean(KEY_ARMED, false).putInt(KEY_STRIKES, 0).apply()
+        prefs(context).edit { putBoolean(KEY_ARMED, false).putInt(KEY_STRIKES, 0) }
     }
 
     private fun launch(context: Context): State {
@@ -59,11 +63,11 @@ internal object VulkanCrashGuard {
         val stored = State(p.getInt(KEY_VERSION, -1), p.getBoolean(KEY_ARMED, false), p.getInt(KEY_STRIKES, 0))
         val next = atLaunch(stored, BuildConfig.VERSION_CODE)
         if (next != stored) {
-            p.edit()
-                .putInt(KEY_VERSION, next.version)
-                .putBoolean(KEY_ARMED, next.armed)
-                .putInt(KEY_STRIKES, next.strikes)
-                .commit()
+            p.edit(commit = true) {
+                putInt(KEY_VERSION, next.version)
+                putBoolean(KEY_ARMED, next.armed)
+                putInt(KEY_STRIKES, next.strikes)
+            }
         }
         if (isTripped(next)) Log.w(TAG, "Vulkan disabled after ${next.strikes} crashed import windows")
         launchState = next
