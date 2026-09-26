@@ -17,6 +17,8 @@ Fixes
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
 - The REC and scan pulses no longer hold the display at its highest refresh rate, and paused clips stop redrawing.
+- Live View no longer freezes for several seconds after a single dropped video packet. The picture returns as soon as the camera sends a fresh keyframe.
+- Switching clips in Media no longer freezes the app while the previous clip is still being processed.
 
 What to test
 

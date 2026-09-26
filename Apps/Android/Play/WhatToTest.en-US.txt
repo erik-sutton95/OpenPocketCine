@@ -18,12 +18,13 @@ Fixes
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
 - Live View no longer crashes on some phone and monitor screen sizes while gimbal controls are shown.
+- Live View no longer freezes for several seconds after a single dropped video packet. The picture returns as soon as the camera sends a fresh keyframe.
+- Live View no longer crashes over and over on some MediaTek phones. After two crashes it uses a compatible display mode for this version.
 
 What to test
 
 - If Live View freezes while the camera stays connected, note the time and send Connection setup → Share Diagnostics: it now includes more detail about the stall.
 - Open Multiview with two or more cameras: record the group, switch Grid and Center stage, double-tap a tile, then close and connect one camera normally.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
-- In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
-- Over a bright scene, check the dark glow around the joystick and gimbal controls, then drag the joystick and open the gimbal drawer.
+- In Media, open a clip, tap the trash icon, and try Cancel, then Delete. Over a bright scene, check the dark glow around the joystick and gimbal controls.
 - On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

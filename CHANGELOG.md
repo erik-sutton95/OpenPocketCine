@@ -28,6 +28,20 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Live View no longer freezes for up to 8 s after a single lost video packet.
+  The keyframe request is no longer held behind an earlier request the camera
+  already answered. After a reconnect that brings video back without a usable
+  keyframe, the picture is repaired after 15 s instead of staying frozen until
+  the operator leaves.
+- Android Live View no longer crash-loops on MediaTek phones whose Mali driver
+  faults while importing decoder frames into Vulkan. Two launches that die
+  during that import switch Live View to the non-Vulkan path for that app
+  version, and native crash reports now name the phone model and SoC.
+- Feed incident reports are graded by outcome: only incidents whose recovery
+  gave up are errors, interrupted ones are warnings, and recovered or
+  suppressed ones are info.
+- iOS clip playback no longer hangs, and gets closed by the system, when you
+  switch clips while the previous clip's frame is still being processed.
 - The joystick and gimbal controls on iOS and Android now use the same dark
   glow as other live-view controls, improving separation from bright footage.
 - Android Live View no longer crashes on some screen sizes while gimbal controls
