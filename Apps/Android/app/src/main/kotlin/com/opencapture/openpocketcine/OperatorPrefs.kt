@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine
 
 import android.content.Context
 import androidx.core.content.edit
+import com.opencapture.monitorui.MonitorJoystickSize
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.feed.FeedUpscaleSwitch
 import com.opencapture.openpocketcine.feed.FeedUpscaler
@@ -212,6 +213,7 @@ object OperatorPrefs {
     private const val VIRTUAL_INVERT_TILT = "OpenPocketCine.VirtualJoystickInvertTilt"
     private const val VIRTUAL_DEADZONE_PERCENT = "OpenPocketCine.VirtualJoystickDeadzonePercent"
     private const val VIRTUAL_RESPONSE_CURVE = "OpenPocketCine.VirtualJoystickResponseCurve"
+    private const val VIRTUAL_SIZE = "OpenPocketCine.VirtualJoystickSize"
     private const val GIMBAL_RAMP = "OpenPocketCine.GimbalRamp"
     private const val GIMBAL_DOUBLE_TAP = "OpenPocketCine.GimbalDoubleTap"
     private const val DISP_LIVE = "OpenPocketCine.DispChrome.Live"
@@ -323,6 +325,13 @@ object OperatorPrefs {
         value: CameraCommands.VirtualJoystickCurve,
     ) {
         prefs(context).edit { putString(VIRTUAL_RESPONSE_CURVE, value.raw) }
+    }
+
+    fun virtualJoystickSize(context: Context): MonitorJoystickSize =
+        MonitorJoystickSize.parse(prefs(context).getString(VIRTUAL_SIZE, null))
+
+    fun setVirtualJoystickSize(context: Context, value: MonitorJoystickSize) {
+        prefs(context).edit { putString(VIRTUAL_SIZE, value.raw) }
     }
 
     fun virtualJoystickMapping(context: Context): CameraCommands.VirtualJoystickMapping =

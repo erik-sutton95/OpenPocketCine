@@ -85,6 +85,8 @@ class AppModel(
         OperatorPrefs.virtualJoystickResponseCurve(appContext),
     )
         private set
+    var virtualJoystickSize by mutableStateOf(OperatorPrefs.virtualJoystickSize(appContext))
+        private set
     val virtualJoystickMapping: CameraCommands.VirtualJoystickMapping
         get() =
             CameraCommands.VirtualJoystickMapping(
@@ -261,6 +263,11 @@ class AppModel(
     fun updateVirtualJoystickResponseCurve(value: CameraCommands.VirtualJoystickCurve) {
         virtualJoystickResponseCurve = value
         OperatorPrefs.setVirtualJoystickResponseCurve(appContext, value)
+    }
+
+    fun updateVirtualJoystickSize(value: com.opencapture.monitorui.MonitorJoystickSize) {
+        virtualJoystickSize = value
+        OperatorPrefs.setVirtualJoystickSize(appContext, value)
     }
 
     fun updatePortraitFeedAspect(value: PortraitFeedAspect) {

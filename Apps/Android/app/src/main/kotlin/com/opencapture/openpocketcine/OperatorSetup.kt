@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
+import com.opencapture.monitorui.MonitorJoystickSize
 import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.openpocketcine.assists.CrushClipCompensation
 import com.opencapture.openpocketcine.settings.SettingsFalseColorKey
@@ -140,6 +141,8 @@ object SettingsHelpCopy {
         "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
     const val JOYSTICK_SENSITIVITY =
         "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+    const val VIRTUAL_JOYSTICK_SIZE =
+        "How large the on-screen stick is. Medium is the default. Large is easier to grab; Small keeps more of the picture clear."
     const val VIRTUAL_JOYSTICK_INVERT_PAN =
         "Reverse left and right on the on-screen stick. Off is the default. A game controller is unchanged."
     const val VIRTUAL_JOYSTICK_INVERT_TILT =
@@ -1294,10 +1297,28 @@ private fun ControlsRows(model: AppModel) {
             }
         }
         SettingsRowCard(title = "On-screen joystick") {
+            SettingsInlineRow(
+                title = "Size",
+                help = SettingsHelpCopy.VIRTUAL_JOYSTICK_SIZE,
+                showTopDivider = false,
+                stacked = true,
+            ) {
+                SettingsSegmented(
+                    options = MonitorJoystickSize.entries.map { it.label },
+                    selected = model.virtualJoystickSize.label,
+                    compact = true,
+                    testTag = "gimbal.virtual.size",
+                ) { label ->
+                    val next = MonitorJoystickSize.fromLabel(label)
+                    if (next != model.virtualJoystickSize) {
+                        operatorHaptic(view, model.hapticsEnabled)
+                        model.updateVirtualJoystickSize(next)
+                    }
+                }
+            }
             SettingsSwitchInlineRow(
                 title = "Invert pan",
                 help = SettingsHelpCopy.VIRTUAL_JOYSTICK_INVERT_PAN,
-                showTopDivider = false,
                 isOn = model.virtualJoystickInvertPan,
                 testTag = "gimbal.virtual.invertPan",
             ) {

@@ -891,6 +891,8 @@ data class LiveMonitorLayout(
     val safeTop: Float,
     val safeBottom: Float,
     val usesFieldMonitor: Boolean = false,
+    /** Operator joystick diameter at chrome scale 1 (Small / Medium / Large). */
+    val stickSide: Float = com.opencapture.monitorui.MonitorLayoutPolicy.STICK_SIDE,
 ) {
     val onFeed: ChromeRect
         get() = if (picture.width > 1f) picture else feed
@@ -908,10 +910,10 @@ data class LiveMonitorLayout(
                 }
             val stick =
                 if (portrait) {
-                    com.opencapture.monitorui.MonitorLayoutPolicy.portraitStick(viewportWidth, floor)
+                    com.opencapture.monitorui.MonitorLayoutPolicy.portraitStick(viewportWidth, floor, stickSide)
                 } else {
                     com.opencapture.monitorui.MonitorLayoutPolicy.landscapeStick(
-                        viewportWidth, floor, record.width, safeTrailing,
+                        viewportWidth, floor, record.width, safeTrailing, stickSide,
                     )
                 }
             val zoom = com.opencapture.monitorui.MonitorLayoutPolicy.portraitZoom(stick)
@@ -944,7 +946,7 @@ data class LiveMonitorLayout(
             floorY = floorY,
             canvasMaxY = viewportHeight - max(0f, safeBottom),
             avoid = avoid,
-            stickSize = LiveChromeMetrics.STICK,
+            stickSize = LiveChromeMetrics.STICK * stickSide / LiveDesign.GIMBAL_STICK_DP,
             zoomSize = LiveChromeMetrics.ZOOM,
             gap = gap,
             inset = inset,
@@ -1100,13 +1102,14 @@ data class LiveMonitorLayout(
             fill: Boolean = false,
             showsValues: Boolean = true,
             topControlInset: Float = 0f,
+            joystick: com.opencapture.monitorui.MonitorJoystickSize = com.opencapture.monitorui.MonitorJoystickSize.MEDIUM,
         ): LiveMonitorLayout {
             LiveChromeMetrics.scale = chromeScale
             val p =
                 com.opencapture.monitorui.MonitorLayoutPolicy.fieldMonitor(
                     viewportWidth, viewportHeight, safeTop, safeLeading, safeBottom, safeTrailing,
                     pictureAspect ?: LiveChromeMetrics.FEED_ASPECT, fill, showsValues,
-                    topControlInset, hasDisplayCutout,
+                    topControlInset, hasDisplayCutout, joystick,
                 )
             fun slot(rect: com.opencapture.monitorui.MonitorRect) =
                 ChromeRect(rect.x, rect.y, rect.width, rect.height)
@@ -1132,6 +1135,7 @@ data class LiveMonitorLayout(
                 safeTop = safeTop,
                 safeBottom = safeBottom,
                 usesFieldMonitor = true,
+                stickSide = joystick.side,
             )
         }
 
@@ -2057,10 +2061,11 @@ fun LiveGimbalStick(
             .semantics { contentDescription = "Gimbal stick" }
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
-                val stickPx = min(this.size.width, this.size.height).toFloat()
                 var taps = 0
                 var lastTap = 0L
                 awaitEachGesture {
+                    // Read per gesture: the operator Small / Medium / Large size resizes the frame.
+                    val stickPx = min(this.size.width, this.size.height).toFloat()
                     val down = awaitFirstDown()
                     pressed = true
                     var dragged = false

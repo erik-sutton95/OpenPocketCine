@@ -45,6 +45,20 @@ data class MonitorFieldLayout(
     val controlsFloor: Float,
 )
 
+/** Operator choice for the on-feed gimbal joystick diameter. */
+enum class MonitorJoystickSize(val raw: String, val side: Float, val label: String) {
+    SMALL("small", 88f, "Small"),
+    MEDIUM("medium", MonitorLayoutPolicy.STICK_SIDE, "Medium"),
+    LARGE("large", 116f, "Large"),
+    ;
+
+    companion object {
+        fun parse(raw: String?): MonitorJoystickSize = entries.firstOrNull { it.raw == raw } ?: MEDIUM
+
+        fun fromLabel(label: String): MonitorJoystickSize = entries.firstOrNull { it.label == label } ?: MEDIUM
+    }
+}
+
 /** UI 2.0 layout decisions shared by brand apps; native shells retain the feed. */
 object MonitorLayoutPolicy {
     fun portrait(
@@ -156,11 +170,11 @@ object MonitorLayoutPolicy {
         MonitorRect(max(0f, width) / 2f - 24f, max(0f, floor - 56f), 48f, 48f)
 
     /** FieldMonitorLayout portrait stick / zoom / gimbal. */
-    /** On-feed gimbal joystick diameter. */
+    /** Default on-feed gimbal joystick diameter. */
     const val STICK_SIDE = 101f
 
-    fun portraitStick(width: Float, floor: Float): MonitorRect =
-        MonitorRect(max(0f, width) - 16f - STICK_SIDE, floor - 16f - STICK_SIDE, STICK_SIDE, STICK_SIDE)
+    fun portraitStick(width: Float, floor: Float, side: Float = STICK_SIDE): MonitorRect =
+        MonitorRect(max(0f, width) - 16f - side, floor - 16f - side, side, side)
 
     fun portraitZoom(stick: MonitorRect): MonitorRect =
         MonitorRect(stick.x, stick.y - 44f, 44f, 36f)
@@ -171,9 +185,11 @@ object MonitorLayoutPolicy {
     fun recordSize(tablet: Boolean): Float = if (tablet) 84f else 70f
 
     /** FieldMonitorLayout landscape stick: leading of the record well, on the values floor. */
-    fun landscapeStick(width: Float, floor: Float, recordSize: Float, safeTrailing: Float): MonitorRect {
-        val x = max(0f, width) - max(16f + recordSize + 12f, max(0f, safeTrailing) + 6f) - STICK_SIDE
-        return MonitorRect(x, floor - STICK_SIDE, STICK_SIDE, STICK_SIDE)
+    fun landscapeStick(
+        width: Float, floor: Float, recordSize: Float, safeTrailing: Float, side: Float = STICK_SIDE,
+    ): MonitorRect {
+        val x = max(0f, width) - max(16f + recordSize + 12f, max(0f, safeTrailing) + 6f) - side
+        return MonitorRect(x, floor - side, side, side)
     }
 
     fun landscapeZoom(stick: MonitorRect): MonitorRect = portraitZoom(stick)
@@ -193,6 +209,7 @@ object MonitorLayoutPolicy {
         safeTop: Float = 0f, safeLeading: Float = 0f, safeBottom: Float = 0f, safeTrailing: Float = 0f,
         sourceAspect: Float = 16f / 9f, fill: Boolean = false, showsValues: Boolean = true,
         topControlInset: Float = 0f, hasDisplayCutout: Boolean = false,
+        joystick: MonitorJoystickSize = MonitorJoystickSize.MEDIUM,
     ): MonitorFieldLayout {
         val w = max(1f, width)
         val h = max(1f, height)
@@ -222,7 +239,7 @@ object MonitorLayoutPolicy {
             )
             val floor = layout.controlsFloor
             val assists = portraitAssists(floor, tablet)
-            val stick = portraitStick(w, floor)
+            val stick = portraitStick(w, floor, joystick.side)
             val zoom = portraitZoom(stick)
             val gimbal = portraitGimbal(stick, zoom)
             val compass = headTrack(stick, zoom)
@@ -279,7 +296,7 @@ object MonitorLayoutPolicy {
             12f, max(0f, h - max(4f, bottomPad - 4f) - assistHeight),
             button + ASSIST_HORIZONTAL_INSETS, assistHeight,
         )
-        val stick = landscapeStick(w, floor, rec, safeTrailing)
+        val stick = landscapeStick(w, floor, rec, safeTrailing, joystick.side)
         val zoom = landscapeZoom(stick)
         val gimbal = landscapeGimbal(stick, zoom)
         val compass = headTrack(stick, zoom)

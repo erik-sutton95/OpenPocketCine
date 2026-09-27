@@ -2951,13 +2951,24 @@ class PocketCameraSession(
             )
         }
 
+    private val feedDoubleTap = FeedDoubleTapTrack()
+
+    /**
+     * Feed tap: inside the AF-C face box → ActiveTrack with that rect. A second
+     * tap on the same spot → ActiveTrack there (Mimo / on-camera). Else tap-focus.
+     */
     fun handleFeedTap(x: Float, y: Float) {
         val nx = x.coerceIn(0f, 1f).toDouble()
         val ny = y.coerceIn(0f, 1f).toDouble()
         val hud = _trackingHud.value
         val box = FaceTrackTap.boxIfTapped(hud.overlay, nx, ny, hud.dimmedFaces)
         if (box != null) {
+            feedDoubleTap.reset()
             startTracking(box)
+            return
+        }
+        feedDoubleTap.register(nx, ny, SystemClock.elapsedRealtime() / 1000.0)?.let {
+            startTracking(it)
             return
         }
         when (LiveFeedTapPolicy.action(supportsTapFocus, tappedFace = false)) {

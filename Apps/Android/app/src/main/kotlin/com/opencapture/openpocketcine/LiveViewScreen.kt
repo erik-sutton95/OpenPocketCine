@@ -431,6 +431,7 @@ fun LiveViewScreen(model: AppModel) {
                 hasDisplayCutout = hasDisplayCutout,
                 fill = fill,
                 showsValues = model.chromeSectionMounts(PocketDispSection.CAMERA_VALUES),
+                joystick = model.virtualJoystickSize,
             )
         val layout =
             if (zones != null) {

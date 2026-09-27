@@ -219,4 +219,23 @@ class TrackingBoxTest {
         assertTrue(drawn.centerX < 0.5)
         assertTrue(camera.centerX > 0.5)
     }
+
+    @Test
+    fun secondTapOnTheSameSpotStartsTracking() {
+        val taps = FeedDoubleTapTrack()
+        assertNull(taps.register(0.4, 0.5, 10.0))
+        assertEquals(TrackingBox.fromCenter(0.42, 0.51, 0.14, 0.25), taps.register(0.42, 0.51, 10.3))
+        // A third tap starts over rather than tracking again.
+        assertNull(taps.register(0.42, 0.51, 10.5))
+    }
+
+    @Test
+    fun slowOrDistantTapsOnlyFocus() {
+        val taps = FeedDoubleTapTrack()
+        assertNull(taps.register(0.4, 0.5, 0.0))
+        assertNull(taps.register(0.4, 0.5, 0.6), "too slow")
+        assertNull(taps.register(0.7, 0.5, 0.8), "different spot")
+        taps.reset()
+        assertNull(taps.register(0.7, 0.5, 0.9), "reset clears the first tap")
+    }
 }
