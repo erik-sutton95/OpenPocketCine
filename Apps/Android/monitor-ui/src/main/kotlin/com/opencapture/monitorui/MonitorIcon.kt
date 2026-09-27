@@ -45,6 +45,7 @@ enum class MonitorIcon(
     FOLDER("folder", R.drawable.opc_lucide_folder),
     FOCUS("focus", R.drawable.opc_lucide_focus),
     FUNNEL("funnel", R.drawable.opc_lucide_funnel),
+    GAUGE("gauge", R.drawable.opc_lucide_gauge),
     GRID_3X3("grid-3x3", R.drawable.opc_lucide_grid_3x3),
     IMAGE("image", R.drawable.opc_lucide_image),
     INFO("info", R.drawable.opc_lucide_info),

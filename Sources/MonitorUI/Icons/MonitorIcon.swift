@@ -37,6 +37,7 @@
         case folder
         case focus
         case funnel
+        case gauge
         case grid3x3 = "grid-3x3"
         case image
         case info

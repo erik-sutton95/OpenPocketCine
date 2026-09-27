@@ -26,6 +26,7 @@ flip-horizontal-2
 folder
 focus
 funnel
+gauge
 grid-3x3
 image
 info

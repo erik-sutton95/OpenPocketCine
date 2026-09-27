@@ -423,7 +423,7 @@ struct FieldMonitorGauges: View {
                     showsFPS.toggle()
                 } label: {
                     gauge(
-                        icon: showsFPS ? .video : .signal, value: showsFPS ? fpsValue : nil,
+                        icon: showsFPS ? .gauge : .signal, value: showsFPS ? fpsValue : nil,
                         bars: bars, color: linkColor)
                 }
                 .buttonStyle(.zcTapTarget)

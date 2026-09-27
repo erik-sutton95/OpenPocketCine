@@ -45,7 +45,7 @@ fun MonitorTelemetry(
     // One link pill: tap swaps signal bars and feed fps.
     var showsFps by rememberSaveable { mutableStateOf(false) }
     val gauges: @Composable () -> Unit = {
-        TelemetryGauge(if (showsFps) OpcIcon.VIDEO else OpcIcon.SIGNAL, linkColor, bars / 4f,
+        TelemetryGauge(if (showsFps) OpcIcon.GAUGE else OpcIcon.SIGNAL, linkColor, bars / 4f,
             "Live link $signalBars of 4 delivery bars, feed $fps frames per second", horizontal,
             // Whole frames with a unit; RECOV / LINK / — pass through.
             if (showsFps) fps.toDoubleOrNull()?.let { "${Math.round(it)} fps" } ?: fps else null,
