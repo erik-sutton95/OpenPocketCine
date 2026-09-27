@@ -618,9 +618,11 @@ Both shells implement the approved Grid and Center stage presentation. Grid
 uses four equal rows in portrait and a 2×2 layout in landscape, filling the
 available stage without a fixed aspect ratio. Center stage keeps its full-width
 16:9 portrait main feed. Short resized windows fit that main feed smaller while
-preserving 16:9 and room for reachable secondary feeds and controls. Secondary
-portrait feeds fill the lower space beside the vertical right toolbar; the
-toolbar starts just below the main feed. Camera
+preserving 16:9 and room for reachable secondary feeds and controls. The main
+camera's readouts sit directly under the main feed. Secondary portrait feeds
+fill the space below them, beside a plain, always-visible tool column (no
+chevron, drag or collapse) spanning exactly the first to the last secondary
+feed. Camera
 name/model, reported timecode, battery/storage and recording state are in-feed.
 There are no side information panels. Compact feeds retain a camera options
 menu instead of requiring promotion to access their actions.
@@ -635,8 +637,7 @@ it. A far-right strip of 16:9 feeds fills from the main feed's gap to the
 trailing margin (the cutout reserve on a cutout edge) and scrolls all three
 secondary feeds above the Record row, fading only content alpha at edges with
 more cameras. DISP sits left of Record on that row at the shared button size. Scrolling and promotion retain camera owners
-and mounted picture hosts. Portrait keeps the prior full-width main picture and
-right palette below it. Grid readouts retain their separate bottom row. The
+and mounted picture hosts. Portrait keeps the full-width main picture. Grid readouts retain their separate bottom row. The
 session title and connected count are absent. Record stays in its normal Live
 View position; DISP does too except in landscape Center stage (beside Record, above).
 Neither follows the toolbar; no Record all caption is added.
@@ -696,11 +697,14 @@ There is no tab box, fill or divider. Shared Settings scrolling masks content
 opacity at available top/bottom edges without a painted MORE overlay.
 
 Exit keeps native Lock size and glass styling. Wi-Fi retains native Settings
-size: top-right in Grid/portrait, below Exit in landscape Center stage. The
+size: 8 pt right of Exit in the top-left corner in portrait (Live View's
+portrait corner row), top-right in landscape Grid, below Exit in landscape
+Center stage. The
 palette uses the shared View Assist reveal, favorites, icons and native touch
 targets. Grid follows the opposite-cutout column policy; Center stage reserves
 the far right for the scrolling feeds. Short palettes scroll, including below a
-left cutout. Portrait keeps the right palette below the unchanged main picture.
+left cutout. Portrait Grid keeps the right palette; portrait Center stage uses
+the fixed tool column described above.
 These approved Multiview placements are explicit exceptions to Live View's
 Settings position; native Record/DISP geometry remains shared.
 

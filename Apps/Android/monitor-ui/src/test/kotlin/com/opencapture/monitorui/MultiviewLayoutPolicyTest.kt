@@ -44,12 +44,14 @@ class MultiviewLayoutPolicyTest {
                     assertEquals(live.display, layout.display, case)
                 }
                 val expectedNetwork = when {
-                    portrait -> live.settings.copy(x = w - 14 - live.settings.width, y = safe.top + 12)
+                    // Close then Wi-Fi, 8 dp apart, at Live View's portrait corner row.
+                    portrait -> live.settings.copy(x = live.lock.maxX + 8, y = minOf(live.gauges.y, safe.top + 12))
                     arrangement == CENTER_STAGE -> live.settings.copy(x = live.lock.midX - live.settings.width / 2, y = live.lock.maxY + 8)
                     else -> live.settings
                 }
                 assertEquals(expectedNetwork, layout.network, case)
-                assertEquals(if (portrait) live.lock.copy(y = safe.top + 12) else live.lock, layout.sessionControls, case)
+                assertEquals(if (portrait) live.lock.copy(y = minOf(live.gauges.y, safe.top + 12)) else live.lock,
+                    layout.sessionControls, case)
                 val controls = listOf(layout.sessionControls, layout.readouts, layout.assists,
                     layout.network, layout.display, layout.record)
                 val visibleTiles = layout.tiles.mapIndexedNotNull { index, tile ->
@@ -83,7 +85,7 @@ class MultiviewLayoutPolicyTest {
     fun portraitGridFillsFourRowsBesideTheToolbar() {
         val grid = MultiviewPresentationLayout.compute(393f, 852f, MultiviewSafeArea(top = 59f, bottom = 34f), GRID, 0)
         assertTrue(grid.tiles.all { it.x == 15f && it.maxX == grid.assists.x - 6f })
-        assertEquals(129f, grid.tiles[0].y)
+        assertEquals(grid.sessionControls.maxY + 10f, grid.tiles[0].y)
         assertEquals(grid.readouts.y - 12f, grid.tiles[3].maxY, 0.001f)
         assertEquals(grid.tiles[0].height, grid.tiles[3].height)
         assertFalse(grid.assistsHorizontal)
@@ -98,11 +100,18 @@ class MultiviewLayoutPolicyTest {
             MultiviewSafeArea(top = 59f, bottom = 34f), CENTER_STAGE, 2)
         val main = layout.tiles[2]
         val thumbs = layout.tiles.filterIndexed { index, _ -> index != 2 }
-        assertEquals(MonitorRect(15f, 129f, 363f, 204.1875f), main)
-        assertEquals(main.maxY + 15f, layout.assists.y)
+        assertEquals(layout.sessionControls.maxX + 8f, layout.network.x)
+        assertEquals(layout.sessionControls.y, layout.network.y)
+        assertEquals(MonitorRect(15f, layout.sessionControls.maxY + 10f, 363f, 204.1875f), main)
+        // Readouts sit directly under the main picture, the feeds below them.
+        assertEquals(main.maxY + 8f, layout.readouts.y)
+        assertEquals(layout.readouts.maxY + 12f, thumbs[0].y)
         assertTrue(thumbs.all { it.x == 15f && it.maxX == layout.assists.x - 6f })
-        assertEquals(layout.assists.y, thumbs[0].y)
-        assertEquals(layout.readouts.y - 12f, thumbs[2].maxY, 0.001f)
+        // The fixed tool column spans the secondary feeds exactly.
+        assertEquals(thumbs[0].y, layout.assists.y)
+        assertEquals(thumbs[2].maxY, layout.assists.maxY, 0.001f)
+        assertEquals(layout.record.y - 12f, thumbs[2].maxY, 0.001f)
+        assertTrue(layout.assists.height >= 4 * 44f + 8f)
         assertEquals(thumbs[0].height, thumbs[1].height)
     }
 
@@ -215,7 +224,7 @@ class MultiviewLayoutPolicyTest {
                 if (h > w) {
                     assertEquals(grid.display, stage.display)
                     assertEquals(grid.network, stage.network)
-                    assertEquals(grid.readouts, stage.readouts)
+                    assertEquals(stage.tiles[selected].maxY + 8f, stage.readouts.y)
                 } else {
                     assertEquals(stage.sessionControls.midX, stage.network.midX)
                     assertTrue(stage.assistsHorizontal)
@@ -280,7 +289,9 @@ class MultiviewLayoutPolicyTest {
                 assertFalse(overlaps(layout.assists, layout.display), case)
                 if (arrangement == CENTER_STAGE) {
                     assertEquals(16f / 9f, layout.tiles[0].width / layout.tiles[0].height, 0.001f)
-                    assertEquals(layout.tiles[0].maxY + 15, layout.assists.y, 0.001f)
+                    assertEquals(layout.tiles[0].maxY + 8, layout.readouts.y, 0.001f)
+                    assertEquals(layout.readouts.maxY + 12, layout.assists.y, 0.001f)
+                    assertEquals(layout.tiles.drop(1).maxOf { it.maxY }, layout.assists.maxY, 0.001f)
                 }
             }
         }

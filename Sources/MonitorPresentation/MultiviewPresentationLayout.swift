@@ -53,17 +53,18 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
 
         let cutout = max(0, max(safeArea.leading, safeArea.trailing))
         let headerTop = (portrait || banded ? max(0, safeArea.top) : 0) + 12 + inset
-        // Portrait Exit uses the native Lock size at the upper-left. Landscape
-        // is exactly Live View's Lock rectangle. Portrait Wi-Fi uses the native
-        // Settings size at top-right, leaving room for the right-side toolbar.
+        // Portrait Exit and Wi-Fi share the native button size in the top-left
+        // corner, at Live View's portrait corner row (beside the island on
+        // phones). Landscape Exit is exactly Live View's Lock rectangle.
+        let portraitTop = min(live.gauges.y, headerTop)
         sessionControls =
             portrait
-            ? .init(x: live.lock.x, y: headerTop, width: live.lock.width, height: live.lock.height)
+            ? .init(x: live.lock.x, y: portraitTop, width: live.lock.width, height: live.lock.height)
             : live.lock
         network =
             portrait
             ? .init(
-                x: w - 14 - live.settings.width, y: headerTop,
+                x: sessionControls.maxX + 8, y: portraitTop,
                 width: live.settings.width, height: live.settings.height)
             : arrangement == .centerStage
                 ? .init(
@@ -82,12 +83,9 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
         let rightToolX = display.midX - toolWidth / 2
         let toolX =
             portrait
-            ? network.midX - toolWidth / 2
+            ? w - 14 - (live.settings.width + toolWidth) / 2
             : toolbarOnLeft ? leftToolX : rightToolX
-        let stageTop =
-            portrait
-            ? max(max(0, safeArea.top) + 70 + inset, sessionControls.maxY + 4)
-            : sessionControls.y
+        let stageTop = portrait ? sessionControls.maxY + 10 : sessionControls.y
         let selectedIndex = min(3, max(0, selected))
         var result = [MonitorRect](repeating: .init(), count: 4)
         var stripViewport: MonitorRect?
@@ -95,12 +93,12 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
         readoutsOverlay = !portrait && arrangement == .centerStage
 
         if portrait {
-            readouts = .init(
-                x: 18, y: max(stageTop, record.y - 58), width: max(1, w - 36), height: 37)
-            let stageBottom = max(stageTop + 1, readouts.y - 12)
             let tileWidth = max(1, toolX - 6 - 15)
             let gap = 9.0
             if arrangement == .grid {
+                readouts = .init(
+                    x: 18, y: max(stageTop, record.y - 58), width: max(1, w - 36), height: 37)
+                let stageBottom = max(stageTop + 1, readouts.y - 12)
                 let tileHeight = max(1, (stageBottom - stageTop - 3 * gap) / 4)
                 result = (0..<4).map { index in
                     .init(
@@ -112,24 +110,31 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
                     x: toolX, y: toolTop, width: toolWidth,
                     height: max(1, min(toolHeight, stageBottom - toolTop)))
             } else {
-                // Short, resized windows must still leave room for reachable
-                // secondary feeds and the full toolbar below the main picture.
+                // The main camera's readouts sit directly under its picture;
+                // the secondary feeds and the fixed tool column fill the rest
+                // down to the system row. Short, resized windows must still
+                // leave room for reachable secondary feeds and all four tools.
+                let stageBottom = max(stageTop + 1, min(record.y, display.y) - 12)
                 let lowerHeight = max((tablet ? 52.0 : 44.0) * 4 + 17, 3 * 44 + 2 * gap)
                 let mainHeight = max(
-                    1, min((w - 30) * 9 / 16, stageBottom - stageTop - 15 - lowerHeight))
+                    1, min((w - 30) * 9 / 16, stageBottom - stageTop - 57 - lowerHeight))
                 let mainWidth = mainHeight * 16 / 9
                 result[selectedIndex] = .init(
                     x: (w - mainWidth) / 2, y: stageTop, width: mainWidth, height: mainHeight)
-                let stripTop = stageTop + mainHeight + 15
+                readouts = .init(
+                    x: 18, y: stageTop + mainHeight + 8, width: max(1, w - 36), height: 37)
+                let stripTop = readouts.maxY + 12
                 let tileHeight = max(1, (stageBottom - stripTop - 2 * gap) / 3)
                 for (row, index) in (0..<4).filter({ $0 != selectedIndex }).enumerated() {
                     result[index] = .init(
                         x: 15, y: stripTop + Double(row) * (tileHeight + gap),
                         width: tileWidth, height: tileHeight)
                 }
+                // A plain column, not the collapsible palette: it spans the
+                // secondary feeds exactly, top of the first to bottom of the last.
                 assists = .init(
                     x: toolX, y: stripTop, width: toolWidth,
-                    height: max(1, min(toolHeight, stageBottom - stripTop)))
+                    height: max(1, stageBottom - stripTop))
             }
         } else if arrangement == .centerStage {
             // Live View's landscape View Assist slot, collapsed at the lower left.

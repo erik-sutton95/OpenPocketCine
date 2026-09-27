@@ -65,9 +65,11 @@ data class MultiviewPresentationLayout(
                 safeBottom.toFloat(), safeTrailing.toFloat(), topControlInset = controlInset.toFloat(),
             )
             val headerTop = (if (portrait || banded) safeTop else 0.0) + 12 + controlInset
-            val close = if (portrait) live.lock.copy(y = headerTop.toFloat()) else live.lock
+            // Portrait Exit then Wi-Fi, 8 dp apart, at Live View's portrait corner row.
+            val portraitTop = min(live.gauges.y.toDouble(), headerTop).toFloat()
+            val close = if (portrait) live.lock.copy(y = portraitTop) else live.lock
             val network = when {
-                portrait -> live.settings.copy(x = (w - 14 - live.settings.width).toFloat(), y = headerTop.toFloat())
+                portrait -> live.settings.copy(x = close.maxX + 8, y = portraitTop)
                 focusedLandscape -> live.settings.copy(x = close.midX - live.settings.width / 2, y = close.maxY + 8)
                 else -> live.settings
             }
@@ -81,12 +83,12 @@ data class MultiviewPresentationLayout(
             val rightToolX = live.display.midX - toolbarWidth / 2
             val toolbarOnLeft = !portrait && safeTrailing > safeLeading
             val toolX = when {
-                portrait -> network.midX - toolbarWidth / 2
+                portrait -> w - 14 - (live.settings.width + toolbarWidth) / 2
                 toolbarOnLeft -> leftToolX
                 else -> rightToolX
             }
             val stageTop = when {
-                portrait -> max(safeTop + 70 + controlInset, close.maxY + 4.0)
+                portrait -> close.maxY + 10.0
                 else -> close.y.toDouble()
             }
             val preferredStageLeft = if (banded) 28.0 else max(cutout + 8, 18.0)
@@ -118,6 +120,7 @@ data class MultiviewPresentationLayout(
             val focused = selected.coerceIn(0, 3)
             val tiles = MutableList(4) { Rect(0.0, 0.0, 0.0, 0.0) }
             var toolbarTop = stageTop
+            var columnBottom: Double? = null
             var secondaryViewport: MonitorRect? = null
             val secondaryIndices = if (focusedLandscape) (0 until 4).filter { it != focused } else emptyList()
             if (arrangement == MultiviewArrangement.GRID) {
@@ -132,12 +135,17 @@ data class MultiviewPresentationLayout(
                     )
                 }
             } else if (portrait) {
+                // Readouts sit directly under the main picture; the feeds and the fixed
+                // tool column fill the rest down to the system row.
+                val bottom = max(stageTop + 1, min(live.record.y, display.y) - 12.0)
+                columnBottom = bottom
                 val secondaryMinimum = max(portraitSecondaryMinimum, 3 * 44.0 + 2 * gap)
-                val mainHeight = min(max(1.0, w - 30) * 9 / 16, max(1.0, stageHeight - 15 - secondaryMinimum))
+                val mainHeight = min(max(1.0, w - 30) * 9 / 16, max(1.0, bottom - stageTop - 57 - secondaryMinimum))
                 val mainWidth = mainHeight * 16 / 9
                 tiles[focused] = Rect((w - mainWidth) / 2, stageTop, mainWidth, mainHeight)
-                toolbarTop = tiles[focused].maxY + 15
-                val thumbHeight = max(1.0, (stageBottom - toolbarTop - 2 * gap) / 3)
+                readouts = Rect(18.0, tiles[focused].maxY + 8, w - 36, 37.0)
+                toolbarTop = readouts.maxY + 12
+                val thumbHeight = max(1.0, (bottom - toolbarTop - 2 * gap) / 3)
                 var row = 0
                 for (index in 0 until 4) {
                     if (index == focused) continue
@@ -184,6 +192,9 @@ data class MultiviewPresentationLayout(
             val paletteHeight = max(1.0, min(toolbarHeight, toolBottom - toolTop))
             val assists = if (focusedLandscape) live.assists.let {
                 Rect(it.x.toDouble(), it.y.toDouble(), it.width.toDouble(), it.height.toDouble())
+            } else if (columnBottom != null) {
+                // Portrait Center stage: a plain column spanning the secondary feeds exactly.
+                Rect(toolX, toolbarTop, toolbarWidth, max(1.0, columnBottom - toolbarTop))
             } else Rect(toolX, if (portrait) toolTop else toolBottom - paletteHeight, toolbarWidth, paletteHeight)
             return MultiviewPresentationLayout(
                 tiles = tiles.mapIndexed { index, rect ->

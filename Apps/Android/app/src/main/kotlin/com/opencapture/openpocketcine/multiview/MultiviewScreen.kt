@@ -229,6 +229,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                 MultiviewAssistPalette(
                     session, layout.controlCellSize, Modifier.rect(layout.assists),
                     horizontal = layout.assistsHorizontal,
+                    fixed = layout.portrait && session.layout == MultiviewLayout.CENTER_STAGE,
                     maxExpandedHeight = if (layout.assistsHorizontal) null else layout.assists.height,
                     onSettings = { cameraSettings = true },
                 )
@@ -341,7 +342,8 @@ private enum class MultiviewTool { LAYOUT, LUT, FIT, SETTINGS }
 @Composable
 internal fun MultiviewAssistPalette(
     session: MultiviewSession, cell: Float, modifier: Modifier,
-    horizontal: Boolean = false, maxExpandedHeight: Float? = null, onSettings: () -> Unit,
+    horizontal: Boolean = false, fixed: Boolean = false, maxExpandedHeight: Float? = null,
+    onSettings: () -> Unit,
 ) {
     val assigned = session.tiles.filter { it.camera != null }
     var usage by remember { mutableStateOf(com.opencapture.monitorui.MonitorToolUsageState()) }
@@ -352,11 +354,68 @@ internal fun MultiviewAssistPalette(
         MultiviewTool.LAYOUT -> if (session.layout == MultiviewLayout.GRID) "Show Focused stage" else "Show Grid"
         MultiviewTool.SETTINGS -> "Camera settings"
     }
+    fun isOn(tool: MultiviewTool) = tool == MultiviewTool.LUT && assigned.any { tile -> tile.lutEnabled }
+    fun isAvailable(tool: MultiviewTool) =
+        tool !in listOf(MultiviewTool.LUT, MultiviewTool.SETTINGS) || assigned.isNotEmpty()
+    fun identifier(tool: MultiviewTool) = when (tool) {
+        MultiviewTool.LUT -> "multiview.lut"
+        MultiviewTool.FIT -> "multiview.fitFill"
+        MultiviewTool.LAYOUT -> "multiview.layout"
+        MultiviewTool.SETTINGS -> "multiview.settings"
+    }
+    fun toggle(tool: MultiviewTool) {
+        haptics.selection()
+        when (tool) {
+            MultiviewTool.LUT -> {
+                val enabled = !assigned.all { it.lutEnabled }
+                assigned.forEach { if (it.lutEnabled != enabled) it.toggleLUT() }
+                session.persistStage()
+            }
+            MultiviewTool.FIT -> { session.fill = !session.fill; session.persistStage() }
+            MultiviewTool.LAYOUT -> session.layout = if (session.layout == MultiviewLayout.GRID)
+                MultiviewLayout.CENTER_STAGE else MultiviewLayout.GRID
+            MultiviewTool.SETTINGS -> onSettings()
+        }
+    }
+    val glyph: @Composable (MultiviewTool, Color, Modifier) -> Unit = { tool, tint, iconModifier ->
+        val icon = when (tool) {
+            MultiviewTool.LUT -> OpcIcon.PALETTE
+            MultiviewTool.FIT -> if (session.fill) OpcIcon.MINIMIZE else OpcIcon.MAXIMIZE
+            MultiviewTool.LAYOUT -> if (session.layout == MultiviewLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID
+            MultiviewTool.SETTINGS -> OpcIcon.SLIDERS_HORIZONTAL
+        }
+        OpcIcon(icon, null, iconModifier, tint)
+    }
+    if (fixed) {
+        // Portrait Center stage: the same tools as a plain, always-visible column spanning
+        // the secondary feeds. No chevron, drag or collapse.
+        Column(modifier.monitorGlass(RoundedCornerShape(14.dp)).padding(4.dp)) {
+            MultiviewTool.entries.forEach { tool ->
+                val available = isAvailable(tool) && !session.closing
+                Box(
+                    Modifier.weight(1f).fillMaxWidth().heightIn(min = 44.dp)
+                        .alpha(if (isAvailable(tool)) 1f else .4f)
+                        .testTag(identifier(tool))
+                        .semantics {
+                            contentDescription = title(tool)
+                            if (tool == MultiviewTool.LUT) stateDescription = if (isOn(tool)) "On" else "Off"
+                            role = Role.Button
+                        }
+                        .chromeClickable(enabled = available) { toggle(tool) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    glyph(tool, if (isOn(tool)) MonitorPalette.accent else MonitorPalette.text,
+                        Modifier.size((cell * 29f / 54f).dp))
+                }
+            }
+        }
+        return
+    }
     // Landscape Center stage mounts the palette as Live View does: horizontal, bottom-leading.
     Box(modifier, contentAlignment = if (horizontal) Alignment.BottomStart else Alignment.BottomCenter) {
         com.opencapture.monitorui.MonitorAssistPalette(
             tools = MultiviewTool.entries, portrait = !horizontal, locked = session.closing,
-            isOn = { it == MultiviewTool.LUT && assigned.any { tile -> tile.lutEnabled } },
+            isOn = ::isOn,
             title = ::title, label = { tool -> when (tool) {
                 MultiviewTool.LUT -> "LUT"
                 MultiviewTool.FIT -> if (session.fill) "FILL" else "FIT"
@@ -364,43 +423,17 @@ internal fun MultiviewAssistPalette(
                 MultiviewTool.SETTINGS -> "CAM"
             } },
             hasOptions = { false }, onOptions = {},
-            isAvailable = { it !in listOf(MultiviewTool.LUT, MultiviewTool.SETTINGS) || assigned.isNotEmpty() },
+            isAvailable = ::isAvailable,
             accessibilityLabel = ::title,
-            accessibilityIdentifier = { tool -> when (tool) {
-                MultiviewTool.LUT -> "multiview.lut"
-                MultiviewTool.FIT -> "multiview.fitFill"
-                MultiviewTool.LAYOUT -> "multiview.layout"
-                MultiviewTool.SETTINGS -> "multiview.settings"
-            } },
+            accessibilityIdentifier = ::identifier,
             accessibilityValue = { if (it == MultiviewTool.LUT) {
                 if (assigned.any { tile -> tile.lutEnabled }) "On" else "Off"
             } else null },
             expansionAccessibilityName = "Multiview tools", expansionAccessibilityIdentifier = "multiview.tools.expand",
             cellSize = cell, maxExpandedHeight = maxExpandedHeight,
             idOf = { it.name }, usage = usage, onUsageChange = { usage = it },
-            onToggle = { tool ->
-                haptics.selection()
-                when (tool) {
-                    MultiviewTool.LUT -> {
-                        val enabled = !assigned.all { it.lutEnabled }
-                        assigned.forEach { if (it.lutEnabled != enabled) it.toggleLUT() }
-                        session.persistStage()
-                    }
-                    MultiviewTool.FIT -> { session.fill = !session.fill; session.persistStage() }
-                    MultiviewTool.LAYOUT -> session.layout = if (session.layout == MultiviewLayout.GRID)
-                        MultiviewLayout.CENTER_STAGE else MultiviewLayout.GRID
-                    MultiviewTool.SETTINGS -> onSettings()
-                }
-            },
-            glyph = { tool, tint, iconModifier ->
-                val icon = when (tool) {
-                    MultiviewTool.LUT -> OpcIcon.PALETTE
-                    MultiviewTool.FIT -> if (session.fill) OpcIcon.MINIMIZE else OpcIcon.MAXIMIZE
-                    MultiviewTool.LAYOUT -> if (session.layout == MultiviewLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID
-                    MultiviewTool.SETTINGS -> OpcIcon.SLIDERS_HORIZONTAL
-                }
-                OpcIcon(icon, null, iconModifier, tint)
-            },
+            onToggle = ::toggle,
+            glyph = glyph,
             chevron = { expanded, vertical ->
                 val icon = if (vertical) { if (expanded) OpcIcon.CHEVRON_DOWN else OpcIcon.CHEVRON_UP }
                     else { if (expanded) OpcIcon.CHEVRON_LEFT else OpcIcon.CHEVRON_RIGHT }

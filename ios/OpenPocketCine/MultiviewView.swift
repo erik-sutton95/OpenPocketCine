@@ -282,9 +282,18 @@ struct MultiviewView: View {
         .accessibilityLabel(title + " " + value)
     }
 
+    @ViewBuilder
     private func stageAssistPalette(layout: MultiviewPresentationLayout) -> some View {
+        if layout.portrait && session.layout == .centerStage {
+            stageToolColumn(frame: layout.assists, tablet: layout.tablet)
+        } else {
+            stageCollapsiblePalette(layout: layout)
+        }
+    }
+
+    private var stageTools: [MonitorToolItem] {
         let cameras = session.tiles.contains { $0.camera != nil }
-        let tools: [MonitorToolItem] = [
+        return [
             .init(
                 id: "LAYOUT", title: session.layout == .grid ? "FOCUS" : "GRID", enabled: false,
                 hasOptions: false,
@@ -309,6 +318,49 @@ struct MultiviewView: View {
                 hasOptions: false, available: cameras,
                 accessibilityLabel: "Toggle Auto LUT for all cameras"),
         ]
+    }
+
+    @ViewBuilder
+    private func stageToolIcon(_ id: String) -> some View {
+        switch id {
+        case "LUT": MonitorAssistIcon.lut
+        case "FIT": session.feedAspect == .fill ? OpcIcon.minimize : OpcIcon.maximize
+        case "LAYOUT": session.layout == .grid ? OpcIcon.layoutList : OpcIcon.layoutGrid
+        default: OpcIcon.slidersHorizontal  // camera settings
+        }
+    }
+
+    /// Portrait Center stage: the same tools as a plain, always-visible column
+    /// spanning the secondary feeds. No chevron, drag or collapse.
+    private func stageToolColumn(frame: MonitorRect, tablet: Bool) -> some View {
+        let iconSide = MonitorSystemButtonMetrics.iconSide(tablet: tablet)
+        return VStack(spacing: 0) {
+            ForEach(stageTools) { tool in
+                Button {
+                    activateTool(tool.id)
+                } label: {
+                    stageToolIcon(tool.id)
+                        .frame(width: iconSide, height: iconSide)
+                        .foregroundStyle(tool.enabled ? MonitorTheme.accent : MonitorTheme.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 44, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(MonitorButtonStyle())
+                .disabled(!tool.available)
+                .opacity(tool.available ? 1 : 0.4)
+                .accessibilityLabel(tool.accessibilityLabel ?? tool.title)
+                .accessibilityValue(tool.accessibilityValue ?? (tool.enabled ? "On" : "Off"))
+                .accessibilityIdentifier(tool.accessibilityIdentifier ?? "multiview.tool.\(tool.id)")
+            }
+        }
+        .padding(4)
+        .frame(width: frame.width, height: frame.height)
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
+        .position(x: frame.midX, y: frame.midY)
+    }
+
+    private func stageCollapsiblePalette(layout: MultiviewPresentationLayout) -> some View {
+        let tools = stageTools
         // Landscape Center stage mounts Live View's palette as Live View does:
         // horizontal, anchored at its collapsed bottom-leading slot, growing
         // trailing short of DISP. Other stages keep the vertical rail.
@@ -327,12 +379,7 @@ struct MultiviewView: View {
             onOptions: { _ in },
             accessibilityName: "Multiview tools", accessibilityPrefix: "multiview.toolbar"
         ) { id in
-            switch id {
-            case "LUT": MonitorAssistIcon.lut
-            case "FIT": session.feedAspect == .fill ? OpcIcon.minimize : OpcIcon.maximize
-            case "LAYOUT": session.layout == .grid ? OpcIcon.layoutList : OpcIcon.layoutGrid
-            default: OpcIcon.slidersHorizontal  // camera settings
-            }
+            stageToolIcon(id)
         }
         .frame(width: frame.width, height: frame.height)
         .position(x: frame.midX, y: frame.midY)

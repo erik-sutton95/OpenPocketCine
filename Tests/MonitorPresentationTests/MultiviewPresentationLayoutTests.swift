@@ -41,8 +41,11 @@ struct MultiviewPresentationLayoutTests {
                             #expect(layout.network.width == live.settings.width)
                             #expect(layout.network.height == live.settings.height)
                             if portrait {
-                                #expect(layout.network.maxX == w - 14)
+                                // Close then Wi-Fi, 8 pt apart, in the top-left corner.
+                                #expect(layout.network.x == layout.sessionControls.maxX + 8)
                                 #expect(layout.network.y == layout.sessionControls.y)
+                                #expect(layout.sessionControls.x == live.lock.x)
+                                #expect(layout.sessionControls.y <= live.gauges.y)
                             } else if arrangement == .centerStage {
                                 #expect(layout.network.midX == layout.sessionControls.midX)
                                 #expect(layout.network.y == layout.sessionControls.maxY + 8)
@@ -112,11 +115,20 @@ struct MultiviewPresentationLayoutTests {
             safeArea: .init(top: 59, bottom: 34), arrangement: .centerStage, selected: 2)
         let main = layout.tiles[2]
         let secondary = layout.tiles.enumerated().filter { $0.offset != 2 }.map(\.element)
-        #expect(main == MonitorRect(x: 15, y: 129, width: 363, height: 204.1875))
-        #expect(layout.assists.y == main.maxY + 15)
+        let live = FieldMonitorLayout(
+            width: 393, height: 852, safeArea: .init(top: 59, bottom: 34))
+        #expect(layout.sessionControls.y == live.gauges.y)
+        #expect(main == MonitorRect(
+            x: 15, y: layout.sessionControls.maxY + 10, width: 363, height: 204.1875))
+        // Readouts sit directly under the main picture, the feeds below them.
+        #expect(layout.readouts.y == main.maxY + 8)
+        #expect(secondary[0].y == layout.readouts.maxY + 12)
         #expect(secondary.allSatisfy { $0.x == 15 && $0.maxX == layout.assists.x - 6 })
-        #expect(secondary[0].y == layout.assists.y)
-        #expect(abs(secondary[2].maxY - (layout.readouts.y - 12)) < 0.001)
+        // The fixed tool column spans the secondary feeds exactly.
+        #expect(layout.assists.y == secondary[0].y)
+        #expect(abs(layout.assists.maxY - secondary[2].maxY) < 0.001)
+        #expect(abs(secondary[2].maxY - (layout.record.y - 12)) < 0.001)
+        #expect(layout.assists.height >= 4 * 44 + 8)
         #expect(secondary[0].height == secondary[1].height)
     }
 
@@ -125,7 +137,7 @@ struct MultiviewPresentationLayoutTests {
             width: 393, height: 852, safeArea: .init(top: 59, bottom: 34),
             arrangement: .grid, selected: 0)
         #expect(grid.tiles.allSatisfy { $0.x == 15 && $0.maxX == grid.assists.x - 6 })
-        #expect(grid.tiles[0].y == 129)
+        #expect(grid.tiles[0].y == grid.sessionControls.maxY + 10)
         #expect(abs(grid.tiles[3].maxY - (grid.readouts.y - 12)) < 0.001)
         #expect(grid.tiles[0].height == grid.tiles[3].height)
         // The palette clears Wi-Fi but never starts above the feed tops.
@@ -161,8 +173,11 @@ struct MultiviewPresentationLayoutTests {
                     let main = layout.tiles[1]
                     #expect(abs(main.width / main.height - 16 / 9) < 0.001)
                     #expect(abs(main.midX - width / 2) < 0.001)
-                    #expect(layout.assists.y == main.maxY + 15)
-                    #expect(layout.assists.maxY <= layout.readouts.y - 12)
+                    #expect(layout.readouts.y == main.maxY + 8)
+                    #expect(layout.assists.y == layout.readouts.maxY + 12)
+                    let secondary = layout.tiles.enumerated().filter { $0.offset != 1 }
+                    #expect(layout.assists.y == secondary.first!.element.y)
+                    #expect(abs(layout.assists.maxY - secondary.last!.element.maxY) < 0.001)
                 }
             }
         }
@@ -213,7 +228,8 @@ struct MultiviewPresentationLayoutTests {
                 if height > width { #expect(grid.display == stage.display) }
                 #expect(grid.sessionControls == stage.sessionControls)
                 if height > width {
-                    #expect(grid.network == stage.network && grid.readouts == stage.readouts)
+                    #expect(grid.network == stage.network)
+                    #expect(stage.readouts.y == stage.tiles[selected].maxY + 8)
                 } else {
                     #expect(stage.network.midX == stage.sessionControls.midX)
                     #expect(stage.readoutsOverlay)
