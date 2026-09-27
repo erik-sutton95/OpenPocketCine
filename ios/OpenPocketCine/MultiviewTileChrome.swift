@@ -150,35 +150,42 @@ struct MultiviewTileChrome: View {
             .padding(.trailing, 2)
             .allowsHitTesting(true)
             Spacer(minLength: 0)
-            VStack(alignment: .leading, spacing: compact ? 2 : 4) {
-                if !compact {
-                    Text(values.format)
-                        .font(MonitorTheme.font(9, weight: .semibold)).lineLimit(1)
-                }
-                HStack(spacing: 6) {
-                    battery
-                    Text(values.storage)
-                    Spacer(minLength: 0)
-                    Text(MultiviewTelemetryPresentation.recordingStatus(tile))
-                        .foregroundStyle(tile.recordingActive == true ? .red : .white)
-                }
-                .font(MonitorTheme.font(compact ? 7.5 : 9, weight: .medium))
-                HStack(spacing: 6) {
+            // Two bottom-aligned columns so the left block ends on the same line as
+            // the right block (and the stage's camera-values row).
+            HStack(alignment: .bottom, spacing: 6) {
+                VStack(alignment: .leading, spacing: compact ? 2 : 4) {
+                    if !compact {
+                        Text(values.format)
+                            .font(MonitorTheme.font(9, weight: .semibold)).lineLimit(1)
+                    }
+                    HStack(spacing: 6) {
+                        battery
+                        Text(values.storage)
+                    }
+                    .font(MonitorTheme.font(compact ? 7.5 : 9, weight: .medium))
                     if compact, let timecode = tile.timecodeReadout {
                         Text(timecode).monospacedDigit()
+                            .font(MonitorTheme.font(8, weight: .medium))
                             .accessibilityLabel("Timecode " + timecode)
                     }
-                    Spacer(minLength: 0)
-                    if tile.lutEnabled { Text("LUT").foregroundStyle(MonitorTheme.accent) }
-                    if let note = tile.recordingNote,
-                        note != "Recording", note != "Recording stopped"
-                    {
-                        Text(note).foregroundStyle(.orange).lineLimit(1)
-                    } else if selected && !compact {
-                        Text("SELECTED").foregroundStyle(MonitorTheme.accent)
-                    }
                 }
-                .font(MonitorTheme.font(compact ? 8 : 10, weight: .medium))
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: compact ? 2 : 4) {
+                    Text(MultiviewTelemetryPresentation.recordingStatus(tile))
+                        .foregroundStyle(tile.recordingActive == true ? .red : .white)
+                        .font(MonitorTheme.font(compact ? 7.5 : 9, weight: .medium))
+                    HStack(spacing: 6) {
+                        if tile.lutEnabled { Text("LUT").foregroundStyle(MonitorTheme.accent) }
+                        if let note = tile.recordingNote,
+                            note != "Recording", note != "Recording stopped"
+                        {
+                            Text(note).foregroundStyle(.orange).lineLimit(1)
+                        } else if selected && !compact {
+                            Text("SELECTED").foregroundStyle(MonitorTheme.accent)
+                        }
+                    }
+                    .font(MonitorTheme.font(compact ? 8 : 10, weight: .medium))
+                }
             }
             .monospacedDigit()
             .padding(.horizontal, compact ? 8 : 11)
