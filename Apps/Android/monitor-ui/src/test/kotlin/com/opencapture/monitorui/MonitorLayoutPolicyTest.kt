@@ -131,18 +131,18 @@ class MonitorLayoutPolicyTest {
     @Test
     fun portraitStatusRowSitsBelowTheSafeTopAndTheFeedCentersOnTheCanvas() {
         val notched = MonitorLayoutPolicy.portrait(393f, 852f, 59f, 34f, false, true, 16f / 9f)
-        assertEquals(51f, notched.status.y, .05f)
+        assertEquals(59f, notched.status.y, .05f)
         assertEquals(44f, notched.status.height, .05f)
         assertTrue(notched.status.maxY <= notched.picture.y + .05f)
         assertEquals(852f / 2f, notched.picture.y + notched.picture.height / 2f, .5f)
         assertTrue(notched.picture.maxY < notched.values.y)
 
         val classic = MonitorLayoutPolicy.portrait(375f, 667f, 20f, 0f, false, true, 16f / 9f)
-        assertEquals(12f, classic.status.y, .05f)
+        assertEquals(20f, classic.status.y, .05f)
         assertTrue(classic.status.maxY <= classic.picture.y + .05f)
 
         val maxPhone = MonitorLayoutPolicy.portrait(440f, 956f, 62f, 34f, false, true, 16f / 9f)
-        assertEquals(54f, maxPhone.status.y, .05f)
+        assertEquals(62f, maxPhone.status.y, .05f)
         assertTrue(maxPhone.status.maxY <= maxPhone.picture.y + .05f)
         assertEquals(956f / 2f, maxPhone.picture.y + maxPhone.picture.height / 2f, .5f)
         assertTrue(maxPhone.picture.maxY < maxPhone.values.y)

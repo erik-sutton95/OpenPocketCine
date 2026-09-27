@@ -69,7 +69,7 @@ object MonitorLayoutPolicy {
         val vh = max(0f, height)
         val tablet = min(vw, vh) >= 600f
         val ratio = sourceAspect.takeIf { it.isFinite() && it > 0f } ?: 16f / 9f
-        val top = max(0f, safeTop - 8f)
+        val top = max(0f, safeTop)
         val status = MonitorRect(0f, top, vw, if (tablet) 52f else 44f)
         val systemH = if (tablet) 116f else 100f
         // Record still clears the navigation handle; the whole portrait stack sits low.

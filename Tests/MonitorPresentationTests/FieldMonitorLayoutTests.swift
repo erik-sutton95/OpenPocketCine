@@ -252,7 +252,7 @@ struct FieldMonitorLayoutTests {
     @Test func portraitStatusRowSitsBelowTheSafeTopAndTheFeedCentersOnTheCanvas() {
         let notched = FieldMonitorLayout(
             width: 393, height: 852, safeArea: .init(top: 59, bottom: 34))
-        #expect(abs(notched.status.y - 51) < 0.05)
+        #expect(abs(notched.status.y - 59) < 0.05)
         #expect(notched.status.height == 44)
         #expect(notched.status.maxY <= notched.picture.y + 0.05)
         #expect(abs(notched.picture.midY - notched.viewport.height / 2) < 0.5)
@@ -260,12 +260,12 @@ struct FieldMonitorLayoutTests {
 
         let classic = FieldMonitorLayout(
             width: 375, height: 667, safeArea: .init(top: 20, bottom: 0))
-        #expect(abs(classic.status.y - 12) < 0.05)
+        #expect(abs(classic.status.y - 20) < 0.05)
         #expect(classic.status.maxY <= classic.picture.y + 0.05)
 
         let maxPhone = FieldMonitorLayout(
             width: 440, height: 956, safeArea: .init(top: 62, bottom: 34))
-        #expect(abs(maxPhone.status.y - 54) < 0.05)
+        #expect(abs(maxPhone.status.y - 62) < 0.05)
         #expect(maxPhone.status.maxY <= maxPhone.picture.y + 0.05)
         #expect(abs(maxPhone.picture.midY - maxPhone.viewport.height / 2) < 0.5)
         #expect(maxPhone.picture.maxY < maxPhone.values.y)

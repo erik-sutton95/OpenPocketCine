@@ -205,7 +205,8 @@ struct FieldMonitorStatusChrome: View {
                     Text(caption)
                         .font(MonitorTheme.font(11, weight: .semibold))
                         .lineLimit(1).fixedSize()
-                        .alignmentGuide(.bottom) { $0[.top] - 1 }
+                        // Hang below the format line (its own line height), not over it.
+                        .offset(y: 14)
                 }
             }
             .foregroundStyle(

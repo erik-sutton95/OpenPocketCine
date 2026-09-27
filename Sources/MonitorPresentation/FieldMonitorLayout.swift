@@ -126,7 +126,7 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             // STBY / clock / REC SETUP sit just below the notch, independent of the feed.
             let statusH = tablet ? 52.0 : 44.0
             status = .init(
-                x: edge, y: max(0, safeArea.top - 8) + controlInset, width: w - 28, height: statusH)
+                x: edge, y: max(0, safeArea.top) + controlInset, width: w - 28, height: statusH)
             let ceiling = status.maxY
             let pillarbox = tablet && w / ratio > max(0, floor - ceiling)
             let pictureH = pillarbox ? max(1, floor - ceiling) : w / ratio
