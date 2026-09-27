@@ -163,41 +163,59 @@
 
         private func toolGrid(full: MonitorAssistPaletteLayout, labels: Double) -> some View {
             let items = displayTools
-            return Group {
-                if full.portrait {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: MonitorAssistPaletteLayout.spacing) {
-                            ForEach(Array(items.enumerated()), id: \.element.id) { index, tool in
-                                toolButton(tool, index: index, full: full, labels: labels)
+            // Collapsed, the edge fade would mask the favorite in its one-cell viewport.
+            let fade: CGFloat = expanded ? 24 : 0
+            return ScrollViewReader { proxy in
+                Group {
+                    if full.portrait {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(spacing: MonitorAssistPaletteLayout.spacing) {
+                                ForEach(Array(items.enumerated()), id: \.element.id) {
+                                    index, tool in
+                                    toolButton(tool, index: index, full: full, labels: labels)
+                                }
                             }
                         }
-                    }
-                    // Collapsed, a drag belongs to the expand gesture, not the scroller.
-                    .scrollDisabled(!expanded)
-                    .monitorScrollFade()
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: MonitorAssistPaletteLayout.spacing) {
-                            ForEach(0..<full.columns, id: \.self) { column in
-                                VStack(spacing: MonitorAssistPaletteLayout.spacing) {
-                                    ForEach(0..<2, id: \.self) { row in
-                                        let index = MonitorAssistPaletteReveal.landscapeCellIndex(
-                                            column: column, row: row)
-                                        if items.indices.contains(index) {
-                                            toolButton(
-                                                items[index], index: index, full: full,
-                                                labels: labels)
-                                        } else {
-                                            Color.clear.frame(
-                                                width: full.cellWidth, height: full.cellHeight)
+                        // Collapsed, a drag belongs to the expand gesture, not the scroller.
+                        .scrollDisabled(!expanded)
+                        .monitorScrollFade(depth: fade)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(spacing: MonitorAssistPaletteLayout.spacing) {
+                                ForEach(0..<full.columns, id: \.self) { column in
+                                    VStack(spacing: MonitorAssistPaletteLayout.spacing) {
+                                        ForEach(0..<2, id: \.self) { row in
+                                            let index =
+                                                MonitorAssistPaletteReveal.landscapeCellIndex(
+                                                    column: column, row: row)
+                                            if items.indices.contains(index) {
+                                                toolButton(
+                                                    items[index], index: index, full: full,
+                                                    labels: labels)
+                                            } else {
+                                                Color.clear.frame(
+                                                    width: full.cellWidth, height: full.cellHeight)
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                        .scrollDisabled(!expanded)
+                        .monitorScrollFade(.horizontal, depth: fade)
                     }
-                    .scrollDisabled(!expanded)
-                    .monitorScrollFade(.horizontal)
+                }
+                // An offset scrolled while open survives the collapse and, with
+                // scrolling off, strands the favorites outside the collapsed cells.
+                .onChange(of: expanded) { _, open in
+                    guard !open else { return }
+                    withAnimation(MonitorMotion.drawerSpring(reduceMotion)) {
+                        if full.portrait, let first = items.first?.id {
+                            proxy.scrollTo(first, anchor: .top)
+                        } else if !full.portrait {
+                            proxy.scrollTo(0, anchor: .leading)
+                        }
+                    }
                 }
             }
             .frame(
@@ -208,7 +226,8 @@
             .frame(maxHeight: full.scrollHeight)
             .scrollBounceBehavior(.basedOnSize)
             .padding(MonitorAssistPaletteLayout.padding)
-            .padding(.top, full.portrait ? 24 + MonitorAssistPaletteLayout.spacing : 0)
+            // The layout reserves 35 pt in portrait: 4 + 24 chevron + 3 + 4.
+            .padding(.top, full.portrait ? 24 + 3 : 0)
             .padding(
                 .trailing,
                 full.portrait

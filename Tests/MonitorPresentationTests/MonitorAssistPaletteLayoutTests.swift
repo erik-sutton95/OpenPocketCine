@@ -36,6 +36,29 @@ struct MonitorAssistPaletteLayoutTests {
             "Excess tools belong to the scroller")
     }
 
+    /// Only the portrait catalog overflows on a phone, so only there can an
+    /// offset scrolled while open strand the favorite when the plate collapses.
+    /// The collapsed viewport is exactly one cell under the 24 pt chevron.
+    @Test func portraitCatalogScrollsPastTheOneCellCollapsedViewport() {
+        let full = MonitorAssistPaletteLayout(
+            portrait: true, tablet: false, expanded: true, toolCount: 15,
+            maximumWidth: 276, maximumHeight: 874 * 0.62)
+        let compact = full.resolving(expanded: false)
+        let catalog =
+            15 * full.cellHeight + 14 * MonitorAssistPaletteLayout.spacing
+        #expect(catalog > full.scrollHeight)
+        #expect(compact.scrollHeight == compact.cellHeight)
+        #expect(
+            compact.height - 2 * MonitorAssistPaletteLayout.padding - 24 - 3 == compact.cellHeight)
+        let landscape = MonitorAssistPaletteLayout(
+            portrait: false, tablet: false, expanded: true, toolCount: 15,
+            maximumWidth: 700, maximumHeight: 300)
+        let columns = Double(landscape.columns)
+        #expect(
+            columns * landscape.cellWidth + (columns - 1) * MonitorAssistPaletteLayout.spacing
+                <= landscape.scrollWidth)
+    }
+
     @Test func landscapeExpansionKeepsTwoRowsAndScrollsNarrowScreens() {
         let layout = MonitorAssistPaletteLayout(
             portrait: false, tablet: false, expanded: true, toolCount: 15,

@@ -158,6 +158,11 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
         if (!dragging) progress.animateTo(if (expanded) 1f else 0f, settle)
     }
     val scrollState = rememberScrollState()
+    // An offset scrolled while open survives the collapse and, with scrolling off,
+    // strands the favorites outside the collapsed cells.
+    LaunchedEffect(expanded) { if (!expanded) scrollState.animateScrollTo(0) }
+    // Collapsed, the edge fade would mask the favorite in its one-cell viewport.
+    val fade = if (expanded) 24.dp else 0.dp
     var slotInWindow by remember { mutableStateOf(IntRect.Zero) }
     var windowToRoot by remember { mutableStateOf(Offset.Zero) }
     var popupWindowWidth by remember(config.screenWidthDp, density.density) {
@@ -334,11 +339,12 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
             .monitorMaterial(if (reveal > 0.5f) MonitorMaterial.Expanded else MonitorMaterial.Compact)
             .padding(4.dp)) {
             if (portrait) {
+                // compactH reserves 35: 4 + 24 chevron + 3 + 4, whatever the cell spacing.
                 Column(Modifier.matchParentSize(), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
+                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     expandHit()
                     // Collapsed, a drag belongs to the expand gesture, not the scroller.
-                    Column(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState)
+                    Column(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState, depth = fade)
                         .verticalScroll(scrollState, enabled = expanded),
                         verticalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
                         ranked.forEachIndexed { index, tool -> key(tool, index) }
@@ -347,7 +353,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
             } else {
                 Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
-                    Row(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState, vertical = false)
+                    Row(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState, vertical = false, depth = fade)
                         .horizontalScroll(scrollState, enabled = expanded),
                         horizontalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
                         repeat(columns) { column ->
