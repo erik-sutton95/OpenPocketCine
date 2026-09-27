@@ -164,7 +164,8 @@
         private func toolGrid(full: MonitorAssistPaletteLayout, labels: Double) -> some View {
             let items = displayTools
             // Collapsed, the edge fade would mask the favorite in its one-cell viewport.
-            let fade: CGFloat = expanded ? 24 : 0
+            // Shallow: a hint that more tools scroll, never dimming the edge buttons.
+            let fade: CGFloat = expanded ? 8 : 0
             return ScrollViewReader { proxy in
                 Group {
                     if full.portrait {

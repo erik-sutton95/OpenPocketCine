@@ -162,7 +162,8 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     // strands the favorites outside the collapsed cells.
     LaunchedEffect(expanded) { if (!expanded) scrollState.animateScrollTo(0) }
     // Collapsed, the edge fade would mask the favorite in its one-cell viewport.
-    val fade = if (expanded) 24.dp else 0.dp
+    // Shallow: a hint that more tools scroll, never dimming the edge buttons.
+    val fade = if (expanded) 8.dp else 0.dp
     var slotInWindow by remember { mutableStateOf(IntRect.Zero) }
     var windowToRoot by remember { mutableStateOf(Offset.Zero) }
     var popupWindowWidth by remember(config.screenWidthDp, density.density) {
