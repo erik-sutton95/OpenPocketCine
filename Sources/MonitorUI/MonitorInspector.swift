@@ -33,7 +33,7 @@
         private let helpVisible: Binding<Bool>?
         private let scrollsContent: Bool
         private let closeIdentifier: String
-        private let closeInset: CGFloat
+        private let compactHeader: Bool
         private let navigation: Navigation
         private let content: Content
         private let footer: Footer
@@ -45,7 +45,7 @@
             trailing: Bool = false, hasNavigation: Bool = true,
             preferredWidth: MonitorInspectorWidth? = nil,
             helpVisible: Binding<Bool>? = nil,
-            scrollsContent: Bool = true, closeIdentifier: String = "", closeInset: CGFloat = 0,
+            scrollsContent: Bool = true, closeIdentifier: String = "", compactHeader: Bool = false,
             onClose: @escaping () -> Void,
             @ViewBuilder navigation: () -> Navigation,
             @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer
@@ -60,7 +60,7 @@
             self.helpVisible = helpVisible
             self.scrollsContent = scrollsContent
             self.closeIdentifier = closeIdentifier
-            self.closeInset = closeInset
+            self.compactHeader = compactHeader
             self.navigation = navigation()
             self.content = content()
             self.footer = footer()
@@ -88,7 +88,7 @@
                     .accessibilityLabel("Dismiss \(title)")
                     .accessibilityAddTraits(.isButton)
                 VStack(spacing: 0) {
-                    header
+                    header.zIndex(1)
                     if portrait && hasNavigation {
                         navigation.frame(height: 44).padding(.bottom, 8)
                     }
@@ -169,18 +169,22 @@
                                 helpVisible.wrappedValue ? MonitorTheme.accent : MonitorTheme.muted
                             )
                             .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.buttonStyle(MonitorButtonStyle()).accessibilityLabel("Show option help")
+                    }.buttonStyle(MonitorButtonStyle()).padding(.vertical, compactHeader ? -11 : 0)
+                    .accessibilityLabel("Show option help")
                         .accessibilityValue(helpVisible.wrappedValue ? "On" : "Off")
                 }
                 Button(action: onClose) {
                     MonitorIcon.x.frame(width: 14, height: 14)
                         .frame(width: 44, height: 44).contentShape(Rectangle())
                 }.buttonStyle(MonitorButtonStyle()).foregroundStyle(MonitorTheme.secondary)
+                    .padding(.vertical, compactHeader ? -11 : 0)
                     .accessibilityLabel("Close \(title)")
                     .accessibilityIdentifier(closeIdentifier)
             }
-            // `closeInset` moves the close control in from the panel corner; title follows the row.
-            .padding(.leading, 14).padding(.trailing, 2 + closeInset).padding(.top, closeInset)
+            // A compact header is one title line: the 44 pt close target overflows it,
+            // sits 8 pt further in from the corner, and top tabs start under the title.
+            .padding(.leading, 14).padding(.trailing, compactHeader ? 10 : 2)
+            .padding(.top, compactHeader ? 16 : 0).padding(.bottom, compactHeader ? -10 : 0)
         }
     }
 

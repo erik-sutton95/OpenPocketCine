@@ -44,6 +44,9 @@ struct MultiviewCameraSettings: View {
     @State private var selectedID: UUID?
     @State private var category: CaptureSheet = .iso
     @State private var railHeight: CGFloat = 0
+    @State private var column: CGSize = .zero
+    /// Tallest controls seen this session, so the preview never makes a category scroll.
+    @State private var controlsReserve: CGFloat = 200
     private struct PanelIdentity: Hashable {
         let model: ObjectIdentifier
         let category: CaptureSheet
@@ -61,7 +64,7 @@ struct MultiviewCameraSettings: View {
         MonitorInspector(
             title: "Camera settings", viewport: viewport, safeArea: safeArea,
             trailing: true, hasNavigation: false, preferredWidth: .assist,
-            scrollsContent: false, closeIdentifier: "monitor.capture.close", closeInset: 8,
+            scrollsContent: false, closeIdentifier: "monitor.capture.close", compactHeader: true,
             onClose: close
         ) {
             EmptyView()
@@ -79,25 +82,39 @@ struct MultiviewCameraSettings: View {
                                 .accessibilityLabel("\(tile.camera?.name ?? "Camera") preview")
                                 .environment(model)
                                 .id(ObjectIdentifier(model))
-                                // A compact 16:9 thumbnail (about 99 pt tall) keeps the
-                                // selected controls unscrolled on large phones.
-                                .frame(maxWidth: 176)
+                                .frame(maxWidth: previewWidth)
                                 .frame(maxWidth: .infinity)
-                                CapturePickerPanel(
-                                    sheet: category,
-                                    isPresented: { tile.controlsModel === model && selectedID == tile.id },
-                                    controlsEnabled: session.controlsAvailable(for: tile)
-                                        && categoryAvailable(category, model: model),
-                                    chromeless: true, onClose: close
-                                )
-                                .fixedSize(horizontal: false, vertical: true)
-                                .environment(model)
-                                .id(PanelIdentity(model: ObjectIdentifier(model), category: category))
-                                notes(tile: tile, model: model)
+                                VStack(alignment: .leading, spacing: 10) {
+                                    CapturePickerPanel(
+                                        sheet: category,
+                                        isPresented: {
+                                            tile.controlsModel === model && selectedID == tile.id
+                                        },
+                                        controlsEnabled: session.controlsAvailable(for: tile)
+                                            && categoryAvailable(category, model: model),
+                                        chromeless: true, onClose: close
+                                    )
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .environment(model)
+                                    .id(
+                                        PanelIdentity(
+                                            model: ObjectIdentifier(model), category: category))
+                                    notes(tile: tile, model: model)
+                                }
+                                .onGeometryChange(for: CGFloat.self) {
+                                    $0.size.height
+                                } action: {
+                                    controlsReserve = max(controlsReserve, $0)
+                                }
                             }
                         }
                         .scrollBounceBehavior(.basedOnSize)
                         .monitorScrollFade()
+                        .onGeometryChange(for: CGSize.self) {
+                            $0.size
+                        } action: {
+                            column = $0
+                        }
                         ScrollView(.vertical, showsIndicators: false) {
                             MonitorCaptureTabs(
                                 options: categories(model), selection: category, title: title,
@@ -110,7 +127,9 @@ struct MultiviewCameraSettings: View {
                         .frame(width: 92)
                         .frame(maxHeight: .infinity)
                         // The rail's baseline spans the full content height.
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        .onGeometryChange(for: CGFloat.self) {
+                            $0.size.height
+                        } action: {
                             railHeight = $0
                         }
                     }
@@ -180,6 +199,13 @@ struct MultiviewCameraSettings: View {
                 if let tile = cameras.first(where: { $0.id == id }) { select(tile) }
             }
         )
+    }
+
+    /// 16:9 preview width from the measured column: full width when the tallest
+    /// controls still fit below it, smaller on short (landscape) panels.
+    private var previewWidth: CGFloat {
+        let height = min(column.width * 9 / 16, column.height - controlsReserve - 10)
+        return max(72, height) * 16 / 9
     }
 
     /// Compact status lines; they take space only while present.

@@ -29,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -97,7 +99,7 @@ fun MonitorInspector(
     safeBottom: Float = 0f,
     hasNavigation: Boolean = true,
     close: (@Composable () -> Unit)? = null,
-    headerGap: androidx.compose.ui.unit.Dp = 8.dp,
+    compactHeader: Boolean = false,
     helpVisible: Boolean? = null,
     onToggleHelp: () -> Unit = {},
     navigation: @Composable (portrait: Boolean) -> Unit = {},
@@ -150,7 +152,16 @@ fun MonitorInspector(
                         ),
                 ) {
                     Row(
-                        Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, bottom = headerGap),
+                        if (compactHeader) {
+                            // One title line: the host's close target overflows it and the
+                            // first content row starts just under the title.
+                            Modifier.zIndex(1f).layout { measurable, constraints ->
+                                val row = measurable.measure(constraints)
+                                layout(row.width, (row.height - 10.dp.roundToPx()).coerceAtLeast(0)) { row.place(0, 0) }
+                            }.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 16.dp)
+                        } else {
+                            Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, bottom = 8.dp)
+                        },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(

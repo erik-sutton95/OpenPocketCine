@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -33,13 +34,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
+import androidx.compose.ui.unit.min
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -122,15 +127,17 @@ internal fun MultiviewCameraSettings(
         safeTop = safe.top,
         safeBottom = safe.bottom,
         close = {
-            // Inset from the panel corner; 48dp target.
-            Box(Modifier.padding(top = 8.dp, end = 8.dp).size(48.dp).chromeClickable(onClick = onDismiss)
-                .semantics { contentDescription = "Close camera settings"; role = Role.Button },
-                contentAlignment = Alignment.Center) {
-                OpcIcon(OpcIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
+            // Inset from the panel corner; the 48dp target overflows the one-line header.
+            Box(Modifier.padding(end = 8.dp).height(20.dp).wrapContentHeight(unbounded = true)) {
+                Box(Modifier.size(48.dp).chromeClickable(onClick = onDismiss)
+                    .semantics { contentDescription = "Close camera settings"; role = Role.Button },
+                    contentAlignment = Alignment.Center) {
+                    OpcIcon(OpcIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
+                }
             }
         },
         // Recording stays on Record all and each tile's options; camera tabs sit under the header.
-        headerGap = 0.dp,
+        compactHeader = true,
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val cameraTabScroll = rememberScrollState()
@@ -154,25 +161,33 @@ internal fun MultiviewCameraSettings(
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                         val viewport = maxHeight
+                        val density = LocalDensity.current
+                        // Tallest controls seen this session, so the preview never makes a category scroll.
+                        var controlsReserve by remember { mutableStateOf(200.dp) }
+                        val previewHeight = max(72.dp, min(maxWidth * 9f / 16f, maxHeight - controlsReserve - 8.dp))
                         val controlsScroll = rememberScrollState()
                         // Like the assist inspector: the live preview leads the scrolled controls.
                         Column(Modifier.fillMaxSize().monitorScrollFade(controlsScroll).verticalScroll(controlsScroll),
                             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // A compact 16:9 thumbnail keeps the selected controls unscrolled on large phones.
+                            // 16:9 from the measured column: full width when the tallest controls still fit.
                             key(tile) {
                                 MultiviewSettingsPreview(tile, Modifier.align(Alignment.CenterHorizontally)
-                                    .width(176.dp).height(99.dp))
+                                    .width(previewHeight * 16f / 9f).height(previewHeight))
                             }
-                            // Changing camera, category, recording or mode retires any in-progress native drum gesture.
-                            key(controls, sheet, status.isRecording, status.shootingMode) {
-                                LiveControlSheet(
-                                    sheet, controls, status, locked = multiviewSettingsLocked(sheet, status.isRecording),
-                                    onDismiss = onDismiss, maxHeightDp = viewport.value, portrait = false, showsHeader = false,
-                                )
+                            Column(Modifier.onSizeChanged {
+                                controlsReserve = max(controlsReserve, with(density) { it.height.toDp() })
+                            }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // Changing camera, category, recording or mode retires any in-progress native drum gesture.
+                                key(controls, sheet, status.isRecording, status.shootingMode) {
+                                    LiveControlSheet(
+                                        sheet, controls, status, locked = multiviewSettingsLocked(sheet, status.isRecording),
+                                        onDismiss = onDismiss, maxHeightDp = viewport.value, portrait = false, showsHeader = false,
+                                    )
+                                }
+                                // Compact error line; it takes space only while present.
+                                val note by controls.session.controlNote.collectAsState()
+                                note?.let { Text(it, color = LiveDesign.amber, style = LiveType.text(11f), maxLines = 2) }
                             }
-                            // Compact error line; it takes space only while present.
-                            val note by controls.session.controlNote.collectAsState()
-                            note?.let { Text(it, color = LiveDesign.amber, style = LiveType.text(11f), maxLines = 2) }
                         }
                     }
                     BoxWithConstraints(Modifier.fillMaxHeight()) {
