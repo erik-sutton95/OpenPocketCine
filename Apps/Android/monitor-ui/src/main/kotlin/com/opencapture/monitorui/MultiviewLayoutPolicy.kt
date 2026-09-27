@@ -95,9 +95,11 @@ data class MultiviewPresentationLayout(
                 else -> min(w - (if (banded) 28.0 else max(18.0, cutout + 8)),
                     min(display.x, live.record.x) - 8.0)
             }
-            var readouts = Rect(18.0, max(stageTop, live.record.y - 58.0),
-                if (portraitGrid) cornerPaletteX - 6 - 18 else w - 36, 37.0)
+            var readouts = Rect(18.0, max(stageTop, live.record.y - 58.0), w - 36, 37.0)
             val stageBottom = when {
+                // The feeds reach down to Record and the collapsed palette; the selected
+                // camera's values sit inside its tile.
+                portraitGrid -> max(stageTop + 1, min(live.record.y.toDouble(), live.display.maxY - (cell + 35)) - 12)
                 portrait -> readouts.y - 12
                 banded -> min(h - 111, live.display.y - 12.0)
                 else -> h - safeBottom - 12
@@ -122,13 +124,16 @@ data class MultiviewPresentationLayout(
                         stageTop + (index / columns) * (tileHeight + gap), tileWidth, tileHeight,
                     )
                 }
-                if (!portrait) {
+                if (portrait) {
                     val tile = tiles[focused]
-                    val rowY = max(tile.y, tile.maxY - 45)
+                    readouts = Rect(tile.x, max(tile.y, tile.maxY - 8 - GRID_READOUT_HEIGHT), tile.width, GRID_READOUT_HEIGHT)
+                } else {
+                    val tile = tiles[focused]
+                    val rowY = max(tile.y, tile.maxY - 8 - GRID_READOUT_HEIGHT)
                     val palette = live.assists
-                    val underPalette = palette.maxX > tile.x && palette.y < rowY + 37 && palette.maxY > rowY
+                    val underPalette = palette.maxX > tile.x && palette.y < rowY + GRID_READOUT_HEIGHT && palette.maxY > rowY
                     val readoutsLeft = if (underPalette) max(tile.x, palette.maxX + 6.0) else tile.x
-                    readouts = Rect(readoutsLeft, rowY, max(0.0, tile.maxX - readoutsLeft), 37.0)
+                    readouts = Rect(readoutsLeft, rowY, max(0.0, tile.maxX - readoutsLeft), GRID_READOUT_HEIGHT)
                 }
             } else if (portrait) {
                 // Readouts sit directly under the main picture; the feeds and the fixed
@@ -191,11 +196,14 @@ data class MultiviewPresentationLayout(
                 display = display, record = live.record, portrait = portrait, tablet = tablet,
                 controlCellSize = cell.toFloat(), sessionControlsHorizontal = true, assistsHorizontal = horizontal,
                 secondaryViewport = secondaryViewport, secondaryIndices = secondaryIndices,
-                readoutsOverlay = !portrait,
+                readoutsOverlay = !portrait || portraitGrid,
             )
         }
     }
 }
+
+/** Grid tiles carry the selected camera's values as a small row above the footer. */
+private const val GRID_READOUT_HEIGHT = 24.0
 
 private fun Float.finiteNonnegative() = if (isFinite()) max(0.0, toDouble()) else 0.0
 

@@ -155,7 +155,10 @@ struct MultiviewView: View {
                     session.tiles[index], index: index,
                     compact: frame.width < 200 || frame.height < 136,
                     condensed: frame.height < 80,
-                    readoutInset: 0,  // stage info sits inline with the camera values row
+                    // Center stage info sits inline with the camera values row; a
+                    // Grid tile is too narrow, so its footer sits above the values.
+                    readoutInset: overlay && session.layout == .grid
+                        ? frame.maxY - layout.readouts.y : 0,
                     // The floating View Assist palette covers the main tile's lower
                     // left; its footer starts where the stage value row does.
                     footerLeading: overlay ? layout.readouts.x - frame.x : 0)
@@ -172,7 +175,7 @@ struct MultiviewView: View {
                 networkButton(size: layout.network.width)
                     .frame(width: layout.network.width, height: layout.network.height)
                     .position(x: layout.network.midX, y: layout.network.midY)
-                selectedReadouts
+                selectedReadouts(small: session.layout == .grid)
                     .frame(width: layout.readouts.width, height: layout.readouts.height)
                     .position(x: layout.readouts.midX, y: layout.readouts.midY)
             }
@@ -255,27 +258,28 @@ struct MultiviewView: View {
         }
     }
 
-    private var selectedReadouts: some View {
+    /// Grid tiles are narrow, so their values row is small.
+    private func selectedReadouts(small: Bool) -> some View {
         let tile = session.tiles[min(3, max(0, session.focusedIndex))]
         let values = MultiviewTelemetryPresentation(settings: tile.settings)
-        return HStack(spacing: 6) {
-            readout("ISO", value: values.iso)
-            readout("SHUTTER", value: values.shutter)
-            readout("WB", value: values.whiteBalance)
-            readout("FOCUS", value: values.focus)
+        return HStack(spacing: small ? 4 : 6) {
+            readout("ISO", value: values.iso, small: small)
+            readout("SHUTTER", value: values.shutter, small: small)
+            readout("WB", value: values.whiteBalance, small: small)
+            readout("FOCUS", value: values.focus, small: small)
         }
-        .frame(maxWidth: 316)
+        .frame(maxWidth: small ? 220 : 316)
         .opacity(tile.camera == nil ? 0 : 1)
         .accessibilityHidden(tile.camera == nil)
         .accessibilityIdentifier("multiview.readouts")
     }
 
-    private func readout(_ title: String, value: String) -> some View {
-        VStack(spacing: 3) {
-            Text(value).font(MonitorTheme.font(14, weight: .medium)).monospacedDigit()
+    private func readout(_ title: String, value: String, small: Bool) -> some View {
+        VStack(spacing: small ? 1 : 3) {
+            Text(value).font(MonitorTheme.font(small ? 11 : 14, weight: .medium)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.7)
-            Text(title).font(MonitorTheme.font(7, weight: .semibold))
-                .tracking(0.8).foregroundStyle(MonitorTheme.muted)
+            Text(title).font(MonitorTheme.font(small ? 6 : 7, weight: .semibold))
+                .tracking(small ? 0.5 : 0.8).foregroundStyle(MonitorTheme.muted)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)

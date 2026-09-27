@@ -20,6 +20,8 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
     public let sessionControlsHorizontal: Bool
     /// Landscape stages mount Live View's horizontal View Assist palette.
     public let assistsHorizontal: Bool
+    /// Grid tiles carry the selected camera's values as a small row above the footer.
+    public static let gridReadoutHeight = 24.0
 
     public init(
         width: Double, height: Double, safeArea: MonitorSafeArea = .init(),
@@ -80,7 +82,7 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
         var result = [MonitorRect](repeating: .init(), count: 4)
         var stripViewport: MonitorRect?
         var stripIndices: [Int] = []
-        readoutsOverlay = !portrait
+        readoutsOverlay = !portrait || arrangement == .grid
 
         if portrait {
             let tileWidth = max(1, toolX - 6 - 15)
@@ -88,18 +90,22 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             if arrangement == .grid {
                 // Full-width feeds; the collapsible palette mirrors DISP across
                 // Record (same gap, same row bottom) and grows upward over them.
+                // The feeds reach down to Record and the collapsed palette; the
+                // selected camera's values sit inside its tile.
                 let paletteBottom = display.maxY
                 let paletteX = record.maxX + (record.x - display.maxX)
-                readouts = .init(
-                    x: 18, y: max(stageTop, record.y - 58),
-                    width: max(1, paletteX - 6 - 18), height: 37)
-                let stageBottom = max(stageTop + 1, readouts.y - 12)
+                let collapsedTop = paletteBottom - (cell + 35)
+                let stageBottom = max(stageTop + 1, min(record.y, collapsedTop) - 12)
                 let tileHeight = max(1, (stageBottom - stageTop - 3 * gap) / 4)
                 result = (0..<4).map { index in
                     .init(
                         x: 15, y: stageTop + Double(index) * (tileHeight + gap),
                         width: max(1, w - 30), height: tileHeight)
                 }
+                let tile = result[selectedIndex]
+                readouts = .init(
+                    x: tile.x, y: max(tile.y, tile.maxY - 8 - Self.gridReadoutHeight),
+                    width: tile.width, height: Self.gridReadoutHeight)
                 let paletteHeight = max(1, min(toolHeight, paletteBottom - stageTop))
                 assists = .init(
                     x: paletteX, y: paletteBottom - paletteHeight, width: toolWidth,
@@ -190,12 +196,14 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
                     width: tileWidth, height: tileHeight)
             }
             let tile = result[selectedIndex]
-            let rowY = max(tile.y, tile.maxY - 45)
+            let rowHeight = Self.gridReadoutHeight
+            let rowY = max(tile.y, tile.maxY - 8 - rowHeight)
             let underPalette =
-                assists.maxX > tile.x && assists.y < rowY + 37 && assists.maxY > rowY
+                assists.maxX > tile.x && assists.y < rowY + rowHeight && assists.maxY > rowY
             let readoutsLeft = underPalette ? max(tile.x, assists.maxX + 6) : tile.x
             readouts = .init(
-                x: readoutsLeft, y: rowY, width: max(0, tile.maxX - readoutsLeft), height: 37)
+                x: readoutsLeft, y: rowY, width: max(0, tile.maxX - readoutsLeft),
+                height: rowHeight)
         }
         secondaryViewport = stripViewport
         secondaryIndices = stripIndices

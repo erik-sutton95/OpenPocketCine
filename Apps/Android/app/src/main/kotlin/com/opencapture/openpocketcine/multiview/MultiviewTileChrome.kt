@@ -172,12 +172,13 @@ internal fun MultiviewTileChrome(
 internal fun MultiviewTileOverlay(
     readouts: MultiviewTileReadouts, focused: Boolean, compact: Boolean, clean: Boolean,
     enabled: Boolean, onOptions: () -> Unit, readoutsOverlay: Boolean = false, footerStart: Float = 0f,
+    footerInset: Float = 0f,
 ) {
     Box(Modifier.fillMaxSize()) {
         if (!clean && readoutsOverlay) {
         }
         if (!clean) MultiviewTileChrome(readouts, focused, compact, enabled, onOptions,
-            footerInset = 0f, footerStart = footerStart)  // inline with the camera values row
+            footerInset = footerInset, footerStart = footerStart)
         if (readouts.recovery != null && (compact || clean)) {
             Box(
                 Modifier.align(Alignment.Center).heightIn(min = 44.dp)

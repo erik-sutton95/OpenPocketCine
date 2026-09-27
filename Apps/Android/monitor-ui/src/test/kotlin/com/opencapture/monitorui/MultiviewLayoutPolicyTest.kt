@@ -82,7 +82,10 @@ class MultiviewLayoutPolicyTest {
                     }
                 }
                 controls.forEachIndexed { index, control ->
-                    for (other in controls.drop(index + 1)) assertFalse(overlaps(control, other), "$case: $control / $other")
+                    // Portrait Grid's palette expands over the in-tile values.
+                    for (other in controls.drop(index + 1)) if (!(portrait && arrangement == GRID &&
+                            control == layout.readouts && other == layout.assists))
+                        assertFalse(overlaps(control, other), "$case: $control / $other")
                 }
             }
         }
@@ -94,12 +97,17 @@ class MultiviewLayoutPolicyTest {
         val grid = MultiviewPresentationLayout.compute(393f, 852f, safe, GRID, 0)
         val live = MonitorLayoutPolicy.fieldMonitor(393f, 852f, safe.top, safe.leading, safe.bottom, safe.trailing)
         assertTrue(grid.tiles.all { it.x == 15f && it.maxX == 393f - 15f })
-        // DISP mirrored across Record, anchored at the bottom row; values stop short of it.
+        // DISP mirrored across Record, anchored at the bottom row.
         assertEquals(grid.record.x - grid.display.maxX, grid.assists.x - grid.record.maxX, 0.01f)
         assertEquals(live.display.maxY, grid.assists.maxY, 0.01f)
-        assertEquals(grid.assists.x - 6f, grid.readouts.maxX, 0.01f)
+        // The selected camera's values sit inside its tile, as in landscape.
+        assertTrue(grid.readoutsOverlay)
+        assertEquals(grid.tiles[0].maxY - 8f, grid.readouts.maxY, 0.01f)
+        assertEquals(grid.tiles[0].width, grid.readouts.width, 0.01f)
         assertEquals(grid.sessionControls.maxY + 10f, grid.tiles[0].y)
-        assertEquals(grid.readouts.y - 12f, grid.tiles[3].maxY, 0.001f)
+        // Feeds reach down to Record and the collapsed palette's top.
+        val collapsedTop = grid.assists.maxY - (grid.controlCellSize + 35f)
+        assertEquals(minOf(grid.record.y, collapsedTop) - 12f, grid.tiles[3].maxY, 0.01f)
         assertEquals(grid.tiles[0].height, grid.tiles[3].height)
         assertFalse(grid.assistsHorizontal)
         assertTrue(abs(grid.tiles[0].width / grid.tiles[0].height - 16f / 9f) > 0.1f)
@@ -238,13 +246,15 @@ class MultiviewLayoutPolicyTest {
                 val case = "$w x $h $arrangement"
                 for (tile in layout.tiles) {
                     assertTrue(tile.height >= 44f || tile == layout.tiles[0] && arrangement == CENTER_STAGE, case)
-                    // Portrait Grid's palette grows up over the feeds.
-                    if (arrangement == CENTER_STAGE) assertFalse(overlaps(tile, layout.assists), case)
-                    assertFalse(overlaps(tile, layout.readouts), case)
+                    // Portrait Grid's palette grows up over the feeds; values sit in a tile.
+                    if (arrangement == CENTER_STAGE) {
+                        assertFalse(overlaps(tile, layout.assists), case)
+                        assertFalse(overlaps(tile, layout.readouts), case)
+                    }
                     assertFalse(overlaps(tile, layout.record), case)
                     assertFalse(overlaps(tile, layout.display), case)
                 }
-                assertFalse(overlaps(layout.assists, layout.readouts), case)
+                if (arrangement == CENTER_STAGE) assertFalse(overlaps(layout.assists, layout.readouts), case)
                 assertFalse(overlaps(layout.assists, layout.display), case)
                 if (arrangement == CENTER_STAGE) {
                     assertEquals(16f / 9f, layout.tiles[0].width / layout.tiles[0].height, 0.001f)

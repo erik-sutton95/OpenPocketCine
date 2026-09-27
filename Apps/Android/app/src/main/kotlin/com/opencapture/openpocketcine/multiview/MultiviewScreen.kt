@@ -208,6 +208,11 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                     // its footer starts where the stage value row does.
                     footerStart = if (layout.readoutsOverlay && index == session.focusedIndex)
                         layout.readouts.x - layout.tiles[index].x else 0f,
+                    // Center stage info sits inline with the values; a Grid tile is too narrow,
+                    // so its footer sits above them.
+                    footerInset = if (layout.readoutsOverlay && index == session.focusedIndex &&
+                        session.layout == MultiviewLayout.GRID)
+                        layout.tiles[index].maxY - layout.readouts.y else 0f,
                     confirmRecording = model.recordConfirmationEnabled,
                     onAdd = { empty ->
                         if (session.networkConfigured) adding = empty else showNetwork = true
@@ -225,7 +230,8 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                         if (session.tiles.any { it.camera != null }) showLeave = true else closeStage()
                     },
                 )
-                StageReadouts(session.tiles.getOrNull(session.focusedIndex)?.settings, Modifier.rect(layout.readouts))
+                StageReadouts(session.tiles.getOrNull(session.focusedIndex)?.settings, Modifier.rect(layout.readouts),
+                    small = session.layout == MultiviewLayout.GRID)
                 MultiviewAssistPalette(
                     session, layout.controlCellSize, Modifier.rect(layout.assists),
                     horizontal = layout.assistsHorizontal,
@@ -322,15 +328,16 @@ private fun SessionControls(session: MultiviewSession, modifier: Modifier, onExi
 }
 
 @Composable
-private fun StageReadouts(settings: CameraStatus?, modifier: Modifier) {
+private fun StageReadouts(settings: CameraStatus?, modifier: Modifier, small: Boolean = false) {
     val values = multiviewExposureReadouts(settings ?: CameraStatus())
+    // Grid tiles are narrow, so their values row is small.
     Box(modifier, contentAlignment = Alignment.Center) {
-        Row(Modifier.widthIn(max = 300.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.widthIn(max = if (small) 220.dp else 300.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (small) 4.dp else 6.dp)) {
             values.forEach { (label, value) ->
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(value, color = LiveDesign.text, style = LiveType.mono(12f, FontWeight.SemiBold), maxLines = 1)
-                    Text(label, color = LiveDesign.muted, style = LiveType.text(7f, FontWeight.SemiBold), maxLines = 1)
+                    Text(value, color = LiveDesign.text, style = LiveType.mono(if (small) 10f else 12f, FontWeight.SemiBold), maxLines = 1)
+                    Text(label, color = LiveDesign.muted, style = LiveType.text(if (small) 6f else 7f, FontWeight.SemiBold), maxLines = 1)
                 }
             }
         }
@@ -540,6 +547,7 @@ private fun TileView(
     enabled: Boolean,
     readoutsOverlay: Boolean,
     footerStart: Float,
+    footerInset: Float = 0f,
     confirmRecording: Boolean,
     onAdd: (MultiviewSession.Tile) -> Unit,
     onOpenLive: () -> Unit,
@@ -578,7 +586,7 @@ private fun TileView(
             MultiviewTileOverlay(
                 readouts = readouts,
                 focused = focused, compact = compact, clean = clean, enabled = enabled,
-                readoutsOverlay = readoutsOverlay, footerStart = footerStart, onOptions = { session.focusedIndex = index; optionsOpen = true },
+                readoutsOverlay = readoutsOverlay, footerStart = footerStart, footerInset = footerInset, onOptions = { session.focusedIndex = index; optionsOpen = true },
             )
             Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) {
                 DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false },

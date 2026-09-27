@@ -94,7 +94,11 @@ struct MultiviewPresentationLayoutTests {
                                 }
                             }
                             for (index, control) in controls.enumerated() {
-                                for other in controls.dropFirst(index + 1) {
+                                // Portrait Grid's palette expands over the in-tile values.
+                                for other in controls.dropFirst(index + 1)
+                                where !(portrait && arrangement == .grid
+                                    && control == layout.readouts && other == layout.assists)
+                                {
                                     #expect(!overlaps(control, other))
                                 }
                             }
@@ -137,12 +141,17 @@ struct MultiviewPresentationLayoutTests {
         let live = FieldMonitorLayout(width: 393, height: 852, safeArea: safe)
         #expect(grid.tiles.allSatisfy { $0.x == 15 && $0.maxX == 393 - 15 })
         #expect(grid.tiles[0].y == grid.sessionControls.maxY + 10)
-        #expect(abs(grid.tiles[3].maxY - (grid.readouts.y - 12)) < 0.001)
+        // Feeds reach down to Record and the collapsed palette's top.
+        let collapsedTop = grid.assists.maxY - (grid.controlCellSize + 35)
+        #expect(grid.tiles[3].maxY == min(grid.record.y, collapsedTop) - 12)
         #expect(grid.tiles[0].height == grid.tiles[3].height)
-        // DISP mirrored across Record, anchored at the bottom row; values stop short of it.
+        // DISP mirrored across Record, anchored at the bottom row.
         #expect(grid.assists.x - grid.record.maxX == grid.record.x - grid.display.maxX)
         #expect(grid.assists.maxY == live.display.maxY)
-        #expect(grid.readouts.maxX == grid.assists.x - 6)
+        // The selected camera's values sit inside its tile, as in landscape.
+        #expect(grid.readoutsOverlay)
+        #expect(grid.readouts.x == grid.tiles[0].x && grid.readouts.maxX == grid.tiles[0].maxX)
+        #expect(grid.readouts.maxY == grid.tiles[0].maxY - 8)
         #expect(!grid.assistsHorizontal)
         #expect(abs(grid.tiles[0].width / grid.tiles[0].height - 16 / 9) > 0.1)
     }
@@ -160,9 +169,11 @@ struct MultiviewPresentationLayoutTests {
                 for (index, tile) in layout.tiles.enumerated() {
                     #expect(tile.height >= 44)
                     #expect(tile.x >= 0 && tile.maxX <= width)
-                    // Portrait Grid's palette grows up over the feeds.
+                    // Portrait Grid's palette grows up over the feeds; values sit in a tile.
                     for control in controls
-                    where !(arrangement == .grid && control == layout.assists) {
+                    where !(arrangement == .grid
+                        && (control == layout.assists || control == layout.readouts))
+                    {
                         #expect(!overlaps(tile, control))
                     }
                     for other in layout.tiles.dropFirst(index + 1) {
@@ -170,7 +181,10 @@ struct MultiviewPresentationLayoutTests {
                     }
                 }
                 for (index, control) in controls.enumerated() {
-                    for other in controls.dropFirst(index + 1) {
+                    for other in controls.dropFirst(index + 1)
+                    where !(arrangement == .grid && control == layout.assists
+                        && other == layout.readouts)
+                    {
                         #expect(!overlaps(control, other))
                     }
                 }
@@ -280,7 +294,7 @@ struct MultiviewPresentationLayoutTests {
                 #expect(layout.tiles[0].y == top)
                 #expect(layout.tiles[1].y == top)
                 #expect(layout.tiles[0].x == layout.sessionControls.maxX + 8)
-                #expect(layout.readouts.height == 37)
+                #expect(layout.readouts.height == MultiviewPresentationLayout.gridReadoutHeight)
                 if phone {
                     #expect(layout.tiles[3].maxY == height - safe.bottom - 12)
                 }
