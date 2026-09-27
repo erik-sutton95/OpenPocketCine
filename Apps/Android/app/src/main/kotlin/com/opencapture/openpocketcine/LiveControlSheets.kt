@@ -281,10 +281,7 @@ private fun LiveControlSheetContent(
     }
 
     fun applySeat(seat: CaptureLists.ShutterSeat) {
-        preferredAngle = seat.preferredAngle
-        effects.run {
-            if (seat.persistAngle) OperatorPrefs.setShutterAngleDegrees(context, seat.preferredAngle)
-        }
+        if (isAngleSheet) preferredAngle = seat.preferredAngle
         lastApplied = seat.selection
         drumSelection = seat.selection
     }
@@ -445,9 +442,10 @@ private fun LiveControlSheetContent(
                     is CaptureLists.ShutterDrumCommand.SetShutter ->
                         commitDrumValue { model.setShutterDenom(cmd.denom) }
                     is CaptureLists.ShutterDrumCommand.SetAngle -> {
-                        preferredAngle = cmd.degrees
-                        OperatorPrefs.setShutterAngleDegrees(context, cmd.degrees)
-                        commitDrumValue { model.setShutterDenom(cmd.denom) }
+                        commitDrumValue {
+                            preferredAngle = cmd.degrees
+                            model.session.setShutterAngle(cmd.degrees)
+                        }
                     }
                     CaptureLists.ShutterDrumCommand.Ignored -> Unit
                 }
@@ -1129,6 +1127,12 @@ object ShutterAngle {
 
     fun effectiveFps(fps: Int): Int = if (fps in 8..240) fps else 24
 
+    fun rematchesFormat(
+        usesAngle: Boolean, manual: Boolean, isPhoto: Boolean,
+        previousFps: Int, nextFps: Int, alreadyPending: Boolean = false,
+    ): Boolean = usesAngle && manual && !isPhoto && previousFps > 0 && nextFps > 0 &&
+        (previousFps != nextFps || alreadyPending)
+
     fun label(value: Double): String {
         val rounded = round(value)
         return if (abs(value - rounded) < 0.05) {
@@ -1710,8 +1714,7 @@ object CaptureLists {
                 return ShutterSeat(preferred, preferredAngle, persistAngle = false)
             }
             val next = ShutterAngle.nearestLabel(liveDenom, fps)
-            val degrees = ShutterAngle.parse(next) ?: ShutterAngle.DEFAULT_DEGREES
-            return ShutterSeat(next, degrees, persistAngle = true)
+            return ShutterSeat(next, preferredAngle, persistAngle = false)
         }
         return ShutterSeat(preferred, preferredAngle, persistAngle = false)
     }

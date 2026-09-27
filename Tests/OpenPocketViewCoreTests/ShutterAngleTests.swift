@@ -40,4 +40,22 @@ import Testing
         #expect(ShutterAngle.effectiveFps(0) == 24)
         #expect(ShutterAngle.effectiveFps(60) == 60)
     }
+
+    @Test func formatRematchRequiresEstablishedManualVideoAndPreservesQueuedIntent() {
+        #expect(ShutterAngle.rematchesFormat(
+            usesAngle: true, manual: true, isPhoto: false, previousFps: 25, nextFps: 50))
+        #expect(!ShutterAngle.rematchesFormat(
+            usesAngle: true, manual: false, isPhoto: false, previousFps: 25, nextFps: 50))
+        #expect(!ShutterAngle.rematchesFormat(
+            usesAngle: true, manual: true, isPhoto: true, previousFps: 25, nextFps: 50))
+        #expect(!ShutterAngle.rematchesFormat(
+            usesAngle: false, manual: true, isPhoto: false, previousFps: 25, nextFps: 50))
+        #expect(!ShutterAngle.rematchesFormat(
+            usesAngle: true, manual: true, isPhoto: false, previousFps: 0, nextFps: 50))
+        #expect(!ShutterAngle.rematchesFormat(
+            usesAngle: true, manual: true, isPhoto: false, previousFps: 50, nextFps: 50))
+        #expect(ShutterAngle.rematchesFormat(
+            usesAngle: true, manual: true, isPhoto: false, previousFps: 50, nextFps: 50,
+            alreadyPending: true))
+    }
 }

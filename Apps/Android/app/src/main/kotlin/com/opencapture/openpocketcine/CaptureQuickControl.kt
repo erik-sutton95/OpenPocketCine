@@ -143,8 +143,7 @@ internal fun applyCaptureQuickControl(sheet: LiveSheet, value: String, status: C
             is CaptureLists.ShutterDrumCommand.SetEv -> model.setEv(command.thirds)
             is CaptureLists.ShutterDrumCommand.SetShutter -> model.setShutterDenom(command.denom)
             is CaptureLists.ShutterDrumCommand.SetAngle -> {
-                OperatorPrefs.setShutterAngleDegrees(context, command.degrees)
-                model.setShutterDenom(command.denom)
+                model.session.setShutterAngle(command.degrees)
             }
             CaptureLists.ShutterDrumCommand.Ignored -> Unit
         }

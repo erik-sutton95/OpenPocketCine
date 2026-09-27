@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -108,6 +109,7 @@ internal fun MultiviewTileChrome(
     compact: Boolean,
     enabled: Boolean,
     onOptions: () -> Unit,
+    footerInset: Float = 0f,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < 200.dp
@@ -149,7 +151,7 @@ internal fun MultiviewTileChrome(
             OpcIcon(OpcIcon.ELLIPSIS, null, Modifier.padding(top = edge, end = edge).size(20.dp), Color.White)
         }
         Column(
-            Modifier.fillMaxWidth().align(Alignment.BottomCenter)
+            Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = footerInset.dp)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f))))
                 .padding(edge),
         ) {
@@ -171,10 +173,15 @@ internal fun MultiviewTileChrome(
 @Composable
 internal fun MultiviewTileOverlay(
     readouts: MultiviewTileReadouts, focused: Boolean, compact: Boolean, clean: Boolean,
-    enabled: Boolean, onOptions: () -> Unit,
+    enabled: Boolean, onOptions: () -> Unit, readoutsOverlay: Boolean = false,
 ) {
     Box(Modifier.fillMaxSize()) {
-        if (!clean) MultiviewTileChrome(readouts, focused, compact, enabled, onOptions)
+        if (!clean && readoutsOverlay) {
+            Box(Modifier.fillMaxWidth().height(74.dp).align(Alignment.BottomCenter)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .70f)))))
+        }
+        if (!clean) MultiviewTileChrome(readouts, focused, compact, enabled, onOptions,
+            footerInset = if (readoutsOverlay) 45f else 0f)
         if (readouts.recovery != null && (compact || clean)) {
             Box(
                 Modifier.align(Alignment.Center).heightIn(min = 44.dp)

@@ -1,9 +1,8 @@
-import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
 /// On-feed analog stick. Streams `0x04/0x01` while held, center on lift.
-/// UI 2.0 uses translucent white at rest and cyan while the operator holds it.
+/// Resting ink inverts the picture beneath it; a held stick uses the accent.
 struct LiveGimbalStick: View {
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
@@ -21,7 +20,7 @@ struct LiveGimbalStick: View {
     private var knob: CGFloat { LiveChromeMetrics.gimbalKnobSize }
     private var opacity: CGFloat { contact ? 0.8 : LiveChromeMetrics.gimbalStickOpacity }
     private var interactive: Bool { enabled && !interfaceLocked }
-    private var ink: Color { contact ? LiveDesign.accent : LiveDesign.text }
+    private var ink: Color { contact ? LiveDesign.accent : .white }
 
     var body: some View {
         ZStack {
@@ -37,7 +36,9 @@ struct LiveGimbalStick: View {
         }
         .animation(.easeOut(duration: 0.12), value: contact)
         .frame(width: size, height: size)
-        .monitorReadoutShadow()
+        // Let the compositor adapt these two shapes to the visible picture.
+        // No sampled pixels, readback, blur or independent refresh cadence.
+        .blendMode(contact ? .normal : .difference)
         .contentShape(Circle())
         .gesture(drag, including: interactive ? .gesture : .none)
         .allowsHitTesting(interactive)

@@ -96,23 +96,24 @@ See [BLE provisioning](https://openpocketcine.app/docs/protocol/ble/) for the ob
 ## Layout and per-camera monitoring
 
 The Layout button switches between **Grid** and **Center stage**. Grid uses four
-equal portrait rows or a 2×2 landscape arrangement. Tiles fill the available area
-without a fixed aspect ratio. In landscape, Center stage shows one large 16:9
-feed and a trailing strip of smaller feeds. In portrait, its main 16:9 feed
-retains the full stage width, while the smaller feeds fill the space below it.
-In a short resized window, the main feed fits smaller at 16:9 to leave room for
-the smaller feeds and controls. Landscape feeds start level with the top of
-Exit and Wi-Fi, with camera readouts below the pictures.
+equal portrait rows or a 2×2 landscape arrangement, filling the available area
+without a fixed aspect ratio. Portrait Center stage keeps its full-width 16:9
+main feed above the other cameras. On short resized windows, the main feed fits
+smaller at 16:9 to keep the remaining cameras and controls reachable.
 
-The toolbar is vertical and lines up with the right-hand controls. In landscape,
-it moves to the left control column when the cutout is on the right. Portrait
-keeps it on the right; in Center stage it starts just below the main picture.
-The rail stays below the top control and above the DISP row. On short screens,
-scroll the toolbar to reach every control.
-Camera pictures keep their positions. DISP and Record stay at their familiar
-Live View positions independently of the toolbar. FIT contains the complete
-source and FILL crops to cover a tile without stretching it. Switching layouts
-keeps the existing video hosts and camera sessions alive.
+Landscape Center stage has a larger 16:9 main picture, with camera readouts over
+its shaded bottom edge. Wi-Fi sits beneath Exit on the left. The three other
+camera tiles scroll in a strip at the far right, above DISP and Record. Content
+fades softly at the edges where more cameras remain; tap a camera to promote it.
+
+Multiview uses the same collapsible toolbar as View Assist. Tap its arrow to
+show Layout, Camera settings, FIT/FILL and LUT; scroll short toolbars to reach
+every control. In landscape Center stage it sits on the left, below any cutout.
+Grid aligns it with the right controls, or the left for a right-side cutout.
+Portrait keeps it on the right, below the main picture in Center stage.
+DISP and Record retain their Live View positions. FIT contains the source;
+FILL crops to cover the tile. Layout, selection and scrolling retain the camera
+sessions and video hosts.
 
 Camera names, models, reported timecode, battery/storage and recording state
 appear inside each feed, including the smaller portrait views. No information
@@ -120,8 +121,8 @@ box occupies the side of a feed. Selected-camera ISO, shutter, white balance and
 focus readouts form a compact group at the bottom. **Camera settings** in the toolbar opens a floating popup. Select a connected camera's tab to change its settings using
 the same controls as Live View. Changes apply to that camera while the other
 feeds stay visible; available controls follow that camera's capabilities and
-recording state. Camera and setting tabs have adjoining edges and an accent
-line marking the selected tab, matching the shared tabs elsewhere in the app.
+recording state. Camera and setting tabs use a single bottom line with a highlighted segment
+for the selected tab, matching navigation elsewhere in the app.
 
 Timecode uses **HH:MM:SS**, without a frame field. Each tile uses Live View's
 camera battery gauge. iOS includes charge state and low-battery colors; Android

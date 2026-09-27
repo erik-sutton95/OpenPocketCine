@@ -84,6 +84,11 @@ struct MultiviewCameraSettings: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("multiview.settings.panel")
+        #if DEBUG
+            .accessibilityValue(
+                ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_PROBE"] == "1"
+                    ? selected?.previewAccessibilityValue ?? "" : "")
+        #endif
         .onAppear { select(initialTile) }
         .onDisappear { session.closeCameraSettings() }
         .onChange(of: cameras.map(\.id)) { _, _ in

@@ -795,13 +795,8 @@ struct CapturePickerPanel: View {
             }
             if isAngleSheet {
                 guard let degrees = ShutterAngle.parse(value) else { return }
-                let denom = ShutterAngle.denom(
-                    degrees: degrees,
-                    fps: model.session.status.fps,
-                    available: shutterDenoms)
                 enqueueDrumSend(value) {
-                    OperatorPrefs.shutterAngleDegrees = degrees
-                    model.session.setShutterDenom(denom)
+                    model.session.setShutterAngle(degrees)
                 }
                 return
             }
@@ -1023,10 +1018,6 @@ struct CapturePickerPanel: View {
                 return
             }
             let next = ShutterAngle.nearestLabel(denom: liveDenom, fps: fps)
-            if preview == nil {
-                OperatorPrefs.shutterAngleDegrees =
-                    ShutterAngle.parse(next) ?? ShutterAngle.defaultDegrees
-            }
             lastApplied = next
             drumSelection = next
             return

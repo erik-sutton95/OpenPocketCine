@@ -271,11 +271,7 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             }
         case .angle:
             if let degrees = ShutterAngle.parse(value) {
-                OperatorPrefs.shutterAngleDegrees = degrees
-                model.session.setShutterDenom(
-                    ShutterAngle.denom(
-                        degrees: degrees, fps: status.fps,
-                        available: CaptureLists.shutterDenoms(from: status)))
+                model.session.setShutterAngle(degrees)
             }
         case .whiteBalanceMode:
             if value == WhiteBalanceMode.auto.label {

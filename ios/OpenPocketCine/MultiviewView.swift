@@ -20,6 +20,9 @@ struct MultiviewView: View {
     @State private var liveTile: MultiviewSession.Tile?
     @State private var settingsTile: MultiviewSession.Tile?
     @State private var clean = false
+    @State private var toolsExpanded = false
+    @State private var toolUsage = MonitorToolUsage()
+    @State private var stageGeometry = MultiviewStageGeometry()
     @State private var orientation = InterfaceOrientationObserver()
 
     init(session: MultiviewSession? = nil, startsSession: Bool = true, reviewPictures: Bool = false)
@@ -143,16 +146,15 @@ struct MultiviewView: View {
             selected: session.focusedIndex, topControlInset: windowGeometry.topControlInset)
         return ZStack(alignment: .topLeading) {
             MonitorTheme.canvas
-            ForEach(Array(session.tiles.enumerated()), id: \.element.id) { index, tile in
+            MultiviewStageCanvas(
+                ids: session.tiles.map(\.id), layout: layout, geometry: stageGeometry
+            ) { index in
                 let frame = layout.tiles[index]
                 tileView(
-                    tile, index: index, compact: frame.width < 200 || frame.height < 136,
-                    condensed: frame.height < 80
-                )
-                .frame(width: frame.width, height: frame.height)
-                .clipped()
-                .contentShape(Rectangle())
-                .position(x: frame.midX, y: frame.midY)
+                    session.tiles[index], index: index,
+                    compact: frame.width < 200 || frame.height < 136,
+                    condensed: frame.height < 80,
+                    readoutInset: layout.readoutsOverlay && index == session.focusedIndex ? 45 : 0)
             }
             if !clean {
                 exitButton(size: layout.sessionControls.width)
@@ -162,11 +164,9 @@ struct MultiviewView: View {
                     .position(
                         x: layout.sessionControls.midX,
                         y: layout.sessionControls.midY)
-                stageAssistPalette(
-                    cellSize: layout.controlCellSize, viewportHeight: layout.assists.height
-                )
-                .frame(width: layout.assists.width, height: layout.assists.height)
-                .position(x: layout.assists.midX, y: layout.assists.midY)
+                stageAssistPalette(layout: layout)
+                    .frame(width: layout.assists.width, height: layout.assists.height)
+                    .position(x: layout.assists.midX, y: layout.assists.midY)
                 networkButton(size: layout.network.width)
                     .frame(width: layout.network.width, height: layout.network.height)
                     .position(x: layout.network.midX, y: layout.network.midY)
@@ -200,14 +200,15 @@ struct MultiviewView: View {
                 guard tile.liveModel == nil, tile.camera != nil,
                     let buffer = tile.decoder.backdropSource
                 else { return nil }
-                let rect = layout.tiles[index].cgRect
+                guard let placement = stageGeometry.placement(index) else { return nil }
+                let rect = placement.frame
                 let effects = tile.decoder.backdropEffects
                 return MonitorVideoBackdropSource(
                     buffer: buffer, effects: effects,
                     frame: MonitorVideoBackdropSource.displayedFrame(
                         sourceAspect: tile.decoder.pictureAspect, effects: effects, in: rect,
                         fill: session.feedAspect == .fill),
-                    clip: rect)
+                    clip: placement.clip)
             }
         }
         .overlay { floatingPopups(viewport: viewport.size, safe: safe) }
@@ -281,92 +282,73 @@ struct MultiviewView: View {
         .accessibilityLabel(title + " " + value)
     }
 
-    private func stageAssistPalette(cellSize: CGFloat, viewportHeight: CGFloat) -> some View {
-        let content = Group {
-            Button {
-                let enabled = !session.tiles.filter { $0.camera != nil }.allSatisfy(\.lutEnabled)
-                for tile in session.tiles where tile.camera != nil && tile.lutEnabled != enabled {
-                    tile.toggleLUT()
-                }
-                session.persistStage()
-            } label: {
-                VStack(spacing: 2) {
-                    MonitorAssistIcon.lut.frame(width: 20, height: 20)
-                    Text("LUT").font(MonitorTheme.font(7.5, weight: .semibold)).tracking(0.7)
-                }
-                .frame(width: cellSize, height: cellSize)
-                .contentShape(Rectangle())
+    private func stageAssistPalette(layout: MultiviewPresentationLayout) -> some View {
+        let cameras = session.tiles.contains { $0.camera != nil }
+        let tools: [MonitorToolItem] = [
+            .init(
+                id: "LAYOUT", title: session.layout == .grid ? "FOCUS" : "GRID", enabled: false,
+                hasOptions: false,
+                accessibilityLabel: session.layout == .grid ? "Show Center stage" : "Show grid",
+                accessibilityValue: session.layout.displayName,
+                accessibilityIdentifier: "multiview.layout"),
+            .init(
+                id: "CAMERA", title: "CAMERA", enabled: false, hasOptions: false,
+                available: cameras,
+                accessibilityLabel: "Camera settings", accessibilityValue: "",
+                accessibilityIdentifier: "multiview.settings"),
+            .init(
+                id: "FIT", title: session.feedAspect == .fill ? "FILL" : "FIT", enabled: false,
+                hasOptions: false,
+                accessibilityLabel: session.feedAspect == .fill
+                    ? "Fit feed in frame" : "Fill frame with feed",
+                accessibilityValue: session.feedAspect == .fill ? "Fill" : "Fit",
+                accessibilityIdentifier: "multiview.fitFill"),
+            .init(
+                id: "LUT", title: "LUT",
+                enabled: session.tiles.contains { $0.camera != nil && $0.lutEnabled },
+                hasOptions: false, available: cameras,
+                accessibilityLabel: "Toggle Auto LUT for all cameras"),
+        ]
+        let palette = MonitorAssistPaletteLayout(
+            portrait: true, tablet: layout.tablet, expanded: true, toolCount: tools.count,
+            maximumWidth: layout.assists.width, maximumHeight: layout.assists.height)
+        return MonitorAssistPalette(
+            tools: tools, layout: palette,
+            usageSeed: ["LAYOUT": 4, "CAMERA": 3, "FIT": 2, "LUT": 1],
+            usage: $toolUsage, expanded: $toolsExpanded, onToggle: activateTool,
+            onOptions: { _ in },
+            accessibilityName: "Multiview tools", accessibilityPrefix: "multiview.toolbar"
+        ) { id in
+            switch id {
+            case "LUT": MonitorAssistIcon.lut
+            case "FIT": session.feedAspect == .fill ? OpcIcon.minimize : OpcIcon.maximize
+            case "LAYOUT": session.layout == .grid ? OpcIcon.layoutList : OpcIcon.layoutGrid
+            default: OpcIcon.settings
             }
-            .foregroundStyle(
-                session.tiles.contains { $0.camera != nil && $0.lutEnabled }
-                    ? MonitorTheme.accent : MonitorTheme.secondary
-            )
-            .disabled(!session.tiles.contains { $0.camera != nil })
-            .accessibilityLabel("Toggle Auto LUT for all cameras")
-            Button {
-                session.feedAspect = session.feedAspect == .fill ? .fit16x9 : .fill
-                session.persistStage()
-            } label: {
-                VStack(spacing: 2) {
-                    (session.feedAspect == .fill ? OpcIcon.minimize : OpcIcon.maximize)
-                        .frame(width: 20, height: 20)
-                    Text(session.feedAspect == .fill ? "FILL" : "FIT")
-                        .font(MonitorTheme.font(7.5, weight: .semibold)).tracking(0.7)
-                }
-                .frame(width: cellSize, height: cellSize)
-                .contentShape(Rectangle())
-            }
-            .foregroundStyle(MonitorTheme.secondary)
-            .accessibilityLabel(
-                session.feedAspect == .fill ? "Fit feed in frame" : "Fill frame with feed"
-            )
-            .accessibilityValue(session.feedAspect == .fill ? "Fill" : "Fit")
-            .accessibilityIdentifier("multiview.fitFill")
-            Button {
-                session.layout = session.layout == .grid ? .centerStage : .grid
-            } label: {
-                VStack(spacing: 2) {
-                    (session.layout == .grid ? OpcIcon.layoutList : OpcIcon.layoutGrid)
-                        .frame(width: 20, height: 20)
-                    Text(session.layout == .grid ? "FOCUS" : "GRID")
-                        .font(MonitorTheme.font(7.5, weight: .semibold)).tracking(0.7)
-                }
-                .frame(width: cellSize, height: cellSize)
-                .contentShape(Rectangle())
-            }
-            .foregroundStyle(MonitorTheme.secondary)
-            .accessibilityLabel(session.layout == .grid ? "Show Center stage" : "Show grid")
-            .accessibilityValue(session.layout.displayName)
-            .accessibilityIdentifier("multiview.layout")
-            Button {
-                optionsTile = nil
-                settingsTile =
-                    session.tiles.first(where: {
-                        $0.id == session.tiles[session.focusedIndex].id && $0.camera != nil
-                    })
-                    ?? session.tiles.first(where: { $0.camera != nil })
-            } label: {
-                VStack(spacing: 2) {
-                    OpcIcon.settings.frame(width: 20, height: 20)
-                    Text("CAMERA").font(MonitorTheme.font(7.5, weight: .semibold)).tracking(0.7)
-                }
-                .frame(width: cellSize, height: cellSize).contentShape(Rectangle())
-            }
-            .foregroundStyle(MonitorTheme.secondary)
-            .disabled(!session.tiles.contains { $0.camera != nil })
-            .accessibilityLabel("Camera settings")
-            .accessibilityIdentifier("multiview.settings")
         }
-        return ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 3) { content }.padding(4)
+    }
+
+    private func activateTool(_ id: String) {
+        switch id {
+        case "LUT":
+            let enabled = !session.tiles.filter { $0.camera != nil }.allSatisfy(\.lutEnabled)
+            for tile in session.tiles where tile.camera != nil && tile.lutEnabled != enabled {
+                tile.toggleLUT()
+            }
+            session.persistStage()
+        case "FIT":
+            session.feedAspect = session.feedAspect == .fill ? .fit16x9 : .fill
+            session.persistStage()
+        case "LAYOUT": session.layout = session.layout == .grid ? .centerStage : .grid
+        case "CAMERA":
+            optionsTile = nil
+            settingsTile =
+                session.tiles.first {
+                    $0.id == session.tiles[session.focusedIndex].id && $0.camera != nil
+                }
+                ?? session.tiles.first { $0.camera != nil }
+        default: break
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollDisabled(viewportHeight >= cellSize * 4 + 17)
-        .frame(width: cellSize + 8, height: viewportHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .accessibilityIdentifier("multiview.toolbar")
-        .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
-        .buttonStyle(.plain)
     }
 
     private func networkButton(size: CGFloat) -> some View {
@@ -403,7 +385,8 @@ struct MultiviewView: View {
     }
 
     private func tileView(
-        _ tile: MultiviewSession.Tile, index: Int, compact: Bool, condensed: Bool
+        _ tile: MultiviewSession.Tile, index: Int, compact: Bool, condensed: Bool,
+        readoutInset: CGFloat = 0
     ) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12).fill(LiveDesign.surface)
@@ -458,7 +441,7 @@ struct MultiviewView: View {
                 if !clean {
                     MultiviewTileChrome(
                         tile: tile, index: index, selected: index == session.focusedIndex,
-                        compact: compact, condensed: condensed
+                        compact: compact, condensed: condensed, reservedBottom: readoutInset
                     ) {
                         closePopups()
                         optionsTile = tile

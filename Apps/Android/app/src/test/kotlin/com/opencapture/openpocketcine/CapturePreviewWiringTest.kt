@@ -54,7 +54,7 @@ class CapturePreviewWiringTest {
         assertTrue(body.contains("val enabled = !locked && preview == null"))
         assertTrue(body.contains("if (preview == null) {\n        LaunchedEffect(sheet)"))
         assertTrue(body.contains("effects.mount(sheet, status"))
-        assertTrue(body.contains("if (seat.persistAngle) OperatorPrefs.setShutterAngleDegrees"))
+        assertFalse(body.contains("if (seat.persistAngle) OperatorPrefs.setShutterAngleDegrees"))
         assertTrue(body.contains("CaptureFocusChoices.selection(status)"))
     }
 }

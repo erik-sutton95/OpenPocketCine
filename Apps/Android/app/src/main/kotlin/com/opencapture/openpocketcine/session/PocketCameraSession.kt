@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.Surface
 import com.opencapture.openpocketcine.CaptureLists
 import com.opencapture.openpocketcine.CaptureShutterPolicy
+import com.opencapture.openpocketcine.ShutterAngle
 import com.opencapture.openpocketcine.GamepadOperatorAction
 import com.opencapture.openpocketcine.GamepadShutterSync
 import com.opencapture.openpocketcine.EvComp
@@ -164,6 +165,9 @@ class PocketCameraSession(
     /** Main-thread instrumentation observes actual ACKs/timeouts, never the optimistic HUD. */
     internal var debugCameraSetResult: ((Int, Boolean) -> Unit)? = null
     internal val pendingCameraSetCount: Int get() = inflight.size + inflightPending.size
+    internal fun pendingCameraSetExtra(kind: Int): String? =
+        inflight[SwiftCore.waitKey(kind)]?.extra
+            ?: inflightPending[SwiftCore.waitKey(kind)]?.extra
     private val videoHistory = LiveSessionVideoHistory()
     /**
      * Multiview lends a tile's decoder and verified transport to Live View.
@@ -636,6 +640,7 @@ class PocketCameraSession(
     }
 
     fun releaseMultiview() {
+        formatPin = null
         if (!isMultiviewBorrowed) return
         controlLease?.invalidate()
         if (!isMultiviewControlOnly) {
@@ -2394,9 +2399,16 @@ class PocketCameraSession(
             formatPin = null
         }
         next = CamFov.absorb(next)
-        next = absorbStaleFormat(next, reported.resolutionCode >= 0 && reported.fpsIndex >= 0)
-        next = absorbStaleColor(next, reported)
+        // Reconcile the explicit Manual pin before accepting an Auto report.
         next = absorbStaleExpo(next, reported)
+        if (next.expoMode == CameraCommands.EXPO_AUTO && formatPin?.shutterAngle != null) {
+            formatPin?.shutterAngle = null
+            clearExpoPin(shutter = true)
+        }
+        val (formatStatus, angleRematch) =
+            absorbStaleFormat(next, reported.resolutionCode >= 0 && reported.fpsIndex >= 0)
+        next = formatStatus
+        next = absorbStaleColor(next, reported)
         next = absorbStaleWhiteBalance(next, reported.wbMode >= 0 &&
             (reported.wbMode != CameraCommands.WB_CUSTOM || reported.wbKelvin >= 2000))
         next = absorbStaleFocus(next, reported.focusMode >= 0, reported.focusTrack >= 0)
@@ -2429,6 +2441,7 @@ class PocketCameraSession(
         }
         if (isMultiviewControlOnly) {
             if (next != prev) { telemetryStatus = next; _status.value = next }
+            rematchShutterAngle(angleRematch)
             return
         }
         if (next.selfieFlip != prev.selfieFlip) {
@@ -2518,6 +2531,7 @@ class PocketCameraSession(
             _status.value = next
             publishFaceDetectWanted()
         }
+        rematchShutterAngle(angleRematch)
         confirmZoomColorHopIfReady()
     }
 
@@ -3360,6 +3374,7 @@ class PocketCameraSession(
     }
 
     fun setShutterDenom(denom: Int) {
+        formatPin?.shutterAngle = null
         if (_status.value.expoMode != CameraCommands.EXPO_MANUAL) {
             val previousExpo = _status.value.expoMode
             pinExpo(expoMode = CameraCommands.EXPO_MANUAL)
@@ -3393,8 +3408,46 @@ class PocketCameraSession(
         )
     }
 
+    /** Only explicit angle choices write the saved intent; delayed telemetry never does. */
+    fun setShutterAngle(degrees: Double) {
+        val dl = datalink
+        if (!controlLeaseAllows() || dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
+            _controlNote.value = "not live"
+            return
+        }
+        if (CameraCommands.isPhotoMode(_status.value.shootingMode)) return
+        if (formatPin?.let { SystemClock.elapsedRealtime() >= it.activeDeadline } == true) formatPin = null
+        val angle = ShutterAngle.nearestDegrees(degrees)
+        OperatorPrefs.setShutterAngleDegrees(appContext, angle)
+        val current = _status.value
+        val denom = ShutterAngle.denom(angle, current.fps, current.availableShutterDenoms)
+        if (formatPin != null && current.expoMode == CameraCommands.EXPO_MANUAL &&
+            !CameraCommands.isPhotoMode(current.shootingMode)) {
+            formatPin?.shutterAngle = angle
+            pinExpo(shutterDenom = denom)
+            _status.value = current.copy(shutterDenom = denom)
+            return
+        }
+        setShutterDenom(denom)
+    }
+
+    private fun rematchShutterAngle(degrees: Double?) {
+        if (degrees == null || !OperatorPrefs.shutterUsesAngle(appContext)) return
+        val current = _status.value
+        val dl = datalink
+        if (current.expoMode != CameraCommands.EXPO_MANUAL || CameraCommands.isPhotoMode(current.shootingMode) ||
+            !controlLeaseAllows() || dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) return
+        val note = _controlNote.value
+        setShutterDenom(ShutterAngle.denom(degrees, current.fps, current.availableShutterDenoms))
+        if (_controlNote.value == null) _controlNote.value = note
+    }
+
     fun setExpoMode(mode: Int) {
         val extra = CameraCommands.expoWireExtra(mode) ?: return
+        if (mode != CameraCommands.EXPO_MANUAL) {
+            formatPin?.shutterAngle = null
+            clearExpoPin(shutter = true)
+        }
         val previous = _status.value.expoMode
         pinExpo(expoMode = mode)
         _status.value = _status.value.copy(expoMode = mode)
@@ -3587,27 +3640,28 @@ class PocketCameraSession(
             )
         ) return false
         val modeAtSet = previous.shootingMode
+        val angle = if (ShutterAngle.rematchesFormat(
+                usesAngle = OperatorPrefs.shutterUsesAngle(appContext),
+                manual = previous.expoMode == CameraCommands.EXPO_MANUAL,
+                isPhoto = CameraCommands.isPhotoMode(previous.shootingMode),
+                previousFps = previous.fps, nextFps = format.frameRate.fps,
+                alreadyPending = formatPin?.shutterAngle != null,
+            )) formatPin?.shutterAngle ?: OperatorPrefs.shutterAngleDegrees(appContext) else null
+        val shutter = angle?.let { ShutterAngle.denom(it, format.frameRate.fps, previous.availableShutterDenoms) }
         val pin =
             FormatPin(
                 expected = format,
                 deadlineElapsedRealtime = SystemClock.elapsedRealtime() + 2_000L,
+                shutterAngle = angle,
             )
         formatPin = pin
+        if (shutter != null) pinExpo(shutterDenom = shutter)
         _status.value =
             previous.copy(
                 resolutionCode = format.resolution.rawValue,
                 fpsIndex = format.frameRate.rawValue,
                 fps = format.frameRate.fps,
-            )
-        val rematch =
-            CaptureLists.rematchShutterDenomAfterFps(
-                usesAngle = OperatorPrefs.shutterUsesAngle(appContext),
-                degrees = OperatorPrefs.shutterAngleDegrees(appContext),
-                previousFps = previous.fps,
-                nextFps = format.frameRate.fps,
-                expoMode = previous.expoMode,
-                currentDenom = previous.shutterDenom,
-                available = previous.availableShutterDenoms,
+                shutterDenom = shutter ?: previous.shutterDenom,
             )
         fireKind(
             SwiftCore.CMD_SET_VIDEO_FORMAT,
@@ -3625,22 +3679,15 @@ class PocketCameraSession(
                             resolutionCode = previous.resolutionCode,
                             fpsIndex = previous.fpsIndex,
                             fps = previous.fps,
+                            shutterDenom = if (pin.shutterAngle != null) previous.shutterDenom else live.shutterDenom,
                         )
+                    if (pin.shutterAngle != null) clearExpoPin(shutter = true)
                 }
                 formatPin = null
             },
         )
-        // [fireKind] clears the note on its way out and only writes one when the
-        // SET could not go. Hold that failure aside: the shutter rematch below
-        // sends again and would clear it along with anything written here.
-        val formatSendNote = _controlNote.value
-        if (rematch != null) setShutterDenom(rematch)
-        // Settle the note once both sends are done. A failure from either send
-        // outranks the ceiling note, which is only worth showing when the format
-        // change actually went.
-        if (formatSendNote != null) {
-            _controlNote.value = formatSendNote
-        } else if (_controlNote.value == null) {
+        // Only actual format telemetry releases the shutter SET on the existing mailbox.
+        if (_controlNote.value == null) {
             _controlNote.value =
                 CamFov.ceilingNote(
                     format.resolution.sizeTitle,
@@ -3659,16 +3706,23 @@ class PocketCameraSession(
         return setVideoFormat(format)
     }
 
-    private fun absorbStaleFormat(incoming: CameraStatus, formatReported: Boolean): CameraStatus {
+    private fun absorbStaleFormat(incoming: CameraStatus, formatReported: Boolean): Pair<CameraStatus, Double?> {
+        val pending = formatPin
+        val now = SystemClock.elapsedRealtime()
         val (next, remaining) =
             VideoFormat.absorbStale(
                 incoming,
                 formatPin,
-                SystemClock.elapsedRealtime(),
+                now,
                 formatReported,
             )
         formatPin = remaining
-        return next
+        val angle = if (pending != null && remaining == null && formatReported &&
+            now < pending.activeDeadline) pending.shutterAngle else null
+        if (pending?.shutterAngle != null && now >= pending.activeDeadline) {
+            _controlNote.value = "Frame rate unconfirmed; choose the shutter angle again"
+        }
+        return next to angle
     }
 
     private fun absorbStaleColor(incoming: CameraStatus, reported: CameraStatus): CameraStatus {
@@ -3679,11 +3733,19 @@ class PocketCameraSession(
     }
 
     private fun absorbStaleExpo(incoming: CameraStatus, reported: CameraStatus): CameraStatus {
-        val pin = expoPin ?: return incoming
-        val (next, remaining) =
-            pin.absorb(incoming, _status.value, SystemClock.elapsedRealtime(), reportedValues = reported)
+        val now = SystemClock.elapsedRealtime()
+        val pin = expoPin
+        val (next, remaining) = pin?.absorb(incoming, _status.value, now, reportedValues = reported)
+            ?: (incoming to null)
         expoPin = remaining
-        return next
+        val format = formatPin
+        val angle = format?.shutterAngle
+        // Exposure is a different stream of reports; even a matching shutter
+        // cannot release the angle until the requested FORMAT itself is reported.
+        return if (format != null && angle != null && now < format.activeDeadline &&
+            next.expoMode == CameraCommands.EXPO_MANUAL) {
+            next.copy(shutterDenom = ShutterAngle.denom(angle, format.expected.frameRate.fps, next.availableShutterDenoms))
+        } else next
     }
 
     private fun absorbStaleShootingMode(incoming: CameraStatus, reported: Boolean): CameraStatus {

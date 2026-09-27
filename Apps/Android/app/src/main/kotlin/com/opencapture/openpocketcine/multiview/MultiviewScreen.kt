@@ -197,25 +197,21 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             // iOS hides the stage from VoiceOver while a popup covers it.
             Modifier.fillMaxSize().then(if (overlayOpen) Modifier.clearAndSetSemantics { } else Modifier),
         ) {
-            session.tiles.forEachIndexed { index, tile ->
-                val frame = layout.tiles[index]
-                key(tile.id) {
-                    Box(Modifier.rect(frame).clip(TileShape)) {
-                        TileView(
-                            session = session, tile = tile, index = index,
-                            compact = frame.width < 200f || frame.height < 136f,
-                            clean = clean, enabled = !overlayOpen,
-                            confirmRecording = model.recordConfirmationEnabled,
-                            onAdd = { empty ->
-                                if (session.networkConfigured) adding = empty else showNetwork = true
-                            },
-                            onOpenLive = {
-                                session.openLiveView(tile)
-                                if (tile.liveModel != null) liveTile = tile
-                            },
-                        )
-                    }
-                }
+            MultiviewTileCanvas(session.tiles.map { it.id }, layout) { index, compact ->
+                val tile = session.tiles[index]
+                TileView(
+                    session = session, tile = tile, index = index, compact = compact,
+                    clean = clean, enabled = !overlayOpen,
+                    readoutsOverlay = layout.readoutsOverlay && index == session.focusedIndex,
+                    confirmRecording = model.recordConfirmationEnabled,
+                    onAdd = { empty ->
+                        if (session.networkConfigured) adding = empty else showNetwork = true
+                    },
+                    onOpenLive = {
+                        session.openLiveView(tile)
+                        if (tile.liveModel != null) liveTile = tile
+                    },
+                )
             }
             if (!clean) {
                 SessionControls(
@@ -226,7 +222,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                 )
                 StageReadouts(session.tiles.getOrNull(session.focusedIndex)?.settings, Modifier.rect(layout.readouts))
                 MultiviewAssistPalette(
-                    session, layout.controlCellSize, Modifier.rect(layout.assists),
+                    session, layout.controlCellSize, Modifier.rect(layout.assists), maxExpandedHeight = layout.assists.height,
                     onSettings = { cameraSettings = true },
                 )
                 NetworkButton(
@@ -333,95 +329,75 @@ private fun StageReadouts(settings: CameraStatus?, modifier: Modifier) {
     }
 }
 
+private enum class MultiviewTool { LAYOUT, LUT, FIT, SETTINGS }
+
 @Composable
-internal fun MultiviewAssistPalette(session: MultiviewSession, cell: Float, modifier: Modifier, onSettings: () -> Unit) {
+internal fun MultiviewAssistPalette(
+    session: MultiviewSession, cell: Float, modifier: Modifier,
+    maxExpandedHeight: Float? = null, onSettings: () -> Unit,
+) {
     val assigned = session.tiles.filter { it.camera != null }
-    ControlGroup(modifier) {
-        LabeledCell(
-            icon = OpcIcon.PALETTE, label = "LUT", cell = cell,
-            tint = if (assigned.any { it.lutEnabled }) LiveDesign.accent else MonitorPalette.secondary,
-            description = "Toggle Auto LUT for all cameras",
-            enabled = assigned.isNotEmpty(),
-        ) {
-            val enabled = !assigned.all { it.lutEnabled }
-            for (tile in assigned) if (tile.lutEnabled != enabled) tile.toggleLUT()
-            session.persistStage()
-        }
-        LabeledCell(
-            icon = if (session.fill) OpcIcon.MINIMIZE else OpcIcon.MAXIMIZE,
-            label = if (session.fill) "FILL" else "FIT", cell = cell, tint = MonitorPalette.secondary,
-            description = if (session.fill) "Fit feed in frame" else "Fill frame with feed",
-        ) {
-            session.fill = !session.fill
-            session.persistStage()
-        }
-        LabeledCell(
-            icon = if (session.layout == MultiviewLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID,
-            label = if (session.layout == MultiviewLayout.GRID) "FOCUS" else "GRID",
-            cell = cell, tint = MonitorPalette.secondary,
-            description = if (session.layout == MultiviewLayout.GRID) "Show Focused stage" else "Show Grid",
-        ) {
-            session.layout = if (session.layout == MultiviewLayout.GRID) MultiviewLayout.CENTER_STAGE else MultiviewLayout.GRID
-        }
-        LabeledCell(
-            icon = OpcIcon.SETTINGS, label = "CAM", cell = cell, tint = MonitorPalette.secondary,
-            description = "Camera settings", enabled = assigned.isNotEmpty() && !session.closing,
-            onClick = onSettings,
+    var usage by remember { mutableStateOf(com.opencapture.monitorui.MonitorToolUsageState()) }
+    val haptics = com.opencapture.openpocketcine.LocalOperatorHaptics.current
+    fun title(tool: MultiviewTool) = when (tool) {
+        MultiviewTool.LUT -> "Toggle Auto LUT for all cameras"
+        MultiviewTool.FIT -> if (session.fill) "Fit feed in frame" else "Fill frame with feed"
+        MultiviewTool.LAYOUT -> if (session.layout == MultiviewLayout.GRID) "Show Focused stage" else "Show Grid"
+        MultiviewTool.SETTINGS -> "Camera settings"
+    }
+    Box(modifier, contentAlignment = Alignment.BottomCenter) {
+        com.opencapture.monitorui.MonitorAssistPalette(
+            tools = MultiviewTool.entries, portrait = true, locked = session.closing,
+            isOn = { it == MultiviewTool.LUT && assigned.any { tile -> tile.lutEnabled } },
+            title = ::title, label = { tool -> when (tool) {
+                MultiviewTool.LUT -> "LUT"
+                MultiviewTool.FIT -> if (session.fill) "FILL" else "FIT"
+                MultiviewTool.LAYOUT -> if (session.layout == MultiviewLayout.GRID) "FOCUS" else "GRID"
+                MultiviewTool.SETTINGS -> "CAM"
+            } },
+            hasOptions = { false }, onOptions = {},
+            isAvailable = { it !in listOf(MultiviewTool.LUT, MultiviewTool.SETTINGS) || assigned.isNotEmpty() },
+            accessibilityLabel = ::title,
+            accessibilityIdentifier = { tool -> when (tool) {
+                MultiviewTool.LUT -> "multiview.lut"
+                MultiviewTool.FIT -> "multiview.fitFill"
+                MultiviewTool.LAYOUT -> "multiview.layout"
+                MultiviewTool.SETTINGS -> "multiview.settings"
+            } },
+            accessibilityValue = { if (it == MultiviewTool.LUT) {
+                if (assigned.any { tile -> tile.lutEnabled }) "On" else "Off"
+            } else null },
+            expansionAccessibilityName = "Multiview tools", expansionAccessibilityIdentifier = "multiview.tools.expand",
+            cellSize = cell, maxExpandedHeight = maxExpandedHeight,
+            idOf = { it.name }, usage = usage, onUsageChange = { usage = it },
+            onToggle = { tool ->
+                haptics.selection()
+                when (tool) {
+                    MultiviewTool.LUT -> {
+                        val enabled = !assigned.all { it.lutEnabled }
+                        assigned.forEach { if (it.lutEnabled != enabled) it.toggleLUT() }
+                        session.persistStage()
+                    }
+                    MultiviewTool.FIT -> { session.fill = !session.fill; session.persistStage() }
+                    MultiviewTool.LAYOUT -> session.layout = if (session.layout == MultiviewLayout.GRID)
+                        MultiviewLayout.CENTER_STAGE else MultiviewLayout.GRID
+                    MultiviewTool.SETTINGS -> onSettings()
+                }
+            },
+            glyph = { tool, tint, iconModifier ->
+                val icon = when (tool) {
+                    MultiviewTool.LUT -> OpcIcon.PALETTE
+                    MultiviewTool.FIT -> if (session.fill) OpcIcon.MINIMIZE else OpcIcon.MAXIMIZE
+                    MultiviewTool.LAYOUT -> if (session.layout == MultiviewLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID
+                    MultiviewTool.SETTINGS -> OpcIcon.SETTINGS
+                }
+                OpcIcon(icon, null, iconModifier, tint)
+            },
+            chevron = { expanded, _ ->
+                OpcIcon(if (expanded) OpcIcon.CHEVRON_DOWN else OpcIcon.CHEVRON_UP,
+                    null, Modifier.size(14.dp), LiveDesign.muted)
+            },
         )
-    }
-}
-
-@Composable
-private fun ControlGroup(modifier: Modifier, content: @Composable () -> Unit) {
-    Box(modifier.monitorGlass(ControlShape), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.padding(4.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(3.dp)) { content() }
-    }
-}
-
-@Composable
-private fun GlyphCell(
-    icon: OpcIcon,
-    cell: Float,
-    description: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    Box(
-        Modifier.size(cell.dp).alpha(if (enabled) 1f else 0.4f)
-            .chromeClickable(enabled = enabled, onClick = onClick)
-            .semantics {
-                contentDescription = description
-                role = Role.Button
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        OpcIcon(icon, null, Modifier.size((cell * 0.46f).dp), MonitorPalette.secondary)
-    }
-}
-
-@Composable
-private fun LabeledCell(
-    icon: OpcIcon,
-    label: String,
-    cell: Float,
-    tint: Color,
-    description: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    Column(
-        Modifier.size(cell.dp).alpha(if (enabled) 1f else 0.4f)
-            .chromeClickable(enabled = enabled, onClick = onClick)
-            .semantics {
-                contentDescription = description
-                role = Role.Button
-            },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
-    ) {
-        OpcIcon(icon, null, Modifier.size(20.dp), tint)
-        Text(label, color = tint, style = LiveType.text(7.5f, FontWeight.SemiBold).copy(letterSpacing = 0.7.sp))
     }
 }
 
@@ -520,6 +496,7 @@ private fun TileView(
     compact: Boolean,
     clean: Boolean,
     enabled: Boolean,
+    readoutsOverlay: Boolean,
     confirmRecording: Boolean,
     onAdd: (MultiviewSession.Tile) -> Unit,
     onOpenLive: () -> Unit,
@@ -558,7 +535,7 @@ private fun TileView(
             MultiviewTileOverlay(
                 readouts = readouts,
                 focused = focused, compact = compact, clean = clean, enabled = enabled,
-                onOptions = { session.focusedIndex = index; optionsOpen = true },
+                readoutsOverlay = readoutsOverlay, onOptions = { session.focusedIndex = index; optionsOpen = true },
             )
             Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) {
                 DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false },

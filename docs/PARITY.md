@@ -205,9 +205,10 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   0.62 expanded, 0.82 info and 0.86 delivery. Text and icons use tighter,
   darker local black shadows, independently of the plate tint. Readout
   halos fade instead of clipping at the glyph or tile bounds.
-  Gimbal-controls icons and the joystick ring/knob use that same local glow on
-  both shells, including the cyan held state. Touch geometry stays unchanged.
-  Physical qualification of the gimbal glow remains pending on both platforms.
+  Gimbal-controls icons retain the local glow. The joystick ring/knob instead
+  uses native difference compositing at rest, adapting bright/dark ink to the
+  picture with no halo, image readback or sampling timer. Held ink stays cyan
+  with normal compositing. Touch geometry and command cadence stay unchanged.
   Compact
   hold/drag camera-value popups use the same detent haptics as the full drums.
   Landscape camera values and the assist plate sit
@@ -607,8 +608,8 @@ claim of seamless foreground return.
 Multiview shows reported camera timecode as HH:MM:SS inside each feed, including compact
 side tiles; very short feeds retain it in camera options. Nano has no timecode
 readout. It follows the existing 5 Hz settings
-updates. LUT, FIT/FILL, Layout and Camera settings share the toolbar; Wi-Fi
-uses the normal Live View Settings position. The first empty tile provides Add camera, and the remaining empty slots
+updates. LUT, FIT/FILL, Layout and Camera settings share the toolbar; the
+September 27 composition below defines Wi-Fi placement. The first empty tile provides Add camera, and the remaining empty slots
 stay quiet. Per-camera options stay available inside compact feeds.
 
 ### Multiview stage composition (September 27 revision)
@@ -624,20 +625,25 @@ name/model, reported timecode, battery/storage and recording state are in-feed.
 There are no side information panels. Compact feeds retain a camera options
 menu instead of requiring promotion to access their actions.
 
-Landscape tiles keep the same rectangles in both cutout orientations. The
-vertical toolbar aligns with the right control column, or the left for a right-side cutout. Exit is top-left; the Wi-Fi icon is top-right
-with native Settings size and styling. The session title and connected count are removed. Landscape feeds start level with the top of Exit and Wi-Fi. Selected-camera
-exposure readouts occupy the bottom row, with space reserved below the feeds. Record and DISP reuse each platform's normal Live
-View layout, including its native inset differences. They do not follow the
-toolbar. No visible Record all caption is added. DISP retains both system
-controls, per-camera tally and recovery status while hiding optional chrome.
+Landscape Grid keeps its tile rectangles across cutout orientations, with the
+palette aligned right or left for a right-side cutout. Landscape Center stage
+has a larger 16:9 main feed with bottom in-picture exposure readouts; the existing
+metadata sits above that row. Wi-Fi moves below Exit and the collapsible View
+Assist palette sits in the left column, below a left cutout. A far-right strip
+scrolls all three secondary feeds above native DISP/Record, fading only content
+alpha at edges with more cameras. Scrolling and promotion retain camera owners
+and mounted picture hosts. Portrait keeps the prior full-width main picture and
+right palette below it. Grid readouts retain their separate bottom row. The
+session title and connected count are absent. Record and DISP stay in normal
+Live View positions and do not follow the toolbar; no Record all caption is added.
 
 Fit contains the source, Fill crops inside the tile, and the choice remains
 saved with the stage. One tap changes selection without leaving Grid. Layout,
 selection and rotation preserve the four tile/decoder owners and existing
 telemetry cadence. The first empty slot offers Add camera; others are quiet.
 
-Qualification: nine shared geometry regressions cover portrait, both landscape
+Earlier qualification (before the scrolling-strip refinement below): nine shared
+geometry regressions covered portrait, both landscape
 cutout edges, phone/tablet sizes, resized windows and native system control
 positions. The native iOS UI flow passes Grid/Center stage, selection, camera
 options, one Add slot and Clean recovery in portrait and both landscape
@@ -675,18 +681,19 @@ toolbar opens a bounded floating popup with tabs for connected
 cameras and the existing Live View setting controls. Controls target the chosen
 camera while all feed owners stay with Multiview. Tab changes, camera removal
 and reconnect retire pending edits instead of applying them to another camera.
-Camera, recording and settings tabs share a continuous strip with adjoining
-edges and an accent selection line; they no longer appear as separate buttons.
+Camera, recording and settings tabs have a single gray edge line with an accent
+segment for selection: left in vertical rails, bottom in horizontal strips.
+There is no tab box, fill or divider. Shared Settings scrolling masks content
+opacity at available top/bottom edges without a painted MORE overlay.
 
-Exit is top-left with the native Lock size and glass styling. Wi-Fi uses the
-native Settings size and an icon only at the top-right. The title and connected
-count are removed. The vertical toolbar aligns with the right control column
-by default and moves to the left column for a right-side landscape cutout. It
-stays below the top control and above the DISP row; short viewports scroll the
-rail while preserving touch targets. Portrait keeps the toolbar on the right. Portrait Center stage starts the rail below its unchanged main picture.
-The former left gutter is available to the feeds. Record and DISP retain their
-native slots. Moving portrait Wi-Fi from its normal bottom Settings slot is an
-explicit exception required by the approved right-rail arrangement.
+Exit keeps native Lock size and glass styling. Wi-Fi retains native Settings
+size: top-right in Grid/portrait, below Exit in landscape Center stage. The
+palette uses the shared View Assist reveal, favorites, icons and native touch
+targets. Grid follows the opposite-cutout column policy; Center stage reserves
+the far right for the scrolling feeds. Short palettes scroll, including below a
+left cutout. Portrait keeps the right palette below the unchanged main picture.
+These approved Multiview placements are explicit exceptions to Live View's
+Settings position; native Record/DISP geometry remains shared.
 
 Exit handles the captured `07/45 00 06` pairing refusal with up to three BLE
 sessions, separated by three seconds. It requires normal pairing approval and
@@ -1468,3 +1475,40 @@ test runner before timing out enabling UI Automation. The app was subsequently
 installed directly on the iOS 27 iPhone and its running bundle verified; this
 does not establish camera-connected setup or AP return. No Android phone was
 attached.
+
+### September 27 layout cleanup qualification
+
+The shared Wi-Fi/hotspot form aligns fixed-height headings and field tops,
+reserves a bottom safe-area/keyboard footer for Connect, and keeps manual
+network entry reachable below long scan lists. iOS native tests retain each
+camera's original display host through scrolling, promotion, Grid and rotation.
+Android instrumentation likewise retains four TextureViews and decoder owners
+with zero SurfaceTexture destruction across the same transitions, including a
+real touch swipe and pixel checks against the underlying background. Repository
+checks, 778 iOS native tests (one expected skip), simulator/Watch builds,
+1,142 Android JVM tests, Android build/lint and 29 focused emulator cases pass.
+The iOS UI flows cover the stage, scrolling/promotion, bounded popups, Wi-Fi
+form alignment/footer, and tab selection in portrait/both landscapes. A complete
+physical iPhone + Pocket 4 Pro/Nano run passed these layouts, borrowed Live View,
+Settings tabs/fades, 5-second and 35-second app switches, and first-Exit AP return.
+Real camera readback confirmed 180° at 25 → 50 → 25 fps as 1/50 → 1/100 → 1/50;
+the test restored the original format, shutter and exposure preferences. The
+joystick was inspected on the phone with LUT on/off. No new cadence or thermal
+measurement is claimed, and no physical Android phone is attached.
+
+One earlier full run left the Pocket 4 Pro picture stale after borrowed Live View
+and a 5-second app switch. A reduced handoff run and the subsequent complete run
+passed without a production recovery change. Its cause remains unresolved;
+these passes do not establish repeatable recovery in every presentation state.
+
+### Shutter angle through format changes
+
+Both shells preserve an explicitly chosen manual-video shutter angle when the
+operator changes frame rate in Live View, Multiview or a preset. The matching
+shutter time follows camera format confirmation through the existing command
+mailbox. Passive picker reseating cannot overwrite saved angle intent. Direct
+shutter-speed choices, Auto/Photo and retired camera editors cancel obsolete
+pending angle work; camera telemetry remains authoritative outside the bounded
+transition. The regression tests cover mixed old-shutter/new-FPS snapshots,
+mounted picker reseating and command order. Physical readback qualification is
+recorded with the September 27 cleanup above.

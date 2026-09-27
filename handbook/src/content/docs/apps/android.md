@@ -292,8 +292,8 @@ on Pocket 4 Pro. View Assist **ND** is a small chip on the live picture
 switch Stops, ND32, or ND 0.3. It meters against middle gray and suggests
 a screw-on ND to balance the frame. The app cannot set a filter. The gimbal stick and zoom chip sit together as a cluster in the
 trailing-bottom of the picture, same as iOS. A gimbal-controls button sits
-beside zoom (Pocket only). The button and joystick use the same dark glow as
-the camera readouts to stay visible over bright footage. Its trailing drawer has Mode, Speed and Ramp
+beside zoom (Pocket only). The gimbal button keeps its dark readout glow; the joystick uses adaptive
+bright/dark ink without a halo. Its trailing drawer has Mode, Speed and Ramp
 tabs, each with its own dial, showing Follow / Tilt locked / FPV / Direction Lock, Slow / Default / Fast,
 and stick ramp. The Motion Control footer opens the experimental editor for an A→B (optional C) take (set A and B, choose each
 leg’s duration; drag the editor directly). With C set, Smoothness rounds B and shows a dashed curve.
@@ -316,6 +316,8 @@ says Gamepad connected or disconnected; unplug rests the stick.
 Operator Setup → Controls → Gamepad shows Connected / Not connected.
 Choose **Gimbal joystick → Left / Right** in the same Controls tab. D-pad shutter
 changes also update the shutter-angle readout when angle display is selected.
+A selected angle is retained when changing frame rate: 180° changes shutter time
+to 1/50 at 25 fps or 1/100 at 50 fps after the camera confirms the new format.
 A gimbal stop pulses only after the head moves then stalls (Haptics
 setting). Capture drums, the zoom disc, and duration dials pulse on
 coarse steps and whole-stop crossings (172° → 180°, 3×, whole seconds), not on every hundredth
@@ -358,19 +360,22 @@ camera file — LUT bake, Bake exposure, and Convert log are iOS only.
 Sharing is unavailable on Android. Experimental **Multiview** opens from the grid
 button in the **Your cameras** header and matches the iPhone flow: choose Local
 Wi-Fi or this phone's hotspot, add up to four cameras, and double-tap a live tile
-for full Live View. Grid uses four full-feed portrait rows or two landscape
-columns. Portrait keeps the toolbar on the right; Center stage's toolbar starts
-below the wide main feed. Camera details and options sit inside each feed.
-In landscape the toolbar aligns with the right controls, or moves left for a
-right-side cutout. The landscape feeds start level with the top of Exit and
-Wi-Fi; current camera readouts sit below the feeds. Scroll the rail on short screens.
-DISP/Record stay at Android Live View's normal positions. Newly added cameras start with
-Auto LUT on. Tile timecode uses HH:MM:SS and batteries reuse Live View's camera
-gauge. The compact **…** menu stays over the stage. Exit is at the top-left and
-the Wi-Fi icon sits at the top-right with Live View's Settings styling. **Camera settings** in the
-toolbar opens a floating popup with a tab for each connected
-camera and the same setting controls as Live View. Camera, recording and
-settings tabs share adjoining edges and an accent selection line. The
+for full Live View. Grid fills four portrait rows or two
+landscape columns. Portrait keeps a vertical right toolbar below the wide main
+feed in Center stage, with camera details inside each feed. Landscape Center
+stage enlarges the main 16:9 picture, overlays its readouts at the bottom, and
+puts the other cameras in a scrolling right strip. Content fades softly only at
+edges with more to scroll. Wi-Fi sits below Exit on the left; the tools reuse
+the collapsible View Assist palette. Grid keeps tools in the right control
+column, or left for a right-side cutout. DISP and Record retain Live View positions.
+
+New cameras start with Auto LUT on, HH:MM:SS timecode and Live View battery
+gauges. The **…** menu stays compact over the stage. Exit uses Live View Lock
+styling; Wi-Fi uses Settings styling and opens the shared network wizard.
+**Camera settings** opens a floating popup with a tab for each connected camera
+and Live View's setting controls. Camera, recording and settings tabs have one
+bottom or left edge with a highlighted selection, without tab boxes.
+The
 [Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) describes setup,
 Android differences and validation limits.
 Platform differences, including Frame.io and MetalFX, are listed in

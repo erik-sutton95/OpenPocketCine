@@ -121,7 +121,8 @@ final class PhysicalStationSetupTests: XCTestCase {
 
     /// Opt-in real-camera presentation smoke. Names must explicitly identify the
     /// intended cameras; credentials remain in the phone's existing Keychain.
-    /// Checks fresh source/presentation through a debug-only sampled probe; no SETs.
+    /// Checks fresh pictures and reported 180° shutter timing, then restores original
+    /// camera settings. Uses a DEBUG-only readback probe; never records or moves the gimbal.
     func testMultiviewCameraControls() throws {
         guard let value = ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_CAMERAS"]
         else {
@@ -161,7 +162,11 @@ final class PhysicalStationSetupTests: XCTestCase {
             XCTAssertTrue(closeMultiview(app), "The first Exit must restore every camera")
             return
         }
-        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
+        let handoffOnly =
+            ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_HANDOFF_ONLY"] == "1"
+        for orientation
+            in (handoffOnly ? [] : [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight])
+        {
             XCUIDevice.shared.orientation = orientation
             let landscape = orientation != .portrait
             XCTAssertTrue(
@@ -169,13 +174,13 @@ final class PhysicalStationSetupTests: XCTestCase {
                     (app.frame.width > app.frame.height) == landscape
                 })
             Thread.sleep(forTimeInterval: 1)
-            let rail = app.scrollViews["multiview.toolbar"]
-            XCTAssertTrue(rail.exists)
+            let layout = revealMultiviewTool(app, "multiview.layout")
+            if layout.value as? String == "Grid" { layout.tap() }
             let wifiFrame = app.buttons["multiview.network"].frame
             let closeFrame = app.buttons["multiview.close"].frame
             // ScrollView accessibility bounds can extend to the screen edge.
             // Check the rendered control's touch target, not that container.
-            let fit = app.buttons["multiview.fitFill"]
+            let fit = revealMultiviewTool(app, "multiview.fitFill")
             XCTAssertTrue(fit.isHittable)
             XCTAssertGreaterThanOrEqual(fit.frame.width, 44 - 0.001)
             let toolbarColumn =
@@ -189,7 +194,20 @@ final class PhysicalStationSetupTests: XCTestCase {
             let tiles = names.indices.map { app.buttons["multiview.tile.\($0)"].frame }
             if landscape {
                 XCTAssertEqual(tiles[0].minY, closeFrame.minY, accuracy: 0.5)
-                XCTAssertEqual(tiles[1].minY, wifiFrame.minY, accuracy: 0.5)
+                XCTAssertEqual(tiles[1].minY, closeFrame.minY, accuracy: 0.5)
+                XCTAssertEqual(wifiFrame.midX, closeFrame.midX, accuracy: 0.5)
+                XCTAssertEqual(wifiFrame.minY, closeFrame.maxY + 8, accuracy: 0.5)
+                let strip = app.scrollViews["multiview.secondaryStrip"]
+                XCTAssertTrue(strip.exists)
+                XCTAssertLessThanOrEqual(strip.frame.maxY, displayFrame.minY - 7)
+                scrollCameraStrip(strip, towardTop: false)
+                assertRollingPictures(app, cameras: names.count)
+                capture("multiview-physical-scrolled-\(orientation.rawValue)")
+                scrollCameraStrip(strip, towardTop: true)
+                XCTAssertTrue(
+                    waitUntil(timeout: 3) {
+                        abs(app.buttons["multiview.tile.1"].frame.minY - closeFrame.minY) < 0.5
+                    })
             }
             capture("multiview-physical-stage-\(orientation.rawValue)")
 
@@ -202,12 +220,7 @@ final class PhysicalStationSetupTests: XCTestCase {
             capture("multiview-physical-menu-\(orientation.rawValue)")
             app.buttons["monitor.capture.close"].firstMatch.tap()
 
-            let settingsButton = app.buttons["multiview.settings"]
-            let toolbar = app.scrollViews["multiview.toolbar"]
-            for _ in 0..<2 {
-                if toolbar.frame.contains(settingsButton.frame) { break }
-                toolbar.swipeUp()
-            }
+            let settingsButton = revealMultiviewTool(app, "multiview.settings")
             settingsButton.tap()
             let settings = app.descendants(matching: .any)["multiview.settings.panel"].firstMatch
             XCTAssertTrue(settings.waitForExistence(timeout: 5))
@@ -234,20 +247,108 @@ final class PhysicalStationSetupTests: XCTestCase {
                 XCTAssertEqual(app.buttons["multiview.tile.\(index)"].frame, tiles[index])
             }
         }
-        for duration in [5.0, 35.0] {
+        let controlsIndex =
+            names.indices.first { !names[$0].localizedCaseInsensitiveContains("nano") } ?? 0
+        inspectBorrowedLiveChrome(app, index: controlsIndex)
+        for duration in (handoffOnly ? [5.0] : [5.0, 35.0]) {
             assertRollingPictures(app, cameras: names.count)
             XCUIDevice.shared.press(.home)
             Thread.sleep(forTimeInterval: duration)
             app.activate()
+            let recovered = waitUntil(timeout: 60) {
+                names.indices.allSatisfy { self.previewFrames(app, index: $0) != nil }
+            }
+            let health = XCTAttachment(
+                string: names.indices.map {
+                    "tile\($0): \(app.buttons["multiview.tile.\($0)"].value as? String ?? "missing")"
+                }.joined(separator: "\n"))
+            health.name = "multiview-foreground-health"
+            health.lifetime = .keepAlways
+            add(health)
             XCTAssertTrue(
-                waitUntil(timeout: 60) {
-                    names.indices.allSatisfy { self.previewFrames(app, index: $0) != nil }
-                }, "Every camera must restore a fresh picture after returning to the app")
+                recovered, "Every camera must restore a fresh picture after returning to the app")
             assertRollingPictures(app, cameras: names.count)
             capture("multiview-physical-foreground-\(Int(duration))s")
         }
+        if handoffOnly {
+            XCTAssertTrue(closeMultiview(app))
+            return
+        }
+        try exercisePhysicalShutterAngle(
+            testCase: self, app: app,
+            openSettings: {
+                self.revealMultiviewTool(app, "multiview.settings").tap()
+                let firstCamera = app.buttons["multiview.settings.camera.\(controlsIndex)"]
+                XCTAssertTrue(firstCamera.waitForExistence(timeout: 5))
+                firstCamera.tap()
+            },
+            readProbe: {
+                let panel = app.descendants(matching: .any)["multiview.settings.panel"].firstMatch
+                let element = panel.exists ? panel : app.buttons["multiview.tile.\(controlsIndex)"]
+                let text = element.value as? String ?? ""
+                return Dictionary(
+                    uniqueKeysWithValues: text.split(separator: ";").compactMap {
+                        let pair = $0.split(separator: "=", maxSplits: 1).map {
+                            $0.trimmingCharacters(in: .whitespaces)
+                        }
+                        return pair.count == 2 ? (pair[0], pair[1]) : nil
+                    })
+            })
         capture("multiview-physical-after-controls")
         XCTAssertTrue(closeMultiview(app), "Camera Wi-Fi restoration did not finish")
+    }
+
+    private func revealMultiviewTool(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
+        let expand = app.buttons["multiview.toolbar.expand"]
+        if expand.waitForExistence(timeout: 2) { expand.tap() }
+        let tool = app.buttons[identifier]
+        XCTAssertTrue(tool.waitForExistence(timeout: 5))
+        let rail = app.scrollViews.containing(.button, identifier: identifier).firstMatch
+        for _ in 0..<5 {
+            if tool.isHittable, rail.frame.contains(tool.frame) { break }
+            if tool.frame.minY < rail.frame.minY { rail.swipeDown() } else { rail.swipeUp() }
+        }
+        XCTAssertTrue(tool.isHittable)
+        return tool
+    }
+
+    private func scrollCameraStrip(_ strip: XCUIElement, towardTop: Bool) {
+        // Default AX swipes can start at the system edge and open Control Center.
+        let start = strip.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: towardTop ? 0.4 : 0.85))
+        let end = strip.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: towardTop ? 0.85 : 0.4))
+        start.press(forDuration: 0.05, thenDragTo: end)
+    }
+
+    private func inspectBorrowedLiveChrome(_ app: XCUIApplication, index: Int) {
+        app.buttons["multiview.tile.\(index)"].doubleTap()
+        let back = app.buttons["Return to Multiview"]
+        XCTAssertTrue(back.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.descendants(matching: .any)["monitor.system.gimbal"].firstMatch.exists)
+        capture("physical-joystick-adaptive-ink")
+        let expand = app.buttons["monitor.assists.expand"]
+        if expand.exists { expand.tap() }
+        let lut = app.buttons["monitor.assist.LUT"]
+        if lut.isHittable {
+            lut.tap()
+            capture("physical-joystick-alternate-lut-path")
+            lut.tap()
+        }
+        app.buttons["monitor.system.settings"].tap()
+        let display = app.buttons["monitor.settings.tab.Display"]
+        XCTAssertTrue(display.waitForExistence(timeout: 5))
+        display.tap()
+        capture("physical-settings-boxless-vertical-tabs")
+        app.swipeUp()
+        capture("physical-settings-opacity-scroll-fade")
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(waitUntil(timeout: 10) { app.frame.height > app.frame.width })
+        capture("physical-settings-boxless-horizontal-tabs")
+        app.buttons["Back to live"].firstMatch.tap()
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        back.tap()
+        XCTAssertTrue(app.buttons["multiview.tile.0"].waitForExistence(timeout: 10))
     }
 
     private func previewFrames(_ app: XCUIApplication, index: Int) -> Int? {
@@ -256,7 +357,7 @@ final class PhysicalStationSetupTests: XCTestCase {
             value.contains("Live; frames="),
             let count = value.components(separatedBy: "frames=").last
         else { return nil }
-        return Int(count)
+        return Int(count.prefix { $0.isNumber })
     }
 
     private func assertRollingPictures(_ app: XCUIApplication, cameras: Int) {
@@ -288,6 +389,10 @@ final class PhysicalStationSetupTests: XCTestCase {
     }
 
     private func closeMultiview(_ app: XCUIApplication) -> Bool {
+        let backToLive = app.buttons["Back to live"].firstMatch
+        if backToLive.exists { backToLive.tap() }
+        let returnToStage = app.buttons["Return to Multiview"]
+        if returnToStage.exists { returnToStage.tap() }
         let cleanupError = app.alerts["Multiview"]
         if cleanupError.exists { cleanupError.buttons["OK"].tap() }
         if !app.buttons["Close Multiview"].exists,
@@ -335,10 +440,16 @@ final class PhysicalStationSetupTests: XCTestCase {
         }
         XCTAssertTrue(network.waitForExistence(timeout: 15))
         capture("multiview-wifi-scanning")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(waitUntil(timeout: 10) { app.frame.width > app.frame.height })
+        capture("multiview-wifi-landscape-columns")
         network.tap()
         let connect = app.buttons["multiview.setup.connect"]
         XCTAssertTrue(connect.waitForExistence(timeout: 5))
         XCTAssertTrue(connect.isEnabled)
+        capture("multiview-wifi-landscape-password-footer")
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(waitUntil(timeout: 10) { app.frame.height > app.frame.width })
         connect.tap()
         let add = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Add camera'"))
             .firstMatch

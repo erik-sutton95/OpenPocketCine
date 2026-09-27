@@ -12,8 +12,8 @@
         }
     }
 
-    /// A single shared surface for adjacent tabs. Hosts retain typed selections,
-    /// scrolling and camera actions; only the strip's presentation lives here.
+    /// One edge line for adjacent tabs, with no plate or individual boxes.
+    /// Hosts retain typed selections, scrolling and camera actions.
     public struct MonitorTabStrip<Content: View>: View {
         private let vertical: Bool
         private let content: Content
@@ -28,11 +28,9 @@
                 vertical ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
             layout { content }
                 .environment(\.monitorVerticalTabs, vertical)
-                .background(Color.white.opacity(0.035))
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(MonitorTheme.border, lineWidth: 1)
+                .background(alignment: vertical ? .leading : .bottom) {
+                    Rectangle().fill(MonitorTheme.border)
+                        .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
                         .allowsHitTesting(false)
                 }
         }
@@ -41,19 +39,10 @@
     private struct MonitorTabSurface: ViewModifier {
         @Environment(\.monitorVerticalTabs) private var vertical
         let selected: Bool
-        let separator: Bool
 
         func body(content: Content) -> some View {
             content
                 .frame(minWidth: 44, minHeight: 44)
-                .background(selected ? MonitorTheme.accent.opacity(0.10) : .clear)
-                .overlay(alignment: vertical ? .top : .leading) {
-                    if separator {
-                        Rectangle().fill(MonitorTheme.border)
-                            .frame(width: vertical ? nil : 1, height: vertical ? 1 : nil)
-                            .allowsHitTesting(false)
-                    }
-                }
                 .overlay(alignment: vertical ? .leading : .bottom) {
                     if selected {
                         Rectangle().fill(MonitorTheme.accent)
@@ -66,8 +55,8 @@
     }
 
     extension View {
-        public func monitorTabSurface(selected: Bool, separator: Bool = true) -> some View {
-            modifier(MonitorTabSurface(selected: selected, separator: separator))
+        public func monitorTabSurface(selected: Bool, separator _: Bool = true) -> some View {
+            modifier(MonitorTabSurface(selected: selected))
         }
     }
 

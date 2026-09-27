@@ -63,15 +63,15 @@ class CaptureQuickControlTest {
         }
     }
 
-    @Test fun liveShutterReseatingCanPersistButPreviewReseatingCannot() {
+    @Test fun neitherLiveNorPreviewReseatingCanReplaceAngleIntent() {
         val status = CameraStatus(fps = 24, shutterDenom = 100, availableShutterDenoms = listOf(25, 50, 100))
         val seat = CaptureLists.reseatShutterAngle(status, 180.0)
-        assertTrue(seat.persistAngle)
+        assertFalse(seat.persistAngle)
         var writes = 0
         CapturePanelEffects(preview = true).run { if (seat.persistAngle) writes++ }
         assertEquals(0, writes)
         CapturePanelEffects(preview = false).run { if (seat.persistAngle) writes++ }
-        assertEquals(1, writes)
+        assertEquals(0, writes)
     }
 
     @Test fun focusTapAndHoldOfferFiveNativeChoicesWithUnknownUnselected() {

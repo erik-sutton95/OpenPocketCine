@@ -941,15 +941,29 @@ final class MonitorUIFlowTests: XCTestCase {
                     .waitForExistence(timeout: 5))
             let other = app.buttons["Other network…"]
             XCTAssertTrue(other.isHittable, "Manual entry remains available during the scan")
+            XCTAssertLessThanOrEqual(other.frame.maxY, app.frame.maxY)
+            XCTAssertLessThan(app.frame.maxY - other.frame.maxY, 90)
             other.tap()
             let alert = app.alerts["Other network"]
             alert.textFields.firstMatch.typeText("Test network")
             alert.buttons["Next"].tap()
             let password = app.secureTextFields["multiview.setup.password"]
             XCTAssertTrue(password.waitForExistence(timeout: 5))
+            let connect = app.buttons["multiview.setup.connect"]
+            XCTAssertTrue(connect.isHittable)
+            XCTAssertLessThan(app.frame.maxY - connect.frame.maxY, 90)
+            if orientation != .portrait {
+                let summary = app.descendants(matching: .any)["multiview.setup.networkSummary"]
+                    .firstMatch
+                let field = app.descendants(matching: .any)["multiview.setup.password.field"]
+                    .firstMatch
+                XCTAssertEqual(summary.frame.minY, field.frame.minY, accuracy: 1)
+            }
+            capture("multiview-password-layout-\(orientation.rawValue)")
             password.tap()
             capture("multiview-password-focused-\(orientation.rawValue)")
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            XCTAssertLessThanOrEqual(connect.frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
             password.typeText("short")
             XCTAssertFalse(app.buttons["multiview.setup.connect"].isEnabled)
             app.buttons["Show password"].tap()

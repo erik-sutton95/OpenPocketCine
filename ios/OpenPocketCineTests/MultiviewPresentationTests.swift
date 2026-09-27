@@ -1,3 +1,4 @@
+import MonitorPresentation
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -121,6 +122,64 @@ import XCTest
             XCTAssertEqual(
                 Set(displayHosts(in: controller.view).map(ObjectIdentifier.init)), identities)
             XCTAssertTrue(session.tiles.allSatisfy { $0.driver == nil && $0.liveModel == nil })
+        }
+    }
+
+    func testNativeStripKeepsEachCameraHostThroughScrollPromotionAndRotation() async throws {
+        let session = MultiviewUIReview.makeSession(count: 4)
+        let controller = MultiviewStageController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 956, height: 440))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        let roots = session.tiles.map { tile in
+            AnyView(MultiviewVideoLayer(tile: tile, hdrDisplay: false))
+        }
+        func owners() throws -> [UUID: ObjectIdentifier] {
+            try Dictionary(
+                uniqueKeysWithValues: session.tiles.map { tile in
+                    let picture = try XCTUnwrap(
+                        tile.decoder.displayLayer.superlayer?.delegate as? UIView)
+                    let host = try XCTUnwrap(picture.superview as? DisplayLayerView)
+                    XCTAssertTrue(host.ownsDisplayLayer)
+                    return (tile.id, ObjectIdentifier(host))
+                })
+        }
+        let first = MultiviewPresentationLayout(
+            width: 956, height: 440,
+            safeArea: .init(leading: 59, bottom: 21),
+            arrangement: .centerStage, selected: 0)
+        controller.update(ids: session.tiles.map(\.id), layout: first, roots: roots)
+        controller.view.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(150))
+        let original = try owners()
+        let strip = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? UIScrollView }.first)
+        XCTAssertGreaterThan(strip.contentSize.height, strip.bounds.height)
+        strip.contentOffset.y = strip.contentSize.height - strip.bounds.height
+        let shifted = try XCTUnwrap(controller.placement(1))
+        XCTAssertLessThan(shifted.frame.minY, strip.frame.minY)
+        XCTAssertEqual(shifted.clip.minY, strip.frame.minY, accuracy: 0.01)
+        XCTAssertEqual(try owners(), original)
+        for (width, height, selected, arrangement) in [
+            (956.0, 440.0, 3, MultiviewPresentationLayout.Arrangement.centerStage),
+            (956, 440, 1, .grid), (440, 956, 1, .centerStage),
+            (956, 440, 2, .centerStage),
+        ] {
+            window.frame.size = CGSize(width: width, height: height)
+            controller.view.frame = window.bounds
+            let layout = MultiviewPresentationLayout(
+                width: width, height: height,
+                safeArea: .init(bottom: 21, trailing: 59),
+                arrangement: arrangement, selected: selected)
+            controller.update(ids: session.tiles.map(\.id), layout: layout, roots: roots)
+            controller.view.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(100))
+            XCTAssertEqual(try owners(), original)
+            XCTAssertEqual(displayHosts(in: controller.view).count, 4)
+            XCTAssertEqual(strip.contentOffset.y, 0, accuracy: 0.01)
         }
     }
 

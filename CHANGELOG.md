@@ -8,28 +8,31 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
-- Camera, recording and settings tabs use a continuous strip with shared edges
-  and an accent selection line instead of separate button shapes.
-- Multiview Grid fills the available stage on iOS and Android. Portrait uses a
-  right toolbar and in-feed camera details; Center stage keeps its main 16:9
-  picture above the toolbar. Landscape feeds start level with Exit and Wi-Fi,
-  and camera readouts move below them. Landscape aligns tools with the right controls,
-  or the left column for a right-side cutout. Short rails scroll. DISP and Record retain their normal Live View
-  positions. Every camera has an options menu, and recording follows the saved
-  confirmation preference. Clean view retains tally and recovery status.
+- Camera, recording and settings tabs use only a bottom or left edge line with
+  a highlighted selected segment, without boxes, fills or inter-tab dividers.
+  Settings scroll content fades in opacity at available edges; the painted
+  MORE overlay is removed.
+- Multiview Center stage has a larger landscape 16:9 main picture with bottom
+  in-picture readouts, Wi-Fi below Exit, the shared collapsible View Assist
+  palette, and a far-right scrolling strip of three retained camera feeds with
+  soft alpha fades. Grid fills the available area; portrait keeps its 16:9 main
+  picture above the right palette. Record and DISP keep Live View positions.
 - Multiview starts newly added cameras with Auto LUT enabled, shows HH:MM:SS
   timecode and reuses Live View's camera battery gauges. Camera options open in
   a compact floating menu. The toolbar gains a Camera settings button with
   a tab for each connected camera, reusing Live View controls while feeds stay
   on the stage. Exit sits at the top-left with Live View Lock styling; the
-  Wi-Fi icon sits at the top-right with Live View Settings styling. Removing the session heading
+  Wi-Fi icon uses Live View Settings styling. Removing the session heading
   and tightening the left gutter gives tiles more space.
 - Multiview on iOS and Android uses the Add setup Wi-Fi/hotspot experience:
   current, saved and nearby networks, automatic camera scanning, remembered
   passwords, compatibility help and inline retry. iOS shares the same wizard
   and scan implementation with Add setup. Scan cancellation restores camera
   Wi-Fi before handing off the Bluetooth link; password entry keeps its layout
-  when the keyboard opens.
+  when the keyboard opens. Fixed headings align both columns; Connect and manual
+  network entry stay in a bottom safe-area/keyboard footer.
+- The joystick returns to adaptive bright/dark ink using local native contrast
+  blending. Its dark halo is removed, with no image sampling or added timer.
 - Refreshed the website with current app captures, iPad and level examples,
   simpler navigation, and equal iOS and Android open-beta choices.
 - Android Live View uses about half the app CPU on a Galaxy S25 with a live
@@ -50,6 +53,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- A selected shutter angle survives frame-rate changes in Live View, Multiview
+  and preset format changes. The matching shutter time is sent after camera
+  format confirmation; opening the picker no longer overwrites the saved angle
+  with a transitional reading.
 - Multiview Exit retries the captured temporary pairing refusal before showing
   an error, waiting for the old Bluetooth link to close on iOS. Successful
   cameras are left alone and genuine failures retain their cleanup record.

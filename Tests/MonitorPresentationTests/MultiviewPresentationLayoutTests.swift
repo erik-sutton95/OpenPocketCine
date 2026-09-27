@@ -35,6 +35,10 @@ struct MultiviewPresentationLayoutTests {
                             if portrait {
                                 #expect(layout.network.maxX == w - 14)
                                 #expect(layout.network.y == layout.sessionControls.y)
+                            } else if arrangement == .centerStage {
+                                #expect(layout.network.midX == layout.sessionControls.midX)
+                                #expect(layout.network.y == layout.sessionControls.maxY + 8)
+                                #expect(layout.assists.midX == layout.sessionControls.midX)
                             } else {
                                 #expect(layout.network == live.settings)
                                 if safe.trailing > safe.leading {
@@ -52,17 +56,25 @@ struct MultiviewPresentationLayoutTests {
                                 layout.assists,
                                 layout.network, layout.display, layout.record,
                             ]
-                            for frame in layout.tiles + controls {
+                            let visibleTiles = layout.tiles.enumerated().map { index, tile in
+                                layout.secondaryIndices.contains(index)
+                                    ? clipped(tile, to: layout.secondaryViewport!) : tile
+                            }
+                            for frame in visibleTiles + controls where frame.height > 0 {
                                 #expect(frame.x >= 0 && frame.y >= 0)
                                 #expect(frame.width > 0 && frame.height > 0)
                                 #expect(frame.maxX <= w + 0.1 && frame.maxY <= h + 0.1)
                             }
-                            for (index, tile) in layout.tiles.enumerated() {
-                                for other in layout.tiles.dropFirst(index + 1) {
+                            for (index, tile) in visibleTiles.enumerated() where tile.height > 0 {
+                                for other in visibleTiles.dropFirst(index + 1)
+                                where other.height > 0 {
                                     #expect(!overlaps(tile, other))
                                 }
-                                for control in controls { #expect(!overlaps(tile, control)) }
-                                if arrangement == .centerStage && (!portrait || index == selected) {
+                                for control in controls
+                                where !(layout.readoutsOverlay && control == layout.readouts) {
+                                    #expect(!overlaps(tile, control))
+                                }
+                                if arrangement == .centerStage && index == selected {
                                     #expect(abs(tile.width / tile.height - 16 / 9) < 0.001)
                                 }
                             }
@@ -98,7 +110,7 @@ struct MultiviewPresentationLayoutTests {
         let grid = MultiviewPresentationLayout(
             width: 393, height: 852, safeArea: .init(top: 59, bottom: 34),
             arrangement: .grid, selected: 0)
-        #expect(grid.tiles.allSatisfy { $0.x == 15 && $0.width == 305 })
+        #expect(grid.tiles.allSatisfy { $0.x == 15 && $0.maxX == grid.assists.x - 6 })
         #expect(grid.tiles[0].y == 129)
         #expect(abs(grid.tiles[3].maxY - (grid.readouts.y - 12)) < 0.001)
         #expect(grid.tiles[0].height == grid.tiles[3].height)
@@ -143,7 +155,7 @@ struct MultiviewPresentationLayoutTests {
     }
 
     @Test func landscapeToolbarChangesNativeColumnsAcrossCutoutOrientations() {
-        for arrangement in [MultiviewPresentationLayout.Arrangement.grid, .centerStage] {
+        for arrangement in [MultiviewPresentationLayout.Arrangement.grid] {
             let left = MultiviewPresentationLayout(
                 width: 852, height: 393, safeArea: .init(leading: 59, bottom: 21),
                 arrangement: arrangement, selected: 1)
@@ -158,10 +170,10 @@ struct MultiviewPresentationLayoutTests {
             #expect(left.assists.midX == left.display.midX)
             #expect(left.assists.midX == left.network.midX)
             #expect(right.assists.midX == right.sessionControls.midX)
-            #expect(left.assists.x == 781)
-            #expect(right.assists.x == 19)
+            #expect(left.assists.width == left.sessionControls.width + 8)
+            #expect(right.assists.width == right.sessionControls.width + 8)
             for layout in [left, right] {
-                #expect(layout.assists.y >= layout.network.maxY + 8)
+                #expect(layout.assists.y >= layout.network.maxY + 8 - 0.001)
                 #expect(layout.assists.maxY <= layout.display.y - 8)
                 #expect(layout.tiles.allSatisfy { !overlaps($0, layout.assists) })
             }
@@ -177,10 +189,10 @@ struct MultiviewPresentationLayoutTests {
         let grid = MultiviewPresentationLayout(
             width: 852, height: 393, safeArea: .init(leading: 59, bottom: 21),
             arrangement: .grid, selected: 0)
-        #expect(grid.tiles[0].x == 77 && grid.tiles[0].width == 337.5)
+        #expect(grid.tiles[0].x == 82 && grid.tiles[0].width == 335)
         #expect(grid.tiles[0].y == grid.sessionControls.y)
         #expect(grid.tiles[3].maxX == 764 && grid.tiles[3].maxY == 311)
-        #expect(grid.tiles.allSatisfy { $0.width == 337.5 && abs($0.height - 140.5875) < 0.001 })
+        #expect(grid.tiles.allSatisfy { $0.width == 335 && abs($0.height - 140.5875) < 0.001 })
     }
 
     @Test func selectionAndLayoutKeepNativeSystemControlsStable() {
@@ -195,8 +207,12 @@ struct MultiviewPresentationLayoutTests {
                 #expect(grid.tiles == otherGrid.tiles)
                 #expect(grid.record == stage.record && grid.display == stage.display)
                 #expect(grid.sessionControls == stage.sessionControls)
-                #expect(grid.network == stage.network && grid.readouts == stage.readouts)
-                if height < width { #expect(grid.assists == stage.assists) }
+                if height > width {
+                    #expect(grid.network == stage.network && grid.readouts == stage.readouts)
+                } else {
+                    #expect(stage.network.midX == stage.sessionControls.midX)
+                    #expect(stage.readoutsOverlay)
+                }
                 #expect(stage.tiles[selected].width > stage.tiles[(selected + 1) % 4].width)
             }
         }
@@ -206,13 +222,13 @@ struct MultiviewPresentationLayoutTests {
         for (width, height) in [(393.0, 852.0), (852, 393), (744, 1133), (1133, 744)] {
             let layout = MultiviewPresentationLayout(
                 width: width, height: height, arrangement: .grid, selected: 0)
-            let cell = layout.tablet ? 52.0 : 44.0
+            let cell = MonitorSystemButtonMetrics.side(tablet: layout.tablet)
             #expect(layout.controlCellSize == cell)
             #expect(!layout.assistsHorizontal)
             #expect(layout.assists.width == cell + 8)
-            #expect(layout.assists.height <= cell * 4 + 17)
+            #expect(layout.assists.height <= cell * 4 + 44)
             #expect(layout.assists.height >= 44)
-            #expect(layout.assists.y >= layout.network.maxY + 8)
+            #expect(layout.assists.y >= layout.network.maxY + 8 - 0.001)
             #expect(layout.assists.maxY <= layout.display.y - 8)
         }
     }
@@ -227,16 +243,16 @@ struct MultiviewPresentationLayoutTests {
                 width: width, height: height,
                 safeArea: safe, arrangement: .grid, selected: 0)
             let live = FieldMonitorLayout(width: width, height: height, safeArea: safe)
-            #expect(layout.controlCellSize == 44)
-            #expect(layout.assists.height < 4 * layout.controlCellSize + 17)
-            #expect(layout.assists.y == live.settings.maxY + 8)
+            #expect(layout.controlCellSize == 54)
+            #expect(layout.assists.height < 4 * layout.controlCellSize + 44)
+            #expect(abs(layout.assists.y - live.settings.maxY - 8) < 0.001)
             #expect(layout.assists.maxY == live.display.y - 8)
             #expect(layout.record == live.record && layout.display == live.display)
         }
         let roomy = MultiviewPresentationLayout(
             width: 956, height: 440,
             safeArea: .init(leading: 59, bottom: 21), arrangement: .grid, selected: 0)
-        #expect(roomy.assists.height == 193)
+        #expect(roomy.assists.maxY == roomy.display.y - 8)
     }
 
     @Test func landscapeStageReservesNativeExitAndEitherCutoutRail() {
@@ -249,7 +265,7 @@ struct MultiviewPresentationLayoutTests {
             width: 600, height: 300,
             safeArea: .init(leading: 47, bottom: 21), arrangement: .grid, selected: 0)
         #expect(clear.sessionControls.y == clear.tiles[0].y)
-        #expect(clear.tiles[0].x == 77)
+        #expect(clear.tiles[0].x == 82)
         let opposite = MultiviewPresentationLayout(
             width: 600, height: 300,
             safeArea: .init(bottom: 21, trailing: 47), arrangement: .grid, selected: 0)
@@ -270,7 +286,7 @@ struct MultiviewPresentationLayoutTests {
                 let safe = MonitorSafeArea(
                     leading: phone && !right ? 59 : 0, bottom: 21,
                     trailing: phone && right ? 59 : 0)
-                for arrangement in [MultiviewPresentationLayout.Arrangement.grid, .centerStage] {
+                for arrangement in [MultiviewPresentationLayout.Arrangement.grid] {
                     let layout = MultiviewPresentationLayout(
                         width: width, height: height, safeArea: safe,
                         arrangement: arrangement, selected: 2)
@@ -300,6 +316,46 @@ struct MultiviewPresentationLayoutTests {
             #expect(inset.tiles[0].y == plain.tiles[0].y + 28)
             #expect(inset.record == plain.record && inset.display == plain.display)
         }
+    }
+
+    @Test func focusedLandscapeUsesLargerMainAndScrollableFarRightStrip() {
+        for (width, height) in sizes {
+            for right in [false, true] {
+                let safe = MonitorSafeArea(
+                    leading: right ? 0 : 59, bottom: 21, trailing: right ? 59 : 0)
+                let layout = MultiviewPresentationLayout(
+                    width: width, height: height, safeArea: safe,
+                    arrangement: .centerStage, selected: 2)
+                let viewport = layout.secondaryViewport!
+                let main = layout.tiles[2]
+                #expect(layout.secondaryIndices == [0, 1, 3])
+                #expect(viewport.maxX == width - 67)
+                #expect(viewport.y == layout.sessionControls.y)
+                #expect(viewport.maxY <= min(layout.display.y, layout.record.y) - 8)
+                #expect(main.maxX <= viewport.x - 12)
+                #expect(layout.tiles[0].height >= 96)
+                #expect(layout.readoutsOverlay)
+                #expect(layout.readouts.y >= main.y && layout.readouts.maxY <= main.maxY)
+                #expect(layout.network.y == layout.sessionControls.maxY + 8)
+                #expect(layout.assists.y >= layout.network.maxY + 8 - 0.001)
+                #expect(main.x >= layout.assists.maxX + 6)
+            }
+        }
+        let phone = MultiviewPresentationLayout(
+            width: 956, height: 440,
+            safeArea: .init(leading: 59, bottom: 21),
+            arrangement: .centerStage, selected: 0)
+        #expect(phone.tiles[0].width > 650, "The earlier main feed was about 597pt wide")
+        #expect(
+            phone.tiles[3].maxY > phone.secondaryViewport!.maxY,
+            "Secondary feeds should scroll instead of shrinking")
+    }
+
+    private func clipped(_ tile: MonitorRect, to viewport: MonitorRect) -> MonitorRect {
+        .init(
+            x: max(tile.x, viewport.x), y: max(tile.y, viewport.y),
+            width: max(0, min(tile.maxX, viewport.maxX) - max(tile.x, viewport.x)),
+            height: max(0, min(tile.maxY, viewport.maxY) - max(tile.y, viewport.y)))
     }
 
     private func overlaps(_ a: MonitorRect, _ b: MonitorRect) -> Bool {

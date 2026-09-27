@@ -114,22 +114,29 @@ struct StationNetworkSetupView: View {
             // Keyboard avoidance must not switch layout branches and destroy the focused field.
             let size = windowGeometry.size == .zero ? proxy.size : windowGeometry.size
             let landscape = size.width > size.height
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    content(page, landscape: landscape)
-                    if working {
-                        ProgressView(scanning ? "Finishing camera scan…" : "Connecting…")
-                            .accessibilityIdentifier("\(context.prefix).progress")
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        content(page, landscape: landscape)
+                        if working {
+                            ProgressView(scanning ? "Finishing camera scan…" : "Connecting…")
+                                .accessibilityIdentifier("\(context.prefix).progress")
+                        }
+                        if let errorMessage {
+                            Text(errorMessage).font(MonitorTheme.font(13)).foregroundStyle(warning)
+                                .accessibilityIdentifier("\(context.prefix).error")
+                        }
                     }
-                    if let errorMessage {
-                        Text(errorMessage).font(MonitorTheme.font(13)).foregroundStyle(warning)
-                            .accessibilityIdentifier("\(context.prefix).error")
-                    }
+                    .padding(.horizontal, landscape ? 24 : 18).padding(.top, 8)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, landscape ? 24 : 18).padding(.top, 8)
-                .padding(.bottom, 24)
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier("\(context.prefix).form")
+                footer(page, landscape: landscape, width: proxy.size.width)
             }
-            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(MonitorTheme.background.opacity(0.001))
         .navigationTitle(title(page))
@@ -401,7 +408,8 @@ struct StationNetworkSetupView: View {
                 hint(context.networkHint).padding(.bottom, 8)
             }
             if let currentSSID {
-                sectionLabel("THIS IPHONE IS ON")
+                sectionHeader("THIS IPHONE IS ON")
+                    .accessibilityIdentifier("\(context.prefix).currentHeader")
                 group {
                     networkRow(
                         currentSSID,
@@ -410,7 +418,8 @@ struct StationNetworkSetupView: View {
                         detailColor: good)
                 }
             } else if let locationHint {
-                sectionLabel("THIS IPHONE IS ON")
+                sectionHeader("THIS IPHONE IS ON")
+                    .accessibilityIdentifier("\(context.prefix).currentHeader")
                 group {
                     Button {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -428,7 +437,7 @@ struct StationNetworkSetupView: View {
                 }
             }
             if !savedNetworks.isEmpty {
-                sectionLabel("SAVED ON THIS IPHONE").padding(.top, 6)
+                sectionHeader("SAVED ON THIS IPHONE").padding(.top, 6)
                 group {
                     ForEach(Array(savedNetworks.enumerated()), id: \.element) { index, name in
                         if index > 0 { divider }
@@ -445,10 +454,13 @@ struct StationNetworkSetupView: View {
                 if !scanning, scan != nil {
                     Button("Scan again", action: rescan)
                         .font(MonitorTheme.font(12, weight: .semibold))
-                        .frame(minHeight: 32)
+                        .frame(minHeight: 44)
                         .accessibilityIdentifier("\(context.prefix).rescan")
                 }
             }
+            .frame(height: 44)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("\(context.prefix).nearbyHeader")
             .padding(.top, landscape ? 0 : 6)
             group {
                 let nearbyNames = found.filter { !savedNetworks.contains($0) && $0 != currentSSID }
@@ -457,8 +469,8 @@ struct StationNetworkSetupView: View {
                     networkRow(name, detail: hasPassword(name) ? "Password saved" : nil)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                if !nearbyNames.isEmpty { divider }
                 if scan == nil || scanning || nearbyNames.isEmpty {
+                    if !nearbyNames.isEmpty { divider }
                     row(
                         icon: scanning ? nil : .scan,
                         title: scanning
@@ -471,15 +483,7 @@ struct StationNetworkSetupView: View {
                         showsProgress: scanning, chevron: false
                     )
                     .accessibilityIdentifier("\(context.prefix).scanStatus")
-                    divider
                 }
-                Button {
-                    otherName = ""
-                    otherNetwork = true
-                } label: {
-                    row(icon: .plus, title: "Other network…", detail: nil)
-                }
-                .buttonStyle(.plain)
             }
             if landscape {
                 hint(context.networkHint).padding(.top, 4)
@@ -529,6 +533,12 @@ struct StationNetworkSetupView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16).padding(.vertical, 13).background(card)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("\(context.prefix).networkSummary")
+        let summary = VStack(alignment: .leading, spacing: 6) {
+            sectionHeader("NETWORK")
+            network
+        }
         let checklist = VStack(alignment: .leading, spacing: 13) {
             sectionLabel("BEFORE YOU CONNECT")
             check(
@@ -546,33 +556,24 @@ struct StationNetworkSetupView: View {
             secureField("PASSWORD", text: $password, id: "\(context.prefix).password")
             hint("Saved in this iPhone’s Keychain. Multiview can reuse it.")
         }
-        let valid =
-            (password.isEmpty || password.count >= 8)
-            && (try? MulticamCommands.join(ssid: ssid, password: password, seq: 0)) != nil
-        let connect = connectButton("Connect over Wi-Fi", enabled: valid) {
-            await save(.wifi, ssid, password)
-        }
         return Group {
             if landscape {
                 HStack(alignment: .top, spacing: 14) {
                     VStack(spacing: 10) {
-                        network
+                        summary
                         checklist
                     }
                     .frame(maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: 6) {
                         field
-                        Spacer(minLength: 8)
-                        connect
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 16) {
-                    network
+                    summary
                     field
                     checklist
-                    connect.padding(.top, 8)
                 }
             }
         }
@@ -626,7 +627,7 @@ struct StationNetworkSetupView: View {
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading).background(card)
         let name = VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("HOTSPOT NAME")
+            sectionHeader("HOTSPOT NAME")
             TextField(
                 "Hotspot name",
                 text: Binding(
@@ -676,29 +677,22 @@ struct StationNetworkSetupView: View {
                 )
             }
         }
-        let trimmed = hotspotName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let valid =
-            hotspotPassword.count >= 8
-            && (try? MulticamCommands.join(ssid: trimmed, password: hotspotPassword, seq: 0))
-                != nil
-        let connect = connectButton("Connect over Hotspot", enabled: valid) {
-            await save(.phoneHotspot, trimmed, hotspotPassword)
-        }
         return Group {
             if landscape {
                 HStack(alignment: .top, spacing: 14) {
                     VStack(spacing: 10) {
-                        status
+                        VStack(alignment: .leading, spacing: 6) {
+                            sectionHeader("THIS IPHONE’S HOTSPOT")
+                            status
+                        }
                         checklist
                     }
                     .frame(maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: 10) {
                         name
                         pass
-                        Spacer(minLength: 8)
-                        connect
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 14) {
@@ -706,13 +700,54 @@ struct StationNetworkSetupView: View {
                     checklist
                     name
                     pass
-                    connect.padding(.top, 8)
                 }
             }
         }
     }
 
     // MARK: Pieces
+
+    @ViewBuilder private func footer(_ page: Page, landscape: Bool, width: CGFloat) -> some View {
+        if page != .choose {
+            let gap: CGFloat = page == .networks ? 16 : 14
+            footerAction(page)
+                .frame(width: max(1, landscape ? (width - 48 - gap) / 2 : width - 36))
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, landscape ? 24 : 18)
+                .padding(.top, 8).padding(.bottom, 16)
+        }
+    }
+
+    @ViewBuilder private func footerAction(_ page: Page) -> some View {
+        switch page {
+        case .networks:
+            Button {
+                otherName = ""
+                otherNetwork = true
+            } label: {
+                row(icon: .plus, title: "Other network…", detail: nil).background(card)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("\(context.prefix).otherNetwork")
+        case .password(let ssid):
+            let valid =
+                (password.isEmpty || password.count >= 8)
+                && (try? MulticamCommands.join(ssid: ssid, password: password, seq: 0)) != nil
+            connectButton("Connect over Wi-Fi", enabled: valid) {
+                await save(.wifi, ssid, password)
+            }
+        case .hotspot:
+            let trimmed = hotspotName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let valid =
+                hotspotPassword.count >= 8
+                && (try? MulticamCommands.join(ssid: trimmed, password: hotspotPassword, seq: 0))
+                    != nil
+            connectButton("Connect over Hotspot", enabled: valid) {
+                await save(.phoneHotspot, trimmed, hotspotPassword)
+            }
+        case .choose: EmptyView()
+        }
+    }
 
     private var card: some View {
         RoundedRectangle(cornerRadius: 13).fill(MonitorTheme.surface)
@@ -731,6 +766,10 @@ struct StationNetworkSetupView: View {
     private func sectionLabel(_ text: String) -> some View {
         Text(text).font(MonitorTheme.font(10, weight: .bold)).tracking(1.6)
             .foregroundStyle(MonitorTheme.muted)
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        sectionLabel(text).frame(height: 44, alignment: .leading)
     }
 
     private func hint(_ text: String) -> some View {
@@ -793,7 +832,7 @@ struct StationNetworkSetupView: View {
 
     private func secureField(_ label: String, text: Binding<String>, id: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionLabel(label)
+            sectionHeader(label)
             HStack(spacing: 0) {
                 Group {
                     if reveal {
@@ -816,6 +855,8 @@ struct StationNetworkSetupView: View {
                 .accessibilityLabel(reveal ? "Hide password" : "Show password")
             }
             .modifier(InputStyle(trailing: 2))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("\(id).field")
         }
     }
 

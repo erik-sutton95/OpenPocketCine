@@ -67,6 +67,7 @@ struct MultiviewTileChrome: View {
     let selected: Bool
     let compact: Bool
     let condensed: Bool
+    var reservedBottom: CGFloat = 0
     let openOptions: () -> Void
 
     private var values: MultiviewTelemetryPresentation { .init(settings: tile.settings) }
@@ -81,6 +82,7 @@ struct MultiviewTileChrome: View {
                 condensedChrome
             } else {
                 regularChrome
+                    .padding(.bottom, reservedBottom)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))

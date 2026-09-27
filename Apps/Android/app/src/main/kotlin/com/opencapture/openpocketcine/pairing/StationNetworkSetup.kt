@@ -7,19 +7,22 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -103,6 +108,7 @@ fun StationNetworkSetup(
     var scanFailed by remember { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val formScroll = rememberScrollState()
     val scanning = scanJob != null
     val saved = savedNetworks.filter { !it.hotspot && !it.ssid.startsWith("osmo", ignoreCase = true) }
     val phones = found.filter {
@@ -190,15 +196,16 @@ fun StationNetworkSetup(
         }
     }
     DisposableEffect(Unit) { onDispose { scanJob?.cancel() } }
+    LaunchedEffect(page) { formScroll.scrollTo(0) }
 
     Dialog(onDismissRequest = ::back, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(16.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(16.dp), contentAlignment = Alignment.Center) {
             Surface(
                 modifier = Modifier.widthIn(max = if (landscape) 840.dp else 520.dp).fillMaxWidth()
-                    .heightIn(max = maxHeight).testTag("multiview.networkSetup"),
+                    .fillMaxHeight().testTag("multiview.networkSetup"),
                 color = MonitorPalette.backgroundDeep, shape = RoundedCornerShape(20.dp),
             ) {
-                Column {
+                Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = ::back, enabled = !working) { Text(if (page == "choose") "Cancel" else "Back") }
                         Text(
@@ -210,7 +217,8 @@ fun StationNetworkSetup(
                         )
                     }
                     Column(
-                        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(18.dp),
+                        Modifier.weight(1f).verticalScroll(formScroll).padding(18.dp)
+                            .testTag("stationSetup.form"),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         if (lockedNetwork != null) {
@@ -221,23 +229,23 @@ fun StationNetworkSetup(
                             "choose" -> {
                                 Text("How will your cameras connect?", style = LiveType.display(22f, FontWeight.SemiBold))
                                 AdaptiveSetupColumns(landscape, {
-                                    SetupNetworkRow("Local Wi-Fi", "A router, venue network or another device’s hotspot. This phone joins it too.", OpcIcon.WIFI, !working) {
+                                    SetupNetworkRow("Local Wi-Fi", detail = "A router, venue network or another device’s hotspot. This phone joins it too.", icon = OpcIcon.WIFI, enabled = !working) {
                                         page = "networks"
                                     }
                                 }, {
-                                    SetupNetworkRow("Phone hotspot", "This phone’s Wi-Fi hotspot. Best on the move.", OpcIcon.RADIO, !working) {
+                                    SetupNetworkRow("Phone hotspot", detail = "This phone’s Wi-Fi hotspot. Best on the move.", icon = OpcIcon.RADIO, enabled = !working) {
                                         page = "hotspot"
                                     }
                                 })
                                 SetupHint("Choose the shared network before adding cameras. Saved passwords stay on this phone.")
                             }
                             "networks" -> AdaptiveSetupColumns(landscape, {
-                                SetupSection("THIS PHONE IS ON")
+                                SetupSectionHeader("THIS PHONE IS ON", Modifier.testTag("stationSetup.currentHeader"))
                                 current?.let { name ->
-                                    SetupNetworkRow(name, if (saved.any { it.ssid == name }) "Connected · password saved" else "Connected", enabled = !working) { choose(name) }
+                                    SetupNetworkRow(name, detail = if (saved.any { it.ssid == name }) "Connected · password saved" else "Connected", enabled = !working) { choose(name) }
                                 } ?: SetupNetworkRow(
                                     "Show this phone’s Wi-Fi",
-                                    when {
+                                    detail = when {
                                         !locationPermission -> "Allow precise Location in app Settings to show the Wi-Fi name."
                                         !locationEnabled -> "Turn on Location in Settings to show the Wi-Fi name."
                                         else -> "Connect this phone to Wi-Fi, or choose the network below."
@@ -250,10 +258,10 @@ fun StationNetworkSetup(
                                     })
                                 }
                                 val known = saved.filter { it.ssid != current }.distinctBy { it.ssid }
-                                if (known.isNotEmpty()) SetupSection("SAVED ON THIS PHONE")
-                                known.forEach { item -> SetupNetworkRow(item.ssid, "Password saved", enabled = !working) { choose(item.ssid) } }
+                                if (known.isNotEmpty()) SetupSectionHeader("SAVED ON THIS PHONE")
+                                known.forEach { item -> SetupNetworkRow(item.ssid, detail = "Password saved", enabled = !working) { choose(item.ssid) } }
                             }, {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().height(44.dp).testTag("stationSetup.nearbyHeader"), verticalAlignment = Alignment.CenterVertically) {
                                     SetupSection("NEARBY")
                                     Spacer(Modifier.weight(1f))
                                     if (scanning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -270,40 +278,36 @@ fun StationNetworkSetup(
                                         }, Modifier.testTag("stationSetup.scanStatus"),
                                     )
                                 }
-                                SetupNetworkRow("Other network…", icon = OpcIcon.PLUS, enabled = !working) { otherName = ""; otherNetwork = true }
                                 SetupHint("This phone joins first. Every camera you add will use the same Wi-Fi.")
                             })
                             "password" -> AdaptiveSetupColumns(landscape, {
-                                SetupNetworkRow(network, if (network == current) "This phone’s current network" else "This phone joins it too", enabled = false) {}
+                                SetupSectionHeader("NETWORK")
+                                SetupNetworkRow(network, detail = if (network == current) "This phone’s current network" else "This phone joins it too", enabled = false,
+                                    modifier = Modifier.testTag("stationSetup.networkSummary")) {}
                                 SetupChecklist()
                             }, {
                                 SetupPasswordField("Password", password, !working) { password = it }
                                 SetupHint("Saved securely on this phone for all cameras.")
-                                Button(
-                                    onClick = { submit(false) }, enabled = !working && validStationCredentials(network, password, false),
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp).testTag("stationSetup.connect"),
-                                ) { Text("Connect over Wi-Fi") }
                             })
                             "hotspot" -> AdaptiveSetupColumns(landscape, {
+                                SetupSectionHeader("THIS PHONE’S HOTSPOT")
                                 SetupHint(if (hotspotDetected) "Phone hotspot is active" else "Phone hotspot not detected yet. It can appear once a camera joins.")
                                 SetupSection("IN SETTINGS")
                                 SetupHint("1. Turn on this phone’s Wi-Fi hotspot.\n2. Use WPA2 security and 2.4 GHz for compatibility.")
                                 TextButton(onClick = ::settings, enabled = !working) { Text("Open Settings") }
                             }, {
+                                SetupSectionHeader("HOTSPOT NAME")
                                 OutlinedTextField(
                                     value = hotspotName, onValueChange = { hotspotTouched = true; hotspotName = it },
-                                    label = { Text("Hotspot name") }, enabled = !working, singleLine = true,
-                                    modifier = Modifier.fillMaxWidth().testTag("stationSetup.hotspotName"),
+                                    placeholder = { Text("Hotspot name") }, enabled = !working, singleLine = true,
+                                    modifier = Modifier.fillMaxWidth().testTag("stationSetup.hotspotName")
+                                        .semantics { contentDescription = "Hotspot name" },
                                 )
                                 if (phones.size > 1 || (phones.size == 1 && phones.single() != hotspotName)) {
                                     phones.forEach { name -> TextButton(onClick = { hotspotTouched = true; hotspotName = name }, enabled = !working) { Text(name) } }
                                 }
                                 SetupHint("Copy the hotspot name and password from Settings once. Android keeps the password private.")
                                 SetupPasswordField("Hotspot password", hotspotPassword, !working) { hotspotPassword = it }
-                                Button(
-                                    onClick = { submit(true) }, enabled = !working && validStationCredentials(hotspotName.trim(), hotspotPassword, true),
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp).testTag("stationSetup.connect"),
-                                ) { Text("Connect over Hotspot") }
                             })
                         }
                         if (working) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -311,6 +315,33 @@ fun StationNetworkSetup(
                             Text(if (scanning) "Finishing camera scan…" else "Connecting…")
                         }
                         (error ?: warning)?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("stationSetup.error")) }
+                    }
+                    // The scrolling form yields to the keyboard; primary and manual-entry
+                    // actions retain a stable bottom slot outside long network lists.
+                    if (lockedNetwork == null && page != "choose") {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp)) {
+                            if (landscape) {
+                                Spacer(Modifier.weight(1f))
+                                Spacer(Modifier.width(16.dp))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                if (page == "networks") {
+                                    SetupNetworkRow("Other network…", icon = OpcIcon.PLUS, enabled = !working,
+                                        modifier = Modifier.testTag("stationSetup.otherNetwork")) {
+                                        otherName = ""; otherNetwork = true
+                                    }
+                                } else {
+                                    val hotspot = page == "hotspot"
+                                    val ssid = if (hotspot) hotspotName.trim() else network
+                                    val passphrase = if (hotspot) hotspotPassword else password
+                                    Button(
+                                        onClick = { submit(hotspot) },
+                                        enabled = !working && validStationCredentials(ssid, passphrase, hotspot),
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp).testTag("stationSetup.connect"),
+                                    ) { Text(if (hotspot) "Connect over Hotspot" else "Connect over Wi-Fi") }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -340,11 +371,18 @@ private fun AdaptiveSetupColumns(landscape: Boolean, first: @Composable ColumnSc
 private fun SetupSection(text: String) { Text(text, style = LiveType.text(11f, FontWeight.Bold)) }
 
 @Composable
+private fun SetupSectionHeader(text: String, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+        SetupSection(text)
+    }
+}
+
+@Composable
 private fun SetupHint(text: String, modifier: Modifier = Modifier) { Text(text, modifier, style = LiveType.text(13f), color = MaterialTheme.colorScheme.onSurfaceVariant) }
 
 @Composable
-private fun SetupNetworkRow(title: String, detail: String? = null, icon: OpcIcon = OpcIcon.WIFI, enabled: Boolean = true, onClick: () -> Unit) {
-    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(13.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+private fun SetupNetworkRow(title: String, modifier: Modifier = Modifier, detail: String? = null, icon: OpcIcon = OpcIcon.WIFI, enabled: Boolean = true, onClick: () -> Unit) {
+    Surface(onClick = onClick, enabled = enabled, modifier = modifier, shape = RoundedCornerShape(13.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OpcIcon(icon, null, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -359,14 +397,18 @@ private fun SetupNetworkRow(title: String, detail: String? = null, icon: OpcIcon
 @Composable
 private fun SetupPasswordField(label: String, value: String, enabled: Boolean, onChange: (String) -> Unit) {
     var reveal by remember { mutableStateOf(false) }
-    OutlinedTextField(
-        value = value, onValueChange = onChange, label = { Text(label) }, enabled = enabled, singleLine = true,
-        visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        trailingIcon = { IconButton(onClick = { reveal = !reveal }) {
-            OpcIcon(if (reveal) OpcIcon.EYE_OFF else OpcIcon.EYE, if (reveal) "Hide password" else "Show password", Modifier.size(20.dp))
-        } }, modifier = Modifier.fillMaxWidth().testTag("stationSetup.password"),
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SetupSectionHeader(label.uppercase())
+        OutlinedTextField(
+            value = value, onValueChange = onChange, placeholder = { Text(label) }, enabled = enabled, singleLine = true,
+            visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = { IconButton(onClick = { reveal = !reveal }) {
+                OpcIcon(if (reveal) OpcIcon.EYE_OFF else OpcIcon.EYE, if (reveal) "Hide password" else "Show password", Modifier.size(20.dp))
+            } }, modifier = Modifier.fillMaxWidth().testTag("stationSetup.password")
+                .semantics { contentDescription = label },
+        )
+    }
 }
 
 @Composable

@@ -30,6 +30,9 @@ data class MultiviewPresentationLayout(
     val controlCellSize: Float,
     val sessionControlsHorizontal: Boolean,
     val assistsHorizontal: Boolean,
+    val secondaryViewport: MonitorRect? = null,
+    val secondaryIndices: List<Int> = emptyList(),
+    val readoutsOverlay: Boolean = false,
 ) {
     companion object {
         fun compute(
@@ -50,26 +53,30 @@ data class MultiviewPresentationLayout(
             val portrait = h > w
             val tablet = min(w, h) >= 600
             val banded = tablet && !portrait
-            val cell = if (tablet) 52.0 else 44.0
+            val focusedLandscape = !portrait && arrangement == MultiviewArrangement.CENTER_STAGE
+            val cell = MonitorLayoutPolicy.assistButtonSize(tablet).toDouble()
             val horizontal = false
             val toolbarWidth = cell + 8
-            val toolbarHeight = cell * 4 + 17
+            val toolbarHeight = cell * 4 + 44
+            val portraitSecondaryMinimum = (if (tablet) 52.0 else 44.0) * 4 + 17
             val live = MonitorLayoutPolicy.fieldMonitor(
                 w.toFloat(), h.toFloat(), safeTop.toFloat(), safeLeading.toFloat(),
                 safeBottom.toFloat(), safeTrailing.toFloat(), topControlInset = controlInset.toFloat(),
             )
             val headerTop = (if (portrait || banded) safeTop else 0.0) + 12 + controlInset
             val close = if (portrait) live.lock.copy(y = headerTop.toFloat()) else live.lock
-            val network = if (portrait) live.settings.copy(
-                x = (w - 14 - live.settings.width).toFloat(), y = headerTop.toFloat(),
-            ) else live.settings
+            val network = when {
+                portrait -> live.settings.copy(x = (w - 14 - live.settings.width).toFloat(), y = headerTop.toFloat())
+                focusedLandscape -> live.settings.copy(x = close.midX - live.settings.width / 2, y = close.maxY + 8)
+                else -> live.settings
+            }
             val cutout = max(safeLeading, safeTrailing)
             val leftToolX = close.midX - toolbarWidth / 2
             val rightToolX = live.display.midX - toolbarWidth / 2
             val toolbarOnLeft = !portrait && safeTrailing > safeLeading
             val toolX = when {
                 portrait -> network.midX - toolbarWidth / 2
-                toolbarOnLeft -> leftToolX
+                focusedLandscape || toolbarOnLeft -> leftToolX
                 else -> rightToolX
             }
             val stageTop = when {
@@ -88,10 +95,10 @@ data class MultiviewPresentationLayout(
                 banded -> minOf(w - 28, rightToolX - 6, network.x - 6.0)
                 else -> minOf(w - max(88.0, cutout + 12), rightToolX - 6, network.x - 6.0)
             }
-            val readouts = when {
+            var readouts = when {
                 portrait -> Rect(18.0, max(stageTop, live.record.y - 58.0), w - 36, 37.0)
-                banded -> Rect(28.0, live.record.y + live.record.height / 2 - 18.5,
-                    live.record.x - 52.0, 37.0)
+                banded -> Rect(stageLeft, live.record.y + live.record.height / 2 - 18.5,
+                    live.record.x - stageLeft - 24.0, 37.0)
                 else -> Rect(stageLeft, h - safeBottom - 12 - 37, stageRight - stageLeft, 37.0)
             }
             val stageBottom = when {
@@ -105,6 +112,8 @@ data class MultiviewPresentationLayout(
             val focused = selected.coerceIn(0, 3)
             val tiles = MutableList(4) { Rect(0.0, 0.0, 0.0, 0.0) }
             var toolbarTop = stageTop
+            var secondaryViewport: MonitorRect? = null
+            val secondaryIndices = if (focusedLandscape) (0 until 4).filter { it != focused } else emptyList()
             if (arrangement == MultiviewArrangement.GRID) {
                 val columns = if (portrait) 1 else 2
                 val rows = 4 / columns
@@ -117,7 +126,7 @@ data class MultiviewPresentationLayout(
                     )
                 }
             } else if (portrait) {
-                val secondaryMinimum = max(toolbarHeight, 3 * 44.0 + 2 * gap)
+                val secondaryMinimum = max(portraitSecondaryMinimum, 3 * 44.0 + 2 * gap)
                 val mainHeight = min(max(1.0, w - 30) * 9 / 16, max(1.0, stageHeight - 15 - secondaryMinimum))
                 val mainWidth = mainHeight * 16 / 9
                 tiles[focused] = Rect((w - mainWidth) / 2, stageTop, mainWidth, mainHeight)
@@ -130,43 +139,48 @@ data class MultiviewPresentationLayout(
                     row++
                 }
             } else {
-                val thumbGap = if (tablet) 14.0 else 9.0
+                val mainLeft = maxOf(cutout + 8, close.maxX + 8.0, leftToolX + toolbarWidth + 6)
+                val stripRight = w - max(18.0, cutout + 8)
                 val columnGap = if (tablet) 18.0 else 12.0
-                val thumbWidth = max(1.0, minOf(
-                    if (tablet) 252.0 else 184.0,
-                    (stageHeight - 2 * thumbGap) * 16 / 27,
-                    (stageWidth - columnGap - 2 * thumbGap * 16 / 9) / 4,
-                ))
-                val thumbHeight = thumbWidth * 9 / 16
-                val mainColumnWidth = max(1.0, stageWidth - thumbWidth - columnGap)
-                val mainWidth = min(stageHeight * 16 / 9, mainColumnWidth)
+                val thumbWidth = max(1.0, min(if (tablet) 200.0 else 140.0, (stripRight - mainLeft - columnGap) * .26))
+                val stripLeft = stripRight - thumbWidth
+                val stripBottom = max(stageTop + 44, min(live.display.y, live.record.y) - 8.0)
+                secondaryViewport = Rect(stripLeft, stageTop, thumbWidth, stripBottom - stageTop).clamped(w, h)
+                val thumbHeight = max(if (tablet) 132.0 else 96.0, thumbWidth * 9 / 16)
+                val thumbGap = if (tablet) 14.0 else 9.0
+                val mainWidth = max(1.0, min((h - safeBottom - 12 - stageTop) * 16 / 9, stripLeft - columnGap - mainLeft))
                 val mainHeight = mainWidth * 9 / 16
-                tiles[focused] = Rect(
-                    stageLeft + (mainColumnWidth - mainWidth) / 2,
-                    stageTop, mainWidth, mainHeight,
-                )
-                val stripTop = stageTop
-                var row = 0
-                for (index in 0 until 4) {
-                    if (index == focused) continue
-                    tiles[index] = Rect(stageRight - thumbWidth, stripTop + row * (thumbHeight + thumbGap), thumbWidth, thumbHeight)
-                    row++
+                tiles[focused] = Rect(mainLeft, stageTop, mainWidth, mainHeight)
+                secondaryIndices.forEachIndexed { row, index ->
+                    tiles[index] = Rect(stripLeft, stageTop + row * (thumbHeight + thumbGap), thumbWidth, thumbHeight)
                 }
+                readouts = Rect(mainLeft, max(stageTop, stageTop + mainHeight - 45), mainWidth, 37.0)
             }
             val toolTop = when {
                 portrait -> max(toolbarTop, network.maxY + 8.0)
+                focusedLandscape -> max(network.maxY + 8.0,
+                    if (safeLeading > 0 && !tablet) (h + if (safeLeading >= 55) 112 else 124) / 2 + 8 else 0.0)
                 toolbarOnLeft -> close.maxY + 8.0
                 else -> network.maxY + 8.0
             }
-            val toolBottom = if (portrait) stageBottom else live.display.y - 8.0
-            // Short rails scroll their four full-size targets between the native system controls.
-            val assists = Rect(toolX, toolTop, toolbarWidth, min(toolbarHeight, max(1.0, toolBottom - toolTop)))
+            val toolBottom = when {
+                portrait -> stageBottom
+                focusedLandscape -> h - safeBottom - 12
+                else -> live.display.y - 8.0
+            }
+            // The native palette grows upward within this rail and scrolls its full-size tools.
+            val paletteHeight = max(1.0, min(toolbarHeight, toolBottom - toolTop))
+            val assists = Rect(toolX, if (portrait) toolTop else toolBottom - paletteHeight, toolbarWidth, paletteHeight)
             return MultiviewPresentationLayout(
-                tiles = tiles.map { it.clamped(w, h) }, sessionControls = close,
+                tiles = tiles.mapIndexed { index, rect ->
+                    if (index in secondaryIndices) rect.unclamped() else rect.clamped(w, h)
+                }, sessionControls = close,
                 readouts = readouts.clamped(w, h),
                 assists = assists.clamped(w, h), network = network,
                 display = live.display, record = live.record, portrait = portrait, tablet = tablet,
                 controlCellSize = cell.toFloat(), sessionControlsHorizontal = true, assistsHorizontal = horizontal,
+                secondaryViewport = secondaryViewport, secondaryIndices = secondaryIndices,
+                readoutsOverlay = focusedLandscape,
             )
         }
     }
@@ -177,6 +191,7 @@ private fun Float.finiteNonnegative() = if (isFinite()) max(0.0, toDouble()) els
 private class Rect(val x: Double, val y: Double, val width: Double, val height: Double) {
     val maxX get() = x + width
     val maxY get() = y + height
+    fun unclamped() = MonitorRect(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat())
     fun clamped(viewWidth: Double, viewHeight: Double): MonitorRect {
         val fittedWidth = width.coerceIn(1.0, viewWidth)
         val fittedHeight = height.coerceIn(1.0, viewHeight)

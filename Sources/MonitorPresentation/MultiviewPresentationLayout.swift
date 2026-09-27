@@ -9,6 +9,9 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
     public let readouts: MonitorRect
     public let assists: MonitorRect
     public let network: MonitorRect
+    public let secondaryViewport: MonitorRect?
+    public let secondaryIndices: [Int]
+    public let readoutsOverlay: Bool
     public let display: MonitorRect
     public let record: MonitorRect
     public let portrait: Bool
@@ -27,7 +30,7 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
         portrait = h > w
         tablet = min(w, h) >= 600
         let banded = tablet && !portrait
-        let cell = tablet ? 52.0 : 44.0
+        let cell = MonitorSystemButtonMetrics.side(tablet: tablet)
         controlCellSize = cell
         sessionControlsHorizontal = true
         assistsHorizontal = false
@@ -53,10 +56,15 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             ? .init(
                 x: w - 14 - live.settings.width, y: headerTop,
                 width: live.settings.width, height: live.settings.height)
-            : live.settings
+            : arrangement == .centerStage
+                ? .init(
+                    x: sessionControls.midX - live.settings.width / 2,
+                    y: sessionControls.maxY + 8,
+                    width: live.settings.width, height: live.settings.height)
+                : live.settings
 
         let toolWidth = cell + 8
-        let toolHeight = cell * 4 + 17
+        let toolHeight = cell * 4 + 44
         // Follow the native button columns and use the opposite edge from a
         // landscape cutout. Fixed stage reserves keep picture hosts stationary
         // when the toolbar changes sides.
@@ -73,6 +81,9 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             : sessionControls.y
         let selectedIndex = min(3, max(0, selected))
         var result = [MonitorRect](repeating: .init(), count: 4)
+        var stripViewport: MonitorRect?
+        var stripIndices: [Int] = []
+        readoutsOverlay = !portrait && arrangement == .centerStage
 
         if portrait {
             readouts = .init(
@@ -94,7 +105,7 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             } else {
                 // Short, resized windows must still leave room for reachable
                 // secondary feeds and the full toolbar below the main picture.
-                let lowerHeight = max(toolHeight, 3 * 44 + 2 * gap)
+                let lowerHeight = max((tablet ? 52.0 : 44.0) * 4 + 17, 3 * 44 + 2 * gap)
                 let mainHeight = max(
                     1, min((w - 30) * 9 / 16, stageBottom - stageTop - 15 - lowerHeight))
                 let mainWidth = mainHeight * 16 / 9
@@ -111,14 +122,48 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
                     x: toolX, y: stripTop, width: toolWidth,
                     height: max(1, min(toolHeight, stageBottom - stripTop)))
             }
+        } else if arrangement == .centerStage {
+            // One left control column leaves the far right available for a
+            // scrollable filmstrip. The main image no longer reserves a separate
+            // exposure row or enough height to squeeze in three thumbnails.
+            let toolLeft = sessionControls.midX - toolWidth / 2
+            let stageLeft = max(cutout + 8, sessionControls.maxX + 8, toolLeft + toolWidth + 6)
+            let stageRight = w - max(18, cutout + 8)
+            let gap = banded ? 18.0 : 12.0
+            let thumbWidth = max(1, min(banded ? 200 : 140, (stageRight - stageLeft - gap) * 0.26))
+            let stripTop = stageTop
+            let stripBottom = max(stripTop + 44, min(display.y, record.y) - 8)
+            stripViewport = .init(
+                x: stageRight - thumbWidth, y: stripTop,
+                width: thumbWidth, height: stripBottom - stripTop)
+            stripIndices = (0..<4).filter { $0 != selectedIndex }
+            let thumbHeight = max(banded ? 132 : 96, thumbWidth * 9 / 16)
+            let stripGap = banded ? 14.0 : 9.0
+            for (row, index) in stripIndices.enumerated() {
+                result[index] = .init(
+                    x: stageRight - thumbWidth,
+                    y: stripTop + Double(row) * (thumbHeight + stripGap),
+                    width: thumbWidth, height: thumbHeight)
+            }
+            let floor = h - max(0, safeArea.bottom) - 12
+            let mainWidth = max(
+                1, min((floor - stageTop) * 16 / 9, stageRight - thumbWidth - gap - stageLeft))
+            let main = MonitorRect(
+                x: stageLeft, y: stageTop, width: mainWidth, height: mainWidth * 9 / 16)
+            result[selectedIndex] = main
+            readouts = .init(
+                x: main.x, y: max(main.y, main.maxY - 45), width: main.width, height: 37)
+            let cutoutFloor =
+                safeArea.leading > 0 ? (h + (safeArea.leading >= 55 ? 112 : 124)) / 2 + 8 : 0
+            let toolTop = max(network.maxY + 8, cutoutFloor)
+            let toolBottom = max(toolTop + 1, floor)
+            let paletteHeight = min(toolHeight, toolBottom - toolTop)
+            assists = .init(
+                x: toolLeft, y: toolBottom - paletteHeight, width: toolWidth, height: paletteHeight)
         } else {
             let preferredLeft = banded ? 28.0 : max(cutout + 8, 18)
-            // The stage shares the native buttons' top edge. A cutout can also
-            // move the toolbar left, so reserve both possible columns without
-            // narrowing either side beyond the controls' actual footprint.
             let stageLeft = max(
-                preferredLeft,
-                sessionControls.maxY > stageTop ? sessionControls.maxX + 4 : preferredLeft,
+                preferredLeft, sessionControls.maxX + 4,
                 cutout > 0 ? leftToolX + toolWidth + 6 : preferredLeft)
             let stageRight = min(
                 w - (banded ? 28.0 : max(cutout + 12, 88)), rightToolX - 6, network.x - 6)
@@ -131,45 +176,22 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             let stageWidth = max(1, stageRight - stageLeft)
             let stageHeight = max(1, stageBottom - stageTop)
             let toolTop = (toolbarOnLeft ? sessionControls.maxY : network.maxY) + 8
+            let toolBottom = max(toolTop + 1, display.y - 8)
+            let paletteHeight = min(toolHeight, toolBottom - toolTop)
             assists = .init(
-                x: toolX, y: toolTop, width: toolWidth,
-                height: max(1, min(toolHeight, display.y - 8 - toolTop)))
-            if arrangement == .grid {
-                let gap = banded ? 14.0 : 12.0
-                let tileWidth = max(1, (stageWidth - gap) / 2)
-                let tileHeight = max(1, (stageHeight - gap) / 2)
-                result = (0..<4).map { index in
-                    .init(
-                        x: stageLeft + Double(index % 2) * (tileWidth + gap),
-                        y: stageTop + Double(index / 2) * (tileHeight + gap),
-                        width: tileWidth, height: tileHeight)
-                }
-            } else {
-                let gap = banded ? 18.0 : 12.0
-                let stripGap = banded ? 14.0 : 9.0
-                let thumbWidth = max(
-                    1,
-                    min(
-                        banded ? 252 : 184,
-                        (stageHeight - 2 * stripGap) * 16 / 27,
-                        (stageWidth - gap - 2 * stripGap * 16 / 9) / 4))
-                let mainWidth = max(1, min(stageHeight * 16 / 9, stageWidth - thumbWidth - gap))
-                let mainHeight = mainWidth * 9 / 16
-                let mainColumnWidth = stageWidth - thumbWidth - gap
-                result[selectedIndex] = .init(
-                    x: stageLeft + max(0, (mainColumnWidth - mainWidth) / 2),
-                    y: stageTop,
-                    width: mainWidth, height: mainHeight)
-                let thumbHeight = thumbWidth * 9 / 16
-                let stripTop = stageTop
-                for (row, index) in (0..<4).filter({ $0 != selectedIndex }).enumerated() {
-                    result[index] = .init(
-                        x: stageRight - thumbWidth,
-                        y: stripTop + Double(row) * (thumbHeight + stripGap),
-                        width: thumbWidth, height: thumbHeight)
-                }
+                x: toolX, y: toolBottom - paletteHeight, width: toolWidth, height: paletteHeight)
+            let gap = banded ? 14.0 : 12.0
+            let tileWidth = max(1, (stageWidth - gap) / 2)
+            let tileHeight = max(1, (stageHeight - gap) / 2)
+            result = (0..<4).map { index in
+                .init(
+                    x: stageLeft + Double(index % 2) * (tileWidth + gap),
+                    y: stageTop + Double(index / 2) * (tileHeight + gap),
+                    width: tileWidth, height: tileHeight)
             }
         }
+        secondaryViewport = stripViewport
+        secondaryIndices = stripIndices
         tiles = result
     }
 }

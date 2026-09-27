@@ -7,11 +7,23 @@
         public var title: String
         public var enabled: Bool
         public var hasOptions: Bool
-        public init(id: String, title: String, enabled: Bool, hasOptions: Bool) {
+        public var available: Bool
+        public var accessibilityLabel: String?
+        public var accessibilityValue: String?
+        public var accessibilityIdentifier: String?
+        public init(
+            id: String, title: String, enabled: Bool, hasOptions: Bool,
+            available: Bool = true, accessibilityLabel: String? = nil,
+            accessibilityValue: String? = nil, accessibilityIdentifier: String? = nil
+        ) {
             self.id = id
             self.title = title
             self.enabled = enabled
             self.hasOptions = hasOptions
+            self.available = available
+            self.accessibilityLabel = accessibilityLabel
+            self.accessibilityValue = accessibilityValue
+            self.accessibilityIdentifier = accessibilityIdentifier
         }
     }
 
@@ -25,6 +37,8 @@
         private let onOptions: (String) -> Void
         private let onExpansionActivityChange: (Bool) -> Void
         private let icon: (String) -> Icon
+        private let accessibilityName: String
+        private let accessibilityPrefix: String
         @Binding private var expanded: Bool
         @Binding private var usage: MonitorToolUsage
         @State private var progress: Double = 0
@@ -42,6 +56,8 @@
             expanded: Binding<Bool>, onToggle: @escaping (String) -> Void,
             onOptions: @escaping (String) -> Void,
             onExpansionActivityChange: @escaping (Bool) -> Void = { _ in },
+            accessibilityName: String = "View Assist tools",
+            accessibilityPrefix: String = "monitor.assists",
             @ViewBuilder icon: @escaping (String) -> Icon
         ) {
             self.tools = tools
@@ -53,6 +69,8 @@
             self.onOptions = onOptions
             self.onExpansionActivityChange = onExpansionActivityChange
             self.icon = icon
+            self.accessibilityName = accessibilityName
+            self.accessibilityPrefix = accessibilityPrefix
         }
 
         public var body: some View {
@@ -219,14 +237,14 @@
                         visibleHeight: visibleHeight)
                 )
                 .accessibilityLabel(
-                    open ? "Show all View Assist tools" : "Collapse View Assist tools"
+                    open ? "Show all \(accessibilityName)" : "Collapse \(accessibilityName)"
                 )
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction {
                     expanded.toggle()
                 }
                 .accessibilityIdentifier(
-                    open ? "monitor.assists.expand" : "monitor.assists.collapse")
+                    accessibilityPrefix + (open ? ".expand" : ".collapse"))
         }
 
         private func revealDrag(
@@ -339,7 +357,8 @@
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(tool.title).accessibilityValue(tool.enabled ? "On" : "Off")
+            .accessibilityLabel(tool.accessibilityLabel ?? tool.title)
+            .accessibilityValue(tool.accessibilityValue ?? (tool.enabled ? "On" : "Off"))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { toggle(tool) }
             .accessibilityActions {
@@ -347,19 +366,21 @@
                     Button("Options") { showOptions(tool) }
                 }
             }
-            .opacity(shown)
+            .disabled(!tool.available)
+            .opacity(shown * (tool.available ? 1 : 0.4))
             .allowsHitTesting(shown > 0.35)
             .accessibilityHidden(shown < 0.35)
-            .accessibilityIdentifier("monitor.assist.\(tool.id)")
+            .accessibilityIdentifier(tool.accessibilityIdentifier ?? "monitor.assist.\(tool.id)")
         }
 
         private func toggle(_ tool: MonitorToolItem) {
+            guard tool.available else { return }
             usage.recordUse(of: tool.id, seed: usageSeed)
             onToggle(tool.id)
         }
 
         private func showOptions(_ tool: MonitorToolItem) {
-            guard tool.hasOptions else { return }
+            guard tool.available, tool.hasOptions else { return }
             usage.recordUse(of: tool.id, seed: usageSeed)
             expanded = false
             onOptions(tool.id)

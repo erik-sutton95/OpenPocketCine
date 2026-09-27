@@ -19,46 +19,16 @@ final class MultiviewUIFlowTests: XCTestCase {
 
     func testLayoutsSelectionAndSystemControlsAcrossOrientations() {
         app.launch()
-        var previousLandscapeRailX: CGFloat?
-        var landscapeFrames: [String: [CGRect]] = [:]
+        var landscapeMain: CGRect?
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
             rotate(orientation)
-            let layout = revealToolbarButton("multiview.layout")
             let record = app.buttons["multiview.recordAll"]
             let display = app.buttons["multiview.display"]
-            XCTAssertTrue(layout.waitForExistence(timeout: 10))
-            XCTAssertTrue(layout.isHittable)
-            XCTAssertTrue(display.isHittable)
+            XCTAssertTrue(display.waitForExistence(timeout: 10))
             let recordFrame = record.frame
             let displayFrame = display.frame
-            if orientation != .portrait {
-                let rail = app.scrollViews["multiview.toolbar"]
-                let exit = app.buttons["multiview.close"]
-                let network = app.buttons["multiview.network"]
-                // ScrollView accessibility bounds can extend to the screen
-                // edge; alignment belongs to the rendered button target.
-                let toolbarX = layout.frame.midX
-                XCTAssertGreaterThanOrEqual(layout.frame.width, 44 - 0.001)
-                let toolbarOnLeft = toolbarX < app.frame.midX
-                XCTAssertEqual(
-                    toolbarX,
-                    toolbarOnLeft ? exit.frame.midX : display.frame.midX, accuracy: 1)
-                XCTAssertGreaterThanOrEqual(
-                    rail.frame.minY, (toolbarOnLeft ? exit.frame.maxY : network.frame.maxY) + 7)
-                XCTAssertLessThanOrEqual(rail.frame.maxY, display.frame.minY - 7)
-                if app.frame.height < 600, exit.frame.minY < 50 {
-                    // Native phone corner clearance identifies a cutout device.
-                    // Opposite rotations move only the toolbar across the feeds.
-                    if let previousLandscapeRailX {
-                        XCTAssertNotEqual(toolbarX, previousLandscapeRailX)
-                    }
-                    previousLandscapeRailX = toolbarX
-                }
-                if !toolbarOnLeft, app.frame.height < 600 {
-                    XCTAssertEqual(toolbarX, network.frame.midX, accuracy: 1)
-                }
-            }
             for expected in ["Grid", "Center stage"] {
+                let layout = revealToolbarButton("multiview.layout")
                 layout.tap()
                 XCTAssertEqual(layout.value as? String, expected)
                 XCTAssertEqual(record.frame, recordFrame)
@@ -67,47 +37,40 @@ final class MultiviewUIFlowTests: XCTestCase {
                 let tile = app.buttons["multiview.tile.1"]
                 XCTAssertTrue(tile.isHittable)
                 tile.tap()
-                // The native exclusive double-tap recognizer must expire before
-                // a single tap selects the feed. XCTest idleness does not wait
-                // for that recognizer deadline.
                 expectation(
                     for: NSPredicate(format: "value BEGINSWITH %@", "Selected"), evaluatedWith: tile
                 )
                 waitForExpectations(timeout: 3)
-                XCTAssertEqual(
-                    layout.value as? String, expected, "Selecting a grid feed keeps Grid")
+                XCTAssertEqual(layout.value as? String, expected)
                 XCTAssertTrue(app.buttons["multiview.options.1"].isHittable)
+                let close = app.buttons["multiview.close"].frame
+                let network = app.buttons["multiview.network"].frame
                 if orientation == .portrait {
-                    if expected == "Grid" {
-                        XCTAssertGreaterThan(layout.frame.minX, tile.frame.maxX)
-                    } else {
-                        XCTAssertGreaterThanOrEqual(layout.frame.minY, tile.frame.maxY)
-                    }
                     XCTAssertLessThan(display.frame.midX, record.frame.midX)
                     XCTAssertEqual(display.frame.midY, record.frame.midY, accuracy: 1)
+                    if expected == "Center stage" {
+                        XCTAssertGreaterThanOrEqual(layout.frame.minY, tile.frame.maxY)
+                    }
                 } else {
                     XCTAssertEqual(display.frame.midX, record.frame.midX, accuracy: 1)
                     XCTAssertLessThan(display.frame.maxY, record.frame.minY)
-                    let frames =
-                        (0..<3).map { app.buttons["multiview.tile.\($0)"].frame }
-                        + [app.buttons["multiview.add"].frame]
-                    for frame in frames.prefix(2) {
-                        XCTAssertEqual(
-                            frame.minY, app.buttons["multiview.close"].frame.minY, accuracy: 0.5)
-                        XCTAssertEqual(
-                            frame.minY, app.buttons["multiview.network"].frame.minY, accuracy: 0.5)
-                    }
-                    if let previous = landscapeFrames[expected] {
-                        for (frame, prior) in zip(frames, previous) {
-                            // Rotation's coordinate conversion can introduce
-                            // floating-point noise below a rendered pixel.
-                            XCTAssertEqual(frame.minX, prior.minX, accuracy: 0.5)
-                            XCTAssertEqual(frame.minY, prior.minY, accuracy: 0.5)
-                            XCTAssertEqual(frame.width, prior.width, accuracy: 0.5)
-                            XCTAssertEqual(frame.height, prior.height, accuracy: 0.5)
+                    XCTAssertEqual(tile.frame.minY, close.minY, accuracy: 0.5)
+                    if expected == "Grid" {
+                        XCTAssertEqual(network.minY, close.minY, accuracy: 0.5)
+                    } else {
+                        XCTAssertEqual(network.midX, close.midX, accuracy: 0.5)
+                        XCTAssertEqual(network.minY, close.maxY + 8, accuracy: 0.5)
+                        let strip = app.scrollViews["multiview.secondaryStrip"]
+                        XCTAssertTrue(strip.exists)
+                        XCTAssertGreaterThan(strip.frame.minX, tile.frame.maxX)
+                        XCTAssertLessThanOrEqual(strip.frame.maxY, display.frame.minY - 7)
+                        if let previous = landscapeMain {
+                            XCTAssertEqual(tile.frame.minX, previous.minX, accuracy: 0.5)
+                            XCTAssertEqual(tile.frame.width, previous.width, accuracy: 0.5)
+                            XCTAssertEqual(tile.frame.height, previous.height, accuracy: 0.5)
                         }
+                        landscapeMain = tile.frame
                     }
-                    landscapeFrames[expected] = frames
                 }
                 capture("multiview-\(expected)-\(orientation.rawValue)")
             }
@@ -121,6 +84,30 @@ final class MultiviewUIFlowTests: XCTestCase {
             capture("multiview-clean-\(orientation.rawValue)")
             display.tap()
         }
+    }
+
+    func testFocusedStripScrollsAndPromotesCameraWithoutMovingSystemControls() {
+        app.launchEnvironment["OPV_UI_REVIEW_MULTIVIEW_COUNT"] = "4"
+        app.launch()
+        rotate(.landscapeLeft)
+        let strip = app.scrollViews["multiview.secondaryStrip"]
+        XCTAssertTrue(strip.waitForExistence(timeout: 10))
+        let record = app.buttons["multiview.recordAll"].frame
+        let display = app.buttons["multiview.display"].frame
+        let first = app.buttons["multiview.tile.1"].frame
+        strip.swipeUp()
+        XCTAssertLessThan(app.buttons["multiview.tile.1"].frame.minY, first.minY)
+        let last = app.buttons["multiview.tile.3"]
+        XCTAssertTrue(last.isHittable)
+        capture("multiview-strip-scrolled")
+        last.tap()
+        expectation(
+            for: NSPredicate(format: "value BEGINSWITH %@", "Selected"), evaluatedWith: last)
+        waitForExpectations(timeout: 3)
+        XCTAssertGreaterThan(last.frame.width, strip.frame.width * 2)
+        XCTAssertEqual(app.buttons["multiview.recordAll"].frame, record)
+        XCTAssertEqual(app.buttons["multiview.display"].frame, display)
+        capture("multiview-strip-promoted")
     }
 
     func testOptionsKeepUnavailableHardwareActionsDisabledAndOneAddSlot() {
@@ -194,14 +181,15 @@ final class MultiviewUIFlowTests: XCTestCase {
     /// Smaller phones keep full-size buttons in a bounded side rail.
     /// Reveal the requested control without changing the native Record/DISP slots.
     private func revealToolbarButton(_ identifier: String) -> XCUIElement {
+        let expand = app.buttons["multiview.toolbar.expand"]
+        if expand.waitForExistence(timeout: 2) { expand.tap() }
         let button = app.buttons[identifier]
         XCTAssertTrue(button.waitForExistence(timeout: 10))
-        let rail = app.scrollViews["multiview.toolbar"]
-        XCTAssertTrue(rail.exists)
+        let rail = app.scrollViews.containing(.button, identifier: identifier).firstMatch
         let recordFrame = app.buttons["multiview.recordAll"].frame
         let displayFrame = app.buttons["multiview.display"].frame
-        for _ in 0..<2 {
-            if rail.frame.contains(button.frame) { break }
+        for _ in 0..<4 {
+            if button.isHittable, rail.frame.contains(button.frame) { break }
             if button.frame.minY < rail.frame.minY { rail.swipeDown() } else { rail.swipeUp() }
         }
         XCTAssertTrue(button.isHittable)

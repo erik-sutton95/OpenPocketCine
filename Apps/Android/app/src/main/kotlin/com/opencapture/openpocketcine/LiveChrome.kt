@@ -1,7 +1,5 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.monitorui.monitorReadoutShadow
-
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.snap
@@ -68,6 +66,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
@@ -2129,19 +2128,24 @@ fun LiveGimbalStick(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.fillMaxSize().monitorReadoutShadow()) {
+        Canvas(Modifier.fillMaxSize()) {
             val stickPx = size.minDimension
             val knobPx = stickPx * knobRatio
             val stroke = 2.dp.toPx()
+            // Adapt only the two shapes during native composition: no pixel
+            // samples, readback, blur or separate refresh cadence.
+            val inkBlend = if (pressed) BlendMode.SrcOver else BlendMode.Difference
             drawCircle(
                 color = stickTint,
                 radius = stickPx / 2f - stroke / 2f,
                 style = Stroke(width = stroke),
+                blendMode = inkBlend,
             )
             drawCircle(
                 color = stickTint,
                 radius = knobPx / 2f,
                 center = center + renderedOffset,
+                blendMode = inkBlend,
             )
         }
     }

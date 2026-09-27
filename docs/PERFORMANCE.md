@@ -341,9 +341,15 @@ when size or insets change. SwiftUI consumes the snapshot through the environmen
 No geometry polling or frame-tick subscription is added; same-size landscape
 rotations still update the physical cutout edges.
 
-The UI 2.0 joystick uses the reference white/cyan treatment. Its former 150 ms
-image-luminance sampling loop and Core Image readback are removed; movement,
+The resting joystick uses native difference blending on its ring and knob to
+switch between bright and dark ink over the picture; held ink is cyan. No dark
+halo, image-luminance sampling, Core Image readback or timer is added. Movement,
 release and the existing transport cadence are unchanged.
+
+Multiview scrolling retains each camera display host and decoder. Native scroll
+geometry moves and clips secondary feeds locally; edge alpha masks reveal the
+existing background. Settings uses the same opacity-only treatment. Scroll
+updates do not publish camera state or add image sampling.
 
 ## iOS media cache scheduling
 

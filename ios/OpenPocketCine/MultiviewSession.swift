@@ -119,7 +119,22 @@ final class MultiviewSession {
             let state = previewFresh ? "Live" : (camera == nil ? "Empty" : "Reconnecting")
             #if DEBUG
                 if ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_PROBE"] == "1" {
-                    return "\(state); frames=\(previewFrames)"
+                    // Read-only physical-test evidence from decoded camera status, never
+                    // the settings editor's optimistic format/exposure presentation.
+                    let format = latestSettings.videoFormat
+                    let values = [
+                        "frames=\(previewFrames)",
+                        "fps=\(format.map { Int($0.frameRate.rawValue) } ?? -1)",
+                        "res=\(format.map { Int($0.resolution.rawValue) } ?? -1)",
+                        "expo=\(latestSettings.expoMode.map { Int($0.rawValue) } ?? -1)",
+                        "shutter=\(latestSettings.shutterDenom)",
+                        "mode=\(latestSettings.shootingMode)",
+                        "rec=\(latestSettings.isRecording ? 1 : 0)",
+                        "usesAngle=\(OperatorPrefs.shutterUsesAngle ? 1 : 0)",
+                        "angle=\(OperatorPrefs.shutterAngleDegrees)",
+                        "shutters=\(latestSettings.availableShutterDenoms.map(String.init).joined(separator: ","))",
+                    ]
+                    return ([state] + values).joined(separator: "; ")
                 }
             #endif
             return state

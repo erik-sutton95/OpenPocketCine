@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -52,8 +53,13 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -79,6 +85,14 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     idOf: (T) -> String = { it.toString() },
     usage: MonitorToolUsageState = MonitorToolUsageState(),
     onUsageChange: (MonitorToolUsageState) -> Unit = {},
+    isAvailable: (T) -> Boolean = { true },
+    accessibilityLabel: (T) -> String? = { null },
+    accessibilityValue: (T) -> String? = { null },
+    accessibilityIdentifier: (T) -> String? = { null },
+    expansionAccessibilityName: String = "view assists",
+    expansionAccessibilityIdentifier: String = "monitor.assists.expand",
+    cellSize: Float? = null,
+    maxExpandedHeight: Float? = null,
     onBoundsInRootChanged: (Rect?) -> Unit = {}) {
     var expanded by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
@@ -115,8 +129,8 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     val config = LocalConfiguration.current
     val density = LocalDensity.current
     val tablet = minOf(config.screenWidthDp, config.screenHeightDp) >= 600
-    val buttonSize = MonitorLayoutPolicy.assistButtonSize(tablet).dp
-    val iconSize = MonitorLayoutPolicy.assistIconSize(tablet).dp
+    val buttonSize = (cellSize ?: MonitorLayoutPolicy.assistButtonSize(tablet)).dp
+    val iconSize = buttonSize * (29f / 54f)
     val expansionLane = MonitorLayoutPolicy.ASSIST_EXPANSION_BUTTON_WIDTH.dp
     val horizontalInsets = MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS.dp
     val columns = maxOf(1, (tools.size + 1) / 2)
@@ -127,7 +141,8 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     val compactH = if (portrait) buttonSize + 35.dp else buttonSize * 2 + 11.dp
     val fullW = if (portrait) buttonSize + 8.dp else minOf(available, maxOf(buttonSize + horizontalInsets, catalogWidth))
     val fullH = if (portrait) minOf((config.screenHeightDp * .62f).dp,
-        buttonSize * tools.size + (maxOf(0, tools.size - 1) * 3 + 35).dp) else buttonSize * 2 + 11.dp
+        buttonSize * tools.size + (maxOf(0, tools.size - 1) * 3 + 35).dp,
+        maxExpandedHeight?.dp?.coerceAtLeast(compactH) ?: Float.MAX_VALUE.dp) else buttonSize * 2 + 11.dp
     val reveal = if (portrait && dragging) scrub else progress.value
     val visibleW = compactW + (fullW - compactW) * reveal
     val visibleH = compactH + (fullH - compactH) * reveal
@@ -173,13 +188,20 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     val compactCount = MonitorAssistPaletteReveal.compactToolCount(portrait)
     val key: @Composable (T, Int) -> Unit = { tool, index ->
         val active = isOn(tool)
+        val available = isAvailable(tool)
         val tint = if (active) MonitorPalette.accent else MonitorPalette.text
         val shown = if (index < compactCount) 1f else extraOpacity
-        Box(Modifier.size(buttonSize).graphicsLayer { alpha = shown }
+        val identifier = accessibilityIdentifier(tool)
+        Box(Modifier.size(buttonSize).graphicsLayer { alpha = shown * if (available) 1f else .4f }
             .clip(RoundedCornerShape(9.dp)).background(if (active) MonitorPalette.accent.copy(alpha = .13f) else Color.Transparent)
-            .combinedClickable(enabled = !locked && shown > 0.35f, onClick = { used(tool); onToggle(tool) },
+            .combinedClickable(enabled = !locked && available && shown > 0.35f, onClick = { used(tool); onToggle(tool) },
                 onLongClick = if (hasOptions(tool)) { { used(tool); onOptions(tool); expanded = false } } else null)
-            .semantics { contentDescription = "${title(tool)}, ${if (active) "on" else "off"}" },
+            .then(if (identifier != null) Modifier.testTag(identifier) else Modifier)
+            .semantics {
+                role = Role.Button
+                contentDescription = accessibilityLabel(tool) ?: "${title(tool)}, ${if (active) "on" else "off"}"
+                accessibilityValue(tool)?.let { stateDescription = it }
+            },
             contentAlignment = Alignment.Center) {
             glyph(tool, tint, Modifier.size(iconSize))
             Text(label(tool), color = tint.copy(alpha = tint.alpha * labelOpacity),
@@ -294,7 +316,14 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
                         )
                 },
             )
-            .semantics { contentDescription = if (open) "Show view assists" else "Collapse view assists" },
+            .testTag(expansionAccessibilityIdentifier)
+            .semantics {
+                contentDescription = if (open) "Show $expansionAccessibilityName" else "Collapse $expansionAccessibilityName"
+                role = Role.Button
+                if (portrait && !locked) onClick {
+                    if (dragging) false else { expanded = !expanded; true }
+                }
+            },
             contentAlignment = if (portrait) Alignment.Center else Alignment.CenterStart) {
             chevron(!open, portrait)
         }
@@ -354,7 +383,7 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
             Popup(popupPositionProvider = popupPosition,
                 onDismissRequest = { if (expanded) expanded = false },
                 properties = PopupProperties(focusable = expanded, clippingEnabled = false)) {
-                plate()
+                CompositionLocalProvider(LocalDensity provides density) { plate() }
             }
         }
     }

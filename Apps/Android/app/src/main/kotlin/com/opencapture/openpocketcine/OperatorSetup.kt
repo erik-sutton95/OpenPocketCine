@@ -11,6 +11,7 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -56,7 +57,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -521,7 +528,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
                         ) {
-                            Column(Modifier.fillMaxWidth().monitorTabStrip()) {
+                            Column(Modifier.fillMaxWidth().monitorTabStrip(vertical = true)) {
                                 OperatorSettingsTab.entries.forEach { tab ->
                                     SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.fillMaxWidth(), vertical = true)
                                 }
@@ -674,7 +681,7 @@ private fun SettingsTabRail(model: AppModel, hapticsEnabled: Boolean, view: View
         Modifier
             .width(146.dp)
             .fillMaxHeight()
-            .monitorTabStrip(),
+            .monitorTabStrip(vertical = true),
     ) {
         OperatorSettingsTab.entries.forEach { tab ->
             SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.fillMaxWidth(), vertical = true)
@@ -771,6 +778,7 @@ private fun SettingsContentPane(
                 Column(
                     Modifier
                         .fillMaxSize()
+                        .settingsScrollEdgeMask(scroll)
                         .verticalScroll(scroll)
                         .padding(bottom = 22.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -786,9 +794,6 @@ private fun SettingsContentPane(
                         OperatorSettingsTab.STORAGE -> StorageRows(model, onClearCache)
                         OperatorSettingsTab.SYSTEM -> SystemRows(model, onLegal)
                     }
-                }
-                if (scroll.canScrollForward) {
-                    ScrollMoreCue(Modifier.align(Alignment.BottomCenter))
                 }
             }
         }
@@ -1793,28 +1798,23 @@ private fun SettingsLiveTile(
     }
 }
 
-@Composable
-private fun ScrollMoreCue(modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .height(58.dp)
-            .background(
-                Brush.verticalGradient(listOf(LiveDesign.surface.copy(alpha = 0f), LiveDesign.surface)),
-            )
-            .padding(bottom = 13.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Bottom,
-    ) {
-        Text(
-            "MORE",
-            style = LiveType.mono(9.5f, FontWeight.Bold).copy(letterSpacing = 1.2.sp, color = LiveDesign.muted),
-        )
-        OpcIcon(
-            icon = OpcIcon.CHEVRON_DOWN,
-            contentDescription = null,
-            tint = LiveDesign.muted,
-            modifier = Modifier.size(10.dp),
-        )
-    }
-}
+/** Mask only the scrolling content; the page's own background stays untouched. */
+private fun Modifier.settingsScrollEdgeMask(scroll: ScrollState): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithCache {
+            val depth = minOf(24.dp.toPx(), size.height / 2f)
+            val top = Brush.verticalGradient(listOf(Color.Transparent, Color.Black), endY = depth)
+            val bottom = Brush.verticalGradient(listOf(Color.Black, Color.Transparent),
+                startY = size.height - depth, endY = size.height)
+            onDrawWithContent {
+                drawContent()
+                // Observe the existing native scroll state in draw, not composition.
+                if (scroll.canScrollBackward) {
+                    drawRect(top, size = Size(size.width, depth), blendMode = BlendMode.DstIn)
+                }
+                if (scroll.canScrollForward) {
+                    drawRect(bottom, topLeft = Offset(0f, size.height - depth),
+                        size = Size(size.width, depth), blendMode = BlendMode.DstIn)
+                }
+            }
+        }

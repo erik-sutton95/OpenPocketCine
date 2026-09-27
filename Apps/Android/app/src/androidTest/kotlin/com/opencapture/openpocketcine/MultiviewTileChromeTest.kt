@@ -124,10 +124,21 @@ class MultiviewTileChromeTest {
     @Test fun leftIslandKeepsToolbarAlignedWithNativeWifiAndDisplay() =
         toolbarFixture(852f, 393f, MultiviewSafeArea(leading = 59f, bottom = 21f))
 
-    private fun toolbarFixture(width: Float, height: Float, safe: MultiviewSafeArea) {
+    @Test fun centerStagePaletteBelowLeftIslandKeepsAllActionsReachable() =
+        toolbarFixture(852f, 393f, MultiviewSafeArea(leading = 59f, bottom = 21f), MultiviewArrangement.CENTER_STAGE)
+
+    @Test fun centerStagePaletteBelowWifiKeepsAllActionsReachableWithRightNotch() =
+        toolbarFixture(844f, 390f, MultiviewSafeArea(trailing = 44f, bottom = 21f), MultiviewArrangement.CENTER_STAGE)
+
+    private fun toolbarFixture(width: Float, height: Float, safe: MultiviewSafeArea,
+        arrangement: MultiviewArrangement = MultiviewArrangement.GRID) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.serviceInfo = automation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
         val layout = MultiviewPresentationLayout.compute(width, height, safe,
-            arrangement = MultiviewArrangement.GRID, selected = 0)
-        val toolbarOnLeft = safe.trailing > safe.leading
+            arrangement = arrangement, selected = 0)
+        val toolbarOnLeft = arrangement == MultiviewArrangement.CENTER_STAGE || safe.trailing > safe.leading
         val column = if (toolbarOnLeft) layout.sessionControls.midX else layout.display.midX
         lateinit var stage: MultiviewSession
         var settingsOpened = false
@@ -136,6 +147,9 @@ class MultiviewTileChromeTest {
             try {
                 scenario.onActivity { activity ->
                     stage = MultiviewSession(activity, saveStage = { true })
+                    stage.layout = if (arrangement == MultiviewArrangement.GRID) {
+                        com.opencapture.openpocketcine.multiview.MultiviewLayout.GRID
+                    } else com.opencapture.openpocketcine.multiview.MultiviewLayout.CENTER_STAGE
                     stage.tiles[0].camera = FoundCamera("first", "unused", "First", CameraModel("Osmo Pocket 4"), null)
                     activity.setContent {
                         MaterialTheme {
@@ -145,7 +159,8 @@ class MultiviewTileChromeTest {
                                     Box(Modifier.size(width.dp, height.dp)) {
                                         MultiviewAssistPalette(stage, layout.controlCellSize,
                                             Modifier.offset(layout.assists.x.dp, layout.assists.y.dp)
-                                                .requiredSize(layout.assists.width.dp, layout.assists.height.dp)) {
+                                                .requiredSize(layout.assists.width.dp, layout.assists.height.dp),
+                                            maxExpandedHeight = layout.assists.height) {
                                             settingsOpened = true
                                         }
                                     }
@@ -154,7 +169,15 @@ class MultiviewTileChromeTest {
                         }
                     }
                 }
-                val lut = awaitNode("Toggle Auto LUT for all cameras")
+                awaitNode(if (arrangement == MultiviewArrangement.GRID) "Show Focused stage" else "Show Grid")
+                click(awaitNode("Show Multiview tools"))
+                awaitNode("Toggle Auto LUT for all cameras")
+                    .performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id)
+                val lut = awaitNode("Toggle Auto LUT for all cameras") { node ->
+                    val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
+                    node.contentDescription?.toString() == "Toggle Auto LUT for all cameras" &&
+                        bounds.height() + 1 >= layout.controlCellSize * scale
+                }
                 val lutHit = android.graphics.Rect().also(lut::getBoundsInScreen)
                 assertTrue(abs(lutHit.exactCenterX() - column * scale) <= 1.5f,
                     "LUT must align with the native system column: $lutHit")
@@ -163,12 +186,15 @@ class MultiviewTileChromeTest {
                 scenario.onActivity { assertTrue(!stage.tiles[0].lutEnabled) }
                 val rail = awaitNode("scrollable toolbar") { it.isScrollable }
                 assertTrue(rail.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
+                SystemClock.sleep(250)
+                awaitNode("scrollable toolbar") { it.isScrollable }.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                awaitNode("Camera settings").performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id)
                 val settings = awaitNode("Camera settings after toolbar scroll settles") { node ->
                     val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
-                    node.contentDescription?.toString() == "Camera settings" && bounds.height() + 1 >= 44 * scale
+                    node.contentDescription?.toString() == "Camera settings" && bounds.height() + 1 >= layout.controlCellSize * scale
                 }
                 val hit = android.graphics.Rect().also(settings::getBoundsInScreen)
-                assertTrue(hit.height() + 1 >= 44 * scale, "Scrolling must expose a full camera settings target: $hit")
+                assertTrue(hit.height() + 1 >= layout.controlCellSize * scale, "Scrolling must expose a full camera settings target: $hit")
                 assertTrue(abs(hit.exactCenterX() - column * scale) <= 1.5f,
                     "Camera settings must align with the native system column: $hit")
                 assertEquals(toolbarOnLeft, hit.exactCenterX() < width / 2 * scale)
@@ -279,6 +305,35 @@ class MultiviewTileChromeTest {
         }
     }
 
+    @Test fun focusedMainMetadataReservesTheOverlayReadoutBand() {
+        var bottom = 0f
+        var density = 1f
+        ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                density = activity.resources.displayMetrics.density
+                activity.setContent {
+                    MaterialTheme {
+                        Box(Modifier.size(390.dp, 260.dp).onGloballyPositioned { bottom = it.boundsInWindow().bottom }) {
+                            MultiviewTileOverlay(
+                                multiviewTileReadouts(0, "Main camera", "Osmo Pocket 4", CameraStatus(
+                                    batteryPercent = 73, sdTotalMb = 65536, sdFreeMb = 8192,
+                                    recordElapsedSec = 84), "01:02:03:04", true, true, false, false, true, null),
+                                focused = true, compact = false, clean = false, enabled = true,
+                                onOptions = {}, readoutsOverlay = true,
+                            )
+                        }
+                    }
+                }
+            }
+            for (label in listOf("Storage 8 GB", "REC 1:24", "Camera battery 73 percent")) {
+                val hit = android.graphics.Rect().also { awaitNode(label).getBoundsInScreen(it) }
+                assertTrue(hit.bottom <= bottom - 45 * density + 1, "$label must stay above exposure values: $hit")
+            }
+            awaitNode("Timecode 01:02:03")
+            awaitNode("Camera A options")
+        }
+    }
+
     @Test fun compactPortraitFeedShowsTelemetryAndEveryCameraAction() {
         val actions = Collections.synchronizedList(mutableListOf<MultiviewCameraAction>())
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
@@ -379,7 +434,12 @@ class MultiviewTileChromeTest {
             for (window in automation.windows.orEmpty()) find(window.root)?.let { return it }
             SystemClock.sleep(32)
         }
-        error("Missing compact feed readout/action: $label")
+        fun labels(node: AccessibilityNodeInfo?): List<String> {
+            if (node == null) return emptyList()
+            return listOf("${node.text}/${node.contentDescription}") + (0 until node.childCount).flatMap { labels(node.getChild(it)) }
+        }
+        error("Missing compact feed readout/action: $label; windows=${automation.windows.size}; " +
+            (labels(automation.rootInActiveWindow) + automation.windows.flatMap { labels(it.root) }))
     }
 
     private fun awaitCondition(condition: () -> Boolean) {

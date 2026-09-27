@@ -2,11 +2,11 @@ Since open beta build 138
 
 New and changed
 
-- Camera, recording and settings tabs now share adjoining edges and a clear selection line.
-- Camera settings in the Multiview toolbar opens a popup with one tab per connected camera. Change that camera's settings using the same controls as Live View.
+- Tabs use one highlighted bottom/left edge, without boxes. Scrolling content fades softly at edges with more to scroll.
+- Multiview Camera settings opens a popup with one tab per camera and the same controls as Live View.
 - Multiview starts with Auto LUT on, shows HH:MM:SS timecode and uses Live View battery gauges. Camera options open in a compact floating menu.
 - Multiview repairs lost decoder references after returning from another app, retaining the camera connection while waiting for a new picture.
-- Multiview tiles fill the stage, aligned with Exit/Wi-Fi in landscape. Readouts sit below. Tools align right, or left for a right-side cutout; DISP and Record keep Live View positions.
+- Center stage enlarges the main picture beside a scrolling camera strip, with Wi-Fi below Exit and collapsible tools. Grid fills the space; DISP and Record keep Live View positions.
 - Multiview uses the Add setup Wi-Fi and Hotspot flow: current, saved and nearby networks, remembered passwords, compatibility help and retry without leaving the password screen.
 - Your cameras: Add setup lets a saved camera connect over your Wi-Fi network or this iPhone's Personal Hotspot, on every Osmo camera. Camera Wi-Fi stays as the other setup.
 - A setup connect shows a progress bar with one line of status. If it fails, choose Edit setup, Try again or Camera Wi-Fi; common router causes are named.
@@ -19,9 +19,10 @@ New and changed
 
 Fixes
 
+- Shutter angle stays at your chosen value when changing frame rate; shutter time follows after camera confirmation. Opening the picker no longer changes the saved angle.
 - Multiview Exit retries a temporary pairing refusal before showing an error; cameras already returned to their Wi-Fi stay untouched.
-- Password entry keeps the setup layout stable when the keyboard opens in portrait. Connecting or cancelling waits for the camera scan to finish returning its Wi-Fi.
-- The joystick and gimbal controls now have the same dark glow as other live-view controls, making them easier to see over bright footage.
+- Wi-Fi headings and fields align, Connect stays at the bottom above the keyboard, and connecting/cancelling waits for scan cleanup.
+- The joystick adapts between bright and dark ink over the picture, without a dark halo or image sampling.
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
 - The REC and scan pulses no longer hold the display at its highest refresh rate, and paused clips stop redrawing.
@@ -30,7 +31,7 @@ Fixes
 
 What to test
 
-- In Multiview, rotate, open camera options and switch Camera settings tabs. Change one camera; confirm the other stays unchanged. Switch apps, check both feeds resume, then Exit once.
+- In Multiview, rotate and scroll the camera strip. Set 180° and change FPS: angle should stay 180°. Switch apps, check feeds resume, then Exit once.
 - Try Wi-Fi and Hotspot in Add setup and Multiview. Check current/saved/nearby networks, type a password in both orientations, cancel a scan, then reconnect.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - Monitor for 10 minutes with LUT, PEAK and WAVE on, then record: glass panels and the REC pulse should look as before, and the phone should stay cooler.

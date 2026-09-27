@@ -170,3 +170,13 @@ confirmation. On iOS, Add setup and Multiview render the same
 `StationNetworkSetupView`; Android's matching form is `StationNetworkSetup`.
 Hotspot instructions use each OS's Settings; its password stays private to the
 OS until the operator enters it, and interface detection is only a hint.
+
+Network picker headings reserve the same height during scanning and after Scan
+again appears. In landscape, network summaries and password fields start on the
+same row. Connect sits at the bottom of the available safe area, above the
+keyboard; form content scrolls independently. Manual network entry stays
+reachable when Nearby contains a long list.
+
+Navigation tabs use one highlighted edge line with no individual boxes. Scroll
+content uses soft opacity masks at edges with overflow, revealing the original
+surface behind it. Settings no longer paints a different-colored MORE overlay.

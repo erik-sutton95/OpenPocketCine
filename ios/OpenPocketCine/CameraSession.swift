@@ -499,7 +499,8 @@ final class CameraSession {
     @ObservationIgnored private var expoGeneration: UInt64 = 0
     @ObservationIgnored private var audioPin: AudioPin?
     /// After a local res+fps / color SET, ignore subscribe snapshots that have not caught up.
-    @ObservationIgnored private var formatPin: (expected: VideoFormat, deadline: Date)?
+    @ObservationIgnored private var formatPin:
+        (expected: VideoFormat, deadline: Date, shutterAngle: Double?, angleDeadline: Date)?
     @ObservationIgnored private var captureModeGeneration: UInt64 = 0
     @ObservationIgnored private var formatRequestGeneration: UInt64 = 0
     /// FORMAT sheet: skip reseat while `0x02/0x18` is in flight.
@@ -626,6 +627,7 @@ final class CameraSession {
     }
     func releaseMultiview() {
         guard isMultiviewBorrowed else { return }
+        formatPin = nil
         if isMultiviewControlsOnly {
             // Detach only this editor's commands. The tile keeps its transport,
             // decoder callbacks, frame samples, pose and recovery ownership.
@@ -1776,6 +1778,10 @@ final class CameraSession {
     }
 
     func setExpoMode(_ mode: ExpoMode) {
+        if mode != .manual {
+            formatPin?.shutterAngle = nil
+            clearExpoPin(shutter: true)
+        }
         let previous = status.expoMode
         pinExpo(mode: mode)
         status.expoMode = mode
@@ -2401,6 +2407,17 @@ final class CameraSession {
 
     /// Drop `cam_expo_param` snapshots that still show the pre-SET ISO / shutter / EV / mode.
     private func absorbStaleExpo(_ incoming: inout CameraStatus, reported: CameraStatus) {
+        defer {
+            // Exposure reports cannot confirm the requested FORMAT, even when
+            // an early report happens to contain the desired denominator.
+            if let pin = formatPin, let angle = pin.shutterAngle,
+                Date() < pin.angleDeadline, incoming.expoMode == .manual
+            {
+                incoming.shutterDenom = ShutterAngle.denom(
+                    degrees: angle, fps: pin.expected.frameRate.fps,
+                    available: incoming.availableShutterDenoms)
+            }
+        }
         guard var pin = expoPin else { return }
         if Date() >= pin.deadline {
             expoPin = nil
@@ -2442,17 +2459,25 @@ final class CameraSession {
         expoPin = pinIsEmpty(pin) ? nil : pin
     }
 
-    private func absorbStaleFormat(_ incoming: inout CameraStatus, reportedThisFrame: Bool) {
-        guard let pin = formatPin else { return }
-        if Date() >= pin.deadline {
+    private func absorbStaleFormat(_ incoming: inout CameraStatus, reportedThisFrame: Bool)
+        -> Double?
+    {
+        guard let pin = formatPin else { return nil }
+        let deadline = pin.shutterAngle == nil ? pin.deadline : pin.angleDeadline
+        if Date() >= deadline {
             formatPin = nil
-            return
+            if pin.shutterAngle != nil {
+                controlNote = "Frame rate unconfirmed; choose the shutter angle again"
+            }
+            return nil
         }
         if !VideoFormat.absorbStale(
             incoming: &incoming, expected: pin.expected, reportedThisFrame: reportedThisFrame)
         {
             formatPin = nil
+            return pin.shutterAngle
         }
+        return nil
     }
 
     private func absorbStaleColor(_ incoming: inout CameraStatus, reported: CameraStatus) {
@@ -2484,6 +2509,8 @@ final class CameraSession {
     /// Manual-expo rides the same socket right before the shutter SET (Mimo never
     /// round-trips between them; the camera applies datagrams in arrival order).
     func setShutterDenom(_ denom: Int) {
+        // A direct speed choice supersedes an angle waiting for FORMAT.
+        formatPin?.shutterAngle = nil
         if status.expoMode != .manual {
             pinExpo(mode: .manual)
             fireCamera(
@@ -2499,6 +2526,47 @@ final class CameraSession {
                 ControlLiveLog.line(
                     "shutter: SET 1/\(denom) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
             })
+    }
+
+    /// Angle is operator intent, never a value inferred back from delayed telemetry.
+    func setShutterAngle(_ degrees: Double) {
+        guard admitsMultiviewControl, datalink != nil, datalink?.isRebuilding != true else {
+            controlNote = "not live"
+            return
+        }
+        guard !status.isPhoto else { return }
+        if let pin = formatPin,
+            Date() >= (pin.shutterAngle == nil ? pin.deadline : pin.angleDeadline)
+        {
+            formatPin = nil
+        }
+        let angle = ShutterAngle.nearestDegrees(degrees)
+        OperatorPrefs.shutterAngleDegrees = angle
+        let denom = ShutterAngle.denom(
+            degrees: angle, fps: status.fps, available: status.availableShutterDenoms)
+        if formatPin != nil, status.expoMode == .manual, !status.isPhoto {
+            formatPin?.shutterAngle = angle
+            pinExpo(shutter: denom)
+            status.shutterDenom = denom
+            return
+        }
+        let previous = status.shutterDenom
+        status.shutterDenom = denom
+        setShutterDenom(denom)
+        if controlNote == "not live" { status.shutterDenom = previous }
+    }
+
+    private func rematchShutterAngle(_ degrees: Double?) {
+        guard let degrees, OperatorPrefs.shutterUsesAngle,
+            status.expoMode == .manual, !status.isPhoto, admitsMultiviewControl,
+            datalink != nil, datalink?.isRebuilding != true
+        else { return }
+        let denom = ShutterAngle.denom(
+            degrees: degrees, fps: status.fps, available: status.availableShutterDenoms)
+        status.shutterDenom = denom
+        let note = controlNote
+        setShutterDenom(denom)
+        if controlNote == nil { controlNote = note }
     }
 
     func setWhiteBalanceAuto(tint: Int? = nil) {
@@ -2770,15 +2838,30 @@ final class CameraSession {
         let previousFormat = status.videoFormat
         let previousRes = status.videoResolution
         let previousFps = status.fps
+        let previousShutter = status.shutterDenom
+        let angle = ShutterAngle.rematchesFormat(
+            usesAngle: OperatorPrefs.shutterUsesAngle, manual: status.expoMode == .manual,
+            isPhoto: status.isPhoto, previousFps: previousFps, nextFps: format.frameRate.fps,
+            alreadyPending: formatPin?.shutterAngle != nil)
+            ? formatPin?.shutterAngle ?? OperatorPrefs.shutterAngleDegrees : nil
         formatRequestGeneration &+= 1
         let requestGeneration = formatRequestGeneration
         let modeGeneration = captureModeGeneration
         let sessionGeneration = controlGeneration
-        formatPin = (format, Date().addingTimeInterval(2))
+        // The dependent shutter has a bounded confirmation window beyond the
+        // normal two-second FORMAT projection; no separate command task owns it.
+        let now = Date()
+        formatPin = (format, now.addingTimeInterval(2), angle, now.addingTimeInterval(8))
         var next = status
         next.videoResolution = format.resolution
         next.videoFormat = format
         next.fps = format.frameRate.fps
+        if let angle {
+            let denom = ShutterAngle.denom(
+                degrees: angle, fps: next.fps, available: next.availableShutterDenoms)
+            pinExpo(shutter: denom)
+            next.shutterDenom = denom
+        }
         status = next
         fireCamera(
             Commands.setVideoFormat(
@@ -2795,28 +2878,15 @@ final class CameraSession {
                 self.status.videoFormat = previousFormat
                 self.status.videoResolution = previousRes
                 self.status.fps = previousFps
+                if self.formatPin?.shutterAngle != nil {
+                    self.status.shutterDenom = previousShutter
+                    self.clearExpoPin(shutter: true)
+                }
                 self.formatPin = nil
             })
-        // `fireCamera` clears the note on its way out and only writes one when
-        // the SET could not go. Hold that failure aside: the shutter rematch
-        // below sends again and would clear it along with anything written here.
-        let formatSendNote = controlNote
-        // Angle mode is ours: keep the chosen degrees and rewrite 1/N for the new fps.
-        if OperatorPrefs.shutterUsesAngle, previousFps != status.fps, status.expoMode != .auto {
-            let denom = ShutterAngle.denom(
-                degrees: OperatorPrefs.shutterAngleDegrees,
-                fps: status.fps,
-                available: status.availableShutterDenoms)
-            if denom != status.shutterDenom {
-                setShutterDenom(denom)
-            }
-        }
-        // Settle the note once both sends are done. A failure from either send
-        // outranks the ceiling note, which is only worth showing when the
-        // format change actually went.
-        if let formatSendNote {
-            controlNote = formatSendNote
-        } else if controlNote == nil {
+        // The matching format subscribe owns the shutter rematch. A parallel
+        // shutter SET can land on the old encoder and be reset by FORMAT.
+        if controlNote == nil {
             controlNote = CamFov.ceilingNote(
                 size: format.resolution.sizeTitle,
                 held: zoomCycleFrom,
@@ -4167,8 +4237,9 @@ final class CameraSession {
         let formatReported =
             reported.videoFormat != nil
             || reported.videoResolution != nil || reported.fps > 0
-        absorbStaleFormat(&next, reportedThisFrame: formatReported)
+        let angle = absorbStaleFormat(&next, reportedThisFrame: formatReported)
         status = next
+        rematchShutterAngle(angle)
         let parsed = CameraReply.parse(reply.payload)
         ControlLiveLog.line(
             "control: got \(name) \(opcode) seq=\(reply.seq) flags=0x\(String(reply.flags, radix: 16)) payload=\(Duml.hex(reply.payload)) success=\(parsed.isSuccess)\(late ? " late-hold" : "")"
@@ -6000,14 +6071,19 @@ final class CameraSession {
             formatPin = nil
         }
         absorbStaleExpo(&s, reported: reported)
+        if s.expoMode == .auto, formatPin?.shutterAngle != nil {
+            formatPin?.shutterAngle = nil
+            clearExpoPin(shutter: true)
+        }
         absorbStaleAudio(&s, reported: reported)
         let formatReported =
             reported.videoFormat != nil
             || reported.videoResolution != nil || reported.fps > 0
-        absorbStaleFormat(&s, reportedThisFrame: formatReported)
+        let angle = absorbStaleFormat(&s, reportedThisFrame: formatReported)
         absorbStaleColor(&s, reported: reported)
         if isMultiviewControlsOnly {
             if status != s { status = s }
+            rematchShutterAngle(angle)
             settleLateFromSubscribe()
             return
         }
@@ -6108,6 +6184,7 @@ final class CameraSession {
             }
         }
         status = s
+        rematchShutterAngle(angle)
         confirmZoomColorHopIfReady()
         if flipReply || flipChanged {
             if flipChanged {

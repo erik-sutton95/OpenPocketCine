@@ -32,6 +32,16 @@ public enum ShutterAngle: Sendable {
         return value
     }
 
+    /// Only an established manual-video choice follows a format change. Auto,
+    /// Photo and unknown exposure must never acquire a hidden manual SET.
+    public static func rematchesFormat(
+        usesAngle: Bool, manual: Bool, isPhoto: Bool,
+        previousFps: Int, nextFps: Int, alreadyPending: Bool = false
+    ) -> Bool {
+        usesAngle && manual && !isPhoto && previousFps > 0 && nextFps > 0
+            && (previousFps != nextFps || alreadyPending)
+    }
+
     /// 1/N that produces this angle at `fps`. Clamped to the SET range.
     public static func denom(degrees: Double, fps: Int) -> Int {
         let angle = max(degrees, 0.1)

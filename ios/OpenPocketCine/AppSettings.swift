@@ -770,73 +770,84 @@ private struct SettingsRowChromeStyle: ViewModifier {
     }
 }
 
-private struct SettingsScrollFooterMinYKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+private struct SettingsScrollBoundsKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         value = nextValue()
     }
+}
+
+private struct SettingsScrollEdges: Equatable {
+    var above = false
+    var below = false
 }
 
 struct SettingsTabScrollArea<Content: View>: View {
     let tabID: String
     @ViewBuilder var content: Content
-    @State private var moreBelow = false
+    @State private var edges = SettingsScrollEdges()
 
     var body: some View {
         GeometryReader { viewport in
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 8) {
                     content
-                    Color.clear
-                        .frame(height: 1)
-                        .background(
-                            GeometryReader { footer in
-                                Color.clear.preference(
-                                    key: SettingsScrollFooterMinYKey.self,
-                                    value: footer.frame(in: .named("opc.settingsScroll")).maxY
-                                )
-                            }
-                        )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, 22)
+                .background {
+                    if #unavailable(iOS 18.0) {
+                        GeometryReader { content in
+                            Color.clear.preference(
+                                key: SettingsScrollBoundsKey.self,
+                                value: content.frame(in: .named("opc.settingsScroll")))
+                        }
+                    }
+                }
             }
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: "opc.settingsScroll")
-            .onPreferenceChange(SettingsScrollFooterMinYKey.self) { footerMaxY in
-                moreBelow = footerMaxY > viewport.size.height + 6
+            .modifier(SettingsScrollEdgeReporter(edges: $edges))
+            .onPreferenceChange(SettingsScrollBoundsKey.self) { bounds in
+                guard bounds != .zero else { return }
+                edges = SettingsScrollEdges(
+                    above: bounds.minY < -1, below: bounds.maxY > viewport.size.height + 1)
             }
-            .overlay(alignment: .bottom) {
-                ScrollMoreCue()
-                    .opacity(moreBelow ? 1 : 0)
-                    .allowsHitTesting(false)
+            .mask {
+                let depth = min(24, viewport.size.height / 2)
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        colors: [edges.above ? .clear : .black, .black],
+                        startPoint: .top, endPoint: .bottom
+                    ).frame(height: depth)
+                    Rectangle().fill(.black)
+                    LinearGradient(
+                        colors: [.black, edges.below ? .clear : .black],
+                        startPoint: .top, endPoint: .bottom
+                    ).frame(height: depth)
+                }
             }
         }
         .id(tabID)
     }
 }
 
-struct ScrollMoreCue: View {
-    var body: some View {
-        VStack(spacing: 1) {
-            Spacer(minLength: 0)
-            Text("MORE")
-                .font(MonitorTheme.font(9.5, weight: .bold)).monospacedDigit()
-                .kerning(1.2)
-                .foregroundStyle(LiveDesign.muted)
-            OpcIcon.chevronDown
-                .foregroundStyle(LiveDesign.muted)
-                .frame(width: 8, height: 8)
+private struct SettingsScrollEdgeReporter: ViewModifier {
+    @Binding var edges: SettingsScrollEdges
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: SettingsScrollEdges.self) { geometry in
+                SettingsScrollEdges(
+                    above: geometry.contentOffset.y + geometry.contentInsets.top > 1,
+                    below: geometry.contentSize.height + geometry.contentInsets.bottom
+                        - geometry.containerSize.height - geometry.contentOffset.y > 1)
+            } action: { _, next in
+                edges = next
+            }
+        } else {
+            content
         }
-        .padding(.bottom, 13)
-        .frame(maxWidth: .infinity)
-        .frame(height: 58)
-        .background(
-            LinearGradient(
-                colors: [LiveDesign.surface.opacity(0), LiveDesign.surface],
-                startPoint: .top, endPoint: .bottom)
-        )
-        .allowsHitTesting(false)
     }
 }
 

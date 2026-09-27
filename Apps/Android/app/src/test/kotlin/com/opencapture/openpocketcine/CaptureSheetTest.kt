@@ -400,7 +400,7 @@ class CaptureSheetTest {
     }
 
     @Test
-    fun reseatAngleSnapsWhenLiveDiffersAndPersists() {
+    fun reseatAngleDisplaysLiveValueWithoutReplacingOperatorIntent() {
         val status =
             CameraStatus(
                 fps = 24,
@@ -409,8 +409,8 @@ class CaptureSheetTest {
             )
         val seat = CaptureLists.reseatShutterAngle(status, 180.0)
         assertEquals("360°", seat.selection)
-        assertEquals(360.0, seat.preferredAngle)
-        assertTrue(seat.persistAngle)
+        assertEquals(180.0, seat.preferredAngle)
+        assertTrue(!seat.persistAngle)
         val speed = CaptureLists.reseatShutterSpeed(CameraStatus(shutterDenom = 80))
         assertEquals("1/80", speed.selection)
     }
