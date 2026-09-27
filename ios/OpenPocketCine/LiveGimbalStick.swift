@@ -1,12 +1,19 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
 /// On-feed analog stick. Streams `0x04/0x01` while held, center on lift.
-/// Resting ink inverts the picture beneath it; a held stick uses the accent.
+/// Resting ink is white on a dark picture and black on a bright one; a held
+/// stick uses the accent.
 struct LiveGimbalStick: View {
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
+    @Environment(\.monitorHDRChromeGain) private var hdrGain
     var enabled: Bool
+    /// Stick and picture in the same coordinate space, for the luma sample.
+    var frame: CGRect
+    var feed: CGRect
+    @State private var darkInk = false
     @State private var knobOffset: CGSize = .zero
     @State private var dragging = false
     @State private var contact = false
@@ -20,7 +27,11 @@ struct LiveGimbalStick: View {
     private var knob: CGFloat { LiveChromeMetrics.gimbalKnobSize }
     private var opacity: CGFloat { contact ? 0.8 : LiveChromeMetrics.gimbalStickOpacity }
     private var interactive: Bool { enabled && !interfaceLocked }
-    private var ink: Color { contact ? LiveDesign.accent : .white }
+    private var ink: Color {
+        contact
+            ? LiveDesign.accent
+            : darkInk ? Color(white: 0.2) : MonitorTheme.edrText(gain: hdrGain)
+    }
 
     var body: some View {
         ZStack {
@@ -35,10 +46,18 @@ struct LiveGimbalStick: View {
                 )
         }
         .animation(.easeOut(duration: 0.12), value: contact)
+        .animation(.easeInOut(duration: 0.2), value: darkInk)
         .frame(width: size, height: size)
-        // Let the compositor adapt these two shapes to the visible picture.
-        // No sampled pixels, readback, blur or independent refresh cadence.
-        .blendMode(contact ? .normal : .difference)
+        // A compositor blend cannot adapt: iOS shows live video on its own
+        // display plane. Sample the decoded source under the stick instead.
+        // ponytail: 4 Hz loop of 64 CPU reads; MIRROR / 180 flips are not mapped
+        // into the sample region (the stick sits near a corner either way).
+        .task(id: "\(Int(frame.minX))x\(Int(frame.minY))x\(Int(feed.width))x\(Int(feed.height))") {
+            while !Task.isCancelled {
+                refreshInk()
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
         .contentShape(Circle())
         .gesture(drag, including: interactive ? .gesture : .none)
         .allowsHitTesting(interactive)
@@ -129,6 +148,24 @@ struct LiveGimbalStick: View {
             hapticFlip()
             model.session.flipGimbal()
         }
+    }
+
+    private func refreshInk() {
+        guard !contact else { return }
+        guard
+            let region = GimbalStick.chromeSampleRegion(
+                stick: .init(
+                    x: frame.minX, y: frame.minY, width: frame.width, height: frame.height),
+                feed: .init(x: feed.minX, y: feed.minY, width: feed.width, height: feed.height))
+        else {
+            if darkInk { darkInk = false }
+            return
+        }
+        let luma = model.frameSamples.sourcePixelBuffer.flatMap {
+            GimbalStickLuma.mean($0, region: region)
+        }
+        let dark = GimbalStick.prefersDarkChrome(luma: luma, previous: darkInk)
+        if dark != darkInk { darkInk = dark }
     }
 
     private func hapticPress() {

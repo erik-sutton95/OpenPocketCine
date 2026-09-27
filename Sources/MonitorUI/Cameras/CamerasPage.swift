@@ -164,32 +164,28 @@
                 VStack(alignment: .leading, spacing: 2) {
                     Text(brandName.uppercased()).font(MonitorTheme.font(8.5, weight: .bold))
                         .tracking(1.7).foregroundStyle(MonitorTheme.accent).lineLimit(1)
-                    Text("Your cameras").font(
-                        MonitorTheme.font(tablet ? 24 : 19, weight: .semibold)
-                    )
-                    .tracking(-0.2).lineLimit(1).minimumScaleFactor(0.75)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if scanning {
-                    HStack(spacing: 7) {
-                        Circle().fill(MonitorTheme.accent).frame(width: 6, height: 6)
-                            .monitorPulse(period: MonitorMotion.scanPulseDuration)
-                        if fullLabels {
-                            Text("SCANNING").font(MonitorTheme.font(9.5, weight: .bold)).tracking(
-                                1.1)
+                    HStack(spacing: 10) {
+                        Text("Your cameras").font(
+                            MonitorTheme.font(tablet ? 24 : 19, weight: .semibold)
+                        )
+                        .tracking(-0.2).lineLimit(1).minimumScaleFactor(0.75)
+                        // A status beside the title, not a button: no plate or frame.
+                        if scanning {
+                            HStack(spacing: 6) {
+                                Circle().fill(MonitorTheme.accent).frame(width: 6, height: 6)
+                                    .monitorPulse(period: MonitorMotion.scanPulseDuration)
+                                if fullLabels {
+                                    Text("SCANNING").font(MonitorTheme.font(9.5, weight: .bold))
+                                        .tracking(1.1).fixedSize()
+                                }
+                            }
+                            .foregroundStyle(MonitorTheme.accent)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Scanning for cameras")
                         }
                     }
-                    .foregroundStyle(MonitorTheme.accent).padding(.horizontal, fullLabels ? 12 : 10)
-                    .frame(height: MonitorSystemButtonMetrics.side(tablet: tablet))
-                    .background(
-                        MonitorTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12).stroke(
-                            MonitorTheme.accent.opacity(0.24), lineWidth: 1)
-                    )
-                    .accessibilityLabel("Scanning for cameras")
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 if let onMultiview {
                     Menu {
                         Button("Open Multiview", action: onMultiview).disabled(busy)

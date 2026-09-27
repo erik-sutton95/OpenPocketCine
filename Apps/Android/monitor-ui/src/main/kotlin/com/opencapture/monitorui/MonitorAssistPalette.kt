@@ -337,7 +337,9 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
                 Column(Modifier.matchParentSize(), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     expandHit()
-                    Column(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState).verticalScroll(scrollState),
+                    // Collapsed, a drag belongs to the expand gesture, not the scroller.
+                    Column(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState)
+                        .verticalScroll(scrollState, enabled = expanded),
                         verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         ranked.forEachIndexed { index, tool -> key(tool, index) }
                     }
@@ -345,7 +347,8 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
             } else {
                 Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Row(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState, vertical = false).horizontalScroll(scrollState),
+                    Row(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState, vertical = false)
+                        .horizontalScroll(scrollState, enabled = expanded),
                         horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         repeat(columns) { column ->
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {

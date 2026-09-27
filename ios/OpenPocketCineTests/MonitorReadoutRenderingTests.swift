@@ -83,7 +83,7 @@ final class MonitorReadoutRenderingTests: XCTestCase {
                 } else {
                     readout
                         .shadow(color: .black, radius: 1.5)
-                        .shadow(color: .black.opacity(0.92), radius: 3)
+                        .shadow(color: .black.opacity(0.92), radius: 2.5)
                         .shadow(color: .black.opacity(0.85), radius: 1, y: 1)
                 }
             }

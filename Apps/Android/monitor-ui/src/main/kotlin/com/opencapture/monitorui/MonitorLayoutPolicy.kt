@@ -209,12 +209,13 @@ object MonitorLayoutPolicy {
             val display = MonitorRect(edge + button + 8f, lock.y, button, button)
             val record = MonitorRect((w - rec) / 2f, cy - rec / 2f, rec, rec)
             val media = MonitorRect(w - edge - button, lock.y, button, button)
-            val settings = MonitorRect(media.x - button - 8f, lock.y, button, button)
+            val settings = MonitorRect(media.x - button - SETTINGS_MEDIA_GAP, lock.y, button, button)
             val top = max(0f, safeTop - 24f)
             val gaugeTop = (if (tablet) 82f else max(4f, top - 16f)) + controlInset
+            // Four gauge pills: a trailing row on phone, a stacked column on tablet.
             val gauges = MonitorRect(
-                if (tablet) edge else w - edge - 104f, gaugeTop,
-                if (tablet) 49f else 104f, if (tablet) 58f else 28f,
+                if (tablet) edge else w - edge - 234f, gaugeTop,
+                if (tablet) 54f else 234f, if (tablet) 80f else 18f,
             )
             val floor = layout.controlsFloor
             val assists = portraitAssists(floor, tablet)
@@ -250,15 +251,15 @@ object MonitorLayoutPolicy {
         val cornerClearance = cutoutPhoneCornerInset(h, tablet, hasCutout)
         val cornerTop = (if (tablet) 12f else if (hasCutout) 8f else 52f) + controlInset + max(0f, cornerClearance - 6f)
         val settings = MonitorRect(
-            if (tablet) w - 8f - button * 2f - 8f else record.midX - button / 2f,
+            if (tablet) w - 8f - button * 2f - SETTINGS_MEDIA_GAP else record.midX - button / 2f,
             cornerTop, button, button,
         )
         val media = MonitorRect(
-            if (tablet) settings.maxX + 8f else settings.x,
-            if (tablet) cornerTop else settings.maxY + 8f, button, button,
+            if (tablet) settings.maxX + SETTINGS_MEDIA_GAP else settings.x,
+            if (tablet) cornerTop else settings.maxY + SETTINGS_MEDIA_GAP, button, button,
         )
         val lock = MonitorRect(12f, cornerTop, button, button)
-        val gauges = MonitorRect(18f, lock.maxY + 6f, 49f, 52f)
+        val gauges = MonitorRect(18f, lock.maxY + 6f, 54f, 80f)
         val statusX = max(77f, picture.x + 12f)
         val status = MonitorRect(
             statusX, (if (tablet) 4f else 0f) + controlInset,
@@ -396,6 +397,8 @@ object MonitorLayoutPolicy {
 
     fun cameraPageTitleSize(tablet: Boolean): Float = if (tablet) 24f else 19f
     const val CAMERA_CARD_CORNER = 13f
+    /** Space between the Settings and Media system buttons. */
+    const val SETTINGS_MEDIA_GAP = 12f
     const val SETTINGS_TITLE_CONTENT_GAP = 8f
     const val SETTINGS_TITLE_MIN_HEIGHT = 24f
     const val DISP_SIZE = 12f

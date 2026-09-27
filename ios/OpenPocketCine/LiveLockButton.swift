@@ -37,7 +37,8 @@ enum LiveChromeMetrics {
     static var gimbalStickInset: CGFloat { 16 * scale }
     static var gimbalStickGap: CGFloat { 8 * scale }
     /// On-feed stick. Light on dark picture, dark on bright picture.
-    static let gimbalStickOpacity: CGFloat = 0.55
+    /// Resting ink is solid white or black (sampled from the picture).
+    static let gimbalStickOpacity: CGFloat = 0.9
     static var focusResetSize: CGFloat { 40 * scale }
     static var focusResetGap: CGFloat { 24 * scale }
     static var popupGap: CGFloat { 10 * scale }

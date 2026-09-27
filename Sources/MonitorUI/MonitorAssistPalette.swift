@@ -172,6 +172,8 @@
                             }
                         }
                     }
+                    // Collapsed, a drag belongs to the expand gesture, not the scroller.
+                    .scrollDisabled(!expanded)
                     .monitorScrollFade()
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -194,6 +196,7 @@
                             }
                         }
                     }
+                    .scrollDisabled(!expanded)
                     .monitorScrollFade(.horizontal)
                 }
             }

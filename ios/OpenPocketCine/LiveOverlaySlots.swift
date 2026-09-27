@@ -59,7 +59,8 @@ struct LiveTrackingCancelButton: View {
     }
 }
 
-/// OpenZCine `dot.viewfinder` recenter — AF to centre and end tracking.
+/// Resets AF to centre and ends tracking. Uses the Settings reset glyph so it
+/// is not mistaken for the gimbal recenter crosshair.
 struct LiveFocusResetButton: View {
     @Environment(AppModel.self) private var model
 
@@ -67,7 +68,7 @@ struct LiveFocusResetButton: View {
         Button {
             model.session.resetFocusPoint()
         } label: {
-            OpcIcon.crosshair
+            OpcIcon.rotateCw
                 .frame(width: 17, height: 17)
                 .foregroundStyle(LiveDesign.text)
                 .frame(

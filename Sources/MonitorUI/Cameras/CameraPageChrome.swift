@@ -29,23 +29,32 @@
         var body: some View { glyph }
     }
 
-    struct CameraPageButtonStyle: ButtonStyle {
+    /// The app's standard action button. Destructive uses the record red.
+    public struct CameraPageButtonStyle: ButtonStyle {
         var primary = false
+        var destructive = false
         @Environment(\.isEnabled) private var enabled
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-        func makeBody(configuration: Configuration) -> some View {
+        public init(primary: Bool = false, destructive: Bool = false) {
+            self.primary = primary
+            self.destructive = destructive
+        }
+
+        public func makeBody(configuration: Configuration) -> some View {
             configuration.label
                 .font(MonitorTheme.font(13, weight: .semibold))
                 .foregroundStyle(
                     primary
                         ? Color(red: 8 / 255, green: 25 / 255, blue: 31 / 255)
-                        : MonitorTheme.secondary
+                        : destructive ? MonitorTheme.recording : MonitorTheme.secondary
                 )
                 .padding(.horizontal, 17)
                 .frame(minHeight: 42)
                 .background(
-                    primary ? MonitorTheme.accent : Color.white.opacity(0.06),
+                    primary
+                        ? MonitorTheme.accent
+                        : destructive ? MonitorTheme.recording.opacity(0.12) : Color.white.opacity(0.06),
                     in: RoundedRectangle(cornerRadius: 11)
                 )
                 .opacity(

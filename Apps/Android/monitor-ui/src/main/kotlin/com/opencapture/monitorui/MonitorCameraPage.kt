@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -81,18 +80,21 @@ fun <T> MonitorCameraPage(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    title,
-                    color = MonitorPalette.text,
-                    style = MonitorTypography.text(
-                        MonitorLayoutPolicy.cameraPageTitleSize(tablet),
-                        FontWeight.SemiBold,
-                    ).copy(letterSpacing = (-0.2).sp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        title,
+                        color = MonitorPalette.text,
+                        style = MonitorTypography.text(
+                            MonitorLayoutPolicy.cameraPageTitleSize(tablet),
+                            FontWeight.SemiBold,
+                        ).copy(letterSpacing = (-0.2).sp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (scanning) MonitorCameraScanStatus(fullLabels = fullLabels)
+                }
             }
-            if (scanning) MonitorCameraScanStatus(fullLabels = fullLabels, tablet = tablet)
             actions()
         }
         val gridState = rememberLazyGridState()
@@ -287,18 +289,14 @@ fun MonitorCameraCard(
     }
 }
 
+/** A status beside the title, not a button: no plate or frame. */
 @Composable
-private fun MonitorCameraScanStatus(fullLabels: Boolean, tablet: Boolean) {
+private fun MonitorCameraScanStatus(fullLabels: Boolean) {
     val phase = monitorPulsePhase(1400)
-    val shape = RoundedCornerShape(12.dp)
     Row(
-        Modifier.height(MonitorLayoutPolicy.systemButtonSize(tablet).dp)
-            .background(MonitorPalette.accent.copy(alpha = 0.1f), shape)
-            .border(1.dp, MonitorPalette.accent.copy(alpha = 0.24f), shape)
-            .padding(horizontal = if (fullLabels) 12.dp else 10.dp)
-            .semantics(mergeDescendants = true) { contentDescription = "Scanning for cameras" },
+        Modifier.semantics(mergeDescendants = true) { contentDescription = "Scanning for cameras" },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
             Modifier.size(6.dp).background(
@@ -317,28 +315,45 @@ private fun MonitorCameraScanStatus(fullLabels: Boolean, tablet: Boolean) {
     }
 }
 
+/** The app's standard action button. Destructive uses the record red. */
 @Composable
-private fun MonitorCameraAction(
+fun MonitorCameraAction(
     text: String,
     primary: Boolean,
     enabled: Boolean,
     contentDescription: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    destructive: Boolean = false,
+    icon: (@Composable (Color) -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(11.dp)
-    Box(
-        Modifier.alpha(if (enabled) 1f else 0.38f)
+    val ink = when {
+        primary -> CameraCardPrimaryInk
+        destructive -> MonitorPalette.recording
+        else -> MonitorPalette.secondary
+    }
+    Row(
+        modifier.alpha(if (enabled) 1f else 0.38f)
             .heightIn(min = 42.dp)
             .clip(shape)
-            .background(if (primary) MonitorPalette.accent else Color.White.copy(alpha = 0.06f))
+            .background(
+                when {
+                    primary -> MonitorPalette.accent
+                    destructive -> MonitorPalette.recording.copy(alpha = 0.12f)
+                    else -> Color.White.copy(alpha = 0.06f)
+                },
+            )
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { this.contentDescription = contentDescription }
             .padding(horizontal = 17.dp),
-        contentAlignment = Alignment.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
     ) {
+        icon?.invoke(ink)
         Text(
             text,
-            color = if (primary) CameraCardPrimaryInk else MonitorPalette.secondary,
+            color = ink,
             style = MonitorTypography.text(13f, FontWeight.SemiBold),
             maxLines = 1,
         )

@@ -34,6 +34,9 @@ public struct MonitorSafeArea: Equatable, Sendable {
 /// real window insets are inputs; camera brands and marketed device names are
 /// deliberately absent. No drawing, observation, timers, or camera I/O.
 public struct FieldMonitorLayout: Equatable, Sendable {
+    /// Space between the Settings and Media system buttons.
+    public static let settingsMediaGap = 12.0
+
     public let viewport: MonitorRect
     public let picture: MonitorRect
     public let status: MonitorRect
@@ -115,11 +118,13 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             display = .init(x: edge + button + 8, y: lock.y, width: button, height: button)
             record = .init(x: (w - rec) / 2, y: cy - rec / 2, width: rec, height: rec)
             media = .init(x: w - edge - button, y: lock.y, width: button, height: button)
-            settings = .init(x: media.x - button - 8, y: lock.y, width: button, height: button)
+            settings = .init(
+                x: media.x - button - Self.settingsMediaGap, y: lock.y, width: button, height: button)
             let gaugeTop = (tablet ? 82.0 : max(4, top - 16)) + controlInset
+            // Four gauge pills: a trailing row on phone, a stacked column on tablet.
             gauges = .init(
-                x: tablet ? edge : w - edge - 104, y: gaugeTop,
-                width: tablet ? 49 : 104, height: tablet ? 58 : 28)
+                x: tablet ? edge : w - edge - 234, y: gaugeTop,
+                width: tablet ? 58 : 234, height: tablet ? 91 : 18)
             // Portrait tools belong to the lower control area. Picture crop,
             // aspect and FIT/FILL must not move their touch targets.
             assists = .init(
@@ -161,14 +166,16 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             let cornerTop =
                 (tablet ? 12.0 : (hasCutout ? 8.0 : 52.0)) + controlInset + cornerClearance
             settings = .init(
-                x: tablet ? w - 14 - button * 2 - 8 : record.midX - button / 2,
+                x: tablet ? w - 14 - button * 2 - Self.settingsMediaGap : record.midX - button / 2,
                 y: cornerTop, width: button, height: button)
             media = .init(
-                x: tablet ? settings.maxX + 8 : settings.x,
-                y: tablet ? cornerTop : settings.maxY + 8, width: button, height: button)
+                x: tablet ? settings.maxX + Self.settingsMediaGap : settings.x,
+                y: tablet ? cornerTop : settings.maxY + Self.settingsMediaGap, width: button,
+                height: button)
             lock = .init(
                 x: 18, y: cornerTop, width: button, height: button)
-            gauges = .init(x: 18, y: lock.maxY + 6, width: 49, height: 52)
+            gauges = .init(
+                x: 18, y: lock.maxY + 6, width: tablet ? 58 : 54, height: tablet ? 91 : 80)
             // Keep the full 44pt touch target inside the screen. A 35pt band
             // centred at 21.5pt put its accessibility bounds above the window,
             // causing automatic hit-point selection to miss the top buttons.

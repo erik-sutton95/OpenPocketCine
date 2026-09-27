@@ -212,10 +212,17 @@ struct SettingsRootView: View {
             .padding(9)
             .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
             if model.isLive {
-                SettingsActionPill(
-                    title: "Disconnect", icon: .link2Off,
-                    tint: LiveDesign.rec, background: LiveDesign.rec.opacity(0.12)
-                ) { model.disconnect() }
+                Button {
+                    model.disconnect()
+                } label: {
+                    HStack(spacing: 7) {
+                        OpcIcon.link2Off.frame(width: 14, height: 14)
+                        Text("Disconnect")
+                    }
+                    // The landscape sidebar button spans the rail; portrait sits inline.
+                    .frame(maxWidth: portrait ? nil : .infinity)
+                }
+                .buttonStyle(CameraPageButtonStyle(destructive: true))
             }
         }
     }

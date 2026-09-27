@@ -9,7 +9,7 @@
         public func monitorReadoutShadow() -> some View {
             compositingGroup()
                 .shadow(color: .black, radius: 1.5)
-                .shadow(color: .black.opacity(0.92), radius: 3)
+                .shadow(color: .black.opacity(0.92), radius: 2.5)
                 .shadow(color: .black.opacity(0.85), radius: 1, y: 1)
                 // Rasterize with bloom padding so the halo fades instead of
                 // clipping at the glyph bounds. Negative pad keeps layout.

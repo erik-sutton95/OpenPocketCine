@@ -219,13 +219,6 @@ enum MonitorReadoutHitTarget {
             height: size == .zero ? 0 : max(0, (minSize - size.height) / 2)
         )
     }
-
-    static func frame(_ frame: CGRect, minSize: CGFloat = minimumSize) -> CGRect {
-        let width = max(frame.width, minSize)
-        let height = max(frame.height, minSize)
-        return CGRect(
-            x: frame.midX - width / 2, y: frame.midY - height / 2, width: width, height: height)
-    }
 }
 
 private struct MonitorReadoutHitTargetSizeKey: PreferenceKey {
@@ -394,28 +387,27 @@ struct FieldMonitorGauges: View {
     var body: some View {
         let axis =
             horizontal
-            ? AnyLayout(HStackLayout(spacing: 10))
-            : AnyLayout(VStackLayout(alignment: .leading, spacing: tablet ? 5 : 3))
+            ? AnyLayout(HStackLayout(spacing: 6))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: tablet ? 5 : 4))
+        let bars = model.session.liveSignalBars
+        let linkColor = MonitorTheme.linkHealthColor(.init(bars: bars))
         axis {
+            gauge(icon: .signal, value: nil, bars: bars, color: linkColor)
+                .accessibilityLabel("Live link \(bars) of 4 bars")
+                .accessibilityIdentifier("monitor.telemetry.signal")
+            gauge(icon: .video, value: fpsValue, bars: 0, color: linkColor)
+                .accessibilityLabel("Feed \(model.session.liveFPS) frames per second")
+                .accessibilityIdentifier("monitor.telemetry.fps")
             gauge(
-                icon: .signal, value: nil, bars: model.session.liveSignalBars,
-                color: MonitorTheme.linkHealthColor(.init(bars: model.session.liveSignalBars))
-            )
-            .accessibilityLabel(
-                "Live link \(model.session.liveSignalBars) of 4 bars, \(model.session.liveFPS) frames per second"
-            )
-            .accessibilityIdentifier("monitor.telemetry.signal")
-            gauge(
-                icon: .smartphone, value: phonePercent < 0 ? "—" : String(phonePercent),
-                bars: 0, color: .mint
+                icon: .smartphone, value: phonePercent < 0 ? "—" : "\(phonePercent)%",
+                bars: 0, color: batteryColor(phonePercent)
             )
             .accessibilityLabel(
                 "Phone battery \(phonePercent >= 0 ? String(phonePercent) : "unknown") percent")
             let percent = model.session.status.batteryPercent
             gauge(
-                icon: .camera, value: (0...100).contains(percent) ? "\(percent)%" : "—", bars: 0,
-                color: percent <= 20
-                    ? MonitorTheme.recording : percent <= 40 ? LiveDesign.amber : LiveDesign.good
+                icon: .camera, value: (0...100).contains(percent) ? "\(percent)%" : "—",
+                bars: 0, color: batteryColor(percent)
             )
             .accessibilityLabel(
                 (0...100).contains(percent)
@@ -432,31 +424,50 @@ struct FieldMonitorGauges: View {
         ) { _ in updatePhone() }
     }
 
+    /// Phone and camera batteries share one scale.
+    private func batteryColor(_ percent: Int) -> Color {
+        guard (0...100).contains(percent) else { return LiveDesign.text }
+        return percent <= 20
+            ? MonitorTheme.recording : percent <= 40 ? LiveDesign.amber : LiveDesign.good
+    }
+
+    /// Whole frames with a unit; RECOV / LINK / — pass through.
+    private var fpsValue: String {
+        let label = model.session.liveFPS
+        return Double(label).map { "\(Int($0.rounded())) fps" } ?? label
+    }
+
     private func updatePhone() {
         let value = UIDevice.current.batteryLevel
         phonePercent = value < 0 ? -1 : Int((value * 100).rounded())
     }
 
+    /// One glass pill per gauge: white icon, status color on the value only.
     private func gauge(icon: OpcIcon, value: String?, bars: Int, color: Color) -> some View {
-        let axis =
-            horizontal ? AnyLayout(VStackLayout(spacing: 3)) : AnyLayout(HStackLayout(spacing: 5))
-        return axis {
-            icon.frame(width: tablet ? 11 : 9, height: tablet ? 11 : 9)
-            ZStack {
-                RoundedRectangle(cornerRadius: 2).strokeBorder(color, lineWidth: 1)
-                if let value {
-                    Text(value).font(
-                        MonitorTheme.font(tablet ? 9 : 8, weight: .semibold))
-                } else {
-                    HStack(spacing: 2) {
-                        ForEach(0..<4) { index in
-                            Rectangle().fill(index < bars ? color : color.opacity(0.15))
-                        }
-                    }.padding(3)
+        let height: CGFloat = tablet ? 19 : 17
+        return HStack(spacing: tablet ? 4 : 3) {
+            icon.frame(width: tablet ? 11 : 10, height: tablet ? 11 : 10)
+                .foregroundStyle(LiveDesign.text)
+            if let value {
+                Text(value)
+                    .font(MonitorTheme.font(tablet ? 10 : 9, weight: .semibold)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .foregroundStyle(color)
+            } else {
+                HStack(spacing: 1.5) {
+                    ForEach(0..<4) { index in
+                        RoundedRectangle(cornerRadius: 0.75)
+                            .fill(index < bars ? color : color.opacity(0.2))
+                            .frame(width: 3, height: tablet ? 9 : 8)
+                    }
                 }
-            }.frame(width: tablet ? 33 : 28, height: tablet ? 16 : 14)
+            }
         }
-        .foregroundStyle(color)
+        .padding(.horizontal, 6)
+        // One width for every pill, sized for the widest value ("25 fps").
+        .frame(width: tablet ? 58 : 54, height: height, alignment: .leading)
+        // Same glass as the Live View buttons, as a small rounded-rectangle pill.
+        .monitorGlass(in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .accessibilityElement(children: .ignore)
     }
 }

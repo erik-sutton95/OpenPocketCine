@@ -2044,8 +2044,10 @@ fun LiveGimbalStick(
     var pressed by remember { mutableStateOf(false) }
     val renderedOffset by animateOffsetAsState(knobOffset,
         if (pressed) snap() else spring(dampingRatio = .8f, stiffness = 300f), label = "stick-return")
+    // Resting ink is difference-blended, so its darkest result over white is
+    // 1 - alpha. Keep it high enough to read dark on bright footage.
     val stickTint by animateColorAsState(
-        if (pressed) LiveDesign.accent.copy(alpha = .8f) else Color.White.copy(alpha = .55f),
+        if (pressed) LiveDesign.accent.copy(alpha = .8f) else Color.White.copy(alpha = .9f),
         tween(120), label = "stick-press")
     val scope = rememberCoroutineScope()
     var recenterJob by remember { mutableStateOf<Job?>(null) }
@@ -2170,8 +2172,9 @@ fun LiveFocusResetButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
             .semantics { contentDescription = "Recenter focus" },
         contentAlignment = Alignment.Center,
     ) {
+        // Settings reset glyph, distinct from the gimbal recenter crosshair.
         OpcIcon(
-            icon = OpcIcon.CROSSHAIR,
+            icon = OpcIcon.ROTATE_CW,
             contentDescription = null,
             tint = LiveDesign.text,
             modifier = Modifier.size(18.dp),

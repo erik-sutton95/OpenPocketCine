@@ -562,9 +562,11 @@ struct LiveViewScreen: View {
                         && layout.presentation?.tablet == false
                 )
                 .chromeEditable(.batteries, editing: editingMode)
+                // The portrait row hugs the trailing edge; stacked pills hug the leading.
                 .frame(
                     width: layout.battery.width, height: layout.battery.height,
-                    alignment: .topLeading
+                    alignment: layout.presentation?.portrait == true
+                        && layout.presentation?.tablet == false ? .topTrailing : .topLeading
                 )
                 .position(x: layout.battery.midX, y: layout.battery.midY)
             }
@@ -623,10 +625,14 @@ struct LiveViewScreen: View {
             {
                 LiveGimbalStick(
                     enabled: !interfaceLocked && model.liveOperatorPanel == nil
-                        && chromeInteractive && !captureControlsPresented
+                        && chromeInteractive && !captureControlsPresented,
+                    frame: Self.cgRect(self.gimbalCluster(layout).stick),
+                    feed: layout.feed
                 )
                 .id("live-gimbal-stick")
-                .transaction { $0.animation = nil }
+                // Never animate across rotation (see PERFORMANCE.md), but let DISP
+                // fade it with the zoom chip and gimbal controls.
+                .transaction(value: orientationObserver.orientation) { $0.animation = nil }
                 .chromeEditable(.gimbalStick, editing: editingMode)
                 .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).stick))
                 .opacity(captureControlsPresented ? 0 : 1)
