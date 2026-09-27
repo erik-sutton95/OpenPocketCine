@@ -543,9 +543,12 @@ struct LiveViewScreen: View {
             }
 
             if let exit = model.multiviewExit {
-                Button(action: exit) {
-                    OpcIcon.layoutGrid.frame(width: 22, height: 22).frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                // Same glass button, size and slot as the Lock it replaces.
+                let side = layout.lock.width
+                MonitorChromeButton(
+                    "Return to Multiview", size: CGSize(width: side, height: side), action: exit
+                ) {
+                    OpcIcon.layoutGrid.frame(width: side * 29 / 54, height: side * 29 / 54)
                 }
                 .accessibilityLabel("Return to Multiview")
                 .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
