@@ -81,10 +81,17 @@ struct FieldMonitorStatusChrome: View {
         .frame(height: layout.topDeck.height)
         .monitorReadoutShadow()
         .overlay(alignment: .topLeading) {
-            if portrait, model.chromeSectionMounts(.storage), let p = layout.presentation {
-                storageButton
-                    .monitorReadoutShadow()
-                    .offset(y: (p.tablet ? 52 : p.gauges.y) - p.status.y)
+            if portrait, let p = layout.presentation {
+                HStack(spacing: 10) {
+                    if model.chromeSectionMounts(.storage) {
+                        storageButton.monitorReadoutShadow()
+                    }
+                    // Left of the Dynamic Island; the batteries stay on the right.
+                    if !p.tablet, model.chromeSectionMounts(.batteries) {
+                        FieldMonitorGauges(horizontal: true, showsPower: false)
+                    }
+                }
+                .offset(y: (p.tablet ? 52 : p.gauges.y) - p.status.y)
             }
         }
         .onChange(of: locked) { _, isLocked in
@@ -381,6 +388,10 @@ struct FieldMonitorAssistPalette: View {
 struct FieldMonitorGauges: View {
     @Environment(AppModel.self) private var model
     var horizontal = false
+    /// Portrait phones split the row around the Dynamic Island: the link pill sits
+    /// left of it with storage, the batteries stay on the right.
+    var showsLink = true
+    var showsPower = true
     @State private var phonePercent = -1
     /// One link pill: tap swaps signal bars and feed fps.
     @State private var showsFPS = false
@@ -394,34 +405,39 @@ struct FieldMonitorGauges: View {
         let bars = model.session.liveSignalBars
         let linkColor = MonitorTheme.linkHealthColor(.init(bars: bars))
         axis {
-            Button {
-                showsFPS.toggle()
-            } label: {
-                gauge(
-                    icon: showsFPS ? .video : .signal, value: showsFPS ? fpsValue : nil,
-                    bars: bars, color: linkColor)
+            if showsLink {
+                Button {
+                    showsFPS.toggle()
+                } label: {
+                    gauge(
+                        icon: showsFPS ? .video : .signal, value: showsFPS ? fpsValue : nil,
+                        bars: bars, color: linkColor)
+                }
+                .buttonStyle(.zcTapTarget)
+                .accessibilityLabel(
+                    "Live link \(bars) of 4 bars, feed \(model.session.liveFPS) frames per second"
+                )
+                .accessibilityHint(showsFPS ? "Shows signal strength" : "Shows feed frame rate")
+                .accessibilityIdentifier("monitor.telemetry.signal")
             }
-            .buttonStyle(.zcTapTarget)
-            .accessibilityLabel(
-                "Live link \(bars) of 4 bars, feed \(model.session.liveFPS) frames per second")
-            .accessibilityHint(showsFPS ? "Shows signal strength" : "Shows feed frame rate")
-            .accessibilityIdentifier("monitor.telemetry.signal")
-            gauge(
-                icon: .smartphone, value: phonePercent < 0 ? "—" : "\(phonePercent)%",
-                bars: 0, color: batteryColor(phonePercent)
-            )
-            .accessibilityLabel(
-                "Phone battery \(phonePercent >= 0 ? String(phonePercent) : "unknown") percent")
-            let percent = model.session.status.batteryPercent
-            gauge(
-                icon: .camera, value: (0...100).contains(percent) ? "\(percent)%" : "—",
-                bars: 0, color: batteryColor(percent)
-            )
-            .accessibilityLabel(
-                (0...100).contains(percent)
-                    ? "Camera battery \(percent) percent" : "Camera battery unavailable"
-            )
-            .accessibilityIdentifier("monitor.telemetry.camera")
+            if showsPower {
+                gauge(
+                    icon: .smartphone, value: phonePercent < 0 ? "—" : "\(phonePercent)%",
+                    bars: 0, color: batteryColor(phonePercent)
+                )
+                .accessibilityLabel(
+                    "Phone battery \(phonePercent >= 0 ? String(phonePercent) : "unknown") percent")
+                let percent = model.session.status.batteryPercent
+                gauge(
+                    icon: .camera, value: (0...100).contains(percent) ? "\(percent)%" : "—",
+                    bars: 0, color: batteryColor(percent)
+                )
+                .accessibilityLabel(
+                    (0...100).contains(percent)
+                        ? "Camera battery \(percent) percent" : "Camera battery unavailable"
+                )
+                .accessibilityIdentifier("monitor.telemetry.camera")
+            }
         }
         .onAppear {
             UIDevice.current.isBatteryMonitoringEnabled = true

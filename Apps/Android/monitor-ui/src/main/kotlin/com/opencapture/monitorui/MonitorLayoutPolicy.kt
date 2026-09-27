@@ -72,7 +72,8 @@ object MonitorLayoutPolicy {
         val top = max(0f, safeTop - 8f)
         val status = MonitorRect(0f, top, vw, if (tablet) 52f else 44f)
         val systemH = if (tablet) 116f else 100f
-        val systemY = max(0f, vh - max(0f, safeBottom - 20f) - systemH)
+        // Record still clears the navigation handle; the whole portrait stack sits low.
+        val systemY = max(0f, vh - max(0f, safeBottom - 30f) - systemH)
         val system = MonitorRect(0f, systemY, vw, systemH)
         val valuesH = if (!valuesVisible) 0f else if (tablet) 43f else 74f
         val valuesY = max(0f, systemY - 8f - valuesH)

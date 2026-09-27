@@ -114,7 +114,8 @@ public struct FieldMonitorLayout: Equatable, Sendable {
         if portrait {
             let top = max(0, safeArea.top - 24)
             let systemH = tablet ? 116.0 : 100.0
-            let systemY = max(0, h - max(0, safeArea.bottom - 14) - systemH)
+            // Record still clears the home indicator; the whole portrait stack sits low.
+            let systemY = max(0, h - max(0, safeArea.bottom - 24) - systemH)
             system = .init(y: systemY, width: w, height: h - systemY)
             let valuesH = showsValues ? (tablet ? 43.0 : 74.0) : 0
             let valuesY = systemY - 8 - valuesH
@@ -139,7 +140,8 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 let room = max(1, systemY - status.y)
                 let fittedH = min(w / aspect, room)
                 let fittedW = fittedH * aspect
-                pictureY = min(max(status.y, (h - fittedH) / 2), systemY - fittedH)
+                // Rest it on the bar so the free space goes above, not below.
+                pictureY = max(status.y, systemY - fittedH)
                 verticalRect = .init(
                     x: (w - fittedW) / 2, y: pictureY, width: fittedW, height: fittedH)
             } else if pictureH > h || pictureH > floor - ceiling {
@@ -164,10 +166,11 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             media = .init(
                 x: settings.x - button - Self.settingsMediaGap, y: lock.y, width: button, height: button)
             let gaugeTop = (tablet ? 82.0 : max(4, top - 16)) + controlInset
-            // Three gauge pills: a trailing row on phone, a stacked column on tablet.
+            // Phone: the two battery pills trail the Dynamic Island (the link pill
+            // sits left of it with storage). Tablet: all three stacked.
             gauges = .init(
-                x: tablet ? edge : w - edge - 186, y: gaugeTop,
-                width: tablet ? 64 : 186, height: tablet ? 76 : 22)
+                x: tablet ? edge : w - edge - 122, y: gaugeTop,
+                width: tablet ? 64 : 122, height: tablet ? 76 : 22)
             // Portrait tools belong to the lower control area. Picture crop,
             // aspect and FIT/FILL must not move their touch targets.
             assists = .init(

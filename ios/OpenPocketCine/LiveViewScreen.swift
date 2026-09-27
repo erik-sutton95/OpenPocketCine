@@ -560,7 +560,9 @@ struct LiveViewScreen: View {
             if showsBatteries {
                 FieldMonitorGauges(
                     horizontal: layout.presentation?.portrait == true
-                        && layout.presentation?.tablet == false
+                        && layout.presentation?.tablet == false,
+                    showsLink: layout.presentation?.portrait != true
+                        || layout.presentation?.tablet == true
                 )
                 .chromeEditable(.batteries, editing: editingMode)
                 // The portrait row hugs the trailing edge; stacked pills hug the leading.
