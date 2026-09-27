@@ -681,8 +681,13 @@ The ellipsis button opens a compact floating menu over the stage using the
 existing monitor popup components. Live View, individual recording, Auto LUT,
 reconnect and removal retain their existing availability and confirmation rules.
 The selected-camera readouts form a tighter group at the bottom. Camera settings in the
-toolbar opens a bounded floating popup with tabs for connected
-cameras and the existing Live View setting controls. Controls target the chosen
+toolbar opens Live View's trailing gimbal side panel (shared `MonitorInspector`
+edge, width, glass, reveal and tap-outside dismissal). Connected-camera tabs run
+along the top, setting categories form a full-height vertical rail on the right,
+and the existing Live View setting controls scroll to its left below a live
+preview of the selected camera. The preview reuses the assist inspector preview
+and that tile's existing sample path (iOS inspector sample demand, Android
+present tap), only while the panel shows that camera. Controls target the chosen
 camera while all feed owners stay with Multiview. Tab changes, camera removal
 and reconnect retire pending edits instead of applying them to another camera.
 Camera, recording and settings tabs have a single gray edge line with an accent

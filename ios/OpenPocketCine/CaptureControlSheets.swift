@@ -138,6 +138,8 @@ struct CapturePickerPanel: View {
     var prefixContent: AnyView? = nil
     var subtitleOverride: String? = nil
     var controlsEnabled = true
+    /// Controls only: a host such as Multiview's side panel owns glass, header and scrolling.
+    var chromeless = false
     var onClose: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
@@ -172,6 +174,45 @@ struct CapturePickerPanel: View {
         let presented: Bool
     }
 
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let prefixContent { prefixContent }
+            Group {
+                if let held = preview {
+                    CaptureDrumWheel(
+                        options: held.snapshot.options, selection: .constant(held.selection),
+                        markedValues: held.snapshot.marked, isInteractive: false)
+                } else {
+                    content
+                    if sheet == .resolution, !isPhoto, formatAspects.count > 1 {
+                        aspectBar
+                    }
+                    if !modeTabs.isEmpty { modeBar }
+                    if let onSelectRecordingCategory,
+                        recordingCategories.count > 1,
+                        MonitorCapturePopupChrome.showsRecordingCategoryTabs(
+                            portrait: showsRecordingCategories, kind: .details)
+                    {
+                        MonitorCaptureTabs(
+                            options: recordingCategories, selection: sheet,
+                            title: {
+                                $0 == .resolution ? "Format" : $0 == .color ? "Color" : "Mode"
+                            }
+                        ) { category in
+                            guard canApplyDrum else { return }
+                            cancelDrumSend()
+                            onSelectRecordingCategory(
+                                CaptureReadoutAdmission.opening(
+                                    category, isPhoto: isPhoto))
+                        }
+                    }
+                    if sheet == .iso { nativeIsoHopToggle }
+                    if isEvSheet { facePriorityToggle }
+                }
+            }.disabled(!controlsEnabled)
+        }
+    }
+
     private var drumOptions: [String] {
         switch sheet {
         case .iso: isIsoAutoTab ? isoAutoDrumLabels : isoDrumLabels
@@ -197,47 +238,17 @@ struct CapturePickerPanel: View {
 
     var body: some View {
         let kind: MonitorCapturePopupKind = preview == nil ? .details : .compact
-        MonitorCapturePanel(
-            title: headerTitle, subtitle: subtitleOverride ?? kind.subtitle ?? headerSubtitle,
-            maximumHeight: maximumHeight, bottomPadding: bottomPadding,
-            topPadding: topPadding, topCornerRadius: topCornerRadius,
-            bottomCornerRadius: bottomCornerRadius, kind: kind, edge: edge, close: onClose
-        ) {
-            VStack(alignment: .leading, spacing: 8) {
-                if let prefixContent { prefixContent }
-                Group {
-                    if let held = preview {
-                        CaptureDrumWheel(
-                            options: held.snapshot.options, selection: .constant(held.selection),
-                            markedValues: held.snapshot.marked, isInteractive: false)
-                    } else {
-                        content
-                        if sheet == .resolution, !isPhoto, formatAspects.count > 1 {
-                            aspectBar
-                        }
-                        if !modeTabs.isEmpty { modeBar }
-                        if let onSelectRecordingCategory,
-                            recordingCategories.count > 1,
-                            MonitorCapturePopupChrome.showsRecordingCategoryTabs(
-                                portrait: showsRecordingCategories, kind: .details)
-                        {
-                            MonitorCaptureTabs(
-                                options: recordingCategories, selection: sheet,
-                                title: {
-                                    $0 == .resolution ? "Format" : $0 == .color ? "Color" : "Mode"
-                                }
-                            ) { category in
-                                guard canApplyDrum else { return }
-                                cancelDrumSend()
-                                onSelectRecordingCategory(
-                                    CaptureReadoutAdmission.opening(
-                                        category, isPhoto: isPhoto))
-                            }
-                        }
-                        if sheet == .iso { nativeIsoHopToggle }
-                        if isEvSheet { facePriorityToggle }
-                    }
-                }.disabled(!controlsEnabled)
+        Group {
+            if chromeless {
+                controls
+            } else {
+                MonitorCapturePanel(
+                    title: headerTitle,
+                    subtitle: subtitleOverride ?? kind.subtitle ?? headerSubtitle,
+                    maximumHeight: maximumHeight, bottomPadding: bottomPadding,
+                    topPadding: topPadding, topCornerRadius: topCornerRadius,
+                    bottomCornerRadius: bottomCornerRadius, kind: kind, edge: edge, close: onClose
+                ) { controls }
             }
         }
         .environment(

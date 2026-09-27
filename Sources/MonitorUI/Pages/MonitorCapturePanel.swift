@@ -125,13 +125,18 @@
     /// Camera, capture and recording categories share one joined tab strip.
     public struct MonitorCaptureTabs<Value: Hashable>: View {
         private let snapshot: [MonitorCaptureTabRow]
+        private let vertical: Bool
+        private let minLength: CGFloat
 
         public init(
             options: [Value], selection: Value?, title: (Value) -> String,
             identifier: (Value) -> String = { _ in "" },
             accessibilityValue: (Value) -> String = { _ in "" },
+            vertical: Bool = false, minLength: CGFloat = 0,
             select: @escaping (Value) -> Void
         ) {
+            self.vertical = vertical
+            self.minLength = minLength
             // The child body may run after camera telemetry has changed the
             // host's labels. Freeze projections alongside their option indices.
             snapshot = options.enumerated().map { index, option in
@@ -153,7 +158,7 @@
         }
 
         public var body: some View {
-            MonitorTabStrip { rows }
+            MonitorTabStrip(vertical: vertical, minLength: minLength) { rows }
         }
     }
 

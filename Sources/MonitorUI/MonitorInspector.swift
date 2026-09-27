@@ -31,6 +31,9 @@
         private let preferredWidth: MonitorInspectorWidth
         private let onClose: () -> Void
         private let helpVisible: Binding<Bool>?
+        private let scrollsContent: Bool
+        private let closeIdentifier: String
+        private let closeInset: CGFloat
         private let navigation: Navigation
         private let content: Content
         private let footer: Footer
@@ -42,6 +45,7 @@
             trailing: Bool = false, hasNavigation: Bool = true,
             preferredWidth: MonitorInspectorWidth? = nil,
             helpVisible: Binding<Bool>? = nil,
+            scrollsContent: Bool = true, closeIdentifier: String = "", closeInset: CGFloat = 0,
             onClose: @escaping () -> Void,
             @ViewBuilder navigation: () -> Navigation,
             @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer
@@ -54,6 +58,9 @@
             self.preferredWidth = preferredWidth ?? (trailing ? .trailing : .assist)
             self.onClose = onClose
             self.helpVisible = helpVisible
+            self.scrollsContent = scrollsContent
+            self.closeIdentifier = closeIdentifier
+            self.closeInset = closeInset
             self.navigation = navigation()
             self.content = content()
             self.footer = footer()
@@ -91,13 +98,21 @@
                             Rectangle().fill(MonitorTheme.border).frame(width: 1)
                         }
                         VStack(spacing: 0) {
-                            ScrollView {
+                            if scrollsContent {
+                                ScrollView {
+                                    content
+                                        .frame(width: max(1, contentWidth - 28), alignment: .leading)
+                                        .padding(14)
+                                }
+                                .scrollBounceBehavior(.basedOnSize)
+                                .monitorScrollFade()
+                            } else {
+                                // The host owns scrolling, e.g. fixed tab rails beside scrolled controls.
                                 content
-                                    .frame(width: max(1, contentWidth - 28), alignment: .leading)
+                                    .frame(width: max(1, contentWidth - 28), alignment: .topLeading)
+                                    .frame(maxHeight: .infinity, alignment: .top)
                                     .padding(14)
                             }
-                            .scrollBounceBehavior(.basedOnSize)
-                            .monitorScrollFade()
                             footer.padding(.horizontal, 14).padding(.bottom, 10)
                         }
                         .frame(width: contentWidth)
@@ -161,8 +176,10 @@
                         .frame(width: 44, height: 44).contentShape(Rectangle())
                 }.buttonStyle(MonitorButtonStyle()).foregroundStyle(MonitorTheme.secondary)
                     .accessibilityLabel("Close \(title)")
+                    .accessibilityIdentifier(closeIdentifier)
             }
-            .padding(.leading, 14).padding(.trailing, 2)
+            // `closeInset` moves the close control in from the panel corner; title follows the row.
+            .padding(.leading, 14).padding(.trailing, 2 + closeInset).padding(.top, closeInset)
         }
     }
 

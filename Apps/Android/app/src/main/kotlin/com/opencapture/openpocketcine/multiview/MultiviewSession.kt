@@ -169,6 +169,8 @@ class MultiviewSession(
         private var settingsPublishedAt = 0L
         var lutEnabled by mutableStateOf(true)
         internal var plan by mutableStateOf(FeedEffectsRenderPlan.IDENTITY)
+        /** Camera settings' preview owner; the tile's existing present tap feeds it while set. */
+        internal var previewOwner by mutableStateOf<Any?>(null)
         var lutCaption by mutableStateOf("Auto LUT")
         var hasPicture by mutableStateOf(false)
         var publishing by mutableStateOf(false)

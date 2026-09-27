@@ -707,7 +707,14 @@ private fun TileFeed(session: MultiviewSession, tile: MultiviewSession.Tile, fil
             onFramePresented = { tile.decoder.notePresented(it) },
         )
     }
-    LaunchedEffect(feed, tile.plan) { feed.updatePlan(tile.plan) }
+    val previewOwner = tile.previewOwner
+    LaunchedEffect(feed, tile.plan, previewOwner) {
+        feed.updatePlan(if (previewOwner == null) tile.plan else tile.plan.withPreviewOwner(previewOwner))
+    }
+    // Camera settings' preview borrows this feed's GL present tap, like Live View's inspector.
+    LaunchedEffect(feed, previewOwner != null) {
+        feed.configurePreviewSource(tile, ready = true, active = previewOwner != null)
+    }
     DisposableEffect(feed) {
         feed.setSourceSize(tile.decoder.pictureWidth, tile.decoder.pictureHeight)
         // The decoder drops its output when the coded raster changes; the GL window keeps

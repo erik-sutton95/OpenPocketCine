@@ -17,13 +17,18 @@
     public struct MonitorTabStrip<Content: View>: View {
         private let vertical: Bool
         private let spacing: CGFloat
+        private let minLength: CGFloat
         private let content: Content
 
+        /// `minLength` stretches the baseline along the strip, e.g. a rail that
+        /// spans its panel while tabs stay top/leading aligned.
         public init(
-            vertical: Bool = false, spacing: CGFloat = 0, @ViewBuilder content: () -> Content
+            vertical: Bool = false, spacing: CGFloat = 0, minLength: CGFloat = 0,
+            @ViewBuilder content: () -> Content
         ) {
             self.vertical = vertical
             self.spacing = spacing
+            self.minLength = minLength
             self.content = content()
         }
 
@@ -33,6 +38,11 @@
                 ? AnyLayout(VStackLayout(spacing: spacing)) : AnyLayout(HStackLayout(spacing: spacing))
             layout { content }
                 .environment(\.monitorVerticalTabs, vertical)
+                .frame(
+                    minWidth: !vertical && minLength > 0 ? minLength : nil,
+                    minHeight: vertical && minLength > 0 ? minLength : nil,
+                    alignment: vertical ? .top : .leading
+                )
                 .background(alignment: vertical ? .leading : .bottom) {
                     Rectangle().fill(MonitorTheme.border)
                         .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)

@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine.multiview
 
-import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.openpocketcine.LiveSheet
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraModel
@@ -11,22 +10,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MultiviewSettingsPolicyTest {
-    @Test fun popupStaysInsideTheSafeViewportAcrossCutoutsAndResizedWindows() {
-        for ((width, height) in listOf(375f to 667f, 667f to 375f, 393f to 852f,
-            852f to 393f, 500f to 650f, 600f to 650f, 744f to 1133f, 1194f to 834f)) {
-            for (safe in listOf(MultiviewSafeArea(top = 59f, bottom = 34f),
-                MultiviewSafeArea(leading = 59f, bottom = 21f),
-                MultiviewSafeArea(trailing = 59f, bottom = 21f))) {
-                val panel = multiviewSettingsBounds(width, height, safe)
-                assertTrue(panel.x >= safe.leading + 16f)
-                assertTrue(panel.y >= safe.top + 16f)
-                assertTrue(panel.maxX <= width - safe.trailing - 16f)
-                assertTrue(panel.maxY <= height - safe.bottom - 16f)
-                assertTrue(panel.width <= 560f && panel.height <= 520f)
-            }
-        }
-    }
-
     @Test fun nativeCategoriesFollowCameraCapabilitiesAndShootingMode() {
         val pocket = CameraModel("Osmo Pocket 4")
         val video = CameraStatus(shootingMode = CameraCommands.SHOOT_VIDEO)

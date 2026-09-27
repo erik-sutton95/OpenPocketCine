@@ -33,7 +33,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.openpocketcine.multiview.MultiviewCameraAction
 import com.opencapture.openpocketcine.multiview.MultiviewAssistPalette
-import com.opencapture.openpocketcine.multiview.multiviewSettingsBounds
 import com.opencapture.openpocketcine.multiview.MultiviewCameraSettings
 import com.opencapture.openpocketcine.multiview.MultiviewSession
 import com.opencapture.openpocketcine.multiview.MultiviewCameraMenu
@@ -49,6 +48,7 @@ import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.monitorui.MonitorDrawerTabs
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip
+import com.opencapture.monitorui.MonitorInspectorPolicy
 import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.monitorui.MultiviewArrangement
 import com.opencapture.monitorui.MultiviewPresentationLayout
@@ -247,10 +247,12 @@ class MultiviewTileChromeTest {
                                     Box(Modifier.size(width.dp, height.dp).onGloballyPositioned { coordinates ->
                                         val origin = coordinates.boundsInWindow()
                                         android.graphics.RectF(origin.left, origin.top, origin.right, origin.bottom).roundOut(expectedViewport)
-                                        val panel = multiviewSettingsBounds(width, height, MultiviewSafeArea(top = 24f, bottom = 20f))
-                                        android.graphics.RectF(origin.left + panel.x * density.density,
-                                            origin.top + panel.y * density.density, origin.left + panel.maxX * density.density,
-                                            origin.top + panel.maxY * density.density).roundOut(expectedPanel)
+                                        // Camera settings reuse Live View's trailing gimbal inspector frame.
+                                        val panel = MonitorInspectorPolicy.frame(width, height, trailing = true)
+                                        val panelY = if (panel.portrait) (height - panel.height) / 2 else 0f
+                                        android.graphics.RectF(origin.left + (width - panel.width) * density.density,
+                                            origin.top + panelY * density.density, origin.left + width * density.density,
+                                            origin.top + (panelY + panel.height) * density.density).roundOut(expectedPanel)
                                     }.testTag("multiview.settingsViewport")) {
                                         MultiviewCameraSettings(stage, 0, width, height,
                                             MultiviewSafeArea(top = 24f, bottom = 20f), confirmRecording = true) {}
@@ -266,16 +268,26 @@ class MultiviewTileChromeTest {
                 SystemClock.sleep(350) // Measure after the native reveal transition settles.
                 val panel = android.graphics.Rect(expectedPanel)
                 val screen = android.graphics.Rect(expectedViewport)
-                assertTrue(panel.left > screen.left && panel.right < screen.right, "Popup must float inside the viewport")
-                assertTrue(panel.top > screen.top && panel.bottom < screen.bottom)
+                assertTrue(panel.left > screen.left && panel.right == screen.right, "Side panel must attach to the trailing edge")
+                assertTrue(panel.top >= screen.top && panel.bottom <= screen.bottom)
                 for (label in listOf("Close camera settings", "A · Camera 0", "B · Camera 1", "Start recording")) {
                     val action = android.graphics.Rect().also { awaitNode(label).getBoundsInScreen(it) }
-                    assertTrue(panel.contains(action), "$label $action must stay inside floating panel $panel")
+                    assertTrue(panel.contains(action), "$label $action must stay inside the side panel $panel")
                 }
-                val drum = awaitNode("adjustable ISO control") { it.rangeInfo != null }
-                val drumBounds = android.graphics.Rect().also(drum::getBoundsInScreen)
                 val viewportScale = screen.width() / if (smallLandscape) 667f else
                     InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration.screenWidthDp.toFloat()
+                var drum = awaitNode("adjustable ISO control") { it.rangeInfo != null }
+                var drumBounds = android.graphics.Rect().also(drum::getBoundsInScreen)
+                // The live preview leads the scrolled controls; short panels scroll the drum into view.
+                repeat(3) {
+                    if (panel.contains(drumBounds) && drumBounds.height() >= 44 * viewportScale) return@repeat
+                    generateSequence(drum.parent) { it.parent }.filter { it.isScrollable }.forEach {
+                        it.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                    }
+                    SystemClock.sleep(300)
+                    drum = awaitNode("adjustable ISO control") { it.rangeInfo != null }
+                    drumBounds = android.graphics.Rect().also(drum::getBoundsInScreen)
+                }
                 assertTrue(panel.contains(drumBounds) && drumBounds.height() >= 44 * viewportScale,
                     "Native picker must remain reachable: $drumBounds in $panel")
                 val progress = assertNotNull(drum.rangeInfo)

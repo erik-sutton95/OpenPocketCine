@@ -92,12 +92,13 @@ private final class PhysicalShutterAngleCheck {
         let tab = app.buttons["multiview.settings.control.\(category)"]
         guard tab.waitForExistence(timeout: 5) else { throw Failure("Missing \(category) control") }
         if !tab.isHittable {
-            let row = panel.scrollViews.allElementsBoundByIndex.first {
-                $0.frame.height <= 60 && $0.buttons["multiview.settings.control.iso"].exists
+            // Categories are a vertical rail in the side panel.
+            let rail = panel.scrollViews.allElementsBoundByIndex.first {
+                $0.buttons["multiview.settings.control.iso"].exists
             }
-            row?.swipeRight()
-            row?.swipeRight()
-            for _ in 0..<6 where !tab.isHittable { row?.swipeLeft() }
+            rail?.swipeDown()
+            rail?.swipeDown()
+            for _ in 0..<6 where !tab.isHittable { rail?.swipeUp() }
         }
         guard tab.isHittable else { throw Failure("Unreachable \(category) control") }
         tab.tap()

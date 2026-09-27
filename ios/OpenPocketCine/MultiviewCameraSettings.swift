@@ -18,7 +18,9 @@ extension MultiviewSession {
         let editor = CameraSession(borrowing: tile.decoder, controlsOnly: true)
         let model = AppModel(session: editor)
         editor.updateMultiview(camera: camera, driver: tile.driver, status: tile.settings)
+        model.frameSamples = tile.sampleBus
         tile.controlsModel = model
+        tile.previewDemand = true
         let driver = tile.driver
         editor.multiviewControlAdmission = { [weak self, weak tile, weak editor, weak driver] in
             guard let self, let tile, let editor else { return false }
@@ -36,10 +38,12 @@ extension MultiviewSession {
 struct MultiviewCameraSettings: View {
     let session: MultiviewSession
     let initialTile: MultiviewSession.Tile
-    let maximumHeight: CGFloat
+    let viewport: CGSize
+    let safeArea: EdgeInsets
     let close: () -> Void
     @State private var selectedID: UUID?
     @State private var category: CaptureSheet = .iso
+    @State private var railHeight: CGFloat = 0
     private struct PanelIdentity: Hashable {
         let model: ObjectIdentifier
         let category: CaptureSheet
@@ -51,35 +55,77 @@ struct MultiviewCameraSettings: View {
     }
 
     var body: some View {
-        // A concrete root keeps editor cleanup tied to closing the popup, not
-        // to the conditional picker content or its camera/category identity.
-        VStack(spacing: 0) {
+        // Live View's gimbal side panel container: trailing edge, width, glass,
+        // reveal and tap-outside dismissal. Its concrete root keeps editor
+        // cleanup tied to closing the panel, not to camera/category identity.
+        MonitorInspector(
+            title: "Camera settings", viewport: viewport, safeArea: safeArea,
+            trailing: true, hasNavigation: false, preferredWidth: .assist,
+            scrollsContent: false, closeIdentifier: "monitor.capture.close", closeInset: 8,
+            onClose: close
+        ) {
+            EmptyView()
+        } content: {
+            VStack(alignment: .leading, spacing: 10) {
+                cameraTabs
+                if let tile = selected, let model = tile.controlsModel {
+                    HStack(alignment: .top, spacing: 10) {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                // Live View's assist inspector preview, fed by this tile's sample bus.
+                                AssistInspectorPreview(
+                                    tool: .lut, pictureEffects: previewEffects(tile)
+                                )
+                                .accessibilityLabel("\(tile.camera?.name ?? "Camera") preview")
+                                .environment(model)
+                                .id(ObjectIdentifier(model))
+                                CapturePickerPanel(
+                                    sheet: category,
+                                    isPresented: { tile.controlsModel === model && selectedID == tile.id },
+                                    controlsEnabled: session.controlsAvailable(for: tile)
+                                        && categoryAvailable(category, model: model),
+                                    chromeless: true, onClose: close
+                                )
+                                .fixedSize(horizontal: false, vertical: true)
+                                .environment(model)
+                                .id(PanelIdentity(model: ObjectIdentifier(model), category: category))
+                            }
+                        }
+                        .scrollBounceBehavior(.basedOnSize)
+                        .monitorScrollFade()
+                        ScrollView(.vertical, showsIndicators: false) {
+                            MonitorCaptureTabs(
+                                options: categories(model), selection: category, title: title,
+                                identifier: { "multiview.settings.control." + $0.rawValue },
+                                vertical: true, minLength: railHeight
+                            ) { category = $0 }
+                        }
+                        .scrollBounceBehavior(.basedOnSize)
+                        .monitorScrollFade()
+                        .frame(width: 92)
+                        .frame(maxHeight: .infinity)
+                        // The rail's baseline spans the full content height.
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                            railHeight = $0
+                        }
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .onChange(of: categories(model)) { _, choices in
+                        if !choices.contains(category) { category = .iso }
+                    }
+                } else {
+                    Text(
+                        selected?.recovering == true
+                            ? "Reconnect this camera before changing settings."
+                            : "Waiting for camera controls…"
+                    )
+                    .font(MonitorTheme.font(12)).foregroundStyle(MonitorTheme.muted)
+                    .padding(.vertical, 14)
+                }
+            }
+        } footer: {
             if let tile = selected, let model = tile.controlsModel {
-                CapturePickerPanel(
-                    sheet: category, maximumHeight: maximumHeight,
-                    bottomCornerRadius: 16, edge: .top,
-                    isPresented: { tile.controlsModel === model && selectedID == tile.id },
-                    prefixContent: AnyView(tabs(tile: tile, model: model)),
-                    subtitleOverride: tile.camera?.name ?? "Camera settings",
-                    controlsEnabled: session.controlsAvailable(for: tile)
-                        && categoryAvailable(category, model: model),
-                    onClose: close
-                )
-                .environment(model)
-                .id(PanelIdentity(model: ObjectIdentifier(model), category: category))
-                .onChange(of: categories(model)) { _, choices in
-                    if !choices.contains(category) { category = .iso }
-                }
-            } else {
-                MonitorCapturePanel(
-                    title: "CAMERA SETTINGS", subtitle: selected?.status ?? "Camera unavailable",
-                    maximumHeight: maximumHeight, bottomCornerRadius: 16, edge: .top, close: close
-                ) {
-                    cameraTabs
-                    Text("Waiting for camera controls…")
-                        .font(MonitorTheme.font(12)).foregroundStyle(MonitorTheme.muted)
-                        .padding(.vertical, 14)
-                }
+                footer(tile: tile, model: model)
             }
         }
         .accessibilityElement(children: .contain)
@@ -132,17 +178,8 @@ struct MultiviewCameraSettings: View {
         )
     }
 
-    private func tabs(tile: MultiviewSession.Tile, model: AppModel) -> some View {
-        VStack(spacing: 4) {
-            cameraTabs
-            ScrollView(.horizontal, showsIndicators: false) {
-                MonitorCaptureTabs(
-                    options: categories(model), selection: category, title: title,
-                    identifier: { "multiview.settings.control." + $0.rawValue }
-                ) { category = $0 }
-                .fixedSize(horizontal: true, vertical: false)
-            }
-            .monitorScrollFade(.horizontal)
+    private func footer(tile: MultiviewSession.Tile, model: AppModel) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 MultiviewRecordAction(
                     session: session, tile: tile,
@@ -171,6 +208,13 @@ struct MultiviewCameraSettings: View {
                 Text(note).font(MonitorTheme.font(11)).foregroundStyle(.orange)
             }
         }
+    }
+
+    /// The tile's own picture (color and Auto LUT), without scope or sample demand.
+    private func previewEffects(_ tile: MultiviewSession.Tile) -> LiveImageEffects {
+        var result = tile.effects
+        result.inspectorSample = false
+        return result
     }
 
     private func categories(_ model: AppModel) -> [CaptureSheet] {

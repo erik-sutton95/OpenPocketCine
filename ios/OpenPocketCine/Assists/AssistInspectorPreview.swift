@@ -115,6 +115,8 @@ private struct AssistInspectorImageConfiguration: Equatable {
 /// worker, so tool changes and remounts cannot reset its one-job/5 Hz admission.
 struct AssistInspectorPreview: View {
     var tool: LiveAssistTool
+    /// A host's own picture effects replace the tool's forced assist, e.g. a Multiview camera.
+    var pictureEffects: LiveImageEffects? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.audioInspectorLevels) private var audioInspectorLevels
@@ -134,8 +136,9 @@ struct AssistInspectorPreview: View {
         return AssistInspectorImageConfiguration(
             source: ObjectIdentifier(samples), sourceEpoch: samples.inspectorSourceEpoch,
             playback: samples.usesPlaybackSource, tool: tool,
-            effects: AssistInspectorPreviewPolicy.imageOptions(
-                assist: model.assist, tool: tool, transfer: source.transfer),
+            effects: pictureEffects
+                ?? AssistInspectorPreviewPolicy.imageOptions(
+                    assist: model.assist, tool: tool, transfer: source.transfer),
             transfer: source.transfer,
             lutSelection: model.assist.lutSelection,
             lutExposureStops: model.assist.lutExposureStops,
@@ -303,8 +306,9 @@ struct AssistInspectorPreview: View {
                 let rendered = await renderer.render(
                     owner: identity, source: source.buffer
                 ) {
-                    AssistInspectorPreviewPolicy.imageEffects(
-                        assist: model.assist, tool: tool, transfer: source.transfer)
+                    pictureEffects
+                        ?? AssistInspectorPreviewPolicy.imageEffects(
+                            assist: model.assist, tool: tool, transfer: source.transfer)
                 }
                 guard !Task.isCancelled else { return }
                 if let rendered, renderer.isCurrent(rendered),

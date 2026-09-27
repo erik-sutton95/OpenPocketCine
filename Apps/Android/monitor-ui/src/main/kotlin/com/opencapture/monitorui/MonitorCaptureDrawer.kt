@@ -4,7 +4,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,13 +36,14 @@ fun MonitorCaptureReveal(modifier: Modifier = Modifier, fromTop: Boolean = false
     }, content = content)
 }
 
+/** Horizontal strips keep the bottom baseline; vertical rails keep it on their left edge. */
 @Composable
 fun MonitorDrawerTabs(tabs: List<String>, selected: Int, onSelect: (Int) -> Unit,
-    enabled: Boolean = true) {
-    Row(Modifier.monitorTabStrip()) {
+    enabled: Boolean = true, vertical: Boolean = false, modifier: Modifier = Modifier) {
+    val items: @Composable (Modifier) -> Unit = { tabModifier ->
         tabs.forEachIndexed { index, label ->
             val active = index == selected
-            MonitorTab(active, { onSelect(index) }, enabled = enabled,
+            MonitorTab(active, { onSelect(index) }, tabModifier, enabled = enabled, vertical = vertical,
                 separator = index > 0, accessibilityLabel = label) {
                 Text(label,
                     style = MonitorTypography.text(11f, if (active) FontWeight.SemiBold else FontWeight.Medium),
@@ -46,5 +51,10 @@ fun MonitorDrawerTabs(tabs: List<String>, selected: Int, onSelect: (Int) -> Unit
                     maxLines = 1)
             }
         }
+    }
+    if (vertical) {
+        Column(modifier.width(IntrinsicSize.Max).monitorTabStrip(vertical = true)) { items(Modifier.fillMaxWidth()) }
+    } else {
+        Row(modifier.monitorTabStrip()) { items(Modifier) }
     }
 }

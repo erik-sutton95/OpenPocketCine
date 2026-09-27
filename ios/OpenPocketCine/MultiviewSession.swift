@@ -17,6 +17,12 @@ final class MultiviewSession {
             controlsModel?.captureDrum = nil
             controlsModel?.session.releaseMultiview()
             controlsModel = nil
+            previewDemand = false
+        }
+        /// Camera settings' live preview borrows this decoder's existing sample
+        /// path, like Live View's assist inspector demand. No new decoder.
+        var previewDemand = false {
+            didSet { if previewDemand != oldValue, liveModel == nil { updateLUT() } }
         }
         var driver: DatalinkDriver? {
             didSet {
@@ -99,6 +105,7 @@ final class MultiviewSession {
                     lutCaption = "LUT unavailable"
                 }
             }
+            next.inspectorSample = previewDemand
             effects = next
             decoder.effects = next
             decoder.adoptIncomingTransfer(settings.monitorTransfer)

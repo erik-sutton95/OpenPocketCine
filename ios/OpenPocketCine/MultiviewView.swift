@@ -224,7 +224,7 @@ struct MultiviewView: View {
 
     @ViewBuilder
     private func floatingPopups(viewport: CGSize, safe: EdgeInsets) -> some View {
-        if optionsTile != nil || settingsTile != nil {
+        if let tile = optionsTile {
             let width = max(1, viewport.width - safe.leading - safe.trailing - 32)
             let height = max(1, viewport.height - safe.top - safe.bottom - 32)
             ZStack {
@@ -233,25 +233,23 @@ struct MultiviewView: View {
                     .accessibilityLabel("Dismiss camera panel")
                     .accessibilityAddTraits(.isButton)
                     .accessibilityIdentifier("multiview.popup.dismiss")
-                Group {
-                    if let tile = optionsTile {
-                        MultiviewCameraOptions(
-                            session: session, tile: tile, maximumHeight: min(520, height),
-                            close: closePopups
-                        ) { openLiveView(tile) }
-                        .frame(width: min(440, width))
-                    } else if let tile = settingsTile {
-                        MultiviewCameraSettings(
-                            session: session, initialTile: tile,
-                            maximumHeight: min(560, height), close: closePopups
-                        )
-                        .frame(width: min(560, width))
-                    }
-                }
+                MultiviewCameraOptions(
+                    session: session, tile: tile, maximumHeight: min(520, height),
+                    close: closePopups
+                ) { openLiveView(tile) }
+                .frame(width: min(440, width))
                 .position(
                     x: safe.leading + (viewport.width - safe.leading - safe.trailing) / 2,
                     y: safe.top + (viewport.height - safe.top - safe.bottom) / 2)
             }
+            .accessibilityAddTraits(.isModal)
+            .preferredColorScheme(.dark)
+        } else if let tile = settingsTile {
+            // Same trailing side panel as Live View's gimbal controls.
+            MultiviewCameraSettings(
+                session: session, initialTile: tile, viewport: viewport, safeArea: safe,
+                close: closePopups
+            )
             .accessibilityAddTraits(.isModal)
             .preferredColorScheme(.dark)
         }

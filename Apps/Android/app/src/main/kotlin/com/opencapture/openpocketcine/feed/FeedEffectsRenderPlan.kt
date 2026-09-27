@@ -42,6 +42,14 @@ internal class FeedEffectsRenderPlan(
     val falseColorOn: Boolean
         get() = falseColorPaint != null && falseColorWeight != null
 
+    /** Same look; the present tap also feeds this inspector preview owner. */
+    fun withPreviewOwner(owner: Any?): FeedEffectsRenderPlan = FeedEffectsRenderPlan(
+        lutCube, falseColorPaint, falseColorWeight, peaking, peakingColor, peakingRatioThreshold,
+        peakingNoiseGate, zebraHighlightOn, zebraHighlightCode, zebraHighlightColor, zebraMidtoneOn,
+        zebraMidtoneCode, zebraMidtoneHalf, zebraMidtoneColor, splitComparison, splitVertical,
+        scopeTap.copy(previewOwner = owner),
+    )
+
     /** Same shader set and cube textures; only uniforms or scope policy differ. */
     fun sharesGlResources(other: FeedEffectsRenderPlan): Boolean =
         lutCube === other.lutCube &&

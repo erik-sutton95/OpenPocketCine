@@ -141,19 +141,22 @@ final class MultiviewUIFlowTests: XCTestCase {
             settings.tap()
             var panel = app.descendants(matching: .any)["multiview.settings.panel"]
             XCTAssertTrue(panel.waitForExistence(timeout: 5))
-            assertBounded(panel)
+            assertSidePanel()
             XCTAssertTrue(app.buttons["multiview.settings.camera.0"].exists)
             let cameraA = app.buttons["multiview.settings.camera.0"]
             let cameraB = app.buttons["multiview.settings.camera.1"]
             XCTAssertEqual(cameraA.frame.maxX, cameraB.frame.minX, accuracy: 0.5)
             XCTAssertGreaterThanOrEqual(cameraA.frame.height, 44 - 0.001)
             XCTAssertGreaterThanOrEqual(cameraB.frame.height, 44 - 0.001)
+            // Categories stack in the trailing rail, right of the controls.
             XCTAssertEqual(
-                app.buttons["multiview.settings.control.iso"].frame.maxX,
-                app.buttons["multiview.settings.control.shutter"].frame.minX, accuracy: 0.5)
+                app.buttons["multiview.settings.control.iso"].frame.maxY,
+                app.buttons["multiview.settings.control.shutter"].frame.minY, accuracy: 0.5)
+            XCTAssertGreaterThan(
+                app.buttons["multiview.settings.control.iso"].frame.minX, cameraA.frame.minX)
             app.buttons["multiview.settings.camera.1"].tap()
             XCTAssertTrue(app.buttons["multiview.settings.camera.1"].isSelected)
-            XCTAssertTrue(panel.staticTexts["Close-up"].exists)
+            XCTAssertTrue(app.buttons["multiview.settings.camera.1"].label.contains("Close-up"))
             XCTAssertTrue(
                 panel.otherElements.matching(
                     NSPredicate(format: "label == %@ AND value == %@", "Value", "800")
@@ -162,7 +165,7 @@ final class MultiviewUIFlowTests: XCTestCase {
             XCTAssertTrue(app.buttons["multiview.settings.control.wb"].waitForExistence(timeout: 5))
             app.buttons["multiview.settings.control.wb"].tap()
             panel = app.descendants(matching: .any)["multiview.settings.panel"]
-            assertBounded(panel)
+            assertSidePanel()
             XCTAssertEqual(tile.frame, originalFrame)
             XCTAssertEqual(tile.value as? String, selectedValue)
             capture("multiview-settings-\(orientation.rawValue)")
@@ -196,6 +199,14 @@ final class MultiviewUIFlowTests: XCTestCase {
         XCTAssertEqual(app.buttons["multiview.recordAll"].frame, recordFrame)
         XCTAssertEqual(app.buttons["multiview.display"].frame, displayFrame)
         return button
+    }
+
+    /// Camera settings reuse Live View's trailing gimbal panel geometry.
+    private func assertSidePanel() {
+        let inspector = app.otherElements["monitor.inspector"]
+        XCTAssertTrue(inspector.exists)
+        XCTAssertEqual(inspector.frame.width, min(460, app.frame.width * 0.92), accuracy: 1)
+        XCTAssertEqual(inspector.frame.maxX, app.frame.maxX, accuracy: 1)
     }
 
     private func assertBounded(_ panel: XCUIElement) {
