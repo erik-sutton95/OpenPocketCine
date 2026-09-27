@@ -303,7 +303,7 @@ class MultiviewLayoutPolicyTest {
         assertEquals(16f / 9f, main.width / main.height, .001f)
         assertEquals(left.sessionControls.y, main.y)
         assertEquals(main.maxY - 45, left.readouts.y)
-        assertEquals(main.width, left.readouts.width)
+        assertEquals(main.maxX, left.readouts.maxX, .01f)
         // The strip reaches the trailing margin: 18 on the plain edge, the cutout reserve opposite.
         assertEquals(834f, strip.maxX)
         assertEquals(785f, checkNotNull(right.secondaryViewport).maxX)
