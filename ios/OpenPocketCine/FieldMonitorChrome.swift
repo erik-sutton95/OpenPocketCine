@@ -382,6 +382,8 @@ struct FieldMonitorGauges: View {
     @Environment(AppModel.self) private var model
     var horizontal = false
     @State private var phonePercent = -1
+    /// One link pill: tap swaps signal bars and feed fps.
+    @State private var showsFPS = false
     private var tablet: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     var body: some View {
@@ -392,12 +394,18 @@ struct FieldMonitorGauges: View {
         let bars = model.session.liveSignalBars
         let linkColor = MonitorTheme.linkHealthColor(.init(bars: bars))
         axis {
-            gauge(icon: .signal, value: nil, bars: bars, color: linkColor)
-                .accessibilityLabel("Live link \(bars) of 4 bars")
-                .accessibilityIdentifier("monitor.telemetry.signal")
-            gauge(icon: .video, value: fpsValue, bars: 0, color: linkColor)
-                .accessibilityLabel("Feed \(model.session.liveFPS) frames per second")
-                .accessibilityIdentifier("monitor.telemetry.fps")
+            Button {
+                showsFPS.toggle()
+            } label: {
+                gauge(
+                    icon: showsFPS ? .video : .signal, value: showsFPS ? fpsValue : nil,
+                    bars: bars, color: linkColor)
+            }
+            .buttonStyle(.zcTapTarget)
+            .accessibilityLabel(
+                "Live link \(bars) of 4 bars, feed \(model.session.liveFPS) frames per second")
+            .accessibilityHint(showsFPS ? "Shows signal strength" : "Shows feed frame rate")
+            .accessibilityIdentifier("monitor.telemetry.signal")
             gauge(
                 icon: .smartphone, value: phonePercent < 0 ? "—" : "\(phonePercent)%",
                 bars: 0, color: batteryColor(phonePercent)
@@ -444,13 +452,13 @@ struct FieldMonitorGauges: View {
 
     /// One glass pill per gauge: white icon, status color on the value only.
     private func gauge(icon: OpcIcon, value: String?, bars: Int, color: Color) -> some View {
-        let height: CGFloat = tablet ? 19 : 17
-        return HStack(spacing: tablet ? 4 : 3) {
-            icon.frame(width: tablet ? 11 : 10, height: tablet ? 11 : 10)
+        let height: CGFloat = tablet ? 22 : 20
+        return HStack(spacing: 4) {
+            icon.frame(width: tablet ? 12 : 11, height: tablet ? 12 : 11)
                 .foregroundStyle(LiveDesign.text)
             if let value {
                 Text(value)
-                    .font(MonitorTheme.font(tablet ? 10 : 9, weight: .semibold)).monospacedDigit()
+                    .font(MonitorTheme.font(tablet ? 11 : 10, weight: .semibold)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .foregroundStyle(color)
             } else {
@@ -458,14 +466,14 @@ struct FieldMonitorGauges: View {
                     ForEach(0..<4) { index in
                         RoundedRectangle(cornerRadius: 0.75)
                             .fill(index < bars ? color : color.opacity(0.2))
-                            .frame(width: 3, height: tablet ? 9 : 8)
+                            .frame(width: 3.5, height: tablet ? 10 : 9)
                     }
                 }
             }
         }
         .padding(.horizontal, 6)
         // One width for every pill, sized for the widest value ("25 fps").
-        .frame(width: tablet ? 58 : 54, height: height, alignment: .leading)
+        .frame(width: tablet ? 64 : 58, height: height, alignment: .leading)
         // Same glass as the Live View buttons, as a small rounded-rectangle pill.
         .monitorGlass(in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .accessibilityElement(children: .ignore)

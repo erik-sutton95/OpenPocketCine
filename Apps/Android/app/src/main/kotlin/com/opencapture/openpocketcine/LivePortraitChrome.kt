@@ -248,8 +248,8 @@ fun LivePortraitChrome(
         if (showsStatus) {
             val gaugeTop = if (tablet) 82f else max(4f, zones.topBar.minY - 16f)
             // Phone: a trailing row of gauge pills. Tablet: a stacked column.
-            Box(Modifier.liveModuleFrame(ChromeRect(if (tablet) 14f else layout.viewportWidth - 248f,
-                gaugeTop, if (tablet) 54f else 234f, if (tablet) 80f else 18f)),
+            Box(Modifier.liveModuleFrame(ChromeRect(if (tablet) 14f else layout.viewportWidth - 200f,
+                gaugeTop, if (tablet) 58f else 186f, if (tablet) 68f else 22f)),
                 contentAlignment = if (tablet) Alignment.TopStart else Alignment.TopEnd) {
                 com.opencapture.openpocketcine.monitor.MonitorTelemetry(bars, fpsLabel,
                     model.phoneBatteryPercent, status.batteryPercent, horizontal = !tablet)

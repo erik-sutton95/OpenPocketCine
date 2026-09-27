@@ -212,10 +212,10 @@ object MonitorLayoutPolicy {
             val settings = MonitorRect(media.x - button - SETTINGS_MEDIA_GAP, lock.y, button, button)
             val top = max(0f, safeTop - 24f)
             val gaugeTop = (if (tablet) 82f else max(4f, top - 16f)) + controlInset
-            // Four gauge pills: a trailing row on phone, a stacked column on tablet.
+            // Three gauge pills: a trailing row on phone, a stacked column on tablet.
             val gauges = MonitorRect(
-                if (tablet) edge else w - edge - 234f, gaugeTop,
-                if (tablet) 54f else 234f, if (tablet) 80f else 18f,
+                if (tablet) edge else w - edge - 186f, gaugeTop,
+                if (tablet) 58f else 186f, if (tablet) 68f else 22f,
             )
             val floor = layout.controlsFloor
             val assists = portraitAssists(floor, tablet)
@@ -259,7 +259,7 @@ object MonitorLayoutPolicy {
             if (tablet) cornerTop else settings.maxY + SETTINGS_MEDIA_GAP, button, button,
         )
         val lock = MonitorRect(12f, cornerTop, button, button)
-        val gauges = MonitorRect(18f, lock.maxY + 6f, 54f, 80f)
+        val gauges = MonitorRect(18f, lock.maxY + 6f, 58f, 68f)
         val statusX = max(77f, picture.x + 12f)
         val status = MonitorRect(
             statusX, (if (tablet) 4f else 0f) + controlInset,

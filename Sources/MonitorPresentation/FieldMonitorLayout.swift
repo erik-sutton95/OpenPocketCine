@@ -121,10 +121,10 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             settings = .init(
                 x: media.x - button - Self.settingsMediaGap, y: lock.y, width: button, height: button)
             let gaugeTop = (tablet ? 82.0 : max(4, top - 16)) + controlInset
-            // Four gauge pills: a trailing row on phone, a stacked column on tablet.
+            // Three gauge pills: a trailing row on phone, a stacked column on tablet.
             gauges = .init(
-                x: tablet ? edge : w - edge - 234, y: gaugeTop,
-                width: tablet ? 58 : 234, height: tablet ? 91 : 18)
+                x: tablet ? edge : w - edge - 186, y: gaugeTop,
+                width: tablet ? 64 : 186, height: tablet ? 76 : 22)
             // Portrait tools belong to the lower control area. Picture crop,
             // aspect and FIT/FILL must not move their touch targets.
             assists = .init(
@@ -175,7 +175,7 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             lock = .init(
                 x: 18, y: cornerTop, width: button, height: button)
             gauges = .init(
-                x: 18, y: lock.maxY + 6, width: tablet ? 58 : 54, height: tablet ? 91 : 80)
+                x: 18, y: lock.maxY + 6, width: tablet ? 64 : 58, height: tablet ? 76 : 68)
             // Keep the full 44pt touch target inside the screen. A 35pt band
             // centred at 21.5pt put its accessibility bounds above the window,
             // causing automatic hit-point selection to miss the top buttons.
