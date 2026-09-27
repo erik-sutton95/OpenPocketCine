@@ -74,10 +74,6 @@ struct MultiviewTileChrome: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [.black.opacity(0.65), .clear, .clear, .black.opacity(0.72)],
-                startPoint: .top, endPoint: .bottom
-            ).allowsHitTesting(false)
             if condensed {
                 condensedChrome
             } else {

@@ -17,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -118,7 +117,6 @@ internal fun MultiviewTileChrome(
         val edge = if (narrow) 4.dp else 6.dp
         Row(
             Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent)))
                 .padding(start = edge, top = edge, end = if (narrow) 28.dp else 50.dp, bottom = edge),
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(if (narrow) 3.dp else 5.dp),
@@ -152,7 +150,6 @@ internal fun MultiviewTileChrome(
         }
         Column(
             Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = footerInset.dp)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f))))
                 .padding(edge),
         ) {
             if (!compact) {
@@ -177,8 +174,6 @@ internal fun MultiviewTileOverlay(
 ) {
     Box(Modifier.fillMaxSize()) {
         if (!clean && readoutsOverlay) {
-            Box(Modifier.fillMaxWidth().height(74.dp).align(Alignment.BottomCenter)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .70f)))))
         }
         if (!clean) MultiviewTileChrome(readouts, focused, compact, enabled, onOptions,
             footerInset = if (readoutsOverlay) 45f else 0f)
