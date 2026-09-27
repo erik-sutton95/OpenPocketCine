@@ -107,11 +107,12 @@
                                 .scrollBounceBehavior(.basedOnSize)
                                 .monitorScrollFade()
                             } else {
-                                // The host owns scrolling, e.g. fixed tab rails beside scrolled controls.
+                                // The host owns scrolling, e.g. fixed tab rails beside scrolled
+                                // controls; its top tabs sit directly under the header.
                                 content
                                     .frame(width: max(1, contentWidth - 28), alignment: .topLeading)
                                     .frame(maxHeight: .infinity, alignment: .top)
-                                    .padding(14)
+                                    .padding([.horizontal, .bottom], 14)
                             }
                             footer.padding(.horizontal, 14).padding(.bottom, 10)
                         }

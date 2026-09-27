@@ -255,7 +255,7 @@ class MultiviewTileChromeTest {
                                             origin.top + (panelY + panel.height) * density.density).roundOut(expectedPanel)
                                     }.testTag("multiview.settingsViewport")) {
                                         MultiviewCameraSettings(stage, 0, width, height,
-                                            MultiviewSafeArea(top = 24f, bottom = 20f), confirmRecording = true) {}
+                                            MultiviewSafeArea(top = 24f, bottom = 20f)) {}
                                     }
                                 }
                             }
@@ -263,14 +263,13 @@ class MultiviewTileChromeTest {
                     }
                 }
                 awaitNode("Camera settings")
-                awaitNode("Start recording")
                 awaitCondition { stage.tiles[0].controlsModel != null }
                 SystemClock.sleep(350) // Measure after the native reveal transition settles.
                 val panel = android.graphics.Rect(expectedPanel)
                 val screen = android.graphics.Rect(expectedViewport)
                 assertTrue(panel.left > screen.left && panel.right == screen.right, "Side panel must attach to the trailing edge")
                 assertTrue(panel.top >= screen.top && panel.bottom <= screen.bottom)
-                for (label in listOf("Close camera settings", "A · Camera 0", "B · Camera 1", "Start recording")) {
+                for (label in listOf("Close camera settings", "A · Camera 0", "B · Camera 1", "ISO")) {
                     val action = android.graphics.Rect().also { awaitNode(label).getBoundsInScreen(it) }
                     assertTrue(panel.contains(action), "$label $action must stay inside the side panel $panel")
                 }

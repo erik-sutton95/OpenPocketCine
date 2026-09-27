@@ -244,7 +244,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             }
         }
         if (cameraSettings) {
-            MultiviewCameraSettings(session, session.focusedIndex, maxWidth.value, maxHeight.value, safe, model.recordConfirmationEnabled) {
+            MultiviewCameraSettings(session, session.focusedIndex, maxWidth.value, maxHeight.value, safe) {
                 cameraSettings = false
             }
         }

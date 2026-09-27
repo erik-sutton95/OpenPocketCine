@@ -97,6 +97,7 @@ fun MonitorInspector(
     safeBottom: Float = 0f,
     hasNavigation: Boolean = true,
     close: (@Composable () -> Unit)? = null,
+    headerGap: androidx.compose.ui.unit.Dp = 8.dp,
     helpVisible: Boolean? = null,
     onToggleHelp: () -> Unit = {},
     navigation: @Composable (portrait: Boolean) -> Unit = {},
@@ -149,7 +150,7 @@ fun MonitorInspector(
                         ),
                 ) {
                     Row(
-                        Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, bottom = 8.dp),
+                        Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, bottom = headerGap),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(

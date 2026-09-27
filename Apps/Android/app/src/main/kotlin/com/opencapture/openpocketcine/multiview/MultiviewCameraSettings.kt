@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -26,7 +28,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,7 +52,6 @@ import com.opencapture.openpocketcine.CaptureLists
 import com.opencapture.openpocketcine.CaptureShutterPolicy
 import com.opencapture.openpocketcine.LiveControlSheet
 import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.LivePopupAction
 import com.opencapture.openpocketcine.LiveSheet
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
@@ -60,7 +60,6 @@ import com.opencapture.openpocketcine.feed.InspectorPreviewPipeline
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraModel
 import com.opencapture.openpocketcine.session.CameraStatus
-import kotlinx.coroutines.launch
 
 internal fun multiviewSettingsCategories(camera: CameraModel, status: CameraStatus): List<LiveSheet> = buildList {
     addAll(listOf(LiveSheet.ISO, LiveSheet.SHUTTER, LiveSheet.EXPO, LiveSheet.WB))
@@ -89,11 +88,8 @@ internal fun MultiviewCameraSettings(
     width: Float,
     height: Float,
     safe: MultiviewSafeArea,
-    confirmRecording: Boolean,
     onDismiss: () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
-    var confirmRecord by remember { mutableStateOf<Boolean?>(null) }
     val cameras = session.tiles.filter { it.camera != null }
     var selectedIndex by remember { mutableIntStateOf(initialIndex) }
     var selectedSheet by remember { mutableStateOf(LiveSheet.ISO) }
@@ -103,9 +99,6 @@ internal fun MultiviewCameraSettings(
     val cameraIdentity = tile?.camera?.id
     val endpoint = tile?.driver
     val recording = tile?.settings?.isRecording
-    LaunchedEffect(tile, cameraIdentity, tile?.recordingObservation?.first, tile?.recordingAvailable, session.closing) {
-        confirmRecord = null
-    }
     DisposableEffect(tile, cameraIdentity, endpoint, available, recording) {
         val controls = if (tile != null && available) tile.openControls { session.controlsAvailable(tile) } else null
         onDispose {
@@ -136,22 +129,8 @@ internal fun MultiviewCameraSettings(
                 OpcIcon(OpcIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
             }
         },
-        footer = {
-            if (ready && tile != null && controls != null) {
-                val note by controls.session.controlNote.collectAsState()
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    LivePopupAction(
-                        if (tile.recordingObservation?.first == true) "Stop recording" else "Start recording",
-                        enabled = tile.recordingAvailable && !tile.recordingBusy && !session.groupRecordingBusy && !session.closing,
-                    ) {
-                        if (confirmRecording) confirmRecord = tile.recordingObservation?.first == true
-                        else scope.launch { session.toggleRecording(tile) }
-                    }
-                    note?.let { Text(it, color = LiveDesign.amber, style = LiveType.text(11f), maxLines = 2) }
-                }
-            }
-        },
+        // Recording stays on Record all and each tile's options; camera tabs sit under the header.
+        headerGap = 0.dp,
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val cameraTabScroll = rememberScrollState()
@@ -179,7 +158,11 @@ internal fun MultiviewCameraSettings(
                         // Like the assist inspector: the live preview leads the scrolled controls.
                         Column(Modifier.fillMaxSize().monitorScrollFade(controlsScroll).verticalScroll(controlsScroll),
                             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            key(tile) { MultiviewSettingsPreview(tile) }
+                            // A compact 16:9 thumbnail keeps the selected controls unscrolled on large phones.
+                            key(tile) {
+                                MultiviewSettingsPreview(tile, Modifier.align(Alignment.CenterHorizontally)
+                                    .width(176.dp).height(99.dp))
+                            }
                             // Changing camera, category, recording or mode retires any in-progress native drum gesture.
                             key(controls, sheet, status.isRecording, status.shootingMode) {
                                 LiveControlSheet(
@@ -187,6 +170,9 @@ internal fun MultiviewCameraSettings(
                                     onDismiss = onDismiss, maxHeightDp = viewport.value, portrait = false, showsHeader = false,
                                 )
                             }
+                            // Compact error line; it takes space only while present.
+                            val note by controls.session.controlNote.collectAsState()
+                            note?.let { Text(it, color = LiveDesign.amber, style = LiveType.text(11f), maxLines = 2) }
                         }
                     }
                     BoxWithConstraints(Modifier.fillMaxHeight()) {
@@ -207,21 +193,11 @@ internal fun MultiviewCameraSettings(
             }
         }
     }
-    confirmRecord?.let { stopping ->
-        val target = tile ?: return@let
-        MultiviewRecordConfirmation(stopping, target.camera?.name.orEmpty(), onDismiss = { confirmRecord = null }) {
-            confirmRecord = null
-            if (target.recordingAvailable && target.recordingObservation?.first == stopping && !session.closing) {
-                scope.launch { session.toggleRecording(target) }
-            }
-        }
-    }
-
 }
 
 /** Live View's inspector image preview, fed by the selected tile's existing present tap. */
 @Composable
-private fun MultiviewSettingsPreview(tile: MultiviewSession.Tile) {
+private fun MultiviewSettingsPreview(tile: MultiviewSession.Tile, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val owner = remember(tile) { Any() }
@@ -252,5 +228,5 @@ private fun MultiviewSettingsPreview(tile: MultiviewSession.Tile) {
         }
     }
     SideEffect { InspectorPreviewPipeline.update(owner, tile.plan) }
-    MonitorImagePreview(image?.asImageBitmap(), "${tile.camera?.name ?: "Camera"} preview")
+    MonitorImagePreview(image?.asImageBitmap(), "${tile.camera?.name ?: "Camera"} preview", modifier)
 }

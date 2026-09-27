@@ -79,6 +79,10 @@ struct MultiviewCameraSettings: View {
                                 .accessibilityLabel("\(tile.camera?.name ?? "Camera") preview")
                                 .environment(model)
                                 .id(ObjectIdentifier(model))
+                                // A compact 16:9 thumbnail (about 99 pt tall) keeps the
+                                // selected controls unscrolled on large phones.
+                                .frame(maxWidth: 176)
+                                .frame(maxWidth: .infinity)
                                 CapturePickerPanel(
                                     sheet: category,
                                     isPresented: { tile.controlsModel === model && selectedID == tile.id },
@@ -89,6 +93,7 @@ struct MultiviewCameraSettings: View {
                                 .fixedSize(horizontal: false, vertical: true)
                                 .environment(model)
                                 .id(PanelIdentity(model: ObjectIdentifier(model), category: category))
+                                notes(tile: tile, model: model)
                             }
                         }
                         .scrollBounceBehavior(.basedOnSize)
@@ -124,9 +129,8 @@ struct MultiviewCameraSettings: View {
                 }
             }
         } footer: {
-            if let tile = selected, let model = tile.controlsModel {
-                footer(tile: tile, model: model)
-            }
+            // Recording stays on Record all and each tile's options.
+            EmptyView()
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("multiview.settings.panel")
@@ -178,35 +182,19 @@ struct MultiviewCameraSettings: View {
         )
     }
 
-    private func footer(tile: MultiviewSession.Tile, model: AppModel) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                MultiviewRecordAction(
-                    session: session, tile: tile,
-                    confirmationEnabled: model.recordConfirmationEnabled
-                ) {
-                    Text(tile.recordingActive == true ? "Stop recording" : "Start recording")
-                        .frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("multiview.settings.record")
-                .disabled(
-                    !tile.recordingAvailable || tile.recordingBusy
-                        || session.groupRecordingBusy || session.closing)
-                Spacer(minLength: 8)
-                if !session.controlsAvailable(for: tile) {
-                    Text("Controls unavailable").foregroundStyle(MonitorTheme.muted)
-                } else if !categoryAvailable(category, model: model) {
-                    Text("Locked while recording").foregroundStyle(MonitorTheme.muted)
-                }
-            }
-            .font(MonitorTheme.font(11)).padding(.vertical, 2)
-            if let note = model.session.controlNote {
-                Text(note).font(MonitorTheme.font(11)).foregroundStyle(.orange)
-                    .accessibilityIdentifier("multiview.settings.error")
-            }
-            if let note = tile.recordingNote, note != "Recording", note != "Recording stopped" {
-                Text(note).font(MonitorTheme.font(11)).foregroundStyle(.orange)
-            }
+    /// Compact status lines; they take space only while present.
+    @ViewBuilder
+    private func notes(tile: MultiviewSession.Tile, model: AppModel) -> some View {
+        if !session.controlsAvailable(for: tile) {
+            Text("Controls unavailable").font(MonitorTheme.font(11))
+                .foregroundStyle(MonitorTheme.muted)
+        } else if !categoryAvailable(category, model: model) {
+            Text("Locked while recording").font(MonitorTheme.font(11))
+                .foregroundStyle(MonitorTheme.muted)
+        }
+        if let note = model.session.controlNote {
+            Text(note).font(MonitorTheme.font(11)).foregroundStyle(.orange)
+                .accessibilityIdentifier("multiview.settings.error")
         }
     }
 
