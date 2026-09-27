@@ -393,7 +393,7 @@ internal fun MultiviewAssistPalette(
                     MultiviewTool.LUT -> OpcIcon.PALETTE
                     MultiviewTool.FIT -> if (session.fill) OpcIcon.MINIMIZE else OpcIcon.MAXIMIZE
                     MultiviewTool.LAYOUT -> if (session.layout == MultiviewLayout.GRID) OpcIcon.LAYOUT_LIST else OpcIcon.LAYOUT_GRID
-                    MultiviewTool.SETTINGS -> OpcIcon.SETTINGS
+                    MultiviewTool.SETTINGS -> OpcIcon.SLIDERS_HORIZONTAL
                 }
                 OpcIcon(icon, null, iconModifier, tint)
             },

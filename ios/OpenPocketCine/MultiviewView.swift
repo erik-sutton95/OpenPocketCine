@@ -329,7 +329,7 @@ struct MultiviewView: View {
             case "LUT": MonitorAssistIcon.lut
             case "FIT": session.feedAspect == .fill ? OpcIcon.minimize : OpcIcon.maximize
             case "LAYOUT": session.layout == .grid ? OpcIcon.layoutList : OpcIcon.layoutGrid
-            default: OpcIcon.settings
+            default: OpcIcon.slidersHorizontal  // camera settings
             }
         }
         .frame(width: frame.width, height: frame.height)
