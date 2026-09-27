@@ -94,9 +94,9 @@ class MultiviewLayoutPolicyTest {
         val grid = MultiviewPresentationLayout.compute(393f, 852f, safe, GRID, 0)
         val live = MonitorLayoutPolicy.fieldMonitor(393f, 852f, safe.top, safe.leading, safe.bottom, safe.trailing)
         assertTrue(grid.tiles.all { it.x == 15f && it.maxX == 393f - 15f })
-        // Live View's Settings column, anchored at the bottom row; values stop short of it.
-        assertEquals(live.settings.x + live.settings.width / 2, grid.assists.x + grid.assists.width / 2, 0.01f)
-        assertEquals(live.settings.maxY, grid.assists.maxY, 0.01f)
+        // DISP mirrored across Record, anchored at the bottom row; values stop short of it.
+        assertEquals(grid.record.x - grid.display.maxX, grid.assists.x - grid.record.maxX, 0.01f)
+        assertEquals(live.display.maxY, grid.assists.maxY, 0.01f)
         assertEquals(grid.assists.x - 6f, grid.readouts.maxX, 0.01f)
         assertEquals(grid.sessionControls.maxY + 10f, grid.tiles[0].y)
         assertEquals(grid.readouts.y - 12f, grid.tiles[3].maxY, 0.001f)

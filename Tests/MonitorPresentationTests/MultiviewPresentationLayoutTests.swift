@@ -139,9 +139,9 @@ struct MultiviewPresentationLayoutTests {
         #expect(grid.tiles[0].y == grid.sessionControls.maxY + 10)
         #expect(abs(grid.tiles[3].maxY - (grid.readouts.y - 12)) < 0.001)
         #expect(grid.tiles[0].height == grid.tiles[3].height)
-        // Live View's Settings column, anchored at the bottom row; values stop short of it.
-        #expect(grid.assists.midX == live.settings.midX)
-        #expect(grid.assists.maxY == live.settings.maxY)
+        // DISP mirrored across Record, anchored at the bottom row; values stop short of it.
+        #expect(grid.assists.x - grid.record.maxX == grid.record.x - grid.display.maxX)
+        #expect(grid.assists.maxY == live.display.maxY)
         #expect(grid.readouts.maxX == grid.assists.x - 6)
         #expect(!grid.assistsHorizontal)
         #expect(abs(grid.tiles[0].width / grid.tiles[0].height - 16 / 9) > 0.1)

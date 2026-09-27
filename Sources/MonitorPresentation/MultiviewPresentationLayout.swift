@@ -86,10 +86,10 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             let tileWidth = max(1, toolX - 6 - 15)
             let gap = 9.0
             if arrangement == .grid {
-                // Full-width feeds; the collapsible palette sits in the bottom-right
-                // corner (Live View's Settings column) and grows upward over them.
-                let paletteBottom = live.settings.maxY
-                let paletteX = live.settings.midX - toolWidth / 2
+                // Full-width feeds; the collapsible palette mirrors DISP across
+                // Record (same gap, same row bottom) and grows upward over them.
+                let paletteBottom = display.maxY
+                let paletteX = record.maxX + (record.x - display.maxX)
                 readouts = .init(
                     x: 18, y: max(stageTop, record.y - 58),
                     width: max(1, paletteX - 6 - 18), height: 37)

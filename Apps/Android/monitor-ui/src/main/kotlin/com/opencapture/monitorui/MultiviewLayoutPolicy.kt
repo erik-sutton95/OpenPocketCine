@@ -80,10 +80,10 @@ data class MultiviewPresentationLayout(
             ) else live.display
             val cutout = max(safeLeading, safeTrailing)
             val toolX = w - 14 - (live.settings.width + toolbarWidth) / 2
-            // Portrait Grid: full-width feeds; the collapsible palette sits in the bottom-right
-            // corner (Live View's Settings column) and grows upward over them.
+            // Portrait Grid: full-width feeds; the collapsible palette mirrors DISP across Record
+            // (same gap, same row bottom) and grows upward over them.
             val portraitGrid = portrait && arrangement == MultiviewArrangement.GRID
-            val cornerPaletteX = live.settings.x + (live.settings.width - toolbarWidth) / 2.0
+            val cornerPaletteX = live.record.maxX + (live.record.x - live.display.maxX).toDouble()
             val stageTop = when {
                 portrait -> close.maxY + 10.0
                 else -> close.y.toDouble()
@@ -175,13 +175,13 @@ data class MultiviewPresentationLayout(
                 readouts = Rect(readoutsLeft, max(stageTop, stageTop + mainHeight - 45),
                     maxOf(0.0, mainLeft + mainWidth - readoutsLeft), 37.0)
             }
-            val paletteHeight = max(1.0, min(toolbarHeight, live.settings.maxY - stageTop))
+            val paletteHeight = max(1.0, min(toolbarHeight, live.display.maxY - stageTop))
             val assists = if (!portrait) live.assists.let {
                 Rect(it.x.toDouble(), it.y.toDouble(), it.width.toDouble(), it.height.toDouble())
             } else if (columnBottom != null) {
                 // Portrait Center stage: a plain column spanning the secondary feeds exactly.
                 Rect(toolX, toolbarTop, toolbarWidth, max(1.0, columnBottom - toolbarTop))
-            } else Rect(cornerPaletteX, live.settings.maxY - paletteHeight, toolbarWidth, paletteHeight)
+            } else Rect(cornerPaletteX, live.display.maxY - paletteHeight, toolbarWidth, paletteHeight)
             return MultiviewPresentationLayout(
                 tiles = tiles.mapIndexed { index, rect ->
                     if (index in secondaryIndices) rect.unclamped() else rect.clamped(w, h)

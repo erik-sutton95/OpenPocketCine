@@ -705,7 +705,7 @@ Exit, Live View's horizontal palette floating over the lower-left feed, the
 selected camera's values inside its tile); only DISP keeps Live View's slot
 above Record. Center stage reserves the far right for the scrolling feeds.
 Portrait Grid runs the feeds full width with the collapsible palette in the
-bottom-right corner (Live View's Settings column), growing up over the feeds;
+bottom row, mirroring DISP's gap on the right of Record, growing up over the feeds;
 portrait Center stage uses the fixed tool column described above.
 These approved Multiview placements are explicit exceptions to Live View's
 Settings position; native Record/DISP geometry remains shared.
