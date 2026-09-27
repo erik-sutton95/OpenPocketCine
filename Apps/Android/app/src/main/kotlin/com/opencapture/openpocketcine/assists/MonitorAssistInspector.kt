@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
-import androidx.compose.foundation.background
+import com.opencapture.monitorui.MonitorTab
+import com.opencapture.monitorui.monitorTabStrip
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,11 +10,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,14 +24,13 @@ import androidx.compose.runtime.setValue
 import com.opencapture.monitorui.LocalMonitorInspectorHelp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opencapture.monitorui.MonitorInspector
 import com.opencapture.openpocketcine.AppModel
+import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
-import com.opencapture.openpocketcine.chromeClickable
 
 /** Assist options ride the shared inspector frame; preview work stays in AssistOptionsPopup. */
 @Composable
@@ -61,13 +59,11 @@ fun MonitorAssistInspector(
         safeBottom = safeBottom,
         navigation = { portrait ->
             if (portrait) {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).monitorTabStrip()) {
                     LiveAssistTool.settingsCases.forEach { InspectorTab(it, tool, state, true) }
                 }
             } else {
-                Column(Modifier.fillMaxHeight().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(Modifier.fillMaxHeight().verticalScroll(rememberScrollState()).monitorTabStrip()) {
                     LiveAssistTool.settingsCases.forEach { InspectorTab(it, tool, state, false) }
                 }
             }
@@ -90,16 +86,16 @@ fun MonitorAssistInspector(
 @Composable
 private fun InspectorTab(tool: LiveAssistTool, selected: LiveAssistTool, state: LiveAssistState, portrait: Boolean) {
     val active = tool == selected
+    val haptics = LocalOperatorHaptics.current
     val tint = if (active) LiveDesign.accent else LiveDesign.muted
-    Row(
-        Modifier.then(if (portrait) Modifier.width(94.dp) else Modifier.fillMaxWidth()).height(44.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (active) LiveDesign.accentDim else androidx.compose.ui.graphics.Color.Transparent)
-            .chromeClickable { state.configureTool = tool }.padding(horizontal = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        AssistToolGlyph(tool, tint, Modifier.size(15.dp))
-        Text(tool.chipLabel, color = tint, style = LiveType.ui(9f, FontWeight.SemiBold), maxLines = 1)
+    MonitorTab(active, { haptics.selection(); state.configureTool = tool },
+        Modifier.then(if (portrait) Modifier.width(94.dp) else Modifier.fillMaxWidth()).height(44.dp),
+        vertical = !portrait, separator = tool != LiveAssistTool.settingsCases.first(),
+        accessibilityLabel = tool.chipLabel) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AssistToolGlyph(tool, tint, Modifier.size(15.dp))
+            Text(tool.chipLabel, color = tint, style = LiveType.ui(9f, FontWeight.SemiBold), maxLines = 1)
+        }
     }
 }

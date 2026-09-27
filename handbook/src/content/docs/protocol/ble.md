@@ -54,6 +54,14 @@ Send `SetPairingPIN` (`0x07/0x45`), payload `packString(identifier) + packString
 | `00 01` | already paired |
 | `00 02` | approve on camera screen |
 
+A Pocket 4 Pro and Nano returned `00 06` when Multiview paired again immediately
+after closing their station previews (2026-09-27). Its firmware meaning is not
+established. Multiview does not accept it as approval: cleanup closes that BLE
+session and retries at most twice, three seconds apart, before reporting a
+failure. On the attached iPhone both cameras then paired and accepted AP return
+after one internal retry, within six seconds of the initial refusal. Only a
+normal pairing approval permits the AP-return command.
+
 First-time approval arrives as a `0x07/0x46` **request** — ACK it with a response frame.
 
 Commands are in the [catalog](../commands/). Frame format is [DUML](../duml-frame/).

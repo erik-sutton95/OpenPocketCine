@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,11 +27,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
+import com.opencapture.openpocketcine.LivePopupAction
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.VideoResolution
+import com.opencapture.openpocketcine.session.timecodeClock
+import com.opencapture.openpocketcine.monitor.MonitorCameraBatteryGauge
 
 /** Display values come from the existing throttled tile status; no telemetry polling. */
 internal data class MultiviewTileReadouts(
@@ -41,6 +43,7 @@ internal data class MultiviewTileReadouts(
     val model: String,
     val timecode: String,
     val battery: String,
+    val batteryPercent: Int,
     val storage: String,
     val recording: String,
     val isRecording: Boolean,
@@ -70,8 +73,9 @@ internal fun multiviewTileReadouts(
     val color = if (settings.colorMode < 0) "—" else CameraCommands.colorLabel(settings.colorMode, colorFamily)
     return MultiviewTileReadouts(
         letter = ('A' + index.coerceIn(0, 3)).toString(), name = name, model = model,
-        timecode = timecode?.takeIf(String::isNotBlank) ?: "—",
+        timecode = timecodeClock(timecode) ?: "—",
         battery = if (settings.batteryPercent in 0..100) "${settings.batteryPercent}%" else "—",
+        batteryPercent = settings.batteryPercent,
         storage = if (total > 0 && free >= 0) "${free / 1024} GB" else "—",
         recording = recording, isRecording = recordingObservation == true,
         format = "$resolution · $fps · $color",
@@ -153,8 +157,7 @@ internal fun MultiviewTileChrome(
                 Text(readouts.format, color = Color.White.copy(alpha = 0.75f), style = LiveType.text(small), maxLines = 1)
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(readouts.battery, color = Color.White, style = LiveType.mono(small), maxLines = 1,
-                    modifier = Modifier.semantics { contentDescription = "Battery ${readouts.battery}" })
+                MonitorCameraBatteryGauge(readouts.batteryPercent)
                 Text(readouts.storage, color = Color.White, style = LiveType.mono(small), maxLines = 1,
                     modifier = Modifier.weight(1f).semantics { contentDescription = "Storage ${readouts.storage}" })
                 Text(readouts.recording, color = if (readouts.isRecording) LiveDesign.rec else Color.White,
@@ -204,23 +207,21 @@ internal fun MultiviewCameraMenu(
             Text(values.name, style = LiveType.text(14f, FontWeight.SemiBold))
             Text(values.model, style = LiveType.text(12f))
             Text("TC ${values.timecode}", style = LiveType.mono(12f))
-            Text("Battery ${values.battery} · Storage ${values.storage}", style = LiveType.text(12f))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                MonitorCameraBatteryGauge(values.batteryPercent)
+                Text(values.storage, style = LiveType.text(12f))
+            }
             Text("${values.format} · ${values.recording}", style = LiveType.text(12f))
         }
     }
-    DropdownMenuItem(text = { Text("Open Live View") }, enabled = canOpen,
-        onClick = { onAction(MultiviewCameraAction.LIVE_VIEW) })
-    DropdownMenuItem(text = { Text(if (recording) "Stop recording" else "Start recording") }, enabled = canRecord,
-        onClick = { onAction(MultiviewCameraAction.RECORD) })
-    DropdownMenuItem(text = { Text(if (lutEnabled) "Disable Auto LUT" else "Enable Auto LUT") },
-        onClick = { onAction(MultiviewCameraAction.LUT) })
-    DropdownMenuItem(text = { Text("Reconnect") }, enabled = canReconnect,
-        onClick = { onAction(MultiviewCameraAction.RECONNECT) })
-    experimentalRetryEnabled?.let { enabled ->
-        DropdownMenuItem(text = { Text("Try experimental shared Wi-Fi") }, enabled = enabled,
-            onClick = { onAction(MultiviewCameraAction.EXPERIMENTAL) })
+    LivePopupAction("Open Live View", enabled = canOpen) { onAction(MultiviewCameraAction.LIVE_VIEW) }
+    LivePopupAction(if (recording) "Stop recording" else "Start recording", enabled = canRecord) {
+        onAction(MultiviewCameraAction.RECORD)
     }
-    DropdownMenuItem(text = { Text("Remove camera", color = LiveDesign.rec) }, enabled = canRemove,
-        modifier = Modifier.semantics { contentDescription = "Remove $cameraName" },
-        onClick = { onAction(MultiviewCameraAction.REMOVE) })
+    LivePopupAction(if (lutEnabled) "Disable Auto LUT" else "Enable Auto LUT") { onAction(MultiviewCameraAction.LUT) }
+    LivePopupAction("Reconnect", enabled = canReconnect) { onAction(MultiviewCameraAction.RECONNECT) }
+    experimentalRetryEnabled?.let { enabled ->
+        LivePopupAction("Try experimental shared Wi-Fi", enabled = enabled) { onAction(MultiviewCameraAction.EXPERIMENTAL) }
+    }
+    LivePopupAction("Remove camera", enabled = canRemove, destructive = true) { onAction(MultiviewCameraAction.REMOVE) }
 }

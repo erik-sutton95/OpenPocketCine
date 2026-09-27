@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.monitorui.MonitorTab
+import com.opencapture.monitorui.monitorTabStrip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -509,12 +511,17 @@ private fun NdOptions(state: LiveAssistState) {
 @Composable
 private fun GuidesOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    SettingsSegmented(
-        options = GuideFamily.entries.map { it.label },
-        selected = state.guideFamily.label,
-    ) {
-        haptics.selection()
-        state.updateGuideFamily(GuideFamily.fromPersisted(it))
+    Row(Modifier.fillMaxWidth().monitorTabStrip()) {
+        GuideFamily.entries.forEachIndexed { index, family ->
+            val active = state.guideFamily == family
+            MonitorTab(active, {
+                haptics.selection()
+                state.updateGuideFamily(family)
+            }, Modifier.weight(1f), separator = index > 0, accessibilityLabel = family.label) {
+                Text(family.label, color = if (active) LiveDesign.accent else LiveDesign.muted,
+                    style = LiveType.ui(13f, FontWeight.SemiBold), maxLines = 1)
+            }
+        }
     }
     Spacer(Modifier.height(10.dp))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

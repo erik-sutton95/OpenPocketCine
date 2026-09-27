@@ -58,15 +58,14 @@ struct LiveGimbalSheetHost: View {
             EmptyView()
         } content: {
             VStack(alignment: .leading, spacing: 14) {
-                MonitorSegmentedControl(
+                MonitorCaptureTabs(
                     options: GimbalSettingsTab.allCases,
-                    selection: $tab,
-                    title: { $0.rawValue },
-                    onSelectionFeedback: {
-                        OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
-                    }
-                )
-                .environment(\.monitorSegmentedAppearance, .inspector)
+                    selection: tab, title: { $0.rawValue }
+                ) { next in
+                    guard next != tab else { return }
+                    OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
+                    tab = next
+                }
 
                 MonitorInspectorCard {
                     switch tab {

@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.MonitorTab
+import com.opencapture.monitorui.monitorTabStrip
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -518,10 +520,11 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                     } else {
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
                         ) {
-                            OperatorSettingsTab.entries.forEach { tab ->
-                                SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.fillMaxWidth())
+                            Column(Modifier.fillMaxWidth().monitorTabStrip()) {
+                                OperatorSettingsTab.entries.forEach { tab ->
+                                    SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.fillMaxWidth(), vertical = true)
+                                }
                             }
                         }
                         SettingsSessionStatus(isLive, phaseLabel, Modifier.fillMaxWidth())
@@ -671,12 +674,10 @@ private fun SettingsTabRail(model: AppModel, hapticsEnabled: Boolean, view: View
         Modifier
             .width(146.dp)
             .fillMaxHeight()
-            .panelGlass(ChromeShape)
-            .padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+            .monitorTabStrip(),
     ) {
         OperatorSettingsTab.entries.forEach { tab ->
-            SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.fillMaxWidth())
+            SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.fillMaxWidth(), vertical = true)
         }
     }
 }
@@ -694,8 +695,8 @@ private fun SettingsTabStrip(
             .fillMaxWidth()
             .height(44.dp)
             .horizontalScroll(scroll)
+            .monitorTabStrip()
             .testTag("monitor.settings.tabs"),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OperatorSettingsTab.entries.forEach { tab ->
@@ -711,50 +712,22 @@ private fun SettingsTabButton(
     hapticsEnabled: Boolean,
     view: View,
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
 ) {
     val selected = model.operatorSettingsTab == tab
     val bringIntoView = remember { BringIntoViewRequester() }
     LaunchedEffect(selected) { if (selected) bringIntoView.bringIntoView() }
-    Row(
-        modifier
-            .height(44.dp)
-            .background(if (selected) Color.White.copy(alpha = .08f) else Color.Transparent, RoundedCornerShape(9.dp))
-            .bringIntoViewRequester(bringIntoView)
-            .testTag("monitor.settings.tab.${tab.title}")
-            .semantics {
-                contentDescription = tab.title
-                this.selected = selected
-            }
-            .settingsClickable(role = Role.Tab) {
-                if (tab != model.operatorSettingsTab) operatorHaptic(view, hapticsEnabled)
-                model.operatorSettingsTab = tab
-            }
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
-    ) {
-        Box(
-            Modifier
-                .width(4.dp)
-                .height(24.dp)
-                .background(
-                    if (selected) LiveDesign.accent else LiveDesign.accent.copy(alpha = 0f),
-                    RoundedCornerShape(3.dp),
-                ),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                tab.title,
-                style = LiveType.ui(12.5f, FontWeight.SemiBold),
-                color = if (selected) LiveDesign.text else LiveDesign.muted,
-                maxLines = 1,
-            )
-            Text(
-                tab.rail,
-                style = LiveType.ui(10f),
-                color = LiveDesign.faint,
-                maxLines = 1,
-            )
+    MonitorTab(selected, onClick = {
+        if (tab != model.operatorSettingsTab) operatorHaptic(view, hapticsEnabled)
+        model.operatorSettingsTab = tab
+    }, modifier = modifier.height(44.dp).bringIntoViewRequester(bringIntoView)
+        .testTag("monitor.settings.tab.${tab.title}"), vertical = vertical,
+        separator = tab != OperatorSettingsTab.entries.first(), accessibilityLabel = tab.title) {
+        Column(Modifier.then(if (vertical) Modifier.fillMaxWidth() else Modifier),
+            verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(tab.title, style = LiveType.ui(12.5f, FontWeight.SemiBold),
+                color = if (selected) LiveDesign.accent else LiveDesign.muted, maxLines = 1)
+            Text(tab.rail, style = LiveType.ui(10f), color = LiveDesign.faint, maxLines = 1)
         }
     }
 }

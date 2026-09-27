@@ -359,10 +359,18 @@ Sharing is unavailable on Android. Experimental **Multiview** opens from the gri
 button in the **Your cameras** header and matches the iPhone flow: choose Local
 Wi-Fi or this phone's hotspot, add up to four cameras, and double-tap a live tile
 for full Live View. Grid uses four full-feed portrait rows or two landscape
-columns. Portrait keeps the toolbar on the left; Center stage's toolbar starts
+columns. Portrait keeps the toolbar on the right; Center stage's toolbar starts
 below the wide main feed. Camera details and options sit inside each feed.
-Landscape rotation moves only the toolbar opposite the cutout, and DISP/Record
-stay at Android Live View's normal positions. The
+In landscape the toolbar aligns with the right controls, or moves left for a
+right-side cutout. The landscape feeds start level with the top of Exit and
+Wi-Fi; current camera readouts sit below the feeds. Scroll the rail on short screens.
+DISP/Record stay at Android Live View's normal positions. Newly added cameras start with
+Auto LUT on. Tile timecode uses HH:MM:SS and batteries reuse Live View's camera
+gauge. The compact **…** menu stays over the stage. Exit is at the top-left and
+the Wi-Fi icon sits at the top-right with Live View's Settings styling. **Camera settings** in the
+toolbar opens a floating popup with a tab for each connected
+camera and the same setting controls as Live View. Camera, recording and
+settings tabs share adjoining edges and an accent selection line. The
 [Multiview guide](https://openpocketcine.app/docs/guides/multiview-prototype/) describes setup,
 Android differences and validation limits.
 Platform differences, including Frame.io and MetalFX, are listed in

@@ -41,12 +41,18 @@ fun MonitorTelemetry(
         TelemetryGauge(OpcIcon.SMARTPHONE, Color(0xFF3FE0C7), phonePercent / 100f,
             if (phonePercent >= 0) "Phone battery $phonePercent percent" else "Phone battery unavailable",
             horizontal, phonePercent.takeIf { it in 0..100 }?.toString() ?: "—")
-        TelemetryGauge(OpcIcon.CAMERA, LiveDesign.amber, cameraPercent / 100f,
-            if (cameraPercent in 0..100) "Camera battery $cameraPercent percent" else "Camera battery unavailable",
-            horizontal, cameraPercent.takeIf { it in 0..100 }?.let { "$it%" } ?: "—")
+        MonitorCameraBatteryGauge(cameraPercent, stacked = horizontal)
     }
     if (horizontal) Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) { gauges() }
     else Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) { gauges() }
+}
+
+/** Live View and Multiview share the camera glyph, amber outline and percentage. */
+@Composable
+fun MonitorCameraBatteryGauge(percent: Int, stacked: Boolean = false) {
+    TelemetryGauge(OpcIcon.CAMERA, LiveDesign.amber, if (percent in 0..100) percent / 100f else 0f,
+        if (percent in 0..100) "Camera battery $percent percent" else "Camera battery unavailable",
+        stacked, percent.takeIf { it in 0..100 }?.let { "$it%" } ?: "—")
 }
 
 @Composable

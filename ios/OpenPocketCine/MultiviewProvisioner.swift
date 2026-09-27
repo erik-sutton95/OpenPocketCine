@@ -92,11 +92,7 @@ import OpenPocketViewCore
             try Task.checkCancellation()
             guard !closed else { throw CancellationError() }
             if let response = replies.removeValue(forKey: pair.seq) {
-                if response.payload == [0, 1] {
-                    approved = true
-                } else if response.payload != [0, 2] {
-                    throw MultiviewSession.Failure.rejected
-                }
+                approved = try Self.acceptsPairingReply(response, sequence: pair.seq)
             }
             if !approved { try await Task.sleep(for: .milliseconds(100)) }
         }
@@ -109,6 +105,20 @@ import OpenPocketViewCore
             }
         }
     }
+    /// A previous network session can answer `00 06` at cleanup. It is not
+    /// approval: close that BLE link and retry pairing before sending an AP SET.
+    static func acceptsPairingReply(_ response: Duml.Frame, sequence: UInt16) throws -> Bool {
+        guard response.seq == sequence, response.cmdSet == 7, response.cmdId == 0x45,
+            response.flags & 128 != 0
+        else { return false }
+        switch response.payload {
+        case [0, 1]: return true
+        case [0, 2]: return false
+        case [0, 6]: throw MultiviewSession.Failure.pairingDeferred
+        default: throw MultiviewSession.Failure.rejected
+        }
+    }
+
     /// Closes and returns once iOS reports the Bluetooth link down, so the next connect to
     /// this camera from another link is not dropped with it.
     func closeAndWait() async {

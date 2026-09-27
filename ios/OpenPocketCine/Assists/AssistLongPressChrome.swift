@@ -124,10 +124,7 @@ struct AssistLongPressOverlay: View {
             onClose: dismiss
         ) {
             ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
-                let axis =
-                    portrait
-                    ? AnyLayout(HStackLayout(spacing: 3)) : AnyLayout(VStackLayout(spacing: 3))
-                axis {
+                MonitorTabStrip(vertical: !portrait) {
                     MonitorSnapshotRows(tools) { item in
                         Button {
                             assist.configureTool = item
@@ -140,13 +137,10 @@ struct AssistLongPressOverlay: View {
                                 item == tool ? MonitorTheme.accent : MonitorTheme.muted
                             )
                             .frame(width: portrait ? 88 : 96, height: 44)
-                            .background(
-                                item == tool ? MonitorTheme.accent.opacity(0.12) : .clear,
-                                in: RoundedRectangle(cornerRadius: 9)
-                            )
-                            .contentShape(Rectangle())
+                            .monitorTabSurface(
+                                selected: item == tool, separator: item != tools.first)
                         }
-                        .buttonStyle(MonitorButtonStyle()).accessibilityLabel(item.title)
+                        .buttonStyle(MonitorTabButtonStyle()).accessibilityLabel(item.title)
                         .accessibilityAddTraits(item == tool ? .isSelected : [])
                     }
                 }.padding(.horizontal, 6)

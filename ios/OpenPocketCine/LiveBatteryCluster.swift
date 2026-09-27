@@ -50,7 +50,7 @@ struct LiveBatteryCluster: View {
 }
 
 /// One compact gauge row: device icon beside a battery-shaped outline with the number inside.
-private struct LiveBatteryRow: View {
+struct LiveBatteryRow: View {
     let percent: Int
     let deviceIcon: OpcIcon
     var isCharging: Bool
@@ -91,13 +91,13 @@ private struct LiveBatteryRow: View {
     }
 
     private var readout: String {
-        percent >= 0 ? "\(percent)" : "—"
+        (0...100).contains(percent) ? "\(percent)" : "—"
     }
 
     /// OpenZCine `CameraBatteryGauge.Urgency` on a 0–100 percent (ceil(p/20) bars):
     /// 3+ bars (≥41) nominal green, 2 bars (21–40) warning yellow, 1 bar (≤20) red.
     private var batteryTint: Color {
-        if percent < 0 { return LiveDesign.faint }
+        if !(0...100).contains(percent) { return LiveDesign.faint }
         if percent <= 20 { return .red }
         if percent <= 40 { return .yellow }
         return LiveDesign.good

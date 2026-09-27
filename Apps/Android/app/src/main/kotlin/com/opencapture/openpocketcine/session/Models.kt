@@ -378,6 +378,9 @@ data class CameraStatus(
     val videoFormat: VideoFormat?
         get() = VideoFormat.parse(resolutionCode, fpsIndex)
 
+    /** Display-only clock; the raw timecode retains its frame field for protocol/state. */
+    val timecodeClock: String? get() = timecodeClock(timecode)
+
     val wbLabel: String
         get() =
             when {
@@ -807,4 +810,10 @@ object DumlCodec {
         }
         return out
     }
+}
+
+/** Shared by the single-camera and Multiview readouts; never rewrites decoded status. */
+fun timecodeClock(value: String?): String? = value?.takeIf { it.isNotBlank() }?.let {
+    val parts = it.split(':')
+    if (parts.size >= 4) parts.take(3).joinToString(":") else it
 }

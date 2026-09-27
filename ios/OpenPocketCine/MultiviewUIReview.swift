@@ -50,7 +50,10 @@
                 tile.status = "Live · Video mode"
                 tile.settings.iso = [400, 800, 200, 1600][index]
                 tile.settings.shutterDenom = 50
-                tile.settings.whiteBalance = .custom(kelvin: 5600, tint: 0)
+                tile.settings.shootingMode = Int(ShootingMode.video.rawValue)
+            tile.settings.whiteBalance = .custom(kelvin: 5600, tint: 0)
+            tile.settings.whiteBalanceKelvin = 5600
+            tile.settings.whiteBalanceTint = 0
                 tile.settings.focusMode = index == 2 ? nil : .continuous
                 tile.settings.timecode = index == 2 ? nil : "14:32:08:12"
                 tile.settings.batteryPercent = [87, 72, 64, 91][index]
@@ -61,6 +64,7 @@
                 tile.settings.colorMode = index == 2 ? .dLogM : .dLog2
                 tile.recordingObservation = (index == 0, Date())
                 tile.settings.recordElapsedSec = index == 0 ? 24 : 0
+                tile.latestSettings = tile.settings
                 // No driver or control host: hardware actions stay unavailable.
                 tile.recordingAvailable = false
             }

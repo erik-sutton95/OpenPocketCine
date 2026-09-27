@@ -22,6 +22,7 @@ import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.GimbalStickMapping
 import com.opencapture.openpocketcine.session.HevcDecoder
 import com.opencapture.openpocketcine.session.LiveViewEnablePolicy
+import com.opencapture.openpocketcine.session.MultiviewControlLease
 import com.opencapture.openpocketcine.session.StatusExtras
 import com.opencapture.openpocketcine.session.interruptibleDatalinkOpen
 import java.util.UUID
@@ -117,8 +118,31 @@ class MultiviewSession(
         val id: String = UUID.randomUUID().toString()
         val decoder = HevcDecoder()
         var liveModel by mutableStateOf<AppModel?>(null)
+        /** Settings use their own command model, never the tile's presentation owner. */
+        var controlsModel by mutableStateOf<AppModel?>(null)
+            private set
+        fun closeControls() {
+            controlsModel?.close()
+            controlsModel = null
+        }
+        fun openControls(available: () -> Boolean): AppModel? {
+            closeControls()
+            val camera = camera ?: return null
+            val endpoint = driver ?: return null
+            val recording = latestSettings.isRecording
+            val lease = MultiviewControlLease(
+                isCurrent = { this.camera?.id == camera.id && driver === endpoint && latestSettings.isRecording == recording && available() },
+                onSet = { lastCommandAt = it },
+            )
+            if (!lease.allows()) return null
+            return AppModel(app, borrowing = decoder, controlLease = lease).also {
+                it.session.updateMultiview(camera, endpoint, latestSettings)
+                controlsModel = it
+            }
+        }
         var driver: DatalinkDriver? = null
             set(value) {
+                if (field !== value) closeControls()
                 field = value
                 liveModel?.session?.updateMultiview(camera, value, latestSettings)
             }
@@ -143,7 +167,7 @@ class MultiviewSession(
         var poseViewFlip by mutableStateOf(false)
         var latestSettings = CameraStatus()
         private var settingsPublishedAt = 0L
-        var lutEnabled by mutableStateOf(false)
+        var lutEnabled by mutableStateOf(true)
         internal var plan by mutableStateOf(FeedEffectsRenderPlan.IDENTITY)
         var lutCaption by mutableStateOf("Auto LUT")
         var hasPicture by mutableStateOf(false)
@@ -167,7 +191,7 @@ class MultiviewSession(
             get() {
                 val cam = camera ?: return null
                 if (cam.model.family == "nano") return null
-                return settings.timecode?.takeIf { it.isNotEmpty() }
+                return settings.timecodeClock
             }
 
         fun updateSettings(frame: DumlFrame) {
@@ -232,7 +256,7 @@ class MultiviewSession(
             latestSettings = CameraStatus()
             pose = GimbalStickMapping()
             poseViewFlip = false
-            lutEnabled = false
+            lutEnabled = true
             updateLUT()
             previewStarted = null
             identity = null
@@ -302,9 +326,15 @@ class MultiviewSession(
     private val joinReplyTimeoutMs get() = (joinPolicy.optDouble("replyTimeoutSeconds", 45.0) * 1_000).toLong()
     private val retryDelayMs get() = joinPolicy.optLong("retryDelaySeconds", 5) * 1_000
 
+    internal fun controlsAvailable(tile: Tile): Boolean =
+        running && applicationActive && !closing && !busy && tile.camera != null && tile.controlHost != null &&
+            tile.driver?.let { !it.isClosed && !it.isRebuilding } == true &&
+            !tile.connecting && !tile.recovering && tile.failureMessage == null && tile.liveModel == null
+
     // --- Borrowed Live View -------------------------------------------------------------------
 
     fun openLiveView(tile: Tile) {
+        tile.closeControls()
         val camera = tile.camera ?: return
         if (tile.controlHost == null || tile.recovering) return
         val model = AppModel(app, borrowing = tile.decoder)
@@ -380,6 +410,7 @@ class MultiviewSession(
 
     fun setApplicationActive(active: Boolean) {
         applicationActive = active
+        if (!active) tiles.forEach { it.closeControls() }
         if (active) {
             foregroundAt = SystemClock.elapsedRealtime()
             for (tile in tiles) if (tile.publishing) tile.checkForegroundDecoder = true
@@ -544,7 +575,7 @@ class MultiviewSession(
     private fun recordStationChange(camera: FoundCamera): Boolean {
         val saved = MultiviewStageStore.Camera(
             slot = 0, id = camera.id, name = camera.name, modelId = camera.modelId,
-            bleAddress = camera.address, identity = null, address = "", experimental = false, lutEnabled = false,
+            bleAddress = camera.address, identity = null, address = "", experimental = false, lutEnabled = true,
         )
         pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, listOf(saved))
         return persistStage()
@@ -876,6 +907,7 @@ class MultiviewSession(
                     if (tile.controlHost != null) {
                         tile.updateSettings(frame)
                         tile.liveModel?.session?.receiveMultiview(frame)
+                        tile.controlsModel?.session?.receiveMultiview(frame)
                         if (frame.cmdSet == 0x02 && frame.cmdId == 0x80 && frame.payload.size >= 13) {
                             val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, CameraStatus().toJson())
                             val recording = json?.let { CameraStatus.fromJson(it).isRecording } ?: false
@@ -1235,7 +1267,9 @@ class MultiviewSession(
         stationResets[saved.id]?.let { return it.await() }
         if (pendingReset.none { it.id == saved.id }) return true
         val task = scope.async {
-            val success = resetCamera?.invoke(saved) ?: resetStation(saved)
+            val success = restoreCameraWiFiWithRetry {
+                resetCamera?.invoke(saved) ?: resetStation(saved)
+            }
             if (success) pendingReset = pendingReset.filterNot { it.id == saved.id }
             persistStage()
             stationResets.remove(saved.id)
@@ -1257,8 +1291,8 @@ class MultiviewSession(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            log("multiview: return camera Wi-Fi failed ${error.javaClass.simpleName}: ${error.message}")
-            false
+            log("multiview: return camera Wi-Fi failed ${error.javaClass.simpleName}")
+            throw error
         } finally {
             client.close()
         }

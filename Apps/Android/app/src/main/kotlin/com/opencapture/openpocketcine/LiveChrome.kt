@@ -52,6 +52,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1382,33 +1383,32 @@ internal object LiveSessionBridge {
     }
 }
 
+/** The native Lock tile surface also hosts Multiview's Exit action. */
 @Composable
-fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val tint = if (locked) LiveDesign.accent else LiveDesign.text.copy(alpha = 0.86f)
+internal fun MonitorChromeButton(
+    icon: OpcIcon, label: String, modifier: Modifier = Modifier,
+    enabled: Boolean = true, selected: Boolean = false, buttonRole: Role = Role.Button, onClick: () -> Unit,
+) {
     Box(
-        modifier
-            .size(LiveChromeMetrics.LOCK.dp)
+        modifier.size(LiveChromeMetrics.LOCK.dp).alpha(if (enabled) 1f else 0.4f)
             .monitorGlass(RoundedCornerShape(14.dp))
-            .then(
-                if (locked) Modifier.border(1.5.dp, LiveDesign.accent.copy(alpha = 0.75f), ChromeShape)
-                else Modifier,
-            )
-            .chromeClickable(onClick = onClick)
-            .semantics {
-                contentDescription = if (locked) "Unlock monitor controls" else "Lock monitor controls"
-                role = Role.Switch
-                toggleableState = ToggleableState(locked)
-            },
+            .then(if (selected) Modifier.border(1.5.dp, LiveDesign.accent.copy(alpha = 0.75f), ChromeShape) else Modifier)
+            .chromeClickable(enabled = enabled, onClick = onClick)
+            .semantics { contentDescription = label; role = buttonRole },
         contentAlignment = Alignment.Center,
     ) {
-        OpcIcon(
-            icon = OpcIcon.LOCK,
-            contentDescription = null,
-            tint = tint,
-            // Match the reference's visible glyph height, retaining the full tile/touch area.
-            modifier = Modifier.fillMaxSize(26f / 54f),
-        )
+        OpcIcon(icon, null, Modifier.fillMaxSize(26f / 54f),
+            if (selected) LiveDesign.accent else LiveDesign.text.copy(alpha = 0.86f))
     }
+}
+
+@Composable
+fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    MonitorChromeButton(
+        OpcIcon.LOCK, if (locked) "Unlock monitor controls" else "Lock monitor controls",
+        modifier.semantics { toggleableState = ToggleableState(locked) },
+        selected = locked, buttonRole = Role.Switch, onClick = onClick,
+    )
 }
 
 /** Replaces [LockButton] while Live View borrows a Multiview tile. iOS `multiviewExit`. */
@@ -1475,14 +1475,15 @@ fun DispButton(
 }
 
 @Composable
-fun AuxCircleButton(modifier: Modifier = Modifier, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
+fun AuxCircleButton(modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
     val tablet = minOf(LocalConfiguration.current.screenWidthDp, LocalConfiguration.current.screenHeightDp) >= 600
     val side = com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(tablet)
     com.opencapture.monitorui.MonitorAuxCircleButton(
         modifier
             .size(side.dp)
+            .alpha(if (enabled) 1f else 0.4f)
             .monitorGlass(RoundedCornerShape(14.dp))
-            .chromeClickable(onClick = onClick)
+            .chromeClickable(enabled = enabled, onClick = onClick)
             .semantics { role = Role.Button },
         glyph = glyph,
     )
@@ -1743,11 +1744,8 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
     val config = LocalConfiguration.current
     val tablet = min(config.screenWidthDp, config.screenHeightDp) >= 600
     val incoming = timecode?.takeIf { it.isNotBlank() }
-    val clock =
-        incoming?.let { value ->
-            val parts = value.split(':')
-            if (parts.size >= 4) parts.take(3).joinToString(":") else value
-        } ?: if (portrait) "00:00:00" else "--:--:--"
+    val clock = com.opencapture.openpocketcine.session.timecodeClock(incoming)
+        ?: if (portrait) "00:00:00" else "--:--:--"
     val raw = clock
     val colon = raw.lastIndexOf(':')
     val head = if (colon >= 0) raw.substring(0, colon + 1) else raw

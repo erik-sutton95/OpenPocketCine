@@ -18,7 +18,7 @@ struct MultiviewView: View {
     @State private var optionsTile: MultiviewSession.Tile?
     @State private var showLeave = false
     @State private var liveTile: MultiviewSession.Tile?
-    @State private var pendingLiveTile: MultiviewSession.Tile?
+    @State private var settingsTile: MultiviewSession.Tile?
     @State private var clean = false
     @State private var orientation = InterfaceOrientationObserver()
 
@@ -85,7 +85,21 @@ struct MultiviewView: View {
                         }
                     }
                     .onChange(of: scenePhase) { _, phase in
+                        if phase != .active { closePopups() }
                         if startsSession { session.setApplicationActive(phase == .active) }
+                    }
+                    .onReceive(
+                        NotificationCenter.default.publisher(
+                            for: UIApplication.willResignActiveNotification)
+                    ) { _ in
+                        closePopups()
+                        if startsSession { session.setApplicationActive(false) }
+                    }
+                    .onReceive(
+                        NotificationCenter.default.publisher(
+                            for: UIApplication.didBecomeActiveNotification)
+                    ) { _ in
+                        if startsSession { session.setApplicationActive(true) }
                     }
                     .onChange(of: session.layout) { _, _ in session.persistStage() }
                     .onChange(of: session.focusedIndex) { _, _ in session.persistStage() }
@@ -94,27 +108,14 @@ struct MultiviewView: View {
                         if startsSession { session.start() }
                         showNetwork = !session.networkConfigured
                     }
-                    .onDisappear { orientation.stop() }
+                    .onDisappear {
+                        orientation.stop()
+                        closePopups()
+                    }
             }
             .ignoresSafeArea(.container)
         }
         .interactiveDismissDisabled()
-        .sheet(
-            item: $optionsTile,
-            onDismiss: {
-                guard let tile = pendingLiveTile else { return }
-                pendingLiveTile = nil
-                openLiveView(tile)
-            }
-        ) { tile in
-            MultiviewCameraOptions(session: session, tile: tile) {
-                pendingLiveTile = tile
-                optionsTile = nil
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(MonitorTheme.background)
-        }
         .sheet(isPresented: $showNetwork) {
             MultiviewNetworkSetup(
                 session: session,
@@ -154,24 +155,19 @@ struct MultiviewView: View {
                 .position(x: frame.midX, y: frame.midY)
             }
             if !clean {
-                exitButton(size: layout.controlCellSize)
+                exitButton(size: layout.sessionControls.width)
                     .frame(
                         width: layout.sessionControls.width, height: layout.sessionControls.height
                     )
                     .position(
                         x: layout.sessionControls.midX,
                         y: layout.sessionControls.midY)
-                sessionTitle
-                    .frame(
-                        width: layout.title.width, height: layout.title.height, alignment: .leading
-                    )
-                    .position(x: layout.title.midX, y: layout.title.midY)
                 stageAssistPalette(
-                    horizontal: layout.assistsHorizontal, cellSize: layout.controlCellSize
+                    cellSize: layout.controlCellSize, viewportHeight: layout.assists.height
                 )
                 .frame(width: layout.assists.width, height: layout.assists.height)
                 .position(x: layout.assists.midX, y: layout.assists.midY)
-                networkButton
+                networkButton(size: layout.network.width)
                     .frame(width: layout.network.width, height: layout.network.height)
                     .position(x: layout.network.midX, y: layout.network.midY)
                 selectedReadouts
@@ -214,27 +210,60 @@ struct MultiviewView: View {
                     clip: rect)
             }
         }
+        .overlay { floatingPopups(viewport: viewport.size, safe: safe) }
     }
 
-    private var sessionTitle: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Multiview").font(MonitorTheme.font(17, weight: .semibold))
-            Text(MultiviewTelemetryPresentation.sessionSummary(session))
-                .font(MonitorTheme.font(9)).foregroundStyle(MonitorTheme.muted)
-                .lineLimit(2)
+    private func closePopups() {
+        optionsTile = nil
+        settingsTile = nil
+        session.closeCameraSettings()
+    }
+
+    @ViewBuilder
+    private func floatingPopups(viewport: CGSize, safe: EdgeInsets) -> some View {
+        if optionsTile != nil || settingsTile != nil {
+            let width = max(1, viewport.width - safe.leading - safe.trailing - 32)
+            let height = max(1, viewport.height - safe.top - safe.bottom - 32)
+            ZStack {
+                Color.black.opacity(0.18).contentShape(Rectangle())
+                    .onTapGesture { closePopups() }
+                    .accessibilityLabel("Dismiss camera panel")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityIdentifier("multiview.popup.dismiss")
+                Group {
+                    if let tile = optionsTile {
+                        MultiviewCameraOptions(
+                            session: session, tile: tile, maximumHeight: min(520, height),
+                            close: closePopups
+                        ) { openLiveView(tile) }
+                        .frame(width: min(440, width))
+                    } else if let tile = settingsTile {
+                        MultiviewCameraSettings(
+                            session: session, initialTile: tile,
+                            maximumHeight: min(560, height), close: closePopups
+                        )
+                        .frame(width: min(560, width))
+                    }
+                }
+                .position(
+                    x: safe.leading + (viewport.width - safe.leading - safe.trailing) / 2,
+                    y: safe.top + (viewport.height - safe.top - safe.bottom) / 2)
+            }
+            .accessibilityAddTraits(.isModal)
+            .preferredColorScheme(.dark)
         }
-        .accessibilityIdentifier("multiview.title")
     }
 
     private var selectedReadouts: some View {
         let tile = session.tiles[min(3, max(0, session.focusedIndex))]
         let values = MultiviewTelemetryPresentation(settings: tile.settings)
-        return HStack(spacing: 8) {
+        return HStack(spacing: 6) {
             readout("ISO", value: values.iso)
             readout("SHUTTER", value: values.shutter)
             readout("WB", value: values.whiteBalance)
             readout("FOCUS", value: values.focus)
         }
+        .frame(maxWidth: 316)
         .opacity(tile.camera == nil ? 0 : 1)
         .accessibilityHidden(tile.camera == nil)
         .accessibilityIdentifier("multiview.readouts")
@@ -252,7 +281,7 @@ struct MultiviewView: View {
         .accessibilityLabel(title + " " + value)
     }
 
-    private func stageAssistPalette(horizontal: Bool, cellSize: CGFloat) -> some View {
+    private func stageAssistPalette(cellSize: CGFloat, viewportHeight: CGFloat) -> some View {
         let content = Group {
             Button {
                 let enabled = !session.tiles.filter { $0.camera != nil }.allSatisfy(\.lutEnabled)
@@ -309,36 +338,47 @@ struct MultiviewView: View {
             .accessibilityLabel(session.layout == .grid ? "Show Center stage" : "Show grid")
             .accessibilityValue(session.layout.displayName)
             .accessibilityIdentifier("multiview.layout")
+            Button {
+                optionsTile = nil
+                settingsTile =
+                    session.tiles.first(where: {
+                        $0.id == session.tiles[session.focusedIndex].id && $0.camera != nil
+                    })
+                    ?? session.tiles.first(where: { $0.camera != nil })
+            } label: {
+                VStack(spacing: 2) {
+                    OpcIcon.settings.frame(width: 20, height: 20)
+                    Text("CAMERA").font(MonitorTheme.font(7.5, weight: .semibold)).tracking(0.7)
+                }
+                .frame(width: cellSize, height: cellSize).contentShape(Rectangle())
+            }
+            .foregroundStyle(MonitorTheme.secondary)
+            .disabled(!session.tiles.contains { $0.camera != nil })
+            .accessibilityLabel("Camera settings")
+            .accessibilityIdentifier("multiview.settings")
         }
-        return Group {
-            if horizontal { HStack(spacing: 3) { content } } else { VStack(spacing: 3) { content } }
+        return ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 3) { content }.padding(4)
         }
-        .padding(4)
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDisabled(viewportHeight >= cellSize * 4 + 17)
+        .frame(width: cellSize + 8, height: viewportHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .accessibilityIdentifier("multiview.toolbar")
         .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
         .buttonStyle(.plain)
     }
 
-    private var networkButton: some View {
-        Button {
+    private func networkButton(size: CGFloat) -> some View {
+        MonitorChromeButton("Shared Wi-Fi", size: CGSize(width: size, height: size)) {
+            closePopups()
             showNetwork = true
         } label: {
-            HStack(spacing: 7) {
-                OpcIcon.wifi.frame(width: 18, height: 18).foregroundStyle(MonitorTheme.accent)
-                ViewThatFits(in: .horizontal) {
-                    Text(session.ssid.isEmpty ? "WI-FI" : session.ssid)
-                        .font(MonitorTheme.font(10, weight: .medium)).lineLimit(1).fixedSize()
-                    Color.clear.frame(width: 0, height: 0)
-                }
-            }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
+            OpcIcon.wifi.frame(width: size * 29 / 54, height: size * 29 / 54)
         }
-        .foregroundStyle(MonitorTheme.secondary)
-        .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .compact)
-        .buttonStyle(.plain)
         .disabled(session.busy || session.connectingCameras || !startsSession)
         .accessibilityLabel("Shared Wi-Fi")
+        .accessibilityValue(session.ssid)
         .accessibilityIdentifier("multiview.network")
     }
 
@@ -408,7 +448,10 @@ struct MultiviewView: View {
                     .accessibilityLabel(
                         "Select camera " + MultiviewTelemetryPresentation.letter(index)
                     )
-                    .accessibilityValue(index == session.focusedIndex ? "Selected" : "")
+                    .accessibilityValue(
+                        (index == session.focusedIndex ? "Selected; " : "")
+                            + tile.previewAccessibilityValue
+                    )
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { session.focusedIndex = index }
                     .accessibilityIdentifier("multiview.tile.\(index)")
@@ -416,7 +459,10 @@ struct MultiviewView: View {
                     MultiviewTileChrome(
                         tile: tile, index: index, selected: index == session.focusedIndex,
                         compact: compact, condensed: condensed
-                    ) { optionsTile = tile }
+                    ) {
+                        closePopups()
+                        optionsTile = tile
+                    }
                 }
                 if !tile.hasPicture || tile.failureMessage != nil || tile.recovering {
                     tileRecovery(tile, compact: compact)
@@ -485,27 +531,23 @@ struct MultiviewView: View {
     }
 
     private func openLiveView(_ tile: MultiviewSession.Tile) {
+        closePopups()
         guard tile.controlHost != nil, !tile.recovering else { return }
         session.openLiveView(tile)
         if tile.liveModel != nil { liveTile = tile }
     }
 
     private func exitButton(size: CGFloat) -> some View {
-        Button {
+        MonitorChromeButton("Close Multiview", size: CGSize(width: size, height: size)) {
             if session.tiles.contains(where: { $0.camera != nil }) {
                 showLeave = true
             } else {
                 Task { if await session.closeStage() { dismiss() } }
             }
         } label: {
-            OpcIcon.x.frame(width: size * 0.46, height: size * 0.46).frame(
-                width: size, height: size
-            )
-            .contentShape(Rectangle())
+            OpcIcon.x.frame(width: size * 26 / 54, height: size * 26 / 54)
         }
-        .monitorGlass(in: RoundedRectangle(cornerRadius: 13), density: .compact)
-        .foregroundStyle(MonitorTheme.secondary)
-        .buttonStyle(.zcTapTarget)
+        .accessibilityIdentifier("multiview.close")
         .accessibilityLabel("Close Multiview").disabled(session.busy || session.groupRecordingBusy)
     }
     private func recordAll(diameter: CGFloat) -> some View {

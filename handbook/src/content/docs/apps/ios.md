@@ -428,12 +428,20 @@ recovery after an app switch required a full rejoin and roughly a minute in the
 recorded test. Android has the matching experimental Multiview stage.
 
 Tap Layout to switch Grid/Center stage; tap Wi-Fi in the header for the shared
-network wizard, also used by **Add setup**. Portrait uses a vertical left toolbar
+network wizard, also used by **Add setup**. Portrait uses a vertical right toolbar
 and camera details inside each feed. Grid fills four portrait rows or two
 landscape columns. Center stage keeps its wide main feed, with the portrait
-toolbar starting below it. Landscape rotation moves the toolbar opposite the
-cutout while the tiles stay fixed. DISP and Record use their normal Live View
+toolbar starting below it. In landscape the toolbar aligns with the right controls, or moves left for a
+right-side cutout. The landscape feeds start level with the top of Exit and
+Wi-Fi; current camera readouts sit below the feeds. Scroll the rail on short screens. DISP and Record use their normal Live View
 positions; DISP hides optional chrome and restores it.
+
+Newly added cameras start with Auto LUT on. Tile timecode uses HH:MM:SS and
+batteries reuse Live View's camera gauge. The **…** menu stays compact over the
+stage. Exit is at the top-left and the Wi-Fi icon sits at the top-right with Live View's Settings styling. **Camera settings** in the toolbar opens a floating
+popup with a tab for each connected camera and the same setting controls as
+Live View. Camera, recording and settings tabs use adjoining edges with an
+accent line showing the selection.
 
 Motion Control shows A, B and C with their reported pan, tilt and zoom, or
 **Not set**. The joystick remains usable while the editor is open, so you can

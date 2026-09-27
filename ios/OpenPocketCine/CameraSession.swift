@@ -529,14 +529,27 @@ final class CameraSession {
     @ObservationIgnored private var wasRecording = false
     @ObservationIgnored let decoder: HevcDecoder
     var isMultiviewBorrowed = false
+    private(set) var isMultiviewControlsOnly = false
+    @ObservationIgnored var multiviewControlAdmission: (() -> Bool)?
+    private var admitsMultiviewControl: Bool {
+        !isMultiviewControlsOnly || multiviewControlAdmission?() == true
+    }
 
     /// The live-view display layer, for the SwiftUI `VideoView`.
     var videoLayer: AVSampleBufferDisplayLayer { decoder.displayLayer }
 
-    init(borrowing sharedDecoder: HevcDecoder? = nil, cameraMedia: CameraMedia? = nil) {
+    init(
+        borrowing sharedDecoder: HevcDecoder? = nil, cameraMedia: CameraMedia? = nil,
+        controlsOnly: Bool = false
+    ) {
         self.cameraMedia = cameraMedia ?? CameraMedia()
         self.decoder = sharedDecoder ?? HevcDecoder()
         gimbalStickMapping = GimbalStickMapping()
+        if sharedDecoder != nil, controlsOnly {
+            isMultiviewBorrowed = true
+            isMultiviewControlsOnly = true
+            return
+        }
         syncGimbalPose()
         if sharedDecoder != nil {
             isMultiviewBorrowed = true
@@ -595,23 +608,41 @@ final class CameraSession {
         isFeedWarming = decoder.lastPresentedAt == nil
     }
     func adoptMultiviewPose(_ pose: GimbalStickMapping) {
-        guard isMultiviewBorrowed else { return }
+        guard isMultiviewBorrowed, !isMultiviewControlsOnly else { return }
         gimbalStickMapping = pose
         syncGimbalPose()
     }
     func noteMultiviewFrame() {
-        guard isMultiviewBorrowed else { return }
+        guard isMultiviewBorrowed, !isMultiviewControlsOnly else { return }
         noteLiveFrame()
     }
     func receiveMultiview(_ frame: Duml.Frame) {
         guard isMultiviewBorrowed else { return }
         applyIncomingStatus(frame)
+        guard !isMultiviewControlsOnly else { return }
         // Per tile status frame: an unchanged write re-renders the tile chrome.
         let warming = decoder.lastPresentedAt == nil
         if warming != isFeedWarming { isFeedWarming = warming }
     }
     func releaseMultiview() {
         guard isMultiviewBorrowed else { return }
+        if isMultiviewControlsOnly {
+            // Detach only this editor's commands. The tile keeps its transport,
+            // decoder callbacks, frame samples, pose and recovery ownership.
+            datalink = nil
+            multiviewControlAdmission = nil
+            phase = .idle
+            inflight.removeAll()
+            inflightPending.removeAll()
+            lateWait.removeAll()
+            coalesceScheduled.removeAll()
+            setMailbox.reset()
+            pairingHold.removeAll()
+            audioTail?.cancel()
+            audioTail = nil
+            failAllWaiters(CancellationError())
+            return
+        }
         endGimbalStick(cancelMove: true)
         stopTrackingPoll()
         tapFocusTask?.cancel()
@@ -1391,8 +1422,16 @@ final class CameraSession {
     }
 
     private func route(_ frame: Duml.Frame) {
+        if isMultiviewControlsOnly,
+            CameraParam.isSelfieFlipGetReply(
+                set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload)
+        {
+            return
+        }
         // First-time pairing approval arrives as a request; answer it or the camera drops the link.
-        if frame.cmdSet == 0x07, frame.cmdId == 0x46, frame.flags == Duml.flagRequest {
+        if !isMultiviewControlsOnly, frame.cmdSet == 0x07, frame.cmdId == 0x46,
+            frame.flags == Duml.flagRequest
+        {
             ble.send(Commands.pairApprovalAck(seq: frame.seq))
         }
         // Pid 0x38 GET is untracked. Completing the shared 0x8E waiter here
@@ -1632,6 +1671,9 @@ final class CameraSession {
     }
 
     func setShootingMode(_ mode: ShootingMode) {
+        guard !isMultiviewControlsOnly || (admitsMultiviewControl && !status.isRecording) else {
+            return
+        }
         captureModeGeneration &+= 1
         let modeGeneration = captureModeGeneration
         let sessionGeneration = controlGeneration
@@ -2713,6 +2755,9 @@ final class CameraSession {
     func setVideoFormat(
         resolution: VideoResolution, frameRate: VideoFrameRate, fromOperator: Bool = true
     ) {
+        guard !isMultiviewControlsOnly || (admitsMultiviewControl && !status.isRecording) else {
+            return
+        }
         guard currentShootingMode?.offersVideoFormat != false else { return }
         let format = VideoFormat(resolution: resolution, frameRate: frameRate)
         if fromOperator,
@@ -3106,11 +3151,13 @@ final class CameraSession {
     }
 
     var programmedZoomUnavailableReason: String? {
-        GimbalProgramZoom(program: gimbalProgram, model: connectedCamera?.model, status: status).failureReason
+        GimbalProgramZoom(program: gimbalProgram, model: connectedCamera?.model, status: status)
+            .failureReason
     }
 
     var canRunProgrammedMove: Bool {
-        programmedZoomUnavailableReason == nil && !isFeedWarming && !isLiveVideoStale && gimbalProgram.canRun
+        programmedZoomUnavailableReason == nil && !isFeedWarming && !isLiveVideoStale
+            && gimbalProgram.canRun
             && [gimbalProgram.a, gimbalProgram.b, gimbalProgram.c]
                 .compactMap { $0 }.allSatisfy { $0.nativePitchDeg != nil }
     }
@@ -3182,8 +3229,10 @@ final class CameraSession {
             self.nativeTargetGeneration &+= 1
             let token = self.nativeTargetGeneration
             self.nativeMoveToken = token
-            let zoom = take.changesZoom ? GimbalProgramZoom(
-                program: take, model: self.connectedCamera?.model, status: self.status) : nil
+            let zoom =
+                take.changesZoom
+                ? GimbalProgramZoom(
+                    program: take, model: self.connectedCamera?.model, status: self.status) : nil
             if let reason = zoom?.failureReason {
                 self.cancelProgrammedMove()
                 self.controlNote = reason
@@ -3218,7 +3267,9 @@ final class CameraSession {
     }
 
     func restartProgrammedMove() {
-        guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning, gimbalMovePaused else { return }
+        guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning, gimbalMovePaused else {
+            return
+        }
         cancelProgrammedMove()
         runProgrammedMove()
     }
@@ -3874,7 +3925,9 @@ final class CameraSession {
         onFail: (@MainActor () -> Void)? = nil,
         onSettle: (@MainActor (Bool) -> Void)? = nil
     ) {
-        guard !Task.isCancelled, datalink != nil, datalink?.isRebuilding != true else {
+        guard !Task.isCancelled, admitsMultiviewControl,
+            datalink != nil, datalink?.isRebuilding != true
+        else {
             controlNote = "not live"
             onFail?()
             onSettle?(false)
@@ -3928,6 +3981,7 @@ final class CameraSession {
     }
 
     private func transmit(_ send: InflightSend, kind: String) {
+        guard admitsMultiviewControl else { return }
         let seq = datalink?.send(send.frame) ?? 0
         let key = Duml.opcodeKey(set: send.frame.cmdSet, cmd: send.frame.cmdId)
         // A skipped UDP write returns seq 0 and lastWriteLanded=false — do
@@ -4059,7 +4113,7 @@ final class CameraSession {
         guard !Task.isCancelled,
             Self.audioControlGeneration.map({ $0 == generation }) ?? true
         else { return false }
-        guard datalink != nil, datalink?.isRebuilding != true else {
+        guard admitsMultiviewControl, datalink != nil, datalink?.isRebuilding != true else {
             controlNote = "not live"
             return false
         }
@@ -4075,6 +4129,7 @@ final class CameraSession {
                 timeout: timeout,
                 consumeHold: false
             ) {
+                guard self.admitsMultiviewControl else { return }
                 let seq = self.datalink?.send(frame) ?? 0
                 if logSend {
                     ControlLiveLog.line(
@@ -5917,7 +5972,7 @@ final class CameraSession {
             if isBrowsingMedia { ingestMediaListFrame(frame) }
             return
         }
-        if frame.cmdSet == 0x02, frame.cmdId == 0x89 {
+        if !isMultiviewControlsOnly, frame.cmdSet == 0x02, frame.cmdId == 0x89 {
             applyLiveTrackingPush(frame.payload)
         }
         var s = status
@@ -5951,6 +6006,11 @@ final class CameraSession {
             || reported.videoResolution != nil || reported.fps > 0
         absorbStaleFormat(&s, reportedThisFrame: formatReported)
         absorbStaleColor(&s, reported: reported)
+        if isMultiviewControlsOnly {
+            if status != s { status = s }
+            settleLateFromSubscribe()
+            return
+        }
         if frame.cmdSet == 0x04, frame.cmdId == 0x05 {
             requestGimbalParams()
             if frame.payload.count == 50, let family = s.gimbalModeFamily {

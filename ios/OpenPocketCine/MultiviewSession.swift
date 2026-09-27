@@ -10,36 +10,47 @@ final class MultiviewSession {
         let id = UUID()
         let decoder = HevcDecoder()
         var liveModel: AppModel?
-        var driver: DatalinkDriver? {
-            didSet { liveModel?.session.datalink = nil }
+        // A settings editor borrows only the command/status path. It never owns the feed.
+        var controlsModel: AppModel?
+        func retireControls() {
+            controlsModel?.captureSheet = nil
+            controlsModel?.captureDrum = nil
+            controlsModel?.session.releaseMultiview()
+            controlsModel = nil
         }
-        var connecting = false
+        var driver: DatalinkDriver? {
+            didSet {
+                liveModel?.session.datalink = nil
+                retireControls()
+            }
+        }
+        var connecting = false { didSet { if connecting { retireControls() } } }
         var experimentalNetwork = false
         var networkVerified = false
         var cameraAddress = ""
         var identity: [UInt8]?
         // Per ACK frame bookkeeping; no view reads it.
         @ObservationIgnored var responses: [UInt16: Duml.Frame] = [:]
-        var camera: FoundCamera?
+        var camera: FoundCamera? { didSet { if camera?.id != oldValue?.id { retireControls() } } }
         var status = "Add camera"
         var failureMessage: String?
         var recovery = MultiviewRecovery()
         @ObservationIgnored var repairTask: Task<Void, Never>?
-        var recovering = false
+        var recovering = false { didSet { if recovering { retireControls() } } }
         var pathLostAt: Date?
         var checkForegroundDecoder = false
-        var foregroundRepairAt: Date?
         var settings = CameraStatus()
         @ObservationIgnored var pose = GimbalStickMapping()
         @ObservationIgnored var latestSettings = CameraStatus()
         @ObservationIgnored var settingsPublishedAt = Date.distantPast
         let sampleBus = LiveFrameSampleBus()
-        var lutEnabled = false
+        var lutEnabled = true
         var effects = LiveImageEffects()
         var lutCaption = "Auto LUT"
 
         func updateSettings(_ frame: Duml.Frame) {
             guard let camera else { return }
+            controlsModel?.session.receiveMultiview(frame)
             let previousFlip = latestSettings.selfieFlip
             CameraStatusDecoder.apply(frame, to: &latestSettings, model: camera.model)
             if frame.cmdSet == 4, frame.cmdId == 5 { pose.applyAttitude(frame.payload) }
@@ -98,15 +109,46 @@ final class MultiviewSession {
             guard let camera, camera.model.family != .nano,
                 let timecode = settings.timecode, !timecode.isEmpty
             else { return nil }
-            return timecode
+            return settings.timecodeClock
         }
 
         var hasPicture = false
+        private(set) var previewFresh = false
+        private(set) var previewFrames = 0
+        var previewAccessibilityValue: String {
+            let state = previewFresh ? "Live" : (camera == nil ? "Empty" : "Reconnecting")
+            #if DEBUG
+                if ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_PROBE"] == "1" {
+                    return "\(state); frames=\(previewFrames)"
+                }
+            #endif
+            return state
+        }
+        /// Sample health on the existing 1 Hz monitor, never in the view's frame loop.
+        func samplePreviewHealth(now: Date = Date()) {
+            let since = max(previewStarted ?? now, now.addingTimeInterval(-2))
+            let fresh = hasFreshPicture(since: since, now: now)
+            if previewFresh != fresh { previewFresh = fresh }
+            if fresh { previewFrames = decoder.sourcePresentations }
+        }
+        func hasFreshPicture(since: Date, now: Date = Date()) -> Bool {
+            guard publishing, !connecting, let driver,
+                !decoder.referenceRecoveryNeeded,
+                let source = decoder.lastSourceFrameAt, source > since,
+                let present = decoder.monitorPresentedAt, present > since,
+                let packet = driver.lastVideoPacketAt, packet > since
+            else { return false }
+            if decoder.nativeOutputExpected {
+                guard let age = decoder.nativeOutputAge, now.addingTimeInterval(-age) > since
+                else { return false }
+            }
+            return true
+        }
         var publishing = false
         var recordingBusy = false
         var recordingAvailable = false
         var recordingNote: String?
-        var controlHost: String?
+        var controlHost: String? { didSet { if controlHost != oldValue { retireControls() } } }
         /// Stamped per 0x02/0x80 frame. Views read `recordingActive`, which
         /// only changes on a REC flip, instead of re-rendering per timestamp.
         @ObservationIgnored var recordingObservation: (active: Bool, received: Date)? {
@@ -126,7 +168,7 @@ final class MultiviewSession {
         var enableSends = 0
         var pendingAssistHandoff = false
         func recoverAssistHandoff() {
-            guard pendingAssistHandoff, let driver, controlHost != nil,
+            guard pendingAssistHandoff, !recovering, let driver, controlHost != nil,
                 decoder.isPresentationReady, let camera
             else { return }
             guard
@@ -141,6 +183,76 @@ final class MultiviewSession {
             enableSends += 1
             ControlLiveLog.line("multiview: assist VT handoff enable")
         }
+        /// Install the input callbacks for exactly this tile's current endpoint.
+        func bindPreviewInput(_ driver: DatalinkDriver) {
+            let tile = self
+            driver.onVideoDiscontinuity = { [weak tile, weak driver] in
+                guard let tile, let driver, tile.driver === driver else { return }
+                tile.decoder.noteCompressedDiscontinuity()
+            }
+            driver.onAccessUnit = { [weak tile, weak driver] bytes in
+                guard let tile, let driver, tile.driver === driver else { return }
+                if tile.decoder.decode(accessUnit: bytes) {
+                    // Per access unit: re-writing these notified the whole tile view
+                    // at the feed rate.
+                    if !tile.hasPicture {
+                        ControlLiveLog.line("multiview: station preview enqueued")
+                        tile.hasPicture = true
+                    }
+                    if tile.status != "Live · Video mode" { tile.status = "Live · Video mode" }
+                }
+            }
+        }
+
+        func watchdogSnapshot(now: Date, pathReady: Bool) -> FeedWatchdog.Snapshot? {
+            guard let driver else { return nil }
+            let age: (Date?) -> TimeInterval? = { $0.map { now.timeIntervalSince($0) } }
+            return FeedWatchdog.Snapshot(
+                now: now.timeIntervalSinceReferenceDate,
+                lastDecodedFrameAge: age(decoder.lastPresentedAt),
+                lastVideoPacketAge: age(driver.lastVideoPacketAt),
+                lastAccessUnitAge: age(driver.lastAccessUnitAt),
+                lastStatusAge: age(driver.lastStatusAt), flowHealthy: driver.isFlowHealthy,
+                pathReady: pathReady,
+                hasFormat: decoder.hasFormat,
+                decoderFailed: decoder.isDecoderWedged
+                    || decoder.displayLayer.status == .failed,
+                live: true, sawPicture: hasPicture, tcpPokeReady: driver.isTcpPokeReady,
+                secondsSinceLastRebuild: driver.secondsSinceLastRebuild,
+                hadVideo: driver.videoPackets > 0,
+                secondsSinceLastEnable: now.timeIntervalSince(lastEnable),
+                secondsSinceCameraSet: driver.secondsSinceLastCommand,
+                lastDecoderOutputAge: decoder.nativeOutputAge,
+                decoderOutputExpected: decoder.nativeOutputExpected,
+                referenceRecoveryNeeded: decoder.referenceRecoveryNeeded,
+                secondsSinceLastIrap: decoder.lastIrapAt.map { now.timeIntervalSince($0) },
+                repairReady: decoder.isDisplayReady)
+        }
+
+        /// Readiness and an actual enable each get their own bounded window.
+        static func decoderRepairHasTime(
+            requestedAt: Date, sentAt: Date?, now: Date = Date()
+        ) -> Bool {
+            now.timeIntervalSince(sentAt ?? requestedAt) < FeedWatchdog.decoderRepairDeadline
+        }
+
+        func finishDecoderRepair(
+            previous: MultiviewRecovery, sentAt: Date?, applicationActive: Bool,
+            foregroundUnchanged: Bool = true
+        ) -> Bool {
+            guard applicationActive, foregroundUnchanged, sentAt != nil else {
+                recovery = previous
+                return false
+            }
+            if decoder.nativeOutputExpected,
+                (decoder.nativeOutputAge ?? .infinity) < FeedWatchdog.stallThreshold
+            {
+                recovery.watchdog = FeedWatchdog()
+                return false
+            }
+            return true
+        }
+
         var previewStarted: Date?
     }
     let tiles = (0..<4).map { _ in Tile() }
@@ -163,6 +275,7 @@ final class MultiviewSession {
     var configuringNetwork = false
     var networkSetupError: String?
     var applicationActive = true
+    @ObservationIgnored private var activityGeneration = 0
     private var foregroundAt = Date.distantPast
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     var host = ""
@@ -179,7 +292,8 @@ final class MultiviewSession {
     private var addressReservations: [String: UUID] = [:]
     private var pendingReset: [MultiviewStageStore.Camera] = []
     private var stationResetTasks: [UUID: Task<Bool, Never>] = [:]
-    private let resetCamera: ((MultiviewStageStore.Camera) async -> Bool)?
+    private let resetCamera: ((MultiviewStageStore.Camera) async throws -> Bool)?
+    private let resetRetryDelay: () async -> Void
     private let saveStage: (MultiviewStageStore.Stage?) -> Bool
     private let loadNetwork: (String, Bool) -> MultiviewNetworkStore.Network?
     private var cleanupJournalWritten = false
@@ -191,12 +305,16 @@ final class MultiviewSession {
     private var running = false
 
     init(
-        resetCamera: ((MultiviewStageStore.Camera) async -> Bool)? = nil,
+        resetCamera: ((MultiviewStageStore.Camera) async throws -> Bool)? = nil,
+        resetRetryDelay: @escaping () async -> Void = {
+            try? await Task.sleep(for: .seconds(3))
+        },
         saveStage: @escaping (MultiviewStageStore.Stage?) -> Bool = MultiviewStageStore.save,
         loadNetwork: @escaping (String, Bool) -> MultiviewNetworkStore.Network? =
             MultiviewNetworkStore.load(ssid:hotspot:)
     ) {
         self.resetCamera = resetCamera
+        self.resetRetryDelay = resetRetryDelay
         self.saveStage = saveStage
         self.loadNetwork = loadNetwork
     }
@@ -211,7 +329,7 @@ final class MultiviewSession {
     }
 
     enum Failure: LocalizedError {
-        case timeout, unavailable, rejected, network
+        case timeout, unavailable, rejected, network, pairingDeferred
         var errorDescription: String? {
             switch self {
             case .timeout: "Camera did not respond. Close other camera apps and try again."
@@ -219,10 +337,12 @@ final class MultiviewSession {
             case .rejected:
                 "Camera could not complete this step. Check the Wi-Fi details and try again."
             case .network: "Join the shared Wi-Fi network on this device first."
+            case .pairingDeferred: "Camera is not ready to pair again. Please try again."
             }
         }
     }
     func openLiveView(_ tile: Tile) {
+        closeCameraSettings()
         guard let camera = tile.camera, tile.controlHost != nil, !tile.recovering else { return }
         let model = AppModel()
         model.session = CameraSession(borrowing: tile.decoder)
@@ -274,6 +394,7 @@ final class MultiviewSession {
                         } == true
                     if tile.recordingAvailable != available { tile.recordingAvailable = available }
                     self.monitorPreview(tile)
+                    tile.samplePreviewHealth()
                 }
             }
         }
@@ -448,7 +569,10 @@ final class MultiviewSession {
     }
 
     func setApplicationActive(_ active: Bool) {
+        guard applicationActive != active else { return }
         applicationActive = active
+        activityGeneration &+= 1
+        ControlLiveLog.line("multiview: scene \(active ? "active" : "inactive")")
         if active {
             foregroundAt = Date()
             for tile in tiles where tile.publishing { tile.checkForegroundDecoder = true }
@@ -502,22 +626,10 @@ final class MultiviewSession {
             tile.publishing, let driver = tile.driver
         else { return }
         let now = Date()
-        let age: (Date?) -> TimeInterval? = { $0.map { now.timeIntervalSince($0) } }
-        let snapshot = FeedWatchdog.Snapshot(
-            now: now.timeIntervalSinceReferenceDate,
-            lastDecodedFrameAge: age(tile.decoder.lastPresentedAt),
-            lastVideoPacketAge: age(driver.lastVideoPacketAt),
-            lastAccessUnitAge: age(driver.lastAccessUnitAt),
-            lastStatusAge: age(driver.lastStatusAt), flowHealthy: driver.isFlowHealthy,
-            pathReady: SharedWiFiPath.address(hotspot: usePhoneHotspot) != nil,
-            hasFormat: tile.decoder.hasFormat,
-            decoderFailed: tile.decoder.isDecoderWedged
-                || tile.decoder.displayLayer.status == .failed,
-            live: true, sawPicture: tile.hasPicture, tcpPokeReady: driver.isTcpPokeReady,
-            secondsSinceLastRebuild: driver.secondsSinceLastRebuild,
-            hadVideo: driver.videoPackets > 0,
-            secondsSinceLastEnable: now.timeIntervalSince(tile.lastEnable),
-            secondsSinceCameraSet: driver.secondsSinceLastCommand)
+        guard
+            let snapshot = tile.watchdogSnapshot(
+                now: now, pathReady: SharedWiFiPath.address(hotspot: usePhoneHotspot) != nil)
+        else { return }
         if snapshot.pathReady {
             tile.pathLostAt = nil
         } else if tile.pathLostAt == nil {
@@ -525,27 +637,19 @@ final class MultiviewSession {
         }
         if tile.checkForegroundDecoder && FeedWatchdog.udpReceiveAlive(snapshot) {
             tile.checkForegroundDecoder = false
-            if snapshot.decoderFailed || tile.decoder.displayLayer.requiresFlushToResumeDecoding
-                || (FeedWatchdog.udpReceiveAlive(snapshot) && tile.decoder.isPresentFrozen)
+            if tile.decoder.displayLayer.status == .failed
+                || tile.decoder.displayLayer.requiresFlushToResumeDecoding
             {
                 tile.decoder.prepareAfterForeground()
-                tile.pendingAssistHandoff = true
-                tile.recoverAssistHandoff()
-                tile.foregroundRepairAt = now
-                ControlLiveLog.line("multiview: foreground decoder repair, socket retained")
+                tile.decoder.noteCompressedDiscontinuity()
+                ControlLiveLog.line(
+                    "multiview: foreground display resumed; watchdog owns references")
                 return
             }
         }
-        var foregroundRejoin = false
-        if let repaired = tile.foregroundRepairAt, now.timeIntervalSince(repaired) > 12 {
-            tile.foregroundRepairAt = nil
-            if tile.decoder.isPresentFrozen && FeedWatchdog.udpReceiveAlive(snapshot) {
-                foregroundRejoin = true
-            }
-        }
-        let action: FeedWatchdog.Action =
-            foregroundRejoin ? .fullSessionRejoin : tile.recovery.action(snapshot)
-        if tile.decoder.awaitingIDR,
+        let previousRecovery = tile.recovery
+        let action = tile.recovery.action(snapshot)
+        if tile.decoder.awaitingIDR, tile.decoder.canReleaseIDRHold,
             FeedWatchdog.shouldReleaseIDRHold(
                 awaitingIDR: true, udpReceiveAlive: FeedWatchdog.udpReceiveAlive(snapshot),
                 secondsSinceLastEnable: snapshot.secondsSinceLastEnable,
@@ -564,11 +668,66 @@ final class MultiviewSession {
         ControlLiveLog.line("multiview: repair action=\(action)")
         tile.status = "Reconnecting…"
         if action == .resendLiveViewEnable {
-            guard tile.decoder.isPresentationReady, let camera = tile.camera else { return }
+            guard tile.decoder.isPresentationReady, let camera = tile.camera else {
+                tile.recovery = previousRecovery
+                return
+            }
+            driver.reRegister()
             driver.startLiveView(receiver: camera.model.liveViewEnableReceiver)
             tile.lastEnable = now
             tile.enableSends += 1
             tile.decoder.beginIDRHold()
+            return
+        }
+        if action == .rebuildVTSession {
+            guard
+                tile.decoder.rebuildPresentationIfNeeded(
+                    referenceLossOnly: snapshot.referenceRecoveryNeeded)
+            else {
+                tile.recovery = previousRecovery
+                return
+            }
+            tile.recovering = true
+            let generation = activityGeneration
+            tile.repairTask = Task { [weak self, weak tile, weak driver] in
+                guard let self, let tile, let driver else { return }
+                defer {
+                    tile.recovering = false
+                    tile.repairTask = nil
+                }
+                let requestedAt = Date()
+                var sentAt: Date?
+                while running, !Task.isCancelled, tile.driver === driver,
+                    applicationActive, activityGeneration == generation,
+                    Tile.decoderRepairHasTime(requestedAt: requestedAt, sentAt: sentAt)
+                {
+                    if let sentAt, tile.hasFreshPicture(since: sentAt) {
+                        tile.recovery.watchdog = FeedWatchdog()
+                        ControlLiveLog.line("multiview: decoder repair restored fresh picture")
+                        return
+                    }
+                    if sentAt == nil, applicationActive, tile.decoder.isPresentationReady,
+                        SharedWiFiPath.address(hotspot: usePhoneHotspot) != nil,
+                        let camera = tile.camera
+                    {
+                        driver.startLiveView(receiver: camera.model.liveViewEnableReceiver)
+                        tile.pendingAssistHandoff = false
+                        tile.lastEnable = Date()
+                        tile.enableSends += 1
+                        sentAt = tile.lastEnable
+                        ControlLiveLog.line("multiview: decoder repair enable, socket retained")
+                    }
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+                guard running, !Task.isCancelled, tile.driver === driver else { return }
+                guard
+                    tile.finishDecoderRepair(
+                        previous: previousRecovery, sentAt: sentAt,
+                        applicationActive: applicationActive,
+                        foregroundUnchanged: activityGeneration == generation)
+                else { return }
+                await rejoinWhenAvailable(tile)
+            }
             return
         }
         tile.recovering = true
@@ -864,18 +1023,7 @@ final class MultiviewSession {
             tile.pendingAssistHandoff = true
             tile.recoverAssistHandoff()
         }
-        driver.onAccessUnit = { [weak tile, weak driver] bytes in
-            guard let tile, let driver, tile.driver === driver else { return }
-            if tile.decoder.decode(accessUnit: bytes) {
-                // Per access unit: re-writing these notified the whole tile view
-                // at the feed rate.
-                if !tile.hasPicture {
-                    ControlLiveLog.line("multiview: station preview enqueued")
-                    tile.hasPicture = true
-                }
-                if tile.status != "Live · Video mode" { tile.status = "Live · Video mode" }
-            }
-        }
+        tile.bindPreviewInput(driver)
         let nanoGate = camera.model.usesNanoLiveViewGate
         if nanoGate { driver.send(Commands.nanoLiveViewGate(start: true)) }
         if camera.model.sendsLiveViewPrepare {
@@ -937,7 +1085,6 @@ final class MultiviewSession {
         tile.recovering = false
         tile.recovery = MultiviewRecovery()
         tile.pathLostAt = nil
-        tile.foregroundRepairAt = nil
         tile.failureMessage = nil
         tile.driver?.close()
         tile.driver = nil
@@ -947,7 +1094,7 @@ final class MultiviewSession {
         tile.settings = CameraStatus()
         tile.latestSettings = CameraStatus()
         tile.pose = GimbalStickMapping()
-        tile.lutEnabled = false
+        tile.lutEnabled = true
         tile.updateLUT()
         tile.previewStarted = nil
         tile.identity = nil
@@ -969,6 +1116,7 @@ final class MultiviewSession {
         return true
     }
     func stop() {
+        closeCameraSettings()
         persistStage()
         hostJoin?.cancel()
         hostJoin = nil
@@ -1061,6 +1209,7 @@ final class MultiviewSession {
     var hasPendingCleanup: Bool { !running && !pendingReset.isEmpty && !closing }
 
     func closeStage() async -> Bool {
+        closeCameraSettings()
         guard !closing else { return false }
         closing = true
         networkScanTask?.cancel()
@@ -1094,12 +1243,7 @@ final class MultiviewSession {
         if let task = stationResetTasks[saved.id] { return await task.value }
         guard pendingReset.contains(where: { $0.id == saved.id }) else { return true }
         let task = Task {
-            let success: Bool
-            if let resetCamera {
-                success = await resetCamera(saved)
-            } else {
-                success = await resetStation(saved)
-            }
+            let success = await returnCameraWiFi(saved)
             if success { pendingReset.removeAll { $0.id == saved.id } }
             persistStage()
             stationResetTasks.removeValue(forKey: saved.id)
@@ -1108,19 +1252,41 @@ final class MultiviewSession {
         stationResetTasks[saved.id] = task
         return await task.value
     }
-    private func resetStation(_ saved: MultiviewStageStore.Camera) async -> Bool {
+    private func returnCameraWiFi(_ saved: MultiviewStageStore.Camera) async -> Bool {
+        for attempt in 1...3 {
+            do {
+                if let resetCamera { return try await resetCamera(saved) }
+                return try await resetStation(saved)
+            } catch Failure.pairingDeferred where attempt < 3 {
+                ControlLiveLog.line(
+                    "multiview: camera pairing deferred; Wi-Fi return retry \(attempt) of 2")
+                await resetRetryDelay()
+            } catch {
+                return false
+            }
+        }
+        return false
+    }
+
+    private func resetStation(_ saved: MultiviewStageStore.Camera) async throws -> Bool {
         let client = MultiviewProvisioner()
-        defer { client.close() }
+        var phase = "pairing"
         do {
             try await client.connect(restoredCamera(saved), pairingTimeout: 12)
+            phase = "AP switch"
             let reply = try await client.exchange(
                 MulticamCommands.stationMode(false, seq: client.next()))
             let accepted = reply.payload == [0] || reply.payload == [0, 0]
             ControlLiveLog.line("multiview: return camera Wi-Fi accepted=\(accepted)")
+            await client.closeAndWait()
             return accepted
         } catch {
-            ControlLiveLog.line("multiview: return camera Wi-Fi failed")
-            return false
+            // A new cleanup attempt must not share a Bluetooth link that is still closing.
+            await client.closeAndWait()
+            ControlLiveLog.line(
+                "multiview: return camera Wi-Fi failed phase=\(phase) domain=\((error as NSError).domain) code=\((error as NSError).code)"
+            )
+            throw error
         }
     }
     static func wifiAddress() -> String? { SharedWiFiPath.address() }

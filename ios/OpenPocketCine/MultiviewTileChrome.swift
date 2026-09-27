@@ -94,10 +94,11 @@ struct MultiviewTileChrome: View {
                         + (tile.camera?.name ?? "Camera")
                 )
                 .font(MonitorTheme.font(9, weight: .semibold)).lineLimit(1)
-                Text(
-                    "BAT \(values.battery) · \(MultiviewTelemetryPresentation.recordingStatus(tile))"
-                )
-                .font(MonitorTheme.font(7)).lineLimit(1)
+                HStack(spacing: 6) {
+                    battery
+                    Text(MultiviewTelemetryPresentation.recordingStatus(tile))
+                        .font(MonitorTheme.font(7)).lineLimit(1)
+                }
             }.frame(maxWidth: .infinity, alignment: .leading).allowsHitTesting(false)
             Button(action: openOptions) {
                 OpcIcon.ellipsis.frame(width: 18, height: 18)
@@ -155,7 +156,7 @@ struct MultiviewTileChrome: View {
                         .font(MonitorTheme.font(9, weight: .semibold)).lineLimit(1)
                 }
                 HStack(spacing: 6) {
-                    Text("BAT \(values.battery)")
+                    battery
                     Text(values.storage)
                     Spacer(minLength: 0)
                     Text(MultiviewTelemetryPresentation.recordingStatus(tile))
@@ -186,79 +187,103 @@ struct MultiviewTileChrome: View {
         }
         .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
     }
+    private var battery: some View {
+        LiveBatteryRow(
+            percent: tile.settings.batteryPercent, deviceIcon: .camera,
+            isCharging: tile.settings.charging, isCamera: true)
+    }
+
 }
 
 struct MultiviewCameraOptions: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     let session: MultiviewSession
     let tile: MultiviewSession.Tile
+    let maximumHeight: CGFloat
+    let close: () -> Void
     let openLiveView: () -> Void
 
     var body: some View {
         let values = MultiviewTelemetryPresentation(settings: tile.settings)
-        NavigationStack {
-            List {
-                Section {
-                    Button("Live View", action: openLiveView)
-                        .disabled(tile.controlHost == nil || tile.recovering)
-                    MultiviewRecordAction(
-                        session: session, tile: tile,
-                        confirmationEnabled: model.recordConfirmationEnabled
-                    ) {
-                        Text(tile.recordingActive == true ? "Stop recording" : "Start recording")
-                    }
-                    .disabled(
-                        !tile.recordingAvailable || tile.recordingBusy
-                            || session.groupRecordingBusy || session.closing)
-                    Button(tile.lutEnabled ? "Disable Auto LUT" : "Enable Auto LUT") {
-                        tile.toggleLUT()
-                        session.persistStage()
-                    }.disabled(tile.camera?.hasMultiviewPreview != true)
-                    if tile.camera?.hasMultiviewPreview == true || tile.failureMessage != nil {
-                        Button("Reconnect") { Task { await session.reconnect(tile) } }
-                            .disabled(session.busy || tile.connecting || tile.recovering)
-                    }
-                    if tile.failureMessage != nil, !tile.experimentalNetwork, tile.identity == nil {
-                        Button("Try experimental shared Wi-Fi") {
-                            Task { await session.tryExperimentalNetwork(tile) }
-                        }.disabled(session.busy || tile.connecting || tile.recovering)
-                    }
-                    Button("Remove camera", role: .destructive) {
-                        Task { if await session.remove(tile) { dismiss() } }
-                    }
-                    .disabled(
-                        session.busy || tile.connecting || session.groupRecordingBusy
-                            || tile.recordingBusy || session.closing)
+        MonitorCapturePanel(
+            title: tile.camera?.name ?? "Camera options",
+            subtitle: tile.camera?.model.name ?? "Camera",
+            maximumHeight: maximumHeight, bottomCornerRadius: 16, edge: .top, close: close
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(values.format)
+                    Spacer()
+                    LiveBatteryRow(
+                        percent: tile.settings.batteryPercent, deviceIcon: .camera,
+                        isCharging: tile.settings.charging, isCamera: true)
+                    Text(values.storage)
+                }.font(MonitorTheme.font(11))
+                if let timecode = tile.timecodeReadout {
+                    Text(timecode).font(MonitorTheme.font(12)).monospacedDigit()
                 }
-                Section(tile.camera?.model.name ?? "Camera") {
-                    LabeledContent("Format", value: values.format)
-                    LabeledContent("Battery", value: values.battery)
-                    LabeledContent("Storage available", value: values.storage)
-                    if let timecode = tile.timecodeReadout {
-                        LabeledContent("Timecode", value: timecode)
-                    }
-                    Text(tile.status).font(.footnote).foregroundStyle(.secondary)
-                    if let error = tile.failureMessage {
-                        Text(error).font(.footnote).foregroundStyle(.orange)
-                    }
-                    if let note = tile.recordingNote {
-                        Text(note).font(.footnote)
-                    }
+                Text(tile.status).foregroundStyle(MonitorTheme.muted)
+                if let error = tile.failureMessage { Text(error).foregroundStyle(.orange) }
+                if let note = tile.recordingNote { Text(note) }
+                Divider()
+                action("Live View", action: openLiveView)
+                    .disabled(tile.controlHost == nil || tile.recovering)
+                MultiviewRecordAction(
+                    session: session, tile: tile,
+                    confirmationEnabled: model.recordConfirmationEnabled
+                ) {
+                    actionLabel(tile.recordingActive == true ? "Stop recording" : "Start recording")
                 }
+                .disabled(
+                    !tile.recordingAvailable || tile.recordingBusy
+                        || session.groupRecordingBusy || session.closing)
+                action(tile.lutEnabled ? "Disable Auto LUT" : "Enable Auto LUT") {
+                    tile.toggleLUT()
+                    session.persistStage()
+                }.disabled(tile.camera?.hasMultiviewPreview != true)
+                if tile.camera?.hasMultiviewPreview == true || tile.failureMessage != nil {
+                    action("Reconnect") {
+                        close()
+                        Task { await session.reconnect(tile) }
+                    }
+                    .disabled(session.busy || tile.connecting || tile.recovering)
+                }
+                if tile.failureMessage != nil, !tile.experimentalNetwork, tile.identity == nil {
+                    action("Try experimental shared Wi-Fi") {
+                        close()
+                        Task { await session.tryExperimentalNetwork(tile) }
+                    }.disabled(session.busy || tile.connecting || tile.recovering)
+                }
+                Button(role: .destructive) {
+                    Task { if await session.remove(tile) { close() } }
+                } label: {
+                    actionLabel("Remove camera")
+                }
+                .disabled(
+                    session.busy || tile.connecting || session.groupRecordingBusy
+                        || tile.recordingBusy || session.closing)
                 if tile.networkVerified && tile.camera?.hasMultiviewPreview == false {
-                    Section {
-                        Text("Remove this camera to enable group recording for your other cameras.")
-                            .font(.footnote)
-                    }
+                    Text("Remove this camera to enable group recording for your other cameras.")
+                        .foregroundStyle(MonitorTheme.muted)
                 }
             }
-            .navigationTitle(tile.camera?.name ?? "Camera options")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
-            }
+            .font(MonitorTheme.font(11))
+            .buttonStyle(MonitorButtonStyle())
         }
         .tint(MonitorTheme.accent)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("multiview.cameraOptions")
+    }
+
+    private func action(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { actionLabel(title) }
+    }
+
+    private func actionLabel(_ title: String) -> some View {
+        Text(title).font(MonitorTheme.font(12, weight: .medium))
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.horizontal, 12)
+            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
+            .contentShape(Rectangle())
     }
 }

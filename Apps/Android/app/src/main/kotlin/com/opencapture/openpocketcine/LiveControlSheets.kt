@@ -35,6 +35,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.opencapture.monitorui.MonitorTab
+import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.MonitorQuickPreview
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -134,16 +136,17 @@ fun LiveControlSheet(
     maxHeightDp: Float? = null,
     preview: MonitorQuickPreview? = null,
     portrait: Boolean? = null,
+    showsHeader: Boolean = true,
 ) {
     val availableStatus = CaptureLists.withEffectiveVideoFormats(
         status, model.session.connectedCamera?.model,
     )
     val isPortrait = portrait ?: viewportIsPortrait()
     CompositionLocalProvider(LocalCapturePreview provides preview, LocalViewportPortrait provides isPortrait) {
-        if (sheet.isRecordingSetup && isPortrait) {
+        if (sheet.isRecordingSetup && isPortrait && showsHeader) {
             RecordingSetupPanel(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
         } else {
-            LiveControlSheetContent(sheet, model, availableStatus, locked, onDismiss, maxHeightDp)
+            LiveControlSheetContent(sheet, model, availableStatus, locked, onDismiss, maxHeightDp, showsHeader = showsHeader)
         }
     }
 }
@@ -235,6 +238,7 @@ private fun LiveControlSheetContent(
     onDismiss: () -> Unit,
     maxHeightDp: Float?,
     footer: (@Composable () -> Unit)? = null,
+    showsHeader: Boolean = true,
 ) {
     val context = LocalContext.current
     val preview = LocalCapturePreview.current
@@ -527,7 +531,7 @@ private fun LiveControlSheetContent(
     val compact = preview != null
     val fromTop = sheet.isTopAnchored
     val portrait = viewportIsPortrait()
-    val topPadding = com.opencapture.monitorui.MonitorLayoutPolicy.captureTopPadding(fromTop, portrait, compact)
+    val topPadding = if (showsHeader) com.opencapture.monitorui.MonitorLayoutPolicy.captureTopPadding(fromTop, portrait, compact) else 0f
     // Every drum has the same 86dp viewport; the card hugs its own controls.
     Column(
         Modifier
@@ -549,7 +553,7 @@ private fun LiveControlSheetContent(
             ),
         verticalArrangement = Arrangement.spacedBy(AssistLongPress.PANEL_GAP_DP.dp),
     ) {
-            SheetHeader(
+            if (showsHeader) SheetHeader(
                 title = CaptureLists.headerTitle(sheet, status.expoMode, status.shootingMode),
                 subtitle =
                     if (compact) "drag to set"
@@ -928,21 +932,16 @@ private fun ModeBar(
     uppercase: Boolean = true,
     onSelect: (Int) -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val haptics = LocalOperatorHaptics.current
+    Row(Modifier.fillMaxWidth().monitorTabStrip()) {
         tabs.forEachIndexed { index, title ->
             val active = index == selected
-            val shape = RoundedCornerShape(9.dp)
-            Box(Modifier.weight(1f).height(44.dp)
-                .chromeClickable(enabled = enabled, onClick = { if (enabled) onSelect(index) }), contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxWidth().height(30.dp).clip(shape)
-                    .background(if (active) LiveDesign.accentDim else Color.White.copy(alpha = .05f))
-                    .border(1.dp, if (active) LiveDesign.accent.copy(alpha = .55f) else LiveDesign.hairline, shape),
-                    contentAlignment = Alignment.Center) {
-                    Text(if (uppercase) title.uppercase() else title,
-                        style = LiveType.ui(11f, FontWeight.SemiBold).copy(letterSpacing = .44.sp),
-                        color = if (active) LiveDesign.accent else LiveDesign.muted, maxLines = 1,
-                        textAlign = TextAlign.Center)
-                }
+            MonitorTab(active, { haptics.selection(); onSelect(index) }, Modifier.weight(1f), enabled = enabled,
+                separator = index > 0, accessibilityLabel = title, horizontalPadding = 0.dp) {
+                Text(if (uppercase) title.uppercase() else title,
+                    style = LiveType.ui(11f, FontWeight.SemiBold).copy(letterSpacing = .44.sp),
+                    color = if (active) LiveDesign.accent else LiveDesign.muted, maxLines = 1,
+                    textAlign = TextAlign.Center)
             }
         }
     }

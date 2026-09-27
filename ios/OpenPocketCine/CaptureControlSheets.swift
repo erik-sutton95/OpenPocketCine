@@ -135,6 +135,9 @@ struct CapturePickerPanel: View {
     var preview: CaptureDrumPresentation? = nil
     var onSelectRecordingCategory: ((CaptureSheet) -> Void)? = nil
     var showsRecordingCategories: Bool = false
+    var prefixContent: AnyView? = nil
+    var subtitleOverride: String? = nil
+    var controlsEnabled = true
     var onClose: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.interfaceLocked) private var interfaceLocked
@@ -188,50 +191,53 @@ struct CapturePickerPanel: View {
     }
 
     private var canApplyDrum: Bool {
-        preview == nil && appeared && isPresented() && scenePhase == .active
+        controlsEnabled && preview == nil && appeared && isPresented() && scenePhase == .active
             && !interfaceLocked && !model.session.isLocked
     }
 
     var body: some View {
         let kind: MonitorCapturePopupKind = preview == nil ? .details : .compact
         MonitorCapturePanel(
-            title: headerTitle, subtitle: kind.subtitle ?? headerSubtitle,
+            title: headerTitle, subtitle: subtitleOverride ?? kind.subtitle ?? headerSubtitle,
             maximumHeight: maximumHeight, bottomPadding: bottomPadding,
             topPadding: topPadding, topCornerRadius: topCornerRadius,
             bottomCornerRadius: bottomCornerRadius, kind: kind, edge: edge, close: onClose
         ) {
             VStack(alignment: .leading, spacing: 8) {
-                if let held = preview {
-                    CaptureDrumWheel(
-                        options: held.snapshot.options, selection: .constant(held.selection),
-                        markedValues: held.snapshot.marked, isInteractive: false)
-                } else {
-                    content
-                    if sheet == .resolution, !isPhoto, formatAspects.count > 1 {
-                        aspectBar
-                    }
-                    if !modeTabs.isEmpty { modeBar }
-                    if let onSelectRecordingCategory,
-                        recordingCategories.count > 1,
-                        MonitorCapturePopupChrome.showsRecordingCategoryTabs(
-                            portrait: showsRecordingCategories, kind: .details)
-                    {
-                        MonitorCaptureTabs(
-                            options: recordingCategories, selection: sheet,
-                            title: {
-                                $0 == .resolution ? "Format" : $0 == .color ? "Color" : "Mode"
-                            }
-                        ) { category in
-                            guard canApplyDrum else { return }
-                            cancelDrumSend()
-                            onSelectRecordingCategory(
-                                CaptureReadoutAdmission.opening(
-                                    category, isPhoto: isPhoto))
+                if let prefixContent { prefixContent }
+                Group {
+                    if let held = preview {
+                        CaptureDrumWheel(
+                            options: held.snapshot.options, selection: .constant(held.selection),
+                            markedValues: held.snapshot.marked, isInteractive: false)
+                    } else {
+                        content
+                        if sheet == .resolution, !isPhoto, formatAspects.count > 1 {
+                            aspectBar
                         }
+                        if !modeTabs.isEmpty { modeBar }
+                        if let onSelectRecordingCategory,
+                            recordingCategories.count > 1,
+                            MonitorCapturePopupChrome.showsRecordingCategoryTabs(
+                                portrait: showsRecordingCategories, kind: .details)
+                        {
+                            MonitorCaptureTabs(
+                                options: recordingCategories, selection: sheet,
+                                title: {
+                                    $0 == .resolution ? "Format" : $0 == .color ? "Color" : "Mode"
+                                }
+                            ) { category in
+                                guard canApplyDrum else { return }
+                                cancelDrumSend()
+                                onSelectRecordingCategory(
+                                    CaptureReadoutAdmission.opening(
+                                        category, isPhoto: isPhoto))
+                            }
+                        }
+                        if sheet == .iso { nativeIsoHopToggle }
+                        if isEvSheet { facePriorityToggle }
                     }
-                    if sheet == .iso { nativeIsoHopToggle }
-                    if isEvSheet { facePriorityToggle }
-                }
+                }.disabled(!controlsEnabled)
             }
         }
         .environment(

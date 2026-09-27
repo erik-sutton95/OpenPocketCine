@@ -51,9 +51,9 @@ struct LUTPicker: View {
 
     private var picker: some View {
         VStack(spacing: 8) {
-            LUTSegmentedButtons(
-                items: Category.allCases.map(\.rawValue),
-                selected: category.rawValue
+            MonitorCaptureTabs(
+                options: Category.allCases.map(\.rawValue),
+                selection: category.rawValue, title: { $0 }
             ) { raw in
                 guard let next = Category(rawValue: raw), next != category else { return }
                 category = next
@@ -403,34 +403,6 @@ private enum LUTSplitOrientation: String, CaseIterable {
 
     static func current(vertical: Bool) -> LUTSplitOrientation {
         vertical ? .leftRight : .topBottom
-    }
-}
-
-/// OpenZCine `SegmentedButtons` — capsule chips, gold when selected.
-private struct LUTSegmentedButtons: View {
-    let items: [String]
-    let selected: String
-    let onSelect: (String) -> Void
-
-    var body: some View {
-        HStack(spacing: 6) {
-            MonitorSnapshotRows(items, id: \.self) { item in
-                Button {
-                    onSelect(item)
-                } label: {
-                    Text(item)
-                        .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(item == selected ? LiveDesign.accent : LiveDesign.muted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            item == selected ? LiveDesign.accentDim : LiveDesign.glassBright,
-                            in: Capsule()
-                        )
-                }
-                .buttonStyle(.zcTapTarget)
-            }
-        }
     }
 }
 

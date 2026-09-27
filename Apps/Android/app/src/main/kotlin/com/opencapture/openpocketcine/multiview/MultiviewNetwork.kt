@@ -336,9 +336,7 @@ class MultiviewProvisioner(context: Context) {
         while (!approved && System.currentTimeMillis() < deadline) {
             if (closed) throw kotlinx.coroutines.CancellationException("provisioner closed")
             replies.remove(pair)?.let { response ->
-                val payload = response.payload.map { it.toInt() and 0xFF }
-                if (payload == listOf(0, 1)) approved = true
-                else if (payload != listOf(0, 2)) throw MultiviewFailure.Rejected()
+                approved = acceptsMultiviewPairingReply(response, pair)
             }
             if (!approved) delay(100)
         }
@@ -407,7 +405,40 @@ class MultiviewProvisioner(context: Context) {
 sealed class MultiviewFailure(message: String) : Exception(message) {
     class Timeout : MultiviewFailure("Camera did not respond. Close other camera apps and try again.")
     class Unavailable : MultiviewFailure("Camera is not nearby. Check that it is powered on.")
+    class PairingDeferred : MultiviewFailure("Camera is not ready to pair again. Please try again.")
     class Rejected : MultiviewFailure("Camera could not complete this step. Check the Wi-Fi details and try again.")
     class Network : MultiviewFailure("Join the shared Wi-Fi network on this device first.")
     class Message(text: String) : MultiviewFailure(text)
+}
+
+/** Exact pairing replies; a deferred session is never treated as approval. */
+internal fun acceptsMultiviewPairingReply(response: DumlFrame, sequence: Int): Boolean {
+    if (response.seq != sequence || response.cmdSet != 7 || response.cmdId != 0x45 ||
+        response.flags and 0x80 == 0) return false
+    return when (response.payload.map { it.toInt() and 0xff }) {
+        listOf(0, 1) -> true
+        listOf(0, 2) -> false
+        listOf(0, 6) -> throw MultiviewFailure.PairingDeferred()
+        else -> throw MultiviewFailure.Rejected()
+    }
+}
+
+/** One Exit handles the captured post-session 00 06 reply, at most three attempts. */
+internal suspend fun restoreCameraWiFiWithRetry(
+    waitBetween: suspend () -> Unit = { delay(3_000) },
+    attempt: suspend () -> Boolean,
+): Boolean {
+    repeat(3) { index ->
+        try {
+            return attempt()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: MultiviewFailure.PairingDeferred) {
+            if (index == 2) return false
+            waitBetween()
+        } catch (_: Exception) {
+            return false
+        }
+    }
+    return false
 }

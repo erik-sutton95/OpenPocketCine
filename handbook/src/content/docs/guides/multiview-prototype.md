@@ -8,9 +8,11 @@ Multiview is available on iPhone, iPad and Android phones. See
 [Android differences](#android-differences) for what changes on Android.
 
 From **Your cameras**, tap the grid icon at the top-right of the camera list.
-A centered two-step popup sets up the shared network, then Center stage opens
-with space for four cameras. Close, the session title and Wi-Fi share the header.
-LUT, Fit/Fill and Layout share the toolbar. Record and DISP stay in their normal
+The shared-network wizard confirms the phone's network, then Center stage opens
+with space for four cameras. Exit sits at the top-left with Live View Lock
+styling. The Wi-Fi icon uses the Live View Settings position; there is no session
+title or connected-camera count. LUT, Fit/Fill, Layout and Camera settings share
+the toolbar. Record and DISP stay in their normal
 Live View positions: Record is bottom-right with DISP above it in landscape,
 and centered in the bottom row with DISP to its left in portrait. The picker lists discovered Osmo devices. Pocket 3, Pocket 4, Pocket 4 Pro and Nano can attempt shared-network setup; Pocket 3 is recognized even when its Bluetooth advertisement omits the model ID. Action, 360 and older/unprofiled Osmo devices offer “Try experimental shared Wi-Fi”; preview remains unavailable until their preview commands are implemented. Discovery visibility does not mean working preview support. Pocket 3, Pocket 4 Pro and Nano have been monitored together on an iPhone, with recording start/stop confirmed on all three. Nano uses its existing AVC preview decoder
 and model-specific preview start commands. The station-Wi-Fi provisioning
@@ -19,10 +21,11 @@ For Nano, use WPA2: the tested network returned join failures on WPA3 and
 a successful join reply after switching to WPA2 with the same credentials. Cameras join your shared Wi-Fi while remaining
 in normal Video mode. This path needs no RTMP stream or external server.
 
-1. Each time you open Multiview, choose **Local Wi-Fi** (a router or another
-   device’s hotspot) or **Personal Hotspot** (this phone). Select or enter the
-   network name, then enter its password; a saved password can fill it in.
-2. Tap **Done** in the password prompt. For local Wi-Fi, approve the phone’s
+1. Each time you open Multiview, choose **Wi-Fi** (**Local Wi-Fi** on Android)
+   for a router or another device's hotspot, or choose this phone's **Hotspot**.
+   Select or enter the network name, then enter its password; a saved password
+   can fill it in.
+2. Tap **Connect over Wi-Fi** for a local network. Approve the phone's
    network-join prompt if shown. Then add cameras to the empty tiles.
 3. Set each camera to Video mode, stop recording and close other camera apps.
 4. Tap **Add camera**, choose a nearby camera and approve pairing if asked.
@@ -98,11 +101,15 @@ without a fixed aspect ratio. In landscape, Center stage shows one large 16:9
 feed and a trailing strip of smaller feeds. In portrait, its main 16:9 feed
 retains the full stage width, while the smaller feeds fill the space below it.
 In a short resized window, the main feed fits smaller at 16:9 to leave room for
-the smaller feeds and controls.
+the smaller feeds and controls. Landscape feeds start level with the top of
+Exit and Wi-Fi, with camera readouts below the pictures.
 
-The portrait toolbar is vertical on the left. In Center stage it starts just
-below the main picture. In landscape it moves opposite the phone's cutout;
-camera pictures keep their positions. DISP and Record stay at their familiar
+The toolbar is vertical and lines up with the right-hand controls. In landscape,
+it moves to the left control column when the cutout is on the right. Portrait
+keeps it on the right; in Center stage it starts just below the main picture.
+The rail stays below the top control and above the DISP row. On short screens,
+scroll the toolbar to reach every control.
+Camera pictures keep their positions. DISP and Record stay at their familiar
 Live View positions independently of the toolbar. FIT contains the complete
 source and FILL crops to cover a tile without stretching it. Switching layouts
 keeps the existing video hosts and camera sessions alive.
@@ -110,23 +117,44 @@ keeps the existing video hosts and camera sessions alive.
 Camera names, models, reported timecode, battery/storage and recording state
 appear inside each feed, including the smaller portrait views. No information
 box occupies the side of a feed. Selected-camera ISO, shutter, white balance and
-focus readouts sit in the landscape phone header or lower portrait/tablet row.
+focus readouts form a compact group at the bottom. **Camera settings** in the toolbar opens a floating popup. Select a connected camera's tab to change its settings using
+the same controls as Live View. Changes apply to that camera while the other
+feeds stay visible; available controls follow that camera's capabilities and
+recording state. Camera and setting tabs have adjoining edges and an accent
+line marking the selected tab, matching the shared tabs elsewhere in the app.
+
+Timecode uses **HH:MM:SS**, without a frame field. Each tile uses Live View's
+camera battery gauge. iOS includes charge state and low-battery colors; Android
+uses its native amber gauge.
 Unknown values remain absent or show a dash; Nano has no reported timecode.
-These are readouts, not shooting-setting controls. Preview dimensions can differ
-from the recording format. Tap to select a camera without changing Grid; in
+Preview dimensions can differ from the recording format. Tap to select a camera without changing Grid; in
 Center stage, selecting a smaller camera promotes it to the main feed.
 Very short feeds show a compact identity and battery row; open camera options
 for the remaining details.
 
-Each **LUT** button independently toggles the camera-specific DJI Auto conversion
-to Rec.709. It follows the tile's reported color mode, including Nano D-Log M
+**Auto LUT starts on for each newly added camera.** The toolbar toggles it for
+all cameras; a tile's camera options toggle it independently. Reconnecting or
+changing layout preserves that camera's choice. Auto LUT follows the tile's
+reported color mode, including Nano D-Log M
 and Pocket D-Log/D-Log2. Normal/HDR have no automatic cube conversion; unknown
 color waits for camera status. The LUT affects monitoring only.
 
-Every occupied tile has camera options for Live View, recording, LUT, reconnect
-and removal as available, including the smaller feeds.
+Every occupied tile's **…** button opens a compact floating camera menu for
+Live View, recording, LUT, reconnect and removal as available, including the
+smaller feeds. Tap outside the popup or close it to return to the stage.
 
 ## Network setup and recovery
+
+Exit returns cameras to their own Wi-Fi. A temporary pairing refusal gets a
+bounded automatic retry before an error is shown, so the operator does not need
+to press Exit again for that transition. Successfully restored cameras are left
+alone; cameras that still cannot be reached remain in the device's cleanup
+record for a later retry. Recording continues.
+
+Switching apps keeps the camera assignments. After returning, each feed checks
+for fresh pictures and attempts bounded recovery if needed. The iOS decoder-loss
+path now matches Live View's recovery signals. An iPhone with Pocket 4 Pro and
+Nano restored fresh pictures after 5-second and 35-second app switches.
 
 Center stage is the default. The record lamp matches Live View and applies to
 all assigned cameras whose status is current. The toolbar uses Live View glass

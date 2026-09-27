@@ -89,20 +89,36 @@ only returns the stored row. Button actions retain main-actor ownership. Native
 regression tests invoke the real deferred content off-main. This is for bounded
 option groups, not eager rendering of unbounded media catalogs.
 
+The shared native `MonitorTabStrip` components own joined tab surfaces, dividers,
+selection lines and press feedback. Camera/recording controls and navigation in
+Settings, Media, assists and LUT catalogs supply their labels, selection and
+actions. Ordinary setting-value selectors remain separate controls.
+
 `MultiviewPresentationLayout` computes four persistent tile rectangles, the
-session header, selected-camera readouts and the three-cell LUT/Fit/Layout
-toolbar. The toolbar changes sides opposite the landscape cutout; the camera
-rectangles remain fixed. Portrait uses a left toolbar, four full-width grid
-rows or a full-width 16:9 main feed above the secondary rows. Record and DISP
-reuse the platform's normal Field Monitor layout rather than the toolbar geometry. iOS maps the saved arrangement to that policy;
-changing selection or layout never creates a second decoder for the selected
-camera. Tap Layout to switch Grid/Center stage; the header Wi-Fi button opens Shared Wi-Fi.
+Exit/Wi-Fi system controls, selected-camera readouts and the four-cell
+LUT/Fit/Layout/Camera settings toolbar. The vertical toolbar aligns with the right control
+column by default and moves to the left control column for a right-side
+landscape cutout. Portrait keeps it on the right. Short rails scroll without
+shrinking touch targets; the toolbar stays below the top control and above the
+DISP row. Landscape feeds align their top edges with Exit/Wi-Fi; selected-camera
+readouts sit below the feeds in a reserved bottom row. Portrait uses four full-width grid rows or a full-width 16:9 main
+feed above secondary rows; in Center stage the toolbar starts below that main
+feed. Record and DISP reuse the platform's normal Field Monitor layout.
+Changing selection or layout never creates a second decoder for the selected
+camera. Tap Layout to switch Grid/Center stage; the top-right Wi-Fi icon opens
+Shared Wi-Fi.
 Per-camera options remain available inside every occupied tile, including the
 smaller portrait feeds. One tap selects without changing the arrangement.
 Clean hides the upper session controls and assist palette while retaining DISP
 to restore them. Per-tile recovery, recording acknowledgement and station-network cleanup
 remain in `MultiviewSession`. Its current shared assist control applies Auto LUT
-through the existing per-camera LUT operation. The design's additional multi-feed
+through the existing per-camera LUT operation, enabled by default for newly
+added cameras. Tile batteries and HH:MM:SS timecode reuse Live View presentation.
+Camera options use bounded floating monitor components. Camera settings opens
+from the toolbar with a tab per connected camera. Its editor reuses the Live View setting controls and command settlement,
+with a binding that has no feed ownership. Changing tabs or losing the selected
+connection retires pending edits; opening or closing the editor cannot replace
+the tile's decoder, frame callbacks or network owner. The design's additional multi-feed
 assists require a separate rendering and physical-performance qualification.
 
 Saved-camera Add setup and Multiview use one iOS `StationNetworkSetupView` for

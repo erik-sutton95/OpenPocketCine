@@ -289,6 +289,9 @@ and preferred-size restoration. Preserve actual scope GPU rendering/cadence.
 
 These accepted refinements supersede the corresponding prototype defaults:
 
+- Camera, recording and settings tabs form one continuous strip with adjoining
+  edges, shared dividers and an accent selection line. Remove gaps and separate
+  rounded button outlines while preserving full touch targets and scrolling.
 - Fresh windowed tools open in the canvas center; saved placement survives.
   Audio opens left/vertical-center, can be dragged, and adds orientation and
   optional per-channel dBFS display preferences.

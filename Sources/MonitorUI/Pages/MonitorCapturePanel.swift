@@ -121,13 +121,14 @@
         }
     }
 
-    /// Capture tabs are individual cyan-outlined choices rather than the solid
-    /// grouped segments used on an Operator Setup page.
+    /// Camera, capture and recording categories share one joined tab strip.
     public struct MonitorCaptureTabs<Value: Hashable>: View {
         private let snapshot: [MonitorCaptureTabRow]
 
         public init(
             options: [Value], selection: Value?, title: (Value) -> String,
+            identifier: (Value) -> String = { _ in "" },
+            accessibilityValue: (Value) -> String = { _ in "" },
             select: @escaping (Value) -> Void
         ) {
             // The child body may run after camera telemetry has changed the
@@ -135,6 +136,7 @@
             snapshot = options.enumerated().map { index, option in
                 MonitorCaptureTabRow(
                     id: index, title: title(option), selected: selection == option,
+                    identifier: identifier(option), accessibilityValue: accessibilityValue(option),
                     action: { select(option) })
             }
         }
@@ -150,7 +152,7 @@
         }
 
         public var body: some View {
-            HStack(spacing: 6) { rows }
+            MonitorTabStrip { rows }
         }
     }
 
@@ -158,6 +160,8 @@
         let id: Int
         let title: String
         let selected: Bool
+        var identifier: String = ""
+        var accessibilityValue: String = ""
         let action: @MainActor @Sendable () -> Void
     }
 
@@ -171,22 +175,13 @@
                     .font(MonitorTheme.font(11, weight: .semibold)).tracking(0.44)
                     .foregroundStyle(row.selected ? MonitorTheme.accent : MonitorTheme.muted)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                    .padding(.horizontal, 6).frame(maxWidth: .infinity, minHeight: 30)
-                    .background(
-                        row.selected
-                            ? MonitorTheme.accent.opacity(0.18) : Color.white.opacity(0.05),
-                        in: RoundedRectangle(cornerRadius: 9)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 9)
-                            .stroke(
-                                row.selected ? MonitorTheme.accent : Color.white.opacity(0.10),
-                                lineWidth: 1)
-                    }
-                    .padding(.vertical, 7).contentShape(Rectangle())
+                    .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 44)
+                    .monitorTabSurface(selected: row.selected, separator: row.id > 0)
             }
-            .buttonStyle(MonitorButtonStyle())
+            .buttonStyle(MonitorTabButtonStyle())
             .accessibilityLabel(row.title)
+            .accessibilityIdentifier(row.identifier)
+            .accessibilityValue(row.accessibilityValue)
             .accessibilityAddTraits(row.selected ? .isSelected : [])
         }
     }

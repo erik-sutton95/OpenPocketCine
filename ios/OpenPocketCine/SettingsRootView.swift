@@ -165,15 +165,12 @@ struct SettingsRootView: View {
     private func settingsNavigation(portrait: Bool) -> some View {
         VStack(alignment: .leading, spacing: portrait ? 9 : 8) {
             ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
-                let layout =
-                    portrait
-                    ? AnyLayout(HStackLayout(spacing: 3))
-                    : AnyLayout(VStackLayout(spacing: 3))
-                layout {
+                MonitorTabStrip(vertical: !portrait) {
                     ForEach(OperatorSettingsTab.allCases) { tab in
                         MonitorNavigationItem(
                             tab.rawValue, subtitle: tabSubtitle(tab),
-                            selected: model.operatorSettingsTab == tab
+                            selected: model.operatorSettingsTab == tab,
+                            separator: tab != OperatorSettingsTab.allCases.first
                         ) {
                             if tab != model.operatorSettingsTab {
                                 OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
@@ -536,7 +533,8 @@ struct SettingsRootView: View {
         SettingsRowCard(title: "EV Meter") {
             SettingsSwitchInlineRow(
                 title: "Enabled",
-                help: "Show the camera's exposure meter at the picture's left edge in DISP 1. Auto and Manual use the camera reading without changing exposure settings.",
+                help:
+                    "Show the camera's exposure meter at the picture's left edge in DISP 1. Auto and Manual use the camera reading without changing exposure settings.",
                 showTopDivider: false, isOn: model.assist.evMeter
             ) { model.assist.toggle(.evMeter) }
         }

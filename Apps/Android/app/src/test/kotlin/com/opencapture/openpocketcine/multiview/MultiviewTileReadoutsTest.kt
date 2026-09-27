@@ -27,12 +27,20 @@ class MultiviewTileReadoutsTest {
     @Test fun eachCameraKeepsItsOwnTimecodeAndRecordingConfirmation() {
         val one = readouts(CameraStatus(timecode = "01:02:03:04", recordElapsedSec = 84), true, true)
         val two = readouts(CameraStatus(timecode = "10:20:30:12"), false, true)
-        assertEquals("01:02:03:04", one.timecode)
+        assertEquals("01:02:03", one.timecode)
         assertEquals("REC 1:24", one.recording)
-        assertEquals("10:20:30:12", two.timecode)
+        assertEquals("10:20:30", two.timecode)
         assertEquals("STBY", two.recording)
         val stale = readouts(CameraStatus(recordElapsedSec = 84), true, false)
         assertEquals("REC —", stale.recording)
+    }
+
+    @Test fun displayClockDoesNotChangeProtocolTimecode() {
+        val status = CameraStatus(timecode = "01:02:03:24")
+        assertEquals("01:02:03", status.timecodeClock)
+        assertEquals("01:02:03:24", status.timecode)
+        assertEquals("01:02:03", CameraStatus(timecode = "01:02:03").timecodeClock)
+        assertEquals(null, CameraStatus(timecode = "").timecodeClock)
     }
 
     @Test fun compactReadoutsRetainIdentityAndUnknownFields() {

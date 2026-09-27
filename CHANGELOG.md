@@ -8,12 +8,22 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Camera, recording and settings tabs use a continuous strip with shared edges
+  and an accent selection line instead of separate button shapes.
 - Multiview Grid fills the available stage on iOS and Android. Portrait uses a
-  left toolbar and in-feed camera details; Center stage keeps its main 16:9
-  picture above the toolbar. Landscape moves tools opposite the cutout while
-  keeping camera positions fixed. DISP and Record retain their normal Live View
+  right toolbar and in-feed camera details; Center stage keeps its main 16:9
+  picture above the toolbar. Landscape feeds start level with Exit and Wi-Fi,
+  and camera readouts move below them. Landscape aligns tools with the right controls,
+  or the left column for a right-side cutout. Short rails scroll. DISP and Record retain their normal Live View
   positions. Every camera has an options menu, and recording follows the saved
   confirmation preference. Clean view retains tally and recovery status.
+- Multiview starts newly added cameras with Auto LUT enabled, shows HH:MM:SS
+  timecode and reuses Live View's camera battery gauges. Camera options open in
+  a compact floating menu. The toolbar gains a Camera settings button with
+  a tab for each connected camera, reusing Live View controls while feeds stay
+  on the stage. Exit sits at the top-left with Live View Lock styling; the
+  Wi-Fi icon sits at the top-right with Live View Settings styling. Removing the session heading
+  and tightening the left gutter gives tiles more space.
 - Multiview on iOS and Android uses the Add setup Wi-Fi/hotspot experience:
   current, saved and nearby networks, automatic camera scanning, remembered
   passwords, compatibility help and inline retry. iOS shares the same wizard
@@ -39,6 +49,14 @@ All notable changes to this project are documented here. The format is based on
   to help narrow down which gate stops decoding when Live View freezes.
 
 ### Fixed
+
+- Multiview Exit retries the captured temporary pairing refusal before showing
+  an error, waiting for the old Bluetooth link to close on iOS. Successful
+  cameras are left alone and genuine failures retain their cleanup record.
+- iOS Multiview now forwards lost-frame signals after background suspension to
+  the existing decoder recovery policy. Fresh camera packets no longer hide
+  that failure, and decoder repair retains the camera connection while waiting
+  for a new picture.
 
 - Live View no longer freezes for up to 8 s after a single lost video packet.
   The keyframe request is no longer held behind an earlier request the camera

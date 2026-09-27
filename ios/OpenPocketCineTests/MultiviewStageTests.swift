@@ -35,7 +35,7 @@ import XCTest
             tile.settings.timecode = nil
             XCTAssertNil(tile.timecodeReadout)
             tile.settings.timecode = "01:02:03:04"
-            XCTAssertEqual(tile.timecodeReadout, name.contains("Nano") ? nil : "01:02:03:04")
+            XCTAssertEqual(tile.timecodeReadout, name.contains("Nano") ? nil : "01:02:03")
         }
     }
 
@@ -151,7 +151,8 @@ import XCTest
         let nano = session.tiles[0]
         assign(nano, recording: false, available: true)
         nano.settings.colorMode = .dLogM
-        nano.toggleLUT()
+        XCTAssertTrue(nano.lutEnabled)
+        nano.updateLUT()
         XCTAssertGreaterThan(nano.effects.lutDimension, 0)
         XCTAssertEqual(session.tiles[1].effects.lutDimension, 0)
         nano.settings.colorMode = .normal

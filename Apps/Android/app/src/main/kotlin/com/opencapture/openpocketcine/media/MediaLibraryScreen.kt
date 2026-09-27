@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.monitorui.MonitorTab
+import com.opencapture.monitorui.monitorTabStrip
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -57,8 +60,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -267,10 +268,11 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                         if (compact) {
                             CategoryStrip(category) { category = it }
                         } else {
-                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                MediaLibraryTab.entries.forEach { tab ->
-                                    CategoryTab(tab, active = tab == category, fill = true) { category = tab }
+                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                                Column(Modifier.fillMaxWidth().monitorTabStrip()) {
+                                    MediaLibraryTab.entries.forEach { tab ->
+                                        CategoryTab(tab, active = tab == category, fill = true) { category = tab }
+                                    }
                                 }
                             }
                             MediaCatalogDisplayControls(
@@ -437,14 +439,7 @@ private fun MediaCatalogDisplayControls(
 
 @Composable
 private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab) -> Unit) {
-    Row(
-        Modifier
-            .clip(MediaCornerShape)
-            .panelGlass(MediaCornerShape)
-            .horizontalScroll(rememberScrollState())
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    Row(Modifier.horizontalScroll(rememberScrollState()).monitorTabStrip()) {
         MediaLibraryTab.entries.forEach { tab ->
             CategoryTab(tab, active = tab == category) { onSelect(tab) }
         }
@@ -453,6 +448,7 @@ private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab)
 
 @Composable
 private fun CategoryTab(tab: MediaLibraryTab, active: Boolean, fill: Boolean = false, onClick: () -> Unit) {
+    val haptics = LocalOperatorHaptics.current
     val (icon, label) =
         when (tab) {
             MediaLibraryTab.ALL -> OpcIcon.LAYOUT_GRID to "All"
@@ -460,31 +456,15 @@ private fun CategoryTab(tab: MediaLibraryTab, active: Boolean, fill: Boolean = f
             MediaLibraryTab.PHOTOS -> OpcIcon.IMAGE to "Photos"
             MediaLibraryTab.FAVORITES -> OpcIcon.STAR to "Favorites"
         }
-    Row(
-        Modifier
-            .then(if (fill) Modifier.fillMaxWidth() else Modifier)
-            .clip(MediaCornerShape)
-            .background(if (active) LiveDesign.accentDim else Color.Transparent)
-            .chromeClickable(onClick = onClick)
-            .semantics {
-                contentDescription = "Show $label media"
-                role = Role.Tab
-            }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        OpcIcon(
-            icon = icon,
-            contentDescription = null,
-            tint = if (active) LiveDesign.accent else LiveDesign.muted,
-            modifier = Modifier.size(16.dp),
-        )
-        Text(
-            label,
-            color = if (active) LiveDesign.accent else LiveDesign.muted,
-            style = LiveType.ui(12f, if (active) FontWeight.SemiBold else FontWeight.Medium),
-        )
+    MonitorTab(active, { haptics.selection(); onClick() }, Modifier.then(if (fill) Modifier.fillMaxWidth() else Modifier),
+        vertical = fill, separator = tab != MediaLibraryTab.entries.first(),
+        accessibilityLabel = "Show $label media") {
+        Row(Modifier.then(if (fill) Modifier.fillMaxWidth() else Modifier),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OpcIcon(icon, null, Modifier.size(16.dp), if (active) LiveDesign.accent else LiveDesign.muted)
+            Text(label, color = if (active) LiveDesign.accent else LiveDesign.muted,
+                style = LiveType.ui(12f, if (active) FontWeight.SemiBold else FontWeight.Medium))
+        }
     }
 }
 

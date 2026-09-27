@@ -240,6 +240,81 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         XCTAssertFalse(session.hasPendingCleanup)
     }
 
+    @MainActor func testFirstCloseRetriesCapturedPairingReplyForOnlyUnfinishedCamera() async {
+        var journal: MultiviewStageStore.Stage?
+        var attempts: [UUID: Int] = [:]
+        var waits = 0
+        let first = FoundCamera(
+            id: UUID(), name: "OsmoNano-Test", model: .resolve(modelId: 0x19, name: "Test"),
+            modelId: 0x19)
+        let second = FoundCamera(
+            id: UUID(), name: "OsmoPocket4Pro-Test", model: .resolve(modelId: 0x26, name: "Test"),
+            modelId: 0x26)
+        let session = MultiviewSession(
+            resetCamera: { camera in
+                attempts[camera.id, default: 0] += 1
+                let payload: [UInt8] =
+                    camera.id == first.id && attempts[camera.id] == 1
+                    ? [0, 6] : [0, 1]
+                // Replay the exact pairing response that aborted the physical first Exit.
+                let response = Duml.Frame(
+                    sender: 7, receiver: 2, seq: 1202, flags: 0x80,
+                    cmdSet: 7, cmdId: 0x45, payload: payload)
+                return try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202)
+            }, resetRetryDelay: { waits += 1 },
+            saveStage: {
+                journal = $0
+                return true
+            })
+        XCTAssertTrue(session.recordStationChange(first))
+        XCTAssertTrue(session.recordStationChange(second))
+        let closed = await session.closeStage()
+        XCTAssertTrue(closed, "One Exit must handle the captured temporary pairing refusal")
+        XCTAssertEqual(attempts[first.id], 2)
+        XCTAssertEqual(attempts[second.id], 1, "A successful camera must not be reset again")
+        XCTAssertEqual(waits, 1)
+        XCTAssertFalse(session.hasPendingCleanup)
+        XCTAssertNil(journal)
+    }
+
+    @MainActor func testRepeatedPairingDeferralIsBoundedAndKeepsCleanupJournal() async {
+        var attempts = 0
+        var journal: MultiviewStageStore.Stage?
+        let session = MultiviewSession(
+            resetCamera: { _ in
+                attempts += 1
+                throw MultiviewSession.Failure.pairingDeferred
+            }, resetRetryDelay: {},
+            saveStage: {
+                journal = $0
+                return true
+            })
+        let camera = FoundCamera(
+            id: UUID(), name: "OsmoNano-Test", model: .resolve(modelId: 0x19, name: "Test"),
+            modelId: 0x19)
+        XCTAssertTrue(session.recordStationChange(camera))
+        let closed = await session.closeStage()
+        XCTAssertFalse(closed)
+        XCTAssertEqual(attempts, 3)
+        XCTAssertEqual(journal?.pendingReset?.map(\.id), [camera.id])
+        XCTAssertTrue(session.hasPendingCleanup)
+    }
+
+    @MainActor func testPairingReplyRequiresMatchingOpcodeAndExplicitApproval() throws {
+        var response = Duml.Frame(
+            sender: 7, receiver: 2, seq: 1202, flags: 0x80,
+            cmdSet: 7, cmdId: 0x45, payload: [0, 1])
+        XCTAssertTrue(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202))
+        XCTAssertFalse(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1203))
+        response.cmdId = 0x39
+        XCTAssertFalse(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202))
+        response.cmdId = 0x45
+        response.payload = [0, 2]
+        XCTAssertFalse(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202))
+        response.payload = [0, 3]
+        XCTAssertThrowsError(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202))
+    }
+
     @MainActor func testCloseReusesUncancelledScanCleanup() async throws {
         var journal: MultiviewStageStore.Stage?
         var attempts = 0

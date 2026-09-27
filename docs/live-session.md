@@ -209,6 +209,21 @@ qualification. Android already uses its retained `hasPicture` state for the
 startup cover. Synthetic native/JVM regressions cover these changes; physical
 camera qualification is still pending.
 
+### Multiview foreground recovery
+
+Multiview retains its assigned cameras and UDP endpoints while inactive. On iOS,
+scene phase and UIKit activity notifications share one idempotent transition.
+The existing one-second monitor resumes the watchdog after its foreground grace.
+Receive-queue discontinuities reach each tile's decoder, and the watchdog sees
+native output age and lost references even when packets and complete access
+units remain fresh. Its decoder action rebuilds presentation, keeps the endpoint,
+sends one enable and waits for fresh source and presentation within the existing
+16-second deadline. It cannot declare success from telemetry or retained pixels.
+A known lost reference chain cannot be released as an ordinary IDR hold.
+Android already forwards discontinuities/epochs and these watchdog fields.
+The iOS native overflow regression fails on the previous wiring and passes with
+this correction; physical background/return qualification is pending.
+
 ## Disconnect teardown
 
 On iOS, only the `DisplayLayerView` that currently contains the session's display

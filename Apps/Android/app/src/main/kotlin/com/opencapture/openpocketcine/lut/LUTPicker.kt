@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine.lut
 
+import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.monitorui.MonitorTab
+import com.opencapture.monitorui.monitorTabStrip
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -351,7 +354,7 @@ private fun LUTPickerBody(
             .fillMaxWidth()
             .then(if (embedded) Modifier.fillMaxHeight() else Modifier),
     ) {
-        val tabBlock = 36.dp
+        val tabBlock = 44.dp
         val tabGap = 8.dp
         val contentH =
             if (constraints.hasBoundedHeight) {
@@ -363,11 +366,15 @@ private fun LUTPickerBody(
             Modifier.fillMaxWidth().wrapContentHeight(),
             verticalArrangement = Arrangement.spacedBy(tabGap),
         ) {
-        LutSegmentedButtons(
-            items = LutTab.entries.map { it.label },
-            selected = tab.label,
-        ) { label ->
-            LutTab.entries.firstOrNull { it.label == label }?.let(onTab)
+        val haptics = LocalOperatorHaptics.current
+        Row(Modifier.fillMaxWidth().monitorTabStrip()) {
+            LutTab.entries.forEachIndexed { index, item ->
+                MonitorTab(item == tab, { haptics.selection(); onTab(item) }, Modifier.weight(1f),
+                    separator = index > 0, accessibilityLabel = item.label) {
+                    Text(item.label, style = LiveType.ui(13f, FontWeight.SemiBold),
+                        color = if (item == tab) LiveDesign.accent else LiveDesign.muted, maxLines = 1)
+                }
+            }
         }
         Box(Modifier.fillMaxWidth().height(contentH)) {
             when (tab) {

@@ -81,15 +81,12 @@
         private func navigation(portrait: Bool) -> some View {
             VStack(alignment: .leading, spacing: 9) {
                 ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
-                    let arrangement =
-                        portrait
-                        ? AnyLayout(HStackLayout(spacing: 3))
-                        : AnyLayout(VStackLayout(spacing: 3))
-                    arrangement {
+                    MonitorTabStrip(vertical: !portrait) {
                         ForEach(categories) { item in
                             MonitorNavigationItem(
                                 item.title, count: String(item.count),
-                                selected: item.id == category
+                                selected: item.id == category,
+                                separator: item.id != categories.first?.id
                             ) {
                                 action(.category(item.id))
                             }

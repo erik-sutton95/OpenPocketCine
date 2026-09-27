@@ -67,11 +67,13 @@ private struct GuidesLongPressMenu: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsInlineRow(title: "Family", showTopDivider: false) {
-                SettingsSegmented(
+                MonitorCaptureTabs(
                     options: GuideFamily.allCases.map(\.rawValue),
-                    selected: assist.guideFamily.rawValue
+                    selection: assist.guideFamily.rawValue, title: { $0 }
                 ) { value in
-                    guard let family = GuideFamily(rawValue: value) else { return }
+                    guard let family = GuideFamily(rawValue: value), family != assist.guideFamily
+                    else { return }
+                    OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
                     assist.guideFamily = family
                     assist.persist()
                 }

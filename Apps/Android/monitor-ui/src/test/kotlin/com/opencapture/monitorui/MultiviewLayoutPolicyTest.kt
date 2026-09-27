@@ -33,7 +33,9 @@ class MultiviewLayoutPolicyTest {
                 // Android's native offsets intentionally differ slightly from the iOS shell.
                 assertEquals(live.record, layout.record, case)
                 assertEquals(live.display, layout.display, case)
-                val controls = listOf(layout.sessionControls, layout.title, layout.readouts, layout.assists,
+                assertEquals(if (portrait) live.settings.copy(x = w - 14 - live.settings.width, y = safe.top + 12) else live.settings, layout.network, case)
+                assertEquals(if (portrait) live.lock.copy(y = safe.top + 12) else live.lock, layout.sessionControls, case)
+                val controls = listOf(layout.sessionControls, layout.readouts, layout.assists,
                     layout.network, layout.display, layout.record)
                 for (frame in layout.tiles + controls) {
                     assertTrue(frame.x >= 0 && frame.y >= 0, "$case: $frame")
@@ -57,12 +59,12 @@ class MultiviewLayoutPolicyTest {
     @Test
     fun portraitGridFillsFourRowsBesideTheToolbar() {
         val grid = MultiviewPresentationLayout.compute(393f, 852f, MultiviewSafeArea(top = 59f, bottom = 34f), GRID, 0)
-        assertTrue(grid.tiles.all { it.x == 80f && it.width == 298f })
+        assertTrue(grid.tiles.all { it.x == 15f && it.maxX == grid.assists.x - 6f })
         assertEquals(129f, grid.tiles[0].y)
         assertEquals(grid.readouts.y - 12f, grid.tiles[3].maxY, 0.001f)
         assertEquals(grid.tiles[0].height, grid.tiles[3].height)
         assertFalse(grid.assistsHorizontal)
-        assertEquals(grid.tiles[0].y, grid.assists.y)
+        assertEquals(grid.network.maxY + 8, grid.assists.y)
         assertTrue(abs(grid.tiles[0].width / grid.tiles[0].height - 16f / 9f) > 0.1f)
     }
 
@@ -74,14 +76,14 @@ class MultiviewLayoutPolicyTest {
         val thumbs = layout.tiles.filterIndexed { index, _ -> index != 2 }
         assertEquals(MonitorRect(15f, 129f, 363f, 204.1875f), main)
         assertEquals(main.maxY + 15f, layout.assists.y)
-        assertTrue(thumbs.all { it.x == 80f && it.maxX == 378f })
+        assertTrue(thumbs.all { it.x == 15f && it.maxX == layout.assists.x - 6f })
         assertEquals(layout.assists.y, thumbs[0].y)
         assertEquals(layout.readouts.y - 12f, thumbs[2].maxY, 0.001f)
         assertEquals(thumbs[0].height, thumbs[1].height)
     }
 
     @Test
-    fun landscapeRotationMovesOnlyToolbarAndNativeDisplayClearance() {
+    fun landscapeRotationMovesOnlyToolbarToTheColumnOppositeTheCutout() {
         for (arrangement in MultiviewArrangement.entries) {
             val left = MultiviewPresentationLayout.compute(852f, 393f,
                 MultiviewSafeArea(leading = 59f, bottom = 21f), arrangement, 1)
@@ -91,13 +93,48 @@ class MultiviewLayoutPolicyTest {
             assertEquals(left.record, right.record)
             assertEquals(left.display.x, right.display.x)
             assertEquals(left.sessionControls, right.sessionControls)
-            assertEquals(left.title, right.title)
             assertEquals(left.network, right.network)
-            assertEquals(left.readouts, right.readouts)
-            assertTrue(left.assists.x > left.tiles[1].maxX)
-            assertTrue(right.assists.maxX < right.tiles[0].x)
+            assertEquals(left.display.midX, left.assists.midX)
+            assertEquals(left.network.midX, left.assists.midX)
+            assertEquals(right.sessionControls.midX, right.assists.midX)
+            assertEquals(left.network.maxY + 8f, left.assists.y)
+            assertEquals(right.sessionControls.maxY + 8f, right.assists.y)
+            assertTrue(left.assists.x > left.tiles.maxOf { it.maxX })
+            assertTrue(right.assists.maxX < right.tiles.minOf { it.x })
+            for (layout in listOf(left, right)) {
+                assertFalse(layout.assistsHorizontal)
+                assertTrue(layout.assists.maxY <= layout.display.y - 8f)
+            }
             assertEquals(left.record.y - 8f, left.display.maxY)
             assertEquals(right.record.y - 8f, right.display.maxY)
+        }
+    }
+
+    @Test
+    fun landscapeRailClearsNotchAndIslandBandsWithStableFramesAcrossRotation() {
+        for ((w, h, cutout) in listOf(Triple(844f, 390f, 44f), Triple(852f, 393f, 59f),
+            Triple(956f, 440f, 62f), Triple(976f, 448f, 62f), Triple(800f, 480f, 40f))) {
+            for (arrangement in MultiviewArrangement.entries) {
+                val left = MultiviewPresentationLayout.compute(w, h,
+                    MultiviewSafeArea(leading = cutout, bottom = 21f), arrangement, 0)
+                val right = MultiviewPresentationLayout.compute(w, h,
+                    MultiviewSafeArea(trailing = cutout, bottom = 21f), arrangement, 0)
+                assertEquals(left.tiles, right.tiles)
+                assertEquals(left.display.midX, left.assists.midX)
+                assertEquals(right.sessionControls.midX, right.assists.midX)
+                for ((layout, trailing) in listOf(left to false, right to true)) {
+                    val height = if (cutout >= 55f) 112f else 124f
+                    val band = MonitorRect(if (trailing) w - cutout else 0f, (h - height) / 2, cutout, height)
+                    assertFalse(overlaps(layout.assists, band), "$w x $h / $band / ${layout.assists}")
+                    if (trailing) {
+                        assertTrue(layout.assists.maxX < w / 2)
+                        assertTrue(layout.tiles.all { it.x >= layout.assists.maxX + 6f })
+                    } else {
+                        assertTrue(layout.assists.x > w / 2)
+                        assertTrue(layout.tiles.all { it.maxX <= layout.assists.x - 6f })
+                    }
+                }
+            }
         }
     }
 
@@ -105,10 +142,29 @@ class MultiviewLayoutPolicyTest {
     fun landscapeGridFillsStageWithoutAspectConstraint() {
         val grid = MultiviewPresentationLayout.compute(852f, 393f,
             MultiviewSafeArea(leading = 59f, bottom = 21f), GRID, 0)
-        assertEquals(MonitorRect(80f, 70f, 336f, 139f), grid.tiles[0])
+        assertEquals(MonitorRect(71f, 11.825f, 340.5f, 143.5875f), grid.tiles[0])
         assertEquals(764f, grid.tiles[3].maxX)
-        assertEquals(360f, grid.tiles[3].maxY)
-        assertTrue(grid.tiles.all { it.width == 336f && it.height == 139f })
+        assertEquals(311f, grid.tiles[3].maxY)
+        assertTrue(grid.tiles.all { it.width == 340.5f && it.height == 143.5875f })
+    }
+
+    @Test
+    fun landscapeTopAlignedFeedsLeaveReadoutsBelowForEverySelection() {
+        for ((w, h) in listOf(667f to 375f, 852f to 393f, 1194f to 834f)) {
+            for (arrangement in MultiviewArrangement.entries) for (selected in 0 until 4) {
+                val layout = MultiviewPresentationLayout.compute(w, h,
+                    MultiviewSafeArea(bottom = 21f), arrangement, selected)
+                val main = layout.tiles[if (arrangement == CENTER_STAGE) selected else 0]
+                val firstSecondary = layout.tiles.first { it !== main }
+                assertEquals(layout.sessionControls.y, main.y)
+                assertEquals(layout.network.y, main.y)
+                assertEquals(main.y, firstSecondary.y)
+                assertTrue(layout.tiles.all { it.maxX <= layout.network.x - 6f })
+                assertTrue(layout.tiles.all { it.maxY <= layout.readouts.y - 12f })
+                assertEquals(37f, layout.readouts.height)
+                if (!layout.tablet) assertEquals(h - 21f - 12f, layout.readouts.maxY)
+            }
+        }
     }
 
     @Test
@@ -131,16 +187,30 @@ class MultiviewLayoutPolicyTest {
     }
 
     @Test
-    fun toolbarContainsThreeFullTouchTargets() {
+    fun toolbarContainsFourFullTouchTargets() {
         for ((w, h) in listOf(393f to 852f, 852f to 393f, 744f to 1133f, 1133f to 744f)) {
             val layout = MultiviewPresentationLayout.compute(w, h, arrangement = GRID, selected = 0)
             val cell = if (layout.tablet) 52f else 44f
             assertEquals(cell, layout.controlCellSize)
-            assertEquals(layout.tablet && !layout.portrait, layout.assistsHorizontal)
-            assertEquals(if (layout.assistsHorizontal) cell * 3 + 14 else cell + 8, layout.assists.width)
-            assertEquals(if (layout.assistsHorizontal) cell + 8 else cell * 3 + 14, layout.assists.height)
-            assertEquals(cell, layout.sessionControls.width)
+            assertFalse(layout.assistsHorizontal)
+            assertEquals(cell + 8, layout.assists.width)
+            assertTrue(layout.assists.height <= cell * 4 + 17)
+            assertTrue(layout.assists.height >= cell + 8)
+            assertTrue(layout.assists.x > w / 2)
+            assertEquals(MonitorLayoutPolicy.systemButtonSize(layout.tablet), layout.sessionControls.width)
         }
+    }
+
+    @Test
+    fun smallLandscapeRailUsesTheAvailableHeightWithoutShrinkingTouchTargets() {
+        val layout = MultiviewPresentationLayout.compute(667f, 375f, arrangement = GRID, selected = 0)
+        assertEquals(44f, layout.controlCellSize)
+        assertEquals(52f, layout.assists.width)
+        assertEquals(layout.display.midX, layout.assists.midX)
+        assertEquals(layout.network.maxY + 8f, layout.assists.y)
+        assertEquals(layout.display.y - 8f, layout.assists.maxY)
+        assertTrue(layout.assists.height < 4 * layout.controlCellSize + 17)
+        assertFalse(layout.assistsHorizontal)
     }
 
     @Test

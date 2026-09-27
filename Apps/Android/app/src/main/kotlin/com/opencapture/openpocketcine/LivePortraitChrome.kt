@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,6 +45,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -817,17 +820,17 @@ fun LivePortraitRecOptionsButton(
             ) {
                 Column(Modifier.width(220.dp).monitorMaterial(MonitorMaterial.Expanded)) {
                     if (isPhoto) {
-                        RecOptionsRow("Shooting mode") {
+                        LivePopupAction("Shooting mode") {
                             open = false
                             onOpen(LiveSheet.MODE)
                         }
                     } else {
-                        RecOptionsRow("Resolution · Framerate") {
+                        LivePopupAction("Resolution · Framerate") {
                             open = false
                             onOpen(LiveSheet.FORMAT)
                         }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(LiveDesign.hairline))
-                        RecOptionsRow("Color") {
+                        LivePopupAction("Color") {
                             open = false
                             onOpen(LiveSheet.COLOR)
                         }
@@ -838,18 +841,22 @@ fun LivePortraitRecOptionsButton(
     }
 }
 
+/** Shared floating-menu action used by Live View and Multiview camera menus. */
 @Composable
-private fun RecOptionsRow(title: String, onClick: () -> Unit) {
+internal fun LivePopupAction(
+    title: String, enabled: Boolean = true, destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
     Text(
         title,
-        color = LiveDesign.text,
+        color = if (destructive) LiveDesign.rec else LiveDesign.text,
         style = LiveType.ui(14f, FontWeight.Medium),
-        maxLines = 1,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .chromeClickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+        maxLines = 2,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+            .alpha(if (enabled) 1f else 0.4f)
+            .chromeClickable(enabled = enabled, onClick = onClick)
+            .semantics { role = Role.Button }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
     )
 }
 

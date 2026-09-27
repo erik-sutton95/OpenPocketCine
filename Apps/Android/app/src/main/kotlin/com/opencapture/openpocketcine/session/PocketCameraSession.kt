@@ -42,6 +42,7 @@ import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
 import com.opencapture.openpocketcine.pairing.CameraWifiResolution
 import com.opencapture.openpocketcine.pairing.WifiLowLatencyLock
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -145,7 +146,14 @@ internal suspend fun ensureEndpointCommandCurrent(currentGeneration: Long) {
  * BLE → pair → Wi-Fi creds → camera AP → datalink → live HEVC/AVC.
  * Mirrors iOS `CameraSession` recovery, feed watchdog, and operator commands.
  */
-class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : CameraSessionSeam {
+class PocketCameraSession(
+    context: Context, borrowing: HevcDecoder? = null,
+    private val controlLease: MultiviewControlLease? = null,
+) : CameraSessionSeam {
+    init { require(controlLease == null || borrowing != null) }
+    internal val isMultiviewControlOnly: Boolean get() = controlLease != null
+    private fun controlLeaseAllows(): Boolean = controlLease?.allows() != false
+
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val ble = BleLink(context)
@@ -596,6 +604,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     }
 
     fun attachSurface(surface: Surface?) {
+        if (isMultiviewControlOnly) return
         if (isMultiviewBorrowed) {
             // The returning tile may already own the decoder; only drop our own output.
             if (surface == null) borrowedSurface?.let(decoder::detachSurface) else decoder.attachSurface(surface)
@@ -616,27 +625,35 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     }
 
     fun adoptMultiviewPose(pose: GimbalStickMapping) {
-        if (!isMultiviewBorrowed) return
+        if (!isMultiviewBorrowed || isMultiviewControlOnly) return
         gimbalStickMapping = pose
         syncGimbalPose()
     }
 
     fun receiveMultiview(frame: DumlFrame) {
-        if (!isMultiviewBorrowed) return
+        if (!isMultiviewBorrowed || !controlLeaseAllows()) return
         ingestDatalinkFrame(frame)
     }
 
     fun releaseMultiview() {
         if (!isMultiviewBorrowed) return
-        endGimbalStick()
-        cancelProgrammedMove()
-        cancelTracking()
-        faceAFArmJob?.cancel()
-        faceAFArmJob = null
+        controlLease?.invalidate()
+        if (!isMultiviewControlOnly) {
+            endGimbalStick()
+            cancelProgrammedMove()
+            cancelTracking()
+            faceAFArmJob?.cancel()
+            faceAFArmJob = null
+        }
         inflight.clear()
         inflightPending.clear()
         failAllWaiters(kotlinx.coroutines.CancellationException("Multiview took the camera back"))
         datalink = null
+        if (isMultiviewControlOnly) {
+            connectedCamera = null
+            _phase.value = ConnectionPhase.IDLE
+            scope.cancel()
+        }
     }
 
     override fun disconnect() {
@@ -2391,6 +2408,29 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             aperturePin = remaining
             if (held != null) next = next.copy(apertureStrategy = held)
         }
+        if (frame.cmdSet == 0x02 && frame.cmdId == 0xA0) {
+            val (updated, blob) = StatusExtras.applyAudioDsp(frame.payload, next)
+            next = updated
+            if (blob != null) {
+                audioDspBlob = blob
+                next = next.applyingAudioBlob(blob)
+            }
+        }
+        audioPin?.let { pin ->
+            val (held, nextPin) =
+                pin.absorb(
+                    next,
+                    _status.value,
+                    SystemClock.elapsedRealtime(),
+                    reportedValues = reported,
+                )
+            next = held
+            audioPin = nextPin
+        }
+        if (isMultiviewControlOnly) {
+            if (next != prev) { telemetryStatus = next; _status.value = next }
+            return
+        }
         if (next.selfieFlip != prev.selfieFlip) {
             gimbalStickMapping = gimbalStickMapping.copy(selfieFlip = next.selfieFlip == true)
             syncGimbalPose()
@@ -2447,25 +2487,6 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
             applyTrackingPoll(frame.payload)
         }
         if (lastTapFocusAt != null) refreshTrackingHud()
-        if (frame.cmdSet == 0x02 && frame.cmdId == 0xA0) {
-            val (updated, blob) = StatusExtras.applyAudioDsp(frame.payload, next)
-            next = updated
-            if (blob != null) {
-                audioDspBlob = blob
-                next = next.applyingAudioBlob(blob)
-            }
-        }
-        audioPin?.let { pin ->
-            val (held, nextPin) =
-                pin.absorb(
-                    next,
-                    _status.value,
-                    SystemClock.elapsedRealtime(),
-                    reportedValues = reported,
-                )
-            next = held
-            audioPin = nextPin
-        }
         if (wasRecording && !next.isRecording) {
             cancelProgrammedMove()
         }
@@ -4789,7 +4810,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     ): Boolean {
         ensureEndpointCommandCurrent(audioGeneration)
         val dl = datalink
-        if (dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
+        if (!controlLeaseAllows() || dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
             _controlNote.value = "not live"
             return false
         }
@@ -4841,7 +4862,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
         onSettle: ((Boolean) -> Unit)? = null,
     ) {
         val dl = datalink
-        if (dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
+        if (!controlLeaseAllows() || dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
             _controlNote.value = "not live"
             onFail?.invoke()
             onSettle?.invoke(false)
@@ -4887,10 +4908,13 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     }
 
     private fun transmit(send: InflightSend) {
+        if (!controlLeaseAllows()) return
         val dl = datalink ?: return
         pairingHold.remove(SwiftCore.waitKey(send.kind))
         try {
-            lastCameraSetAt = SystemClock.elapsedRealtime()
+            val sentAt = SystemClock.elapsedRealtime()
+            lastCameraSetAt = sentAt
+            controlLease?.noteSet(sentAt)
             dl.sendCommand(send.kind, send.extra)
             Log.i(TAG, "control: send ${send.name}")
         } catch (e: Exception) {
@@ -5016,7 +5040,7 @@ class PocketCameraSession(context: Context, borrowing: HevcDecoder? = null) : Ca
     ): Boolean {
         ensureEndpointCommandCurrent(audioGeneration)
         val dl = datalink
-        if (dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
+        if (!controlLeaseAllows() || dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
             _controlNote.value = "not live"
             return false
         }

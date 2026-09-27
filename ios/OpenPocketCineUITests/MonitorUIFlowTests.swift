@@ -125,6 +125,43 @@ final class MonitorUIFlowTests: XCTestCase {
         }
     }
 
+    func testSettingsTabsShareEdgesAndKeepSelection() {
+        let physicalReview = ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1"
+        if physicalReview { app.launchEnvironment["OPV_PHYSICAL_UI_REVIEW"] = "1" }
+        app.launch()
+        let liveSettings = app.buttons["monitor.system.settings"]
+        let homeSettings = app.buttons["cameras.settings"]
+        expectation(
+            for: NSPredicate { _, _ in liveSettings.exists || homeSettings.exists },
+            evaluatedWith: app)
+        waitForExpectations(timeout: 20)
+        // On hardware the launch splash can cover controls already in the AX tree.
+        if physicalReview { Thread.sleep(forTimeInterval: 3) }
+        let settings = liveSettings.exists ? liveSettings : homeSettings
+        XCTAssertTrue(settings.isHittable)
+        settings.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            rotate(orientation)
+            let link = app.buttons["monitor.settings.tab.Link"]
+            let sharing = app.buttons["monitor.settings.tab.Sharing"]
+            XCTAssertTrue(link.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(link.frame.height, 44 - 0.001)
+            XCTAssertGreaterThanOrEqual(sharing.frame.height, 44 - 0.001)
+            if orientation == .portrait {
+                XCTAssertEqual(link.frame.maxX, sharing.frame.minX, accuracy: 0.5)
+            } else {
+                XCTAssertEqual(link.frame.maxY, sharing.frame.minY, accuracy: 0.5)
+            }
+            sharing.tap()
+            XCTAssertTrue(sharing.isSelected)
+            XCTAssertFalse(link.isSelected)
+            link.tap()
+            XCTAssertTrue(link.isSelected)
+            XCTAssertFalse(sharing.isSelected)
+            capture("settings-joined-tabs-\(orientation.rawValue)")
+        }
+    }
+
     func testSettingsCoverageAndCardTitleSpacing() throws {
         app.launch()
         rotate(.landscapeLeft)
@@ -271,6 +308,14 @@ final class MonitorUIFlowTests: XCTestCase {
             "The portrait zoom disc covers the bottom system controls")
         capture("zoom-dial-portrait")
         app.buttons["Close zoom dial"].tap()
+        let iso = app.buttons["monitor.capture.iso"]
+        let display = app.buttons["monitor.system.display"]
+        // Dismissal keeps the overlay mounted through its exit animation.
+        expectation(
+            for: NSPredicate { _, _ in
+                !dial.exists && iso.isHittable && record.isHittable && display.isHittable
+            }, evaluatedWith: app)
+        waitForExpectations(timeout: 3)
         XCTAssertTrue(app.buttons["monitor.capture.iso"].isHittable)
         XCTAssertTrue(app.buttons["monitor.system.record"].isHittable)
         XCTAssertTrue(app.buttons["monitor.system.display"].isHittable)

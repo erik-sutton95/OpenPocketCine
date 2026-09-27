@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -113,6 +114,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
     var showLeave by remember { mutableStateOf(false) }
     var liveTile by remember { mutableStateOf<MultiviewSession.Tile?>(null) }
     var clean by remember { mutableStateOf(false) }
+    var cameraSettings by remember { mutableStateOf(false) }
     val close = rememberUpdatedState(onClose)
 
     fun closeStage() {
@@ -134,7 +136,10 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> session.setApplicationActive(true)
-                Lifecycle.Event.ON_PAUSE -> session.setApplicationActive(false)
+                Lifecycle.Event.ON_PAUSE -> {
+                    session.setApplicationActive(false)
+                    cameraSettings = false
+                }
                 else -> Unit
             }
         }
@@ -157,6 +162,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
     BackHandler {
         when {
             session.closing -> Unit
+            cameraSettings -> cameraSettings = false
             showNetwork -> {
                 showNetwork = false
                 if (!session.networkConfigured) closeStage()
@@ -180,7 +186,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             trailing = insets.getRight(this, direction).toDp().value,
         )
     }
-    val overlayOpen = showNetwork || adding != null || session.closing
+    val overlayOpen = showNetwork || adding != null || session.closing || cameraSettings
 
     BoxWithConstraints(Modifier.fillMaxSize().background(StageCanvas)) {
         val layout = MultiviewPresentationLayout.compute(
@@ -213,18 +219,17 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             }
             if (!clean) {
                 SessionControls(
-                    session, layout.controlCellSize, Modifier.rect(layout.sessionControls),
+                    session, Modifier.rect(layout.sessionControls),
                     onExit = {
                         if (session.tiles.any { it.camera != null }) showLeave = true else closeStage()
                     },
                 )
-                StageTitle(session, Modifier.rect(layout.title))
                 StageReadouts(session.tiles.getOrNull(session.focusedIndex)?.settings, Modifier.rect(layout.readouts))
-                StageAssistPalette(
-                    session, layout.assistsHorizontal, layout.controlCellSize, Modifier.rect(layout.assists),
+                MultiviewAssistPalette(
+                    session, layout.controlCellSize, Modifier.rect(layout.assists),
+                    onSettings = { cameraSettings = true },
                 )
                 NetworkButton(
-                    name = if (layout.portrait) null else session.ssid.takeIf { it.isNotBlank() } ?: "Shared Wi-Fi",
                     enabled = !session.busy && !session.connectingCameras,
                     modifier = Modifier.rect(layout.network),
                     onClick = { showNetwork = true },
@@ -233,6 +238,11 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             DisplayButton(clean, Modifier.rect(layout.display)) { clean = !clean }
             RecordAllButton(session, model.recordConfirmationEnabled, layout.record.width, Modifier.rect(layout.record)) {
                 scope.launch { session.toggleAllRecording() }
+            }
+        }
+        if (cameraSettings) {
+            MultiviewCameraSettings(session, session.focusedIndex, maxWidth.value, maxHeight.value, safe, model.recordConfirmationEnabled) {
+                cameraSettings = false
             }
         }
         if (session.closing) {
@@ -300,55 +310,33 @@ private fun Modifier.rect(rect: MonitorRect): Modifier =
     offset(rect.x.dp, rect.y.dp).requiredSize(rect.width.dp, rect.height.dp)
 
 @Composable
-private fun SessionControls(session: MultiviewSession, cell: Float, modifier: Modifier, onExit: () -> Unit) {
-    Box(modifier.monitorGlass(ControlShape), contentAlignment = Alignment.Center) {
-        GlyphCell(
-            OpcIcon.CHEVRON_LEFT, cell, "Close Multiview",
-            enabled = !session.busy && !session.groupRecordingBusy, onClick = onExit,
-        )
-    }
-}
-
-@Composable
-private fun StageTitle(session: MultiviewSession, modifier: Modifier) {
-    val assigned = session.tiles.filter { it.camera != null }
-    val recording = assigned.count { it.recordingObservation?.first == true }
-    val recovering = assigned.count { it.recovering || it.failureMessage != null }
-    val connecting = assigned.count { !it.hasPicture && !it.recovering && it.failureMessage == null }
-    val live = assigned.count { it.hasPicture && !it.recovering && it.failureMessage == null }
-    val subtitle = when {
-        session.groupRecordingBusy -> session.groupRecordingNote ?: "Waiting for cameras…"
-        session.groupRecordingNote?.contains("confirmed") == true -> session.groupRecordingNote.orEmpty()
-        recovering > 0 -> "$live live · $recovering reconnecting"
-        recording > 0 -> "$recording of ${assigned.size} recording"
-        connecting > 0 -> "$live live · $connecting connecting"
-        assigned.isEmpty() -> "Add your first camera"
-        else -> "${assigned.size} cameras connected"
-    }
-    Column(modifier, verticalArrangement = Arrangement.Center) {
-        Text("Multiview", color = LiveDesign.text, style = LiveType.display(16f), maxLines = 1)
-        Text(subtitle, color = if (recording > 0) LiveDesign.rec else LiveDesign.muted,
-            style = LiveType.text(9f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
+private fun SessionControls(session: MultiviewSession, modifier: Modifier, onExit: () -> Unit) {
+    com.opencapture.openpocketcine.MonitorChromeButton(
+        OpcIcon.CHEVRON_LEFT, "Exit Multiview", modifier,
+        enabled = !session.busy && !session.groupRecordingBusy, onClick = onExit,
+    )
 }
 
 @Composable
 private fun StageReadouts(settings: CameraStatus?, modifier: Modifier) {
     val values = multiviewExposureReadouts(settings ?: CameraStatus())
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        values.forEach { (label, value) ->
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(value, color = LiveDesign.text, style = LiveType.mono(12f, FontWeight.SemiBold), maxLines = 1)
-                Text(label, color = LiveDesign.muted, style = LiveType.text(7f, FontWeight.SemiBold), maxLines = 1)
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Row(Modifier.widthIn(max = 300.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            values.forEach { (label, value) ->
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(value, color = LiveDesign.text, style = LiveType.mono(12f, FontWeight.SemiBold), maxLines = 1)
+                    Text(label, color = LiveDesign.muted, style = LiveType.text(7f, FontWeight.SemiBold), maxLines = 1)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StageAssistPalette(session: MultiviewSession, horizontal: Boolean, cell: Float, modifier: Modifier) {
+internal fun MultiviewAssistPalette(session: MultiviewSession, cell: Float, modifier: Modifier, onSettings: () -> Unit) {
     val assigned = session.tiles.filter { it.camera != null }
-    ControlGroup(horizontal, modifier) {
+    ControlGroup(modifier) {
         LabeledCell(
             icon = OpcIcon.PALETTE, label = "LUT", cell = cell,
             tint = if (assigned.any { it.lutEnabled }) LiveDesign.accent else MonitorPalette.secondary,
@@ -375,18 +363,19 @@ private fun StageAssistPalette(session: MultiviewSession, horizontal: Boolean, c
         ) {
             session.layout = if (session.layout == MultiviewLayout.GRID) MultiviewLayout.CENTER_STAGE else MultiviewLayout.GRID
         }
+        LabeledCell(
+            icon = OpcIcon.SETTINGS, label = "CAM", cell = cell, tint = MonitorPalette.secondary,
+            description = "Camera settings", enabled = assigned.isNotEmpty() && !session.closing,
+            onClick = onSettings,
+        )
     }
 }
 
 @Composable
-private fun ControlGroup(horizontal: Boolean, modifier: Modifier, content: @Composable () -> Unit) {
-    val inner = Modifier.padding(4.dp)
-    Box(modifier.monitorGlass(ControlShape), contentAlignment = Alignment.Center) {
-        if (horizontal) {
-            Row(inner, horizontalArrangement = Arrangement.spacedBy(3.dp)) { content() }
-        } else {
-            Column(inner, verticalArrangement = Arrangement.spacedBy(3.dp)) { content() }
-        }
+private fun ControlGroup(modifier: Modifier, content: @Composable () -> Unit) {
+    Box(modifier.monitorGlass(ControlShape), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.padding(4.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(3.dp)) { content() }
     }
 }
 
@@ -437,19 +426,10 @@ private fun LabeledCell(
 }
 
 @Composable
-private fun NetworkButton(name: String?, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Row(
-        modifier.monitorGlass(ControlShape).alpha(if (enabled) 1f else 0.4f)
-            .chromeClickable(enabled = enabled, onClick = onClick)
-            .semantics { contentDescription = "Shared Wi-Fi"; role = Role.Button }
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-    ) {
-        OpcIcon(OpcIcon.WIFI, null, Modifier.size(20.dp), MonitorPalette.secondary)
-        if (name != null) Text(name, color = MonitorPalette.secondary, style = LiveType.text(10f),
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
+private fun NetworkButton(enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    com.opencapture.openpocketcine.AuxCircleButton(
+        modifier.semantics { contentDescription = "Shared Wi-Fi" }, enabled = enabled, onClick = onClick,
+    ) { tint -> OpcIcon(OpcIcon.WIFI, null, Modifier.fillMaxSize(), tint) }
 }
 
 @Composable
@@ -511,7 +491,7 @@ private fun RecordAllButton(
 }
 
 @Composable
-private fun MultiviewRecordConfirmation(
+internal fun MultiviewRecordConfirmation(
     stopping: Boolean, target: String, onDismiss: () -> Unit, onConfirm: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -581,7 +561,9 @@ private fun TileView(
                 onOptions = { session.focusedIndex = index; optionsOpen = true },
             )
             Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) {
-                DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false }) {
+                DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false },
+                    modifier = Modifier.widthIn(min = 220.dp, max = 320.dp).heightIn(max = 520.dp).pickerPanelGlass(ControlShape),
+                    containerColor = Color.Transparent, shadowElevation = 0.dp) {
                     tile.failureMessage?.let { message ->
                         Text(message, modifier = Modifier.widthIn(max = 280.dp).padding(12.dp), style = LiveType.text(12f))
                     }

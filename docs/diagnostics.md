@@ -74,6 +74,11 @@ full reports include `vpn=on|off` / `vpn: on|off`. A local VPN or ad blocker
 also journals `vpn: local VPN or ad blocker active — can drop UDP live view`
 once per process (#239).
 
+Multiview Wi-Fi return journals its failing phase (pairing or AP switch), error
+domain/code, bounded pairing-retry count and AP-set acknowledgement. Camera
+identifiers, PINs and network names are omitted. These are transition events,
+not a polling stream.
+
 Portable types: `Sources/OpenPocketViewCore/Diagnostics.swift`. iOS
 `DiagnosticCenter` (MetricKit, uncaught `NSException`, screenshot paste).
 Android `diagnostics/DiagnosticCenter` (uncaught handler, share sheet).
