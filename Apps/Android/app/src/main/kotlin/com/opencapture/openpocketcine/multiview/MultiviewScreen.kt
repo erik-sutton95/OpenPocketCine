@@ -586,8 +586,11 @@ private fun TileView(
                 TileStatusCard(session, tile, Modifier.align(Alignment.Center))
             }
         } else {
-            val firstEmpty = session.tiles.firstOrNull { it.camera == null } === tile
-            if (firstEmpty && !clean) {
+            // Center stage offers "Add camera" on the big tile while it is empty.
+            val focused = session.tiles.getOrNull(session.focusedIndex)
+            val addTarget = focused?.takeIf { session.layout == MultiviewLayout.CENTER_STAGE && it.camera == null }
+                ?: session.tiles.firstOrNull { it.camera == null }
+            if (addTarget === tile && !clean) {
                 Column(
                     Modifier.fillMaxSize()
                         .chromeClickable(enabled = enabled && !session.busy && !session.groupRecordingBusy) { onAdd(tile) }

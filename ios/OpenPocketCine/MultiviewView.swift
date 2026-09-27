@@ -396,6 +396,18 @@ struct MultiviewView: View {
         .accessibilityIdentifier("multiview.display")
     }
 
+    /// Center stage offers "Add camera" on the big tile while it is empty;
+    /// otherwise on the first empty tile.
+    private var addCameraTileID: UUID? {
+        let tiles = session.tiles
+        if session.layout == .centerStage, tiles.indices.contains(session.focusedIndex),
+            tiles[session.focusedIndex].camera == nil
+        {
+            return tiles[session.focusedIndex].id
+        }
+        return tiles.first(where: { $0.camera == nil })?.id
+    }
+
     private func tileView(
         _ tile: MultiviewSession.Tile, index: Int, compact: Bool, condensed: Bool,
         readoutInset: CGFloat = 0, footerLeading: CGFloat = 0
@@ -463,7 +475,7 @@ struct MultiviewView: View {
                 if !tile.hasPicture || tile.failureMessage != nil || tile.recovering {
                     tileRecovery(tile, compact: compact)
                 }
-            } else if !clean, session.tiles.first(where: { $0.camera == nil })?.id == tile.id {
+            } else if !clean, addCameraTileID == tile.id {
                 Button {
                     selectedCamera = nil
                     if session.networkConfigured { adding = tile } else { showNetwork = true }
