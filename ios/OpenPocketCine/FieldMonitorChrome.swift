@@ -29,8 +29,8 @@ struct FieldMonitorStatusChrome: View {
                         Spacer(minLength: 4)
                         topReadout(
                             model.session.status.isPhoto ? .mode : .resolution,
-                            value: model.session.status.isPhoto ? "MODE" : "REC SETUP",
-                            fontSize: 12, weight: .semibold, alwaysAccent: false
+                            value: model.session.status.isPhoto ? "MODE" : recSetupSummary,
+                            fontSize: 12, weight: .semibold, alwaysAccent: false, lines: 2
                         )
                         .accessibilityLabel(
                             model.session.status.isPhoto
@@ -173,16 +173,29 @@ struct FieldMonitorStatusChrome: View {
         .accessibilityLabel(item == .color ? "Color mode" : "Recording format")
     }
 
+    /// Current format over the colour profile ("4K25p" / "D-Log 2"), not a generic label.
+    private var recSetupSummary: String {
+        let status = model.session.status
+        let format =
+            status.videoFormat.map { "\($0.resolution.tabTitle)\($0.frameRate.drumLabel)" }
+            ?? "REC SETUP"
+        guard let color = status.colorMode?.label(for: model.session.bodyFamily) else {
+            return format
+        }
+        return "\(format)\n\(color)"
+    }
+
     private func topReadout(
         _ sheet: CaptureSheet, value: String, fontSize: CGFloat, weight: Font.Weight = .medium,
-        alwaysAccent: Bool = false
+        alwaysAccent: Bool = false, lines: Int = 1
     ) -> some View {
         let isActive = model.captureSheet == sheet || model.captureDrum?.sheet == sheet
         let acceptsTouch =
             !locked && (model.captureDrum == nil || model.captureDrum?.sheet == sheet)
         return Text(value)
             .font(MonitorTheme.font(fontSize, weight: weight)).monospacedDigit()
-            .lineLimit(1).minimumScaleFactor(0.7)
+            .lineLimit(lines).minimumScaleFactor(0.7)
+            .multilineTextAlignment(.trailing)
             .foregroundStyle(
                 alwaysAccent || isActive ? MonitorTheme.accent : .white
             )
