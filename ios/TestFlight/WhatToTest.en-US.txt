@@ -2,37 +2,40 @@ Since open beta build 138
 
 New and changed
 
-- Tabs use one highlighted bottom/left edge, without boxes. Scrolling content fades softly at edges with more to scroll.
-- Multiview Camera settings opens a popup with one tab per camera and the same controls as Live View.
-- Multiview starts with Auto LUT on, shows HH:MM:SS timecode and uses Live View battery gauges. Camera options open in a compact floating menu.
-- Multiview repairs lost decoder references after returning from another app, retaining the camera connection while waiting for a new picture.
-- Center stage enlarges the main picture beside a scrolling camera strip, with Wi-Fi below Exit and collapsible tools. Grid fills the space; DISP and Record keep Live View positions.
-- Multiview uses the Add setup Wi-Fi and Hotspot flow: current, saved and nearby networks, remembered passwords, compatibility help and retry without leaving the password screen.
-- Your cameras: Add setup lets a saved camera connect over your Wi-Fi network or this iPhone's Personal Hotspot, on every Osmo camera. Camera Wi-Fi stays as the other setup.
+- Tabs use one highlighted edge instead of boxes, lists fade softly at their edges and tool buttons share one size.
+- Live View indicators are glass pills for camera battery, phone battery and link. Tap the link pill to swap signal and feed fps.
+- REC setup shows your format and color, such as 4K 25p over D-Log2, in line with the timecode.
+- Joystick size: Small, Medium or Large in Settings, Controls. Its ink turns dark over bright scenes and light over dark ones.
+- Double-tap the same spot on the picture to start object tracking, as on the camera.
+- Multiview redesign: bigger main picture, scrolling camera strip, Live View's toolbar, and camera values inside the selected tile. Starts with Auto LUT on.
+- Multiview Camera settings is a side panel with a tab per camera and a live preview of that camera.
+- Multiview repairs lost decoder references after returning from another app, keeping the camera connected while it waits for a picture.
+- Multiview uses the Add setup Wi-Fi and Hotspot flow: current, saved and nearby networks, remembered passwords, compatibility help and retry.
+- Your cameras: Add setup lets a saved camera connect over your Wi-Fi network or this iPhone's Personal Hotspot, on every Osmo camera.
 - A setup connect shows a progress bar with one line of status. If it fails, choose Edit setup, Try again or Camera Wi-Fi; common router causes are named.
 - The next Camera Wi-Fi connect moves the camera back onto its own network.
-- New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots. Shows No level data instead of a false level.
+- New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots.
 - Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
-- Osmo Action 6 support: live view, Normal 10-bit and D-Log M color with the official LUT, Photo and Timelapse. Not yet checked on a real Action 6.
-- On Action 6, an APERTURE tile takes the FOCUS slot with a live iris readout. Gimbal and focus controls are hidden.
-- Live monitoring with a look, peaking and waveform uses about 85% less processor power, and about 70% less while recording, so the iPhone runs cooler. Picture and frame rate are unchanged.
+- Osmo Action 6 support: live view, D-Log M with the official LUT, Photo, Timelapse and a live APERTURE tile. Not yet checked on a real Action 6.
+- Live monitoring with a look, peaking and waveform uses about 85% less processor power, so the iPhone runs cooler. Picture and frame rate are unchanged.
 
 Fixes
 
-- Shutter angle stays at your chosen value when changing frame rate; shutter time follows after camera confirmation. Opening the picker no longer changes the saved angle.
+- Shutter angle stays at your chosen value when changing frame rate. Opening the picker no longer changes the saved angle.
+- Tapping to move focus no longer snaps back to the old point first. A new track no longer flashes on a previously tracked face.
+- A vertical camera feed fits whole in portrait, and Live View refits when the camera turns between horizontal and vertical.
+- Value drums open on the current value instead of sliding in.
 - Multiview Exit retries a temporary pairing refusal before showing an error; cameras already returned to their Wi-Fi stay untouched.
-- Wi-Fi headings and fields align, Connect stays at the bottom above the keyboard, and connecting/cancelling waits for scan cleanup.
-- The joystick adapts between bright and dark ink over the picture, without a dark halo or image sampling.
-- Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
-- DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
+- Wi-Fi headings and fields align, Connect stays above the keyboard, and connecting or cancelling waits for scan cleanup.
+- Osmo Nano no longer shows zoom controls, and DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
 - The REC and scan pulses no longer hold the display at its highest refresh rate, and paused clips stop redrawing.
-- Live View no longer freezes for several seconds after a single dropped video packet. The picture returns as soon as the camera sends a fresh keyframe.
+- Live View no longer freezes for several seconds after a single dropped video packet.
 - Switching clips in Media no longer freezes the app while the previous clip is still being processed.
 
 What to test
 
-- In Multiview, rotate and scroll the camera strip. Set 180° and change FPS: angle should stay 180°. Switch apps, check feeds resume, then Exit once.
-- Try Wi-Fi and Hotspot in Add setup and Multiview. Check current/saved/nearby networks, type a password in both orientations, cancel a scan, then reconnect.
-- Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
-- Monitor for 10 minutes with LUT, PEAK and WAVE on, then record: glass panels and the REC pulse should look as before, and the phone should stay cooler.
-- On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.
+- In Multiview, try Grid and Center stage in both orientations, open Camera settings, and switch apps to check feeds resume. Exit once.
+- Double-tap an object to track it, with a face in the scene. Set the joystick to Large and check its ink over bright and dark scenes.
+- Turn the camera vertical in portrait: the whole picture should show. Set 180° and change FPS: angle should stay 180°.
+- Try Wi-Fi and Hotspot in Add setup and Multiview, type a password in both orientations, cancel a scan, then reconnect.
+- Turn on LEVEL and roll the handle in FPV. On Nano, confirm there is no zoom chip. If you have an Action 6, check live view and APERTURE.

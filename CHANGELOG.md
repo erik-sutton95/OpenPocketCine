@@ -13,10 +13,19 @@ All notable changes to this project are documented here. The format is based on
   Settings scroll content fades in opacity at available edges; the painted
   MORE overlay is removed.
 - Multiview Center stage has a larger landscape 16:9 main picture with bottom
-  in-picture readouts, Wi-Fi below Exit, the shared collapsible View Assist
-  palette, and a far-right scrolling strip of three retained camera feeds with
-  soft alpha fades. Grid fills the available area; portrait keeps its 16:9 main
-  picture above the right palette. Record and DISP keep Live View positions.
+  in-picture readouts, Wi-Fi below Exit, Live View's horizontal View Assist
+  palette floating over the main picture, DISP beside Record and a far-right
+  scrolling strip of three retained camera feeds with soft alpha fades.
+  Landscape Grid uses the same chrome, with DISP kept above Record. Portrait
+  puts Exit and Wi-Fi in the top-left corner; Center stage shows the camera
+  values under the main picture and a fixed tool column beside the other
+  feeds, and Grid runs full-width feeds with the palette right of Record,
+  mirroring DISP. The selected tile shows its camera values inline with the
+  tile footer, and tiles no longer have dark top and bottom gradients.
+- Multiview Camera settings is a side panel like the gimbal drawer: camera tabs
+  across the top, vertical category tabs on the right and a live preview of
+  that camera's feed sized to the panel. Return to Multiview takes Live View's
+  Lock slot and style. Add camera always offers the empty big tile first.
 - Multiview starts newly added cameras with Auto LUT enabled, shows HH:MM:SS
   timecode and reuses Live View's camera battery gauges. Camera options open in
   a compact floating menu. The toolbar gains a Camera settings button with
@@ -31,8 +40,21 @@ All notable changes to this project are documented here. The format is based on
   Wi-Fi before handing off the Bluetooth link; password entry keeps its layout
   when the keyboard opens. Fixed headings align both columns; Connect and manual
   network entry stay in a bottom safe-area/keyboard footer.
-- The joystick returns to adaptive bright/dark ink using local native contrast
-  blending. Its dark halo is removed, with no image sampling or added timer.
+- The on-screen joystick has a Small, Medium or Large size under Settings →
+  Controls (Medium, the default, is about 15% larger than before). On
+  iOS its ink turns dark gray over a bright picture and light over a dark one,
+  from a 4 Hz luma sample of the feed under the stick, because live video on
+  iOS is composited on its own display plane where blend modes have no effect.
+  Android keeps native contrast blending.
+- Double-tapping the same spot on the feed starts object tracking there, as on
+  the camera and Mimo. A new track no longer flashes on a face the camera was
+  tracking before.
+- Live View indicators are glass pills with the icon beside a coloured value:
+  camera battery, phone battery and one link pill that swaps between signal and
+  feed fps on tap. Tool buttons across the app share one system size, and
+  scrollable lists fade at their edges.
+- On iOS the REC setup button shows the current format and colour profile
+  (for example 4K 25p over D-Log2), aligned with the timecode.
 - Refreshed the website with current app captures, iPad and level examples,
   simpler navigation, and equal iOS and Android open-beta choices.
 - Android Live View uses about half the app CPU on a Galaxy S25 with a live
@@ -79,6 +101,13 @@ All notable changes to this project are documented here. The format is based on
   suppressed ones are info.
 - iOS clip playback no longer hangs, and gets closed by the system, when you
   switch clips while the previous clip's frame is still being processed.
+- Tapping to move focus no longer snaps briefly back to the camera's previous
+  point before settling on the new one.
+- On iOS a vertical camera feed fits whole in portrait above the system bar,
+  without cropping its bottom edge, and Live View refits when the camera flips
+  between horizontal and vertical. Capture value drums open on the current
+  value instead of sliding in.
+- The collapsed View Assist palette always shows the most-used tool.
 - The joystick and gimbal controls on iOS and Android now use the same dark
   glow as other live-view controls, improving separation from bright footage.
 - Android Live View no longer crashes on some screen sizes while gimbal controls
