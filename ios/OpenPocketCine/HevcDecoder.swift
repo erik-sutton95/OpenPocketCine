@@ -1142,6 +1142,12 @@ final class HevcDecoder {
             pictureSize = next
             isVerticalPicture = EncoderPresentPath.isVertical(
                 width: Int(next.width), height: Int(next.height))
+            if next != previousSize {
+                // Raster changes are rare (format / screen flip); the size decides layout.
+                ControlLiveLog.line(
+                    "decoder: picture \(Int(next.width))x\(Int(next.height)) vertical=\(isVerticalPicture ? 1 : 0)"
+                )
+            }
         }
         let sizeChanged =
             previousSize.width > 1 && previousSize.height > 1 && previousSize != next
