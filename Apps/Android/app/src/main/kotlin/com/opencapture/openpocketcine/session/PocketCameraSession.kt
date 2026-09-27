@@ -471,6 +471,9 @@ class PocketCameraSession(
     private var faceBox: TrackingBox? = null
     private var sceneFaces: List<TrackingBox> = emptyList()
     private var lastTapFocusAt: Long? = null
+    /** The operator's latest ActiveTrack box, until the camera reports it. */
+    private var trackingRequest: TrackingBox? = null
+    private var trackingRequestAt: Long? = null
     private var lastOperatorClearAt: Long? = null
     private var lastSubjectPushAt: Long? = null
     private var lastLiveTrackingAt: Long? = null
@@ -2993,6 +2996,8 @@ class PocketCameraSession(
         lastSubjectPushAt = null
         searchBox = box
         subjectBox = null
+        trackingRequest = box
+        trackingRequestAt = SystemClock.elapsedRealtime()
         isTracking = false
         trackingSawLock = false
         faceBox = null
@@ -4660,6 +4665,7 @@ class PocketCameraSession(
         if (sendClear) lastOperatorClearAt = SystemClock.elapsedRealtime()
         lastLiveTrackingAt = null
         lastSubjectPushAt = null
+        trackingRequest = null
         refreshTrackingHud()
         if (!sendClear || !had || datalink == null) return
         fireKind(SwiftCore.CMD_CLEAR_TRACKING_BOX, null, "Track clear")
@@ -4711,10 +4717,20 @@ class PocketCameraSession(
         refreshTrackingHud()
     }
 
+    /** Drop the camera's previous subject until it reports the operator's new box. */
+    private fun acceptsTrackingReport(box: TrackingBox, now: Long): Boolean {
+        val requested = trackingRequest ?: return true
+        val since = trackingRequestAt?.let { (now - it) / 1000.0 }
+        if (!TrackingStartPolicy.accepts(box, requested, since)) return false
+        trackingRequest = null
+        return true
+    }
+
     private fun applyLiveTrackingPush(payload: ByteArray) {
         val now = SystemClock.elapsedRealtime()
         if (!TrackingClearPolicy.shouldApplyLivePush(lastOperatorClearAt, now)) return
         val box = TrackingBox.parseLivePush(payload) ?: return
+        if (!acceptsTrackingReport(box, now)) return
         lastSubjectPushAt = now
         subjectBox = smoothedSubject(box)
         isTracking = true
@@ -4730,6 +4746,7 @@ class PocketCameraSession(
         if (!TrackingClearPolicy.shouldApplyLivePush(lastOperatorClearAt, now)) return
         when (val poll = TrackingPoll.parse(payload)) {
             is TrackingPoll.Locked -> {
+                if (poll.box?.let { acceptsTrackingReport(it, now) } == false) return
                 isTracking = true
                 trackingSawLock = true
                 val cameraBox = poll.box

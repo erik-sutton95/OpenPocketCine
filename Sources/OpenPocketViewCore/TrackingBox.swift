@@ -625,6 +625,25 @@ public enum LiveFeedTapPolicy {
     }
 }
 
+/// Right after an operator ActiveTrack SET the camera can still push its
+/// previous subject (often a face). Drawing that paints the lock on the wrong
+/// thing, then slides it across to the new target.
+public enum TrackingStartPolicy {
+    public static let settle: TimeInterval = 1.5
+    /// Slack around the requested box: the camera's lock rarely matches it exactly.
+    public static let padding: Double = 0.05
+
+    public static func accepts(
+        _ push: TrackingBox, requested: TrackingBox?, secondsSinceRequest: TimeInterval?
+    ) -> Bool {
+        guard let requested, let secondsSinceRequest, secondsSinceRequest >= 0,
+            secondsSinceRequest < settle
+        else { return true }
+        return push.intersectionOverUnion(requested) > 0
+            || requested.contains(x: push.centerX, y: push.centerY, padding: padding)
+    }
+}
+
 /// Double-tap the same spot, as in Mimo and on the camera: the first tap
 /// focuses as usual, the second starts ActiveTrack on a box centred there.
 public struct FeedDoubleTapTrack: Sendable {

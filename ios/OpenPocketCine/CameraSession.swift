@@ -411,6 +411,8 @@ final class CameraSession {
     /// Operator tap only; camera-adopted points do not start the stale-echo hold.
     @ObservationIgnored private var lastFocusTapAt: Date?
     @ObservationIgnored private var feedDoubleTap = FeedDoubleTapTrack()
+    /// The operator's latest ActiveTrack box, until the camera reports it.
+    @ObservationIgnored private var trackingRequest: (box: TrackingBox, at: Date)?
     private var faceAFArmed = false
     @ObservationIgnored private var faceAFArmTask: Task<Void, Never>?
     /// First GOP has rolled past the IDR grace. Later stalls are the watchdog.
@@ -3510,6 +3512,7 @@ final class CameraSession {
         lastSubjectPushAt = nil
         searchBox = box
         subjectBox = nil
+        trackingRequest = (box, Date())
         isTracking = false
         trackingSawLock = false
         faceBox = nil
@@ -3650,6 +3653,7 @@ final class CameraSession {
         if sendClear { lastOperatorClearAt = Date() }
         lastLiveTrackingAt = nil
         lastSubjectPushAt = nil
+        trackingRequest = nil
         guard sendClear, had, datalink != nil else { return }
         fireCamera(Commands.clearTrackingBox(), name: "Track clear")
     }
@@ -3709,7 +3713,8 @@ final class CameraSession {
             TrackingClearPolicy.shouldApplyLivePush(
                 operatorClearedAt: lastOperatorClearAt, now: Date())
         else { return }
-        guard let box = TrackingBox.parseLivePush(payload) else { return }
+        guard let box = TrackingBox.parseLivePush(payload), acceptsTrackingReport(box)
+        else { return }
         lastSubjectPushAt = Date()
         // Per ActiveTrack push: unchanged writes would still re-render the
         // tracking layer, so publish only what moved.
@@ -3933,6 +3938,18 @@ final class CameraSession {
         var lastHit: Date
     }
 
+    /// Drop the camera's previous subject until it reports the operator's new box.
+    private func acceptsTrackingReport(_ box: TrackingBox) -> Bool {
+        guard let request = trackingRequest else { return true }
+        guard
+            TrackingStartPolicy.accepts(
+                box, requested: request.box,
+                secondsSinceRequest: Date().timeIntervalSince(request.at))
+        else { return false }
+        trackingRequest = nil
+        return true
+    }
+
     private func smoothedSubject(toward box: TrackingBox) -> TrackingBox {
         let now = Date()
         let dt = lastLiveTrackingAt.map { now.timeIntervalSince($0) } ?? .infinity
@@ -3947,6 +3964,7 @@ final class CameraSession {
         else { return }
         switch TrackingPoll.parse(payload) {
         case .locked(let cameraBox):
+            if let cameraBox, !acceptsTrackingReport(cameraBox) { break }
             if !isTracking { isTracking = true }
             trackingSawLock = true
             if let cameraBox {

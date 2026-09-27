@@ -4,6 +4,7 @@ import com.opencapture.openpocketcine.bridge.SwiftCore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TrackingBoxTest {
@@ -237,5 +238,17 @@ class TrackingBoxTest {
         assertNull(taps.register(0.7, 0.5, 0.8), "different spot")
         taps.reset()
         assertNull(taps.register(0.7, 0.5, 0.9), "reset clears the first tap")
+    }
+
+    @Test
+    fun freshTrackIgnoresTheCameraPreviousSubject() {
+        val obj = TrackingBox.fromCenter(0.7, 0.5, 0.14, 0.25)
+        val face = TrackingBox.fromCenter(0.2, 0.3, 0.1, 0.15)
+        val lock = TrackingBox.fromCenter(0.72, 0.52, 0.1, 0.2)
+        assertFalse(TrackingStartPolicy.accepts(face, obj, 0.3))
+        assertTrue(TrackingStartPolicy.accepts(lock, obj, 0.3))
+        // After the settle window the camera's subject is trusted wherever it is.
+        assertTrue(TrackingStartPolicy.accepts(face, obj, 2.0))
+        assertTrue(TrackingStartPolicy.accepts(face, null, null))
     }
 }

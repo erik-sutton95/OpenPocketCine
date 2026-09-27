@@ -385,6 +385,23 @@ object LiveFeedTapPolicy {
 }
 
 /**
+ * Right after an operator ActiveTrack SET the camera can still push its previous
+ * subject (often a face). Drawing that paints the lock on the wrong thing, then
+ * slides it across to the new target. Mirrors Swift `TrackingStartPolicy`.
+ */
+object TrackingStartPolicy {
+    const val SETTLE_SECONDS = 1.5
+    const val PADDING = 0.05
+
+    fun accepts(push: TrackingBox, requested: TrackingBox?, secondsSinceRequest: Double?): Boolean {
+        if (requested == null || secondsSinceRequest == null) return true
+        if (secondsSinceRequest < 0 || secondsSinceRequest >= SETTLE_SECONDS) return true
+        return push.intersectionOverUnion(requested) > 0 ||
+            requested.contains(push.centerX, push.centerY, PADDING)
+    }
+}
+
+/**
  * Double-tap the same spot, as in Mimo and on the camera: the first tap
  * focuses as usual, the second starts ActiveTrack on a box centred there.
  */
