@@ -408,6 +408,8 @@ final class CameraSession {
     @ObservationIgnored private var lastFaceAt: Date?
     @ObservationIgnored private var lastFaceHitAt: Date?
     @ObservationIgnored private var lastTapFocusAt: Date?
+    /// Operator tap only; camera-adopted points do not start the stale-echo hold.
+    @ObservationIgnored private var lastFocusTapAt: Date?
     private var faceAFArmed = false
     @ObservationIgnored private var faceAFArmTask: Task<Void, Never>?
     /// First GOP has rolled past the IDR grace. Later stalls are the watchdog.
@@ -3452,6 +3454,7 @@ final class CameraSession {
         cancelTracking(sendClear: isTrackingActive)
         // Hold the tap reticle so AF-C face detect cannot hide it immediately.
         lastTapFocusAt = Date()
+        lastFocusTapAt = Date()
         faceBox = nil
         faceTarget = nil
         lastFaceHitAt = nil
@@ -3714,7 +3717,9 @@ final class CameraSession {
         guard
             CameraFocusPolicy.shouldAdopt(
                 currentX: Double(focusPoint.x), currentY: Double(focusPoint.y),
-                cameraX: x, cameraY: y)
+                cameraX: x, cameraY: y,
+                secondsSinceTap: fromTrackingBox
+                    ? nil : lastFocusTapAt.map { Date().timeIntervalSince($0) })
         else { return }
         focusPoint = CGPoint(x: x, y: y)
         guard !fromTrackingBox else { return }

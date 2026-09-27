@@ -34,8 +34,8 @@
             #expect(!GimbalStick.prefersDarkChrome(luma: dark, previous: false))
             #expect(GimbalStick.prefersDarkChrome(luma: bright, previous: false))
             // Hysteresis: mid-grey keeps whichever ink is already showing.
-            #expect(GimbalStick.prefersDarkChrome(luma: 0.5, previous: true))
-            #expect(!GimbalStick.prefersDarkChrome(luma: 0.5, previous: false))
+            #expect(GimbalStick.prefersDarkChrome(luma: 0.4, previous: true))
+            #expect(!GimbalStick.prefersDarkChrome(luma: 0.4, previous: false))
             #expect(GimbalStick.prefersDarkChrome(luma: nil, previous: true))
         }
 

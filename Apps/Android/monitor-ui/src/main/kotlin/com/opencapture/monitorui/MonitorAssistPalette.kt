@@ -134,14 +134,14 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
     val expansionLane = MonitorLayoutPolicy.ASSIST_EXPANSION_BUTTON_WIDTH.dp
     val horizontalInsets = MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS.dp
     val columns = maxOf(1, (tools.size + 1) / 2)
-    val catalogWidth = buttonSize * columns + 3.dp * maxOf(0, columns - 1) + horizontalInsets
+    val catalogWidth = buttonSize * columns + MonitorLayoutPolicy.ASSIST_SPACING.dp * maxOf(0, columns - 1) + horizontalInsets
     val available = MonitorLayoutPolicy.assistAvailableWidth(
         config.screenWidthDp.toFloat(), portrait, tablet).dp
     val compactW = buttonSize + if (portrait) 8.dp else horizontalInsets
     val compactH = if (portrait) buttonSize + 35.dp else buttonSize * 2 + 11.dp
     val fullW = if (portrait) buttonSize + 8.dp else minOf(available, maxOf(buttonSize + horizontalInsets, catalogWidth))
     val fullH = if (portrait) minOf((config.screenHeightDp * .62f).dp,
-        buttonSize * tools.size + (maxOf(0, tools.size - 1) * 3 + 35).dp,
+        buttonSize * tools.size + (maxOf(0, tools.size - 1) * MonitorLayoutPolicy.ASSIST_SPACING + 35).dp,
         maxExpandedHeight?.dp?.coerceAtLeast(compactH) ?: Float.MAX_VALUE.dp) else buttonSize * 2 + 11.dp
     val reveal = if (portrait && dragging) scrub else progress.value
     val visibleW = compactW + (fullW - compactW) * reveal
@@ -335,23 +335,23 @@ fun <T> MonitorAssistPalette(tools: List<T>, portrait: Boolean, locked: Boolean,
             .padding(4.dp)) {
             if (portrait) {
                 Column(Modifier.matchParentSize(), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    verticalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
                     expandHit()
                     // Collapsed, a drag belongs to the expand gesture, not the scroller.
                     Column(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState)
                         .verticalScroll(scrollState, enabled = expanded),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        verticalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
                         ranked.forEachIndexed { index, tool -> key(tool, index) }
                     }
                 }
             } else {
                 Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    horizontalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
                     Row(Modifier.weight(1f, fill = true).monitorScrollFade(scrollState, vertical = false)
                         .horizontalScroll(scrollState, enabled = expanded),
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        horizontalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
                         repeat(columns) { column ->
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(MonitorLayoutPolicy.ASSIST_SPACING.dp)) {
                                 repeat(2) { row ->
                                     val index = MonitorAssistPaletteReveal.landscapeCellIndex(column, row)
                                     if (index < ranked.size) key(ranked[index], index)

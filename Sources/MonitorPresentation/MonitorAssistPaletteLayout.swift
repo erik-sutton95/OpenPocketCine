@@ -4,7 +4,7 @@ import Foundation
 /// anchor this intrinsic size at the same bottom-leading point in either state.
 public struct MonitorAssistPaletteLayout: Equatable, Sendable {
     public static let padding: Double = 4
-    public static let spacing: Double = 3
+    public static let spacing: Double = 6
     /// The arrow retains its original 15-point lane; another 12 points catch right-side misses.
     public static let expansionButtonWidth: Double = 27
     public static let horizontalInsets: Double = padding * 2 + spacing + expansionButtonWidth

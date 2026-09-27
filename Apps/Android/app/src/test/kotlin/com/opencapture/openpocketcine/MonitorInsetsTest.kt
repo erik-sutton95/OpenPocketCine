@@ -86,7 +86,7 @@ class LiveMonitorLayoutTest {
             assertEquals(portraitAspectToggle(w, floor), portraitAspectToggle(w, fillZones.assistToolbar.minY))
             assertEquals(portraitAssistToolbar(floor, isTablet),
                 portraitAssistToolbar(fillZones.assistToolbar.minY, isTablet))
-            assertEquals(floor - 104f, fitCluster.stick.minY, 0.05f)
+            assertEquals(floor - 16f - com.opencapture.monitorui.MonitorLayoutPolicy.STICK_SIDE, fitCluster.stick.minY, 0.05f)
             assertEquals(w - 16f, fitCluster.stick.maxX, 0.05f)
             assertEquals(w / 2f, portraitAspectToggle(w, floor).midX, 0.05f)
         }
@@ -270,7 +270,7 @@ class LiveMonitorLayoutTest {
         assertTrue(layout.capture.minX > layout.assist.maxX)
         assertEquals(44f, layout.capture.height, 0.05f)
         val phoneSide = com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(false)
-        assertEquals(phoneSide * 2f + 11f, layout.assist.height, 0.05f)
+        assertEquals(phoneSide * 2f + 8f + com.opencapture.monitorui.MonitorLayoutPolicy.ASSIST_SPACING, layout.assist.height, 0.05f)
         assertEquals(phoneSide + com.opencapture.monitorui.MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS,
             layout.assist.width, 0.05f)
 
@@ -374,7 +374,7 @@ private fun assertGimbalStickOnCanvas(layout: LiveMonitorLayout) {
         assertTrue(layout.assist.maxY <= layout.viewportHeight - 7.5f)
         if (minOf(layout.viewportWidth, layout.viewportHeight) >= 600f) {
             val tabletSide = com.opencapture.monitorui.MonitorLayoutPolicy.systemButtonSize(true)
-            assertEquals(tabletSide * 2f + 11f, layout.assist.height, 0.05f)
+            assertEquals(tabletSide * 2f + 8f + com.opencapture.monitorui.MonitorLayoutPolicy.ASSIST_SPACING, layout.assist.height, 0.05f)
             assertEquals(tabletSide + com.opencapture.monitorui.MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS,
                 layout.assist.width, 0.05f)
             assertEquals(84f, layout.record.width, .05f)

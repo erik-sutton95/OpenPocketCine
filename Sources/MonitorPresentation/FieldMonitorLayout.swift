@@ -36,6 +36,8 @@ public struct MonitorSafeArea: Equatable, Sendable {
 public struct FieldMonitorLayout: Equatable, Sendable {
     /// Space between the Settings and Media system buttons.
     public static let settingsMediaGap = 12.0
+    /// On-feed gimbal joystick diameter.
+    public static let stickSide = 101.0
 
     public let viewport: MonitorRect
     public let picture: MonitorRect
@@ -131,8 +133,8 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 x: edge, y: floor - 16 - (button + 35),
                 width: button + 8, height: button + 35)
             stick = .init(
-                x: w - 104,
-                y: floor - 104, width: 88, height: 88)
+                x: w - 16 - Self.stickSide,
+                y: floor - 16 - Self.stickSide, width: Self.stickSide, height: Self.stickSide)
             zoom = .init(x: stick.x, y: stick.y - 44, width: 44, height: 36)
             gimbal = .init(x: stick.maxX - 36, y: zoom.y, width: 36, height: 36)
             headTrack = Self.headTrack(stick: stick, zoom: zoom)
@@ -190,13 +192,15 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 x: side, y: valuesY + 4,
                 width: w - side * 2, height: valuesH)
             floor = valuesY - 8
-            let assistHeight = button * 2 + 11
+            let assistHeight =
+                button * 2 + MonitorAssistPaletteLayout.padding * 2
+                + MonitorAssistPaletteLayout.spacing
             assists = .init(
                 x: 18, y: h - bottomPad - assistHeight,
                 width: button + MonitorAssistPaletteLayout.horizontalInsets, height: assistHeight)
             stick = .init(
-                x: w - max(16 + rec + 12, safeArea.trailing + 6) - 88,
-                y: floor - 88, width: 88, height: 88)
+                x: w - max(16 + rec + 12, safeArea.trailing + 6) - Self.stickSide,
+                y: floor - Self.stickSide, width: Self.stickSide, height: Self.stickSide)
             zoom = .init(x: stick.x, y: stick.y - 44, width: 44, height: 36)
             gimbal = .init(x: stick.maxX - 36, y: zoom.y, width: 36, height: 36)
             headTrack = Self.headTrack(stick: stick, zoom: zoom)

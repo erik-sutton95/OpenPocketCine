@@ -99,7 +99,7 @@ class MonitorLayoutPolicyTest {
         val landPhone = MonitorLayoutPolicy.landscapeAssists(390f, false)
         assertEquals(14f, landPhone.x)
         assertEquals(phoneSide + MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS, landPhone.width)
-        assertEquals(phoneSide * 2f + 11f, landPhone.height)
+        assertEquals(phoneSide * 2f + 8f + MonitorLayoutPolicy.ASSIST_SPACING, landPhone.height)
         assertEquals(390f - 8f, landPhone.maxY, .01f)
         val filter = MonitorLayoutPolicy.mediaFilterPopup(956f, 440f, 0f, 59f, 21f, 59f)
         assertTrue(filter.maxY <= 440f - 21f)
@@ -116,7 +116,7 @@ class MonitorLayoutPolicyTest {
         assertEquals(390f - 31f, landHome.maxY, .01f)
         val landTablet = MonitorLayoutPolicy.landscapeAssists(744f, true)
         assertEquals(tabletSide + MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS, landTablet.width)
-        assertEquals(tabletSide * 2f + 11f, landTablet.height)
+        assertEquals(tabletSide * 2f + 8f + MonitorLayoutPolicy.ASSIST_SPACING, landTablet.height)
         assertEquals(744f - 8f, landTablet.maxY, .01f)
     }
 
@@ -188,10 +188,10 @@ class MonitorLayoutPolicyTest {
         val zoom = MonitorLayoutPolicy.portraitZoom(stick)
         val gimbal = MonitorLayoutPolicy.portraitGimbal(stick, zoom)
         val headTrack = MonitorLayoutPolicy.headTrack(stick, zoom)
-        assertEquals(MonitorRect(289f, 596f, 88f, 88f), stick)
-        assertEquals(MonitorRect(289f, 552f, 44f, 36f), zoom)
-        assertEquals(MonitorRect(341f, 552f, 36f, 36f), gimbal)
-        assertEquals(MonitorRect(333f, 500f, 44f, 44f), headTrack)
+        assertEquals(MonitorRect(276f, 583f, 101f, 101f), stick)
+        assertEquals(MonitorRect(276f, 539f, 44f, 36f), zoom)
+        assertEquals(MonitorRect(341f, 539f, 36f, 36f), gimbal)
+        assertEquals(MonitorRect(333f, 487f, 44f, 44f), headTrack)
     }
 
     @Test

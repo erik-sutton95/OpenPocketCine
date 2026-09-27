@@ -109,8 +109,8 @@ object LiveDesign {
     const val DISP_HEIGHT_DP = 54f
     const val RAIL_WIDTH_DP = 70f
     const val ZOOM_CHIP_DP = 44f
-    const val GIMBAL_STICK_DP = 88f
-    const val GIMBAL_KNOB_DP = 36f
+    const val GIMBAL_STICK_DP = com.opencapture.monitorui.MonitorLayoutPolicy.STICK_SIDE
+    const val GIMBAL_KNOB_DP = 41f
     const val TOP_DECK_HEIGHT_DP = 35f
     const val FOCUS_RESET_DP = 40f
     const val TOP_PICKER_WIDTH_DP = 480f

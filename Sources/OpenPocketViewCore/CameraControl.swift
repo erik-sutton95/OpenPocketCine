@@ -787,11 +787,16 @@ public enum CamLensState {
 /// When the camera's AF point should replace the painted one.
 public enum CameraFocusPolicy {
     public static let changeThreshold = 0.012
+    /// Status pushes sent before the camera applied a tap still carry the old
+    /// point. Adopting one snaps the reticle back, then forward again.
+    public static let tapHold: TimeInterval = 1.5
 
     public static func shouldAdopt(
-        currentX: Double, currentY: Double, cameraX: Double, cameraY: Double
+        currentX: Double, currentY: Double, cameraX: Double, cameraY: Double,
+        secondsSinceTap: TimeInterval? = nil
     ) -> Bool {
-        abs(currentX - cameraX) >= changeThreshold
+        if let secondsSinceTap, secondsSinceTap >= 0, secondsSinceTap < tapHold { return false }
+        return abs(currentX - cameraX) >= changeThreshold
             || abs(currentY - cameraY) >= changeThreshold
     }
 }
@@ -1832,9 +1837,9 @@ public enum GimbalStick {
     /// window flips (Mimo `0x04/0x4C` `FE 09`) instead.
     public static let doubleTapWindow: TimeInterval = 0.35
     /// Encoded luma above this (0…1) flips the stick to dark ink.
-    public static let chromeGoDarkAbove: Double = 0.55
+    public static let chromeGoDarkAbove: Double = 0.45
     /// Encoded luma below this flips the stick back to light ink.
-    public static let chromeGoLightBelow: Double = 0.42
+    public static let chromeGoLightBelow: Double = 0.33
 
     /// Hysteresis so a mid-grey wall does not flicker the stick. A compositor
     /// difference blend cannot adapt instead: iOS shows live video on its own

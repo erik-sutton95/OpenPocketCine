@@ -523,6 +523,13 @@ import Testing
         #expect(
             !CameraFocusPolicy.shouldAdopt(
                 currentX: 0.772, currentY: 0.483, cameraX: 0.773, cameraY: 0.484))
+        // A stale pre-tap point must not pull the fresh tap back.
+        #expect(
+            !CameraFocusPolicy.shouldAdopt(
+                currentX: 0.77, currentY: 0.48, cameraX: 0.50, cameraY: 0.50, secondsSinceTap: 0.2))
+        #expect(
+            CameraFocusPolicy.shouldAdopt(
+                currentX: 0.77, currentY: 0.48, cameraX: 0.50, cameraY: 0.50, secondsSinceTap: 2))
 
         var status = CameraStatus()
         #expect(

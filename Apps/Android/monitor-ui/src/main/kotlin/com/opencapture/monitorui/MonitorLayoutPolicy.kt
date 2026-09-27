@@ -100,7 +100,7 @@ object MonitorLayoutPolicy {
         viewportHeight: Float, tablet: Boolean, leading: Float = 14f, safeBottom: Float = 0f,
     ): MonitorRect {
         val side = systemButtonSize(tablet)
-        val height = side * 2f + 11f
+        val height = side * 2f + 8f + ASSIST_SPACING
         val bottom = landscapeBottomClearance(safeBottom)
         return MonitorRect(
             leading,
@@ -156,8 +156,11 @@ object MonitorLayoutPolicy {
         MonitorRect(max(0f, width) / 2f - 24f, max(0f, floor - 56f), 48f, 48f)
 
     /** FieldMonitorLayout portrait stick / zoom / gimbal. */
+    /** On-feed gimbal joystick diameter. */
+    const val STICK_SIDE = 101f
+
     fun portraitStick(width: Float, floor: Float): MonitorRect =
-        MonitorRect(max(0f, width) - 104f, floor - 104f, 88f, 88f)
+        MonitorRect(max(0f, width) - 16f - STICK_SIDE, floor - 16f - STICK_SIDE, STICK_SIDE, STICK_SIDE)
 
     fun portraitZoom(stick: MonitorRect): MonitorRect =
         MonitorRect(stick.x, stick.y - 44f, 44f, 36f)
@@ -169,8 +172,8 @@ object MonitorLayoutPolicy {
 
     /** FieldMonitorLayout landscape stick: leading of the record well, on the values floor. */
     fun landscapeStick(width: Float, floor: Float, recordSize: Float, safeTrailing: Float): MonitorRect {
-        val x = max(0f, width) - max(16f + recordSize + 12f, max(0f, safeTrailing) + 6f) - 88f
-        return MonitorRect(x, floor - 88f, 88f, 88f)
+        val x = max(0f, width) - max(16f + recordSize + 12f, max(0f, safeTrailing) + 6f) - STICK_SIDE
+        return MonitorRect(x, floor - STICK_SIDE, STICK_SIDE, STICK_SIDE)
     }
 
     fun landscapeZoom(stick: MonitorRect): MonitorRect = portraitZoom(stick)
@@ -271,7 +274,7 @@ object MonitorLayoutPolicy {
         val valuesY = h - bottomPad - valuesH
         val values = MonitorRect(side, valuesY + 4f, max(0f, w - side * 2f), valuesH)
         val floor = valuesY - 8f
-        val assistHeight = button * 2f + 11f
+        val assistHeight = button * 2f + 8f + ASSIST_SPACING
         val assists = MonitorRect(
             12f, max(0f, h - max(4f, bottomPad - 4f) - assistHeight),
             button + ASSIST_HORIZONTAL_INSETS, assistHeight,
@@ -318,7 +321,9 @@ object MonitorLayoutPolicy {
 
     const val ASSIST_EXPANSION_GLYPH_LANE = 15f
     const val ASSIST_EXPANSION_BUTTON_WIDTH = 27f
-    const val ASSIST_HORIZONTAL_INSETS = 38f
+    /** Gap between View Assist tool cells. */
+    const val ASSIST_SPACING = 6f
+    const val ASSIST_HORIZONTAL_INSETS = 4f * 2f + ASSIST_SPACING + ASSIST_EXPANSION_BUTTON_WIDTH
 
     fun assistAvailableWidth(screenWidth: Float, portrait: Boolean, tablet: Boolean, cornerRadius: Float = 42f): Float {
         val inset = if (portrait) 14f else max(14f, (cornerRadius * 0.42f).roundToInt().toFloat())

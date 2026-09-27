@@ -45,7 +45,7 @@ struct MonitorAssistPaletteLayoutTests {
         #expect(layout.cellWidth == layout.cellHeight)
         #expect(layout.columns == 8)
         #expect(layout.scrollHeight == 99)
-        #expect(layout.scrollWidth + 38 == layout.width)
+        #expect(layout.scrollWidth + MonitorAssistPaletteLayout.horizontalInsets == layout.width)
         #expect(layout.width <= 530)
         #expect(layout.iconSide == MonitorSystemButtonMetrics.iconSide(tablet: false))
         let needed = Double(layout.columns) * (layout.cellWidth + 3) - 3
