@@ -86,19 +86,24 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             let tileWidth = max(1, toolX - 6 - 15)
             let gap = 9.0
             if arrangement == .grid {
+                // Full-width feeds; the collapsible palette sits in the bottom-right
+                // corner (Live View's Settings column) and grows upward over them.
+                let paletteBottom = live.settings.maxY
+                let paletteX = live.settings.midX - toolWidth / 2
                 readouts = .init(
-                    x: 18, y: max(stageTop, record.y - 58), width: max(1, w - 36), height: 37)
+                    x: 18, y: max(stageTop, record.y - 58),
+                    width: max(1, paletteX - 6 - 18), height: 37)
                 let stageBottom = max(stageTop + 1, readouts.y - 12)
                 let tileHeight = max(1, (stageBottom - stageTop - 3 * gap) / 4)
                 result = (0..<4).map { index in
                     .init(
                         x: 15, y: stageTop + Double(index) * (tileHeight + gap),
-                        width: tileWidth, height: tileHeight)
+                        width: max(1, w - 30), height: tileHeight)
                 }
-                let toolTop = max(stageTop, network.maxY + 8)
+                let paletteHeight = max(1, min(toolHeight, paletteBottom - stageTop))
                 assists = .init(
-                    x: toolX, y: toolTop, width: toolWidth,
-                    height: max(1, min(toolHeight, stageBottom - toolTop)))
+                    x: paletteX, y: paletteBottom - paletteHeight, width: toolWidth,
+                    height: paletteHeight)
             } else {
                 // The main camera's readouts sit directly under its picture;
                 // the secondary feeds and the fixed tool column fill the rest

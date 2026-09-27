@@ -80,6 +80,10 @@ data class MultiviewPresentationLayout(
             ) else live.display
             val cutout = max(safeLeading, safeTrailing)
             val toolX = w - 14 - (live.settings.width + toolbarWidth) / 2
+            // Portrait Grid: full-width feeds; the collapsible palette sits in the bottom-right
+            // corner (Live View's Settings column) and grows upward over them.
+            val portraitGrid = portrait && arrangement == MultiviewArrangement.GRID
+            val cornerPaletteX = live.settings.x + (live.settings.width - toolbarWidth) / 2.0
             val stageTop = when {
                 portrait -> close.maxY + 10.0
                 else -> close.y.toDouble()
@@ -91,7 +95,8 @@ data class MultiviewPresentationLayout(
                 else -> min(w - (if (banded) 28.0 else max(18.0, cutout + 8)),
                     min(display.x, live.record.x) - 8.0)
             }
-            var readouts = Rect(18.0, max(stageTop, live.record.y - 58.0), w - 36, 37.0)
+            var readouts = Rect(18.0, max(stageTop, live.record.y - 58.0),
+                if (portraitGrid) cornerPaletteX - 6 - 18 else w - 36, 37.0)
             val stageBottom = when {
                 portrait -> readouts.y - 12
                 banded -> min(h - 111, live.display.y - 12.0)
@@ -109,7 +114,7 @@ data class MultiviewPresentationLayout(
             if (arrangement == MultiviewArrangement.GRID) {
                 val columns = if (portrait) 1 else 2
                 val rows = 4 / columns
-                val tileWidth = max(1.0, (stageWidth - (columns - 1) * gap) / columns)
+                val tileWidth = if (portrait) max(1.0, w - 30) else max(1.0, (stageWidth - (columns - 1) * gap) / columns)
                 val tileHeight = max(1.0, (stageHeight - (rows - 1) * gap) / rows)
                 for (index in 0 until 4) {
                     tiles[index] = Rect(
@@ -170,15 +175,13 @@ data class MultiviewPresentationLayout(
                 readouts = Rect(readoutsLeft, max(stageTop, stageTop + mainHeight - 45),
                     maxOf(0.0, mainLeft + mainWidth - readoutsLeft), 37.0)
             }
-            val toolTop = max(toolbarTop, network.maxY + 8.0)
-            // The portrait grid palette grows downward within this rail and scrolls its tools.
-            val paletteHeight = max(1.0, min(toolbarHeight, stageBottom - toolTop))
+            val paletteHeight = max(1.0, min(toolbarHeight, live.settings.maxY - stageTop))
             val assists = if (!portrait) live.assists.let {
                 Rect(it.x.toDouble(), it.y.toDouble(), it.width.toDouble(), it.height.toDouble())
             } else if (columnBottom != null) {
                 // Portrait Center stage: a plain column spanning the secondary feeds exactly.
                 Rect(toolX, toolbarTop, toolbarWidth, max(1.0, columnBottom - toolbarTop))
-            } else Rect(toolX, toolTop, toolbarWidth, paletteHeight)
+            } else Rect(cornerPaletteX, live.settings.maxY - paletteHeight, toolbarWidth, paletteHeight)
             return MultiviewPresentationLayout(
                 tiles = tiles.mapIndexed { index, rect ->
                     if (index in secondaryIndices) rect.unclamped() else rect.clamped(w, h)

@@ -71,8 +71,10 @@ class MultiviewLayoutPolicyTest {
                     // Landscape overlays the values row and the palette on the main (Grid: lower-left) picture.
                     val paletteHost = if (arrangement == GRID) 2 else selected
                     if (visible != null) for (control in controls) {
+                        // Portrait Grid's palette grows up over the feeds.
                         if (!(layout.readoutsOverlay && (control == layout.readouts ||
-                                (control == layout.assists && index == paletteHost))))
+                                (control == layout.assists && index == paletteHost))) &&
+                            !(portrait && arrangement == GRID && control == layout.assists))
                             assertFalse(overlaps(visible, control), "$case: $visible / $control")
                     }
                     if (arrangement == CENTER_STAGE && index == selected) {
@@ -87,15 +89,19 @@ class MultiviewLayoutPolicyTest {
     }
 
     @Test
-    fun portraitGridFillsFourRowsBesideTheToolbar() {
-        val grid = MultiviewPresentationLayout.compute(393f, 852f, MultiviewSafeArea(top = 59f, bottom = 34f), GRID, 0)
-        assertTrue(grid.tiles.all { it.x == 15f && it.maxX == grid.assists.x - 6f })
+    fun portraitGridFillsFullWidthRowsWithABottomRightPalette() {
+        val safe = MultiviewSafeArea(top = 59f, bottom = 34f)
+        val grid = MultiviewPresentationLayout.compute(393f, 852f, safe, GRID, 0)
+        val live = MonitorLayoutPolicy.fieldMonitor(393f, 852f, safe.top, safe.leading, safe.bottom, safe.trailing)
+        assertTrue(grid.tiles.all { it.x == 15f && it.maxX == 393f - 15f })
+        // Live View's Settings column, anchored at the bottom row; values stop short of it.
+        assertEquals(live.settings.x + live.settings.width / 2, grid.assists.x + grid.assists.width / 2, 0.01f)
+        assertEquals(live.settings.maxY, grid.assists.maxY, 0.01f)
+        assertEquals(grid.assists.x - 6f, grid.readouts.maxX, 0.01f)
         assertEquals(grid.sessionControls.maxY + 10f, grid.tiles[0].y)
         assertEquals(grid.readouts.y - 12f, grid.tiles[3].maxY, 0.001f)
         assertEquals(grid.tiles[0].height, grid.tiles[3].height)
         assertFalse(grid.assistsHorizontal)
-        // The palette clears Wi-Fi but never starts above the feed tops.
-        assertEquals(maxOf(grid.tiles[0].y, grid.network.maxY + 8), grid.assists.y)
         assertTrue(abs(grid.tiles[0].width / grid.tiles[0].height - 16f / 9f) > 0.1f)
     }
 
@@ -232,7 +238,8 @@ class MultiviewLayoutPolicyTest {
                 val case = "$w x $h $arrangement"
                 for (tile in layout.tiles) {
                     assertTrue(tile.height >= 44f || tile == layout.tiles[0] && arrangement == CENTER_STAGE, case)
-                    assertFalse(overlaps(tile, layout.assists), case)
+                    // Portrait Grid's palette grows up over the feeds.
+                    if (arrangement == CENTER_STAGE) assertFalse(overlaps(tile, layout.assists), case)
                     assertFalse(overlaps(tile, layout.readouts), case)
                     assertFalse(overlaps(tile, layout.record), case)
                     assertFalse(overlaps(tile, layout.display), case)

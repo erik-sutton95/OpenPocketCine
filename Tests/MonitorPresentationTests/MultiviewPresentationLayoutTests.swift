@@ -77,12 +77,15 @@ struct MultiviewPresentationLayoutTests {
                                     #expect(!overlaps(tile, other))
                                 }
                                 // Landscape overlays the values row and, like Live View,
-                                // the collapsed palette on the main (Grid: lower-left) picture.
+                                // the collapsed palette on the main (Grid: lower-left)
+                                // picture. Portrait Grid's palette grows up over the feeds.
                                 let paletteHost = arrangement == .grid ? 2 : selected
                                 for control in controls
                                 where !(layout.readoutsOverlay
                                     && (control == layout.readouts
                                         || (control == layout.assists && index == paletteHost)))
+                                    && !(portrait && arrangement == .grid
+                                        && control == layout.assists)
                                 {
                                     #expect(!overlaps(tile, control))
                                 }
@@ -127,17 +130,20 @@ struct MultiviewPresentationLayoutTests {
         #expect(secondary[0].height == secondary[1].height)
     }
 
-    @Test func portraitGridUsesFourFullWidthRowsBesideVerticalTools() {
+    @Test func portraitGridUsesFourFullWidthRowsAndABottomRightPalette() {
+        let safe = MonitorSafeArea(top: 59, bottom: 34)
         let grid = MultiviewPresentationLayout(
-            width: 393, height: 852, safeArea: .init(top: 59, bottom: 34),
-            arrangement: .grid, selected: 0)
-        #expect(grid.tiles.allSatisfy { $0.x == 15 && $0.maxX == grid.assists.x - 6 })
+            width: 393, height: 852, safeArea: safe, arrangement: .grid, selected: 0)
+        let live = FieldMonitorLayout(width: 393, height: 852, safeArea: safe)
+        #expect(grid.tiles.allSatisfy { $0.x == 15 && $0.maxX == 393 - 15 })
         #expect(grid.tiles[0].y == grid.sessionControls.maxY + 10)
         #expect(abs(grid.tiles[3].maxY - (grid.readouts.y - 12)) < 0.001)
         #expect(grid.tiles[0].height == grid.tiles[3].height)
-        // The palette clears Wi-Fi but never starts above the feed tops.
-        #expect(grid.assists.y == max(grid.tiles[0].y, grid.network.maxY + 8))
-        #expect(grid.assists.x == grid.tiles[0].maxX + 6)
+        // Live View's Settings column, anchored at the bottom row; values stop short of it.
+        #expect(grid.assists.midX == live.settings.midX)
+        #expect(grid.assists.maxY == live.settings.maxY)
+        #expect(grid.readouts.maxX == grid.assists.x - 6)
+        #expect(!grid.assistsHorizontal)
         #expect(abs(grid.tiles[0].width / grid.tiles[0].height - 16 / 9) > 0.1)
     }
 
@@ -154,7 +160,11 @@ struct MultiviewPresentationLayoutTests {
                 for (index, tile) in layout.tiles.enumerated() {
                     #expect(tile.height >= 44)
                     #expect(tile.x >= 0 && tile.maxX <= width)
-                    for control in controls { #expect(!overlaps(tile, control)) }
+                    // Portrait Grid's palette grows up over the feeds.
+                    for control in controls
+                    where !(arrangement == .grid && control == layout.assists) {
+                        #expect(!overlaps(tile, control))
+                    }
                     for other in layout.tiles.dropFirst(index + 1) {
                         #expect(!overlaps(tile, other))
                     }
@@ -251,8 +261,8 @@ struct MultiviewPresentationLayoutTests {
             #expect(layout.assists.width == cell + 8)
             #expect(layout.assists.height <= cell * 4 + 44)
             #expect(layout.assists.height >= 44)
-            #expect(layout.assists.y >= layout.network.maxY + 8 - 0.001)
-            #expect(layout.assists.maxY <= layout.display.y - 8)
+            #expect(layout.assists.y >= layout.tiles[0].y)
+            #expect(layout.assists.x > layout.record.maxX)
         }
     }
 
