@@ -79,8 +79,13 @@ struct MultiviewPresentationLayoutTests {
                                 where other.height > 0 {
                                     #expect(!overlaps(tile, other))
                                 }
+                                // Center stage overlays the values row and, like Live
+                                // View, the collapsed palette on the main picture.
                                 for control in controls
-                                where !(layout.readoutsOverlay && control == layout.readouts) {
+                                where !(layout.readoutsOverlay
+                                    && (control == layout.readouts
+                                        || (control == layout.assists && index == selected)))
+                                {
                                     #expect(!overlaps(tile, control))
                                 }
                                 if arrangement == .centerStage && index == selected {
@@ -342,7 +347,8 @@ struct MultiviewPresentationLayoutTests {
                 #expect(layout.readouts.y >= main.y && layout.readouts.maxY <= main.maxY)
                 #expect(layout.network.y == layout.sessionControls.maxY + 8)
                 #expect(layout.assists.y >= layout.network.maxY + 8 - 0.001)
-                #expect(main.x >= layout.assists.maxX + 6)
+                // The palette floats over the main picture; the values row clears it.
+                #expect(layout.readouts.x >= layout.assists.maxX + 6 - 0.001)
                 #expect(layout.assistsHorizontal)
             }
         }

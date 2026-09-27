@@ -64,7 +64,8 @@ class MultiviewLayoutPolicyTest {
                     for (other in layout.tiles.drop(index + 1)) assertFalse(overlaps(tile, other), "$case: $tile / $other")
                     val visible = if (index in layout.secondaryIndices) intersection(tile, checkNotNull(layout.secondaryViewport)) else tile
                     if (visible != null) for (control in controls) {
-                        if (!(layout.readoutsOverlay && index == selected && control == layout.readouts))
+                        if (!(layout.readoutsOverlay && index == selected &&
+                                (control == layout.readouts || control == layout.assists)))
                             assertFalse(overlaps(visible, control), "$case: $visible / $control")
                     }
                     if (arrangement == CENTER_STAGE && index == selected) {
@@ -160,7 +161,9 @@ class MultiviewLayoutPolicyTest {
                     }
                     if (trailing || arrangement == CENTER_STAGE) {
                         assertTrue(layout.assists.maxX < w / 2)
-                        assertTrue(layout.tiles.all { it.x >= layout.assists.maxX + 6f })
+                        // Center stage: the palette floats over the main picture; values clear it.
+                        if (arrangement == CENTER_STAGE) assertTrue(layout.readouts.x >= layout.assists.maxX + 6f - 0.01f)
+                        else assertTrue(layout.tiles.all { it.x >= layout.assists.maxX + 6f })
                     } else {
                         assertTrue(layout.assists.x > w / 2)
                         assertTrue(layout.tiles.all { it.maxX <= layout.assists.x - 6f })
@@ -294,8 +297,9 @@ class MultiviewLayoutPolicyTest {
         assertEquals(main, right.tiles[2])
         assertEquals(listOf(0, 1, 3), left.secondaryIndices)
         assertTrue(left.readoutsOverlay)
-        assertEquals(left.assists.maxX + 6, main.x)
-        assertEquals(526f, main.width)
+        // The palette floats over the main picture; the values row clears it.
+        assertTrue(left.readouts.x >= left.assists.maxX + 6 - 0.01f)
+        assertEquals(565f, main.width)
         assertEquals(16f / 9f, main.width / main.height, .001f)
         assertEquals(left.sessionControls.y, main.y)
         assertEquals(main.maxY - 45, left.readouts.y)

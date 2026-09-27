@@ -145,8 +145,8 @@ data class MultiviewPresentationLayout(
                     row++
                 }
             } else {
-                // The collapsed Live View palette sits at the lower left; the main picture starts past it.
-                val mainLeft = maxOf(cutout + 8, close.maxX + 8.0, live.assists.maxX + 6.0)
+                // Like Live View, the collapsed palette floats over the main picture.
+                val mainLeft = maxOf(cutout + 8, close.maxX + 8.0)
                 // The main picture keeps the cutout reserve on both edges so a half turn does not
                 // move it; the strip takes the room to the trailing margin.
                 val reservedRight = w - max(18.0, cutout + 8)
@@ -166,7 +166,10 @@ data class MultiviewPresentationLayout(
                 secondaryIndices.forEachIndexed { row, index ->
                     tiles[index] = Rect(stripLeft, stageTop + row * (thumbHeight + thumbGap), thumbWidth, thumbHeight)
                 }
-                readouts = Rect(mainLeft, max(stageTop, stageTop + mainHeight - 45), mainWidth, 37.0)
+                // Camera values start past the palette, as Live View's value row does.
+                val readoutsLeft = maxOf(mainLeft, live.assists.maxX + 6.0)
+                readouts = Rect(readoutsLeft, max(stageTop, stageTop + mainHeight - 45),
+                    maxOf(0.0, mainLeft + mainWidth - readoutsLeft), 37.0)
             }
             val toolTop = when {
                 portrait -> max(toolbarTop, network.maxY + 8.0)

@@ -133,9 +133,9 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             }
         } else if arrangement == .centerStage {
             // Live View's landscape View Assist slot, collapsed at the lower left.
-            // The main picture starts past it, so the collapsed rail never covers it.
+            // Like Live View, the palette floats over the main picture.
             assists = live.assists
-            let stageLeft = max(cutout + 8, sessionControls.maxX + 8, assists.maxX + 6)
+            let stageLeft = max(cutout + 8, sessionControls.maxX + 8)
             // The main picture keeps the cutout reserve on both edges so a half
             // turn does not move it; the strip takes the room to the trailing margin.
             let reservedRight = w - max(18, cutout + 8)
@@ -163,8 +163,11 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
                     y: stageTop + Double(row) * (thumbHeight + stripGap),
                     width: thumbWidth, height: thumbHeight)
             }
+            // Camera values start past the palette, as Live View's value row does.
+            let readoutsLeft = max(main.x, assists.maxX + 6)
             readouts = .init(
-                x: main.x, y: max(main.y, main.maxY - 45), width: main.width, height: 37)
+                x: readoutsLeft, y: max(main.y, main.maxY - 45),
+                width: max(0, main.maxX - readoutsLeft), height: 37)
         } else {
             let preferredLeft = banded ? 28.0 : max(cutout + 8, 18)
             let stageLeft = max(
