@@ -707,7 +707,7 @@ above Record. Center stage reserves the far right for the scrolling feeds.
 Portrait Grid runs the feeds full width with the collapsible palette in the
 bottom row, mirroring DISP's gap on the right of Record, growing up over the feeds;
 the feeds reach down to Record. In both Grid orientations the selected camera's
-values are a small row inside its tile, with the tile footer above them;
+values sit small and inline in its tile footer, between the left and right columns;
 portrait Center stage uses the fixed tool column described above.
 These approved Multiview placements are explicit exceptions to Live View's
 Settings position; native Record/DISP geometry remains shared.

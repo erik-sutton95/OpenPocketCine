@@ -70,6 +70,8 @@ struct MultiviewTileChrome: View {
     var reservedBottom: CGFloat = 0
     /// The floating View Assist palette covers the main tile's lower left.
     var reservedLeading: CGFloat = 0
+    /// Grid's selected tile shows its camera values between the footer columns.
+    var inlineValues = false
     let openOptions: () -> Void
 
     private var values: MultiviewTelemetryPresentation { .init(settings: tile.settings) }
@@ -169,7 +171,20 @@ struct MultiviewTileChrome: View {
                             .accessibilityLabel("Timecode " + timecode)
                     }
                 }
-                Spacer(minLength: 0)
+                .layoutPriority(1)
+                if inlineValues {
+                    // Inline with both columns; the values take what is left over.
+                    HStack(alignment: .bottom, spacing: 4) {
+                        inlineValue("ISO", values.iso)
+                        inlineValue("SHUTTER", values.shutter)
+                        inlineValue("WB", values.whiteBalance)
+                        inlineValue("FOCUS", values.focus)
+                    }
+                    .frame(maxWidth: 220)
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Spacer(minLength: 0)
+                }
                 VStack(alignment: .trailing, spacing: compact ? 2 : 4) {
                     Text(MultiviewTelemetryPresentation.recordingStatus(tile))
                         .foregroundStyle(tile.recordingActive == true ? .red : .white)
@@ -186,6 +201,7 @@ struct MultiviewTileChrome: View {
                     }
                     .font(MonitorTheme.font(compact ? 8 : 10, weight: .medium))
                 }
+                .layoutPriority(1)
             }
             .monospacedDigit()
             .padding(.horizontal, compact ? 8 : 11)
@@ -195,6 +211,20 @@ struct MultiviewTileChrome: View {
         }
         .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
     }
+
+    private func inlineValue(_ title: String, _ value: String) -> some View {
+        VStack(spacing: 1) {
+            Text(value).font(MonitorTheme.font(11, weight: .medium))
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(title).font(MonitorTheme.font(6, weight: .semibold))
+                .tracking(0.5).foregroundStyle(MonitorTheme.muted).lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title + " " + value)
+    }
+
     private var battery: some View {
         FieldMonitorGauges.cameraBattery(tile.settings.batteryPercent)
     }

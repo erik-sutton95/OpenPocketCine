@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -110,6 +111,8 @@ internal fun MultiviewTileChrome(
     onOptions: () -> Unit,
     footerInset: Float = 0f,
     footerStart: Float = 0f,
+    /** Grid's selected tile shows its camera values between the footer's left and right. */
+    values: List<Pair<String, String>>? = null,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < 200.dp
@@ -159,7 +162,21 @@ internal fun MultiviewTileChrome(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 MonitorCameraBatteryGauge(readouts.batteryPercent, showsIcon = false)
                 Text(readouts.storage, color = Color.White, style = LiveType.mono(small), maxLines = 1,
-                    modifier = Modifier.weight(1f).semantics { contentDescription = "Storage ${readouts.storage}" })
+                    modifier = (if (values == null) Modifier.weight(1f) else Modifier)
+                        .semantics { contentDescription = "Storage ${readouts.storage}" })
+                if (values != null) {
+                    // Inline with both sides; the values take what is left over.
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.Bottom) {
+                        values.forEach { (label, value) ->
+                            Column(Modifier.weight(1f, fill = false).widthIn(max = 55.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(value, color = LiveDesign.text, style = LiveType.mono(10f, FontWeight.SemiBold), maxLines = 1)
+                                Text(label, color = LiveDesign.muted, style = LiveType.text(6f, FontWeight.SemiBold), maxLines = 1)
+                            }
+                        }
+                    }
+                }
                 Text(readouts.recording, color = if (readouts.isRecording) LiveDesign.rec else Color.White,
                     style = LiveType.mono(small, FontWeight.SemiBold), maxLines = 1)
             }
@@ -172,13 +189,14 @@ internal fun MultiviewTileChrome(
 internal fun MultiviewTileOverlay(
     readouts: MultiviewTileReadouts, focused: Boolean, compact: Boolean, clean: Boolean,
     enabled: Boolean, onOptions: () -> Unit, readoutsOverlay: Boolean = false, footerStart: Float = 0f,
-    footerInset: Float = 0f,
+    inlineValues: Boolean = false, settings: CameraStatus? = null,
 ) {
     Box(Modifier.fillMaxSize()) {
         if (!clean && readoutsOverlay) {
         }
         if (!clean) MultiviewTileChrome(readouts, focused, compact, enabled, onOptions,
-            footerInset = footerInset, footerStart = footerStart)
+            footerInset = 0f, footerStart = footerStart,  // inline with the camera values row
+            values = if (inlineValues && settings != null) multiviewExposureReadouts(settings) else null)
         if (readouts.recovery != null && (compact || clean)) {
             Box(
                 Modifier.align(Alignment.Center).heightIn(min = 44.dp)
