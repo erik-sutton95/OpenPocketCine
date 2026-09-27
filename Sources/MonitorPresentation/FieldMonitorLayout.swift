@@ -146,9 +146,10 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             lock = .init(x: edge, y: cy - button / 2, width: button, height: button)
             display = .init(x: edge + button + 8, y: lock.y, width: button, height: button)
             record = .init(x: (w - rec) / 2, y: cy - rec / 2, width: rec, height: rec)
-            media = .init(x: w - edge - button, y: lock.y, width: button, height: button)
-            settings = .init(
-                x: media.x - button - Self.settingsMediaGap, y: lock.y, width: button, height: button)
+            // Same order as landscape: Media sits next to Record, Settings outside it.
+            settings = .init(x: w - edge - button, y: lock.y, width: button, height: button)
+            media = .init(
+                x: settings.x - button - Self.settingsMediaGap, y: lock.y, width: button, height: button)
             let gaugeTop = (tablet ? 82.0 : max(4, top - 16)) + controlInset
             // Three gauge pills: a trailing row on phone, a stacked column on tablet.
             gauges = .init(

@@ -228,8 +228,9 @@ object MonitorLayoutPolicy {
             val lock = MonitorRect(edge, cy - button / 2f, button, button)
             val display = MonitorRect(edge + button + 8f, lock.y, button, button)
             val record = MonitorRect((w - rec) / 2f, cy - rec / 2f, rec, rec)
-            val media = MonitorRect(w - edge - button, lock.y, button, button)
-            val settings = MonitorRect(media.x - button - SETTINGS_MEDIA_GAP, lock.y, button, button)
+            // Same order as landscape: Media sits next to Record, Settings outside it.
+            val settings = MonitorRect(w - edge - button, lock.y, button, button)
+            val media = MonitorRect(settings.x - button - SETTINGS_MEDIA_GAP, lock.y, button, button)
             val top = max(0f, safeTop - 24f)
             val gaugeTop = (if (tablet) 82f else max(4f, top - 16f)) + controlInset
             // Three gauge pills: a trailing row on phone, a stacked column on tablet.

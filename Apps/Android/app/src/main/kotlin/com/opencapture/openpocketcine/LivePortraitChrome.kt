@@ -537,13 +537,14 @@ fun LivePortraitSystemBar(
                     status.shootingMode, status.isRecording, uiLocked, controlBusy, model.session.phase,
                 ),
                 onClick = model::pressShutter)
+            // Same order as landscape: Media next to Record, Settings outside it.
             Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (showsSettings) AuxCircleButton(Modifier.size(48.dp).monitorPickerPassthrough(navigationEnabled), onClick = { model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) {
-                    OpcIcon(OpcIcon.SETTINGS, "Settings", Modifier.fillMaxSize(), it)
-                }
+                horizontalArrangement = Arrangement.spacedBy(com.opencapture.monitorui.MonitorLayoutPolicy.SETTINGS_MEDIA_GAP.dp)) {
                 if (showsMedia) AuxCircleButton(Modifier.size(48.dp).monitorPickerPassthrough(navigationEnabled), onClick = { model.liveOperatorPanel = LiveOperatorPanel.MEDIA }) {
                     OpcIcon(OpcIcon.FILM, "Media", Modifier.fillMaxSize(), it)
+                }
+                if (showsSettings) AuxCircleButton(Modifier.size(48.dp).monitorPickerPassthrough(navigationEnabled), onClick = { model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) {
+                    OpcIcon(OpcIcon.SETTINGS, "Settings", Modifier.fillMaxSize(), it)
                 }
             }
         }
@@ -583,15 +584,16 @@ fun LivePortraitSystemBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(Modifier.weight(1f))
-                if (showsSettings) {
-                    AuxCircleButton(Modifier.monitorPickerPassthrough(navigationEnabled), onClick = { model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) {
-                        OpcIcon(OpcIcon.SETTINGS, contentDescription = "Settings", tint = it, modifier = Modifier.fillMaxSize())
-                    }
-                    Spacer(Modifier.weight(1f))
-                }
+                // Same order as landscape: Media next to Record, Settings outside it.
                 if (showsMedia) {
                     AuxCircleButton(Modifier.monitorPickerPassthrough(navigationEnabled), onClick = { model.liveOperatorPanel = LiveOperatorPanel.MEDIA }) {
                         OpcIcon(OpcIcon.FILM, contentDescription = "Media", tint = it, modifier = Modifier.fillMaxSize())
+                    }
+                    Spacer(Modifier.weight(1f))
+                }
+                if (showsSettings) {
+                    AuxCircleButton(Modifier.monitorPickerPassthrough(navigationEnabled), onClick = { model.liveOperatorPanel = LiveOperatorPanel.SETTINGS }) {
+                        OpcIcon(OpcIcon.SETTINGS, contentDescription = "Settings", tint = it, modifier = Modifier.fillMaxSize())
                     }
                     Spacer(Modifier.weight(1f))
                 }
