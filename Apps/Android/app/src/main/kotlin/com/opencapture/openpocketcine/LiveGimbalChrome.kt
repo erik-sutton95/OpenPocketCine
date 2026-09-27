@@ -6,6 +6,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import com.opencapture.monitorui.MonitorMaterial
+import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.monitorui.monitorMaterial
 import com.opencapture.monitorui.monitorReadoutShadow
 import androidx.compose.foundation.Canvas
@@ -53,15 +54,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
@@ -541,15 +537,7 @@ private fun LiveGimbalEditor(model: AppModel, program: GimbalProgram, running: B
             Modifier.weight(1f).fillMaxWidth()
                 .testTag("motion.settings")
                 .semantics { if (moreBelow) stateDescription = "More settings below" }
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    if (moreBelow) {
-                        drawRect(Brush.verticalGradient(listOf(Color.Black, Color.Transparent),
-                            startY = max(0f, size.height - 24.dp.toPx()), endY = size.height),
-                            blendMode = BlendMode.DstIn)
-                    }
-                }
+                .monitorScrollFade(scroll)
                 .verticalScroll(scroll)
                 .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp),

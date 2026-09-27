@@ -59,6 +59,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.opencapture.monitorui.monitorScrollFade
 
 private data class ManualImageDraft(val jpeg: ByteArray, val preview: android.graphics.Bitmap)
 
@@ -183,6 +184,7 @@ internal fun ManualProblemReportDialog(
     }
     val sendBlocked = preparingImages || !previewReady || message.isBlank()
     Dialog(onDismissRequest = onClose) {
+        val formScroll = rememberScrollState()
         Column(
             Modifier
                 .fillMaxWidth()
@@ -190,7 +192,8 @@ internal fun ManualProblemReportDialog(
                 .background(LiveDesign.surface, ChromeShape)
                 .border(1.dp, LiveDesign.hairline, ChromeShape)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .monitorScrollFade(formScroll)
+                .verticalScroll(formScroll),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
@@ -419,10 +422,12 @@ internal fun AutomaticReportsPrompt(
             shape = ChromeShape,
             color = LiveDesign.surface,
         ) {
+            val promptScroll = rememberScrollState()
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .monitorScrollFade(promptScroll)
+                    .verticalScroll(promptScroll)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

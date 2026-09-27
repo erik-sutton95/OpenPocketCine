@@ -187,6 +187,7 @@ struct MediaDeliveryPopup: View {
                     mainColumn
                 }
                 .accessibilityIdentifier("monitor.share.optionsScroll")
+                .monitorScrollFade()
             } else {
                 mainColumn
             }

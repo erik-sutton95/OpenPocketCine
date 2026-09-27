@@ -1,4 +1,5 @@
 import CoreImage.CIFilterBuiltins
+import MonitorUI
 import SwiftUI
 
 /// Reveals credentials only while the operator has this sheet open.
@@ -41,6 +42,7 @@ struct WatcherWiFiCodeView: View {
                 .multilineTextAlignment(.center)
                 .padding(24)
             }
+            .monitorScrollFade()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

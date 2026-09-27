@@ -160,17 +160,17 @@ class MonitorFeedbackPolicyTest {
     }
 
     @Test fun assistCellsMatchTheMockupSquareAndSevenColumnMath() {
-        assertEquals(54f, MonitorLayoutPolicy.systemButtonSize(false))
+        assertEquals(48f, MonitorLayoutPolicy.systemButtonSize(false))
         assertEquals(48f, MonitorLayoutPolicy.systemButtonSize(true))
-        assertEquals(54f, MonitorLayoutPolicy.assistButtonSize(false))
+        assertEquals(48f, MonitorLayoutPolicy.assistButtonSize(false))
         assertEquals(48f, MonitorLayoutPolicy.assistButtonSize(true))
-        assertEquals(29f, MonitorLayoutPolicy.assistIconSize(false), .01f)
+        assertEquals(48f * 29f / 54f, MonitorLayoutPolicy.assistIconSize(false), .01f)
         assertEquals(48f * 29f / 54f, MonitorLayoutPolicy.assistIconSize(true), .01f)
-        assertEquals(29f, MonitorLayoutPolicy.assistCompactIconSize(false), .01f)
+        assertEquals(48f * 29f / 54f, MonitorLayoutPolicy.assistCompactIconSize(false), .01f)
         assertEquals(27f, MonitorLayoutPolicy.ASSIST_EXPANSION_BUTTON_WIDTH)
         assertEquals(38f, MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS)
-        assertEquals(54f, MonitorLayoutPolicy.assistCellWidth(874f, false, false))
-        assertEquals(54f, MonitorLayoutPolicy.assistCellWidth(393f, true, false))
+        assertEquals(48f, MonitorLayoutPolicy.assistCellWidth(874f, false, false))
+        assertEquals(48f, MonitorLayoutPolicy.assistCellWidth(393f, true, false))
         assertEquals(48f, MonitorLayoutPolicy.assistCellWidth(1024f, false, true))
     }
 

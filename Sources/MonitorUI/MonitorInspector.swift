@@ -95,7 +95,9 @@
                                 content
                                     .frame(width: max(1, contentWidth - 28), alignment: .leading)
                                     .padding(14)
-                            }.scrollBounceBehavior(.basedOnSize)
+                            }
+                            .scrollBounceBehavior(.basedOnSize)
+                            .monitorScrollFade()
                             footer.padding(.horizontal, 14).padding(.bottom, 10)
                         }
                         .frame(width: contentWidth)

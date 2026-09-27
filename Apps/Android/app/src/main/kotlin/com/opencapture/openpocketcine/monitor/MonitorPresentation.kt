@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.monitor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.OpcIcon
@@ -28,8 +29,9 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
 
 @Composable
 fun MonitorIconButton(icon: OpcIcon, label: String, modifier: Modifier = Modifier,
-    selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
-    com.opencapture.monitorui.MonitorActionButton(label, modifier, selected, enabled, onClick) { tint ->
-        OpcIcon(icon, null, Modifier.size(20.dp), tint)
+    selected: Boolean = false, enabled: Boolean = true, side: Dp = 44.dp, iconSize: Dp = 20.dp,
+    onClick: () -> Unit) {
+    com.opencapture.monitorui.MonitorActionButton(label, modifier, selected, enabled, side, onClick) { tint ->
+        OpcIcon(icon, null, Modifier.size(iconSize), tint)
     }
 }

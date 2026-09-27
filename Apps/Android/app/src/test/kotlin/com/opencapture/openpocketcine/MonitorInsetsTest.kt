@@ -389,10 +389,10 @@ class LiveMonitorLayoutTest {
         assertEquals(52f, se.settings.minY, 0.05f)
         assertEquals(cutout.settings.midY, cutout.lock.midY, 0.05f)
         assertEquals(8f + drop, cutout.settings.minY, 0.05f)
-        assertEquals(cutout.settings.minY, cutout.media.minY - 54f - 8f, 0.05f)
+        assertEquals(cutout.settings.minY, cutout.media.minY - 48f - 8f, 0.05f)
         assertEquals(cutout.lock.width, cutout.settings.width, 0.05f)
         assertEquals(cutout.lock.width, cutout.media.width, 0.05f)
-        assertEquals(54f, cutout.lock.width, 0.05f)
+        assertEquals(48f, cutout.lock.width, 0.05f)
         assertEquals(22f, cutout.topDeck.midY, 0.05f)
         LiveChromeMetrics.scale = 1f
     }

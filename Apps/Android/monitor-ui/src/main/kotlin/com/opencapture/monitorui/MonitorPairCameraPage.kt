@@ -198,8 +198,9 @@ private fun PairingRail(
                 }
             }
         } else {
+            val stepsScroll = rememberScrollState()
             Column(
-                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                Modifier.weight(1f).fillMaxWidth().monitorScrollFade(stepsScroll).verticalScroll(stepsScroll),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 presentation.steps.forEachIndexed { index, step ->
@@ -398,8 +399,9 @@ private fun PairingPane(
                 style = MonitorTypography.text(12.5f).copy(lineHeight = 16.5.sp),
             )
         }
+        val bodyScroll = rememberScrollState()
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            Modifier.weight(1f).fillMaxWidth().monitorScrollFade(bodyScroll).verticalScroll(bodyScroll),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             presentation.error?.let { message ->

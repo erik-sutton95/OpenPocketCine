@@ -1751,6 +1751,7 @@ struct AssistToolRow: View {
             }
             .padding(.horizontal, 2)
         }
+        .monitorScrollFade(.horizontal)
         .allowsHitTesting(!isLocked)
     }
 }

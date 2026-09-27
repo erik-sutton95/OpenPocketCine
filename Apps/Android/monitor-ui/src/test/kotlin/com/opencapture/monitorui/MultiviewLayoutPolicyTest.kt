@@ -76,7 +76,8 @@ class MultiviewLayoutPolicyTest {
         assertEquals(grid.readouts.y - 12f, grid.tiles[3].maxY, 0.001f)
         assertEquals(grid.tiles[0].height, grid.tiles[3].height)
         assertFalse(grid.assistsHorizontal)
-        assertEquals(grid.network.maxY + 8, grid.assists.y)
+        // The palette clears Wi-Fi but never starts above the feed tops.
+        assertEquals(maxOf(grid.tiles[0].y, grid.network.maxY + 8), grid.assists.y)
         assertTrue(abs(grid.tiles[0].width / grid.tiles[0].height - 16f / 9f) > 0.1f)
     }
 
@@ -154,10 +155,10 @@ class MultiviewLayoutPolicyTest {
     fun landscapeGridFillsStageWithoutAspectConstraint() {
         val grid = MultiviewPresentationLayout.compute(852f, 393f,
             MultiviewSafeArea(leading = 59f, bottom = 21f), GRID, 0)
-        assertEquals(MonitorRect(76f, 11.825f, 338f, 143.5875f), grid.tiles[0])
+        assertEquals(MonitorRect(70f, 11.825f, 341f, 143.5875f), grid.tiles[0])
         assertEquals(764f, grid.tiles[3].maxX)
         assertEquals(311f, grid.tiles[3].maxY)
-        assertTrue(grid.tiles.all { it.width == 338f && it.height == 143.5875f })
+        assertTrue(grid.tiles.all { it.width == 341f && it.height == 143.5875f })
     }
 
     @Test
@@ -220,8 +221,8 @@ class MultiviewLayoutPolicyTest {
     @Test
     fun smallLandscapeRailUsesTheAvailableHeightWithoutShrinkingTouchTargets() {
         val layout = MultiviewPresentationLayout.compute(667f, 375f, arrangement = GRID, selected = 0)
-        assertEquals(54f, layout.controlCellSize)
-        assertEquals(62f, layout.assists.width)
+        assertEquals(MonitorLayoutPolicy.systemButtonSize(false), layout.controlCellSize)
+        assertEquals(56f, layout.assists.width)
         assertEquals(layout.display.midX, layout.assists.midX)
         assertEquals(layout.network.maxY + 8f, layout.assists.y)
         assertEquals(layout.display.y - 8f, layout.assists.maxY)
@@ -276,7 +277,7 @@ class MultiviewLayoutPolicyTest {
         assertEquals(left.tiles, right.tiles)
         assertEquals(listOf(0, 1, 3), left.secondaryIndices)
         assertTrue(left.readoutsOverlay)
-        assertEquals(557f, main.width)
+        assertEquals(563f, main.width)
         assertEquals(16f / 9f, main.width / main.height, .001f)
         assertEquals(left.sessionControls.y, main.y)
         assertEquals(main.maxY - 45, left.readouts.y)

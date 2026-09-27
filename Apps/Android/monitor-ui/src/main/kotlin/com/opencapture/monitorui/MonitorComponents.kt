@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -137,10 +138,10 @@ fun MonitorAuxCircleButton(modifier: Modifier = Modifier, glyph: @Composable (Co
 
 @Composable
 fun MonitorActionButton(label: String, modifier: Modifier = Modifier, selected: Boolean = false,
-    enabled: Boolean = true, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
+    enabled: Boolean = true, side: Dp = 44.dp, onClick: () -> Unit, glyph: @Composable (Color) -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     val tint = if (selected) MonitorPalette.accent else MonitorPalette.text
-    Box(modifier.size(44.dp).clip(shape)
+    Box(modifier.size(side).clip(shape)
         .background(if (selected) MonitorPalette.accent.copy(alpha = .14f) else MonitorPalette.tile)
         .border(1.dp, if (selected) MonitorPalette.accent.copy(alpha = .3f) else Color.Transparent, shape)
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
@@ -183,13 +184,18 @@ object MonitorPageLayoutPolicy {
     }
 }
 
+/** Same type scale as the Your cameras header. */
 @Composable
 fun MonitorPageHeading(title: String, kicker: String) {
+    val config = LocalConfiguration.current
+    val tablet = minOf(config.screenWidthDp, config.screenHeightDp) >= 600
     Column(Modifier.fillMaxWidth().heightIn(min = 34.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(kicker, color = MonitorPalette.accent,
-            style = MonitorTypography.text(8f, FontWeight.Bold).copy(letterSpacing = 1.4.sp), maxLines = 1)
+            style = MonitorTypography.text(8.5f, FontWeight.Bold).copy(letterSpacing = 1.7.sp), maxLines = 1)
         Text(title, color = MonitorPalette.text,
-            style = MonitorTypography.text(13f, FontWeight.SemiBold), maxLines = 1)
+            style = MonitorTypography.text(MonitorLayoutPolicy.cameraPageTitleSize(tablet), FontWeight.SemiBold)
+                .copy(letterSpacing = (-0.2).sp),
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -260,7 +266,7 @@ fun MonitorPageScaffold(
 fun <T> MonitorCatalogGrid(items: List<T>, columns: Int, key: (T) -> Any,
     modifier: Modifier = Modifier, state: LazyGridState = rememberLazyGridState(),
     cell: @Composable (T) -> Unit) {
-    LazyVerticalGrid(columns = GridCells.Fixed(columns.coerceAtLeast(1)), modifier = modifier, state = state,
+    LazyVerticalGrid(columns = GridCells.Fixed(columns.coerceAtLeast(1)), modifier = modifier.monitorScrollFade(state), state = state,
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
         items(items, key = key) { cell(it) }

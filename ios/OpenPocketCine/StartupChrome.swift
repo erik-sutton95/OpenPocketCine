@@ -609,39 +609,3 @@ struct StartupYourCamerasButton: View {
         .disabled(disabled)
     }
 }
-
-struct StartupOverflowFade: ViewModifier {
-    var fadeHeight: CGFloat
-    @State private var canScrollFurther = false
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    geometry.contentSize.height - geometry.containerSize.height
-                        - geometry.contentOffset.y > 2
-                } action: { _, more in
-                    canScrollFurther = more
-                }
-                .mask(
-                    VStack(spacing: 0) {
-                        Color.black
-                        LinearGradient(
-                            colors: [.black, canScrollFurther ? .clear : .black],
-                            startPoint: .top, endPoint: .bottom
-                        )
-                        .frame(height: fadeHeight)
-                    }
-                )
-                .animation(.easeInOut(duration: 0.18), value: canScrollFurther)
-        } else {
-            content
-        }
-    }
-}
-
-extension View {
-    func fadeOverflowBottom(height: CGFloat = 28) -> some View {
-        modifier(StartupOverflowFade(fadeHeight: height))
-    }
-}

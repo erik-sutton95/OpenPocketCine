@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -94,9 +95,11 @@ fun <T> MonitorCameraPage(
             if (scanning) MonitorCameraScanStatus(fullLabels = fullLabels, tablet = tablet)
             actions()
         }
+        val gridState = rememberLazyGridState()
         LazyVerticalGrid(
             columns = GridCells.Fixed(if (tablet) 2 else 1),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).monitorScrollFade(gridState),
+            state = gridState,
             contentPadding = PaddingValues(bottom = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -289,7 +292,7 @@ private fun MonitorCameraScanStatus(fullLabels: Boolean, tablet: Boolean) {
     val phase = monitorPulsePhase(1400)
     val shape = RoundedCornerShape(12.dp)
     Row(
-        Modifier.height(if (tablet) 48.dp else 43.dp)
+        Modifier.height(MonitorLayoutPolicy.systemButtonSize(tablet).dp)
             .background(MonitorPalette.accent.copy(alpha = 0.1f), shape)
             .border(1.dp, MonitorPalette.accent.copy(alpha = 0.24f), shape)
             .padding(horizontal = if (fullLabels) 12.dp else 10.dp)

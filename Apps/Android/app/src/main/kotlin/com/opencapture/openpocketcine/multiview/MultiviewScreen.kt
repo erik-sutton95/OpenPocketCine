@@ -81,6 +81,7 @@ import com.opencapture.monitorui.MonitorRecordLamp
 import com.opencapture.monitorui.MonitorRect
 import com.opencapture.monitorui.MultiviewPresentationLayout
 import com.opencapture.monitorui.MultiviewSafeArea
+import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
@@ -857,8 +858,9 @@ private fun CameraPicker(session: MultiviewSession, onCancel: () -> Unit, onPick
             Text("Add camera", color = LiveDesign.text, style = LiveType.display(20f), modifier = Modifier.weight(1f))
             TextAction("Cancel", onClick = onCancel)
         }
+        val pickerScroll = rememberScrollState()
         Column(
-            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+            Modifier.weight(1f, fill = false).monitorScrollFade(pickerScroll).verticalScroll(pickerScroll)
                 .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

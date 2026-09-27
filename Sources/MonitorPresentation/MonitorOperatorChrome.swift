@@ -2,7 +2,7 @@ import Foundation
 
 /// Shared side length for live system controls and View Assist cells.
 public enum MonitorSystemButtonMetrics: Sendable {
-    public static func side(tablet: Bool) -> Double { tablet ? 48 : 54 }
+    public static func side(tablet: Bool) -> Double { 48 }
     public static func iconSide(tablet: Bool) -> Double { side(tablet: tablet) * 29 / 54 }
 }
 

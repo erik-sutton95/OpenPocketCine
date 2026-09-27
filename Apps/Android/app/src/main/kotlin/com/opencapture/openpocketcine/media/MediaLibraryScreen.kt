@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.media
 import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip
+import com.opencapture.monitorui.monitorScrollFade
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -268,7 +269,8 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                         if (compact) {
                             CategoryStrip(category) { category = it }
                         } else {
-                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            val railScroll = rememberScrollState()
+                            Column(Modifier.weight(1f).monitorScrollFade(railScroll).verticalScroll(railScroll)) {
                                 Column(Modifier.fillMaxWidth().monitorTabStrip()) {
                                     MediaLibraryTab.entries.forEach { tab ->
                                         CategoryTab(tab, active = tab == category, fill = true) { category = tab }
@@ -439,7 +441,8 @@ private fun MediaCatalogDisplayControls(
 
 @Composable
 private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab) -> Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()).monitorTabStrip()) {
+    val scroll = rememberScrollState()
+    Row(Modifier.monitorScrollFade(scroll, vertical = false).horizontalScroll(scroll).monitorTabStrip()) {
         MediaLibraryTab.entries.forEach { tab ->
             CategoryTab(tab, active = tab == category) { onSelect(tab) }
         }
@@ -511,7 +514,7 @@ private fun MediaGalleryPane(
                     }
                 layout == MediaBrowserLayout.LIST -> {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().monitorScrollFade(listState),
                         state = listState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(bottom = 24.dp),
@@ -787,6 +790,7 @@ private fun FilterPopup(
                 .background(Color.Black.copy(alpha = 0.18f))
                 .clickable(onClick = onClose),
         )
+        val filterScroll = rememberScrollState()
         Column(
             Modifier
                 .absoluteOffset { IntOffset((card.x * density.density).roundToInt(), (card.y * density.density).roundToInt()) }
@@ -795,7 +799,8 @@ private fun FilterPopup(
                 .clip(MediaCornerShape)
                 .panelGlass(MediaCornerShape)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState())
+                .monitorScrollFade(filterScroll)
+                .verticalScroll(filterScroll)
                 .semantics { contentDescription = "Filter popup" },
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

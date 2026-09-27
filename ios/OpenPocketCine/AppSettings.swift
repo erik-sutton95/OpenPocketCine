@@ -770,84 +770,21 @@ private struct SettingsRowChromeStyle: ViewModifier {
     }
 }
 
-private struct SettingsScrollBoundsKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
-    }
-}
-
-private struct SettingsScrollEdges: Equatable {
-    var above = false
-    var below = false
-}
-
 struct SettingsTabScrollArea<Content: View>: View {
     let tabID: String
     @ViewBuilder var content: Content
-    @State private var edges = SettingsScrollEdges()
 
     var body: some View {
-        GeometryReader { viewport in
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 8) {
-                    content
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 22)
-                .background {
-                    if #unavailable(iOS 18.0) {
-                        GeometryReader { content in
-                            Color.clear.preference(
-                                key: SettingsScrollBoundsKey.self,
-                                value: content.frame(in: .named("opc.settingsScroll")))
-                        }
-                    }
-                }
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 8) {
+                content
             }
-            .scrollDismissesKeyboard(.interactively)
-            .coordinateSpace(name: "opc.settingsScroll")
-            .modifier(SettingsScrollEdgeReporter(edges: $edges))
-            .onPreferenceChange(SettingsScrollBoundsKey.self) { bounds in
-                guard bounds != .zero else { return }
-                edges = SettingsScrollEdges(
-                    above: bounds.minY < -1, below: bounds.maxY > viewport.size.height + 1)
-            }
-            .mask {
-                let depth = min(24, viewport.size.height / 2)
-                VStack(spacing: 0) {
-                    LinearGradient(
-                        colors: [edges.above ? .clear : .black, .black],
-                        startPoint: .top, endPoint: .bottom
-                    ).frame(height: depth)
-                    Rectangle().fill(.black)
-                    LinearGradient(
-                        colors: [.black, edges.below ? .clear : .black],
-                        startPoint: .top, endPoint: .bottom
-                    ).frame(height: depth)
-                }
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 22)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .monitorScrollFade()
         .id(tabID)
-    }
-}
-
-private struct SettingsScrollEdgeReporter: ViewModifier {
-    @Binding var edges: SettingsScrollEdges
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: SettingsScrollEdges.self) { geometry in
-                SettingsScrollEdges(
-                    above: geometry.contentOffset.y + geometry.contentInsets.top > 1,
-                    below: geometry.contentSize.height + geometry.contentInsets.bottom
-                        - geometry.containerSize.height - geometry.contentOffset.y > 1)
-            } action: { _, next in
-                edges = next
-            }
-        } else {
-            content
-        }
     }
 }
 
@@ -1201,6 +1138,7 @@ struct AppPanelChrome<Content: View>: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 28)
             }
+            .monitorScrollFade()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(StartupColors.backdrop.ignoresSafeArea())

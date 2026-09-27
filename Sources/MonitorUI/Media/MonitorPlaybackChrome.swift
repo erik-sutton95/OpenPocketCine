@@ -104,6 +104,7 @@
                         }
                     }
                 }
+                .monitorScrollFade()
             }
             .monitorGlass(in: RoundedRectangle(cornerRadius: 14), density: .information)
         }

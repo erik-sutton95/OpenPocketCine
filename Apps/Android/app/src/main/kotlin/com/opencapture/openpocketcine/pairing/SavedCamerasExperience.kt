@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.opencapture.monitorui.MonitorCameraCard
 import com.opencapture.monitorui.MonitorCameraPage
 import com.opencapture.monitorui.MonitorCameraSection
+import com.opencapture.monitorui.MonitorLayoutPolicy
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.openpocketcine.AppModel
@@ -80,14 +82,20 @@ fun SavedCamerasExperience(model: AppModel) {
         scanning = phase == ConnectionPhase.SCANNING,
         actions = {
             MultiviewHeaderButton(enabled = !busy, onClick = model::openMultiview)
+            // Same footprint as Live View's settings/media buttons.
+            val side = MonitorLayoutPolicy.systemButtonSize(headerTablet())
             MonitorIconButton(
                 OpcIcon.FILM,
                 "Media library",
+                side = side.dp,
+                iconSize = (side * 29f / 54f).dp,
                 onClick = { model.homePanel = AppPanel.MEDIA },
             )
             MonitorIconButton(
                 OpcIcon.SETTINGS,
                 "Settings",
+                side = side.dp,
+                iconSize = (side * 29f / 54f).dp,
                 onClick = { model.homePanel = AppPanel.SETTINGS },
             )
         },
@@ -327,31 +335,39 @@ private fun PairNewCameraFooter(enabled: Boolean, onClick: () -> Unit) {
 
 /** iOS `CamerasPage` grid header action: accented, titled when the header has room. */
 @Composable
-private fun MultiviewHeaderButton(enabled: Boolean, onClick: () -> Unit) {
+private fun headerWindow(): Pair<Float, Float> {
     val window = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
     val density = androidx.compose.ui.platform.LocalDensity.current.density
-    val width = window.width / density
-    val height = window.height / density
+    return window.width / density to window.height / density
+}
+
+@Composable
+private fun headerTablet(): Boolean = headerWindow().let { (w, h) -> minOf(w, h) >= 600f }
+
+@Composable
+private fun MultiviewHeaderButton(enabled: Boolean, onClick: () -> Unit) {
+    val (width, height) = headerWindow()
     val tablet = minOf(width, height) >= 600f
     val fullLabels = tablet || width > height
+    val side = MonitorLayoutPolicy.systemButtonSize(tablet)
     val shape = RoundedCornerShape(12.dp)
     Row(
-        Modifier.height(if (tablet) 48.dp else 43.dp)
+        Modifier.height(side.dp).widthIn(min = side.dp)
             .alpha(if (enabled) 1f else 0.38f)
             .clip(shape)
             .background(MonitorPalette.accent.copy(alpha = 0.12f))
             .border(1.dp, MonitorPalette.accent.copy(alpha = 0.3f), shape)
             .clickable(enabled = enabled, onClick = onClick)
             .semantics { contentDescription = "Open Multiview" }
-            .padding(horizontal = 11.dp),
+            .padding(horizontal = if (fullLabels) 11.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
         OpcIcon(
             OpcIcon.LAYOUT_GRID,
             contentDescription = null,
             tint = MonitorPalette.accent,
-            modifier = Modifier.size(if (tablet) 26.dp else 23.dp),
+            modifier = Modifier.size((side * 29f / 54f).dp),
         )
         if (fullLabels) {
             Text(

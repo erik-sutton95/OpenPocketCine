@@ -115,7 +115,8 @@ struct MultiviewPresentationLayoutTests {
         #expect(abs(grid.tiles[3].maxY - (grid.readouts.y - 12)) < 0.001)
         #expect(grid.tiles[0].height == grid.tiles[3].height)
         #expect(!grid.assistsHorizontal)
-        #expect(grid.assists.y == grid.network.maxY + 8)
+        // The palette clears Wi-Fi but never starts above the feed tops.
+        #expect(grid.assists.y == max(grid.tiles[0].y, grid.network.maxY + 8))
         #expect(grid.assists.x == grid.tiles[0].maxX + 6)
         #expect(abs(grid.tiles[0].width / grid.tiles[0].height - 16 / 9) > 0.1)
     }
@@ -189,10 +190,11 @@ struct MultiviewPresentationLayoutTests {
         let grid = MultiviewPresentationLayout(
             width: 852, height: 393, safeArea: .init(leading: 59, bottom: 21),
             arrangement: .grid, selected: 0)
-        #expect(grid.tiles[0].x == 82 && grid.tiles[0].width == 335)
+        #expect(grid.tiles[0].x == 76)
+        #expect(grid.tiles[0].width == 338)
         #expect(grid.tiles[0].y == grid.sessionControls.y)
         #expect(grid.tiles[3].maxX == 764 && grid.tiles[3].maxY == 311)
-        #expect(grid.tiles.allSatisfy { $0.width == 335 && abs($0.height - 140.5875) < 0.001 })
+        #expect(grid.tiles.allSatisfy { $0.width == 338 && abs($0.height - 140.5875) < 0.001 })
     }
 
     @Test func selectionAndLayoutKeepNativeSystemControlsStable() {
@@ -243,7 +245,7 @@ struct MultiviewPresentationLayoutTests {
                 width: width, height: height,
                 safeArea: safe, arrangement: .grid, selected: 0)
             let live = FieldMonitorLayout(width: width, height: height, safeArea: safe)
-            #expect(layout.controlCellSize == 54)
+            #expect(layout.controlCellSize == MonitorSystemButtonMetrics.side(tablet: false))
             #expect(layout.assists.height < 4 * layout.controlCellSize + 44)
             #expect(abs(layout.assists.y - live.settings.maxY - 8) < 0.001)
             #expect(layout.assists.maxY == live.display.y - 8)
@@ -265,7 +267,7 @@ struct MultiviewPresentationLayoutTests {
             width: 600, height: 300,
             safeArea: .init(leading: 47, bottom: 21), arrangement: .grid, selected: 0)
         #expect(clear.sessionControls.y == clear.tiles[0].y)
-        #expect(clear.tiles[0].x == 82)
+        #expect(clear.tiles[0].x == 76)
         let opposite = MultiviewPresentationLayout(
             width: 600, height: 300,
             safeArea: .init(bottom: 21, trailing: 47), arrangement: .grid, selected: 0)

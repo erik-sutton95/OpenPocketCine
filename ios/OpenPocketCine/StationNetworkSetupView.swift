@@ -132,6 +132,7 @@ struct StationNetworkSetupView: View {
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollDismissesKeyboard(.interactively)
+                .monitorScrollFade()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityIdentifier("\(context.prefix).form")
                 footer(page, landscape: landscape, width: proxy.size.width)
@@ -658,6 +659,7 @@ struct StationNetworkSetupView: View {
                         }
                     }
                 }
+                .monitorScrollFade(.horizontal)
             }
             if scanning, hotspotName.isEmpty {
                 HStack(spacing: 8) {

@@ -252,6 +252,7 @@ struct LUTPicker: View {
                         }
                     }
                 }
+                .monitorScrollFade()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

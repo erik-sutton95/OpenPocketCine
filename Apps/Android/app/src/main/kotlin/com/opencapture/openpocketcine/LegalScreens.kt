@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.monitorui.monitorScrollFade
 
 enum class LegalKind(val title: String) {
     PRIVACY("Privacy"),
@@ -72,6 +73,7 @@ fun LegalDocumentScreen(
                 )
             }
             Spacer(Modifier.height(12.dp))
+            val bodyScroll = rememberScrollState()
             Text(
                 kind.body,
                 style = LiveType.ui(14f, FontWeight.Normal).copy(lineHeight = 19.sp),
@@ -80,7 +82,8 @@ fun LegalDocumentScreen(
                     Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .verticalScroll(rememberScrollState())
+                        .monitorScrollFade(bodyScroll)
+                        .verticalScroll(bodyScroll)
                         .background(LiveDesign.surface, shape)
                         .border(1.dp, LiveDesign.hairline, shape)
                         .padding(16.dp),

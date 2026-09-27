@@ -62,6 +62,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import com.opencapture.monitorui.MonitorPalette
+import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.multiview.MultiviewNetworkStore
@@ -217,7 +218,7 @@ fun StationNetworkSetup(
                         )
                     }
                     Column(
-                        Modifier.weight(1f).verticalScroll(formScroll).padding(18.dp)
+                        Modifier.weight(1f).monitorScrollFade(formScroll).verticalScroll(formScroll).padding(18.dp)
                             .testTag("stationSetup.form"),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {

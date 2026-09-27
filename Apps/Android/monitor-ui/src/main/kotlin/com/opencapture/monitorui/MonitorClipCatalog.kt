@@ -216,7 +216,8 @@ fun MonitorCatalogHeader(title: String, subtitle: String, compact: Boolean, sort
         }
     }
     val controls: @Composable () -> Unit = {
-        Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
+        val controlsScroll = rememberScrollState()
+        Row(Modifier.monitorScrollFade(controlsScroll, vertical = false).horizontalScroll(controlsScroll), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.height(34.dp).clip(RoundedCornerShape(8.dp)).background(MonitorPalette.tile)
                 .combinedClickable(role = Role.Button, onClick = onSort).padding(horizontal = 9.dp),

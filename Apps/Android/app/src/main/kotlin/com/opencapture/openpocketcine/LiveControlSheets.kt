@@ -38,6 +38,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.MonitorQuickPreview
+import com.opencapture.monitorui.monitorScrollFade
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -199,9 +200,10 @@ private fun RecordingSetupPanel(
     }
     androidx.compose.runtime.key(tab) {
         if (tab == "Mode" || tabNames == listOf("Mode")) {
+            val modeScroll = rememberScrollState()
             Column(Modifier.fillMaxWidth().then(if (maxHeightDp != null) Modifier.heightIn(max = maxHeightDp.dp) else Modifier)
                 .pickerPanelGlass(capturePanelShape(fromTop = true, portrait = viewportIsPortrait()))
-                .verticalScroll(rememberScrollState(), enabled = preview == null).padding(14.dp),
+                .monitorScrollFade(modeScroll).verticalScroll(modeScroll, enabled = preview == null).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SheetHeader("SHOOTING MODE", "Capture mode", onDismiss)
                 val bodyName = model.session.connectedCamera?.model?.name
@@ -531,13 +533,15 @@ private fun LiveControlSheetContent(
     val portrait = viewportIsPortrait()
     val topPadding = if (showsHeader) com.opencapture.monitorui.MonitorLayoutPolicy.captureTopPadding(fromTop, portrait, compact) else 0f
     // Every drum has the same 86dp viewport; the card hugs its own controls.
+    val sheetScroll = rememberScrollState()
     Column(
         Modifier
             .fillMaxWidth()
             .then(Modifier.wrapContentHeight(align = Alignment.Top))
             .then(if (cap != null) Modifier.heightIn(max = cap) else Modifier)
             .pickerPanelGlass(capturePanelShape(fromTop, portrait))
-            .verticalScroll(rememberScrollState(), enabled = preview == null)
+            .monitorScrollFade(sheetScroll)
+            .verticalScroll(sheetScroll, enabled = preview == null)
             .pointerInput(Unit) { detectTapGestures(onTap = {}) }
             .padding(horizontal = 14.dp)
             .padding(

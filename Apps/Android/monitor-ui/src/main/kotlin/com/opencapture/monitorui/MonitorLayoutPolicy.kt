@@ -307,7 +307,7 @@ object MonitorLayoutPolicy {
     fun cutoutPhoneCornerInset(viewportHeight: Float, tablet: Boolean, hasDisplayCutout: Boolean): Float =
         if (!tablet && hasDisplayCutout) CUTOUT_CORNER_INSET * max(0f, viewportHeight) else 0f
 
-    fun systemButtonSize(tablet: Boolean): Float = if (tablet) 48f else 54f
+    fun systemButtonSize(tablet: Boolean): Float = 48f
 
     fun assistButtonSize(tablet: Boolean): Float = systemButtonSize(tablet)
 

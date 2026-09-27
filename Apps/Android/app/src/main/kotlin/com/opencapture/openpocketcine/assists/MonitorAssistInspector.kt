@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opencapture.monitorui.MonitorInspector
+import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.LiveDesign
@@ -59,11 +60,13 @@ fun MonitorAssistInspector(
         safeBottom = safeBottom,
         navigation = { portrait ->
             if (portrait) {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).monitorTabStrip()) {
+                val tabScroll = rememberScrollState()
+                Row(Modifier.fillMaxWidth().monitorScrollFade(tabScroll, vertical = false).horizontalScroll(tabScroll).monitorTabStrip()) {
                     LiveAssistTool.settingsCases.forEach { InspectorTab(it, tool, state, true) }
                 }
             } else {
-                Column(Modifier.fillMaxHeight().verticalScroll(rememberScrollState()).monitorTabStrip()) {
+                val tabScroll = rememberScrollState()
+                Column(Modifier.fillMaxHeight().monitorScrollFade(tabScroll).verticalScroll(tabScroll).monitorTabStrip()) {
                     LiveAssistTool.settingsCases.forEach { InspectorTab(it, tool, state, false) }
                 }
             }

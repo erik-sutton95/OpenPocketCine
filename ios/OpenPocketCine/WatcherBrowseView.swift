@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -83,6 +84,7 @@ struct WatcherBrowseView: View {
             }
             .padding(20)
         }
+        .monitorScrollFade()
         .onAppear { model.startWatcherBrowse() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.startWatcherBrowse() }

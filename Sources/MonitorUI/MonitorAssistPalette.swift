@@ -172,6 +172,7 @@
                             }
                         }
                     }
+                    .monitorScrollFade()
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: MonitorAssistPaletteLayout.spacing) {
@@ -193,6 +194,7 @@
                             }
                         }
                     }
+                    .monitorScrollFade(.horizontal)
                 }
             }
             .frame(

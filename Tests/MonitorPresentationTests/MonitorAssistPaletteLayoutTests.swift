@@ -23,9 +23,9 @@ struct MonitorAssistPaletteLayoutTests {
         let frame = layout.anchored(leading: 14, bottom: bottom)
         #expect(frame.maxY == bottom)
         #expect(frame.y >= 62)
-        #expect(frame.width == 62)
+        #expect(frame.width == 56)
         #expect(layout.cellWidth == layout.cellHeight)
-        #expect(layout.cellWidth == 54)
+        #expect(layout.cellWidth == MonitorSystemButtonMetrics.side(tablet: false))
         #expect(layout.scrollHeight + 35 == frame.height)
         // PEAK is the second row; its centre is hundreds of points above the
         // collapsed rail but must still be inside the expanded native view.
@@ -40,11 +40,11 @@ struct MonitorAssistPaletteLayoutTests {
         let layout = MonitorAssistPaletteLayout(
             portrait: false, tablet: false, expanded: true, toolCount: 15,
             maximumWidth: 530, maximumHeight: 300)
-        #expect(layout.height == 119)
-        #expect(layout.cellWidth == 54)
+        #expect(layout.height == 107)
+        #expect(layout.cellWidth == MonitorSystemButtonMetrics.side(tablet: false))
         #expect(layout.cellWidth == layout.cellHeight)
         #expect(layout.columns == 8)
-        #expect(layout.scrollHeight == 111)
+        #expect(layout.scrollHeight == 99)
         #expect(layout.scrollWidth + 38 == layout.width)
         #expect(layout.width <= 530)
         #expect(layout.iconSide == MonitorSystemButtonMetrics.iconSide(tablet: false))

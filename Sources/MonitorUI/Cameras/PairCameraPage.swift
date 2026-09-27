@@ -107,7 +107,9 @@
                                     stepRow(step, index: index, portrait: false)
                                 }
                             }
-                        }.frame(maxHeight: .infinity)
+                        }
+                        .monitorScrollFade()
+                        .frame(maxHeight: .infinity)
                     }
                 }
                 VStack(alignment: .leading, spacing: 5) {
@@ -245,7 +247,9 @@
                             CameraProgressLabel(title: progress).padding(.top, 3)
                         }
                     }
-                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+                .monitorScrollFade()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 footer(portrait: portrait)
             }
             .padding(.horizontal, tablet ? 20 : 15).padding(.top, tablet ? 18 : 14).padding(

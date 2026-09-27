@@ -615,6 +615,7 @@ struct MultiviewView: View {
                             .padding(.top, 4)
                         }.padding(.horizontal, 20).padding(.bottom, 20)
                     }
+                    .monitorScrollFade()
                 }
                 .frame(
                     width: min(460, max(0, geometry.size.width - 32)),

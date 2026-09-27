@@ -60,6 +60,7 @@ import androidx.compose.ui.window.Popup
 import com.opencapture.monitorui.MonitorQuickGestureOwner
 import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.monitorui.monitorPickerPassthrough
+import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.openpocketcine.assists.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistState
@@ -764,11 +765,13 @@ fun LivePortraitAssistRail(
         ) {
             ChevronLeftGlyph(LiveDesign.accent, Modifier.size(13.dp))
         }
+        val railScroll = rememberScrollState()
         Column(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .monitorScrollFade(railScroll)
+                .verticalScroll(railScroll)
                 .padding(vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),

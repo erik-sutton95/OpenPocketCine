@@ -132,9 +132,11 @@
         }
     }
 
+    /// Same type scale as the Your cameras header.
     public struct MonitorPageHeading: View {
         private let brand: String
         private let title: String
+        @Environment(\.monitorWindowGeometry) private var windowGeometry
 
         public init(brand: String, title: String) {
             self.brand = brand
@@ -144,16 +146,20 @@
         public var body: some View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(brand.uppercased())
-                    .font(MonitorTheme.font(8, weight: .bold)).tracking(1.4)
+                    .font(MonitorTheme.font(8.5, weight: .bold)).tracking(1.7)
                     .foregroundStyle(MonitorTheme.accent)
                     .lineLimit(1).minimumScaleFactor(0.9)
-                Text(title).font(MonitorTheme.font(13, weight: .semibold))
-                    .lineLimit(1).minimumScaleFactor(0.9)
+                Text(title).font(MonitorTheme.font(tablet ? 24 : 19, weight: .semibold))
+                    .tracking(-0.2).lineLimit(1).minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
             .foregroundStyle(MonitorTheme.text)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("monitor.page.heading")
+        }
+
+        private var tablet: Bool {
+            min(windowGeometry.size.width, windowGeometry.size.height) >= 600
         }
     }
 

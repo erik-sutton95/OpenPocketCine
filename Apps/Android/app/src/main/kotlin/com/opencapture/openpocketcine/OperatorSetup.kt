@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.monitorui.MonitorTab
+import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.monitorui.monitorTabStrip
 import android.content.Context
 import android.content.Intent
@@ -11,7 +12,6 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -57,13 +57,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -500,6 +493,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
     ) {
         com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            navigationWidth = 190f,
             heading = { com.opencapture.openpocketcine.monitor.MonitorPageHeading("Operator Setup", "OPENPOCKETCINE") },
             navigation = { portrait ->
                 Column(
@@ -525,8 +519,9 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                             }
                         }
                     } else {
+                        val railScroll = rememberScrollState()
                         Column(
-                            Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                            Modifier.weight(1f).monitorScrollFade(railScroll).verticalScroll(railScroll),
                         ) {
                             Column(Modifier.fillMaxWidth().monitorTabStrip(vertical = true)) {
                                 OperatorSettingsTab.entries.forEach { tab ->
@@ -705,6 +700,7 @@ private fun SettingsTabStrip(
         modifier
             .fillMaxWidth()
             .height(44.dp)
+            .monitorScrollFade(scroll, vertical = false)
             .horizontalScroll(scroll)
             .monitorTabStrip()
             .testTag("monitor.settings.tabs"),
@@ -783,7 +779,7 @@ private fun SettingsContentPane(
                 Column(
                     Modifier
                         .fillMaxSize()
-                        .settingsScrollEdgeMask(scroll)
+                        .monitorScrollFade(scroll)
                         .verticalScroll(scroll)
                         .padding(bottom = 22.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1802,24 +1798,3 @@ private fun SettingsLiveTile(
         }
     }
 }
-
-/** Mask only the scrolling content; the page's own background stays untouched. */
-private fun Modifier.settingsScrollEdgeMask(scroll: ScrollState): Modifier =
-    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithCache {
-            val depth = minOf(24.dp.toPx(), size.height / 2f)
-            val top = Brush.verticalGradient(listOf(Color.Transparent, Color.Black), endY = depth)
-            val bottom = Brush.verticalGradient(listOf(Color.Black, Color.Transparent),
-                startY = size.height - depth, endY = size.height)
-            onDrawWithContent {
-                drawContent()
-                // Observe the existing native scroll state in draw, not composition.
-                if (scroll.canScrollBackward) {
-                    drawRect(top, size = Size(size.width, depth), blendMode = BlendMode.DstIn)
-                }
-                if (scroll.canScrollForward) {
-                    drawRect(bottom, topLeft = Offset(0f, size.height - depth),
-                        size = Size(size.width, depth), blendMode = BlendMode.DstIn)
-                }
-            }
-        }

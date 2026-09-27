@@ -142,6 +142,7 @@ struct MultiviewCameraSettings: View {
                 ) { category = $0 }
                 .fixedSize(horizontal: true, vertical: false)
             }
+            .monitorScrollFade(.horizontal)
             HStack {
                 MultiviewRecordAction(
                     session: session, tile: tile,

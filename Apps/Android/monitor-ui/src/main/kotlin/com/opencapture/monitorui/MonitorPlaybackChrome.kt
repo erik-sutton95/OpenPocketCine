@@ -210,7 +210,8 @@ fun MonitorMetadataDrawer(rows: List<MonitorMetadataRow>, modifier: Modifier = M
             )
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { close() }
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        val infoScroll = rememberScrollState()
+        Column(Modifier.weight(1f).monitorScrollFade(infoScroll).verticalScroll(infoScroll)) {
             rows.forEach { row ->
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),

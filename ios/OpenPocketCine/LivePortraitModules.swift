@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -204,6 +205,7 @@ struct LivePortraitAssistRail: View {
                 }
                 .padding(.vertical, 4)
             }
+            .monitorScrollFade()
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -2,11 +2,9 @@ package com.opencapture.openpocketcine.pairing
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,14 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -80,38 +71,6 @@ object StartupColors {
 }
 
 fun Modifier.startupBackdrop(): Modifier = background(StartupColors.backdropBase)
-
-/**
- * Fades out the bottom edge of a scrollable viewport while more content lies
- * below the fold — the "there's more" affordance. Apply before the
- * `verticalScroll` modifier that shares [scrollState].
- */
-@Composable
-fun Modifier.fadeOverflowBottom(scrollState: ScrollState, height: Dp = 28.dp): Modifier {
-    val fade by
-        animateFloatAsState(
-            targetValue = if (scrollState.canScrollForward) 1f else 0f,
-            label = "overflow-edge-fade",
-        )
-    return graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            drawContent()
-            if (fade > 0f) {
-                val bandHeight = height.toPx()
-                drawRect(
-                    brush =
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Black, Color.Black.copy(alpha = 1f - fade)),
-                            startY = size.height - bandHeight,
-                            endY = size.height,
-                        ),
-                    topLeft = Offset(0f, size.height - bandHeight),
-                    size = Size(size.width, bandHeight),
-                    blendMode = BlendMode.DstIn,
-                )
-            }
-        }
-}
 
 fun Modifier.startupCard(): Modifier =
     clip(RoundedCornerShape(13.dp))

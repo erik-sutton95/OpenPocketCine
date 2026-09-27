@@ -145,6 +145,7 @@ struct AssistLongPressOverlay: View {
                     }
                 }.padding(.horizontal, 6)
             }
+            .monitorScrollFade(portrait ? .horizontal : .vertical)
         } content: {
             VStack(alignment: .leading, spacing: 14) {
                 AssistInspectorPreview(tool: tool)

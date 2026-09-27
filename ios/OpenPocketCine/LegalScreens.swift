@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 
 /// In-app legal pages. Canonical website copy lives at openpocketcine.app/privacy and /terms.
@@ -47,6 +48,7 @@ struct LegalDocumentView: View {
                                     .stroke(LiveDesign.hairline, lineWidth: 1)
                             )
                     }
+                    .monitorScrollFade()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(.top, OperatorPanelMetrics.topPadding(safeArea: insets))

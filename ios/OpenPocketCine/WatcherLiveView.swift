@@ -1,4 +1,5 @@
 import AVFoundation
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -185,6 +186,7 @@ struct WatcherLiveView: View {
                     client.state.batteryPercent >= 0 ? "\(client.state.batteryPercent)%" : "—")
             }.padding(.horizontal, 12).padding(.vertical, 7)
         }
+        .monitorScrollFade(.horizontal)
         .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
     }
 
@@ -255,6 +257,7 @@ struct WatcherLiveView: View {
                 }
             }.padding(.horizontal, 12).padding(.vertical, 8)
         }
+        .monitorScrollFade(.horizontal)
         .font(LiveType.ui(size: 12, weight: .semibold))
         .foregroundStyle(LiveDesign.text)
         .background(.black.opacity(0.72), in: Capsule())

@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.media
 
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
+import com.opencapture.monitorui.monitorScrollFade
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -245,8 +246,9 @@ fun MediaDeliveryPopup(
                     )
             }
             Spacer(Modifier.height(12.dp))
+            val bodyScroll = rememberScrollState()
             Column(
-                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                Modifier.weight(1f, fill = false).monitorScrollFade(bodyScroll).verticalScroll(bodyScroll),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(

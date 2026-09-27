@@ -94,6 +94,7 @@
                         }
                     }
                 }
+                .monitorScrollFade(portrait ? .horizontal : .vertical)
                 .frame(height: portrait ? 44 : nil)
                 if !portrait {
                     VStack(alignment: .leading, spacing: 5) {
@@ -189,6 +190,7 @@
             VStack(alignment: .leading, spacing: 8) {
                 headerCaption
                 ScrollView(.horizontal, showsIndicators: false) { toolbar }
+                    .monitorScrollFade(.horizontal)
             }
         }
 
@@ -254,6 +256,7 @@
                 .scrollBounceBehavior(.always)
                 .refreshable { refresh() }
                 .accessibilityIdentifier("monitor.media.gallery")
+                .monitorScrollFade()
             }
         }
 
@@ -371,6 +374,7 @@
                         .disabled(!selectionAllows(.delete, every: true))
                     }
                 }
+                .monitorScrollFade(.horizontal)
                 .fixedSize(horizontal: false, vertical: true)
             }
             .padding(6).monitorCardSurface()

@@ -708,6 +708,7 @@ struct MediaLibraryView: View {
                                 dateEndKey = nil
                             })
                     }
+                    .monitorScrollFade()
                 }
                 .padding(16)
                 .frame(width: card.width, height: card.height, alignment: .topLeading)

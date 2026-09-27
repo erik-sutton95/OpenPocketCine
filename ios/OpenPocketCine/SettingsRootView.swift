@@ -119,7 +119,7 @@ struct SettingsRootView: View {
 
     var body: some View {
         MonitorPage(
-            safeArea: safeArea,
+            safeArea: safeArea, navigationWidth: 188,
             heading: MonitorPageHeading(brand: "OpenPocketCine", title: "Operator Setup"),
             backLabel: model.isLive ? "Back to live" : "Your cameras", back: dismiss
         ) { portrait in
@@ -183,6 +183,7 @@ struct SettingsRootView: View {
                     }
                 }
             }
+            .monitorScrollFade(portrait ? .horizontal : .vertical)
             .frame(height: portrait ? 44 : nil)
             .accessibilityIdentifier("monitor.settings.tabs")
             sessionControls(portrait: portrait)

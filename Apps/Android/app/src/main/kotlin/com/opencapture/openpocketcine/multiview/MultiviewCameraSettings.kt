@@ -42,6 +42,7 @@ import com.opencapture.monitorui.MonitorDrawerTabs
 import com.opencapture.monitorui.MonitorReadoutDismissBackdrop
 import com.opencapture.monitorui.MonitorRect
 import com.opencapture.monitorui.MultiviewSafeArea
+import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.openpocketcine.CaptureLists
 import com.opencapture.openpocketcine.CaptureShutterPolicy
 import com.opencapture.openpocketcine.LiveControlSheet
@@ -139,7 +140,8 @@ internal fun MultiviewCameraSettings(
                         OpcIcon(OpcIcon.X, null, Modifier.size(20.dp), LiveDesign.text)
                     }
                 }
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                val cameraTabScroll = rememberScrollState()
+                Row(Modifier.fillMaxWidth().monitorScrollFade(cameraTabScroll, vertical = false).horizontalScroll(cameraTabScroll)) {
                     MonitorDrawerTabs(
                         tabs = cameras.map { "${'A' + it.index} · ${it.camera?.name.orEmpty()}" },
                         selected = cameras.indexOf(tile).coerceAtLeast(0),
@@ -159,7 +161,8 @@ internal fun MultiviewCameraSettings(
                     val note by controls.session.controlNote.collectAsState()
                     val categories = multiviewSettingsCategories(camera.model, status)
                     val sheet = selectedSheet.takeIf { it in categories } ?: LiveSheet.ISO
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    val categoryScroll = rememberScrollState()
+                    Row(Modifier.fillMaxWidth().monitorScrollFade(categoryScroll, vertical = false).horizontalScroll(categoryScroll)) {
                         MonitorDrawerTabs(categories.map { it.settingsLabel() }, categories.indexOf(sheet),
                             onSelect = { selectedSheet = categories[it] })
                     }

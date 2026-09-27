@@ -89,6 +89,7 @@
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollDisabled(contentHeight <= available)
+                .monitorScrollFade()
                 .frame(height: min(contentHeight, available))
             }
             .padding(.horizontal, 14)
