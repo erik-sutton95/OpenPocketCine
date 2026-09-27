@@ -675,6 +675,9 @@ private fun SessionControls(
     }
 }
 
+/** Settings tabs breathe a little more than compact control tabs; the baseline stays continuous. */
+private val SettingsTabGap = 6.dp
+
 @Composable
 private fun SettingsTabRail(model: AppModel, hapticsEnabled: Boolean, view: View) {
     Column(
@@ -682,6 +685,7 @@ private fun SettingsTabRail(model: AppModel, hapticsEnabled: Boolean, view: View
             .width(146.dp)
             .fillMaxHeight()
             .monitorTabStrip(vertical = true),
+        verticalArrangement = Arrangement.spacedBy(SettingsTabGap),
     ) {
         OperatorSettingsTab.entries.forEach { tab ->
             SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.fillMaxWidth(), vertical = true)
@@ -705,6 +709,7 @@ private fun SettingsTabStrip(
             .monitorTabStrip()
             .testTag("monitor.settings.tabs"),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(SettingsTabGap),
     ) {
         OperatorSettingsTab.entries.forEach { tab ->
             SettingsTabButton(tab, model, hapticsEnabled, view, Modifier.wrapContentWidth())

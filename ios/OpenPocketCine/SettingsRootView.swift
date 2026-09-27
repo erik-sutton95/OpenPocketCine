@@ -165,7 +165,8 @@ struct SettingsRootView: View {
     private func settingsNavigation(portrait: Bool) -> some View {
         VStack(alignment: .leading, spacing: portrait ? 9 : 8) {
             ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
-                MonitorTabStrip(vertical: !portrait) {
+                // Settings tabs breathe a little more; the baseline stays continuous.
+                MonitorTabStrip(vertical: !portrait, spacing: 6) {
                     ForEach(OperatorSettingsTab.allCases) { tab in
                         MonitorNavigationItem(
                             tab.rawValue, subtitle: tabSubtitle(tab),

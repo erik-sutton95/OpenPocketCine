@@ -16,16 +16,21 @@
     /// Hosts retain typed selections, scrolling and camera actions.
     public struct MonitorTabStrip<Content: View>: View {
         private let vertical: Bool
+        private let spacing: CGFloat
         private let content: Content
 
-        public init(vertical: Bool = false, @ViewBuilder content: () -> Content) {
+        public init(
+            vertical: Bool = false, spacing: CGFloat = 0, @ViewBuilder content: () -> Content
+        ) {
             self.vertical = vertical
+            self.spacing = spacing
             self.content = content()
         }
 
         public var body: some View {
             let layout =
-                vertical ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+                vertical
+                ? AnyLayout(VStackLayout(spacing: spacing)) : AnyLayout(HStackLayout(spacing: spacing))
             layout { content }
                 .environment(\.monitorVerticalTabs, vertical)
                 .background(alignment: vertical ? .leading : .bottom) {
