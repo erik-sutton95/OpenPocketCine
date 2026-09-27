@@ -19,7 +19,7 @@ Fixes
 - DISP settings list Zoom Chip and Gimbal Stick only when the connected camera has them.
 - Live View no longer crashes on some phone and monitor screen sizes while gimbal controls are shown.
 - Live View no longer freezes for several seconds after a single dropped video packet. The picture returns as soon as the camera sends a fresh keyframe.
-- Live View no longer crashes over and over on some MediaTek phones. After two crashes it uses a compatible display mode for this version.
+- Live View no longer crashes when it opens on MediaTek phones such as Redmi 10, Poco X3 GT and Galaxy A41.
 
 What to test
 

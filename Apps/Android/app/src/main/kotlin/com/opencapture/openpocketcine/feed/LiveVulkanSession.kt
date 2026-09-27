@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.feed
 import android.content.Context
 import android.graphics.ImageFormat
 import android.media.Image
+import android.hardware.HardwareBuffer
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
@@ -426,7 +427,11 @@ internal class LiveVulkanSession(
         if (reader != null || presentGate.isReleased) return
         val w = sourceW.coerceAtLeast(2)
         val h = sourceH.coerceAtLeast(2)
-        val next = ImageReader.newInstance(w, h, ImageFormat.PRIVATE, 5)
+        // PRIVATE without usage requests usage 0. Vulkan requires GPU_SAMPLED_IMAGE
+        // on an imported AHB; MediaTek gralloc SIGSEGVs without it (ANDROID-E).
+        val next = ImageReader.newInstance(
+            w, h, ImageFormat.PRIVATE, 5, HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE,
+        )
         reader = next
         readerFrames = 0
         next.setOnImageAvailableListener(
