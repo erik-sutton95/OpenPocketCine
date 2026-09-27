@@ -645,8 +645,9 @@ orientations. Mounted UIKit-host identity is checked across layout changes.
 Android passes 1,127 JVM tests and lint; two API 35 emulator tests exercise
 compact feed telemetry, camera-menu actions and Clean recovery access.
 `just check` and `just native-check` pass. Physical qualification remains
-pending: the connected iOS 27 iPhone cannot mount Xcode's developer disk image,
-and no physical Android phone is attached. Camera-connected frame-rate and
+pending: developer services now work on the connected iOS 27 iPhone and the
+signed app installed, but XCTest timed out enabling UI Automation before any
+test ran. No physical Android phone is attached. Camera-connected frame-rate and
 thermal qualification also remains pending. Earlier September 10/23 camera
 checks establish retained connection and recording behavior, not this revised
 layout.
@@ -1388,5 +1389,6 @@ changes setup only; live ACK, watchdog, decoder and enable budgets are unchanged
 Automated qualification includes iOS Add setup and Multiview navigation/password
 entry in portrait and landscape, and Android emulator scan-cancellation cleanup,
 connect ordering and failed-join retry. Repository and platform checks are recorded
-in the PR. Physical qualification remains pending: the available iOS 27 iPhone
-could not mount Xcode's developer disk image, and no Android phone was attached.
+in the PR. Physical qualification remains pending: the signed app installed on
+the available iOS 27 iPhone, but XCTest timed out enabling UI Automation before
+any test ran. No Android phone was attached.
