@@ -68,6 +68,8 @@ struct MultiviewTileChrome: View {
     let compact: Bool
     let condensed: Bool
     var reservedBottom: CGFloat = 0
+    /// The floating View Assist palette covers the main tile's lower left.
+    var reservedLeading: CGFloat = 0
     let openOptions: () -> Void
 
     private var values: MultiviewTelemetryPresentation { .init(settings: tile.settings) }
@@ -180,15 +182,14 @@ struct MultiviewTileChrome: View {
             }
             .monospacedDigit()
             .padding(.horizontal, compact ? 8 : 11)
+            .padding(.leading, reservedLeading)
             .padding(.bottom, compact ? 5 : 9)
             .allowsHitTesting(false)
         }
         .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
     }
     private var battery: some View {
-        LiveBatteryRow(
-            percent: tile.settings.batteryPercent, deviceIcon: .camera,
-            isCharging: tile.settings.charging, isCamera: true)
+        FieldMonitorGauges.cameraBattery(tile.settings.batteryPercent)
     }
 
 }

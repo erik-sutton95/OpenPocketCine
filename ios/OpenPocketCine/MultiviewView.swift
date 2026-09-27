@@ -150,11 +150,15 @@ struct MultiviewView: View {
                 ids: session.tiles.map(\.id), layout: layout, geometry: stageGeometry
             ) { index in
                 let frame = layout.tiles[index]
+                let overlay = layout.readoutsOverlay && index == session.focusedIndex
                 tileView(
                     session.tiles[index], index: index,
                     compact: frame.width < 200 || frame.height < 136,
                     condensed: frame.height < 80,
-                    readoutInset: layout.readoutsOverlay && index == session.focusedIndex ? 45 : 0)
+                    readoutInset: overlay ? 45 : 0,
+                    // The floating View Assist palette covers the main tile's lower
+                    // left; its footer starts where the stage value row does.
+                    footerLeading: overlay ? layout.readouts.x - frame.x : 0)
             }
             if !clean {
                 exitButton(size: layout.sessionControls.width)
@@ -394,7 +398,7 @@ struct MultiviewView: View {
 
     private func tileView(
         _ tile: MultiviewSession.Tile, index: Int, compact: Bool, condensed: Bool,
-        readoutInset: CGFloat = 0
+        readoutInset: CGFloat = 0, footerLeading: CGFloat = 0
     ) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12).fill(LiveDesign.surface)
@@ -449,7 +453,8 @@ struct MultiviewView: View {
                 if !clean {
                     MultiviewTileChrome(
                         tile: tile, index: index, selected: index == session.focusedIndex,
-                        compact: compact, condensed: condensed, reservedBottom: readoutInset
+                        compact: compact, condensed: condensed, reservedBottom: readoutInset,
+                        reservedLeading: footerLeading
                     ) {
                         closePopups()
                         optionsTile = tile

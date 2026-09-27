@@ -421,7 +421,8 @@ struct FieldMonitorGauges: View {
     @State private var phonePercent = -1
     /// One link pill: tap swaps signal bars and feed fps.
     @State private var showsFPS = false
-    private var tablet: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var tablet: Bool { Self.tablet }
+    private static var tablet: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     var body: some View {
         let axis =
@@ -436,7 +437,7 @@ struct FieldMonitorGauges: View {
                 Button {
                     showsFPS.toggle()
                 } label: {
-                    gauge(
+                    Self.gauge(
                         icon: showsFPS ? .gauge : .signal, value: showsFPS ? fpsValue : nil,
                         bars: bars, color: linkColor)
                 }
@@ -448,16 +449,16 @@ struct FieldMonitorGauges: View {
                 .accessibilityIdentifier("monitor.telemetry.signal")
             }
             if showsPower {
-                gauge(
+                Self.gauge(
                     icon: .smartphone, value: phonePercent < 0 ? "—" : "\(phonePercent)%",
-                    bars: 0, color: batteryColor(phonePercent)
+                    bars: 0, color: Self.batteryColor(phonePercent)
                 )
                 .accessibilityLabel(
                     "Phone battery \(phonePercent >= 0 ? String(phonePercent) : "unknown") percent")
                 let percent = model.session.status.batteryPercent
-                gauge(
+                Self.gauge(
                     icon: .camera, value: (0...100).contains(percent) ? "\(percent)%" : "—",
-                    bars: 0, color: batteryColor(percent)
+                    bars: 0, color: Self.batteryColor(percent)
                 )
                 .accessibilityLabel(
                     (0...100).contains(percent)
@@ -476,7 +477,7 @@ struct FieldMonitorGauges: View {
     }
 
     /// Phone and camera batteries share one scale.
-    private func batteryColor(_ percent: Int) -> Color {
+    static func batteryColor(_ percent: Int) -> Color {
         guard (0...100).contains(percent) else { return LiveDesign.text }
         return percent <= 20
             ? MonitorTheme.recording : percent <= 40 ? LiveDesign.amber : LiveDesign.good
@@ -493,12 +494,27 @@ struct FieldMonitorGauges: View {
         phonePercent = value < 0 ? -1 : Int((value * 100).rounded())
     }
 
+    /// Multiview tiles: the camera battery pill without its glyph.
+    static func cameraBattery(_ percent: Int) -> some View {
+        gauge(
+            icon: nil, value: (0...100).contains(percent) ? "\(percent)%" : "—", bars: 0,
+            color: batteryColor(percent)
+        )
+        .accessibilityLabel(
+            (0...100).contains(percent)
+                ? "Camera battery \(percent) percent" : "Camera battery unavailable")
+    }
+
     /// One glass pill per gauge: white icon, status color on the value only.
-    private func gauge(icon: OpcIcon, value: String?, bars: Int, color: Color) -> some View {
+    private static func gauge(icon: OpcIcon?, value: String?, bars: Int, color: Color)
+        -> some View
+    {
         let height: CGFloat = tablet ? 22 : 20
         return HStack(spacing: 4) {
-            icon.frame(width: tablet ? 12 : 11, height: tablet ? 12 : 11)
-                .foregroundStyle(LiveDesign.text)
+            if let icon {
+                icon.frame(width: tablet ? 12 : 11, height: tablet ? 12 : 11)
+                    .foregroundStyle(LiveDesign.text)
+            }
             if let value {
                 Text(value)
                     .font(MonitorTheme.font(tablet ? 11 : 10, weight: .semibold)).monospacedDigit()
@@ -515,8 +531,11 @@ struct FieldMonitorGauges: View {
             }
         }
         .padding(.horizontal, 6)
-        // One width for every pill, sized for the widest value ("25 fps").
-        .frame(width: tablet ? 64 : 58, height: height, alignment: .leading)
+        // One width for every pill, sized for the widest value ("25 fps", or
+        // "100%" without the glyph) so values never jitter.
+        .frame(
+            width: icon == nil ? (tablet ? 44 : 40) : (tablet ? 64 : 58), height: height,
+            alignment: .leading)
         // Same glass as the Live View buttons, as a small rounded-rectangle pill.
         .monitorGlass(in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .accessibilityElement(children: .ignore)

@@ -67,10 +67,10 @@ private fun batteryTint(percent: Int): Color = when {
     else -> LiveDesign.good
 }
 
-/** Live View and Multiview share the camera glyph and percentage. */
+/** Live View and Multiview share the camera battery pill; Multiview tiles drop the glyph. */
 @Composable
-fun MonitorCameraBatteryGauge(percent: Int, stacked: Boolean = false) {
-    TelemetryGauge(OpcIcon.CAMERA, batteryTint(percent), if (percent in 0..100) percent / 100f else 0f,
+fun MonitorCameraBatteryGauge(percent: Int, stacked: Boolean = false, showsIcon: Boolean = true) {
+    TelemetryGauge(OpcIcon.CAMERA.takeIf { showsIcon }, batteryTint(percent), if (percent in 0..100) percent / 100f else 0f,
         if (percent in 0..100) "Camera battery $percent percent" else "Camera battery unavailable",
         stacked, percent.takeIf { it in 0..100 }?.let { "$it%" } ?: "—")
 }
@@ -81,12 +81,13 @@ fun MonitorCameraBatteryGauge(percent: Int, stacked: Boolean = false) {
  */
 @Composable
 private fun TelemetryGauge(
-    icon: OpcIcon, tint: Color, fraction: Float, label: String,
+    icon: OpcIcon?, tint: Color, fraction: Float, label: String,
     stacked: Boolean, value: String? = null, onClick: (() -> Unit)? = null,
 ) {
     Row(
         Modifier
-            .size(58.dp, 20.dp)
+            // Without the glyph the pill still fits "100%" so values never jitter.
+            .size(if (icon != null) 58.dp else 40.dp, 20.dp)
             .monitorGlass(RoundedCornerShape(7.dp))
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(horizontal = 6.dp)
@@ -94,7 +95,7 @@ private fun TelemetryGauge(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OpcIcon(icon, contentDescription = null, tint = LiveDesign.text, modifier = Modifier.size(11.dp))
+        if (icon != null) OpcIcon(icon, contentDescription = null, tint = LiveDesign.text, modifier = Modifier.size(11.dp))
         if (value != null) {
             Text(value, color = tint, style = LiveType.mono(10f, FontWeight.Bold), maxLines = 1)
         } else {

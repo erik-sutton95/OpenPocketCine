@@ -204,6 +204,10 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                     session = session, tile = tile, index = index, compact = compact,
                     clean = clean, enabled = !overlayOpen,
                     readoutsOverlay = layout.readoutsOverlay && index == session.focusedIndex,
+                    // The View Assist palette floats over the main tile's lower left;
+                    // its footer starts where the stage value row does.
+                    footerStart = if (layout.readoutsOverlay && index == session.focusedIndex)
+                        layout.readouts.x - layout.tiles[index].x else 0f,
                     confirmRecording = model.recordConfirmationEnabled,
                     onAdd = { empty ->
                         if (session.networkConfigured) adding = empty else showNetwork = true
@@ -502,6 +506,7 @@ private fun TileView(
     clean: Boolean,
     enabled: Boolean,
     readoutsOverlay: Boolean,
+    footerStart: Float,
     confirmRecording: Boolean,
     onAdd: (MultiviewSession.Tile) -> Unit,
     onOpenLive: () -> Unit,
@@ -540,7 +545,7 @@ private fun TileView(
             MultiviewTileOverlay(
                 readouts = readouts,
                 focused = focused, compact = compact, clean = clean, enabled = enabled,
-                readoutsOverlay = readoutsOverlay, onOptions = { session.focusedIndex = index; optionsOpen = true },
+                readoutsOverlay = readoutsOverlay, footerStart = footerStart, onOptions = { session.focusedIndex = index; optionsOpen = true },
             )
             Box(Modifier.align(Alignment.TopEnd).padding(6.dp)) {
                 DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false },

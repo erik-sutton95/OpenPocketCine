@@ -109,6 +109,7 @@ internal fun MultiviewTileChrome(
     enabled: Boolean,
     onOptions: () -> Unit,
     footerInset: Float = 0f,
+    footerStart: Float = 0f,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < 200.dp
@@ -149,14 +150,14 @@ internal fun MultiviewTileChrome(
             OpcIcon(OpcIcon.ELLIPSIS, null, Modifier.padding(top = edge, end = edge).size(20.dp), Color.White)
         }
         Column(
-            Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = footerInset.dp)
+            Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(start = footerStart.dp, bottom = footerInset.dp)
                 .padding(edge),
         ) {
             if (!compact) {
                 Text(readouts.format, color = Color.White.copy(alpha = 0.75f), style = LiveType.text(small), maxLines = 1)
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                MonitorCameraBatteryGauge(readouts.batteryPercent)
+                MonitorCameraBatteryGauge(readouts.batteryPercent, showsIcon = false)
                 Text(readouts.storage, color = Color.White, style = LiveType.mono(small), maxLines = 1,
                     modifier = Modifier.weight(1f).semantics { contentDescription = "Storage ${readouts.storage}" })
                 Text(readouts.recording, color = if (readouts.isRecording) LiveDesign.rec else Color.White,
@@ -170,13 +171,13 @@ internal fun MultiviewTileChrome(
 @Composable
 internal fun MultiviewTileOverlay(
     readouts: MultiviewTileReadouts, focused: Boolean, compact: Boolean, clean: Boolean,
-    enabled: Boolean, onOptions: () -> Unit, readoutsOverlay: Boolean = false,
+    enabled: Boolean, onOptions: () -> Unit, readoutsOverlay: Boolean = false, footerStart: Float = 0f,
 ) {
     Box(Modifier.fillMaxSize()) {
         if (!clean && readoutsOverlay) {
         }
         if (!clean) MultiviewTileChrome(readouts, focused, compact, enabled, onOptions,
-            footerInset = if (readoutsOverlay) 45f else 0f)
+            footerInset = if (readoutsOverlay) 45f else 0f, footerStart = footerStart)
         if (readouts.recovery != null && (compact || clean)) {
             Box(
                 Modifier.align(Alignment.Center).heightIn(min = 44.dp)
