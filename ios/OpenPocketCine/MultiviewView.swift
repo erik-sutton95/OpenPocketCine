@@ -155,7 +155,7 @@ struct MultiviewView: View {
                     session.tiles[index], index: index,
                     compact: frame.width < 200 || frame.height < 136,
                     condensed: frame.height < 80,
-                    readoutInset: overlay ? 45 : 0,
+                    readoutInset: 0,  // stage info sits inline with the camera values row
                     // The floating View Assist palette covers the main tile's lower
                     // left; its footer starts where the stage value row does.
                     footerLeading: overlay ? layout.readouts.x - frame.x : 0)

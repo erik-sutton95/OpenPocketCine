@@ -177,7 +177,7 @@ internal fun MultiviewTileOverlay(
         if (!clean && readoutsOverlay) {
         }
         if (!clean) MultiviewTileChrome(readouts, focused, compact, enabled, onOptions,
-            footerInset = if (readoutsOverlay) 45f else 0f, footerStart = footerStart)
+            footerInset = 0f, footerStart = footerStart)  // inline with the camera values row
         if (readouts.recovery != null && (compact || clean)) {
             Box(
                 Modifier.align(Alignment.Center).heightIn(min = 44.dp)
