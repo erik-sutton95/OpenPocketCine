@@ -153,6 +153,9 @@ final class HevcDecoder {
     /// Pocket screen flip / vertical mode restarts the encoder. Request a new GOP
     /// only when this AU did not already carry the IDR.
     var onParameterSetsChanged: (() -> Void)?
+    /// The decoder is not observable; the session republishes the raster so the
+    /// layout re-fits when the camera flips between horizontal and vertical.
+    var onPictureSizeChanged: (() -> Void)?
     /// Set when SPS/PPS change mid-session; consumed after the rest of the AU is parsed.
     private var pendingParameterChangeEnable = false
     /// Last accepted format dimensions. `0` until the first parameter sets land.
@@ -598,6 +601,7 @@ final class HevcDecoder {
         nalTypesSeen.removeAll()
         pictureSize = .zero
         isVerticalPicture = false
+        onPictureSizeChanged?()
         decoderErrors = 0
         lastDecodeErrorAt = nil
         lastDecodeErrorUptime = nil
@@ -1147,6 +1151,7 @@ final class HevcDecoder {
                 ControlLiveLog.line(
                     "decoder: picture \(Int(next.width))x\(Int(next.height)) vertical=\(isVerticalPicture ? 1 : 0)"
                 )
+                onPictureSizeChanged?()
             }
         }
         let sizeChanged =

@@ -79,7 +79,7 @@ struct LiveViewScreen: View {
                 screenSize: windowGeometry.validSize)
             let layout = LiveMonitorLayout.fieldMonitor(
                 size: size, safeArea: safeArea,
-                sourceAspect: model.session.decoder.pictureAspect,
+                sourceAspect: model.session.pictureAspect,
                 fill: model.portraitFeedAspect == .fill && !model.assist.isVisible(.desqueeze),
                 showsValues: model.chromeSectionMounts(.cameraValues),
                 showsBottomBars: showsBottomBars,
@@ -248,7 +248,7 @@ struct LiveViewScreen: View {
         let geometry =
             layout.presentation
             ?? FieldMonitorLayout(width: layout.viewport.width, height: layout.viewport.height)
-        MonitorCanvas(layout: geometry, sourceAspect: model.session.decoder.pictureAspect) {
+        MonitorCanvas(layout: geometry, sourceAspect: model.session.pictureAspect) {
             LiveFeedPane()
                 .opacity(model.session.isFeedWarming ? 0 : 1)
                 .transaction { $0.animation = nil }
@@ -457,7 +457,7 @@ struct LiveViewScreen: View {
                     feed: model.assist.isVisible(.desqueeze)
                         ? DesqueezeAssist.presentationRect(
                             sourceSize: CGSize(
-                                width: model.session.decoder.pictureAspect, height: 1),
+                                width: model.session.pictureAspect, height: 1),
                             in: layout.onFeed, effects: model.assist.effects)
                         : layout.onFeed,
                     chip: Self.cgRect(self.gimbalCluster(layout).zoom),
@@ -485,7 +485,7 @@ struct LiveViewScreen: View {
                         feed: model.assist.isVisible(.desqueeze)
                             ? DesqueezeAssist.presentationRect(
                                 sourceSize: CGSize(
-                                    width: model.session.decoder.pictureAspect, height: 1),
+                                    width: model.session.pictureAspect, height: 1),
                                 in: layout.onFeed, effects: model.assist.effects
                             )
                             .intersection(layout.onFeed)
@@ -532,7 +532,7 @@ struct LiveViewScreen: View {
             if let p = layout.presentation, p.portrait {
                 LiveDesign.background.frame(width: p.system.width, height: p.system.height)
                     .position(x: p.system.midX, y: p.system.midY).allowsHitTesting(false)
-                if !model.session.decoder.isVerticalPicture, editingMode == nil,
+                if !model.session.isVerticalPicture, editingMode == nil,
                     !model.assist.isVisible(.desqueeze)
                 {
                     LivePortraitAspectToggle(aspect: Bindable(model).portraitFeedAspect)
@@ -1045,11 +1045,11 @@ private struct LiveFeedAssistsPane: View {
                 sceneFaces: showBox ? model.session.dimmedFaces : [],
                 showFocusChrome: showBox,
                 showTapFocusBox: model.session.supportsTapFocus,
-                sourceAspect: model.session.decoder.pictureAspect,
+                sourceAspect: model.session.pictureAspect,
                 pictureAspect: CGFloat(
                     model.session.status.videoFormat?.resolution.ratio
                         ?? model.session.status.videoResolution?.ratio
-                        ?? model.session.decoder.pictureAspect),
+                        ?? model.session.pictureAspect),
                 pictureMirrored: model.livePictureViewFlip
             )
             .opacity(dimmed ? 0.3 : 1)
@@ -1059,7 +1059,7 @@ private struct LiveFeedAssistsPane: View {
             if model.chromeEditorMode != nil {
                 GeometryReader { proxy in
                     let feed = DesqueezeAssist.presentationRect(
-                        sourceSize: CGSize(width: model.session.decoder.pictureAspect, height: 1),
+                        sourceSize: CGSize(width: model.session.pictureAspect, height: 1),
                         in: CGRect(origin: .zero, size: proxy.size), effects: model.assist.effects)
                     let rect = LiveChromeEditGeometry.focusEditRect(
                         overlay: model.session.focusOverlay,
@@ -1262,7 +1262,7 @@ extension LiveViewScreen {
     private func meterFeed(_ layout: LiveMonitorLayout) -> CGRect {
         model.assist.isVisible(.desqueeze)
             ? DesqueezeAssist.presentationRect(
-                sourceSize: CGSize(width: model.session.decoder.pictureAspect, height: 1),
+                sourceSize: CGSize(width: model.session.pictureAspect, height: 1),
                 in: layout.onFeed, effects: model.assist.effects
             )
             .intersection(layout.onFeed)

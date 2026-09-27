@@ -105,6 +105,9 @@ final class CameraSession {
     @ObservationIgnored var lastKeyframeAge = "—"
     /// OpenZCine `NativeAppModel.liveFPS` — measured live-view delivery, or LINK/FAIL/RECOV.
     var liveFPS = "—"
+    /// Observable mirror of the decoded raster (`HevcDecoder` is not observable).
+    private(set) var pictureAspect: CGFloat = LiveChromeMetrics.feedAspect
+    private(set) var isVerticalPicture = false
     /// OpenZCine `NativeAppModel.liveSignalBars` — 0–4 from `LinkSignalBars` + link-health score.
     var liveSignalBars = 0
     @ObservationIgnored private var frameRate = FrameRateSampler()
@@ -582,6 +585,15 @@ final class CameraSession {
                     liveViewEnableSends: self.liveViewEnableSends)
             else { return }
             self.sendRecoverEnable(force: true, reason: "assist VT start")
+        }
+        decoder.onPictureSizeChanged = { [weak self] in
+            guard let self else { return }
+            if self.pictureAspect != self.decoder.pictureAspect {
+                self.pictureAspect = self.decoder.pictureAspect
+            }
+            if self.isVerticalPicture != self.decoder.isVerticalPicture {
+                self.isVerticalPicture = self.decoder.isVerticalPicture
+            }
         }
         decoder.onParameterSetsChanged = { [weak self] in
             guard let self else { return }
