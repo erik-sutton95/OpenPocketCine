@@ -32,7 +32,17 @@ class MultiviewLayoutPolicyTest {
                 assertEquals(4, layout.tiles.size)
                 // Android's native offsets intentionally differ slightly from the iOS shell.
                 assertEquals(live.record, layout.record, case)
-                assertEquals(live.display, layout.display, case)
+                if (!portrait && arrangement == CENTER_STAGE) {
+                    // DISP sits left of Record on its row, at the shared size.
+                    assertEquals(layout.record.x - 8, layout.display.maxX, case)
+                    assertEquals(layout.record.y + layout.record.height / 2, layout.display.y + layout.display.height / 2, case)
+                    assertEquals(live.display.width, layout.display.width, case)
+                    assertEquals(live.display.width, layout.display.height, case)
+                    assertEquals(live.assists, layout.assists, case)
+                    assertTrue(layout.assistsHorizontal, case)
+                } else {
+                    assertEquals(live.display, layout.display, case)
+                }
                 val expectedNetwork = when {
                     portrait -> live.settings.copy(x = w - 14 - live.settings.width, y = safe.top + 12)
                     arrangement == CENTER_STAGE -> live.settings.copy(x = live.lock.midX - live.settings.width / 2, y = live.lock.maxY + 8)
@@ -132,13 +142,22 @@ class MultiviewLayoutPolicyTest {
                     MultiviewSafeArea(leading = cutout, bottom = 21f), arrangement, 0)
                 val right = MultiviewPresentationLayout.compute(w, h,
                     MultiviewSafeArea(trailing = cutout, bottom = 21f), arrangement, 0)
-                assertEquals(left.tiles, right.tiles)
-                assertEquals(if (arrangement == GRID) left.display.midX else left.sessionControls.midX, left.assists.midX)
-                assertEquals(right.sessionControls.midX, right.assists.midX)
+                if (arrangement == GRID) {
+                    assertEquals(left.tiles, right.tiles)
+                    assertEquals(left.display.midX, left.assists.midX)
+                    assertEquals(right.sessionControls.midX, right.assists.midX)
+                } else {
+                    // A half turn keeps the main picture and Live View's palette slot.
+                    assertEquals(left.tiles[0], right.tiles[0])
+                    assertEquals(left.assists, right.assists)
+                }
                 for ((layout, trailing) in listOf(left to false, right to true)) {
                     val height = if (cutout >= 55f) 112f else 124f
                     val band = MonitorRect(if (trailing) w - cutout else 0f, (h - height) / 2, cutout, height)
-                    assertFalse(overlaps(layout.assists, band), "$w x $h / $band / ${layout.assists}")
+                    // Center stage uses Live View's own palette slot, checked in the device matrix.
+                    if (arrangement == GRID) {
+                        assertFalse(overlaps(layout.assists, band), "$w x $h / $band / ${layout.assists}")
+                    }
                     if (trailing || arrangement == CENTER_STAGE) {
                         assertTrue(layout.assists.maxX < w / 2)
                         assertTrue(layout.tiles.all { it.x >= layout.assists.maxX + 6f })
@@ -189,14 +208,14 @@ class MultiviewLayoutPolicyTest {
                 val stage = MultiviewPresentationLayout.compute(w, h, arrangement = CENTER_STAGE, selected = selected)
                 assertEquals(grid.tiles, otherGrid.tiles)
                 assertEquals(grid.record, stage.record)
-                assertEquals(grid.display, stage.display)
                 assertEquals(grid.sessionControls, stage.sessionControls)
                 if (h > w) {
+                    assertEquals(grid.display, stage.display)
                     assertEquals(grid.network, stage.network)
                     assertEquals(grid.readouts, stage.readouts)
                 } else {
                     assertEquals(stage.sessionControls.midX, stage.network.midX)
-                    assertEquals(stage.sessionControls.midX, stage.assists.midX)
+                    assertTrue(stage.assistsHorizontal)
                 }
                 assertTrue(stage.tiles[selected].width > stage.tiles[(selected + 1) % 4].width)
             }
@@ -272,21 +291,28 @@ class MultiviewLayoutPolicyTest {
             MultiviewSafeArea(trailing = 59f, bottom = 21f), CENTER_STAGE, 2)
         val main = left.tiles[2]
         val strip = checkNotNull(left.secondaryViewport)
-        assertEquals(left.tiles, right.tiles)
+        assertEquals(main, right.tiles[2])
         assertEquals(listOf(0, 1, 3), left.secondaryIndices)
         assertTrue(left.readoutsOverlay)
-        assertEquals(563f, main.width)
+        assertEquals(left.assists.maxX + 6, main.x)
+        assertEquals(526f, main.width)
         assertEquals(16f / 9f, main.width / main.height, .001f)
         assertEquals(left.sessionControls.y, main.y)
         assertEquals(main.maxY - 45, left.readouts.y)
         assertEquals(main.width, left.readouts.width)
-        assertEquals(785f, strip.maxX)
-        assertEquals(140f, strip.width)
-        assertEquals(left.display.y - 8, strip.maxY)
+        // The strip reaches the trailing margin: 18 on the plain edge, the cutout reserve opposite.
+        assertEquals(834f, strip.maxX)
+        assertEquals(785f, checkNotNull(right.secondaryViewport).maxX)
+        assertEquals(main.maxX + 12, strip.x)
+        assertEquals(strip.width, left.tiles[0].width)
+        assertEquals(16f / 9f, left.tiles[0].width / left.tiles[0].height, .001f)
+        assertEquals(140f, right.tiles[0].width)
+        assertEquals(left.record.y - 8, strip.maxY)
+        assertEquals(left.record.x - 8, left.display.maxX)
         assertTrue(left.tiles[3].maxY > strip.maxY)
         assertEquals(left.sessionControls.maxY + 8, left.network.y)
-        assertTrue(left.assists.y >= (393f + 112f) / 2 + 8)
-        assertEquals(360f, left.assists.maxY)
+        assertTrue(left.assists.y >= (393f + 112f) / 2)
+        assertEquals(MonitorLayoutPolicy.fieldMonitor(852f, 393f, 0f, 59f, 21f, 0f).assists, left.assists)
     }
 
     private fun intersection(a: MonitorRect, b: MonitorRect): MonitorRect? {

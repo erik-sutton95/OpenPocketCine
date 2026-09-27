@@ -55,7 +55,8 @@ data class MultiviewPresentationLayout(
             val banded = tablet && !portrait
             val focusedLandscape = !portrait && arrangement == MultiviewArrangement.CENTER_STAGE
             val cell = MonitorLayoutPolicy.assistButtonSize(tablet).toDouble()
-            val horizontal = false
+            // Landscape Center stage mounts Live View's horizontal View Assist palette.
+            val horizontal = focusedLandscape
             val toolbarWidth = cell + 8
             val toolbarHeight = cell * 4 + 44
             val portraitSecondaryMinimum = (if (tablet) 52.0 else 44.0) * 4 + 17
@@ -70,13 +71,18 @@ data class MultiviewPresentationLayout(
                 focusedLandscape -> live.settings.copy(x = close.midX - live.settings.width / 2, y = close.maxY + 8)
                 else -> live.settings
             }
+            // Center stage reserves the far right for the strip: DISP sits left of Record.
+            val display = if (focusedLandscape) MonitorRect(
+                live.record.x - 8 - live.display.width, live.record.y + (live.record.height - live.display.width) / 2,
+                live.display.width, live.display.width,
+            ) else live.display
             val cutout = max(safeLeading, safeTrailing)
             val leftToolX = close.midX - toolbarWidth / 2
             val rightToolX = live.display.midX - toolbarWidth / 2
             val toolbarOnLeft = !portrait && safeTrailing > safeLeading
             val toolX = when {
                 portrait -> network.midX - toolbarWidth / 2
-                focusedLandscape || toolbarOnLeft -> leftToolX
+                toolbarOnLeft -> leftToolX
                 else -> rightToolX
             }
             val stageTop = when {
@@ -139,18 +145,24 @@ data class MultiviewPresentationLayout(
                     row++
                 }
             } else {
-                val mainLeft = maxOf(cutout + 8, close.maxX + 8.0, leftToolX + toolbarWidth + 6)
-                val stripRight = w - max(18.0, cutout + 8)
+                // The collapsed Live View palette sits at the lower left; the main picture starts past it.
+                val mainLeft = maxOf(cutout + 8, close.maxX + 8.0, live.assists.maxX + 6.0)
+                // The main picture keeps the cutout reserve on both edges so a half turn does not
+                // move it; the strip takes the room to the trailing margin.
+                val reservedRight = w - max(18.0, cutout + 8)
+                val stripRight = w - max(18.0, safeTrailing + 8)
                 val columnGap = if (tablet) 18.0 else 12.0
-                val thumbWidth = max(1.0, min(if (tablet) 200.0 else 140.0, (stripRight - mainLeft - columnGap) * .26))
-                val stripLeft = stripRight - thumbWidth
-                val stripBottom = max(stageTop + 44, min(live.display.y, live.record.y) - 8.0)
-                secondaryViewport = Rect(stripLeft, stageTop, thumbWidth, stripBottom - stageTop).clamped(w, h)
-                val thumbHeight = max(if (tablet) 132.0 else 96.0, thumbWidth * 9 / 16)
-                val thumbGap = if (tablet) 14.0 else 9.0
-                val mainWidth = max(1.0, min((h - safeBottom - 12 - stageTop) * 16 / 9, stripLeft - columnGap - mainLeft))
+                val minimumThumb = max(1.0, min(if (tablet) 200.0 else 140.0, (reservedRight - mainLeft - columnGap) * .26))
+                val mainWidth = max(1.0, min((h - safeBottom - 12 - stageTop) * 16 / 9,
+                    reservedRight - minimumThumb - columnGap - mainLeft))
                 val mainHeight = mainWidth * 9 / 16
                 tiles[focused] = Rect(mainLeft, stageTop, mainWidth, mainHeight)
+                val stripLeft = mainLeft + mainWidth + columnGap
+                val thumbWidth = max(1.0, stripRight - stripLeft)
+                val thumbHeight = thumbWidth * 9 / 16
+                val stripBottom = max(stageTop + 44, min(display.y, live.record.y) - 8.0)
+                secondaryViewport = Rect(stripLeft, stageTop, thumbWidth, stripBottom - stageTop).clamped(w, h)
+                val thumbGap = if (tablet) 14.0 else 9.0
                 secondaryIndices.forEachIndexed { row, index ->
                     tiles[index] = Rect(stripLeft, stageTop + row * (thumbHeight + thumbGap), thumbWidth, thumbHeight)
                 }
@@ -158,26 +170,25 @@ data class MultiviewPresentationLayout(
             }
             val toolTop = when {
                 portrait -> max(toolbarTop, network.maxY + 8.0)
-                focusedLandscape -> max(network.maxY + 8.0,
-                    if (safeLeading > 0 && !tablet) (h + if (safeLeading >= 55) 112 else 124) / 2 + 8 else 0.0)
                 toolbarOnLeft -> close.maxY + 8.0
                 else -> network.maxY + 8.0
             }
             val toolBottom = when {
                 portrait -> stageBottom
-                focusedLandscape -> h - safeBottom - 12
                 else -> live.display.y - 8.0
             }
             // The native palette grows upward within this rail and scrolls its full-size tools.
             val paletteHeight = max(1.0, min(toolbarHeight, toolBottom - toolTop))
-            val assists = Rect(toolX, if (portrait) toolTop else toolBottom - paletteHeight, toolbarWidth, paletteHeight)
+            val assists = if (focusedLandscape) live.assists.let {
+                Rect(it.x.toDouble(), it.y.toDouble(), it.width.toDouble(), it.height.toDouble())
+            } else Rect(toolX, if (portrait) toolTop else toolBottom - paletteHeight, toolbarWidth, paletteHeight)
             return MultiviewPresentationLayout(
                 tiles = tiles.mapIndexed { index, rect ->
                     if (index in secondaryIndices) rect.unclamped() else rect.clamped(w, h)
                 }, sessionControls = close,
                 readouts = readouts.clamped(w, h),
                 assists = assists.clamped(w, h), network = network,
-                display = live.display, record = live.record, portrait = portrait, tablet = tablet,
+                display = display, record = live.record, portrait = portrait, tablet = tablet,
                 controlCellSize = cell.toFloat(), sessionControlsHorizontal = true, assistsHorizontal = horizontal,
                 secondaryViewport = secondaryViewport, secondaryIndices = secondaryIndices,
                 readoutsOverlay = focusedLandscape,

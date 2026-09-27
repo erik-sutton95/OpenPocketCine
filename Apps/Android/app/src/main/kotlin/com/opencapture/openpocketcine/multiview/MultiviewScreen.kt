@@ -223,7 +223,9 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                 )
                 StageReadouts(session.tiles.getOrNull(session.focusedIndex)?.settings, Modifier.rect(layout.readouts))
                 MultiviewAssistPalette(
-                    session, layout.controlCellSize, Modifier.rect(layout.assists), maxExpandedHeight = layout.assists.height,
+                    session, layout.controlCellSize, Modifier.rect(layout.assists),
+                    horizontal = layout.assistsHorizontal,
+                    maxExpandedHeight = if (layout.assistsHorizontal) null else layout.assists.height,
                     onSettings = { cameraSettings = true },
                 )
                 NetworkButton(
@@ -335,7 +337,7 @@ private enum class MultiviewTool { LAYOUT, LUT, FIT, SETTINGS }
 @Composable
 internal fun MultiviewAssistPalette(
     session: MultiviewSession, cell: Float, modifier: Modifier,
-    maxExpandedHeight: Float? = null, onSettings: () -> Unit,
+    horizontal: Boolean = false, maxExpandedHeight: Float? = null, onSettings: () -> Unit,
 ) {
     val assigned = session.tiles.filter { it.camera != null }
     var usage by remember { mutableStateOf(com.opencapture.monitorui.MonitorToolUsageState()) }
@@ -346,9 +348,10 @@ internal fun MultiviewAssistPalette(
         MultiviewTool.LAYOUT -> if (session.layout == MultiviewLayout.GRID) "Show Focused stage" else "Show Grid"
         MultiviewTool.SETTINGS -> "Camera settings"
     }
-    Box(modifier, contentAlignment = Alignment.BottomCenter) {
+    // Landscape Center stage mounts the palette as Live View does: horizontal, bottom-leading.
+    Box(modifier, contentAlignment = if (horizontal) Alignment.BottomStart else Alignment.BottomCenter) {
         com.opencapture.monitorui.MonitorAssistPalette(
-            tools = MultiviewTool.entries, portrait = true, locked = session.closing,
+            tools = MultiviewTool.entries, portrait = !horizontal, locked = session.closing,
             isOn = { it == MultiviewTool.LUT && assigned.any { tile -> tile.lutEnabled } },
             title = ::title, label = { tool -> when (tool) {
                 MultiviewTool.LUT -> "LUT"
@@ -394,9 +397,10 @@ internal fun MultiviewAssistPalette(
                 }
                 OpcIcon(icon, null, iconModifier, tint)
             },
-            chevron = { expanded, _ ->
-                OpcIcon(if (expanded) OpcIcon.CHEVRON_DOWN else OpcIcon.CHEVRON_UP,
-                    null, Modifier.size(14.dp), LiveDesign.muted)
+            chevron = { expanded, vertical ->
+                val icon = if (vertical) { if (expanded) OpcIcon.CHEVRON_DOWN else OpcIcon.CHEVRON_UP }
+                    else { if (expanded) OpcIcon.CHEVRON_LEFT else OpcIcon.CHEVRON_RIGHT }
+                OpcIcon(icon, null, Modifier.size(14.dp), LiveDesign.muted)
             },
         )
     }

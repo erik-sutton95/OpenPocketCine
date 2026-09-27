@@ -29,7 +29,15 @@ struct MultiviewPresentationLayoutTests {
                                 arrangement: arrangement, selected: selected)
                             #expect(layout.tiles.count == 4)
                             #expect(layout.record == live.record)
-                            #expect(layout.display == live.display)
+                            if !portrait && arrangement == .centerStage {
+                                // DISP sits left of Record on its row, at the shared size.
+                                #expect(layout.display.maxX + 8 == layout.record.x)
+                                #expect(layout.display.midY == layout.record.midY)
+                                #expect(layout.display.width == live.display.width)
+                                #expect(layout.display.height == live.display.width)
+                            } else {
+                                #expect(layout.display == live.display)
+                            }
                             #expect(layout.network.width == live.settings.width)
                             #expect(layout.network.height == live.settings.height)
                             if portrait {
@@ -38,7 +46,8 @@ struct MultiviewPresentationLayoutTests {
                             } else if arrangement == .centerStage {
                                 #expect(layout.network.midX == layout.sessionControls.midX)
                                 #expect(layout.network.y == layout.sessionControls.maxY + 8)
-                                #expect(layout.assists.midX == layout.sessionControls.midX)
+                                #expect(layout.assists == live.assists)
+                                #expect(layout.assistsHorizontal)
                             } else {
                                 #expect(layout.network == live.settings)
                                 if safe.trailing > safe.leading {
@@ -195,7 +204,8 @@ struct MultiviewPresentationLayoutTests {
                 let stage = MultiviewPresentationLayout(
                     width: width, height: height, arrangement: .centerStage, selected: selected)
                 #expect(grid.tiles == otherGrid.tiles)
-                #expect(grid.record == stage.record && grid.display == stage.display)
+                #expect(grid.record == stage.record)
+                if height > width { #expect(grid.display == stage.display) }
                 #expect(grid.sessionControls == stage.sessionControls)
                 if height > width {
                     #expect(grid.network == stage.network && grid.readouts == stage.readouts)
@@ -317,23 +327,35 @@ struct MultiviewPresentationLayoutTests {
                 let viewport = layout.secondaryViewport!
                 let main = layout.tiles[2]
                 #expect(layout.secondaryIndices == [0, 1, 3])
-                #expect(viewport.maxX == width - 67)
+                // The strip reaches the trailing margin; the cutout edge keeps its reserve.
+                #expect(viewport.maxX == width - (right ? 67 : 18))
+                #expect(viewport.x == main.maxX + (layout.tablet ? 18 : 12))
+                #expect(viewport.width == layout.tiles[0].width)
                 #expect(viewport.y == layout.sessionControls.y)
                 #expect(viewport.maxY <= min(layout.display.y, layout.record.y) - 8)
                 #expect(main.maxX <= viewport.x - 12)
-                #expect(layout.tiles[0].height >= 96)
+                for index in layout.secondaryIndices {
+                    #expect(abs(layout.tiles[index].width / layout.tiles[index].height - 16 / 9) < 0.001)
+                }
+                #expect(viewport.maxY <= layout.record.y - 8)
                 #expect(layout.readoutsOverlay)
                 #expect(layout.readouts.y >= main.y && layout.readouts.maxY <= main.maxY)
                 #expect(layout.network.y == layout.sessionControls.maxY + 8)
                 #expect(layout.assists.y >= layout.network.maxY + 8 - 0.001)
                 #expect(main.x >= layout.assists.maxX + 6)
+                #expect(layout.assistsHorizontal)
             }
         }
         let phone = MultiviewPresentationLayout(
             width: 956, height: 440,
             safeArea: .init(leading: 59, bottom: 21),
             arrangement: .centerStage, selected: 0)
-        #expect(phone.tiles[0].width > 650, "The earlier main feed was about 597pt wide")
+        #expect(phone.tiles[0].width > 610, "The earlier main feed was about 597pt wide")
+        let mirrored = MultiviewPresentationLayout(
+            width: 956, height: 440, safeArea: .init(bottom: 21, trailing: 59),
+            arrangement: .centerStage, selected: 0)
+        #expect(mirrored.tiles[0] == phone.tiles[0], "A half turn keeps the main picture")
+        #expect(phone.tiles[1].width > mirrored.tiles[1].width)
         #expect(
             phone.tiles[3].maxY > phone.secondaryViewport!.maxY,
             "Secondary feeds should scroll instead of shrinking")

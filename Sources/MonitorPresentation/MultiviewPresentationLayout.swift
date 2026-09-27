@@ -18,6 +18,8 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
     public let tablet: Bool
     public let controlCellSize: Double
     public let sessionControlsHorizontal: Bool
+    /// Landscape Center stage mounts Live View's horizontal View Assist palette.
+    public let assistsHorizontal: Bool
 
     public init(
         width: Double, height: Double, safeArea: MonitorSafeArea = .init(),
@@ -32,13 +34,22 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
         let cell = MonitorSystemButtonMetrics.side(tablet: tablet)
         controlCellSize = cell
         sessionControlsHorizontal = true
+        assistsHorizontal = !portrait && arrangement == .centerStage
 
         // System controls belong to Live View's native geometry, not to the
         // movable assist toolbar. In particular, Record never follows a cutout.
         let live = FieldMonitorLayout(
             width: w, height: h, safeArea: safeArea, topControlInset: inset)
         record = live.record
-        display = live.display
+        // Landscape Center stage reserves the far-right column for the feed strip,
+        // so DISP moves beside Record on its row instead of stacking above it.
+        display =
+            !portrait && arrangement == .centerStage
+            ? .init(
+                x: live.record.x - 8 - live.display.width,
+                y: live.record.midY - live.display.width / 2,
+                width: live.display.width, height: live.display.width)
+            : live.display
 
         let cutout = max(0, max(safeArea.leading, safeArea.trailing))
         let headerTop = (portrait || banded ? max(0, safeArea.top) : 0) + 12 + inset
@@ -121,43 +132,39 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
                     height: max(1, min(toolHeight, stageBottom - stripTop)))
             }
         } else if arrangement == .centerStage {
-            // One left control column leaves the far right available for a
-            // scrollable filmstrip. The main image no longer reserves a separate
-            // exposure row or enough height to squeeze in three thumbnails.
-            let toolLeft = sessionControls.midX - toolWidth / 2
-            let stageLeft = max(cutout + 8, sessionControls.maxX + 8, toolLeft + toolWidth + 6)
-            let stageRight = w - max(18, cutout + 8)
+            // Live View's landscape View Assist slot, collapsed at the lower left.
+            // The main picture starts past it, so the collapsed rail never covers it.
+            assists = live.assists
+            let stageLeft = max(cutout + 8, sessionControls.maxX + 8, assists.maxX + 6)
+            // The main picture keeps the cutout reserve on both edges so a half
+            // turn does not move it; the strip takes the room to the trailing margin.
+            let reservedRight = w - max(18, cutout + 8)
+            let stageRight = w - max(18, max(0, safeArea.trailing) + 8)
             let gap = banded ? 18.0 : 12.0
-            let thumbWidth = max(1, min(banded ? 200 : 140, (stageRight - stageLeft - gap) * 0.26))
-            let stripTop = stageTop
-            let stripBottom = max(stripTop + 44, min(display.y, record.y) - 8)
-            stripViewport = .init(
-                x: stageRight - thumbWidth, y: stripTop,
-                width: thumbWidth, height: stripBottom - stripTop)
-            stripIndices = (0..<4).filter { $0 != selectedIndex }
-            let thumbHeight = max(banded ? 132 : 96, thumbWidth * 9 / 16)
-            let stripGap = banded ? 14.0 : 9.0
-            for (row, index) in stripIndices.enumerated() {
-                result[index] = .init(
-                    x: stageRight - thumbWidth,
-                    y: stripTop + Double(row) * (thumbHeight + stripGap),
-                    width: thumbWidth, height: thumbHeight)
-            }
+            let minimumThumb = max(
+                1, min(banded ? 200 : 140, (reservedRight - stageLeft - gap) * 0.26))
             let floor = h - max(0, safeArea.bottom) - 12
             let mainWidth = max(
-                1, min((floor - stageTop) * 16 / 9, stageRight - thumbWidth - gap - stageLeft))
+                1, min((floor - stageTop) * 16 / 9, reservedRight - minimumThumb - gap - stageLeft))
             let main = MonitorRect(
                 x: stageLeft, y: stageTop, width: mainWidth, height: mainWidth * 9 / 16)
             result[selectedIndex] = main
+            let thumbWidth = max(1, stageRight - main.maxX - gap)
+            let thumbHeight = thumbWidth * 9 / 16
+            let stripBottom = max(stageTop + 44, min(display.y, record.y) - 8)
+            stripViewport = .init(
+                x: main.maxX + gap, y: stageTop,
+                width: thumbWidth, height: stripBottom - stageTop)
+            stripIndices = (0..<4).filter { $0 != selectedIndex }
+            let stripGap = banded ? 14.0 : 9.0
+            for (row, index) in stripIndices.enumerated() {
+                result[index] = .init(
+                    x: main.maxX + gap,
+                    y: stageTop + Double(row) * (thumbHeight + stripGap),
+                    width: thumbWidth, height: thumbHeight)
+            }
             readouts = .init(
                 x: main.x, y: max(main.y, main.maxY - 45), width: main.width, height: 37)
-            let cutoutFloor =
-                safeArea.leading > 0 ? (h + (safeArea.leading >= 55 ? 112 : 124)) / 2 + 8 : 0
-            let toolTop = max(network.maxY + 8, cutoutFloor)
-            let toolBottom = max(toolTop + 1, floor)
-            let paletteHeight = min(toolHeight, toolBottom - toolTop)
-            assists = .init(
-                x: toolLeft, y: toolBottom - paletteHeight, width: toolWidth, height: paletteHeight)
         } else {
             let preferredLeft = banded ? 28.0 : max(cutout + 8, 18)
             let stageLeft = max(

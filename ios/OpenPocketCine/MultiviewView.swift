@@ -165,8 +165,6 @@ struct MultiviewView: View {
                         x: layout.sessionControls.midX,
                         y: layout.sessionControls.midY)
                 stageAssistPalette(layout: layout)
-                    .frame(width: layout.assists.width, height: layout.assists.height)
-                    .position(x: layout.assists.midX, y: layout.assists.midY)
                 networkButton(size: layout.network.width)
                     .frame(width: layout.network.width, height: layout.network.height)
                     .position(x: layout.network.midX, y: layout.network.midY)
@@ -309,9 +307,17 @@ struct MultiviewView: View {
                 hasOptions: false, available: cameras,
                 accessibilityLabel: "Toggle Auto LUT for all cameras"),
         ]
+        // Landscape Center stage mounts Live View's palette as Live View does:
+        // horizontal, anchored at its collapsed bottom-leading slot, growing
+        // trailing short of DISP. Other stages keep the vertical rail.
+        let horizontal = layout.assistsHorizontal
         let palette = MonitorAssistPaletteLayout(
-            portrait: true, tablet: layout.tablet, expanded: true, toolCount: tools.count,
-            maximumWidth: layout.assists.width, maximumHeight: layout.assists.height)
+            portrait: !horizontal, tablet: layout.tablet, expanded: true, toolCount: tools.count,
+            maximumWidth: horizontal
+                ? layout.display.x - 8 - layout.assists.x : layout.assists.width,
+            maximumHeight: horizontal
+                ? layout.assists.maxY - max(layout.sessionControls.y, 8) : layout.assists.height)
+        let frame = palette.anchored(leading: layout.assists.x, bottom: layout.assists.maxY)
         return MonitorAssistPalette(
             tools: tools, layout: palette,
             usageSeed: ["LAYOUT": 4, "CAMERA": 3, "FIT": 2, "LUT": 1],
@@ -326,6 +332,8 @@ struct MultiviewView: View {
             default: OpcIcon.settings
             }
         }
+        .frame(width: frame.width, height: frame.height)
+        .position(x: frame.midX, y: frame.midY)
     }
 
     private func activateTool(_ id: String) {

@@ -628,14 +628,18 @@ menu instead of requiring promotion to access their actions.
 Landscape Grid keeps its tile rectangles across cutout orientations, with the
 palette aligned right or left for a right-side cutout. Landscape Center stage
 has a larger 16:9 main feed with bottom in-picture exposure readouts; the existing
-metadata sits above that row. Wi-Fi moves below Exit and the collapsible View
-Assist palette sits in the left column, below a left cutout. A far-right strip
-scrolls all three secondary feeds above native DISP/Record, fading only content
-alpha at edges with more cameras. Scrolling and promotion retain camera owners
+metadata sits above that row. Wi-Fi moves below Exit. The View Assist palette
+is Live View's landscape palette in Live View's lower-left slot (two-row
+collapsed rail, horizontal drag or chevron reveal); the main feed starts past
+it. A far-right strip of 16:9 feeds fills from the main feed's gap to the
+trailing margin (the cutout reserve on a cutout edge) and scrolls all three
+secondary feeds above the Record row, fading only content alpha at edges with
+more cameras. DISP sits left of Record on that row at the shared button size. Scrolling and promotion retain camera owners
 and mounted picture hosts. Portrait keeps the prior full-width main picture and
 right palette below it. Grid readouts retain their separate bottom row. The
-session title and connected count are absent. Record and DISP stay in normal
-Live View positions and do not follow the toolbar; no Record all caption is added.
+session title and connected count are absent. Record stays in its normal Live
+View position; DISP does too except in landscape Center stage (beside Record, above).
+Neither follows the toolbar; no Record all caption is added.
 
 Fit contains the source, Fill crops inside the tile, and the choice remains
 saved with the stage. One tap changes selection without leaving Grid. Layout,
