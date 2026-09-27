@@ -698,13 +698,14 @@ opacity at available top/bottom edges without a painted MORE overlay.
 
 Exit keeps native Lock size and glass styling. Wi-Fi retains native Settings
 size: 8 pt right of Exit in the top-left corner in portrait (Live View's
-portrait corner row), top-right in landscape Grid, below Exit in landscape
-Center stage. The
+portrait corner row), below Exit in both landscape arrangements. The
 palette uses the shared View Assist reveal, favorites, icons and native touch
-targets. Grid follows the opposite-cutout column policy; Center stage reserves
-the far right for the scrolling feeds. Short palettes scroll, including below a
-left cutout. Portrait Grid keeps the right palette; portrait Center stage uses
-the fixed tool column described above.
+targets. Landscape Grid mounts exactly the Center stage chrome (Wi-Fi under
+Exit, Live View's horizontal palette floating over the lower-left feed, the
+selected camera's values inside its tile); only DISP keeps Live View's slot
+above Record. Center stage reserves the far right for the scrolling feeds.
+Portrait Grid keeps the right palette; portrait Center stage uses the fixed
+tool column described above.
 These approved Multiview placements are explicit exceptions to Live View's
 Settings position; native Record/DISP geometry remains shared.
 

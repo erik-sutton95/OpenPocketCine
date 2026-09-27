@@ -361,9 +361,9 @@ struct MultiviewView: View {
 
     private func stageCollapsiblePalette(layout: MultiviewPresentationLayout) -> some View {
         let tools = stageTools
-        // Landscape Center stage mounts Live View's palette as Live View does:
+        // Landscape stages mount Live View's palette as Live View does:
         // horizontal, anchored at its collapsed bottom-leading slot, growing
-        // trailing short of DISP. Other stages keep the vertical rail.
+        // trailing short of DISP. Portrait Grid keeps the vertical rail.
         let horizontal = layout.assistsHorizontal
         let palette = MonitorAssistPaletteLayout(
             portrait: !horizontal, tablet: layout.tablet, expanded: true, toolCount: tools.count,

@@ -38,16 +38,19 @@ class MultiviewLayoutPolicyTest {
                     assertEquals(layout.record.y + layout.record.height / 2, layout.display.y + layout.display.height / 2, case)
                     assertEquals(live.display.width, layout.display.width, case)
                     assertEquals(live.display.width, layout.display.height, case)
-                    assertEquals(live.assists, layout.assists, case)
-                    assertTrue(layout.assistsHorizontal, case)
                 } else {
                     assertEquals(live.display, layout.display, case)
+                }
+                if (!portrait) {
+                    // Both landscape arrangements mount Live View's horizontal palette.
+                    assertEquals(live.assists, layout.assists, case)
+                    assertTrue(layout.assistsHorizontal, case)
+                    assertTrue(layout.readoutsOverlay, case)
                 }
                 val expectedNetwork = when {
                     // Close then Wi-Fi, 8 dp apart, at Live View's portrait corner row.
                     portrait -> live.settings.copy(x = live.lock.maxX + 8, y = minOf(live.gauges.y, safe.top + 12))
-                    arrangement == CENTER_STAGE -> live.settings.copy(x = live.lock.midX - live.settings.width / 2, y = live.lock.maxY + 8)
-                    else -> live.settings
+                    else -> live.settings.copy(x = live.lock.midX - live.settings.width / 2, y = live.lock.maxY + 8)
                 }
                 assertEquals(expectedNetwork, layout.network, case)
                 assertEquals(if (portrait) live.lock.copy(y = minOf(live.gauges.y, safe.top + 12)) else live.lock,
@@ -65,9 +68,11 @@ class MultiviewLayoutPolicyTest {
                 layout.tiles.forEachIndexed { index, tile ->
                     for (other in layout.tiles.drop(index + 1)) assertFalse(overlaps(tile, other), "$case: $tile / $other")
                     val visible = if (index in layout.secondaryIndices) intersection(tile, checkNotNull(layout.secondaryViewport)) else tile
+                    // Landscape overlays the values row and the palette on the main (Grid: lower-left) picture.
+                    val paletteHost = if (arrangement == GRID) 2 else selected
                     if (visible != null) for (control in controls) {
-                        if (!(layout.readoutsOverlay && index == selected &&
-                                (control == layout.readouts || control == layout.assists)))
+                        if (!(layout.readoutsOverlay && (control == layout.readouts ||
+                                (control == layout.assists && index == paletteHost))))
                             assertFalse(overlaps(visible, control), "$case: $visible / $control")
                     }
                     if (arrangement == CENTER_STAGE && index == selected) {
@@ -116,35 +121,37 @@ class MultiviewLayoutPolicyTest {
     }
 
     @Test
-    fun landscapeRotationMovesOnlyToolbarToTheColumnOppositeTheCutout() {
-        for (arrangement in listOf(GRID)) {
-            val left = MultiviewPresentationLayout.compute(852f, 393f,
-                MultiviewSafeArea(leading = 59f, bottom = 21f), arrangement, 1)
-            val right = MultiviewPresentationLayout.compute(852f, 393f,
-                MultiviewSafeArea(trailing = 59f, bottom = 21f), arrangement, 1)
-            assertEquals(left.tiles, right.tiles)
-            assertEquals(left.record, right.record)
-            assertEquals(left.display.x, right.display.x)
-            assertEquals(left.sessionControls, right.sessionControls)
-            assertEquals(left.network, right.network)
-            assertEquals(left.display.midX, left.assists.midX)
-            assertEquals(left.network.midX, left.assists.midX)
-            assertEquals(right.sessionControls.midX, right.assists.midX)
-            assertEquals(left.network.maxY + 8f, left.assists.y)
-            assertEquals(right.sessionControls.maxY + 8f, right.assists.y)
-            assertTrue(left.assists.x > left.tiles.maxOf { it.maxX })
-            assertTrue(right.assists.maxX < right.tiles.minOf { it.x })
-            for (layout in listOf(left, right)) {
-                assertFalse(layout.assistsHorizontal)
-                assertTrue(layout.assists.maxY <= layout.display.y - 8f)
+    fun landscapeGridMountsCenterStageChromeWithValuesInTheSelectedTile() {
+        for (safe in listOf(MultiviewSafeArea(leading = 59f, bottom = 21f),
+            MultiviewSafeArea(trailing = 59f, bottom = 21f), MultiviewSafeArea())) {
+            val live = MonitorLayoutPolicy.fieldMonitor(852f, 393f, safe.top, safe.leading, safe.bottom, safe.trailing)
+            for (selected in 0 until 4) {
+                val grid = MultiviewPresentationLayout.compute(852f, 393f, safe, GRID, selected)
+                val stage = MultiviewPresentationLayout.compute(852f, 393f, safe, CENTER_STAGE, selected)
+                assertEquals(stage.sessionControls, grid.sessionControls)
+                assertEquals(stage.network, grid.network)
+                assertEquals(stage.assists, grid.assists)
+                // Only DISP keeps Live View's slot above Record.
+                assertEquals(live.display, grid.display)
+                val tile = grid.tiles[selected]
+                assertEquals(tile.maxX, grid.readouts.maxX, 0.01f)
+                assertEquals(tile.maxY - 8f, grid.readouts.maxY, 0.01f)
+                assertTrue(grid.readouts.x >= tile.x)
+                assertFalse(overlaps(grid.readouts, grid.assists))
+                assertEquals(tile.x == grid.tiles[0].x && tile.y > grid.tiles[0].y,
+                    grid.readouts.x > tile.x)
             }
-            assertEquals(left.record.y - 8f, left.display.maxY)
-            assertEquals(right.record.y - 8f, right.display.maxY)
         }
+        val left = MultiviewPresentationLayout.compute(852f, 393f, MultiviewSafeArea(leading = 59f, bottom = 21f), GRID, 1)
+        val right = MultiviewPresentationLayout.compute(852f, 393f, MultiviewSafeArea(trailing = 59f, bottom = 21f), GRID, 1)
+        assertEquals(left.tiles, right.tiles)
+        assertEquals(left.sessionControls.maxX + 8f, left.tiles[0].x)
+        assertEquals(left.sessionControls.y, left.tiles[1].y)
+        assertEquals(393f - 21f - 12f, left.tiles[3].maxY, 0.01f)
     }
 
     @Test
-    fun landscapeRailClearsNotchAndIslandBandsWithStableFramesAcrossRotation() {
+    fun landscapeHalfTurnKeepsPicturesAndPaletteSlot() {
         for ((w, h, cutout) in listOf(Triple(844f, 390f, 44f), Triple(852f, 393f, 59f),
             Triple(956f, 440f, 62f), Triple(976f, 448f, 62f), Triple(800f, 480f, 40f))) {
             for (arrangement in listOf(GRID, CENTER_STAGE)) {
@@ -152,61 +159,14 @@ class MultiviewLayoutPolicyTest {
                     MultiviewSafeArea(leading = cutout, bottom = 21f), arrangement, 0)
                 val right = MultiviewPresentationLayout.compute(w, h,
                     MultiviewSafeArea(trailing = cutout, bottom = 21f), arrangement, 0)
-                if (arrangement == GRID) {
-                    assertEquals(left.tiles, right.tiles)
-                    assertEquals(left.display.midX, left.assists.midX)
-                    assertEquals(right.sessionControls.midX, right.assists.midX)
-                } else {
-                    // A half turn keeps the main picture and Live View's palette slot.
-                    assertEquals(left.tiles[0], right.tiles[0])
-                    assertEquals(left.assists, right.assists)
+                if (arrangement == GRID) assertEquals(left.tiles, right.tiles)
+                else assertEquals(left.tiles[0], right.tiles[0])
+                assertEquals(left.assists, right.assists)
+                for (layout in listOf(left, right)) {
+                    assertTrue(layout.assists.maxX < w / 2)
+                    // Center stage: the palette floats over the main picture; values clear it.
+                    if (arrangement == CENTER_STAGE) assertTrue(layout.readouts.x >= layout.assists.maxX + 6f - 0.01f)
                 }
-                for ((layout, trailing) in listOf(left to false, right to true)) {
-                    val height = if (cutout >= 55f) 112f else 124f
-                    val band = MonitorRect(if (trailing) w - cutout else 0f, (h - height) / 2, cutout, height)
-                    // Center stage uses Live View's own palette slot, checked in the device matrix.
-                    if (arrangement == GRID) {
-                        assertFalse(overlaps(layout.assists, band), "$w x $h / $band / ${layout.assists}")
-                    }
-                    if (trailing || arrangement == CENTER_STAGE) {
-                        assertTrue(layout.assists.maxX < w / 2)
-                        // Center stage: the palette floats over the main picture; values clear it.
-                        if (arrangement == CENTER_STAGE) assertTrue(layout.readouts.x >= layout.assists.maxX + 6f - 0.01f)
-                        else assertTrue(layout.tiles.all { it.x >= layout.assists.maxX + 6f })
-                    } else {
-                        assertTrue(layout.assists.x > w / 2)
-                        assertTrue(layout.tiles.all { it.maxX <= layout.assists.x - 6f })
-                    }
-                }
-            }
-        }
-    }
-
-    @Test
-    fun landscapeGridFillsStageWithoutAspectConstraint() {
-        val grid = MultiviewPresentationLayout.compute(852f, 393f,
-            MultiviewSafeArea(leading = 59f, bottom = 21f), GRID, 0)
-        assertEquals(MonitorRect(70f, 11.825f, 341f, 143.5875f), grid.tiles[0])
-        assertEquals(764f, grid.tiles[3].maxX)
-        assertEquals(311f, grid.tiles[3].maxY)
-        assertTrue(grid.tiles.all { it.width == 341f && it.height == 143.5875f })
-    }
-
-    @Test
-    fun landscapeTopAlignedFeedsLeaveReadoutsBelowForEverySelection() {
-        for ((w, h) in listOf(667f to 375f, 852f to 393f, 1194f to 834f)) {
-            for (arrangement in listOf(GRID)) for (selected in 0 until 4) {
-                val layout = MultiviewPresentationLayout.compute(w, h,
-                    MultiviewSafeArea(bottom = 21f), arrangement, selected)
-                val main = layout.tiles[if (arrangement == CENTER_STAGE) selected else 0]
-                val firstSecondary = layout.tiles.first { it !== main }
-                assertEquals(layout.sessionControls.y, main.y)
-                assertEquals(layout.network.y, main.y)
-                assertEquals(main.y, firstSecondary.y)
-                assertTrue(layout.tiles.all { it.maxX <= layout.network.x - 6f })
-                assertTrue(layout.tiles.all { it.maxY <= layout.readouts.y - 12f })
-                assertEquals(37f, layout.readouts.height)
-                if (!layout.tablet) assertEquals(h - 21f - 12f, layout.readouts.maxY)
             }
         }
     }
@@ -236,7 +196,7 @@ class MultiviewLayoutPolicyTest {
 
     @Test
     fun toolbarContainsFourFullTouchTargets() {
-        for ((w, h) in listOf(393f to 852f, 852f to 393f, 744f to 1133f, 1133f to 744f, 667f to 375f)) {
+        for ((w, h) in listOf(393f to 852f, 744f to 1133f)) {
             val layout = MultiviewPresentationLayout.compute(w, h, arrangement = GRID, selected = 0)
             val cell = MonitorLayoutPolicy.assistButtonSize(layout.tablet)
             val case = "$w x $h"
@@ -248,14 +208,6 @@ class MultiviewLayoutPolicyTest {
             assertTrue(layout.assists.height >= cell + 8, case)
             assertTrue(layout.assists.x > w / 2, case)
             assertEquals(MonitorLayoutPolicy.systemButtonSize(layout.tablet), layout.sessionControls.width, case)
-            if (w == 667f) {
-                // The small landscape rail uses the available height without shrinking touch targets.
-                assertEquals(56f, layout.assists.width, case)
-                assertEquals(layout.display.midX, layout.assists.midX, case)
-                assertEquals(layout.network.maxY + 8f, layout.assists.y, case)
-                assertEquals(layout.display.y - 8f, layout.assists.maxY, case)
-                assertTrue(layout.assists.height < 4 * layout.controlCellSize + 44, case)
-            }
         }
     }
 

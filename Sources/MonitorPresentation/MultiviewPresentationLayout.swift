@@ -18,7 +18,7 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
     public let tablet: Bool
     public let controlCellSize: Double
     public let sessionControlsHorizontal: Bool
-    /// Landscape Center stage mounts Live View's horizontal View Assist palette.
+    /// Landscape stages mount Live View's horizontal View Assist palette.
     public let assistsHorizontal: Bool
 
     public init(
@@ -34,7 +34,7 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
         let cell = MonitorSystemButtonMetrics.side(tablet: tablet)
         controlCellSize = cell
         sessionControlsHorizontal = true
-        assistsHorizontal = !portrait && arrangement == .centerStage
+        assistsHorizontal = !portrait
 
         // System controls belong to Live View's native geometry, not to the
         // movable assist toolbar. In particular, Record never follows a cutout.
@@ -55,7 +55,8 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
         let headerTop = (portrait || banded ? max(0, safeArea.top) : 0) + 12 + inset
         // Portrait Exit and Wi-Fi share the native button size in the top-left
         // corner, at Live View's portrait corner row (beside the island on
-        // phones). Landscape Exit is exactly Live View's Lock rectangle.
+        // phones). Landscape Exit is exactly Live View's Lock rectangle, with
+        // Wi-Fi under it in both arrangements.
         let portraitTop = min(live.gauges.y, headerTop)
         sessionControls =
             portrait
@@ -66,31 +67,20 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
             ? .init(
                 x: sessionControls.maxX + 8, y: portraitTop,
                 width: live.settings.width, height: live.settings.height)
-            : arrangement == .centerStage
-                ? .init(
-                    x: sessionControls.midX - live.settings.width / 2,
-                    y: sessionControls.maxY + 8,
-                    width: live.settings.width, height: live.settings.height)
-                : live.settings
+            : .init(
+                x: sessionControls.midX - live.settings.width / 2,
+                y: sessionControls.maxY + 8,
+                width: live.settings.width, height: live.settings.height)
 
         let toolWidth = cell + 8
         let toolHeight = cell * 4 + 44
-        // Follow the native button columns and use the opposite edge from a
-        // landscape cutout. Fixed stage reserves keep picture hosts stationary
-        // when the toolbar changes sides.
-        let toolbarOnLeft = !portrait && safeArea.trailing > safeArea.leading
-        let leftToolX = sessionControls.midX - toolWidth / 2
-        let rightToolX = display.midX - toolWidth / 2
-        let toolX =
-            portrait
-            ? w - 14 - (live.settings.width + toolWidth) / 2
-            : toolbarOnLeft ? leftToolX : rightToolX
+        let toolX = w - 14 - (live.settings.width + toolWidth) / 2
         let stageTop = portrait ? sessionControls.maxY + 10 : sessionControls.y
         let selectedIndex = min(3, max(0, selected))
         var result = [MonitorRect](repeating: .init(), count: 4)
         var stripViewport: MonitorRect?
         var stripIndices: [Int] = []
-        readoutsOverlay = !portrait && arrangement == .centerStage
+        readoutsOverlay = !portrait
 
         if portrait {
             let tileWidth = max(1, toolX - 6 - 15)
@@ -174,25 +164,17 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
                 x: readoutsLeft, y: max(main.y, main.maxY - 45),
                 width: max(0, main.maxX - readoutsLeft), height: 37)
         } else {
-            let preferredLeft = banded ? 28.0 : max(cutout + 8, 18)
-            let stageLeft = max(
-                preferredLeft, sessionControls.maxX + 4,
-                cutout > 0 ? leftToolX + toolWidth + 6 : preferredLeft)
+            // Same chrome as landscape Center stage (Wi-Fi under Exit, the
+            // palette at the lower left, the selected camera's values inside
+            // its tile); only DISP keeps Live View's slot above Record.
+            assists = live.assists
+            let stageLeft = max(banded ? 28.0 : cutout + 8, sessionControls.maxX + 8)
             let stageRight = min(
-                w - (banded ? 28.0 : max(cutout + 12, 88)), rightToolX - 6, network.x - 6)
-            let readoutY = banded ? record.midY - 18.5 : h - max(0, safeArea.bottom) - 12 - 37
-            readouts = .init(
-                x: stageLeft, y: readoutY,
-                width: max(1, banded ? record.x - stageLeft - 24 : stageRight - stageLeft),
-                height: 37)
-            let stageBottom = banded ? min(h - 111, display.y - 12) : readouts.y - 12
+                w - (banded ? 28.0 : max(18, cutout + 8)), min(display.x, record.x) - 8)
+            let stageBottom =
+                banded ? min(h - 111, display.y - 12) : h - max(0, safeArea.bottom) - 12
             let stageWidth = max(1, stageRight - stageLeft)
             let stageHeight = max(1, stageBottom - stageTop)
-            let toolTop = (toolbarOnLeft ? sessionControls.maxY : network.maxY) + 8
-            let toolBottom = max(toolTop + 1, display.y - 8)
-            let paletteHeight = min(toolHeight, toolBottom - toolTop)
-            assists = .init(
-                x: toolX, y: toolBottom - paletteHeight, width: toolWidth, height: paletteHeight)
             let gap = banded ? 14.0 : 12.0
             let tileWidth = max(1, (stageWidth - gap) / 2)
             let tileHeight = max(1, (stageHeight - gap) / 2)
@@ -202,6 +184,13 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
                     y: stageTop + Double(index / 2) * (tileHeight + gap),
                     width: tileWidth, height: tileHeight)
             }
+            let tile = result[selectedIndex]
+            let rowY = max(tile.y, tile.maxY - 45)
+            let underPalette =
+                assists.maxX > tile.x && assists.y < rowY + 37 && assists.maxY > rowY
+            let readoutsLeft = underPalette ? max(tile.x, assists.maxX + 6) : tile.x
+            readouts = .init(
+                x: readoutsLeft, y: rowY, width: max(0, tile.maxX - readoutsLeft), height: 37)
         }
         secondaryViewport = stripViewport
         secondaryIndices = stripIndices

@@ -55,8 +55,9 @@ data class MultiviewPresentationLayout(
             val banded = tablet && !portrait
             val focusedLandscape = !portrait && arrangement == MultiviewArrangement.CENTER_STAGE
             val cell = MonitorLayoutPolicy.assistButtonSize(tablet).toDouble()
-            // Landscape Center stage mounts Live View's horizontal View Assist palette.
-            val horizontal = focusedLandscape
+            // Landscape stages mount Live View's horizontal View Assist palette, Wi-Fi under
+            // Exit and the selected camera's values inside its tile.
+            val horizontal = !portrait
             val toolbarWidth = cell + 8
             val toolbarHeight = cell * 4 + 44
             val portraitSecondaryMinimum = (if (tablet) 52.0 else 44.0) * 4 + 17
@@ -70,8 +71,7 @@ data class MultiviewPresentationLayout(
             val close = if (portrait) live.lock.copy(y = portraitTop) else live.lock
             val network = when {
                 portrait -> live.settings.copy(x = close.maxX + 8, y = portraitTop)
-                focusedLandscape -> live.settings.copy(x = close.midX - live.settings.width / 2, y = close.maxY + 8)
-                else -> live.settings
+                else -> live.settings.copy(x = close.midX - live.settings.width / 2, y = close.maxY + 8)
             }
             // Center stage reserves the far right for the strip: DISP sits left of Record.
             val display = if (focusedLandscape) MonitorRect(
@@ -79,40 +79,23 @@ data class MultiviewPresentationLayout(
                 live.display.width, live.display.width,
             ) else live.display
             val cutout = max(safeLeading, safeTrailing)
-            val leftToolX = close.midX - toolbarWidth / 2
-            val rightToolX = live.display.midX - toolbarWidth / 2
-            val toolbarOnLeft = !portrait && safeTrailing > safeLeading
-            val toolX = when {
-                portrait -> w - 14 - (live.settings.width + toolbarWidth) / 2
-                toolbarOnLeft -> leftToolX
-                else -> rightToolX
-            }
+            val toolX = w - 14 - (live.settings.width + toolbarWidth) / 2
             val stageTop = when {
                 portrait -> close.maxY + 10.0
                 else -> close.y.toDouble()
             }
-            val preferredStageLeft = if (banded) 28.0 else max(cutout + 8, 18.0)
-            val exitClearance = if (close.maxY > stageTop) close.maxX + 4.0 else preferredStageLeft
-            // Keep feed rectangles fixed across cutout rotations; only the toolbar changes sides.
-            val stageLeft = if (portrait) 15.0 else maxOf(
-                preferredStageLeft, exitClearance,
-                if (cutout > 0) leftToolX + toolbarWidth + 6 else preferredStageLeft,
-            )
+            // Landscape grid: only DISP keeps Live View's slot above Record.
+            val stageLeft = if (portrait) 15.0 else max(if (banded) 28.0 else cutout + 8, close.maxX + 8.0)
             val stageRight = when {
                 portrait -> toolX - 6
-                banded -> minOf(w - 28, rightToolX - 6, network.x - 6.0)
-                else -> minOf(w - max(88.0, cutout + 12), rightToolX - 6, network.x - 6.0)
+                else -> min(w - (if (banded) 28.0 else max(18.0, cutout + 8)),
+                    min(display.x, live.record.x) - 8.0)
             }
-            var readouts = when {
-                portrait -> Rect(18.0, max(stageTop, live.record.y - 58.0), w - 36, 37.0)
-                banded -> Rect(stageLeft, live.record.y + live.record.height / 2 - 18.5,
-                    live.record.x - stageLeft - 24.0, 37.0)
-                else -> Rect(stageLeft, h - safeBottom - 12 - 37, stageRight - stageLeft, 37.0)
-            }
+            var readouts = Rect(18.0, max(stageTop, live.record.y - 58.0), w - 36, 37.0)
             val stageBottom = when {
                 portrait -> readouts.y - 12
                 banded -> min(h - 111, live.display.y - 12.0)
-                else -> readouts.y - 12
+                else -> h - safeBottom - 12
             }
             val stageWidth = max(1.0, stageRight - stageLeft)
             val stageHeight = max(1.0, stageBottom - stageTop)
@@ -133,6 +116,14 @@ data class MultiviewPresentationLayout(
                         stageLeft + (index % columns) * (tileWidth + gap),
                         stageTop + (index / columns) * (tileHeight + gap), tileWidth, tileHeight,
                     )
+                }
+                if (!portrait) {
+                    val tile = tiles[focused]
+                    val rowY = max(tile.y, tile.maxY - 45)
+                    val palette = live.assists
+                    val underPalette = palette.maxX > tile.x && palette.y < rowY + 37 && palette.maxY > rowY
+                    val readoutsLeft = if (underPalette) max(tile.x, palette.maxX + 6.0) else tile.x
+                    readouts = Rect(readoutsLeft, rowY, max(0.0, tile.maxX - readoutsLeft), 37.0)
                 }
             } else if (portrait) {
                 // Readouts sit directly under the main picture; the feeds and the fixed
@@ -179,23 +170,15 @@ data class MultiviewPresentationLayout(
                 readouts = Rect(readoutsLeft, max(stageTop, stageTop + mainHeight - 45),
                     maxOf(0.0, mainLeft + mainWidth - readoutsLeft), 37.0)
             }
-            val toolTop = when {
-                portrait -> max(toolbarTop, network.maxY + 8.0)
-                toolbarOnLeft -> close.maxY + 8.0
-                else -> network.maxY + 8.0
-            }
-            val toolBottom = when {
-                portrait -> stageBottom
-                else -> live.display.y - 8.0
-            }
-            // The native palette grows upward within this rail and scrolls its full-size tools.
-            val paletteHeight = max(1.0, min(toolbarHeight, toolBottom - toolTop))
-            val assists = if (focusedLandscape) live.assists.let {
+            val toolTop = max(toolbarTop, network.maxY + 8.0)
+            // The portrait grid palette grows downward within this rail and scrolls its tools.
+            val paletteHeight = max(1.0, min(toolbarHeight, stageBottom - toolTop))
+            val assists = if (!portrait) live.assists.let {
                 Rect(it.x.toDouble(), it.y.toDouble(), it.width.toDouble(), it.height.toDouble())
             } else if (columnBottom != null) {
                 // Portrait Center stage: a plain column spanning the secondary feeds exactly.
                 Rect(toolX, toolbarTop, toolbarWidth, max(1.0, columnBottom - toolbarTop))
-            } else Rect(toolX, if (portrait) toolTop else toolBottom - paletteHeight, toolbarWidth, paletteHeight)
+            } else Rect(toolX, toolTop, toolbarWidth, paletteHeight)
             return MultiviewPresentationLayout(
                 tiles = tiles.mapIndexed { index, rect ->
                     if (index in secondaryIndices) rect.unclamped() else rect.clamped(w, h)
@@ -205,7 +188,7 @@ data class MultiviewPresentationLayout(
                 display = display, record = live.record, portrait = portrait, tablet = tablet,
                 controlCellSize = cell.toFloat(), sessionControlsHorizontal = true, assistsHorizontal = horizontal,
                 secondaryViewport = secondaryViewport, secondaryIndices = secondaryIndices,
-                readoutsOverlay = focusedLandscape,
+                readoutsOverlay = !portrait,
             )
         }
     }

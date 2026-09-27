@@ -46,20 +46,14 @@ struct MultiviewPresentationLayoutTests {
                                 #expect(layout.network.y == layout.sessionControls.y)
                                 #expect(layout.sessionControls.x == live.lock.x)
                                 #expect(layout.sessionControls.y <= live.gauges.y)
-                            } else if arrangement == .centerStage {
+                            } else {
+                                // Both landscape arrangements: Wi-Fi under Exit and
+                                // Live View's horizontal palette.
                                 #expect(layout.network.midX == layout.sessionControls.midX)
                                 #expect(layout.network.y == layout.sessionControls.maxY + 8)
                                 #expect(layout.assists == live.assists)
                                 #expect(layout.assistsHorizontal)
-                            } else {
-                                #expect(layout.network == live.settings)
-                                if safe.trailing > safe.leading {
-                                    #expect(layout.assists.midX == live.lock.midX)
-                                    #expect(layout.assists.maxX < w - safe.trailing)
-                                } else {
-                                    #expect(layout.assists.midX == live.display.midX)
-                                    #expect(layout.assists.x > safe.leading)
-                                }
+                                #expect(layout.readoutsOverlay)
                             }
                             #expect(layout.sessionControls.width == live.lock.width)
                             if !portrait { #expect(layout.sessionControls == live.lock) }
@@ -82,12 +76,13 @@ struct MultiviewPresentationLayoutTests {
                                 where other.height > 0 {
                                     #expect(!overlaps(tile, other))
                                 }
-                                // Center stage overlays the values row and, like Live
-                                // View, the collapsed palette on the main picture.
+                                // Landscape overlays the values row and, like Live View,
+                                // the collapsed palette on the main (Grid: lower-left) picture.
+                                let paletteHost = arrangement == .grid ? 2 : selected
                                 for control in controls
                                 where !(layout.readoutsOverlay
                                     && (control == layout.readouts
-                                        || (control == layout.assists && index == selected)))
+                                        || (control == layout.assists && index == paletteHost)))
                                 {
                                     #expect(!overlaps(tile, control))
                                 }
@@ -183,35 +178,44 @@ struct MultiviewPresentationLayoutTests {
         }
     }
 
-    @Test func landscapeToolbarChangesNativeColumnsAcrossCutoutOrientations() {
-        for arrangement in [MultiviewPresentationLayout.Arrangement.grid] {
-            let left = MultiviewPresentationLayout(
-                width: 852, height: 393, safeArea: .init(leading: 59, bottom: 21),
-                arrangement: arrangement, selected: 1)
-            let right = MultiviewPresentationLayout(
-                width: 852, height: 393, safeArea: .init(bottom: 21, trailing: 59),
-                arrangement: arrangement, selected: 1)
-            #expect(left.tiles == right.tiles)
-            #expect(left.record == right.record)
-            #expect(left.display.x == right.display.x)
-            #expect(left.sessionControls == right.sessionControls)
-            #expect(left.network == right.network)
-            #expect(left.assists.midX == left.display.midX)
-            #expect(left.assists.midX == left.network.midX)
-            #expect(right.assists.midX == right.sessionControls.midX)
-            #expect(left.assists.width == left.sessionControls.width + 8)
-            #expect(right.assists.width == right.sessionControls.width + 8)
-            for layout in [left, right] {
-                #expect(layout.assists.y >= layout.network.maxY + 8 - 0.001)
-                #expect(layout.assists.maxY <= layout.display.y - 8)
-                #expect(layout.tiles.allSatisfy { !overlaps($0, layout.assists) })
+    @Test func landscapeGridMountsCenterStageChromeWithValuesInTheSelectedTile() {
+        for safe in [
+            MonitorSafeArea(leading: 59, bottom: 21), MonitorSafeArea(bottom: 21, trailing: 59),
+            MonitorSafeArea(),
+        ] {
+            let live = FieldMonitorLayout(width: 852, height: 393, safeArea: safe)
+            for selected in 0..<4 {
+                let grid = MultiviewPresentationLayout(
+                    width: 852, height: 393, safeArea: safe, arrangement: .grid,
+                    selected: selected)
+                let stage = MultiviewPresentationLayout(
+                    width: 852, height: 393, safeArea: safe, arrangement: .centerStage,
+                    selected: selected)
+                #expect(grid.sessionControls == stage.sessionControls)
+                #expect(grid.network == stage.network)
+                #expect(grid.assists == stage.assists)
+                #expect(grid.record == stage.record)
+                // Only DISP keeps Live View's slot above Record.
+                #expect(grid.display == live.display)
+                let tile = grid.tiles[selected]
+                #expect(grid.readouts.maxX == tile.maxX)
+                #expect(grid.readouts.maxY == tile.maxY - 8)
+                #expect(grid.readouts.x >= tile.x)
+                #expect(!overlaps(grid.readouts, grid.assists))
+                for frame in grid.tiles {
+                    for control in [grid.sessionControls, grid.network, grid.display, grid.record] {
+                        #expect(!overlaps(frame, control))
+                    }
+                }
             }
-            #expect(left.tiles.allSatisfy { $0.maxX <= left.assists.x - 6 })
-            #expect(right.tiles.allSatisfy { $0.x >= right.assists.maxX + 6 })
-            // DISP keeps native clearance above Record when the cutout is on its edge.
-            #expect(left.display.maxY == left.record.y - 8)
-            #expect(right.display.maxY == right.record.y - 8)
         }
+        let left = MultiviewPresentationLayout(
+            width: 852, height: 393, safeArea: .init(leading: 59, bottom: 21),
+            arrangement: .grid, selected: 1)
+        let right = MultiviewPresentationLayout(
+            width: 852, height: 393, safeArea: .init(bottom: 21, trailing: 59),
+            arrangement: .grid, selected: 1)
+        #expect(left.tiles == right.tiles)
     }
 
     @Test func selectionAndLayoutKeepNativeSystemControlsStable() {
@@ -240,7 +244,7 @@ struct MultiviewPresentationLayoutTests {
     }
 
     @Test func fourToolbarControlsKeepNativeTouchTargets() {
-        for (width, height) in [(393.0, 852.0), (852, 393), (744, 1133), (1133, 744)] {
+        for (width, height) in [(393.0, 852.0), (744, 1133)] {
             let layout = MultiviewPresentationLayout(
                 width: width, height: height, arrangement: .grid, selected: 0)
             let cell = MonitorSystemButtonMetrics.side(tablet: layout.tablet)
@@ -252,74 +256,23 @@ struct MultiviewPresentationLayoutTests {
         }
     }
 
-    @Test func shortLandscapeRailScrollsWithoutMovingNativeSystemControls() {
-        for (width, height, safe) in [
-            (667.0, 375.0, MonitorSafeArea()),
-            (852, 393, MonitorSafeArea(leading: 59, bottom: 21)),
-            (852, 393, MonitorSafeArea(bottom: 21, trailing: 59)),
-        ] {
-            let layout = MultiviewPresentationLayout(
-                width: width, height: height,
-                safeArea: safe, arrangement: .grid, selected: 0)
-            let live = FieldMonitorLayout(width: width, height: height, safeArea: safe)
-            #expect(layout.controlCellSize == MonitorSystemButtonMetrics.side(tablet: false))
-            #expect(layout.assists.height < 4 * layout.controlCellSize + 44)
-            #expect(abs(layout.assists.y - live.settings.maxY - 8) < 0.001)
-            #expect(layout.assists.maxY == live.display.y - 8)
-            #expect(layout.record == live.record && layout.display == live.display)
-        }
-        let roomy = MultiviewPresentationLayout(
-            width: 956, height: 440,
-            safeArea: .init(leading: 59, bottom: 21), arrangement: .grid, selected: 0)
-        #expect(roomy.assists.maxY == roomy.display.y - 8)
-    }
-
-    @Test func landscapeStageReservesNativeExitAndEitherCutoutRail() {
-        let constrained = MultiviewPresentationLayout(
-            width: 667, height: 375,
-            arrangement: .grid, selected: 0)
-        #expect(constrained.sessionControls.maxY > constrained.tiles[0].y)
-        #expect(constrained.tiles[0].x == constrained.sessionControls.maxX + 4)
-        let clear = MultiviewPresentationLayout(
-            width: 600, height: 300,
-            safeArea: .init(leading: 47, bottom: 21), arrangement: .grid, selected: 0)
-        #expect(clear.sessionControls.y == clear.tiles[0].y)
-        #expect(clear.tiles[0].x == 76)
-        let opposite = MultiviewPresentationLayout(
-            width: 600, height: 300,
-            safeArea: .init(bottom: 21, trailing: 47), arrangement: .grid, selected: 0)
-        #expect(clear.tiles == opposite.tiles)
-        #expect(clear.tiles[0].x == opposite.assists.maxX + 6)
-        #expect(!overlaps(clear.sessionControls, clear.readouts))
-        let tablet = MultiviewPresentationLayout(
-            width: 1194, height: 834, arrangement: .grid, selected: 0)
-        #expect(tablet.sessionControls.y == tablet.tiles[0].y)
-        #expect(tablet.tiles[0].x == tablet.sessionControls.maxX + 4)
-        #expect(tablet.tiles[1].maxX == tablet.network.x - 6)
-    }
-
-    @Test func landscapePicturesStartAtNativeTopControlsAndReadoutsStayBelow() {
+    @Test func landscapeGridStartsAtExitAndReachesTheBottomMargin() {
         for (width, height) in sizes {
             for right in [false, true] {
                 let phone = height < 600
                 let safe = MonitorSafeArea(
                     leading: phone && !right ? 59 : 0, bottom: 21,
                     trailing: phone && right ? 59 : 0)
-                for arrangement in [MultiviewPresentationLayout.Arrangement.grid] {
-                    let layout = MultiviewPresentationLayout(
-                        width: width, height: height, safeArea: safe,
-                        arrangement: arrangement, selected: 2)
-                    let top = layout.sessionControls.y
-                    #expect(layout.network.y == top)
-                    #expect(layout.tiles[0].y == top)
-                    #expect(layout.tiles[arrangement == .grid ? 1 : 2].y == top)
-                    #expect(layout.tiles.allSatisfy { $0.maxY <= layout.readouts.y - 12 })
-                    #expect(layout.readouts.height == 37)
-                    if phone {
-                        #expect(layout.readouts.maxY == height - safe.bottom - 12)
-                    } else {
-                        #expect(layout.readouts.midY == layout.record.midY)
-                    }
+                let layout = MultiviewPresentationLayout(
+                    width: width, height: height, safeArea: safe,
+                    arrangement: .grid, selected: 2)
+                let top = layout.sessionControls.y
+                #expect(layout.tiles[0].y == top)
+                #expect(layout.tiles[1].y == top)
+                #expect(layout.tiles[0].x == layout.sessionControls.maxX + 8)
+                #expect(layout.readouts.height == 37)
+                if phone {
+                    #expect(layout.tiles[3].maxY == height - safe.bottom - 12)
                 }
             }
         }

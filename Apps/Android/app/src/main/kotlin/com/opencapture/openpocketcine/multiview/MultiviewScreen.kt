@@ -411,7 +411,7 @@ internal fun MultiviewAssistPalette(
         }
         return
     }
-    // Landscape Center stage mounts the palette as Live View does: horizontal, bottom-leading.
+    // Landscape stages mount the palette as Live View does: horizontal, bottom-leading.
     Box(modifier, contentAlignment = if (horizontal) Alignment.BottomStart else Alignment.BottomCenter) {
         com.opencapture.monitorui.MonitorAssistPalette(
             tools = MultiviewTool.entries, portrait = !horizontal, locked = session.closing,
