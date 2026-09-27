@@ -96,6 +96,11 @@
             status.shootingMode = 1
             status.videoResolution = VideoResolution(rawValue: 0x10)
             status.fps = 25
+            // A real body lists several rates, so reviews show the frame-rate drum
+            // with neighbours on both sides of the current 25p.
+            status.availableVideoFormats = [
+                .fps24, .fps25, .fps30, .fps48, .fps50, .fps60,
+            ].map { VideoFormat(resolution: VideoResolution(rawValue: 0x10), frameRate: $0) }
             status.availableIsoIndices = [
                 .iso100, .iso200, .iso400, .iso800, .iso1600, .iso3200, .iso6400,
             ]
