@@ -83,7 +83,8 @@ struct LiveViewScreen: View {
                 fill: model.portraitFeedAspect == .fill && !model.assist.isVisible(.desqueeze),
                 showsValues: model.chromeSectionMounts(.cameraValues),
                 showsBottomBars: showsBottomBars,
-                topControlInset: windowGeometry.topControlInset)
+                topControlInset: windowGeometry.topControlInset,
+                joystick: model.virtualJoystickSize)
             Color.clear
                 .ignoresSafeArea()
                 .overlay(alignment: .topLeading) {

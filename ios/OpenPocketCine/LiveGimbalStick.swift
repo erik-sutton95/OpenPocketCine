@@ -23,8 +23,11 @@ struct LiveGimbalStick: View {
     @State private var recenterTick = 0
     @State private var flipTick = 0
 
-    private var size: CGFloat { LiveChromeMetrics.gimbalStickSize }
-    private var knob: CGFloat { LiveChromeMetrics.gimbalKnobSize }
+    // The layout sizes the stick (operator Small / Medium / Large); the knob scales with it.
+    private var size: CGFloat { frame.width > 1 ? frame.width : LiveChromeMetrics.gimbalStickSize }
+    private var knob: CGFloat {
+        size * LiveChromeMetrics.gimbalKnobSize / LiveChromeMetrics.gimbalStickSize
+    }
     private var opacity: CGFloat { contact ? 0.8 : LiveChromeMetrics.gimbalStickOpacity }
     private var interactive: Bool { enabled && !interfaceLocked }
     private var ink: Color {

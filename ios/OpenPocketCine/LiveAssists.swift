@@ -758,6 +758,7 @@ enum OperatorPrefs {
         "OpenPocketCine.VirtualJoystickDeadzonePercent"
     private static let virtualJoystickResponseCurveKey =
         "OpenPocketCine.VirtualJoystickResponseCurve"
+    private static let virtualJoystickSizeKey = "OpenPocketCine.VirtualJoystickSize"
     private static let gimbalRampKey = "OpenPocketCine.GimbalRamp"
     private static let gimbalDoubleTapKey = "OpenPocketCine.GimbalDoubleTap"
     private static let dispLiveKey = "OpenPocketCine.DispChrome.Live"
@@ -924,6 +925,11 @@ enum OperatorPrefs {
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: virtualJoystickResponseCurveKey)
         }
+    }
+
+    static var virtualJoystickSize: MonitorJoystickSize {
+        get { MonitorJoystickSize.parse(UserDefaults.standard.string(forKey: virtualJoystickSizeKey)) }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: virtualJoystickSizeKey) }
     }
 
     static var virtualJoystickMapping: GimbalStick.Mapping {

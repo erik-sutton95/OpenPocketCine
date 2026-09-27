@@ -161,6 +161,9 @@ final class AppModel {
     {
         didSet { OperatorPrefs.virtualJoystickResponseCurve = virtualJoystickResponseCurve }
     }
+    var virtualJoystickSize: MonitorJoystickSize = OperatorPrefs.virtualJoystickSize {
+        didSet { OperatorPrefs.virtualJoystickSize = virtualJoystickSize }
+    }
     var virtualJoystickMapping: GimbalStick.Mapping {
         GimbalStick.Mapping(
             invertPan: virtualJoystickInvertPan,

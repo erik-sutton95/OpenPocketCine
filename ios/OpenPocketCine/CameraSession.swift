@@ -410,6 +410,7 @@ final class CameraSession {
     @ObservationIgnored private var lastTapFocusAt: Date?
     /// Operator tap only; camera-adopted points do not start the stale-echo hold.
     @ObservationIgnored private var lastFocusTapAt: Date?
+    @ObservationIgnored private var feedDoubleTap = FeedDoubleTapTrack()
     private var faceAFArmed = false
     @ObservationIgnored private var faceAFArmTask: Task<Void, Never>?
     /// First GOP has rolled past the IDR grace. Later stalls are the watchdog.
@@ -3427,12 +3428,20 @@ final class CameraSession {
     }
 
     /// Feed tap: inside the AF-C face box → ActiveTrack SET with that rect.
+    /// A second tap on the same spot → ActiveTrack there (Mimo / on-camera).
     /// Anywhere else → tap-to-focus.
     func handleFeedTap(at normalized: CGPoint) {
         let x = min(max(Double(normalized.x), 0), 1)
         let y = min(max(Double(normalized.y), 0), 1)
         if let box = FaceTrackTap.boxIfTapped(
             overlay: focusOverlay, x: x, y: y, sceneFaces: dimmedFaces)
+        {
+            feedDoubleTap.reset()
+            startTracking(box)
+            return
+        }
+        if let box = feedDoubleTap.register(
+            x: x, y: y, at: Date.timeIntervalSinceReferenceDate)
         {
             startTracking(box)
             return

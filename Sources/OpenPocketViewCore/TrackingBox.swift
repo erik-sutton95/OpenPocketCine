@@ -625,6 +625,37 @@ public enum LiveFeedTapPolicy {
     }
 }
 
+/// Double-tap the same spot, as in Mimo and on the camera: the first tap
+/// focuses as usual, the second starts ActiveTrack on a box centred there.
+public struct FeedDoubleTapTrack: Sendable {
+    public static let window: TimeInterval = 0.45
+    /// Feed-normalised distance that still counts as the same spot.
+    public static let radius: Double = 0.06
+    /// Roughly square on a 16:9 picture; the camera's tracker finds the subject.
+    public static let boxWidth: Double = 0.14
+    public static let boxHeight: Double = 0.25
+
+    private var lastX = 0.0
+    private var lastY = 0.0
+    private var lastAt: TimeInterval?
+
+    public init() {}
+
+    /// The tracking box when this tap completes a double tap, otherwise `nil`.
+    public mutating func register(x: Double, y: Double, at time: TimeInterval) -> TrackingBox? {
+        if let lastAt, time >= lastAt, time - lastAt <= Self.window,
+            hypot(x - lastX, y - lastY) <= Self.radius
+        {
+            self.lastAt = nil
+            return TrackingBox.fromCenter(x: x, y: y, width: Self.boxWidth, height: Self.boxHeight)
+        }
+        (lastX, lastY, lastAt) = (x, y, time)
+        return nil
+    }
+
+    public mutating func reset() { lastAt = nil }
+}
+
 /// Tap the painted AF-C face box to SET gimbal ActiveTrack (`0x02/0xA6`)
 /// with that rect, instead of tap-to-focus.
 public enum FaceTrackTap {

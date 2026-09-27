@@ -33,11 +33,37 @@ public struct MonitorSafeArea: Equatable, Sendable {
 /// Device-independent geometry from the Field Monitor design. Viewport and
 /// real window insets are inputs; camera brands and marketed device names are
 /// deliberately absent. No drawing, observation, timers, or camera I/O.
+/// Operator choice for the on-feed gimbal joystick diameter.
+public enum MonitorJoystickSize: String, CaseIterable, Sendable {
+    case small, medium, large
+
+    public var side: Double {
+        switch self {
+        case .small: 88
+        case .medium: 101
+        case .large: 116
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .small: "Small"
+        case .medium: "Medium"
+        case .large: "Large"
+        }
+    }
+
+    public static func parse(_ raw: String?) -> Self { raw.flatMap(Self.init(rawValue:)) ?? .medium }
+    public static func fromLabel(_ label: String) -> Self {
+        allCases.first { $0.label == label } ?? .medium
+    }
+}
+
 public struct FieldMonitorLayout: Equatable, Sendable {
     /// Space between the Settings and Media system buttons.
     public static let settingsMediaGap = 12.0
-    /// On-feed gimbal joystick diameter.
-    public static let stickSide = 101.0
+    /// Default on-feed gimbal joystick diameter.
+    public static let stickSide = MonitorJoystickSize.medium.side
 
     public let viewport: MonitorRect
     public let picture: MonitorRect
@@ -70,8 +96,9 @@ public struct FieldMonitorLayout: Equatable, Sendable {
     public init(
         width: Double, height: Double, safeArea: MonitorSafeArea = .init(),
         sourceAspect: Double = 16 / 9, fill: Bool = false, showsValues: Bool = true,
-        topControlInset: Double = 0
+        topControlInset: Double = 0, joystick: MonitorJoystickSize = .medium
     ) {
+        let stickSide = joystick.side
         let w = max(1, width.isFinite ? width : 1)
         let h = max(1, height.isFinite ? height : 1)
         let aspect = sourceAspect.isFinite && sourceAspect > 0 ? sourceAspect : 16 / 9
@@ -133,8 +160,8 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 x: edge, y: floor - 16 - (button + 35),
                 width: button + 8, height: button + 35)
             stick = .init(
-                x: w - 16 - Self.stickSide,
-                y: floor - 16 - Self.stickSide, width: Self.stickSide, height: Self.stickSide)
+                x: w - 16 - stickSide,
+                y: floor - 16 - stickSide, width: stickSide, height: stickSide)
             zoom = .init(x: stick.x, y: stick.y - 44, width: 44, height: 36)
             gimbal = .init(x: stick.maxX - 36, y: zoom.y, width: 36, height: 36)
             headTrack = Self.headTrack(stick: stick, zoom: zoom)
@@ -199,8 +226,8 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 x: 18, y: h - bottomPad - assistHeight,
                 width: button + MonitorAssistPaletteLayout.horizontalInsets, height: assistHeight)
             stick = .init(
-                x: w - max(16 + rec + 12, safeArea.trailing + 6) - Self.stickSide,
-                y: floor - Self.stickSide, width: Self.stickSide, height: Self.stickSide)
+                x: w - max(16 + rec + 12, safeArea.trailing + 6) - stickSide,
+                y: floor - stickSide, width: stickSide, height: stickSide)
             zoom = .init(x: stick.x, y: stick.y - 44, width: 44, height: 36)
             gimbal = .init(x: stick.maxX - 36, y: zoom.y, width: 36, height: 36)
             headTrack = Self.headTrack(stick: stick, zoom: zoom)

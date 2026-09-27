@@ -364,7 +364,7 @@ extension LiveMonitorLayout {
     static func fieldMonitor(
         size: CGSize, safeArea: EdgeInsets, sourceAspect: CGFloat,
         fill: Bool, showsValues: Bool, showsBottomBars: Bool,
-        topControlInset: CGFloat = 0
+        topControlInset: CGFloat = 0, joystick: MonitorJoystickSize = .medium
     ) -> Self {
         let p = FieldMonitorLayout(
             width: size.width, height: size.height,
@@ -372,7 +372,7 @@ extension LiveMonitorLayout {
                 top: safeArea.top, leading: safeArea.leading,
                 bottom: safeArea.bottom, trailing: safeArea.trailing),
             sourceAspect: sourceAspect, fill: fill, showsValues: showsValues,
-            topControlInset: topControlInset)
+            topControlInset: topControlInset, joystick: joystick)
         return Self(
             presentation: p, viewport: size, feed: p.picture.cgRect, picture: p.picture.cgRect,
             lock: p.lock.cgRect, battery: p.gauges.cgRect, topDeck: p.status.cgRect,

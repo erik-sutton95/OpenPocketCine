@@ -1,3 +1,4 @@
+import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
@@ -34,6 +35,8 @@ enum SettingsHelpCopy {
         "Experimental. The compass above the joystick on the right is Calibrate Head Lock: that AirPods pose and that gimbal pose are shared forward. Head turns set matching pan and tilt angles within the gimbal’s range. Roll is shown only. Needs AirPods with motion (Pro, 3, Max, or later) in your ears. Off by default. The same control becomes STOP and clears the lock. On-screen stick, a game controller, and Motion Control takes priority."
     static let joystickSensitivity =
         "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+    static let virtualJoystickSize =
+        "How large the on-screen stick is. Medium is the default. Large is easier to grab; Small keeps more of the picture clear."
     static let virtualJoystickInvertPan =
         "Reverse left and right on the on-screen stick. Off is the default. A game controller is unchanged."
     static let virtualJoystickInvertTilt =
@@ -643,9 +646,22 @@ struct SettingsRootView: View {
                 }
             }
             SettingsRowCard(title: "On-screen joystick") {
+                SettingsInlineRow(
+                    title: "Size", help: SettingsHelpCopy.virtualJoystickSize,
+                    showTopDivider: false, stacked: true
+                ) {
+                    SettingsSegmented(
+                        options: MonitorJoystickSize.allCases.map(\.label),
+                        selected: model.virtualJoystickSize.label,
+                        compact: true
+                    ) { value in
+                        model.virtualJoystickSize = MonitorJoystickSize.fromLabel(value)
+                    }
+                    .accessibilityIdentifier("gimbal.virtual.size")
+                }
                 SettingsSwitchInlineRow(
                     title: "Invert pan", help: SettingsHelpCopy.virtualJoystickInvertPan,
-                    showTopDivider: false, isOn: model.virtualJoystickInvertPan,
+                    isOn: model.virtualJoystickInvertPan,
                     identifier: "gimbal.virtual.invertPan"
                 ) { model.virtualJoystickInvertPan.toggle() }
                 SettingsSwitchInlineRow(
