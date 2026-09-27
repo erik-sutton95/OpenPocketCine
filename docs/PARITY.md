@@ -644,10 +644,12 @@ options, one Add slot and Clean recovery in portrait and both landscape
 orientations. Mounted UIKit-host identity is checked across layout changes.
 Android passes 1,127 JVM tests and lint; two API 35 emulator tests exercise
 compact feed telemetry, camera-menu actions and Clean recovery access.
-`just check` and `just native-check` pass. Physical qualification remains
-pending: developer services now work on the connected iOS 27 iPhone and the
-signed app installed, but XCTest timed out enabling UI Automation before any
-test ran. No physical Android phone is attached. Camera-connected frame-rate and
+`just check` and `just native-check` pass. The signed app was installed directly
+on the connected iOS 27 iPhone, and the running process was verified against
+that installation. The earlier XCTest attempt installed only its test runner
+before timing out enabling UI Automation; it did not deploy the updated app or
+run any tests. Physical visual qualification remains pending. No physical
+Android phone is attached. Camera-connected frame-rate and
 thermal qualification also remains pending. Earlier September 10/23 camera
 checks establish retained connection and recording behavior, not this revised
 layout.
@@ -1389,6 +1391,8 @@ changes setup only; live ACK, watchdog, decoder and enable budgets are unchanged
 Automated qualification includes iOS Add setup and Multiview navigation/password
 entry in portrait and landscape, and Android emulator scan-cancellation cleanup,
 connect ordering and failed-join retry. Repository and platform checks are recorded
-in the PR. Physical qualification remains pending: the signed app installed on
-the available iOS 27 iPhone, but XCTest timed out enabling UI Automation before
-any test ran. No Android phone was attached.
+in the PR. Physical qualification remains pending: XCTest installed only its
+test runner before timing out enabling UI Automation. The app was subsequently
+installed directly on the iOS 27 iPhone and its running bundle verified; this
+does not establish camera-connected setup or AP return. No Android phone was
+attached.
