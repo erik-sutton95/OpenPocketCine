@@ -209,11 +209,6 @@ public struct FeedWatchdog: Equatable, Sendable {
         return status < stallThreshold
     }
 
-    /// Either HEVC or DUML status still landing — do not tear the socket.
-    public static func socketAlive(_ snap: Snapshot) -> Bool {
-        udpReceiveAlive(snap) || controlReceiveAlive(snap)
-    }
-
     /// BLE still up and SoftAP still on the path — do not flap UDP / fullRejoin.
     public static func shouldHoldBind(pathReady: Bool, lastBleNotifyAge: TimeInterval?) -> Bool {
         pathReady && (lastBleNotifyAge ?? .infinity) < stallThreshold
@@ -298,22 +293,6 @@ public struct FeedWatchdog: Equatable, Sendable {
     ) -> Bool {
         if secondsSinceLastEnable >= 1 { return true }
         return hasPresentedPicture && liveViewEnableSends <= 1
-    }
-
-    /// After one UDP rebuild, do not rebuild again on the 2s stall cadence.
-    /// First picture (`hadVideo == false`) is not a live flap — do not hold.
-    public static func shouldHoldRebuildAfterRecentUDP(
-        secondsSinceLastRebuild: TimeInterval?,
-        pathReady: Bool,
-        lastBleNotifyAge: TimeInterval?,
-        hadVideo: Bool = true
-    ) -> Bool {
-        guard hadVideo else { return false }
-        guard shouldHoldBind(pathReady: pathReady, lastBleNotifyAge: lastBleNotifyAge) else {
-            return false
-        }
-        guard let since = secondsSinceLastRebuild else { return false }
-        return since < rebuildBackoff
     }
 
     /// HEVC silent, a repair in flight, or clocks wiped after a live GOP.

@@ -1,7 +1,6 @@
 package com.opencapture.openpocketcine.feed
 
 import com.opencapture.openpocketcine.session.CameraCommands
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.exp
@@ -292,35 +291,11 @@ object ScopeDisplayScale {
         return a.mid + t * (a.clip - a.mid)
     }
 
-    fun remapHistogram(bins: IntArray, transfer: MonitorTransfer, iso: Int? = null): IntArray {
-        val out = IntArray(256)
-        val table = levelTable(transfer, iso)
-        val limit = minOf(bins.size, 256)
-        for (code in 0 until limit) {
-            val count = bins[code]
-            if (count == 0) continue
-            val bucket = round(table[code] * 255.0).toInt().coerceIn(0, 255)
-            out[bucket] += count
-        }
-        return out
-    }
-
-    fun levelTable(transfer: MonitorTransfer, iso: Int? = null): FloatArray {
-        val ei = iso ?: ScopeExposureCeiling.resolvedISO()
-        val clip = ScopeExposureCeiling.clipByte(transfer, ei)
-        val key = transfer.ordinal.toLong() shl 32 or clip.toLong()
-        return tables.getOrPut(key) {
-            FloatArray(256) { waveformLevel(it / 255.0, transfer, ei).toFloat() }
-        }
-    }
-
     private fun overshoot(v: Double, clip: Double): Double {
         val headroom = 1.0 - clip
         if (headroom <= 0) return CLIP_LEVEL
         return CLIP_LEVEL + (v - clip) / headroom * (1.0 - CLIP_LEVEL)
     }
-
-    private val tables = ConcurrentHashMap<Long, FloatArray>()
 }
 
 /**

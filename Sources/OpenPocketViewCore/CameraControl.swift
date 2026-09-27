@@ -227,8 +227,6 @@ public enum IsoLimit: UInt8, CaseIterable, Sendable {
     case max12800 = 0x08
     case max25600 = 0x09
 
-    /// Osmosis `range800` name — same SET byte `04`.
-    public static let range800 = IsoLimit.max800
     /// Osmosis `range1600` name — same SET byte `05`.
     public static let range1600 = IsoLimit.max1600
 
@@ -1833,12 +1831,14 @@ public enum GimbalStick {
     /// Second tap inside this window recenters; a third tap in the same
     /// window flips (Mimo `0x04/0x4C` `FE 09`) instead.
     public static let doubleTapWindow: TimeInterval = 0.35
-    /// Encoded luma above this (0…1) flips the stick to dark chrome.
+    /// Encoded luma above this (0…1) flips the stick to dark ink.
     public static let chromeGoDarkAbove: Double = 0.55
-    /// Encoded luma below this flips the stick back to light chrome.
+    /// Encoded luma below this flips the stick back to light ink.
     public static let chromeGoLightBelow: Double = 0.42
 
-    /// Hysteresis so a mid-grey wall does not flicker the stick.
+    /// Hysteresis so a mid-grey wall does not flicker the stick. A compositor
+    /// difference blend cannot adapt instead: iOS shows live video on its own
+    /// display plane, so the blend never sees the picture (only screenshots do).
     public static func prefersDarkChrome(luma: Double?, previous: Bool) -> Bool {
         guard let luma else { return previous }
         if previous { return luma > chromeGoLightBelow }
@@ -1864,7 +1864,6 @@ public enum GimbalStick {
             width: width / feed.width,
             height: height / feed.height)
     }
-
     public static func isTap(normalizedMagnitude: Double) -> Bool {
         normalizedMagnitude < tapSlop
     }
@@ -1917,11 +1916,6 @@ public enum GimbalStick {
         guard radius > 0, mag > radius else { return (x, y) }
         let scale = radius / mag
         return (x * scale, y * scale)
-    }
-
-    public static func isDoubleTap(secondsSincePreviousTap: TimeInterval?) -> Bool {
-        guard let since = secondsSincePreviousTap else { return false }
-        return since >= 0 && since < doubleTapWindow
     }
 
     /// Counts stick taps so double-tap can wait for a possible triple.
@@ -2511,12 +2505,6 @@ public enum CamFov {
         return stops.contains { abs(shown - $0) < 0.05 }
     }
 
-    /// Older chip takes used slews. The 1×–3×–12× pinch take did not.
-    public static func slew(forJump factor: Double) -> UInt16? {
-        _ = factor
-        return nil
-    }
-
     /// Cycle-button write. 1× / 2× / 3× / 4× / 6× / 12× sliders.
     public enum ChipWrite: Equatable, Sendable {
         case slew(UInt16)
@@ -2533,28 +2521,8 @@ public enum CamFov {
         return nil
     }
 
-    /// Mimo pinch is always a slider. `slewing` is ignored (kept so call sites compile).
-    public enum PinchCommand: Equatable, Sendable {
-        case slider(UInt16)
-        case slew(UInt16)
-        case hold
-    }
-
-    public static func pinchCommand(
-        live: Double, preview: Double, slewing: UInt16?
-    ) -> PinchCommand {
-        _ = live
-        _ = slewing
-        return .slider(pinchLens(for: preview))
-    }
-
     /// Telephoto engages at 3.0×. 1.0…2.9 stays on the wide sensor.
     public static let teleEngage = 3.0
-
-    /// Clamp only. The camera switches at 3.0× — do not invent a 2.9→3.0 hop.
-    public static func snapHybrid(_ factor: Double) -> Double {
-        clamp(factor)
-    }
 
     /// Mimo-style 0.1× steps (1.0, 1.1, … 3.0, 3.1, … 12.0).
     public static func displayTenths(_ factor: Double) -> Double {
@@ -2587,11 +2555,6 @@ public enum CamFov {
         guard dt > 0 else { return clamp(current, max: max) }
         let t = GimbalStick.linearThrow(y)
         return clamp(current + t * zoomRatePerSecond * dt, max: max)
-    }
-
-    /// Pinch HUD between status pushes. 0.1× quantized; 2.9× stays 2.9×.
-    public static func pinchPreview(anchor: Double, magnification: Double) -> Double {
-        displayTenths(pinchFactor(anchor: anchor, magnification: magnification))
     }
 
     /// Slider lens for a pinch target. Not snapped to 0.1× — Mimo steps lens by 1.
@@ -2630,11 +2593,6 @@ public enum CamFov {
     /// exact equality would never release the pin.
     public static func matches(_ live: Double, _ target: Double) -> Bool {
         abs(displayTenths(live) - displayTenths(target)) < 0.15
-    }
-
-    /// 3.0× and above use the telephoto sensor.
-    public static func usesTelephoto(_ factor: Double) -> Bool {
-        displayTenths(factor) >= teleEngage
     }
 
     /// D-Log2 rejects every zoom SET. Hop to D-Log on the first step off 1× —

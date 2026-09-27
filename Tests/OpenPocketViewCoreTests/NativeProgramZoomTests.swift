@@ -74,8 +74,6 @@ import Testing
         controller.notePause(at: 2)
         controller.observe(lens(700), at: 2.1)
         controller.observe(lens(700), at: 2.5)
-        #expect(controller.canResume(at: 2.5))
-        #expect(!controller.canResume(at: 2.81))
         controller.observe(lens(700), at: 3.5)
         #expect(!controller.canResume(at: 3.5))
         controller.observe(push("cam_image_effect", [0, 0, ColorMode.dLog2.rawValue]), at: 3.6)

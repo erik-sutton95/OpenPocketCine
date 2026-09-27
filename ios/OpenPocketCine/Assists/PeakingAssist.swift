@@ -10,10 +10,6 @@ import UIKit
 ///
 /// Defaults match `AssistConfiguration`: red, medium. The GPU compositor reads ``overlay(from:)``.
 enum PeakingAssist {
-    /// Popup width OpenZCine uses for peaking (`assistPanelWidth` — 400, not guides' 472).
-    static let longPressPanelWidth: CGFloat = 400
-    static let panelWidth: CGFloat = longPressPanelWidth
-
     /// OpenZCine `peakingRows` Sensitivity help.
     static let sensitivityHelp =
         "Higher sensitivity catches finer edges but can get noisy on detailed scenes."

@@ -9,7 +9,6 @@ public struct MonitorZoomScale: Equatable, Sendable {
     public static let tickIncrement = 0.01
     /// Equal-angle minor ticks across the full ring. Only labels use hundredths.
     public static let minorTickCount = 18
-    public static let labeledTicks = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0]
     /// Integer majors for visual marks and haptic crossings.
     public static let wholeStops = [1.0, 2.0, 3.0, 4.0, 6.0, 9.0, 12.0]
 
@@ -49,11 +48,6 @@ public struct MonitorZoomScale: Equatable, Sendable {
 
     public func dialLabel(_ value: Double) -> String {
         String(format: "%.2f×", quantized(value))
-    }
-
-    public func isLabeledTick(_ value: Double, marks: [Double] = Self.labeledTicks) -> Bool {
-        let tick = quantized(value)
-        return marks.contains { abs(quantized($0) - tick) < Self.tickIncrement / 2 }
     }
 }
 

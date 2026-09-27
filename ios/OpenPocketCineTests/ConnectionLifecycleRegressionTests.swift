@@ -51,9 +51,9 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         defer { decoder.reset() }
         XCTAssertFalse(decoder.nativeOutputExpected, "Exercise clean compressed HEVC, without VT")
 
-        _ = assembler.ingest(packet(0, Self.syntheticKeyframe))
+        _ = assembler.ingest(HevcFixture.packet(0, HevcFixture.keyframe))
         for frame in 1...UInt8(SoftAPVideoAssembler.pendingLimit + 2) {
-            _ = assembler.ingest(packet(frame, Self.syntheticPFrame))
+            _ = assembler.ingest(HevcFixture.packet(frame, HevcFixture.pFrame))
         }
         let retained = assembler.takeDelivery()
         XCTAssertTrue(retained.discontinuity)
@@ -70,7 +70,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         XCTAssertTrue(decoder.referenceRecoveryNeeded)
 
         for frame in UInt8(SoftAPVideoAssembler.pendingLimit + 3)...UInt8(SoftAPVideoAssembler.pendingLimit + 7) {
-            _ = assembler.ingest(packet(frame, Self.syntheticPFrame))
+            _ = assembler.ingest(HevcFixture.packet(frame, HevcFixture.pFrame))
             XCTAssertTrue(assembler.takeDelivery().accessUnits.isEmpty)
         }
         let arriving = assembler.snapshot()
@@ -96,8 +96,8 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
 
         // The next genuine IRAP reopens admission and restores the decoder's
         // reference chain, without another discontinuity or speculative PLI.
-        _ = assembler.ingest(packet(UInt8(SoftAPVideoAssembler.pendingLimit + 8), Self.syntheticKeyframe))
-        _ = assembler.ingest(packet(UInt8(SoftAPVideoAssembler.pendingLimit + 9), Self.syntheticPFrame))
+        _ = assembler.ingest(HevcFixture.packet(UInt8(SoftAPVideoAssembler.pendingLimit + 8), HevcFixture.keyframe))
+        _ = assembler.ingest(HevcFixture.packet(UInt8(SoftAPVideoAssembler.pendingLimit + 9), HevcFixture.pFrame))
         let recovered = assembler.takeDelivery()
         XCTAssertFalse(recovered.awaitingRandomAccess)
         recovered.deliver(
@@ -117,7 +117,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64)
         display.layoutSubviews()
         defer { decoder.reset() }
-        XCTAssertTrue(decoder.decode(accessUnit: Hevc.stripDjiMarker(Self.syntheticKeyframe)))
+        XCTAssertTrue(decoder.decode(accessUnit: Hevc.stripDjiMarker(HevcFixture.keyframe)))
         XCTAssertNotNil(decoder.lastPresentedAt)
         XCTAssertFalse(decoder.referenceRecoveryNeeded)
         decoder.noteDecodeError(status: -12903, origin: "callback")
@@ -133,13 +133,13 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64)
         display.layoutSubviews()
         defer { decoder.reset() }
-        _ = assembler.ingest(packet(0, Self.syntheticKeyframe))
+        _ = assembler.ingest(HevcFixture.packet(0, HevcFixture.keyframe))
         for frame in 1...UInt8(SoftAPVideoAssembler.pendingLimit - 2) {
-            _ = assembler.ingest(packet(frame, Self.syntheticPFrame))
+            _ = assembler.ingest(HevcFixture.packet(frame, HevcFixture.pFrame))
         }
-        _ = assembler.ingest(packet(UInt8(SoftAPVideoAssembler.pendingLimit - 1), Self.syntheticKeyframe))
+        _ = assembler.ingest(HevcFixture.packet(UInt8(SoftAPVideoAssembler.pendingLimit - 1), HevcFixture.keyframe))
         for frame in UInt8(SoftAPVideoAssembler.pendingLimit)...UInt8(SoftAPVideoAssembler.pendingLimit + 2) {
-            _ = assembler.ingest(packet(frame, Self.syntheticPFrame))
+            _ = assembler.ingest(HevcFixture.packet(frame, HevcFixture.pFrame))
         }
         let suffix = assembler.takeDelivery()
         XCTAssertTrue(suffix.discontinuity)
@@ -180,7 +180,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         decoder.noteCompressedDiscontinuity()
         XCTAssertFalse(
             decoder.referenceRecoveryNeeded, "Cold startup has no good references to lose")
-        XCTAssertTrue(decoder.decode(accessUnit: Self.syntheticKeyframe))
+        XCTAssertTrue(decoder.decode(accessUnit: HevcFixture.keyframe))
         let heldPicture = try XCTUnwrap(decoder.lastPresentedAt)
         XCTAssertTrue(decoder.canReleaseIDRHold)
         decoder.flushForRecovery()
@@ -199,12 +199,12 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64)
         display.layoutSubviews()
         defer { decoder.reset() }
-        XCTAssertTrue(decoder.decode(accessUnit: Self.syntheticKeyframe))
+        XCTAssertTrue(decoder.decode(accessUnit: HevcFixture.keyframe))
         decoder.noteCompressedDiscontinuity()
         XCTAssertTrue(decoder.referenceRecoveryNeeded)
         // The watchdog has requested repair, but its MainActor task has not
         // executed. A spontaneous current IRAP wins that scheduling interval.
-        XCTAssertTrue(decoder.decode(accessUnit: Self.syntheticKeyframe))
+        XCTAssertTrue(decoder.decode(accessUnit: HevcFixture.keyframe))
         let generation = decoder.sourceFrameGeneration
         XCTAssertFalse(decoder.rebuildPresentationIfNeeded(referenceLossOnly: true))
         XCTAssertEqual(decoder.sourceFrameGeneration, generation)
@@ -224,7 +224,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64)
         display.layoutSubviews()
         defer { decoder.reset() }
-        XCTAssertTrue(decoder.decode(accessUnit: Self.syntheticKeyframe))
+        XCTAssertTrue(decoder.decode(accessUnit: HevcFixture.keyframe))
         let heldPicture = try XCTUnwrap(decoder.lastPresentedAt)
         decoder.effects.histogram = true
         decoder.unlockHardwareDecoder()
@@ -233,7 +233,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         // A failed display path calls this same format reset. Fresh inter-frames
         // cannot supply the missing parameter sets or rebuild its reference chain.
         decoder.flushForRecovery()
-        XCTAssertFalse(decoder.decode(accessUnit: Self.syntheticPFrame))
+        XCTAssertFalse(decoder.decode(accessUnit: HevcFixture.pFrame))
         XCTAssertFalse(decoder.hasFormat)
         XCTAssertTrue(decoder.nativeOutputExpected)
         XCTAssertEqual(decoder.lastPresentedAt, heldPicture)
@@ -347,35 +347,5 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         view.layoutIfNeeded()
         try await Task.sleep(for: .milliseconds(150))
         view.layoutIfNeeded()
-    }
-
-    private func displayHosts(in view: UIView) -> [DisplayLayerView] {
-        (view as? DisplayLayerView).map { [$0] }
-            ?? view.subviews.flatMap { displayHosts(in: $0) }
-    }
-
-    private func packet(_ frame: UInt8, _ accessUnit: [UInt8]) -> [UInt8] {
-        var header = [UInt8](repeating: 0, count: 20)
-        header[6] = 2
-        header[16] = frame
-        return header + accessUnit
-    }
-
-    // Synthetic gray 64x64 HEVC, generated with libx265, bframes=0 and a single
-    // IDR. Excludes encoder metadata; these are not camera captures.
-    private static let syntheticKeyframe: [UInt8] = [
-        "40010c01ffff01600000030090000003000003001eba0240",
-        "42010101600000030090000003000003001ea020810596e92930bc05a02000000300200000030321",
-        "4401c073c089",
-        "2801ac76071c24748e",
-    ].flatMap { [UInt8]([0, 0, 0, 1]) + bytes($0) }
-    private static let syntheticPFrame = [UInt8]([0, 0, 0, 1]) + bytes("0201d0097883b0a098")
-
-    private static func bytes(_ hex: String) -> [UInt8] {
-        stride(from: 0, to: hex.count, by: 2).map { offset in
-            let start = hex.index(hex.startIndex, offsetBy: offset)
-            let end = hex.index(start, offsetBy: 2)
-            return UInt8(hex[start..<end], radix: 16)!
-        }
     }
 }

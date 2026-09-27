@@ -107,25 +107,6 @@ public enum Duml {
         return b
     }
 
-    /// Decode one frame at the start of `data`. Returns the frame and bytes
-    /// consumed, or nil if `data` doesn't begin with a CRC-valid DUML frame.
-    public static func decode(_ data: [UInt8]) -> (frame: Frame, consumed: Int)? {
-        guard data.count >= 13, data[0] == 0x55 else { return nil }
-        let total = Int(data[1]) | ((Int(data[2]) & 0x03) << 8)
-        guard data[2] >> 2 == 1, total >= 13, data.count >= total else { return nil }
-        let f = Array(data[0..<total])
-        guard crc8(Array(f[0..<3])) == f[3] else { return nil }
-        let got = UInt16(f[total - 2]) | (UInt16(f[total - 1]) << 8)
-        guard crc16(Array(f[0..<(total - 2)])) == got else { return nil }
-        return (
-            Frame(
-                sender: f[4], receiver: f[5],
-                seq: UInt16(f[6]) | (UInt16(f[7]) << 8),
-                flags: f[8], cmdSet: f[9], cmdId: f[10],
-                payload: Array(f[11..<(total - 2)])), total
-        )
-    }
-
     /// `[len:u8][utf8]` — how the WiFi subsystem packs strings (SSID, pass, PIN).
     public static func packString(_ s: String) -> [UInt8] {
         let bytes = Array(s.utf8)

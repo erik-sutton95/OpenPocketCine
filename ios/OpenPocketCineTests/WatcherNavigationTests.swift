@@ -19,9 +19,18 @@ final class WatcherNavigationTests: XCTestCase {
     }
 
     @MainActor
-    func testAcceptedWatcherDoesNotReturnToPairingWhenTransportFails() {
+    func testJoinScreenUntilLiveThenFailureKeepsTheWatcherMonitor() {
         let model = AppModel()
         model.showsWatcherBrowse = true
+        for status: WatcherRelayClientStatus in [
+            .connecting, .needsPasscode, .failed("Unavailable"),
+        ] {
+            model.relayClient.status = status
+            model.noteWatcherStatusChanged(status)
+            XCTAssertTrue(model.showsWatcherBrowse, "\(status) before live stays on join screen")
+            XCTAssertFalse(model.showsWatcherMonitor, "\(status) before live shows no monitor")
+        }
+
         model.relayClient.status = .live
         model.noteWatcherStatusChanged(.live)
         XCTAssertTrue(model.showsWatcherMonitor)
@@ -39,24 +48,8 @@ final class WatcherNavigationTests: XCTestCase {
         XCTAssertTrue(model.showsWatcherBrowse)
         XCTAssertFalse(model.showsWatcherMonitor)
         model.stopWatching()
-        XCTAssertFalse(model.showsWatcherMonitor)
-    }
-
-    @MainActor
-    func testPasscodeAndInitialFailureStayOnJoinScreen() {
-        let model = AppModel()
-        model.showsWatcherBrowse = true
-        for status: WatcherRelayClientStatus in [
-            .connecting, .needsPasscode, .failed("Unavailable"),
-        ] {
-            model.relayClient.status = status
-            model.noteWatcherStatusChanged(status)
-            XCTAssertTrue(model.showsWatcherBrowse)
-            XCTAssertFalse(model.showsWatcherMonitor)
-        }
-        model.relayClient.status = .needsPasscode
-        model.stopWatching()
         XCTAssertEqual(model.relayClient.status, .idle)
         XCTAssertFalse(model.showsWatcherBrowse)
+        XCTAssertFalse(model.showsWatcherMonitor)
     }
 }

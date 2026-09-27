@@ -9,16 +9,16 @@ import kotlin.test.assertTrue
 
 class ConformPreviewTest {
     @Test
-    fun sixtyToTwentyFour() {
-        assertEquals(0.4, ConformPreview.speed(60.0, 24.0))
+    fun speedIsTargetOverCaptureAndStretchesDuration() {
+        for ((capture, target, speed) in listOf(Triple(60.0, 24.0, 0.4), Triple(120.0, 24.0, 0.2))) {
+            assertEquals(speed, ConformPreview.speed(capture, target), "$capture to $target")
+        }
         assertEquals("60 → 24 fps · 40%", ConformPreview.label(60.0, 24.0))
-    }
-
-    @Test
-    fun oneTwentyToTwentyFour() {
-        assertEquals(0.2, ConformPreview.speed(120.0, 24.0))
         val availability = ConformPreview.availability(ConformPreview.Source(captureRate = 120.0))
         assertEquals(ConformPreview.targetRates, availability.targets)
+        val speed = ConformPreview.speed(60.0, 24.0)
+        assertEquals(15.0, ConformPreview.conformedDuration(6.0, speed))
+        assertEquals("0:15", MediaClipFormatting.durationLabel(ConformPreview.conformedDuration(6.0, speed)))
     }
 
     @Test
@@ -59,13 +59,6 @@ class ConformPreviewTest {
     }
 
     @Test
-    fun conformedDurationStretches() {
-        val speed = ConformPreview.speed(60.0, 24.0)
-        assertEquals(15.0, ConformPreview.conformedDuration(6.0, speed))
-        assertEquals("0:15", MediaClipFormatting.durationLabel(ConformPreview.conformedDuration(6.0, speed)))
-    }
-
-    @Test
     fun frameTapRestartsAtEnd() {
         assertEquals(
             PlaybackFrameTap.RESTART_PLAYBACK,
@@ -103,32 +96,22 @@ class ConformPreviewTest {
     }
 
     @Test
-    fun probeFallsBackToListedRateWhenAssetIsSilent() {
-        val source = ConformPreview.probeLocal(listedRate = 50.0)
-        assertEquals(50.0, source.captureRate)
-        assertFalse(source.isVariableFrameRate)
-        assertTrue(ConformPreview.availability(source).targets.contains(25.0))
-    }
-
-    @Test
-    fun probeUsesMinDurationWhenNominalIsZero() {
-        val source = ConformPreview.probeLocal(nominalFrameRate = 0.0, minFrameDurationSeconds = 1.0 / 50.0)
-        assertEquals(50.0, source.captureRate)
-        assertFalse(source.isVariableFrameRate)
-    }
-
-    @Test
-    fun timescaleArtifactIsNotVariableRate() {
-        val source = ConformPreview.probeLocal(nominalFrameRate = 50.0, minFrameDurationSeconds = 1.0 / 1000.0)
-        assertEquals(50.0, source.captureRate)
-        assertFalse(source.isVariableFrameRate)
-    }
-
-    @Test
-    fun fiftyVersusTwentyFiveIsHighFrameRateNotVFR() {
-        val source = ConformPreview.probeLocal(nominalFrameRate = 25.0, minFrameDurationSeconds = 1.0 / 50.0)
-        assertEquals(50.0, source.captureRate)
-        assertFalse(source.isVariableFrameRate)
+    fun probeResolvesFiftyFpsWithoutReportingVariableRate() {
+        val cases =
+            listOf(
+                "listed rate when the asset is silent" to ConformPreview.probeLocal(listedRate = 50.0),
+                "min duration when nominal is zero" to
+                    ConformPreview.probeLocal(nominalFrameRate = 0.0, minFrameDurationSeconds = 1.0 / 50.0),
+                "timescale artifact is not variable rate" to
+                    ConformPreview.probeLocal(nominalFrameRate = 50.0, minFrameDurationSeconds = 1.0 / 1000.0),
+                "50 versus 25 is high frame rate, not VFR" to
+                    ConformPreview.probeLocal(nominalFrameRate = 25.0, minFrameDurationSeconds = 1.0 / 50.0),
+            )
+        for ((name, source) in cases) {
+            assertEquals(50.0, source.captureRate, name)
+            assertFalse(source.isVariableFrameRate, name)
+        }
+        assertTrue(ConformPreview.availability(cases[0].second).targets.contains(25.0))
     }
 
     @Test

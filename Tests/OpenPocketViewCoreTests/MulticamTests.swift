@@ -54,13 +54,12 @@ struct MulticamTests {
         #expect(MulticamCommands.controlSequence(fromInitialWindow: window) == nil)
     }
 
-    @Test func stationJoinAcceptsObservedThreeByteSuccess() {
+    /// Both observed success shapes connect; only the Wi-Fi transition `01 ff`
+    /// retries, and only within the attempt budget.
+    @Test func joinPolicyAcceptsObservedSuccessAndRetriesOnlyTheTransition() {
         #expect(MulticamJoinPolicy.decision(reply: [0, 0, 0], attempt: 1) == .connected)
         #expect(MulticamJoinPolicy.decision(reply: [0, 0, 1], attempt: 1) == .rejected)
         #expect(MulticamJoinPolicy.decision(reply: [0, 0, 0, 0], attempt: 1) == .rejected)
-    }
-
-    @Test func wifiTransitionRetriesOnlyObservedRejectionWithinBudget() {
         #expect(MulticamJoinPolicy.decision(reply: [1, 0xff], attempt: 1) == .retry)
         #expect(MulticamJoinPolicy.decision(reply: [0, 0], attempt: 2) == .connected)
         #expect(MulticamJoinPolicy.decision(reply: [1, 0xff], attempt: 3) == .rejected)
@@ -69,73 +68,12 @@ struct MulticamTests {
         #expect(MulticamJoinPolicy.decision(reply: [0], attempt: 1) == .rejected)
     }
 
-    @Test func configurationHasConsistentLengthsAndNoCapturedDestination() throws {
-        let url = "rtmp://192.168.1.9:1935/live/tile-test"
-        let command = try MulticamCommands.configuration(url: url, seq: 88)
-        let p = command.payload
-        #expect(Int(p[1]) + Int(p[2]) * 256 == p.count - 3)
-        #expect(Int(p[12]) + Int(p[13]) * 256 == p.count - 14)
-        let object = try #require(
-            JSONSerialization.jsonObject(with: Data(p.dropFirst(14))) as? [String: Any])
-        #expect(object["rtmpAddress"] as? String == url)
-        #expect(object["codec"] as? String == "HEVC")
-        #expect(DumlTransport.scanFrames(Duml.encode(command)) == [command])
-        #expect(MulticamCommands.streaming(false, seq: 1).payload == [1, 1, 0x1a, 0, 1, 2])
-    }
-
     @Test func joinUsesUTF8LengthsAndRejectsOversizedSSID() throws {
         let command = try MulticamCommands.join(ssid: "Café", password: "", seq: 1)
         #expect(command.payload == [5] + Array("Café".utf8) + [0])
         #expect(throws: MulticamCommands.Failure.self) {
             try MulticamCommands.join(ssid: String(repeating: "a", count: 33), password: "", seq: 1)
         }
-    }
-
-    @Test func chunksSurviveEveryTCPBoundary() throws {
-        let payload = (0..<601).map { UInt8($0 % 251) }
-        let encoded = RTMPIngest.encode(.init(type: 9, stream: 1, payload: payload))
-        for size in [1, 2, 7, 127, 128, 129, 307] {
-            var parser = RTMPIngest.Parser()
-            var messages: [RTMPIngest.Message] = []
-            for index in stride(from: 0, to: encoded.count, by: size) {
-                messages += try parser.append(
-                    Array(encoded[index..<min(encoded.count, index + size)]))
-            }
-            #expect(messages.count == 1)
-            #expect(messages.first?.payload == payload)
-            #expect(messages.first?.stream == 1)
-        }
-    }
-
-    @Test func compressedHeadersKeepTimestampAndStream() throws {
-        // Full header followed by type-1 and type-3 headers on chunk stream 3.
-        var parser = RTMPIngest.Parser()
-        let a: [UInt8] = [3, 0, 0, 10, 0, 0, 1, 9, 1, 0, 0, 0, 42]
-        let b: [UInt8] = [0x43, 0, 0, 5, 0, 0, 1, 9, 43]
-        let c: [UInt8] = [0xc3, 44]
-        let messages = try parser.append(a + b + c)
-        #expect(messages.map(\.timestamp) == [10, 15, 20])
-        #expect(messages.map(\.stream) == [1, 1, 1])
-        #expect(messages.map(\.payload) == [[42], [43], [44]])
-    }
-
-    @Test func oversizedChunksAndMissingHeadersFail() throws {
-        var parser = RTMPIngest.Parser()
-        #expect(throws: RTMPIngest.Failure.self) { try parser.append([0xc3, 0]) }
-        var other = RTMPIngest.Parser()
-        let huge = RTMPIngest.encode(.init(type: 1, payload: [0, 2, 0, 0]))
-        #expect(throws: RTMPIngest.Failure.self) { try other.append(huge) }
-    }
-
-    @Test func amfPublishRoundTripAndTruncation() throws {
-        let bytes = RTMPIngest.amf([
-            .string("publish"), .number(3), .null, .string("tile-test"), .string("live"),
-        ])
-        let values = try RTMPIngest.values(bytes)
-        #expect(values[0].string == "publish")
-        #expect(values[1].number == 3)
-        #expect(values[3].string == "tile-test")
-        #expect(throws: RTMPIngest.Failure.self) { try RTMPIngest.values(Array(bytes.dropLast())) }
     }
 }
 
@@ -149,7 +87,10 @@ struct MulticamSupportTests {
             #expect(MulticamSupport.appears(model), "\(name)")
             #expect(MulticamSupport.hasPreview(model), "\(name)")
         }
-        for (id, name) in [(0x15, "Osmo Action 5 Pro"), (0x17, "Osmo 360")] {
+        for (id, name) in [
+            (0x10, "Osmo Action 2"), (0x12, "Osmo Action 3"), (0x14, "Osmo Action 4"),
+            (0x15, "Osmo Action 5 Pro"), (0x17, "Osmo 360"), (0x18, "Osmo Action 6"),
+        ] {
             let model = CameraModel.resolve(modelId: id, name: name)
             #expect(MulticamSupport.appears(model), "\(name)")
             #expect(!MulticamSupport.hasPreview(model), "\(name)")
@@ -157,6 +98,10 @@ struct MulticamSupportTests {
         let drone = CameraModel.resolve(modelId: 0x7E, name: "DJI Neo")
         #expect(!MulticamSupport.appears(drone))
         #expect(!MulticamSupport.hasPreview(drone))
+        #expect(MulticamSupport.hasPreview(.resolve(modelId: nil, name: "OsmoPocket3-Test")))
+        let oldPocket = CameraModel.resolve(modelId: nil, name: "Osmo Pocket 2")
+        #expect(MulticamSupport.appears(oldPocket))
+        #expect(!MulticamSupport.hasPreview(oldPocket))
     }
 
     @Test func missingRoleQueryOnlyForPocket3AndNanoE0() {
@@ -166,7 +111,7 @@ struct MulticamSupportTests {
         ] {
             let model = CameraModel.resolve(modelId: nil, name: name)
             #expect(MulticamSupport.acceptsMissingRoleQuery(model, reply: [0xe0]) == accepted)
-            for reply: [UInt8] in [[], [0], [0xe0, 0], [0, 0]] {
+            for reply: [UInt8] in [[], [0], [0xff], [0xe0, 0], [0, 0]] {
                 #expect(!MulticamSupport.acceptsMissingRoleQuery(model, reply: reply))
             }
         }

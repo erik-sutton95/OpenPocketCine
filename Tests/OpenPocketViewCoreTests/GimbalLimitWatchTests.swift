@@ -15,52 +15,40 @@ import Testing
         #expect(saw.isEmpty)
     }
 
-    @Test func panPulsesAfterMoveThenStop() {
+    @Test(arguments: [true, false])
+    func axisPulsesAfterMoveThenStop(pan: Bool) {
+        let axis: GimbalLimitWatch.Contact = pan ? .pan : .tilt
+        let other: GimbalLimitWatch.Contact = pan ? .tilt : .pan
         var watch = GimbalLimitWatch()
         var now: TimeInterval = 0
         var yaw: Int16 = 0
-        for _ in 0..<4 {
-            now += 0.1
-            yaw += 40
-            #expect(tick(watch: &watch, x: 1, y: 0, yaw: yaw, pitch: 0, now: now).isEmpty)
-        }
-        var saw = GimbalLimitWatch.Contact()
-        for _ in 0..<5 {
-            now += 0.1
-            saw.formUnion(tick(watch: &watch, x: 1, y: 0, yaw: yaw, pitch: 0, now: now))
-        }
-        #expect(saw.contains(.pan))
-        #expect(!saw.contains(.tilt))
-        now += 0.1
-        #expect(tick(watch: &watch, x: 1, y: 0, yaw: yaw, pitch: 0, now: now).isEmpty)
-        yaw += 40
-        now += 0.1
-        #expect(tick(watch: &watch, x: 1, y: 0, yaw: yaw, pitch: 0, now: now).isEmpty)
-        var again = GimbalLimitWatch.Contact()
-        for _ in 0..<5 {
-            now += 0.1
-            again.formUnion(tick(watch: &watch, x: 1, y: 0, yaw: yaw, pitch: 0, now: now))
-        }
-        #expect(again.contains(.pan))
-    }
-
-    @Test func tiltPulsesAfterPitchMovesThenStops() {
-        var watch = GimbalLimitWatch()
-        var now: TimeInterval = 0
         var pitch: Int16 = 0
-        for _ in 0..<4 {
+        func move() {
+            if pan { yaw += 40 } else { pitch += 30 }
+        }
+        func step() -> GimbalLimitWatch.Contact {
             now += 0.1
-            pitch += 30
-            #expect(tick(watch: &watch, x: 0, y: 1, yaw: 0, pitch: pitch, now: now).isEmpty)
+            return tick(
+                watch: &watch, x: pan ? 1 : 0, y: pan ? 0 : 1, yaw: yaw, pitch: pitch, now: now)
+        }
+        for _ in 0..<4 {
+            move()
+            #expect(step().isEmpty)
         }
         var saw = GimbalLimitWatch.Contact()
-        for _ in 0..<5 {
-            now += 0.1
-            saw.formUnion(tick(watch: &watch, x: 0, y: 1, yaw: 0, pitch: pitch, now: now))
+        for _ in 0..<5 { saw.formUnion(step()) }
+        #expect(saw.contains(axis))
+        #expect(!saw.contains(other))
+        guard pan else {
+            #expect(watch.lastTiltSign == 1)
+            return
         }
-        #expect(saw.contains(.tilt))
-        #expect(!saw.contains(.pan))
-        #expect(watch.lastTiltSign == 1)
+        #expect(step().isEmpty)
+        move()
+        #expect(step().isEmpty)
+        var again = GimbalLimitWatch.Contact()
+        for _ in 0..<5 { again.formUnion(step()) }
+        #expect(again.contains(.pan))
     }
 
     @Test func restClearsContact() {

@@ -19,7 +19,4 @@ internal object VulkanWindowAttach {
      * the well black while UDP stayed live.
      */
     fun shouldFallbackToGlesOnAttachFailure(): Boolean = false
-
-    fun keepSurfaceWhileAttached(sdkInt: Int): Boolean =
-        sdkInt >= SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT_API
 }

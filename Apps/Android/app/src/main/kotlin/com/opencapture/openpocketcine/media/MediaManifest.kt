@@ -100,11 +100,6 @@ object MediaManifest {
         return out
     }
 
-    fun headerCount(bytes: ByteArray): Int {
-        if (bytes.size < 4) return 0
-        return u32(bytes, 0).toInt()
-    }
-
     private data class MediaAnchor(val pos: Int, val end: Int, val path: String)
 
     private data class PathField(val value: String, val end: Int)

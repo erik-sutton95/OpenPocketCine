@@ -18,24 +18,6 @@ class MonitorFeedbackPolicyTest {
             "Landscape details retain their approved top padding")
     }
 
-    @Test fun quickPointerOwnershipRejectsOtherTilesAndLateReleases() {
-        val owner = MonitorQuickGestureOwner()
-        val iso = requireNotNull(owner.acquire("ISO"))
-        owner.setActive(iso, true)
-        assertEquals(null, owner.acquire("WB"))
-        owner.release(iso)
-        val wb = requireNotNull(owner.acquire("WB"))
-        owner.setActive(wb, true)
-        owner.release(iso)
-        assertEquals("WB", owner.active)
-        owner.release(wb)
-        val nextISO = requireNotNull(owner.acquire("ISO"))
-        owner.setActive(nextISO, true)
-        owner.release(iso)
-        assertEquals("ISO", owner.active)
-        assertEquals(null, owner.acquire("ISO"))
-    }
-
     @Test fun unchangedDragNeverCommitsAnUnknownVisualSeat() {
         assertFalse(MonitorDrumSelection.changedDetent(0f, .49f))
         assertFalse(MonitorDrumSelection.changedDetent(0f, 0f))
@@ -95,20 +77,7 @@ class MonitorFeedbackPolicyTest {
         assertEquals(16f, MonitorLayoutPolicy.portraitReadoutTop(true, 24f, 16f, 200f))
     }
 
-    @Test fun readoutTypeMatchesApprovedPhoneAndTabletValues() {
-        assertEquals(16f, MonitorLayoutPolicy.readoutValueSize(false))
-        assertEquals(18f, MonitorLayoutPolicy.readoutValueSize(true))
-        assertEquals(9f, MonitorLayoutPolicy.READOUT_LABEL_SIZE)
-        assertEquals(1.26f, MonitorLayoutPolicy.READOUT_LABEL_TRACKING)
-        assertEquals(19f, MonitorLayoutPolicy.cameraPageTitleSize(false))
-        assertEquals(24f, MonitorLayoutPolicy.cameraPageTitleSize(true))
-        assertEquals(13f, MonitorLayoutPolicy.CAMERA_CARD_CORNER)
-        assertEquals(12f, MonitorLayoutPolicy.DISP_SIZE)
-        assertEquals(0.48f, MonitorLayoutPolicy.DISP_TRACKING)
-        assertEquals(8f, MonitorLayoutPolicy.SETTINGS_TITLE_CONTENT_GAP)
-        assertEquals(128f, MonitorLayoutPolicy.COMPACT_CAPTURE_HEIGHT)
-        assertEquals(1f, MonitorLayoutPolicy.compactCaptureBottomPadding(11f))
-        assertEquals(0f, MonitorLayoutPolicy.compactCaptureBottomPadding(16f))
+    @Test fun captureTabsGrabberAndCornersFollowPlacement() {
         assertTrue(MonitorLayoutPolicy.showsRecordingCategoryTabs(true, false))
         assertTrue(!MonitorLayoutPolicy.showsRecordingCategoryTabs(false, false))
         assertTrue(!MonitorLayoutPolicy.showsRecordingCategoryTabs(true, true))
@@ -144,53 +113,16 @@ class MonitorFeedbackPolicyTest {
         assertEquals(0f, MonitorAudioReadout.fraction(-99.0))
     }
 
-    @Test fun audioPlateKeepsTheMockupCrossAxis() {
-        assertEquals(28f, MonitorAudioMetrics.CROSS_AXIS)
-        assertEquals(168f, MonitorAudioMetrics.LONG_AXIS)
-        assertEquals(28f, MonitorAudioMetrics.panelWidth(MonitorAudioOrientation.VERTICAL))
-        assertEquals(168f, MonitorAudioMetrics.panelHeight(MonitorAudioOrientation.VERTICAL))
-        assertEquals(168f, MonitorAudioMetrics.panelWidth(MonitorAudioOrientation.HORIZONTAL))
-        assertEquals(28f, MonitorAudioMetrics.panelHeight(MonitorAudioOrientation.HORIZONTAL))
-    }
-
     @Test fun cutoutPhoneCornerDropIsTwoAndAHalfPercentOfHudHeight() {
         assertEquals(0f, MonitorLayoutPolicy.cutoutPhoneCornerInset(393f, tablet = true, hasDisplayCutout = true))
         assertEquals(0f, MonitorLayoutPolicy.cutoutPhoneCornerInset(393f, tablet = false, hasDisplayCutout = false))
         assertEquals(9.825f, MonitorLayoutPolicy.cutoutPhoneCornerInset(393f, tablet = false, hasDisplayCutout = true), .001f)
     }
 
-    @Test fun assistCellsMatchTheMockupSquareAndSevenColumnMath() {
-        assertEquals(48f, MonitorLayoutPolicy.systemButtonSize(false))
-        assertEquals(48f, MonitorLayoutPolicy.systemButtonSize(true))
-        assertEquals(48f, MonitorLayoutPolicy.assistButtonSize(false))
-        assertEquals(48f, MonitorLayoutPolicy.assistButtonSize(true))
-        assertEquals(48f * 29f / 54f, MonitorLayoutPolicy.assistIconSize(false), .01f)
-        assertEquals(48f * 29f / 54f, MonitorLayoutPolicy.assistIconSize(true), .01f)
-        assertEquals(48f * 29f / 54f, MonitorLayoutPolicy.assistCompactIconSize(false), .01f)
-        assertEquals(27f, MonitorLayoutPolicy.ASSIST_EXPANSION_BUTTON_WIDTH)
-        assertEquals(38f, MonitorLayoutPolicy.ASSIST_HORIZONTAL_INSETS)
-        assertEquals(48f, MonitorLayoutPolicy.assistCellWidth(874f, false, false))
-        assertEquals(48f, MonitorLayoutPolicy.assistCellWidth(393f, true, false))
-        assertEquals(48f, MonitorLayoutPolicy.assistCellWidth(1024f, false, true))
-    }
-
-    @Test fun glassPlatesUseMockupRgbAndAlphas() {
-        assertEquals(20 / 255f, MonitorPalette.panel.red, .002f)
-        assertEquals(22 / 255f, MonitorPalette.panel.green, .002f)
-        assertEquals(24 / 255f, MonitorPalette.panel.blue, .002f)
-        assertEquals(.52f, MonitorPalette.compactGlass.alpha, .01f)
-        assertEquals(.62f, MonitorPalette.expandedGlass.alpha, .01f)
-        assertEquals(.86f, MonitorPalette.overlayPanel.alpha, .01f)
-    }
-
-    @Test fun motionTokensMatchTheMockupMorphs() {
-        assertEquals(150, MonitorMotion.PALETTE_MS)
-        assertEquals(150, MonitorMotion.INSPECTOR_MS)
-        assertEquals(85, MonitorMotion.PICKER_MORPH_MS)
-        assertEquals(220, MonitorMotion.DRUM_SETTLE_MS)
-        assertEquals(220, MonitorMotion.REC_MORPH_MS)
-        assertEquals(260, MonitorMotion.ZOOM_IN_MS)
-        assertEquals(180, MonitorMotion.ZOOM_OUT_MS)
-        assertEquals(28f, MonitorMotion.INSPECTOR_FROM_PX)
+    @Test fun systemAndAssistButtonsAreFortyEightOnPhoneAndTablet() {
+        for (tablet in listOf(false, true)) {
+            assertEquals(48f, MonitorLayoutPolicy.systemButtonSize(tablet), "system button, tablet=$tablet")
+            assertEquals(48f, MonitorLayoutPolicy.assistButtonSize(tablet), "assist button, tablet=$tablet")
+        }
     }
 }

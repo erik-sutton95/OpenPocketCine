@@ -80,10 +80,10 @@ import XCTest
             driver.close()
         }
         let assembler = SoftAPVideoAssembler()
-        _ = assembler.ingest(packet(0, Self.keyframe))
+        _ = assembler.ingest(HevcFixture.packet(0, HevcFixture.keyframe))
         // Suspension can let the receive queue outrun MainActor's AU delivery.
         for frame in 1...UInt8(SoftAPVideoAssembler.pendingLimit + 2) {
-            _ = assembler.ingest(packet(frame, Self.pFrame))
+            _ = assembler.ingest(HevcFixture.packet(frame, HevcFixture.pFrame))
         }
         let batch = assembler.takeDelivery()
         XCTAssertTrue(batch.discontinuity)
@@ -97,7 +97,7 @@ import XCTest
             "Multiview must forward the real receive queue's reference loss")
 
         // The queue still sees complete AUs but cannot deliver dependent frames.
-        _ = assembler.ingest(packet(60, Self.pFrame))
+        _ = assembler.ingest(HevcFixture.packet(60, HevcFixture.pFrame))
         XCTAssertTrue(assembler.takeDelivery().accessUnits.isEmpty)
         var snapshot = try XCTUnwrap(tile.watchdogSnapshot(now: Date(), pathReady: true))
         let arrival = assembler.snapshot()
@@ -122,33 +122,12 @@ import XCTest
             tile.decoder.reset()
             driver.close()
         }
-        XCTAssertTrue(tile.decoder.decode(accessUnit: Self.keyframe))
+        XCTAssertTrue(tile.decoder.decode(accessUnit: HevcFixture.keyframe))
         tile.hasPicture = true
         tile.decoder.noteCompressedDiscontinuity()
         let snapshot = try XCTUnwrap(tile.watchdogSnapshot(now: Date(), pathReady: true))
         XCTAssertTrue(snapshot.referenceRecoveryNeeded)
         XCTAssertTrue(snapshot.decoderOutputExpected)
         XCTAssertEqual(snapshot.repairReady, tile.decoder.isDisplayReady)
-    }
-
-    private func packet(_ frame: UInt8, _ accessUnit: [UInt8]) -> [UInt8] {
-        var header = [UInt8](repeating: 0, count: 20)
-        header[6] = 2
-        header[16] = frame
-        return header + accessUnit
-    }
-
-    // Synthetic gray 64x64 HEVC (libx265); no camera captures or identifiers.
-    private static let keyframe: [UInt8] = [
-        "40010c01ffff01600000030090000003000003001eba0240",
-        "42010101600000030090000003000003001ea020810596e92930bc05a02000000300200000030321",
-        "4401c073c089", "2801ac76071c24748e",
-    ].flatMap { [UInt8]([0, 0, 0, 1]) + bytes($0) }
-    private static let pFrame = [UInt8]([0, 0, 0, 1]) + bytes("0201d0097883b0a098")
-    private static func bytes(_ hex: String) -> [UInt8] {
-        stride(from: 0, to: hex.count, by: 2).map { offset in
-            let start = hex.index(hex.startIndex, offsetBy: offset)
-            return UInt8(hex[start..<hex.index(start, offsetBy: 2)], radix: 16)!
-        }
     }
 }

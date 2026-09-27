@@ -22,7 +22,9 @@ import Testing
             #expect(CamCapVideoFormat.resolutions(available: [], current: current) == [current])
         }
         #expect(CamCapVideoFormat.resolutions(available: [], current: nil).isEmpty)
-        #expect(CamCapVideoFormat.resolutions(available: [], current: .p4K) == [.p4K])
+        #expect(
+            CamCapVideoFormat.resolutions(available: [], current: .p4K) == [.p4K],
+            "empty camcap is the live pair only, no invented 1080 tab")
         #expect(
             CamCapVideoFormat.resolutions(
                 available: [], aspect: .sixteenNine, current: .p3K_9x16
@@ -222,6 +224,9 @@ import Testing
 
     @Test func isoAutoOnlyAndFallback() {
         #expect(CamCapIso.parseIndices(Self.isoAutoOnly) == [.auto])
+        #expect(
+            CamCapIso.parseIndices(Self.isoDLog2)
+                == [.iso100, .iso200, .iso400, .iso800, .iso1600, .iso3200])
         #expect(CamCapIso.wheelIndices(available: [.auto], fallback: IsoIndex.allCases) == [.auto])
         #expect(
             CamCapIso.wheelIndices(available: [], fallback: [.iso100, .iso200]) == [
@@ -229,31 +234,22 @@ import Testing
             ])
     }
 
-    @Test func dLogStars400AndDLog2Stars1600() {
-        let dlog2 = CamCapIso.parseIndices(Self.isoDLog2)
-        #expect(dlog2 == [.iso100, .iso200, .iso400, .iso800, .iso1600, .iso3200])
-        #expect(CamCapIso.markedLabels(transfer: .dlog) == ["400"])
-        #expect(CamCapIso.markedLabels(transfer: .dlog2) == ["1600"])
-        #expect(CamCapIso.markedLabels(colorMode: .dLog) == ["400"])
-        #expect(CamCapIso.markedLabels(colorMode: .dLog2) == ["1600"])
-        #expect(CamCapIso.baseISO(transfer: .dlog) == 400)
-        #expect(CamCapIso.baseISO(transfer: .dlog2) == 1600)
-        for other in ["100", "200", "800", "3200", "6400", "Auto"] {
-            #expect(!CamCapIso.markedLabels(transfer: .dlog).contains(other))
-            #expect(!CamCapIso.markedLabels(transfer: .dlog2).contains(other))
-        }
-        #expect(CamCapIso.markedLabels(transfer: .dlog).isDisjoint(with: ["1600"]))
-        #expect(CamCapIso.markedLabels(transfer: .dlog2).isDisjoint(with: ["400"]))
-    }
-
-    @Test func rec709AndHLGStarNothing() {
-        #expect(CamCapIso.markedLabels(transfer: .rec709).isEmpty)
-        #expect(CamCapIso.markedLabels(transfer: .hdr).isEmpty)
-        #expect(CamCapIso.markedLabels(transfer: nil).isEmpty)
-        #expect(CamCapIso.markedLabels(colorMode: .normal).isEmpty)
-        #expect(CamCapIso.markedLabels(colorMode: .hdr).isEmpty)
-        #expect(CamCapIso.baseISO(transfer: .rec709) == nil)
-        #expect(CamCapIso.baseISO(colorMode: nil) == nil)
+    /// D-Log stars 400, D-Log2 stars 1600; Rec.709, HLG and unknown star nothing.
+    @Test(
+        arguments: [
+            (.dlog, .dLog, ["400"], 400),
+            (.dlog2, .dLog2, ["1600"], 1600),
+            (.rec709, .normal, [], nil),
+            (.hdr, .hdr, [], nil),
+            (nil, nil, [], nil),
+        ] as [(MonitorTransfer?, ColorMode?, Set<String>, Int?)])
+    func baseISOStarsOnlyTheLogFloor(
+        transfer: MonitorTransfer?, colorMode: ColorMode?, stars: Set<String>, base: Int?
+    ) {
+        #expect(CamCapIso.markedLabels(transfer: transfer) == stars)
+        #expect(CamCapIso.markedLabels(colorMode: colorMode) == stars)
+        #expect(CamCapIso.baseISO(transfer: transfer) == base)
+        #expect(CamCapIso.baseISO(colorMode: colorMode) == base)
     }
 
     @Test func nativeISOHopsOnlyWhenStillOnBase() {
@@ -286,15 +282,6 @@ import Testing
                 from: .dLog2, to: .dLog, current: .iso1600, hopEnabled: true) == .iso400)
     }
 
-    @Test func isoStarDoesNotReplaceCamcapList() {
-        let fromCap = CamCapIso.parseIndices(Self.isoDLog2)
-        let wheel = CamCapIso.wheelIndices(available: fromCap, fallback: ColorMode.dLog2.isoIndices)
-        #expect(wheel == fromCap)
-        #expect(CamCapIso.markedLabels(transfer: .dlog2) == ["1600"])
-        #expect(
-            wheel.map(\.label).contains("400"), "400 stays on the D-Log2 camcap list, unstarred")
-    }
-
     @Test func isoAutoMaxTablesMatchColorMode() {
         let normal: [UInt8] = [
             0x02, 0x0B, 0x00, 0x08, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x64, 0x00,
@@ -309,14 +296,7 @@ import Testing
         #expect(parsedD?.base == 400)
         #expect(parsedD?.limits == ColorMode.dLog.isoAutoLimits)
 
-        let dlog2: [UInt8] = [0x01, 0x01, 0x00, 0x00]
-        #expect(CamCapIsoAutoMax.parse(dlog2)?.limits.isEmpty == true)
-        #expect(ColorMode.dLog2.offersIsoAuto == false)
-        #expect(ColorMode.dLog2.isoAutoLimits.isEmpty)
-        #expect(!ColorMode.dLog2.isoIndices.contains(.auto))
-        #expect(ColorMode.dLog.offersIsoAuto)
-        #expect(ColorMode.normal.offersIsoAuto)
-        #expect(ColorMode.hdr.offersIsoAuto)
+        #expect(CamCapIsoAutoMax.parse([0x01, 0x01, 0x00, 0x00])?.limits.isEmpty == true)
     }
 
     /// #180: Auto ISO range labels use the body's Rec.709 floor. SET bytes stay
@@ -359,9 +339,6 @@ import Testing
         let value: [UInt8] = [0x01, 0x04, 0x00, 0x03, 0x00, 0x3F, 0x3D]
         let nano = CameraModel.resolve(modelId: 0x0019, name: nil)
         #expect(CamCapColorMode.parse(value, model: nano) == [.normal, .normal10, .dLogM])
-        #expect(ColorMode.parseImageEffect([0, 0, 0x00], model: nano) == .normal)
-        #expect(ColorMode.parseImageEffect([0, 0, 0x3F], model: nano) == .normal10)
-        #expect(ColorMode.parseImageEffect([0, 0, 0x3D], model: nano) == .dLogM)
         #expect(MonitorTransfer(.normal10) == .rec709)
         #expect(MonitorTransfer(.dLogM) == .dlogm)
         var s = CameraStatus()
@@ -413,10 +390,6 @@ import Testing
                     name: CamCapVideoFormat.subscribeKey, value: Self.videoFormatPocket4Pro),
                 to: &s))
         #expect(s.availableVideoFormats.count == 12)
-        #expect(
-            CamCapVideoFormat.frameRates(
-                available: [], resolution: .p4K, current: .fps24
-            ).map(\.fps) == [24])
     }
 
     /// Nano Video spec: 4K/2.7K/1080 × 16:9 and 4:3. 4K 4:3 has no 60.
@@ -437,9 +410,6 @@ import Testing
                     available: formats, resolution: fourK43, current: nil
                 ).map(\.fps) == [24, 25, 30, 48, 50])
         }
-        #expect(
-            CamCapVideoFormat.resolutions(available: [], current: .p4K) == [.p4K],
-            "empty camcap is the live pair only — no invented 1080 tab")
         #expect(
             CamCapVideoFormat.aspects(available: formats, current: nil)
                 == [.fourThree, .sixteenNine])
@@ -472,20 +442,6 @@ import Testing
         #expect(VideoFormat(resolution: .p3K_9x16, frameRate: .fps30).chipLabel == "3K 9:16 · 30p")
     }
 
-    @Test func pocket4VideoCapKeeps9by16() {
-        let rates: [UInt8] = [1, 2, 3, 4, 5, 6]
-        let formats = CamCapVideoFormat.parse(
-            Self.packVideoFormats([0x10, 0x0A, 0x6C, 0x42].map { ($0, rates) }))
-        #expect(formats.count == 24)
-        #expect(
-            CamCapVideoFormat.aspects(available: formats, current: nil)
-                == [.sixteenNine, .nineSixteen])
-        #expect(
-            CamCapVideoFormat.resolutions(
-                available: formats, aspect: .nineSixteen, current: nil
-            ).map(\.rawValue) == [0x6C, 0x42])
-    }
-
     @Test func unknownCamcapByteIsKept() {
         let formats = CamCapVideoFormat.parse(Self.packVideoFormats([(0x11, [1])]))
         #expect(formats.count == 1)
@@ -515,9 +471,6 @@ import Testing
         #expect(ColorMode.available(for: nano) == [.normal, .normal10, .dLogM])
         #expect(ColorMode.dLogM.label(for: .pocket) == "D-Log M")
         #expect(ColorMode(label: "D-Log M") == .dLogM)
-        #expect(!ColorMode.available(for: pocket3).contains(.dLog2))
-        #expect(!ColorMode.available(for: pocket3).contains(.dLog))
-        #expect(!ColorMode.available(for: pocket4).contains(.dLog2))
         #expect(
             ColorMode.available(for: CameraModel.resolve(modelId: nil, name: "OsmoPocket4P-ABCD"))
                 .contains(.dLog2))
@@ -573,10 +526,6 @@ import Testing
         #expect(ColorMode.fromWire(0x3F, model: nano) == .normal10)
         #expect(ColorMode.fromWire(0x3D, model: nano) == .dLogM)
         #expect(Commands.setColorMode(.normal, model: pocket4).payload == [0x3F])
-        #expect(Commands.setColorMode(.normal, model: nano).payload == [0x00])
-        #expect(Commands.setColorMode(.normal10, model: nano).payload == [0x3F])
-        #expect(Commands.setColorMode(.dLogM, model: nano).payload == [0x3D])
-        #expect(Commands.setColorMode(.dLogM).payload == [0x00])
 
         let cap: [UInt8] = [0x01, 0x04, 0x00, 0x03, 0x00, 0x3C, 0x3D]
         #expect(CamCapColorMode.parse(cap, model: pocket3) == [.normal, .hdr, .dLogM])
@@ -623,74 +572,16 @@ import Testing
         #expect(CamFov.readout(live: 1, preview: nil, fallback: 3, optimistic: nil) == 1)
     }
 
-    @Test func formatCeilingClampsTheRememberedStopAndSaysSo() {
-        let pocket3 = CameraModel.resolve(modelId: 0x20, name: "OsmoPocket3-Test")
-        func stops(_ res: VideoResolution) -> [Double] {
-            pocket3.activeZoomStops(resolution: res, shootingMode: -1)
-        }
-        // 2.7K offers 3x, 4K only 2x, 1080 the full 4x.
-        #expect(stops(.p2_7K) == [1, 2, 3])
-        #expect(stops(.p4K) == [1, 2])
-        #expect(stops(.p1080) == [1, 2, 4])
-        // The stop the operator last tapped cannot outlive the FORMAT that
-        // allowed it: dropping to 4K has to pull 3x back to the new ceiling.
-        #expect(CamFov.stopWithinCycle(3, stops: stops(.p2_7K)) == 3)
-        #expect(CamFov.stopWithinCycle(3, stops: stops(.p4K)) == 2)
-        #expect(CamFov.stopWithinCycle(4, stops: []) == CamFov.minFactor)
-        // And the operator is told why the chip fell, only when it actually falls.
-        #expect(CamFov.ceilingNote(size: "4K", held: 3, stops: [1, 2]) == "4K caps zoom at 2\u{00D7}")
-        #expect(CamFov.ceilingNote(size: "4K", held: 2, stops: [1, 2]) == nil)
-        #expect(CamFov.ceilingNote(size: "2.7K", held: 4, stops: [1, 2, 3]) != nil)
-        #expect(CamFov.ceilingNote(size: "1080", held: 3, stops: [1, 2, 4]) == nil)
-        #expect(CamFov.ceilingNote(size: "4K", held: 3, stops: []) == nil)
-    }
-
-    @Test func zoomStopsFollowTheBody() {
-        let pro = CameraModel.resolve(modelId: 0x0022, name: nil)
-        let pocket4 = CameraModel.resolve(modelId: 0x0021, name: nil)
-        let pocket3 = CameraModel.resolve(modelId: 0x0020, name: nil)
-        let nano = CameraModel.resolve(modelId: 0x0019, name: nil)
-        #expect(pro.zoomStops == [1, 3, 6, 12])
-        #expect(pocket4.zoomStops == [1, 2, 4])
-        #expect(pocket3.zoomStops == [1, 2, 4])
-        #expect(nano.zoomStops == [1])
-        #expect(pocket3.activeZoomStops(resolution: .p4K, shootingMode: 0x01) == [1, 2])
-        #expect(pocket3.activeZoomStops(resolution: .p1080, shootingMode: 0x01) == [1, 2, 4])
-        // Measured on a Pocket 3: the body clamps an over-ask to its own max,
-        // so these are the stops it actually reaches, not the ones we hoped for.
-        #expect(pocket3.activeZoomStops(resolution: .p2_7K, shootingMode: 0x01) == [1, 2, 3])
-        #expect(pocket3.activeZoomStops(resolution: .p1080_1x1, shootingMode: 0x01) == [1, 2, 4])
-        #expect(pocket3.activeZoomStops(resolution: .p2160_1x1, shootingMode: 0x01) == [1, 2, 3])
-        #expect(pocket3.activeZoomStops(resolution: .p3K_1x1, shootingMode: 0x01) == [1, 2])
-        // Unmeasured bytes inherit their measured sibling's size class.
-        #expect(pocket3.activeZoomStops(resolution: .p1080_9x16, shootingMode: 0x01) == [1, 2, 4])
-        #expect(pocket3.activeZoomStops(resolution: .p2_7K_4x3, shootingMode: 0x01) == [1, 2, 3])
-        #expect(pocket3.activeZoomStops(resolution: .p4K_1x1, shootingMode: 0x01) == [1, 2])
-        #expect(pocket3.activeZoomStops(resolution: .p3K_9x16, shootingMode: 0x01) == [1, 2])
-        // No FORMAT yet, or a byte the catalog does not name: full range.
-        #expect(pocket3.activeZoomStops(resolution: nil, shootingMode: 0x01) == [1, 2, 4])
-        #expect(
-            pocket3.activeZoomStops(resolution: VideoResolution(rawValue: 0xFE), shootingMode: 0x01)
-                == [1, 2, 4])
-        #expect(VideoResolution.p2_7K.pocket3ZoomMax == 3)
-        #expect(VideoResolution.p4K.pocket3ZoomMax == 2)
-        #expect(VideoResolution(rawValue: 0xFE).pocket3ZoomMax == nil)
-        #expect(pocket4.activeZoomStops(resolution: .p4K, shootingMode: 0x01) == [1, 2, 4])
-        #expect(pro.activeZoomStops(resolution: .p4K, shootingMode: 0x00) == [1, 3])
-        #expect(pocket4.activeZoomStops(resolution: .p4K, shootingMode: 0x00) == [1])
-        #expect(CamFov.nextJump(from: 1, stops: [1, 2, 4]) == 2)
-        #expect(CamFov.nextJump(from: 2, stops: [1, 2, 4]) == 4)
-        #expect(CamFov.nextJump(from: 4, stops: [1, 2, 4]) == 1)
-        #expect(CamFov.previousJump(from: 1, stops: [1, 2, 4]) == 1)
-        #expect(CamFov.previousJump(from: 2, stops: [1, 2, 4]) == 1)
-        #expect(CamFov.previousJump(from: 4, stops: [1, 2, 4]) == 2)
-        #expect(CamFov.previousJump(from: 3) == 1)
-        #expect(CamFov.previousJump(from: 12) == 6)
+    /// Chip writes, clamps and empty-cycle edges. Stop tables, jumps and
+    /// ceiling notes live in `Tests/Fixtures/camfov-vectors.tsv`.
+    @Test func zoomChipEdgesOutsideTheSharedVectors() {
         #expect(CamFov.chipWrite(forJump: 2) == .lens(CamFov.lensPosition(for: 2)))
         #expect(CamFov.chipWrite(forJump: 4) == .lens(CamFov.lensPosition(for: 4)))
         #expect(CamFov.clamp(12, max: 4) == 4)
         #expect(CamFov.isJumpStop(2, stops: [1, 2, 4]))
         #expect(!CamFov.isJumpStop(2))
+        #expect(CamFov.stopWithinCycle(4, stops: []) == CamFov.minFactor)
+        #expect(CamFov.ceilingNote(size: "4K", held: 3, stops: []) == nil)
     }
 
     private static let shutter25p = hex(

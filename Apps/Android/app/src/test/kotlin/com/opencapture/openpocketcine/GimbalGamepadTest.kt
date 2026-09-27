@@ -10,20 +10,6 @@ import kotlin.test.assertTrue
 
 class GimbalGamepadTest {
     @Test
-    fun discussion159FaceShoulderAndDpad() {
-        assertEquals(GamepadOperatorAction.RECORD, GamepadOperatorMap.face(GamepadFaceButton.A))
-        assertEquals(GamepadOperatorAction.RECENTER, GamepadOperatorMap.face(GamepadFaceButton.B))
-        assertEquals(GamepadOperatorAction.FLIP, GamepadOperatorMap.face(GamepadFaceButton.X))
-        assertEquals(GamepadOperatorAction.TRACK, GamepadOperatorMap.face(GamepadFaceButton.Y))
-        assertEquals(GamepadOperatorAction.ZOOM_CHIP_OUT, GamepadOperatorMap.shoulder(GamepadShoulder.LEFT))
-        assertEquals(GamepadOperatorAction.ZOOM_CHIP_IN, GamepadOperatorMap.shoulder(GamepadShoulder.RIGHT))
-        assertEquals(GamepadOperatorAction.ISO_UP, GamepadOperatorMap.dpad(GamepadDpad.UP))
-        assertEquals(GamepadOperatorAction.ISO_DOWN, GamepadOperatorMap.dpad(GamepadDpad.DOWN))
-        assertEquals(GamepadOperatorAction.SHUTTER_OPEN, GamepadOperatorMap.dpad(GamepadDpad.LEFT))
-        assertEquals(GamepadOperatorAction.SHUTTER_CLOSE, GamepadOperatorMap.dpad(GamepadDpad.RIGHT))
-    }
-
-    @Test
     fun keysMatchDiscussion159() {
         assertEquals(GamepadOperatorAction.RECORD, GimbalGamepad.actionForKey(KeyEvent.KEYCODE_BUTTON_A))
         assertEquals(GamepadOperatorAction.RECENTER, GimbalGamepad.actionForKey(KeyEvent.KEYCODE_BUTTON_B))

@@ -27,7 +27,6 @@ object CamFov {
 
     const val SLEW_TELE = 100
     const val SLEW_WIDE = 300
-    const val TELE_ENGAGE = 3.0
     /** iOS `CameraSetMailbox.zoomCoalesceHold` — Mimo pinch is 20 Hz. */
     const val SLIDER_COALESCE_MS = 50L
     /** Camera can pause HEVC while the lens slews. Same 4 s as AF-C. */
@@ -141,12 +140,6 @@ object CamFov {
         return cycle[0]
     }
 
-    fun isJumpStop(factor: Double, stops: List<Double> = JUMPS): Boolean {
-        val shown = displayTenths(factor)
-        val cycle = if (stops.isEmpty()) JUMPS else stops
-        return cycle.any { abs(shown - it) < 0.05 }
-    }
-
     sealed class ChipWrite {
         data class Lens(val position: Int) : ChipWrite()
         data class Slew(val value: Int) : ChipWrite()
@@ -186,9 +179,6 @@ object CamFov {
         return clamp(current + t * ZOOM_RATE_PER_SECOND * dt, max)
     }
 
-    fun pinchPreview(anchor: Double, magnification: Double): Double =
-        displayTenths(pinchFactor(anchor, magnification))
-
     fun pinchLens(factor: Double): Int = lensPosition(factor)
 
     fun readout(
@@ -222,8 +212,6 @@ object CamFov {
      */
     fun matches(live: Double, target: Double): Boolean =
         abs(displayTenths(live) - displayTenths(target)) < 0.15
-
-    fun usesTelephoto(factor: Double): Boolean = displayTenths(factor) >= TELE_ENGAGE
 
     /**
      * D-Log2 rejects every zoom SET. Hop on the first step off 1×.

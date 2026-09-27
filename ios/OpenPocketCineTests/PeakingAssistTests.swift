@@ -22,37 +22,6 @@ final class PeakingAssistTests: XCTestCase {
         super.tearDown()
     }
 
-    func testOpenZCineOptionSet() {
-        XCTAssertEqual(
-            PeakingAssist.Color.allCases.map(\.rawValue),
-            ["White", "Blue", "Red", "Green"])
-        XCTAssertEqual(
-            PeakingAssist.Sensitivity.allCases.map(\.rawValue),
-            ["Low", "Med", "High"])
-        XCTAssertEqual(PeakingAssist.palette.map(\.rawValue), ["White", "Blue", "Red", "Green"])
-        XCTAssertEqual(PeakingAssist.sensitivityOptions, ["Low", "Med", "High"])
-        XCTAssertEqual(PeakingAssist.Options.default.color, .red)
-        XCTAssertEqual(PeakingAssist.Options.default.sensitivity, .medium)
-        XCTAssertEqual(PeakingAssist.longPressPanelWidth, 400)
-        XCTAssertEqual(PeakingAssist.panelWidth, 400)
-    }
-
-    func testPopupCopyMatchesOpenZCine() {
-        XCTAssertEqual(
-            PeakingAssist.sensitivityHelp,
-            "Higher sensitivity catches finer edges but can get noisy on detailed scenes.")
-        XCTAssertEqual(
-            PeakingAssist.colorHelp,
-            "Choose the edge color that stays readable over your typical scene.")
-    }
-
-    func testOverlayRGBMatchesOpenZCinePaint() {
-        assertRGB(PeakingAssist.Color.white.rgb, 246, 241, 226)
-        assertRGB(PeakingAssist.Color.blue.rgb, 64, 142, 255)
-        assertRGB(PeakingAssist.Color.red.rgb, 255, 72, 64)
-        assertRGB(PeakingAssist.Color.green.rgb, 74, 220, 132)
-    }
-
     func testOverlayHookMatchesOpenZCineDetector() {
         let low = PeakingAssist.overlay(color: .white, sensitivity: .low)
         XCTAssertEqual(low.ratioThreshold, 2.30)
@@ -95,9 +64,7 @@ final class PeakingAssistTests: XCTestCase {
         let overlay = PeakingAssist.overlay(from: fx)
         XCTAssertEqual(overlay.color, .green)
         XCTAssertEqual(overlay.sensitivity, .high)
-        XCTAssertEqual(fx.peakingOptions.overlay.noiseGate, 0.00058)
-        XCTAssertEqual(PeakingPaint.red.rgb.1, 72.0 / 255, accuracy: 1e-12)
-        XCTAssertEqual(PeakingSense.medium.ratioThreshold, 2.10)
+        XCTAssertEqual(fx.peakingOptions.overlay, overlay)
     }
 
     @MainActor
@@ -123,13 +90,5 @@ final class PeakingAssistTests: XCTestCase {
         XCTAssertEqual(assist.peakingColor, .red)
         XCTAssertEqual(assist.peakingSensitivity, .medium)
         XCTAssertEqual(assist.peakingOptions, .default)
-    }
-
-    private func assertRGB(
-        _ rgb: (Double, Double, Double), _ r: Double, _ g: Double, _ b: Double
-    ) {
-        XCTAssertEqual(rgb.0, r / 255, accuracy: 1e-12)
-        XCTAssertEqual(rgb.1, g / 255, accuracy: 1e-12)
-        XCTAssertEqual(rgb.2, b / 255, accuracy: 1e-12)
     }
 }

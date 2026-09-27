@@ -10,16 +10,22 @@ struct LiveChromeThrottleTests {
         #expect(LiveChromeThrottle.shouldNotify(previous: a, next: a, elapsed: 1) == false)
     }
 
-    @Test func recordingFlipIsImmediate() {
+    /// Operator-facing fields land on the next render, not the HUD interval.
+    @Test(
+        arguments: [
+            ("recording", { @Sendable in $0.isRecording = true }),
+            ("expoMode", { @Sendable in $0.expoMode = .manual }),
+            ("zoomRaw", { @Sendable in $0.zoomFactorRaw = 3072 }),
+            ("selfieFlip", { @Sendable in $0.selfieFlip = .on }),
+            ("audioChannel", { @Sendable in $0.audioChannel = .stereo }),
+            ("vocalBoost", { @Sendable in $0.vocalBoost = .on }),
+            ("windNR", { @Sendable in $0.windNR = .on }),
+            ("directionalAudio", { @Sendable in $0.directionalAudio = .front }),
+        ] as [(String, @Sendable (inout CameraStatus) -> Void)])
+    func operatorFieldIsImmediate(field: String, change: @Sendable (inout CameraStatus) -> Void) {
         var next = CameraStatus()
-        next.isRecording = true
+        change(&next)
         #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
-        #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0))
-    }
-
-    @Test func expoModeFlipIsImmediate() {
-        var next = CameraStatus()
-        next.expoMode = .manual
         #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0))
     }
 
@@ -53,35 +59,6 @@ struct LiveChromeThrottleTests {
         #expect(
             LiveChromeThrottle.shouldNotify(
                 previous: CameraStatus(), next: next, elapsed: LiveChromeThrottle.statusInterval))
-    }
-
-    @Test func zoomRawIsImmediate() {
-        var next = CameraStatus()
-        next.zoomFactorRaw = 3072
-        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
-        #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0))
-    }
-
-    @Test func selfieFlipIsImmediate() {
-        var next = CameraStatus()
-        next.selfieFlip = .on
-        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
-        #expect(LiveChromeThrottle.shouldNotify(previous: CameraStatus(), next: next, elapsed: 0))
-    }
-
-    @Test func audioOperatorFieldsAreImmediate() {
-        var next = CameraStatus()
-        next.audioChannel = .stereo
-        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
-        next = CameraStatus()
-        next.vocalBoost = .on
-        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
-        next = CameraStatus()
-        next.windNR = .on
-        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
-        next = CameraStatus()
-        next.directionalAudio = .front
-        #expect(LiveChromeThrottle.isImmediate(CameraStatus(), next))
     }
 
     @Test func shutterCapListIsImmediate() {

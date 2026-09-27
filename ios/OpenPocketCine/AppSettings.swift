@@ -1033,23 +1033,6 @@ enum OperatorPanelMetrics {
         max(safeArea.bottom + 4, 12)
     }
 
-    /// OpenZCine `MediaBrowserView` padding — trailing floor is 20, bottom floor 14.
-    static func mediaTopPadding(safeArea: EdgeInsets) -> CGFloat {
-        max(safeArea.top + 6, 16)
-    }
-
-    static func mediaLeadingPadding(safeArea: EdgeInsets, portrait: Bool) -> CGFloat {
-        max(safeArea.leading + 6, portrait ? 16 : 64)
-    }
-
-    static func mediaTrailingPadding(safeArea: EdgeInsets) -> CGFloat {
-        max(safeArea.trailing + 6, 20)
-    }
-
-    static func mediaBottomPadding(safeArea: EdgeInsets) -> CGFloat {
-        max(safeArea.bottom + 4, 14)
-    }
-
     /// Extra leading inset so a landscape title clears the floating close button.
     static func closeButtonClearance(safeArea: EdgeInsets) -> CGFloat {
         max(0, (closeLeading + closeSize + 8) - leadingPadding(safeArea: safeArea))

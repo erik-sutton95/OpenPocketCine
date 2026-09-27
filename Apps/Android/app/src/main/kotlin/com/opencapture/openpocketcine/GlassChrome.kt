@@ -27,13 +27,6 @@ enum class GlassTier {
     FULL,
 }
 
-/**
- * Kyant `drawBackdrop` must not be a descendant of the `layerBackdrop` it
- * samples. That pairing overflows HWUI `RenderNode::prepareTreeImpl` (native
- * stack overflow on opening playback).
- */
-fun kyantWouldLoop(chromeInsideRecordedLayer: Boolean): Boolean = chromeInsideRecordedLayer
-
 fun resolveTier(
     sdkInt: Int,
     override: String? = null,
@@ -141,19 +134,3 @@ internal fun liveFeedContentRect(
         height = height,
     )
 }
-
-internal fun glassBackdropContentRect(
-    feedWidth: Float,
-    feedHeight: Float,
-    sourceWidth: Int,
-    sourceHeight: Int,
-    aspectFill: Boolean,
-): LiveFeedContentRect? =
-    liveFeedContentRect(
-        containerWidth = feedWidth,
-        containerHeight = feedHeight,
-        sourceWidth = sourceWidth,
-        sourceHeight = sourceHeight,
-        aspectFill = aspectFill,
-    )
-

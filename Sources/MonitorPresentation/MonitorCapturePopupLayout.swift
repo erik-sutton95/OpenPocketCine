@@ -13,7 +13,6 @@ public enum MonitorCapturePopupKind: Equatable, Sendable {
     case compact
 
     public var showsClose: Bool { self == .details }
-    public var showsAccessoryChrome: Bool { self == .details }
     public var subtitle: String? {
         switch self {
         case .compact: "drag to set"

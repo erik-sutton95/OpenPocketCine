@@ -26,15 +26,6 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         session.stop()
     }
 
-    @MainActor func testChangingNetworkSourceInvalidatesPreviousSessionConfirmation() {
-        let session = MultiviewSession(saveStage: { _ in true })
-        session.networkConfigured = true
-        session.usePhoneHotspot = true
-        session.selectNetworkSource(hotspot: false)
-        XCTAssertFalse(session.networkConfigured)
-        XCTAssertFalse(session.usePhoneHotspot)
-    }
-
     @MainActor func testCredentialsAreLoadedOnlyAfterAnExplicitNetworkChoice() {
         var lookups: [(String, Bool)] = []
         let session = MultiviewSession(
@@ -50,7 +41,8 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         XCTAssertTrue(lookups[0].1)
         session.networkConfigured = true
         session.selectNetworkSource(hotspot: false)
-        XCTAssertFalse(session.networkConfigured)
+        XCTAssertFalse(session.networkConfigured, "Changing source invalidates confirmation")
+        XCTAssertFalse(session.usePhoneHotspot)
         XCTAssertEqual(session.ssid, "")
         XCTAssertEqual(session.password, "")
         session.selectNetwork("Test local Wi-Fi")

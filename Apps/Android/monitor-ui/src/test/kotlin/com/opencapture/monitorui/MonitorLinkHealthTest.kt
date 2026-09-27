@@ -1,6 +1,5 @@
 package com.opencapture.monitorui
 
-import androidx.compose.ui.graphics.Color
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -16,24 +15,22 @@ class MonitorLinkHealthTest {
     }
 
     @Test fun bandsSplitAt50And80() {
-        assertEquals(MonitorLinkHealth.Band.POOR, MonitorLinkHealth.band(49))
-        assertEquals(MonitorLinkHealth.Band.WATCH, MonitorLinkHealth.band(50))
-        assertEquals(MonitorLinkHealth.Band.WATCH, MonitorLinkHealth.band(79))
-        assertEquals(MonitorLinkHealth.Band.STABLE, MonitorLinkHealth.band(80))
-        assertEquals(MonitorLinkHealth.Band.POOR, MonitorLinkHealth.band(MonitorLinkHealth.score(1)))
-        assertEquals(MonitorLinkHealth.Band.WATCH, MonitorLinkHealth.band(MonitorLinkHealth.score(2)))
-        assertEquals(MonitorLinkHealth.Band.WATCH, MonitorLinkHealth.band(MonitorLinkHealth.score(3)))
-        assertEquals(MonitorLinkHealth.Band.STABLE, MonitorLinkHealth.band(MonitorLinkHealth.score(4)))
-    }
-
-    @Test fun paletteMatchesDashScaleBands() {
-        assertEquals(Color(0.18f, 0.78f, 0.42f), MonitorLinkHealth.stable)
-        assertEquals(Color(0.96f, 0.52f, 0.12f), MonitorLinkHealth.watch)
-        assertEquals(MonitorPalette.recording, MonitorLinkHealth.poor)
-        assertEquals(MonitorLinkHealth.poor, MonitorLinkHealth.color(49))
-        assertEquals(MonitorLinkHealth.watch, MonitorLinkHealth.color(50))
-        assertEquals(MonitorLinkHealth.watch, MonitorLinkHealth.color(75))
-        assertEquals(MonitorLinkHealth.stable, MonitorLinkHealth.color(80))
-        assertEquals(MonitorLinkHealth.stable, MonitorLinkHealth.color(100))
+        for ((score, band) in listOf(
+            49 to MonitorLinkHealth.Band.POOR,
+            50 to MonitorLinkHealth.Band.WATCH,
+            79 to MonitorLinkHealth.Band.WATCH,
+            80 to MonitorLinkHealth.Band.STABLE,
+            MonitorLinkHealth.score(1) to MonitorLinkHealth.Band.POOR,
+            MonitorLinkHealth.score(2) to MonitorLinkHealth.Band.WATCH,
+            MonitorLinkHealth.score(3) to MonitorLinkHealth.Band.WATCH,
+            MonitorLinkHealth.score(4) to MonitorLinkHealth.Band.STABLE,
+        )) assertEquals(band, MonitorLinkHealth.band(score), "band($score)")
+        for ((score, color) in listOf(
+            49 to MonitorLinkHealth.poor,
+            50 to MonitorLinkHealth.watch,
+            75 to MonitorLinkHealth.watch,
+            80 to MonitorLinkHealth.stable,
+            100 to MonitorLinkHealth.stable,
+        )) assertEquals(color, MonitorLinkHealth.color(score), "color($score)")
     }
 }

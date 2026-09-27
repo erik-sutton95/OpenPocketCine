@@ -82,9 +82,9 @@ import Testing
                 == "bytes=50-\(size - 1)")
     }
 
-    @Test func realMimoExportsIfPresent() throws {
-        let dir = ProcessInfo.processInfo.environment["OPC_CLIP_DIR"]
-        guard let dir, !dir.isEmpty else { return }
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OPC_CLIP_DIR"]?.isEmpty == false))
+    func realMimoExportsIfPresent() throws {
+        let dir = try #require(ProcessInfo.processInfo.environment["OPC_CLIP_DIR"])
         let expected: [(String, ColorMode)] = [
             ("_video_Normal.MP4", .normal),
             ("_video_HDR.MP4", .hdr),
@@ -107,9 +107,9 @@ import Testing
         }
     }
 
-    @Test func realLrfProxiesAreNotShotColorIfPresent() throws {
-        let dir = ProcessInfo.processInfo.environment["OPC_LRF_DIR"]
-        guard let dir, !dir.isEmpty else { return }
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OPC_LRF_DIR"]?.isEmpty == false))
+    func realLrfProxiesAreNotShotColorIfPresent() throws {
+        let dir = try #require(ProcessInfo.processInfo.environment["OPC_LRF_DIR"])
         let files = try FileManager.default.contentsOfDirectory(
             at: URL(fileURLWithPath: dir), includingPropertiesForKeys: nil)
         let lrf = files.filter {

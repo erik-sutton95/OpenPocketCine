@@ -18,7 +18,6 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
     public let tablet: Bool
     public let controlCellSize: Double
     public let sessionControlsHorizontal: Bool
-    public let assistsHorizontal: Bool
 
     public init(
         width: Double, height: Double, safeArea: MonitorSafeArea = .init(),
@@ -33,7 +32,6 @@ public struct MultiviewPresentationLayout: Equatable, Sendable {
         let cell = MonitorSystemButtonMetrics.side(tablet: tablet)
         controlCellSize = cell
         sessionControlsHorizontal = true
-        assistsHorizontal = false
 
         // System controls belong to Live View's native geometry, not to the
         // movable assist toolbar. In particular, Record never follows a cutout.

@@ -167,19 +167,6 @@ import Testing
         #expect(recorder.openHeader?.outcome == .recovered)
     }
 
-    @Test func compressedLayerUnknownOutputDoesNotFalseStall() {
-        var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-layer" })
-        _ = recorder.beginSession(Fixture.context())
-        let compressed = Fixture.snap(
-            now: 4,
-            outputHz: 0,
-            outputAge: 8,
-            presentAge: 0.04,
-            outputObservable: false)
-        #expect(recorder.recordSnapshot(compressed) == nil)
-        #expect(recorder.openHeader == nil)
-    }
-
     @Test func cumulativeErrorCountIsNotCurrentFailure() {
         var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-olderr" })
         _ = recorder.beginSession(Fixture.context())
@@ -360,7 +347,8 @@ import Testing
             recorder.recordSnapshot(Fixture.stall(now: 4, outputAge: 3))?.bundle)
         bundle.repairs = [
             FeedRepairRecord(monotonicAt: 1, action: "enable", phase: .locallySent),
-            FeedRepairRecord(monotonicAt: 4, action: "session", phase: .requested, reason: "bleDropped"),
+            FeedRepairRecord(
+                monotonicAt: 4, action: "session", phase: .requested, reason: "bleDropped"),
             FeedRepairRecord(monotonicAt: 5, action: "enable", phase: .locallySent),
             FeedRepairRecord(monotonicAt: 9, action: "endpoint", phase: .requested),
         ]

@@ -487,21 +487,10 @@ internal object PlaybackChromeMetrics {
     const val SAMPLE_MS = 80L
     const val SAMPLE_MAX_SIDE = 480f
     const val actionChipSize = 44f
-    const val actionChipSpacing = 8f
     const val actionChipIcon = 18f
     const val actionChipCorner = 14f
-    const val headerGutterBase = 28f
     val hideChromeIcon = OpcIcon.MAXIMIZE
     val showChromeIcon = OpcIcon.MINIMIZE
-    val viewAssistIcon = OpcIcon.MONITOR
-
-    fun headerGutter(safeLeading: Float, safeTrailing: Float, base: Float = headerGutterBase): Float =
-        max(max(0f, safeLeading), max(0f, safeTrailing)) + base
-
-    fun headerTopPadding(safeTop: Float, base: Float = 12f): Float = max(0f, safeTop) + base
-
-    fun portraitActionRowWidth(actionCount: Int = 4): Float =
-        actionChipSize * actionCount + actionChipSpacing * max(0, actionCount - 1)
 
     fun usesDarkenedBars(tier: GlassTier): Boolean = tier == GlassTier.FLAT
 

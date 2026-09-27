@@ -180,8 +180,6 @@ class CameraExposureMeterTest {
         assertTrue(LiveAssistTool.EV in LiveAssistTool.settingsCases)
         assertFalse(LiveAssistTool.EV in LiveAssistTool.cleanPinCases)
         assertFalse(LiveAssistTool.EV in LiveAssistTool.playbackToolbarCases)
-        assertFalse(state.playbackNeedsScopeTap())
-        assertFalse(state.playbackNeedsProcessedFeed())
         assertFalse(state.encoded().contains("evScale"))
         assertFalse(state.encoded().contains("evCenter"))
         assertFalse(CleanPinTool.entries.any { it.key == "EV" })

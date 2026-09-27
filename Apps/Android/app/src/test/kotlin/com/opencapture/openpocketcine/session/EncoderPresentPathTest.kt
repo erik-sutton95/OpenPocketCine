@@ -12,17 +12,6 @@ class EncoderPresentPathTest {
     }
 
     @Test
-    fun identicalCsdIsNotAChange() {
-        val csd = byteArrayOf(1, 2, 3)
-        assertFalse(EncoderPresentPath.parameterSetsChanged(true, csd, csd.copyOf()))
-    }
-
-    @Test
-    fun newCsdIsAChange() {
-        assertTrue(EncoderPresentPath.parameterSetsChanged(true, byteArrayOf(1), byteArrayOf(2)))
-    }
-
-    @Test
     fun feedAspectAndVerticalMatchIos() {
         assertEquals(16.0 / 9.0, EncoderPresentPath.feedAspect(1920, 1080), 0.001)
         assertEquals(9.0 / 16.0, EncoderPresentPath.feedAspect(1080, 1920), 0.001)

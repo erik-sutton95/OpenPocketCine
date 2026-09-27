@@ -74,13 +74,4 @@ final class GuidesAssistTests: XCTestCase {
         XCTAssertGreaterThan(frame.minX, well.minX + 1)
         XCTAssertEqual(frame.midX, picture.midX, accuracy: 0.01)
     }
-
-    func testPanelWidthMatchesOpenZCineGuidesPopup() {
-        XCTAssertEqual(GuidesAssist.panelWidth, 472)
-    }
-
-    func testLongPressOptionsAreFamilyRatiosAndMaskOnly() {
-        XCTAssertEqual(GuideFamily.allCases.map(\.rawValue), ["Film", "Social"])
-        XCTAssertEqual(GuidesAssist.panelWidth, 472)
-    }
 }

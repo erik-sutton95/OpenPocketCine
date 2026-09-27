@@ -16,8 +16,6 @@ class PocketScopeSamplerTest {
         val (w, h) = PocketScopeSampler.tapSize(1280, 720)
         assertEquals(213, w)
         assertEquals(120, h)
-        assertEquals(PocketScopeSampler.MAX_WIDTH, 200)
-        assertEquals(PocketScopeSampler.POINT_STRIDE, 2)
         assertEquals(1_000_000_000L / 25, PocketScopeSampler.BASE_MIN_INTERVAL_NS)
         assertEquals(1_000_000_000L / 10, PocketScopeSampler.DENSE_MIN_INTERVAL_NS)
         assertEquals(PocketScopeSampler.BASE_MIN_INTERVAL_NS, PocketScopeSampler.minIntervalNs(1))

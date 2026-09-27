@@ -8,7 +8,6 @@ import kotlin.test.assertTrue
 class CamFovTest {
     @Test
     fun raw12287IsOneXNotTwelve() {
-        assertEquals(1.0, CamFov.factor(12_287), 0.01)
         assertEquals("1×", CamFov.displayLabel(12_287))
         assertEquals(
             "1×",
@@ -28,7 +27,6 @@ class CamFovTest {
         assertEquals("2.9×", CamFov.displayLabel(2.9))
         assertEquals("3×", CamFov.displayLabel(2.95))
         assertEquals(2.3, CamFov.displayTenths(2.286), 0.001)
-        assertEquals(50L, CamFov.SLIDER_COALESCE_MS)
         assertTrue(CamFov.shouldHoldWatchdog(0.0))
         assertTrue(CamFov.shouldHoldWatchdog(3.9))
         assertTrue(!CamFov.shouldHoldWatchdog(4.0))
@@ -44,50 +42,26 @@ class CamFovTest {
 
     @Test
     fun chipJumpsAndWritesMatchIos() {
-        assertEquals(3.0, CamFov.nextJump(1.0), 0.0)
+        // Whole-stop jumps and stop-list lens positions live in camfov-vectors.tsv;
+        // these are the in-between readouts the fixture does not walk.
         assertEquals(3.0, CamFov.nextJump(2.3), 0.0)
         assertEquals(3.0, CamFov.nextJump(2.89), 0.0)
         assertEquals(3.0, CamFov.nextJump(2.9), 0.0)
-        assertEquals(6.0, CamFov.nextJump(3.0), 0.0)
         assertEquals(6.0, CamFov.nextJump(5.4), 0.0)
-        assertEquals(12.0, CamFov.nextJump(6.0), 0.0)
-        assertEquals(1.0, CamFov.nextJump(12.0), 0.0)
-        assertEquals(2.0, CamFov.nextJump(1.0, listOf(1.0, 2.0, 4.0)), 0.0)
-        assertEquals(4.0, CamFov.nextJump(2.0, listOf(1.0, 2.0, 4.0)), 0.0)
-        assertEquals(1.0, CamFov.nextJump(4.0, listOf(1.0, 2.0, 4.0)), 0.0)
-        assertEquals(1.0, CamFov.previousJump(1.0), 0.0)
-        assertEquals(1.0, CamFov.previousJump(3.0), 0.0)
-        assertEquals(3.0, CamFov.previousJump(6.0), 0.0)
-        assertEquals(6.0, CamFov.previousJump(12.0), 0.0)
-        assertEquals(1.0, CamFov.previousJump(2.0, listOf(1.0, 2.0, 4.0)), 0.0)
-        assertEquals(2.0, CamFov.previousJump(4.0, listOf(1.0, 2.0, 4.0)), 0.0)
-        assertEquals(1.0, CamFov.previousJump(1.0, listOf(1.0, 2.0, 4.0)), 0.0)
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_1X), CamFov.chipWrite(1.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.lensPosition(2.0)), CamFov.chipWrite(2.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_3X), CamFov.chipWrite(3.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.lensPosition(4.0)), CamFov.chipWrite(4.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_6X), CamFov.chipWrite(6.0))
         assertEquals(CamFov.ChipWrite.Lens(CamFov.LENS_12X), CamFov.chipWrite(12.0))
-        assertEquals(217, CamFov.lensPosition(1.0))
-        assertEquals(651, CamFov.lensPosition(3.0))
-        assertEquals(1_302, CamFov.lensPosition(6.0))
-        assertEquals(2_604, CamFov.lensPosition(12.0))
         assertEquals(477, CamFov.lensPosition(2.2))
         assertEquals(1_454, CamFov.lensPosition(6.7))
-        assertTrue(CamFov.isJumpStop(1.0) && CamFov.isJumpStop(3.0))
-        assertTrue(CamFov.isJumpStop(6.0) && CamFov.isJumpStop(12.0))
-        assertTrue(!CamFov.isJumpStop(2.3) && !CamFov.isJumpStop(5.4))
     }
 
     @Test
     fun pinchHybridMatchesIos() {
         assertEquals(4.0, CamFov.pinchFactor(2.0, 4.0, max = 4.0), 0.001)
         assertEquals(2.53, CamFov.pinchFactor(2.3, 1.1), 0.001)
-        assertEquals(2.5, CamFov.pinchPreview(2.3, 1.1), 0.001)
-        assertEquals(2.3, CamFov.pinchPreview(2.3, 1.0), 0.001)
-        assertEquals(2.9, CamFov.pinchPreview(2.3, 1.261), 0.001)
-        assertEquals(2.9, CamFov.pinchPreview(1.0, 2.9), 0.001)
-        assertEquals(3.0, CamFov.pinchPreview(1.0, 3.0), 0.001)
         assertEquals(477, CamFov.pinchLens(2.2))
         assertEquals(1_454, CamFov.pinchLens(6.7))
         assertTrue(CamFov.pinchLens(2.53) != CamFov.pinchLens(2.5))
@@ -97,8 +71,6 @@ class CamFovTest {
         assertEquals(1.0, CamFov.readout(live = null, preview = null, fallback = 1.0), 0.001)
         assertTrue(CamFov.matches(1.0, 1.0))
         assertTrue(!CamFov.matches(3.0, 12.0))
-        assertTrue(!CamFov.usesTelephoto(2.9))
-        assertTrue(CamFov.usesTelephoto(3.0))
     }
 
     @Test

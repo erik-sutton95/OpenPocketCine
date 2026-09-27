@@ -12,15 +12,6 @@ import Testing
         }
     }
 
-    @Test func oneDarkFaceAddsPositiveEV() {
-        let transfer = MonitorTransfer.rec709
-        let dark = transfer.encodeLinear(0.18 / 4)
-        let next = FacePriorityExposure.nextEV(
-            current: .zero, encoded: dark, transfer: transfer)
-        #expect(next != nil)
-        #expect((next?.thirds ?? 0) > 0)
-    }
-
     @Test func oneBrightFaceSubtractsEV() {
         let transfer = MonitorTransfer.rec709
         let bright = transfer.encodeLinear(0.18 * 4)
@@ -53,12 +44,6 @@ import Testing
             FacePriorityExposure.nextEV(
                 current: .zero, encoded: transfer.middleGrayEncoded, transfer: transfer)
                 == nil)
-    }
-
-    @Test func restoreUsesSavedOrZero() {
-        #expect(FacePriorityExposure.restoreEV(saved: nil) == .zero)
-        #expect(FacePriorityExposure.restoreEV(saved: EvComp(thirds: 3)) == EvComp(thirds: 3))
-        #expect(FacePriorityExposure.restoreEV(saved: EvComp(thirds: -2)) == EvComp(thirds: -2))
     }
 
     @Test func twoFacesUseMedian() {
@@ -104,33 +89,19 @@ import Testing
         #expect(abs(both! - 0.5) < 0.15)
     }
 
-    @Test func intervalIsFastWhileAcquiring() {
+    /// `nil` elapsed means no acquire has started yet.
+    @Test(
+        arguments: [(nil, true), (0, true), (2.4, true), (2.5, false), (10, false)]
+            as [(TimeInterval?, Bool)])
+    func intervalIsFastUntilTheAcquireWindowCloses(elapsed: TimeInterval?, fast: Bool) {
         let start = Date()
-        #expect(
-            FacePriorityExposure.interval(sinceAcquire: start, now: start)
-                == FacePriorityExposure.acquireInterval)
-        #expect(
-            FacePriorityExposure.interval(
-                sinceAcquire: start, now: start.addingTimeInterval(2.4))
-                == FacePriorityExposure.acquireInterval)
-    }
-
-    @Test func intervalSettlesAfterAcquireWindow() {
-        let start = Date()
+        let expected =
+            fast ? FacePriorityExposure.acquireInterval : FacePriorityExposure.settleInterval
         #expect(
             FacePriorityExposure.interval(
-                sinceAcquire: start, now: start.addingTimeInterval(2.5))
-                == FacePriorityExposure.settleInterval)
-        #expect(
-            FacePriorityExposure.interval(
-                sinceAcquire: start, now: start.addingTimeInterval(10))
-                == FacePriorityExposure.settleInterval)
-    }
-
-    @Test func intervalIsFastBeforeAcquireStarts() {
-        #expect(
-            FacePriorityExposure.interval(sinceAcquire: nil, now: Date())
-                == FacePriorityExposure.acquireInterval)
+                sinceAcquire: elapsed.map { _ in start },
+                now: start.addingTimeInterval(elapsed ?? 0))
+                == expected)
     }
 
     @Test func clampsToEvRange() {

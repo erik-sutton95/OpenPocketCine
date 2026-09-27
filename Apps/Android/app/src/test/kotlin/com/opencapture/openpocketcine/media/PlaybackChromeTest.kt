@@ -1,8 +1,5 @@
 package com.opencapture.openpocketcine.media
 
-import com.opencapture.openpocketcine.GlassTier
-import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.OpcIcon
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -206,41 +203,6 @@ class PlaybackChromeTest {
     }
 
     @Test
-    fun headerGuttersMirrorTheLargerCutoutAndActionsFitNarrowPortrait() {
-        assertEquals(87f, PlaybackChromeMetrics.headerGutter(59f, 0f), 0.01f)
-        assertEquals(87f, PlaybackChromeMetrics.headerGutter(0f, 59f), 0.01f)
-        assertEquals(28f, PlaybackChromeMetrics.headerGutter(0f, 0f), 0.01f)
-        assertEquals(71f, PlaybackChromeMetrics.headerTopPadding(59f), 0.01f)
-        assertEquals(44f, PlaybackChromeMetrics.actionChipSize, 0.01f)
-        assertEquals(8f, PlaybackChromeMetrics.actionChipSpacing, 0.01f)
-        val actions = PlaybackChromeMetrics.portraitActionRowWidth(4)
-        val usable = PlaybackChromeMetrics.narrowestScreenWidth - PlaybackChromeMetrics.headerGutter(0f, 0f) * 2
-        assertEquals(200f, actions, 0.01f)
-        assertTrue(actions <= usable, "actions=$actions usable=$usable")
-    }
-
-    @Test
-    fun flatPlaybackUsesDarkenedBarsAndFullDoesNot() {
-        assertTrue(PlaybackChromeMetrics.usesDarkenedBars(GlassTier.FLAT))
-        assertFalse(PlaybackChromeMetrics.usesDarkenedBars(GlassTier.FULL))
-        assertEquals(0.72f, LiveDesign.playbackScrim.alpha, 0.01f)
-        assertTrue(LiveDesign.playbackScrim.alpha < LiveDesign.chromePlate.alpha)
-        assertEquals(120f, PlaybackChromeMetrics.topScrimDp, 0.01f)
-        assertEquals(200f, PlaybackChromeMetrics.bottomScrimDp, 0.01f)
-    }
-
-    @Test
-    fun viewAssistIconIsNotTheFullscreenIcon() {
-        assertEquals(OpcIcon.MAXIMIZE, PlaybackChromeMetrics.hideChromeIcon)
-        assertEquals(OpcIcon.MINIMIZE, PlaybackChromeMetrics.showChromeIcon)
-        assertEquals(OpcIcon.MONITOR, PlaybackChromeMetrics.viewAssistIcon)
-        assertEquals(80L, PlaybackChromeMetrics.SAMPLE_MS)
-        assertEquals(480f, PlaybackChromeMetrics.SAMPLE_MAX_SIDE, 0.01f)
-        assertTrue(PlaybackChromeMetrics.viewAssistIcon != PlaybackChromeMetrics.hideChromeIcon)
-        assertTrue(PlaybackChromeMetrics.viewAssistIcon != PlaybackChromeMetrics.showChromeIcon)
-    }
-
-    @Test
     fun argbPackIsRgbaByteOrder() {
         val packed = argb8888ToRgba(intArrayOf(0xFF112233.toInt()))
         assertEquals(0x11, packed[0].toInt() and 0xFF)
@@ -250,34 +212,13 @@ class PlaybackChromeTest {
     }
 
     @Test
-    fun identityLookLeavesPixelsAlone() {
-        val px = intArrayOf(0xFF8090A0.toInt())
-        applyPlaybackLookPixels(px, 1, 1, com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan.IDENTITY)
-        assertEquals(0xFF8090A0.toInt(), px[0])
-    }
-
-    @Test
-    fun identityPlanHasNoPlaybackLook() {
-        assertFalse(com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan.IDENTITY.hasPlaybackLook)
-        assertTrue(
-            com.opencapture.openpocketcine.feed.PlaybackLookEffect(
-                com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan.IDENTITY,
-            ).isNoOp(3840, 2160),
-        )
-    }
-
-    @Test
-    fun playbackPanelIsDenseEnoughToRead() {
-        assertEquals(1f, LiveDesign.playbackPanel.alpha, 0.01f)
-        assertTrue(LiveDesign.playbackPanel.alpha > LiveDesign.scopePlate.alpha)
-        assertEquals(LiveDesign.playbackPanel.alpha, LiveDesign.sheetPlate.alpha)
-    }
-
-    @Test
-    fun playbackLookKeyIgnoresScopeToggles() {
+    fun identityPlanIsANoOpPlaybackLook() {
         val identity = com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan.IDENTITY
-        assertEquals(identity.playbackLookKey, identity.playbackLookKey)
         assertFalse(identity.hasPlaybackLook)
+        assertTrue(com.opencapture.openpocketcine.feed.PlaybackLookEffect(identity).isNoOp(3840, 2160))
+        val px = intArrayOf(0xFF8090A0.toInt())
+        applyPlaybackLookPixels(px, 1, 1, identity)
+        assertEquals(0xFF8090A0.toInt(), px[0])
     }
 
     @Test

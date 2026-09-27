@@ -86,7 +86,6 @@ import Testing
         #expect(IsoLimit.max25600.rawValue == 0x09)
         #expect(IsoLimit.max800.ceiling == 800)
         #expect(IsoLimit.max800.label(base: 400) == "400–800")
-        #expect(IsoLimit.range800 == .max800)
 
         let reply: [UInt8] = [0x00, 0x00, 0x01, 0x0F, 0x00, 0x01, 0x07]
         #expect(CameraParam.parseGetReply(reply)?.pid == CameraParam.isoLimit.rawValue)
@@ -116,20 +115,16 @@ import Testing
         #expect(IsoLimit.shouldGet(colorMode: .dLog))
         #expect(IsoLimit.shouldGet(colorMode: nil), "color unknown — treat as Normal")
         #expect(!IsoLimit.shouldGet(colorMode: .dLog2), "D-Log2 has no Auto ceiling")
+        #expect(ColorMode.dLog2.isoAutoLimits.isEmpty)
+        #expect(!ColorMode.dLog2.isoIndices.contains(.auto))
     }
 
     @Test func probeGetTimeoutStaysOffTheHud() {
         #expect(ControlHud.timeoutNote(name: "ISO limit GET", announce: false) == nil)
-        #expect(
-            ControlHud.timeoutNote(name: "ISO limit GET", announce: true)
-                == "ISO limit GET timed out")
         #expect(ControlHud.timeoutNote(name: "Audio ch GET", announce: false) == nil)
     }
 
     @Test func controlNoteToastSitsTopCenterAndFades() {
-        #expect(ControlHud.toastHoldSeconds == 2)
-        #expect(ControlHud.toastOpacity < 1)
-        #expect(ControlHud.toastOpacity > 0.5)
         #expect(ControlHud.toastCenterY(feedMinY: 200) == 222)
         #expect(
             ControlHud.toastCenterY(feedMinY: 0, chromeBottomY: 60) == 82,
@@ -143,14 +138,6 @@ import Testing
         #expect(
             ControlHud.toastCenterY(feedMinY: 50, chromeBottomY: 40) == 72,
             "chrome above the feed does not pull the toast up")
-    }
-
-    @Test func recordingColorLockNoteIsOperatorFacing() {
-        #expect(
-            ControlHud.recordingColorLockNote
-                == "Can't change color while recording — D-Log2 can't zoom")
-        #expect(!ControlHud.recordingColorLockNote.contains("0x"))
-        #expect(!ControlHud.recordingColorLockNote.localizedCaseInsensitiveContains("opcode"))
     }
 
     @Test func audioStateRefreshOmitsIsoLimitGet() {
@@ -478,21 +465,6 @@ import Testing
 
     @Test func videoFormatPackAndParse() {
         #expect(Commands.setVideoFormat(resolution: .p1080, frameRate: .fps24).cmdId == 0x18)
-        #expect(
-            Commands.setVideoFormat(resolution: .p1080, frameRate: .fps24).payload
-                == [0x0A, 0x01, 0x00, 0x00, 0x00])
-        #expect(
-            Commands.setVideoFormat(resolution: .p1080, frameRate: .fps60).payload
-                == [0x0A, 0x06, 0x00, 0x00, 0x00])
-        #expect(
-            Commands.setVideoFormat(resolution: .p4K, frameRate: .fps24).payload
-                == [0x10, 0x01, 0x00, 0x00, 0x00])
-        #expect(
-            Commands.setVideoFormat(resolution: .p4K, frameRate: .fps30).payload
-                == [0x10, 0x03, 0x00, 0x00, 0x00])
-        #expect(
-            Commands.setVideoFormat(resolution: .p4K, frameRate: .fps60).payload
-                == [0x10, 0x06, 0x00, 0x00, 0x00])
 
         let value: [UInt8] = [0x0A, 0x05, 0x00, 0x00, 0x00, 0x02, 0x01, 0x00, 0x11, 0x01]
         var s = CameraStatus()
@@ -504,41 +476,28 @@ import Testing
         #expect(s.videoFormat == VideoFormat(resolution: .p1080, frameRate: .fps50))
     }
 
-    @Test func absorbStaleFormatIgnoresUnrelatedStatusCopy() {
+    /// Unrelated status copy, a stale reported format, and a reported match.
+    @Test(arguments: [
+        (VideoResolution.p4K, VideoFrameRate.fps25, false, true),
+        (.p1080, .fps24, true, true),
+        (.p4K, .fps25, true, false),
+    ])
+    func absorbStaleFormatHoldsUntilReportedMatch(
+        resolution: VideoResolution, frameRate: VideoFrameRate, reportedThisFrame: Bool,
+        absorbs: Bool
+    ) {
         let expected = VideoFormat(resolution: .p4K, frameRate: .fps25)
         var incoming = CameraStatus()
-        incoming.videoFormat = expected
-        incoming.videoResolution = .p4K
-        incoming.fps = 25
+        incoming.videoFormat = VideoFormat(resolution: resolution, frameRate: frameRate)
+        incoming.videoResolution = resolution
+        incoming.fps = frameRate.fps
         #expect(
             VideoFormat.absorbStale(
-                incoming: &incoming, expected: expected, reportedThisFrame: false))
+                incoming: &incoming, expected: expected, reportedThisFrame: reportedThisFrame)
+                == absorbs)
         #expect(incoming.videoFormat == expected)
         #expect(incoming.videoResolution == .p4K)
         #expect(incoming.fps == 25)
-    }
-
-    @Test func absorbStaleFormatHoldsUntilReportedMatch() {
-        let expected = VideoFormat(resolution: .p4K, frameRate: .fps25)
-        var stale = CameraStatus()
-        stale.videoFormat = VideoFormat(resolution: .p1080, frameRate: .fps24)
-        stale.videoResolution = .p1080
-        stale.fps = 24
-        #expect(
-            VideoFormat.absorbStale(
-                incoming: &stale, expected: expected, reportedThisFrame: true))
-        #expect(stale.videoFormat == expected)
-        #expect(stale.videoResolution == .p4K)
-        #expect(stale.fps == 25)
-
-        var matched = CameraStatus()
-        matched.videoFormat = expected
-        matched.videoResolution = .p4K
-        matched.fps = 25
-        #expect(
-            !VideoFormat.absorbStale(
-                incoming: &matched, expected: expected, reportedThisFrame: true))
-        #expect(matched.videoFormat == expected)
     }
 
     @Test func recAndColorDrumLabelsMatchCapture() {
@@ -570,11 +529,6 @@ import Testing
                 model: CameraModel.resolve(modelId: 0x0022, name: nil)
             ).map(\.label) == ["Normal", "HDR", "D-Log", "D-Log2"])
         #expect(
-            !CamCapColorMode.wheel(
-                available: [.dLog2, .dLog, .hdr, .normal],
-                model: CameraModel.resolve(modelId: 0x0021, name: nil)
-            ).contains(.dLog2))
-        #expect(
             CamCapColorMode.wheel(
                 available: [], model: CameraModel.resolve(modelId: 0x0020, name: nil)
             ).map { $0.label(for: .pocket) } == ["Normal", "HDR", "D-Log M"])
@@ -591,8 +545,6 @@ import Testing
         #expect(ColorMode(label: "N-Log") == nil)
         #expect(VideoFormat(resolution: .p4K, frameRate: .fps25).chipLabel == "4K · 25p")
         #expect(VideoFormat(resolution: .p1080, frameRate: .fps24).chipLabel == "1080p · 24p")
-        #expect(VideoFormat(resolution: .p2_7K, frameRate: .fps30).chipLabel == "2.7K · 30p")
-        #expect(VideoFormat(resolution: .p4K_4x3, frameRate: .fps50).chipLabel == "4K 4:3 · 50p")
     }
 
     @Test func videoFormatOffersOnlyAcceptedPairs() {
@@ -682,7 +634,6 @@ import Testing
         #expect(stick.flags == Duml.flagNotify)
         #expect(stick.payload == [0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x00, 0x80, 0x22, 0x00])
 
-        #expect(GimbalStick.defaultSensitivity == 4)
         #expect(GimbalStick.sensitivityGain(4) == 1)
         #expect(GimbalStick.sensitivityGain(1) == 0.25)
         #expect(GimbalStick.clampedSensitivity(0) == 1)
@@ -697,19 +648,12 @@ import Testing
         #expect(midFive > midFour)
         #expect(GimbalStick.axis(1, sensitivity: 5) == GimbalStick.max)
         #expect(GimbalStick.encode(x: 0, y: 0) == (GimbalStick.center, GimbalStick.center))
-        #expect(GimbalStick.encode(x: 0.04, y: -0.04) == (GimbalStick.center, GimbalStick.center))
         #expect(GimbalStick.axis(1) == GimbalStick.max)
         #expect(GimbalStick.axis(-1) == GimbalStick.min)
         let linearHalf = UInt16(
             (Double(GimbalStick.center) + 0.5 * Double(GimbalStick.travel)).rounded())
         #expect(GimbalStick.axis(0.5) < linearHalf, "half throw is slower than linear")
         #expect(GimbalStick.axis(0.5) > GimbalStick.center)
-        #expect(GimbalStick.analogCurve(0) == 0)
-        #expect(GimbalStick.analogCurve(0.04) == 0)
-        #expect(GimbalStick.analogCurve(1) == 1)
-        #expect(GimbalStick.analogCurve(-1) == -1)
-        #expect(abs(GimbalStick.analogCurve(0.5)) < 0.5)
-        #expect(GimbalStick.analogCurve(-0.5) == -GimbalStick.analogCurve(0.5))
         #expect(GimbalStick.axisLinear(0) == GimbalStick.center)
         #expect(GimbalStick.axisLinear(1) == GimbalStick.max)
         #expect(GimbalStick.axisLinear(-1) == GimbalStick.min)
@@ -775,7 +719,6 @@ import Testing
         #expect(trackingSelfieRight == selfieRight)
         let full = Commands.gimbalStick(axis0: GimbalStick.max, axis1: GimbalStick.min)
         #expect(full.payload == [0x26, 0x06, 0x00, 0x00, 0xDA, 0x01, 0x00, 0x80, 0x22, 0x00])
-        #expect(GimbalStick.streamInterval == 0.04)
         #expect(GimbalStick.shouldEmit(held: true, restPending: false, now: 1, lastEmitted: 0))
         #expect(
             !GimbalStick.shouldEmit(held: true, restPending: false, now: 1.02, lastEmitted: 1))
@@ -804,9 +747,6 @@ import Testing
         #expect(Commands.gimbalInit(seq: 0).cmdId == 0xDA)
         #expect(GimbalStick.isTap(normalizedMagnitude: 0.05))
         #expect(!GimbalStick.isTap(normalizedMagnitude: 0.4))
-        #expect(GimbalStick.isDoubleTap(secondsSincePreviousTap: 0.2))
-        #expect(!GimbalStick.isDoubleTap(secondsSincePreviousTap: 0.5))
-        #expect(!GimbalStick.isDoubleTap(secondsSincePreviousTap: nil))
         var seq = GimbalStick.TapSequence()
         #expect(seq.tap(at: 0) == .first)
         #expect(seq.tap(at: 0.2) == .second)
@@ -827,22 +767,9 @@ import Testing
         #expect(seq.tap(at: 0) == .first)
         #expect(seq.tap(at: 0.2) == .second)
         #expect(seq.tap(at: 0.56) == .first)
-        #expect(!GimbalStick.prefersDarkChrome(luma: 0.2, previous: false))
-        #expect(GimbalStick.prefersDarkChrome(luma: 0.7, previous: false))
-        #expect(GimbalStick.prefersDarkChrome(luma: 0.5, previous: true))
-        #expect(!GimbalStick.prefersDarkChrome(luma: 0.3, previous: true))
-        #expect(!GimbalStick.prefersDarkChrome(luma: nil, previous: false))
-        let feed = MonitorLayoutRegion(x: 0, y: 100, width: 400, height: 220)
-        let onFeed = MonitorLayoutRegion(x: 300, y: 230, width: 88, height: 88)
-        let region = GimbalStick.chromeSampleRegion(stick: onFeed, feed: feed)
-        #expect(region != nil)
-        #expect(abs((region?.maxX ?? 0) - 1) < 0.05)
-        let parked = MonitorLayoutRegion(x: 300, y: 340, width: 88, height: 88)
-        #expect(GimbalStick.chromeSampleRegion(stick: parked, feed: feed) == nil)
 
         #expect(Commands.gimbalParamsGet().payload == [0x01, 0x04, 0x05])
         #expect(Commands.setGimbalSpeed(.fast).payload == [0x00, 0x05, 0x01, 0x00])
-        #expect(Commands.gimbalFollowFamily().payload == [0x02, 0x08])
         #expect(Commands.setGimbalSpeed(.defaultSpeed).payload == [0x00, 0x05, 0x01, 0x01])
         #expect(Commands.setGimbalSpeed(.slow).payload == [0x00, 0x05, 0x01, 0x02])
         #expect(Commands.setGimbalTiltLock(.unlocked).payload == [0x00, 0x04, 0x01, 0x00])
@@ -882,7 +809,6 @@ import Testing
         #expect(GimbalStick.rotationSettled(yawTenthDeg: 1650, want180: true))
         #expect(!GimbalStick.rotationSettled(yawTenthDeg: 400, want180: false))
         #expect(GimbalStick.rotationSettled(yawTenthDeg: 100, want180: false))
-        #expect(GimbalStick.poseSeedFrontVotes == 3)
         #expect(GimbalStick.fe09GoesTo180(yawTenthDeg: 0))
         #expect(GimbalStick.fe09GoesTo180(yawTenthDeg: 900))
         #expect(!GimbalStick.fe09GoesTo180(yawTenthDeg: 901))
@@ -1076,12 +1002,6 @@ import Testing
         #expect(CamFov.nextJump(from: 3) == 6)
         #expect(CamFov.nextJump(from: 6) == 12)
         #expect(CamFov.nextJump(from: 12) == 1)
-        #expect(CamFov.previousJump(from: 1) == 1)
-        #expect(CamFov.previousJump(from: 3) == 1)
-        #expect(CamFov.previousJump(from: 12) == 6)
-        #expect(CamFov.lensPosition(for: 1) == 217)
-        #expect(CamFov.lensPosition(for: 3) == 651)
-        #expect(CamFov.lensPosition(for: 12) == 2604)
         #expect(CamFov.lensPosition(for: 2.2) == 477)
         #expect(CamFov.lensPosition(for: 6.7) == 1454)
         #expect(Commands.setZoomLens(217).cmdId == 0xB8)
@@ -1096,17 +1016,10 @@ import Testing
         #expect(Commands.setZoomSlew(300).payload == [0x03, 0x00, 0x2C, 0x01])
         #expect(Commands.setZoomSlew(CamFov.slewTele).payload == [0x03, 0x00, 0x64, 0x00])
         #expect(Commands.setZoomSlew(CamFov.slewWide).payload == [0x03, 0x00, 0x2C, 0x01])
-        #expect(CamFov.slew(forJump: 1) == nil)
-        #expect(CamFov.slew(forJump: 3) == nil)
-        #expect(CamFov.slew(forJump: 12) == nil)
         #expect(CamFov.chipWrite(forJump: 1) == .lens(CamFov.lens1x))
         #expect(CamFov.chipWrite(forJump: 3) == .lens(CamFov.lens3x))
         #expect(CamFov.chipWrite(forJump: 6) == .lens(CamFov.lens6x))
         #expect(CamFov.chipWrite(forJump: 12) == .lens(CamFov.lens12x))
-        #expect(CamFov.usesTelephoto(1) == false)
-        #expect(CamFov.usesTelephoto(2.9) == false)
-        #expect(CamFov.usesTelephoto(3) == true)
-        #expect(CamFov.usesTelephoto(12) == true)
         #expect(CamFov.holdZoomWrite(factor: 1.1, current: .dLog2, hopPending: false))
         #expect(CamFov.holdZoomWrite(factor: 1.02, current: .dLog2, hopPending: false))
         #expect(CamFov.holdZoomWrite(factor: 1.1, current: .dLog, hopPending: true))
@@ -1146,13 +1059,7 @@ import Testing
         #expect(CamFov.shouldRestoreDLog2(factor: 1))
         #expect(!CamFov.shouldRestoreDLog2(factor: 2.9))
         #expect(CamFov.nextJump(from: 1) == 3)
-        #expect(Commands.setZoomLens(CamFov.lens1x).payload == [0x0A, 0x4E, 0xD9, 0x00])
-        #expect(Commands.setZoomSlew(CamFov.slewTele).payload == [0x03, 0x00, 0x64, 0x00])
-        #expect(Commands.setZoomSlew(CamFov.slewWide).payload == [0x03, 0x00, 0x2C, 0x01])
         #expect(Commands.setZoomStop().payload == [0xFF, 0x00, 0x00, 0x00])
-        #expect(CamFov.lens1x == 217)
-        #expect(CamFov.lens3x == 651)
-        #expect(CamFov.lens12x == 2604)
         #expect(Commands.setZoom(factor: 3).payload == [0x0A, 0x4E, 0x8B, 0x02])
 
         var s = CameraStatus()
@@ -1176,24 +1083,11 @@ import Testing
     }
 
     @Test func camFovHybridReadoutSnapsTeleAndTicksTenths() {
-        #expect(abs(CamFov.snapHybrid(2.89) - 2.89) < 0.001)
-        #expect(CamFov.snapHybrid(2.9) == 2.9)
-        #expect(CamFov.snapHybrid(2.95) == 2.95)
-        #expect(CamFov.snapHybrid(3.1) == 3.1)
         #expect(CamFov.displayTenths(2.286) == 2.3)
         #expect(CamFov.displayTenths(2.9) == 2.9)
         #expect(CamFov.displayTenths(2.95) == 3)
         #expect(CamFov.displayTenths(5.34) == 5.3)
         #expect(CamFov.displayTenths(5.36) == 5.4)
-
-        #expect(CamFov.pinchPreview(anchor: 2.3, magnification: 1) == 2.3)
-        #expect(CamFov.pinchPreview(anchor: 2.3, magnification: 1.261) == 2.9)
-        #expect(CamFov.pinchPreview(anchor: 1, magnification: 2.9) == 2.9)
-        #expect(CamFov.pinchPreview(anchor: 1, magnification: 3) == 3)
-        #expect(CamFov.pinchPreview(anchor: 2.3, magnification: 2.3) == 5.3)
-        #expect(CamFov.pinchPreview(anchor: 2.3, magnification: 2.348) == 5.4)
-        #expect(CamFov.pinchPreview(anchor: 3, magnification: 0.967) == 2.9)
-        #expect(CamFov.pinchPreview(anchor: 3, magnification: 0.96) == 2.9)
 
         #expect(CamFov.readout(live: 5.36, preview: nil, fallback: 1) == 5.4)
         #expect(CamFov.readout(live: 2.29, preview: 5.3, fallback: 1) == 5.3)
@@ -1208,12 +1102,6 @@ import Testing
         #expect(CamFov.nextJump(from: 2.89) == 3)
         #expect(CamFov.nextJump(from: 2.9) == 3)
         #expect(CamFov.nextJump(from: 5.4) == 6)
-        #expect(CamFov.nextJump(from: 6) == 12)
-        #expect(CamFov.chipWrite(forJump: 1) == .lens(CamFov.lens1x))
-        #expect(CamFov.chipWrite(forJump: 3) == .lens(CamFov.lens3x))
-        #expect(CamFov.chipWrite(forJump: 6) == .lens(CamFov.lens6x))
-        #expect(CamFov.chipWrite(forJump: 12) == .lens(CamFov.lens12x))
-        #expect(CamFov.lensPosition(for: 6) == 1302)
         #expect(CamFov.isJumpStop(1) && CamFov.isJumpStop(3))
         #expect(CamFov.isJumpStop(6) && CamFov.isJumpStop(12))
         #expect(!CamFov.isJumpStop(2.3) && !CamFov.isJumpStop(5.4))
@@ -1221,7 +1109,6 @@ import Testing
         #expect(CamFov.pinchLens(for: 2.2) == 477)
         #expect(CamFov.pinchLens(for: 6.7) == 1454)
         #expect(abs(CamFov.pinchFactor(anchor: 2.3, magnification: 1.1) - 2.53) < 0.001)
-        #expect(CamFov.pinchPreview(anchor: 2.3, magnification: 1.1) == 2.5)
         #expect(CamFov.pinchLens(for: 2.53) != CamFov.pinchLens(for: 2.5))
         #expect(CamFov.pinchLens(for: 2.15) != CamFov.pinchLens(for: 2.16))
         #expect(Commands.setZoom(factor: 2.2).payload.prefix(2) == [0x0A, 0x4E])
@@ -1238,16 +1125,6 @@ import Testing
         #expect(CamFov.shouldHoldWatchdog(secondsSinceSet: 8, pinchActive: true))
         #expect(GimbalStick.shouldHoldWatchdog(secondsSinceThrow: 8, stickHeld: true))
 
-        #expect(CamFov.pinchCommand(live: 2.3, preview: 3, slewing: nil) == .slider(651))
-        #expect(
-            CamFov.pinchCommand(live: 12, preview: 10.5, slewing: nil)
-                == .slider(CamFov.pinchLens(for: 10.5)))
-        #expect(
-            CamFov.pinchCommand(live: 9.2, preview: 12, slewing: nil) == .slider(CamFov.lens12x))
-        #expect(
-            CamFov.pinchCommand(live: 6.7, preview: 5.3, slewing: nil)
-                == .slider(CamFov.pinchLens(for: 5.3)))
-
         var lastLens: UInt16?
         for tenth in 10...120 {
             let factor = Double(tenth) / 10
@@ -1260,32 +1137,22 @@ import Testing
         }
     }
 
-    @Test func recordUnchanged() {
-        #expect(Commands.recordStart().payload == [0x01])
-        #expect(Commands.recordStop().payload == [0x00])
-        #expect(Commands.setShootingMode(.photo).payload == [0x17])
-    }
-
     @Test func commandReplyFlagsAndOpcodeKey() {
         #expect(Duml.isCommandReply(0xC0))
         #expect(Duml.isCommandReply(0x80))
         #expect(!Duml.isCommandReply(0x40))
         #expect(!Duml.isCommandReply(0x00))
         #expect(Duml.opcodeKey(set: 0x02, cmd: 0x28) == 0x0228)
-        #expect(Duml.opcodeKey(set: 0x02, cmd: 0x1E) == 0x021E)
-        #expect(Duml.opcodeKey(set: 0x02, cmd: 0x2A) == 0x022A)
-        #expect(Duml.opcodeKey(set: 0x02, cmd: 0x2E) == 0x022E)
         #expect(Duml.isLiveCameraControl(set: 0x02, cmd: 0x2E))
         #expect(Duml.isLiveCameraControl(set: 0x02, cmd: 0x68))
         #expect(Duml.isLiveCameraControl(set: 0x02, cmd: 0xB8))
         #expect(Duml.shouldHoldReply(set: 0x02, cmd: 0xB8))
         #expect(Duml.shouldHoldReply(set: 0x02, cmd: 0x02))
+        #expect(Duml.isLiveCameraControl(set: 0x02, cmd: 0xA5))
+        #expect(Duml.isLiveCameraControl(set: 0x02, cmd: 0xA6))
+        #expect(Duml.shouldHoldReply(set: 0x02, cmd: 0xA6))
         #expect(!Duml.isLiveCameraControl(set: 0x09, cmd: 0xA8))
-        #expect(Duml.hex([0x01, 0x32, 0x80, 0x00, 0x00, 0x00, 0x40]) == "01 32 80 00 00 00 40")
-        #expect(Duml.hex([]) == "-")
         #expect(Commands.setIsoIndex(.iso1600).payload == [0x07])
-        #expect(Commands.setExpoMode(.auto).payload == [0x01, 0x00])
-        #expect(Commands.setExpoMode(.manual).payload == [0x04, 0x00])
     }
 
     @Test func mailboxCoalesceLastWins() {

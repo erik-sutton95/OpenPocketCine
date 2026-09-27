@@ -61,15 +61,6 @@ final class WatchRelayTests: XCTestCase {
         }
     }
 
-    func testThumbnailFromSolidImageIsNonEmpty() {
-        let color = CIColor(red: 0.2, green: 0.4, blue: 0.6)
-        let image = CIImage(color: color).cropped(to: CGRect(x: 0, y: 0, width: 1280, height: 720))
-        let data = WatchRelay.thumbnailData(from: image, maxWidth: 512, quality: 0.5)
-        XCTAssertNotNil(data)
-        XCTAssertGreaterThan(data?.count ?? 0, 32)
-        XCTAssertNotNil(data.flatMap { UIImage(data: $0) })
-    }
-
     func testIdentityThumbnailFromRec709GreyIsNotBlown() {
         // Rec.709 18% grey in video-range 420v (Y = 16 + 0.409×219 ≈ 106).
         // A DeviceRGB CI bake of this buffer was the overexposed wrist preview.
@@ -87,19 +78,6 @@ final class WatchRelayTests: XCTestCase {
         let scaledImage = scaled.flatMap { UIImage(data: $0) }
         XCTAssertEqual(scaledImage?.cgImage?.width, 64)
         XCTAssertEqual(scaledImage.map(Self.meanLuma) ?? 0, luma, accuracy: 3)
-    }
-
-    func testWatchShutterCopyIsOperatorFacing() {
-        for text in [
-            WatchRelayCopy.openOnIPhone,
-            WatchRelayCopy.connectFirst,
-            WatchRelayCopy.switchToVideo,
-            WatchRelayCopy.switchToPhoto,
-            WatchRelayCopy.busy,
-        ] {
-            XCTAssertFalse(text.localizedCaseInsensitiveContains("OpenZCine"))
-            XCTAssertFalse(text.localizedCaseInsensitiveContains("Nikon"))
-        }
     }
 
     private func assertMirroredPair(

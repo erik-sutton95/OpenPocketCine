@@ -71,14 +71,4 @@ struct MonitorReadoutValueTests {
         #expect(!ownership.permitsDeferredCommit(revision))
         #expect(release.snapshot.selection == "Single", "Release is not native camera truth")
     }
-
-    @Test func immutablePreviewCanBeReadOnABackgroundRendererWithoutHostAccess() async {
-        let snapshot = MonitorReadoutSnapshot(
-            title: "Temperature", options: ["5500K", "5600K", "5700K"], selection: "5600K")
-        let preview = MonitorReadoutValue(
-            id: UUID(), sourceIdentity: 42, snapshot: snapshot, position: 2)
-        let rendered = await Task.detached { (preview.selection, preview.snapshot.title) }.value
-        #expect(rendered.0 == "5700K")
-        #expect(rendered.1 == "Temperature")
-    }
 }

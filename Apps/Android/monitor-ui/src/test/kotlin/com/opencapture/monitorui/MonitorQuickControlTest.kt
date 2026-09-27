@@ -128,5 +128,10 @@ class MonitorQuickControlTest {
         owner.release(second)
         assertNull(owner.active)
         assertNull(owner.owner)
+        val next = assertNotNull(owner.acquire("first"))
+        owner.setActive(next, true)
+        owner.release(first)
+        assertEquals("first", owner.active, "A late release from the old lease must not end the new one")
+        assertNull(owner.acquire("first"), "The same key cannot take a second lease while one is held")
     }
 }

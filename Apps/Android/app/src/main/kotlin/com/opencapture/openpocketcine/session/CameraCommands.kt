@@ -133,62 +133,12 @@ object CameraCommands {
             else -> null
         }
 
-    /** SET `0x02/0x1E` — iOS `ExpoMode.setPayload` (`01 00` auto, `04 00` manual). */
-    fun expoMode(mode: Int): ByteArray =
-        when (mode) {
-            EXPO_AUTO, EXPO_MANUAL -> byteArrayOf(mode.toByte(), 0x00)
-            else -> byteArrayOf()
-        }
-
-    fun expoMode(manual: Boolean): ByteArray = expoMode(if (manual) EXPO_MANUAL else EXPO_AUTO)
-
-    fun isoIndex(index: Int): ByteArray = byteArrayOf(index.toByte())
-
-    /** `01` + u16-LE `(denom | 0x8000)` + `00 00 00 40`. */
-    fun shutter(denom: Int): ByteArray {
-        val coded = (denom and 0xFFFF) or 0x8000
-        return byteArrayOf(
-            0x01,
-            (coded and 0xFF).toByte(),
-            ((coded shr 8) and 0xFF).toByte(),
-            0x00,
-            0x00,
-            0x00,
-            0x40,
-        )
-    }
-
-    /** `[mode][kelvin/100 u16-LE][tint i16-LE]`. Matches iOS `WhiteBalance.setPayload`. */
-    fun whiteBalance(mode: Int, kelvin: Int, tint: Int): ByteArray {
-        val k = (kelvin.coerceAtLeast(0) / 100).coerceIn(0, 0xFFFF)
-        val t = tint.coerceIn(-100, 100)
-        val tu = t and 0xFFFF
-        return byteArrayOf(
-            mode.toByte(),
-            (k and 0xFF).toByte(),
-            ((k shr 8) and 0xFF).toByte(),
-            (tu and 0xFF).toByte(),
-            ((tu shr 8) and 0xFF).toByte(),
-        )
-    }
-
-    /** Auto SET is kelvin 0 and keeps tint (Mimo `00 00 00 14 00` at tint 20). */
-    fun whiteBalanceAuto(tint: Int = 0): ByteArray = whiteBalance(WB_AUTO, 0, tint)
-
-    fun whiteBalanceCustom(kelvin: Int, tint: Int): ByteArray {
-        val (k, t) = clampWhiteBalanceCustom(kelvin, tint)
-        return whiteBalance(WB_CUSTOM, k, t)
-    }
-
     /** iOS `CameraSession.setWhiteBalanceCustom` clamp. */
     fun clampWhiteBalanceCustom(kelvin: Int, tint: Int): Pair<Int, Int> =
         kelvin.coerceIn(2_000, 10_000) to tint.coerceIn(-100, 100)
 
     fun focusMode(continuous: Boolean): ByteArray =
         byteArrayOf(if (continuous) FOCUS_CONTINUOUS.toByte() else FOCUS_SINGLE.toByte())
-
-    fun colorMode(mode: Int, name: String = "", family: String = ""): ByteArray =
-        byteArrayOf(wireColorMode(mode, name, family).toByte())
 
     /**
      * D-Log2 cannot zoom. Any step off 1× hops the body to D-Log.
@@ -247,19 +197,6 @@ object CameraCommands {
         }
         return "$res\u001f$fpsIndex"
     }
-
-    fun paramGet(pid: Int): ByteArray =
-        byteArrayOf(0x00, 0x01, (pid and 0xFF).toByte(), ((pid shr 8) and 0xFF).toByte())
-
-    fun paramSet(pid: Int, value: Int): ByteArray =
-        byteArrayOf(
-            0x01,
-            0x01,
-            (pid and 0xFF).toByte(),
-            ((pid shr 8) and 0xFF).toByte(),
-            0x01,
-            value.toByte(),
-        )
 
     const val AUDIO_DSP_SIZE = 26
 
@@ -445,14 +382,6 @@ object CameraCommands {
 
     fun shootPhoto(): ByteArray = byteArrayOf(0x01)
 
-    /** `0x02/0x2E` 1-byte EV. `0x10` = 0.0; ⅓-stop steps, −9…+9 thirds. */
-    fun ev(thirds: Int): ByteArray {
-        val t = thirds.coerceIn(-9, 9)
-        return byteArrayOf((0x10 + t).toByte())
-    }
-
-    fun isoLimit(raw: Int): ByteArray = paramSet(PID_ISO_LIMIT, raw)
-
     fun zoomLens(position: Int): ByteArray {
         val p = position.coerceIn(0, 0xFFFF)
         return byteArrayOf(0x0A, 0x4E, (p and 0xFF).toByte(), ((p shr 8) and 0xFF).toByte())
@@ -462,10 +391,6 @@ object CameraCommands {
         val v = value.coerceIn(0, 0xFFFF)
         return byteArrayOf(0x03, 0x00, (v and 0xFF).toByte(), ((v shr 8) and 0xFF).toByte())
     }
-
-    /** Mimo held zoom: `01 rate direction 00`; refresh while held, then STOP. */
-    fun zoomRate(rate: Int, increasing: Boolean): ByteArray =
-        byteArrayOf(0x01, rate.coerceIn(72, 78).toByte(), if (increasing) 0x01 else 0x00, 0x00)
 
     fun zoomStop(): ByteArray = byteArrayOf(0xFF.toByte(), 0x00, 0x00, 0x00)
 
@@ -536,8 +461,6 @@ object CameraCommands {
             floatLE(width) +
             floatLE(height)
     }
-
-    fun clearTracking(): ByteArray = ByteArray(21)
 
     fun pollTracking(): ByteArray = byteArrayOf(0x00)
 
@@ -752,9 +675,6 @@ object CameraCommands {
     const val GIMBAL_FACE_FRONT = 0
     const val GIMBAL_FACE_SELFIE = 1
 
-    /** Screen-relative pan: invert for triple-tap 180. Unknown keeps front. */
-    fun invertGimbalPan(gimbalFace: Int): Boolean = gimbalFace == GIMBAL_FACE_SELFIE
-
     /** View-space X flip: TT180 extra-mirror XOR MIRROR assist. */
     fun liveViewFlip(poseViewFlip: Boolean, assistMirror: Boolean): Boolean =
         poseViewFlip != assistMirror
@@ -781,11 +701,6 @@ object CameraCommands {
         if (payload.size < 22) return null
         val raw = ((payload[20].toInt() and 0xFF) or (payload[21].toInt() shl 8)).toShort().toInt()
         return -raw
-    }
-
-    fun rotated180(payload: ByteArray): Boolean? {
-        val tenth = yawTenthDeg(payload) ?: return null
-        return kotlin.math.abs(tenth) > ROTATED_180_TENTH_DEG
     }
 
     fun rotationSettled(yawTenthDeg: Int, want180: Boolean): Boolean {
@@ -890,9 +805,6 @@ object CameraCommands {
     }
 
     fun fpsIndex(fps: Int): Int? = VideoFrameRate.fromFps(fps)?.rawValue
-
-    fun fpsFromIndex(index: Int): Int? =
-        VideoFrameRate.fromRaw(index)?.fps?.takeIf { it > 0 }
 
     /**
      * iOS `CameraStatusDecoder.fps(index:)` — subscribe display table,
@@ -1006,12 +918,6 @@ object CameraCommands {
             COLOR_DLOG2 -> "1600"
             else -> null
         }
-
-    /** OpenZCine drum: `" ★"` after the native base, same color as the number. */
-    fun isoChipLabel(label: String, colorMode: Int): String {
-        val base = markedIsoLabel(colorMode)
-        return if (base != null && label == base) "$label ★" else label
-    }
 
     fun isoChoices(colorMode: Int): List<Pair<Int, String>> {
         val all =

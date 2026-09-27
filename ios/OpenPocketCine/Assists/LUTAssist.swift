@@ -8,8 +8,6 @@ import SwiftUI
 /// Contrast / Warm / Cool. Custom is imported `.cube` files. The assist-bar
 /// chip is off. Exposure is input-referred stops before the cube (ETTR pull).
 enum LUTAssist {
-    /// OpenZCine `assistPanelWidth(for: .lut)`.
-    static let longPressPanelWidth: CGFloat = 400
     static let exposureTitle = "Exposure"
     static let exposureHelp = "Input stops before the cube. Pull 1–2 after ETTR."
     /// Live Photo / Photo is Rec.709; do not label a stale D-Log conversion.

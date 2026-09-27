@@ -47,68 +47,40 @@ class GimbalProgramTest {
     }
 
     @Test
-    fun runNeedsAAndB() {
-        var program = GimbalProgram()
-        assertFalse(program.canRun)
-        program = program.copy(a = a, b = b)
-        assertTrue(program.canRun)
+    fun unwrapYawCrossesTheGapButDoesNotClampMeasuredYaw() {
+        val cases = listOf(
+            -48.0 to -48.0, -135.0 to 225.0, -180.0 to 180.0, 180.0 to 180.0,
+            // Measured yaw is not clamped into fake endpoints.
+            90.0 to 90.0, 100.0 to 100.0, -80.0 to -80.0, -100.0 to 260.0,
+        )
+        for ((raw, unwrapped) in cases) {
+            assertEquals(unwrapped, GimbalWaypoint.unwrapYaw(raw), 1e-9, "raw yaw $raw")
+        }
     }
 
     @Test
-    fun lerpIsLinear() {
-        val mid = GimbalMoveEngine.lerp(a, b, 0.5)
-        assertEquals(15.0, mid.yawDeg, 1e-9)
-        assertEquals(5.0, mid.pitchDeg, 1e-9)
-    }
-
-    @Test
-    fun unwrapYawPastTheGap() {
-        assertEquals(-48.0, GimbalWaypoint.unwrapYaw(-48.0), 1e-9)
-        assertEquals(225.0, GimbalWaypoint.unwrapYaw(-135.0), 1e-9)
-        assertEquals(180.0, GimbalWaypoint.unwrapYaw(-180.0), 1e-9)
-        assertEquals(180.0, GimbalWaypoint.unwrapYaw(180.0), 1e-9)
-    }
-
-    @Test
-    fun measuredYawIsNotClampedIntoFakeEndpoints() {
-        assertEquals(90.0, GimbalWaypoint.unwrapYaw(90.0), 1e-9)
-        assertEquals(100.0, GimbalWaypoint.unwrapYaw(100.0), 1e-9)
-        assertEquals(-80.0, GimbalWaypoint.unwrapYaw(-80.0), 1e-9)
-        assertEquals(260.0, GimbalWaypoint.unwrapYaw(-100.0), 1e-9)
-    }
-
-    @Test
-    fun overlayCentersWhenPoseMatches() {
+    fun overlayProjectsRectilinearlyOnTheSphere() {
+        // Centers when the pose matches.
         val (nx, ny, onScreen) = GimbalMoveEngine.project(a, a, 16.0 / 9.0)
         assertEquals(0.5, nx, 1e-9)
         assertEquals(0.5, ny, 1e-9)
         assertTrue(onScreen)
-    }
-
-    @Test
-    fun overlayFollowsLiveYawOnTheSphere() {
+        // Follows live yaw on the sphere.
         val point = GimbalWaypoint(20.0, 0.0, 1.0)
         val atOrigin = GimbalMoveEngine.project(point, GimbalWaypoint(0.0, 0.0, 1.0), 16.0 / 9.0)
         val afterPan = GimbalMoveEngine.project(point, GimbalWaypoint(20.0, 0.0, 1.0), 16.0 / 9.0)
         assertTrue(atOrigin.first > 0.5)
         assertEquals(0.5, afterPan.first, 1e-9)
-    }
-
-    @Test
-    fun overlayIsRectilinear() {
-        val (nx, _, onScreen) =
+        // Rectilinear, not equirectangular.
+        val (rectX, _, rectOnScreen) =
             GimbalMoveEngine.project(GimbalWaypoint(30.0, 0.0, 1.0), a, 16.0 / 9.0)
         val expected = 0.5 + tan(30 * PI / 180) / (2 * tan(42 * PI / 180))
-        assertEquals(expected, nx, 1e-9)
-        assertTrue(onScreen)
+        assertEquals(expected, rectX, 1e-9)
+        assertTrue(rectOnScreen)
+        // Looking up draws above center.
+        val (_, upY, _) = GimbalMoveEngine.project(GimbalWaypoint(0.0, 10.0, 1.0), a, 16.0 / 9.0)
+        assertTrue(upY < 0.5)
     }
-
-    @Test
-    fun overlayDrawsLookUpAboveCenter() {
-        val (_, ny, _) = GimbalMoveEngine.project(GimbalWaypoint(0.0, 10.0, 1.0), a, 16.0 / 9.0)
-        assertTrue(ny < 0.5)
-    }
-
 
     @Test
     fun cameraExecutesABCOncePerLegWithSparseFeedback() {
@@ -199,15 +171,6 @@ class GimbalProgramTest {
             val out = engine.tick(dt, a, age)!!
             assertTrue(out.stop && out.finished)
         }
-    }
-
-    @Test
-    fun cancellationCannotSendAnotherNativeTarget() {
-        val engine = GimbalMoveEngine()
-        assertTrue(engine.start(GimbalProgram(a = a, b = b), b))
-        engine.tick(0.04, b)
-        engine.cancel()
-        assertEquals(null, engine.tick(0.04, b))
     }
 
     @Test
@@ -459,25 +422,25 @@ class GimbalProgramTest {
     }
 
     @Test
-    fun curveStopsAfterStalledScheduler() {
+    fun curveStopsAfterALateSchedulerTickAndCannotSkipFinalC() {
         val program = curveProgram(1.0)
-        val engine = GimbalMoveEngine()
-        assertTrue(engine.start(program, program.a!!))
-        repeat(200) { engine.tick(0.01, program.a) }
-        val late = engine.tick(0.09, program.a)
-        assertEquals(true, late?.stop)
-        assertEquals(null, late?.target)
+        val start = program.a!!
+        // (on-time ticks at A, late tick dt, pose at the late tick)
+        val cases = listOf(
+            "stalled scheduler" to Triple(200, 0.09, start),
+            "skip final C" to Triple(689, 0.11, program.c!!),
+        )
+        for ((label, case) in cases) {
+            val (ticks, lateDt, latePose) = case
+            val engine = GimbalMoveEngine()
+            assertTrue(engine.start(program, start))
+            repeat(ticks) { engine.tick(0.01, start) }
+            val late = engine.tick(lateDt, latePose)
+            assertEquals(true, late?.stop, label)
+            assertEquals(null, late?.target, label)
+        }
     }
-    @Test
-    fun schedulerCannotSkipFinalC() {
-        val program = curveProgram(1.0)
-        val engine = GimbalMoveEngine()
-        assertTrue(engine.start(program, program.a!!))
-        repeat(689) { engine.tick(0.01, program.a) }
-        val late = engine.tick(0.11, program.c!!)
-        assertEquals(true, late?.stop)
-        assertEquals(null, late?.target)
-    }
+
     @Test
     fun boundaryFitsBoundedFeedbackDelayWithoutWideningPositionTolerance() {
         data class Case(val delay: Double, val miss: Double, val succeeds: Boolean,

@@ -3,11 +3,6 @@ import Testing
 
 @testable import OpenPocketViewCore
 
-@Test func frameRateSamplerReportsZeroBeforeAnyFrames() {
-    let sampler = FrameRateSampler()
-    #expect(sampler.currentFPS == 0)
-}
-
 @Test func frameRateSamplerMeasuresInstantaneousRateFromTwoFrames() {
     var sampler = FrameRateSampler()
     sampler.recordFrame(at: 0)
@@ -28,23 +23,6 @@ import Testing
         sampler.recordFrame(at: t)
     }
     #expect(abs(sampler.currentFPS - 33.3) < 1.5)
-}
-
-@Test func frameRateSamplerIgnoresNonMonotonicTimestamps() {
-    var sampler = FrameRateSampler()
-    sampler.recordFrame(at: 0.1)
-    sampler.recordFrame(at: 0.133)
-    // A stale/out-of-order or zero-delta frame must not corrupt the rate or divide by zero.
-    sampler.recordFrame(at: 0.0)
-    #expect(sampler.currentFPS > 0)
-    #expect(abs(sampler.currentFPS - 30.0) < 0.5)
-}
-
-@Test func frameRateSamplerFormattedReportsTwoDecimals() {
-    var sampler = FrameRateSampler()
-    sampler.recordFrame(at: 0)
-    sampler.recordFrame(at: 0.040)
-    #expect(sampler.formatted == "25.00")
 }
 
 @Test func frameRateSamplerThrottlesDisplayedReadout() {

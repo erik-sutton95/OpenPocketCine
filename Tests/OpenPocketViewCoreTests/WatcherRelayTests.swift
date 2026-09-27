@@ -26,15 +26,6 @@ import Testing
         #expect(name == "_opc-mon._tcp")
     }
 
-    @Test func framingRoundTrip() throws {
-        let payload = Data("hello".utf8)
-        let wire = WatcherRelayFraming.encode(kind: .hello, payload: payload)
-        let decoded = try WatcherRelayFraming.decode(from: wire)
-        #expect(decoded?.kind == .hello)
-        #expect(decoded?.payload == payload)
-        #expect(decoded?.consumedBytes == wire.count)
-    }
-
     /// HEVC frames are thousands of bytes. `UInt8(length)` traps above 255
     /// (iPhone crash on Share this feed, IPS 2026-09-08-224509).
     @Test func framingRoundTripHevcSizedPayload() throws {
@@ -118,17 +109,6 @@ import Testing
             _ = b.recordTick(saturated: true, cameraStarving: false, now: Double(t) * 0.3)
         }
         #expect(b.rungIndex >= 1)
-    }
-
-    @Test func skipEncodeWhenAllPeersSaturated() {
-        #expect(WatcherRelayBitrate.shouldSkipEncode(allPeersSaturated: true))
-        #expect(!WatcherRelayBitrate.shouldSkipEncode(allPeersSaturated: false))
-    }
-
-    @Test func ceilingBlocksClimb() {
-        let b = WatcherRelayBitrate(ceilingIndex: 2, now: 0)
-        #expect(b.rungIndex == 2)
-        #expect(b.bitsPerSecond == WatcherRelayBitrate.ladder[2])
     }
 
     @Test func leaseAnonymousDropReleases() {

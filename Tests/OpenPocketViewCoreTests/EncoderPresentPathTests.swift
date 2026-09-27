@@ -3,28 +3,20 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct EncoderPresentPathTests {
-    @Test func firstFormatIsNotAChange() {
+    /// The first format is not a change; only a new VPS/SPS/PPS set is.
+    @Test(
+        arguments: [
+            (false, nil, [2], false),
+            (true, [2], [2], false),
+            (true, [2], [9], true),
+        ] as [(Bool, [UInt8]?, [UInt8], Bool)])
+    func parameterSetsChanged(hadFormat: Bool, previousSPS: [UInt8]?, nextSPS: [UInt8], changed: Bool) {
         #expect(
             EncoderPresentPath.parameterSetsChanged(
-                hadFormat: false,
-                previousVPS: nil, previousSPS: nil, previousPPS: nil,
-                nextVPS: [1], nextSPS: [2], nextPPS: [3]) == false)
-    }
-
-    @Test func identicalSetsAreNotAChange() {
-        #expect(
-            EncoderPresentPath.parameterSetsChanged(
-                hadFormat: true,
-                previousVPS: [1], previousSPS: [2], previousPPS: [3],
-                nextVPS: [1], nextSPS: [2], nextPPS: [3]) == false)
-    }
-
-    @Test func newSPSIsAChange() {
-        #expect(
-            EncoderPresentPath.parameterSetsChanged(
-                hadFormat: true,
-                previousVPS: [1], previousSPS: [2], previousPPS: [3],
-                nextVPS: [1], nextSPS: [9], nextPPS: [3]))
+                hadFormat: hadFormat,
+                previousVPS: hadFormat ? [1] : nil, previousSPS: previousSPS,
+                previousPPS: hadFormat ? [3] : nil,
+                nextVPS: [1], nextSPS: nextSPS, nextPPS: [3]) == changed)
     }
 
     @Test func feedAspectUsesRasterAndFallsBack() {

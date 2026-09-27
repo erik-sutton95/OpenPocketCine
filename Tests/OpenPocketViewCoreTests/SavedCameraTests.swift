@@ -252,7 +252,6 @@ import Testing
         #expect(ConnectionPhase.awaitingApproval.pocketWizardStep == 2)
         #expect(ConnectionPhase.joiningWifi.pocketWizardStep == 3)
         #expect(ConnectionPhase.openingDatalink.pocketWizardStep == 4)
-        #expect(ConnectionPhase.pocketWizardStepCount == 4)
         #expect(ConnectionPhase.failed("x").pocketWizardStep == 1)
     }
 

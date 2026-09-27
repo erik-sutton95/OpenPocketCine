@@ -2,7 +2,6 @@ import Foundation
 import Network
 import OpenPocketViewCore
 import XCTest
-import os
 
 @testable import OpenPocketCine
 
@@ -216,38 +215,24 @@ final class HandshakeBindTests: XCTestCase {
             "The camera keeps sending to its old peer until a new handshake retargets it")
     }
 
-    func testReplacementCannotInheritAlreadyArmedOldReceiveAck() {
-        let state = OSAllocatedUnfairLock(initialState: (generation: 0, acked: false))
-        let queue = DispatchQueue(label: "test.old-receive")
-        let oldGeneration = 0
-        let oldSocket = NWConnection(host: "127.0.0.1", port: 9004, using: .udp)
-        DatalinkDriver.prepareHandshakeBind(
-            existingSocket: oldSocket,
-            discard: {
-                state.withLock { $0.generation += 1 }
-                queue.sync {}
-            },
-            reset: {
-                state.withLock { $0.acked = false }
-                // An old callback may run immediately after reset. Generation
-                // invalidation must already have happened before this point.
-                queue.async {
-                    state.withLock {
-                        if $0.generation == oldGeneration { $0.acked = true }
-                    }
-                }
-                queue.sync {}
-            })
-        XCTAssertFalse(state.withLock { $0.acked })
-    }
-
-    func testFirstBindResetsWithoutDiscardingFreshTransport() {
-        var reset = false
-        DatalinkDriver.prepareHandshakeBind(
-            existingSocket: nil,
-            discard: { XCTFail("First bind must not discard a fresh driver") },
-            reset: { reset = true })
-        XCTAssertTrue(reset)
+    /// A replacement bind must invalidate the old socket's receive callbacks before
+    /// reset, or an already armed old ACK re-registers; a first bind must not discard.
+    func testHandshakeBindDiscardsOnlyAnExistingSocketAndBeforeReset() {
+        let cases: [(name: String, socket: NWConnection?, calls: [String])] = [
+            ("first bind", nil, ["reset"]),
+            (
+                "replacement bind", NWConnection(host: "127.0.0.1", port: 9004, using: .udp),
+                ["discard", "reset"]
+            ),
+        ]
+        for testCase in cases {
+            var calls: [String] = []
+            DatalinkDriver.prepareHandshakeBind(
+                existingSocket: testCase.socket,
+                discard: { calls.append("discard") },
+                reset: { calls.append("reset") })
+            XCTAssertEqual(calls, testCase.calls, testCase.name)
+        }
     }
 }
 

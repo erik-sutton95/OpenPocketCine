@@ -39,16 +39,6 @@ import Testing
             ])
     }
 
-    @Test func roundTrip() throws {
-        let original = Duml.Frame(
-            sender: Duml.senderApp, receiver: Duml.rxCamera, seq: 0xA000,
-            flags: Duml.flagRequest, cmdSet: 0x02, cmdId: 0x0C, payload: [0x01, 0x01, 0x00, 0x01])
-        let bytes = Duml.encode(original)
-        let decoded = try #require(Duml.decode(bytes))
-        #expect(decoded.consumed == bytes.count)
-        #expect(decoded.frame == original)
-    }
-
     @Test func unpackStatusString() {
         // Osmosis example: `00 12 "XtraEdgePro-2DCA16"`
         let ssid = Array("XtraEdgePro-2DCA16".utf8)
@@ -58,12 +48,4 @@ import Testing
         #expect(Duml.unpackStatusString([]) == "")
     }
 
-    @Test func decodeRejectsBadCrc() {
-        var bytes = Duml.encode(
-            .init(
-                sender: Duml.senderApp, receiver: Duml.rxCamera, seq: 0xA000,
-                flags: Duml.flagRequest, cmdSet: 0x02, cmdId: 0x0C, payload: [0x01]))
-        bytes[bytes.count - 1] ^= 0xFF  // corrupt the CRC16
-        #expect(Duml.decode(bytes) == nil)
-    }
 }

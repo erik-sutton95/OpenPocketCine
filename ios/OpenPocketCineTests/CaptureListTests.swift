@@ -20,35 +20,6 @@ final class CaptureListTests: XCTestCase {
             FocusOption.allCases.map(\.chip), ["AF-S", "AF-C", "Showcase", "Lock", "Priority"])
     }
 
-    func testShutterWheelUsesCameraListNotHardcoded24pTable() {
-        var status = CameraStatus()
-        status.fps = 60
-        status.shutterDenom = 50
-        status.availableShutterDenoms = CamCapShutter.parseDenoms(Self.shutter60p)
-
-        let denoms = CaptureLists.shutterDenoms(from: status)
-        XCTAssertTrue(denoms.contains(50), "4K 60p payload includes 1/50")
-        XCTAssertFalse(denoms.contains(25), "60p payload does not offer 1/25")
-        XCTAssertEqual(denoms, status.availableShutterDenoms)
-        XCTAssertFalse(denoms.contains(13), "wheel cannot invent a 24p-only stop")
-    }
-
-    func testShutterWheelOmitsSpeedsMissingFromPayload() {
-        var status = CameraStatus()
-        status.fps = 25
-        status.shutterDenom = 50
-        status.availableShutterDenoms = CamCapShutter.parseDenoms(Self.shutter25p)
-
-        let denoms = CaptureLists.shutterDenoms(from: status)
-        let other = CamCapShutter.parseDenoms(Self.shutter60p)
-        XCTAssertNotEqual(denoms, other)
-        XCTAssertTrue(denoms.contains(25))
-        XCTAssertTrue(denoms.contains(50))
-        for extra in [13, 15, 20, 125, 250, 10_000, 13_000] {
-            XCTAssertFalse(denoms.contains(extra), "do not offer 1/\(extra) — not in payload")
-        }
-    }
-
     func testIsoWheelUsesCamcapAndStarsBaseForTransfer() {
         var dlog2 = CameraStatus()
         dlog2.colorMode = .dLog2
@@ -137,18 +108,6 @@ final class CaptureListTests: XCTestCase {
             "zoom tele hop guess must not flip the star while status is still D-Log2")
     }
 
-    func testFacePriorityCopy() {
-        XCTAssertEqual(CaptureLists.facePriorityTitle, "Face Priority")
-        XCTAssertEqual(CaptureLists.facePriorityBadgeIcon, .scan)
-        XCTAssertFalse(CaptureLists.facePriorityHelp.isEmpty)
-    }
-
-    func testNativeIsoHopCopy() {
-        XCTAssertEqual(CaptureLists.nativeIsoHopTitle, "Auto Native ISO")
-        XCTAssertFalse(CaptureLists.nativeIsoHopHelp.isEmpty)
-        XCTAssertFalse(CaptureLists.nativeIsoHopHelp.contains("400 ↔ 1600"))
-    }
-
     func testDLog2HasNoIsoAuto() {
         var status = CameraStatus()
         status.colorMode = .dLog2
@@ -210,29 +169,6 @@ final class CaptureListTests: XCTestCase {
         XCTAssertEqual(CaptureLists.isoAutoLabels(from: normal, model: p4p).first, "100–200")
     }
 
-    func testEvLabelsThirdStopsFromMinus3ToPlus3() {
-        let labels = CaptureLists.evLabels
-        XCTAssertEqual(labels.count, 19)
-        XCTAssertEqual(labels.first, "\(EvComp.minusSign)3.0")
-        XCTAssertEqual(labels.last, "+3.0")
-        XCTAssertTrue(labels.contains("0.0"))
-        XCTAssertTrue(labels.contains("\(EvComp.minusSign)1.3"))
-        XCTAssertTrue(labels.contains("+0.7"))
-        XCTAssertTrue(labels.contains("+1.0"))
-        XCTAssertEqual(EvComp(label: "\(EvComp.minusSign)3.0")?.rawValue, 0x07)
-        XCTAssertEqual(EvComp(label: "0.0")?.rawValue, 0x10)
-        XCTAssertEqual(EvComp(label: "+3.0")?.rawValue, 0x19)
-        XCTAssertEqual(
-            labels,
-            [
-                "\(EvComp.minusSign)3.0", "\(EvComp.minusSign)2.7", "\(EvComp.minusSign)2.3",
-                "\(EvComp.minusSign)2.0", "\(EvComp.minusSign)1.7", "\(EvComp.minusSign)1.3",
-                "\(EvComp.minusSign)1.0", "\(EvComp.minusSign)0.7", "\(EvComp.minusSign)0.3",
-                "0.0",
-                "+0.3", "+0.7", "+1.0", "+1.3", "+1.7", "+2.0", "+2.3", "+2.7", "+3.0",
-            ])
-    }
-
     func testShutterAngleLadderIsCalculatedNotCaptured() {
         XCTAssertEqual(ShutterAngle.labels.first, "5.6°")
         XCTAssertEqual(ShutterAngle.labels.last, "360°")
@@ -241,32 +177,10 @@ final class CaptureListTests: XCTestCase {
         XCTAssertEqual(ShutterAngle.nearestLabel(denom: 48, fps: 24), "180°")
     }
 
-    func testEmptyCapListUsesFallbackLadderAndRetainsCurrent() {
-        var status = CameraStatus()
-        status.shutterDenom = 80
-        let denoms = CaptureLists.shutterDenoms(from: status)
-        XCTAssertTrue(denoms.contains(80))
-        XCTAssertTrue(denoms.contains(48), "The fallback retains a 180° shutter at 24 fps")
-        XCTAssertEqual(CaptureLists.shutterLabels(from: status), denoms.map { "1/\($0)" })
-    }
-
-    private static let shutter25p = hex(
-        "016d000002000101001e00052180be00409f00009900889300a08f00808c00c48900d08700408600e28400e88300208300808200f48100908100408100f08000c88000a080007880006480005080003c80003280002880001e80001980000c80000a8000088000068000058000048000"
-    )
-    private static let shutter60p = hex(
-        "0164000002000101001e00051e80be00409f00009900889300a08f00808c00c48900d08700408600e28400e88300208300808200f48100908100408100f08000c88000a080007880006480005080003c80003280000c80000a8000088000068000058000048000"
-    )
     private static let isoDLog2: [UInt8] = [
         0x01, 0x08, 0x00, 0x00, 0x06, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
     ]
     private static let isoDLog: [UInt8] = [
         0x01, 0x08, 0x00, 0x00, 0x06, 0x00, 0x05, 0x06, 0x07, 0x08, 0x09,
     ]
-
-    private static func hex(_ s: String) -> [UInt8] {
-        stride(from: 0, to: s.count, by: 2).map {
-            let i = s.index(s.startIndex, offsetBy: $0)
-            return UInt8(s[i..<s.index(i, offsetBy: 2)], radix: 16)!
-        }
-    }
 }

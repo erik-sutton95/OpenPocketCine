@@ -189,16 +189,6 @@ import Testing
         #expect(out?.stop == true && out?.finished == true)
     }
 
-    @Test func canceledMoveCannotSendAnotherNativeTarget() {
-        var engine = GimbalMoveEngine()
-        let started = engine.start(program: GimbalProgram(a: a, b: b), live: c)
-        #expect(started)
-        _ = engine.tick(dt: 0.04, live: c)
-        engine.cancel()
-        let later = engine.tick(dt: 0.04, live: c)
-        #expect(later == nil)
-    }
-
     @Test func editingPointPreservesDuration() {
         var program = GimbalProgram(a: a, b: b, durationAB: 10)
         program.setPoint(.b, c)

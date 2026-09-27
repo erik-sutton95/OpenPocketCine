@@ -8,7 +8,6 @@ import com.opencapture.openpocketcine.feed.WaveformIre
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -121,15 +120,6 @@ object GridAssist {
 }
 
 object GuidesAssist {
-    const val PANEL_WIDTH_DP = 472f
-
-    fun summaryLabel(selected: Set<GuideAspect>): String =
-        when (selected.size) {
-            0 -> "—"
-            1 -> selected.first().label
-            else -> "${selected.size} ratios"
-        }
-
     /** Letterbox when the guide is wider than the feed, pillarbox when narrower. */
     fun rectForRatio(feed: AssistRect, ratio: Float): AssistRect {
         val width: Float
@@ -180,16 +170,6 @@ object AudioAssist {
         val fallback = AssistPoint(movement.minX + size.width / 2f, canvas.midY)
         return MovablePanelMath.clamp(fallback, size, movement)
     }
-
-    fun displayedSensitivity(value: String?): String {
-        val trimmed = value?.trim().orEmpty()
-        return if (trimmed.isEmpty()) "—" else trimmed.uppercase()
-    }
-
-    fun y(db: Double, barTop: Float, barBottom: Float): Float {
-        val fraction = ((db - FLOOR_DB) / -FLOOR_DB).coerceIn(0.0, 1.0)
-        return (barBottom - fraction * (barBottom - barTop)).toFloat()
-    }
 }
 
 /**
@@ -202,7 +182,6 @@ object WaveformAxis {
     const val BOTTOM_PAD = 2f
     const val SIDE_PAD = 6f
     const val BUFFER_IRE = 5.0
-    const val OPTIONS_DRAG_SLOP = 8f
     val crushClipDash = floatArrayOf(3f, 3f)
 
     /**
@@ -238,15 +217,6 @@ object WaveformAxis {
     fun middleGrayIRE(colorMode: Int): Double =
         WaveformIre.middleGrayIRE(MonitorTransfer.fromColorMode(colorMode))
 
-    fun ire(encoded: Double, colorMode: Int, iso: Int? = null): Double =
-        WaveformIre.ire(encoded, MonitorTransfer.fromColorMode(colorMode), iso)
-
-    fun levelTable(colorMode: Int, iso: Int? = null): FloatArray =
-        WaveformIre.levelTable(MonitorTransfer.fromColorMode(colorMode), iso)
-
-    fun remapHistogram(bins: IntArray, colorMode: Int, iso: Int? = null): IntArray =
-        WaveformIre.remapHistogram(bins, MonitorTransfer.fromColorMode(colorMode), iso)
-
     data class GuideStroke(val ire: Double, val dashed: Boolean, val crushClip: Boolean)
 
     fun guideStrokes(
@@ -265,8 +235,6 @@ object WaveformAxis {
         }
         return strokes
     }
-
-    fun shouldPresentOptions(dx: Float, dy: Float): Boolean = hypot(dx, dy) <= OPTIONS_DRAG_SLOP
 }
 
 object HistogramAssist {
@@ -322,9 +290,6 @@ object ParadeAssist {
     }
 
     fun chip(mode: ParadeMode): String = mode.label.uppercase()
-
-    fun accessibilityLabel(mode: ParadeMode): String =
-        if (mode == ParadeMode.YRGB) "YRGB parade" else "RGB parade"
 }
 
 object VectorscopeAssist {
@@ -440,10 +405,8 @@ object TrafficLightsAssist {
 object MovablePanelMath {
     const val HOLD_SECONDS = 0.3
     const val POSITION_GRID = 4f
-    const val HAPTIC_GRID = 22f
     const val SCALE_MIN = 0.6
     const val SCALE_MAX = 1.6
-    const val GAP = 10f
     /** Thumb well for the L-corner. Larger than iOS 56 so the grip is easy to hit. */
     const val GRIP_HIT_DP = 90f
     /** iOS `WaveformAssist.gripVisualSize` — L-bracket stroke size. */
@@ -523,9 +486,6 @@ object MovablePanelMath {
     fun snap(point: AssistPoint, grid: Float = POSITION_GRID): AssistPoint =
         AssistPoint(round(point.x / grid) * grid, round(point.y / grid) * grid)
 
-    fun hapticCell(point: AssistPoint, grid: Float = HAPTIC_GRID): Int =
-        round(point.x / grid).toInt() * 100_000 + round(point.y / grid).toInt()
-
     fun resolvedCenter(
         session: AssistPoint?,
         stored: StoredCenter?,
@@ -537,101 +497,6 @@ object MovablePanelMath {
         if (stored != null) return clamp(stored.center(bounds), size, bounds)
         return clamp(defaultCenter, size, bounds)
     }
-
-    fun defaultCenterTopLeading(
-        feed: AssistRect,
-        size: AssistSize,
-        bounds: AssistRect,
-        topClearance: Float = 0f,
-    ): AssistPoint {
-        val halfW = size.width / 2f
-        val halfH = size.height / 2f
-        val x = feed.minX + halfW
-        val outside = feed.minY - GAP - halfH
-        val y =
-            if (outside - halfH >= bounds.minY) {
-                outside
-            } else {
-                maxOf(feed.minY, bounds.minY + topClearance) + GAP + halfH
-            }
-        return clamp(AssistPoint(x, y), size, bounds)
-    }
-
-    fun defaultCenterTopTrailing(
-        feed: AssistRect,
-        size: AssistSize,
-        bounds: AssistRect,
-        topClearance: Float = 0f,
-    ): AssistPoint {
-        val halfW = size.width / 2f
-        val halfH = size.height / 2f
-        val x = feed.maxX - halfW
-        val outside = feed.minY - GAP - halfH
-        val y =
-            if (outside - halfH >= bounds.minY) {
-                outside
-            } else {
-                maxOf(feed.minY, bounds.minY + topClearance) + GAP + halfH
-            }
-        return clamp(AssistPoint(x, y), size, bounds)
-    }
-
-    fun defaultCenterBottomTrailing(
-        feed: AssistRect,
-        size: AssistSize,
-        bounds: AssistRect,
-        bottomClearance: Float = 0f,
-    ): AssistPoint {
-        val halfW = size.width / 2f
-        val halfH = size.height / 2f
-        val x = feed.maxX - halfW
-        val outside = feed.maxY + GAP + halfH
-        val y =
-            if (outside + halfH <= bounds.maxY) {
-                outside
-            } else {
-                minOf(feed.maxY, bounds.maxY - bottomClearance) - GAP - halfH
-            }
-        return clamp(AssistPoint(x, y), size, bounds)
-    }
-
-    fun defaultCenterBottomLeading(
-        feed: AssistRect,
-        size: AssistSize,
-        bounds: AssistRect,
-        bottomClearance: Float = 0f,
-    ): AssistPoint {
-        val halfW = size.width / 2f
-        val halfH = size.height / 2f
-        val x = feed.minX + halfW
-        val outside = feed.maxY + GAP + halfH
-        val y =
-            if (outside + halfH <= bounds.maxY) {
-                outside
-            } else {
-                minOf(feed.maxY, bounds.maxY - bottomClearance) - GAP - halfH
-            }
-        return clamp(AssistPoint(x, y), size, bounds)
-    }
-}
-
-object LiveLumaHistogram {
-    const val BINS = 256
-
-    /** Rec.709 luma over packed ARGB. Empty input yields 256 zeros. */
-    fun fromArgb(pixels: IntArray): IntArray {
-        val bins = IntArray(BINS)
-        for (px in pixels) {
-            val r = (px ushr 16) and 0xFF
-            val g = (px ushr 8) and 0xFF
-            val b = px and 0xFF
-            val y = (0.2126 * r + 0.7152 * g + 0.0722 * b).roundToInt().coerceIn(0, 255)
-            bins[y]++
-        }
-        return bins
-    }
-
-    fun empty(): IntArray = IntArray(BINS)
 }
 
 object FalseColorBands {
@@ -645,20 +510,6 @@ object FalseColorBands {
     ) {
         fun contains(value: Double): Boolean = value >= lowerBound && value < upperBound
     }
-
-    fun legendLabels(scale: FalseColorScale): List<String> =
-        when (scale) {
-            FalseColorScale.STOPS ->
-                listOf("0–4", "5", "10–12", "41–48", "61–70", "92–93", "94–95", "96–98", "99–100")
-            FalseColorScale.EL_ZONE ->
-                listOf(
-                    "−6", "−5", "−4", "−3", "−2", "−1", "−½", "18%",
-                    "+½", "+1", "+2", "+3", "+4", "+5", "+6",
-                )
-            FalseColorScale.IRE ->
-                listOf("BDL", "NBDL", "18%MG", "MG+1", "80%WC", "95%WC")
-            FalseColorScale.LIMITS -> listOf("0–4", "5–9", "94–98", "99–100")
-        }
 
     fun bands(scale: FalseColorScale, transfer: MonitorTransfer): List<Band> =
         when (scale) {
@@ -722,19 +573,11 @@ object FalseColorBands {
 }
 
 object AssistLongPress {
-    const val CHIP_MS = 250L
     const val PANEL_MS = 300L
-    const val GAP_DP = 10f
-    const val MARGIN_DP = 12f
     /** LUT-matched close on every assist / capture options card (iOS 34 pt reads large on S25). */
     const val CLOSE_DP = 27f
     const val PANEL_PAD_DP = 12f
     const val PANEL_GAP_DP = 8f
-    const val DRUM_ROW_DP = 52f
-    const val DRUM_FADE_IN = 0.12f
-    const val DRUM_FADE_OUT = 0.88f
-    const val DRUM_CENTER_PT = 27f
-    const val DRUM_NEIGHBOR_PT = 20f
 
     fun preferredWidthDp(tool: LiveAssistTool): Float =
         if (tool == LiveAssistTool.GUIDES) 472f else 400f

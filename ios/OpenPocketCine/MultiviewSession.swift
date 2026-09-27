@@ -1309,9 +1309,6 @@ final class MultiviewSession {
 
 /// Discovery is broader than the preview command profiles captured so far.
 extension FoundCamera {
-    func acceptsMissingMultiviewRoleQuery(_ reply: [UInt8]) -> Bool {
-        MulticamSupport.acceptsMissingRoleQuery(model, reply: reply)
-    }
     var appearsInMultiview: Bool { MulticamSupport.appears(model) }
     var hasMultiviewPreview: Bool { MulticamSupport.hasPreview(model) }
 }

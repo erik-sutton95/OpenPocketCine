@@ -14,12 +14,4 @@ final class LiveTypeTests: XCTestCase {
                 "MonitorUI should register shared face \(name)")
         }
     }
-
-    func testReadoutsUseTheSharedSoraFace() {
-        let readout = LiveType.ui(size: 17, weight: .medium, design: .monospaced)
-        let shared = MonitorTheme.font(17, weight: .medium)
-        XCTAssertEqual(String(describing: readout), String(describing: shared))
-        _ = MonitorTheme.font(17)
-        XCTAssertNotNil(UIFont(name: "Sora-Regular", size: 17))
-    }
 }

@@ -10,26 +10,11 @@ public enum LUTExposureCompensation: Sendable {
     public static let maxStops: Double = 3
     public static let step: Double = 0.5
 
-    /// Half-stop ticks from ``minStops`` through ``maxStops`` (13 values).
-    public static var stops: [Double] {
-        var values: [Double] = []
-        var value = minStops
-        while value <= maxStops + 0.000_1 {
-            values.append(snap(value))
-            value += step
-        }
-        return values
-    }
-
     public static func snap(_ stops: Double) -> Double {
         guard stops.isFinite else { return 0 }
         let clamped = min(max(stops, minStops), maxStops)
         let snapped = (clamped / step).rounded() * step
         return abs(snapped) < 0.000_1 ? 0 : snapped
-    }
-
-    public static func canStep(_ stops: Double, by delta: Double) -> Bool {
-        stepped(stops, by: delta) != snap(stops)
     }
 
     public static func stepped(_ stops: Double, by delta: Double) -> Double {

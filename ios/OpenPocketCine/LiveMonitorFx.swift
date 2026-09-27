@@ -5,7 +5,7 @@ import UIKit
 
 /// Local GPU monitor tools. Peaking, false colour, and zebra measure **source
 /// camera codes** — the same pre-LUT buffer WAVE / HISTO tap. Never the cube look.
-/// False colour IRE / Limits use ``LiveColorScience/monitorIRE`` for the active
+/// False colour IRE / Limits use `ScopeDisplayScale.monitorPercent` for the active
 /// `ColorMode`. LUT and de-squeeze are display-only CI ops. Mirror is a view-space
 /// flip (`MirrorAssist.feedScale`) so it never lands in this graph.
 struct LiveImageEffects: Equatable, Sendable {

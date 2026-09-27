@@ -8,9 +8,6 @@ import SwiftUI
 /// ring plus 34pt cross is leftover prototype copy — neither platform draws a ring or a
 /// centre mark, and `AssistConfiguration` has no crosshair fields.
 enum CrosshairAssist {
-    /// Popup width OpenZCine uses for CROSS (`assistPanelWidth` — 400, not guides' 472).
-    static let longPressPanelWidth: CGFloat = 400
-
     /// OpenZCine `AssistPanel` / Android `OptionCopy` for CROSS.
     static let helpCopy = "Tap the toolbar button to show or hide the centre crosshair."
 

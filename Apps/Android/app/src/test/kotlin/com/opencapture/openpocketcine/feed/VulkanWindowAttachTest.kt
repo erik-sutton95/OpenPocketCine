@@ -18,11 +18,4 @@ class VulkanWindowAttachTest {
     fun attachFailureIsNotAGlesFallback() {
         assertFalse(VulkanWindowAttach.shouldFallbackToGlesOnAttachFailure())
     }
-
-    @Test
-    fun api34KeepsTheSurfaceWhileAnOverlayCoversTheMonitor() {
-        assertFalse(VulkanWindowAttach.keepSurfaceWhileAttached(33))
-        assertTrue(VulkanWindowAttach.keepSurfaceWhileAttached(34))
-        assertTrue(VulkanWindowAttach.keepSurfaceWhileAttached(35))
-    }
 }

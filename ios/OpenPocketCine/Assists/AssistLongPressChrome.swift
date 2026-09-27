@@ -2,54 +2,9 @@ import MonitorUI
 import SwiftUI
 import UIKit
 
-/// Shared long-press options chrome — OpenZCine `AssistPanel` +
-/// `AssistOptionsPopupAnchor` (glass card above the assist bar).
+/// Shared long-press options chrome: OpenZCine `AssistPanel` menus and footers.
 enum AssistLongPressChrome {
     static let revealCurve = Animation.timingCurve(0.16, 1, 0.3, 1, duration: 0.20)
-    static let gap: CGFloat = 10
-    static let margin: CGFloat = 12
-    static let slideSlack: CGFloat = 20
-
-    /// OpenZCine `assistPanelWidth(for:)` — guides is wider; everything else is 400.
-    static func preferredWidth(for tool: LiveAssistTool) -> CGFloat {
-        tool == .guides ? 472 : 400
-    }
-
-    /// OpenZCine `AssistOptionsPopupAnchor`: park above the toolbar / icon, clamp into
-    /// the safe viewport, cap height so a tall menu cannot become a centred sheet.
-    static func panelBox(
-        viewport: CGSize,
-        anchor: CGRect,
-        panel: CGSize,
-        toolbar: CGRect = .zero,
-        safeArea: EdgeInsets = EdgeInsets(),
-        ceilingY: CGFloat = 0,
-        gap: CGFloat = gap,
-        keyboardHeight: CGFloat = 0
-    ) -> LivePopupPlacement.Box {
-        LivePopupPlacement.assistOptions(
-            icon: anchor,
-            toolbar: toolbar.width > 1 ? toolbar : anchor,
-            preferredWidth: panel.width,
-            panelHeight: panel.height,
-            viewport: viewport,
-            safeArea: safeArea,
-            ceilingY: ceilingY,
-            gap: gap,
-            keyboardHeight: keyboardHeight
-        )
-    }
-
-    static func panelOrigin(
-        viewport: CGSize,
-        anchor: CGRect,
-        panel: CGSize,
-        margin: CGFloat = margin,
-        gap: CGFloat = gap
-    ) -> CGPoint {
-        _ = margin
-        return panelBox(viewport: viewport, anchor: anchor, panel: panel, gap: gap).origin
-    }
 
     @MainActor
     @ViewBuilder

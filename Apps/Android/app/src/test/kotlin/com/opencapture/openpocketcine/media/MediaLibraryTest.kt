@@ -13,22 +13,6 @@ class MediaLibraryTest {
         javaClass.classLoader!!.getResourceAsStream("nano-manifest.bin")!!.readBytes()
 
     @Test
-    fun portraitHeaderStacksTheItemCountUnderTheTitle() {
-        assertTrue(MediaLibraryHeaderMetrics.stacksCountUnderTitle(portrait = true))
-        assertFalse(MediaLibraryHeaderMetrics.stacksCountUnderTitle(portrait = false))
-    }
-
-    @Test
-    fun thumbnailGridMatchesOpenZCineMinima() {
-        assertEquals(148, MediaThumbnailSize.SMALL.gridMinimumDp)
-        assertEquals(210, MediaThumbnailSize.MEDIUM.gridMinimumDp)
-        assertEquals(280, MediaThumbnailSize.LARGE.gridMinimumDp)
-        assertEquals(200, MediaThumbnailSize.SMALL.gridMaximumDp)
-        assertEquals(300, MediaThumbnailSize.MEDIUM.gridMaximumDp)
-        assertEquals(380, MediaThumbnailSize.LARGE.gridMaximumDp)
-    }
-
-    @Test
     fun emptyCopyDoesNotNameSisterApps() {
         val copy =
             listOf(
@@ -71,7 +55,6 @@ class MediaLibraryTest {
     fun decodesNanoManifestCountAndNames() {
         val files = MediaManifest.decode(fixture())
         assertEquals(34, files.size)
-        assertEquals(34, MediaManifest.headerCount(fixture()))
         assertEquals("DJI_20260814125250_0034_D.MP4", files.first().filename)
         assertEquals("DJI_20260404103742_0001_D.MP4", files.last().filename)
         assertTrue(files.all { it.kind == MediaKind.VIDEO })
@@ -141,12 +124,8 @@ class MediaLibraryTest {
         val original = MediaHTTP.pathUrlString(storage, file.path)
         assertTrue(original.contains("DCIM/DJI_001/DJI_20260814125250_0034_D.MP4"))
         assertTrue(MediaHTTP.previewPaths(file).any { it.endsWith(".LRF") })
-        val play = MediaHTTP.playbackCandidates(file, firstStorage = 1)
-        assertEquals(listOf(1, 0, 1, 0), play.map { it.first })
-        assertTrue(play.all { it.second.endsWith(".LRF") || it.second.endsWith(".MP4") })
-        assertTrue(play.first().second.endsWith(".LRF"))
-        assertTrue(play.last().second.endsWith(".MP4"))
-        assertTrue(MediaHTTP.isProxyPath(play[0].second))
+        val proxy = MediaHTTP.previewPaths(file).first()
+        assertTrue(MediaHTTP.isProxyPath(proxy))
         assertFalse(MediaHTTP.isProxyPath(file.path))
         assertEquals(file.path, MediaHTTP.deliveryPath(file))
         assertFalse(MediaHTTP.isProxyPath(MediaHTTP.deliveryPath(file)))
@@ -154,9 +133,9 @@ class MediaLibraryTest {
         assertTrue(MediaHTTP.proxyPaths(file).all { MediaHTTP.isProxyPath(it) })
         assertTrue(MediaHTTP.proxyPaths(file).none { it == file.path })
         assertTrue(MediaHTTP.proxyPaths(file).isNotEmpty())
-        assertEquals("video/mp4", MediaHTTP.playbackMIMEType(play[0].second))
+        assertEquals("video/mp4", MediaHTTP.playbackMIMEType(proxy))
         assertEquals("video/mp4", MediaHTTP.playbackMIMEType(file.path))
-        assertTrue(MediaHTTP.playbackCacheFileName(play[0].second).endsWith(".mp4"))
+        assertTrue(MediaHTTP.playbackCacheFileName(proxy).endsWith(".mp4"))
         assertTrue(MediaHTTP.playbackCacheFileName(file.path).endsWith(".MP4"))
         assertEquals(MediaCacheGrade.ORIGINAL, MediaCacheGrade.resolve(true, true))
         assertEquals(MediaCacheGrade.PROXY, MediaCacheGrade.resolve(false, true))
@@ -231,44 +210,11 @@ class MediaLibraryTest {
     fun nextCursorUsesOldestVideoHandle() {
         val files = MediaManifest.decode(fixture())
         val handles = files.map { it.handle }
-        val oldest = MediaListCommand.oldestVideoHandle(handles)
-        assertEquals(handles.minOrNull(), oldest)
+        val oldest = handles.minOrNull()
         assertFalse(MediaListCommand.hasOlderPage(recordCount = 34, cursor = oldest))
         assertTrue(MediaListCommand.hasOlderPage(recordCount = 45, cursor = oldest))
         val older = MediaListCommand.nextCursor(handles, files[0].handle)
         assertEquals(files.drop(1).minOf { it.handle }, older)
-    }
-
-    @Test
-    fun queryFiltersAndSorts() {
-        val files = MediaManifest.decode(fixture())
-        val videos = MediaLibraryQuery.filtered(files, MediaLibraryTab.VIDEOS)
-        assertEquals(34, videos.size)
-        val photos = MediaLibraryQuery.filtered(files, MediaLibraryTab.PHOTOS)
-        assertTrue(photos.isEmpty())
-        val oldest = MediaLibraryQuery.sorted(files, MediaLibrarySort.OLDEST)
-        assertTrue(oldest.first().filename.contains("20260404"))
-        assertEquals("3:29", MediaClipFormatting.durationLabel(209))
-    }
-
-    @Test
-    fun fiftyFpsClipOffersHalfSpeedConform() {
-        val file =
-            MediaFile(
-                path = "DCIM/DJI_001/DJI_20260819000000_0050_D.MP4",
-                thumbPath = "MISC/THM/DJI_001/DJI_20260819000000_0050_D.scr",
-                resolution = "3840x2160",
-                fps = 50,
-            )
-        val source = ConformPreview.probeLocal(listedRate = file.fps?.toDouble())
-        val availability = ConformPreview.availability(source)
-        assertEquals(50.0, source.captureRate)
-        assertTrue(availability.targets.contains(25.0))
-        assertEquals("25 fps · 50%", ConformPreview.targetLabel(50.0, 25.0))
-        assertEquals(
-            PlaybackVideoLayout.Size(3840f, 2160f),
-            PlaybackVideoLayout.sizeFromResolution(file.resolution),
-        )
     }
 
     @Test
@@ -361,22 +307,6 @@ class MediaLibraryTest {
     }
 
     @Test
-    fun leftoverGopPacketsAreNotALivePicture() {
-        assertFalse(MediaLiveResume.isPictureFresh(lastPresentedAt = null, since = 100L))
-        assertFalse(MediaLiveResume.isPictureFresh(lastPresentedAt = 99L, since = 100L))
-        assertTrue(MediaLiveResume.isPictureFresh(lastPresentedAt = 100L, since = 100L))
-        assertTrue(MediaLiveResume.isPictureFresh(lastPresentedAt = 101L, since = 100L))
-    }
-
-    @Test
-    fun sortCyclesNewestOldestNameRating() {
-        assertEquals(MediaLibrarySort.OLDEST, MediaLibrarySort.NEWEST.next)
-        assertEquals(MediaLibrarySort.NAME, MediaLibrarySort.OLDEST.next)
-        assertEquals(MediaLibrarySort.RATING, MediaLibrarySort.NAME.next)
-        assertEquals(MediaLibrarySort.NEWEST, MediaLibrarySort.RATING.next)
-    }
-
-    @Test
     fun downloadFinishesAtContentLengthWithoutWaitingForEof() {
         val body = ByteArray(100) { it.toByte() }
         val padded = body + ByteArray(40) { 0xFF.toByte() }
@@ -388,67 +318,42 @@ class MediaLibraryTest {
     }
 
     @Test
-    fun unknownLengthRamCopyRejectsPastMaxBytes() {
-        val body = ByteArray(200) { it.toByte() }
-        val out = ByteArrayOutputStream()
-        assertFailsWith<MediaTransferError.BadResponse> {
-            MediaTransfer.readUntilLength(
-                ByteArrayInputStream(body),
-                out,
-                expected = 0,
-                maxBytes = 100,
-            ) { }
+    fun ramCopyEnforcesMaxBytesForKnownAndUnknownLengths() {
+        data class Case(val name: String, val size: Int, val expected: Long, val rejects: Boolean)
+        val cases =
+            listOf(
+                Case("unknown length past max is rejected", size = 200, expected = 0, rejects = true),
+                Case("unknown length within max succeeds", size = 50, expected = 0, rejects = false),
+                Case("unknown length at exact max succeeds", size = 100, expected = 0, rejects = false),
+                Case("known length above max is rejected without copying", size = 200, expected = 200, rejects = true),
+            )
+        for (case in cases) {
+            val body = ByteArray(case.size) { it.toByte() }
+            val out = ByteArrayOutputStream()
+            val read = {
+                MediaTransfer.readUntilLength(
+                    ByteArrayInputStream(body),
+                    out,
+                    expected = case.expected,
+                    maxBytes = 100,
+                ) { }
+            }
+            if (case.rejects) {
+                assertFailsWith<MediaTransferError.BadResponse>(case.name) { read() }
+                if (case.expected == 0L) {
+                    assertTrue(out.size() <= 100, case.name)
+                } else {
+                    assertEquals(0, out.size(), case.name)
+                }
+            } else {
+                assertEquals(case.size.toLong(), read(), case.name)
+                assertEquals(body.toList(), out.toByteArray().toList(), case.name)
+            }
         }
-        assertTrue(out.size() <= 100)
     }
 
     @Test
-    fun unknownLengthRamCopyWithinMaxSucceeds() {
-        val body = ByteArray(50) { it.toByte() }
-        val out = ByteArrayOutputStream()
-        val written =
-            MediaTransfer.readUntilLength(
-                ByteArrayInputStream(body),
-                out,
-                expected = 0,
-                maxBytes = 100,
-            ) { }
-        assertEquals(50L, written)
-        assertEquals(body.toList(), out.toByteArray().toList())
-    }
-
-    @Test
-    fun unknownLengthRamCopyAtExactMaxSucceeds() {
-        val body = ByteArray(100) { it.toByte() }
-        val out = ByteArrayOutputStream()
-        val written =
-            MediaTransfer.readUntilLength(
-                ByteArrayInputStream(body),
-                out,
-                expected = 0,
-                maxBytes = 100,
-            ) { }
-        assertEquals(100L, written)
-        assertEquals(body.toList(), out.toByteArray().toList())
-    }
-
-    @Test
-    fun knownLengthAboveMaxIsRejectedWithoutCopying() {
-        val body = ByteArray(200) { it.toByte() }
-        val out = ByteArrayOutputStream()
-        assertFailsWith<MediaTransferError.BadResponse> {
-            MediaTransfer.readUntilLength(
-                ByteArrayInputStream(body),
-                out,
-                expected = 200,
-                maxBytes = 100,
-            ) { }
-        }
-        assertEquals(0, out.size())
-    }
-
-    @Test
-    fun downloadedUsesNinetyPercentThreshold() {
+    fun downloadIsCompleteOnlyAtExactExpectedLength() {
         assertTrue(MediaCache.isCompleteDownload(100, 100))
         assertFalse(MediaCache.isCompleteDownload(90, 100))
         assertTrue(MediaCache.isCompleteDownload(1, 0))

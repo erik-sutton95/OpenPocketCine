@@ -114,7 +114,6 @@ struct MultiviewPresentationLayoutTests {
         #expect(grid.tiles[0].y == 129)
         #expect(abs(grid.tiles[3].maxY - (grid.readouts.y - 12)) < 0.001)
         #expect(grid.tiles[0].height == grid.tiles[3].height)
-        #expect(!grid.assistsHorizontal)
         // The palette clears Wi-Fi but never starts above the feed tops.
         #expect(grid.assists.y == max(grid.tiles[0].y, grid.network.maxY + 8))
         #expect(grid.assists.x == grid.tiles[0].maxX + 6)
@@ -186,17 +185,6 @@ struct MultiviewPresentationLayoutTests {
         }
     }
 
-    @Test func landscapeGridFillsAvailableStageWithoutAnAspectConstraint() {
-        let grid = MultiviewPresentationLayout(
-            width: 852, height: 393, safeArea: .init(leading: 59, bottom: 21),
-            arrangement: .grid, selected: 0)
-        #expect(grid.tiles[0].x == 76)
-        #expect(grid.tiles[0].width == 338)
-        #expect(grid.tiles[0].y == grid.sessionControls.y)
-        #expect(grid.tiles[3].maxX == 764 && grid.tiles[3].maxY == 311)
-        #expect(grid.tiles.allSatisfy { $0.width == 338 && abs($0.height - 140.5875) < 0.001 })
-    }
-
     @Test func selectionAndLayoutKeepNativeSystemControlsStable() {
         for (width, height) in [(852.0, 393.0), (393, 852), (1194, 834)] {
             let grid = MultiviewPresentationLayout(
@@ -225,8 +213,6 @@ struct MultiviewPresentationLayoutTests {
             let layout = MultiviewPresentationLayout(
                 width: width, height: height, arrangement: .grid, selected: 0)
             let cell = MonitorSystemButtonMetrics.side(tablet: layout.tablet)
-            #expect(layout.controlCellSize == cell)
-            #expect(!layout.assistsHorizontal)
             #expect(layout.assists.width == cell + 8)
             #expect(layout.assists.height <= cell * 4 + 44)
             #expect(layout.assists.height >= 44)

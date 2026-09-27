@@ -7,26 +7,17 @@ import kotlin.test.assertTrue
 /** Pins the live battery outline to iOS `LiveBatteryRow` (26×15, min-scale 0.65). */
 class LiveBatteryTest {
     @Test
-    fun cellMatchesIosPill() {
-        assertEquals(26f, BATTERY_CELL_W_DP)
-        assertEquals(15f, BATTERY_CELL_H_DP)
-    }
-
-    @Test
-    fun threeDigitReadoutScalesToTheCell() {
-        val scale = scaleToFitFactor(contentWidth = 32, contentHeight = 14, maxWidth = 22, maxHeight = 13)
-        assertTrue(scale < 1f)
-        assertTrue(scale >= 0.65f)
-        assertEquals(22f / 32f, scale, 0.001f)
-    }
-
-    @Test
-    fun alreadyFittingReadoutStaysIdentity() {
-        assertEquals(1f, scaleToFitFactor(18, 10, 22, 13))
-    }
-
-    @Test
-    fun extremeOverflowFloorsAtIosMinimumScale() {
-        assertEquals(0.65f, scaleToFitFactor(80, 20, 22, 13))
+    fun readoutScalesToTheCellAndFloorsAtIosMinimum() {
+        // (name, contentWidth, contentHeight, expected scale) into a 22x13 cell.
+        val cases = listOf(
+            Triple("three-digit readout scales to the cell", 32 to 14, 22f / 32f),
+            Triple("already fitting readout stays identity", 18 to 10, 1f),
+            Triple("extreme overflow floors at iOS minimum", 80 to 20, 0.65f),
+        )
+        for ((name, content, expected) in cases) {
+            val scale = scaleToFitFactor(content.first, content.second, 22, 13)
+            assertEquals(expected, scale, 0.001f, name)
+            assertTrue(scale in 0.65f..1f, name)
+        }
     }
 }

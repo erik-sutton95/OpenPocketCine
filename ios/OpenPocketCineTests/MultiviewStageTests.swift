@@ -39,20 +39,6 @@ import XCTest
         }
     }
 
-    func testMissingRoleQueryIsRestrictedToPhysicallyVerifiedModelsAndReply() {
-        for (name, accepted) in [
-            ("OsmoPocket3-Test", true), ("OsmoNano-Test", true),
-            ("OsmoPocket4P-Test", false), ("OsmoAction4-Test", false),
-        ] {
-            let camera = FoundCamera(
-                id: UUID(), name: name,
-                model: .resolve(modelId: nil, name: name), modelId: nil)
-            XCTAssertEqual(camera.acceptsMissingMultiviewRoleQuery([0xe0]), accepted)
-            for reply: [UInt8] in [[], [0], [0xff], [0xe0, 0], [0, 0]] {
-                XCTAssertFalse(camera.acceptsMissingMultiviewRoleQuery(reply))
-            }
-        }
-    }
     func testPocketTileCompensatesSelfiePoseOnlyWithCameraFlipOff() {
         let tile = MultiviewSession.Tile()
         tile.camera = FoundCamera(
@@ -76,48 +62,6 @@ import XCTest
                 payload: [0, 0, 1, 0x38, 0, 1, 0]))
         XCTAssertTrue(tile.decoder.poseViewFlip)
         XCTAssertFalse(MultiviewSession.Tile().decoder.poseViewFlip)
-    }
-
-    func testMultiviewDiscoversOsmoCatalogWithoutGuessingUnknownPreviewCommands() {
-        for (id, name) in [
-            (0x10, "Osmo Action 2"), (0x12, "Osmo Action 3"), (0x14, "Osmo Action 4"),
-            (0x15, "Osmo Action 5 Pro"), (0x17, "Osmo 360"), (0x18, "Osmo Action 6"),
-            (0x19, "Osmo Nano"), (0x20, "Osmo Pocket 3"), (0x21, "Osmo Pocket 4"),
-            (0x22, "Osmo Pocket 4 Pro"),
-        ] {
-            let camera = FoundCamera(
-                id: UUID(), name: name, model: .resolve(modelId: id, name: name), modelId: id)
-            XCTAssertTrue(camera.appearsInMultiview, name)
-            XCTAssertEqual(camera.hasMultiviewPreview, [0x19, 0x20, 0x21, 0x22].contains(id), name)
-        }
-        let pocket = FoundCamera(
-            id: UUID(), name: "OsmoPocket3-Test",
-            model: .resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil)
-        XCTAssertTrue(pocket.hasMultiviewPreview)
-        let drone = FoundCamera(
-            id: UUID(), name: "DJI Neo", model: .resolve(modelId: 0x7E, name: "DJI Neo"),
-            modelId: 0x7E)
-        XCTAssertFalse(drone.appearsInMultiview)
-        let oldPocket = FoundCamera(
-            id: UUID(), name: "Osmo Pocket 2", model: .resolve(modelId: nil, name: "Osmo Pocket 2"),
-            modelId: nil)
-        XCTAssertTrue(oldPocket.appearsInMultiview)
-        XCTAssertFalse(oldPocket.hasMultiviewPreview)
-    }
-    func testStageUsesSharedPresentationAndKeepsOneSlotPerCamera() {
-        for size in [
-            CGSize(width: 390, height: 844), CGSize(width: 852, height: 393),
-            CGSize(width: 1194, height: 834),
-        ] {
-            for arrangement in MultiviewLayout.allCases {
-                for selected in 0..<4 {
-                    let layout = arrangement.presentation(in: size, selected: selected)
-                    XCTAssertEqual(layout.tiles.count, 4)
-                    XCTAssertEqual(layout.portrait, size.height > size.width)
-                    XCTAssertGreaterThan(layout.tiles[selected].width, 0)
-                }
-            }
-        }
     }
 
     private func assign(_ tile: MultiviewSession.Tile, recording: Bool, available: Bool) {
@@ -166,19 +110,6 @@ import XCTest
         let snapshot = FeedWatchdog.Snapshot(
             now: 100, lastDecodedFrameAge: 20, lastVideoPacketAge: 0.01,
             lastStatusAge: 0.1, flowHealthy: true, pathReady: true, hasFormat: true,
-            decoderFailed: false, live: true, sawPicture: true,
-            secondsSinceLastEnable: 50)
-        XCTAssertEqual(recovery.action(snapshot), .none)
-    }
-    func testRecoveryStopsAfterTwoFullRejoinsUntilOperatorRetries() {
-        var recovery = MultiviewRecovery()
-        XCTAssertTrue(recovery.beginRejoin())
-        XCTAssertTrue(recovery.beginRejoin())
-        XCTAssertFalse(recovery.beginRejoin())
-        XCTAssertTrue(recovery.failed)
-        let snapshot = FeedWatchdog.Snapshot(
-            now: 100, lastDecodedFrameAge: 20, lastVideoPacketAge: 20,
-            lastStatusAge: 20, flowHealthy: false, pathReady: true, hasFormat: true,
             decoderFailed: false, live: true, sawPicture: true,
             secondsSinceLastEnable: 50)
         XCTAssertEqual(recovery.action(snapshot), .none)

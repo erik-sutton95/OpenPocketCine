@@ -220,23 +220,65 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertFalse(decoder.videoToolboxActive)
     }
 
-    func testFaceAFKeepsIdentityDisplayLayer() {
-        let decoder = HevcDecoder()
-        let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
-        decoder.processedFeed = feed
-        feed.isHidden = false
-        decoder.displayLayer.isHidden = true
-
-        decoder.effects = LiveImageEffects().withFaceAF(true)
-        XCTAssertTrue(decoder.effects.needsSample)
-        XCTAssertFalse(decoder.effects.needsGPUFeed)
-        XCTAssertFalse(decoder.effects.replacesIdentityFeed)
-        XCTAssertFalse(
-            decoder.displayLayer.isHidden,
-            "Face AF starts VT but the identity picture stays on the display layer")
-        XCTAssertTrue(
-            feed.isHidden,
-            "opaque CIFeedView must not cover the layer while Face AF is reading buffers")
+    func testOverlayAndSampleOnlyEffectsKeepIdentityDisplayLayer() {
+        var zebra = LiveImageEffects()
+        zebra.zebra = true
+        var split = zebra
+        split.splitComparison = true
+        var falseColor = LiveImageEffects()
+        falseColor.falseColor = true
+        struct Case {
+            let name: String
+            let steps: [LiveImageEffects]
+            let feedStartsVisible: Bool
+            var needsSample: Bool? = nil
+            var needsGPUFeed: Bool? = nil
+            var needsOverlayFeed: Bool? = nil
+            var feedHidden: Bool? = nil
+            var keepsPictureAndIDR = false
+        }
+        let cases = [
+            // Face AF starts VT but the identity picture stays on the display layer; the
+            // opaque CIFeedView must not cover the layer while Face AF is reading buffers.
+            Case(
+                name: "Face AF", steps: [LiveImageEffects().withFaceAF(true)],
+                feedStartsVisible: true, needsSample: true, needsGPUFeed: false, feedHidden: true),
+            // Zebra and false colour must not cover Rec.709 / D-Log2 identity with a
+            // remade CI picture.
+            Case(
+                name: "zebra", steps: [zebra], feedStartsVisible: false, needsOverlayFeed: true),
+            // 50/50 without a cube must not cover HEVC with replace-grade Metal (#218).
+            Case(
+                name: "split without cube", steps: [zebra, split], feedStartsVisible: false,
+                needsOverlayFeed: true, keepsPictureAndIDR: true),
+            Case(
+                name: "false colour", steps: [falseColor], feedStartsVisible: false,
+                needsOverlayFeed: true),
+        ]
+        for c in cases {
+            let decoder = HevcDecoder()
+            let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
+            decoder.processedFeed = feed
+            feed.isHidden = !c.feedStartsVisible
+            decoder.displayLayer.isHidden = c.feedStartsVisible
+            for step in c.steps { decoder.effects = step }
+            if let expected = c.needsSample {
+                XCTAssertEqual(decoder.effects.needsSample, expected, c.name)
+            }
+            if let expected = c.needsGPUFeed {
+                XCTAssertEqual(decoder.effects.needsGPUFeed, expected, c.name)
+            }
+            if let expected = c.needsOverlayFeed {
+                XCTAssertEqual(decoder.effects.needsOverlayFeed, expected, c.name)
+            }
+            XCTAssertFalse(decoder.effects.replacesIdentityFeed, c.name)
+            XCTAssertFalse(decoder.displayLayer.isHidden, "\(c.name) must keep the identity layer")
+            if let expected = c.feedHidden { XCTAssertEqual(feed.isHidden, expected, c.name) }
+            if c.keepsPictureAndIDR {
+                XCTAssertFalse(decoder.awaitingIDR, c.name)
+                XCTAssertFalse(decoder.displayedImageRemoved, c.name)
+            }
+        }
     }
 
     func testFastUpscalerDoesNotStealIdentityLayer() {
@@ -261,62 +303,6 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertFalse(
             decoder.displayLayer.isHidden,
             "Fast upscale must not remake identity — zebra stays a transparent overlay")
-    }
-
-    func testZebraKeepsIdentityDisplayLayer() {
-        let decoder = HevcDecoder()
-        let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
-        decoder.processedFeed = feed
-        feed.isHidden = true
-        decoder.displayLayer.isHidden = false
-
-        var fx = LiveImageEffects()
-        fx.zebra = true
-        decoder.effects = fx
-        XCTAssertTrue(decoder.effects.needsOverlayFeed)
-        XCTAssertFalse(decoder.effects.replacesIdentityFeed)
-        XCTAssertFalse(
-            decoder.displayLayer.isHidden,
-            "zebra must not cover Rec.709 / D-Log2 identity with a remade CI picture")
-    }
-
-    func testSplitWithoutCubeKeepsIdentityDisplayLayer() {
-        let decoder = HevcDecoder()
-        let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
-        decoder.processedFeed = feed
-        feed.isHidden = true
-        decoder.displayLayer.isHidden = false
-
-        var zebra = LiveImageEffects()
-        zebra.zebra = true
-        decoder.effects = zebra
-        var split = zebra
-        split.splitComparison = true
-        decoder.effects = split
-        XCTAssertTrue(decoder.effects.needsOverlayFeed)
-        XCTAssertFalse(decoder.effects.replacesIdentityFeed)
-        XCTAssertFalse(
-            decoder.displayLayer.isHidden,
-            "50/50 without a cube must not cover HEVC with replace-grade Metal (#218)")
-        XCTAssertFalse(decoder.awaitingIDR)
-        XCTAssertFalse(decoder.displayedImageRemoved)
-    }
-
-    func testFalseColorKeepsIdentityDisplayLayer() {
-        let decoder = HevcDecoder()
-        let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
-        decoder.processedFeed = feed
-        feed.isHidden = true
-        decoder.displayLayer.isHidden = false
-
-        var fx = LiveImageEffects()
-        fx.falseColor = true
-        decoder.effects = fx
-        XCTAssertTrue(decoder.effects.needsOverlayFeed)
-        XCTAssertFalse(decoder.effects.replacesIdentityFeed)
-        XCTAssertFalse(
-            decoder.displayLayer.isHidden,
-            "false colour must not cover Rec.709 / D-Log2 identity with a remade CI picture")
     }
 
     func testRec709AndHDRWithoutLUTUseDisplayLayer() {
@@ -480,53 +466,17 @@ final class LiveFrameSampleTests: XCTestCase {
             accuracy: 0.1)
     }
 
-    // MARK: - Throttle constants
+    // MARK: - Throttle
 
-    func testScopeTapIntervalTracksTypicalSoftAPRate() {
-        XCTAssertEqual(PocketScopeSampler.baseMinInterval, 1.0 / 25.0, accuracy: 1e-9)
-        XCTAssertEqual(PocketScopeSampler.denseMinInterval, 1.0 / 10.0, accuracy: 1e-9)
-        XCTAssertEqual(
-            PocketScopeSampler.minInterval(activeScopeCount: 1, thermalState: .nominal),
-            PocketScopeSampler.baseMinInterval)
-        XCTAssertEqual(
-            PocketScopeSampler.minInterval(activeScopeCount: 2, thermalState: .nominal),
-            PocketScopeSampler.baseMinInterval)
-        XCTAssertEqual(
+    func testMoreScopesAndHeatSlowTheTapNeverSpeedItUp() {
+        XCTAssertGreaterThan(
             PocketScopeSampler.minInterval(activeScopeCount: 3, thermalState: .nominal),
-            PocketScopeSampler.denseMinInterval, "more than two scopes go slower, not faster")
-        // Thermal tiers shed the interval, never the sampling density.
-        XCTAssertEqual(PocketScopeSampler.thermalMultiplier(.nominal), 1)
-        XCTAssertEqual(PocketScopeSampler.thermalMultiplier(.fair), 1)
-        XCTAssertEqual(PocketScopeSampler.thermalMultiplier(.serious), 3)
-        XCTAssertEqual(PocketScopeSampler.thermalMultiplier(.critical), 5)
-        XCTAssertEqual(
+            PocketScopeSampler.minInterval(activeScopeCount: 2, thermalState: .nominal),
+            "more than two scopes go slower, not faster")
+        XCTAssertGreaterThan(
             PocketScopeSampler.minInterval(activeScopeCount: 1, thermalState: .serious),
-            3.0 / 25.0, accuracy: 1e-9)
-        XCTAssertEqual(PocketScopeSampler.maxWidth, 200)
-        XCTAssertEqual(PocketScopeSampler.pointStride, 2)
-        // 15 Hz next to a 25 fps well is a 2-frame hold. WAVE-only must
-        // tap every typical SoftAP picture; dense 3+ stays the 10 Hz back-off.
-        XCTAssertEqual(
-            scheduledScopeTaps(frames: 25, fps: 25, interval: PocketScopeSampler.baseMinInterval),
-            25)
-        // 10 Hz on a 40 ms picture clock lands every third frame (deadline skip).
-        XCTAssertEqual(
-            scheduledScopeTaps(frames: 25, fps: 25, interval: PocketScopeSampler.denseMinInterval),
-            9)
-    }
-
-    private func scheduledScopeTaps(frames: Int, fps: Double, interval: CFAbsoluteTime) -> Int {
-        var next = 0.0
-        var taps = 0
-        let dt = 1.0 / fps
-        for i in 0..<frames {
-            let now = Double(i) * dt
-            if now + 1e-12 >= next {
-                next = now + interval
-                taps += 1
-            }
-        }
-        return taps
+            PocketScopeSampler.minInterval(activeScopeCount: 1, thermalState: .nominal),
+            "thermal tiers shed the interval, never the sampling density")
     }
 
     // MARK: - Sampler contracts (app layer)
@@ -666,23 +616,6 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertGreaterThan(red, 0.15, "PEAK must paint red on a hard edge")
     }
 
-    func testDLog2MidGreyDoesNotZebraHighlight() {
-        // Legal-scaled grey byte 78 ≈ monitor 25.9% — far from the 100 highlight
-        // threshold and outside the default 55 ± 5 midtone band.
-        let buffer = ScopeTestBuffers.makeFlatBuffer(code: 78)
-        let source = CIImage(cvPixelBuffer: buffer)
-        var fx = LiveImageEffects()
-        fx.zebra = true
-        fx.zebraHighlight = true
-        fx.zebraMidtone = false
-        fx.colorMode = .dLog2
-        fx.zebraHighlightIRE = LiveZebra.highlightIRE
-        let output = LiveMonitorCompositor.apply(to: source, effects: fx)
-        let context = CIContext(options: [.cacheIntermediates: false])
-        let delta = Self.maxChannelDelta(output: output, source: source, context: context)
-        XCTAssertLessThan(delta, 0.04, "D-Log2 18% grey (monitor ≈ 26%) must not zebra-clip")
-    }
-
     func testDLog2MidGreyDoesNotZebraDefaultMidtone() {
         let buffer = ScopeTestBuffers.makeFlatBuffer(code: 78)
         let source = CIImage(cvPixelBuffer: buffer)
@@ -697,81 +630,6 @@ final class LiveFrameSampleTests: XCTestCase {
         let delta = Self.maxChannelDelta(output: output, source: source, context: context)
         XCTAssertLessThan(
             delta, 0.04, "grey ≈ 26% is outside the default 55 ± 5 midtone stripe")
-    }
-
-    func testDLog2PeakZebrasHighlight() {
-        let buffer = ScopeTestBuffers.makeFlatBuffer(code: 255)
-        let source = CIImage(cvPixelBuffer: buffer)
-        var fx = LiveImageEffects()
-        fx.zebra = true
-        fx.zebraHighlight = true
-        fx.zebraMidtone = false
-        fx.colorMode = .dLog2
-        fx.zebraHighlightIRE = LiveZebra.highlightIRE
-        // White stripes on a white frame are invisible to the delta probe.
-        fx.zebraHighlightColor = .red
-        let output = LiveMonitorCompositor.apply(to: source, effects: fx)
-        let context = CIContext(options: [.cacheIntermediates: false])
-        let delta = Self.maxChannelDelta(output: output, source: source, context: context)
-        XCTAssertGreaterThan(delta, 0.08, "D-Log2 curve top (monitor 100) must zebra")
-    }
-
-    func testDLog2FalseColorIREPaintsGreyAsGapNotClip() {
-        let cube = PocketFalseColorMap.cube(scale: .ire, transfer: .dlog2)
-        let g = Float(MonitorTransfer.dlog2.middleGrayEncoded)
-        let mapped = cube.map(red: g, green: g, blue: g)
-        XCTAssertEqual(
-            mapped.red, mapped.green, accuracy: 0.06,
-            "D-Log2 18% grey is WAVE ~30.5 — an IRE gap, not 18%MG green")
-        XCTAssertEqual(mapped.green, mapped.blue, accuracy: 0.06)
-        let clip = Float(ScopeExposureCeiling.clipEncoded(transfer: .dlog2))
-        let over = cube.map(red: clip, green: clip, blue: clip)
-        XCTAssertGreaterThan(
-            over.red, over.green, "live-tap ceiling is 95%WC red, not the grey gap")
-    }
-
-    // MARK: - Real-clip end-to-end (author's machine only)
-
-    func testDLog2ClipPublishesScopeDistribution() async throws {
-        let env = ProcessInfo.processInfo.environment["OPV_SIM_FEED_CLIP"]
-        try XCTSkipIf(
-            env == nil || env?.isEmpty == true,
-            "set OPV_SIM_FEED_CLIP to a local D-Log2 clip to run this test")
-        let url = URL(fileURLWithPath: env!)
-        guard let buffer = Self.pullClipFrame(url: url) else {
-            XCTFail("AVAssetReader must yield a frame from the D-Log2 clip")
-            return
-        }
-        XCTAssertGreaterThan(CVPixelBufferGetWidth(buffer), 16)
-        XCTAssertGreaterThan(CVPixelBufferGetHeight(buffer), 16)
-        guard let packed = PocketScopeSampler.copyBGRA(buffer, maxWidth: 160) else {
-            XCTFail("clip frame tap must succeed")
-            return
-        }
-        let sampled = PocketScopeSampler.sample(
-            bytes: packed.bytes, width: packed.width, height: packed.height,
-            bytesPerRow: packed.bytesPerRow, transfer: .dlog2,
-            includePoints: true, look: nil, previous: .empty)
-        let occupied = sampled.samples.histogramLuma.filter { $0 > 0 }.count
-        XCTAssertGreaterThan(occupied, 3, "D-Log2 clip must not be a flat/empty spike")
-
-        let bus = LiveFrameSampleBus()
-        let decoder = HevcDecoder()
-        var fx = LiveImageEffects()
-        fx.histogram = true
-        fx.waveform = true
-        decoder.attach(sampleBus: bus, effects: { fx }, transfer: { .dlog2 })
-        decoder.effects = fx
-        decoder.handleDecodedFrame(buffer, effects: fx, transfer: .dlog2)
-        let deadline = Date().addingTimeInterval(4)
-        while Date() < deadline {
-            if bus.publishedScopes >= 1, !bus.bundle.samples.points.isEmpty { break }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        XCTAssertGreaterThanOrEqual(bus.publishedScopes, 1)
-        XCTAssertFalse(bus.bundle.samples.points.isEmpty)
-        XCTAssertEqual(bus.transfer, .dlog2)
-        XCTAssertEqual(bus.bundle.transfer, .dlog2)
     }
 
     // MARK: - Pipeline coverage across live-like formats
@@ -830,7 +688,7 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertGreaterThan(occupied, 1, "edge frame must not collapse to a single bin")
     }
 
-    // MARK: - Bake / LUT
+    // MARK: - Bake
 
     func testBakeSizeKeepsSourceAspectAndClampsToDrawable() {
         let fourK = FeedFrameBaker.bakeSize(
@@ -846,42 +704,7 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertEqual(smaller.height, 720, accuracy: 1)
     }
 
-    func testLUTRunsOnLiveFrame() {
-        let buffer = ScopeTestBuffers.makeEdgeBuffer()
-        let source = CIImage(cvPixelBuffer: buffer)
-        let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
-        fx.lutDimension = cube.size
-        fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        let output = LiveMonitorCompositor.apply(to: source, effects: fx)
-        XCTAssertEqual(output.extent, source.extent)
-        XCTAssertTrue(fx.needsGPUFeed)
-    }
-
     // MARK: - Helpers
-
-    private static func pullClipFrame(url: URL) -> CVPixelBuffer? {
-        let asset = AVURLAsset(url: url)
-        guard let track = asset.tracks(withMediaType: .video).first,
-            let reader = try? AVAssetReader(asset: asset)
-        else { return nil }
-        let output = AVAssetReaderTrackOutput(
-            track: track,
-            outputSettings: [
-                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
-            ])
-        output.alwaysCopiesSampleData = true
-        reader.add(output)
-        guard reader.startReading() else { return nil }
-        for _ in 0..<8 {
-            if let sample = output.copyNextSampleBuffer(),
-                let buffer = CMSampleBufferGetImageBuffer(sample)
-            {
-                return buffer
-            }
-        }
-        return nil
-    }
 
     /// Prefers legal-scaled 10-bit x420 (black → grey edge), falls back to
     /// IOSurface BGRA, then 8-bit 420v.

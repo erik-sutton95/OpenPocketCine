@@ -4,22 +4,6 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct ConnectionRegressionAuditTests {
-    @Test func freshPacketsWithoutFirstPictureEventuallyLeaveWaiting() {
-        var decisions: [CameraSoftAP.FirstPictureStep] = []
-        for second in 8...180 {
-            decisions.append(
-                CameraSoftAP.firstPictureStep(
-                    videoPackets: second * 100, enableSends: 2,
-                    secondsSinceLastEnable: Double(second),
-                    secondsSinceLastVideo: 0.01,
-                    hasPresentedPicture: false))
-        }
-        #expect(
-            decisions.contains { $0 != .wait },
-            "Two enables followed by uninterrupted P-frames cannot leave first picture waiting forever"
-        )
-    }
-
     @Test func ongoingCameraSetsCannotSuppressSilentNativeOutputForever() {
         var dog = FeedWatchdog()
         var actions: [FeedWatchdog.Action] = []

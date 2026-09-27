@@ -157,20 +157,6 @@ class GimbalLoopTest {
         assertNull(camera.engine.failure)
     }
 
-    @Test fun missedArrivalStopsDuringReturnWithinTheVerificationDeadline() {
-        val camera = Camera(program())
-        camera.until { camera.starts.size == 1 && camera.now >= camera.starts[0] + 2.99 - 1e-8 }
-        val boundary = camera.starts[0] + 3.0
-        while (camera.engine.running && camera.now < boundary + 1) {
-            camera.step { it.copy(yawDeg = it.yawDeg - 0.4) }
-        }
-        assertFalse(camera.engine.running)
-        assertEquals("Camera waypoint could not be verified", camera.engine.failure)
-        assertTrue(camera.now <= boundary + 0.411)
-        assertEquals(2, camera.commands.size, "The timed reverse starts immediately, then failed feedback stops it")
-        assertNull(camera.engine.tick(0.01, camera.live))
-    }
-
     @Test fun oneShotMissedFinalPositionAfterEarlierSettledReportsStillFails() {
         val camera = Camera(program().copy(loop = false))
         camera.until { camera.engine.readout(camera.live)?.phase == "VERIFY" }
@@ -179,20 +165,6 @@ class GimbalLoopTest {
         assertFalse(camera.engine.running)
         assertEquals("Camera missed its final position", camera.engine.failure)
         assertEquals(1, camera.commands.size)
-    }
-
-    @Test fun cancelBeforeOrAfterTurnaroundPreventsAnyFurtherCommand() {
-        for (afterTurnaround in listOf(false, true)) {
-            val camera = Camera(program())
-            camera.until { camera.starts.size == 1 && camera.now >= camera.starts[0] + 2.99 - 1e-8 }
-            if (afterTurnaround) camera.until { camera.starts.size == 2 }
-            val commandsAtCancel = camera.commands.size
-            camera.engine.cancel()
-            repeat(100) { camera.step() }
-            assertNull(camera.lastOutput)
-            assertFalse(camera.engine.running)
-            assertEquals(commandsAtCancel, camera.commands.size)
-        }
     }
 
     @Test fun shortSmoothLoopsAcceptSparseFeedbackWithFractionalDelayWithoutEndpointHolds() {

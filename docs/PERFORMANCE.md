@@ -158,7 +158,7 @@ One present in flight still holds. Android uses window HDR headroom rather than
 a float swapchain. Extra panel nits cost power and heat — leave it off on set.
 
 Metal present is latest-wins with **one drawable in flight**
-(`FeedPresentPolicy.maxInFlightMetalPresents`). Do not block MainActor on
+(`CIFeedView.presentLatestBake` guard in `LiveMonitorFx.swift`). Do not block MainActor on
 `nextDrawable` — LUT 50/50 plus PEAK / FALSE / ZEBRA pipelined baker
 completions and froze ingest until force-quit (#218). Acquire on a dedicated
 serial worker. Prepare Core Image / native upscaling on that worker too: native

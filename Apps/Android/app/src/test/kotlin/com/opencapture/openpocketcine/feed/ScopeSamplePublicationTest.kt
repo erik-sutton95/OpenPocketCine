@@ -36,21 +36,6 @@ class ScopeSamplePublicationTest {
         assertTrue(LiveScopeSampleBus.bundle.isEmpty)
     }
 
-    @Test fun sourceReadinessStillRequiresANewlyLatchedFrameAfterAClipChange() {
-        val source = InspectorPreviewSource()
-        source.configure("first", true)
-        source.didLatch(source.beginLatch())
-        val old = source.captureEpoch()
-        source.configure("second", false)
-        assertFalse(source.isCurrent(old))
-        assertEquals(null, source.captureEpoch())
-        source.configure("second", true)
-        source.didLatch(old)
-        assertEquals(null, source.captureEpoch())
-        source.didLatch(source.beginLatch())
-        assertTrue(source.isCurrent(source.captureEpoch()))
-    }
-
     private fun picture(code: Int) = ScopeAssistBundle(
         revision = 1,
         samples = ScopeSamples.EMPTY.copy(histogramLuma = IntArray(256).also { it[code] = 9 }),

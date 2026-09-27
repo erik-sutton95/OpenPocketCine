@@ -21,86 +21,68 @@ class LutLookResolverTest {
         )
     }
 
-    @Test
-    fun `built-in auto follows pocket log`() {
-        assertEquals(
-            LutLookSource.Asset("DJI_Official_Pocket4P_DLog2_Rec709_33.cube"),
-            LutLookResolver.resolve(
-                LutCatalog.AUTO,
-                lutOn = true,
-                colorMode = CameraCommands.COLOR_DLOG2,
-                family = "pocket",
-                cameraName = null,
-            ),
-        )
-        assertEquals(
-            LutLookSource.Asset("DJI_Official_Pocket4P_DLog_Rec709_33.cube"),
-            LutLookResolver.resolve(
-                LutCatalog.AUTO,
-                lutOn = true,
-                colorMode = CameraCommands.COLOR_DLOG,
-                family = "pocket",
-                cameraName = null,
-            ),
-        )
-        assertEquals(
-            LutLookSource.Off,
-            LutLookResolver.resolve(
-                LutCatalog.AUTO,
-                lutOn = true,
-                colorMode = CameraCommands.COLOR_NORMAL,
-                family = "pocket",
-                cameraName = null,
-            ),
-        )
-    }
+    private data class AutoCase(
+        val name: String,
+        val selection: String,
+        val colorMode: Int,
+        val family: String,
+        val cameraName: String?,
+        val expected: LutLookSource,
+    )
 
     @Test
-    fun `built-in auto leaves nano ungraded`() {
-        assertEquals(
-            LutLookSource.Asset("DJI_Official_Nano_DLogM_Rec709_33.cube"),
-            LutLookResolver.resolve(
-                LutCatalog.AUTO,
-                lutOn = true,
-                colorMode = CameraCommands.COLOR_DLOG2,
-                family = "nano",
-                cameraName = "Osmo Nano",
-            ),
-        )
-    }
-
-    @Test
-    fun `dji auto picks the official cube for the body`() {
-        assertEquals(
-            LutLookSource.Asset("DJI_Official_Pocket4P_DLog2_Rec709_33.cube"),
-            LutLookResolver.resolve(
-                LutCatalog.DJI_AUTO,
-                lutOn = true,
-                colorMode = CameraCommands.COLOR_DLOG2,
-                family = "pocket",
-                cameraName = "Pocket 4 Pro",
-            ),
-        )
-        assertEquals(
-            LutLookSource.Asset("DJI_Official_Nano_DLogM_Rec709_33.cube"),
-            LutLookResolver.resolve(
-                LutCatalog.DJI_AUTO,
-                lutOn = true,
-                colorMode = CameraCommands.COLOR_DLOG2,
-                family = "nano",
-                cameraName = "Osmo Nano",
-            ),
-        )
-        assertEquals(
-            LutLookSource.Asset("DJI_Official_Action6_DLogM_Rec709_33.cube"),
-            LutLookResolver.resolve(
-                LutCatalog.DJI_AUTO,
-                lutOn = true,
-                colorMode = 0x00,
-                family = "nano",
-                cameraName = "Osmo Action 6",
-            ),
-        )
+    fun `auto selections pick the official cube for the body`() {
+        val cases =
+            listOf(
+                AutoCase(
+                    "built-in auto follows pocket D-Log2",
+                    LutCatalog.AUTO, CameraCommands.COLOR_DLOG2, "pocket", null,
+                    LutLookSource.Asset("DJI_Official_Pocket4P_DLog2_Rec709_33.cube"),
+                ),
+                AutoCase(
+                    "built-in auto follows pocket D-Log",
+                    LutCatalog.AUTO, CameraCommands.COLOR_DLOG, "pocket", null,
+                    LutLookSource.Asset("DJI_Official_Pocket4P_DLog_Rec709_33.cube"),
+                ),
+                AutoCase(
+                    "built-in auto leaves pocket normal ungraded",
+                    LutCatalog.AUTO, CameraCommands.COLOR_NORMAL, "pocket", null,
+                    LutLookSource.Off,
+                ),
+                AutoCase(
+                    "built-in auto grades nano with the Nano D-Log M cube",
+                    LutCatalog.AUTO, CameraCommands.COLOR_DLOG2, "nano", "Osmo Nano",
+                    LutLookSource.Asset("DJI_Official_Nano_DLogM_Rec709_33.cube"),
+                ),
+                AutoCase(
+                    "dji auto picks the Pocket 4 Pro cube",
+                    LutCatalog.DJI_AUTO, CameraCommands.COLOR_DLOG2, "pocket", "Pocket 4 Pro",
+                    LutLookSource.Asset("DJI_Official_Pocket4P_DLog2_Rec709_33.cube"),
+                ),
+                AutoCase(
+                    "dji auto picks the Nano cube",
+                    LutCatalog.DJI_AUTO, CameraCommands.COLOR_DLOG2, "nano", "Osmo Nano",
+                    LutLookSource.Asset("DJI_Official_Nano_DLogM_Rec709_33.cube"),
+                ),
+                AutoCase(
+                    "dji auto picks the Action 6 cube",
+                    LutCatalog.DJI_AUTO, 0x00, "nano", "Osmo Action 6",
+                    LutLookSource.Asset("DJI_Official_Action6_DLogM_Rec709_33.cube"),
+                ),
+            )
+        for (case in cases) {
+            assertEquals(
+                case.expected,
+                LutLookResolver.resolve(
+                    case.selection,
+                    lutOn = true,
+                    colorMode = case.colorMode,
+                    family = case.family,
+                    cameraName = case.cameraName,
+                ),
+                case.name,
+            )
+        }
     }
 
     @Test
@@ -228,38 +210,5 @@ class LutLookResolverTest {
                 isPhoto = false,
             ),
         )
-    }
-
-    @Test
-    fun `identity plan does not split`() {
-        assertEquals(false, FeedEffectsRenderPlan.IDENTITY.splitComparison)
-        assertEquals(null, FeedEffectsRenderPlan.IDENTITY.lutCube)
-    }
-
-    @Test
-    fun `split is stored on a lut plan`() {
-        val cube = FeedEffectsCube(2, ByteArray(2 * 2 * 2 * 4))
-        val plan =
-            FeedEffectsRenderPlan(
-                lutCube = cube,
-                falseColorPaint = null,
-                falseColorWeight = null,
-                peaking = false,
-                peakingColor = floatArrayOf(1f, 0f, 0f),
-                peakingRatioThreshold = 2.1f,
-                peakingNoiseGate = 0.001f,
-                zebraHighlightOn = false,
-                zebraHighlightCode = 1f,
-                zebraHighlightColor = floatArrayOf(1f, 1f, 1f),
-                zebraMidtoneOn = false,
-                zebraMidtoneCode = 0.5f,
-                zebraMidtoneHalf = 0.02f,
-                zebraMidtoneColor = floatArrayOf(1f, 1f, 1f),
-                splitComparison = true,
-                splitVertical = false,
-            )
-        assertEquals(true, plan.splitComparison)
-        assertEquals(false, plan.splitVertical)
-        assertEquals(false, plan.falseColorOn)
     }
 }

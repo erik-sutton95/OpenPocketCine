@@ -20,7 +20,6 @@ import UIKit
 /// No pinch-resize — OpenZCine scales only from the L-corner grip.
 enum WaveformAssist {
     static let panelID = "wave"
-    static let longPressPanelWidth: CGFloat = 400
     static let baseSize = ScopePanelSize.waveform
     static let scaleRange: ClosedRange<Double> = 0.6...1.6
     static let defaultScale = 1.0
@@ -34,10 +33,6 @@ enum WaveformAssist {
     static let gripVisualSize: CGFloat = 14
     static let gripExteriorGap: CGFloat = 2
 
-    /// OpenZCine `AssistQuickSettingsContent.waveformRows` titles (no Size, no IRE labels).
-    static let popupRows = [
-        "Mode", "Brightness", "Safe Border Clip", "Safe Border Crush", "Middle Gray",
-    ]
     static let brightnessHelp =
         "Raise trace intensity when the waveform is hard to read in bright light."
 

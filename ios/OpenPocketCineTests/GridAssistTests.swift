@@ -12,13 +12,6 @@ final class GridAssistTests: XCTestCase {
         )
     }
 
-    func testThirdsAndPhiFractionsMatchOpenZCine() {
-        XCTAssertEqual(GridAssist.thirdsFractions, [1.0 / 3, 2.0 / 3])
-        XCTAssertEqual(GridAssist.phiFractions, [0.382, 0.618])
-        XCTAssertEqual(GridAssist.strokeOpacity, 0.22, accuracy: 0.0001)
-        XCTAssertEqual(GridAssist.strokeWidth, 1)
-    }
-
     func testThirdsSegmentsCrossTheFeed() {
         let feed = CGRect(x: 10, y: 20, width: 900, height: 600)
         let lines = GridAssist.segments(in: feed, thirds: true, phi: false, diagonal: false)

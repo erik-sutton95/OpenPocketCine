@@ -183,20 +183,4 @@ private struct CaptureComparisonPixels {
         guard right >= left, bottom >= top else { return nil }
         return CGRect(x: left, y: top, width: right - left + 1, height: bottom - top + 1)
     }
-
-    func meanDifference(from other: Self, within bounds: CGRect) -> Double {
-        guard width == other.width, height == other.height else { return .infinity }
-        var total = 0
-        var count = 0
-        for y in Int(bounds.minY)..<Int(bounds.maxY) {
-            for x in Int(bounds.minX)..<Int(bounds.maxX) {
-                let index = (y * width + x) * 4
-                for channel in 0..<3 {
-                    total += abs(Int(rgba[index + channel]) - Int(other.rgba[index + channel]))
-                    count += 1
-                }
-            }
-        }
-        return count > 0 ? Double(total) / Double(count) : .infinity
-    }
 }

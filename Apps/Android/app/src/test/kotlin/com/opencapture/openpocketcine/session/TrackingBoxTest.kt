@@ -16,8 +16,6 @@ class TrackingBoxTest {
         assertEquals(0x00, payload[2].toInt() and 0xFF)
         assertEquals(0x26, payload[3].toInt() and 0xFF)
         assertEquals(0x27, payload[4].toInt() and 0xFF)
-        assertEquals(21, CameraCommands.clearTracking().size)
-        assertTrue(CameraCommands.clearTracking().all { it == 0.toByte() })
         assertTrue(CameraCommands.pollTracking().contentEquals(byteArrayOf(0x00)))
         assertEquals(0x02A6, SwiftCore.waitKey(SwiftCore.CMD_SET_TRACKING_BOX))
         assertEquals(0x02A5, SwiftCore.waitKey(SwiftCore.CMD_POLL_TRACKING))

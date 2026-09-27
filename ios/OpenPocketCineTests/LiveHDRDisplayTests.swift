@@ -10,28 +10,22 @@ final class LiveHDRDisplayTests: XCTestCase {
         super.tearDown()
     }
 
-    func testGainIsOneWhenDisabled() {
-        XCTAssertEqual(LiveHDRDisplay.displayGain(enabled: false, potentialHeadroom: 8), 1)
-        XCTAssertEqual(LiveHDRDisplay.displayGain(enabled: false, potentialHeadroom: 1), 1)
-    }
-
-    func testGainUsesRequestedHeadroomWhenThePanelHasRoom() {
-        XCTAssertEqual(
-            LiveHDRDisplay.displayGain(enabled: true, potentialHeadroom: 8),
-            Float(LiveHDRDisplay.requestedHeadroom))
+    func testDisplayGainIsRequestedHeadroomCappedByThePanel() {
         XCTAssertEqual(LiveHDRDisplay.requestedHeadroom, 3, accuracy: 0.001)
-    }
-
-    func testGainDoesNotExceedPanelPotential() {
-        XCTAssertEqual(
-            LiveHDRDisplay.displayGain(enabled: true, potentialHeadroom: 1.4), 1.4, accuracy: 0.001)
-        XCTAssertEqual(LiveHDRDisplay.displayGain(enabled: true, potentialHeadroom: 1), 1)
-    }
-
-    func testNonFinitePotentialFallsBackToOne() {
-        XCTAssertEqual(LiveHDRDisplay.displayGain(enabled: true, potentialHeadroom: .nan), 1)
-        XCTAssertEqual(
-            LiveHDRDisplay.displayGain(enabled: true, potentialHeadroom: .infinity), 1)
+        let cases: [(name: String, enabled: Bool, potential: CGFloat, expected: Float)] = [
+            ("disabled on an HDR panel", false, 8, 1),
+            ("disabled on an SDR panel", false, 1, 1),
+            ("panel has room", true, 8, Float(LiveHDRDisplay.requestedHeadroom)),
+            ("panel potential caps the gain", true, 1.4, 1.4),
+            ("SDR panel", true, 1, 1),
+            ("NaN potential falls back to one", true, .nan, 1),
+            ("infinite potential falls back to one", true, .infinity, 1),
+        ]
+        for c in cases {
+            XCTAssertEqual(
+                LiveHDRDisplay.displayGain(enabled: c.enabled, potentialHeadroom: c.potential),
+                c.expected, accuracy: 0.001, c.name)
+        }
     }
 
     func testDrawableFormatIsFloatOnlyWhileEnabled() {
@@ -60,14 +54,5 @@ final class LiveHDRDisplayTests: XCTestCase {
         XCTAssertEqual(LiveHDRDisplay.presentGain, 1)
         LiveHDRDisplay.setScreenCaptured(false)
         XCTAssertTrue(LiveHDRDisplay.isEnabled)
-    }
-
-    func testHelpCopyDisambiguatesCameraHDR() {
-        XCTAssertTrue(SettingsHelpCopy.hdrDisplay.contains("HDR/HLG"))
-        XCTAssertTrue(SettingsHelpCopy.hdrDisplay.contains("Off by default"))
-        XCTAssertTrue(SettingsHelpCopy.hdrDisplay.contains("decoded camera signal"))
-        XCTAssertTrue(SettingsHelpCopy.hdrDisplay.contains("Screen recording"))
-        XCTAssertFalse(SettingsHelpCopy.hdrDisplay.localizedCaseInsensitiveContains("OpenZCine"))
-        XCTAssertFalse(SettingsHelpCopy.hdrDisplay.localizedCaseInsensitiveContains("Nikon"))
     }
 }

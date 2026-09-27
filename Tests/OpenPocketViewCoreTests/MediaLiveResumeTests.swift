@@ -4,40 +4,23 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct MediaLiveResumeTests {
-    @Test func exitsUntilTheCameraLeavesPlayback() {
+    /// Exit until playback clears, enable only after, done on a live picture.
+    /// An exhausted exit budget never enables: 0x09/0xa8 in gallery ACKs E0.
+    @Test(arguments: [
+        (1, true, false, false, MediaLiveResume.Action.exitPlayback),
+        (2, true, true, false, .exitPlayback),
+        (2, false, true, false, .enableLiveView),
+        (3, false, true, true, .done),
+        (MediaLiveResume.maxExitAttempts + 1, true, false, false, .exhausted),
+    ])
+    func resumeStep(
+        attempt: Int, inPlayback: Bool, exitAcknowledged: Bool, pictureFresh: Bool,
+        expected: MediaLiveResume.Action
+    ) {
         #expect(
             MediaLiveResume.action(
-                attempt: 1, inPlayback: true, exitAcknowledged: false, pictureFresh: false)
-                == .exitPlayback)
-        #expect(
-            MediaLiveResume.action(
-                attempt: 2, inPlayback: true, exitAcknowledged: true, pictureFresh: false)
-                == .exitPlayback)
-    }
-
-    @Test func enablesOnlyAfterExitClearsPlayback() {
-        #expect(
-            MediaLiveResume.action(
-                attempt: 2, inPlayback: false, exitAcknowledged: true, pictureFresh: false)
-                == .enableLiveView)
-    }
-
-    @Test func doneWhenLivePictureIsBack() {
-        #expect(
-            MediaLiveResume.action(
-                attempt: 3, inPlayback: false, exitAcknowledged: true, pictureFresh: true)
-                == .done)
-    }
-
-    @Test func exhaustedExitBudgetNeverEnablesWhileInPlayback() {
-        #expect(
-            MediaLiveResume.action(
-                attempt: MediaLiveResume.maxExitAttempts + 1,
-                inPlayback: true,
-                exitAcknowledged: false,
-                pictureFresh: false)
-                == .exhausted,
-            "0x09/0xa8 in gallery ACKs E0 — transfer the bounded failed resume")
+                attempt: attempt, inPlayback: inPlayback, exitAcknowledged: exitAcknowledged,
+                pictureFresh: pictureFresh) == expected)
     }
 
     @Test func successfulEnableIsNotRepeatedWhileFirstPictureIsPending() {
@@ -82,20 +65,6 @@ import Testing
                 == .exitPlayback)
         #expect(MediaLiveResume.strayPlaybackAction(browsing: true, inPlayback: true) == nil)
         #expect(MediaLiveResume.strayPlaybackAction(browsing: false, inPlayback: false) == nil)
-    }
-
-    @Test func leftoverGopPacketsAreNotALivePicture() {
-        let start = Date(timeIntervalSince1970: 100)
-        #expect(!MediaLiveResume.isPictureFresh(lastPresentedAt: nil, since: start))
-        #expect(
-            !MediaLiveResume.isPictureFresh(
-                lastPresentedAt: Date(timeIntervalSince1970: 99), since: start))
-        #expect(
-            MediaLiveResume.isPictureFresh(
-                lastPresentedAt: Date(timeIntervalSince1970: 100), since: start))
-        #expect(
-            MediaLiveResume.isPictureFresh(
-                lastPresentedAt: Date(timeIntervalSince1970: 101), since: start))
     }
 
     @Test func newestPageListsWhenEnterPlaybackFails() {

@@ -205,29 +205,27 @@ class MultiviewLayoutPolicyTest {
 
     @Test
     fun toolbarContainsFourFullTouchTargets() {
-        for ((w, h) in listOf(393f to 852f, 852f to 393f, 744f to 1133f, 1133f to 744f)) {
+        for ((w, h) in listOf(393f to 852f, 852f to 393f, 744f to 1133f, 1133f to 744f, 667f to 375f)) {
             val layout = MultiviewPresentationLayout.compute(w, h, arrangement = GRID, selected = 0)
             val cell = MonitorLayoutPolicy.assistButtonSize(layout.tablet)
-            assertEquals(cell, layout.controlCellSize)
-            assertFalse(layout.assistsHorizontal)
-            assertEquals(cell + 8, layout.assists.width)
-            assertTrue(layout.assists.height <= cell * 4 + 44)
-            assertTrue(layout.assists.height >= cell + 8)
-            assertTrue(layout.assists.x > w / 2)
-            assertEquals(MonitorLayoutPolicy.systemButtonSize(layout.tablet), layout.sessionControls.width)
+            val case = "$w x $h"
+            assertEquals(cell, layout.controlCellSize, case)
+            assertEquals(MonitorLayoutPolicy.systemButtonSize(layout.tablet), layout.controlCellSize, case)
+            assertFalse(layout.assistsHorizontal, case)
+            assertEquals(cell + 8, layout.assists.width, case)
+            assertTrue(layout.assists.height <= cell * 4 + 44, case)
+            assertTrue(layout.assists.height >= cell + 8, case)
+            assertTrue(layout.assists.x > w / 2, case)
+            assertEquals(MonitorLayoutPolicy.systemButtonSize(layout.tablet), layout.sessionControls.width, case)
+            if (w == 667f) {
+                // The small landscape rail uses the available height without shrinking touch targets.
+                assertEquals(56f, layout.assists.width, case)
+                assertEquals(layout.display.midX, layout.assists.midX, case)
+                assertEquals(layout.network.maxY + 8f, layout.assists.y, case)
+                assertEquals(layout.display.y - 8f, layout.assists.maxY, case)
+                assertTrue(layout.assists.height < 4 * layout.controlCellSize + 44, case)
+            }
         }
-    }
-
-    @Test
-    fun smallLandscapeRailUsesTheAvailableHeightWithoutShrinkingTouchTargets() {
-        val layout = MultiviewPresentationLayout.compute(667f, 375f, arrangement = GRID, selected = 0)
-        assertEquals(MonitorLayoutPolicy.systemButtonSize(false), layout.controlCellSize)
-        assertEquals(56f, layout.assists.width)
-        assertEquals(layout.display.midX, layout.assists.midX)
-        assertEquals(layout.network.maxY + 8f, layout.assists.y)
-        assertEquals(layout.display.y - 8f, layout.assists.maxY)
-        assertTrue(layout.assists.height < 4 * layout.controlCellSize + 44)
-        assertFalse(layout.assistsHorizontal)
     }
 
     @Test

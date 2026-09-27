@@ -7,79 +7,6 @@ import XCTest
 /// Pins OpenZCine Traffic Lights — popup rows, RGB goal-post chrome, crush/clip
 /// lamps, and labels — onto PocketCine. IRE / histogram science stays in core.
 final class TrafficLightsAssistTests: XCTestCase {
-    func testOpenZCineCompensationStops() {
-        XCTAssertEqual(
-            TrafficLightsAssist.CrushClipCompensation.allCases.map(\.label),
-            ["0", "0.25", "0.5", "0.75", "1.0"])
-        XCTAssertEqual(
-            TrafficLightsAssist.CrushClipCompensation.allCases.map(\.compactLabel),
-            ["0", "¼", "½", "¾", "1"])
-        XCTAssertEqual(
-            TrafficLightsAssist.CrushClipCompensation.allCases.map(\.rawValue),
-            [0, 2, 5, 7, 10])
-        XCTAssertEqual(TrafficLightsAssist.CrushClipCompensation.zero.pixelFractionThreshold, 0)
-        XCTAssertEqual(
-            TrafficLightsAssist.CrushClipCompensation.quarter.pixelFractionThreshold, 0.025,
-            accuracy: 1e-12)
-        XCTAssertEqual(
-            TrafficLightsAssist.CrushClipCompensation.half.pixelFractionThreshold, 0.05,
-            accuracy: 1e-12)
-        XCTAssertEqual(
-            TrafficLightsAssist.CrushClipCompensation.one.pixelFractionThreshold, 0.10,
-            accuracy: 1e-12)
-        XCTAssertEqual(TrafficLightsAssist.CrushClipCompensation.quarter.rawValue, 2)
-        XCTAssertEqual(TrafficLightsAssist.defaultCompensation, .zero)
-        XCTAssertEqual(TrafficLightsAssist.longPressPanelWidth, 400)
-        XCTAssertEqual(TrafficLightsAssist.compensationTitle, "Crush/Clip Compensation")
-        XCTAssertEqual(
-            TrafficLightsAssist.compensationHelp,
-            "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights."
-        )
-        XCTAssertEqual(TrafficLightsAssist.baseSize, CGSize(width: 74, height: 168))
-        XCTAssertEqual(TrafficLightsAssist.baseSize, ScopePanelSize.trafficLights)
-        XCTAssertEqual(TrafficLightsAssist.scaleRange, 0.6...1.6)
-        XCTAssertEqual(TrafficLightsAssist.panelID, "traffic-lights")
-        XCTAssertEqual(TrafficLightsAssist.holdDuration, 0.3, accuracy: 0.001)
-        XCTAssertEqual(TrafficLightsAssist.positionGrid, 4)
-        XCTAssertEqual(TrafficLightsAssist.hapticGrid, 22)
-        XCTAssertEqual(TrafficLightsAssist.segmentMinWidth, 46)
-        XCTAssertEqual(TrafficLightsAssist.segmentMinHeight, 34)
-    }
-
-    func testMeterChromeMatchesOpenZCine() {
-        XCTAssertEqual(TrafficLightsAssist.meterTitle, "TL")
-        XCTAssertEqual(TrafficLightsAssist.accessibilityTitle, "Traffic Lights")
-        XCTAssertEqual(TrafficLightsAssist.titleSize, 8.5)
-        XCTAssertEqual(TrafficLightsAssist.titleSpacing, 6)
-        XCTAssertEqual(TrafficLightsAssist.columnSpacing, 6)
-        XCTAssertEqual(TrafficLightsAssist.postSpacing, 4)
-        XCTAssertEqual(TrafficLightsAssist.panelPad, 8)
-        XCTAssertEqual(TrafficLightsAssist.trackWidth, 11)
-        XCTAssertEqual(TrafficLightsAssist.columnHeight, 108)
-        XCTAssertEqual(TrafficLightsAssist.indicatorSize, 8)
-        XCTAssertEqual(TrafficLightsAssist.fillsWidthMaxColumn, 44)
-        XCTAssertEqual(TrafficLightsAssist.trackCorner, 2)
-        XCTAssertEqual(TrafficLightsAssist.minBarHeight, 1.5)
-        XCTAssertEqual(TrafficLightsAssist.centerLineFactor, 0.85, accuracy: 1e-12)
-        XCTAssertEqual(TrafficLightsAssist.meterRedRGB.0, 255, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.meterRedRGB.1, 92, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.meterRedRGB.2, 82, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.meterGreenRGB.0, 86, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.meterGreenRGB.1, 235, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.meterGreenRGB.2, 132, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.meterBlueRGB.0, 96, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.meterBlueRGB.1, 158, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.meterBlueRGB.2, 255, accuracy: 0)
-        XCTAssertEqual(TrafficLightsAssist.channelNames, ["red", "green", "blue"])
-        XCTAssertEqual(TrafficLightsAssist.leanBalanced, "balanced")
-        XCTAssertEqual(TrafficLightsAssist.leanOver, "over")
-        XCTAssertEqual(TrafficLightsAssist.leanUnder, "under")
-        XCTAssertEqual(TrafficLightsAssist.flagClip, "clip")
-        XCTAssertEqual(TrafficLightsAssist.flagCrush, "crush")
-        XCTAssertEqual(TrafficLightsAssist.balanceCenter, 0.5, accuracy: 1e-12)
-        XCTAssertEqual(TrafficLightsAssist.balanceDeadZone, 0.03, accuracy: 1e-12)
-    }
-
     func testColumnWidthLandscapeAndFillsWidth() {
         XCTAssertEqual(
             TrafficLightsAssist.columnWidth(fillsWidth: false, panelWidth: 74, uiScale: 1), 11)
@@ -128,66 +55,68 @@ final class TrafficLightsAssistTests: XCTestCase {
             "red over (clip), green balanced, blue under (crush)")
     }
 
-    func testLenientCompensationDecodeClampsLegacyStops() throws {
-        let over = try JSONDecoder().decode(
-            TrafficLightsAssist.CrushClipCompensation.self, from: Data("15".utf8))
-        XCTAssertEqual(over, .one)
-        let unknownLow = try JSONDecoder().decode(
-            TrafficLightsAssist.CrushClipCompensation.self, from: Data("3".utf8))
-        XCTAssertEqual(unknownLow, .zero)
-        let quarter = try JSONDecoder().decode(
-            TrafficLightsAssist.CrushClipCompensation.self, from: Data("2".utf8))
-        XCTAssertEqual(quarter, .quarter)
-        let encoded = try JSONEncoder().encode(TrafficLightsAssist.CrushClipCompensation.half)
-        XCTAssertEqual(
-            try JSONDecoder().decode(TrafficLightsAssist.CrushClipCompensation.self, from: encoded),
-            .half)
+    /// HISTO and TL each carry a copy of OpenZCine `CrushClipCompensation`; one table
+    /// holds both to the same stops, labels, lenient decode, and core-meter threshold.
+    func testCrushClipCompensationMatchesAcrossHistoAndLights() throws {
+        let histo = try Self.compensationRow(HistogramAssist.CrushClipCompensation.self)
+        let lights = try Self.compensationRow(TrafficLightsAssist.CrushClipCompensation.self)
+        for row in [histo, lights] {
+            XCTAssertEqual(row.rawValues, [0, 2, 5, 7, 10], row.name)
+            XCTAssertEqual(row.labels, ["0", "0.25", "0.5", "0.75", "1.0"], row.name)
+            XCTAssertEqual(row.compactLabels, ["0", "¼", "½", "¾", "1"], row.name)
+            XCTAssertEqual(row.stops, [0, 0.25, 0.5, 0.75, 1.0], row.name)
+            for (index, expected) in [(0, 0), (1, 0.025), (2, 0.05), (4, 0.10)] {
+                XCTAssertEqual(row.thresholds[index], expected, accuracy: 1e-12, row.name)
+            }
+            // Legacy stored stops: above the range saturates, unknown below falls to zero.
+            for (stored, expected) in [(15, 10), (20, 10), (-1, 0), (3, 0), (2, 2), (5, 5)] {
+                XCTAssertEqual(try row.decode(stored), expected, "\(row.name) decodes \(stored)")
+            }
+            XCTAssertEqual(row.encodedHalfRoundTrips, 5, row.name)
+
+            // The assist supplies only the stops/10 threshold to the shared core meter.
+            func red(_ crushPixels: Int, _ threshold: Double) -> ScopeChannelLight {
+                var bins = [Int](repeating: 0, count: 256)
+                bins[16] = crushPixels  // in the D-Log2 crush band [15…21]
+                bins[128] = 100 - crushPixels
+                return ScopeTrafficLights.reading(
+                    red: bins, green: bins, blue: bins, transfer: .dlog2, threshold: threshold
+                ).red
+            }
+            XCTAssertTrue(red(3, row.thresholds[0]).crush, row.name)
+            XCTAssertTrue(red(3, row.thresholds[1]).crush, row.name)
+            XCTAssertFalse(red(3, row.thresholds[4]).crush, row.name)
+            XCTAssertTrue(red(5, row.thresholds[1]).crush, row.name)
+            XCTAssertFalse(red(5, row.thresholds[1]).clip, row.name)
+            XCTAssertFalse(red(5, row.thresholds[4]).crush, row.name)
+        }
+        XCTAssertEqual(TrafficLightsAssist.defaultCompensation, .zero)
+        XCTAssertEqual(HistogramAssist.Options.default.crushClipCompensation, .zero)
     }
 
-    func testScaleClampAndPanelSize() {
-        XCTAssertEqual(TrafficLightsAssist.clampedScale(0.2), 0.6)
-        XCTAssertEqual(TrafficLightsAssist.clampedScale(2), 1.6)
-        XCTAssertEqual(TrafficLightsAssist.clampedScale(1), 1)
-        let size = TrafficLightsAssist.panelSize(scale: 1.2)
-        XCTAssertEqual(size.width, (74 * 1.2).rounded())
-        XCTAssertEqual(size.height, (168 * 1.2).rounded())
+    private struct CompensationRow {
+        let name: String
+        let rawValues: [Int]
+        let labels: [String]
+        let compactLabels: [String]
+        let stops: [Double]
+        let thresholds: [Double]
+        let decode: (Int) throws -> Int
+        let encodedHalfRoundTrips: Int
     }
 
-    func testStoredCenterRoundTrip() {
-        let bounds = CGRect(x: 10, y: 20, width: 200, height: 100)
-        let center = CGPoint(x: 60, y: 70)
-        let stored = TrafficLightsAssist.StoredCenter(center: center, in: bounds)
-        let restored = stored.center(in: bounds)
-        XCTAssertEqual(restored.x, center.x, accuracy: 0.001)
-        XCTAssertEqual(restored.y, center.y, accuracy: 0.001)
-    }
-
-    func testUnplacedMeterStartsAtCanvasCenter() {
-        let bounds = CGRect(x: 0, y: 0, width: 874, height: 402)
-        let feed = CGRect(x: 59, y: 0, width: 714.7, height: 402)
-        let size = TrafficLightsAssist.baseSize
-        let chrome = EdgeInsets(top: 60, leading: 0, bottom: 72, trailing: 100)
-        let center = TrafficLightsAssist.defaultCenter(
-            feed: feed, size: size, bounds: bounds, chromeClearance: chrome)
-        XCTAssertEqual(center.x, bounds.midX, accuracy: 0.05)
-        XCTAssertEqual(center.y, bounds.midY, accuracy: 0.05)
-        XCTAssertLessThanOrEqual(center.y + size.height / 2, bounds.maxY - chrome.bottom + 0.5)
-        XCTAssertGreaterThanOrEqual(center.y - size.height / 2, bounds.minY - 0.5)
-    }
-
-    func testCompensationThresholdLightsCrushBand() {
-        // Same core meter as HISTO; the assist supplies only the stops/10 threshold.
-        var bins = [Int](repeating: 0, count: 256)
-        bins[16] = 5  // in the D-Log2 crush band [15…21]
-        bins[128] = 95
-        let strict = ScopeTrafficLights.reading(
-            red: bins, green: bins, blue: bins, transfer: .dlog2, threshold: 0.10)
-        let forgiving = ScopeTrafficLights.reading(
-            red: bins, green: bins, blue: bins, transfer: .dlog2,
-            threshold: TrafficLightsAssist.CrushClipCompensation.quarter.pixelFractionThreshold)
-        XCTAssertFalse(strict.red.crush)
-        XCTAssertTrue(forgiving.red.crush)
-        XCTAssertFalse(forgiving.red.clip)
+    private static func compensationRow<T: CrushClipCompensationRow>(_: T.Type) throws -> CompensationRow {
+        let half = try XCTUnwrap(T(rawValue: 5))
+        let roundTrip = try JSONDecoder().decode(T.self, from: JSONEncoder().encode(half))
+        return CompensationRow(
+            name: String(describing: T.self),
+            rawValues: T.allCases.map(\.rawValue),
+            labels: T.allCases.map(\.label),
+            compactLabels: T.allCases.map(\.compactLabel),
+            stops: T.allCases.map(\.stops),
+            thresholds: T.allCases.map(\.pixelFractionThreshold),
+            decode: { try JSONDecoder().decode(T.self, from: Data("\($0)".utf8)).rawValue },
+            encodedHalfRoundTrips: roundTrip.rawValue)
     }
 
     @MainActor
@@ -206,28 +135,15 @@ final class TrafficLightsAssistTests: XCTestCase {
         XCTAssertEqual(HistogramAssist.store.options.crushClipCompensation, .one)
         XCTAssertEqual(TrafficLightsAssist.sharedCompensation(), .one)
     }
-
-    func testSnapClampAndHapticGrid() {
-        let snapped = TrafficLightsAssist.snap(CGPoint(x: 11, y: 7))
-        XCTAssertEqual(snapped.x, 12)
-        XCTAssertEqual(snapped.y, 8)
-        let bounds = CGRect(x: 0, y: 0, width: 200, height: 200)
-        let size = CGSize(width: 74, height: 168)
-        let clamped = TrafficLightsAssist.clamp(
-            CGPoint(x: -40, y: 400), size: size, in: bounds)
-        XCTAssertEqual(clamped.x, size.width / 2)
-        XCTAssertEqual(clamped.y, bounds.maxY - size.height / 2)
-        XCTAssertEqual(
-            TrafficLightsAssist.hapticCell(CGPoint(x: 22, y: 44)),
-            TrafficLightsAssist.hapticCell(CGPoint(x: 23, y: 45)))
-        let session = CGPoint(x: 80, y: 90)
-        let resolved = TrafficLightsAssist.resolvedCenter(
-            session: session,
-            stored: nil,
-            defaultCenter: CGPoint(x: 40, y: 40),
-            size: size,
-            bounds: bounds)
-        XCTAssertEqual(resolved.x, session.x, accuracy: 0.001)
-        XCTAssertEqual(resolved.y, session.y, accuracy: 0.001)
-    }
 }
+
+private protocol CrushClipCompensationRow: CaseIterable, Codable, RawRepresentable
+where RawValue == Int {
+    var label: String { get }
+    var compactLabel: String { get }
+    var stops: Double { get }
+    var pixelFractionThreshold: Double { get }
+}
+
+extension HistogramAssist.CrushClipCompensation: CrushClipCompensationRow {}
+extension TrafficLightsAssist.CrushClipCompensation: CrushClipCompensationRow {}

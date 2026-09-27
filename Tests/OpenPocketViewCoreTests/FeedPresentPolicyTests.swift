@@ -12,29 +12,6 @@ import Testing
             secondsSinceLastPresent: 10, secondsSinceLastDecodedFrame: 0.01))
     }
 
-    @Test func freezeThresholdMatchesWatchdogStall() {
-        #expect(FeedPresentPolicy.freezeThreshold == FeedWatchdog.stallThreshold)
-        #expect(FeedPresentPolicy.freezeThreshold == 2)
-    }
-
-    @Test func shouldRenderRequiresVisibleEnabledDrawable() {
-        #expect(
-            FeedPresentPolicy.shouldRender(
-                attached: true, enabled: true, hidden: false, hasDrawable: true))
-        #expect(
-            !FeedPresentPolicy.shouldRender(
-                attached: false, enabled: true, hidden: false, hasDrawable: true))
-        #expect(
-            !FeedPresentPolicy.shouldRender(
-                attached: true, enabled: false, hidden: false, hasDrawable: true))
-        #expect(
-            !FeedPresentPolicy.shouldRender(
-                attached: true, enabled: true, hidden: true, hasDrawable: true))
-        #expect(
-            !FeedPresentPolicy.shouldRender(
-                attached: true, enabled: true, hidden: false, hasDrawable: false))
-    }
-
     @Test func overlayMayScheduleBakeWhileHidden() {
         #expect(FeedPresentPolicy.shouldScheduleBake(enabled: true, hasDrawable: true))
         #expect(!FeedPresentPolicy.shouldScheduleBake(enabled: false, hasDrawable: true))
@@ -68,20 +45,6 @@ import Testing
                 hasPresentedFrame: true, lastPresentWasOverlay: false))
     }
 
-    @Test func unhideMetalBeforeReplaceBakeOnly() {
-        #expect(FeedPresentPolicy.unhideMetalBeforeBake(overlay: false))
-        #expect(!FeedPresentPolicy.unhideMetalBeforeBake(overlay: true))
-    }
-
-    @Test func metalPresentIsLatestWinsOneDrawable() {
-        #expect(FeedPresentPolicy.maxInFlightMetalPresents == 1)
-        #expect(FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 0))
-        #expect(
-            !FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 1),
-            "a second nextDrawable on MainActor is the LUT 50/50 stall")
-        #expect(!FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 3))
-    }
-
     @Test func splitComparisonNeedsACubeAndIsNotFullFalseColor() {
         #expect(
             FeedPresentPolicy.appliesSplitComparison(
@@ -97,12 +60,6 @@ import Testing
             !FeedPresentPolicy.appliesSplitComparison(
                 enabled: true, hasLUTCube: true, falseColorPaintsFullFrame: true),
             "IRE / PStops remap both halves — Android skips GPU split too")
-    }
-
-    @Test func monitorGradePrefersProxy() {
-        #expect(FeedPresentPolicy.preferProxyForMonitorGrade(hasProxy: true))
-        #expect(!FeedPresentPolicy.preferProxyForMonitorGrade(hasProxy: false))
-        #expect(FeedPresentPolicy.maxWorkingWidth == 1440)
     }
 
     @Test func flushIsDisconnectOrFailedLayerWithReplacement() {

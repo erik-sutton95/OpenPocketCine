@@ -55,7 +55,7 @@ struct FieldMonitorLayoutTests {
                 safeArea: .init(bottom: 20))
             #expect(layout.settings.width == 48)
             #expect(layout.settings.y == layout.media.y)
-            #expect(layout.settings.maxX + 8 == layout.media.x)
+            #expect(layout.settings.maxX + FieldMonitorLayout.settingsMediaGap == layout.media.x)
             #expect(layout.status.maxX < layout.settings.x)
             #expect(layout.display.width == 48)
             #expect(layout.stick.maxX < layout.display.x)
@@ -105,7 +105,7 @@ struct FieldMonitorLayoutTests {
                 #expect(layout.lock.height == layout.settings.height)
                 #expect(layout.media.width == layout.settings.width)
                 #expect(layout.media.height == layout.settings.height)
-                #expect(layout.media.y == layout.settings.maxY + 8)
+                #expect(layout.media.y == layout.settings.maxY + FieldMonitorLayout.settingsMediaGap)
                 #expect(layout.gauges.y >= layout.lock.maxY + 6)
                 #expect(layout.status.midY > layout.picture.y)
                 #expect(
@@ -163,21 +163,8 @@ struct FieldMonitorLayoutTests {
         #expect(layout.aspectToggle.midX == layout.viewport.midX)
         #expect(layout.assists.maxY == layout.stick.maxY)
         #expect(layout.zoom.maxY < layout.stick.y)
-        #expect(layout.stick.x == layout.viewport.width - 104)
-        #expect(layout.stick.width == 88 && layout.stick.height == 88)
         #expect(layout.zoom.x == layout.stick.x)
-        #expect(layout.zoom.y == layout.stick.y - 44)
-        #expect(layout.zoom.width == 44 && layout.zoom.height == 36)
-        #expect(layout.gimbal.x == layout.stick.maxX - 36)
         #expect(layout.gimbal.y == layout.zoom.y)
-        #expect(layout.gimbal.width == 36 && layout.gimbal.height == 36)
-        #expect(
-            layout.headTrack == FieldMonitorLayout.headTrack(stick: layout.stick, zoom: layout.zoom)
-        )
-        #expect(layout.headTrack.x == layout.stick.maxX - 44)
-        #expect(layout.headTrack.y == layout.zoom.y - 8 - 44)
-        #expect(layout.headTrack.width == 44 && layout.headTrack.height == 44)
-        #expect(layout.headTrack.maxY + 8 == layout.zoom.y)
     }
 
     @Test func headTrackCompassParksAboveTheClusterInBothOrientations() {

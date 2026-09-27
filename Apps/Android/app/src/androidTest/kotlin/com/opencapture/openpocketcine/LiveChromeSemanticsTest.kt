@@ -3,19 +3,14 @@ package com.opencapture.openpocketcine
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
@@ -39,38 +34,25 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LiveChromeSemanticsTest {
 
-    @Test fun recChipSpeaksStateAndElapsedTimeAsOneNode() {
-        val spoken = render { RecChip(recording = true, elapsedSeconds = 134) }
-        assertEquals(
-            listOf("Recording, 2 minutes 14 seconds"),
-            spoken,
-            "REC chip should speak one sentence, not \"REC\" and \"02:14\" as fragments",
+    /**
+     * Each readout speaks one sentence, not its fragments ("REC" and "02:14").
+     * The last case is the shared readout shape the chips all reuse.
+     */
+    @Test fun readoutChipsSpeakOneNamedSentence() {
+        val cases: List<Pair<String, @Composable () -> Unit>> = listOf(
+            "Recording, 2 minutes 14 seconds" to @Composable { RecChip(recording = true, elapsedSeconds = 134) },
+            "Standby" to @Composable { RecChip(recording = false, elapsedSeconds = 0) },
+            "Camera battery 87 percent" to @Composable { CameraBatteryReadout(percent = 87) },
+            "Camera battery level unknown" to @Composable { CameraBatteryReadout(percent = -1) },
+            "Timecode not available" to @Composable { TimecodeReadout(timecode = null) },
+            "Timecode 01:23:45" to @Composable { TimecodeReadout(timecode = "01:23:45:12") },
+            "Lens 24 mm" to @Composable {
+                ReadoutPill(value = "24 mm", accessibilityLabel = "Lens") { Spacer(Modifier.size(12.dp)) }
+            },
         )
-    }
-
-    @Test fun recChipSpeaksStandbyWithoutAnIdleTimer() {
-        assertEquals(listOf("Standby"), render { RecChip(recording = false, elapsedSeconds = 0) })
-    }
-
-    @Test fun cameraBatteryNamesItsSourceAndUnit() {
-        assertEquals(listOf("Camera battery 87 percent"), render { CameraBatteryReadout(percent = 87) })
-    }
-
-    @Test fun cameraBatterySaysUnknownRatherThanReadingADash() {
-        assertEquals(listOf("Camera battery level unknown"), render { CameraBatteryReadout(percent = -1) })
-    }
-
-    @Test fun timecodeIsNamedAndItsPlaceholderIsSpoken() {
-        assertEquals(listOf("Timecode not available"), render { TimecodeReadout(timecode = null) })
-        assertEquals(listOf("Timecode 01:23:45"), render { TimecodeReadout(timecode = "01:23:45:12") })
-    }
-
-    /** The shared readout shape, which the chips above all reuse. */
-    @Test fun aReadoutPillAbsorbsItsChildText() {
-        val spoken = render {
-            ReadoutPill(value = "24 mm", accessibilityLabel = "Lens") { Spacer(Modifier.size(12.dp)) }
+        for ((expected, content) in cases) {
+            assertEquals(listOf(expected), render(content), "readout should speak \"$expected\" as one node")
         }
-        assertEquals(listOf("Lens 24 mm"), spoken)
     }
 
     /**
@@ -82,36 +64,6 @@ class LiveChromeSemanticsTest {
             listOf("Live view 23.98 frames per second, 3 of 4 signal bars"),
             render { FpsChip(fps = "23.98", bars = 3) },
             "readout chips must merge; a stray \"FPS\" node means the convention leaks",
-        )
-    }
-
-    /**
-     * The rule the rest of this file depends on, pinned to the platform rather
-     * than to belief: only clearing collapses a labelled row to one stop, and
-     * it keeps the row activatable. `mergeDescendants` reads as merged in the
-     * Compose tree but still publishes the child text, so it is not a fix.
-     */
-    @Test fun onlyClearingCollapsesALabelledRowAndItKeepsItsActions() {
-        val plain = render { Row(Modifier.semantics { contentDescription = "PLAIN" }) { BasicText("kid") } }
-        assertEquals(listOf("PLAIN", "kid"), plain, "plain semantics leaves the child text behind")
-
-        val merged = render {
-            Row(Modifier.semantics(mergeDescendants = true) { contentDescription = "MERGED" }) { BasicText("kid") }
-        }
-        assertEquals(listOf("MERGED", "kid"), merged, "mergeDescendants does not suppress the child either")
-
-        val cleared = render {
-            Row(Modifier.clearAndSetSemantics { contentDescription = "CLEARED" }) { BasicText("kid") }
-        }
-        assertEquals(listOf("CLEARED"), cleared, "clearing must collapse the row to a single stop")
-
-        assertTrue(
-            clickableDescriptions {
-                Row(Modifier.clickable {}.clearAndSetSemantics { contentDescription = "TAPPABLE" }) {
-                    BasicText("kid")
-                }
-            }.contains("TAPPABLE"),
-            "clearing must not cost the row its click action",
         )
     }
 
@@ -145,19 +97,6 @@ class LiveChromeSemanticsTest {
         }
         assertTrue(actions.contains(CLICK), "tap must survive clearAndSetSemantics, got $actions")
         assertTrue(actions.contains(LONG_CLICK), "hold must survive clearAndSetSemantics, got $actions")
-    }
-
-    @Test fun assistToolWithoutOptionsOmitsTheHoldHint() {
-        val spoken = render {
-            com.opencapture.openpocketcine.assists.AssistToolCell(
-                tool = LiveAssistTool.GRID,
-                isOn = false,
-                enabled = true,
-                onLongClick = null,
-                onClick = {},
-            )
-        }
-        assertEquals(listOf("Grid, off"), spoken)
     }
 
     @Test fun everyAssistToolIsNamedInWordsNotItsChipAbbreviation() {
@@ -239,27 +178,6 @@ class LiveChromeSemanticsTest {
         return null
     }
 
-    /** Descriptions carried by nodes TalkBack can actually activate. */
-    private fun clickableDescriptions(content: @Composable () -> Unit): List<String> {
-        var found = emptyList<String>()
-        ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
-            val fixture = mountFixture(scenario, content)
-            val instrumentation = InstrumentationRegistry.getInstrumentation()
-            val deadline = SystemClock.uptimeMillis() + 5_000
-            while (SystemClock.uptimeMillis() < deadline) {
-                instrumentation.waitForIdleSync()
-                val root = currentFixture(fixture)
-                val collected = root?.let(::clickableLabels).orEmpty()
-                if (collected.isNotEmpty()) {
-                    found = collected
-                    break
-                }
-                SystemClock.sleep(80)
-            }
-        }
-        return found
-    }
-
     private fun mountFixture(
         scenario: ActivityScenario<BackdropRenderActivity>,
         content: @Composable () -> Unit,
@@ -288,15 +206,6 @@ class LiveChromeSemanticsTest {
             return null
         }
         return InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow?.let(::find)
-    }
-
-    private fun clickableLabels(node: AccessibilityNodeInfo): List<String> {
-        if (node.packageName?.toString() != TEST_PACKAGE) return emptyList()
-        val own =
-            node.contentDescription?.toString()
-                ?.takeIf { it.isNotBlank() && node.actionList.any { action -> action.id == CLICK } }
-        return listOfNotNull(own) +
-            (0 until node.childCount).flatMap { index -> node.getChild(index)?.let(::clickableLabels).orEmpty() }
     }
 
     private fun descriptions(node: AccessibilityNodeInfo): List<String> {

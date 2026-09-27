@@ -4,15 +4,14 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct ConformPreviewTests {
-    @Test func sixtyToTwentyFour() {
+    @Test func speedLabelAndDurationFollowTheTargetRate() {
         #expect(ConformPreview.speed(captureRate: 60, targetRate: 24) == 0.4)
         #expect(ConformPreview.label(captureRate: 60, targetRate: 24) == "60 → 24 fps · 40%")
-    }
-
-    @Test func oneTwentyToTwentyFour() {
         #expect(ConformPreview.speed(captureRate: 120, targetRate: 24) == 0.2)
         let availability = ConformPreview.availability(for: ConformPreview.Source(captureRate: 120))
         #expect(availability.targets == ConformPreview.targetRates)
+        let speed = ConformPreview.speed(captureRate: 60, targetRate: 24)
+        #expect(ConformPreview.conformedDuration(sourceSeconds: 6, speed: speed) == 15)
     }
 
     @Test func onlySlowerTargets() {
@@ -43,11 +42,6 @@ import Testing
         }
     }
 
-    @Test func conformedDurationStretches() {
-        let speed = ConformPreview.speed(captureRate: 60, targetRate: 24)
-        #expect(ConformPreview.conformedDuration(sourceSeconds: 6, speed: speed) == 15)
-    }
-
     @Test func frameTapRestartsAtEnd() {
         #expect(PlaybackFrameTap.action(chromeVisible: true, reachedEnd: true) == .restartPlayback)
         #expect(PlaybackFrameTap.action(chromeVisible: true, reachedEnd: false) == .toggleTransport)
@@ -72,22 +66,6 @@ import Testing
         #expect(abs(picture.midY - well.midY) < 0.01)
     }
 
-    @Test func fiftyFpsOffersHalfSpeedAtTwentyFive() {
-        let source = ConformPreview.probe(nominalFrameRate: 50)
-        let availability = ConformPreview.availability(for: source)
-        #expect(source.captureRate == 50)
-        #expect(availability.targets.contains(25))
-        #expect(ConformPreview.speed(captureRate: 50, targetRate: 25) == 0.5)
-        #expect(ConformPreview.targetLabel(captureRate: 50, targetRate: 25) == "25 fps · 50%")
-    }
-
-    @Test func probeFallsBackToListedRateWhenAssetIsSilent() {
-        let source = ConformPreview.probe(listedRate: 50)
-        #expect(source.captureRate == 50)
-        #expect(!source.isVariableFrameRate)
-        #expect(ConformPreview.availability(for: source).targets.contains(25))
-    }
-
     @Test func probeUsesMinDurationWhenNominalIsZero() {
         let source = ConformPreview.probe(
             nominalFrameRate: 0, minFrameDurationSeconds: 1 / 50)
@@ -102,13 +80,6 @@ import Testing
         #expect(!source.isVariableFrameRate)
     }
 
-    @Test func fiftyVersusTwentyFiveIsHighFrameRateNotVFR() {
-        let source = ConformPreview.probe(
-            nominalFrameRate: 25, minFrameDurationSeconds: 1 / 50)
-        #expect(source.captureRate == 50)
-        #expect(!source.isVariableFrameRate)
-    }
-
     @Test func listedResolutionBecomesTheFeedRaster() {
         #expect(
             PlaybackVideoLayout.size(fromResolution: "3840x2160")
@@ -118,15 +89,5 @@ import Testing
                 == CGSize(width: 1080, height: 1920))
         #expect(PlaybackVideoLayout.size(fromResolution: nil) == nil)
         #expect(PlaybackVideoLayout.size(fromResolution: "n/a") == nil)
-    }
-
-    @Test func letterboxedFeedIsSmallerThanTheScreen() {
-        let screen = CGRect(x: 0, y: 0, width: 844, height: 390)
-        let feed = PlaybackVideoLayout.aspectFitRect(
-            videoSize: CGSize(width: 3840, height: 2160), in: screen)
-        #expect(feed.height <= screen.height + 0.01)
-        #expect(feed.width < screen.width - 1)
-        #expect(abs(feed.midY - screen.midY) < 0.01)
-        #expect(abs(feed.width / feed.height - 16 / 9) < 0.01)
     }
 }

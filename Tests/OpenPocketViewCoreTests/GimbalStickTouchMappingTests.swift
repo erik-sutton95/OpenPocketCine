@@ -52,22 +52,16 @@ struct GimbalStickTouchMappingTests {
         #expect(beyond.visualY > 0)
     }
 
-    @Test func responseCurvesDivergeAtVisibleRing() {
-        let n = map(dx: outer, dy: 0).commandX
-        let linear = GimbalStick.analogCurve(n, expo: GimbalStick.ResponseCurve.linear.expo)
-        let standard = GimbalStick.analogCurve(n, expo: GimbalStick.ResponseCurve.standard.expo)
-        let fine = GimbalStick.analogCurve(n, expo: GimbalStick.ResponseCurve.fine.expo)
-        #expect(linear < 1)
-        #expect(linear > standard)
-        #expect(standard > fine)
-    }
-
     @Test func engagedReturnToCenterEmitsZero() {
         let slop = travel * GimbalStick.tapSlop * 0.5
         let tap = map(dx: slop, dy: 0)
         #expect(tap.isTap)
         #expect(!tap.emit)
         #expect(!tap.engaged)
+
+        let edge = map(dx: travel * GimbalStick.tapSlop, dy: 0)
+        #expect(!edge.isTap)
+        #expect(edge.emit)
 
         let thrown = map(dx: outer, dy: 0, engaged: tap.engaged)
         #expect(thrown.emit)
@@ -80,16 +74,5 @@ struct GimbalStickTouchMappingTests {
         #expect(rest.isTap)
         #expect(rest.engaged)
         #expect(rest.emit)
-    }
-
-    @Test func initialTapRemainsTapInsideVisualSlop() {
-        let inside = map(dx: travel * GimbalStick.tapSlop * 0.5, dy: 0)
-        #expect(inside.isTap)
-        #expect(!inside.emit)
-        #expect(!inside.engaged)
-
-        let edge = map(dx: travel * GimbalStick.tapSlop, dy: 0)
-        #expect(!edge.isTap)
-        #expect(edge.emit)
     }
 }

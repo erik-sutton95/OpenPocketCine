@@ -16,16 +16,6 @@ import Testing
         #expect(GamepadOperatorMap.dpad(.right) == .shutterClose)
     }
 
-    @Test func zoomChipOutDoesNotWrapToTele() {
-        #expect(CamFov.previousJump(from: 1) == 1)
-        #expect(CamFov.previousJump(from: 3) == 1)
-        #expect(CamFov.previousJump(from: 6) == 3)
-        #expect(CamFov.previousJump(from: 12) == 6)
-        #expect(CamFov.previousJump(from: 2, stops: [1, 2, 4]) == 1)
-        #expect(CamFov.previousJump(from: 4, stops: [1, 2, 4]) == 2)
-        #expect(CamFov.previousJump(from: 1, stops: [1, 2, 4]) == 1)
-    }
-
     @Test func gimbalStickDefaultsLeftAndIgnoresTheOtherAxes() {
         #expect(GamepadGimbalStick.default == .left)
         #expect(GamepadGimbalStick.parse(nil) == .left)

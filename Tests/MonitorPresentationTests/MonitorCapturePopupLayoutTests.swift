@@ -48,15 +48,6 @@ struct MonitorCapturePopupLayoutTests {
         #expect(invalid.maximumHeight == 0)
     }
 
-    @Test func compactHoldIsDialOnlyAndDetailsKeepAccessoryChrome() {
-        #expect(MonitorCapturePopupKind.compact.showsClose == false)
-        #expect(MonitorCapturePopupKind.compact.showsAccessoryChrome == false)
-        #expect(MonitorCapturePopupKind.compact.subtitle == "drag to set")
-        #expect(MonitorCapturePopupKind.details.showsClose)
-        #expect(MonitorCapturePopupKind.details.showsAccessoryChrome)
-        #expect(MonitorCapturePopupKind.details.subtitle == nil)
-    }
-
     @Test func topRecordingCategoriesParkBelowThePortraitInfoBar() {
         let hud = FieldMonitorLayout(
             width: 393, height: 852, safeArea: .init(top: 59, bottom: 34))
@@ -103,23 +94,6 @@ struct MonitorCapturePopupLayoutTests {
         #expect(MonitorCapturePopupChrome.showsGrabber(kind: .details, edge: .bottom))
         #expect(!MonitorCapturePopupChrome.showsGrabber(kind: .details, edge: .top))
         #expect(!MonitorCapturePopupChrome.showsGrabber(kind: .compact, edge: .bottom))
-    }
-
-    @Test func readoutAndSettingsChromeKeepApprovedPhoneType() {
-        #expect(MonitorReadoutTypography.valueSize(tablet: false) == 16)
-        #expect(MonitorReadoutTypography.valueSize(tablet: true) == 18)
-        #expect(MonitorReadoutTypography.labelSize == 9)
-        #expect(MonitorReadoutTypography.labelTracking == 1.26)
-        #expect(MonitorSettingsCardMetrics.titleClearance() >= 8)
-        #expect(
-            MonitorSettingsCardMetrics.contentOriginY()
-                >= MonitorSettingsCardMetrics.titleTopPadding + 17
-                    + MonitorSettingsCardMetrics.titleContentGap)
-        #expect(MonitorCapturePopupChrome.dispSize == 12)
-        #expect(MonitorCapturePopupChrome.dispTracking == 0.48)
-        #expect(MonitorCapturePopupChrome.cameraPhoneTitle == 19)
-        #expect(MonitorCapturePopupChrome.cameraTabletTitle == 24)
-        #expect(MonitorCapturePopupChrome.cameraCardCorner == 13)
     }
 
     @Test func wideLabelsHaveRoomForTheirEnlargedSelectedValue() {

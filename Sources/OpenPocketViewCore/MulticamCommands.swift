@@ -38,31 +38,6 @@ public enum MulticamCommands {
         command(8, 2, 0xe1, [0x1a], seq)
     }
 
-    public static func configuration(url: String, seq: UInt16) throws -> Duml.Frame {
-        guard let address = URL(string: url), address.scheme == "rtmp", address.host != nil,
-            url.utf8.count < 256
-        else { throw Failure.invalidInput }
-        let json: [String: Any] = [
-            "codec": "HEVC", "EnhancedRTMP": false, "supportStopLive": false,
-            "watermark": 0, "rtmpAddress": url, "orientation": "landscape",
-        ]
-        let bytes = [UInt8](
-            try JSONSerialization.data(
-                withJSONObject: json, options: [.sortedKeys, .withoutEscapingSlashes]))
-        let count = UInt16(bytes.count)
-        let body = count + 11
-        // Version, body size, captured encoder preset, JSON size, JSON document.
-        let prefix: [UInt8] = [
-            1, UInt8(body & 255), UInt8(body >> 8), 10, 0x70, 0x17,
-            2, 1, 2, 0, 0, 0, UInt8(count & 255), UInt8(count >> 8),
-        ]
-        return command(8, 8, 0x78, prefix + bytes, seq)
-    }
-
-    public static func streaming(_ enabled: Bool, seq: UInt16) -> Duml.Frame {
-        command(8, 2, 0x8e, [1, 1, 0x1a, 0, 1, enabled ? 1 : 2], seq)
-    }
-
     private static func command(
         _ receiver: UInt8, _ set: UInt8, _ id: UInt8, _ payload: [UInt8], _ seq: UInt16
     ) -> Duml.Frame {

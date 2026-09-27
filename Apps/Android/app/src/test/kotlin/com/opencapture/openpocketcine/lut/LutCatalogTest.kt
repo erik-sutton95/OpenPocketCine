@@ -31,24 +31,6 @@ class LutCatalogTest {
     }
 
     @Test
-    fun shippedAssetNamesMatchOfficialCubes() {
-        assertEquals(shipped.toSet(), LutCatalog.shippedAssetFileNames.toSet())
-        assertEquals(
-            listOf(
-                "DJI_Official_Pocket4P_DLog_Rec709_33.cube",
-                "DJI_Official_Pocket4P_DLog2_Rec709_33.cube",
-                "DJI_Official_Nano_DLogM_Rec709_33.cube",
-                "DJI_Official_Action6_DLogM_Rec709_33.cube",
-            ),
-            LutCatalog.officialDji.map { it.fileName },
-        )
-        assertEquals(
-            listOf("D-Log → Rec.709", "D-Log2 → Rec.709", "D-Log M → Rec.709", "Action 6 D-Log M → Rec.709"),
-            LutCatalog.officialDji.map { it.title },
-        )
-    }
-
-    @Test
     fun djiTabListsAutoThenOfficialCubesNotBuiltInLooks() {
         val dji = LutCatalog.djiEntries(shipped)
         assertEquals(
@@ -59,10 +41,6 @@ class LutCatalogTest {
         assertFalse(dji.any { it.id == "officialDLog" || it.id == "officialDLog2" })
         val photo = LutCatalog.djiEntries(shipped, isPhotoLive = true)
         assertEquals(listOf("djiAuto"), photo.map { it.id })
-        assertEquals(
-            LutCatalog.PHOTO_REC709_CAPTION,
-            "Photo live view is Rec.709 — log conversions are off",
-        )
     }
 
     @Test

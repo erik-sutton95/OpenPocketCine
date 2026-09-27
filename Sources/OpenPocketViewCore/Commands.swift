@@ -331,17 +331,6 @@ public enum Commands {
         tapFocusLiveHint(seq: seq)
     }
 
-    /// Mimo tap burst (`mimo-tap-focus-20260818`). AF-S and AF-C are the same
-    /// four writes; each ACK is `00`. `0x32` alone times out.
-    public static func tapFocus(_ x: Float, _ y: Float, seq: UInt16 = 0) -> [Duml.Frame] {
-        [
-            tapFocusPrepare(seq: seq),
-            tapFocusPoint(x, y, seq: seq),
-            tapFocusLiveHint(seq: seq),
-            tapFocusCommit(x, y, seq: seq),
-        ]
-    }
-
     /// `0x02/0xA6` drag-to-track SET. `01 00 00` + u16-LE id + 4×f32 LE origin/size.
     public static func setTrackingBox(
         id: UInt16, x: Float, y: Float, width: Float, height: Float, seq: UInt16 = 0
@@ -607,10 +596,6 @@ public enum Commands {
     /// No GET: zero empty `0x1E`, no `0x8E` pid tracks this. Read `cam_expo_param` `@7`.
     public static func setExpoMode(_ mode: ExpoMode, seq: UInt16 = 0) -> Duml.Frame {
         camera(0x1E, mode.setPayload, seq: seq)
-    }
-
-    public static func setExpoManual(_ on: Bool, seq: UInt16 = 0) -> Duml.Frame {
-        setExpoMode(on ? .manual : .auto, seq: seq)
     }
 
     private static func floatLE(_ v: Float) -> [UInt8] {

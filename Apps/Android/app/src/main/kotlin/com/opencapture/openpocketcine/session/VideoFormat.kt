@@ -354,29 +354,6 @@ data class VideoFormat(val resolution: VideoResolution, val frameRate: VideoFram
             return VideoFrameRate.labeledVideo
         }
 
-        /** Tab change: skip the SET when res+fps already match. */
-        fun nextForTab(status: CameraStatus, tab: Int, drum: String): VideoFormat? {
-            val rate = VideoFrameRate.fromDrumLabel(drum) ?: current(status).frameRate
-            val res =
-                resolutions(status.availableVideoFormats, current(status).resolution)
-                    .getOrNull(tab) ?: return null
-            val next = VideoFormat(res, rate)
-            return next.takeIf { it != current(status) }
-        }
-
-        /** Drum row: rate must be on the camcap (or Video 24–60) list. */
-        fun nextForDrum(status: CameraStatus, tab: Int, drum: String): VideoFormat? {
-            val rate = VideoFrameRate.fromDrumLabel(drum) ?: return null
-            val current = current(status)
-            val res =
-                resolutions(status.availableVideoFormats, current.resolution)
-                    .getOrNull(tab) ?: current.resolution
-            val rates = frameRates(
-                status.availableVideoFormats, res, current.frameRate, status.shootingMode,
-            )
-            if (rate !in rates) return null
-            return VideoFormat(res, rate)
-        }
 
         /**
          * Keep the optimistic FORMAT HUD until `cam_video_param_v2` reports the SET.

@@ -15,9 +15,6 @@ import UIKit
 /// 99, one IRE under the live-tap ceiling so the typical D-Log2 243–247 shelf paints (#136).
 /// The GPU compositor reads ``overlay(from:)``.
 enum ZebraAssist {
-    /// Popup width OpenZCine uses for zebra (`assistPanelWidth` — 400, not guides' 472).
-    static let longPressPanelWidth: CGFloat = 400
-    static let panelWidth: CGFloat = longPressPanelWidth
     static let unitDefaultsKey = "OpenPocketCine.zebraUnit"
 
     /// OpenZCine `zebraRows` / `SettingsSegmented` labels.

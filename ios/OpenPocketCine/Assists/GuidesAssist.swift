@@ -8,9 +8,6 @@ import SwiftUI
 /// - Multi-select aspect chips for the active tab
 /// - "Mask outside frame" (darkens the inverse of the union)
 enum GuidesAssist {
-    /// OpenZCine `assistPanelWidth(for: .guides)`.
-    static let panelWidth: CGFloat = 472
-
     @MainActor
     @ViewBuilder
     static func longPressMenu(assist: LiveAssistState) -> some View {

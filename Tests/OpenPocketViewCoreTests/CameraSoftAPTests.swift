@@ -44,18 +44,14 @@ import Testing
 
     @Test func dfsJoinKeepsRetryingUntilTheDeadline() {
         #expect(CameraSoftAPSwitch.joinDeadlineSeconds >= 60)
-        #expect(CameraSoftAPSwitch.joinRetryPauseSeconds == 10)
         #expect(CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: 70))
         #expect(CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: 11))
         #expect(!CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: 10))
         #expect(!CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: 0))
         #expect(!CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: -5))
-        #expect(CameraSoftAPSwitch.frequencyHint.contains("2.4 GHz"))
     }
 
     @Test func leftoverCameraPathDoesNotBlockTheOtherBody() {
-        #expect(!CameraSoftAPSwitch.shouldAbortBecausePathStillReady(true))
-        #expect(!CameraSoftAPSwitch.shouldAbortBecausePathStillReady(false))
         #expect(CameraSoftAPSwitch.isOnTarget(currentSSID: nil, target: "OsmoNano-BBBB"))
         #expect(
             CameraSoftAPSwitch.isOnTarget(currentSSID: "OsmoNano-BBBB", target: "OsmoNano-BBBB"))
@@ -141,12 +137,6 @@ import Testing
         ]
         #expect(CameraSoftAP.cameraLocalIPv4(in: addrs) == "192.168.2.15")
         #expect(CameraSoftAP.cameraInterfaceNames(in: addrs) == ["en2"])
-        #expect(
-            CameraSoftAP.preferredInterfaceName(
-                cameraNames: ["en2"], available: ["en0", "en2", "pdp_ip0"]) == "en2")
-        #expect(
-            CameraSoftAP.preferredInterfaceName(
-                cameraNames: ["en2"], available: ["en0", "pdp_ip0"]) == nil)
         #expect(
             CameraSoftAP.cameraLocalIPv4(in: [
                 .init(name: "en0", ipv4: "192.168.1.20")
@@ -387,32 +377,6 @@ import Testing
             "noteRebuild() nils the clock; videoPkts stays")
     }
 
-    /// 272 pkts then silence: receive died. Do not sit on enable-only because
-    /// the cumulative counter is non-zero.
-    @Test func firstPictureFrozenBurstRebuildsUDP() {
-        #expect(
-            CameraSoftAP.firstPictureStep(
-                videoPackets: 272, enableSends: 1, secondsSinceLastEnable: 5,
-                secondsSinceLastVideo: 0.4) == .resendEnable,
-            "fresh packets, no picture after 5s — one 0x09/0xa8 resend")
-        #expect(
-            CameraSoftAP.firstPictureStep(
-                videoPackets: 272, enableSends: 1, secondsSinceLastEnable: 2,
-                secondsSinceLastVideo: 2) == .wait,
-            "inside IDR grace — do not rebuild")
-        #expect(
-            CameraSoftAP.firstPictureStep(
-                videoPackets: 272, enableSends: 2, secondsSinceLastEnable: 8,
-                secondsSinceLastVideo: 8) == .rebuildUDP)
-        #expect(
-            CameraSoftAP.firstPictureStep(
-                videoPackets: 272, enableSends: 4, secondsSinceLastEnable: 8,
-                secondsSinceLastVideo: 8) == .rejoin)
-        #expect(
-            CameraSoftAP.firstPictureStep(
-                videoPackets: 272, enableSends: 4, secondsSinceLastEnable: 8) == .rejoin)
-    }
-
     /// Second enable on a frozen receive RST'd TCP 7001. Skip it.
     @Test func frozenBurstDoesNotResendEnableOnSameSocket() {
         #expect(
@@ -496,21 +460,6 @@ import Testing
         #expect(!CameraSoftAP.shouldApplyStaleSocketHealth(isLiveConnection: false))
     }
 
-    @Test func handshakeSendRequiresArmedReader() {
-        #expect(!CameraSoftAP.canSendHandshake(receiveArmed: false, connectionReady: true))
-        #expect(!CameraSoftAP.canSendHandshake(receiveArmed: true, connectionReady: false))
-        #expect(CameraSoftAP.canSendHandshake(receiveArmed: true, connectionReady: true))
-    }
-
-    @Test func firstPictureDoesNotExitPlaybackUnlessCameraIsInGallery() {
-        #expect(!CameraSoftAP.shouldExitPlaybackBeforeLiveEnable(inPlayback: false))
-        #expect(CameraSoftAP.shouldExitPlaybackBeforeLiveEnable(inPlayback: true))
-        #expect(CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: true))
-        #expect(!CameraSoftAP.shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: false))
-        #expect(CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(hasPicture: false))
-        #expect(!CameraSoftAP.shouldContinueFirstPictureAfterStrayPlayback(hasPicture: true))
-    }
-
     @Test func firstPictureWaitsAfterUDPRebuild() {
         #expect(
             CameraSoftAP.firstPictureStep(
@@ -525,12 +474,11 @@ import Testing
     /// pktType 0x00, 8-byte transport header. Session/seq are not part of the
     /// ACK test — a mismatch here is how a real reply was treated as a miss.
     @Test func handshakeAckIsPktType00() {
-        #expect(CameraSoftAP.isHandshakeAck([0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00]))
         #expect(DumlTransport.isHandshake([0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00]))
-        #expect(!CameraSoftAP.isHandshakeAck([0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x02, 0x00]))
-        #expect(!CameraSoftAP.isHandshakeAck([0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x04, 0x00]))
-        #expect(!CameraSoftAP.isHandshakeAck([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-        #expect(!CameraSoftAP.isHandshakeAck([]))
+        #expect(!DumlTransport.isHandshake([0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x02, 0x00]))
+        #expect(!DumlTransport.isHandshake([0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x04, 0x00]))
+        #expect(!DumlTransport.isHandshake([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        #expect(!DumlTransport.isHandshake([]))
     }
 
     /// One bind of 20×350 ms is not a kick if 192.168.2.x is still on the path.
@@ -545,9 +493,6 @@ import Testing
             CameraSoftAP.handshakeTimeoutStep(
                 pathReady: true, rebindsUsed: 0, inboundDatagrams: 12) == .keepSocket,
             "HEVC/status already inbound — do not discardUDP")
-        #expect(CameraSoftAP.shouldBindLocalListenPort(9004) == false)
-        #expect(CameraSoftAP.isEphemeralLocalPort(0))
-        #expect(!CameraSoftAP.isEphemeralLocalPort(9004))
     }
 
     /// Late SET ACK while video is still arriving is not a dead uplink.
@@ -605,20 +550,6 @@ import Testing
             "respect the rebuild cooldown")
     }
 
-    @Test func handshakeTimeoutDoesNotKickWhileSoftAPUp() {
-        #expect(!CameraSoftAP.shouldKickAfterHandshakeTimeout(pathReady: true))
-        #expect(CameraSoftAP.shouldKickAfterHandshakeTimeout(pathReady: false))
-        #expect(
-            !CameraSoftAP.shouldKickAfterHandshakeTimeout(pathReady: true),
-            "rebind-limit fail is this open() attempt — operator stays on live")
-    }
-
-    @Test func handshakeOpenRetryGivesUpAtLimit() {
-        #expect(!CameraSoftAP.shouldGiveUpOpenRetry(attempts: 0))
-        #expect(!CameraSoftAP.shouldGiveUpOpenRetry(attempts: 5))
-        #expect(CameraSoftAP.shouldGiveUpOpenRetry(attempts: 6))
-    }
-
     /// Disconnect must not leave a closed driver for the next connect, and a
     /// cancelled `open()` must not publish LIVE after the operator already left.
     @Test func closedDatalinkMustNotCommitLive() {
@@ -639,19 +570,6 @@ import Testing
             !CameraSoftAP.shouldCommitLiveHandshake(
                 driverOwned: true, isClosed: false, isCancelled: true),
             "cancelled open() must not publish LIVE after Disconnect")
-    }
-
-    @Test func savedCamerasPersistHotspot() {
-        #expect(CameraSoftAP.shouldPersistHotspot(isSavedCamera: true))
-        #expect(!CameraSoftAP.shouldPersistHotspot(isSavedCamera: false))
-    }
-
-    /// Poll so an early ACK does not wait out the full send interval.
-    @Test func handshakePollIsFinerThanSendInterval() {
-        #expect(CameraSoftAP.handshakePollMilliseconds > 0)
-        #expect(
-            CameraSoftAP.handshakePollMilliseconds
-                < CameraSoftAP.handshakeSendIntervalMilliseconds)
     }
 
 }

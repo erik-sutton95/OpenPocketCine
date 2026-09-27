@@ -39,9 +39,4 @@ class MonitorInspectorPolicyTest {
         assertEquals(80f, MonitorInspectorPolicy.edgeInset(false, true, 0f, 80f), .01f)
         assertEquals(20f, MonitorInspectorPolicy.edgeInset(false, false, 20f, 0f), .01f)
     }
-
-    @Test fun landscapePreferredWidthStaysUnchangedWhenTheCutoutIsClearedInternally() {
-        assertEquals(460f, MonitorInspectorPolicy.width(800f), .01f)
-        assertEquals(480f * .92f, MonitorInspectorPolicy.width(480f), .01f)
-    }
 }

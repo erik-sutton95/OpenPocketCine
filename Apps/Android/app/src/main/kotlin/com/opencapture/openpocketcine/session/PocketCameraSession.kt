@@ -5219,7 +5219,6 @@ internal object LiveViewEnablePolicy {
     const val COMMAND_TIMEOUT_REBUILD_COUNT = 2
     const val FIRST_PICTURE_RESEND_MS = 2_000L
     const val FORMAT_POKE_MIN_SETTLE_MS = 800L
-    const val STALLED_FORMAT_RESEND_MS = 5_000L
     const val FORMAT_STALL_MS = 2_000L
     const val HANDSHAKE_RETRY_PAUSE_MS = 500L
     const val HANDSHAKE_OPEN_RETRY_LIMIT = 6
@@ -5713,8 +5712,6 @@ internal object LiveViewEnablePolicy {
         return ingestArmed
     }
 
-    fun shouldUseCapturedLiveStartForMediaResume(): Boolean = true
-
     /** Pocket: `0x02/0x68` `08` immediately before `0x09/0xa8`. Not Nano. */
     fun shouldSendLiveViewPrepare(usesNanoLiveViewGate: Boolean): Boolean =
         coreFlag(
@@ -5737,11 +5734,6 @@ internal object LiveViewEnablePolicy {
             "shouldContinueFirstPictureAfterStrayPlayback",
             "{\"hasPicture\":$hasPicture}",
         ) { !hasPicture }
-
-    /**
-     * Mimo 20260828: HEVC at join+17 ms. Do not wait a DUML ACK before arming.
-     */
-    fun shouldWaitForLiveViewAckBeforeArm(): Boolean = false
 
     fun shouldKeepaliveRebuildUDP(
         flowNeedsRebuild: Boolean,
@@ -5967,25 +5959,5 @@ internal object LiveViewEnablePolicy {
             }
         state.lastActionAt = now
         return action
-    }
-
-    /** Legacy gate used by tests: first-picture 2 s, stalled format 5 s — never 1 Hz. */
-    fun shouldResendEnable(
-        videoPackets: Int,
-        nowElapsedRealtime: Long,
-        lastIdrRequest: Long,
-        hasFormat: Boolean,
-        decoderErrors: Int,
-        streamStartedAt: Long?,
-    ): Boolean {
-        if (videoPackets == 0) {
-            return nowElapsedRealtime - lastIdrRequest >= FIRST_PICTURE_RESEND_MS
-        }
-        val started = streamStartedAt ?: nowElapsedRealtime
-        val stalled =
-            (decoderErrors > 0 && !hasFormat) ||
-                (!hasFormat && nowElapsedRealtime - started > FORMAT_STALL_MS)
-        if (!stalled) return false
-        return nowElapsedRealtime - lastIdrRequest >= STALLED_FORMAT_RESEND_MS
     }
 }

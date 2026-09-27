@@ -9,15 +9,6 @@ import UIKit
 /// * Scale — CineStop / EL Zone / IRE / Limits
 /// * Reference Display — compact color key over live view; turning it on arms False Color
 enum FalseColorAssist {
-    /// OpenZCine `assistPanelWidth` for tools other than guides.
-    static let longPressPanelWidth: CGFloat = 400
-    static let panelWidth: CGFloat = longPressPanelWidth
-    /// OpenZCine `FalseColorReference.panelSize`.
-    static let referencePanelSize = FalseColorReference.panelSize
-
-    /// OpenZCine `falseColorRows` titles, in order.
-    static let popupTitles = ["Scale", "Reference key", "Reference Display"]
-
     /// OpenZCine Scale help, Pocket curves in the first sentence.
     static let scaleHelp =
         "The camera color mode selects D-Log, D-Log2, D-Log M, Rec.709, or HLG automatically. "

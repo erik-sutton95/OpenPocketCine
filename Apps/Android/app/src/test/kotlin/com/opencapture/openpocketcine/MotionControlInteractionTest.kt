@@ -51,50 +51,55 @@ class MotionControlInteractionTest {
         assertTrue(tiny.height >= 0f)
     }
 
-    @Test
-    fun pillDragKeepsExclusiveOwnershipThroughReleaseEvenAfterReturningToStart() {
-        val drag = MotionControlDragGesture(immediate = true, slop = 8f)
-        assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(10, 2f))
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(30, 12f))
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(70, 0f))
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(90, 0f)) // release
-    }
+    /** One pointer sample; a null [expected] feeds the gesture without asserting. */
+    private data class DragStep(
+        val elapsedMs: Long,
+        val distance: Float,
+        val expected: MotionControlDragGesture.Ownership?,
+        val childConsumed: Boolean = false,
+    )
 
     @Test
-    fun intentionalTapPassesButLongHoldConsumesRelease() {
-        assertEquals(MotionControlDragGesture.Ownership.TRACKING,
-            MotionControlDragGesture(true, 8f).update(140, 2f))
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING,
-            MotionControlDragGesture(true, 8f).update(300, 0f))
-    }
-
-    @Test
-    fun editorDirectDragStartsWithoutHoldLikeScopes() {
-        val drag = MotionControlDragGesture(immediate = false, slop = 8f)
-        assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(40, 2f))
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(50, 12f))
-        assertEquals(MotionControlDragGesture.Ownership.DRAGGING, drag.update(80, 30f))
-    }
-
-    @Test
-    fun editorHoldWithoutMoveDoesNotClaimSoWaypointTapsFire() {
-        val drag = MotionControlDragGesture(immediate = false, slop = 8f)
-        assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(300, 0f))
-        assertEquals(MotionControlDragGesture.Ownership.TRACKING, drag.update(450, 2f))
-    }
-
-    @Test
-    fun editorYieldsWhenChildConsumesForDurationDialOrSlider() {
-        val drag = MotionControlDragGesture(immediate = false, slop = 8f)
-        assertEquals(MotionControlDragGesture.Ownership.YIELDED, drag.update(50, 12f, childConsumed = true))
-        assertEquals(MotionControlDragGesture.Ownership.YIELDED, drag.update(500, 30f, childConsumed = true))
-    }
-
-    @Test
-    fun yieldedOwnershipStaysEvenIfChildStopsConsuming() {
-        val drag = MotionControlDragGesture(immediate = false, slop = 8f)
-        drag.update(50, 12f, childConsumed = true)
-        assertEquals(MotionControlDragGesture.Ownership.YIELDED, drag.update(80, 0f, childConsumed = false))
+    fun dragOwnershipFollowsImmediacyHoldSlopAndChildConsumption() {
+        val tracking = MotionControlDragGesture.Ownership.TRACKING
+        val dragging = MotionControlDragGesture.Ownership.DRAGGING
+        val yielded = MotionControlDragGesture.Ownership.YIELDED
+        // why to (immediate, pointer samples); each case starts a fresh gesture with 8 dp slop.
+        val cases = listOf(
+            "pill drag keeps exclusive ownership through release even after returning to start" to (true to listOf(
+                DragStep(10, 2f, tracking),
+                DragStep(30, 12f, dragging),
+                DragStep(70, 0f, dragging),
+                DragStep(90, 0f, dragging), // release
+            )),
+            "intentional pill tap passes" to (true to listOf(DragStep(140, 2f, tracking))),
+            "long pill hold consumes release" to (true to listOf(DragStep(300, 0f, dragging))),
+            "editor direct drag starts without hold like scopes" to (false to listOf(
+                DragStep(40, 2f, tracking),
+                DragStep(50, 12f, dragging),
+                DragStep(80, 30f, dragging),
+            )),
+            "editor hold without move does not claim so waypoint taps fire" to (false to listOf(
+                DragStep(300, 0f, tracking),
+                DragStep(450, 2f, tracking),
+            )),
+            "editor yields when child consumes for duration dial or slider" to (false to listOf(
+                DragStep(50, 12f, yielded, childConsumed = true),
+                DragStep(500, 30f, yielded, childConsumed = true),
+            )),
+            "yielded ownership stays even if child stops consuming" to (false to listOf(
+                DragStep(50, 12f, null, childConsumed = true),
+                DragStep(80, 0f, yielded),
+            )),
+        )
+        for ((why, case) in cases) {
+            val (immediate, steps) = case
+            val drag = MotionControlDragGesture(immediate = immediate, slop = 8f)
+            for (step in steps) {
+                val ownership = drag.update(step.elapsedMs, step.distance, childConsumed = step.childConsumed)
+                if (step.expected != null) assertEquals(step.expected, ownership, "$why at ${step.elapsedMs} ms")
+            }
+        }
     }
 
     @Test

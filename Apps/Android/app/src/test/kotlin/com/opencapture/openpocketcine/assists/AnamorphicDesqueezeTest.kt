@@ -92,9 +92,6 @@ class AnamorphicDesqueezeTest {
         assertEquals(setOf("DESQ"), playbackSaved)
         state.toggle(LiveAssistTool.DESQ)
         assertTrue(state.presentedAspect(16f / 9f, playback = true) > 16f / 9f)
-        assertFalse(state.playbackNeedsProcessedFeed())
-        assertFalse(state.playbackNeedsScopeTap())
-        assertFalse(state.playbackNeedsLookOverlay())
     }
 
     @Test

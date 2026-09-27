@@ -157,7 +157,6 @@ object StartupConnectionCopy {
         }
 
     const val WIZARD_STEP_COUNT = 4
-    const val SHARE_DIAGNOSTICS = "Share Diagnostics"
 
     fun friendly(raw: String): String {
         val trimmed = raw.trim()

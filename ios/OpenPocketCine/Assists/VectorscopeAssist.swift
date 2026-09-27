@@ -17,7 +17,6 @@ import UIKit
 /// normalised centre (OpenZCine `MovablePanelStoredCenter`).
 enum VectorscopeAssist {
     static let panelID = "vector"
-    static let longPressPanelWidth: CGFloat = 400
     static let baseSize = ScopePanelSize.vectorscope
     static let scaleRange: ClosedRange<Double> = 0.6...1.6
     static let defaultScale = 1.0
@@ -219,9 +218,6 @@ enum VectorscopeAssist {
     static func longPressMenu() -> VectorscopeLongPressMenu {
         longPressMenu(options: store.optionsBinding)
     }
-
-    /// OpenZCine `AssistQuickSettingsContent.vectorscopeRows` titles, in order.
-    static let popupRows = ["Trace Zoom", "Brightness"]
 
     /// Direct drag + L-corner resize wrapper (OpenZCine `MovablePanel`).
     static func overlay<Content: View>(

@@ -27,8 +27,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -112,8 +110,7 @@ fun LiveAssistLayer(
     state.acceptScopeBundle(LiveScopeSampleBus.bundle)
     BoxWithConstraints(
         modifier
-            .fillMaxSize()
-            .onGloballyPositioned { GpuOverlayBus.layerRoot = it.positionInRoot() },
+            .fillMaxSize(),
     ) {
         val canvas =
             AssistRect(0f, 0f, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())

@@ -118,16 +118,6 @@ final class ChromeEditorReturnTests: XCTestCase {
         XCTAssertTrue(model.chromeSectionMounts(.railSettings))
     }
 
-    func testDisplayModesDoNotIncludeCommand() {
-        XCTAssertEqual(PocketDispMode.allCases.map(\.rawValue), ["live", "clean"])
-        XCTAssertFalse(PocketDispMode.live.settingsTitle.contains("DISP 3"))
-        XCTAssertFalse(PocketDispMode.clean.settingsTitle.contains("DISP 3"))
-        XCTAssertFalse(
-            PocketDispMode.live.settingsCaption.localizedCaseInsensitiveContains("command"))
-        XCTAssertFalse(
-            PocketDispMode.clean.settingsCaption.localizedCaseInsensitiveContains("command"))
-    }
-
     func testBadgeFramesSitOnTopBarAndAvoidOverlap() throws {
         let statusBox = CGRect(x: 120, y: 12, width: 420, height: 40)
         let recBox = CGRect(x: 128, y: 16, width: 72, height: 32)
@@ -218,16 +208,6 @@ final class ChromeEditorReturnTests: XCTestCase {
         assist.cleanViewPinnedTools = [.waveform]
         XCTAssertFalse(assist.isVisible(.waveform))
         XCTAssertFalse(assist.effects.waveform)
-    }
-
-    func testCleanViewStockPinsExcludeOmittedTools() {
-        XCTAssertEqual(
-            LiveAssistState.cleanViewDefaultPinnedTools,
-            [.lut, .peaking, .desqueeze, .mirror]
-        )
-        XCTAssertTrue(LiveAssistTool.cleanPinCases.contains(.desqueeze))
-        XCTAssertTrue(LiveAssistTool.cleanPinCases.contains(.level))
-        XCTAssertFalse(LiveAssistTool.cleanPinCases.contains(.magnification))
     }
 
     func testAbsentCleanPinPrefsLoadStockSet() {

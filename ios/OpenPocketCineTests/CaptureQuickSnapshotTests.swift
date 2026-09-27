@@ -21,8 +21,15 @@ final class CaptureQuickSnapshotTests: XCTestCase {
             RecordConfirmationContext(
                 mode: 1, recording: false, locked: false, busy: false, phase: .idle),
         ]
+        // Mirrors the LiveRecordButton confirm guard: `pending == current && current.canConfirm`.
+        let confirms = { (current: RecordConfirmationContext) in
+            request == current && current.canConfirm
+        }
+        XCTAssertTrue(confirms(request))
         for changed in changedStates {
-            XCTAssertFalse(request == changed && changed.canConfirm)
+            XCTAssertNotEqual(
+                changed, request, "every captured field must bind the confirmation: \(changed)")
+            XCTAssertFalse(confirms(changed), "stale confirmation must not fire after \(changed)")
         }
         for photo in [0x05, 0x17] {
             XCTAssertFalse(

@@ -182,9 +182,4 @@ import XCTest
             XCTAssertEqual(strip.contentOffset.y, 0, accuracy: 0.01)
         }
     }
-
-    private func displayHosts(in view: UIView) -> [DisplayLayerView] {
-        (view as? DisplayLayerView).map { [$0] }
-            ?? view.subviews.flatMap { displayHosts(in: $0) }
-    }
 }

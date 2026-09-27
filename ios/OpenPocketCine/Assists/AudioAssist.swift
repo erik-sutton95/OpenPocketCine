@@ -4,7 +4,6 @@ import SwiftUI
 
 /// Presentation of the existing camera/clip level and peak measurements.
 enum AudioAssist {
-    static let longPressPanelWidth: CGFloat = 400
     static let panelSize = CGSize(width: 28, height: 168)
     static let barCrossAxis: CGFloat = 10
     static let helpCopy = "Meters the camera's audio. Available while live view is up."

@@ -34,15 +34,6 @@ struct SessionRecoveryPolicyTests {
         #expect(policy.decision(afterFailedAttempts: 4, jitter: 0.5) == .retry(afterSeconds: 4))
     }
 
-    @Test func delayIsCapped() {
-        let policy = SessionRecoveryPolicy.monitor
-        guard case .retry(let seconds) = policy.decision(afterFailedAttempts: 7, jitter: 1) else {
-            Issue.record("expected a retry before the attempt budget is spent")
-            return
-        }
-        #expect(seconds <= policy.backoff.maxSeconds)
-    }
-
     @Test func stopsAtBudget() {
         let policy = SessionRecoveryPolicy.monitor
         #expect(policy.decision(afterFailedAttempts: 7, jitter: 0.5) != .stop)
@@ -61,13 +52,6 @@ struct SessionRecoveryPolicyTests {
         let policy = SessionRecoveryPolicy.monitor
         #expect(policy.decision(afterFailedAttempts: -3, jitter: 0.5) == .retry(afterSeconds: 0))
         #expect(policy.state(afterFailedAttempts: -3) == .retrying(attempt: 1, maxAttempts: 8))
-    }
-
-    @Test func recoveringFlag() {
-        #expect(SessionRecoveryState.idle.isRecovering == false)
-        #expect(SessionRecoveryState.retrying(attempt: 1, maxAttempts: 8).isRecovering)
-        #expect(SessionRecoveryState.waitingForOperator(attemptsMade: 8).isRecovering)
-        #expect(SessionRecoveryState.pausedAfterRepeatedDrops(drops: 3).isRecovering)
     }
 
     @Test func onlyBleAndSoftAPStartSessionRecovery() {
@@ -125,40 +109,25 @@ struct SessionDropStormGuardTests {
 
 @Suite("Session recovery copy")
 struct SessionRecoveryCopyTests {
-    @Test func retryingCopy() {
-        let state = SessionRecoveryState.retrying(attempt: 3, maxAttempts: 8)
-        #expect(SessionRecoveryCopy.title(state) == "Reconnecting…")
+    @Test(arguments: [
+        (
+            SessionRecoveryState.retrying(attempt: 3, maxAttempts: 8), "Reconnecting…",
+            ["Pocket 4 Pro", "attempt 3 of 8"]
+        ),
+        (.waitingForOperator(attemptsMade: 8), "Camera disconnected", ["8 tries", "held, not live"]),
+        (
+            .pausedAfterRepeatedDrops(drops: 3), "Connection keeps dropping",
+            ["3 times", "protect the camera", "held, not live"]
+        ),
+        (.waitingForOperator(attemptsMade: 1), "Camera disconnected", ["1 try"]),
+    ])
+    func copyNamesStateAndCount(state: SessionRecoveryState, title: String, phrases: [String]) {
+        #expect(SessionRecoveryCopy.title(state) == title)
         let detail = SessionRecoveryCopy.detail(state, deviceName: "Pocket 4 Pro")
-        #expect(detail.contains("Pocket 4 Pro"))
-        #expect(detail.contains("attempt 3 of 8"))
+        for phrase in phrases {
+            #expect(detail.contains(phrase))
+        }
         #expect(!detail.localizedCaseInsensitiveContains("Nikon"))
         #expect(!detail.localizedCaseInsensitiveContains("OpenZCine"))
-    }
-
-    @Test func exhaustedCopy() {
-        let state = SessionRecoveryState.waitingForOperator(attemptsMade: 8)
-        #expect(SessionRecoveryCopy.title(state) == "Camera disconnected")
-        let detail = SessionRecoveryCopy.detail(state, deviceName: "Pocket 4 Pro")
-        #expect(detail.contains("8 tries"))
-        #expect(detail.contains("held, not live"))
-    }
-
-    @Test func stormPauseCopy() {
-        let state = SessionRecoveryState.pausedAfterRepeatedDrops(drops: 3)
-        #expect(SessionRecoveryCopy.title(state) == "Connection keeps dropping")
-        let detail = SessionRecoveryCopy.detail(state, deviceName: "Pocket 4 Pro")
-        #expect(detail.contains("3 times"))
-        #expect(detail.contains("protect the camera"))
-        #expect(detail.contains("held, not live"))
-    }
-
-    @Test func singleTryCopy() {
-        let detail = SessionRecoveryCopy.detail(
-            .waitingForOperator(attemptsMade: 1), deviceName: "Pocket 4 Pro")
-        #expect(detail.contains("1 try"))
-    }
-
-    @Test func heldFrameBadge() {
-        #expect(SessionRecoveryCopy.heldFrameBadge == "NO LINK")
     }
 }

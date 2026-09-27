@@ -4,43 +4,15 @@ import Testing
 
 @Suite("ReconnectBackoff")
 struct ReconnectBackoffTests {
-    @Test func firstAttemptUsesBaseDelay() {
+    /// Base 0.5 s doubling to a 30 s cap, spread +/-30% by jitter; negative attempts are the first.
+    @Test(arguments: [
+        (0, 0.5, 0.5), (1, 0.5, 1.0), (2, 0.5, 2.0), (3, 0.5, 4.0), (20, 0.5, 30.0),
+        (3, 0.0, 2.8), (3, 1.0, 5.2), (20, 1.0, 30.0), (-3, 0.5, 0.5),
+    ])
+    func delayGrowsClampsAndJitters(attempt: Int, jitter: Double, expected: Double) {
         let backoff = ReconnectBackoff(
             baseSeconds: 0.5, maxSeconds: 30, multiplier: 2, jitterFraction: 0.3)
-        #expect(backoff.delaySeconds(forAttempt: 0, jitter: 0.5) == 0.5)
-    }
-
-    @Test func growsExponentially() {
-        let backoff = ReconnectBackoff(
-            baseSeconds: 0.5, maxSeconds: 30, multiplier: 2, jitterFraction: 0.3)
-        #expect(backoff.delaySeconds(forAttempt: 1, jitter: 0.5) == 1.0)
-        #expect(backoff.delaySeconds(forAttempt: 2, jitter: 0.5) == 2.0)
-        #expect(backoff.delaySeconds(forAttempt: 3, jitter: 0.5) == 4.0)
-    }
-
-    @Test func clampsToMaximum() {
-        let backoff = ReconnectBackoff(
-            baseSeconds: 0.5, maxSeconds: 30, multiplier: 2, jitterFraction: 0.3)
-        #expect(backoff.delaySeconds(forAttempt: 20, jitter: 0.5) == 30)
-    }
-
-    @Test func jitterSpreadsBelowAndAbove() {
-        let backoff = ReconnectBackoff(
-            baseSeconds: 0.5, maxSeconds: 30, multiplier: 2, jitterFraction: 0.3)
-        #expect(abs(backoff.delaySeconds(forAttempt: 3, jitter: 0) - 2.8) < 1e-9)
-        #expect(abs(backoff.delaySeconds(forAttempt: 3, jitter: 1) - 5.2) < 1e-9)
-    }
-
-    @Test func jitterNeverExceedsMaximum() {
-        let backoff = ReconnectBackoff(
-            baseSeconds: 0.5, maxSeconds: 30, multiplier: 2, jitterFraction: 0.3)
-        #expect(backoff.delaySeconds(forAttempt: 20, jitter: 1) == 30)
-    }
-
-    @Test func negativeAttemptTreatedAsFirst() {
-        let backoff = ReconnectBackoff(
-            baseSeconds: 0.5, maxSeconds: 30, multiplier: 2, jitterFraction: 0.3)
-        #expect(backoff.delaySeconds(forAttempt: -3, jitter: 0.5) == 0.5)
+        #expect(abs(backoff.delaySeconds(forAttempt: attempt, jitter: jitter) - expected) < 1e-9)
     }
 
     @Test func jitterSampleIsClampedToUnitRange() {

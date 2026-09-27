@@ -3,31 +3,29 @@ import XCTest
 @testable import OpenPocketCine
 
 final class FeedUpscaleTests: XCTestCase {
-    func testOfferedUpscalersAreAllRunnableAndAlwaysIncludeTheFloor() {
-        XCTAssertTrue(FeedUpscaler.supportedOnThisDevice.contains(.off))
-        XCTAssertTrue(FeedUpscaler.supportedOnThisDevice.contains(.lanczos))
-        for upscaler in FeedUpscaler.supportedOnThisDevice {
+    func testOfferedUpscalersAreRunnableAndTheDefaultIsTheFastFloor() {
+        let offered = FeedUpscaler.supportedOnThisDevice
+        XCTAssertTrue(offered.contains(.off))
+        XCTAssertTrue(offered.contains(.lanczos))
+        #if targetEnvironment(simulator)
+            XCTAssertEqual(offered, [.off, .lanczos])
+        #endif
+        // The fast floor is the default even where better upscalers exist.
+        XCTAssertEqual(FeedUpscaler.supported(or: nil), .lanczos)
+        XCTAssertTrue(FeedUpscaler.supported(or: nil).isSupportedOnThisDevice)
+        XCTAssertEqual(FeedUpscaler.supported(or: .lanczos), .lanczos)
+        XCTAssertEqual(FeedUpscaler.lanczos.rawValue, "Fast")
+        for upscaler in offered {
             XCTAssertTrue(
                 upscaler.isSupportedOnThisDevice, "\(upscaler) is offered but not runnable")
+            XCTAssertEqual(
+                FeedUpscaler.supported(or: upscaler), upscaler,
+                "\(upscaler) is runnable, so a stored choice keeps it")
         }
-        #if targetEnvironment(simulator)
-            XCTAssertEqual(FeedUpscaler.supportedOnThisDevice, [.off, .lanczos])
-        #endif
-    }
-
-    func testAStoredChoiceThisDeviceCannotRunResolvesToOneItCan() {
-        XCTAssertTrue(FeedUpscaler.supported(or: nil).isSupportedOnThisDevice)
         for upscaler in FeedUpscaler.allCases {
-            XCTAssertTrue(FeedUpscaler.supported(or: upscaler).isSupportedOnThisDevice)
-        }
-        XCTAssertEqual(FeedUpscaler.supported(or: .lanczos), .lanczos)
-    }
-
-    func testTheDefaultUpscalerIsTheFastFloorEvenWhereBetterOnesExist() {
-        XCTAssertEqual(FeedUpscaler.supported(or: nil), .lanczos)
-        XCTAssertEqual(FeedUpscaler.lanczos.rawValue, "Fast")
-        for upscaler in FeedUpscaler.supportedOnThisDevice {
-            XCTAssertEqual(FeedUpscaler.supported(or: upscaler), upscaler)
+            XCTAssertTrue(
+                FeedUpscaler.supported(or: upscaler).isSupportedOnThisDevice,
+                "a stored \(upscaler) this device cannot run resolves to one it can")
         }
     }
 
@@ -80,10 +78,5 @@ final class FeedUpscaleTests: XCTestCase {
         XCTAssertEqual(top.y, 0, accuracy: 0.001)
         let bottom = CGPoint(x: 50, y: 0).applying(t)
         XCTAssertEqual(bottom.y, 80, accuracy: 0.001)
-    }
-
-    func testHelpCopyDoesNotNameSisterApps() {
-        XCTAssertFalse(SettingsHelpCopy.feedUpscaler.localizedCaseInsensitiveContains("OpenZCine"))
-        XCTAssertFalse(SettingsHelpCopy.feedUpscaler.localizedCaseInsensitiveContains("Nikon"))
     }
 }

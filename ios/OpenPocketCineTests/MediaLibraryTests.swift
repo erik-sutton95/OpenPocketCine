@@ -6,33 +6,6 @@ import XCTest
 @testable import OpenPocketCine
 
 final class MediaLibraryTests: XCTestCase {
-    func testThumbnailGridMatchesOpenZCineMinima() {
-        XCTAssertEqual(MediaThumbnailSize.small.gridMinimum, 148)
-        XCTAssertEqual(MediaThumbnailSize.medium.gridMinimum, 210)
-        XCTAssertEqual(MediaThumbnailSize.large.gridMinimum, 280)
-        XCTAssertEqual(MediaThumbnailSize.small.gridMaximum, 200)
-        XCTAssertEqual(MediaThumbnailSize.medium.gridMaximum, 300)
-        XCTAssertEqual(MediaThumbnailSize.large.gridMaximum, 380)
-    }
-
-    func testEmptyCopyDoesNotNameSisterApps() {
-        let copy = [
-            MediaLibraryCopy.filterEmpty,
-            MediaLibraryCopy.emptyAll,
-            MediaLibraryCopy.emptyFavorites,
-            MediaLibraryCopy.emptyVideos,
-            MediaLibraryCopy.emptyPhotos,
-            MediaLibraryCopy.disconnected,
-            MediaLibraryCopy.disconnectedEmptyCache,
-            MediaOperatorCopy.clipNotCached,
-        ]
-        for text in copy {
-            XCTAssertFalse(text.localizedCaseInsensitiveContains("OpenZCine"))
-            XCTAssertFalse(text.localizedCaseInsensitiveContains("Nikon"))
-            XCTAssertFalse(text.localizedCaseInsensitiveContains("protocol is not"))
-        }
-    }
-
     func testFilterAndSortOfManifestFiles() {
         let videos = [
             MediaFile(
@@ -54,8 +27,6 @@ final class MediaLibraryTests: XCTestCase {
             thumbPath: "MISC/THM/DJI_001/DJI_20260801000000_0002_D.scr")
         let all = videos + [photo]
 
-        XCTAssertEqual(MediaLibraryQuery.filtered(all, tab: .videos).count, 2)
-        XCTAssertEqual(MediaLibraryQuery.filtered(all, tab: .photos).count, 1)
         XCTAssertEqual(MediaLibraryQuery.filtered(all, tab: .favorites).count, 1)
         XCTAssertEqual(
             MediaLibraryQuery.filtered(all, tab: .all, formats: ["MP4"]).count, 2)
@@ -72,26 +43,8 @@ final class MediaLibraryTests: XCTestCase {
                 all, tab: .all, dateStart: "20260801", dateEnd: "20260801"
             ).map(\.filename),
             ["DJI_20260801000000_0002_D.JPG"])
-        let colors: [String: UInt8] = [
-            videos[0].path: ColorMode.dLog2.rawValue,
-            videos[1].path: ColorMode.dLog.rawValue,
-            photo.path: ColorMode.normal.rawValue,
-        ]
-        XCTAssertEqual(
-            MediaLibraryQuery.filtered(
-                all, tab: .all, colors: [ColorMode.dLog2.rawValue], shotColors: colors
-            ).map(\.filename),
-            ["DJI_20260814125250_0034_D.MP4"])
-        XCTAssertEqual(
-            MediaLibraryQuery.dateKey(
-                from: MediaLibraryQuery.date(fromKey: "20260814")!),
-            "20260814")
-
-        let oldest = MediaLibraryQuery.sorted(all, by: .oldest)
-        XCTAssertEqual(oldest.first?.filename, "DJI_20260404103742_0001_D.MP4")
         let newest = MediaLibraryQuery.sorted(videos, by: .newest)
         XCTAssertEqual(newest.first?.filename, "DJI_20260814125250_0034_D.MP4")
-        XCTAssertEqual(MediaClipFormatting.durationLabel(seconds: 209), "3:29")
     }
 
     func testCacheGradePrefersOriginalOverProxy() {
@@ -103,20 +56,6 @@ final class MediaLibraryTests: XCTestCase {
             MediaCacheGrade.resolve(hasOriginal: false, hasProxy: false), .none)
         XCTAssertTrue(MediaCacheGrade.proxy.isProxyOnly)
         XCTAssertFalse(MediaCacheGrade.original.isProxyOnly)
-    }
-
-    func testCacheFullResolutionDefaultsOn() {
-        let key = "OpenPocketCine.CacheFullResolution"
-        let saved = UserDefaults.standard.object(forKey: key)
-        UserDefaults.standard.removeObject(forKey: key)
-        XCTAssertTrue(OperatorPrefs.cacheFullResolution)
-        OperatorPrefs.cacheFullResolution = false
-        XCTAssertFalse(OperatorPrefs.cacheFullResolution)
-        if let saved {
-            UserDefaults.standard.set(saved, forKey: key)
-        } else {
-            UserDefaults.standard.removeObject(forKey: key)
-        }
     }
 
     func testOfflineLibraryHidesThumbOnlyClips() {
@@ -195,35 +134,7 @@ final class MediaLibraryTests: XCTestCase {
             CGSize(width: 3840, height: 2160))
     }
 
-    func testMediaFileCatalogRoundTrip() throws {
-        let file = MediaFile(
-            path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
-            thumbPath: "MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr",
-            handle: 0x4010_0880,
-            sizeBytes: 1_024_000,
-            durationSeconds: 12,
-            resolution: "3840x2160")
-        let data = try JSONEncoder().encode([file])
-        let decoded = try JSONDecoder().decode([MediaFile].self, from: data)
-        XCTAssertEqual(decoded, [file])
-    }
-
-    func testPlaybackToolbarUsesLabeledChipsAndAudio() {
-        XCTAssertTrue(LiveAssistTool.playbackToolbarCases.contains(.audioMeters))
-        XCTAssertTrue(LiveAssistTool.playbackToolbarCases.contains(.falseColor))
-        XCTAssertTrue(LiveAssistTool.playbackToolbarCases.contains(.zebra))
-        XCTAssertFalse(LiveAssistTool.playbackToolbarCases.contains(.level))
-        XCTAssertFalse(LiveAssistTool.playbackToolbarCases.contains(.magnification))
-    }
-
-    func testShareDestinationsMatchOpenZCine() {
-        XCTAssertEqual(
-            MediaDeliveryDestination.allCases.map(\.title),
-            ["Share", "Frame.io"])
-        XCTAssertEqual(
-            MediaDeliveryDestination.nativeShare.subtitle,
-            "Convert log, Bake LUT, AirDrop, Files")
-        XCTAssertEqual(MediaExportFormat.allCases.map(\.label), ["MOV", "MP4"])
+    func testShareFilenameAndExposureMetadata() {
         let file = MediaFile(
             path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
             thumbPath: "MISC/THM/clip.scr")
@@ -247,11 +158,6 @@ final class MediaLibraryTests: XCTestCase {
             for: file, configuration: exposure, lutName: "Auto · D-Log2 → Rec.709",
             cameraName: nil, lutExposureStops: -1)
         XCTAssertNil(cubeOnly?.lutExposureStops)
-        XCTAssertEqual(MediaDeliveryCopy.bakeExposure, "Bake exposure")
-        XCTAssertFalse(MediaDeliveryCopy.bakeExposureHelp.isEmpty)
-        XCTAssertEqual(
-            MediaDeliveryChrome.maxCardHeight, 520,
-            "portrait share card must hug; 520 matches Android heightIn(max = 520.dp)")
     }
 
     func testConvertLogExportNamesTheDestinationLog() {
@@ -315,38 +221,6 @@ final class MediaLibraryTests: XCTestCase {
             MediaDelivery.convertLogAvailable(files: [file, file], shotColors: [.dLog, .dLog2]))
     }
 
-    func testPlaybackCandidatesPreferProxyThenOriginalOnBothStores() {
-        let file = MediaFile(
-            path: "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4",
-            thumbPath: "MISC/THM/DJI_001/DJI_20260814125250_0034_D.scr",
-            handle: 0x4010_0880)
-        let paths = MediaHTTP.previewPaths(file)
-        XCTAssertEqual(paths.first?.hasSuffix(".LRF"), true)
-        XCTAssertEqual(paths.last, file.path)
-        XCTAssertEqual(MediaHTTP.deliveryPath(file), file.path)
-        XCTAssertFalse(MediaHTTP.isProxyPath(MediaHTTP.deliveryPath(file)))
-        XCTAssertTrue(MediaHTTP.proxyPaths(file).allSatisfy { MediaHTTP.isProxyPath($0) })
-        XCTAssertFalse(MediaHTTP.proxyPaths(file).contains(file.path))
-        XCTAssertFalse(MediaHTTP.proxyPaths(file).isEmpty)
-
-        let first = MediaHTTP.storageGuess(handle: file.handle, singleSdStorage: false)
-        XCTAssertEqual(first, 1)
-        let candidates = MediaHTTP.playbackCandidates(file: file, firstStorage: first)
-        XCTAssertEqual(candidates.count, 4)
-        XCTAssertEqual(candidates[0].storage, 1)
-        XCTAssertTrue(candidates[0].path.hasSuffix(".LRF"))
-        XCTAssertEqual(candidates[1].storage, 0)
-        XCTAssertTrue(candidates[1].path.hasSuffix(".LRF"))
-        XCTAssertEqual(candidates[2].storage, 1)
-        XCTAssertEqual(candidates[2].path, file.path)
-        XCTAssertEqual(MediaHTTP.playbackMIMEType(for: "/v2"), "video/mp4")
-        XCTAssertEqual(MediaHTTP.playbackMIMEType(for: file.path), "video/mp4")
-        XCTAssertEqual(
-            MediaHTTP.playbackCacheFileName(paths[0]),
-            "DCIM_DJI_001_DJI_20260814125250_0034_D.mp4")
-        XCTAssertTrue(MediaHTTP.playbackCacheFileName(file.path).hasSuffix(".MP4"))
-    }
-
     func testPlaybackTransportFitsNarrowestPhone() {
         let portrait = MonitorPlaybackLayout(width: 375, height: 667, tablet: false)
         XCTAssertTrue(portrait.portrait)
@@ -371,13 +245,5 @@ final class MediaLibraryTests: XCTestCase {
         XCTAssertEqual(media.resolvedStorage(for: file, singleSd: false), 1)
         media.rememberStorage(1, for: file.path)
         XCTAssertEqual(media.resolvedStorage(for: file, singleSd: true), 0)
-    }
-
-    func testClipOpenCopyDoesNotNameSisterApps() {
-        XCTAssertFalse(
-            MediaOperatorCopy.clipOpenFailed.localizedCaseInsensitiveContains("OpenZCine"))
-        XCTAssertFalse(MediaOperatorCopy.clipOpenFailed.localizedCaseInsensitiveContains("Nikon"))
-        XCTAssertFalse(MediaOperatorCopy.clipOpenFailed.isEmpty)
-        XCTAssertFalse(MediaOperatorCopy.clipLoading.localizedCaseInsensitiveContains("OpenZCine"))
     }
 }

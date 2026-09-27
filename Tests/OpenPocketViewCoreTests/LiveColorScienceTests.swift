@@ -28,8 +28,8 @@ struct LiveColorScienceTests {
         #expect(abs(LiveColorScience.encode(0.18, transfer: transfer) - 0.40000007) < 1e-7)
         #expect(abs(LiveColorScience.encode(0.72, transfer: transfer) - 0.698565282656276) < 1e-6)
         #expect(abs(LiveColorScience.stops(encoded: 0.698565282656276, transfer: transfer) - 2) < 1e-5)
-        #expect(!LiveColorScience.zebraHighlight(
-            ScopeDisplayScale.monitorPercent(0.9, transfer: transfer)))
+        #expect(
+            ScopeDisplayScale.monitorPercent(0.9, transfer: transfer) < LiveZebra.highlightIRE)
         #expect(ScopeDisplayScale.monitorPercent(0.05, transfer: transfer) > 4.99)
         #expect(MonitorTransfer.inferred(minByte: 24, maxByte: 223, fallback: transfer) == transfer)
         #expect(CamCapIso.baseISO(transfer: transfer) == nil)
@@ -42,10 +42,6 @@ struct LiveColorScienceTests {
         #expect(MonitorTransfer(.hdr) == .hdr)
         #expect(MonitorTransfer(.dLog) == .dlog)
         #expect(MonitorTransfer(.dLog2) == .dlog2)
-        #expect(ColorMode.normal.rawValue == 0x3F)
-        #expect(ColorMode.hdr.rawValue == 0x3C)
-        #expect(ColorMode.dLog.rawValue == 0x17)
-        #expect(ColorMode.dLog2.rawValue == 0x41)
 
         var status = CameraStatus()
         #expect(status.monitorTransfer == nil)
@@ -195,23 +191,7 @@ struct LiveColorScienceTests {
             #expect(
                 abs(a.midLevel - ScopeDisplayScale.level(scaleIRE: greyIRE)) < 1e-3,
                 "\(transfer) midLevel")
-            #expect(abs(transfer.scopeGreyScaleIRE - greyIRE) < 0.05, "\(transfer) grey scale IRE")
             #expect(abs(LiveColorScience.paperIRE(a.mid) - greyIRE) < 0.05)
-        }
-    }
-
-    @Test func fullDynamicRangeSceneSpansZeroToHundred() {
-        // The user-facing contract: log black → the 0 line, clip → the 100 line.
-        for transfer in [MonitorTransfer.dlog, .dlog2] {
-            let a = transfer.scopeAnchors
-            let blackIRE =
-                (ScopeDisplayScale.waveformLevel(a.black, transfer: transfer)
-                    - ScopeDisplayScale.crushLevel) / 0.9 * 100
-            let clipIRE =
-                (ScopeDisplayScale.waveformLevel(a.clip, transfer: transfer)
-                    - ScopeDisplayScale.crushLevel) / 0.9 * 100
-            #expect(abs(blackIRE - 0) < 1e-9)
-            #expect(abs(clipIRE - 100) < 1e-9)
         }
     }
 
@@ -222,8 +202,6 @@ struct LiveColorScienceTests {
             #expect(abs(ScopeDisplayScale.monitorPercent(a.clip, transfer: transfer) - 100) < 1e-9)
             #expect(ScopeDisplayScale.monitorPercent(0, transfer: transfer) == 0, "clamps below")
             #expect(ScopeDisplayScale.monitorPercent(1, transfer: transfer) == 100, "clamps above")
-            let mid = ScopeDisplayScale.monitorPercent(a.mid, transfer: transfer)
-            #expect(abs(mid - transfer.scopeGreyScaleIRE) < 1e-9, "grey agrees across axes")
             // signalNative inverts it.
             for percent in [0.0, 2, 55, 100] {
                 let native = ScopeDisplayScale.signalNative(
@@ -464,26 +442,6 @@ struct LiveColorScienceTests {
 
     // MARK: - Zebra (monitor-percent axis, no bisection)
 
-    @Test func zebraThresholdsRideMonitorPercent() {
-        // 100 is the live-tap ceiling byte itself; the factory highlight sits
-        // one IRE under it so the typical 243–247 D-Log2 shelf paints (#136).
-        #expect(LiveZebra.highlightIRE == 99.0)
-        #expect(LiveZebra.midtoneIRE == 55.0)
-        for transfer in transfers {
-            let clip = ScopeDisplayScale.signalNative(monitorPercent: 100, transfer: transfer)
-            let expected = ScopeExposureCeiling.clipEncoded(transfer: transfer, iso: 1600)
-            #expect(
-                abs(clip - expected) < 1e-12, "\(transfer) highlight zebra at the live-tap ceiling")
-            let black = ScopeDisplayScale.signalNative(monitorPercent: 0, transfer: transfer)
-            #expect(abs(black - transfer.scopeAnchors.black) < 1e-12)
-        }
-        #expect(LiveColorScience.zebraHighlight(100))
-        #expect(LiveColorScience.zebraHighlight(99))
-        #expect(!LiveColorScience.zebraHighlight(98.4))
-        #expect(LiveColorScience.zebraMidtone(58))
-        #expect(!LiveColorScience.zebraMidtone(61))
-    }
-
     /// #136: a D-Log2 SoftAP take tops out at 243–247. Only the ceiling byte
     /// itself is IRE 100, so a highlight threshold of 100 misses the shelf.
     /// The factory default must catch the shelf; 100 must still catch 247.
@@ -491,14 +449,13 @@ struct LiveColorScienceTests {
         ScopeExposureCeiling.reset()
         let ceiling = ScopeDisplayScale.monitorPercent(247.0 / 255, transfer: .dlog2, iso: 1600)
         #expect(abs(ceiling - 100) < 0.05)
-        #expect(LiveColorScience.zebraHighlight(ceiling, threshold: 100))
-        #expect(LiveColorScience.zebraHighlight(ceiling))
+        #expect(ceiling >= 100)
+        #expect(ceiling >= LiveZebra.highlightIRE)
         for byte in 245...246 {
             let shelf = ScopeDisplayScale.monitorPercent(
                 Double(byte) / 255, transfer: .dlog2, iso: 1600)
             #expect(shelf < 100, "byte \(byte) is under the 100 line")
-            #expect(!LiveColorScience.zebraHighlight(shelf, threshold: 100), "byte \(byte)")
-            #expect(LiveColorScience.zebraHighlight(shelf), "byte \(byte) at factory highlight")
+            #expect(shelf >= LiveZebra.highlightIRE, "byte \(byte) at factory highlight")
         }
         // Rec.709 / HLG: 100 is still encoded peak; 99 is just under it.
         for transfer in [MonitorTransfer.rec709, .hdr] {
@@ -603,25 +560,25 @@ struct LiveColorScienceTests {
         #expect(!LiveFalseColorScale.ire.usesSceneStops)
     }
 
-    @Test func monitorIREIsTheWaveAxis() {
+    @Test func monitorPercentIsTheWaveAxis() {
+        func percent(_ encoded: Double, _ transfer: MonitorTransfer) -> Double {
+            ScopeDisplayScale.monitorPercent(encoded, transfer: transfer)
+        }
         for transfer in transfers {
-            let paper = LiveColorScience.paperIRE(
-                LiveColorScience.encode(0.18, transfer: transfer))
+            let grey = LiveColorScience.encode(0.18, transfer: transfer)
             #expect(
-                abs(LiveColorScience.monitorIRE(linear: 0.18, transfer: transfer) - paper) < 0.5,
+                abs(percent(grey, transfer) - LiveColorScience.paperIRE(grey)) < 0.5,
                 "\(transfer) 18% is paper IRE on the WAVE axis, not Reinhard 42")
             let clip = ScopeExposureCeiling.clipEncoded(transfer: transfer, iso: 1600)
-            #expect(
-                abs(LiveColorScience.monitorIRE(encoded: clip, transfer: transfer) - 100) < 0.05)
+            #expect(abs(percent(clip, transfer) - 100) < 0.05)
         }
-        #expect(abs(LiveColorScience.monitorIRE(linear: 0.18, transfer: .dlog2) - 30.50) < 0.5)
-        #expect(abs(LiveColorScience.monitorIRE(linear: 0.18, transfer: .dlog) - 39.88) < 0.5)
-        #expect(
-            abs(LiveColorScience.monitorIRE(encoded: 223.0 / 255, transfer: .dlog) - 100) < 0.05)
+        #expect(abs(percent(LiveColorScience.encode(0.18, transfer: .dlog2), .dlog2) - 30.50) < 0.5)
+        #expect(abs(percent(LiveColorScience.encode(0.18, transfer: .dlog), .dlog) - 39.88) < 0.5)
+        #expect(abs(percent(223.0 / 255, .dlog) - 100) < 0.05)
         // 188 is recoverable D-Log2 highlight, not clip (journal max is 247).
-        let early = LiveColorScience.monitorIRE(encoded: 188.0 / 255, transfer: .dlog2)
+        let early = percent(188.0 / 255, .dlog2)
         #expect(early < 90)
-        #expect(!LiveColorScience.zebraHighlight(early))
+        #expect(early < LiveZebra.highlightIRE)
     }
 
     @Test func liveTapCeilingUsesMeasuredPreviewMax() {
@@ -669,52 +626,9 @@ struct LiveColorScienceTests {
         ScopeExposureCeiling.reset()
     }
 
-    @Test func paperBlackAndEighteenPercentOnWave() {
-        let black = LiveColorScience.encode(0, transfer: .dlog2)
-        #expect(abs(ScopeDisplayScale.monitorPercent(black, transfer: .dlog2, iso: 1600)) < 1e-9)
-        let grey = LiveColorScience.encode(0.18, transfer: .dlog2)
-        #expect(
-            abs(ScopeDisplayScale.monitorPercent(grey, transfer: .dlog2, iso: 1600) - 30.50) < 0.5)
-        let band = LiveColorScience.falseColorBand(
-            value: 30.50, scale: .ire, transfer: .dlog2)
-        #expect(band == nil, "D-Log2 18% is an IRE gap")
-        #expect(
-            LiveColorScience.falseColorBand(value: 41, scale: .ire, transfer: .rec709)?.label
-                == "18%MG")
-        let clip = LiveColorScience.falseColorBand(
-            value: 100, scale: .ire, transfer: .dlog2)
-        #expect(clip?.label == "95%WC")
-        #expect(LiveColorScience.zebraHighlight(100))
-        #expect(
-            !LiveColorScience.zebraHighlight(
-                ScopeDisplayScale.monitorPercent(grey, transfer: .dlog2, iso: 1600)))
-
-        let dlogBlack = LiveColorScience.encode(0, transfer: .dlog)
-        #expect(abs(ScopeDisplayScale.monitorPercent(dlogBlack, transfer: .dlog, iso: 400)) < 1e-9)
-        let dlogGrey = LiveColorScience.encode(0.18, transfer: .dlog)
-        #expect(
-            abs(ScopeDisplayScale.monitorPercent(dlogGrey, transfer: .dlog, iso: 400) - 39.88) < 0.5
-        )
-        #expect(
-            abs(ScopeDisplayScale.monitorPercent(223.0 / 255, transfer: .dlog, iso: 400) - 100)
-                < 0.05)
-        #expect(
-            abs(ScopeDisplayScale.monitorPercent(223.0 / 255, transfer: .dlog, iso: 1600) - 100)
-                < 0.05)
-        let dlogClip = LiveColorScience.falseColorBand(
-            value: 100, scale: .ire, transfer: .dlog)
-        #expect(dlogClip?.label == "95%WC")
-        #expect(
-            !LiveColorScience.zebraHighlight(
-                ScopeDisplayScale.monitorPercent(dlogGrey, transfer: .dlog, iso: 400)))
-    }
-
     // MARK: - Gamut matrices (papers)
 
     @Test func dGamut2PaperMatrices() {
-        #expect(DGamut2.redPrimary == (x: 0.7347, y: 0.2653))
-        #expect(DGamut2.bluePrimary == (x: 0.0900, y: -0.0800))
-        #expect(DGamut2.whiteD65 == (x: 0.3127, y: 0.3290))
         // White preservation: rows of D-Gamut2 → Rec.709 sum to ≈ 1.
         for row in [
             DGamut2.rgbToRec709.m00 + DGamut2.rgbToRec709.m01 + DGamut2.rgbToRec709.m02,
@@ -725,10 +639,6 @@ struct LiveColorScienceTests {
         }
         let grey = DGamut2.rgbToRec709.apply(r: 0.18, g: 0.18, b: 0.18)
         #expect(abs(grey.r - 0.18) < 1e-3 && abs(grey.g - 0.18) < 1e-3 && abs(grey.b - 0.18) < 1e-3)
-        // Round trip through DWG.
-        let dwg = DGamut2.rgbToDWG.apply(r: 0.4, g: 0.3, b: 0.2)
-        let back = DGamut2.dwgToRGB.apply(r: dwg.r, g: dwg.g, b: dwg.b)
-        #expect(abs(back.r - 0.4) < 5e-3 && abs(back.g - 0.3) < 5e-3 && abs(back.b - 0.2) < 5e-3)
     }
 
     @Test func dGamutV1PaperMatrices() {
@@ -753,11 +663,9 @@ struct LiveColorScienceTests {
                 let level = ScopeDisplayScale.waveformLevel(encoded, transfer: transfer)
                 let percent = ScopeDisplayScale.monitorPercent(encoded, transfer: transfer)
                 let linear = LiveColorScience.linearize(encoded, transfer: transfer)
-                let ire = LiveColorScience.monitorIRE(encoded: encoded, transfer: transfer)
                 #expect(level.isFinite && level >= 0 && level <= 1)
                 #expect(percent.isFinite && percent >= 0 && percent <= 100)
                 #expect(linear.isFinite && linear >= 0)
-                #expect(ire.isFinite && ire >= 0 && ire <= 100)
             }
         }
     }

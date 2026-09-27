@@ -76,34 +76,6 @@ data class GimbalCluster(
             return cluster
         }
 
-        fun belowWell(
-            well: ChromeRect,
-            floorY: Float,
-            stickSize: Float = STICK,
-            zoomSize: Float = ZOOM,
-            gap: Float = GAP,
-            inset: Float = INSET,
-            showGimbalButton: Boolean = false,
-        ): GimbalCluster {
-            val stickSize = max(0f, stickSize)
-            val zoomSize = max(0f, zoomSize)
-            val gap = max(0f, gap)
-            val inset = max(0f, inset)
-            val ceiling = well.maxY + gap
-            val stickY = max(ceiling + zoomSize + gap, floorY - inset - stickSize)
-            val stickX = max(well.minX, well.maxX - inset - stickSize)
-            return stacked(
-                stickX = stickX,
-                stickY = stickY,
-                well = well,
-                stickSize = stickSize,
-                zoomSize = zoomSize,
-                gap = gap,
-                showGimbalButton = showGimbalButton,
-                zoomFloor = ceiling,
-            )
-        }
-
         private fun stacked(
             stickX: Float,
             stickY: Float,
@@ -112,13 +84,12 @@ data class GimbalCluster(
             zoomSize: Float,
             gap: Float,
             showGimbalButton: Boolean,
-            zoomFloor: Float? = null,
         ): GimbalCluster {
             val zoomSize = max(0f, zoomSize)
             val gap = max(0f, gap)
             val stick = ChromeRect(stickX, stickY, stickSize, stickSize)
             val stackedY = stick.minY - gap - zoomSize
-            val zoomY = max(zoomFloor ?: well.minY, stackedY)
+            val zoomY = max(well.minY, stackedY)
             val button: ChromeRect
             val zoomX: Float
             if (showGimbalButton) {

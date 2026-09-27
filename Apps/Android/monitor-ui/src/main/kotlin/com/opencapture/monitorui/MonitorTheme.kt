@@ -37,12 +37,6 @@ object MonitorPalette {
     val surface = Color(0xFF1A1B1C)
     /** iOS `MonitorTheme.raised` `0x222425`. */
     val tile = Color(0xFF222425)
-    /** Mockup panel RGB (20,22,24). Alphas follow compact / expanded / share plates. */
-    val panel = Color(20, 22, 24)
-    val compactGlass = MonitorMaterial.Compact.tint
-    val expandedGlass = MonitorMaterial.Expanded.tint
-    /** Delivery plates. Information uses MonitorMaterial.Info; capture uses expanded. */
-    val overlayPanel = MonitorMaterial.Delivery.tint
     val zoomGlass = MonitorMaterial.Zoom.tint
     val recHousing = MonitorMaterial.Record.tint
     val accent = Color(0xFF00A3E0)
@@ -78,7 +72,7 @@ fun TextStyle.monitorReadoutGlow(): TextStyle = monitorReadoutGlow(LocalDensity.
 fun Modifier.monitorReadoutShadow(): Modifier = this
     .then(ReadoutBloomLayout)
     .drawWithCache {
-        val blurPx = 3.dp.toPx()
+        val blurPx = 2.5.dp.toPx()
         val dy = 1.dp.toPx()
         val extra = 10.dp.toPx()
         if (Build.VERSION.SDK_INT >= 31) {
@@ -92,7 +86,7 @@ fun Modifier.monitorReadoutShadow(): Modifier = this
                 alpha = opacity
                 translationY = yDp.dp.toPx()
             }
-            val halos = arrayOf(shadow(1.5f, 1f, 0f), shadow(3f, .92f, 0f), shadow(1f, .85f, 1f))
+            val halos = arrayOf(shadow(1.5f, 1f, 0f), shadow(2.5f, .92f, 0f), shadow(1f, .85f, 1f))
             onDrawWithContent {
                 sharp.record { this@onDrawWithContent.drawContent() }
                 for ((index, halo) in halos.withIndex()) {
@@ -166,16 +160,4 @@ data class MonitorCapabilities(
     val clipStar: Boolean = false,
     val requiresInternetHop: Boolean = false,
     val timecode: Boolean = false,
-) {
-    val availableControls: Set<MonitorControlRole>
-        get() = buildSet {
-            if (gimbal) add(MonitorControlRole.GIMBAL)
-            if (zoom) add(MonitorControlRole.ZOOM)
-            if (focus) add(MonitorControlRole.FOCUS)
-            if (iris) add(MonitorControlRole.IRIS)
-            if (audio) add(MonitorControlRole.AUDIO)
-            if (headTracking && gimbal) add(MonitorControlRole.HEAD_TRACKING)
-        }
-}
-
-enum class MonitorControlRole { GIMBAL, ZOOM, FOCUS, IRIS, AUDIO, HEAD_TRACKING }
+)

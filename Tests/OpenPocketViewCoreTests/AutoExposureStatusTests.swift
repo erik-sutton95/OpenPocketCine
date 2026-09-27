@@ -69,4 +69,26 @@ import Testing
             #expect(status.shutterDenom == -1)
         }
     }
+
+    @Test func expoParamDoesNotInventWhiteBalance() {
+        // WB is `cam_image_effect` `@4–8`, not expo `@41`. `@6` is EV (`0x02/0x2E`). ISO is `@16`, not `@13`.
+        var expo = [UInt8](repeating: 0, count: 46)
+        expo[13] = 0xE7
+        expo[14] = 0x03  // 999 sitting at the old wrong offset
+        expo[16] = 0xC8
+        expo[17] = 0x00  // ISO 200
+        expo[6] = 0x0F
+        expo[7] = 0x01
+        expo[41] = 0x02
+        var s = CameraStatus()
+        #expect(
+            CameraStatusDecoder.applySubscribePush(
+                SubscribePush.pack(name: "cam_expo_param", value: expo), to: &s))
+        #expect(s.iso == 200)
+        #expect(s.expoMode == .auto)  // @7 == 0x01 is exposure auto, not WB
+        #expect(s.evComp == EvComp(thirds: -1))  // @6 == 0x0F
+        #expect(s.whiteBalanceKelvin == -1)
+        #expect(s.whiteBalance == nil)
+        #expect(s.irisHundredths == nil)
+    }
 }

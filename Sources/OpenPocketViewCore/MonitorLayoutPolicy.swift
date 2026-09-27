@@ -69,32 +69,6 @@ public enum MonitorHorizontalLayoutDirection: Equatable, Sendable {
     }
 }
 
-/// Rectangular frame for the native monitor live feed.
-public struct MonitorFeedFrame: Equatable, Sendable {
-    public let x: Double
-    public let y: Double
-    public let width: Double
-    public let height: Double
-
-    public init(x: Double, y: Double, width: Double, height: Double) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-    }
-
-    /// Mirrors the frame around the viewport's vertical center line — the same operation the
-    /// module frames carry, so the feed can follow the one-mirror-at-the-exit rule they follow.
-    public func mirroredHorizontally(in viewportWidth: Double) -> MonitorFeedFrame {
-        MonitorFeedFrame(
-            x: max(0, viewportWidth) - x - width,
-            y: y,
-            width: width,
-            height: height
-        )
-    }
-}
-
 /// Rectangular layout region used to anchor monitor modules.
 public struct MonitorLayoutRegion: Equatable, Sendable {
     public let x: Double
@@ -128,16 +102,6 @@ public struct MonitorLayoutRegion: Equatable, Sendable {
             y: y + max(0, edges.top),
             width: width - max(0, edges.leading) - max(0, edges.trailing),
             height: height - max(0, edges.top) - max(0, edges.bottom)
-        )
-    }
-
-    /// Mirrors the region around the viewport's vertical center line.
-    public func mirroredHorizontally(in viewportWidth: Double) -> MonitorLayoutRegion {
-        MonitorLayoutRegion(
-            x: max(0, viewportWidth) - x - width,
-            y: y,
-            width: width,
-            height: height
         )
     }
 

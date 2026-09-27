@@ -471,10 +471,6 @@ private fun CategoryTab(tab: MediaLibraryTab, active: Boolean, fill: Boolean = f
     }
 }
 
-internal object MediaLibraryHeaderMetrics {
-    fun stacksCountUnderTitle(portrait: Boolean): Boolean = portrait
-}
-
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun MediaGalleryPane(

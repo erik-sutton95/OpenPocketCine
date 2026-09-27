@@ -46,13 +46,35 @@ struct WatchRelayProtocolTests {
         #expect(!photography.matchesIgnoringLiveReadouts(state))
     }
 
-    @Test("State round-trips through its envelope")
-    func stateEnvelopeRoundTrips() throws {
-        let state = sampleState()
-        let envelope = try WatchRelayEnvelope.encode(kind: .state, payload: state)
-        #expect(try WatchRelayEnvelope.kind(of: envelope) == .state)
-        let decoded = try WatchRelayEnvelope.decode(WatchRelayState.self, from: envelope)
-        #expect(decoded == state)
+    @Test(
+        "Every payload round-trips through its envelope",
+        arguments: [WatchRelayProtocol.Kind.state, .frame, .command, .result])
+    func envelopeRoundTrips(kind: WatchRelayProtocol.Kind) throws {
+        switch kind {
+        case .state:
+            try expectRoundTrip(kind, sampleState())
+        case .frame:
+            try expectRoundTrip(
+                kind,
+                WatchRelayFrame(
+                    jpeg: Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]),
+                    timecode: "12:34:56",
+                    isRecording: true))
+        case .command:
+            try expectRoundTrip(kind, WatchRelayCommand.toggleRecord)
+        case .result:
+            try expectRoundTrip(
+                kind,
+                WatchCommandResult(accepted: false, isRecording: true, error: WatchRelayCopy.busy))
+        }
+    }
+
+    private func expectRoundTrip<Payload: Codable & Equatable>(
+        _ kind: WatchRelayProtocol.Kind, _ payload: Payload
+    ) throws {
+        let envelope = try WatchRelayEnvelope.encode(kind: kind, payload: payload)
+        #expect(try WatchRelayEnvelope.kind(of: envelope) == kind)
+        #expect(try WatchRelayEnvelope.decode(Payload.self, from: envelope) == payload)
     }
 
     @Test("State without photography keys still decodes")
@@ -66,36 +88,6 @@ struct WatchRelayProtocolTests {
         #expect(decoded.isPhotography == false)
         #expect(decoded.feedAspectRatio == 16.0 / 9.0)
         #expect(decoded.connection == .noCamera)
-    }
-
-    @Test("Frame round-trips through its envelope")
-    func frameEnvelopeRoundTrips() throws {
-        let frame = WatchRelayFrame(
-            jpeg: Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]),
-            timecode: "12:34:56",
-            isRecording: true)
-        let envelope = try WatchRelayEnvelope.encode(kind: .frame, payload: frame)
-        #expect(try WatchRelayEnvelope.kind(of: envelope) == .frame)
-        let decoded = try WatchRelayEnvelope.decode(WatchRelayFrame.self, from: envelope)
-        #expect(decoded == frame)
-    }
-
-    @Test("Command round-trips through its envelope")
-    func commandEnvelopeRoundTrips() throws {
-        let envelope = try WatchRelayEnvelope.encode(
-            kind: .command, payload: WatchRelayCommand.toggleRecord)
-        #expect(try WatchRelayEnvelope.kind(of: envelope) == .command)
-        #expect(
-            try WatchRelayEnvelope.decode(WatchRelayCommand.self, from: envelope) == .toggleRecord)
-    }
-
-    @Test("Result round-trips through its envelope")
-    func resultEnvelopeRoundTrips() throws {
-        let result = WatchCommandResult(
-            accepted: false, isRecording: true, error: WatchRelayCopy.busy)
-        let envelope = try WatchRelayEnvelope.encode(kind: .result, payload: result)
-        #expect(try WatchRelayEnvelope.kind(of: envelope) == .result)
-        #expect(try WatchRelayEnvelope.decode(WatchCommandResult.self, from: envelope) == result)
     }
 
     @Test("Empty envelope reports an empty error")

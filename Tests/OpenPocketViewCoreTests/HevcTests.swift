@@ -75,7 +75,7 @@ private let PPS = hex("4401c17312240890")
     // The enable command, byte-checked against the captured frame.
     @Test func liveViewEnableFrame() throws {
         let bytes = Duml.encode(Commands.liveViewEnable(seq: 0xE06E))
-        let (f, _) = try #require(Duml.decode(bytes))
+        let f = try #require(DumlTransport.scanFrames(bytes).first)
         #expect(f.receiver == 0x08 && f.cmdSet == 0x09 && f.cmdId == 0xA8)
         #expect(f.payload == [0x00, 0x04, 0x02, 0, 0, 0, 0, 0, 0, 0])
     }

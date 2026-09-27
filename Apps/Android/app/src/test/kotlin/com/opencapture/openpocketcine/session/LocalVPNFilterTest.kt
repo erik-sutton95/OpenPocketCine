@@ -1,7 +1,6 @@
 package com.opencapture.openpocketcine.session
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -39,19 +38,7 @@ class LocalVPNFilterTest {
     }
 
     @Test
-    fun operatorCopyMatchesIosAndDoesNotNameSisterApps() {
-        assertEquals(
-            "Pause VPNs and ad blockers, or exclude this app. They can block the camera live feed.",
-            LocalVPNFilter.WIZARD_BANNER,
-        )
-        assertEquals(
-            "A VPN or ad blocker may be blocking the live feed. Pause it, or exclude this app, then try again.",
-            LocalVPNFilter.LIVE_HINT,
-        )
-        assertEquals(
-            "Pause VPNs and ad blockers, or exclude this app",
-            LocalVPNFilter.JOIN_WIFI_PHONE_STEP,
-        )
+    fun operatorCopyDoesNotNameSisterApps() {
         val facing =
             listOf(
                 LocalVPNFilter.WIZARD_BANNER,

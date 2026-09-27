@@ -35,14 +35,6 @@ struct ConnectionChaosTests {
                 "seed=\(seed) profile=\(profile.rawValue) failures=\(result.failures)")
         }
     }
-
-    @Test func networkProfileReplayIsDeterministicAndBounded() {
-        for profile in ChaosProfile.allCases {
-            var first = ChaosExperiment(seed: 401, profile: profile)
-            var second = ChaosExperiment(seed: 401, profile: profile)
-            #expect(first.run() == second.run())
-        }
-    }
 }
 
 enum ChaosProfile: String, CaseIterable, Codable, Sendable {
@@ -134,7 +126,7 @@ private struct ChaosLink {
     }
 }
 
-private struct ChaosResult: Codable, Equatable {
+private struct ChaosResult: Codable {
     var schema = 1
     var evidence = "core_simulation"
     var seed: UInt64

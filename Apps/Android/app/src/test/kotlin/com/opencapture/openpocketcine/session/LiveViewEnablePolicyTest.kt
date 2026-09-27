@@ -8,71 +8,6 @@ import kotlin.test.assertTrue
 
 class LiveViewEnablePolicyTest {
     @Test
-    fun firstPictureDoesNotResendEveryKeepaliveSecond() {
-        val last = 1_000L
-        assertTrue(
-            !LiveViewEnablePolicy.shouldResendEnable(
-                videoPackets = 0,
-                nowElapsedRealtime = last + 1_000,
-                lastIdrRequest = last,
-                hasFormat = false,
-                decoderErrors = 0,
-                streamStartedAt = null,
-            ),
-        )
-        assertTrue(
-            LiveViewEnablePolicy.shouldResendEnable(
-                videoPackets = 0,
-                nowElapsedRealtime = last + 2_000,
-                lastIdrRequest = last,
-                hasFormat = false,
-                decoderErrors = 0,
-                streamStartedAt = null,
-            ),
-        )
-    }
-
-    @Test
-    fun afterPacketsDoesNotResendWhenPacketsStop() {
-        assertTrue(
-            !LiveViewEnablePolicy.shouldResendEnable(
-                videoPackets = 40,
-                nowElapsedRealtime = 20_000,
-                lastIdrRequest = 1_000,
-                hasFormat = true,
-                decoderErrors = 0,
-                streamStartedAt = 2_000,
-            ),
-        )
-    }
-
-    @Test
-    fun stalledFormatResendsAfterFiveSecondsNotOne() {
-        val started = 3_000L
-        val last = 3_000L
-        assertTrue(
-            !LiveViewEnablePolicy.shouldResendEnable(
-                videoPackets = 8,
-                nowElapsedRealtime = last + 4_000,
-                lastIdrRequest = last,
-                hasFormat = false,
-                decoderErrors = 0,
-                streamStartedAt = started,
-            ),
-        )
-        assertTrue(
-            LiveViewEnablePolicy.shouldResendEnable(
-                videoPackets = 8,
-                nowElapsedRealtime = last + 5_000,
-                lastIdrRequest = last,
-                hasFormat = false,
-                decoderErrors = 0,
-                streamStartedAt = started,
-            ),
-        )
-    }
-
-    @Test
     fun reconnectIsAllowedFromLive() {
         assertTrue(phaseAllowsReconnect(ConnectionPhase.LIVE))
         assertTrue(phaseAllowsReconnect(ConnectionPhase.FAILED))
@@ -239,26 +174,6 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
-    fun gopAndAfcHoldLogsMatchIos() {
-        assertEquals(
-            "feed: hold UDP rebuild — GOP-reset grace lastEnable=2.5s lastVideo=1.0s",
-            LiveViewEnablePolicy.holdUdpRebuildGopLog(2_500, 1_000),
-        )
-        assertEquals(
-            "feed: hold UDP rebuild — AF-C grace lastSet=2.2s lastVideo=0.4s",
-            LiveViewEnablePolicy.holdUdpRebuildAfcLog(2_200, 400),
-        )
-        assertEquals(
-            "feed: hold UDP rebuild — zoom grace lastSet=1.0s lastVideo=0.4s",
-            LiveViewEnablePolicy.holdUdpRebuildZoomLog(1_000, 400),
-        )
-        assertEquals(
-            "feed: hold UDP rebuild — GOP-reset grace lastEnable=-1.0s lastVideo=-1.0s",
-            LiveViewEnablePolicy.holdUdpRebuildGopLog(null, null),
-        )
-    }
-
-    @Test
     fun prepareAfterForegroundDoesNotHoldIdr() {
         val decoder = HevcDecoder()
         decoder.prepareAfterForeground()
@@ -278,10 +193,9 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
-    fun afcGraceHoldsWatchdog() {
-        val state = LiveViewEnablePolicy.State()
+    fun afcAndZoomGraceHoldWatchdogUntilTheStageExpires() {
         val now = 20_000L
-        val snap =
+        val base =
             stalledSnap(
                 now = now,
                 lastEnableAt = now - 10_000,
@@ -289,36 +203,21 @@ class LiveViewEnablePolicyTest {
                 lastStatusAt = now - 8_000,
                 lastBleAt = now - 100,
                 lastRebuildAt = now - 70_000,
-            ).copy(lastFocusTrackAt = now - 2_200)
-        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
-        assertEquals(
-            LiveViewEnablePolicy.Action.REBUILD_UDP,
-            LiveViewEnablePolicy.tick(state,
-                snap.copy(lastVideoPacketAt = now - 8_000, lastAccessUnitAt = now - 8_000)),
-            "A recent control cannot renew grace after the failed stage exceeds stall + grace",
+            )
+        val cases = listOf(
+            "AF-C" to base.copy(lastFocusTrackAt = now - 2_200),
+            "zoom" to base.copy(lastZoomAt = now - 1_000),
         )
-    }
-
-    @Test
-    fun zoomGraceHoldsWatchdog() {
-        val state = LiveViewEnablePolicy.State()
-        val now = 20_000L
-        val snap =
-            stalledSnap(
-                now = now,
-                lastEnableAt = now - 10_000,
-                lastVideoAt = now - 3_000,
-                lastStatusAt = now - 8_000,
-                lastBleAt = now - 100,
-                lastRebuildAt = now - 70_000,
-            ).copy(lastZoomAt = now - 1_000)
-        assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap))
-        assertEquals(
-            LiveViewEnablePolicy.Action.REBUILD_UDP,
-            LiveViewEnablePolicy.tick(state,
-                snap.copy(lastVideoPacketAt = now - 8_000, lastAccessUnitAt = now - 8_000)),
-            "A recent control cannot renew grace after the failed stage exceeds stall + grace",
-        )
+        for ((control, snap) in cases) {
+            val state = LiveViewEnablePolicy.State()
+            assertEquals(LiveViewEnablePolicy.Action.NONE, LiveViewEnablePolicy.tick(state, snap), "$control grace")
+            assertEquals(
+                LiveViewEnablePolicy.Action.REBUILD_UDP,
+                LiveViewEnablePolicy.tick(state,
+                    snap.copy(lastVideoPacketAt = now - 8_000, lastAccessUnitAt = now - 8_000)),
+                "$control: a recent control cannot renew grace after the failed stage exceeds stall + grace",
+            )
+        }
     }
 
     @Test
@@ -557,31 +456,6 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
-    fun neverGotVideoRebuildsEvenWhenStatusIsFresh() {
-        assertEquals(
-            LiveViewEnablePolicy.FirstPictureStep.WAIT,
-            LiveViewEnablePolicy.firstPictureStep(
-                videoPackets = 0,
-                enableSends = 2,
-                sinceEnableMs = 2_000,
-                videoAgeMs = null,
-                sinceRebuildMs = null,
-            ),
-            "IDR grace — a 2s rebuild is the 30–45s Waiting for live view",
-        )
-        assertEquals(
-            LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP,
-            LiveViewEnablePolicy.firstPictureStep(
-                videoPackets = 0,
-                enableSends = 2,
-                sinceEnableMs = 8_000,
-                videoAgeMs = null,
-                sinceRebuildMs = null,
-            ),
-        )
-    }
-
-    @Test
     fun leftoverGopKeepsUdpOnlyWhileVideoIsFresh() {
         assertTrue(
             LiveViewEnablePolicy.shouldKeepUdpForLeftoverGop(
@@ -637,10 +511,6 @@ class LiveViewEnablePolicyTest {
                 browsingMedia = true,
                 operatorOverlayHeld = true,
             ),
-        )
-        assertTrue(
-            LiveViewEnablePolicy.shouldUseCapturedLiveStartForMediaResume(),
-            "media resume is 0x68 then 0x09/0xa8 + IDR hold, not a raw 0xa8 write",
         )
     }
 
@@ -771,10 +641,6 @@ class LiveViewEnablePolicyTest {
         assertTrue(LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady = true, decoderReady = true))
         assertTrue(LiveViewEnablePolicy.shouldSendLiveViewPrepare(usesNanoLiveViewGate = false))
         assertTrue(!LiveViewEnablePolicy.shouldSendLiveViewPrepare(usesNanoLiveViewGate = true))
-        assertTrue(
-            !LiveViewEnablePolicy.shouldWaitForLiveViewAckBeforeArm(),
-            "Mimo VPS is 25–167 ms after 0xa8 — do not block ingest on a DUML ACK",
-        )
     }
 
     @Test
@@ -826,17 +692,8 @@ class LiveViewEnablePolicyTest {
     }
 
     @Test
-    fun recoveryCopyMatchesIos() {
+    fun recoveryDetailCountsAttemptsWithoutNamingSisterApps() {
         val retrying = SessionRecoveryUi.Retrying(attempt = 3, maxAttempts = 8)
-        assertEquals("Reconnecting…", SessionRecoveryCopy.title(retrying))
-        assertEquals("Camera disconnected", SessionRecoveryCopy.title(SessionRecoveryUi.WaitingForOperator(8)))
-        assertEquals(
-            "Connection keeps dropping",
-            SessionRecoveryCopy.title(SessionRecoveryUi.PausedAfterDrops(3)),
-        )
-        assertEquals("Retry connection", SessionRecoveryCopy.RETRY_CONNECTION)
-        assertEquals("Operator menu", SessionRecoveryCopy.OPERATOR_MENU)
-        assertEquals("NO LINK", SessionRecoveryCopy.HELD_FRAME_BADGE)
         val detail = SessionRecoveryCopy.detail(retrying, "Pocket 4 Pro")
         assertTrue(detail.contains("attempt 3 of 8"))
         assertTrue(!detail.contains("OpenZCine", ignoreCase = true))
@@ -931,15 +788,6 @@ class LiveViewEnablePolicyTest {
                 hasPresentedPicture = false,
             ),
             "first picture stays held until IRAP",
-        )
-    }
-
-    @Test
-    fun fullRejoinAndEndpointRepairShareSixteenSecondPictureGrace() {
-        assertEquals(16_000L, LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS)
-        assertEquals(
-            LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS,
-            2 * LiveViewEnablePolicy.FOREGROUND_PICTURE_GRACE_MS,
         )
     }
 

@@ -30,17 +30,6 @@ public enum FeedPresentPolicy: Sendable {
         framesHeld <= extraMirrorHoldFrames && secondsHeld < extraMirrorHoldSeconds
     }
 
-    /// Visible, enabled, attached view with a real drawable. Overlay may be hidden
-    /// until the first bake — use ``shouldScheduleBake(enabled:hasDrawable:)`` there.
-    public static func shouldRender(
-        attached: Bool,
-        enabled: Bool,
-        hidden: Bool,
-        hasDrawable: Bool
-    ) -> Bool {
-        attached && enabled && !hidden && hasDrawable
-    }
-
     /// Schedule a bake. Hidden overlay is OK; replace unhides before the drawable.
     public static func shouldScheduleBake(enabled: Bool, hasDrawable: Bool) -> Bool {
         enabled && hasDrawable
@@ -74,17 +63,6 @@ public enum FeedPresentPolicy: Sendable {
     /// Overlay stays hidden until the transparent bake lands.
     public static func unhideMetalBeforeBake(overlay: Bool) -> Bool {
         !overlay
-    }
-
-    /// Cap in-flight Metal presents. A LUT 50/50 graph on top of PEAK / FALSE /
-    /// ZEBRA pipelines several baker completions; each one calling blocking
-    /// `nextDrawable` on MainActor starved HEVC ingest and left Reconnecting
-    /// up until force-quit (#218). Latest-wins: skip the acquire and present
-    /// the newest bake when a drawable returns.
-    public static let maxInFlightMetalPresents = 1
-
-    public static func shouldAcquireDrawable(inFlightPresents: Int) -> Bool {
-        inFlightPresents < maxInFlightMetalPresents
     }
 
     /// GPU 50/50 is log-vs-LUT. Split without a cube is not replace-grade —

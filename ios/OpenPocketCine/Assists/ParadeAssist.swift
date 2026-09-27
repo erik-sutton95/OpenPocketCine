@@ -23,7 +23,6 @@ import UIKit
 /// normalised centre (OpenZCine `MovablePanelStoredCenter`).
 enum ParadeAssist {
     static let panelID = "parade"
-    static let longPressPanelWidth: CGFloat = 400
     static let baseSize = ScopePanelSize.parade
     static let scaleRange: ClosedRange<Double> = 0.6...1.6
     static let defaultScale = 1.0
@@ -44,10 +43,6 @@ enum ParadeAssist {
         var laneCount: Int { self == .yrgb ? 4 : 3 }
     }
 
-    /// OpenZCine `AssistQuickSettingsContent.paradeRows` titles (no Size — scale is the grip).
-    static let popupRows = [
-        "Mode", "Brightness", "Safe Border Clip", "Safe Border Crush", "Middle Gray",
-    ]
     static let brightnessHelp =
         "Raise trace intensity when channel separation is hard to see."
 

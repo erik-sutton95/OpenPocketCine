@@ -85,13 +85,6 @@ public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
         LiveColorScience.paperIRE(middleGrayEncoded)
     }
 
-    /// 18% grey on the shared IRE scale (paper IRE). WAVE draws this as the
-    /// solid middle-gray guide — not remapped to 50.
-    public var scopeGreyScaleIRE: Double {
-        (scopeAnchors.midLevel - ScopeDisplayScale.crushLevel)
-            / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel) * 100
-    }
-
     public func encodeLinear(_ linear: Double) -> Double {
         LiveColorScience.encode(linear, transfer: self)
     }
@@ -786,16 +779,6 @@ public enum LiveColorScience {
         encoded * 100
     }
 
-    /// Shared HISTO / PARADE / ZEBRA / FALSE / WAVE IRE. 0 = paper black,
-    /// 18% grey = paper IRE (D-Log2 30.50, D-Log 39.88), 100 = live-tap EI ceiling.
-    public static func monitorIRE(linear: Double, transfer: MonitorTransfer) -> Double {
-        monitorIRE(encoded: encode(linear, transfer: transfer), transfer: transfer)
-    }
-
-    public static func monitorIRE(encoded: Double, transfer: MonitorTransfer) -> Double {
-        finiteIRE(ScopeDisplayScale.monitorPercent(encoded, transfer: transfer))
-    }
-
     /// Stops relative to 18% grey. Zero light is `−∞`, never NaN.
     public static func stops(linear: Double) -> Double {
         let y = max(0, linear)
@@ -805,20 +788,6 @@ public enum LiveColorScience {
 
     public static func stops(encoded: Double, transfer: MonitorTransfer) -> Double {
         stops(linear: linearize(encoded, transfer: transfer))
-    }
-
-    public static func zebraHighlight(
-        _ monitorPercent: Double, threshold: Double = LiveZebra.highlightIRE
-    ) -> Bool {
-        monitorPercent >= threshold
-    }
-
-    public static func zebraMidtone(
-        _ monitorPercent: Double,
-        centre: Double = LiveZebra.midtoneIRE,
-        halfWidth: Double = LiveZebra.midtoneHalfWidthIRE
-    ) -> Bool {
-        abs(monitorPercent - centre) <= halfWidth
     }
 
     /// IRE / Limits / CineStop ride the WAVE axis. EL Zone is scene-referred
@@ -868,11 +837,6 @@ public enum LiveColorScience {
 
     private static func clamp(_ x: Double, _ lo: Double, _ hi: Double) -> Double {
         min(hi, max(lo, x))
-    }
-
-    private static func finiteIRE(_ ire: Double) -> Double {
-        guard ire.isFinite else { return 0 }
-        return clamp(ire, 0, 100)
     }
 }
 
@@ -1017,36 +981,6 @@ private enum DLog2 {
 /// Display rendering, contrast, highlight roll-off, and gamut mapping stay
 /// downstream. Scopes do **not** call this — they plot encoded codes.
 public enum DGamut2 {
-    /// CIE 1931 xy. Blue y is negative (below the spectral locus). White is D65.
-    public static let redPrimary = (x: 0.7347, y: 0.2653)
-    public static let greenPrimary = (x: 0.1600, y: 0.8400)
-    public static let bluePrimary = (x: 0.0900, y: -0.0800)
-    public static let whiteD65 = (x: 0.3127, y: 0.3290)
-
-    /// Linear D-Gamut2 RGB → CIE 1931 XYZ.
-    public static let rgbToXYZ = ColorMatrix3(
-        0.6917, 0.1596, 0.0990,
-        0.2498, 0.8381, -0.0880,
-        0.0000, 0.0000, 1.0891)
-
-    /// CIE 1931 XYZ → linear D-Gamut2 RGB.
-    public static let xyzToRGB = ColorMatrix3(
-        1.5525, -0.2956, -0.1650,
-        -0.4627, 1.2813, 0.1456,
-        0.0000, 0.0000, 0.9182)
-
-    /// Linear D-Gamut2 RGB → DaVinci Wide Gamut RGB (`DJI DLog2 to DWG.dctl`).
-    public static let rgbToDWG = ColorMatrix3(
-        0.9790, 0.0062, 0.0149,
-        -0.0090, 0.9747, 0.0343,
-        0.0721, 0.1018, 0.8260)
-
-    /// DaVinci Wide Gamut RGB → linear D-Gamut2 RGB.
-    public static let dwgToRGB = ColorMatrix3(
-        1.0228, -0.0046, -0.0182,
-        0.0126, 1.0304, -0.0430,
-        -0.0909, -0.1266, 1.2175)
-
     /// Linear D-Gamut2 RGB → ITU-R BT.709 RGB.
     public static let rgbToRec709 = ColorMatrix3(
         1.8577, -0.7712, -0.0869,

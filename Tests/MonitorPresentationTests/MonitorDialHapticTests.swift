@@ -2,17 +2,22 @@ import MonitorPresentation
 import Testing
 
 struct MonitorDialHapticTests {
-    @Test func coarseDrumsTickEveryNeighbor() {
-        #expect(MonitorDialHaptic.shouldTick(previous: "172°", next: "180°", optionCount: 15))
-        #expect(MonitorDialHaptic.shouldTick(previous: "144°", next: "172°", optionCount: 15))
-        #expect(!MonitorDialHaptic.shouldTick(previous: "180°", next: "180°", optionCount: 15))
+    /// Coarse drums (15 options) tick every neighbor; dense Kelvin (81) and
+    /// shutter speed (40) drums only tick round stops.
+    @Test(arguments: [
+        ("172°", "180°", 15, true), ("144°", "172°", 15, true), ("180°", "180°", 15, false),
+        ("5500K", "5600K", 81, true), ("5500K", "5700K", 81, false),
+        ("1/49", "1/50", 40, true), ("1/47", "1/49", 40, false),
+    ])
+    func labeledDrumTicks(previous: String, next: String, optionCount: Int, ticks: Bool) {
+        #expect(
+            MonitorDialHaptic.shouldTick(previous: previous, next: next, optionCount: optionCount)
+                == ticks)
     }
 
-    @Test func denseKelvinOnlyTicksRoundStops() {
-        #expect(MonitorDialHaptic.shouldTick(previous: "5500K", next: "5600K", optionCount: 81))
-        #expect(!MonitorDialHaptic.shouldTick(previous: "5500K", next: "5700K", optionCount: 81))
-        #expect(MonitorDialHaptic.isMajor("3200K"))
-        #expect(!MonitorDialHaptic.isMajor("3300K"))
+    @Test(arguments: [("3200K", true), ("3300K", false), ("1/48", true), ("1/47", false)])
+    func denseDrumMajors(label: String, major: Bool) {
+        #expect(MonitorDialHaptic.isMajor(label) == major)
     }
 
     @Test func zoomHundredthsStaySilentUntilAWholeStop() {
@@ -41,12 +46,5 @@ struct MonitorDialHapticTests {
             }.count
             #expect(ticks == 1)
         }
-    }
-
-    @Test func denseShutterSpeedOnlyTicksRoundDenoms() {
-        #expect(MonitorDialHaptic.shouldTick(previous: "1/49", next: "1/50", optionCount: 40))
-        #expect(!MonitorDialHaptic.shouldTick(previous: "1/47", next: "1/49", optionCount: 40))
-        #expect(MonitorDialHaptic.isMajor("1/48"))
-        #expect(!MonitorDialHaptic.isMajor("1/47"))
     }
 }

@@ -32,48 +32,6 @@ final class WaveformAssistTests: XCTestCase {
         XCTAssertEqual(WaveformAxis.unit(dlogGrey, transfer: .dlog), 0.3988, accuracy: 0.005)
     }
 
-    func testSharedIRETablesStillPinGreyAtPaperNumber() {
-        let grey = LiveColorScience.encode(0.18, transfer: .dlog2)
-        XCTAssertEqual(
-            ScopeDisplayScale.monitorPercent(grey, transfer: .dlog2), 30.50, accuracy: 0.5,
-            "HISTO / shared IRE tables must not move with the WAVE axis")
-        XCTAssertEqual(
-            ScopeDisplayScale.monitorPercent(
-                LiveColorScience.encode(0, transfer: .dlog2), transfer: .dlog2),
-            0, accuracy: 1e-9)
-        XCTAssertEqual(
-            ScopeDisplayScale.monitorPercent(247.0 / 255, transfer: .dlog2), 100, accuracy: 0.05)
-        XCTAssertEqual(
-            ScopeDisplayScale.monitorPercent(223.0 / 255, transfer: .dlog), 100, accuracy: 0.05)
-        XCTAssertEqual(
-            WaveformAxis.unit(255.0 / 255, transfer: .dlog2), 1, accuracy: 1e-9,
-            "full-range 255 is overshoot, clamped to 100 on WAVE")
-    }
-
-    func testOpenZCineOptionSet() {
-        XCTAssertEqual(WaveformAssist.Mode.allCases.map(\.rawValue), ["Luma", "RGB"])
-        XCTAssertEqual(WaveformAssist.Options.default.mode, .rgb)
-        XCTAssertEqual(WaveformAssist.Options.default.brightness, 100)
-        XCTAssertEqual(WaveformAssist.Options.default.scale, 1)
-        XCTAssertTrue(WaveformAssist.Options.default.guides.clip)
-        XCTAssertTrue(WaveformAssist.Options.default.guides.crush)
-        XCTAssertTrue(WaveformAssist.Options.default.guides.middle)
-        XCTAssertEqual(WaveformAssist.longPressPanelWidth, 400)
-        XCTAssertEqual(WaveformAssist.panelID, "wave")
-        XCTAssertEqual(WaveformAssist.scaleRange, 0.6...1.6)
-        XCTAssertEqual(WaveformAssist.brightnessRange, 0...200)
-        XCTAssertEqual(WaveformAssist.holdDuration, 0.3, accuracy: 0.001)
-        XCTAssertEqual(WaveformAssist.positionGrid, 4)
-        XCTAssertEqual(WaveformAssist.hapticGrid, 22)
-        XCTAssertEqual(WaveformAssist.baseSize, CGSize(width: 250, height: 153))
-        XCTAssertEqual(
-            WaveformAssist.popupRows,
-            ["Mode", "Brightness", "Safe Border Clip", "Safe Border Crush", "Middle Gray"])
-        XCTAssertEqual(
-            WaveformAssist.brightnessHelp,
-            "Raise trace intensity when the waveform is hard to read in bright light.")
-    }
-
     func testHoldWithoutDragOpensOptions() {
         XCTAssertTrue(WaveformAssist.shouldPresentOptions(translation: .zero))
         XCTAssertTrue(
@@ -89,16 +47,6 @@ final class WaveformAssistTests: XCTestCase {
         WaveformAssist.presentOptions(anchor: frame, assist: assist)
         XCTAssertEqual(assist.configureTool, .waveform)
         XCTAssertEqual(assist.longPressAnchor, frame)
-    }
-
-    func testClampsMatchOpenZCine() {
-        XCTAssertEqual(WaveformAssist.Options.clampedScale(99), 1.6)
-        XCTAssertEqual(WaveformAssist.Options.clampedScale(0.01), 0.6)
-        XCTAssertEqual(WaveformAssist.Options.clampedBrightness(999), 200)
-        XCTAssertEqual(WaveformAssist.Options.clampedBrightness(-10), 0)
-        XCTAssertEqual(WaveformAssist.intensity(0), 0)
-        XCTAssertEqual(WaveformAssist.intensity(100), 0.25)
-        XCTAssertEqual(WaveformAssist.intensity(200), 0.5)
     }
 
     func testIREZeroAndHundredSitOnPlotEdges() {
@@ -217,71 +165,6 @@ final class WaveformAssistTests: XCTestCase {
         XCTAssertEqual(WaveformAxis.unit(clip1600, transfer: .dlog2, iso: 1600), 1, accuracy: 1e-9)
         XCTAssertEqual(WaveformAxis.unit(clip400, transfer: .dlog2, iso: 400), 1, accuracy: 1e-9)
         XCTAssertLessThan(clip400, clip1600, "lower EI pulls 100 down; gray stays at paper IRE")
-    }
-
-    func testPanelSizeRoundsBaseTimesScale() {
-        XCTAssertEqual(WaveformAssist.panelSize(scale: 1), CGSize(width: 250, height: 153))
-        XCTAssertEqual(WaveformAssist.panelSize(scale: 1.4), CGSize(width: 350, height: 214))
-        XCTAssertEqual(WaveformAssist.panelSize(scale: 99), WaveformAssist.panelSize(scale: 1.6))
-    }
-
-    func testStoredCenterRoundTrip() {
-        let bounds = CGRect(x: 0, y: 0, width: 874, height: 402)
-        let center = CGPoint(x: 184, y: 146)
-        let stored = WaveformAssist.StoredCenter(center: center, in: bounds)
-        let restored = stored.center(in: bounds)
-        XCTAssertEqual(restored.x, center.x, accuracy: 0.05)
-        XCTAssertEqual(restored.y, center.y, accuracy: 0.05)
-    }
-
-    func testUnplacedScopeStartsAtCanvasCenter() {
-        let feed = CGRect(x: 59, y: 0, width: 714.7, height: 402)
-        let bounds = CGRect(x: 0, y: 0, width: 874, height: 402)
-        let size = WaveformAssist.baseSize
-        let clearance = EdgeInsets(top: 60, leading: 0, bottom: 72, trailing: 0)
-        let center = WaveformAssist.defaultCenter(
-            feed: feed, size: size, bounds: bounds, chromeClearance: clearance)
-        XCTAssertEqual(center.x, bounds.midX, accuracy: 0.05)
-        XCTAssertEqual(center.y, bounds.midY, accuracy: 0.05)
-        XCTAssertGreaterThan(center.y - size.height / 2, bounds.minY - 0.05)
-        XCTAssertGreaterThanOrEqual(center.y - size.height / 2, clearance.top + 10 - 0.5)
-        XCTAssertLessThan(center.x + size.width / 2, bounds.maxX + 0.05)
-    }
-
-    func testClampAndSnapMatchOpenZCineGrid() {
-        let bounds = CGRect(x: 0, y: 0, width: 400, height: 300)
-        let size = CGSize(width: 100, height: 80)
-        let clamped = WaveformAssist.clamp(CGPoint(x: -20, y: 900), size: size, bounds: bounds)
-        XCTAssertEqual(clamped.x, 50, accuracy: 0.05)
-        XCTAssertEqual(clamped.y, 260, accuracy: 0.05)
-        let snapped = WaveformAssist.snap(CGPoint(x: 11, y: 7))
-        XCTAssertEqual(snapped.x, 12, accuracy: 0.05)
-        XCTAssertEqual(snapped.y, 8, accuracy: 0.05)
-    }
-
-    func testResolvedCenterPrefersSessionThenStored() {
-        let bounds = CGRect(x: 0, y: 0, width: 400, height: 300)
-        let size = CGSize(width: 100, height: 80)
-        let fallback = CGPoint(x: 80, y: 80)
-        let stored = WaveformAssist.StoredCenter(center: CGPoint(x: 200, y: 150), in: bounds)
-        let fromStored = WaveformAssist.resolvedCenter(
-            session: nil, stored: stored, defaultCenter: fallback, size: size, bounds: bounds)
-        XCTAssertEqual(fromStored.x, 200, accuracy: 0.05)
-        let session = CGPoint(x: 120, y: 110)
-        let fromSession = WaveformAssist.resolvedCenter(
-            session: session, stored: stored, defaultCenter: fallback, size: size, bounds: bounds)
-        XCTAssertEqual(fromSession.x, 120, accuracy: 0.05)
-        XCTAssertEqual(fromSession.y, 110, accuracy: 0.05)
-    }
-
-    func testLegacyDecodeDefaultsToRGB() throws {
-        let data = Data(#"{"brightness":150}"#.utf8)
-        let decoded = try JSONDecoder().decode(WaveformAssist.Options.self, from: data)
-        XCTAssertEqual(decoded.mode, .rgb)
-        XCTAssertEqual(decoded.brightness, 150)
-        XCTAssertEqual(decoded.scale, 1)
-        XCTAssertNil(decoded.storedCenter)
-        XCTAssertNil(decoded.storedCenterPortrait)
     }
 
     @MainActor

@@ -157,10 +157,6 @@ struct LiveRecordingTally: View {
     static let lineWidth: CGFloat = 4
     /// Approximate display corner. No public API; decorative, tuned to modern iPhones.
     static let displayCornerRadius: CGFloat = 52
-
-    static func borderRect(in layout: LiveMonitorLayout) -> CGRect {
-        CGRect(origin: .zero, size: layout.viewport)
-    }
 }
 
 /// Full-screen REC border: stroke plus glow on a precomputed shadow path, with a

@@ -23,6 +23,24 @@ class NativeGimbalProgramRunnerTest {
         }
     }
 
+    /** Simulated head: moves linearly toward the last timed target and records each send. */
+    private class Head(private val tx: Tx, start: GimbalWaypoint) {
+        private var origin = start
+        private var target = start
+        private var motionAt = 0.0
+        private var duration = 1.0
+        val sends = mutableListOf<Pair<Double, GimbalWaypoint>>()
+        fun pose() = GimbalMoveEngine.lerp(origin, target, (tx.now - motionAt) / duration)
+        fun send(next: GimbalWaypoint, seconds: Double): Boolean {
+            origin = pose()
+            target = next
+            motionAt = tx.now
+            duration = seconds
+            sends += tx.now to next
+            return true
+        }
+    }
+
     private val a = GimbalWaypoint(0.0, 0.0, 1.0, 175.0)
     private val b = GimbalWaypoint(30.0, 0.0, 1.0, 175.0)
     private val c = GimbalWaypoint(30.0, 20.0, 1.0, 155.0)
@@ -75,26 +93,15 @@ class NativeGimbalProgramRunnerTest {
     fun continuousCurveCompletesWhileUiNeverDrainsItsCallbackQueue() {
         val tx = Tx()
         var sample = NativeGimbalFeedback(a, 0.0)
-        var origin = a
-        var target = a
-        var motionAt = 0.0
-        var duration = 1.0
-        fun physical() = GimbalMoveEngine.lerp(origin, target, (tx.now - motionAt) / duration)
+        val head = Head(tx, a)
+        val sends = head.sends
         fun receive() {
-            sample = NativeGimbalFeedback(physical(), tx.now)
+            sample = NativeGimbalFeedback(head.pose(), tx.now)
             if (tx.now < 8.0) tx.schedule(0.01) { receive() }
         }
-        val sends = mutableListOf<Pair<Double, GimbalWaypoint>>()
         val queuedUi = mutableListOf<NativeGimbalProgramRunner.Progress>()
         var stops = 0
-        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule, { sample }, { next, seconds ->
-            origin = physical()
-            target = next
-            motionAt = tx.now
-            duration = seconds
-            sends += tx.now to next
-            true
-        }, { stops++ })
+        val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule, { sample }, head::send, { stops++ })
         receive()
         runner.start(GimbalProgram(a, b, c, 3.0, 2.0, 1.0)) { queuedUi += it }
         tx.through(8.0) // No UI callbacks are consumed during the entire take.
@@ -239,23 +246,14 @@ class NativeGimbalProgramRunnerTest {
     fun loopKeepsOneTokenAndCancelFencesTargetsBeforeOrAfterTurnaround() {
         for (cancelAfterReturn in listOf(false, true)) {
             val tx = Tx()
-            var origin = a
-            var target = a
-            var motionAt = 0.0
-            var duration = 1.0
-            fun physical() = GimbalMoveEngine.lerp(origin, target, (tx.now - motionAt) / duration)
-            val sends = mutableListOf<Pair<Double, GimbalWaypoint>>()
+            val head = Head(tx, a)
+            val sends = head.sends
             val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
             val events = mutableListOf<String>()
             val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-                { NativeGimbalFeedback(physical(), tx.now) }, { next, seconds ->
-                    origin = physical()
-                    target = next
-                    motionAt = tx.now
-                    duration = seconds
-                    sends += tx.now to next
+                { NativeGimbalFeedback(head.pose(), tx.now) }, { next, seconds ->
                     events += "target"
-                    true
+                    head.send(next, seconds)
                 }, { events += "stop" })
             val token = runner.start(GimbalProgram(a, b, durationAB = 1.0, loop = true)) { updates += it }
             // Preparation + A hold + one-second move; reverse is dispatched at 3.25s.
@@ -275,23 +273,12 @@ class NativeGimbalProgramRunnerTest {
     @Test
     fun loopingRunnerReversesWithoutAnotherPreparationCountdownOrHold() {
         val tx = Tx()
-        var origin = a
-        var target = a
-        var motionAt = 0.0
-        var duration = 1.0
-        fun physical() = GimbalMoveEngine.lerp(origin, target, (tx.now - motionAt) / duration)
-        val sends = mutableListOf<Pair<Double, GimbalWaypoint>>()
+        val head = Head(tx, a)
+        val sends = head.sends
         val updates = mutableListOf<NativeGimbalProgramRunner.Progress>()
         var stops = 0
         val runner = NativeGimbalProgramRunner({ tx.now }, tx::schedule,
-            { NativeGimbalFeedback(physical(), tx.now) }, { next, seconds ->
-                origin = physical()
-                target = next
-                motionAt = tx.now
-                duration = seconds
-                sends += tx.now to next
-                true
-            }, { stops++ })
+            { NativeGimbalFeedback(head.pose(), tx.now) }, head::send, { stops++ })
         val token = runner.start(GimbalProgram(a, b, durationAB = 1.0, loop = true)) { updates += it }
         tx.through(13.0)
         assertTrue(sends.count { it.second == b } >= 3)

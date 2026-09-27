@@ -4,19 +4,15 @@ import Testing
 
 @Suite("Audio meter dBFS conversion")
 struct AudioMeterDecibelTests {
-    @Test func fullScaleReadsZeroDB() {
-        #expect(AudioMeterBallistics.decibels(fromLinear: 1) == 0)
-    }
-
-    @Test func halfAmplitudeReadsMinusSixDB() {
-        #expect(abs(AudioMeterBallistics.decibels(fromLinear: 0.5) - (-6.0206)) < 0.01)
-    }
-
-    @Test func silenceAndOverdriveClampToTheScale() {
-        #expect(AudioMeterBallistics.decibels(fromLinear: 0) == AudioMeterBallistics.floorDB)
-        #expect(AudioMeterBallistics.decibels(fromLinear: -1) == AudioMeterBallistics.floorDB)
-        #expect(AudioMeterBallistics.decibels(fromLinear: 0.000_01) == AudioMeterBallistics.floorDB)
-        #expect(AudioMeterBallistics.decibels(fromLinear: 2) == 0)
+    /// Full scale reads 0 dB, half amplitude −6 dB; silence and overdrive clamp.
+    @Test(
+        arguments: [
+            (1, 0), (0.5, -6.0206), (2, 0),
+            (0, AudioMeterBallistics.floorDB), (-1, AudioMeterBallistics.floorDB),
+            (0.000_01, AudioMeterBallistics.floorDB),
+        ] as [(Double, Double)])
+    func linearMapsToDecibels(linear: Double, decibels: Double) {
+        #expect(abs(AudioMeterBallistics.decibels(fromLinear: linear) - decibels) < 0.01)
     }
 }
 

@@ -4,12 +4,6 @@ import XCTest
 @testable import OpenPocketCine
 
 final class MirrorAssistTests: XCTestCase {
-    func testMirrorIsTapOnlyLikeOpenZCine() {
-        XCTAssertFalse(
-            LiveAssistTool.mirror.hasConfiguration,
-            "OpenZCine mirror has no long-press options")
-    }
-
     func testFeedScaleIsHorizontalNotVertical() {
         let off = MirrorAssist.feedScale(mirrored: false)
         XCTAssertEqual(off.width, 1)

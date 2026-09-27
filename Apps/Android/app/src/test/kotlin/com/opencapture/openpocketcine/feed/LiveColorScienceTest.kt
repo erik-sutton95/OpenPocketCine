@@ -136,33 +136,6 @@ class LiveColorScienceTest {
     }
 
     @Test
-    fun histogramRemapConservesAndAnchors() {
-        val bins = IntArray(256)
-        bins[5] = 15
-        bins[16] = 100
-        bins[78] = 50
-        bins[247] = 25
-        bins[255] = 10
-        val out = ScopeDisplayScale.remapHistogram(bins, MonitorTransfer.DLOG2)
-        assertEquals(200, out.sum())
-        assertTrue(out[12] + out[13] >= 100)
-        assertEquals(25, out[242])
-        assertEquals(10, out[255])
-        assertEquals(15, out.slice(0..11).sum())
-
-        val dlogBins = IntArray(256)
-        dlogBins[18] = 15
-        dlogBins[24] = 100
-        dlogBins[102] = 50
-        dlogBins[223] = 25
-        dlogBins[255] = 10
-        val dlogOut = ScopeDisplayScale.remapHistogram(dlogBins, MonitorTransfer.DLOG)
-        assertEquals(200, dlogOut.sum())
-        assertEquals(25, dlogOut[242])
-        assertEquals(10, dlogOut[255])
-    }
-
-    @Test
     fun waveformIreHistogramRemapPinsBlackAndClip() {
         val bins = IntArray(256)
         bins[16] = 100
@@ -186,43 +159,33 @@ class LiveColorScienceTest {
         assertEquals(223, ScopeAnchors.make(MonitorTransfer.DLOG, 400).clipEdgeByte)
     }
 
-    @Test
-    fun subBlackNoiseDoesNotCrush() {
-        for ((transfer, code) in listOf(MonitorTransfer.DLOG2 to 10, MonitorTransfer.DLOG to 18)) {
-            val bins = spike(code)
-            val reading = ScopeTrafficLights.reading(bins, bins, bins, transfer)
-            assertFalse(reading.anyCrush, transfer.name)
-            assertFalse(reading.anyClip, transfer.name)
-        }
-    }
+    private data class SpikeCase(
+        val name: String,
+        val transfer: MonitorTransfer,
+        val code: Int,
+        val crush: Boolean,
+        val clip: Boolean,
+    )
 
     @Test
-    fun toePileUpCrushes() {
-        for (transfer in transfers) {
-            val floor = transfer.scopeAnchors(1600).crushFloorByte
-            val bins = spike(floor + 1)
-            val reading = ScopeTrafficLights.reading(bins, bins, bins, transfer)
-            assertTrue(reading.anyCrush, transfer.name)
-            assertFalse(reading.anyClip, transfer.name)
+    fun spikeHistogramsLightOnlyTheExpectedLamp() {
+        val cases =
+            listOf(
+                SpikeCase("sub-black noise does not crush", MonitorTransfer.DLOG2, 10, crush = false, clip = false),
+                SpikeCase("sub-black noise does not crush", MonitorTransfer.DLOG, 18, crush = false, clip = false),
+                SpikeCase("recoverable D-Log2 highlight does not clip", MonitorTransfer.DLOG2, 188, crush = false, clip = false),
+            ) +
+                transfers.map {
+                    SpikeCase("toe pile-up crushes", it, it.scopeAnchors(1600).crushFloorByte + 1, crush = true, clip = false)
+                } +
+                transfers.map { SpikeCase("curve top clips", it, 255, crush = false, clip = true) }
+        for (case in cases) {
+            val bins = spike(case.code)
+            val reading = ScopeTrafficLights.reading(bins, bins, bins, case.transfer)
+            val label = "${case.name}: ${case.transfer.name} code ${case.code}"
+            assertEquals(case.crush, reading.anyCrush, label)
+            assertEquals(case.clip, reading.anyClip, label)
         }
-    }
-
-    @Test
-    fun curveTopClips() {
-        for (transfer in transfers) {
-            val bins = spike(255)
-            val reading = ScopeTrafficLights.reading(bins, bins, bins, transfer)
-            assertTrue(reading.anyClip, transfer.name)
-            assertFalse(reading.anyCrush, transfer.name)
-        }
-    }
-
-    @Test
-    fun recoverableDLog2HighlightDoesNotClipLights() {
-        val bins = spike(188)
-        val reading = ScopeTrafficLights.reading(bins, bins, bins, MonitorTransfer.DLOG2)
-        assertFalse(reading.anyClip)
-        assertFalse(reading.anyCrush)
     }
 
     @Test

@@ -13,40 +13,6 @@ struct LiveTopPickerFramesKey: PreferenceKey {
     }
 }
 
-/// OpenZCine `topPickerBody`: 340-wide card, centred on the cell, 8 pt under `cell.maxY`.
-enum LiveTopPickerPlacement {
-    static func leadingX(
-        cellMidX: CGFloat,
-        width: CGFloat,
-        viewportWidth: CGFloat,
-        safeArea: EdgeInsets = EdgeInsets()
-    ) -> CGFloat {
-        LivePopupPlacement.topPicker(
-            cell: CGRect(x: cellMidX - 1, y: 0, width: 2, height: 2),
-            panelHeight: 80,
-            viewport: CGSize(width: viewportWidth, height: 400),
-            safeArea: safeArea,
-            preferredWidth: width
-        ).x
-    }
-
-    static func topY(
-        cellMaxY: CGFloat,
-        panelHeight: CGFloat,
-        viewportHeight: CGFloat,
-        safeArea: EdgeInsets = EdgeInsets(),
-        floorY: CGFloat? = nil
-    ) -> CGFloat {
-        LivePopupPlacement.topPicker(
-            cell: CGRect(x: 0, y: cellMaxY - 2, width: 2, height: 2),
-            panelHeight: panelHeight,
-            viewport: CGSize(width: 400, height: viewportHeight),
-            safeArea: safeArea,
-            floorY: floorY
-        ).y
-    }
-}
-
 /// OpenZCine `TimecodeReadout`: last field in accent. Osmo has no frames, so seconds tick Sky Blue.
 private struct LiveTimecodeLabel: View {
     let clock: String

@@ -1,7 +1,6 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.openpocketcine.lut.LutCatalog
-import com.opencapture.openpocketcine.lut.PlaybackLutColor
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.test.Test
@@ -30,32 +29,6 @@ class PhotoLiveMonitorTest {
         val night = dlog2.copy(shootingMode = CameraCommands.SHOOT_SUPER_NIGHT)
         assertFalse(night.isPhoto)
         assertEquals(CameraCommands.COLOR_DLOG2, night.monitorColorMode)
-    }
-
-    @Test
-    fun playbackClipColorWinsWhileCameraStaysPhoto() {
-        val photo =
-            CameraStatus(
-                colorMode = CameraCommands.COLOR_DLOG2,
-                shootingMode = CameraCommands.SHOOT_PHOTO_POCKET4,
-            )
-        assertEquals(CameraCommands.COLOR_NORMAL, photo.monitorColorMode)
-        assertEquals(
-            CameraCommands.COLOR_DLOG2,
-            PlaybackLutColor.resolve(
-                clip = CameraCommands.COLOR_DLOG2,
-                live = photo.colorMode,
-                last = CameraCommands.COLOR_DLOG,
-            ),
-        )
-        assertEquals(
-            CameraCommands.COLOR_NORMAL,
-            PlaybackLutColor.resolve(
-                clip = CameraCommands.COLOR_NORMAL,
-                live = photo.colorMode,
-                last = CameraCommands.COLOR_DLOG2,
-            ),
-        )
     }
 
     @Test

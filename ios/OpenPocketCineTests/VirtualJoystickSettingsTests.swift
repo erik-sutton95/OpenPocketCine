@@ -33,17 +33,15 @@ final class VirtualJoystickSettingsTests: XCTestCase {
         super.tearDown()
     }
 
-    func testMissingKeysAreCapturedDefaults() {
+    /// Clamp and curve parsing live in core (`GimbalStickVirtualMappingTests`).
+    /// This covers the shell: missing keys, persistence, and clamping on write.
+    func testMissingKeysDefaultThenRoundTripAndClampOnWrite() {
         XCTAssertFalse(OperatorPrefs.virtualJoystickInvertPan)
         XCTAssertFalse(OperatorPrefs.virtualJoystickInvertTilt)
         XCTAssertEqual(OperatorPrefs.virtualJoystickDeadzonePercent, 8)
         XCTAssertEqual(OperatorPrefs.virtualJoystickResponseCurve, .standard)
-        let mapping = OperatorPrefs.virtualJoystickMapping
-        XCTAssertEqual(mapping, .defaults)
-        XCTAssertEqual(mapping.deadzone, GimbalStick.deadzone)
-    }
+        XCTAssertEqual(OperatorPrefs.virtualJoystickMapping, .defaults)
 
-    func testRoundTripPersists() {
         OperatorPrefs.virtualJoystickInvertPan = true
         OperatorPrefs.virtualJoystickInvertTilt = true
         OperatorPrefs.virtualJoystickDeadzonePercent = 0
@@ -54,19 +52,8 @@ final class VirtualJoystickSettingsTests: XCTestCase {
         XCTAssertEqual(OperatorPrefs.virtualJoystickResponseCurve, .fine)
         XCTAssertEqual(OperatorPrefs.virtualJoystickMapping.curve, .fine)
         XCTAssertEqual(OperatorPrefs.virtualJoystickMapping.deadzone, 0)
-    }
 
-    func testCorruptStoredValuesClampToSafeDefaults() {
-        UserDefaults.standard.set(99, forKey: keys[2])
-        XCTAssertEqual(OperatorPrefs.virtualJoystickDeadzonePercent, 25)
-        UserDefaults.standard.set(-12, forKey: keys[2])
-        XCTAssertEqual(OperatorPrefs.virtualJoystickDeadzonePercent, 0)
         OperatorPrefs.virtualJoystickDeadzonePercent = 40
-        XCTAssertEqual(
-            UserDefaults.standard.integer(forKey: keys[2]), 25)
-        UserDefaults.standard.set("cubic", forKey: keys[3])
-        XCTAssertEqual(OperatorPrefs.virtualJoystickResponseCurve, .standard)
-        UserDefaults.standard.set("linear", forKey: keys[3])
-        XCTAssertEqual(OperatorPrefs.virtualJoystickResponseCurve, .linear)
+        XCTAssertEqual(UserDefaults.standard.integer(forKey: keys[2]), 25)
     }
 }

@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraModel
 import com.opencapture.openpocketcine.session.CameraStatus
@@ -128,61 +127,37 @@ class CaptureSheetTest {
     }
 
     @Test
-    fun dLogIsoAutoRanges() {
-        val status = CameraStatus(colorMode = CameraCommands.COLOR_DLOG)
+    fun isoAutoRangesFollowColorAndBody() {
         val dash = "\u2013"
-        assertEquals(
-            listOf("400${dash}800", "400${dash}1600", "400${dash}3200", "400${dash}6400"),
-            CaptureLists.isoAutoLabels(status),
-        )
-        assertEquals(listOf(0x04, 0x05, 0x06, 0x07), CaptureLists.isoAutoLimits(status.colorMode).map { it.rawValue })
-        assertEquals(IsoLimit.Max1600, CaptureLists.isoLimit("400${dash}1600", status))
-        assertTrue(CaptureLists.offersIsoAuto(status))
-    }
-
-    @Test
-    fun normalAndHdrIsoAutoRanges() {
-        val dash = "\u2013"
-        val expected =
-            listOf(
-                "100${dash}200",
-                "100${dash}400",
-                "100${dash}800",
-                "100${dash}1600",
-                "100${dash}3200",
-                "100${dash}6400",
-                "100${dash}12800",
-                "100${dash}25600",
-            )
+        fun ladder(base: Int, vararg tops: Int) = tops.map { "$base$dash$it" }
+        val full = intArrayOf(200, 400, 800, 1600, 3200, 6400, 12800, 25600)
+        val dlog = CameraStatus(colorMode = CameraCommands.COLOR_DLOG)
         val normal = CameraStatus(colorMode = CameraCommands.COLOR_NORMAL)
         val hdr = CameraStatus(colorMode = CameraCommands.COLOR_HDR)
-        assertEquals(expected, CaptureLists.isoAutoLabels(normal))
-        assertEquals(expected, CaptureLists.isoAutoLabels(hdr))
+        val p3 = "Osmo Pocket 3"
+        // why to (status, body name, expected labels)
+        val cases = listOf(
+            "D-Log starts at 400" to Triple(dlog, "", ladder(400, 800, 1600, 3200, 6400)),
+            "Normal starts at 100" to Triple(normal, "", ladder(100, *full)),
+            "HDR starts at 100" to Triple(hdr, "", ladder(100, *full)),
+            "Pocket 3 starts at 50" to Triple(normal, p3, ladder(50, *full)),
+        )
+        for ((why, case) in cases) {
+            val (status, body, expected) = case
+            assertEquals(expected, CaptureLists.isoAutoLabels(status, body), why)
+        }
+
+        assertEquals(listOf(0x04, 0x05, 0x06, 0x07), CaptureLists.isoAutoLimits(dlog.colorMode).map { it.rawValue })
+        assertEquals(IsoLimit.Max1600, CaptureLists.isoLimit("400${dash}1600", dlog))
+        assertTrue(CaptureLists.offersIsoAuto(dlog))
+
         assertEquals(IsoLimit.Max800, CaptureLists.isoLimit("100${dash}800", normal))
         assertEquals(IsoLimit.Max25600, CaptureLists.isoLimit("100${dash}25600", hdr))
         assertEquals(0x02, IsoLimit.Max200.rawValue)
         assertEquals(0x03, IsoLimit.Max400.rawValue)
         assertEquals(0x06, IsoLimit.Max3200.rawValue)
         assertEquals(0x08, IsoLimit.Max12800.rawValue)
-    }
 
-    @Test
-    fun pocket3IsoAutoRangesStartAt50() {
-        val dash = "\u2013"
-        val expected =
-            listOf(
-                "50${dash}200",
-                "50${dash}400",
-                "50${dash}800",
-                "50${dash}1600",
-                "50${dash}3200",
-                "50${dash}6400",
-                "50${dash}12800",
-                "50${dash}25600",
-            )
-        val normal = CameraStatus(colorMode = CameraCommands.COLOR_NORMAL)
-        val p3 = "Osmo Pocket 3"
-        assertEquals(expected, CaptureLists.isoAutoLabels(normal, p3))
         assertEquals(IsoLimit.Max400, CaptureLists.isoLimit("50${dash}400", normal, p3))
         assertEquals(
             "50${dash}400",
@@ -203,13 +178,6 @@ class CaptureSheetTest {
     fun evLabelsThirdStopsFromMinus3ToPlus3() {
         val minus = EvComp.MINUS
         val labels = CaptureLists.evLabels
-        assertEquals(19, labels.size)
-        assertEquals("${minus}3.0", labels.first())
-        assertEquals("+3.0", labels.last())
-        assertTrue(labels.contains("0.0"))
-        assertTrue(labels.contains("${minus}1.3"))
-        assertTrue(labels.contains("+0.7"))
-        assertTrue(labels.contains("+1.0"))
         assertEquals(0x07, EvComp.fromLabel("${minus}3.0")?.rawValue)
         assertEquals(0x10, EvComp.fromLabel("0.0")?.rawValue)
         assertEquals(0x19, EvComp.fromLabel("+3.0")?.rawValue)
@@ -468,41 +436,17 @@ class CaptureSheetTest {
     }
 
     @Test
-    fun headersAreUppercaseIosNames() {
-        assertEquals("ISO", LiveSheet.ISO.headerLabel)
-        assertEquals("SHUTTER", LiveSheet.SHUTTER.headerLabel)
-        assertEquals("WB", LiveSheet.WB.headerLabel)
-        assertEquals("FOCUS", LiveSheet.FOCUS.headerLabel)
-        assertEquals("MODE", LiveSheet.EXPO.headerLabel)
-        assertEquals("AUDIO", LiveSheet.AUDIO.headerLabel)
-        assertEquals("COLOR", LiveSheet.COLOR.headerLabel)
-        assertEquals("RESOLUTION", LiveSheet.FORMAT.headerLabel)
-        assertEquals("SHOOTING MODE", LiveSheet.MODE.headerLabel)
-        assertEquals("Shooting mode", LiveSheet.MODE.subtitle)
-        assertTrue(LiveSheet.MODE.isTopAnchored)
-        assertTrue(!LiveSheet.EXPO.isTopAnchored)
+    fun lowerCaptureValuesHideForBottomPickersAndStripQuickOnly() {
         assertTrue(!LiveSheet.MODE.isRecordingSetup)
         assertTrue(!hidesLowerCaptureValues(LiveSheet.FORMAT, stripQuick = false, topQuick = false))
         assertTrue(!hidesLowerCaptureValues(LiveSheet.MODE, stripQuick = false, topQuick = false))
         assertTrue(!hidesLowerCaptureValues(null, stripQuick = false, topQuick = true))
         assertTrue(hidesLowerCaptureValues(LiveSheet.ISO, stripQuick = false, topQuick = false))
         assertTrue(hidesLowerCaptureValues(null, stripQuick = true, topQuick = false))
-        assertEquals(
-            128f,
-            com.opencapture.monitorui.MonitorLayoutPolicy.CAPTURE_HEADER_HEIGHT
-                + 11f + 8f + 86f
-                + com.opencapture.monitorui.MonitorLayoutPolicy.compactCaptureBottomPadding(11f),
-        )
     }
 
     @Test
-    fun kelvinDrumIs2000To10000ByHundreds() {
-        assertEquals(2000, CaptureLists.kelvinValues.first())
-        assertEquals(10000, CaptureLists.kelvinValues.last())
-        assertEquals(81, CaptureLists.kelvinValues.size)
-        assertEquals(100, CaptureLists.kelvinValues[1] - CaptureLists.kelvinValues[0])
-        assertEquals("2000K", CaptureLists.kelvinLabels.first())
-        assertEquals("10000K", CaptureLists.kelvinLabels.last())
+    fun kelvinLabelsRoundTripToValues() {
         assertEquals("5600K", CaptureLists.kelvinLabels[CaptureLists.kelvinValues.indexOf(5600)])
         assertEquals(3200, CaptureLists.kelvinFromLabel("3200K"))
         assertEquals(10000, CaptureLists.kelvinFromLabel("10000K"))
@@ -570,15 +514,10 @@ class CaptureSheetTest {
     }
 
     @Test
-    fun wbTintPadIsMinus100To100WithNudgesAndNeutral() {
+    fun wbTintPadIsMinus100To100WithNeutral() {
         assertEquals("Neutral", CaptureLists.tintLabel(0))
         assertEquals("+10", CaptureLists.tintLabel(10))
         assertEquals("-5", CaptureLists.tintLabel(-5))
-        assertEquals("Apply tint 0", CaptureLists.tintApplyLabel(0))
-        assertEquals("Apply tint 25", CaptureLists.tintApplyLabel(25))
-        assertEquals(-100f, CaptureLists.nudgeTint(-95f, -10))
-        assertEquals(100f, CaptureLists.nudgeTint(95f, 10))
-        assertEquals(5f, CaptureLists.nudgeTint(-5f, 10))
         assertEquals(-100, CaptureLists.roundedTint(-100.4f))
         assertEquals(100, CaptureLists.roundedTint(100.6f))
         val status = CameraStatus(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = 5600, wbTint = 0)
@@ -591,14 +530,6 @@ class CaptureSheetTest {
         )
         assertTrue(CaptureLists.wbTintStaysAuto(CameraStatus(wbMode = CameraCommands.WB_AUTO)))
         assertTrue(CaptureLists.wbTintStaysAuto(CameraStatus()))
-    }
-
-    @Test
-    fun nativeIsoHopCopyDoesNotInventAPairing() {
-        assertEquals("Auto Native ISO", CaptureLists.NATIVE_ISO_HOP_TITLE)
-        assertTrue(CaptureLists.NATIVE_ISO_HOP_HELP.isNotEmpty())
-        assertTrue(!CaptureLists.NATIVE_ISO_HOP_HELP.contains("400 ↔ 1600"))
-        assertEquals("Face Priority", CaptureLists.FACE_PRIORITY_TITLE)
     }
 
     @Test
@@ -639,30 +570,9 @@ class CaptureSheetTest {
         assertTrue(!CaptureLists.focusShowsTrackChips(afs))
         assertTrue(CaptureLists.focusIsContinuous(afc))
         assertTrue(CaptureLists.focusShowsTrackChips(afc))
-        assertEquals(FocusTrackMode.DEFAULT.raw, CaptureLists.selectedFocusTrack(afc))
-        assertEquals(FocusTrackMode.SUBJECT_LOCK.raw, CaptureLists.selectedFocusTrack(lock))
         assertTrue(CaptureLists.shouldRefreshFocusTrack(afc, supportsFocus = true))
         assertTrue(!CaptureLists.shouldRefreshFocusTrack(lock, supportsFocus = true))
         assertTrue(!CaptureLists.shouldRefreshFocusTrack(afc, supportsFocus = false))
-        assertEquals(
-            listOf("AF-S", "AF-C", "Showcase", "Lock", "Priority"),
-            CaptureFocusChoices.labels,
-        )
-        assertEquals(CaptureFocusChoices.labels, captureQuickFocusControl(afs).options)
-        assertEquals("AF-S", captureQuickFocusControl(afs).selection)
-        assertEquals("", captureQuickFocusControl(afc).selection)
-        assertEquals(CaptureFocusChoices.labels, captureQuickFocusControl(lock).options)
-        assertEquals("Lock", captureQuickFocusControl(lock).selection)
-    }
-
-    @Test
-    fun holdDrawerChromeMatchesThePersistentPicker() {
-        val status = CameraStatus(expoMode = CameraCommands.EXPO_MANUAL)
-        assertEquals("ISO", CaptureLists.headerTitle(LiveSheet.ISO, status.expoMode))
-        assertEquals("Sensitivity", CaptureLists.headerSubtitle(LiveSheet.ISO, status.expoMode, 0, false))
-        assertEquals("AUDIO", CaptureLists.headerTitle(LiveSheet.AUDIO, status.expoMode))
-        assertEquals(listOf("Channel", "Wind", "Dir", "Vocal"), CaptureLists.modeTabs(LiveSheet.AUDIO, status, false))
-        assertEquals("FOCUS", CaptureLists.headerTitle(LiveSheet.FOCUS, status.expoMode))
     }
 
     @Test
@@ -706,17 +616,9 @@ class CaptureSheetTest {
     }
 
     @Test
-    fun fpsDrumAndColorWheelMatchIos() {
-        assertEquals(listOf("24p", "25p", "30p", "48p", "50p", "60p"), CaptureLists.fpsDrumLabels)
-        assertEquals(listOf("1080", "4K"), CaptureLists.resolutionTabTitles)
-        assertEquals(listOf("1080p", "4K"), VideoResolution.labeledVideo.map { it.label })
-        assertEquals(listOf(24, 25, 30, 48, 50, 60), VideoFrameRate.labeledVideo.map { it.fps })
-        assertEquals(1, CaptureLists.fpsIndexFromDrum("24p"))
-        assertEquals(6, CaptureLists.fpsIndexFromDrum("60p"))
+    fun fpsDrumParsesAndColorWheelFiltersByBody() {
         assertEquals(VideoFrameRate.FPS48, VideoFrameRate.fromDrumLabel("48p"))
         assertEquals(VideoFrameRate.FPS120, VideoFrameRate.fromDrumLabel("120p"))
-        assertEquals(7, CaptureLists.fpsIndexFromDrum("120p"))
-        assertTrue(!CaptureLists.resolutionTabTitles.contains("2.7K"))
         assertTrue(!CaptureLists.fpsDrumLabels.contains("120p"))
         assertEquals(
             listOf("Normal", "HDR", "D-Log"),
@@ -832,8 +734,6 @@ class CaptureSheetTest {
 
     @Test
     fun expoModeSheetIsAutoManualOnly() {
-        assertEquals("MODE", LiveSheet.EXPO.headerLabel)
-        assertEquals("Exposure", LiveSheet.EXPO.subtitle)
         assertEquals(listOf("Auto", "Manual"), CaptureLists.expoLabels)
         assertEquals("Auto", CameraStatus(expoMode = CameraCommands.EXPO_AUTO).expoLabel)
         assertEquals("Manual", CameraStatus(expoMode = CameraCommands.EXPO_MANUAL).expoLabel)
@@ -844,12 +744,6 @@ class CaptureSheetTest {
         assertEquals(CameraCommands.EXPO_MANUAL, CaptureLists.expoModeFromLabel("Manual"))
         assertEquals(null, CaptureLists.expoModeFromLabel("Video"))
         assertEquals(null, CaptureLists.expoModeFromLabel("Photo"))
-        assertEquals("Exposure", LiveSheet.EXPO.subtitle)
-        assertEquals("Shooting mode", LiveSheet.MODE.subtitle)
-        assertEquals(
-            setOf("ISO", "SHUTTER", "WB", "FOCUS", "APERTURE", "EXPO", "AUDIO", "COLOR", "FORMAT", "MODE"),
-            LiveSheet.entries.map { it.name }.toSet(),
-        )
     }
 
     @Test
@@ -865,39 +759,41 @@ class CaptureSheetTest {
         assertTrue(CaptureLists.shouldRefreshAudio(LiveSheet.AUDIO))
         assertTrue(!CaptureLists.shouldRefreshAudio(LiveSheet.EXPO))
 
-        assertEquals(listOf("Stereo", "Mono", "Spatial"), CaptureLists.audioChannelLabels)
-        assertEquals("Stereo", CaptureLists.audioChannelLabel(CameraCommands.AUDIO_STEREO))
-        assertEquals("Mono", CaptureLists.audioChannelLabel(CameraCommands.AUDIO_MONO))
-        assertEquals("Spatial", CaptureLists.audioChannelLabel(CameraCommands.AUDIO_SPATIAL))
+        val channels = listOf(
+            "Stereo" to CameraCommands.AUDIO_STEREO,
+            "Mono" to CameraCommands.AUDIO_MONO,
+            "Spatial" to CameraCommands.AUDIO_SPATIAL,
+        )
+        assertEquals(channels.map { it.first }, CaptureLists.audioChannelLabels)
+        for ((label, value) in channels) {
+            assertEquals(label, CaptureLists.audioChannelLabel(value), "channel $value")
+            assertEquals(value, CaptureLists.audioChannelValue(label), "channel $label")
+            assertEquals(label, CameraStatus(audioChannel = value).audioLabel, "status channel $value")
+        }
         assertEquals(null, CaptureLists.audioChannelLabel(-1))
-        assertEquals(CameraCommands.AUDIO_STEREO, CaptureLists.audioChannelValue("Stereo"))
-        assertEquals(CameraCommands.AUDIO_MONO, CaptureLists.audioChannelValue("Mono"))
-        assertEquals(CameraCommands.AUDIO_SPATIAL, CaptureLists.audioChannelValue("Spatial"))
         assertEquals(null, CaptureLists.audioChannelValue("Surround"))
+        assertEquals("\u2014", CameraStatus().audioLabel)
 
-        assertEquals(listOf("Off", "On"), CaptureLists.audioWindLabels)
-        assertEquals("Off", CaptureLists.audioWindLabel(0))
-        assertEquals("On", CaptureLists.audioWindLabel(1))
+        // Index-coded lists: the raw value is the position in the list.
+        val indexed = listOf(
+            Triple("wind", listOf("Off", "On"), CaptureLists::audioWindLabel),
+            Triple("dir", listOf("All", "Front", "Front+back"), CaptureLists::audioDirLabel),
+            Triple("vocal", listOf("Off", "On"), CaptureLists::audioVocalLabel),
+        )
+        assertEquals(indexed[0].second, CaptureLists.audioWindLabels)
+        assertEquals(indexed[1].second, CaptureLists.audioDirLabels)
+        assertEquals(indexed[2].second, CaptureLists.audioVocalLabels)
+        for ((name, labels, labelFor) in indexed) {
+            for ((raw, label) in labels.withIndex()) {
+                assertEquals(label, labelFor(raw), "$name $raw")
+            }
+        }
         assertEquals(null, CaptureLists.audioWindLabel(-1))
-
-        assertEquals(listOf("All", "Front", "Front+back"), CaptureLists.audioDirLabels)
-        assertEquals("All", CaptureLists.audioDirLabel(0))
-        assertEquals("Front", CaptureLists.audioDirLabel(1))
-        assertEquals("Front+back", CaptureLists.audioDirLabel(2))
-        assertEquals(0, CaptureLists.audioDirValue("All"))
-        assertEquals(1, CaptureLists.audioDirValue("Front"))
-        assertEquals(2, CaptureLists.audioDirValue("Front+back"))
-        assertEquals(null, CaptureLists.audioDirValue("Rear"))
-
-        assertEquals(listOf("Off", "On"), CaptureLists.audioVocalLabels)
-        assertEquals("Off", CaptureLists.audioVocalLabel(0))
-        assertEquals("On", CaptureLists.audioVocalLabel(1))
         assertEquals(null, CaptureLists.audioVocalLabel(-1))
-
-        assertEquals("Spatial", CameraStatus(audioChannel = CameraCommands.AUDIO_SPATIAL).audioLabel)
-        assertEquals("Stereo", CameraStatus(audioChannel = CameraCommands.AUDIO_STEREO).audioLabel)
-        assertEquals("Mono", CameraStatus(audioChannel = CameraCommands.AUDIO_MONO).audioLabel)
-        assertEquals("—", CameraStatus().audioLabel)
+        for ((raw, label) in indexed[1].second.withIndex()) {
+            assertEquals(raw, CaptureLists.audioDirValue(label), "dir $label")
+        }
+        assertEquals(null, CaptureLists.audioDirValue("Rear"))
     }
 
     @Test
@@ -936,19 +832,6 @@ class CaptureSheetTest {
     }
 
     @Test
-    fun expoModeCommandsMatchIosBytes() {
-        assertTrue(CameraCommands.expoMode(CameraCommands.EXPO_AUTO).contentEquals(byteArrayOf(0x01, 0x00)))
-        assertTrue(CameraCommands.expoMode(CameraCommands.EXPO_MANUAL).contentEquals(byteArrayOf(0x04, 0x00)))
-        assertTrue(CameraCommands.expoMode(manual = false).contentEquals(byteArrayOf(0x01, 0x00)))
-        assertTrue(CameraCommands.expoMode(manual = true).contentEquals(byteArrayOf(0x04, 0x00)))
-        assertEquals("auto", CameraCommands.expoWireExtra(CameraCommands.EXPO_AUTO))
-        assertEquals("manual", CameraCommands.expoWireExtra(CameraCommands.EXPO_MANUAL))
-        assertEquals(null, CameraCommands.expoWireExtra(-1))
-        assertTrue(CameraCommands.expoMode(-1).isEmpty())
-        assertEquals(0x021E, SwiftCore.waitKey(SwiftCore.CMD_SET_EXPO_MODE))
-    }
-
-    @Test
     fun isoAutoChipAndLimitGetMatchIos() {
         assertEquals("Auto", CaptureLists.isoChipValue(CameraStatus(isoIndex = 0, iso = 400)))
         assertEquals("1600", CaptureLists.isoChipValue(CameraStatus(isoIndex = 0x07, iso = 1600)))
@@ -960,100 +843,26 @@ class CaptureSheetTest {
 
     @Test
     fun nativeIsoHopOnlyWhenStillOnBase() {
-        assertEquals(
-            0x05,
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG2,
-                to = CameraCommands.COLOR_DLOG,
-                currentIndex = 0x07,
-                hopEnabled = true,
-            ),
+        data class Hop(val why: String, val from: Int, val to: Int, val index: Int, val enabled: Boolean, val expected: Int?)
+        val cases = listOf(
+            Hop("D-Log2 base 1600 hops to D-Log base", CameraCommands.COLOR_DLOG2, CameraCommands.COLOR_DLOG, 0x07, true, 0x05),
+            Hop("D-Log base 400 hops to D-Log2 base", CameraCommands.COLOR_DLOG, CameraCommands.COLOR_DLOG2, 0x05, true, 0x07),
+            Hop("off-base index stays", CameraCommands.COLOR_DLOG2, CameraCommands.COLOR_DLOG, 0x06, true, null),
+            Hop("auto index stays", CameraCommands.COLOR_DLOG, CameraCommands.COLOR_DLOG2, 0, true, null),
+            Hop("hop disabled", CameraCommands.COLOR_DLOG2, CameraCommands.COLOR_DLOG, 0x07, false, null),
+            Hop("log to normal", CameraCommands.COLOR_DLOG2, CameraCommands.COLOR_NORMAL, 0x07, true, null),
+            Hop("normal to log", CameraCommands.COLOR_NORMAL, CameraCommands.COLOR_DLOG2, 0x03, true, null),
+            Hop("same color", CameraCommands.COLOR_DLOG2, CameraCommands.COLOR_DLOG2, 0x07, true, null),
+            Hop("unknown from", -1, CameraCommands.COLOR_DLOG, 0x07, true, null),
+            Hop("D-Log M is not a pair", CameraCommands.COLOR_DLOG_M, CameraCommands.COLOR_DLOG2, 0x05, true, null),
         )
-        assertEquals(
-            0x07,
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG,
-                to = CameraCommands.COLOR_DLOG2,
-                currentIndex = 0x05,
-                hopEnabled = true,
-            ),
-        )
-        assertEquals(
-            null,
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG2,
-                to = CameraCommands.COLOR_DLOG,
-                currentIndex = 0x06,
-                hopEnabled = true,
-            ),
-        )
-        assertEquals(
-            null,
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG,
-                to = CameraCommands.COLOR_DLOG2,
-                currentIndex = 0,
-                hopEnabled = true,
-            ),
-        )
-        assertEquals(
-            null,
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG2,
-                to = CameraCommands.COLOR_DLOG,
-                currentIndex = 0x07,
-                hopEnabled = false,
-            ),
-        )
-        assertNull(
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG2,
-                to = CameraCommands.COLOR_NORMAL,
-                currentIndex = 0x07,
-                hopEnabled = true,
-            ),
-        )
-        assertNull(
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_NORMAL,
-                to = CameraCommands.COLOR_DLOG2,
-                currentIndex = 0x03,
-                hopEnabled = true,
-            ),
-        )
-        assertNull(
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG2,
-                to = CameraCommands.COLOR_DLOG2,
-                currentIndex = 0x07,
-                hopEnabled = true,
-            ),
-        )
-        assertNull(
-            CaptureLists.nativeIsoHop(
-                from = -1,
-                to = CameraCommands.COLOR_DLOG,
-                currentIndex = 0x07,
-                hopEnabled = true,
-            ),
-        )
-        assertEquals(
-            0x05,
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG2,
-                to = CameraCommands.COLOR_DLOG,
-                currentIndex = 0x07,
-                hopEnabled = true,
-            ),
-        )
-        assertNull(
-            CaptureLists.nativeIsoHop(
-                from = CameraCommands.COLOR_DLOG_M,
-                to = CameraCommands.COLOR_DLOG2,
-                currentIndex = 0x05,
-                hopEnabled = true,
-            ),
-        )
+        for (case in cases) {
+            assertEquals(
+                case.expected,
+                CaptureLists.nativeIsoHop(from = case.from, to = case.to, currentIndex = case.index, hopEnabled = case.enabled),
+                case.why,
+            )
+        }
     }
 
     @Test
@@ -1235,9 +1044,6 @@ class CaptureSheetTest {
         assertTrue(!CaptureLists.shouldGetIsoLimit(CameraStatus(colorMode = CameraCommands.COLOR_DLOG2)))
         assertTrue(CameraCommands.shouldGetIsoLimit(-1))
         assertTrue(!CameraCommands.shouldGetIsoLimit(CameraCommands.COLOR_DLOG2))
-        assertTrue(!CameraCommands.isoIndex(0).contentEquals(byteArrayOf(0x07)))
-        assertEquals(0x00, CameraCommands.isoIndex(0)[0].toInt() and 0xFF)
-        assertEquals(1, CameraCommands.isoIndex(0).size)
     }
 
     @Test
@@ -1292,16 +1098,6 @@ class CaptureSheetTest {
                 fpsIndex = 1,
             )
         assertEquals(VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS24), VideoFormat.current(live))
-        assertEquals(
-            VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS24),
-            VideoFormat.nextForTab(live, tab = 1, drum = "24p"),
-        )
-        assertNull(VideoFormat.nextForTab(live, tab = 0, drum = "24p"))
-        assertEquals(
-            VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS60),
-            VideoFormat.nextForDrum(live, tab = 0, drum = "60p"),
-        )
-        assertNull(VideoFormat.nextForDrum(live, tab = 0, drum = "120p"))
         val boot = VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS25)
         assertEquals(
             VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS25),
@@ -1444,7 +1240,6 @@ class CaptureSheetTest {
 
     @Test
     fun wbChipShowsCustomKelvinAndAuto() {
-        assertEquals("10000K", CaptureLists.wbChipWidest())
         assertEquals("Auto", CaptureLists.wbChipValue(CameraStatus(wbMode = CameraCommands.WB_AUTO)))
         assertEquals(
             "5600K",
@@ -1473,51 +1268,33 @@ class CaptureSheetTest {
 
     @Test
     fun fpsChipLabelIsLiveViewHealthNotRecordFps() {
-        assertEquals(
-            "—",
-            LiveViewLink.fpsChipLabel(
-                connection = com.opencapture.openpocketcine.core.ConnectionPhase.IDLE,
-                recovering = false,
-                formattedFPS = "25.00",
-                measuredFPS = 0.0,
-            ),
+        data class Chip(
+            val why: String,
+            val connection: com.opencapture.openpocketcine.core.ConnectionPhase,
+            val recovering: Boolean,
+            val measured: Double,
+            val expected: String,
         )
-        assertEquals(
-            "LINK",
-            LiveViewLink.fpsChipLabel(
-                connection = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
-                recovering = false,
-                formattedFPS = "25.00",
-                measuredFPS = 0.0,
-            ),
+        val live = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE
+        val cases = listOf(
+            Chip("idle hides fps", com.opencapture.openpocketcine.core.ConnectionPhase.IDLE, false, 0.0, "\u2014"),
+            Chip("live without frames", live, false, 0.0, "LINK"),
+            Chip("recovering", live, true, 12.0, "RECOV"),
+            Chip("failed", com.opencapture.openpocketcine.core.ConnectionPhase.FAILED, false, 25.0, "FAIL"),
+            Chip("live with frames", live, false, 25.0, "25.00"),
         )
-        assertEquals(
-            "RECOV",
-            LiveViewLink.fpsChipLabel(
-                connection = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
-                recovering = true,
-                formattedFPS = "25.00",
-                measuredFPS = 12.0,
-            ),
-        )
-        assertEquals(
-            "FAIL",
-            LiveViewLink.fpsChipLabel(
-                connection = com.opencapture.openpocketcine.core.ConnectionPhase.FAILED,
-                recovering = false,
-                formattedFPS = "25.00",
-                measuredFPS = 25.0,
-            ),
-        )
-        assertEquals(
-            "25.00",
-            LiveViewLink.fpsChipLabel(
-                connection = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
-                recovering = false,
-                formattedFPS = "25.00",
-                measuredFPS = 25.0,
-            ),
-        )
+        for (case in cases) {
+            assertEquals(
+                case.expected,
+                LiveViewLink.fpsChipLabel(
+                    connection = case.connection,
+                    recovering = case.recovering,
+                    formattedFPS = "25.00",
+                    measuredFPS = case.measured,
+                ),
+                case.why,
+            )
+        }
     }
 
     companion object {

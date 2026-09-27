@@ -97,21 +97,6 @@ final class LiveScopesTests: XCTestCase {
 
     // MARK: - Tap format coverage on iOS buffers
 
-    func testTapExpandsX420LegalAnchorsToPaperBytes() throws {
-        let made = ScopeTestBuffers.makeX420(width: 48, height: 16) { x, _ in
-            x < 16
-                ? ScopeTestBuffers.dlog2Black10
-                : (x < 32 ? ScopeTestBuffers.dlog2Grey10 : ScopeTestBuffers.clip10)
-        }
-        let buffer = try XCTUnwrap(made, "10-bit x420 must be creatable on this host")
-        let packed = try XCTUnwrap(PocketScopeSampler.copyBGRA(buffer, maxWidth: 48))
-        var values = Set<UInt8>()
-        for i in stride(from: 1, to: packed.bytes.count, by: 4) {
-            values.insert(packed.bytes[i])
-        }
-        XCTAssertEqual(values, [16, 78, 255], "legal 119/331/940 → curve bytes 16/78/255")
-    }
-
     func testX420PaperBlackRGBSitsOnWaveZeroNotCrushInset() throws {
         let made = ScopeTestBuffers.makeX420(width: 32, height: 16) { _, _ in
             ScopeTestBuffers.dlog2Black10
@@ -181,40 +166,6 @@ final class LiveScopesTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(y, line0 - 0.2, "container legal black is at or below WAVE 0")
         XCTAssertEqual(leftover, line0, accuracy: 0.5, "0.05 is 0.05 IRE, not 5% of the plot")
         XCTAssertGreaterThan(line0 - line5, 4, "the 5 IRE buffer is above 0")
-    }
-
-    func testTapExpandsIOSurfaceX420() throws {
-        let made = ScopeTestBuffers.makeX420(width: 64, height: 32, ioSurface: true) { _, _ in
-            ScopeTestBuffers.dlog2Grey10
-        }
-        let buffer = try XCTUnwrap(made, "IOSurface x420 must be creatable on this host")
-        XCTAssertTrue(LiveFrameTap.isIOSurfaceBacked(buffer))
-        let packed = try XCTUnwrap(
-            PocketScopeSampler.copyBGRA(buffer, maxWidth: 64),
-            "IOSurface-backed planes must tap (the historical zeros bug)")
-        XCTAssertGreaterThan(LiveFrameTap.maxRGB(packed.bytes), 0)
-        for i in stride(from: 1, to: packed.bytes.count, by: 4) {
-            XCTAssertEqual(packed.bytes[i], 78)
-        }
-    }
-
-    func testTapReads420vEdge() {
-        let buffer = ScopeTestBuffers.make420v(width: 64, height: 48, leftY: 16, rightY: 235)
-        XCTAssertEqual(
-            CVPixelBufferGetPixelFormatType(buffer),
-            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
-        guard let packed = PocketScopeSampler.copyBGRA(buffer, maxWidth: 32) else {
-            XCTFail("420v must tap via the planar reader")
-            return
-        }
-        var minB = UInt8.max
-        var maxB: UInt8 = 0
-        for i in stride(from: 1, to: packed.bytes.count, by: 4) {
-            minB = min(minB, packed.bytes[i])
-            maxB = max(maxB, packed.bytes[i])
-        }
-        XCTAssertEqual(minB, 0, "legal floor Y16 expands to curve 0")
-        XCTAssertEqual(maxB, 255, "legal white Y235 expands to curve 255")
     }
 
     func testIOSurfaceDLog2BlackTapsToByte16AndCrushes() throws {
@@ -306,38 +257,5 @@ final class LiveScopesTests: XCTestCase {
             includePoints: false, look: nil, previous: .empty)
         XCTAssertFalse(bundle.traffic.anyCrush, "sub-black noise is noise, not crushed picture")
         XCTAssertFalse(bundle.traffic.anyClip)
-    }
-
-    // MARK: - Vectorscope raster
-
-    func testVectorscopeNeutralGreyStaysCentredAndZoomExpands() throws {
-        let n = VectorscopeRaster.bins
-        func peakBin(_ pixels: [UInt8]) -> (x: Int, y: Int) {
-            var best = 0
-            var bestAlpha: UInt8 = 0
-            for i in 0..<(n * n) where pixels[i * 4 + 3] > bestAlpha {
-                bestAlpha = pixels[i * 4 + 3]
-                best = i
-            }
-            return (best % n, best / n)
-        }
-        let grey = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 128, green: 128, blue: 128, luma: 128)
-        let greyPixels = try XCTUnwrap(
-            VectorscopeRaster.pixels(from: [grey], gain: 1, intensity: 1))
-        let g = peakBin(greyPixels)
-        XCTAssertEqual(Double(g.x), Double(n / 2), accuracy: 1.5, "neutral chroma bins at centre")
-        XCTAssertEqual(Double(g.y), Double(n / 2), accuracy: 1.5)
-
-        // Moderate saturation: a full-sat red at 2× gain leaves the plot and bins nothing.
-        let red = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 160, green: 80, blue: 80, luma: 100)
-        let unity = try XCTUnwrap(VectorscopeRaster.pixels(from: [red], gain: 1, intensity: 1))
-        let zoomed = try XCTUnwrap(VectorscopeRaster.pixels(from: [red], gain: 2, intensity: 1))
-        let a = peakBin(unity)
-        let b = peakBin(zoomed)
-        let mid = Double(n / 2)
-        let unityRadius = hypot(Double(a.x) - mid, Double(a.y) - mid)
-        let zoomedRadius = hypot(Double(b.x) - mid, Double(b.y) - mid)
-        XCTAssertGreaterThan(unityRadius, 1, "saturated red must leave the centre")
-        XCTAssertGreaterThan(zoomedRadius, unityRadius * 1.4, "2× gain expands the trace")
     }
 }

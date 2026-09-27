@@ -161,8 +161,6 @@ object SettingsHelpCopy {
     const val REPORT = "Opens a public issue form on GitHub for this project."
     const val REPORT_PROBLEM =
         "Tell us what happened. Technical details stay off unless you include them. You can attach up to three photos. Sending does not turn on automatic reports."
-    const val SHARE_DIAGNOSTICS =
-        "Saves a report with connection events, warnings, and crashes. No name, location, or Wi-Fi password. Paste the copied text into a bug report."
     const val RELIABILITY_REPORTS =
         "Optional: send crash, hang, live-feed reports and session health counts to OpenCapture through Sentry. Off by default. Turn off anytime without losing app features. Uploads wait until you leave camera Wi-Fi. Automatic reports exclude all images. No footage or GPS location. Sentry receives the connection IP; stored event IP and derived geography are removed. See Reporting Privacy below."
     const val RELIABILITY_UNAVAILABLE =
@@ -508,15 +506,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             SettingsSessionStatus(isLive, phaseLabel, Modifier.weight(1f))
-                            if (isLive) {
-                                SettingsActionPill(
-                                    "Disconnect",
-                                    OpcIcon.LINK_2_OFF,
-                                    LiveDesign.rec,
-                                    LiveDesign.rec.copy(alpha = .12f),
-                                    onClick = model::disconnect,
-                                )
-                            }
+                            if (isLive) SettingsDisconnectButton(model)
                         }
                     } else {
                         val railScroll = rememberScrollState()
@@ -530,15 +520,8 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                             }
                         }
                         SettingsSessionStatus(isLive, phaseLabel, Modifier.fillMaxWidth())
-                        if (isLive) {
-                            SettingsActionPill(
-                                "Disconnect",
-                                OpcIcon.LINK_2_OFF,
-                                LiveDesign.rec,
-                                LiveDesign.rec.copy(alpha = .12f),
-                                onClick = model::disconnect,
-                            )
-                        }
+                        // The landscape sidebar button spans the rail.
+                        if (isLive) SettingsDisconnectButton(model, Modifier.fillMaxWidth())
                     }
                 }
             },
@@ -672,6 +655,20 @@ private fun SessionControls(
 
 /** Settings tabs breathe a little more than compact control tabs; the baseline stays continuous. */
 private val SettingsTabGap = 6.dp
+
+@Composable
+private fun SettingsDisconnectButton(model: AppModel, modifier: Modifier = Modifier) {
+    com.opencapture.monitorui.MonitorCameraAction(
+        text = "Disconnect",
+        primary = false,
+        enabled = true,
+        contentDescription = "Disconnect",
+        onClick = model::disconnect,
+        modifier = modifier,
+        destructive = true,
+        icon = { tint -> OpcIcon(OpcIcon.LINK_2_OFF, null, Modifier.size(14.dp), tint) },
+    )
+}
 
 @Composable
 private fun SettingsTabRail(model: AppModel, hapticsEnabled: Boolean, view: View) {

@@ -210,18 +210,11 @@ class LiveAssistState(
     var playbackVisibleTools by mutableStateOf(parsePlayback(playbackNames))
         private set
 
-    /**
-     * Latest GLES tap. WAVE / PARADE / HISTO / VECTOR / LIGHTS read this;
-     * [lumaHistogram] mirrors native luma counts for tests.
-     */
+    /** Latest GLES tap. WAVE / PARADE / HISTO / VECTOR / LIGHTS read this. */
     var scopeBundle by mutableStateOf(ScopeAssistBundle.EMPTY)
-
-    /** Optional 256-bin luminance histogram. Null / all-zero draws empty bins. */
-    var lumaHistogram by mutableStateOf<IntArray?>(null)
 
     fun acceptScopeBundle(bundle: ScopeAssistBundle) {
         scopeBundle = bundle
-        lumaHistogram = bundle.samples.histogramLuma
     }
 
     init {
@@ -271,8 +264,6 @@ class LiveAssistState(
         persist()
     }
 
-    fun nudgeLutExposure(delta: Double) = updateLutExposure(lutExposureStops + delta)
-
     fun updateLutExposure(stops: Double) {
         val next = LutExposureCompensation.snap(stops)
         if (next == lutExposureStops) return
@@ -317,16 +308,6 @@ class LiveAssistState(
 
     fun isPlaybackVisible(tool: LiveAssistTool): Boolean = tool in playbackVisibleTools
 
-    /** LUT / PEAK / FALSE / ZEBRA / scopes — used to gate a processed present path. */
-    fun playbackNeedsProcessedFeed(): Boolean =
-        playbackVisibleTools.any { it in processedPlaybackTools }
-
-    fun playbackNeedsScopeTap(): Boolean =
-        playbackVisibleTools.any { it in stackableScopeTools }
-
-    fun playbackNeedsLookOverlay(): Boolean =
-        playbackVisibleTools.any { it in lookOverlayTools }
-
     fun togglePlayback(tool: LiveAssistTool) {
         if (tool !in LiveAssistTool.playbackToolbarCases) return
         playbackVisibleTools =
@@ -338,15 +319,6 @@ class LiveAssistState(
         if (tool !in LiveAssistTool.cleanPinCases) return
         pinned = if (tool in pinned) pinned - tool else pinned + tool
         onPersistPins?.invoke(pinned.map { it.name }.toSet())
-    }
-
-    fun cycleGuide() {
-        val all = GuideAspect.ratios(guideFamily)
-        val idx = all.indexOf(guideAspect)
-        guideAspect = if (idx < 0) all.firstOrNull() ?: GuideAspect.CINEMA else all[(idx + 1) % all.size]
-        selectedGuides = setOf(guideAspect)
-        guides = true
-        persist()
     }
 
     fun toggleGuide(aspect: GuideAspect) {

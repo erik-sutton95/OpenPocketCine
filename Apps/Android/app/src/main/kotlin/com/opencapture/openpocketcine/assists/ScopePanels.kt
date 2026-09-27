@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,19 +28,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -60,10 +53,8 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.ChromeRect
@@ -72,9 +63,6 @@ import com.opencapture.openpocketcine.NDFilterRecommendation
 import com.opencapture.openpocketcine.LocalOperatorHaptics
 
 import com.opencapture.openpocketcine.reportChromeFrame
-import com.opencapture.openpocketcine.feed.GpuLiveLayout
-import com.opencapture.openpocketcine.feed.GpuOverlayBus
-import com.opencapture.openpocketcine.feed.GpuRect
 import com.opencapture.openpocketcine.feed.LocalGpuLive
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.feed.ScopeAssistBundle
@@ -167,27 +155,10 @@ internal fun MovableAssistPanel(
         )
     val center = MovablePanelMath.clampWithGrip(rawCenter, sizePx, placementBounds, gripPx)
     val placementState = rememberUpdatedState(placementBounds)
-    val gpuSlot = GpuOverlayBus.usesGpuSlot(tool)
     val centerState = rememberUpdatedState(center)
     val sizeState = rememberUpdatedState(sizePx)
     val scaleState = rememberUpdatedState(scale)
     val canvasState = rememberUpdatedState(canvas)
-    fun publishSlot(at: AssistPoint, size: AssistSize) {
-        if (!gpuSlot) return
-        if (!usable) { GpuOverlayBus.reportSlot(tool, null); return }
-        val root = GpuOverlayBus.layerRoot
-        val left = (at.x - size.width / 2f).roundToInt().toFloat()
-        val top = (at.y - size.height / 2f).roundToInt().toFloat()
-        val plot = GpuLiveLayout.gpuTracePlot(tool, size.width, size.height, density.density)
-        GpuOverlayBus.reportSlot(
-            tool,
-            GpuLiveLayout.slotFromPanelPlot(root.x + left, root.y + top, plot),
-        )
-    }
-    DisposableEffect(tool) { onDispose { GpuOverlayBus.reportSlot(tool, null) } }
-    SideEffect {
-        publishSlot(center, sizePx)
-    }
     if (!usable) return
     val snapGrid = with(density) { MovablePanelMath.POSITION_GRID.dp.toPx() }
     val plateShape = if (chip) ChipShape else PanelShape
@@ -246,7 +217,6 @@ internal fun MovableAssistPanel(
                                     gripPx,
                                 )
                             session = snapped
-                            publishSlot(snapped, size)
                         },
                         onEnd = { _ ->
                             if (canvas == canvasState.value && placementBounds == placementState.value) {
@@ -301,7 +271,6 @@ internal fun MovableAssistPanel(
                                 val start = resizeOrigin ?: scaleState.value
                                 val delta = (translation.x + translation.y) / reachPx
                                 onScale(start + delta)
-                                publishSlot(centerState.value, sizeState.value)
                             },
                             onEnd = {
                                 resizeOrigin = null
@@ -843,47 +812,3 @@ private fun zoneColor(db: Double): Color =
 @Composable
 internal fun Modifier.scopePanelChrome(): Modifier =
     monitorMaterial(MonitorMaterial.Scope, PanelShape)
-
-/** Plot origin in root pixels — same rect the Canvas punches, so Vulkan fill matches. */
-private fun Modifier.reportGpuPlot(
-    tool: LiveAssistTool,
-    density: Float,
-    plotOf: (Float, Float, Float) -> AssistRect,
-): Modifier =
-    onGloballyPositioned { coords ->
-        val plot = plotOf(coords.size.width.toFloat(), coords.size.height.toFloat(), density)
-        val origin = coords.localToRoot(Offset(plot.minX, plot.minY))
-        GpuOverlayBus.reportSlot(tool, GpuRect(origin.x, origin.y, plot.width, plot.height))
-    }
-
-private fun DrawScope.punchGpuPlotHole(plot: AssistRect) {
-    drawRect(
-        Color.Transparent,
-        Offset(plot.minX, plot.minY),
-        Size(plot.width, plot.height),
-        blendMode = BlendMode.Clear,
-    )
-}
-
-/**
- * Rounded plate minus the plot. Kept for layout tests.
- */
-internal class ScopeFrameShape(
-    private val plot: GpuRect,
-    private val cornerPx: Float,
-) : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val radius = CornerRadius(cornerPx.coerceAtMost(minOf(size.width, size.height) / 2f))
-        val path =
-            Path().apply {
-                fillType = PathFillType.EvenOdd
-                addRoundRect(RoundRect(0f, 0f, size.width, size.height, radius))
-                val left = plot.x.coerceIn(0f, size.width)
-                val top = plot.y.coerceIn(0f, size.height)
-                val right = (plot.x + plot.w).coerceIn(left, size.width)
-                val bottom = (plot.y + plot.h).coerceIn(top, size.height)
-                addRect(Rect(left, top, right, bottom))
-            }
-        return Outline.Generic(path)
-    }
-}

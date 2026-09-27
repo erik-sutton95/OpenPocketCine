@@ -4,14 +4,9 @@ import Testing
 @Suite
 struct GimbalStickVirtualMappingTests {
     @Test func defaultMappingMatchesLegacyEncode() {
-        #expect(GimbalStick.Mapping.defaults.invertPan == false)
-        #expect(GimbalStick.Mapping.defaults.invertTilt == false)
         #expect(GimbalStick.Mapping.defaults.deadzone == GimbalStick.deadzone)
-        #expect(GimbalStick.Mapping.defaults.curve == .standard)
         #expect(GimbalStick.Mapping.defaults.curve.expo == GimbalStick.analogExpo)
         #expect(GimbalStick.Mapping.defaults.isDefault)
-        #expect(GimbalStick.deadzone == 0.08)
-        #expect(GimbalStick.defaultDeadzonePercent == 8)
         #expect(GimbalStick.deadzoneFromPercent(8) == GimbalStick.deadzone)
         let samples: [Double] = [-1, -0.7, -0.5, -0.08, 0, 0.08, 0.5, 0.7, 1]
         let expected: [Int: [UInt16]] = [

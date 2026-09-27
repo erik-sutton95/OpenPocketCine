@@ -81,7 +81,6 @@ struct AndroidSessionWireTests {
         #expect(rawManual?.payload == [0x04, 0x00])
         #expect(auto?.payload == Commands.setExpoMode(.auto, seq: 1).payload)
         #expect(manual?.payload == Commands.setExpoMode(.manual, seq: 1).payload)
-        #expect(ExpoMode.allCases.map(\.label) == ["Auto", "Manual"])
     }
 
     @Test
@@ -112,20 +111,30 @@ struct AndroidSessionWireTests {
         #expect(selfieUp == "\(GimbalStick.max),\(GimbalStick.center)")
     }
 
-    @Test
-    func statusJSONRoundTripsGimbalFace() {
-        var selfie = CameraStatus()
-        selfie.gimbalFace = .selfie
-        let selfieJSON = AndroidSessionWire.statusJSON(selfie)
-        #expect(AndroidSessionWire.status(fromJSON: selfieJSON).gimbalFace == .selfie)
+    /// Each field round-trips on its own, so one dropped on both encode and
+    /// decode still fails here even though the idempotence test passes.
+    @Test(arguments: [true, false])
+    func statusJSONRoundTripsGimbalFaceSelfieFlipAndVideoFormats(selfie: Bool) {
+        var status = CameraStatus()
+        status.gimbalFace = selfie ? .selfie : .front
+        status.selfieFlip = selfie ? .on : .off
+        status.availableVideoFormats =
+            selfie
+            ? [
+                VideoFormat(resolution: .p4K, frameRate: .fps24),
+                VideoFormat(resolution: .p1080, frameRate: .fps60),
+            ] : []
+        let decoded = AndroidSessionWire.status(fromJSON: AndroidSessionWire.statusJSON(status))
+        #expect(decoded.gimbalFace == (selfie ? .selfie : .front))
+        #expect(decoded.selfieFlip == (selfie ? .on : .off))
+        #expect(decoded.availableVideoFormats == status.availableVideoFormats)
 
-        var front = CameraStatus()
-        front.gimbalFace = .front
+        let empty = AndroidSessionWire.status(fromJSON: "{}")
+        #expect(empty.gimbalFace == nil)
+        #expect(empty.selfieFlip == nil)
         #expect(
-            AndroidSessionWire.status(fromJSON: AndroidSessionWire.statusJSON(front)).gimbalFace
-                == .front)
-
-        #expect(AndroidSessionWire.status(fromJSON: "{}").gimbalFace == nil)
+            AndroidSessionWire.encodeCommand(kind: .getSelfieFlip, seq: 1, extra: nil)?.payload
+                == Commands.getSelfieFlip(seq: 1).payload)
     }
 
     @Test
@@ -152,25 +161,6 @@ struct AndroidSessionWireTests {
         #expect(CameraStatusDecoder.apply(unknown, to: &status))
         #expect(status.gimbalModeFamily == nil)
         #expect(AndroidSessionWire.status(fromJSON: "{}").gimbalModeFamily == nil)
-    }
-
-    @Test
-    func statusJSONRoundTripsSelfieFlip() {
-        var on = CameraStatus()
-        on.selfieFlip = .on
-        let onJSON = AndroidSessionWire.statusJSON(on)
-        #expect(AndroidSessionWire.status(fromJSON: onJSON).selfieFlip == .on)
-
-        var off = CameraStatus()
-        off.selfieFlip = .off
-        #expect(
-            AndroidSessionWire.status(fromJSON: AndroidSessionWire.statusJSON(off)).selfieFlip
-                == .off)
-
-        #expect(AndroidSessionWire.status(fromJSON: "{}").selfieFlip == nil)
-        #expect(
-            AndroidSessionWire.encodeCommand(kind: .getSelfieFlip, seq: 1, extra: nil)?.payload
-                == Commands.getSelfieFlip(seq: 1).payload)
     }
 
     @Test
@@ -213,40 +203,24 @@ struct AndroidSessionWireTests {
         #expect(lowLight?.payload == [0x10, 0x03, 0x00, 0x00, 0x00])
     }
 
-    @Test
-    func cameraModelJSONCarriesZoomStops() {
-        let pro = AndroidSessionWire.cameraModelJSON(modelId: 0x0022, name: nil)
+    /// Zoom stops, with or without trailing `.0`, plus gimbal and zoom support
+    /// (nil when this body's capabilities are not asserted).
+    @Test(arguments: [
+        (0x0022, "[1.0,3.0,6.0,12.0]", "[1,3,6,12]", true as Bool?),
+        (0x0021, "[1.0,2.0,4.0]", "[1,2,4]", nil),
+        (0x0019, "[1.0]", "[1]", false),
+    ])
+    func cameraModelJSONCarriesZoomStopsAndBodyCapabilities(
+        modelId: Int, stops: String, integerStops: String, gimbalAndZoom: Bool?
+    ) {
+        let json = AndroidSessionWire.cameraModelJSON(modelId: modelId, name: nil)
         #expect(
-            pro.contains("\"zoomStops\":[1.0,3.0,6.0,12.0]")
-                || pro.contains("\"zoomStops\":[1,3,6,12]"))
-        let pocket4 = AndroidSessionWire.cameraModelJSON(modelId: 0x0021, name: nil)
-        #expect(
-            pocket4.contains("\"zoomStops\":[1.0,2.0,4.0]")
-                || pocket4.contains("\"zoomStops\":[1,2,4]"))
-        let nano = AndroidSessionWire.cameraModelJSON(modelId: 0x0019, name: nil)
-        #expect(nano.contains("\"zoomStops\":[1.0]") || nano.contains("\"zoomStops\":[1]"))
-    }
-
-    @Test
-    func cameraModelJSONCarriesBodyCapabilities() {
-        let pro = AndroidSessionWire.cameraModelJSON(modelId: 0x0022, name: nil)
-        #expect(pro.contains("\"hasGimbal\":true"))
-        #expect(pro.contains("\"supportsZoom\":true"))
-        let nano = AndroidSessionWire.cameraModelJSON(modelId: 0x0019, name: nil)
-        #expect(nano.contains("\"hasGimbal\":false"))
-        #expect(nano.contains("\"supportsZoom\":false"))
-    }
-
-    @Test
-    func statusJSONRoundTripsAvailableVideoFormats() {
-        var status = CameraStatus()
-        status.availableVideoFormats = [
-            VideoFormat(resolution: .p4K, frameRate: .fps24),
-            VideoFormat(resolution: .p1080, frameRate: .fps60),
-        ]
-        let json = AndroidSessionWire.statusJSON(status)
-        let decoded = AndroidSessionWire.status(fromJSON: json)
-        #expect(decoded.availableVideoFormats == status.availableVideoFormats)
+            json.contains("\"zoomStops\":\(stops)")
+                || json.contains("\"zoomStops\":\(integerStops)"))
+        if let gimbalAndZoom {
+            #expect(json.contains("\"hasGimbal\":\(gimbalAndZoom)"))
+            #expect(json.contains("\"supportsZoom\":\(gimbalAndZoom)"))
+        }
     }
 
     @Test
@@ -336,6 +310,11 @@ struct AndroidSessionWireTests {
             AndroidSessionWire.cameraSoftAPDecision(
                 kind: "canSendHandshake",
                 requestJSON: "{\"receiveArmed\":false,\"connectionReady\":true}"
+            ) == "false")
+        #expect(
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "canSendHandshake",
+                requestJSON: "{\"receiveArmed\":true,\"connectionReady\":false}"
             ) == "false")
         #expect(
             AndroidSessionWire.cameraSoftAPDecision(

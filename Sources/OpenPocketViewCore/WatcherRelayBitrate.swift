@@ -28,10 +28,6 @@ public struct WatcherRelayBitrate: Equatable, Sendable {
         return Self.ladder[min(i, Self.ladder.count - 1)]
     }
 
-    public static func shouldSkipEncode(allPeersSaturated: Bool) -> Bool {
-        allPeersSaturated
-    }
-
     public mutating func recordTick(saturated: Bool, cameraStarving: Bool, now: TimeInterval)
         -> Int?
     {

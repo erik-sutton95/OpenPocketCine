@@ -14,25 +14,6 @@ import Testing
         #expect(LUTSelection.officialDLog2.migratedToDJICatalog == .djiDLog2)
     }
 
-    @Test func builtInAndCustomTitlesAreObvious() {
-        #expect(
-            LUTSelection.djiCases.map(\.title)
-                == ["Auto", "D-Log → Rec.709", "D-Log2 → Rec.709", "D-Log M → Rec.709"])
-        #expect(
-            LUTSelection.creativeCases.map(\.title)
-                == ["Mono", "Contrast", "Warm", "Cool"])
-        #expect(
-            LUTSelection.customCases.map(\.title)
-                == ["Custom", "Custom D-Log", "Custom D-Log2"])
-        #expect(
-            CustomLUTSlot.allCases.map(\.title)
-                == ["Custom", "Custom D-Log", "Custom D-Log2"])
-        #expect(OfficialPocketLUT.dLogToRec709.fileName == "DJI_Pocket4P_DLog_Rec709_33.cube")
-        #expect(OfficialPocketLUT.dLog2ToRec709.fileName == "DJI_Pocket4P_DLog2_Rec709_33.cube")
-        #expect(OfficialDJILUT.pocketDLog.fileName == "DJI_Official_Pocket4P_DLog_Rec709_33.cube")
-        #expect(OfficialDJILUT.nanoDLogM.title == "D-Log M → Rec.709")
-    }
-
     @Test(.enabled(if: OfficialLUTFixtures.dLog2Present))
     func officialDLog2CubeMovesMidGrey() throws {
         let cube = try officialCube(.dLog2ToRec709)
@@ -60,17 +41,6 @@ import Testing
         #expect(abs(out.red - g) > 0.02)
     }
 
-    @Test func autoArmedDLog2SelectsOfficialCube() {
-        #expect(
-            LUTResolver.resolve(
-                selection: .djiAuto, colorMode: .dLog2, hasCustomDLog: false, hasCustomDLog2: false)
-                == .dji(.pocketDLog2))
-        #expect(
-            LUTResolver.statusLabel(
-                enabled: true, selection: .djiAuto, source: .dji(.pocketDLog2))
-                == "Auto · D-Log2 → Rec.709")
-    }
-
     private func officialLUTURL(_ id: OfficialPocketLUT) -> URL {
         OfficialLUTFixtures.url(id)
     }
@@ -78,17 +48,6 @@ import Testing
     private func officialCube(_ id: OfficialPocketLUT) throws -> CubeLUT {
         let text = try String(contentsOf: officialLUTURL(id), encoding: .utf8)
         return try CubeLUT.parse(text)
-    }
-
-    @Test func autoAppliesOfficialCubeForEachLog() {
-        #expect(
-            LUTResolver.resolve(
-                selection: .auto, colorMode: .dLog, hasCustomDLog: false, hasCustomDLog2: false)
-                == .dji(.pocketDLog))
-        #expect(
-            LUTResolver.resolve(
-                selection: .auto, colorMode: .dLog2, hasCustomDLog: false, hasCustomDLog2: false)
-                == .dji(.pocketDLog2))
     }
 
     @Test func playbackAutoKeepsLastLogWhenTheFileAndLiveSayRec709() {
@@ -107,22 +66,6 @@ import Testing
                 == .dji(.pocketDLog2))
     }
 
-    @Test func autoLeavesRec709AndHLGUnlutedWithoutCustom() {
-        #expect(
-            LUTResolver.resolve(
-                selection: .auto, colorMode: .normal, hasCustomDLog: false, hasCustomDLog2: false)
-                == .off)
-        #expect(
-            LUTResolver.resolve(
-                selection: .auto, colorMode: .hdr, hasCustomDLog: true, hasCustomDLog2: true)
-                == .off)
-        #expect(
-            LUTResolver.resolve(
-                selection: .auto, colorMode: nil, hasCustomDLog: false, hasCustomDLog2: false,
-                hasCustomRec709: true)
-                == .off)
-    }
-
     @Test func builtInAutoIgnoresCustomSlots() {
         #expect(
             LUTResolver.resolve(
@@ -137,6 +80,19 @@ import Testing
             LUTResolver.resolve(
                 selection: .auto, colorMode: .normal, family: .pocket, hasCustomDLog: false,
                 hasCustomDLog2: false, hasCustomRec709: true)
+                == .off)
+        #expect(
+            LUTResolver.resolve(
+                selection: .auto, colorMode: .normal, hasCustomDLog: false, hasCustomDLog2: false)
+                == .off)
+        #expect(
+            LUTResolver.resolve(
+                selection: .auto, colorMode: .hdr, hasCustomDLog: true, hasCustomDLog2: true)
+                == .off)
+        #expect(
+            LUTResolver.resolve(
+                selection: .auto, colorMode: nil, hasCustomDLog: false, hasCustomDLog2: false,
+                hasCustomRec709: true)
                 == .off)
     }
 

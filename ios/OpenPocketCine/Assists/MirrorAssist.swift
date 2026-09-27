@@ -7,9 +7,6 @@ import SwiftUI
 /// long-press does not open options. This menu exists for Display-settings exhaustiveness
 /// and matches OpenZCine `AssistPanel` `.mirror` copy exactly.
 enum MirrorAssist {
-    /// Popup width OpenZCine uses for tap-only tools (`assistPanelWidth` — 400).
-    static let longPressPanelWidth: CGFloat = 400
-
     static let explanation =
         "Flips the monitor left-to-right, for a camera pointed back at you. "
         + "The recording and the scopes are never mirrored."

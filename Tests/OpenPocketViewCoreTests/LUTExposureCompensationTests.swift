@@ -25,13 +25,6 @@ import Testing
         #expect(LUTExposureCompensation.snap(.nan) == 0)
     }
 
-    @Test func ticksAreThirteenHalfStops() {
-        #expect(
-            LUTExposureCompensation.stops == [
-                -3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3,
-            ])
-    }
-
     @Test func labelsUseSignedHalfStops() {
         #expect(LUTExposureCompensation.label(0) == "0.0")
         #expect(LUTExposureCompensation.label(0.5) == "+0.5")
@@ -41,9 +34,6 @@ import Testing
     }
 
     @Test func stepperStopsAtTheRails() {
-        #expect(!LUTExposureCompensation.canStep(-3, by: -0.5))
-        #expect(LUTExposureCompensation.canStep(-3, by: 0.5))
-        #expect(!LUTExposureCompensation.canStep(3, by: 0.5))
         #expect(LUTExposureCompensation.stepped(1.0, by: -0.5) == 0.5)
         #expect(LUTExposureCompensation.stepped(3, by: 0.5) == 3)
     }

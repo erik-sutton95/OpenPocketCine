@@ -85,27 +85,6 @@ class LiveAssistStateTest {
     }
 
     @Test
-    fun acceptScopeBundleMirrorsLumaHistogram() {
-        val state = LiveAssistState()
-        val luma = IntArray(256).also { it[128] = 9 }
-        val bundle =
-            com.opencapture.openpocketcine.feed.ScopeAssistBundle(
-                revision = 3,
-                samples =
-                    com.opencapture.openpocketcine.feed.ScopeSamples(
-                        histogramLuma = luma,
-                        histogramRed = IntArray(256),
-                        histogramGreen = IntArray(256),
-                        histogramBlue = IntArray(256),
-                        points = emptyList(),
-                    ),
-            )
-        state.acceptScopeBundle(bundle)
-        assertEquals(3L, state.scopeBundle.revision)
-        assertEquals(9, state.lumaHistogram?.get(128))
-    }
-
-    @Test
     fun bringToFrontPutsTheScopeLastAndRoundTrips() {
         var saved: String? = null
         val state = LiveAssistState(onPersist = { saved = it })
@@ -127,7 +106,7 @@ class LiveAssistStateTest {
         val state = LiveAssistState(onPersist = { saved = it })
         state.toggle(LiveAssistTool.GRID)
         state.toggle(LiveAssistTool.MIRROR)
-        state.nudgeLutExposure(-1.5)
+        state.updateLutExposure(-1.5)
         assertTrue(saved!!.contains("GRID"))
         val restored = LiveAssistState(encoded = saved)
         assertTrue(restored.isOn(LiveAssistTool.LUT))
@@ -149,7 +128,7 @@ class LiveAssistStateTest {
     }
 
     @Test
-    fun guidesToggleKeepsCinemaDefaultAndCycles() {
+    fun guidesToggleKeepsCinemaDefault() {
         val state = LiveAssistState()
         state.toggle(LiveAssistTool.GUIDES)
         assertEquals(setOf(GuideAspect.CINEMA), state.selectedGuides)
@@ -161,16 +140,6 @@ class LiveAssistStateTest {
         state.toggleGuide(GuideAspect.WIDE)
         assertTrue(state.selectedGuides.isEmpty())
         assertFalse(state.guides)
-        state.cycleGuide()
-        assertTrue(state.guides)
-        assertEquals(setOf(state.guideAspect), state.selectedGuides)
-    }
-
-    @Test
-    fun mirrorFeedScaleIsHorizontalOnly() {
-        assertEquals(1f, MirrorAssist.feedScaleX(false))
-        assertEquals(-1f, MirrorAssist.feedScaleX(true))
-        assertEquals(-1.33f, MirrorAssist.feedScaleX(true, 1.33f), 0.0001f)
     }
 
     @Test
@@ -219,20 +188,6 @@ class LiveAssistStateTest {
         state.togglePlayback(LiveAssistTool.FALSE)
         assertFalse(state.isPlaybackVisible(LiveAssistTool.FALSE))
         assertEquals(setOf("ZEBRA"), playbackSaved)
-        assertTrue(state.playbackNeedsProcessedFeed())
-        state.togglePlayback(LiveAssistTool.ZEBRA)
-        assertFalse(state.playbackNeedsProcessedFeed())
-        state.togglePlayback(LiveAssistTool.GRID)
-        assertFalse(state.playbackNeedsProcessedFeed())
-        state.togglePlayback(LiveAssistTool.LUT)
-        assertTrue(state.playbackNeedsProcessedFeed())
-        assertTrue(state.playbackNeedsLookOverlay())
-        state.togglePlayback(LiveAssistTool.LUT)
-        assertFalse(state.playbackNeedsLookOverlay())
-        assertFalse(state.playbackNeedsScopeTap())
-        state.togglePlayback(LiveAssistTool.WAVE)
-        assertTrue(state.playbackNeedsScopeTap())
-        assertFalse(state.playbackNeedsLookOverlay())
     }
     @Test
     fun newWindowPreferencesRoundTripWithoutSeedingExistingCenters() {

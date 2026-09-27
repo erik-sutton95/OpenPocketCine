@@ -31,11 +31,6 @@ internal object ClipColorProfile {
     }
 
     /** LRF / XRF / LRV Keys are Rec.709 even on D-Log2 — never use them for Auto. */
-    fun shotColorFromMp4(bytes: ByteArray, path: String): Int {
-        if (MediaHTTP.isProxyPath(path)) return -1
-        return colorModeFromMp4(bytes)
-    }
-
     fun shotColorFromFile(file: File, path: String): Int {
         if (MediaHTTP.isProxyPath(path)) return -1
         return colorModeFromFile(file)

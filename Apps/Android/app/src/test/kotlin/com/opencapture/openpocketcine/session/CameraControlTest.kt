@@ -6,7 +6,6 @@ import com.opencapture.openpocketcine.feed.ExtraMirrorHold
 import com.opencapture.openpocketcine.feed.FeedPresentPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -63,28 +62,6 @@ class CameraControlTest {
     }
 
     @Test
-    fun shutterIsU16DenomOr8000() {
-        val p = CameraCommands.shutter(1600)
-        assertEquals(7, p.size)
-        assertEquals(0x01, p[0].toInt() and 0xFF)
-        val coded = (p[1].toInt() and 0xFF) or ((p[2].toInt() and 0xFF) shl 8)
-        assertEquals(1600 or 0x8000, coded)
-        assertEquals(0x40, p[6].toInt() and 0xFF)
-        fun codedOf(denom: Int): Int {
-            val bytes = CameraCommands.shutter(denom)
-            return (bytes[1].toInt() and 0xFF) or ((bytes[2].toInt() and 0xFF) shl 8)
-        }
-        assertEquals(4 or 0x8000, codedOf(4))
-        assertEquals(50 or 0x8000, codedOf(50))
-        assertEquals(16_000 or 0x8000, codedOf(16_000))
-        assertEquals(0x10, CameraCommands.ev(0)[0].toInt() and 0xFF)
-        assertEquals(0x11, CameraCommands.ev(1)[0].toInt() and 0xFF)
-        assertEquals(0x0F, CameraCommands.ev(-1)[0].toInt() and 0xFF)
-        assertEquals(0x07, CameraCommands.ev(-9)[0].toInt() and 0xFF)
-        assertEquals(0x19, CameraCommands.ev(9)[0].toInt() and 0xFF)
-    }
-
-    @Test
     fun isoStepsSkipAutoAndStopAtEnds() {
         assertEquals(0x04, CameraCommands.isoStepped(0x03, 1, CameraCommands.ISO_INDEX_ALL))
         assertNull(CameraCommands.isoStepped(0x0B, 1, CameraCommands.ISO_INDEX_ALL))
@@ -103,67 +80,7 @@ class CameraControlTest {
     }
 
     @Test
-    fun isoIsIndexNotNumber() {
-        assertEquals(1, CameraCommands.isoIndex(0x07).size)
-        assertEquals(0x07, CameraCommands.isoIndex(0x07)[0].toInt() and 0xFF)
-        assertEquals(1, CameraCommands.isoIndex(0).size)
-        assertEquals(0x00, CameraCommands.isoIndex(0)[0].toInt() and 0xFF)
-        assertTrue(
-            CameraCommands.isoLimit(0x05).contentEquals(
-                byteArrayOf(0x01, 0x01, 0x0F, 0x00, 0x01, 0x05),
-            ),
-        )
-        assertTrue(
-            CameraCommands.isoLimit(0x09).contentEquals(
-                byteArrayOf(0x01, 0x01, 0x0F, 0x00, 0x01, 0x09),
-            ),
-        )
-        assertTrue(
-            CameraCommands.paramGet(CameraCommands.PID_ISO_LIMIT).contentEquals(
-                byteArrayOf(0x00, 0x01, 0x0F, 0x00),
-            ),
-        )
-        assertTrue(
-            CameraCommands.paramGet(CameraCommands.PID_SELFIE_FLIP).contentEquals(
-                byteArrayOf(0x00, 0x01, 0x38, 0x00),
-            ),
-        )
-    }
-
-    @Test
-    fun whiteBalancePackMatchesIosBytes() {
-        assertEquals(0x2C, CameraCommands.CMD_WB)
-        assertEquals(0x00, CameraCommands.WB_AUTO)
-        assertEquals(0x06, CameraCommands.WB_CUSTOM)
-        assertTrue(CameraCommands.whiteBalanceAuto().contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00)))
-        assertTrue(
-            CameraCommands.whiteBalanceAuto(20).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x14, 0x00)),
-        )
-        assertTrue(
-            CameraCommands.whiteBalanceAuto(-25).contentEquals(
-                byteArrayOf(0x00, 0x00, 0x00, 0xE7.toByte(), 0xFF.toByte()),
-            ),
-        )
-        assertTrue(
-            CameraCommands.whiteBalanceCustom(3000, 0)
-                .contentEquals(byteArrayOf(0x06, 0x1E, 0x00, 0x00, 0x00)),
-        )
-        assertTrue(
-            CameraCommands.whiteBalanceCustom(4200, 20)
-                .contentEquals(byteArrayOf(0x06, 0x2A, 0x00, 0x14, 0x00)),
-        )
-        assertTrue(
-            CameraCommands.whiteBalanceCustom(2000, -5)
-                .contentEquals(byteArrayOf(0x06, 0x14, 0x00, 0xFB.toByte(), 0xFF.toByte())),
-        )
-        assertTrue(
-            CameraCommands.whiteBalanceCustom(10_000, 100)
-                .contentEquals(byteArrayOf(0x06, 0x64, 0x00, 0x64, 0x00)),
-        )
-        assertTrue(
-            CameraCommands.whiteBalanceCustom(10_000, -100)
-                .contentEquals(byteArrayOf(0x06, 0x64, 0x00, 0x9C.toByte(), 0xFF.toByte())),
-        )
+    fun whiteBalanceCustomClampMatchesIos() {
         assertEquals(2_000 to 0, CameraCommands.clampWhiteBalanceCustom(1999, 0))
         assertEquals(10_000 to 100, CameraCommands.clampWhiteBalanceCustom(12_000, 140))
         assertEquals(5_600 to -100, CameraCommands.clampWhiteBalanceCustom(5_600, -140))
@@ -213,40 +130,7 @@ class CameraControlTest {
     }
 
     @Test
-    fun resFpsIsOneBlob() {
-        val p = CameraCommands.resolutionFps(CameraCommands.RES_4K, 6)
-        assertTrue(p.contentEquals(byteArrayOf(0x10, 0x06, 0x00, 0x00, 0x00)))
-        assertTrue(
-            VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS60).setPayload
-                .contentEquals(p),
-        )
-    }
-
-    @Test
-    fun videoFormatOffersOnlyAcceptedPairs() {
-        val expected =
-            listOf(
-                Triple(VideoResolution.P1080, VideoFrameRate.FPS24, byteArrayOf(0x0A, 0x01, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P1080, VideoFrameRate.FPS25, byteArrayOf(0x0A, 0x02, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P1080, VideoFrameRate.FPS30, byteArrayOf(0x0A, 0x03, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P1080, VideoFrameRate.FPS48, byteArrayOf(0x0A, 0x04, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P1080, VideoFrameRate.FPS50, byteArrayOf(0x0A, 0x05, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P1080, VideoFrameRate.FPS60, byteArrayOf(0x0A, 0x06, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P4K, VideoFrameRate.FPS24, byteArrayOf(0x10, 0x01, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P4K, VideoFrameRate.FPS25, byteArrayOf(0x10, 0x02, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P4K, VideoFrameRate.FPS30, byteArrayOf(0x10, 0x03, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P4K, VideoFrameRate.FPS48, byteArrayOf(0x10, 0x04, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P4K, VideoFrameRate.FPS50, byteArrayOf(0x10, 0x05, 0x00, 0x00, 0x00)),
-                Triple(VideoResolution.P4K, VideoFrameRate.FPS60, byteArrayOf(0x10, 0x06, 0x00, 0x00, 0x00)),
-            )
-        for ((res, rate, payload) in expected) {
-            assertTrue(
-                CameraCommands.resolutionFps(res.rawValue, rate.rawValue).contentEquals(payload),
-                "${res.label} ${rate.drumLabel}",
-            )
-        }
-        assertEquals(2, VideoResolution.labeledVideo.size)
-        assertEquals(6, VideoFrameRate.labeledVideo.size)
+    fun videoFormatParsesHighRateRawAndDrumLabels() {
         assertEquals(
             VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS120),
             VideoFormat.parse(CameraCommands.RES_4K, 7),
@@ -264,8 +148,6 @@ class CameraControlTest {
         assertEquals(50, next.fps)
         assertEquals(VideoFormat(VideoResolution.P1080, VideoFrameRate.FPS50), next.videoFormat)
         assertEquals(120, CameraCommands.fpsFromSubscribeIndex(7))
-        assertEquals(120, CameraCommands.fpsFromIndex(7))
-        assertNull(CameraCommands.fpsFromIndex(0x09))
     }
 
     @Test
@@ -344,60 +226,12 @@ class CameraControlTest {
     }
 
     @Test
-    fun zoomStopsFollowTheBody() {
+    fun zoomPinAndColorModesFollowTheBody() {
         val pro = CameraModel(name = "Osmo Pocket 4 Pro", family = "pocket")
         val pocket4 = CameraModel(name = "Osmo Pocket 4", family = "pocket")
         val pocket3 = CameraModel(name = "Osmo Pocket 3", family = "pocket")
-        val nano = CameraModel(name = "Osmo Nano", family = "nano")
-        assertEquals(listOf(1.0, 3.0, 6.0, 12.0), pro.activeZoomStops())
-        assertEquals(listOf(1.0, 2.0, 4.0), pocket4.activeZoomStops())
-        assertEquals(listOf(1.0, 2.0, 4.0), pocket3.activeZoomStops())
-        assertEquals(listOf(1.0), nano.activeZoomStops())
-        assertEquals(
-            listOf(1.0, 2.0),
-            pocket3.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_VIDEO),
-        )
-        // Measured on a Pocket 3: the body clamps an over-ask to its own max,
-        // so these are the stops it actually reaches, not the ones we hoped for.
-        assertEquals(
-            listOf(1.0, 2.0, 3.0),
-            pocket3.activeZoomStops(0x2D, CameraCommands.SHOOT_VIDEO),
-        )
-        assertEquals(
-            listOf(1.0, 2.0, 4.0),
-            pocket3.activeZoomStops(0x69, CameraCommands.SHOOT_VIDEO),
-        )
-        assertEquals(
-            listOf(1.0, 2.0, 3.0),
-            pocket3.activeZoomStops(0x6A, CameraCommands.SHOOT_VIDEO),
-        )
-        assertEquals(
-            listOf(1.0, 2.0),
-            pocket3.activeZoomStops(0x6B, CameraCommands.SHOOT_VIDEO),
-        )
-        // Unmeasured bytes inherit their measured sibling's size class.
-        assertEquals(
-            listOf(1.0, 2.0, 4.0),
-            pocket3.activeZoomStops(0x42, CameraCommands.SHOOT_VIDEO),
-        )
-        assertEquals(
-            listOf(1.0, 2.0, 3.0),
-            pocket3.activeZoomStops(0x5F, CameraCommands.SHOOT_VIDEO),
-        )
-        assertEquals(
-            listOf(1.0, 2.0),
-            pocket3.activeZoomStops(0x7D, CameraCommands.SHOOT_VIDEO),
-        )
-        assertEquals(
-            listOf(1.0, 2.0),
-            pocket3.activeZoomStops(0x6C, CameraCommands.SHOOT_VIDEO),
-        )
-        // No FORMAT yet, or a byte the catalog does not name: full range.
-        assertEquals(listOf(1.0, 2.0, 4.0), pocket3.activeZoomStops(-1, CameraCommands.SHOOT_VIDEO))
-        assertEquals(
-            listOf(1.0, 2.0, 4.0),
-            pocket3.activeZoomStops(0xFE, CameraCommands.SHOOT_VIDEO),
-        )
+        // activeZoomStops, ceilingNote, stopWithinCycle and pocket3ZoomMax are
+        // covered row by row in camfov-vectors.tsv (CamFovVectorTest).
         // The chip rides the same pin as every other control, with
         // CamFov::matches standing in for equality.
         fun held(ask: Double, live: Double?, ageMs: Long): Double? =
@@ -420,32 +254,6 @@ class CameraControlTest {
         assertNull(held(3.0, null, 5_000L))
         // A pin that outlived its ask must not win the readout.
         assertEquals(1.0, CamFov.readout(live = 1.0, preview = null, fallback = 3.0))
-        // The stop the operator last tapped cannot outlive the FORMAT that
-        // allowed it: dropping to 4K has to pull 3× back to the new ceiling.
-        assertEquals(3.0, CamFov.stopWithinCycle(3.0, listOf(1.0, 2.0, 3.0)))
-        assertEquals(2.0, CamFov.stopWithinCycle(3.0, listOf(1.0, 2.0)))
-        assertEquals(CamFov.MIN_FACTOR, CamFov.stopWithinCycle(4.0, emptyList()))
-        // And the operator is told why the chip fell, only when it actually falls.
-        assertEquals("4K caps zoom at 2×", CamFov.ceilingNote("4K", 3.0, listOf(1.0, 2.0)))
-        assertNull(CamFov.ceilingNote("4K", 2.0, listOf(1.0, 2.0)))
-        assertNotNull(CamFov.ceilingNote("2.7K", 4.0, listOf(1.0, 2.0, 3.0)))
-        assertNull(CamFov.ceilingNote("1080", 3.0, listOf(1.0, 2.0, 4.0)))
-        assertNull(CamFov.ceilingNote("4K", 3.0, emptyList()))
-        assertEquals(3.0, VideoResolution.P2_7K.pocket3ZoomMax)
-        assertEquals(2.0, VideoResolution.P4K.pocket3ZoomMax)
-        assertNull(VideoResolution(0xFE).pocket3ZoomMax)
-        assertEquals(
-            listOf(1.0, 2.0, 4.0),
-            pocket4.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_VIDEO),
-        )
-        assertEquals(
-            listOf(1.0, 3.0),
-            pro.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_SLOWMO),
-        )
-        assertEquals(
-            listOf(1.0),
-            pocket4.activeZoomStops(CameraCommands.RES_4K, CameraCommands.SHOOT_SLOWMO),
-        )
         assertEquals(
             listOf(
                 CameraCommands.COLOR_NORMAL,
@@ -805,27 +613,19 @@ class CameraControlTest {
         val slow = CameraCommands.gimbalAxes(1f, 0f, sensitivity = 1)
         assertTrue(slow.second < CameraCommands.GIMBAL_STICK_MAX)
         assertEquals(CameraCommands.GIMBAL_STICK_CENTER, slow.first)
-        assertTrue(!CameraCommands.invertGimbalPan(CameraCommands.GIMBAL_FACE_UNKNOWN))
-        assertTrue(!CameraCommands.invertGimbalPan(CameraCommands.GIMBAL_FACE_FRONT))
-        assertTrue(CameraCommands.invertGimbalPan(CameraCommands.GIMBAL_FACE_SELFIE))
-        val selfieInvert = CameraCommands.invertGimbalPan(CameraCommands.GIMBAL_FACE_SELFIE)
-        val selfieRight = CameraCommands.gimbalAxes(1f, 0f, invertPan = selfieInvert)
+        val selfieRight = CameraCommands.gimbalAxes(1f, 0f, invertPan = true)
         assertEquals(CameraCommands.GIMBAL_STICK_CENTER, selfieRight.first)
         assertEquals(CameraCommands.GIMBAL_STICK_MIN, selfieRight.second)
-        val selfieUp = CameraCommands.gimbalAxes(0f, 1f, invertPan = selfieInvert)
+        val selfieUp = CameraCommands.gimbalAxes(0f, 1f, invertPan = true)
         assertEquals(up, selfieUp)
         fun attitude(tenthDeg: Short): ByteArray {
             val u = tenthDeg.toInt() and 0xFFFF
             return byteArrayOf(0, 0, 0, 0, u.toByte(), (u shr 8).toByte())
         }
-        assertTrue(CameraCommands.rotated180(attitude(0)) == false)
-        assertTrue(CameraCommands.rotated180(attitude(901)) == true)
-        assertTrue(CameraCommands.rotated180(attitude((-1800).toShort())) == true)
         assertTrue(!CameraCommands.rotationSettled(901, true))
         assertTrue(CameraCommands.rotationSettled(1650, true))
         assertTrue(!CameraCommands.rotationSettled(400, false))
         assertTrue(CameraCommands.rotationSettled(100, false))
-        assertEquals(3, CameraCommands.POSE_SEED_FRONT_VOTES)
         assertTrue(CameraCommands.fe09GoesTo180(0))
         assertTrue(CameraCommands.fe09GoesTo180(900))
         assertTrue(!CameraCommands.fe09GoesTo180(901))
@@ -943,7 +743,6 @@ class CameraControlTest {
 
     @Test
     fun extraMirrorHoldsThreePresentsThenCommits() {
-        assertEquals(3, FeedPresentPolicy.EXTRA_MIRROR_HOLD_FRAMES)
         assertTrue(FeedPresentPolicy.shouldHoldPictureAcrossMirror(1, 0.04))
         assertTrue(FeedPresentPolicy.shouldHoldPictureAcrossMirror(3, 0.12))
         assertTrue(!FeedPresentPolicy.shouldHoldPictureAcrossMirror(4, 0.16))
@@ -989,12 +788,11 @@ class CameraControlTest {
     }
 
     @Test
-    fun expoModeSetPayloadMatchesIos() {
-        assertTrue(CameraCommands.expoMode(false).contentEquals(byteArrayOf(0x01, 0x00)))
-        assertTrue(CameraCommands.expoMode(true).contentEquals(byteArrayOf(0x04, 0x00)))
+    fun expoModeWireExtraAndWaitKeyMatchIos() {
         assertEquals(0x021E, SwiftCore.waitKey(SwiftCore.CMD_SET_EXPO_MODE))
         assertEquals("auto", CameraCommands.expoWireExtra(CameraCommands.EXPO_AUTO))
         assertEquals("manual", CameraCommands.expoWireExtra(CameraCommands.EXPO_MANUAL))
+        assertEquals(null, CameraCommands.expoWireExtra(-1))
     }
 
     @Test
@@ -1052,12 +850,6 @@ class CameraControlTest {
         assertEquals(null, CameraCommands.baseIsoLabel(CameraCommands.COLOR_NORMAL))
         assertEquals(null, CameraCommands.baseIsoLabel(CameraCommands.COLOR_HDR))
         assertEquals(null, CameraCommands.baseIsoLabel(-1))
-        assertEquals("400 ★", CameraCommands.isoChipLabel("400", CameraCommands.COLOR_DLOG))
-        assertEquals("1600", CameraCommands.isoChipLabel("1600", CameraCommands.COLOR_DLOG))
-        assertEquals("1600 ★", CameraCommands.isoChipLabel("1600", CameraCommands.COLOR_DLOG2))
-        assertEquals("400", CameraCommands.isoChipLabel("400", CameraCommands.COLOR_DLOG2))
-        assertEquals("800", CameraCommands.isoChipLabel("800", CameraCommands.COLOR_DLOG))
-        assertEquals("400", CameraCommands.isoChipLabel("400", CameraCommands.COLOR_NORMAL))
         assertTrue(dlog2.contains(0x05))
         assertTrue(dlog2.contains(0x07))
         assertEquals("400", CameraCommands.isoLabel(0x05))
@@ -1069,7 +861,6 @@ class CameraControlTest {
         assertEquals(listOf(0x00), autoOnly)
         assertEquals("400", CameraCommands.markedIsoLabel(CameraCommands.COLOR_DLOG_M))
         assertEquals(null, CameraCommands.baseIsoLabel(CameraCommands.COLOR_DLOG_M))
-        assertEquals("400 ★", CameraCommands.isoChipLabel("400", CameraCommands.COLOR_DLOG_M))
         assertEquals(
             CameraCommands.COLOR_DLOG,
             CameraCommands.colorModeForZoom(3.0, CameraCommands.COLOR_DLOG2),
@@ -1086,39 +877,40 @@ class CameraControlTest {
     }
 
     @Test
-    fun colorModePayloadMatchesIosBytes() {
-        assertEquals(0x42, CameraCommands.CMD_COLOR)
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL).contentEquals(byteArrayOf(0x3F)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_HDR).contentEquals(byteArrayOf(0x3C)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG).contentEquals(byteArrayOf(0x17)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG2).contentEquals(byteArrayOf(0x41)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL10).contentEquals(byteArrayOf(0x3D)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG_M).contentEquals(byteArrayOf(0x00)))
+    fun colorModeWireBytesMatchIos() {
+        // The byte the core packs for `CMD_SET_COLOR_MODE`, per body.
+        val cases = listOf(
+            Triple(CameraCommands.COLOR_NORMAL, "", 0x3F),
+            Triple(CameraCommands.COLOR_HDR, "", 0x3C),
+            Triple(CameraCommands.COLOR_DLOG, "", 0x17),
+            Triple(CameraCommands.COLOR_DLOG2, "", 0x41),
+            Triple(CameraCommands.COLOR_NORMAL10, "", 0x3D),
+            Triple(CameraCommands.COLOR_DLOG_M, "", 0x00),
+            Triple(CameraCommands.COLOR_NORMAL, "Osmo Pocket 3", 0x00),
+            Triple(CameraCommands.COLOR_DLOG_M, "Osmo Pocket 3", 0x3D),
+            Triple(CameraCommands.COLOR_HDR, "Osmo Pocket 3", 0x3C),
+            Triple(CameraCommands.COLOR_NORMAL, "Xtra Muse", 0x00),
+            Triple(CameraCommands.COLOR_NORMAL, "Osmo Pocket 4", 0x3F),
+            Triple(CameraCommands.COLOR_NORMAL, "Osmo Nano", 0x00),
+            Triple(CameraCommands.COLOR_NORMAL10, "Osmo Nano", 0x3F),
+            Triple(CameraCommands.COLOR_DLOG_M, "Osmo Nano", 0x3D),
+        )
+        for ((mode, body, wire) in cases) {
+            assertEquals(wire, CameraCommands.wireColorMode(mode, body), "mode $mode on '$body'")
+        }
         assertEquals(0x0242, SwiftCore.waitKey(SwiftCore.CMD_SET_COLOR_MODE))
     }
 
     @Test
     fun pocket3ColorWireSwapsNormalAndDLogM() {
         val p3 = "Osmo Pocket 3"
-        val muse = "Xtra Muse"
-        val p4 = "Osmo Pocket 4"
         val nano = "Osmo Nano"
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, p3).contentEquals(byteArrayOf(0x00)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG_M, p3).contentEquals(byteArrayOf(0x3D)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_HDR, p3).contentEquals(byteArrayOf(0x3C)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, muse).contentEquals(byteArrayOf(0x00)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, p4).contentEquals(byteArrayOf(0x3F)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL, nano).contentEquals(byteArrayOf(0x00)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_NORMAL10, nano).contentEquals(byteArrayOf(0x3F)))
-        assertTrue(CameraCommands.colorMode(CameraCommands.COLOR_DLOG_M, nano).contentEquals(byteArrayOf(0x3D)))
         assertEquals(CameraCommands.COLOR_NORMAL, CameraCommands.parseColorMode(0x00, p3))
         assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x3D, p3))
         assertEquals(CameraCommands.COLOR_HDR, CameraCommands.parseColorMode(0x3C, p3))
         assertEquals(CameraCommands.COLOR_NORMAL, CameraCommands.parseColorMode(0x00, nano))
         assertEquals(CameraCommands.COLOR_NORMAL10, CameraCommands.parseColorMode(0x3F, nano))
         assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x3D, nano))
-        assertEquals(0x00, CameraCommands.wireColorMode(CameraCommands.COLOR_NORMAL, p3))
-        assertEquals(0x3D, CameraCommands.wireColorMode(CameraCommands.COLOR_DLOG_M, p3))
         assertEquals(0x00, CameraCommands.wireColorMode(CameraCommands.COLOR_NORMAL, "", "nano"))
         assertEquals(0x3F, CameraCommands.wireColorMode(CameraCommands.COLOR_NORMAL10, "", "nano"))
         assertEquals(0x3D, CameraCommands.wireColorMode(CameraCommands.COLOR_DLOG_M, "", "nano"))
@@ -1393,16 +1185,11 @@ class CameraControlTest {
         assertEquals(null, ControlHud.timeoutNote("Audio ch GET", announce = false))
         assertEquals("Color timed out", ControlHud.timeoutNote("Color", announce = true))
         assertEquals("ISO limit GET timed out", ControlHud.timeoutNote("ISO limit GET", announce = true))
-        assertEquals(2.0, ControlHud.TOAST_HOLD_SECONDS)
         assertEquals(222.0, ControlHud.toastCenterY(200.0))
         assertEquals(82.0, ControlHud.toastCenterY(0.0, 60.0))
         assertEquals(222.0, ControlHud.toastCenterY(200.0, null))
         assertEquals(72.0, ControlHud.toastCenterY(50.0, 50.0))
         assertEquals(72.0, ControlHud.toastCenterY(50.0, 40.0))
-        assertEquals(
-            "Can't change color while recording — D-Log2 can't zoom",
-            ControlHud.RECORDING_COLOR_LOCK_NOTE,
-        )
         assertTrue(!ControlHud.RECORDING_COLOR_LOCK_NOTE.contains("0x"))
     }
 

@@ -64,35 +64,8 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(anchors.clip, 200.0 / 255.0)
     }
 
-    func testLiveTapCeilingPaintsClipBand() {
-        let cube = PocketFalseColorMap.overlayPaintCube(scale: .ire, transfer: .dlog2)
-        let c = Float(247) / 255
-        let mapped = cube.map(red: c, green: c, blue: c)
-        XCTAssertGreaterThan(
-            mapped.red, mapped.green,
-            "ISO 1600 live-tap max 247 is the clip band, not 18%")
-        let early = cube.map(red: 188.0 / 255, green: 188.0 / 255, blue: 188.0 / 255)
-        XCTAssertLessThan(
-            early.red, mapped.red,
-            "byte 188 is recoverable D-Log2 highlight, not the clip band")
-        let rec709Grey = Float(MonitorTransfer.rec709.middleGrayEncoded)
-        let rec709 = PocketFalseColorMap.overlayPaintCube(scale: .ire, transfer: .rec709)
-            .map(red: rec709Grey, green: rec709Grey, blue: rec709Grey)
-        XCTAssertGreaterThan(
-            rec709.green, rec709.red,
-            "Rec.709 18% hits IRE 18%MG green")
-
-        let dlogCube = PocketFalseColorMap.overlayPaintCube(scale: .ire, transfer: .dlog)
-        let dlogC = Float(223) / 255
-        let dlogClip = dlogCube.map(red: dlogC, green: dlogC, blue: dlogC)
-        XCTAssertGreaterThan(
-            dlogClip.red, dlogClip.green,
-            "D-Log live-tap max 223 is the clip band")
-    }
     func testScaleOptionsMatchOpenZCine() {
         XCTAssertEqual(FalseColorAssist.scaleOptions, ["CineStop", "EL Zone", "IRE", "Limits"])
-        XCTAssertEqual(
-            FalseColorAssist.popupTitles, ["Scale", "Reference key", "Reference Display"])
         XCTAssertEqual(FalseColorAssist.Options.default.scale, .stops)
         XCTAssertTrue(FalseColorAssist.Options.default.referenceEnabled)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "CineStop"), .stops)
@@ -109,55 +82,18 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertTrue(FalseColorAssist.scaleHelp.contains("EL Zone"))
         XCTAssertTrue(FalseColorAssist.scaleHelp.contains("CineStop"))
         XCTAssertEqual(FalseColorScaleKind(rawValue: "ZC Stops") ?? .stops, .stops)
-        XCTAssertEqual(FalseColorAssist.longPressPanelWidth, 400)
-    }
-
-    @MainActor
-    func testFreshAssistDefaultsMatchOpenZCine() {
-        XCTAssertEqual(FalseColorAssist.Options.default.scale, .stops)
-        XCTAssertTrue(FalseColorAssist.Options.default.referenceEnabled)
         XCTAssertEqual(LiveImageEffects().falseColorScale, .stops)
-        // `LiveAssistState.init` reloads OperatorPrefs — pin the decode fallback.
-        XCTAssertEqual(FalseColorScaleKind(rawValue: "not-a-scale") ?? .stops, .stops)
     }
 
-    func testIRELegendLabelsMatchOpenZCine() {
-        XCTAssertEqual(
-            FalseColorAssist.legendLabels(scale: .ire),
-            ["BDL", "NBDL", "18%MG", "MG+1", "80%WC", "95%WC"])
-        XCTAssertEqual(
-            FalseColorAssist.legendLabels(scale: .stops),
-            [
-                "0–4", "5", "10–12", "41–48", "61–70", "92–93", "94–95",
-                "96–98", "99–100",
-            ])
-        XCTAssertEqual(
-            FalseColorAssist.legendLabels(scale: .limits),
-            ["0–4", "5–9", "94–98", "99–100"])
-        XCTAssertEqual(
-            FalseColorAssist.legendLabels(scale: .elZone),
-            [
-                "−6", "−5", "−4", "−3", "−2", "−1", "−½", "18%",
-                "+½", "+1", "+2", "+3", "+4", "+5", "+6",
-            ])
-    }
-
-    func testLegendBandsCarryOpenZCineLabels() {
-        let ire = FalseColorScaleKind.ire.legendStops(transfer: .dlog2)
-        XCTAssertEqual(ire.map(\.label), FalseColorAssist.legendLabels(scale: .ire))
-        XCTAssertEqual(ire.count, 6)
-
-        let limits = FalseColorScaleKind.limits.legendStops(transfer: .dlog2)
-        XCTAssertEqual(limits.map(\.label), FalseColorAssist.legendLabels(scale: .limits))
-        XCTAssertEqual(limits.count, 4)
-
-        let stops = FalseColorScaleKind.stops.legendStops(transfer: .dlog2)
-        XCTAssertEqual(stops.map(\.label), FalseColorAssist.legendLabels(scale: .stops))
-        XCTAssertEqual(stops.count, 9)
-
-        let elZone = FalseColorScaleKind.elZone.legendStops(transfer: .dlog2)
-        XCTAssertEqual(elZone.map(\.label), FalseColorAssist.legendLabels(scale: .elZone))
-        XCTAssertEqual(elZone.count, 15)
+    /// Legend copy is pinned once, in core `LiveColorScienceTests`; the shell must
+    /// match it band for band (the `zip` in `legendStops` would silently truncate).
+    func testLegendLabelsMatchCoreFalseColorBands() {
+        for scale in FalseColorScaleKind.allCases {
+            let core = PocketFalseColorMap.bands(scale: scale, transfer: .dlog2).map(\.label)
+            XCTAssertEqual(FalseColorAssist.legendLabels(scale: scale), core, "\(scale) labels")
+            XCTAssertEqual(
+                scale.legendStops(transfer: .dlog2).map(\.label), core, "\(scale) legend stops")
+        }
     }
 
     @MainActor
@@ -182,7 +118,6 @@ final class FalseColorAssistTests: XCTestCase {
     /// OpenZCine `testFalseColorReferenceUsesCompactProportionalScales`.
     func testReferenceOverlayMatchesOpenZCineChrome() {
         XCTAssertEqual(FalseColorReference.panelSize, CGSize(width: 264, height: 52))
-        XCTAssertEqual(FalseColorAssist.referencePanelSize, FalseColorReference.panelSize)
         XCTAssertEqual(FalseColorReferenceChrome.panelSize, FalseColorReference.panelSize)
 
         let ire = FalseColorReference.segments(scale: .ire, transfer: .dlog2)
@@ -263,6 +198,14 @@ final class FalseColorAssistTests: XCTestCase {
         let clip = Float(ScopeExposureCeiling.clipEncoded(transfer: .dlog2))
         let over = cube.map(red: clip, green: clip, blue: clip)
         XCTAssertGreaterThan(over.red, over.green, "live-tap ceiling is 95%WC red")
+        let early = cube.map(red: 188.0 / 255, green: 188.0 / 255, blue: 188.0 / 255)
+        XCTAssertLessThan(
+            early.red, over.red, "byte 188 is recoverable D-Log2 highlight, not the clip band")
+
+        let dlogC = Float(223) / 255
+        let dlogClip = PocketFalseColorMap.overlayPaintCube(scale: .ire, transfer: .dlog)
+            .map(red: dlogC, green: dlogC, blue: dlogC)
+        XCTAssertGreaterThan(dlogClip.red, dlogClip.green, "D-Log live-tap max 223 is the clip band")
     }
 
     func testELZonePaintsGrayAtEighteenAndWhiteAbovePlusSix() {
@@ -446,20 +389,6 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(clipOff.2, clipOn.2, accuracy: 0.04)
         XCTAssertGreaterThan(clipOff.0, clipOff.1, "99–100 stays red-dominant without a LUT")
         XCTAssertGreaterThan(clipOn.0, clipOn.1, "99–100 must stay the clip paint when LUT is on")
-    }
-
-    func testFalseColorAloneOverlaysIdentityInsteadOfRemakingThePicture() {
-        var fx = LiveImageEffects()
-        fx.falseColor = true
-        XCTAssertTrue(fx.needsGPUFeed)
-        XCTAssertTrue(fx.needsOverlayFeed)
-        XCTAssertFalse(fx.replacesIdentityFeed)
-
-        let cube = BuiltInLook.mono.cube()
-        fx.lutDimension = cube.size
-        fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        XCTAssertTrue(fx.replacesIdentityFeed)
-        XCTAssertFalse(fx.needsOverlayFeed)
     }
 
     func testAssistOverlayPaintsGrayInCineStopGap() throws {

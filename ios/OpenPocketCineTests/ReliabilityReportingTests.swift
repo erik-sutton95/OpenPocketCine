@@ -151,48 +151,40 @@ final class ReliabilityReportingTests: XCTestCase {
             URLError.notConnectedToInternet)
     }
 
-    func testBlockedSDKSessionFailsWithoutHTTPResponse() {
-        ReliabilityReportingGate.shared.setCameraSessionActive(true)
-        let session = ReliabilityReportingURLProtocol.makeSDKSession()
-        let url = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
-        let done = expectation(description: "blocked")
-        var response: URLResponse?
-        session.dataTask(with: url) { _, resp, error in
-            response = resp
-            XCTAssertEqual((error as NSError?)?.code, NSURLErrorNotConnectedToInternet)
-            done.fulfill()
-        }.resume()
-        wait(for: [done], timeout: 2)
-        XCTAssertNil(response)
-    }
-
-    func testRevokedConsentBlocksCachedEnvelopeWithoutHTTPResponse() {
-        ReliabilityReportingConsent.setOptedIn(false)
-        ReliabilityReportingGate.shared.setCameraSessionActive(false)
-        let session = ReliabilityReportingURLProtocol.makeSDKSession()
-        let done = expectation(description: "revoked transport")
-        session.dataTask(with: URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!) {
-            _, response, error in
-            XCTAssertNil(response)
-            XCTAssertEqual((error as NSError?)?.code, NSURLErrorNotConnectedToInternet)
-            done.fulfill()
-        }.resume()
-        wait(for: [done], timeout: 2)
-    }
-
-    func testHostIsolationOnSessionDoesNotForward() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        let session = ReliabilityReportingURLProtocol.makeSDKSession()
-        let url = URL(string: "https://example.com/secret")!
-        let done = expectation(description: "reject")
-        var response: URLResponse?
-        session.dataTask(with: url) { _, resp, error in
-            response = resp
-            XCTAssertEqual((error as NSError?)?.code, NSURLErrorCannotFindHost)
-            done.fulfill()
-        }.resume()
-        wait(for: [done], timeout: 2)
-        XCTAssertNil(response)
+    func testRefusedSDKRequestsFailWithoutHTTPResponse() {
+        let envelopeURL = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
+        let cases: [(name: String, optedIn: Bool?, cameraActive: Bool, url: URL, code: Int)] = [
+            (
+                "camera session blocks the SDK", nil, true, envelopeURL,
+                NSURLErrorNotConnectedToInternet
+            ),
+            (
+                "revoked consent blocks a cached envelope", false, false, envelopeURL,
+                NSURLErrorNotConnectedToInternet
+            ),
+            (
+                "host isolation rejects a non-DSN host", true, false,
+                URL(string: "https://example.com/secret")!, NSURLErrorCannotFindHost
+            ),
+        ]
+        for c in cases {
+            ReliabilityReportingConsent.resetForTests()
+            ReliabilityReportingGate.shared.resetForTests()
+            if let optedIn = c.optedIn { ReliabilityReportingConsent.setOptedIn(optedIn) }
+            ReliabilityReportingGate.shared.setCameraSessionActive(c.cameraActive)
+            let session = ReliabilityReportingURLProtocol.makeSDKSession()
+            let done = expectation(description: c.name)
+            var response: URLResponse?
+            var code: Int?
+            session.dataTask(with: c.url) { _, resp, error in
+                response = resp
+                code = (error as NSError?)?.code
+                done.fulfill()
+            }.resume()
+            wait(for: [done], timeout: 2)
+            XCTAssertNil(response, c.name)
+            XCTAssertEqual(code, c.code, c.name)
+        }
     }
 
     func testCameraActivationCancelsInFlightForwardWithoutResponse() {

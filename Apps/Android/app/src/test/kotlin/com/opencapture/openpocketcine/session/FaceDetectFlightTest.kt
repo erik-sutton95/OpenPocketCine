@@ -14,14 +14,6 @@ class FaceDetectFlightTest {
     }
 
     @Test
-    fun watchdogTakesTheFlightSoCompletionDoesNotDeliver() {
-        val flight = FaceDetectFlight()
-        val id = flight.begin()
-        assertTrue(flight.take(id), "watchdog unsticks Face AF")
-        assertFalse(flight.take(id), "completion must only recycle, not deliver")
-    }
-
-    @Test
     fun nextBeginIsANewFlight() {
         val flight = FaceDetectFlight()
         val first = flight.begin()

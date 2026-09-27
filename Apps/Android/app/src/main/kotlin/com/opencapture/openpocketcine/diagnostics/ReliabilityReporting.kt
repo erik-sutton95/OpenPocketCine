@@ -141,9 +141,6 @@ internal object ReliabilityReporting {
         executor.execute { sessionSummaryLoader = loader }
     }
 
-    fun shouldStartSdk(): Boolean =
-        ReliabilityReportingConsent.isOptedIn && ReliabilityReportingDSN.configured() != null
-
     fun isFinalized(bundle: FeedIncidentBundle): Boolean =
         when (bundle.header.outcome) {
             FeedIncidentOutcome.OPEN -> false

@@ -83,7 +83,6 @@ import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraModel
 import com.opencapture.openpocketcine.settings.SettingsHelpBadge
 import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.FocusTrackMode
 import com.opencapture.openpocketcine.session.VideoAspect
 import com.opencapture.openpocketcine.session.VideoFormat
 import com.opencapture.openpocketcine.session.VideoFrameRate
@@ -1578,8 +1577,6 @@ object CaptureLists {
 
     val fpsDrumLabels: List<String> get() = VideoFrameRate.drumLabels
 
-    val resolutionTabTitles: List<String> get() = VideoResolution.tabTitles
-
     /** Family fallback — D-Log2 is 4 Pro only (`colorWheelOrder`). */
     val colorWheelPocket: List<Pair<Int, String>> =
         listOf(
@@ -1887,15 +1884,11 @@ object CaptureLists {
 
     fun roundedTint(value: Float): Int = value.roundToInt().coerceIn(-100, 100)
 
-    fun nudgeTint(current: Float, delta: Int): Float = (current + delta).coerceIn(-100f, 100f)
-
     fun tintLabel(tint: Int): String {
         val t = tint.coerceIn(-100, 100)
         if (t == 0) return "Neutral"
         return if (t > 0) "+$t" else "$t"
     }
-
-    fun tintApplyLabel(tint: Int): String = "Apply tint ${tint.coerceIn(-100, 100)}"
 
     fun wbCustomFromTint(tint: Float, status: CameraStatus): Pair<Int, Int> =
         currentKelvin(status) to roundedTint(tint)
@@ -1904,8 +1897,6 @@ object CaptureLists {
         status.wbMode != CameraCommands.WB_CUSTOM
 
     fun fpsDrumLabel(status: CameraStatus): String = VideoFormat.current(status).frameRate.drumLabel
-
-    fun fpsIndexFromDrum(label: String): Int? = VideoFrameRate.fromDrumLabel(label)?.rawValue
 
     fun currentFpsIndex(status: CameraStatus): Int = VideoFormat.current(status).frameRate.rawValue
 
@@ -2061,8 +2052,6 @@ object CaptureLists {
     fun wbIsAuto(status: CameraStatus): Boolean =
         status.wbMode != CameraCommands.WB_CUSTOM
 
-    fun wbChipWidest(): String = "10000K"
-
     const val FOCUS_TAB_SINGLE = "AF-S"
     const val FOCUS_TAB_CONTINUOUS = "AF-C"
 
@@ -2098,10 +2087,6 @@ object CaptureLists {
 
     /** Horizontal AF-C chips only while continuous, matching iOS `if continuous`. */
     fun focusShowsTrackChips(status: CameraStatus): Boolean = focusIsContinuous(status)
-
-    /** Unknown track paints Default, matching iOS `focusTrack ?? .default`. */
-    fun selectedFocusTrack(status: CameraStatus): Int =
-        if (status.focusTrack < 0) FocusTrackMode.DEFAULT.raw else status.focusTrack
 
     /** GET `0x8E` pid `0x003B` when FOCUS opens without a track. Nano never GETs. */
     fun shouldRefreshFocusTrack(status: CameraStatus, supportsFocus: Boolean): Boolean =

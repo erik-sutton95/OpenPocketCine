@@ -20,17 +20,6 @@ import Testing
         #expect(LogColorTransform.converting(from: .hdr) == nil)
     }
 
-    @Test func labelsAndFilenameTokensNameTheDestinationLog() {
-        #expect(LogColorTransform.dLogToDLog2.label == "D-Log → D-Log2")
-        #expect(LogColorTransform.dLogToDLog2.filenameToken == "dlog2")
-        #expect(LogColorTransform.dLog2ToDLog.label == "D-Log2 → D-Log")
-        #expect(LogColorTransform.dLog2ToDLog.filenameToken == "dlog")
-        #expect(LogColorTransform.dLogToDLog2.source == .dlog)
-        #expect(LogColorTransform.dLogToDLog2.destination == .dlog2)
-        #expect(LogColorTransform.dLog2ToDLog.source == .dlog2)
-        #expect(LogColorTransform.dLog2ToDLog.destination == .dlog)
-    }
-
     @Test func eighteenPercentGreyLandsOnTheDestinationPaperCode() {
         let dlogGrey = LiveColorScience.encode(0.18, transfer: .dlog)
         let dlog2Grey = LiveColorScience.encode(0.18, transfer: .dlog2)

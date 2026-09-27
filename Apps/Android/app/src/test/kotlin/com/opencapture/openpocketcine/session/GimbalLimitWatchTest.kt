@@ -2,7 +2,6 @@ package com.opencapture.openpocketcine.session
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GimbalLimitWatchTest {
@@ -18,85 +17,66 @@ class GimbalLimitWatchTest {
         assertTrue(saw.isEmpty)
     }
 
-    @Test
-    fun panPulsesAfterMoveThenStop() {
+    /** Drives one watch at 10 Hz: [move] turns the head 4 ticks, [hold] parks it 5 ticks. */
+    private class Drive {
         val watch = GimbalLimitWatch()
         var now = 0.0
         var yaw = 0
-        repeat(4) {
+        var pitch = 0
+
+        fun tick(pan: Double, tilt: Double): GimbalLimitContact {
             now += 0.1
-            yaw += 40
-            assertTrue(watch.tick(1.0, 0.0, yaw, 0, now, false).isEmpty)
+            return watch.tick(pan, tilt, yaw, pitch, now, false)
         }
-        var saw = GimbalLimitContact()
-        repeat(5) {
-            now += 0.1
-            saw = saw.union(watch.tick(1.0, 0.0, yaw, 0, now, false))
+
+        fun move(pan: Double, tilt: Double, dYaw: Int, dPitch: Int, quiet: Boolean) = repeat(4) {
+            yaw += dYaw
+            pitch += dPitch
+            val contact = tick(pan, tilt)
+            if (quiet) assertTrue(contact.isEmpty, "no pulse while the head still moves")
         }
-        assertTrue(saw.pan)
-        assertFalse(saw.tilt)
-        now += 0.1
-        assertTrue(watch.tick(1.0, 0.0, yaw, 0, now, false).isEmpty)
-        yaw += 40
-        now += 0.1
-        assertTrue(watch.tick(1.0, 0.0, yaw, 0, now, false).isEmpty)
-        var again = GimbalLimitContact()
-        repeat(5) {
-            now += 0.1
-            again = again.union(watch.tick(1.0, 0.0, yaw, 0, now, false))
+
+        fun hold(pan: Double, tilt: Double): GimbalLimitContact {
+            var saw = GimbalLimitContact()
+            repeat(5) { saw = saw.union(tick(pan, tilt)) }
+            return saw
         }
-        assertTrue(again.pan)
     }
 
     @Test
-    fun tiltPulsesAfterPitchMovesThenStops() {
-        val watch = GimbalLimitWatch()
-        var now = 0.0
-        var pitch = 0
-        repeat(4) {
-            now += 0.1
-            pitch += 30
-            assertTrue(watch.tick(0.0, 1.0, 0, pitch, now, false).isEmpty)
+    fun eachAxisPulsesAfterMoveThenStop() {
+        data class Case(val axis: String, val pan: Double, val tilt: Double, val dYaw: Int, val dPitch: Int)
+        for ((axis, pan, tilt, dYaw, dPitch) in listOf(Case("pan", 1.0, 0.0, 40, 0), Case("tilt", 0.0, 1.0, 0, 30))) {
+            val drive = Drive()
+            drive.move(pan, tilt, dYaw, dPitch, quiet = true)
+            val saw = drive.hold(pan, tilt)
+            assertEquals(axis == "pan", saw.pan, "$axis stick: pan contact")
+            assertEquals(axis == "tilt", saw.tilt, "$axis stick: tilt contact")
+            if (axis == "tilt") assertEquals(1.0, drive.watch.lastTiltSign)
         }
-        var saw = GimbalLimitContact()
-        repeat(5) {
-            now += 0.1
-            saw = saw.union(watch.tick(0.0, 1.0, 0, pitch, now, false))
-        }
-        assertTrue(saw.tilt)
-        assertFalse(saw.pan)
-        assertEquals(1.0, watch.lastTiltSign)
+    }
+
+    @Test
+    fun panPulsesAgainAfterMovingOffTheStop() {
+        val drive = Drive()
+        drive.move(1.0, 0.0, 40, 0, quiet = true)
+        assertTrue(drive.hold(1.0, 0.0).pan)
+        assertTrue(drive.tick(1.0, 0.0).isEmpty)
+        drive.yaw += 40
+        assertTrue(drive.tick(1.0, 0.0).isEmpty)
+        assertTrue(drive.hold(1.0, 0.0).pan)
     }
 
     @Test
     fun restClearsContact() {
-        val watch = GimbalLimitWatch()
-        var now = 0.0
-        var yaw = 0
-        repeat(4) {
-            now += 0.1
-            yaw += 40
-            watch.tick(-1.0, 0.0, yaw, 0, now, false)
-        }
-        repeat(5) {
-            now += 0.1
-            watch.tick(-1.0, 0.0, yaw, 0, now, false)
-        }
-        now += 0.1
-        assertTrue(watch.tick(0.0, 0.0, yaw, 0, now, false).isEmpty)
-        yaw = 0
-        repeat(4) {
-            now += 0.1
-            yaw -= 40
-            watch.tick(-1.0, 0.0, yaw, 0, now, false)
-        }
-        var saw = GimbalLimitContact()
-        repeat(5) {
-            now += 0.1
-            saw = saw.union(watch.tick(-1.0, 0.0, yaw, 0, now, false))
-        }
-        assertTrue(saw.pan)
-        assertEquals(-1.0, watch.lastPanSign)
+        val drive = Drive()
+        drive.move(-1.0, 0.0, 40, 0, quiet = false)
+        drive.hold(-1.0, 0.0)
+        assertTrue(drive.tick(0.0, 0.0).isEmpty)
+        drive.yaw = 0
+        drive.move(-1.0, 0.0, -40, 0, quiet = false)
+        assertTrue(drive.hold(-1.0, 0.0).pan)
+        assertEquals(-1.0, drive.watch.lastPanSign)
     }
 
     @Test
@@ -130,14 +110,8 @@ class GimbalLimitWatchTest {
     }
 
     @Test
-    fun analogCurveCrawlsAtHalfThrow() {
-        val linearHalf =
-            (CameraCommands.GIMBAL_STICK_CENTER + 0.5f * CameraCommands.GIMBAL_STICK_TRAVEL)
-                .toInt()
-        val half = CameraCommands.gimbalAxis(0.5f)
-        assertTrue(half < linearHalf)
-        assertTrue(half > CameraCommands.GIMBAL_STICK_CENTER)
-        assertEquals(0f, CameraCommands.gimbalAnalogCurve(0f))
+    fun zoomCrawlsAtPartialThrowAndAttitudeBytesDecode() {
+        // Stick curve shape lives in VirtualJoystickMappingTest.
         assertEquals(0f, CameraCommands.gimbalLinearThrow(0.04f))
         assertEquals(1f, CameraCommands.gimbalLinearThrow(1f))
         assertEquals(1.0, CamFov.zoomStep(1.0, 0.0, 1.0, 12.0), 0.001)

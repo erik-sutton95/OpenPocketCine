@@ -5,68 +5,41 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class NDFilterRecommendationTest {
-    @Test
-    fun middleGrayNeedsNoGlass() {
-        val rec = NDFilterRecommendation.suggestion(0.0)
-        assertEquals(0, rec.ndStops)
-        assertEquals("—", rec.ndLabel)
-        assertEquals("0.0", rec.stopsLabel)
-        assertFalse(rec.needsGlass)
-    }
+    /** A null field is not asserted for that case. */
+    private data class SuggestionCase(
+        val why: String,
+        val pictureStops: Double,
+        val ndStops: Int,
+        val ndLabel: String,
+        val stopsLabel: String? = null,
+        val needsGlass: Boolean? = null,
+        val opticalFactor: Int? = null,
+    )
 
     @Test
-    fun twoStopsHotIsND4() {
-        val rec = NDFilterRecommendation.suggestion(2.0)
-        assertEquals(2, rec.ndStops)
-        assertEquals(4, rec.opticalFactor)
-        assertEquals("ND4", rec.ndLabel)
-        assertEquals("+2.0", rec.stopsLabel)
-        assertTrue(rec.needsGlass)
-    }
-
-    @Test
-    fun fiveStopsHotIsND32() {
-        val rec = NDFilterRecommendation.suggestion(5.0)
-        assertEquals(5, rec.ndStops)
-        assertEquals("ND32", rec.ndLabel)
-        assertEquals("+5.0", rec.stopsLabel)
-    }
-
-    @Test
-    fun twoPointThreeRoundsToND4() {
-        val rec = NDFilterRecommendation.suggestion(2.3)
-        assertEquals(2, rec.ndStops)
-        assertEquals("ND4", rec.ndLabel)
-        assertEquals("+2.3", rec.stopsLabel)
-    }
-
-    @Test
-    fun halfStopRoundsUpToND2() {
-        val rec = NDFilterRecommendation.suggestion(0.5)
-        assertEquals(1, rec.ndStops)
-        assertEquals("ND2", rec.ndLabel)
-    }
-
-    @Test
-    fun underExposureDoesNotSuggestND() {
-        val rec = NDFilterRecommendation.suggestion(-1.5)
-        assertEquals(0, rec.ndStops)
-        assertEquals("—", rec.ndLabel)
-        assertEquals("−1.5", rec.stopsLabel)
-        assertFalse(rec.needsGlass)
-    }
-
-    @Test
-    fun tenStopCapIsND1000NotND1024() {
-        val rec = NDFilterRecommendation.suggestion(12.0)
-        assertEquals(10, rec.ndStops)
-        assertEquals(1_000, rec.opticalFactor)
-        assertEquals("ND1000", rec.ndLabel)
+    fun suggestionRoundsHotStopsOntoTheOpticalLadder() {
+        val none = "\u2014"
+        val cases = listOf(
+            SuggestionCase("middle gray needs no glass", 0.0, 0, none, "0.0", needsGlass = false),
+            SuggestionCase("two stops hot is ND4", 2.0, 2, "ND4", "+2.0", needsGlass = true, opticalFactor = 4),
+            SuggestionCase("five stops hot is ND32", 5.0, 5, "ND32", "+5.0"),
+            SuggestionCase("2.3 rounds to ND4", 2.3, 2, "ND4", "+2.3"),
+            SuggestionCase("half stop rounds up to ND2", 0.5, 1, "ND2"),
+            SuggestionCase("under exposure does not suggest ND", -1.5, 0, none, "−1.5", needsGlass = false),
+            SuggestionCase("ten stop cap is ND1000 not ND1024", 12.0, 10, "ND1000", opticalFactor = 1_000),
+        )
+        for (case in cases) {
+            val rec = NDFilterRecommendation.suggestion(case.pictureStops)
+            assertEquals(case.ndStops, rec.ndStops, case.why)
+            assertEquals(case.ndLabel, rec.ndLabel, case.why)
+            case.stopsLabel?.let { assertEquals(it, rec.stopsLabel, case.why) }
+            case.needsGlass?.let { assertEquals(it, rec.needsGlass, case.why) }
+            case.opticalFactor?.let { assertEquals(it, rec.opticalFactor, case.why) }
+        }
     }
 
     @Test
@@ -100,7 +73,6 @@ class NDFilterRecommendationTest {
 
     @Test
     fun densityIsThreeTenthsPerStop() {
-        assertEquals(0.3, NDFilterRecommendation.DENSITY_PER_STOP, 1e-12)
         assertEquals("ND 0.0", NDFilterRecommendation.densityLabel(0.0))
         assertEquals("ND 0.3", NDFilterRecommendation.densityLabel(1.0))
         assertEquals("ND 0.4", NDFilterRecommendation.densityLabel(4.0 / 3.0))

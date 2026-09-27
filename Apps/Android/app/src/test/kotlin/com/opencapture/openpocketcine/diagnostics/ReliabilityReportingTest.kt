@@ -156,71 +156,51 @@ class ReliabilityReportingTest {
     }
 
     @Test
-    fun absentPersistedChoiceOffersPromptWhenConfiguredWithoutWriting() {
-        val stored = mutableMapOf<String, Boolean>()
-        ReliabilityReportingDSN.buildDsn = CONFIGURED_DSN
-        ReliabilityReportingConsent.restorePersistedChoice(
-            hasChoice = false,
-            persist = { stored[ReliabilityReportingConsent.KEY] = it },
+    fun persistedChoiceRestoresWithoutRepromptingOrWritingUnasked() {
+        data class Case(
+            val name: String,
+            val dsn: String?,
+            val choice: Boolean?,
+            val hasDecision: Boolean,
+            val optedIn: Boolean?,
+            val offersPrompt: Boolean,
         )
-        assertFalse(ReliabilityReportingConsent.hasDecision)
-        assertFalse(ReliabilityReportingConsent.isOptedIn)
-        assertTrue(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
-        assertTrue(stored.isEmpty())
-    }
-
-    @Test
-    fun unavailableDestinationDoesNotMarkAskedOnAbsentChoice() {
-        val stored = mutableMapOf<String, Boolean>()
-        ReliabilityReportingDSN.buildDsn = null
-        ReliabilityReportingConsent.restorePersistedChoice(
-            hasChoice = false,
-            persist = { stored[ReliabilityReportingConsent.KEY] = it },
-        )
-        assertFalse(ReliabilityReportingConsent.hasDecision)
-        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
-        assertTrue(stored.isEmpty())
-    }
-
-    @Test
-    fun explicitDeclinePersistsAcrossRestoreAndDoesNotReprompt() {
-        val stored = mutableMapOf<String, Boolean>()
-        ReliabilityReportingDSN.buildDsn = CONFIGURED_DSN
-        ReliabilityReportingConsent.restorePersistedChoice(
-            hasChoice = false,
-            persist = { stored[ReliabilityReportingConsent.KEY] = it },
-        )
-        ReliabilityReportingConsent.setOptedIn(false)
-        assertEquals(false, stored[ReliabilityReportingConsent.KEY])
-        ReliabilityReportingConsent.resetForTests()
-        ReliabilityReportingConsent.restorePersistedChoice(
-            hasChoice = stored.contains(ReliabilityReportingConsent.KEY),
-            optedIn = stored[ReliabilityReportingConsent.KEY] == true,
-            persist = { stored[ReliabilityReportingConsent.KEY] = it },
-        )
-        assertTrue(ReliabilityReportingConsent.hasDecision)
-        assertFalse(ReliabilityReportingConsent.isOptedIn)
-        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
-    }
-
-    @Test
-    fun explicitAcceptPersistsAcrossRestoreAndDoesNotReprompt() {
-        val stored = mutableMapOf<String, Boolean>()
-        ReliabilityReportingDSN.buildDsn = CONFIGURED_DSN
-        ReliabilityReportingConsent.restorePersistedChoice(
-            hasChoice = false,
-            persist = { stored[ReliabilityReportingConsent.KEY] = it },
-        )
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingConsent.resetForTests()
-        ReliabilityReportingConsent.restorePersistedChoice(
-            hasChoice = stored.contains(ReliabilityReportingConsent.KEY),
-            optedIn = stored[ReliabilityReportingConsent.KEY] == true,
-            persist = { stored[ReliabilityReportingConsent.KEY] = it },
-        )
-        assertTrue(ReliabilityReportingConsent.hasDecision)
-        assertTrue(ReliabilityReportingConsent.isOptedIn)
-        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+        val cases =
+            listOf(
+                Case("absent choice offers prompt when configured without writing", CONFIGURED_DSN, null,
+                    hasDecision = false, optedIn = false, offersPrompt = true),
+                Case("unavailable destination does not mark asked on absent choice", null, null,
+                    hasDecision = false, optedIn = null, offersPrompt = false),
+                Case("explicit decline persists across restore and does not reprompt", CONFIGURED_DSN, false,
+                    hasDecision = true, optedIn = false, offersPrompt = false),
+                Case("explicit accept persists across restore and does not reprompt", CONFIGURED_DSN, true,
+                    hasDecision = true, optedIn = true, offersPrompt = false),
+            )
+        for (case in cases) {
+            ReliabilityReportingConsent.resetForTests()
+            val stored = mutableMapOf<String, Boolean>()
+            ReliabilityReportingDSN.buildDsn = case.dsn
+            ReliabilityReportingConsent.restorePersistedChoice(
+                hasChoice = false,
+                persist = { stored[ReliabilityReportingConsent.KEY] = it },
+            )
+            val choice = case.choice
+            if (choice == null) {
+                assertTrue(stored.isEmpty(), case.name)
+            } else {
+                ReliabilityReportingConsent.setOptedIn(choice)
+                assertEquals(choice, stored[ReliabilityReportingConsent.KEY], case.name)
+                ReliabilityReportingConsent.resetForTests()
+                ReliabilityReportingConsent.restorePersistedChoice(
+                    hasChoice = stored.contains(ReliabilityReportingConsent.KEY),
+                    optedIn = stored[ReliabilityReportingConsent.KEY] == true,
+                    persist = { stored[ReliabilityReportingConsent.KEY] = it },
+                )
+            }
+            assertEquals(case.hasDecision, ReliabilityReportingConsent.hasDecision, case.name)
+            case.optedIn?.let { assertEquals(it, ReliabilityReportingConsent.isOptedIn, case.name) }
+            assertEquals(case.offersPrompt, ReliabilityReportingConsent.shouldOfferAutomaticPrompt(), case.name)
+        }
     }
 
     @Test
@@ -594,17 +574,6 @@ class ReliabilityReportingTest {
         assertTrue(options.release.orEmpty().startsWith("com.opencapture.openpocketcine@"))
         assertEquals(com.opencapture.openpocketcine.BuildConfig.VERSION_CODE.toString(), options.dist)
         assertEquals("development", options.environment)
-    }
-
-    @Test
-    fun sdkStartsWithConsentEvenOnCameraPath() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingDSN.buildDsn = "https://publickey@o0.ingest.sentry.io/0"
-        ReliabilityReportingGate.setCameraSessionActive(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(true)
-        assertTrue(ReliabilityReporting.shouldStartSdk())
-        assertTrue(ReliabilityReportingGate.shouldBlockUpload)
-        assertFalse(ReliabilityReportingGate.isConnected)
     }
 
     @Test

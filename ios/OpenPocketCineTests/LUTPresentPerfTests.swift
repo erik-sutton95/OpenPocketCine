@@ -19,14 +19,6 @@ final class LUTPresentPerfTests: XCTestCase {
         XCTAssertEqual(FeedWorkingRaster.targetSize(width: 1920, height: 1080).width, 1440)
     }
 
-    func testBakeStaysAtSourceWhenDrawableIsRetinaPanel() throws {
-        let source = CGSize(width: 1280, height: 720)
-        let panel = CGSize(width: 2796, height: 1290)
-        let baked = FeedFrameBaker.bakeSize(source: source, drawable: panel)
-        XCTAssertEqual(Int(baked.width.rounded()), 1280)
-        XCTAssertEqual(Int(baked.height.rounded()), 720)
-    }
-
     func testLUTBakeOf720pProxyIsCheapRelativeToFourK() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal required")

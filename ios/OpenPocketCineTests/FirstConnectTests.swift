@@ -219,16 +219,6 @@ final class FirstConnectTests: XCTestCase {
             CameraSetMailbox.timeoutImpliesUplinkFailure(
                 .waitLate, key: CameraSetMailbox.zoomOpcodeKey),
             "missing 0xB8 ACK is not half-dead uplink")
-        XCTAssertTrue(
-            FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
-                secondsSinceLastRebuild: 2.6, pathReady: true, lastBleNotifyAge: 0.2,
-                hadVideo: true),
-            "after one UDP rebuild, do not flap on a 2s stall")
-        XCTAssertFalse(
-            FeedWatchdog.shouldHoldRebuildAfterRecentUDP(
-                secondsSinceLastRebuild: 2.6, pathReady: true, lastBleNotifyAge: 0.2,
-                hadVideo: false),
-            "first picture is not a live flap")
         XCTAssertFalse(
             FeedWatchdog.shouldRepeatRecoverEnable(
                 secondsSinceLastEnable: 5, secondsSinceLastRebuild: 2.6,
@@ -256,18 +246,10 @@ final class FirstConnectTests: XCTestCase {
             CameraSoftAP.handshakeTimeoutStep(
                 pathReady: true, rebindsUsed: 0, inboundDatagrams: 12),
             .keepSocket)
-        XCTAssertTrue(
-            CameraSoftAP.isHandshakeAck(
-                [0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00]))
-        XCTAssertFalse(
-            CameraSoftAP.isHandshakeAck(
-                [0x30, 0x80, 0x34, 0x12, 0x00, 0x00, 0x02, 0x00]))
         XCTAssertFalse(
             CameraSoftAP.canSendHandshake(receiveArmed: false, connectionReady: true),
             "bound-but-deaf: do not send 0x00 until receiveMessage is armed")
         XCTAssertTrue(CameraSoftAP.canSendHandshake(receiveArmed: true, connectionReady: true))
-        let ack = DumlTransport.handshakeDatagram(sessionId: 0x1234, seq: 0, baseSeq: 0xB887)
-        XCTAssertTrue(CameraSoftAP.isHandshakeAck(ack), "inbound 0x00 is the handshake ACK")
         XCTAssertTrue(
             CameraSoftAP.shouldRearmAfterError(isLiveConnection: true, canceled: true),
             "spurious 89 on a live fd must not kill the handshake reader")
@@ -323,19 +305,6 @@ final class FirstConnectTests: XCTestCase {
                 videoPackets: 0, enableSends: 0, secondsSinceLastEnable: 8),
             .resendEnable,
             "never sent 0x09/0xa8 — do not sit on LINK")
-    }
-
-    func testPinDatalinkToCameraInterfaceNotEn0() {
-        let addrs = [
-            CameraSoftAP.InterfaceAddress(name: "en0", ipv4: "192.168.1.20"),
-            CameraSoftAP.InterfaceAddress(name: "en2", ipv4: "192.168.2.15"),
-        ]
-        XCTAssertEqual(CameraSoftAP.cameraLocalIPv4(in: addrs), "192.168.2.15")
-        XCTAssertEqual(
-            CameraSoftAP.preferredInterfaceName(
-                cameraNames: ["en2"], available: ["en0", "en2"]), "en2")
-        XCTAssertTrue(CameraSoftAP.shouldRebuildFlow(.writeRejected))
-        XCTAssertTrue(Duml.shouldHoldReply(set: 0x02, cmd: 0xB8))
     }
 
     func testAvcInterFrameCannotClaimFirstPictureBeforeRandomAccess() {

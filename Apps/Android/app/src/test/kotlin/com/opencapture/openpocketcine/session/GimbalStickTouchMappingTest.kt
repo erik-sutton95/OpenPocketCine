@@ -17,28 +17,20 @@ class GimbalStickTouchMappingTest {
         CameraCommands.mapGimbalStickTouch(dx, dy, stick, knob, engaged)
 
     @Test
-    fun visibleRingMapsToCommandOverOuterRadius() {
+    fun commandScalesOverOuterRadiusWhileVisualStaysAtKnobTravel() {
+        // The visible ring commands 1/1.35; full command sits 1.35x further out.
+        for ((dx, command) in listOf(outer to 1f / 1.35f, commandRadius to 1f)) {
+            val mapped = map(dx, 0f)
+            assertEquals(command, mapped.commandX, 1e-5f, "dx=$dx")
+            assertEquals(0f, mapped.commandY, 1e-5f, "dx=$dx")
+            assertEquals(travel, mapped.visualX, 1e-5f, "dx=$dx")
+            assertEquals(0f, mapped.visualY, 1e-5f, "dx=$dx")
+        }
         val ring = map(outer, 0f)
-        assertEquals(1f / 1.35f, ring.commandX, 1e-5f)
-        assertEquals(0f, ring.commandY, 1e-5f)
-        assertEquals(travel, ring.visualX, 1e-5f)
-        assertEquals(0f, ring.visualY, 1e-5f)
         assertTrue(ring.emit)
         assertTrue(ring.engaged)
         assertFalse(ring.isTap)
-    }
-
-    @Test
-    fun fullCommandRadiusIsOneAndVisualStaysAtKnobTravel() {
-        val full = map(commandRadius, 0f)
-        assertEquals(1f, full.commandX, 1e-5f)
-        assertEquals(0f, full.commandY, 1e-5f)
-        assertEquals(travel, full.visualX, 1e-5f)
-        assertEquals(0f, full.visualY, 1e-5f)
-
-        val ring = map(outer, 0f)
-        assertEquals(ring.visualX, full.visualX, 1e-5f)
-        assertTrue(ring.commandX < full.commandX)
+        assertTrue(ring.commandX < map(commandRadius, 0f).commandX)
     }
 
     @Test
@@ -54,37 +46,9 @@ class GimbalStickTouchMappingTest {
     }
 
     @Test
-    fun responseCurvesDivergeAtVisibleRing() {
-        val n = map(outer, 0f).commandX
-        val linear =
-            CameraCommands.gimbalAnalogCurve(
-                n,
-                expo = CameraCommands.VirtualJoystickCurve.LINEAR.expo,
-            )
-        val standard =
-            CameraCommands.gimbalAnalogCurve(
-                n,
-                expo = CameraCommands.VirtualJoystickCurve.STANDARD.expo,
-            )
-        val fine =
-            CameraCommands.gimbalAnalogCurve(
-                n,
-                expo = CameraCommands.VirtualJoystickCurve.FINE.expo,
-            )
-        assertTrue(linear < 1f)
-        assertTrue(linear > standard)
-        assertTrue(standard > fine)
-    }
-
-    @Test
     fun engagedReturnToCenterEmitsZero() {
-        val slop = travel * CameraCommands.GIMBAL_STICK_TAP_SLOP * 0.5f
-        val tap = map(slop, 0f)
-        assertTrue(tap.isTap)
-        assertFalse(tap.emit)
-        assertFalse(tap.engaged)
-
-        val thrown = map(outer, 0f, engaged = tap.engaged)
+        // A tap inside the slop does not engage (initialTapRemainsTapInsideVisualSlop).
+        val thrown = map(outer, 0f, engaged = false)
         assertTrue(thrown.emit)
 
         val rest = map(0f, 0f, engaged = thrown.engaged)

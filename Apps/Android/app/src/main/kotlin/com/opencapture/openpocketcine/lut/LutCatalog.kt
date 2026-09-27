@@ -85,9 +85,6 @@ object LutCatalog {
             ),
         )
 
-    val shippedAssetFileNames: List<String>
-        get() = (officialBuiltInLooks + officialDji).mapNotNull { it.fileName }
-
     fun assetPath(fileName: String): String = "$ASSET_DIRECTORY/$fileName"
 
     fun customDirectory(filesDir: File): File = File(filesDir, CUSTOM_DIRECTORY)

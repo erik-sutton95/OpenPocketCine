@@ -165,14 +165,11 @@ class WorldLevelTest {
         assertEquals(SnapOutcome.Arrived, snap.evaluate(-89.6, 0.6))
         assertEquals(SnapOutcome.Failed(2.3), snap.evaluate(-87.7, snap.deadline))
         assertEquals(SnapOutcome.Failed(null), snap.evaluate(null, 0.7))
-        assertEquals("Couldn't level: 2.3° off", WorldLevelSnap.failureNote(2.3))
     }
 
     @Test
-    fun doubleTapDefaultsToRecenter() {
-        assertEquals(listOf(GimbalDoubleTap.RECENTER, GimbalDoubleTap.LEVEL), GimbalDoubleTap.pickerOrder)
+    fun unknownDoubleTapRawFallsBackToRecenter() {
         assertEquals(GimbalDoubleTap.RECENTER, GimbalDoubleTap.fromRaw(7))
-        assertEquals("Level", GimbalDoubleTap.LEVEL.label)
     }
 
     @Test

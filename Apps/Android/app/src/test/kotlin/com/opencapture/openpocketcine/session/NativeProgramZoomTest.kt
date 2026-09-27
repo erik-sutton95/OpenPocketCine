@@ -19,12 +19,9 @@ class NativeProgramZoomTest {
         }
     }
 
-    @Test fun preparationAndTrackingUseTheSameLensPayloadAndRockerProtocolRemainsAvailable() {
-        assertContentEquals(byteArrayOf(0x0A, 0x4E, 0x8B.toByte(), 2), NativeProgramZoomCommand.Position(3.0).payload)
+    @Test fun preparationAndTrackingUseTheSameLensPayload() {
         assertContentEquals(NativeProgramZoomCommand.Position(3.0).payload, NativeProgramZoomCommand.Track(3.0).payload)
-        assertContentEquals(byteArrayOf(0xFF.toByte(), 0, 0, 0), NativeProgramZoomCommand.Stop.payload)
-        assertContentEquals(byteArrayOf(1, 72, 1, 0), CameraCommands.zoomRate(72, true))
-        assertContentEquals(byteArrayOf(1, 73, 0, 0), CameraCommands.zoomRate(73, false))
+        assertContentEquals(CameraCommands.zoomStop(), NativeProgramZoomCommand.Stop.payload)
     }
 
     @Test fun longAndTinyLegsStartImmediatelyAndClampAtBothEnds() {

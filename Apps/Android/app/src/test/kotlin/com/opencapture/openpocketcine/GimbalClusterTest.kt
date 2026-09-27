@@ -73,17 +73,6 @@ class GimbalClusterTest {
         assertEquals(withButton.controls.minX - GimbalCluster.GAP, withButton.zoom.maxX, 0.05f)
         assertTrue(withButton.zoom.minX < bare.zoom.minX)
     }
-
-    @Test
-    fun belowWellKeepsZoomUnderTheStrip() {
-        val strip = ChromeRect(0f, 200f, 390f, 220f)
-        val cluster = GimbalCluster.belowWell(strip, floorY = 620f)
-        assertTrue(cluster.zoom.minY >= strip.maxY + GimbalCluster.GAP - 0.05f)
-        assertTrue(cluster.stick.minY >= cluster.zoom.maxY - 0.05f)
-        assertEquals(strip.maxX - GimbalCluster.INSET, cluster.stick.maxX, 0.05f)
-        assertEquals(cluster.stick.maxX, cluster.zoom.maxX, 0.05f)
-        assertEquals(620f - GimbalCluster.INSET, cluster.stick.maxY, 0.05f)
-    }
 }
 
 private fun assertEquals(expected: Float, actual: Float, delta: Float) {

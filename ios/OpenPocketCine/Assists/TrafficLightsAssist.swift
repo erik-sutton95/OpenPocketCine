@@ -17,7 +17,6 @@ enum TrafficLightsAssist {
     static let scaleRange: ClosedRange<Double> = 0.6...1.6
     static let defaultScale = 1.0
     static let defaultCompensation = CrushClipCompensation.zero
-    static let longPressPanelWidth: CGFloat = 400
     static let compensationTitle = "Crush/Clip Compensation"
     static let compensationHelp =
         "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights."

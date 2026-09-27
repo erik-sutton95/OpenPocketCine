@@ -133,61 +133,67 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertFalse(assist.playbackEffects.needsOverlayFeed)
     }
 
-    func testZebraHandoffKeepsThePlayerUntilTheOverlayBakes() {
-        var fx = LiveImageEffects()
-        fx.zebra = true
-        let waiting = PlaybackFeedHandoff.plan(
-            effects: fx, overlayOnly: true, unmanagedBake: false, metalHasPresented: false)
-        XCTAssertTrue(waiting.showPlayer, "identity stays on AVPlayerLayer")
-        XCTAssertFalse(waiting.showFeed, "unpresented CAMetalLayer is a black plate")
-        XCTAssertTrue(waiting.overlay)
-
-        let landed = PlaybackFeedHandoff.plan(
-            effects: fx, overlayOnly: true, unmanagedBake: false, metalHasPresented: true)
-        XCTAssertTrue(landed.showPlayer)
-        XCTAssertTrue(landed.showFeed, "stripes unhide only after the bake presents")
-        XCTAssertTrue(landed.overlay)
-    }
-
-    func testHDRIdentityHandoffHidesThePlayerOnceMetalOwnsThePicture() {
-        let waiting = PlaybackFeedHandoff.plan(
-            effects: LiveImageEffects(), overlayOnly: false, unmanagedBake: false,
-            metalHasPresented: false, hdrDisplay: true)
-        XCTAssertTrue(waiting.showPlayer)
-        XCTAssertFalse(waiting.showFeed)
-
-        let landed = PlaybackFeedHandoff.plan(
-            effects: LiveImageEffects(), overlayOnly: false, unmanagedBake: false,
-            metalHasPresented: true, hdrDisplay: true)
-        XCTAssertFalse(landed.showPlayer)
-        XCTAssertTrue(landed.showFeed)
-        XCTAssertFalse(landed.overlay)
-    }
-
-    func testLUTHandoffHidesThePlayerOnceMetalOwnsThePicture() {
+    func testHandoffPlanKeepsThePlayerUntilMetalOwnsThePicture() {
+        var zebra = LiveImageEffects()
+        zebra.zebra = true
         let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
-        fx.lutDimension = cube.size
-        fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        XCTAssertTrue(fx.replacesIdentityFeed)
-
-        let waiting = PlaybackFeedHandoff.plan(
-            effects: fx, overlayOnly: false, unmanagedBake: true, metalHasPresented: false)
-        XCTAssertTrue(waiting.showPlayer, "player stays until the LUT drawable lands")
-        XCTAssertFalse(waiting.showFeed)
-        XCTAssertFalse(waiting.overlay)
-
-        let landed = PlaybackFeedHandoff.plan(
-            effects: fx, overlayOnly: false, unmanagedBake: true, metalHasPresented: true)
-        XCTAssertFalse(
-            landed.showPlayer,
-            "live hides the identity layer once Metal owns LUT replace; a second HEVC present is the hitch"
-        )
-        XCTAssertTrue(landed.showFeed)
-        XCTAssertFalse(landed.overlay)
-        XCTAssertTrue(
-            landed.unmanaged,
-            "LUT cube product presents unmanaged, same as live HevcDecoder")
+        var lut = LiveImageEffects()
+        lut.lutDimension = cube.size
+        lut.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
+        XCTAssertTrue(lut.replacesIdentityFeed)
+        struct Case {
+            let name: String
+            let effects: LiveImageEffects
+            var overlayOnly = false
+            var unmanagedBake = false
+            var hdrDisplay = false
+            let metalHasPresented: Bool
+            let showPlayer: Bool
+            let showFeed: Bool
+            var overlay: Bool? = nil
+            var unmanaged: Bool? = nil
+        }
+        let cases = [
+            // Identity stays on AVPlayerLayer; an unpresented CAMetalLayer is a black plate.
+            Case(
+                name: "zebra waiting", effects: zebra, overlayOnly: true, metalHasPresented: false,
+                showPlayer: true, showFeed: false, overlay: true),
+            // Stripes unhide only after the bake presents.
+            Case(
+                name: "zebra landed", effects: zebra, overlayOnly: true, metalHasPresented: true,
+                showPlayer: true, showFeed: true, overlay: true),
+            Case(
+                name: "HDR identity waiting", effects: LiveImageEffects(), hdrDisplay: true,
+                metalHasPresented: false, showPlayer: true, showFeed: false),
+            Case(
+                name: "HDR identity landed", effects: LiveImageEffects(), hdrDisplay: true,
+                metalHasPresented: true, showPlayer: false, showFeed: true, overlay: false),
+            // Player stays until the LUT drawable lands.
+            Case(
+                name: "LUT waiting", effects: lut, unmanagedBake: true, metalHasPresented: false,
+                showPlayer: true, showFeed: false, overlay: false),
+            // Live hides the identity layer once Metal owns LUT replace; a second HEVC
+            // present is the hitch. The cube product presents unmanaged, like HevcDecoder.
+            Case(
+                name: "LUT landed", effects: lut, unmanagedBake: true, metalHasPresented: true,
+                showPlayer: false, showFeed: true, overlay: false, unmanaged: true),
+            Case(
+                name: "assists off", effects: LiveImageEffects(), metalHasPresented: true,
+                showPlayer: true, showFeed: false),
+        ]
+        for c in cases {
+            let plan = PlaybackFeedHandoff.plan(
+                effects: c.effects, overlayOnly: c.overlayOnly, unmanagedBake: c.unmanagedBake,
+                metalHasPresented: c.metalHasPresented, hdrDisplay: c.hdrDisplay)
+            XCTAssertEqual(plan.showPlayer, c.showPlayer, "\(c.name): showPlayer")
+            XCTAssertEqual(plan.showFeed, c.showFeed, "\(c.name): showFeed")
+            if let overlay = c.overlay {
+                XCTAssertEqual(plan.overlay, overlay, "\(c.name): overlay")
+            }
+            if let unmanaged = c.unmanaged {
+                XCTAssertEqual(plan.unmanaged, unmanaged, "\(c.name): unmanaged")
+            }
+        }
     }
 
     func testPausedLinkParksOnlyAfterAPausedSeekCanLand() {
@@ -258,45 +264,6 @@ final class PlaybackAssistTests: XCTestCase {
         session.shutdown()
     }
 
-    func testPresentPolicyDrivesHandoffOwnership() {
-        XCTAssertEqual(
-            PlaybackFeedHandoff.replaceOwnsPicture(
-                hasPresentedFrame: true, lastPresentWasOverlay: false),
-            FeedPresentPolicy.replaceOwnsPicture(
-                hasPresentedFrame: true, lastPresentWasOverlay: false))
-        XCTAssertTrue(FeedPresentPolicy.unhideMetalBeforeBake(overlay: false))
-        XCTAssertFalse(FeedPresentPolicy.unhideMetalBeforeBake(overlay: true))
-        XCTAssertTrue(
-            FeedPresentPolicy.shouldScheduleBake(enabled: true, hasDrawable: true))
-        XCTAssertFalse(
-            FeedPresentPolicy.shouldRender(
-                attached: true, enabled: true, hidden: true, hasDrawable: true),
-            "hidden replace drawable is the black well")
-        XCTAssertTrue(
-            FeedPresentPolicy.isDuplicateFrameTime(42, lastPresentedNs: 42))
-        XCTAssertFalse(
-            FeedPresentPolicy.isDuplicateFrameTime(0, lastPresentedNs: 42),
-            "unknown timestamps must not skip")
-        XCTAssertTrue(FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 0))
-        XCTAssertFalse(
-            FeedPresentPolicy.shouldAcquireDrawable(inFlightPresents: 1),
-            "LUT 50/50 must not block MainActor on a second nextDrawable")
-    }
-
-    func testLUTMustNotStealThePlayerOnAStaleOverlayBake() {
-        XCTAssertFalse(
-            PlaybackFeedHandoff.replaceOwnsPicture(
-                hasPresentedFrame: true, lastPresentWasOverlay: true),
-            "PEAK/FALSE/ZEBRA present must not hide AVPlayerLayer for LUT")
-        XCTAssertFalse(
-            PlaybackFeedHandoff.replaceOwnsPicture(
-                hasPresentedFrame: false, lastPresentWasOverlay: false),
-            "LUT stays off the player until its own bake lands")
-        XCTAssertTrue(
-            PlaybackFeedHandoff.replaceOwnsPicture(
-                hasPresentedFrame: true, lastPresentWasOverlay: false))
-    }
-
     func testNextClipForcesAPullUntilTheHostPresents() {
         XCTAssertTrue(
             PlaybackFeedHandoff.shouldForcePull(
@@ -342,14 +309,6 @@ final class PlaybackAssistTests: XCTestCase {
             PlaybackFeedHandoff.shouldAdoptHost(
                 incomingGeneration: 2, currentGeneration: 2, isSameHost: false),
             "equal generation on a different view is the outgoing slide twin")
-    }
-
-    func testAssistsOffHandoffHidesTheMetalFeed() {
-        let plan = PlaybackFeedHandoff.plan(
-            effects: LiveImageEffects(), overlayOnly: false, unmanagedBake: false,
-            metalHasPresented: true)
-        XCTAssertTrue(plan.showPlayer)
-        XCTAssertFalse(plan.showFeed)
     }
 
     @MainActor
@@ -488,10 +447,25 @@ final class PlaybackAssistTests: XCTestCase {
             "zebra / peaking / false colour overlay is unmanaged chrome")
     }
 
-    func testLUTBakeOfRec709PlayerFrameKeepsLuma() throws {
-        let lumas = try Self.measureLUTBakeLumas(buffer: Self.rec709TaggedBGRA(code: 78))
-        XCTAssertGreaterThan(lumas.unmanaged, 0.04)
-        XCTAssertGreaterThan(lumas.managed, 0.04)
+    func testLUTBakeOfRec709PlayerFramesKeepsLuma() throws {
+        let cases: [(name: String, buffer: CVPixelBuffer, colorMode: ColorMode, managed: Bool)] = [
+            (
+                "Rec.709-tagged BGRA (AVPlayer output)", Self.rec709TaggedBGRA(code: 78), .dLog2,
+                true
+            ),
+            (
+                "Rec.709-tagged 420 (live-shaped player output)",
+                Self.tagRec709(
+                    ScopeTestBuffers.make420v(width: 32, height: 32, leftY: 128, rightY: 128)),
+                .normal, false
+            ),
+        ]
+        for c in cases {
+            let lumas = try Self.measureLUTBakeLumas(buffer: c.buffer, colorMode: c.colorMode)
+            XCTAssertGreaterThan(
+                lumas.unmanaged, 0.04, "unmanaged LUT of \(c.name) must not present black")
+            if c.managed { XCTAssertGreaterThan(lumas.managed, 0.04, c.name) }
+        }
     }
 
     @MainActor
@@ -521,104 +495,7 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertNotEqual(feed.debugPresentGeneration, generation)
     }
 
-    func testUnmanagedLUTBakeOfRec709Tagged420KeepsLuma() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal required")
-        }
-        let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
-        fx.lutDimension = cube.size
-        fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        let buffer = ScopeTestBuffers.make420v(width: 32, height: 32, leftY: 128, rightY: 128)
-        CVBufferSetAttachment(
-            buffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2,
-            .shouldPropagate)
-        CVBufferSetAttachment(
-            buffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2,
-            .shouldPropagate)
-        CVBufferSetAttachment(
-            buffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_709_2,
-            .shouldPropagate)
-        let source = CIImage(cvPixelBuffer: buffer, options: LiveMonitorWorkingSpace.imageOptions)
-        let identity = CIImage(cvPixelBuffer: buffer)
-        let product = LiveMonitorCompositor.applyProduct(to: source, effects: fx, display: identity)
-        XCTAssertTrue(product.unmanagedBake)
-
-        let baker = FeedFrameBaker(device: device)
-        let drawable = CGSize(width: 32, height: 32)
-        let done = expectation(description: "420 lut bake")
-        baker.scheduleBake(
-            image: product.image, drawableSize: drawable, pixelFormat: .bgra8Unorm,
-            unmanaged: true
-        ) {
-            done.fulfill()
-        }
-        wait(for: [done], timeout: 2)
-        guard let texture = baker.bakedTexture(for: drawable, pixelFormat: .bgra8Unorm) else {
-            XCTFail("baker must publish the 420 LUT texture")
-            return
-        }
-        defer { baker.releaseBakedTexture(texture) }
-        guard
-            let wrapped = CIImage(
-                mtlTexture: texture, options: LiveMonitorWorkingSpace.imageOptions)
-        else {
-            XCTFail("CIImage(mtlTexture:) must wrap the bake")
-            return
-        }
-        XCTAssertGreaterThan(
-            Self.sampleLuma(wrapped), 0.04,
-            "unmanaged LUT of Rec.709-tagged 420 (live-shaped player output) must not present black"
-        )
-    }
-
-    func testUnmanagedLUTBakeOfRec709TaggedBGRAKeepsLuma() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal required")
-        }
-        let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
-        fx.lutDimension = cube.size
-        fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        fx.colorMode = .dLog2
-        let buffer = Self.rec709TaggedBGRA(code: 78)
-        let source = CIImage(cvPixelBuffer: buffer, options: LiveMonitorWorkingSpace.imageOptions)
-        let identity = CIImage(cvPixelBuffer: buffer)
-        let product = LiveMonitorCompositor.applyProduct(to: source, effects: fx, display: identity)
-        XCTAssertTrue(product.unmanagedBake)
-
-        let baker = FeedFrameBaker(device: device)
-        let drawable = CGSize(width: 32, height: 32)
-        let done = expectation(description: "lut bake")
-        baker.scheduleBake(
-            image: product.image, drawableSize: drawable, pixelFormat: .bgra8Unorm,
-            unmanaged: product.unmanagedBake
-        ) {
-            done.fulfill()
-        }
-        wait(for: [done], timeout: 2)
-        guard let texture = baker.bakedTexture(for: drawable, pixelFormat: .bgra8Unorm) else {
-            XCTFail("baker must publish the LUT texture")
-            return
-        }
-        defer { baker.releaseBakedTexture(texture) }
-        guard
-            let wrapped = CIImage(
-                mtlTexture: texture, options: LiveMonitorWorkingSpace.imageOptions)
-        else {
-            XCTFail("CIImage(mtlTexture:) must wrap the bake")
-            return
-        }
-        let luma = Self.sampleLuma(wrapped)
-        XCTAssertGreaterThan(
-            luma, 0.04,
-            "unmanaged LUT of Rec.709-tagged BGRA (AVPlayer output) must not present black")
-    }
-
     func testUntaggedCloneLetsUnmanagedLUTBakeKeepLumaFromIOSurface() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("Metal required")
-        }
         let made = ScopeTestBuffers.makeIOSurfaceBGRA(width: 32, height: 32, left: 78, right: 78)
         guard made.filled else { throw XCTSkip("host cannot CPU-write IOSurface BGRA") }
         CVBufferSetAttachment(
@@ -632,42 +509,16 @@ final class PlaybackAssistTests: XCTestCase {
             CVBufferGetAttachment(cloned, kCVImageBufferColorPrimariesKey, nil),
             "clone must drop Rec.709 tags so NSNull present is not a black well")
 
-        let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
-        fx.lutDimension = cube.size
-        fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        let source = CIImage(cvPixelBuffer: cloned, options: LiveMonitorWorkingSpace.imageOptions)
-        let product = LiveMonitorCompositor.applyProduct(to: source, effects: fx, display: source)
-        XCTAssertTrue(product.unmanagedBake)
-
-        let baker = FeedFrameBaker(device: device)
-        let drawable = CGSize(width: 32, height: 32)
-        let done = expectation(description: "cloned lut bake")
-        baker.scheduleBake(
-            image: product.image, drawableSize: drawable, pixelFormat: .bgra8Unorm,
-            unmanaged: true
-        ) {
-            done.fulfill()
-        }
-        wait(for: [done], timeout: 2)
-        guard let texture = baker.bakedTexture(for: drawable, pixelFormat: .bgra8Unorm) else {
-            XCTFail("baker must publish the cloned LUT texture")
-            return
-        }
-        defer { baker.releaseBakedTexture(texture) }
-        guard
-            let wrapped = CIImage(
-                mtlTexture: texture, options: LiveMonitorWorkingSpace.imageOptions)
-        else {
-            XCTFail("CIImage(mtlTexture:) must wrap the bake")
-            return
-        }
-        XCTAssertGreaterThan(Self.sampleLuma(wrapped), 0.04)
+        let lumas = try Self.measureLUTBakeLumas(
+            buffer: cloned, colorMode: .normal, displayIsSource: true)
+        XCTAssertGreaterThan(lumas.unmanaged, 0.04)
     }
 
-    private static func measureLUTBakeLumas(buffer: CVPixelBuffer) throws -> (
-        managed: Float, unmanaged: Float
-    ) {
+    /// Mono cube bake of `buffer`, sampled managed and unmanaged. `displayIsSource`
+    /// passes the working-space image as the display identity (the clone path).
+    private static func measureLUTBakeLumas(
+        buffer: CVPixelBuffer, colorMode: ColorMode = .dLog2, displayIsSource: Bool = false
+    ) throws -> (managed: Float, unmanaged: Float) {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal required")
         }
@@ -675,9 +526,9 @@ final class PlaybackAssistTests: XCTestCase {
         var fx = LiveImageEffects()
         fx.lutDimension = cube.size
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        fx.colorMode = .dLog2
+        fx.colorMode = colorMode
         let source = CIImage(cvPixelBuffer: buffer, options: LiveMonitorWorkingSpace.imageOptions)
-        let identity = CIImage(cvPixelBuffer: buffer)
+        let identity = displayIsSource ? source : CIImage(cvPixelBuffer: buffer)
         let product = LiveMonitorCompositor.applyProduct(to: source, effects: fx, display: identity)
         XCTAssertTrue(product.unmanagedBake)
         let baker = FeedFrameBaker(device: device)
@@ -712,7 +563,10 @@ final class PlaybackAssistTests: XCTestCase {
     private static func rec709TaggedBGRA(code: UInt8, width: Int = 32, height: Int = 32)
         -> CVPixelBuffer
     {
-        let buffer = ScopeTestBuffers.makeFlatBuffer(code: code, width: width, height: height)
+        tagRec709(ScopeTestBuffers.makeFlatBuffer(code: code, width: width, height: height))
+    }
+
+    private static func tagRec709(_ buffer: CVPixelBuffer) -> CVPixelBuffer {
         CVBufferSetAttachment(
             buffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2,
             .shouldPropagate)

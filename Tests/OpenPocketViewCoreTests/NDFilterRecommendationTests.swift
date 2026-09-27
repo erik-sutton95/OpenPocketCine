@@ -4,62 +4,31 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct NDFilterRecommendationTests {
-    @Test func middleGrayNeedsNoGlass() {
-        let rec = NDFilterRecommendation.suggestion(pictureStops: 0)
-        #expect(rec.ndStops == 0)
-        #expect(rec.ndLabel == "—")
-        #expect(rec.stopsLabel == "0.0")
-        #expect(rec.needsGlass == false)
-    }
-
-    @Test func twoStopsHotIsND4() {
-        let rec = NDFilterRecommendation.suggestion(pictureStops: 2)
-        #expect(rec.ndStops == 2)
-        #expect(rec.opticalFactor == 4)
-        #expect(rec.ndLabel == "ND4")
-        #expect(rec.stopsLabel == "+2.0")
-        #expect(rec.needsGlass == true)
-    }
-
-    @Test func fiveStopsHotIsND32() {
-        let rec = NDFilterRecommendation.suggestion(pictureStops: 5)
-        #expect(rec.ndStops == 5)
-        #expect(rec.ndLabel == "ND32")
-        #expect(rec.stopsLabel == "+5.0")
-    }
-
-    @Test func twoPointThreeRoundsToND4() {
-        let rec = NDFilterRecommendation.suggestion(pictureStops: 2.3)
-        #expect(rec.ndStops == 2)
-        #expect(rec.ndLabel == "ND4")
-        #expect(rec.stopsLabel == "+2.3")
-    }
-
-    @Test func halfStopRoundsUpToND2() {
-        let rec = NDFilterRecommendation.suggestion(pictureStops: 0.5)
-        #expect(rec.ndStops == 1)
-        #expect(rec.ndLabel == "ND2")
-    }
-
-    @Test func underExposureDoesNotSuggestND() {
-        let rec = NDFilterRecommendation.suggestion(pictureStops: -1.5)
-        #expect(rec.ndStops == 0)
-        #expect(rec.ndLabel == "—")
-        #expect(rec.stopsLabel == "−1.5")
-        #expect(rec.needsGlass == false)
-    }
-
-    @Test func deadbandHoldsUnderHalfStop() {
-        let rec = NDFilterRecommendation.suggestion(pictureStops: 0.3)
-        #expect(rec.ndStops == 0)
-        #expect(rec.ndLabel == "—")
-    }
-
-    @Test func tenStopCapIsND1000NotND1024() {
-        let rec = NDFilterRecommendation.suggestion(pictureStops: 12)
-        #expect(rec.ndStops == 10)
-        #expect(rec.opticalFactor == 1_000)
-        #expect(rec.ndLabel == "ND1000")
+    /// Picture stops over grey to the suggested glass. Under half a stop is a
+    /// deadband, under exposure never asks for ND, and the ladder caps at ND1000.
+    @Test(
+        arguments: [
+            (0, 0, "—", "0.0", nil),
+            (0.3, 0, "—", nil, nil),
+            (0.5, 1, "ND2", nil, nil),
+            (2, 2, "ND4", "+2.0", 4),
+            (2.3, 2, "ND4", "+2.3", nil),
+            (3, 3, "ND8", "+3.0", 8),
+            (5, 5, "ND32", "+5.0", nil),
+            (12, 10, "ND1000", nil, 1_000),
+            (-1, 0, "—", "−1.0", nil),
+            (-1.5, 0, "—", "−1.5", nil),
+        ] as [(Double, Int, String, String?, Int?)])
+    func suggestionFollowsTheOpticalLadder(
+        pictureStops: Double, ndStops: Int, ndLabel: String, stopsLabel: String?,
+        opticalFactor: Int?
+    ) {
+        let rec = NDFilterRecommendation.suggestion(pictureStops: pictureStops)
+        #expect(rec.ndStops == ndStops)
+        #expect(rec.ndLabel == ndLabel)
+        #expect(rec.needsGlass == (ndStops > 0))
+        if let stopsLabel { #expect(rec.stopsLabel == stopsLabel) }
+        if let opticalFactor { #expect(rec.opticalFactor == opticalFactor) }
     }
 
     @Test func histogramMedianMapsToPictureStops() {
@@ -80,17 +49,6 @@ import Testing
         #expect(
             NDFilterRecommendation.reading(lumaHistogram: [], transfer: .rec709)
                 == nil)
-    }
-
-    @Test func labelsFollowTheOpticalLadder() {
-        #expect(NDFilterRecommendation.ndLabel(stops: 0) == "—")
-        #expect(NDFilterRecommendation.ndLabel(stops: 1) == "ND2")
-        #expect(NDFilterRecommendation.ndLabel(stops: 3) == "ND8")
-        #expect(NDFilterRecommendation.ndLabel(stops: 5) == "ND32")
-        #expect(NDFilterRecommendation.ndLabel(stops: 10) == "ND1000")
-        #expect(NDFilterRecommendation.stopsLabel(0) == "0.0")
-        #expect(NDFilterRecommendation.stopsLabel(2.3) == "+2.3")
-        #expect(NDFilterRecommendation.stopsLabel(-1) == "−1.0")
     }
 
     @Test func densityIsThreeTenthsPerStop() {

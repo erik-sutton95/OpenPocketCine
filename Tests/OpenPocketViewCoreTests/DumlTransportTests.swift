@@ -56,7 +56,6 @@ import Testing
         #expect(pkt[6] == 0x00)
         #expect(Array(pkt[8..<14]) == [0x87, 0xB8, 0x64, 0x00, 0x64, 0x00])
         #expect(DumlTransport.isHandshake(pkt))
-        #expect(CameraSoftAP.isHandshakeAck(pkt))
     }
 
     @Test func ackPayloadLayout() {

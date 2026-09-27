@@ -358,6 +358,4 @@ extension ConnectionPhase {
         case .openingDatalink, .live: 4
         }
     }
-
-    public static let pocketWizardStepCount = 4
 }

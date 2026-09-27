@@ -3,17 +3,8 @@ package com.opencapture.openpocketcine.media
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class MediaStoreInsertPolicyTest {
-    @Test
-    fun photosUsePicturesAndVideoUsesMovies() {
-        assertEquals("Pictures/OpenPocketCine", MediaStoreInsertPolicy.relativePath("image/jpeg"))
-        assertEquals("Pictures/OpenPocketCine", MediaStoreInsertPolicy.relativePath("image/heic"))
-        assertEquals("Pictures/OpenPocketCine", MediaStoreInsertPolicy.relativePath("image/x-adobe-dng"))
-        assertEquals("Movies/OpenPocketCine", MediaStoreInsertPolicy.relativePath("video/mp4"))
-    }
-
     @Test
     fun photosAreNeverPlacedUnderMovies() {
         // Play #348: Images collection + RELATIVE_PATH Movies/… is rejected by
@@ -24,12 +15,7 @@ class MediaStoreInsertPolicyTest {
                 "$mime must not be inserted under Movies",
             )
         }
-    }
-
-    @Test
-    fun imageDetectionFollowsMime() {
-        assertTrue(MediaStoreInsertPolicy.isImage("image/jpeg"))
-        assertFalse(MediaStoreInsertPolicy.isImage("video/mp4"))
+        assertEquals("Movies/OpenPocketCine", MediaStoreInsertPolicy.relativePath("video/mp4"))
     }
 
     @Test

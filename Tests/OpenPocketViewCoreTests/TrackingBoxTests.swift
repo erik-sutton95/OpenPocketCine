@@ -89,36 +89,24 @@ import Testing
         #expect(abs(box.height - 0.22) < 0.0001)
     }
 
-    @Test func overlayShowsFocusWhenIdle() {
-        #expect(
-            FocusOverlayPolicy.resolve(
-                tracking: false, search: Optional<TrackingBox>.none,
-                subject: Optional<TrackingBox>.none)
-                == .focus
-        )
-    }
+    static let overlaySearch = TrackingBox(x: 0.2, y: 0.2, width: 0.5, height: 0.5)
+    static let overlayCamera = TrackingBox(x: 0.41, y: 0.33, width: 0.16, height: 0.20)
 
-    @Test func overlayShowsSearchUntilLock() {
-        let search = TrackingBox(x: 0.2, y: 0.2, width: 0.5, height: 0.5)
+    @Test(
+        arguments: [
+            (false, nil, nil, FocusOverlay.focus),
+            (
+                true, Self.overlaySearch, nil,
+                .subject(TrackingBox.subject(from: Self.overlaySearch))
+            ),
+            (true, Self.overlaySearch, Self.overlayCamera, .subject(Self.overlayCamera)),
+        ] as [(Bool, TrackingBox?, TrackingBox?, FocusOverlay)])
+    func overlayResolvesFocusOrSubject(
+        tracking: Bool, search: TrackingBox?, subject: TrackingBox?, expected: FocusOverlay
+    ) {
         #expect(
-            FocusOverlayPolicy.resolve(
-                tracking: false, search: search, subject: Optional<TrackingBox>.none)
-                == .search(search)
-        )
-    }
-
-    @Test func overlayReplacesSearchWithSubjectOnLock() {
-        let search = TrackingBox(x: 0.2, y: 0.2, width: 0.5, height: 0.5)
-        #expect(
-            FocusOverlayPolicy.resolve(
-                tracking: true, search: search, subject: Optional<TrackingBox>.none)
-                == .subject(TrackingBox.subject(from: search))
-        )
-        let camera = TrackingBox(x: 0.41, y: 0.33, width: 0.16, height: 0.20)
-        #expect(
-            FocusOverlayPolicy.resolve(tracking: true, search: search, subject: camera)
-                == .subject(camera)
-        )
+            FocusOverlayPolicy.resolve(tracking: tracking, search: search, subject: subject)
+                == expected)
     }
 
     @Test func subjectBoxIsTighterAndCenteredOnSearch() {
@@ -151,26 +139,8 @@ import Testing
         #expect(box.maxX <= 1)
         #expect(box.maxY <= 1)
         #expect(box.isTooSmall)
-    }
-
-    @Test func mimoRejectsTinySearchFrames() {
-        let tiny = TrackingBox(x: 0.40, y: 0.40, width: 0.05, height: 0.05)
-        let ok = TrackingBox(x: 0.40, y: 0.40, width: 0.12, height: 0.20)
-        #expect(tiny.isTooSmall)
-        #expect(!ok.isTooSmall)
-    }
-
-    @Test func setTrackingBoxSendsCenterNotOrigin() {
-        let box = TrackingBox(x: 0.20, y: 0.30, width: 0.40, height: 0.20)
-        let frame = Commands.setTrackingBox(
-            id: 1,
-            x: Float(box.centerX),
-            y: Float(box.centerY),
-            width: Float(box.width),
-            height: Float(box.height)
-        )
-        #expect(Array(frame.payload[5..<9]) == floatLE(0.40))
-        #expect(Array(frame.payload[9..<13]) == floatLE(0.40))
+        #expect(TrackingBox(x: 0.40, y: 0.40, width: 0.05, height: 0.05).isTooSmall)
+        #expect(!TrackingBox(x: 0.40, y: 0.40, width: 0.12, height: 0.20).isTooSmall)
     }
 
     @Test func smoothingBlendsSizeSlowerThanCenter() {
@@ -239,7 +209,17 @@ import Testing
         #expect(
             SceneFacePolicy.dimmed(faces: [primary, extra], occluder: subject)
                 == [extra])
-        #expect(SceneFacePolicy.dimOpacity == 0.20)
+        // Padded head grown from `face`: it owns the face, so the two never paint side by side.
+        let face = TrackingBox(x: 0.42, y: 0.20, width: 0.14, height: 0.16)
+        let head = TrackingBox(x: 0.36, y: -0.08, width: 0.26, height: 0.46)
+        #expect(FaceHeadHandoff.faceBelongsToHead(face: face, head: head))
+        #expect(FaceHeadHandoff.isSamePerson(face, head))
+        #expect(
+            !FaceHeadHandoff.faceBelongsToHead(
+                face: face, head: TrackingBox(x: 0.78, y: 0.20, width: 0.16, height: 0.20)))
+        #expect(
+            SceneFacePolicy.dimmed(faces: [face, head], hiding: face).isEmpty,
+            "padded head must not sit next to its own face")
         let a = TrackingBox(x: 0.10, y: 0.10, width: 0.20, height: 0.20)
         let b = TrackingBox(x: 0.12, y: 0.11, width: 0.20, height: 0.20)
         let c = TrackingBox(x: 0.70, y: 0.10, width: 0.20, height: 0.20)
@@ -249,11 +229,11 @@ import Testing
         #expect(
             SceneFacePolicy.assignments(
                 detections: [panned], previous: [a],
-                maxCenterDistance: FaceTrackHold.motionMatchDistance)[0] == 0)
+                maxCenterDistance: HeadTrackPolicy.jumpDistance)[0] == 0)
         #expect(
             SceneFacePolicy.assignments(
                 detections: [c], previous: [a],
-                maxCenterDistance: FaceTrackHold.motionMatchDistance
+                maxCenterDistance: HeadTrackPolicy.jumpDistance
             )
             .isEmpty)
     }
@@ -443,108 +423,6 @@ import Testing
         #expect(jumped.box == ducked)
     }
 
-    @Test func personHoldKeepsHeadBoxWhenFaceTurnsAway() throws {
-        let face = TrackingBox(x: 0.40, y: 0.18, width: 0.16, height: 0.20)
-        let person = TrackingBox(x: 0.36, y: 0.16, width: 0.24, height: 0.62)
-        #expect(FaceBodyFallback.shouldHold(lastFace: face, person: person))
-        #expect(FaceBodyFallback.needsHold(faces: [], last: face))
-        #expect(
-            !FaceBodyFallback.needsHold(
-                faces: [FaceHit(box: face, confidence: 0.9, structured: true)], last: face))
-        // A cap / occiput oval overlapping the last face is not a reacquire.
-        #expect(
-            FaceBodyFallback.needsHold(
-                faces: [FaceHit(box: face, confidence: 0.95, structured: false)], last: face))
-        let head = try #require(FaceBodyFallback.heldHead(lastFace: face, person: person))
-        // Top-centre of the person — not the last face centre (that is the occiput).
-        #expect(abs(head.centerX - person.centerX) < 0.001)
-        #expect(head.minY > person.minY + 0.01)
-        #expect(head.centerY < person.centerY)
-        #expect(head.maxY < person.minY + person.height * 0.60)
-        #expect(isVisualSquare(head))
-        let stranger = TrackingBox(x: 0.02, y: 0.70, width: 0.20, height: 0.25)
-        #expect(!FaceBodyFallback.shouldHold(lastFace: face, person: stranger))
-        #expect(FaceBodyFallback.heldHead(lastFace: face, person: stranger) == nil)
-        #expect(FaceBodyFallback.bestHold(lastFace: face, people: [stranger, person]) == head)
-        let walked = TrackingBox(x: 0.60, y: 0.10, width: 0.22, height: 0.70)
-        let movedFace = TrackingBox(x: 0.20, y: 0.20, width: 0.14, height: 0.16)
-        #expect(FaceBodyFallback.shouldHold(lastFace: movedFace, person: walked) == false)
-        let trailing = TrackingBox(x: 0.50, y: 0.12, width: 0.16, height: 0.18)
-        #expect(FaceBodyFallback.shouldHold(lastFace: trailing, person: walked))
-        #expect(!walked.contains(x: trailing.centerX, y: trailing.centerY))
-        let relocated = try #require(FaceBodyFallback.heldHead(lastFace: trailing, person: walked))
-        #expect(relocated.minY > walked.minY + 0.01)
-        #expect(relocated.centerY < walked.centerY)
-        #expect(relocated.maxY < walked.minY + walked.height * 0.60)
-        #expect(abs(relocated.centerX - walked.centerX) < 0.001)
-        #expect(isVisualSquare(relocated))
-    }
-
-    @Test func poseHeadUsesEarsAndNeckNotTorso() throws {
-        let face = TrackingBox(x: 0.42, y: 0.20, width: 0.14, height: 0.18)
-        let head = try #require(
-            FaceBodyFallback.headFromPose(
-                lastFace: face,
-                neckX: 0.50, neckY: 0.38,
-                leftEarX: 0.44, leftEarY: 0.24,
-                rightEarX: 0.56, rightEarY: 0.24,
-                leftShoulderX: 0.40, leftShoulderY: 0.48,
-                rightShoulderX: 0.60, rightShoulderY: 0.48))
-        #expect(head.centerY < 0.38)
-        #expect(head.maxY <= 0.42)
-        #expect(head.minY < 0.24)
-        #expect(head.width < 0.40)
-        #expect(isVisualSquare(head))
-        let neckOnly = try #require(
-            FaceBodyFallback.headFromPose(
-                lastFace: face,
-                neckX: 0.50, neckY: 0.40,
-                leftEarX: nil, leftEarY: nil,
-                rightEarX: nil, rightEarY: nil,
-                leftShoulderX: 0.42, leftShoulderY: 0.50,
-                rightShoulderX: 0.58, rightShoulderY: 0.50))
-        #expect(abs(neckOnly.centerX - 0.50) < 0.02)
-        #expect(neckOnly.centerY < 0.40)
-        #expect(
-            FaceBodyFallback.headFromPose(
-                lastFace: face,
-                neckX: nil, neckY: nil,
-                leftEarX: nil, leftEarY: nil,
-                rightEarX: nil, rightEarY: nil,
-                leftShoulderX: nil, leftShoulderY: nil,
-                rightShoulderX: nil, rightShoulderY: nil) == nil)
-    }
-
-    @Test func poseHeadInProfileSpansEarToNoseNotOcciput() throws {
-        let lastFace = TrackingBox(x: 0.38, y: 0.18, width: 0.14, height: 0.18)
-        let head = try #require(
-            FaceBodyFallback.headFromPose(
-                lastFace: lastFace,
-                neckX: 0.48, neckY: 0.40,
-                leftEarX: 0.40, leftEarY: 0.24,
-                rightEarX: nil, rightEarY: nil,
-                leftShoulderX: 0.42, leftShoulderY: 0.50,
-                rightShoulderX: 0.56, rightShoulderY: 0.50,
-                noseX: 0.58, noseY: 0.26))
-        #expect(head.minX < 0.42)
-        #expect(head.maxX > 0.56)
-        #expect(head.centerX > 0.46)
-        #expect(head.centerX < 0.56)
-        #expect(head.centerY < 0.40)
-        #expect(head.maxY < 0.48)
-        #expect(isVisualSquare(head))
-        let earNeckOnly = try #require(
-            FaceBodyFallback.headFromPose(
-                lastFace: lastFace,
-                neckX: 0.48, neckY: 0.40,
-                leftEarX: 0.40, leftEarY: 0.24,
-                rightEarX: nil, rightEarY: nil,
-                leftShoulderX: 0.42, leftShoulderY: 0.50,
-                rightShoulderX: 0.56, rightShoulderY: 0.50))
-        #expect(head.maxX > earNeckOnly.maxX)
-        #expect(head.centerX > earNeckOnly.centerX)
-    }
-
     @Test func primaryPickFollowsHeadNotASecondOval() throws {
         let last = TrackingBox(x: 0.40, y: 0.16, width: 0.20, height: 0.24)
         let head = FaceHit(box: last, confidence: 0.80, structured: false)
@@ -561,37 +439,6 @@ import Testing
                 hits: [head], hold: nil, last: nil,
                 secondsSinceHit: .infinity, sceneMoving: false))
         #expect(first == head)
-    }
-
-    @Test func headFromFaceGrowsUpAndOutNotIntoChest() {
-        let face = TrackingBox(x: 0.40, y: 0.22, width: 0.14, height: 0.16)
-        let head = FaceBodyFallback.headFromFace(face)
-        #expect(head.width > face.width)
-        #expect(head.height > face.height)
-        #expect(isVisualSquare(head))
-        #expect(head.minY < face.minY)
-        #expect(head.maxY >= face.maxY - 0.01)
-        #expect(abs(head.centerX - face.centerX) < 0.001)
-        #expect(head.width <= FaceBodyFallback.poseMaxSide)
-        #expect(head.height <= FaceBodyFallback.poseMaxSide)
-    }
-
-    @Test func poseHeadIgnoresHugeLastFaceSize() throws {
-        let huge = TrackingBox(x: 0.20, y: 0.02, width: 0.42, height: 0.52)
-        let head = try #require(
-            FaceBodyFallback.headFromPose(
-                lastFace: huge,
-                neckX: 0.50, neckY: 0.38,
-                leftEarX: 0.44, leftEarY: 0.24,
-                rightEarX: 0.56, rightEarY: 0.24,
-                leftShoulderX: 0.40, leftShoulderY: 0.48,
-                rightShoulderX: 0.60, rightShoulderY: 0.48))
-        #expect(head.width <= FaceBodyFallback.poseMaxSide)
-        #expect(head.height <= FaceBodyFallback.poseMaxSide)
-        #expect(isVisualSquare(head))
-        #expect(head.height < huge.height)
-        #expect(head.maxY < huge.maxY)
-        #expect(head.maxY < 0.50)
     }
 
     @Test func faceStructureNeedsTwoEyesOrProfile() {
@@ -695,211 +542,6 @@ import Testing
         #expect(FocusResetPolicy.isAvailable(x: 0.50, y: 0.10, tracking: false))
         #expect(FocusResetPolicy.isAvailable(x: 0.50, y: 0.50, tracking: true))
         #expect(FocusResetPolicy.isAvailable(x: nil, y: nil, tracking: true))
-    }
-
-    @Test func faceHeadHandoffKeepsOneBoxAndWaitsToSwap() throws {
-        let face = TrackingBox(x: 0.42, y: 0.20, width: 0.14, height: 0.16)
-        let head = FaceBodyFallback.headFromFace(face)
-        #expect(FaceHeadHandoff.faceBelongsToHead(face: face, head: head))
-        #expect(FaceHeadHandoff.isSamePerson(face, head))
-        #expect(
-            !FaceHeadHandoff.faceBelongsToHead(
-                face: face, head: TrackingBox(x: 0.78, y: 0.20, width: 0.16, height: 0.20)))
-
-        #expect(
-            FaceHeadHandoff.nextMode(
-                current: .face, hasUsableFace: true, hasHead: true,
-                faceVisibleFor: 1, faceMissingFor: 0) == .face)
-        #expect(
-            FaceHeadHandoff.nextMode(
-                current: .face, hasUsableFace: false, hasHead: true,
-                faceVisibleFor: 0, faceMissingFor: 0.10) == .face,
-            "brief miss must not flip to head")
-        #expect(
-            FaceHeadHandoff.nextMode(
-                current: .face, hasUsableFace: false, hasHead: true,
-                faceVisibleFor: 0, faceMissingFor: FaceHeadHandoff.faceLostDuration)
-                == .head)
-        #expect(
-            FaceHeadHandoff.nextMode(
-                current: .head, hasUsableFace: true, hasHead: true,
-                faceVisibleFor: 0.08, faceMissingFor: 0) == .head,
-            "brief face flicker must not leave head")
-        #expect(
-            FaceHeadHandoff.nextMode(
-                current: .head, hasUsableFace: true, hasHead: true,
-                faceVisibleFor: FaceHeadHandoff.faceRecoverDuration, faceMissingFor: 0)
-                == .face)
-
-        let faceHit = FaceHit(box: face, confidence: 0.92, structured: true)
-        let facing = HeadLock.fuse(faces: [faceHit], poses: [head], last: face)
-        #expect(facing.count == 1)
-        #expect(facing.first?.structured == true)
-        let painted = try #require(facing.first?.box)
-        #expect(painted.width + 0.001 >= face.width)
-        #expect(painted.height + 0.001 >= face.height)
-        #expect(painted.intersectionArea(face) / face.area > 0.9)
-        #expect(isVisualSquare(painted))
-
-        let stillFace = HeadLock.fuse(
-            faces: [], poses: [head], last: face, lastMode: .face,
-            faceVisibleFor: 0, faceMissingFor: 0.10)
-        #expect(
-            stillFace.isEmpty, "grace holds the last face in CameraSession, does not add a head")
-
-        let turned = HeadLock.fuse(
-            faces: [], poses: [head], last: face, lastMode: .face,
-            faceVisibleFor: 0, faceMissingFor: FaceHeadHandoff.faceLostDuration)
-        #expect(turned.count == 1)
-        #expect(turned.first?.structured == false)
-
-        let flicker = HeadLock.fuse(
-            faces: [faceHit], poses: [head], last: head, lastMode: .head,
-            faceVisibleFor: 0.08, faceMissingFor: 0)
-        #expect(flicker.count == 1)
-        #expect(flicker.first?.structured == false, "recover wait keeps the head")
-
-        let back = HeadLock.fuse(
-            faces: [faceHit], poses: [head], last: head, lastMode: .head,
-            faceVisibleFor: FaceHeadHandoff.faceRecoverDuration, faceMissingFor: 0)
-        #expect(back.count == 1)
-        let recovered = try #require(back.first?.box)
-        #expect(recovered.intersectionArea(face) / face.area > 0.9)
-        #expect(isVisualSquare(recovered))
-
-        #expect(
-            SceneFacePolicy.dimmed(faces: [face, head], hiding: face).isEmpty,
-            "padded head must not sit next to its own face")
-        #expect(FaceHeadHandoff.pickBox(mode: .face, face: face, head: head) == face)
-        #expect(FaceHeadHandoff.pickBox(mode: .head, face: face, head: head) == head)
-    }
-
-    @Test func headLockPrefersFaceAndRejectsChairPose() throws {
-        let face = FaceHit(
-            box: TrackingBox(x: 0.42, y: 0.18, width: 0.14, height: 0.18),
-            confidence: 0.92, structured: true)
-        let chair = TrackingBox(x: 0.08, y: 0.22, width: 0.16, height: 0.22)
-        let last = TrackingBox(x: 0.40, y: 0.16, width: 0.20, height: 0.24)
-        let fused = HeadLock.fuse(faces: [face], poses: [chair], last: last)
-        #expect(fused.count == 1)
-        let head = try #require(fused.first)
-        #expect(head.structured)
-        #expect(abs(head.box.centerX - face.box.centerX) < 0.04)
-        #expect(head.box.centerX > 0.35)
-        let poseOnly = HeadLock.fuse(faces: [], poses: [chair], last: last)
-        #expect(poseOnly.isEmpty, "pose on the chair must not steal a still lock")
-        let poseHold = HeadLock.fuse(
-            faces: [],
-            poses: [TrackingBox(x: 0.41, y: 0.17, width: 0.18, height: 0.22)],
-            last: last)
-        #expect(poseHold.count == 1)
-        let moving = HeadLock.fuse(
-            faces: [], poses: [chair], last: last, sceneMoving: true)
-        #expect(moving.count == 1, "gimbal may translate the whole scene")
-    }
-
-    @Test func headBoxScalesUniformlyWithPoseHull() throws {
-        let far = try #require(
-            FaceBodyFallback.headFromPose(
-                lastFace: nil,
-                neckX: 0.50, neckY: 0.34,
-                leftEarX: 0.485, leftEarY: 0.30,
-                rightEarX: 0.515, rightEarY: 0.30,
-                leftShoulderX: 0.47, leftShoulderY: 0.40,
-                rightShoulderX: 0.53, rightShoulderY: 0.40))
-        let near = try #require(
-            FaceBodyFallback.headFromPose(
-                lastFace: nil,
-                neckX: 0.50, neckY: 0.42,
-                leftEarX: 0.40, leftEarY: 0.22,
-                rightEarX: 0.60, rightEarY: 0.22,
-                leftShoulderX: 0.34, leftShoulderY: 0.52,
-                rightShoulderX: 0.66, rightShoulderY: 0.52))
-        #expect(isVisualSquare(far))
-        #expect(isVisualSquare(near))
-        #expect(far.height < 0.16, "distant head must not sit on the old 0.18 floor")
-        #expect(near.height > far.height * 1.6)
-        #expect(abs(far.width / far.height - near.width / near.height) < 0.001)
-        let small = FaceBodyFallback.squareHead(
-            centerX: 0.50, centerY: 0.30, width: 0.05, height: 0.06)
-        let large = FaceBodyFallback.squareHead(
-            centerX: 0.50, centerY: 0.30, width: 0.20, height: 0.24)
-        #expect(isVisualSquare(small))
-        #expect(isVisualSquare(large))
-        #expect(small.height < large.height)
-        #expect(abs(small.width / small.height - large.width / large.height) < 0.001)
-    }
-
-    @Test func coveringBoxUsesFaceAndPoseExtent() {
-        let face = TrackingBox(x: 0.42, y: 0.22, width: 0.12, height: 0.14)
-        let pose = TrackingBox(x: 0.38, y: 0.16, width: 0.22, height: 0.24)
-        let cover = FaceBodyFallback.coveringBox(face: face, head: pose)
-        #expect(cover != nil)
-        #expect(cover!.minX <= min(face.minX, pose.minX) + 0.001)
-        #expect(cover!.maxX + 0.001 >= max(face.maxX, pose.maxX))
-        #expect(cover!.minY <= min(face.minY, pose.minY) + 0.001)
-        #expect(isVisualSquare(cover!))
-        let faceOnly = FaceBodyFallback.coveringBox(face: face, head: nil)
-        #expect(faceOnly != nil)
-        #expect(faceOnly!.width > face.width)
-        #expect(faceOnly!.height > face.height)
-        #expect(isVisualSquare(faceOnly!))
-    }
-
-    @Test func eyeOnlyPoseIsHeadSizedNotFeatureSquare() throws {
-        let box = try #require(
-            FaceBodyFallback.headFromPose(
-                lastFace: nil,
-                neckX: 0.50, neckY: 0.36,
-                leftEarX: nil, leftEarY: nil,
-                rightEarX: nil, rightEarY: nil,
-                leftShoulderX: 0.40, leftShoulderY: 0.48,
-                rightShoulderX: 0.60, rightShoulderY: 0.48,
-                noseX: 0.50, noseY: 0.30,
-                leftEyeX: 0.44, leftEyeY: 0.28,
-                rightEyeX: 0.56, rightEyeY: 0.28))
-        let eyeSpan = 0.12
-        #expect(
-            box.width * FaceBodyFallback.defaultPictureAspect + 0.001
-                >= eyeSpan * FaceBodyFallback.eyeSpanToHead)
-        #expect(isVisualSquare(box))
-        #expect(box.height > 0.20)
-    }
-
-    @Test func squareHeadPaintsOneToOneOnSixteenByNine() {
-        let aspect = FaceBodyFallback.defaultPictureAspect
-        #expect(abs(aspect - 16.0 / 9.0) < 0.0001)
-        let equalNorm = FaceBodyFallback.squareHead(
-            centerX: 0.50, centerY: 0.30, width: 0.22, height: 0.22)
-        #expect(isVisualSquare(equalNorm, aspect: aspect))
-        #expect(equalNorm.height > equalNorm.width)
-        // Independent 0…1 mapping onto 16:9 must not paint a wide rectangle.
-        let paintedW = equalNorm.width * 1920
-        let paintedH = equalNorm.height * 1080
-        #expect(abs(paintedW - paintedH) < 1)
-        let wideHull = FaceBodyFallback.squareHead(
-            centerX: 0.50, centerY: 0.30, width: 0.28, height: 0.14)
-        #expect(isVisualSquare(wideHull, aspect: aspect))
-        #expect(abs(FaceBodyFallback.pictureAspect(width: 1920, height: 1080) - aspect) < 0.0001)
-        #expect(FaceBodyFallback.pictureAspect(width: 0, height: 1080) == aspect)
-        #expect(FaceBodyFallback.sanitizedPictureAspect(.nan) == aspect)
-        // Square picture keeps equal stored sides.
-        let squarePic = FaceBodyFallback.squareHead(
-            centerX: 0.50, centerY: 0.30, width: 0.20, height: 0.20,
-            pictureAspect: 1)
-        #expect(abs(squarePic.width - squarePic.height) < 0.001)
-    }
-
-    @Test func liveControlIncludesTrackingOpcodes() {
-        #expect(Duml.isLiveCameraControl(set: 0x02, cmd: 0xA5))
-        #expect(Duml.isLiveCameraControl(set: 0x02, cmd: 0xA6))
-        #expect(Duml.shouldHoldReply(set: 0x02, cmd: 0xA6))
-    }
-
-    private func isVisualSquare(
-        _ box: TrackingBox, aspect: Double = FaceBodyFallback.defaultPictureAspect
-    ) -> Bool {
-        abs(box.width * aspect - box.height) < 0.001
     }
 
     private func floatLE(_ v: Float) -> [UInt8] {

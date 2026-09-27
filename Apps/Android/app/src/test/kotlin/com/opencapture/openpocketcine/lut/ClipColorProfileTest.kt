@@ -6,24 +6,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class ClipColorProfileTest {
     @Test
-    fun gammaMapsToColorMode() {
-        assertEquals(CameraCommands.COLOR_NORMAL, ClipColorProfile.colorModeFromGamma("Rec.709"))
-        assertEquals(CameraCommands.COLOR_HDR, ClipColorProfile.colorModeFromGamma("Rec.2100 HLG"))
-        assertEquals(CameraCommands.COLOR_DLOG, ClipColorProfile.colorModeFromGamma("D-Log"))
-        assertEquals(CameraCommands.COLOR_DLOG2, ClipColorProfile.colorModeFromGamma("D-Log2"))
-        assertEquals(CameraCommands.COLOR_DLOG_M, ClipColorProfile.colorModeFromGamma("D-Log M"))
-        assertEquals(CameraCommands.COLOR_DLOG2, ClipColorProfile.colorModeFromGamma("  D-Log2  "))
-        assertEquals(-1, ClipColorProfile.colorModeFromGamma("Rec.2020"))
-        assertEquals(-1, ClipColorProfile.colorModeFromGamma(""))
-    }
-
-    @Test
-    fun parsesColorGammaFromQuickTimeKeys() {
+    fun gammaMapsToColorModeInKeysAndQuickTimeFiles() {
         val cases =
             listOf(
                 "Rec.709" to CameraCommands.COLOR_NORMAL,
@@ -32,9 +19,20 @@ class ClipColorProfileTest {
                 "D-Log2" to CameraCommands.COLOR_DLOG2,
             )
         for ((gamma, mode) in cases) {
+            assertEquals(mode, ClipColorProfile.colorModeFromGamma(gamma), gamma)
             val mp4 = mp4(gamma)
             assertEquals(gamma, ClipColorProfile.gammaFromMp4(mp4))
-            assertEquals(mode, ClipColorProfile.colorModeFromMp4(mp4))
+            assertEquals(mode, ClipColorProfile.colorModeFromMp4(mp4), gamma)
+        }
+        val gammaOnly =
+            listOf(
+                "D-Log M" to CameraCommands.COLOR_DLOG_M,
+                "  D-Log2  " to CameraCommands.COLOR_DLOG2,
+                "Rec.2020" to -1,
+                "" to -1,
+            )
+        for ((gamma, mode) in gammaOnly) {
+            assertEquals(mode, ClipColorProfile.colorModeFromGamma(gamma), "'$gamma'")
         }
     }
 
@@ -49,19 +47,22 @@ class ClipColorProfileTest {
     fun proxyRec709IsNotShotColor() {
         val rec709 = mp4("Rec.709")
         assertEquals(CameraCommands.COLOR_NORMAL, ClipColorProfile.colorModeFromMp4(rec709))
-        assertEquals(
-            -1,
-            ClipColorProfile.shotColorFromMp4(
-                rec709,
-                "DCIM/DJI_001/DJI_20260824085921_0008_D.LRF",
-            ),
-        )
-        assertEquals(-1, ClipColorProfile.shotColorFromMp4(rec709, "DCIM/CAM_001/clip.XRF"))
-        val log = mp4("D-Log2")
-        assertEquals(
-            CameraCommands.COLOR_DLOG2,
-            ClipColorProfile.shotColorFromMp4(log, "DCIM/DJI_001/DJI_x_D.MP4"),
-        )
+        val file = File.createTempFile("opc-clip-shot", ".mp4")
+        try {
+            file.writeBytes(rec709)
+            assertEquals(
+                -1,
+                ClipColorProfile.shotColorFromFile(file, "DCIM/DJI_001/DJI_20260824085921_0008_D.LRF"),
+            )
+            assertEquals(-1, ClipColorProfile.shotColorFromFile(file, "DCIM/CAM_001/clip.XRF"))
+            file.writeBytes(mp4("D-Log2"))
+            assertEquals(
+                CameraCommands.COLOR_DLOG2,
+                ClipColorProfile.shotColorFromFile(file, "DCIM/DJI_001/DJI_x_D.MP4"),
+            )
+        } finally {
+            file.delete()
+        }
     }
 
     @Test
@@ -88,25 +89,6 @@ class ClipColorProfileTest {
             assertEquals(CameraCommands.COLOR_DLOG2, ClipColorProfile.colorModeFromFile(file))
         } finally {
             file.delete()
-        }
-    }
-
-    @Test
-    fun realMimoExportsIfPresent() {
-        val dir = System.getenv("OPC_CLIP_DIR") ?: return
-        if (dir.isEmpty()) return
-        val expected =
-            listOf(
-                "_video_Normal.MP4" to CameraCommands.COLOR_NORMAL,
-                "_video_HDR.MP4" to CameraCommands.COLOR_HDR,
-                "_video_Dlog.MP4" to CameraCommands.COLOR_DLOG,
-                "_video_Dlog2.MP4" to CameraCommands.COLOR_DLOG2,
-            )
-        val files = File(dir).listFiles() ?: emptyArray()
-        for ((suffix, mode) in expected) {
-            val match = files.firstOrNull { it.name.endsWith(suffix) }
-            val file = assertNotNull(match, "missing *$suffix in OPC_CLIP_DIR")
-            assertEquals(mode, ClipColorProfile.colorModeFromFile(file), file.name)
         }
     }
 

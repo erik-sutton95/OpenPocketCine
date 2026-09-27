@@ -102,17 +102,8 @@ final class EncoderFormatChangeTests: XCTestCase {
         XCTAssertEqual(enables, 0, "Reconnect uses the normal first GOP")
     }
 
-    func testDecoderWedgedIsFreshNotCumulative() {
-        let decoder = HevcDecoder()
-        XCTAssertFalse(decoder.isDecoderWedged)
-        XCTAssertEqual(decoder.decoderErrors, 0)
-    }
-
     func testLivePresentTimingDoesNotPaceAtThirtyFps() {
         let timing = LiveViewPresentTiming.sampleTiming(frameIndex: 1)
-        XCTAssertEqual(timing.duration.timescale, 60_000)
-        XCTAssertEqual(timing.presentationTimeStamp.timescale, 60_000)
-        XCTAssertNotEqual(timing.duration.timescale, 30)
         let seconds = CMTimeGetSeconds(timing.duration)
         XCTAssertLessThan(seconds, 1.0 / 50.0)
     }

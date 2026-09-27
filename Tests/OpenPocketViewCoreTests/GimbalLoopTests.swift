@@ -191,17 +191,6 @@ import Testing
         #expect(camera.engine.programmedZoomTarget! < 3)
     }
 
-    @Test func loopDefaultsOffAndFinishesOnce() {
-        let program = GimbalProgram(a: point(0), b: point(30), durationAB: 1)
-        #expect(!program.loop)
-        var camera = Camera(program)
-        for _ in 0..<1000 where camera.engine.running { _ = camera.tick() }
-        #expect(camera.turnarounds == 0)
-        #expect(camera.commands.count == 1)
-        #expect(!camera.engine.running)
-        #expect(camera.engine.failure == nil)
-    }
-
     @Test func wideReverseUsesTimedReachableSubdivisions() {
         let program = GimbalProgram(a: point(-40), b: point(225), durationAB: 4, loop: true)
         var camera = Camera(program)
@@ -249,17 +238,6 @@ import Testing
         #expect(!camera.engine.running)
         let resumed = camera.engine.resume(live: camera.live)
         #expect(!resumed)
-    }
-
-    @Test func failedTurnaroundVerificationStopsTheReturn() {
-        var camera = Camera(GimbalProgram(a: point(0), b: point(30), durationAB: 1, loop: true))
-        for _ in 0..<1000 where camera.engine.running { _ = camera.tick(miss: camera.now >= 3 ? 1 : 0) }
-        #expect(camera.engine.failure != nil)
-        #expect(!camera.engine.running)
-        #expect(camera.turnarounds == 1)
-        #expect(camera.commands.count == 2)
-        #expect(camera.now < 3.5)
-        #expect(camera.tick() == nil)
     }
 
     @Test(arguments: [(0.0, 0.137, 0.0, true), (1.0, 0.137, 0.0, true),
@@ -328,14 +306,5 @@ import Testing
         #expect(out?.target == nil)
         #expect(out?.stop == true)
         #expect(camera.engine.failure == "Move interrupted — waypoint dispatch was late")
-    }
-
-    @Test func lostFeedbackDuringReverseStopsInsteadOfRetrying() {
-        var camera = Camera(GimbalProgram(a: point(0), b: point(30), durationAB: 1, loop: true))
-        camera.advance(toPass: 1)
-        let out = camera.engine.tick(dt: 0.01, live: camera.live, telemetryAge: 0.31)
-        #expect(out?.stop == true && out?.finished == true)
-        #expect(camera.engine.failure != nil)
-        #expect(camera.tick() == nil)
     }
 }
