@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,9 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
     val metrics = remember(options) { MonitorDrumSelection.metrics(options) }
     val cell = with(density) { metrics.cellWidth.dp.toPx() }
     val textMeasurer = rememberTextMeasurer()
+    // A sheet seats its current value just after the drum appears. That first
+    // seat must land in place, not slide in from the first option.
+    var seated by remember { mutableStateOf(selection in options) }
     LaunchedEffect(selection, options, interactive, displayPosition) {
         val preview = displayPosition
         if (preview != null && preview.isFinite()) {
@@ -79,6 +83,11 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
             lastTickIndex = cursor.roundToInt()
         }
         expected = null
+        if (!seated && selection in options) {
+            // Arm the settle animation only after the seat has rendered.
+            withFrameNanos { }
+            seated = true
+        }
     }
     fun choose(position: Float) {
         if (!position.isFinite()) return
@@ -92,7 +101,7 @@ fun MonitorValueDrum(options: List<String>, selection: String, modifier: Modifie
     }
     val rendered by animateFloatAsState(
         displayPosition ?: cursor,
-        animationSpec = if (dragging || displayPosition != null) snap()
+        animationSpec = if (dragging || displayPosition != null || !seated) snap()
             else tween(MonitorMotion.DRUM_SETTLE_MS, easing = MonitorMotion.DrumSettle),
         label = "drum detent",
     )

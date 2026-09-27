@@ -20,6 +20,9 @@
         /// separate flag set in the same write as the first translation.
         @State private var tracking = false
         @State private var canvasWidth: CGFloat = 0
+        /// A sheet seats its current value just after the drum appears. That
+        /// first seat must land in place, not slide in from the first option.
+        @State private var seated = false
         @GestureState private var dragging = false
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -87,13 +90,21 @@
                         }
                 )
                 .frame(height: 86)
-                .transaction { if followsFinger || previewPosition != nil { $0.animation = nil } }
+                .transaction {
+                    if followsFinger || previewPosition != nil || !seated { $0.animation = nil }
+                }
                 .animation(
-                    followsFinger || previewPosition != nil ? nil : settleAnimation, value: selection
+                    followsFinger || previewPosition != nil || !seated ? nil : settleAnimation,
+                    value: selection
                 )
+                .onAppear { if options.contains(selection) { seated = true } }
                 .opacity(isInteractive || previewPosition != nil ? 1 : 0.45)
                 .onChange(of: options) { _, _ in cancelDrag() }
-                .onChange(of: selection) { _, _ in if drag.origin != nil { cancelDrag() } }
+                .onChange(of: selection) { _, next in
+                    if drag.origin != nil { cancelDrag() }
+                    // Arm the settle animation only after the seat has rendered.
+                    if !seated, options.contains(next) { Task { @MainActor in seated = true } }
+                }
                 .onChange(of: interactionIdentity()) { _, _ in cancelDrag() }
                 .onChange(of: acceptsInput) { _, active in if !active { cancelDrag() } }
                 .onChange(of: dragging) { _, active in
