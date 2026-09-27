@@ -24,7 +24,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
@@ -41,7 +40,8 @@ fun MonitorTelemetry(
     modifier: Modifier = Modifier,
 ) {
     val bars = signalBars.coerceIn(0, 4)
-    val linkColor = MonitorLinkHealth.color(MonitorLinkHealth.score(bars))
+    // Signal / fps stay in the accent; the bar count carries the health.
+    val linkColor = com.opencapture.monitorui.MonitorPalette.accent
     // One link pill: tap swaps signal bars and feed fps.
     var showsFps by rememberSaveable { mutableStateOf(false) }
     val gauges: @Composable () -> Unit = {

@@ -27,10 +27,16 @@ struct FieldMonitorStatusChrome: View {
                     HStack {
                         tally
                         Spacer(minLength: 4)
+                        // The format sits on the timecode's line at its size; the colour
+                        // profile hangs smaller underneath without moving that alignment.
                         topReadout(
                             model.session.status.isPhoto ? .mode : .resolution,
-                            value: model.session.status.isPhoto ? "MODE" : recSetupSummary,
-                            fontSize: 12, weight: .semibold, alwaysAccent: false, lines: 2
+                            value: model.session.status.isPhoto ? "MODE" : recSetupFormat,
+                            fontSize: model.session.status.isPhoto
+                                ? 12 : (layout.presentation?.tablet == true ? 25 : 23),
+                            weight: model.session.status.isPhoto ? .semibold : .medium,
+                            alwaysAccent: false,
+                            caption: model.session.status.isPhoto ? nil : recSetupColor
                         )
                         .accessibilityLabel(
                             model.session.status.isPhoto
@@ -173,29 +179,35 @@ struct FieldMonitorStatusChrome: View {
         .accessibilityLabel(item == .color ? "Color mode" : "Recording format")
     }
 
-    /// Current format over the colour profile ("4K25p" / "D-Log 2"), not a generic label.
-    private var recSetupSummary: String {
-        let status = model.session.status
-        let format =
-            status.videoFormat.map { "\($0.resolution.tabTitle)\($0.frameRate.drumLabel)" }
-            ?? "REC SETUP"
-        guard let color = status.colorMode?.label(for: model.session.bodyFamily) else {
-            return format
-        }
-        return "\(format)\n\(color)"
+    /// Current format ("4K25p"), not a generic label.
+    private var recSetupFormat: String {
+        model.session.status.videoFormat.map {
+            "\($0.resolution.tabTitle)\($0.frameRate.drumLabel)"
+        } ?? "REC SETUP"
+    }
+
+    private var recSetupColor: String? {
+        model.session.status.colorMode?.label(for: model.session.bodyFamily)
     }
 
     private func topReadout(
         _ sheet: CaptureSheet, value: String, fontSize: CGFloat, weight: Font.Weight = .medium,
-        alwaysAccent: Bool = false, lines: Int = 1
+        alwaysAccent: Bool = false, caption: String? = nil
     ) -> some View {
         let isActive = model.captureSheet == sheet || model.captureDrum?.sheet == sheet
         let acceptsTouch =
             !locked && (model.captureDrum == nil || model.captureDrum?.sheet == sheet)
         return Text(value)
             .font(MonitorTheme.font(fontSize, weight: weight)).monospacedDigit()
-            .lineLimit(lines).minimumScaleFactor(0.7)
-            .multilineTextAlignment(.trailing)
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .overlay(alignment: .bottomTrailing) {
+                if let caption {
+                    Text(caption)
+                        .font(MonitorTheme.font(11, weight: .semibold))
+                        .lineLimit(1).fixedSize()
+                        .alignmentGuide(.bottom) { $0[.top] - 1 }
+                }
+            }
             .foregroundStyle(
                 alwaysAccent || isActive ? MonitorTheme.accent : .white
             )
@@ -416,7 +428,8 @@ struct FieldMonitorGauges: View {
             ? AnyLayout(HStackLayout(spacing: 6))
             : AnyLayout(VStackLayout(alignment: .leading, spacing: tablet ? 5 : 4))
         let bars = model.session.liveSignalBars
-        let linkColor = MonitorTheme.linkHealthColor(.init(bars: bars))
+        // Signal / fps stay in the accent; the bar count carries the health.
+        let linkColor = MonitorTheme.accent
         axis {
             if showsLink {
                 Button {
