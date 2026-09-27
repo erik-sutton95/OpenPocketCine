@@ -22,6 +22,8 @@ struct StationNetworkSetupView: View {
                 : "The camera and this iPhone must be on the same Wi-Fi."
         }
     }
+    /// One landscape column; nil lays the whole page out in one column.
+    enum Side { case leading, trailing }
     enum Page: Hashable {
         case choose, networks, hotspot
         case password(String)
@@ -56,6 +58,15 @@ struct StationNetworkSetupView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.monitorWindowGeometry) private var windowGeometry
+
+    /// The dark sheet colour portrait shows (elevated system background). Pinned so the
+    /// full-screen landscape sheet, which drops to the base level, keeps the same page.
+    private static let pageBackground = Color(
+        uiColor: .systemBackground.resolvedColor(
+            with: UITraitCollection {
+                $0.userInterfaceStyle = .dark
+                $0.userInterfaceLevel = .elevated
+            }))
 
     private var warning: Color { MonitorTheme.linkHealthColor(.watch) }
     private var good: Color { MonitorTheme.linkHealthColor(.stable) }
@@ -114,32 +125,36 @@ struct StationNetworkSetupView: View {
             // Keyboard avoidance must not switch layout branches and destroy the focused field.
             let size = windowGeometry.size == .zero ? proxy.size : windowGeometry.size
             let landscape = size.width > size.height
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        content(page, landscape: landscape)
-                        if working {
-                            ProgressView(scanning ? "Finishing camera scan…" : "Connecting…")
-                                .accessibilityIdentifier("\(context.prefix).progress")
-                        }
-                        if let errorMessage {
-                            Text(errorMessage).font(MonitorTheme.font(13)).foregroundStyle(warning)
-                                .accessibilityIdentifier("\(context.prefix).error")
-                        }
+            if landscape, page != .choose {
+                // Landscape: the leading column stays put; only the form column scrolls,
+                // with Connect / Other network pinned beneath it.
+                HStack(alignment: .top, spacing: page == .networks ? 16 : 14) {
+                    // ponytail: scrolls only if it overflows (long saved list, keyboard up).
+                    ScrollView {
+                        content(page, landscape: true, side: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 8).padding(.bottom, 16)
                     }
-                    .padding(.horizontal, landscape ? 24 : 18).padding(.top, 8)
-                    .padding(.bottom, 16)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scrollIndicators(.hidden)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(spacing: 0) {
+                        form(page, landscape: true, side: .trailing, inset: 0)
+                        footer(page, inset: 0)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .scrollDismissesKeyboard(.interactively)
-                .monitorScrollFade()
+                .padding(.horizontal, 24)
+            } else {
+                let inset: CGFloat = landscape ? 24 : 18
+                VStack(spacing: 0) {
+                    form(page, landscape: landscape, side: nil, inset: inset)
+                    footer(page, inset: inset)
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityIdentifier("\(context.prefix).form")
-                footer(page, landscape: landscape, width: proxy.size.width)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(MonitorTheme.background.opacity(0.001))
+        .background(Self.pageBackground)
         .navigationTitle(title(page))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -152,6 +167,30 @@ struct StationNetworkSetupView: View {
                 }
             }
         }
+    }
+
+    /// The scrolling form: the whole page in portrait, the trailing column in landscape.
+    private func form(_ page: Page, landscape: Bool, side: Side?, inset: CGFloat) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                content(page, landscape: landscape, side: side)
+                if working {
+                    ProgressView(scanning ? "Finishing camera scan…" : "Connecting…")
+                        .accessibilityIdentifier("\(context.prefix).progress")
+                }
+                if let errorMessage {
+                    Text(errorMessage).font(MonitorTheme.font(13)).foregroundStyle(warning)
+                        .accessibilityIdentifier("\(context.prefix).error")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, inset).padding(.top, 8).padding(.bottom, 16)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
+        .monitorScrollFade()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("\(context.prefix).form")
     }
 
     // MARK: Navigation
@@ -270,12 +309,27 @@ struct StationNetworkSetupView: View {
         }
     }
 
-    @ViewBuilder private func content(_ page: Page, landscape: Bool) -> some View {
+    @ViewBuilder private func content(_ page: Page, landscape: Bool, side: Side?) -> some View {
         switch page {
         case .choose: choosePage(landscape)
-        case .networks: networksPage(landscape)
-        case .password(let ssid): passwordPage(ssid, landscape)
-        case .hotspot: hotspotPage(landscape)
+        case .networks: networksPage(landscape, side)
+        case .password(let ssid): passwordPage(ssid, landscape, side)
+        case .hotspot: hotspotPage(landscape, side)
+        }
+    }
+
+    /// Picks one landscape column, or stacks both in portrait.
+    @ViewBuilder private func columns<Leading: View, Trailing: View>(
+        _ side: Side?, spacing: CGFloat, _ leading: Leading, _ trailing: Trailing
+    ) -> some View {
+        switch side {
+        case .leading: leading
+        case .trailing: trailing
+        case nil:
+            VStack(alignment: .leading, spacing: spacing) {
+                leading
+                trailing
+            }
         }
     }
 
@@ -402,7 +456,7 @@ struct StationNetworkSetupView: View {
         MultiviewNetworkStore.load(ssid: ssid, hotspot: false) != nil
     }
 
-    private func networksPage(_ landscape: Bool) -> some View {
+    private func networksPage(_ landscape: Bool, _ side: Side?) -> some View {
         let known = VStack(alignment: .leading, spacing: 7) {
             if !landscape {
                 Text("Choose the network").font(MonitorTheme.font(22, weight: .semibold))
@@ -459,7 +513,8 @@ struct StationNetworkSetupView: View {
                         .accessibilityIdentifier("\(context.prefix).rescan")
                 }
             }
-            .frame(height: 44)
+            // Same height as `sectionHeader`; Scan again keeps its 44 pt target past the row.
+            .frame(height: Self.headerHeight)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("\(context.prefix).nearbyHeader")
             .padding(.top, landscape ? 0 : 6)
@@ -490,19 +545,7 @@ struct StationNetworkSetupView: View {
                 hint(context.networkHint).padding(.top, 4)
             }
         }
-        return Group {
-            if landscape {
-                HStack(alignment: .top, spacing: 16) {
-                    known.frame(maxWidth: .infinity)
-                    nearby.frame(maxWidth: .infinity)
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 7) {
-                    known
-                    nearby
-                }
-            }
-        }
+        return columns(side, spacing: 7, known, nearby)
     }
 
     private func networkRow(_ name: String, detail: String? = nil, detailColor: Color? = nil)
@@ -517,7 +560,7 @@ struct StationNetworkSetupView: View {
         .accessibilityIdentifier("\(context.prefix).network.\(name)")
     }
 
-    private func passwordPage(_ ssid: String, _ landscape: Bool) -> some View {
+    private func passwordPage(_ ssid: String, _ landscape: Bool, _ side: Side?) -> some View {
         let network = HStack(spacing: 12) {
             MonitorIcon.wifi.frame(width: 19, height: 19).foregroundStyle(MonitorTheme.accent)
                 .frame(width: 38, height: 38)
@@ -557,32 +600,28 @@ struct StationNetworkSetupView: View {
             secureField("PASSWORD", text: $password, id: "\(context.prefix).password")
             hint("Saved in this iPhone’s Keychain. Multiview can reuse it.")
         }
+        // Portrait keeps the password under the network, above the checklist.
         return Group {
-            if landscape {
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 10) {
-                        summary
-                        checklist
-                    }
-                    .frame(maxWidth: .infinity)
-                    VStack(alignment: .leading, spacing: 6) {
-                        field
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            } else {
+            if side == nil {
                 VStack(alignment: .leading, spacing: 16) {
                     summary
                     field
                     checklist
                 }
+            } else {
+                columns(
+                    side, spacing: 10,
+                    VStack(spacing: 10) {
+                        summary
+                        checklist
+                    }, field)
             }
         }
     }
 
     // MARK: Hotspot
 
-    private func hotspotPage(_ landscape: Bool) -> some View {
+    private func hotspotPage(_ landscape: Bool, _ side: Side?) -> some View {
         let status = HStack(spacing: 10) {
             (hotspotActive ? MonitorIcon.radio : MonitorIcon.triangleAlert)
                 .frame(width: 18, height: 18)
@@ -680,22 +719,20 @@ struct StationNetworkSetupView: View {
             }
         }
         return Group {
-            if landscape {
-                HStack(alignment: .top, spacing: 14) {
+            if side != nil {
+                columns(
+                    side, spacing: 10,
                     VStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 6) {
                             sectionHeader("THIS IPHONE’S HOTSPOT")
                             status
                         }
                         checklist
-                    }
-                    .frame(maxWidth: .infinity)
+                    },
                     VStack(alignment: .leading, spacing: 10) {
                         name
                         pass
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+                    })
             } else {
                 VStack(alignment: .leading, spacing: 14) {
                     status
@@ -709,13 +746,11 @@ struct StationNetworkSetupView: View {
 
     // MARK: Pieces
 
-    @ViewBuilder private func footer(_ page: Page, landscape: Bool, width: CGFloat) -> some View {
+    /// Connect / Other network, pinned under the form above the safe area or keyboard.
+    @ViewBuilder private func footer(_ page: Page, inset: CGFloat) -> some View {
         if page != .choose {
-            let gap: CGFloat = page == .networks ? 16 : 14
             footerAction(page)
-                .frame(width: max(1, landscape ? (width - 48 - gap) / 2 : width - 36))
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.horizontal, landscape ? 24 : 18)
+                .padding(.horizontal, inset)
                 .padding(.top, 8).padding(.bottom, 16)
         }
     }
@@ -751,9 +786,10 @@ struct StationNetworkSetupView: View {
         }
     }
 
+    /// Matches `monitorCardSurface()`.
     private var card: some View {
-        RoundedRectangle(cornerRadius: 13).fill(MonitorTheme.surface)
-            .overlay(RoundedRectangle(cornerRadius: 13).stroke(MonitorTheme.border, lineWidth: 1))
+        RoundedRectangle(cornerRadius: MonitorTheme.radius).fill(MonitorTheme.surface)
+            .overlay(RoundedRectangle(cornerRadius: MonitorTheme.radius).strokeBorder(MonitorTheme.border))
     }
 
     private var divider: some View {
@@ -762,17 +798,20 @@ struct StationNetworkSetupView: View {
 
     private func group<Rows: View>(@ViewBuilder _ rows: () -> Rows) -> some View {
         VStack(spacing: 0, content: rows).background(card)
-            .clipShape(RoundedRectangle(cornerRadius: 13))
+            .clipShape(RoundedRectangle(cornerRadius: MonitorTheme.radius))
     }
 
+    /// The app's eyebrow (Settings cards, Cameras groups).
     private func sectionLabel(_ text: String) -> some View {
-        Text(text).font(MonitorTheme.font(10, weight: .bold)).tracking(1.6)
-            .foregroundStyle(MonitorTheme.muted)
+        MonitorSectionHeader(text)
     }
 
+    /// Fixed height so paired columns keep their headings and card tops aligned.
     private func sectionHeader(_ text: String) -> some View {
-        sectionLabel(text).frame(height: 44, alignment: .leading)
+        sectionLabel(text).frame(height: Self.headerHeight, alignment: .leading)
     }
+
+    private static let headerHeight: CGFloat = 24
 
     private func hint(_ text: String) -> some View {
         Text(text).font(MonitorTheme.font(11.5)).foregroundStyle(MonitorTheme.muted)
@@ -868,17 +907,9 @@ struct StationNetworkSetupView: View {
         Button {
             finish(action)
         } label: {
-            Text(title).font(MonitorTheme.font(15, weight: .semibold))
-                .foregroundStyle(
-                    enabled
-                        ? Color(red: 6 / 255, green: 16 / 255, blue: 24 / 255) : MonitorTheme.muted
-                )
-                .frame(maxWidth: .infinity, minHeight: 50)
-                .background(
-                    enabled ? MonitorTheme.accent : MonitorTheme.raised,
-                    in: RoundedRectangle(cornerRadius: 12))
+            Text(title).frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain).disabled(!enabled)
+        .buttonStyle(CameraPageButtonStyle(primary: true)).disabled(!enabled)
         .accessibilityIdentifier("\(context.prefix).connect")
     }
 }
