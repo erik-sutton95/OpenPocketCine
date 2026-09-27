@@ -238,7 +238,14 @@ struct FieldMonitorLayoutTests {
             #expect(layout.picture.height <= height)
             #expect(layout.picture.y >= 0)
             #expect(layout.picture.maxY <= height + 0.001)
-            #expect(abs(layout.picture.midY - height / 2) < 0.001)
+            if aspect < 1 {
+                // A vertical camera stays whole: nothing under the opaque system bar.
+                #expect(layout.picture.maxY <= layout.system.y + 0.001)
+                #expect(layout.picture.y >= layout.status.y - 0.001)
+                #expect(abs(layout.picture.width / layout.picture.height - aspect) < 0.001)
+            } else {
+                #expect(abs(layout.picture.midY - height / 2) < 0.001)
+            }
         }
     }
 

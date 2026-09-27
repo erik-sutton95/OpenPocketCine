@@ -130,8 +130,19 @@ public struct FieldMonitorLayout: Equatable, Sendable {
             let pillarbox = tablet && w / ratio > max(0, floor - ceiling)
             let pictureH = pillarbox ? max(1, floor - ceiling) : w / ratio
             let pictureW = pillarbox ? pictureH * ratio : w
-            let pictureY: Double
-            if pictureH > h || pictureH > floor - ceiling {
+            var pictureY: Double
+            var verticalRect: MonitorRect?
+            if aspect < 1, !pillarbox {
+                // A vertical camera is shown whole: fit it above the opaque system
+                // bar (the status row is a transparent overlay and may sit on it).
+                // Centring the full-width picture on the canvas hid ~5% under the bar.
+                let room = max(1, systemY - status.y)
+                let fittedH = min(w / aspect, room)
+                let fittedW = fittedH * aspect
+                pictureY = min(max(status.y, (h - fittedH) / 2), systemY - fittedH)
+                verticalRect = .init(
+                    x: (w - fittedW) / 2, y: pictureY, width: fittedW, height: fittedH)
+            } else if pictureH > h || pictureH > floor - ceiling {
                 // When chrome cannot fit around the picture, keep the picture
                 // on the canvas midline instead of using an inverted interval.
                 pictureY = (h - pictureH) / 2
@@ -141,7 +152,9 @@ public struct FieldMonitorLayout: Equatable, Sendable {
                 let ideal = (h - pictureH) / 2
                 pictureY = max(ceiling, min(ideal, floor - pictureH))
             }
-            picture = .init(x: (w - pictureW) / 2, y: pictureY, width: pictureW, height: pictureH)
+            picture =
+                verticalRect
+                ?? .init(x: (w - pictureW) / 2, y: pictureY, width: pictureW, height: pictureH)
             let cy = systemY + systemH / 2
             lock = .init(x: edge, y: cy - button / 2, width: button, height: button)
             display = .init(x: edge + button + 8, y: lock.y, width: button, height: button)
