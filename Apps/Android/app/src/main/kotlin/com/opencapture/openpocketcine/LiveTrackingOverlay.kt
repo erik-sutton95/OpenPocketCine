@@ -89,23 +89,7 @@ fun LiveTrackingCancelButton(
                 .background(LiveDesign.good),
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(Modifier.size(11.dp)) {
-                val pad = size.minDimension * 0.22f
-                drawLine(
-                    LiveDesign.background,
-                    Offset(pad, pad),
-                    Offset(size.width - pad, size.height - pad),
-                    2.dp.toPx(),
-                    StrokeCap.Round,
-                )
-                drawLine(
-                    LiveDesign.background,
-                    Offset(size.width - pad, pad),
-                    Offset(pad, size.height - pad),
-                    2.dp.toPx(),
-                    StrokeCap.Round,
-                )
-            }
+            OpcIcon(OpcIcon.X, null, Modifier.size(11.dp), LiveDesign.background)
         }
     }
 }

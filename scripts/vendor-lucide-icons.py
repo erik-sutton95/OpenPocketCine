@@ -50,6 +50,7 @@ ICON_NAMES = [
     "folder",
     "focus",
     "funnel",
+    "gauge",
     "grid-3x3",
     "image",
     "info",

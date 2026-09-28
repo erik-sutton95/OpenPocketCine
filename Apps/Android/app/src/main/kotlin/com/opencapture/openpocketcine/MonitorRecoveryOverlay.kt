@@ -54,6 +54,8 @@ fun MonitorRecoveryOverlay(
                         color = LiveDesign.accent,
                         strokeWidth = 2.dp,
                     )
+                } else {
+                    OpcIcon(OpcIcon.UNPLUG, null, Modifier.size(22.dp), LiveDesign.accent)
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(
@@ -69,8 +71,8 @@ fun MonitorRecoveryOverlay(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                RecoveryAction(SessionRecoveryCopy.RETRY_CONNECTION, accent = true, modifier = Modifier.weight(1f), onClick = onRetry)
-                RecoveryAction(SessionRecoveryCopy.OPERATOR_MENU, accent = false, modifier = Modifier.weight(1f), onClick = onOperatorMenu)
+                RecoveryAction(SessionRecoveryCopy.RETRY_CONNECTION, OpcIcon.REFRESH_CW, accent = true, modifier = Modifier.weight(1f), onClick = onRetry)
+                RecoveryAction(SessionRecoveryCopy.OPERATOR_MENU, OpcIcon.CHEVRON_LEFT, accent = false, modifier = Modifier.weight(1f), onClick = onOperatorMenu)
             }
         }
     }
@@ -79,21 +81,25 @@ fun MonitorRecoveryOverlay(
 @Composable
 private fun RecoveryAction(
     title: String,
+    icon: OpcIcon,
     accent: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Box(
+    val tint = if (accent) LiveDesign.background else LiveDesign.text
+    Row(
         modifier
             .clip(RoundedCornerShape(50))
             .background(if (accent) LiveDesign.accent else LiveDesign.glass)
             .chromeClickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
-        contentAlignment = Alignment.Center,
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        OpcIcon(icon, null, Modifier.size(13.dp), tint)
         Text(
             title,
-            color = if (accent) LiveDesign.background else LiveDesign.text,
+            color = tint,
             style = LiveType.ui(13f, FontWeight.SemiBold),
             maxLines = 1,
         )

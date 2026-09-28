@@ -286,7 +286,7 @@ fun MediaPhotoViewer(
                         if (favorite) "Remove from favorites" else "Add to favorites",
                         { controller.toggleFavorite(file) },
                         filled = favorite,
-                        tint = if (favorite) LiveDesign.amber else LiveDesign.text,
+                        tint = if (favorite) LiveDesign.accent else LiveDesign.text,
                     )
                 }
             }

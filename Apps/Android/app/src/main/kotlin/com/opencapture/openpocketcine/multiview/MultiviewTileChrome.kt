@@ -45,6 +45,7 @@ internal data class MultiviewTileReadouts(
     val timecode: String,
     val battery: String,
     val batteryPercent: Int,
+    val charging: Boolean,
     val storage: String,
     val recording: String,
     val isRecording: Boolean,
@@ -77,6 +78,7 @@ internal fun multiviewTileReadouts(
         timecode = timecodeClock(timecode) ?: "—",
         battery = if (settings.batteryPercent in 0..100) "${settings.batteryPercent}%" else "—",
         batteryPercent = settings.batteryPercent,
+        charging = settings.charging,
         storage = if (total > 0 && free >= 0) "${free / 1024} GB" else "—",
         recording = recording, isRecording = recordingObservation == true,
         format = "$resolution · $fps · $color",
@@ -230,7 +232,8 @@ internal fun MultiviewCameraMenu(
             Text(values.model, style = LiveType.text(12f))
             Text("TC ${values.timecode}", style = LiveType.mono(12f))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                MonitorCameraBatteryGauge(values.batteryPercent)
+                // iOS options panel: LiveBatteryRow (camera glyph, zap while charging).
+                com.opencapture.openpocketcine.BatteryOutlineRow(values.batteryPercent, values.charging, camera = true)
                 Text(values.storage, style = LiveType.text(12f))
             }
             Text("${values.format} · ${values.recording}", style = LiveType.text(12f))

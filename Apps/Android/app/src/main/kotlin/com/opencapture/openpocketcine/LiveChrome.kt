@@ -1626,7 +1626,7 @@ internal const val BATTERY_CELL_W_DP = 26f
 internal const val BATTERY_CELL_H_DP = 15f
 
 @Composable
-private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) {
+internal fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) {
     val tint =
         when {
             percent < 0 -> LiveDesign.faint
@@ -1645,10 +1645,7 @@ private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) 
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(10.dp), contentAlignment = Alignment.Center) {
-            if (camera) CameraGlyph(LiveDesign.muted, Modifier.size(12.dp, 10.dp))
-            else PhoneGlyph(LiveDesign.muted, Modifier.size(7.dp, 11.dp))
-        }
+        OpcIcon(if (camera) OpcIcon.CAMERA else OpcIcon.SMARTPHONE, null, Modifier.size(10.dp), LiveDesign.muted)
         Box(Modifier.size(BATTERY_CELL_W_DP.dp, BATTERY_CELL_H_DP.dp), contentAlignment = Alignment.Center) {
             Box(
                 Modifier
@@ -1662,7 +1659,7 @@ private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) 
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(1.dp),
                     ) {
-                        if (charging) BoltGlyph(tint, Modifier.size(5.dp, 7.dp))
+                        if (charging) OpcIcon(OpcIcon.ZAP, null, Modifier.size(7.dp), tint)
                         Text(
                             readout,
                             color = tint,
@@ -1700,25 +1697,6 @@ private fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) 
                     .background(tint.copy(alpha = 0.85f), RoundedCornerShape(1.dp)),
             )
         }
-    }
-}
-
-@Composable
-private fun BoltGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        val path =
-            Path().apply {
-                moveTo(w * 0.62f, 0f)
-                lineTo(w * 0.08f, h * 0.55f)
-                lineTo(w * 0.46f, h * 0.55f)
-                lineTo(w * 0.38f, h)
-                lineTo(w * 0.92f, h * 0.42f)
-                lineTo(w * 0.54f, h * 0.42f)
-                close()
-            }
-        drawPath(path, tint)
     }
 }
 
@@ -2184,13 +2162,6 @@ fun LiveFocusResetButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
             tint = LiveDesign.text,
             modifier = Modifier.size(18.dp),
         )
-    }
-}
-
-@Composable
-fun PhoneGlyph(tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        drawRoundRect(tint, style = Stroke(1.3.dp.toPx()), cornerRadius = CornerRadius(1.6.dp.toPx()))
     }
 }
 

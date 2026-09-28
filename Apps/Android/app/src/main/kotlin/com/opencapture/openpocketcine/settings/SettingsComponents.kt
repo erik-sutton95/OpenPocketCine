@@ -148,7 +148,7 @@ fun SettingsRowCard(
     }
 }
 
-/** Circular counter-clockwise reset control (iOS `SettingsResetButton`, 28dp). */
+/** Circular refresh-cw reset control (iOS `SettingsResetButton`, 28dp). */
 @Composable
 fun SettingsResetButton(onClick: () -> Unit) {
     val description = "Reset to defaults"
@@ -160,7 +160,7 @@ fun SettingsResetButton(onClick: () -> Unit) {
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        OpcIcon(OpcIcon.ROTATE_CW, null, Modifier.size(12.dp), LiveDesign.muted)
+        OpcIcon(OpcIcon.REFRESH_CW, null, Modifier.size(12.dp), LiveDesign.muted)
     }
 }
 

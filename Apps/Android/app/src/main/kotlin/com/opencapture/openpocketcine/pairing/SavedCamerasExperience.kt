@@ -198,9 +198,6 @@ private fun SavedCameraRow(
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text("Rename") },
-                        leadingIcon = {
-                            OpcIcon(OpcIcon.PENCIL, contentDescription = null, modifier = Modifier.size(18.dp))
-                        },
                         onClick = {
                             menu = false
                             renameText = camera.customName.orEmpty()
@@ -209,9 +206,6 @@ private fun SavedCameraRow(
                     )
                     DropdownMenuItem(
                         text = { Text("Remove") },
-                        leadingIcon = {
-                            OpcIcon(OpcIcon.TRASH, contentDescription = null, modifier = Modifier.size(18.dp))
-                        },
                         onClick = {
                             menu = false
                             remove = true
