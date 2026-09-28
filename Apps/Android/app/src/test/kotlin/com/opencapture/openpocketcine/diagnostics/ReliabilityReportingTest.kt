@@ -687,7 +687,8 @@ class ReliabilityReportingTest {
         assertEquals(state, ReliabilityReporting.receipt(id)?.state)
     }
 
-    private fun waitUntil(timeoutMs: Long = 2_000, predicate: () -> Boolean) {
+    // Returns as soon as the predicate holds; the ceiling only matters on a loaded CI runner.
+    private fun waitUntil(timeoutMs: Long = 10_000, predicate: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (predicate()) return
