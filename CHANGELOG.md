@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- MIRROR View Assist options on iOS and Android: **Horizontal** (on by
+  default, the existing flip) and **Vertical**. Both on turns the monitor 180°
+  for an underslung camera, such as on a car mount. Live View on every render
+  path, the glass backdrop, the Apple Watch preview and video playback follow
+  it; tap to focus, drag to track, focus and face boxes, the tracking cancel
+  key and LEVEL roll map through it. Recordings and scopes stay unflipped, and
+  Vertical does not change joystick directions.
 - Per-camera **setups** on Android **Your cameras** (discussion #406), matching
   iOS: each saved camera keeps Camera Wi-Fi and can add **Wi-Fi** (a router this
   phone joins too) or **Hotspot** (this phone's hotspot) from **Add setup**.
