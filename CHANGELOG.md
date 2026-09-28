@@ -29,9 +29,11 @@ All notable changes to this project are documented here. The format is based on
   key beside the focus recenter button (left side in portrait) returns to Auto.
   Choosing Auto or Manual under EXPOSURE also ends the lock; Manual keeps the
   locked values. The press only buzzes when a lock is possible, so holding the
-  picture in Manual is silent. White balance Mode adds AWB Lock, which sets
-  Custom at the camera's live Auto Kelvin snapped to the Kelvin drum. Neither
-  uses a camera-native lock.
+  picture in Manual is silent. White balance Mode and the WB tile's drag dial
+  add AWB Lock left of Auto, which sets Custom at the camera's live Auto Kelvin
+  snapped to the Kelvin drum. While locked, WB stays on AWB Lock and the tile
+  reads AWB-L; Auto or Custom releases it, and a WB change on the camera ends
+  it. Neither uses a camera-native lock.
 
 ### Changed
 

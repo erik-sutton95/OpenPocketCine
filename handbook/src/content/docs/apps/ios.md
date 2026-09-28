@@ -33,9 +33,12 @@ locked values as ordinary Manual. The lock switches the camera to Manual at its
 current Auto ISO (nearest whole stop) and shutter; changing shooting mode or an
 Auto report from the camera also ends it. The haptic only comes when a lock is
 possible; a hold in Manual or while locked is silent. Dragging after the hold
-still draws a tracking box. White balance **Mode** offers **AWB Lock** beside
-Auto while Auto reports a live Kelvin; it sets Custom at that Kelvin, snapped to
-the Kelvin drum, and keeps tint. Neither is a camera-native lock and both await hardware testing.
+still draws a tracking box. White balance **Mode** and the WB tile's drag dial
+offer **AWB Lock** beside Auto while Auto reports a live Kelvin; it sets Custom
+at that Kelvin, snapped to the Kelvin drum, and keeps tint. While locked, WB
+stays on **AWB Lock** (the tile reads **AWB-L**); choose Auto to return to Auto
+or Custom to keep that Kelvin as ordinary Custom. A WB change on the camera
+also ends the lock. Neither is a camera-native lock and both await hardware testing.
 Capture tabs retain their matching labels while camera updates change the available modes.
 Hold Record to open shooting mode.
 In **Photo**, the capture control becomes a shutter and takes a photo immediately,
