@@ -79,33 +79,45 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Shared station-network form. Callers supply radio work and persist only a confirmed network. */
+/**
+ * Shared station-network form for Multiview and a saved camera's Add setup (iOS
+ * `StationNetworkSetupView`). Callers supply radio work and persist only a confirmed network.
+ * [scan] is null when the camera is not nearby over Bluetooth. [startPage] and [startNetwork]
+ * reopen a failed setup on its password or hotspot page.
+ */
 @Composable
 fun StationNetworkSetup(
     savedNetworks: List<MultiviewNetworkStore.Network>,
     currentSsid: () -> String?,
     hotspotActive: () -> Boolean,
-    scan: suspend ((String) -> Unit) -> Unit,
+    scan: (suspend ((String) -> Unit) -> Unit)?,
     connect: suspend (MultiviewNetworkStore.Network) -> String?,
     cancel: () -> Unit,
     complete: () -> Unit,
     lockedNetwork: MultiviewNetworkStore.Network? = null,
     warning: String? = null,
+    camera: SavedCamera? = null,
+    startPage: String = "choose",
+    startNetwork: String = "",
 ) {
     val context = LocalContext.current
     // The keyboard must not replace the focused field by changing the form layout.
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val scope = rememberCoroutineScope()
     val latestScan by rememberUpdatedState(scan)
-    var page by remember { mutableStateOf("choose") }
+    var page by remember { mutableStateOf(startPage) }
     var current by remember { mutableStateOf<String?>(null) }
     var locationPermission by remember { mutableStateOf(false) }
     var locationEnabled by remember { mutableStateOf(false) }
     var hotspotDetected by remember { mutableStateOf(false) }
-    var network by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var hotspotName by remember { mutableStateOf(savedNetworks.lastOrNull { it.hotspot }?.ssid.orEmpty()) }
-    var hotspotPassword by remember { mutableStateOf(savedNetworks.lastOrNull { it.hotspot }?.password.orEmpty()) }
+    var network by remember { mutableStateOf(startNetwork) }
+    var password by remember {
+        mutableStateOf(savedNetworks.firstOrNull { !it.hotspot && it.ssid == startNetwork }?.password.orEmpty())
+    }
+    val knownHotspot = camera?.hotspotSSID?.let { name -> savedNetworks.firstOrNull { it.hotspot && it.ssid == name } }
+        ?: savedNetworks.lastOrNull { it.hotspot }
+    var hotspotName by remember { mutableStateOf(knownHotspot?.ssid ?: camera?.hotspotSSID.orEmpty()) }
+    var hotspotPassword by remember { mutableStateOf(knownHotspot?.password.orEmpty()) }
     var hotspotTouched by remember { mutableStateOf(false) }
     var otherNetwork by remember { mutableStateOf(false) }
     var otherName by remember { mutableStateOf("") }
@@ -123,14 +135,20 @@ fun StationNetworkSetup(
         listOf("iphone", "ipad", "android", "galaxy", "pixel").any { token -> it.contains(token, ignoreCase = true) }
     }
 
+    fun isCameraNetwork(name: String) = name.startsWith("osmo", ignoreCase = true) || name == camera?.lastSSID
+    val networkHint =
+        if (camera == null) "This phone joins first. Every camera you add will use the same Wi-Fi."
+        else "The camera and this phone must be on the same Wi-Fi."
+
     fun startScan() {
-        if (scanning || working || lockedNetwork != null) return
+        val scanner = latestScan
+        if (scanner == null || scanning || working || lockedNetwork != null) return
         scanned = true
         scanFailed = false
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
-                latestScan { name ->
-                    if (!working && !name.startsWith("osmo", ignoreCase = true) && name !in found) found += name
+                scanner { name ->
+                    if (!working && !isCameraNetwork(name) && name !in found) found += name
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -234,7 +252,9 @@ fun StationNetworkSetup(
                 SetupSection("NEARBY")
                 Spacer(Modifier.weight(1f))
                 if (scanning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else TextButton(onClick = ::startScan, enabled = !working, modifier = Modifier.requiredHeight(48.dp)) { Text("Scan again") }
+                else if (scan != null) {
+                    TextButton(onClick = ::startScan, enabled = !working, modifier = Modifier.requiredHeight(48.dp)) { Text("Scan again") }
+                }
             }
             val nearby = found.filter { it != current && saved.none { saved -> saved.ssid == it } }
             nearby.forEach { name -> SetupNetworkRow(name, enabled = !working, lock = true) { choose(name) } }
@@ -242,12 +262,13 @@ fun StationNetworkSetup(
                 SetupIconHint(if (scanning) null else OpcIcon.SCAN, MaterialTheme.colorScheme.primary,
                     when {
                         scanning -> "The camera is looking for networks… Networks appear here as it finds them."
+                        scan == null -> "Turn on the camera nearby to scan for networks, or enter a network name."
                         scanFailed -> "The scan did not finish. Turn on a camera and try Scan again."
                         else -> "No networks found yet. Turn on a camera or enter a network name."
                     }, Modifier.testTag("stationSetup.scanStatus"),
                 )
             }
-            SetupHint("This phone joins first. Every camera you add will use the same Wi-Fi.")
+            SetupHint(networkHint)
         })
         "password" -> SetupColumns({
             SetupSectionHeader("NETWORK")
@@ -256,7 +277,7 @@ fun StationNetworkSetup(
             SetupChecklist()
         }, {
             SetupPasswordField("Password", password, !working) { password = it }
-            SetupHint("Saved securely on this phone for all cameras.")
+            SetupHint(if (camera == null) "Saved securely on this phone for all cameras." else "Saved securely on this phone. Multiview can reuse it.")
         })
         "hotspot" -> SetupColumns({
             SetupSectionHeader("THIS PHONE’S HOTSPOT")
@@ -319,7 +340,7 @@ fun StationNetworkSetup(
         Box(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(16.dp), contentAlignment = Alignment.Center) {
             Surface(
                 modifier = Modifier.widthIn(max = if (landscape) 840.dp else 520.dp).fillMaxWidth()
-                    .fillMaxHeight().testTag("multiview.networkSetup"),
+                    .fillMaxHeight().testTag(if (camera == null) "multiview.networkSetup" else "addSetup"),
                 color = MonitorPalette.backgroundDeep, shape = RoundedCornerShape(20.dp),
             ) {
                 Column(Modifier.fillMaxSize()) {
@@ -327,7 +348,7 @@ fun StationNetworkSetup(
                         TextButton(onClick = ::back, enabled = !working) { Text(if (page == "choose") "Cancel" else "Back") }
                         Text(
                             if (lockedNetwork != null) "Shared Wi-Fi" else when (page) {
-                                "choose" -> "Connect your cameras"
+                                "choose" -> if (camera == null) "Connect your cameras" else "Add setup"
                                 "hotspot" -> "Phone hotspot"
                                 else -> "Wi-Fi"
                             }, style = LiveType.text(16f, FontWeight.SemiBold), modifier = Modifier.weight(1f),
@@ -370,17 +391,35 @@ fun StationNetworkSetup(
                                 }
                                 columns != null -> { columns.leading(this); columns.trailing(this) }
                                 else -> {
-                                    Text("How will your cameras connect?", style = LiveType.display(22f, FontWeight.SemiBold))
+                                    camera?.let { SetupHint("${it.displayName} · ${it.modelName}") }
+                                    Text(
+                                        if (camera == null) "How will your cameras connect?" else "How should this camera connect?",
+                                        style = LiveType.display(22f, FontWeight.SemiBold),
+                                    )
+                                    fun added(ssid: String?, body: String) = ssid?.let { "Added · $it. $body" } ?: body
                                     AdaptiveSetupColumns(landscape, {
-                                        SetupNetworkRow("Local Wi-Fi", detail = "A router, venue network or another device’s hotspot. This phone joins it too.", icon = OpcIcon.WIFI, enabled = !working) {
+                                        SetupNetworkRow(
+                                            if (camera == null) "Local Wi-Fi" else "Wi-Fi",
+                                            detail = added(camera?.wifiSSID, "A router, venue network or another device’s hotspot. This phone joins it too."),
+                                            icon = OpcIcon.WIFI, enabled = !working,
+                                            modifier = Modifier.testTag("stationSetup.wifi"),
+                                        ) {
                                             page = "networks"
                                         }
                                     }, {
-                                        SetupNetworkRow("Phone hotspot", detail = "This phone’s Wi-Fi hotspot. Best on the move.", icon = OpcIcon.RADIO, enabled = !working) {
+                                        SetupNetworkRow(
+                                            if (camera == null) "Phone hotspot" else "Hotspot",
+                                            detail = added(camera?.hotspotSSID, "This phone’s Wi-Fi hotspot. Best on the move."),
+                                            icon = OpcIcon.RADIO, enabled = !working,
+                                            modifier = Modifier.testTag("stationSetup.phoneHotspot"),
+                                        ) {
                                             page = "hotspot"
                                         }
                                     })
-                                    SetupHint("Choose the shared network before adding cameras. Saved passwords stay on this phone.")
+                                    SetupHint(
+                                        if (camera == null) "Choose the shared network before adding cameras. Saved passwords stay on this phone."
+                                        else "Camera Wi-Fi stays available. Switch setups from the camera’s chips at any time.",
+                                    )
                                 }
                             }
                             status()

@@ -39,7 +39,14 @@ import com.opencapture.openpocketcine.diagnostics.RecoveryReason
 import com.opencapture.openpocketcine.BuildConfig
 import android.os.Build
 import java.util.UUID
+import com.opencapture.openpocketcine.multiview.MultiviewDiscovery
+import com.opencapture.openpocketcine.multiview.MultiviewNetworkStore
+import com.opencapture.openpocketcine.multiview.SharedWiFi
+import com.opencapture.openpocketcine.multiview.StationJoin
+import com.opencapture.openpocketcine.multiview.multicamSupport
+import com.opencapture.openpocketcine.multiview.hasMultiviewPreview
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
+import com.opencapture.openpocketcine.pairing.CameraConnectionSetup
 import com.opencapture.openpocketcine.pairing.CameraWifiCredentialStore
 import com.opencapture.openpocketcine.pairing.CameraWifiResolution
 import com.opencapture.openpocketcine.pairing.WifiLowLatencyLock
@@ -159,6 +166,8 @@ class PocketCameraSession(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val ble = BleLink(context)
     private val joiner = CameraApJoiner(context)
+    /** The operator's Wi-Fi or this phone's hotspot for the Wi-Fi and Hotspot setups (#406). */
+    private val station = SharedWiFi(context)
     internal val cadence = LivePipelineCadence()
     /** Instrumentation only. Invoked after ACK observation; never blocks or delays the receive thread. */
     @Volatile internal var debugVideoPacketAdmission: (() -> Boolean)? = null
@@ -329,6 +338,23 @@ class PocketCameraSession(
         private set
     var joinedSSID: String? = null
         private set
+
+    /** Setup for the next connect (#406); session recovery reuses it. Disconnect resets it. */
+    var connectionSetup: CameraConnectionSetup = CameraConnectionSetup.CAMERA_WIFI
+        private set
+    /** Network and password a Wi-Fi or Hotspot setup moves the camera onto. */
+    private var stationNetwork: MultiviewNetworkStore.Network? = null
+    /** A camera Wi-Fi connect after a setup that moved the camera sends `07/48 00` first. */
+    private var restoreAccessPoint = false
+    /** Wi-Fi or Hotspot address that answered with this body's BLE identity. */
+    var stationHost: String? = null
+        private set
+    private var stationSeq = 1200
+    /** Station provisioning step; the camera card shows it over the phase label. */
+    private val _setupProgress = MutableStateFlow<String?>(null)
+    val setupProgress: StateFlow<String?> = _setupProgress.asStateFlow()
+    private val cameraPath: CameraNetworkPath
+        get() = if (connectionSetup.movesCamera) station else joiner
 
     /** iOS `CameraSession.supportsFocusMode`. Unknown camera defaults on. */
     val supportsFocusMode: Boolean
@@ -694,10 +720,15 @@ class PocketCameraSession(
         ble.disconnect()
         decoder.reset()
         videoHistory.reset()
-        joiner.release()
+        releaseCameraPath()
         wifiLock.release()
         connectedCamera = null
         joinedSSID = null
+        connectionSetup = CameraConnectionSetup.CAMERA_WIFI
+        stationNetwork = null
+        restoreAccessPoint = false
+        stationHost = null
+        _setupProgress.value = null
         holdsMonitor = false
         isBrowsingMedia = false
         mediaPictureGeneration += 1
@@ -818,9 +849,16 @@ class PocketCameraSession(
         }
 
         startKeepalive(joinedSSID)
+        if (connectionSetup.movesCamera) {
+            val ssid = runStation(camera)
+            startKeepalive(ssid)
+            return
+        }
         publishPhase(ConnectionPhase.READING_WIFI_CREDS)
+        val restored = restoreAccessPoint
+        if (restored) restoreCameraAccessPoint()
         val credsFromCache = wifiCache.load(camera.id) != null
-        val skipApSettle = joiner.isProcessBound() && credsFromCache
+        val skipApSettle = !restored && joiner.isProcessBound() && credsFromCache
         if (!skipApSettle) delay(200)
         ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_5310, 0x8053))
         runCatching { waitFrame(0x53, 0x10, 2_000) }
@@ -928,35 +966,7 @@ class PocketCameraSession(
         val existing = datalink
         val dl =
             existing?.takeIf { LiveViewEnablePolicy.shouldReuseDatalink(it.isClosed) }
-                ?: DatalinkDriver(
-                    joiner,
-                    camera.model.datalinkPort,
-                    camera.model.tcpPoke,
-                    camera.model.pairingToken,
-                    cadence,
-                    videoHistory,
-                    camera.model,
-                    debugVideoPacketAdmission = { debugVideoPacketAdmission?.invoke() ?: true },
-                ).also { created ->
-                    val inputOwner = decoder.claimInputOwner()
-                    created.onVideoEpochChanged = { epoch -> decoder.advanceInputEpoch(inputOwner, epoch) }
-                    created.onStatusFrame = { frame -> ingestDatalinkFrame(frame) }
-                    created.onAccessUnit = { au, epoch ->
-                        if (LiveViewEnablePolicy.shouldIngestLiveVideo(
-                                ingestArmed = true,
-                                browsingMedia = isBrowsingMedia,
-                                operatorOverlayHeld = operatorOverlayHeld,
-                            )
-                        ) {
-                            rawAccessUnits += 1
-                            decoder.decode(au, inputOwner, epoch)
-                        }
-                    }
-                    created.onReferenceDiscontinuity = { epoch ->
-                        decoder.noteReferenceDiscontinuity(inputOwner, epoch)
-                    }
-                    datalink = created
-                }
+                ?: makeDatalink(camera, stationHost.takeIf { connectionSetup.movesCamera })
         var attempt = 0
         while (true) {
             try {
@@ -988,7 +998,7 @@ class PocketCameraSession(
                 Log.i(TAG, "session: handshake open timed out")
                 val miss =
                     DatalinkHandshakeException("camera never answered the datalink handshake")
-                if (LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(joiner.isProcessBound())) {
+                if (LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(cameraPath.isProcessBound())) {
                     throw miss
                 }
                 attempt += 1
@@ -1001,7 +1011,7 @@ class PocketCameraSession(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(joiner.isProcessBound())) {
+                if (LiveViewEnablePolicy.shouldKickAfterHandshakeTimeout(cameraPath.isProcessBound())) {
                     throw e
                 }
                 attempt += 1
@@ -1014,6 +1024,266 @@ class PocketCameraSession(
             }
         }
     }
+
+    // ---- Wi-Fi and Hotspot setups (#406) --------------------------------------------------------
+
+    /**
+     * Setup for the next [connect] or [reconnect]. [network] carries the Wi-Fi or Hotspot
+     * credentials; [restoreAccessPoint] asks a camera Wi-Fi connect to bring back the access
+     * point of a camera a setup left in station role. A live session on another setup must
+     * be disconnected first.
+     */
+    fun useSetup(
+        setup: CameraConnectionSetup,
+        network: MultiviewNetworkStore.Network?,
+        restoreAccessPoint: Boolean,
+    ) {
+        if (setup != connectionSetup) stationHost = null
+        connectionSetup = setup
+        stationNetwork = network.takeIf { setup.movesCamera }
+        this.restoreAccessPoint = restoreAccessPoint && !setup.movesCamera
+        station.hotspot = setup == CameraConnectionSetup.PHONE_HOTSPOT
+    }
+
+    private fun releaseCameraPath() {
+        joiner.release()
+        station.release()
+    }
+
+    private fun cameraNetworkUsable(): Boolean =
+        if (connectionSetup.movesCamera) station.address() != null else joiner.hasUsableCameraNetwork()
+
+    private fun stationLog(line: String) = DiagnosticCenter.log("info", "session", "station", "station: $line")
+
+    /** BLE request on the session link; the reply is matched by opcode like every other wait. */
+    private suspend fun exchangeBle(kind: Int, extra: String? = null, timeoutMs: Long = 12_000): ByteArray {
+        stationSeq = (stationSeq + 1) and 0xFFFF
+        val bytes = SwiftCore.command(kind, stationSeq, extra)
+        require(bytes.size > 10) { "command not encoded" }
+        val key = ((bytes[9].toInt() and 0xFF) shl 8) or (bytes[10].toInt() and 0xFF)
+        pairingHold.remove(key)
+        ble.send(bytes)
+        return waitFrame(listOf(key), timeoutMs).payload
+    }
+
+    /**
+     * A camera a setup left in station role has its access point down. `07/48 00` is the
+     * reset Multiview sends on close. A missing or refused reply is not fatal: an access
+     * point already up still serves the normal join.
+     */
+    private suspend fun restoreCameraAccessPoint() {
+        val reply = runCatching { exchangeBle(SwiftCore.CMD_MULTICAM_STATION_MODE, "0") }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException && it !is TimeoutCancellationException) throw it }
+            .getOrNull()
+        val accepted = reply?.contentEquals(byteArrayOf(0)) == true || reply?.contentEquals(byteArrayOf(0, 0)) == true
+        DiagnosticCenter.log("info", "session", "wifi", "wifi: restore camera access point accepted=$accepted")
+        // Join only once `07/39` reports 00 00 (access point; 00 01 is station). iOS saw
+        // 0.2 to 2.4 s on a Pocket 4 Pro.
+        val started = SystemClock.elapsedRealtime()
+        for (poll in 0 until 15) {
+            val role = runCatching { exchangeBle(SwiftCore.CMD_MULTICAM_WIFI_WORK_MODE, timeoutMs = 4_000) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException && it !is TimeoutCancellationException) throw it }
+                .getOrNull()
+            DiagnosticCenter.log("info", "session", "wifi",
+                "wifi: camera role after restore ${role?.let(::hexBytes) ?: "no reply"} at " +
+                    "${"%.1f".format(Locale.US, (SystemClock.elapsedRealtime() - started) / 1000.0)} s")
+            if (role?.contentEquals(byteArrayOf(0, 0)) == true) break
+            delay(1_000)
+        }
+    }
+
+    /**
+     * Moves the camera onto the operator's Wi-Fi or this phone's hotspot with the captured
+     * Multiview sequence, then goes live on the address that proves this body. Returns the
+     * network name.
+     */
+    private suspend fun runStation(camera: FoundCamera): String {
+        val network = stationNetwork
+            ?: error("this setup's password is missing on this phone. Edit the setup and enter it again")
+        val hotspot = connectionSetup == CameraConnectionSetup.PHONE_HOTSPOT
+        publishPhase(ConnectionPhase.JOINING_WIFI)
+        station.hotspot = hotspot
+        try {
+            // Neither setup keeps the phone on a camera access point.
+            joiner.release()
+            joinedSSID = null
+            // Wi-Fi: this phone joins first. Hotspot: the phone hosts it and joins nothing.
+            if (!hotspot) {
+                _setupProgress.value = "Joining ${network.ssid} on this phone"
+                if (!station.join(network.ssid, network.password)) {
+                    error("this phone could not join the Wi-Fi. Check the password and that the network is in range")
+                }
+            }
+            if (camera.model.family == "nano") {
+                _setupProgress.value = "Waking camera Wi-Fi"
+                val wake = exchangeBle(SwiftCore.CMD_SESSION_5310)
+                if (!wake.contentEquals(byteArrayOf(1, 0, 0, 0))) {
+                    error("the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again")
+                }
+                delay(1_000)
+            }
+            val identity = readStationIdentity()
+            val support = camera.multicamSupport()
+            val outcome = StationJoin(
+                ssid = network.ssid, password = network.password, hotspot = hotspot,
+                hasPreview = support.preview, missingRoleQueryE0 = support.missingRoleQueryE0,
+                // Bodies without a captured preview profile (Action, 360) take Multiview's
+                // bounded experimental path: no Pocket video-mode route, missing role getter allowed.
+                experimental = !camera.hasMultiviewPreview,
+                probeExistingStation = true,
+            ).run(
+                identity,
+                exchange = { kind, extra, timeoutMs -> exchangeBle(kind, extra, timeoutMs) },
+                send = { kind ->
+                    stationSeq = (stationSeq + 1) and 0xFFFF
+                    ble.send(SwiftCore.command(kind, stationSeq))
+                },
+                status = { _setupProgress.value = it },
+                hotspotReady = { station.address(true) != null },
+                verifyOnNetwork = { openStationDatalink(camera, identity, patienceMs = 0) },
+                log = ::stationLog,
+            )
+            if (outcome == StationJoin.Outcome.JOINED) {
+                _setupProgress.value = "Finding the camera on ${network.ssid}"
+                // A router hands the camera an address, then its services start: about 40 s
+                // after the join on a Pocket 4 Pro on a home /24 (iOS, 2026-09-24).
+                if (!openStationDatalink(camera, identity, patienceMs = STATION_FIND_MS)) {
+                    error(
+                        "the camera joined the Wi-Fi, but this phone cannot reach it there. The router is keeping " +
+                            "the two apart: on a Wi-Fi 7 router turn off MLO for this network (or add a camera " +
+                            "network without it), and turn off client isolation. The Hotspot setup avoids the router",
+                    )
+                }
+            }
+            return network.ssid
+        } finally {
+            _setupProgress.value = null
+        }
+    }
+
+    /**
+     * `07/07` over BLE: the only proof that a LAN address is this body. A Pocket just
+     * returned to its access point ignored it until one `53/10` wake (Multiview, 2026-09-23).
+     */
+    private suspend fun readStationIdentity(): ByteArray =
+        try {
+            exchangeBle(SwiftCore.CMD_GET_WIFI_SSID)
+        } catch (_: TimeoutCancellationException) {
+            stationLog("identity reply missing; sending Wi-Fi wake once")
+            try {
+                exchangeBle(SwiftCore.CMD_SESSION_5310, timeoutMs = 2_000)
+            } catch (_: TimeoutCancellationException) {
+            }
+            delay(600)
+            exchangeBle(SwiftCore.CMD_GET_WIFI_SSID)
+        }
+
+    /** Sweep the setup's subnet until the camera answers with [identity] or [patienceMs] runs out. */
+    private suspend fun openStationDatalink(camera: FoundCamera, identity: ByteArray, patienceMs: Long): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + patienceMs
+        var sweep = 0
+        do {
+            sweep += 1
+            if (openStationDatalinkOnce(camera, identity, sweep)) return true
+            if (SystemClock.elapsedRealtime() >= deadline) break
+            delay(2_000)
+        } while (SystemClock.elapsedRealtime() < deadline)
+        return false
+    }
+
+    /**
+     * An address counts only when its datalink answers `07/07` with the identity read over
+     * BLE: other cameras can share the network. Then register and send the one enable.
+     */
+    private suspend fun openStationDatalinkOnce(camera: FoundCamera, identity: ByteArray, sweep: Int): Boolean {
+        val hotspot = connectionSetup == CameraConnectionSetup.PHONE_HOTSPOT
+        if (station.address() == null) {
+            stationLog("sweep $sweep no ${if (hotspot) "hotspot" else "Wi-Fi"} address")
+            return false
+        }
+        val known = listOfNotNull(stationHost)
+        val started = SystemClock.elapsedRealtime()
+        val found = try {
+            MultiviewDiscovery(station).candidates(emptySet())
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            stationLog("sweep $sweep cannot scan this subnet (${error.message})")
+            emptyList()
+        }
+        // Whether the phone is on the setup's network, never its name: diagnostics are shared.
+        stationLog("sweep $sweep answering=${found.size} known=${known.size} in " +
+            "${"%.1f".format(Locale.US, (SystemClock.elapsedRealtime() - started) / 1000.0)} s")
+        for (host in known + found.filterNot { it in known }) {
+            coroutineContext.ensureActive()
+            disposeDatalink()
+            val dl = makeDatalink(camera, host)
+            try {
+                withTimeout(LiveViewEnablePolicy.handshakeOpenTimeoutMs()) {
+                    interruptibleDatalinkOpen { dl.open(identityOnly = true) }
+                }
+                pairingHold.remove(IDENTITY_KEY)
+                dl.sendCommand(SwiftCore.CMD_GET_WIFI_SSID)
+                val reply = waitFrame(listOf(IDENTITY_KEY), 8_000)
+                if (!reply.payload.contentEquals(identity) || datalink !== dl) {
+                    stationLog("an answering device is another camera")
+                    continue
+                }
+            } catch (_: TimeoutCancellationException) {
+                stationLog("an answering device did not open the datalink")
+                continue
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                stationLog("an answering device did not open the datalink")
+                continue
+            }
+            stationLog("camera identity verified on the network")
+            stationHost = host
+            withContext(Dispatchers.IO) { dl.completeRegistration() }
+            // Subscribe is fire-and-forget; an enable in the same burst is ignored.
+            delay(STATION_SUBSCRIBE_SETTLE_MS)
+            publishPhase(ConnectionPhase.LIVE)
+            beginFeedIncidentSession()
+            withContext(Dispatchers.IO) { sendCapturedLiveView("first picture") }
+            return true
+        }
+        disposeDatalink()
+        return false
+    }
+
+    /** New driver on the camera access point, or the verified station address. Becomes [datalink]. */
+    private fun makeDatalink(camera: FoundCamera, host: String?): DatalinkDriver =
+        DatalinkDriver(
+            cameraPath,
+            camera.model.datalinkPort,
+            camera.model.tcpPoke,
+            camera.model.pairingToken,
+            cadence,
+            videoHistory,
+            camera.model,
+            debugVideoPacketAdmission = { debugVideoPacketAdmission?.invoke() ?: true },
+            host = host ?: DatalinkDriver.CAMERA_HOST,
+        ).also { created ->
+            val inputOwner = decoder.claimInputOwner()
+            created.onVideoEpochChanged = { epoch -> decoder.advanceInputEpoch(inputOwner, epoch) }
+            created.onStatusFrame = { frame -> ingestDatalinkFrame(frame) }
+            created.onAccessUnit = { au, epoch ->
+                if (LiveViewEnablePolicy.shouldIngestLiveVideo(
+                        ingestArmed = true,
+                        browsingMedia = isBrowsingMedia,
+                        operatorOverlayHeld = operatorOverlayHeld,
+                    )
+                ) {
+                    rawAccessUnits += 1
+                    decoder.decode(au, inputOwner, epoch)
+                }
+            }
+            created.onReferenceDiscontinuity = { epoch ->
+                decoder.noteReferenceDiscontinuity(inputOwner, epoch)
+            }
+            datalink = created
+        }
 
     /** Stay on LIVE while recovering so the monitor (last frame) is not unmounted. */
     private fun publishPhase(next: ConnectionPhase) {
@@ -1173,7 +1443,7 @@ class PocketCameraSession(
                 sawPicture = hasStableLivePicture,
                 statusFresh = statusFresh,
                 sinceEnableMs = if (lastIdrRequest == 0L) null else now - lastIdrRequest,
-                pathReady = joiner.isProcessBound(),
+                pathReady = cameraPath.isProcessBound(),
             )
         }
 
@@ -1325,7 +1595,7 @@ class PocketCameraSession(
             logRecoverSkip("foreground")
             return
         }
-        if (!joiner.isProcessBound()) {
+        if (!cameraPath.isProcessBound()) {
             logRecoverSkip("unbound")
             return
         }
@@ -1515,7 +1785,7 @@ class PocketCameraSession(
                 lastBleNotifyAt = lastBleNotifyAt,
                 lastRebuildAt = datalink?.lastRebuildAt,
                 lastEnableAt = lastIdrRequest,
-                pathReady = joiner.isProcessBound(),
+                pathReady = cameraPath.isProcessBound(),
                 hasFormat = decoder.hasFormat,
                 decoderErrors = decoderErrors,
                 live = _phase.value == ConnectionPhase.LIVE,
@@ -1784,7 +2054,7 @@ class PocketCameraSession(
             logRecovery(RecoveryAction.ENABLE, RecoveryEffect.BLOCKED, RecoveryReason.PLAYBACK)
             return false
         }
-        val pathReady = joiner.isProcessBound()
+        val pathReady = cameraPath.isProcessBound()
         val decoderReady = decoder.isPresentationReady
         if (!LiveViewEnablePolicy.shouldSendRecoverEnable(pathReady, decoderReady)) {
             Log.i(TAG, "feed: hold enable path=${if (pathReady) 1 else 0} decoder=${if (decoderReady) 1 else 0} reason=$reason")
@@ -1830,7 +2100,7 @@ class PocketCameraSession(
         while (SystemClock.elapsedRealtime() < readyDeadline) {
             if (!ownsPicture()) return
             if (decoder.isPresentationReady &&
-                joiner.isProcessBound() &&
+                cameraPath.isProcessBound() &&
                 !isBrowsingMedia &&
                 !_status.value.inPlayback
             ) {
@@ -1995,10 +2265,10 @@ class PocketCameraSession(
      * packets still arrive but the picture is frozen — that is the resume canvas.
      */
     private fun recoverAfterForeground() {
-        if (!joiner.hasUsableCameraNetwork()) {
+        if (!cameraNetworkUsable()) {
             DiagnosticCenter.log("notice", "recovery", "foreground-network",
                 "live: foreground camera network unavailable — reconnect camera")
-            joiner.release()
+            releaseCameraPath()
             beginSessionRecovery("camera Wi-Fi changed while away", SessionRecoveryTrigger.SOFTAP_LOST)
             return
         }
@@ -2011,8 +2281,8 @@ class PocketCameraSession(
             delay(LiveViewEnablePolicy.STALL_MS)
             if (!ownsLivePicture(owner) || datalink !== link) return@startFeedRecovery
             if (hasRecoveryPicture(returnedAt)) return@startFeedRecovery
-            if (!joiner.hasUsableCameraNetwork()) {
-                joiner.release()
+            if (!cameraNetworkUsable()) {
+                releaseCameraPath()
                 beginSessionRecovery("camera Wi-Fi changed while away", SessionRecoveryTrigger.SOFTAP_LOST)
                 return@startFeedRecovery
             }
@@ -2020,7 +2290,7 @@ class PocketCameraSession(
                 "live: foreground picture did not return — reconnect camera")
             // A fresh session owns the next enable. Do not add a foreground PLI
             // alongside the watchdog while the old socket is still delivering.
-            joiner.release()
+            releaseCameraPath()
             beginSessionRecovery("picture did not return after app switch", SessionRecoveryTrigger.DATALINK_LOST)
         }
     }
@@ -2043,8 +2313,8 @@ class PocketCameraSession(
         idrHoldEnableCount = 0
         firstPictureSettled = false
         focusTrackPending = true
-        if (!joiner.hasUsableCameraNetwork()) {
-            joiner.release()
+        if (!cameraNetworkUsable()) {
+            releaseCameraPath()
             beginSessionRecovery("camera Wi-Fi unavailable during rejoin", SessionRecoveryTrigger.SOFTAP_LOST)
             return
         }
@@ -2199,7 +2469,7 @@ class PocketCameraSession(
             videoHistory.reset()
         }
         if (!preserveSoftAP) {
-            joiner.release()
+            releaseCameraPath()
         }
         videoPackets = 0
         accessUnits = 0
@@ -2254,7 +2524,7 @@ class PocketCameraSession(
         feedRecoveryJob?.cancel()
         feedRecoveryJob = null
         connectJob?.cancel()
-        stopLivePipeline(preserveDecoder = true, preserveSoftAP = joiner.isProcessBound())
+        stopLivePipeline(preserveDecoder = true, preserveSoftAP = cameraPath.isProcessBound())
         ble.disconnect()
         val now = SystemClock.elapsedRealtime()
         if (dropStorm.noteDrop(now)) {
@@ -2312,7 +2582,7 @@ class PocketCameraSession(
             }
         }
         if (!withinAutomaticRecoveryBudget { runAttempts() }) {
-            stopLivePipeline(preserveDecoder = true, preserveSoftAP = joiner.hasUsableCameraNetwork())
+            stopLivePipeline(preserveDecoder = true, preserveSoftAP = cameraNetworkUsable())
             ble.disconnect()
             _recoveryState.value = SessionRecoveryUi.WaitingForOperator(maxOf(1, failures + 1))
             DiagnosticCenter.log("notice", "recovery", "budget",
@@ -2351,7 +2621,7 @@ class PocketCameraSession(
             false
         }.also { recovered ->
             if (!recovered) {
-                stopLivePipeline(preserveDecoder = true, preserveSoftAP = joiner.hasUsableCameraNetwork())
+                stopLivePipeline(preserveDecoder = true, preserveSoftAP = cameraNetworkUsable())
                 ble.disconnect()
             }
         }
@@ -5221,8 +5491,13 @@ class PocketCameraSession(
 
     companion object {
         private const val TAG = "PocketCameraSession"
+        private const val IDENTITY_KEY = 0x0707
+        private const val STATION_FIND_MS = 60_000L
+        private const val STATION_SUBSCRIBE_SETTLE_MS = 150L
     }
 }
+
+private fun hexBytes(bytes: ByteArray): String = bytes.joinToString(" ") { "%02x".format(it.toInt() and 0xFF) }
 
 internal fun phaseAllowsReconnect(phase: ConnectionPhase): Boolean =
     when (phase) {

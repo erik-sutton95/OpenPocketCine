@@ -47,7 +47,15 @@ import com.opencapture.openpocketcine.AppPanel
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.monitor.MonitorIconButton
+import com.opencapture.openpocketcine.bridge.SwiftCore
+import com.opencapture.openpocketcine.multiview.SharedWiFi
+import com.opencapture.openpocketcine.multiview.appearsInMultiview
 import com.opencapture.openpocketcine.session.FoundCamera
+import androidx.compose.ui.platform.LocalContext
+import com.opencapture.monitorui.MonitorConnectFailure
+import com.opencapture.monitorui.MonitorConnectStep
+import com.opencapture.monitorui.MonitorSetupChip
+import org.json.JSONObject
 
 @Composable
 fun SavedCamerasExperience(model: AppModel) {
@@ -55,6 +63,11 @@ fun SavedCamerasExperience(model: AppModel) {
     val phase by model.session.phaseFlow.collectAsState()
     val reconnecting by model.session.isReconnecting.collectAsState()
     val targetId by model.session.connectionTargetId.collectAsState()
+    val failureReason by model.session.failure.collectAsState()
+    val setupProgress by model.session.setupProgress.collectAsState()
+    val context = LocalContext.current
+    val wifi = remember { SharedWiFi(context) }
+    var addSetup by remember { mutableStateOf<AddSetupTarget?>(null) }
     val busy = phase.isBusy() || reconnecting
     val connectingLabel = if (reconnecting && phase == ConnectionPhase.SCANNING) {
         "Looking for camera…"
@@ -101,19 +114,52 @@ fun SavedCamerasExperience(model: AppModel) {
         },
         camera = { item ->
             when (item) {
-                is HomeCamera.Paired ->
+                is HomeCamera.Paired -> {
+                    val camera = item.camera
+                    val nearby = found.firstOrNull { it.id == camera.id }
+                    val connecting = busy && targetId == camera.id
+                    val reason = failureReason
+                    val failed = !busy && phase == ConnectionPhase.FAILED && targetId == camera.id && reason != null
+                    val setup = model.session.connectionSetup
+                    val appears = remember(camera.modelName, nearby) { appearsInMultiview(camera, nearby) }
                     SavedCameraRow(
-                        camera = item.camera,
-                        nearby = found.firstOrNull { it.id == item.camera.id },
-                        primary = item.camera.id == latestId,
+                        camera = camera,
+                        nearby = nearby,
+                        primary = camera.id == latestId,
                         phase = phase,
                         isBusy = busy,
-                        connectionLabel = connectingLabel.takeIf { busy && targetId == item.camera.id },
+                        connectionLabel = (setupProgress ?: connectingLabel).takeIf { connecting },
                         onCancel = model::cancelPairing,
-                        onConnect = { model.reconnect(item.camera) },
-                        onRename = { model.rename(item.camera, it) },
-                        onRemove = { model.forget(item.camera) },
+                        onConnect = { model.reconnect(camera) },
+                        onRename = { model.rename(camera, it) },
+                        onRemove = { model.forget(camera) },
+                        setups = SavedCameraSetupPresentation.chips(camera, setup.takeIf { connecting || failed }),
+                        canAddSetup = SavedCameraSetupPresentation.canAddSetup(camera, appears),
+                        steps = if (connecting) {
+                            SavedCameraSetupPresentation.steps(phase, setup, camera, setupProgress, connectingLabel)
+                        } else emptyList(),
+                        failure = if (failed && reason != null) {
+                            SavedCameraSetupPresentation.failure(reason, setup, camera, wifi.address(true) != null)
+                        } else null,
+                        onSetup = { chip ->
+                            CameraConnectionSetup.fromRaw(chip.id)?.let { model.reconnect(camera, it) }
+                        },
+                        onAddSetup = { addSetup = AddSetupTarget(camera) },
+                        onForgetSetup = { chip ->
+                            CameraConnectionSetup.fromRaw(chip.id)?.let { model.forgetSetup(it, camera) }
+                        },
+                        onFailureAction = { action ->
+                            when (action) {
+                                SavedCameraSetupPresentation.ACTION_EDIT -> addSetup =
+                                    if (setup == CameraConnectionSetup.PHONE_HOTSPOT) AddSetupTarget(camera, "hotspot")
+                                    else AddSetupTarget(camera, "password", camera.wifiSSID.orEmpty())
+                                SavedCameraSetupPresentation.ACTION_CAMERA_WIFI ->
+                                    model.reconnect(camera, CameraConnectionSetup.CAMERA_WIFI)
+                                else -> model.reconnect(camera, setup)
+                            }
+                        },
                     )
+                }
                 is HomeCamera.Nearby ->
                     NearbyCameraRow(
                         camera = item.camera,
@@ -129,7 +175,36 @@ fun SavedCamerasExperience(model: AppModel) {
             PairNewCameraFooter(enabled = !busy, onClick = model::pairNewCamera)
         },
     )
+    addSetup?.let { target ->
+        StationNetworkSetup(
+            savedNetworks = model.savedNetworks(),
+            currentSsid = wifi::currentSsid,
+            hotspotActive = { wifi.address(true) != null },
+            scan = model.networkScan(target.camera),
+            connect = { network ->
+                val setup = if (network.hotspot) CameraConnectionSetup.PHONE_HOTSPOT else CameraConnectionSetup.WIFI
+                model.addSetup(setup, network.ssid, network.password, target.camera)
+                null
+            },
+            cancel = { addSetup = null },
+            complete = { addSetup = null },
+            camera = target.camera,
+            startPage = target.page,
+            startNetwork = target.network,
+        )
+    }
 }
+
+/** Add setup, or Edit setup reopening a failed setup on its password or hotspot page. */
+private data class AddSetupTarget(val camera: SavedCamera, val page: String = "choose", val network: String = "")
+
+/** Saved records carry no model id; the advertised model name resolves support when not nearby. */
+private fun appearsInMultiview(camera: SavedCamera, nearby: FoundCamera?): Boolean =
+    nearby?.appearsInMultiview ?: runCatching {
+        SwiftCore.isAvailable && JSONObject(
+            SwiftCore.multicamDecision("support", JSONObject().put("name", camera.modelName).toString()) ?: "{}",
+        ).optBoolean("appears")
+    }.getOrDefault(false)
 
 @Composable
 private fun SavedCameraRow(
@@ -143,6 +218,14 @@ private fun SavedCameraRow(
     onConnect: () -> Unit,
     onRename: (String?) -> Unit,
     onRemove: () -> Unit,
+    setups: List<MonitorSetupChip>,
+    canAddSetup: Boolean,
+    steps: List<MonitorConnectStep>,
+    failure: MonitorConnectFailure?,
+    onSetup: (MonitorSetupChip) -> Unit,
+    onAddSetup: () -> Unit,
+    onForgetSetup: (MonitorSetupChip) -> Unit,
+    onFailureAction: (String) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
@@ -156,7 +239,7 @@ private fun SavedCameraRow(
             phase == ConnectionPhase.LIVE
     MonitorCameraCard(
         title = camera.displayName,
-        detail = camera.modelName + (camera.lastSSID?.let { " · $it" } ?: ""),
+        detail = camera.modelName + (camera.ssid(camera.preferredSetup)?.let { " · $it" } ?: ""),
         status = connectionLabel
             ?: if (online) "Nearby · ready to connect" else "Not found — power it on to reconnect",
         actionTitle = if (online) "Connect" else "Reconnect",
@@ -164,6 +247,7 @@ private fun SavedCameraRow(
         onOpen = onConnect,
         badge = when {
             connecting -> "CONNECTING"
+            failure != null -> "NOT CONNECTED"
             primary -> "LAST USED"
             online -> "PAIRED"
             else -> "OFFLINE"
@@ -172,6 +256,15 @@ private fun SavedCameraRow(
         busy = connecting,
         available = online,
         onCancel = onCancel,
+        setups = setups,
+        canAddSetup = canAddSetup,
+        setupsEnabled = !isBusy,
+        onSetup = onSetup,
+        onAddSetup = onAddSetup,
+        onForgetSetup = onForgetSetup,
+        steps = steps,
+        failure = failure,
+        onFailureAction = onFailureAction,
         glyph = {
             OpcIcon(
                 OpcIcon.CAMERA,

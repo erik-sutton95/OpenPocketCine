@@ -32,6 +32,32 @@ class SavedCameraRecordsTest {
     }
 
     @Test
+    fun setupsAddForgetAndPreferTheLastUsed() {
+        val base = listOf(SavedCamera("a", "OsmoPocket4P-1", "Osmo Pocket 4 Pro", "OsmoPocket4P-1", 1L))
+        var records = SavedCameras.setting(CameraConnectionSetup.WIFI, "  Studio  ", "a", base)
+        records = SavedCameras.setting(CameraConnectionSetup.PHONE_HOTSPOT, "Phone", "a", records)
+        val camera = records.single()
+        assertEquals("Studio", camera.wifiSSID)
+        assertEquals(CameraConnectionSetup.entries, camera.setups)
+        assertEquals(CameraConnectionSetup.CAMERA_WIFI, camera.preferredSetup)
+
+        records = SavedCameras.stamping(CameraConnectionSetup.PHONE_HOTSPOT, "a", records)
+        assertEquals(CameraConnectionSetup.PHONE_HOTSPOT, records.single().preferredSetup)
+        // Forgetting the setup keeps lastSetup (the camera may still be in station role)
+        // but the row's Connect falls back to camera Wi-Fi.
+        records = SavedCameras.setting(CameraConnectionSetup.PHONE_HOTSPOT, " ", "a", records)
+        assertEquals(null, records.single().hotspotSSID)
+        assertEquals(CameraConnectionSetup.PHONE_HOTSPOT, records.single().lastSetup)
+        assertEquals(CameraConnectionSetup.CAMERA_WIFI, records.single().preferredSetup)
+
+        // A reconnect upsert without setups keeps them.
+        val merged = SavedCameras.upserting(SavedCamera("a", "OsmoPocket4P-1", "Osmo Pocket 4 Pro", null, 2L), records)
+        assertEquals("Studio", merged.single().wifiSSID)
+        assertEquals(CameraConnectionSetup.PHONE_HOTSPOT, merged.single().lastSetup)
+        assertEquals(merged, SharedPreferencesSavedCameraStore.decode(SharedPreferencesSavedCameraStore.encode(merged)))
+    }
+
+    @Test
     fun renamedSoftAPUsesLiveAdvertisedSSIDNotCache() {
         val id = "pocket-1"
         val renamed =
