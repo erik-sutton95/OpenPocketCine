@@ -16,6 +16,9 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
     private let signposter = OSSignposter(
         subsystem: "com.opencapture.openpocketcine", category: "diagnostics")
     private var screenshotObserver: NSObjectProtocol?
+    private var memoryObserver: NSObjectProtocol?
+    /// Uptime of the last `didReceiveMemoryWarning` (main thread).
+    private(set) var lastMemoryWarningUptime: TimeInterval?
     private var installed = false
 
     /// Last compact summary copied for TestFlight paste.
@@ -51,6 +54,15 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
             DispatchQueue.main.async {
                 self?.copyCompactSummaryForTestFlight()
             }
+        }
+        memoryObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.lastMemoryWarningUptime = ProcessInfo.processInfo.systemUptime
+            let megabytes = os_proc_available_memory() / 1_048_576
+            ControlLiveLog.line("diagnostics: memory warning available=\(megabytes) MB")
         }
         event(
             level: .notice, category: .diagnostics, code: "boot",
@@ -101,6 +113,11 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
             error: error, includeStack: true)
     }
 
+    /// A memory warning in the last minute, for the feed incident lifecycle.
+    func hadRecentMemoryWarning(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
+        lastMemoryWarningUptime.map { now - $0 < 60 } ?? false
+    }
+
     func beginInterval(_ name: StaticString) -> OSSignpostIntervalState {
         signposter.beginInterval(name)
     }
@@ -142,7 +159,8 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
             cameraFamily: familyName,
             cameraModel: session.connectedCamera?.model.name ?? "none",
             phase: phase,
-            vpnActive: LocalVPNProbe.isActive())
+            vpnActive: LocalVPNProbe.isActive(),
+            localNetwork: LocalNetworkAccess.status.rawValue)
     }
 
     @MainActor

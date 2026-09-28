@@ -149,7 +149,7 @@ class MotionControlInteractionTest {
 
     @Test
     fun markerInversionUsesSettledRotationOrReconnectSeedRatherThanManualPanAngle() {
-        fun attitude(yaw: Int) = byteArrayOf(0, 0, 0, 0, yaw.toByte(), (yaw shr 8).toByte())
+        fun attitude(yaw: Int) = byteArrayOf(0, 0, 0, 0, yaw.toByte(), (yaw shr 8).toByte()) + ByteArray(44)
         val front = GimbalStickMapping().applyAttitude(attitude(0))
             .applyAttitude(attitude(0)).applyAttitude(attitude(0))
         val manual = front.applyAttitude(attitude(1800))

@@ -90,6 +90,10 @@ struct SavedCamerasView: View {
                             ? .hotspot : .password(camera.ssid(for: .wifi) ?? "")
                         addSetup = AddSetupTarget(camera: camera, page: page)
                     case "cameraWiFi": connect(camera, over: .cameraWiFi)
+                    case "settings":
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
                     default: connect(camera, over: failed)
                     }
                 })

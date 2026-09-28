@@ -19,6 +19,18 @@ class BoundedDiagnosticFormatterTest {
         )
 
     @Test
+    fun headerCarriesBluetoothLocationAndPermissionState() {
+        val radio = listOf(
+            "bluetooth: on",
+            "location services: off",
+            "permissions: BLUETOOTH_SCAN=granted BLUETOOTH_CONNECT=granted ACCESS_FINE_LOCATION=denied",
+        )
+        val body = BoundedDiagnosticFormatter.format(env.copy(radio = radio), emptyList(), emptyList())
+        val header = body.substringBefore("incidents:")
+        radio.forEach { assertTrue(header.contains(it), it) }
+    }
+
+    @Test
     fun keepsEnvironmentNewestJournalTypedIncidentsAndFaultsInsteadOfOldMetricKit() {
         val journal = (1..400).map { "journal-line-$it recent-event" }
         val extras =

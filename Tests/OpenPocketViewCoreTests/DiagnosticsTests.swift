@@ -89,12 +89,16 @@ import Testing
             cameraFamily: "pocket",
             cameraModel: "Osmo Pocket 3",
             phase: "live",
-            vpnActive: true)
+            vpnActive: true, localNetwork: "denied")
         let text = DiagnosticReport.compactSummary(environment: env, recent: [])
-        #expect(text.contains("vpn=on"))
+        #expect(text.contains("vpn=on localNetwork=denied"))
         let full = DiagnosticReport.fullReport(
             environment: env, journal: [], exceptions: [])
         #expect(full.contains("vpn: on"))
+        #expect(full.contains("localNetwork: denied"))
+        let manual = DiagnosticReport.manualReport(
+            environment: env, journal: [], exceptions: [])
+        #expect(manual.contains("localNetwork: denied"))
     }
 
     @Test func journalLineIsStable() {

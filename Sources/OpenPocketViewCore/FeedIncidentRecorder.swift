@@ -43,8 +43,10 @@ public struct FeedIncidentRecorder: Sendable {
         return leftover
     }
 
+    /// Explicit operator disconnect. An incident still open here ends as
+    /// `userEnded`; a recovered or exhausted outcome is kept.
     public mutating func endSession(now: TimeInterval) -> FeedIncidentPersistenceJob? {
-        let job = finalizeOpen(outcome: .suppressed, now: now)
+        let job = finalizeOpen(outcome: .userEnded, now: now)
         session = nil
         ring.removeAll(keepingCapacity: true)
         breadcrumbs.removeAll(keepingCapacity: true)

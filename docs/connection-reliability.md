@@ -51,7 +51,7 @@ logged (`feed: observe`). `FeedWatchdog.tick` still acts.
 
 | Owner | Production? | What it does |
 | --- | --- | --- |
-| `FeedWatchdog.tick` | **Yes** — iOS keepalive; Android JNI tick | 2 s no video packet/AU → one enable (status young) → one UDP rebuild with fresh handshake/registration/subscription. Separately, when native decode is expected, fresh complete AUs with silent decoder output request one decoder rebuild and one enable (not a UDP rebuild). The repair retains the last picture and requires fresh source/presentation; negotiation failure or a 16 s picture deadline transfers to full recovery. Holds 4 s after any tracked SET. Blocked enables do not spend a ladder rung. |
+| `FeedWatchdog.tick` | **Yes**: iOS keepalive; Android JNI tick | 2 s no video packet/AU → one enable (status young) → no video 1.5 s later (`enableAnswerWindow`) → one UDP rebuild with fresh handshake/registration/subscription. Separately, when native decode is expected, fresh complete AUs with silent decoder output request one decoder rebuild and one enable (not a UDP rebuild). That owner resends the keyframe request every 2 s until an IRAP newer than it lands; two unanswered requests (~4 s) go straight to the endpoint rebuild (`decoderRepairStep`). The repair retains the last picture and requires fresh source/presentation; negotiation failure or a 16 s picture deadline transfers to full recovery, except that a picture deadline with video packets still fresh never starts BLE `SessionRecovery` (`nextSessionHoldCycles`): the watchdog takes the stall back, for at most `maxHeldRepairCycles` (3, ~60 s) deadlines per episode without a presented picture, then `SessionRecovery` runs. Holds 4 s after any tracked SET. Blocked enables do not spend a ladder rung. |
 | `LinkDiagnoser` | **Observe only** | Classify → cheapest repair. SoftAP lost → rejoin; BLE lost → full reconnect; present stall → none. |
 | `CameraSoftAP.firstPictureStep` | **Yes**, runs **before** the watchdog | After the initial enable and one resend, fresh traffic without picture reaches the existing 16 s deadline and transfers to negotiated recovery; Pocket 3 FORMAT ownership is preserved. |
 | Keepalive / SET-timeout / foreground | **Yes**, gated | Extra UDP rebuilds only when status is stale (`statusFresh` false) and no repair is in flight. Do not cancel a live rebuild to start another. A successful replacement-endpoint negotiation receives one enable from its repair caller, including keepalive. `still holding for IDR` is not a repair owner. |
@@ -87,6 +87,17 @@ still transfers to full recovery; missing picture during playback does not.
 Native callback age is separate from presentation age. Decoder errors carry a
 generation and numeric origin/status; historical cumulative errors cannot label
 the current decoder failed.
+
+Build 158 Sentry review (7 days): in about half the iOS exhausted decoder
+repairs AUs kept arriving at ~30/s while the decoder waited 16 s on one
+keyframe request; the camera answers a request in 0.1-1.1 s (#443). On Pocket 3
+the enable brought picture back 0 of 52 times (Pocket 4 Pro 70 of 87) and only the endpoint
+rebuild restored it (picture ~4 s later), while the rejoin's failure path
+disconnected BLE with acks at ~40 Hz and Wi-Fi never lost (the reported
+connect/disconnect loop). 36 of 37 transport stalls credited to the enable
+actually recovered after the rebuild or rejoin. Hence the 2 s keyframe resend,
+the two-request endpoint escalation, the 1.5 s enable answer window and the
+video-live hold on BLE recovery. Physical qualification is pending.
 
 The [2026-09-12 audit](audits/2026-09-12-connection-audit.md) distinguishes corrected
 ownership/cancellation defects from outstanding physical cadence qualification.

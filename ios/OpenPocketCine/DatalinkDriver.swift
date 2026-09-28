@@ -105,6 +105,9 @@ final class DatalinkDriver {
     private var lastCommandSendAt: Date?
     private var receiveErrors = 0
     private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "datalink")
+    /// Open-path steps go to the diagnostics journal too (it also writes os_log). A
+    /// never-opened datalink used to leave the tester report silent for 50-80 s.
+    nonisolated private func journal(_ text: String) { ControlLiveLog.line(text) }
 
     private struct NativeProgramRun {
         var token: UInt64
@@ -285,8 +288,8 @@ final class DatalinkDriver {
                 if !CameraSoftAP.canSendHandshake(
                     receiveArmed: receiveArmed, connectionReady: isConnectionReady
                 ) {
-                    log.info(
-                        "datalink: handshake UDP not ready reader=\(self.receiveArmed) — will rebind"
+                    journal(
+                        "datalink: handshake UDP not ready reader=\(self.receiveArmed), will rebind"
                     )
                     break
                 }
@@ -294,12 +297,17 @@ final class DatalinkDriver {
                     sessionId: sessionId, seq: udpSeq, baseSeq: baseSeq)
                 write(pkt)
                 udpSeq = udpSeq &+ 8
-                log.info("datalink: handshake send \(send)/\(sends)")
+                if send == 1 {
+                    journal("datalink: handshake send 1/\(sends) bind=\(rebinds + 1)")
+                } else {
+                    log.info("datalink: handshake send \(send)/\(sends)")
+                }
                 try await waitForHandshakeAck()
                 if handshakeAcked { break }
             }
             if handshakeAcked {
-                log.info("datalink: handshake acked session=\(self.sessionId, privacy: .public)")
+                journal("datalink: handshake acked session=\(self.sessionId)")
+                LocalNetworkAccess.note(.allowed, source: "datalink handshake")
                 // Protocol: register + subscribe, then 0x09/0xa8. Enable before
                 // subscribe is ignored; first-boot then piled mid-GOP P-frames
                 // and first-picture tore UDP during the IDR gap.
@@ -327,8 +335,8 @@ final class DatalinkDriver {
 
             let inbound = handshakeInbound.withLock { $0 }
             let evidence = handshakeAdmission.withLock { ($0.acknowledged, $0.hasInitialWindow) }
-            log.info(
-                "datalink: negotiation miss ack=\(evidence.0, privacy: .public) window=\(evidence.1, privacy: .public)"
+            journal(
+                "datalink: negotiation miss ack=\(evidence.0) window=\(evidence.1) inbound=\(inbound) path=\(self.pathReady)"
             )
             let pathReady = self.pathReady
             sendRounds += 1
@@ -337,17 +345,15 @@ final class DatalinkDriver {
                 sendRoundsUsed: sendRounds)
             {
             case .keepSocket:
-                log.info(
-                    "datalink: handshake miss inbound=\(inbound, privacy: .public) — keep UDP, retry sends"
-                )
+                journal("datalink: handshake miss inbound=\(inbound), keep UDP, retry sends")
                 keepBind = true
             case .rebindUDP:
                 rebinds += 1
-                log.info(
-                    "datalink: handshake miss inbound=\(inbound, privacy: .public) — SoftAP up, rebind UDP (\(rebinds)/\(CameraSoftAP.handshakeRebindLimit))"
+                journal(
+                    "datalink: handshake miss inbound=\(inbound), SoftAP up, rebind UDP (\(rebinds)/\(CameraSoftAP.handshakeRebindLimit))"
                 )
             case .fail:
-                log.info("datalink: handshake never acked inbound=\(inbound, privacy: .public)")
+                journal("datalink: handshake never acked inbound=\(inbound) rounds=\(sendRounds)")
                 throw DatalinkError.noHandshake
             }
         }
@@ -400,24 +406,24 @@ final class DatalinkDriver {
     /// open another TCP and RST the one the camera still had.
     private func ensurePoke() async throws {
         guard tcpPoke else {
-            log.info("datalink: TCP 7001 poke skipped (model)")
+            journal("datalink: TCP 7001 poke skipped (model)")
             return
         }
         if isTcpPokeReady {
-            log.info("datalink: TCP 7001 poke already ready")
+            journal("datalink: TCP 7001 poke already ready")
             return
         }
         pokeConn?.cancel()
         pokeConn = nil
         do {
             try await poke7001()
-            log.info("datalink: TCP 7001 poke ready")
+            journal("datalink: TCP 7001 poke ready")
         } catch is CancellationError {
             throw CancellationError()
+        } catch DatalinkError.localNetworkDenied {
+            throw DatalinkError.localNetworkDenied
         } catch {
-            log.info(
-                "datalink: TCP 7001 poke failed (\(error.localizedDescription, privacy: .public)) — trying UDP"
-            )
+            journal("datalink: TCP 7001 poke failed (\(error.localizedDescription)), trying UDP")
         }
     }
 
@@ -798,12 +804,12 @@ final class DatalinkDriver {
                 return w.nativeProgram?.zoom?.failureReason
             }
             if let zoomFailure { _ = cancelNativeProgramOnQueue(reason: zoomFailure) }
-            guard frame.cmdSet == 0x04, frame.cmdId == 0x05, frame.payload.count >= 22 else { continue }
+            guard frame.cmdSet == 0x04, frame.cmdId == 0x05, GimbalStick.isAttitude(frame.payload) else { continue }
             guard
                 var pose = GimbalWaypoint.from(
                     yawTenth: GimbalStick.yawTenthDeg(frame.payload),
                     pitchTenth: GimbalStick.pitchTenthDeg(frame.payload), zoom: 1,
-                    nativePitchTenth: GimbalStick.i16LE(frame.payload, at: 0))
+                    nativePitchTenth: GimbalStick.nativePitchTenthDeg(frame.payload))
             else { continue }
             let now = ProcessInfo.processInfo.systemUptime
             wire.withLock { w in
@@ -1714,9 +1720,8 @@ final class DatalinkDriver {
             } catch {
                 last = error
                 discardUDP()
-                log.info(
-                    "datalink: UDP \(label, privacy: .public) failed (\(error.localizedDescription, privacy: .public))"
-                )
+                journal("datalink: UDP \(label) failed (\(error.localizedDescription))")
+                if case DatalinkError.localNetworkDenied = error { break }
             }
         }
         cameraLocalIPv4 = savedIP
@@ -1729,8 +1734,8 @@ final class DatalinkDriver {
         let host = remoteHost
         conn = NWConnection(
             host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!, using: params)
-        log.info(
-            "datalink: UDP \(label, privacy: .public) \(host, privacy: .private):\(self.port) if=\(self.cameraInterface?.name ?? "-", privacy: .public) local=\(self.cameraLocalIPv4 ?? "-", privacy: .public)"
+        journal(
+            "datalink: UDP \(label) open port=\(self.port) if=\(self.cameraInterface?.name ?? "-") local=\(self.cameraLocalIPv4 ?? "-")"
         )
         try await start(conn!)
         startReceiveLoop()
@@ -1762,11 +1767,14 @@ final class DatalinkDriver {
         cameraInterface = await WiFiJoiner.resolveCameraInterface()
         #if !targetEnvironment(simulator)
             if cameraLocalIPv4 == nil {
+                journal(
+                    "datalink: no 192.168.2.x (\(CameraSoftAP.describe(WiFiJoiner.interfaceAddresses())))"
+                )
                 throw DatalinkError.notReady
             }
         #endif
-        log.info(
-            "datalink: camera path if=\(self.cameraInterface?.name ?? "unlisted", privacy: .public) local=\(self.cameraLocalIPv4 ?? "-", privacy: .public)"
+        journal(
+            "datalink: camera path if=\(self.cameraInterface?.name ?? "unlisted") local=\(self.cameraLocalIPv4 ?? "-")"
         )
     }
 
@@ -1834,11 +1842,9 @@ final class DatalinkDriver {
                 switch state {
                 case .failed(let error):
                     self.writeHealthy = false
-                    self.log.info(
-                        "datalink: UDP failed (\(error.localizedDescription, privacy: .public))")
+                    self.journal("datalink: UDP failed (\(error.localizedDescription))")
                 case .waiting(let error):
-                    self.log.info(
-                        "datalink: UDP waiting (\(error.localizedDescription, privacy: .public))")
+                    self.journal("datalink: UDP waiting (\(error.localizedDescription))")
                 case .cancelled:
                     self.writeHealthy = false
                 default:
@@ -1853,6 +1859,9 @@ final class DatalinkDriver {
             try await startUntilReady(c, timeout: timeout)
         } catch {
             c.cancel()
+            if case DatalinkError.localNetworkDenied = error {
+                LocalNetworkAccess.note(.denied, source: "datalink")
+            }
             throw error
         }
     }
@@ -1868,19 +1877,43 @@ final class DatalinkDriver {
                 case .failure(let error): cont.resume(throwing: error)
                 }
             }
-            c.stateUpdateHandler = { state in
+            // Local Network denial never fails the connection; it only waits. Name it at
+            // the deadline instead of the generic "not ready" (TN3179).
+            let waiting = OSAllocatedUnfairLock(initialState: (denied: false, logged: false))
+            let label = Self.label(c)
+            c.stateUpdateHandler = { [weak c] state in
                 switch state {
                 case .ready: finish(.success(()))
                 case .failed(let e): finish(.failure(e))
                 case .cancelled: finish(.failure(CancellationError()))
+                case .waiting(let e):
+                    let isDenied = LocalNetworkAccess.isDenied(e, path: c?.currentPath)
+                    let first = waiting.withLock { seen in
+                        let first = !seen.logged
+                        seen = (denied: seen.denied || isDenied, logged: true)
+                        return first
+                    }
+                    if first {
+                        ControlLiveLog.line(
+                            "datalink: \(label) waiting (\(e.debugDescription)) localNetworkDenied=\(isDenied)"
+                        )
+                    }
                 default: break
                 }
             }
             c.start(queue: q)
             q.asyncAfter(deadline: .now() + timeout) {
-                finish(.failure(DatalinkError.notReady))
+                let denied =
+                    waiting.withLock { $0.denied }
+                    || LocalNetworkAccess.isDenied(nil, path: c.currentPath)
+                finish(.failure(denied ? DatalinkError.localNetworkDenied : DatalinkError.notReady))
             }
         }
+    }
+
+    nonisolated private static func label(_ c: NWConnection) -> String {
+        if case .hostPort(_, let port) = c.endpoint, port == 7001 { return "TCP 7001" }
+        return "UDP"
     }
 
     /// TCP-7001 "poke": write a SetPairingPIN frame to arm the UDP datalink. Mimo keeps this socket
@@ -1895,11 +1928,12 @@ final class DatalinkDriver {
                 return
             } catch is CancellationError {
                 throw CancellationError()
+            } catch DatalinkError.localNetworkDenied {
+                throw DatalinkError.localNetworkDenied
             } catch {
                 last = error
-                log.info(
-                    "datalink: TCP 7001 attempt \(attempt) failed (\(error.localizedDescription, privacy: .public))"
-                )
+                journal(
+                    "datalink: TCP 7001 attempt \(attempt) failed (\(error.localizedDescription))")
                 pokeConn?.cancel()
                 pokeConn = nil
                 try? await Task.sleep(for: .milliseconds(350))
@@ -1939,10 +1973,12 @@ final class DatalinkDriver {
     enum DatalinkError: LocalizedError {
         case noHandshake
         case notReady
+        case localNetworkDenied
         var errorDescription: String? {
             switch self {
             case .noHandshake: "camera never answered the datalink handshake"
             case .notReady: "camera Wi-Fi path was not ready for the datalink"
+            case .localNetworkDenied: StartupConnectionCopy.localNetworkDenied
             }
         }
     }

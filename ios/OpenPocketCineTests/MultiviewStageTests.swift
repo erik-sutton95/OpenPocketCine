@@ -45,7 +45,7 @@ import XCTest
             id: UUID(), name: "Test Pocket",
             model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22)
         let yaw = UInt16(bitPattern: Int16(-1800))
-        var payload = [UInt8](repeating: 0, count: 12)
+        var payload = [UInt8](repeating: 0, count: GimbalStick.attitudeLength)
         payload[4] = UInt8(truncatingIfNeeded: yaw)
         payload[5] = UInt8(truncatingIfNeeded: yaw >> 8)
         tile.updateSettings(
@@ -174,7 +174,7 @@ import XCTest
         borrowed.receiveMultiview(
             .init(
                 sender: 0, receiver: 0, seq: 1, flags: 0, cmdSet: 4, cmdId: 5,
-                payload: [UInt8](repeating: 0, count: 22)))
+                payload: [UInt8](repeating: 0, count: GimbalStick.attitudeLength)))
         let start = try XCTUnwrap(borrowed.freshGimbalWaypoint)
         var end = start
         end.yawDeg += 10

@@ -77,4 +77,10 @@ it also exposed a permission-pending startup ownership failure. Bridge tests
 cover repeated pending starts, stop during permission, stale callbacks, explicit
 retry and permission/error guidance. One `head-motion` diagnostic row per second
 records request generation, platform state, accepted/rejected counts and source
-age, without identities or head angles.
+age, without identities or head angles. Rejections split into `stale` (older
+than 200 ms), `future` (stamped ahead of `systemUptime`, a Core Motion clock-base
+mismatch) and `other` (old generation or not newer), plus `lastRejectAgeMs`.
+
+Head tracking drives on Fast with tilt unlocked, like Motion Control. The
+operator's Speed and Tilt locked choice comes back one second after tracking
+stops driving (see [Motion Control](programmed-moves.md)).

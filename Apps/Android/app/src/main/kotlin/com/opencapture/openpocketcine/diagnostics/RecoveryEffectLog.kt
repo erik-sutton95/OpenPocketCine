@@ -29,6 +29,9 @@ internal enum class RecoveryReason(val wire: String) {
     PICTURE_DEADLINE("pictureDeadline"),
     OUTPUT_RESUMED("outputResumed"),
     UDP_ALIVE("udpAlive"),
+    KEYFRAME_UNANSWERED("keyframeUnanswered"),
+    VIDEO_LIVE("videoLive"),
+    FIRST_PICTURE("firstPicture"),
 }
 
 internal object RecoveryEffectLog {

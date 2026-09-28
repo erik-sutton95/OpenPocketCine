@@ -50,7 +50,7 @@ If recover already wiped the picture (or the layer is `.failed`):
 
 Every hold above also applies to **any tracked SET** for `cameraSetGrace` (4 s after the last `datalink.send`): record, FORMAT, COLOR, WB, tracking box `0xA6`, audio. The camera can pause HEVC for a moment on any of them; a long-press track that GOP-cut or rebound the socket was #219. The hold lifts once the failed stage has been silent for `stall + grace`, so a SET burst cannot block recovery indefinitely. Use packet age for transport silence, complete-AU age for assembly silence, and native-output age for decoder silence. Fresh traffic upstream does not renew the failed stage's grace; actively held zoom/stick still suppresses repair.
 
-If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw / SET grace, that is an encoder pause — one `0x09/0xa8` (`resendLiveViewEnable`), then after `escalateAfter` (5 s) one UDP rebuild. A 2 s reopen while status is still on 9004 left `lastVideo=none` (physical #148). 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop. Field evidence, 1,960 TestFlight incidents to 2026-09-22: of 521 transport stalls, 292 recovered only after the rebuild (reopen at median 11.2 s, picture 16.3 s), 56 after the first enable (41 within 4 s) and 17 after the second, most of those coinciding with the rebuild. The second enable was removed; expected picture after a failed enable is about 5 s sooner.
+If `lastStatus` is young and `lastVideo` is old, past GOP / AF-C / gimbal-throw / SET grace, that is an encoder pause: one `0x09/0xa8` (`resendLiveViewEnable`), then after `enableAnswerWindow` (1.5 s, was `escalateAfter` 5 s) without video one UDP rebuild. A 2 s reopen *instead of* the enable while status is still on 9004 left `lastVideo=none` (physical #148); the enable still goes first. Build 158: 36 of 37 transport stalls credited to the enable only recovered after the rebuild, and the camera answers a keyframe request in 0.1-1.1 s (#443). 22:16 that rebuild brought HEVC back; keepalive must not flap it (`statusFresh`). Do not 1 Hz loop. Field evidence, 1,960 TestFlight incidents to 2026-09-22: of 521 transport stalls, 292 recovered only after the rebuild (reopen at median 11.2 s, picture 16.3 s), 56 after the first enable (41 within 4 s) and 17 after the second, most of those coinciding with the rebuild. The second enable was removed; expected picture after a failed enable is about 5 s sooner.
 
 **A replacement UDP endpoint requires a handshake.** The former `rebuildUDP`
 kept session/sequence state while allocating another local port. A September 12
@@ -121,9 +121,13 @@ records reproducible source failures and the remaining physical qualification.
 When native decoding is expected, fresh packets and complete access units do not
 by themselves prove a healthy feed. Two seconds without actual decoder output
 (after the same command/GOP/motion grace gates) requests one owned decoder
-rebuild and one recovery enable. The owner keeps the last image and waits up to
-16 seconds for fresh source and presentation before transferring to full datalink
-rejoin. Fresh native output with stale presentation does not request a camera PLI.
+rebuild and one recovery enable. The owner keeps the last image and resends the
+keyframe request every 2 s until an IRAP newer than it lands. Two unanswered
+requests (~4 s) renegotiate the endpoint with BLE and SoftAP kept. An answered
+request waits up to 16 seconds for fresh source and presentation before
+transferring to full datalink rejoin. A repair picture deadline with video
+packets still fresh does not start BLE `SessionRecovery`, until the third such
+deadline in one episode without a presented picture (~60 s). Fresh native output with stale presentation does not request a camera PLI.
 
 An established decoder can lose its format when a failed display path resets
 parameter sets. Fresh inter-frames cannot recreate those sets. Missing format

@@ -95,22 +95,81 @@ final class BleLink: NSObject {
 
     /// CoreBluetooth may stay off/unauthorized indefinitely. Recovery must
     /// exhaust its radio wait and cancellation must not depend on a delegate callback.
+    /// The system Bluetooth prompt does not count against the wait: a prompt left open
+    /// longer than `timeout` used to fail pairing even after the operator tapped Allow.
     @discardableResult
     func waitUntilPoweredOn(timeout: Duration = .seconds(10)) async -> Bool {
-        await Self.waitForPower(timeout: timeout) { self.isPoweredOn }
+        if central.state == .unauthorized { return false }  // Only Settings can fix it.
+        return await Self.waitForPower(
+            timeout: timeout, isPoweredOn: { self.isPoweredOn },
+            awaitingPrompt: { CBManager.authorization == .notDetermined })
     }
 
     @MainActor static func waitForPower(
-        timeout: Duration, isPoweredOn: @escaping @MainActor () -> Bool
+        timeout: Duration, isPoweredOn: @escaping @MainActor () -> Bool,
+        awaitingPrompt: @escaping @MainActor () -> Bool = { false }
     ) async -> Bool {
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
+        var deadline = clock.now.advanced(by: timeout)
         while !Task.isCancelled {
             if isPoweredOn() { return true }
+            if awaitingPrompt() { deadline = clock.now.advanced(by: timeout) }
             guard clock.now < deadline else { return false }
             do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
         }
         return false
+    }
+
+    /// Operator copy for a radio that never reached `poweredOn`.
+    var unavailableReason: String {
+        switch central.state {
+        case .unauthorized: StartupConnectionCopy.bluetoothDenied
+        case .poweredOff: StartupConnectionCopy.bluetoothOff
+        default: StartupConnectionCopy.bluetoothNotReady
+        }
+    }
+
+    /// `state=poweredOff auth=allowedAlways` for the journal.
+    var stateSummary: String {
+        let state =
+            switch central.state {
+            case .unknown: "unknown"
+            case .resetting: "resetting"
+            case .unsupported: "unsupported"
+            case .unauthorized: "unauthorized"
+            case .poweredOff: "poweredOff"
+            case .poweredOn: "poweredOn"
+            @unknown default: "state\(central.state.rawValue)"
+            }
+        let auth =
+            switch CBManager.authorization {
+            case .notDetermined: "notDetermined"
+            case .restricted: "restricted"
+            case .denied: "denied"
+            case .allowedAlways: "allowedAlways"
+            @unknown default: "auth\(CBManager.authorization.rawValue)"
+            }
+        return "state=\(state) auth=\(auth)"
+    }
+
+    // Scan summary counters (main queue).
+    private var scanGeneration = 0
+    private var scanAdverts = 0
+    private var scanDjiAdverts = 0
+
+    /// Journal what the radio heard every 10 s of a scan, for one minute. "No camera"
+    /// with zero adverts is a radio problem; DJI adverts with no match is identity.
+    private func scheduleScanSummary(_ generation: Int, tick: Int = 1) {
+        guard tick <= 6 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self, self.scanGeneration == generation, self.central.isScanning else {
+                return
+            }
+            ControlLiveLog.line(
+                "ble: scan \(tick * 10) s adverts=\(self.scanAdverts) dji=\(self.scanDjiAdverts) cameras=\(self.yielded.count) \(self.stateSummary)"
+            )
+            self.scheduleScanSummary(generation, tick: tick + 1)
+        }
     }
 
     /// Scan until cancelled; yields each distinct DJI camera as it's discovered.
@@ -122,6 +181,11 @@ final class BleLink: NSObject {
         disconnectForeignDJI(keeping: nil)
         peripherals.removeAll()
         yielded.removeAll()
+        scanGeneration += 1
+        scanAdverts = 0
+        scanDjiAdverts = 0
+        ControlLiveLog.line("ble: scan start \(stateSummary)")
+        scheduleScanSummary(scanGeneration)
         return AsyncStream { cont in
             self.foundStream?.finish()
             self.foundStream = cont
@@ -372,14 +436,17 @@ final class BleLink: NSObject {
 
 extension BleLink: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        // Power waiters poll with a deadline and observe this manager state.
+        // Power waiters poll this manager state; the journal records each change.
+        ControlLiveLog.line("ble: \(stateSummary)")
     }
 
     func centralManager(
         _ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
         advertisementData: [String: Any], rssi RSSI: NSNumber
     ) {
+        scanAdverts += 1
         guard let camera = classify(peripheral, advertisementData) else { return }
+        scanDjiAdverts += 1
         peripherals[peripheral.identifier] = peripheral
         // Later advert often adds the BLE name / model the first packet lacked.
         yieldIfChanged(camera)

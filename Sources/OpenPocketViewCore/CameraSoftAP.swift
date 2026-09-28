@@ -104,6 +104,19 @@ extension CameraSoftAP {
         cameraAddresses(in: addrs).map(\.name)
     }
 
+    /// `en0:192.168.1.20,bridge100:172.20.10.1` for the journal. Local addresses only
+    /// survive `PrivacyRedactor`; a public one becomes `<ip>`.
+    public static func describe(_ addrs: [InterfaceAddress]) -> String {
+        addrs.filter { $0.name != "lo0" }.map { "\($0.name):\($0.ipv4)" }
+            .joined(separator: ",")
+    }
+
+    /// iOS Personal Hotspot is hosting: a `bridge` interface, or the hotspot host
+    /// `172.20.10.1`. While it is on, iOS will not take a DHCP address from the camera AP.
+    public static func isPersonalHotspotHosting(_ addrs: [InterfaceAddress]) -> Bool {
+        addrs.contains { $0.name.hasPrefix("bridge") || $0.ipv4 == "172.20.10.1" }
+    }
+
     /// UDP channel-flow health. `writeRejected` is iOS
     /// `nw_flow_add_write_request … cannot accept write requests`.
     public enum DatalinkFlowHealth: Equatable, Sendable {

@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine.session
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -27,8 +26,11 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
 import com.opencapture.openpocketcine.pairing.FoundCameraIdentity
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -110,6 +112,8 @@ class BleLink(context: Context) {
     private val scanCallback =
         object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
+                scanAdverts.incrementAndGet()
+                scanDevices.add(result.device.address)
                 classify(result)?.let { camera ->
                     foundDevices[camera.address] = result.device
                     val current = _found.value
@@ -130,8 +134,9 @@ class BleLink(context: Context) {
             }
 
             override fun onScanFailed(errorCode: Int) {
-                Log.w(TAG, "BLE scan failed code=$errorCode")
+                journalScan("warning", "failed code=$errorCode (${scanFailureName(errorCode)})")
                 scanning = false
+                handler.removeCallbacks(scanSummary)
             }
         }
 
@@ -147,17 +152,17 @@ class BleLink(context: Context) {
         val radio = adapter
         if (radio == null || !radio.isEnabled) {
             _radioOn.value = false
-            Log.w(TAG, "BLE scan waiting: Bluetooth is not fully on (state=${radio?.state})")
+            journalScan("info", "waiting: Bluetooth is not on (state=${radio?.state})")
             return
         }
         _radioOn.value = true
         val scanner = radio.bluetoothLeScanner ?: run {
-            Log.w(TAG, "BLE scan skipped: no LE scanner")
+            journalScan("warning", "skipped: no LE scanner")
             return
         }
         if (scanning) return
         if (!hasScanPermission()) {
-            Log.w(TAG, "BLE scan skipped: nearby-device permission not granted")
+            journalScan("warning", "skipped: scan permission not granted")
             return
         }
         foundDevices.clear()
@@ -166,22 +171,42 @@ class BleLink(context: Context) {
             ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
         val started =
             runCatching { scanner.startScan(null, settings, scanCallback) }
-                .onFailure { Log.w(TAG, "BLE scan failed to start", it) }
+                .onFailure { journalScan("warning", "failed to start ${it.javaClass.simpleName}") }
                 .isSuccess
         scanning = started
-        if (started) Log.i(TAG, "BLE scan started")
+        if (started) {
+            scanAdverts.set(0)
+            scanDevices.clear()
+            journalScan("info", "started")
+            handler.removeCallbacks(scanSummary)
+            handler.postDelayed(scanSummary, SCAN_SUMMARY_MS)
+        }
     }
 
-    private fun hasScanPermission(): Boolean {
-        val required =
-            if (Build.VERSION.SDK_INT >= 31) {
-                Manifest.permission.BLUETOOTH_SCAN
-            } else {
-                Manifest.permission.ACCESS_FINE_LOCATION
-            }
-        return ContextCompat.checkSelfPermission(appContext, required) ==
-            PackageManager.PERMISSION_GRANTED
+    // Privacy-safe scan journal: counts only, never addresses or names.
+    private val scanAdverts = AtomicInteger(0)
+    private val scanDevices: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val scanSummary: Runnable = object : Runnable {
+        override fun run() {
+            if (!scanning) return
+            journalScan("info", scanCounts())
+            scanAdverts.set(0)
+            scanDevices.clear()
+            handler.postDelayed(this, SCAN_SUMMARY_MS)
+        }
     }
+
+    private fun scanCounts() =
+        "adverts=${scanAdverts.get()} devices=${scanDevices.size} dji=${_found.value.size}"
+
+    private fun journalScan(level: String, message: String) {
+        DiagnosticCenter.log(level, "ble", "scan", "scan: $message")
+    }
+
+    private fun hasScanPermission(): Boolean =
+        DiscoveryPermissions.discovery().first().let {
+            ContextCompat.checkSelfPermission(appContext, it) == PackageManager.PERMISSION_GRANTED
+        }
 
     @SuppressLint("MissingPermission")
     fun stopScan() {
@@ -193,6 +218,8 @@ class BleLink(context: Context) {
     private fun stopScanner() {
         if (!scanning) return
         scanning = false
+        handler.removeCallbacks(scanSummary)
+        journalScan("info", "stopped ${scanCounts()}")
         runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
     }
 
@@ -407,6 +434,18 @@ class BleLink(context: Context) {
     }
 
     @SuppressLint("MissingPermission")
+    private fun scanFailureName(code: Int): String =
+        when (code) {
+            ScanCallback.SCAN_FAILED_ALREADY_STARTED -> "already started"
+            ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> "app registration failed"
+            ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> "internal error"
+            ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> "unsupported"
+            ScanCallback.SCAN_FAILED_OUT_OF_HARDWARE_RESOURCES -> "out of hardware resources"
+            ScanCallback.SCAN_FAILED_SCANNING_TOO_FREQUENTLY -> "scanning too frequently"
+            else -> "unknown"
+        }
+
+    @SuppressLint("MissingPermission") // runCatching absorbs a revoked Nearby devices grant.
     private fun classify(result: ScanResult): FoundCamera? {
         val record = result.scanRecord ?: return null
         val name = record.deviceName ?: runCatching { result.device.name }.getOrNull()
@@ -620,6 +659,7 @@ class BleLink(context: Context) {
     companion object {
         /** An MTU reply normally lands in tens of ms; never let it block discovery. */
         const val MTU_DISCOVERY_FALLBACK_MS = 1_500L
+        private const val SCAN_SUMMARY_MS = 10_000L
         private const val TAG = "BleLink"
         private val SERVICE_FFF0 = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb")
         private val CHAR_FFF4 = UUID.fromString("0000fff4-0000-1000-8000-00805f9b34fb")

@@ -226,6 +226,11 @@ public enum FeedIncidentExport: Sendable {
             testSource: header.resolvedTestSource.rawValue,
             buildIdentity: header.resolvedBuildIdentity,
             trigger: own.lazy.compactMap(\.reason).first ?? "none",
-            recoveredBy: header.outcome == .recovered ? own.last?.action ?? "none" : "none")
+            // A first-picture resend inside an endpoint/rejoin repair is on the
+            // timeline, but the rung that opened the new session gets the credit.
+            recoveredBy: header.outcome == .recovered
+                ? own.last(where: { $0.reason != FeedRepairRecord.firstPictureReason })?.action
+                    ?? "none"
+                : "none")
     }
 }

@@ -620,7 +620,7 @@ class CameraControlTest {
         assertEquals(up, selfieUp)
         fun attitude(tenthDeg: Short): ByteArray {
             val u = tenthDeg.toInt() and 0xFFFF
-            return byteArrayOf(0, 0, 0, 0, u.toByte(), (u shr 8).toByte())
+            return byteArrayOf(0, 0, 0, 0, u.toByte(), (u shr 8).toByte()) + ByteArray(44)
         }
         assertTrue(!CameraCommands.rotationSettled(901, true))
         assertTrue(CameraCommands.rotationSettled(1650, true))

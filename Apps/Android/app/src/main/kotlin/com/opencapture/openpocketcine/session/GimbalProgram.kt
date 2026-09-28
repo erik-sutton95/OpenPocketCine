@@ -89,6 +89,62 @@ enum class GimbalSpeed(val wire: Int, val label: String) {
     }
 }
 
+/**
+ * Mirrors core `GimbalPrepRestore`. Motion Control drives on Fast with tilt unlocked;
+ * the operator's speed and mode from before the first prep come back once nothing
+ * has driven the gimbal for [IDLE_DELAY] seconds, so the stick does not stay Fast.
+ */
+class GimbalPrepRestore {
+    /** Operator values to put back; cleared when the operator picks a new one mid-hold. */
+    var speed: GimbalSpeed? = null
+    var mode: GimbalMode? = null
+    private var idleSince: Double? = null
+
+    val isHolding: Boolean get() = speed != null || mode != null
+
+    data class Restore(val speed: GimbalSpeed?, val mode: GimbalMode?) {
+        /** `0x04/0x50` SET payloads. Fast and Follow need no write. */
+        val payloads: List<ByteArray>
+            get() = buildList {
+                if (speed != null && speed != GimbalSpeed.FAST) add(CameraCommands.setGimbalSpeed(speed.wire))
+                if (mode == GimbalMode.TILT_LOCKED) add(CameraCommands.setGimbalTiltLock(true))
+            }
+    }
+
+    /** Fast + tilt unlocked. Held values are kept: later readbacks report our Fast. */
+    fun prep(speed: GimbalSpeed, mode: GimbalMode): List<ByteArray> {
+        if (this.speed == null) this.speed = speed
+        if (this.mode == null) this.mode = mode
+        idleSince = null
+        return listOf(CameraCommands.setGimbalTiltLock(false), CameraCommands.setGimbalSpeed(GimbalSpeed.FAST.wire))
+    }
+
+    /** Call on each attitude report; [busy] is a Motion Control run. */
+    fun restore(busy: Boolean, now: Double): Restore? {
+        if (!isHolding || busy || !now.isFinite()) {
+            idleSince = null
+            return null
+        }
+        val since = idleSince ?: now
+        idleSince = since
+        return if (now - since >= IDLE_DELAY) restoreNow() else null
+    }
+
+    /** Immediate restore, for a disconnect while the link can still send. */
+    fun restoreNow(): Restore? {
+        if (!isHolding) return null
+        val restore = Restore(speed, mode)
+        speed = null
+        mode = null
+        idleSince = null
+        return restore
+    }
+
+    companion object {
+        const val IDLE_DELAY = 1.0
+    }
+}
+
 enum class GimbalRamp(val raw: Int, val label: String, val tau: Double) {
     OFF(0, "Off", 0.0),
     SOFT(1, "Soft", 0.35),
@@ -397,14 +453,12 @@ class GimbalMoveEngine {
         verificationInterruptedByPause = false
         failure = null
         lastReadout = null
-        val a = program.a
-        val b = program.b
-        if (a == null || b == null) {
+        if (program.a == null || program.b == null) {
             failure = "Set A and B before running"
             return false
         }
         if (!program.smoothness.isFinite() || program.smoothness !in 0.0..1.0) return false
-        val points = listOfNotNull(a, b, live, program.c)
+        val points = listOfNotNull(program.a, program.b, live, program.c)
         if (!points.all {
                 it.yawDeg.isFinite() && it.pitchDeg.isFinite() && it.zoom.isFinite() && it == it.clamped() &&
                     (it.nativePitchDeg == null || (it.nativePitchDeg.isFinite() && it.nativePitchDeg in -180.0..180.0)) }) {
@@ -415,8 +469,13 @@ class GimbalMoveEngine {
             failure = "Set gimbal points from fresh camera feedback"
             return false
         }
-        val next = mutableListOf(Leg("A→B", a, b, program.durationAB))
-        program.c?.let { next += Leg("B→C", b, it, program.durationBC) }
+        val planned = planFromLive(program, live)
+        this.program = planned
+        zoomPath = GimbalZoomPath(planned)
+        val a = planned.a ?: return false
+        val b = planned.b ?: return false
+        val next = mutableListOf(Leg("A→B", a, b, planned.durationAB))
+        planned.c?.let { next += Leg("B→C", b, it, planned.durationBC) }
         if (!next.all { it.duration.isFinite() && it.duration in GimbalProgram.MIN_DURATION..GimbalProgram.MAX_DURATION &&
                 abs(it.duration * 10 - kotlin.math.round(it.duration * 10)) < 1e-6 }) {
             failure = "Increase the move duration"
@@ -424,7 +483,7 @@ class GimbalMoveEngine {
         }
         legs = next
         reversed = false
-        curve = GimbalProgramCurve.create(program)
+        curve = GimbalProgramCurve.create(planned)
         nextCurveCommand = 0.0
         index = 0
         clock = 0.0
@@ -881,6 +940,22 @@ class GimbalMoveEngine {
         }
 
         fun wrapAngle(value: Double): Double = ((value + 180) % 360 + 360) % 360 - 180
+
+        /**
+         * Saved native pitch goes stale once the handle tilts after the point was set:
+         * a 38° display change once planned as ~110° native. Re-derive every point's
+         * native pitch from the live pose at Start, like Double-tap Level (native falls
+         * 1° per 1° of look-up tilt).
+         */
+        fun planFromLive(program: GimbalProgram, live: GimbalWaypoint): GimbalProgram {
+            val liveNative = live.nativePitchDeg ?: return program
+            fun rebase(point: GimbalWaypoint?): GimbalWaypoint? {
+                val saved = point?.nativePitchDeg ?: return point
+                val planned = wrapAngle(liveNative - (point.pitchDeg - live.pitchDeg))
+                return if (abs(wrapAngle(planned - saved)) < 1e-9) point else point.copy(nativePitchDeg = planned)
+            }
+            return program.copy(a = rebase(program.a), b = rebase(program.b), c = rebase(program.c))
+        }
         fun pitchDelta(from: GimbalWaypoint, to: GimbalWaypoint): Double =
             if (from.nativePitchDeg != null && to.nativePitchDeg != null) wrapAngle(to.nativePitchDeg - from.nativePitchDeg)
             else to.pitchDeg - from.pitchDeg

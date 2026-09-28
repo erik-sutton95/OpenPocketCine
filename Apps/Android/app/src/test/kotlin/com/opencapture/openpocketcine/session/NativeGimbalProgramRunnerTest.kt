@@ -179,7 +179,7 @@ class NativeGimbalProgramRunnerTest {
 
     @Test
     fun directWireFeedbackRetainsSamePacketRawPitchAndReceipt() {
-        val bytes = ByteArray(22)
+        val bytes = ByteArray(CameraCommands.ATTITUDE_LENGTH)
         fun i16(at: Int, value: Int) {
             bytes[at] = value.toByte()
             bytes[at + 1] = (value shr 8).toByte()

@@ -667,7 +667,7 @@ import Testing
         let lookDown: [UInt8] = [
             0xB7, 0xFA, 0x00, 0x00, 0x01, 0x00, 0x86, 0x00, 0x02, 0x00, 0x00, 0x02,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB3, 0x01,
-        ]
+        ] + [UInt8](repeating: 0, count: 28)
         #expect(GimbalStick.yawTenthDeg(lookDown) == 1)
         #expect(GimbalStick.pitchTenthDeg(lookDown) == -435)
         #expect(GimbalStick.i16LE(lookDown, at: 2) == 0, "@2 is not tilt")
@@ -675,10 +675,18 @@ import Testing
         let nearLevel: [UInt8] = [
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3, 0xFF,
-        ]
+        ] + [UInt8](repeating: 0, count: 28)
         #expect(GimbalStick.pitchTenthDeg(nearLevel) == 13)
+        // Only the 50-byte layout is attitude: a short or long frame must not move pan/tilt.
+        #expect(GimbalStick.pitchTenthDeg(Array(nearLevel.prefix(22))) == nil)
+        #expect(GimbalStick.yawTenthDeg(lookDown + [0]) == nil)
+        #expect(GimbalStick.nativePitchTenthDeg(lookDown) == -1353)
+        #expect(GimbalStick.nativePitchTenthDeg(Array(lookDown.prefix(22))) == nil)
+        var ignored = GimbalStickMapping(yawTenthDeg: 5, pitchTenthDeg: 7)
+        ignored.applyAttitude(Array(lookDown.prefix(22)))
+        #expect(ignored.yawTenthDeg == 5 && ignored.pitchTenthDeg == 7)
         var pitched = GimbalStickMapping()
-        var att = [UInt8](repeating: 0, count: 22)
+        var att = [UInt8](repeating: 0, count: GimbalStick.attitudeLength)
         att[4] = 0xE8
         att[5] = 0x03
         att[20] = 0x30
@@ -798,7 +806,7 @@ import Testing
         #expect(GimbalStick.encode(x: 1, y: 0, face: s.gimbalFace).axis1 == GimbalStick.max)
         func attitude(_ tenthDeg: Int16) -> [UInt8] {
             let u = UInt16(bitPattern: tenthDeg)
-            return [0, 0, 0, 0, UInt8(u & 0xFF), UInt8(u >> 8)]
+            return [0, 0, 0, 0, UInt8(u & 0xFF), UInt8(u >> 8)] + [UInt8](repeating: 0, count: 44)
         }
         #expect(GimbalStick.rotated180(attitude(0)) == false)
         #expect(GimbalStick.rotated180(attitude(899)) == false)

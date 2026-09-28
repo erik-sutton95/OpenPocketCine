@@ -329,7 +329,9 @@ space after rotation or resizing, including saved positions. Long-press a View A
   anywhere on the editor). With C set, Smoothness rounds the corner near B and shows a dashed curve.
   Zero hits B exactly; higher values bypass B while preserving A/C and total
   duration. There is no artificial speed cap. Moves are experimental: keep the camera fixed, rehearse,
-  and check framing before a take. Programmed and head-tracking tilt targets
+  and check framing before a take. Tilt is planned from where the camera points at Start.
+  Takes and head tracking run the gimbal on Fast; your Speed and Tilt locked setting
+  comes back about a second after they stop. Programmed and head-tracking tilt targets
   stay within −44° to +70°. A missed timed point stops the move;
   professional positional/timing accuracy has not been qualified. Stick
   throw is analog with an ease-in curve (small push crawls; full throw is
@@ -538,8 +540,11 @@ firmware qualification remain pending. See
 
 Verify record start/stop on the camera body until you trust the link.
 
-If live view never starts after Wi-Fi joins, pause local VPNs and ad
-blockers or exclude this app
+Before pairing, turn off DJI Frame Tap and force quit DJI Mimo; either can hold
+the camera. Pairing asks for Bluetooth and Local Network access; if either is
+off, the failure offers **Open Settings**. Personal Hotspot must be off for a
+Camera Wi-Fi connect. If live view never starts after Wi-Fi joins, pause local
+VPNs and ad blockers or exclude this app
 ([Troubleshooting](../../guides/troubleshooting/)).
 
 ## Device requirements

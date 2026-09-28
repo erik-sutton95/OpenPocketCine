@@ -28,6 +28,8 @@ internal object BoundedDiagnosticFormatter {
         val cameraModel: String,
         val phase: String,
         val vpnActive: Boolean,
+        /** Bluetooth, Location services and permission lines. */
+        val radio: List<String> = emptyList(),
     )
 
     fun format(
@@ -154,7 +156,7 @@ internal object BoundedDiagnosticFormatter {
                 "family: ${environment.cameraFamily}",
                 "phase: ${environment.phase}",
                 "vpn: ${if (environment.vpnActive) "on" else "off"}",
-            )
+            ).apply { addAll(environment.radio) }
         if (!hasTypedExtras) lines += "incidents: none captured"
         return PrivacyRedactor.redact(lines.joinToString("\n"))
     }

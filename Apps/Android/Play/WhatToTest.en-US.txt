@@ -4,10 +4,10 @@ New and changed
 
 - Long-press MIRROR for Horizontal and Vertical. Turn both on to see an underslung camera, such as on a car mount, the right way up.
 - Long-press the picture to lock exposure: the focus box turns yellow with AE-L. The sun-and-lock key beside Recenter unlocks. WB Mode adds AWB Lock.
-- Tabs use one highlighted edge instead of boxes, lists fade softly at their edges and tool buttons share one size.
+- Tabs use one highlighted edge instead of boxes and tool buttons share one size.
 - Live View indicators are glass pills for camera battery, phone battery and link. Tap the link pill to swap signal and feed fps.
 - Joystick size: Small, Medium or Large in Settings, Controls.
-- Double-tap the same spot on the picture to start object tracking, as on the camera.
+- Double-tap the picture to start object tracking, as on the camera.
 - Experimental Multiview: the grid button on Your cameras monitors up to four Osmo cameras on shared Wi-Fi or a phone hotspot, with Auto LUT and per-tile or group recording.
 - Multiview redesign: bigger main picture, camera strip, Live View's toolbar and a Camera settings side panel.
 - Wi-Fi and Hotspot setup, in Multiview and Add setup, uses choice cards, grouped networks, checklists and a pinned Connect button.
@@ -15,17 +15,19 @@ New and changed
 - New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots.
 - Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
 - Osmo Action 6 support: live view, D-Log M with the official LUT, Photo, Timelapse and a live APERTURE tile. Not yet checked on a real Action 6.
-- Live View uses about 60% less CPU with a LUT, PEAK or WAVE on a Galaxy S25 and runs cooler, with the same frame rate and picture.
-- Devices without Google Play can install the sideload APK from the project's GitHub Releases page.
+- Live View uses about 60% less CPU with a LUT, PEAK or WAVE on a Galaxy S25, with the same frame rate.
+- Devices without Google Play can install the APK from GitHub Releases.
 
 Fixes
 
+- Pairing finds the camera with only Nearby devices allowed (Location on Android 10 and 11). If Android stops asking, Allow opens Settings.
+- Pairing reminds you to turn off DJI Frame Tap and force quit DJI Mimo.
 - The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
 - Portrait Live View shows Recenter focus after an off-centre tap. The zoom chip, joystick and gimbal controls have the dark glow of other controls.
-- Media now lists complete SD and internal-storage libraries, retries Nano's briefly empty first response, and keeps storage capacity visible during playback.
+- Media lists complete SD and internal-storage libraries and keeps capacity visible during playback.
 - Shutter angle stays at your chosen value when changing frame rate. Opening the picker no longer changes the saved angle.
 - A new track no longer flashes on a previously tracked face.
-- Multiview Exit retries a temporary pairing refusal before showing an error; cameras already returned to their Wi-Fi stay untouched.
+- Multiview Exit retries a temporary pairing refusal before showing an error.
 - Wi-Fi headings and fields align, Connect stays above the keyboard, and connecting or cancelling waits for scan cleanup.
 - Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
 - Osmo Nano no longer shows zoom controls, and DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.

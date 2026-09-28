@@ -36,8 +36,9 @@ internal class FeedIncidentRecorder(
         return leftover
     }
 
+    /** Operator disconnect. An incident still open ends as USER_ENDED; a verdict is kept. */
     fun endSession(now: Double): FeedIncidentPersistenceJob? {
-        val job = finalizeOpen(FeedIncidentOutcome.SUPPRESSED, now)
+        val job = finalizeOpen(FeedIncidentOutcome.USER_ENDED, now)
         session = null
         ring.clear()
         breadcrumbs.clear()
@@ -266,8 +267,9 @@ internal class FeedIncidentRecorder(
 
     private fun finalizeOpen(outcome: FeedIncidentOutcome, now: Double): FeedIncidentPersistenceJob? {
         val current = open ?: return null
-        current.header.outcome = outcome
-        current.header.endedAtMonotonic = now
+        // Swift twin: an EXHAUSTED or RECOVERED verdict survives the disconnect that follows it.
+        if (current.header.outcome == FeedIncidentOutcome.OPEN) current.header.outcome = outcome
+        if (current.header.endedAtMonotonic == null) current.header.endedAtMonotonic = now
         val job = FeedIncidentPersistenceJob(current.bundle(), FeedIncidentPersistenceJob.Reason.OUTCOME)
         open = null
         return job

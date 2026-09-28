@@ -73,6 +73,9 @@ public struct DiagnosticEnvironment: Equatable, Sendable {
     /// Local VPN / ad-blocker tunnel (AdGuard, Blokada, RethinkDNS). Not a
     /// personal identifier. Testers' reports for a black live well need this.
     public var vpnActive: Bool
+    /// iOS Local Network permission as the app last observed it:
+    /// `allowed`, `denied` or `unknown`. A denial leaves the camera datalink silent.
+    public var localNetwork: String
 
     public init(
         appVersion: String,
@@ -83,7 +86,8 @@ public struct DiagnosticEnvironment: Equatable, Sendable {
         cameraFamily: String = "unknown",
         cameraModel: String = "none",
         phase: String = "none",
-        vpnActive: Bool = false
+        vpnActive: Bool = false,
+        localNetwork: String = "unknown"
     ) {
         self.appVersion = appVersion
         self.appBuild = appBuild
@@ -94,6 +98,7 @@ public struct DiagnosticEnvironment: Equatable, Sendable {
         self.cameraModel = cameraModel
         self.phase = phase
         self.vpnActive = vpnActive
+        self.localNetwork = localNetwork
     }
 }
 
@@ -242,7 +247,7 @@ public enum DiagnosticReport: Sendable {
         var lines = [
             "OpenPocketCine diagnostics (no name, no location)",
             "app \(environment.appVersion) (\(environment.appBuild)) \(environment.osName) \(environment.osVersion) \(environment.deviceModel)",
-            "camera \(environment.cameraModel) family=\(environment.cameraFamily) phase=\(environment.phase) vpn=\(environment.vpnActive ? "on" : "off")",
+            "camera \(environment.cameraModel) family=\(environment.cameraFamily) phase=\(environment.phase) vpn=\(environment.vpnActive ? "on" : "off") localNetwork=\(environment.localNetwork)",
         ]
         let tail = recent.suffix(12)
         if !tail.isEmpty {
@@ -273,6 +278,7 @@ public enum DiagnosticReport: Sendable {
             family: \(environment.cameraFamily)
             phase: \(environment.phase)
             vpn: \(environment.vpnActive ? "on" : "off")
+            localNetwork: \(environment.localNetwork)
             """)
         if !exceptions.isEmpty {
             sections.append(
@@ -434,6 +440,7 @@ public enum DiagnosticReport: Sendable {
             "family: \(environment.cameraFamily)",
             "phase: \(environment.phase)",
             "vpn: \(environment.vpnActive ? "on" : "off")",
+            "localNetwork: \(environment.localNetwork)",
         ]
         if !hasTypedExtras {
             lines.append("incidents: none captured")

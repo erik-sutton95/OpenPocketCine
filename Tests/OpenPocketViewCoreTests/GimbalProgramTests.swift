@@ -173,4 +173,31 @@ import Testing
         #expect(CameraModel(name: "Osmo Pocket 4 Pro").hasGimbal)
         #expect(!CameraModel(name: "Osmo Nano").hasGimbal)
     }
+
+    /// Field report: after one head-track or Motion Control run the stick stayed
+    /// on Fast for the session. The operator's speed and tilt lock come back.
+    @Test func prepRestoresOperatorSpeedAndTiltLockAfterIdle() {
+        var prep = GimbalPrepRestore()
+        let fast = [Commands.setGimbalTiltLock(.unlocked), Commands.setGimbalSpeed(.fast)]
+        #expect(prep.prep(speed: .slow, mode: .tiltLocked) == fast)
+        // Readback now says Fast/Follow; a second prep must not adopt it.
+        #expect(prep.prep(speed: .fast, mode: .follow) == fast)
+        #expect(prep.restore(busy: true, now: 10) == nil)
+        #expect(prep.restore(busy: false, now: 11) == nil)
+        #expect(prep.restore(busy: true, now: 11.5) == nil, "a restart resets the idle wait")
+        #expect(prep.restore(busy: false, now: 12) == nil)
+        let restore = prep.restore(busy: false, now: 13)
+        #expect(restore?.speed == .slow && restore?.mode == .tiltLocked)
+        #expect(restore?.frames == [Commands.setGimbalSpeed(.slow), Commands.setGimbalTiltLock(.locked)])
+        #expect(!prep.isHolding && prep.restore(busy: false, now: 20) == nil)
+
+        // Operator picks Default mid-hold: only the untouched mode comes back.
+        _ = prep.prep(speed: .slow, mode: .tiltLocked)
+        prep.speed = nil
+        #expect(prep.restoreNow()?.frames == [Commands.setGimbalTiltLock(.locked)])
+        // Already Fast / Follow: nothing to write, but the hold still ends.
+        _ = prep.prep(speed: .fast, mode: .follow)
+        #expect(prep.restoreNow()?.frames == [])
+        #expect(prep.restoreNow() == nil)
+    }
 }

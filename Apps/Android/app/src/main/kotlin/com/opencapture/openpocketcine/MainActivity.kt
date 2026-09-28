@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -62,10 +63,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.AutomaticReportsPrompt
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReport
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReportingConsent
@@ -74,7 +75,9 @@ import com.opencapture.openpocketcine.pairing.SavedCamerasExperience
 import com.opencapture.openpocketcine.pairing.StartupColors
 import com.opencapture.openpocketcine.pairing.StartupConnectionCopy
 import com.opencapture.openpocketcine.pairing.isBusy
-import com.opencapture.openpocketcine.pairing.pocketRuntimePermissions
+import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
+import com.opencapture.openpocketcine.pairing.PermissionGate
+import com.opencapture.openpocketcine.pairing.rememberPermissionGate
 import com.opencapture.openpocketcine.pairing.startupBackdrop
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.delay
@@ -161,26 +164,20 @@ private fun OpenPocketCineApp(model: AppModel) {
     val phase by model.session.phaseFlow.collectAsState()
     var launchSplashVisible by remember { mutableStateOf(true) }
     val activity = LocalActivity.current
-    val permissions = pocketRuntimePermissions()
-    fun permissionsAreGranted(): Boolean {
-        val current = activity ?: return false
-        return permissions.all {
-            ContextCompat.checkSelfPermission(current, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-    }
-    var permissionsGranted by remember { mutableStateOf(permissionsAreGranted()) }
+    lateinit var discovery: PermissionGate
     val enableBluetooth =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            if (permissionsAreGranted()) model.session.startScan()
+            if (discovery.granted) model.session.startScan()
         }
     fun requestBluetoothOn() {
+        // Without Nearby devices the enable prompt throws; Bluetooth settings still work.
         runCatching { enableBluetooth.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
+            .recoverCatching { activity?.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }
+            .onFailure { DiagnosticCenter.log("warning", "ble", "enable", "bluetooth enable unavailable ${it.javaClass.simpleName}") }
     }
-    val launcher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            permissionsGranted = permissionsAreGranted()
-            if (permissionsGranted) beginDiscovery(model) { requestBluetoothOn() }
-        }
+    discovery = rememberPermissionGate("discovery", DiscoveryPermissions.discovery()) {
+        beginDiscovery(model) { requestBluetoothOn() }
+    }
 
     LaunchedEffect(model.keepScreenAwake, activity) {
         val window = activity?.window ?: return@LaunchedEffect
@@ -193,10 +190,10 @@ private fun OpenPocketCineApp(model: AppModel) {
 
     LaunchedEffect(Unit) {
         model.prepareStartup()
-        if (permissionsAreGranted()) {
+        if (discovery.granted) {
             beginDiscovery(model, onBluetoothOff = { requestBluetoothOn() })
-        } else {
-            launcher.launch(permissions)
+        } else if (!discovery.needsSettings) {
+            discovery.request()
         }
         delay(2_250)
         launchSplashVisible = false
@@ -239,8 +236,7 @@ private fun OpenPocketCineApp(model: AppModel) {
         } else {
             LinkExperience(
                 model = model,
-                permissionsGranted = permissionsGranted,
-                onRequestPermissions = { launcher.launch(permissions) },
+                discovery = discovery,
                 onEnableBluetooth = { requestBluetoothOn() },
             )
         }
@@ -277,8 +273,7 @@ private fun beginDiscovery(model: AppModel, onBluetoothOff: () -> Unit = {}) {
 @Composable
 private fun LinkExperience(
     model: AppModel,
-    permissionsGranted: Boolean,
-    onRequestPermissions: () -> Unit,
+    discovery: PermissionGate,
     onEnableBluetooth: () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -315,7 +310,7 @@ private fun LinkExperience(
             top = if (model.shouldShowWizard) 0.dp else 8.dp,
         )) {
             if (model.shouldShowWizard) {
-                PairingExperience(model, permissionsGranted, onRequestPermissions, onEnableBluetooth)
+                PairingExperience(model, discovery, onEnableBluetooth)
             } else {
                 SavedCamerasExperience(model)
             }

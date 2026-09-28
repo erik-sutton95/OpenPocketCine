@@ -117,7 +117,7 @@ enum ReliabilityReporting {
     static func isFinalized(_ bundle: FeedIncidentBundle) -> Bool {
         switch bundle.header.outcome {
         case .open: return false
-        case .recovered, .interrupted, .exhausted, .suppressed: return true
+        case .recovered, .interrupted, .exhausted, .suppressed, .userEnded: return true
         }
     }
 
@@ -199,7 +199,8 @@ enum ReliabilityReporting {
         options.shutdownTimeInterval = 0
         options.enableCrashHandler = true
         options.enableAppHangTracking = true
-        options.enableWatchdogTerminationTracking = true
+        options.enableWatchdogTerminationTracking =
+            ReliabilityReportingConfiguration.tracksWatchdogTerminations
         options.sessionReplay.sessionSampleRate = 0
         options.sessionReplay.onErrorSampleRate = 0
         options.maxBreadcrumbs = 32
@@ -467,7 +468,8 @@ enum ReliabilityReporting {
     static func level(forOutcome outcome: String) -> SentryLevel {
         switch outcome {
         case FeedIncidentOutcome.exhausted.rawValue: return .error
-        case FeedIncidentOutcome.interrupted.rawValue: return .warning
+        case FeedIncidentOutcome.interrupted.rawValue, FeedIncidentOutcome.userEnded.rawValue:
+            return .warning
         default: return .info
         }
     }

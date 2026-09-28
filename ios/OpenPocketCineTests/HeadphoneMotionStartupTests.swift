@@ -149,15 +149,22 @@ final class HeadphoneMotionStartupTests: XCTestCase {
         for _ in 0..<20 { bridge.sync() }
         XCTAssertEqual(lines.count, 1)
         XCTAssertTrue(lines[0].contains("requested=1"))
-        XCTAssertTrue(lines[0].contains("accepted=0 rejected=0 sampleAgeMs=-"))
+        XCTAssertTrue(
+            lines[0].contains(
+                "accepted=0 rejected=0 stale=0 future=0 other=0 lastRejectAgeMs=- sampleAgeMs=-"))
 
         motion.starts.first?(HeadphoneMotionSample(timestamp: 99.95), nil)
         motion.starts.first?(HeadphoneMotionSample(timestamp: 99.95), nil)
+        motion.starts.first?(HeadphoneMotionSample(timestamp: 100.5), nil)
         motion.starts.first?(HeadphoneMotionSample(timestamp: 99), nil)
         clock.withLock { $0 = 101 }
         bridge.sync()
         XCTAssertEqual(lines.count, 2)
-        XCTAssertTrue(lines[1].contains("accepted=1 rejected=2 sampleAgeMs=1050"))
+        // Duplicate = other, clock-base mismatch = future, late = stale.
+        XCTAssertTrue(
+            lines[1].contains(
+                "accepted=1 rejected=3 stale=1 future=1 other=1 lastRejectAgeMs=1000 sampleAgeMs=1050"),
+            lines[1])
         XCTAssertEqual(motion.starts.count, 1)
     }
 }

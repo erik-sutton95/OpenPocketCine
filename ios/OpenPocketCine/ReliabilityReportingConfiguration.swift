@@ -14,6 +14,13 @@ enum ReliabilityReportingConfiguration {
         return "com.opencapture.openpocketcine@\(version)+\(build ?? self.build)"
     }
 
+    /// Reinstalling a development build looks like a watchdog kill to Sentry (81 of
+    /// 86 WatchdogTermination events came from developer installs). TestFlight and
+    /// App Store keep it.
+    static var tracksWatchdogTerminations: Bool {
+        !["development", "verification"].contains(environment)
+    }
+
     static var environment: String {
         #if DEBUG
             return ReliabilityReportingVerification.mode == nil ? "development" : "verification"

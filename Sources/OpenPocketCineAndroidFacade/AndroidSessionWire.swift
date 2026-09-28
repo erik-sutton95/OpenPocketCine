@@ -1072,6 +1072,21 @@ public enum AndroidSessionWire {
                     secondsSinceLastEnable: jsonOptionalNumber(
                         json, key: "secondsSinceLastEnable"),
                     lastVideoPacketAge: jsonOptionalNumber(json, key: "lastVideoPacketAge")))
+        case "decoderRepairStep":
+            return FeedWatchdog.decoderRepairStep(
+                secondsSinceRepairStart: jsonNumber(
+                    json, key: "secondsSinceRepairStart", default: 0),
+                secondsSinceLastEnable: jsonNumber(json, key: "secondsSinceLastEnable", default: 0),
+                secondsSinceLastIrap: jsonOptionalNumber(json, key: "secondsSinceLastIrap"),
+                keyframeRequests: Int(jsonNumber(json, key: "keyframeRequests", default: 0))
+            ).rawValue
+        case "nextSessionHoldCycles":
+            return String(
+                FeedWatchdog.nextSessionHoldCycles(
+                    lastVideoPacketAge: jsonOptionalNumber(json, key: "lastVideoPacketAge"),
+                    previousCycles: Int(jsonNumber(json, key: "previousCycles", default: 0)),
+                    pictureSinceLastCycle: jsonBool(
+                        json, key: "pictureSinceLastCycle", default: false)))
         case "shouldStartFeedRecovery":
             return flag(
                 FeedWatchdog.shouldStartFeedRecovery(

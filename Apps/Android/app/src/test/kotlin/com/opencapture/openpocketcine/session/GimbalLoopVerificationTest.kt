@@ -77,7 +77,9 @@ class GimbalLoopVerificationTest {
                 result.commands.zipWithNext().forEach { (first, next) ->
                     assertEquals(program.durationAB, next.at - first.at, 1e-8)
                 }
-                assertEquals(listOf(b, a, b, a), result.commands.take(4).map { it.to })
+                // Native pitch is planned from the live pose at Start, not the saved reading.
+                val planned = GimbalMoveEngine.planFromLive(program, a)
+                assertEquals(listOf(planned.b, planned.a, planned.b, planned.a), result.commands.take(4).map { it.to })
             } else {
                 assertEquals(1, result.commands.size)
             }

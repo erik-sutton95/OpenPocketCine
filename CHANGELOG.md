@@ -114,6 +114,61 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android portrait Live View shows a vertical camera picture whole, like iOS:
+  it fits inside the picture area and rests on the control bar. Sizing it to
+  the area's height clipped both sides on narrow phones.
+- Android pairing no longer stalls before the Bluetooth scan starts. First run
+  asked for Location, Nearby devices and Nearby Wi-Fi together and scanned only
+  when all were granted, so Approximate location or a denied Wi-Fi permission
+  left the camera unfound (Android 12 also ignores a precise-only location
+  request). Discovery now needs only **Nearby devices** on Android 12 and newer
+  (Location plus Location services on Android 10 and 11). Precise Location is
+  asked in Wi-Fi and Hotspot setup, where it shows this phone's Wi-Fi name;
+  joining camera Wi-Fi needs no permission. Once Android stops showing the
+  dialog, **Allow** becomes **Open Settings**; without Nearby devices, **Turn
+  on** falls back to Bluetooth settings. Diagnostics journal scan start, stop, failures
+  and 10 s advert counts, and the report header lists Bluetooth, Location
+  services and each permission.
+- Android pairing tells you to turn off DJI Frame Tap (it blocks pairing and
+  connecting) and force quit DJI Mimo on every phone near the camera: a tip on
+  the first pairing step, a **Still looking** hint after 20 s with no camera,
+  and the end of the error when the camera never answers pairing or the video
+  link. The wording matches iOS.
+- The gimbal joystick no longer stays on Fast after head tracking or a Motion
+  Control take. Both switch the camera to Fast with tilt unlocked; iOS and
+  Android now put back the operator's Speed and Tilt locked setting about a
+  second after the gimbal is released, and before a disconnect. Picking a
+  Speed or Mode mid-run keeps that choice.
+- Motion Control plans each point's tilt from where the camera points at Start
+  (like head tracking and Double-tap Level), so tilting the handle after
+  saving points no longer turns a 38° move into a 110° one.
+- Gimbal attitude (`0x04/0x05`) is read only from the known 50-byte layout on
+  both platforms. Another length used to parse as pan 0 / tilt 0, which could
+  throw Motion Control and head tracking at the wrong pose.
+- The iOS `head-motion` journal row now counts why headphone samples were
+  rejected (stale, stamped in the future, or superseded) with the last
+  rejected age, so a head-tracking report with zero accepted samples is
+  diagnosable.
+- iOS pairing names what blocks it instead of failing at "Step 4" after a minute.
+  A denied **Local Network** permission is detected on the video link within a
+  few seconds and offers **Open Settings**; the permission prompt now appears
+  during pairing, before the link opens. **Personal Hotspot** stops the camera
+  Wi-Fi join with "Turn off Personal Hotspot, then try again." and keeps the
+  saved camera password. A system Bluetooth prompt left open no longer fails
+  the scan, and denied or powered-off Bluetooth get their own messages (the old
+  one asked for "camera access"). The first pairing step says "Before pairing,
+  turn off DJI Frame Tap and force quit DJI Mimo.", a 20-second empty scan
+  repeats it with activation and distance, and video-link and Bluetooth
+  timeouts name it too. A `0x07/0x45 00 06` pairing reply is a deferral, not
+  approval: single-camera pairing reconnects and retries up to twice, as
+  Multiview does. Diagnostics journal Bluetooth state and scan counts, every
+  video-link open step, interface names on Wi-Fi addresses, and a
+  `localNetwork:` header line.
+- iOS reliability reports skip watchdog-termination tracking on development
+  builds (reinstalls read as watchdog kills), keep Sentry's memory, thermal and
+  foreground contexts, and mark memory warnings in feed incidents. The glass
+  backdrop no longer blocks the playback pull thread on the main queue once per
+  frame.
 - Gimbal joystick diagonals move as fast as straight pushes on iOS and Android.
   Deadzone, response curve and sensitivity now act on the stick's throw length
   and split back along its direction; per-axis curves ran a full 45 degree
@@ -168,6 +223,28 @@ All notable changes to this project are documented here. The format is based on
   are shown. Float rounding could make the Motion editor's default placement
   range empty, and `coerceIn` threw (Sentry OPENPOCKETCINE-ANDROID-6/7/8). The
   exposure meter placement had the same pattern.
+- A frozen picture with video still arriving no longer waits 16 s on one
+  keyframe request. The decoder repair resends the request every 2 s until the
+  camera answers; after two unanswered requests (about 4 s) it renegotiates the
+  camera endpoint, keeping Bluetooth and camera Wi-Fi. Field data: the camera
+  answers in 0.1 to 1.1 s when it answers at all, and on the Pocket 3 the
+  request brought the picture back 0 of 52 times.
+- Pocket 3 "keeps connecting and disconnecting" (iPhone and Android): a repair
+  that runs out of time while the camera is still sending video no longer
+  disconnects Bluetooth and starts a full reconnect. The watchdog takes the
+  stall back and repairs the endpoint instead, for at most three repair cycles
+  (about 60 s) without a picture; then the normal reconnect runs.
+- A video stall with the camera still talking now renegotiates the endpoint
+  1.5 s after its one keyframe request goes unanswered, instead of 5 s. On
+  build 158, 36 of 37 such stalls only recovered after that renegotiation.
+  Zoom, AF-C, gimbal and camera-setting holds still apply.
+- Feed incident telemetry: iOS records the endpoint and rejoin repairs, so
+  `recoveredBy` no longer credits an earlier enable; `lastIrapAge` reports the
+  last keyframe the decoder accepted (Android now fills it too). Android keeps
+  an exhausted or recovered verdict when a disconnect follows, keeps one
+  incident session across automatic reconnects like iOS, and records
+  first-picture resends. An incident still open when the operator disconnects
+  ends as `userEnded` (a warning) on both platforms, not `suppressed`.
 
 ## [0.1.5] - 2026-09-24
 

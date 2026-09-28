@@ -7,11 +7,15 @@ import SwiftUI
 struct ConnectionSetupView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.monitorWindowGeometry) private var windowGeometry
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     let compact: Bool
     @State private var selectedID: UUID?
     @State private var diagnostics: DiagnosticSharePayload?
     @State private var showProblemReport = false
     @State private var orientation = InterfaceOrientationObserver()
+    /// Back from Settings after a permission failure: look for the camera again.
+    @State private var rescanOnReturn = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -27,7 +31,14 @@ struct ConnectionSetupView: View {
                 },
                 onPrimary: {
                     guard !model.isBusy else { return }
-                    if case .failed = model.session.phase {
+                    if case .failed(let reason) = model.session.phase {
+                        if StartupConnectionCopy.opensSettings(reason),
+                            let url = URL(string: UIApplication.openSettingsURLString)
+                        {
+                            rescanOnReturn = true
+                            openURL(url)
+                            return
+                        }
                         model.session.startScan()
                     } else if let selectedID,
                         let camera = model.session.found.first(where: { $0.id == selectedID })
@@ -53,6 +64,11 @@ struct ConnectionSetupView: View {
         }
         .onChange(of: model.session.phase) { _, phase in
             if phase == .openingDatalink { LocalVPNProbe.noteIfActive() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, rescanOnReturn else { return }
+            rescanOnReturn = false
+            if case .failed = model.session.phase { model.session.startScan() }
         }
     }
 }

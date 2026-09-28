@@ -212,6 +212,11 @@ class PocketCameraSession(
     private val wifiLock = WifiLowLatencyLock(appContext)
     private var feedSessionId = UUID.randomUUID().toString()
     private var socketGeneration = 0
+    /** Open from the first LIVE until the operator disconnects (iOS `incidentSessionActive`). */
+    private var incidentSessionActive = false
+    /** Repair deadlines held off Bluetooth recovery this stall episode (core `nextSessionHoldCycles`). */
+    private var sessionHoldCycles = 0
+    private var lastSessionHoldAt: Long? = null
 
     private val _phase = MutableStateFlow(ConnectionPhase.IDLE)
     override val phase: ConnectionPhase get() = _phase.value
@@ -436,6 +441,8 @@ class PocketCameraSession(
     private var expoPin: ExpoPin? = null
     private var gimbalModePin: CameraValuePin<GimbalMode>? = null
     private var gimbalSpeedPin: CameraValuePin<GimbalSpeed>? = null
+    /** Operator speed/tilt lock held while Motion Control runs on Fast. */
+    private val gimbalPrep = GimbalPrepRestore()
     private var gimbalFollowFamilyConfirmed = false
     private var shootingModePin: ShootingModePin? = null
     private var whiteBalancePin: WhiteBalancePin? = null
@@ -705,6 +712,9 @@ class PocketCameraSession(
             return
         }
         ReliabilityReporting.setCameraSessionActive(false)
+        // Operator ended the session: an incident still open ends as userEnded.
+        FeedIncidentRuntime.endSession(SystemClock.elapsedRealtime() / 1000.0)
+        incidentSessionActive = false
         cancelSessionRecovery(clearHoldsMonitor = true)
         reconnectTarget = null
         _connectionTargetId.value = null
@@ -1464,7 +1474,10 @@ class PocketCameraSession(
             return SystemClock.elapsedRealtime() - at >= LiveViewEnablePolicy.REBUILD_COOLDOWN_MS
         }
 
+    /** iOS parity: one incident session per operator connect; recovery reconnects keep it. */
     private fun beginFeedIncidentSession() {
+        if (incidentSessionActive) return
+        incidentSessionActive = true
         FeedIncidentRuntime.beginSession(
             FeedIncidentSessionContext(
                 sessionId = feedSessionId,
@@ -1542,6 +1555,7 @@ class PocketCameraSession(
                         receivedIrap = decoder.hasDecodableReferences,
                         awaitingIrap = decoder.awaitingIdr,
                         hasDecodableReferences = decoder.hasDecodableReferences,
+                        lastIrapAge = ageSec(decoder.lastIrapAt),
                         lastSuccessfulOutputAge = ageSec(decoder.lastDecoderOutputAt),
                     ),
                 lifecycle =
@@ -1744,9 +1758,10 @@ class PocketCameraSession(
             LiveViewEnablePolicy.FirstPictureStep.RESEND_ENABLE -> {
                 // Do not route through sendRecoverEnable — inPlayback / decoder-ready
                 // holds skipped the only PLI and sat on WAITING FOR LIVE VIEW.
-                sendCapturedLiveView(
-                    if (liveViewEnableSends == 0) "first picture" else "first-picture resend",
-                )
+                val resend = liveViewEnableSends > 0
+                if (sendCapturedLiveView(if (resend) "first-picture resend" else "first picture") && resend) {
+                    logRecovery(RecoveryAction.ENABLE, RecoveryEffect.SENT, RecoveryReason.FIRST_PICTURE)
+                }
             }
             LiveViewEnablePolicy.FirstPictureStep.REBUILD_UDP -> {
                 if (currentRepairOwnsPicture) return
@@ -2108,13 +2123,14 @@ class PocketCameraSession(
         }
         var sent = false
         val readyDeadline = startedAt + LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS
-        while (SystemClock.elapsedRealtime() < readyDeadline) {
-            if (!ownsPicture()) return
-            if (decoder.isPresentationReady &&
+        fun enableReady() =
+            decoder.isPresentationReady &&
                 cameraPath.isProcessBound() &&
                 !isBrowsingMedia &&
                 !_status.value.inPlayback
-            ) {
+        while (SystemClock.elapsedRealtime() < readyDeadline) {
+            if (!ownsPicture()) return
+            if (enableReady()) {
                 sent = sendRecoverEnable(force = true, reason = "watchdog decoder")
                 if (sent) break
             }
@@ -2124,11 +2140,38 @@ class PocketCameraSession(
             logRecovery(RecoveryAction.DECODER, RecoveryEffect.BLOCKED, RecoveryReason.NOT_READY)
             return
         }
-        val restored =
-            kotlinx.coroutines.withTimeoutOrNull(LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS) {
-                while (ownsPicture() && !hasRecoveryPicture(startedAt)) delay(100)
-                true
-            } ?: false
+        // Resend the keyframe request until an IRAP newer than it lands;
+        // unanswered twice, rebuild the endpoint (core decoderRepairStep).
+        var keyframeRequests = 1
+        var restored = false
+        repair@ while (ownsPicture()) {
+            if (hasRecoveryPicture(startedAt)) {
+                restored = true
+                break
+            }
+            val now = SystemClock.elapsedRealtime()
+            when (
+                LiveViewEnablePolicy.decoderRepairStep(
+                    sinceRepairStartMs = now - startedAt,
+                    sinceEnableMs = now - lastIdrRequest,
+                    sinceIrapMs = decoder.lastIrapAt?.let { now - it },
+                    keyframeRequests = keyframeRequests,
+                )
+            ) {
+                LiveViewEnablePolicy.DecoderRepairStep.WAIT -> Unit
+                LiveViewEnablePolicy.DecoderRepairStep.RESEND_KEYFRAME ->
+                    if (enableReady() && sendRecoverEnable(force = true, reason = "watchdog keyframe resend")) {
+                        keyframeRequests += 1
+                    }
+                LiveViewEnablePolicy.DecoderRepairStep.REBUILD_ENDPOINT -> {
+                    logRecovery(RecoveryAction.ENDPOINT, RecoveryEffect.REQUESTED, RecoveryReason.KEYFRAME_UNANSWERED)
+                    rebuildDatalinkKeepingPicture("keyframe unanswered")
+                    return
+                }
+                LiveViewEnablePolicy.DecoderRepairStep.DEADLINE -> break@repair
+            }
+            delay(100)
+        }
         if (!ownsPicture()) return
         if (restored) {
             logRecovery(RecoveryAction.DECODER, RecoveryEffect.FRESH_PICTURE, RecoveryReason.OUTPUT_RESUMED)
@@ -2148,6 +2191,7 @@ class PocketCameraSession(
         }
         FeedIncidentRuntime.noteExhausted(SystemClock.elapsedRealtime() / 1000.0)
         logRecovery(RecoveryAction.DECODER, RecoveryEffect.BLOCKED, RecoveryReason.PICTURE_DEADLINE)
+        logRecovery(RecoveryAction.REJOIN, RecoveryEffect.REQUESTED, RecoveryReason.PICTURE_DEADLINE)
         rejoinDatalinkKeepingLive()
     }
 
@@ -2187,7 +2231,9 @@ class PocketCameraSession(
             recoverSession = {
                 DiagnosticCenter.log("notice", "recovery", "endpoint",
                     "feed: endpoint repair did not restore picture ($reason)")
-                beginSessionRecovery("camera endpoint did not recover", SessionRecoveryTrigger.DATALINK_LOST)
+                if (!holdSessionRecoveryForLiveVideo()) {
+                    beginSessionRecovery("camera endpoint did not recover", SessionRecoveryTrigger.DATALINK_LOST)
+                }
             },
         ) {
             // Reject every queued pre-negotiation image, including one decoded
@@ -2306,6 +2352,28 @@ class PocketCameraSession(
         }
     }
 
+    /**
+     * Core `nextSessionHoldCycles`: a repair picture deadline with video still
+     * arriving is a keyframe/decoder stall. Keep BLE; the watchdog owns it again.
+     */
+    private fun holdSessionRecoveryForLiveVideo(): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        val videoAge = datalink?.lastVideoPacketAt?.let { now - it }
+        val presented = decoder.lastPresentedAt
+        val held = lastSessionHoldAt
+        val pictureSinceLastHold = held != null && presented != null && presented > held
+        sessionHoldCycles = LiveViewEnablePolicy.nextSessionHoldCycles(videoAge, sessionHoldCycles, pictureSinceLastHold)
+        lastSessionHoldAt = now
+        // Bounded: the maxHeldRepairCycles-th deadline in one episode releases to SessionRecovery.
+        if (sessionHoldCycles == 0) return false
+        DiagnosticCenter.log("notice", "recovery", "session",
+            "feed: keep BLE, video still arriving; watchdog owns the stall cycle=$sessionHoldCycles")
+        logRecovery(RecoveryAction.SESSION, RecoveryEffect.BLOCKED, RecoveryReason.VIDEO_LIVE)
+        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+        feedWatchdog.reset()
+        return true
+    }
+
     internal fun hasRecoveryPicture(startedAt: Long): Boolean =
         RecoveryPictureProof.isFresh(startedAt, SystemClock.elapsedRealtime(),
             decoder.lastPresentedAt, datalink?.lastAccessUnitAt)
@@ -2346,6 +2414,7 @@ class PocketCameraSession(
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException && e !is TimeoutCancellationException) throw e
             if (negotiationCompleted && !ownsLivePicture(owner)) return
+            if (e is TimeoutCancellationException && holdSessionRecoveryForLiveVideo()) return
             DiagnosticCenter.log("notice", "recovery", "session", "feed: full rejoin failed (${e.message})")
             disposeDatalink()
             // A null datalink under LIVE has no repair owner — bounded session
@@ -2499,7 +2568,6 @@ class PocketCameraSession(
         needsForegroundRecover = false
         feedWatchdog.reset()
         if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
-        FeedIncidentRuntime.endSession(SystemClock.elapsedRealtime() / 1000.0)
     }
 
     fun retrySessionRecovery() {
@@ -2749,14 +2817,12 @@ class PocketCameraSession(
             gimbalStickMapping = gimbalStickMapping.applyAttitude(frame.payload)
             levelReading.ingest(frame.payload, SystemClock.elapsedRealtimeNanos() / 1e9)
             judgeWorldLevelSnap()
-            if (frame.payload.size >= 22) {
+            if (CameraCommands.isAttitude(frame.payload)) {
                 val now = SystemClock.elapsedRealtime()
                 val previousAt = lastValidGimbalAttitudeAt
-                val rawPitch = ((frame.payload[0].toInt() and 0xFF) or
-                    ((frame.payload[1].toInt() and 0xFF) shl 8)).toShort().toInt()
                 lastNativeGimbalPose = GimbalWaypoint.from(
                     CameraCommands.yawTenthDeg(frame.payload), CameraCommands.pitchTenthDeg(frame.payload),
-                    _zoomReadout.value, rawPitch)
+                    _zoomReadout.value, CameraCommands.nativePitchTenthDeg(frame.payload))
                 lastValidGimbalAttitudeAt = now
                 val pose = liveGimbalWaypoint
                 pose?.let { gimbalOverlayMotion.observe(it, now / 1000.0) }
@@ -2770,6 +2836,7 @@ class PocketCameraSession(
                     captureStableSince = now
                     captureStablePose = pose
                 }
+                restoreGimbalPrep(gimbalPrep.restore(_gimbalMoveRunning.value, now / 1000.0))
             }
             syncGimbalPose()
             tickGimbalLimit()
@@ -4629,6 +4696,7 @@ class PocketCameraSession(
     fun setGimbalMode(mode: GimbalMode) {
         if (!canChangeGimbalSettings()) return
         cancelProgrammedMove()
+        gimbalPrep.mode = null
         gimbalFollowFamilyConfirmed = false
         gimbalModePin = CameraValuePin(mode, SystemClock.elapsedRealtime() + 2_000L)
         _gimbalMode.value = mode
@@ -4667,6 +4735,7 @@ class PocketCameraSession(
     fun setGimbalSpeed(speed: GimbalSpeed) {
         if (!canChangeGimbalSettings()) return
         cancelProgrammedMove()
+        gimbalPrep.speed = null
         gimbalSpeedPin = CameraValuePin(speed, SystemClock.elapsedRealtime() + 2_000L)
         _gimbalSpeed.value = speed
         datalink?.sendDuml(
@@ -4854,19 +4923,39 @@ class PocketCameraSession(
         if (lastValidGimbalAttitudeAt == 0L) Double.POSITIVE_INFINITY else (nowMs - lastValidGimbalAttitudeAt) / 1000.0
 
     private fun prepProgrammedMoveGimbal() {
-        datalink?.sendDuml(
-            cmdSet = 0x04,
-            cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
-            payload = CameraCommands.setGimbalTiltLock(false),
-            receiver = CameraCommands.RX_GIMBAL,
-        )
-        datalink?.sendDuml(
-            cmdSet = 0x04,
-            cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
-            payload = CameraCommands.setGimbalSpeed(GimbalSpeed.FAST.wire),
-            receiver = CameraCommands.RX_GIMBAL,
-        )
-        Log.i(TAG, "gimbal-move: Fast+unlock")
+        gimbalPrep.prep(_gimbalSpeed.value, _gimbalMode.value).forEach { payload ->
+            datalink?.sendDuml(
+                cmdSet = 0x04,
+                cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
+                payload = payload,
+                receiver = CameraCommands.RX_GIMBAL,
+            )
+        }
+        Log.i(TAG, "gimbal-move: Fast+unlock restore speed=${gimbalPrep.speed?.label} mode=${gimbalPrep.mode?.label}")
+    }
+
+    /** Put back the speed/tilt lock that [prepProgrammedMoveGimbal] replaced. */
+    private fun restoreGimbalPrep(restore: GimbalPrepRestore.Restore?) {
+        restore ?: return
+        val link = datalink ?: return
+        val deadline = SystemClock.elapsedRealtime() + 2_000L
+        restore.speed?.let {
+            gimbalSpeedPin = CameraValuePin(it, deadline)
+            _gimbalSpeed.value = it
+        }
+        if (restore.mode == GimbalMode.TILT_LOCKED && _gimbalMode.value == GimbalMode.FOLLOW) {
+            gimbalModePin = CameraValuePin(GimbalMode.TILT_LOCKED, deadline)
+            _gimbalMode.value = GimbalMode.TILT_LOCKED
+        }
+        restore.payloads.forEach { payload ->
+            link.sendDuml(
+                cmdSet = 0x04,
+                cmdId = CameraCommands.CMD_GIMBAL_PARAMS,
+                payload = payload,
+                receiver = CameraCommands.RX_GIMBAL,
+            )
+        }
+        Log.i(TAG, "control: gimbal restore speed=${restore.speed?.label} mode=${restore.mode?.label}")
     }
 
     private fun publishMoveDebug(text: String, force: Boolean) {
@@ -4899,6 +4988,8 @@ class PocketCameraSession(
     }
 
     private fun resetGimbalControls() {
+        // Before the link closes: do not leave the camera on Fast for the next session.
+        restoreGimbalPrep(gimbalPrep.restoreNow())
         cancelProgrammedMove()
         lastValidGimbalAttitudeAt = 0L
         lastNativeGimbalPose = null
@@ -5619,6 +5710,13 @@ internal object LiveViewEnablePolicy {
     const val GOP_GRACE_MS = 8_000L
     /** Endpoint repair and decoder-rebuild picture deadline. Matches iOS 16 s. */
     const val ENDPOINT_PICTURE_GRACE_MS = 16_000L
+    /** Core `enableAnswerWindow`: an unanswered encoder-pause enable escalates after this. */
+    const val ENABLE_ANSWER_MS = 1_500L
+    /** Core `keyframeResendInterval` / `keyframeRequestLimit` for the decoder repair. */
+    const val KEYFRAME_RESEND_MS = 2_000L
+    const val KEYFRAME_REQUEST_LIMIT = 2
+    /** Core `maxHeldRepairCycles`: repair deadlines (~60 s) before BLE recovery may run. */
+    const val MAX_HELD_REPAIR_CYCLES = 3
     const val REBUILD_BACKOFF_MS = 60_000L
     const val COOLDOWN_MS = 15_000L
     const val REBUILD_COOLDOWN_MS = 5_000L
@@ -5871,6 +5969,55 @@ internal object LiveViewEnablePolicy {
         coreFlag("shouldStartFeedRecovery", "{\"rebuildInFlight\":$rebuildInFlight}") {
             !rebuildInFlight
         }
+
+    enum class DecoderRepairStep { WAIT, RESEND_KEYFRAME, REBUILD_ENDPOINT, DEADLINE }
+
+    /** Core `FeedWatchdog.decoderRepairStep`: resend until answered, then the endpoint. */
+    fun decoderRepairStep(
+        sinceRepairStartMs: Long,
+        sinceEnableMs: Long,
+        sinceIrapMs: Long?,
+        keyframeRequests: Int,
+    ): DecoderRepairStep {
+        val core =
+            coreDecision(
+                "decoderRepairStep",
+                "{\"secondsSinceRepairStart\":${sinceRepairStartMs / 1000.0}," +
+                    "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}," +
+                    "\"secondsSinceLastIrap\":${secJson(sinceIrapMs)}," +
+                    "\"keyframeRequests\":$keyframeRequests}",
+            )
+        return when (core) {
+            "wait" -> DecoderRepairStep.WAIT
+            "resendKeyframe" -> DecoderRepairStep.RESEND_KEYFRAME
+            "rebuildEndpoint" -> DecoderRepairStep.REBUILD_ENDPOINT
+            "deadline" -> DecoderRepairStep.DEADLINE
+            else -> {
+                if (sinceRepairStartMs >= ENDPOINT_PICTURE_GRACE_MS) return DecoderRepairStep.DEADLINE
+                val answered = sinceIrapMs != null && sinceIrapMs < sinceEnableMs
+                if (answered || sinceEnableMs < KEYFRAME_RESEND_MS) return DecoderRepairStep.WAIT
+                if (keyframeRequests < KEYFRAME_REQUEST_LIMIT) DecoderRepairStep.RESEND_KEYFRAME
+                else DecoderRepairStep.REBUILD_ENDPOINT
+            }
+        }
+    }
+
+    /**
+     * Core `FeedWatchdog.nextSessionHoldCycles`: no BLE teardown while video arrives,
+     * for at most [MAX_HELD_REPAIR_CYCLES] repair deadlines per episode. 0 releases.
+     */
+    fun nextSessionHoldCycles(videoAgeMs: Long?, previousCycles: Int, pictureSinceLastCycle: Boolean): Int {
+        val core =
+            coreDecision(
+                "nextSessionHoldCycles",
+                "{\"lastVideoPacketAge\":${secJson(videoAgeMs)},\"previousCycles\":$previousCycles," +
+                    "\"pictureSinceLastCycle\":$pictureSinceLastCycle}",
+            )?.toIntOrNull()
+        if (core != null) return core
+        val cycles = (if (pictureSinceLastCycle) 0 else maxOf(0, previousCycles)) + 1
+        val videoLive = videoAgeMs != null && videoAgeMs < STALL_MS
+        return if (videoLive && cycles < MAX_HELD_REPAIR_CYCLES) cycles else 0
+    }
 
     fun shouldRepeatRecoverEnable(
         sinceEnableMs: Long,
@@ -6305,7 +6452,9 @@ internal object LiveViewEnablePolicy {
         }
 
         if (assemblyStalled || (controlReceiveAlive(snap) && !udpReceiveAlive(snap))) {
-            if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < ESCALATE_MS) {
+            // Twin of FeedWatchdog: an unanswered enable escalates after ENABLE_ANSWER_MS.
+            val rungWait = if (state.stage == Stage.RESEND_ENABLE) ENABLE_ANSWER_MS else ESCALATE_MS
+            if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < rungWait) {
                 return Action.NONE
             }
             if (state.encoderPauseEnables < 1) {

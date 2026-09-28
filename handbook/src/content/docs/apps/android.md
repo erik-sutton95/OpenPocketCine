@@ -16,6 +16,27 @@ options → Save diagnostic report**. Local VPNs and ad blockers (AdGuard, Bloka
 RethinkDNS) can block the UDP live feed after Wi-Fi joins — pause them or
 exclude this app ([Troubleshooting](../../guides/troubleshooting/)).
 
+## Before pairing
+
+Before pairing, turn off DJI Frame Tap and force quit DJI Mimo. Frame Tap blocks
+any pairing or connection, and DJI Mimo on this phone or any other phone near
+the camera can hold it. The first pairing step shows this as a tip. After 20
+seconds with no camera, **Still looking** repeats it: "Turn off DJI Frame Tap
+and force quit DJI Mimo on every phone near the camera. Make sure the camera is
+on and activated, then move closer." When the camera never answers pairing or
+the video link, the error message ends with the same reminder.
+
+## Permissions
+
+Pairing asks only for what finding the camera over Bluetooth needs: **Nearby
+devices** on Android 12 and newer, or **Location** on Android 10 and 11 (which
+also need Location turned on to scan). Precise **Location** is asked later, in
+Wi-Fi and Hotspot setup, to show which Wi-Fi this phone is on; only the network
+name is read. Joining the camera's Wi-Fi needs no extra permission. If Android no
+longer shows a permission prompt, the pairing screen's **Open Settings** opens
+this app's page in Android Settings
+([Troubleshooting](../../guides/troubleshooting/#camera-does-not-appear)).
+
 On **Your cameras**, PAIRED and NEARBY groups separate remembered cameras from
 new discoveries. Select a camera to see its connection progress and **Cancel**.
 **Pair new camera** opens the guided flow; select a discovered camera, then
@@ -326,7 +347,9 @@ and stick ramp. The Motion Control footer opens the experimental editor for an A
 leg’s duration; drag the editor directly). With C set, Smoothness rounds B and shows a dashed curve.
 Zero hits B exactly; higher values bypass B while preserving A/C and total
 duration. There is no artificial speed cap. Moves are experimental: keep
-the camera fixed, rehearse, and check framing before a take. Tilt targets stay
+the camera fixed, rehearse, and check framing before a take. Tilt is planned from
+where the camera points at Start. A take runs the gimbal on Fast; your Speed and
+Tilt locked setting comes back about a second after it stops. Tilt targets stay
 within −44° to +70°. A missed timed
 point stops the move; professional positional/timing accuracy has not been qualified. Stick throw is analog with
 an ease-in curve (small push crawls; full throw is fastest). Direction Lock keeps

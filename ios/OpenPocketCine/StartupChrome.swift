@@ -84,15 +84,50 @@ enum StartupConnectionCopy {
         }
     }
 
+    static let openSettings = "Open Settings"
+    static let localNetworkDenied =
+        "OpenPocketCine needs Local Network access to reach the camera. Open Settings, turn on Local Network for OpenPocketCine, then try again."
+    static let bluetoothDenied =
+        "OpenPocketCine needs Bluetooth access to find the camera. Open Settings, turn on Bluetooth for OpenPocketCine, then try again."
+    static let bluetoothOff =
+        "Bluetooth is off. Turn it on in Control Center or Settings, then try again."
+    static let bluetoothNotReady = "Bluetooth is not ready yet. Try again in a moment."
+    static let personalHotspotOn =
+        "Turn off Personal Hotspot, then try again. While it is on, this iPhone cannot join the camera Wi-Fi."
+    /// DJI Frame Tap or a running DJI Mimo holds the camera and blocks pairing and the
+    /// video link. `preCheck` and `scanEmptyHint` match Android word for word.
+    static let preCheckTitle = "Check first"
+    static let preCheck = "Before pairing, turn off DJI Frame Tap and force quit DJI Mimo."
+    static let scanEmptyTitle = "Still looking"
+    static let scanEmptyHint =
+        "Turn off DJI Frame Tap and force quit DJI Mimo on every phone near the camera. Make sure the camera is on and activated, then move closer."
+    static let pairingDeferred =
+        "The camera is not ready to pair again yet. Force quit DJI Mimo on every phone near the camera, wait a few seconds, then try again."
+    /// Datalink never answered: another phone holds the camera, or a VPN eats the UDP.
+    static let datalinkSilent =
+        "The camera did not answer over its Wi-Fi. Turn off DJI Frame Tap and force quit DJI Mimo on every phone near the camera, pause any VPN or ad blocker, then try again."
+    static let bluetoothTimedOut =
+        "The camera didn't respond in time. Check Bluetooth, turn off DJI Frame Tap and force quit DJI Mimo on every phone near the camera, then try again."
+    static let bluetoothEnded =
+        "The camera ended the connection. Turn off DJI Frame Tap and force quit DJI Mimo on every phone near the camera, then try again."
+
+    /// Failures the operator can only fix in iOS Settings get an Open Settings action.
+    static func opensSettings(_ raw: String) -> Bool {
+        raw == localNetworkDenied || raw == bluetoothDenied
+    }
+
     static func friendly(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
         let lower = trimmed.lowercased()
-        if lower.contains("timed out") || lower.contains("timeout") {
-            return "The camera didn't respond in time. Check Bluetooth and try again."
+        if lower.contains("datalink handshake") || lower.contains("not ready for the datalink") {
+            return datalinkSilent
         }
-        if lower.contains("disconnected") {
-            return "The camera ended the connection. Try again."
+        if lower.contains("timed out") || lower.contains("timeout") {
+            return bluetoothTimedOut
+        }
+        if lower.contains("disconnected") || lower.contains("camera disappeared") {
+            return bluetoothEnded
         }
         if lower.contains("approve") {
             return trimmed

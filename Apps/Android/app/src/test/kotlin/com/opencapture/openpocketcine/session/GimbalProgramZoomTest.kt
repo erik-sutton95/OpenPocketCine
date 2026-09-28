@@ -154,7 +154,7 @@ class GimbalProgramZoomTest {
             val payload = ByteArray(16).also { it[14] = position.toByte(); it[15] = (position shr 8).toByte() }
             return DumlFrame(0, 0, 1, 0, 0, 0x99, StatusExtras.packSubscribe("cam_lens_state", payload))
         }
-        val attitude = DumlFrame(0, 0, 1, 0, 4, 5, ByteArray(22))
+        val attitude = DumlFrame(0, 0, 1, 0, 4, 5, ByteArray(CameraCommands.ATTITUDE_LENGTH))
         var observed = NativeProgramZoomObservation(ready).observing(lens(217), pro, 1.0).notePause(1.1)
         observed = observed.observing(attitude, pro, 1.5)
         assertEquals(1.0, observed.receivedAt)
@@ -202,7 +202,7 @@ class GimbalProgramZoomTest {
             nativeProgramZoomFailure(program.copy(b = b.copy(zoom = 6.0)), pro, status))
         status = nativeProgramZoomStatus(subscribe("cam_video_param_v2", byteArrayOf(0x10, 0x02)), status, pro)
         assertEquals(0x10, status.resolutionCode)
-        val pitch = ByteArray(22)
+        val pitch = ByteArray(CameraCommands.ATTITUDE_LENGTH)
         val measured = NativeGimbalFeedback.from(DumlFrame(0, 0, 1, 0, 4, 5, pitch), 12.0, status.zoomFactor!!)!!
         assertTrue(abs(measured.pose.zoom - 3.0) < 1e-9)
     }

@@ -1585,6 +1585,62 @@ public enum GimbalControl {
     }
 }
 
+/// Head tracking and Motion Control drive the gimbal on Fast with tilt unlocked.
+/// Remember the operator's speed and mode from before the first prep and hand
+/// them back once nothing has driven the gimbal for `idleDelay`, so the stick
+/// does not stay on Fast for the rest of the session. The delay absorbs head
+/// tracking's brief stop/start cycles without flapping the speed.
+public struct GimbalPrepRestore: Equatable, Sendable {
+    public static let idleDelay: TimeInterval = 1
+
+    public struct Restore: Equatable, Sendable {
+        public var speed: GimbalSpeed?
+        public var mode: GimbalMode?
+        public var frames: [Duml.Frame]
+    }
+
+    /// Operator values to put back. The shell clears one when the operator
+    /// picks a new value mid-hold, so the restore cannot undo that choice.
+    public var speed: GimbalSpeed?
+    public var mode: GimbalMode?
+    private var idleSince: TimeInterval?
+
+    public init() {}
+
+    public var isHolding: Bool { speed != nil || mode != nil }
+
+    /// Fast + tilt unlocked. Values already held are kept: after the first
+    /// prep the session reads back Fast, which is not the operator's choice.
+    public mutating func prep(speed current: GimbalSpeed, mode currentMode: GimbalMode) -> [Duml.Frame] {
+        if speed == nil { speed = current }
+        if mode == nil { mode = currentMode }
+        idleSince = nil
+        return [Commands.setGimbalTiltLock(.unlocked), Commands.setGimbalSpeed(.fast)]
+    }
+
+    /// Call on each attitude report. `busy` is head tracking or a Motion Control run.
+    public mutating func restore(busy: Bool, now: TimeInterval) -> Restore? {
+        guard isHolding, !busy, now.isFinite else {
+            idleSince = nil
+            return nil
+        }
+        let since = idleSince ?? now
+        idleSince = since
+        return now - since >= Self.idleDelay ? restoreNow() : nil
+    }
+
+    /// Immediate restore, for a disconnect while the link can still send.
+    public mutating func restoreNow() -> Restore? {
+        guard isHolding else { return nil }
+        var frames: [Duml.Frame] = []
+        if let speed, speed != .fast { frames.append(Commands.setGimbalSpeed(speed)) }
+        if mode == .tiltLocked { frames.append(Commands.setGimbalTiltLock(.locked)) }
+        let restore = Restore(speed: speed, mode: mode, frames: frames)
+        self = GimbalPrepRestore()
+        return restore
+    }
+}
+
 /// `0x04/0x50` param `04`. `00` unlocked (Follow), `01` locked. FPV may leave a leftover `01`.
 public enum GimbalTiltLock: UInt8, CaseIterable, Sendable {
     case unlocked = 0x00
@@ -2132,7 +2188,7 @@ public enum GimbalStick {
     }
 
     /// `0x04/0x05` i16-LE @4 in 0.1°. |angle| > 90° is the selfie-facing pose.
-    /// Short payloads fail closed (`nil`).
+    /// Any length but the known 50-byte layout fails closed (`nil`).
     public static let rotated180TenthDeg = 900
     /// Invert latch like Mimo: end of the 180, not the midpoint.
     public static let settle180TenthDeg = 1650
@@ -2145,15 +2201,28 @@ public enum GimbalStick {
         return Int16(bitPattern: UInt16(payload[offset]) | UInt16(payload[offset + 1]) << 8)
     }
 
+    /// The only `0x04/0x05` layout with known offsets. Another length is a
+    /// different frame; reading it as attitude corrupts pan/tilt and Motion Control.
+    public static let attitudeLength = 50
+
+    public static func isAttitude(_ payload: [UInt8]) -> Bool {
+        payload.count == attitudeLength
+    }
+
     public static func yawTenthDeg(_ payload: [UInt8]) -> Int16? {
-        i16LE(payload, at: 4)
+        isAttitude(payload) ? i16LE(payload, at: 4) : nil
+    }
+
+    /// Native absolute pitch i16-LE `@0` (the `0x04/0x14` pitch reference).
+    public static func nativePitchTenthDeg(_ payload: [UInt8]) -> Int16? {
+        isAttitude(payload) ? i16LE(payload, at: 0) : nil
     }
 
     /// Tilt 0.1° from i16-LE `@20`, negated so look-up is positive.
     /// Mimo tilt take 2026-09-01: stick axis0 down → `@20` +43.5°; stick up
     /// → `@20` −115°. `@2` stays 0; `@6` stays ~13°.
     public static func pitchTenthDeg(_ payload: [UInt8]) -> Int16? {
-        guard let raw = i16LE(payload, at: 20) else { return nil }
+        guard isAttitude(payload), let raw = i16LE(payload, at: 20) else { return nil }
         return 0 &- raw
     }
 

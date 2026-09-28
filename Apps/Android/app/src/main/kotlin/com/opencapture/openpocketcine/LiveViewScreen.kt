@@ -441,8 +441,7 @@ fun LiveViewScreen(model: AppModel) {
                 val well = zones.feed
                 val picture =
                     if (verticalPicture && well.height > 1f) {
-                        val width = well.height * 9f / 16f
-                        ChromeRect(well.midX - width / 2f, well.minY, width, well.height)
+                        portraitVerticalPicture(well)
                     } else {
                         well
                     }
@@ -1678,4 +1677,14 @@ private fun LiveTopDeck(
         }
         }
     }
+}
+
+/**
+ * iOS `FieldMonitorLayout`: a vertical camera is shown whole, resting on the bottom of the
+ * well. Height-only sizing overflowed narrow phones and clipped both sides.
+ */
+internal fun portraitVerticalPicture(well: ChromeRect): ChromeRect {
+    val height = minOf(well.height, well.width * 16f / 9f)
+    val width = height * 9f / 16f
+    return ChromeRect(well.midX - width / 2f, well.maxY - height, width, height)
 }

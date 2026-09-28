@@ -374,10 +374,12 @@ private final class MonitorBackdropWake {
     private var generation = 0
 
     init() {
+        // `queue: nil` runs on the poster. A main queue here made the playback pull
+        // thread wait on Main every frame (the IOS-2T hang shape).
         observer = NotificationCenter.default.addObserver(
-            forName: .monitorBackdropSourceAdvanced, object: nil, queue: .main
+            forName: .monitorBackdropSourceAdvanced, object: nil, queue: nil
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.fire() }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.fire() } }
         }
     }
 

@@ -44,6 +44,13 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         var gate = HeadTrackNativeSampleGate()
         var accepted: UInt64 = 0
         var rejected: UInt64 = 0
+        /// Rejection reasons for the `head-motion` row: measurement older than
+        /// 200 ms, stamped in the future (clock-base mismatch), or superseded
+        /// (old generation / not newer than the last sample).
+        var rejectedStale: UInt64 = 0
+        var rejectedFuture: UInt64 = 0
+        var rejectedOther: UInt64 = 0
+        var lastRejectedAgeMs: Int?
     }
     nonisolated private let latestHead = OSAllocatedUnfairLock(initialState: HeadInbox())
     private var samplePump: Task<Void, Never>?
@@ -329,6 +336,10 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             $0.sample = nil
             $0.accepted = 0
             $0.rejected = 0
+            $0.rejectedStale = 0
+            $0.rejectedFuture = 0
+            $0.rejectedOther = 0
+            $0.lastRejectedAgeMs = nil
             return $0.gate.begin()
         }
         requestedGeneration = generation
@@ -367,13 +378,23 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
                 yaw: a.yaw, pitch: a.pitch, roll: a.roll)
             self.latestHead.withLock {
                 var next = measurement
+                let now = self.uptime()
                 guard
-                    $0.gate.accepts(
-                        generation, measuredAt: next.measuredAt,
-                        now: self.uptime()),
+                    $0.gate.accepts(generation, measuredAt: next.measuredAt, now: now),
                     next.measuredAt > ($0.sample?.measuredAt ?? -.infinity)
                 else {
                     $0.rejected &+= 1
+                    let age = now - next.measuredAt
+                    if !$0.gate.isCurrent(generation) || !age.isFinite {
+                        $0.rejectedOther &+= 1
+                    } else if age < 0 {
+                        $0.rejectedFuture &+= 1
+                    } else if age > HeadTrackNative.maxHeadSampleAge {
+                        $0.rejectedStale &+= 1
+                    } else {
+                        $0.rejectedOther &+= 1
+                    }
+                    if age.isFinite { $0.lastRejectedAgeMs = Int((age * 1_000).rounded()) }
                     return
                 }
                 $0.accepted &+= 1
@@ -410,10 +431,12 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
     private func logStartupIfDue(now: TimeInterval) {
         if let lastStartupLogAt, now - lastStartupLogAt < 1 { return }
         lastStartupLogAt = now
-        let snapshot = latestHead.withLock { ($0.accepted, $0.rejected, $0.sample?.measuredAt) }
-        let age = snapshot.2.map { String(format: "%.0f", max(0, now - $0) * 1_000) } ?? "-"
+        let snapshot = latestHead.withLock { $0 }
+        let age = snapshot.sample.map { String(format: "%.0f", max(0, now - $0.measuredAt) * 1_000) } ?? "-"
+        // Reasons make a zero-accepted report diagnosable: `future` with a large
+        // negative age is a Core Motion clock mismatch, `stale` is late delivery.
         startupLog(
-            "head-motion: generation=\(requestedGeneration.map(String.init) ?? "-") requested=\(requestedGeneration == nil ? 0 : 1) auth=\(Self.authLabel(authorizationStatus())) available=\(motion.isDeviceMotionAvailable ? 1 : 0) active=\(motion.isDeviceMotionActive ? 1 : 0) accepted=\(snapshot.0) rejected=\(snapshot.1) sampleAgeMs=\(age)"
+            "head-motion: generation=\(requestedGeneration.map(String.init) ?? "-") requested=\(requestedGeneration == nil ? 0 : 1) auth=\(Self.authLabel(authorizationStatus())) available=\(motion.isDeviceMotionAvailable ? 1 : 0) active=\(motion.isDeviceMotionActive ? 1 : 0) accepted=\(snapshot.accepted) rejected=\(snapshot.rejected) stale=\(snapshot.rejectedStale) future=\(snapshot.rejectedFuture) other=\(snapshot.rejectedOther) lastRejectAgeMs=\(snapshot.lastRejectedAgeMs.map(String.init) ?? "-") sampleAgeMs=\(age)"
         )
     }
 

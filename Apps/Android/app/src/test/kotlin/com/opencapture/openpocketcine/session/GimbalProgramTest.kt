@@ -479,4 +479,55 @@ class GimbalProgramTest {
             assertEquals(succeeds, engine.failure == null, "delay=$delay miss=$miss lateOnly=$lateOnly fast=$fast")
         }
     }
+
+    /** Field journal: a 38° display change once planned as ~110° native after the handle tilted. */
+    @Test
+    fun startPlansNativePitchFromTheLivePose() {
+        val program = GimbalProgram(
+            a = GimbalWaypoint(0.0, 0.0, 1.0, nativePitchDeg = 108.0),
+            b = GimbalWaypoint(-21.1, 38.0, 1.0, nativePitchDeg = -2.0),
+            durationAB = 2.0,
+        )
+        val live = GimbalWaypoint(0.0, 0.0, 1.0, nativePitchDeg = 180.0)
+        val planned = GimbalMoveEngine.planFromLive(program, live)
+        assertEquals(-180.0, planned.a?.nativePitchDeg)
+        assertEquals(142.0, planned.b?.nativePitchDeg)
+        assertEquals(planned, GimbalMoveEngine.planFromLive(planned, live))
+        val engine = GimbalMoveEngine()
+        assertTrue(engine.start(program, live))
+        var out: GimbalMoveEngine.Output? = null
+        var t = 0.0
+        while (t < GimbalMoveEngine.HOLD_SECONDS + 0.1 && out?.target == null) {
+            out = engine.tick(0.04, live)
+            t += 0.04
+        }
+        assertEquals(142.0, out?.target?.nativePitchDeg)
+    }
+
+    /** Field report: after one Motion Control run the stick stayed on Fast for the session. */
+    @Test
+    fun prepRestoresOperatorSpeedAndTiltLockAfterIdle() {
+        fun List<ByteArray>.wire() = map { it.toList() }
+        val prep = GimbalPrepRestore()
+        val fast = listOf(CameraCommands.setGimbalTiltLock(false), CameraCommands.setGimbalSpeed(GimbalSpeed.FAST.wire)).wire()
+        assertEquals(fast, prep.prep(GimbalSpeed.SLOW, GimbalMode.TILT_LOCKED).wire())
+        assertEquals(fast, prep.prep(GimbalSpeed.FAST, GimbalMode.FOLLOW).wire())
+        assertEquals(null, prep.restore(true, 10.0))
+        assertEquals(null, prep.restore(false, 11.0))
+        assertEquals(null, prep.restore(true, 11.5))
+        assertEquals(null, prep.restore(false, 12.0))
+        val restore = prep.restore(false, 13.0)
+        assertEquals(GimbalPrepRestore.Restore(GimbalSpeed.SLOW, GimbalMode.TILT_LOCKED), restore)
+        assertEquals(
+            listOf(CameraCommands.setGimbalSpeed(GimbalSpeed.SLOW.wire), CameraCommands.setGimbalTiltLock(true)).wire(),
+            restore?.payloads?.wire(),
+        )
+        assertFalse(prep.isHolding)
+        prep.prep(GimbalSpeed.SLOW, GimbalMode.TILT_LOCKED)
+        prep.speed = null
+        assertEquals(listOf(CameraCommands.setGimbalTiltLock(true)).wire(), prep.restoreNow()?.payloads?.wire())
+        prep.prep(GimbalSpeed.FAST, GimbalMode.FOLLOW)
+        assertEquals(emptyList(), prep.restoreNow()?.payloads?.wire())
+        assertEquals(null, prep.restoreNow())
+    }
 }

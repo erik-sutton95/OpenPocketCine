@@ -69,6 +69,7 @@ object SavedCameraSetupPresentation {
         hotspotActive: Boolean,
     ): MonitorConnectFailure {
         var message = reason.trim().replaceFirstChar { it.uppercase() }.let { if (it.endsWith(".")) it else "$it." }
+        message = StartupConnectionCopy.withDjiAppsTip(message, reason)
         if (setup == CameraConnectionSetup.PHONE_HOTSPOT && !hotspotActive) {
             // The usual cause: the hotspot was off, so the camera had nothing to join.
             message = "The camera could not find this phone’s hotspot. Turn on the Wi-Fi hotspot, then try again."

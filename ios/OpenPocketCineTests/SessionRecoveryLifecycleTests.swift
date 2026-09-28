@@ -35,6 +35,13 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
         XCTAssertFalse(timeout)
         let ready = await BleLink.waitForPower(timeout: .zero) { true }
         XCTAssertTrue(ready)
+        // An open Bluetooth prompt does not spend the wait; Allow after it still pairs.
+        let clock = ContinuousClock()
+        let answeredAt = clock.now.advanced(by: .milliseconds(400))
+        let allowedLate = await BleLink.waitForPower(
+            timeout: .milliseconds(100), isPoweredOn: { clock.now >= answeredAt },
+            awaitingPrompt: { clock.now < answeredAt })
+        XCTAssertTrue(allowedLate)
     }
 
     func testHotspotCallbackCancellationIgnoresLateSuccess() async {

@@ -428,7 +428,11 @@ final class ReliabilityReportingTests: XCTestCase {
         ]
         event.extra = ["password": "hunter2", "failingStage": "decodedOutput"]
         event.context = [
-            "device": ["name": "Example Phone", "model": "iPhone17,2"],
+            "device": [
+                "name": "Example Phone", "model": "iPhone17,2", "free_memory": 1_024,
+                "memory_size": 8_192, "thermal_state": "nominal",
+            ],
+            "app": ["app_memory": 512, "in_foreground": true, "device_app_hash": "x"],
             "feed": ["failingStage": "decodedOutput", "serial": "ABC"],
         ]
         event.exceptions = [
@@ -446,6 +450,12 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertEqual(event.extra?["failingStage"] as? String, "decodedOutput")
         XCTAssertNil(event.context?["device"]?["name"])
         XCTAssertEqual(event.context?["device"]?["model"] as? String, "iPhone17,2")
+        XCTAssertEqual(event.context?["device"]?["free_memory"] as? Int, 1_024)
+        XCTAssertEqual(event.context?["device"]?["memory_size"] as? Int, 8_192)
+        XCTAssertEqual(event.context?["device"]?["thermal_state"] as? String, "nominal")
+        XCTAssertEqual(event.context?["app"]?["app_memory"] as? Int, 512)
+        XCTAssertEqual(event.context?["app"]?["in_foreground"] as? Bool, true)
+        XCTAssertNil(event.context?["app"]?["device_app_hash"])
         XCTAssertNil(event.context?["feed"]?["serial"])
         XCTAssertFalse(event.exceptions?.first?.value?.contains("example/Library") ?? true)
     }
@@ -615,6 +625,9 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertFalse(options.enableMetricKit)
         XCTAssertTrue(options.enableCrashHandler)
         XCTAssertTrue(options.enableAppHangTracking)
+        // Tests run a development build: reinstalls must not read as watchdog kills.
+        XCTAssertEqual(ReliabilityReportingConfiguration.environment, "development")
+        XCTAssertFalse(options.enableWatchdogTerminationTracking)
         XCTAssertEqual(options.maxCacheItems, 30)
         XCTAssertEqual(options.maxAttachmentSize, 256 * 1_024)
         XCTAssertEqual(options.sessionReplay.sessionSampleRate, 0)

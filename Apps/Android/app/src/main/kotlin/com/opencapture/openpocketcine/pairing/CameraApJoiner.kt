@@ -229,6 +229,8 @@ class CameraApJoiner(context: Context) : CameraNetworkPath {
         requireVisible: Boolean,
     ): Boolean {
         if (wifi == null || maxWaitMillis <= 0L) return false
+        // Scan results need precise location; without it this wait only delays the join.
+        if (!DiscoveryPermissions.canReadWifiScans(appContext)) return false
         kickWifiScan()
         if (scanResultsContainSsid(ssid)) return true
         val deadline = System.nanoTime() + maxWaitMillis * 1_000_000L

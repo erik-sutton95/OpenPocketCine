@@ -762,6 +762,12 @@ final class MonitorUIFlowTests: XCTestCase {
             ]
             XCTAssertTrue(
                 app.staticTexts[expected[screen]!].firstMatch.waitForExistence(timeout: 10))
+            if screen == "pair" {
+                XCTAssertTrue(
+                    app.staticTexts[
+                        "Before pairing, turn off DJI Frame Tap and force quit DJI Mimo."
+                    ].firstMatch.exists)
+            }
             capture(screen + "-portrait")
             rotate(.landscapeLeft)
             capture(screen + "-landscape")

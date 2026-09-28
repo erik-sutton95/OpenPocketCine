@@ -27,15 +27,41 @@ The first-pair wizard names this on the Join camera Wi-Fi step. If the picture s
 
 The phone cannot punch a hole through that VPN. Exclude the app or pause the filter.
 
+## Before pairing
+
+Before pairing, turn off DJI Frame Tap and force quit DJI Mimo. Either one can
+hold the camera, and then pairing or the video link never completes. Do this on
+every phone near the camera, not only the one you are pairing.
+
 ## Camera does not appear
 
-Power the Pocket on, stay close, and allow Bluetooth. Pocket and Nano both appear — tap the one you want. If you previously paired with another install, remove the old pairing on the camera and try again.
+Power the Pocket on, stay close, and allow Bluetooth. Pocket and Nano both
+appear; tap the one you want. If you previously paired with another install,
+remove the old pairing on the camera and try again.
+
+After about 20 seconds with no camera, the pairing screen shows: Turn off DJI
+Frame Tap and force quit DJI Mimo on every phone near the camera. Make sure the
+camera is on and activated, then move closer. A new camera must be activated in
+DJI Mimo once before any other app can pair with it.
+
+On iPhone, pairing waits while the system Bluetooth prompt is open, so answering
+it late no longer fails the scan. If Bluetooth access is off for OpenPocketCine,
+the pairing screen says so and offers **Open Settings** (Settings, OpenPocketCine,
+Bluetooth). If Bluetooth itself is off, turn it on in Control Center.
+
+**Before pairing, turn off DJI Frame Tap and force quit DJI Mimo.** Frame Tap blocks any pairing or connection. DJI Mimo running on this phone or on any other phone near the camera can hold the camera, so force quit it on every one of them.
+
+On Android, finding the camera needs **Nearby devices** on Android 12 and newer, or **Location** with Location turned on on Android 10 and 11. Location is not needed to find the camera on Android 12 and newer. If you denied the prompt twice, Android stops showing it: tap **Open Settings** on the pairing screen, open **Permissions**, and allow the permission it names. If Bluetooth is off, **Turn on** asks Android to switch it on.
+
+After 20 seconds with no camera, Android pairing shows **Still looking**: "Turn off DJI Frame Tap and force quit DJI Mimo on every phone near the camera. Make sure the camera is on and activated, then move closer." If it still does not appear, **Share Diagnostics**: the report lists Bluetooth, Location services and each permission, and the journal counts Bluetooth adverts and DJI matches without names or addresses.
 
 ## Camera appears, but Bluetooth setup times out
 
 Finding the camera confirms discovery; Bluetooth setup can still fail before
-camera Wi-Fi or live video starts. Keep the camera awake and nearby, close DJI
-Mimo and other camera apps, and use one phone at a time. Check that OpenPocketCine
+camera Wi-Fi or live video starts. Keep the camera awake and nearby, turn off
+DJI Frame Tap, force quit DJI Mimo on every phone near the camera, close other
+camera apps, and use one phone at a time. When the camera never answers pairing
+or the video link, the error ends with the same Frame Tap and DJI Mimo reminder. Check that OpenPocketCine
 has **Nearby devices** permission on Android. Restart the camera and retry once.
 Pair inside OpenPocketCine; the camera uses app-level pairing rather than an
 Android Settings Bluetooth bond.
@@ -49,6 +75,28 @@ has started. These checks help locate the failure and are not a guaranteed fix.
 ## Wi-Fi join never finishes
 
 Approve the Join prompt for the camera SoftAP. On 5.8 GHz in a DFS region the camera AP can take about a minute to beacon; the app keeps trying. A wrong cached passphrase after a camera Wi-Fi reset is dropped so the next tap re-reads credentials over Bluetooth.
+
+**Personal Hotspot** on the iPhone blocks the camera Wi-Fi join: iOS applies
+the camera network but never gets an address on it. The app now stops and says
+"Turn off Personal Hotspot, then try again." Turn it off in Settings or Control
+Center and tap **Try again**. The saved camera Wi-Fi password is kept in this
+case. (The **Hotspot** setup on a saved camera is different: there the camera
+joins this iPhone's hotspot on purpose.)
+
+## Stuck on Open video link (iPhone Local Network)
+
+The video link uses the camera's local network, which iOS guards with the
+**Local Network** permission. The prompt now appears while you approve on the
+camera, before the video link opens. If access is off, the app stops within a
+few seconds and says "OpenPocketCine needs Local Network access to reach the
+camera." Tap **Open Settings**, turn on **Local Network** for OpenPocketCine,
+and return; the wizard looks for the camera again.
+
+If Local Network is on and the link still fails with "The camera did not answer
+over its Wi-Fi", another app is holding the camera: turn off DJI Frame Tap and
+force quit DJI Mimo on every phone near the camera, pause any VPN or ad blocker,
+then try again. **Share Diagnostics** includes a `localNetwork:` line and each
+video-link step (TCP 7001, UDP, handshake sends and datagrams received).
 
 ## Live view stays black on an older Android phone
 

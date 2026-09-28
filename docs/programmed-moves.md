@@ -15,6 +15,20 @@ firmware owns its motor profile and may not achieve every requested duration.
 Updating a point preserves the chosen duration. Faster commands are not proof
 of a qualified maximum repeatable speed.
 
+Points save display tilt (`@20`) and native pitch (`@0`). Start re-derives every
+point's native pitch from the live pose (native falls 1° per 1° of look-up tilt),
+as head tracking and Double-tap Level already do. A saved native reading goes
+stale once the handle tilts: one field take planned a 38° display change as
+roughly 110° native. Pan stays joint yaw. Only the 50-byte `0x04/0x05` layout
+is read as attitude; other lengths are ignored.
+
+A take (and iOS head tracking) switches the camera to Fast with tilt unlocked.
+The shell remembers the operator's Speed and Tilt locked choice before the first
+switch and writes it back once nothing has driven the gimbal for one second, or
+immediately on disconnect. A Speed or Mode picked during the run replaces the
+remembered value. A link lost mid-run restores on the next attitude report after
+recovery; an app kill while Fast is applied leaves the camera on Fast.
+
 Preparation follows the reachable pan arc to A in steps no larger than 120°.
 Each approach command lasts at least 0.5 seconds, allowing 120°/s for this
 untimed preparation, then waits at A for 2 seconds. This

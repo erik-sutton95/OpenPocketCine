@@ -17,6 +17,8 @@ enum WiFiJoiner {
         case pathNotReady
         case timedOut
         case stillOnOtherBody(String)
+        /// Personal Hotspot is hosting, so iOS never takes a camera AP address.
+        case personalHotspot
         var errorDescription: String? {
             switch self {
             case .failed(let s):
@@ -27,7 +29,16 @@ enum WiFiJoiner {
                 "camera Wi-Fi joined but 192.168.2.x never appeared. \(CameraSoftAPSwitch.frequencyHint)"
             case .stillOnOtherBody(let ssid):
                 "couldn't switch from \(ssid) — tap Connect again"
+            case .personalHotspot: StartupConnectionCopy.personalHotspotOn
             }
+        }
+
+        /// A wrong or regenerated passphrase also ends as `pathNotReady` (iOS applies
+        /// the config, then silently fails to join), so only a join blocked by Personal
+        /// Hotspot is known to leave the saved credentials valid.
+        static func rejectsCredentials(_ error: Error) -> Bool {
+            if case JoinError.personalHotspot = error { return false }
+            return true
         }
     }
 
@@ -92,6 +103,13 @@ enum WiFiJoiner {
                 throw CancellationError()
             } catch {
                 lastError = error
+            }
+            let addresses = interfaceAddresses()
+            if CameraSoftAP.isPersonalHotspotHosting(addresses), !isCameraPathReady() {
+                journal(
+                    "wifi: Personal Hotspot is on (\(CameraSoftAP.describe(addresses))), stop joining"
+                )
+                throw JoinError.personalHotspot
             }
             let left = deadline.timeIntervalSinceNow
             guard CameraSoftAPSwitch.shouldRetryJoin(secondsLeft: left) else { throw lastError }
@@ -176,7 +194,7 @@ enum WiFiJoiner {
                 try await Task.sleep(for: .milliseconds(200))
                 if isCameraPathReady() {
                     journal(
-                        "wifi: camera path ready (\(ipv4Addresses().filter(CameraSoftAP.isAssociatedIPv4).joined(separator: ",")))"
+                        "wifi: camera path ready (\(CameraSoftAP.describe(CameraSoftAP.cameraAddresses(in: interfaceAddresses()))))"
                     )
                     return
                 }
@@ -185,7 +203,7 @@ enum WiFiJoiner {
         }
         let current = await currentSSID() ?? "nil"
         journal(
-            "wifi: no 192.168.2.x after \(Int(timeout)) s ssid=\(current) ipv4=\(ipv4Addresses().joined(separator: ","))"
+            "wifi: no 192.168.2.x after \(Int(timeout)) s ssid=\(current) ipv4=\(CameraSoftAP.describe(interfaceAddresses()))"
         )
         throw JoinError.pathNotReady
     }

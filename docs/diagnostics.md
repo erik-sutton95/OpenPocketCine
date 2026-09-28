@@ -74,6 +74,25 @@ full reports include `vpn=on|off` / `vpn: on|off`. A local VPN or ad blocker
 also journals `vpn: local VPN or ad blocker active — can drop UDP live view`
 once per process (#239).
 
+iOS also journals the rest of the spine. `ble:` records every CoreBluetooth
+state and authorization change, the scan start, and a summary every 10 s of a
+scan for its first minute (all adverts, DJI adverts, distinct cameras).
+`localNetwork:` records the pairing-time permission probe and its result.
+`datalink:` records each video-link open step: camera path and interface, TCP
+7001 poke attempts, each UDP bind mode, the first `.waiting` error per socket
+with `localNetworkDenied=`, the first handshake send per bind, and every miss
+with the datagrams received. `wifi:` address lines name each interface
+(`en2:192.168.2.15,bridge100:172.20.10.1`). Compact and full reports carry
+`localNetwork=allowed|denied|unknown` / `localNetwork:` (iOS only; `allowed`
+is set once a camera handshake succeeds).
+
+iOS reliability reports keep Sentry's `device.free_memory`, `memory_size`,
+`thermal_state` and `app.app_memory`, `in_foreground` contexts. Watchdog
+termination tracking is off for `development` and `verification` builds,
+where a reinstall reads as a watchdog kill; TestFlight and App Store keep it.
+The feed incident lifecycle marks `memoryWarning` for a minute after
+`didReceiveMemoryWarning`, and the journal records the available memory then.
+
 Multiview Wi-Fi return journals its failing phase (pairing or AP switch), error
 domain/code, bounded pairing-retry count and AP-set acknowledgement. Camera
 identifiers, PINs and network names are omitted. These are transition events,
@@ -118,8 +137,17 @@ means only the video stream stopped. Android does not record these yet.
 
 Sentry events titled `feed incident <stage>: <kind>` keep that grouping. Tags
 `trigger` (first repair reason, e.g. `bleDropped`), `recoveredBy` (last repair
-action before recovery) and `gap` (picture gap bucket) are searchable; the full
-timeline is the event's JSON attachment.
+action before recovery, including `endpoint` and `rejoin`; a first-picture
+resend inside that repair does not take the credit) and `gap` (picture gap
+bucket) are searchable; the full timeline is the event's JSON attachment.
+
+Outcomes: `recovered`, `exhausted` (the ladder gave up; an error), `userEnded`
+(the operator disconnected with the incident still open; a warning),
+`interrupted` (the process died while open; a warning) and `suppressed`
+(disconnect or playback ended it, or a new session replaced it). A disconnect
+after `exhausted` or during a recovery's aftermath keeps that verdict. One
+incident session spans a connect and its automatic reconnects on both shells.
+`lastIrapAge` is the last keyframe the decoder accepted.
 
 These rows are counters, not scanout. Cached FPS cannot satisfy them.
 Share Diagnostics can attach the local extra; keep the app open briefly

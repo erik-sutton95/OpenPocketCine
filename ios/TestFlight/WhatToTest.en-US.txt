@@ -17,6 +17,7 @@ New and changed
 
 Fixes
 
+- Pairing says what blocks it: Bluetooth or Local Network access (with Open Settings), Personal Hotspot, or DJI Frame Tap and DJI Mimo holding the camera.
 - The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
 - Media lists complete SD and internal libraries, retries Nano's briefly empty first response and keeps capacity visible during playback.
 - Switching clips in Media no longer freezes the app while the previous clip is still being processed.
@@ -32,7 +33,7 @@ Fixes
 What to test
 
 - Open Media on a camera with many clips or both storage types. On Nano, open it right after playback starts. Confirm all clips and capacity appear.
-- In Multiview, try Grid and Center stage in both orientations, open Camera settings, and switch apps to check feeds resume. Exit once.
+- In Multiview, try Grid and Center stage in both orientations, Camera settings, an app switch, Wi-Fi and Hotspot, then Exit once.
 - Double-tap an object to track it, with a face in the scene. Set the joystick to Large and check its ink over bright and dark scenes.
 - Turn the camera vertical in portrait: the whole picture should show. Set 180° and change FPS: angle should stay 180°.
-- Try Wi-Fi and Hotspot in Multiview, type a password in both orientations, cancel a scan, then reconnect.
+- Pair with Local Network or Bluetooth off for OpenPocketCine, or Personal Hotspot on: the error should name the fix.

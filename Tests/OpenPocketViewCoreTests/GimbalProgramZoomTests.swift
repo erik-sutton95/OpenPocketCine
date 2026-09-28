@@ -119,7 +119,7 @@ import Testing
         zoom.observe(lensFrame(651), at: 1)
         zoom.notePause(at: 1.1)
         zoom.observe(.init(sender: 0, receiver: 0, seq: 0, flags: 0, cmdSet: 4, cmdId: 5,
-            payload: [UInt8](repeating: 0, count: 22)), at: 1.4)
+            payload: [UInt8](repeating: 0, count: GimbalStick.attitudeLength)), at: 1.4)
         zoom.observe(push("cam_fov", [0xff, 0x2f, 0, 0]), at: 1.4)
         #expect(!zoom.canResume(at: 1.4), "FOV cannot refresh an older preferred lens measurement")
         zoom.observe(lensFrame(651), at: 1.5)

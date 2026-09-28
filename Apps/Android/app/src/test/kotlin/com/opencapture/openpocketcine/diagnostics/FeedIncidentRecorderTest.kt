@@ -40,6 +40,35 @@ class FeedIncidentRecorderTest {
     }
 
     @Test
+    fun exhaustedOutcomeSurvivesTheDisconnectThatFollows() {
+        val recorder = FeedIncidentRecorder { "inc-exh" }
+        recorder.beginSession(session())
+        recorder.recordSnapshot(staleOutput(3.0))
+        recorder.noteExhausted(5.0)
+        val stale = staleOutput(6.0)
+        val job = recorder.recordSnapshot(stale.copy(lifecycle = stale.lifecycle.copy(connected = false)))
+        assertEquals(FeedIncidentOutcome.EXHAUSTED, job?.bundle?.header?.outcome)
+        assertEquals(5.0, job?.bundle?.header?.endedAtMonotonic)
+        assertNull(recorder.openHeader)
+    }
+
+    @Test
+    fun operatorDisconnectDuringOpenIncidentIsUserEnded() {
+        val recorder = FeedIncidentRecorder { "inc-user" }
+        recorder.beginSession(session())
+        recorder.recordSnapshot(staleOutput(3.0))
+        assertEquals(FeedIncidentOutcome.USER_ENDED, recorder.endSession(4.0)?.bundle?.header?.outcome)
+        recorder.beginSession(session())
+        recorder.recordSnapshot(staleOutput(3.0))
+        recorder.recordSnapshot(healthy(4.0))
+        assertEquals(
+            FeedIncidentOutcome.RECOVERED,
+            recorder.endSession(5.0)?.bundle?.header?.outcome,
+            "a disconnect during the aftermath keeps the observed recovery",
+        )
+    }
+
+    @Test
     fun repairRecordsUseFixedTokens() {
         val recorder = FeedIncidentRecorder { "inc-rep" }
         recorder.beginSession(session())

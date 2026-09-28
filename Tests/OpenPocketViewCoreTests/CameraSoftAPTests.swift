@@ -143,6 +143,22 @@ import Testing
             ]) == nil)
     }
 
+    /// Field report: 10 joins with `ipv4=...,172.20.10.1` and no camera address.
+    @Test func personalHotspotHostIsNamedWithItsInterface() {
+        let hosting = [
+            CameraSoftAP.InterfaceAddress(name: "lo0", ipv4: "127.0.0.1"),
+            CameraSoftAP.InterfaceAddress(name: "pdp_ip0", ipv4: "10.1.2.3"),
+            CameraSoftAP.InterfaceAddress(name: "bridge100", ipv4: "172.20.10.1"),
+        ]
+        #expect(CameraSoftAP.isPersonalHotspotHosting(hosting))
+        #expect(CameraSoftAP.describe(hosting) == "pdp_ip0:10.1.2.3,bridge100:172.20.10.1")
+        #expect(
+            !CameraSoftAP.isPersonalHotspotHosting([
+                .init(name: "en0", ipv4: "172.20.10.4"),
+                .init(name: "en2", ipv4: "192.168.2.15"),
+            ]))
+    }
+
     @Test func firstPictureEscalatesPastEnableSpam() {
         #expect(
             CameraSoftAP.firstPictureStep(

@@ -13,6 +13,7 @@ import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.media.MediaShare
+import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
 import com.opencapture.openpocketcine.session.LocalVPNFilter
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import java.io.File
@@ -79,6 +80,7 @@ object DiagnosticCenter {
                         cameraModel = env.cameraModel,
                         phase = env.phase,
                         vpnActive = env.vpnActive,
+                        radio = env.radio,
                     ),
                 journal = journalLines(),
                 exceptions = exceptionLines(),
@@ -261,6 +263,7 @@ object DiagnosticCenter {
             cameraModel = model,
             phase = phase,
             vpnActive = vpn,
+            radio = appContext?.let { runCatching { DiscoveryPermissions.reportLines(it) }.getOrNull() }.orEmpty(),
         )
     }
 
@@ -271,6 +274,7 @@ object DiagnosticCenter {
                 "app ${env.appVersion} (${env.appBuild}) source=${env.sourceRevision} ${env.osName} ${env.osVersion} ${env.deviceModel}",
                 "camera ${env.cameraModel} family=${env.cameraFamily} phase=${env.phase} vpn=${if (env.vpnActive) "on" else "off"}",
             )
+        if (env.radio.isNotEmpty()) lines += env.radio.joinToString(" · ")
         val tail = recent.takeLast(12)
         if (tail.isNotEmpty()) {
             lines += "recent:"
@@ -300,7 +304,7 @@ object DiagnosticCenter {
             family: ${env.cameraFamily}
             phase: ${env.phase}
             vpn: ${if (env.vpnActive) "on" else "off"}
-            """.trimIndent()
+            """.trimIndent() + env.radio.joinToString("") { "\n$it" }
         if (exceptions.isNotEmpty()) {
             sections += "Exceptions / faults\n" + exceptions.takeLast(EXCEPTION_CAP).joinToString("\n")
         }
@@ -359,5 +363,6 @@ object DiagnosticCenter {
         val cameraModel: String,
         val phase: String,
         val vpnActive: Boolean,
+        val radio: List<String>,
     )
 }

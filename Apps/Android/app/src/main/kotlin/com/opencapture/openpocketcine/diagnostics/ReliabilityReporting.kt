@@ -148,6 +148,7 @@ internal object ReliabilityReporting {
             FeedIncidentOutcome.INTERRUPTED,
             FeedIncidentOutcome.EXHAUSTED,
             FeedIncidentOutcome.SUPPRESSED,
+            FeedIncidentOutcome.USER_ENDED,
             -> true
         }
 
@@ -537,7 +538,7 @@ internal object ReliabilityReporting {
     fun level(outcome: String): SentryLevel =
         when (outcome) {
             FeedIncidentOutcome.EXHAUSTED.wire -> SentryLevel.ERROR
-            FeedIncidentOutcome.INTERRUPTED.wire -> SentryLevel.WARNING
+            FeedIncidentOutcome.INTERRUPTED.wire, FeedIncidentOutcome.USER_ENDED.wire -> SentryLevel.WARNING
             else -> SentryLevel.INFO
         }
 

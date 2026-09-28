@@ -1,10 +1,7 @@
 package com.opencapture.openpocketcine.pairing
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.location.LocationManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -82,7 +79,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.core.net.toUri
 import com.opencapture.monitorui.MonitorCameraAction
 import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.monitorui.MonitorPalette
@@ -149,6 +145,10 @@ fun StationNetworkSetup(
     val top = path.lastOrNull()
     var current by remember { mutableStateOf<String?>(null) }
     var locationHint by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Asked here, where the Wi-Fi name is shown, not at first run.
+    val wifiNameAccess = rememberPermissionGate(
+        "wifi-name", DiscoveryPermissions.wifiName, DiscoveryPermissions.wifiNameRequest,
+    )
     var hotspotDetected by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
     var hotspotName by remember { mutableStateOf("") }
@@ -263,14 +263,16 @@ fun StationNetworkSetup(
     }
     LaunchedEffect(Unit) {
         while (true) {
-            val permitted = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            val located = context.getSystemService(LocationManager::class.java)?.isLocationEnabled == true
+            val permitted = wifiNameAccess.granted
+            val located = DiscoveryPermissions.locationServicesOn(context)
             val ssid = currentSsid()
             current = ssid?.takeUnless(::isCameraNetwork)
             locationHint = when {
                 ssid != null -> null
+                !permitted && wifiNameAccess.needsSettings -> "Allow Location to show this phone’s Wi-Fi" to
+                    "Settings › Apps › OpenPocketCine › Permissions › Location, with Use precise location on. Only the Wi-Fi name is used."
                 !permitted -> "Allow Location to show this phone’s Wi-Fi" to
-                    "Settings › Apps › OpenPocketCine › Permissions › Location. Only the Wi-Fi name is used."
+                    "Tap to allow precise location. Only the Wi-Fi name is used."
                 !located -> "Turn on Location to show this phone’s Wi-Fi" to
                     "Settings › Location. Only the Wi-Fi name is used."
                 else -> null
@@ -413,11 +415,8 @@ fun StationNetworkSetup(
                     } else if (hint != null) {
                         SetupRow(OpcIcon.WIFI, hint.first, hint.second,
                             modifier = Modifier.setupClickable(!working) {
-                                settings(
-                                    if (hint.first.startsWith("Allow")) {
-                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri())
-                                    } else Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS),
-                                )
+                                if (!wifiNameAccess.granted) wifiNameAccess.request()
+                                else settings(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                             }.testTag("stationSetup.locationHint"))
                     }
                 }

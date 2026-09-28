@@ -158,12 +158,30 @@ object StartupConnectionCopy {
 
     const val WIZARD_STEP_COUNT = 4
 
+    // Frame Tap blocks pairing and connecting; DJI Mimo on any nearby phone holds the camera.
+    // Same wording as iOS.
+    const val PAIRING_PRECHECK = "Before pairing, turn off DJI Frame Tap and force quit DJI Mimo."
+    const val DJI_APPS_TIP = "Turn off DJI Frame Tap and force quit DJI Mimo on every phone near the camera."
+    const val STILL_LOOKING = "$DJI_APPS_TIP Make sure the camera is on and activated, then move closer."
+
+    /** The camera never answered pairing or the datalink handshake (PocketCameraSession failures). */
+    fun cameraNeverAnswered(raw: String): Boolean {
+        val lower = raw.lowercase()
+        return "pairing timed out" in lower || "never answered the datalink handshake" in lower
+    }
+
+    fun withDjiAppsTip(message: String, raw: String): String =
+        if (cameraNeverAnswered(raw)) "$message $DJI_APPS_TIP" else message
+
     fun friendly(raw: String): String {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return trimmed
         val lower = trimmed.lowercase()
+        if (lower.contains("never answered the datalink handshake")) {
+            return withDjiAppsTip("The camera never answered the video link.", trimmed)
+        }
         if (lower.contains("timed out") || lower.contains("timeout")) {
-            return "The camera didn't respond in time. Check Bluetooth and try again."
+            return withDjiAppsTip("The camera didn't respond in time. Check Bluetooth and try again.", trimmed)
         }
         if (lower.contains("disconnected")) {
             return "The camera ended the connection. Try again."

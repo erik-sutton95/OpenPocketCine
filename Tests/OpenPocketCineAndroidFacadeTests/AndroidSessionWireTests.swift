@@ -261,6 +261,32 @@ struct AndroidSessionWireTests {
     }
 
     @Test
+    func feedRepairDecisionsMatchCore() {
+        func step(_ start: Double, _ irap: String, _ requests: Int) -> String {
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "decoderRepairStep",
+                requestJSON:
+                    "{\"secondsSinceRepairStart\":\(start),\"secondsSinceLastEnable\":2,"
+                    + "\"secondsSinceLastIrap\":\(irap),\"keyframeRequests\":\(requests)}")
+        }
+        #expect(step(2, "null", 1) == "resendKeyframe")
+        #expect(step(4, "0.4", 2) == "wait")
+        #expect(step(4, "null", 2) == "rebuildEndpoint")
+        #expect(step(16, "null", 1) == "deadline")
+        func hold(_ previous: Int, _ picture: Bool, _ video: String) -> String {
+            AndroidSessionWire.cameraSoftAPDecision(
+                kind: "nextSessionHoldCycles",
+                requestJSON:
+                    "{\"lastVideoPacketAge\":\(video),\"previousCycles\":\(previous),"
+                    + "\"pictureSinceLastCycle\":\(picture)}")
+        }
+        #expect(hold(0, false, "0.1") == "1")
+        #expect(hold(2, false, "0.1") == "0", "third cycle releases Bluetooth")
+        #expect(hold(2, true, "0.1") == "1")
+        #expect(hold(0, false, "null") == "0")
+    }
+
+    @Test
     func cameraSoftAPHandshakeTimeoutMatchesCore() {
         #expect(
             AndroidSessionWire.cameraSoftAPDecision(

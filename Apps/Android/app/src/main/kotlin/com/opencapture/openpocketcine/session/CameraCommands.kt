@@ -690,18 +690,24 @@ object CameraCommands {
     const val SETTLE_FRONT_TENTH_DEG = 150
     const val POSE_SEED_FRONT_VOTES = 3
 
-    fun yawTenthDeg(payload: ByteArray): Int? {
-        if (payload.size < 6) return null
-        val raw = (payload[4].toInt() and 0xFF) or (payload[5].toInt() shl 8)
-        return raw.toShort().toInt()
-    }
+    /**
+     * The only `0x04/0x05` layout with known offsets. Another length is a different
+     * frame; reading it as attitude corrupts pan/tilt and Motion Control.
+     */
+    const val ATTITUDE_LENGTH = 50
+
+    fun isAttitude(payload: ByteArray): Boolean = payload.size == ATTITUDE_LENGTH
+
+    private fun i16(payload: ByteArray, at: Int): Int =
+        ((payload[at].toInt() and 0xFF) or ((payload[at + 1].toInt() and 0xFF) shl 8)).toShort().toInt()
+
+    fun yawTenthDeg(payload: ByteArray): Int? = if (isAttitude(payload)) i16(payload, 4) else null
 
     /** Tilt 0.1° from i16-LE `@20`, negated so look-up is positive (Mimo stick-down → `@20` +). */
-    fun pitchTenthDeg(payload: ByteArray): Int? {
-        if (payload.size < 22) return null
-        val raw = ((payload[20].toInt() and 0xFF) or (payload[21].toInt() shl 8)).toShort().toInt()
-        return -raw
-    }
+    fun pitchTenthDeg(payload: ByteArray): Int? = if (isAttitude(payload)) -i16(payload, 20) else null
+
+    /** Native absolute pitch i16-LE `@0` (the `0x04/0x14` pitch reference). */
+    fun nativePitchTenthDeg(payload: ByteArray): Int? = if (isAttitude(payload)) i16(payload, 0) else null
 
     fun rotationSettled(yawTenthDeg: Int, want180: Boolean): Boolean {
         val angle = kotlin.math.abs(yawTenthDeg)

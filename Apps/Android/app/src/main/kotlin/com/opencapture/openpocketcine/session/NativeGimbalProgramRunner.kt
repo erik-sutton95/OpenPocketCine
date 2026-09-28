@@ -7,12 +7,10 @@ import kotlin.math.abs
 internal data class NativeGimbalFeedback(val pose: GimbalWaypoint, val receivedAt: Double, val zoomReceivedAt: Double? = null) {
     companion object {
         fun from(frame: DumlFrame, receivedAt: Double, zoom: Double = 1.0): NativeGimbalFeedback? {
-            if (frame.cmdSet != 0x04 || frame.cmdId != 0x05 || frame.payload.size < 22) return null
+            if (frame.cmdSet != 0x04 || frame.cmdId != 0x05 || !CameraCommands.isAttitude(frame.payload)) return null
             val payload = frame.payload
-            val nativePitch = ((payload[0].toInt() and 0xFF) or
-                ((payload[1].toInt() and 0xFF) shl 8)).toShort().toInt()
             val pose = GimbalWaypoint.from(CameraCommands.yawTenthDeg(payload),
-                CameraCommands.pitchTenthDeg(payload), zoom, nativePitch) ?: return null
+                CameraCommands.pitchTenthDeg(payload), zoom, CameraCommands.nativePitchTenthDeg(payload)) ?: return null
             return NativeGimbalFeedback(pose, receivedAt)
         }
     }

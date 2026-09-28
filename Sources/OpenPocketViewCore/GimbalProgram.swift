@@ -278,8 +278,9 @@ public struct GimbalMoveEngine: Equatable, Sendable {
 
     public init() {}
 
-    public mutating func start(program: GimbalProgram, live: GimbalWaypoint) -> Bool {
+    public mutating func start(program saved: GimbalProgram, live: GimbalWaypoint) -> Bool {
         cancel()
+        let program = Self.planFromLive(saved, live: live)
         self.program = program
         zoomPath = GimbalZoomPath(program: program)
         zoomElapsedOffset = 0
@@ -897,6 +898,25 @@ public struct GimbalMoveEngine: Equatable, Sendable {
     public static func wrapAngle(_ degrees: Double) -> Double {
         let remainder = (degrees + 180).truncatingRemainder(dividingBy: 360)
         return (remainder < 0 ? remainder + 360 : remainder) - 180
+    }
+
+    /// Saved native pitch goes stale once the handle tilts after the point was
+    /// set: a 38° display change once planned as ~110° native. Re-derive every
+    /// point's native pitch from the live pose at Start, as head tracking and
+    /// Double-tap Level do (native falls 1° per 1° of look-up tilt).
+    public static func planFromLive(_ program: GimbalProgram, live: GimbalWaypoint) -> GimbalProgram {
+        guard let liveNative = live.nativePitchDeg else { return program }
+        func rebase(_ point: GimbalWaypoint?) -> GimbalWaypoint? {
+            guard var point, let saved = point.nativePitchDeg else { return point }
+            let planned = wrapAngle(liveNative - (point.pitchDeg - live.pitchDeg))
+            if abs(wrapAngle(planned - saved)) >= 1e-9 { point.nativePitchDeg = planned }
+            return point
+        }
+        var planned = program
+        planned.a = rebase(program.a)
+        planned.b = rebase(program.b)
+        planned.c = rebase(program.c)
+        return planned
     }
 
     public static func pitchDelta(from: GimbalWaypoint, to: GimbalWaypoint) -> Double {

@@ -121,6 +121,8 @@ internal enum class FeedIncidentOutcome(val wire: String) {
     INTERRUPTED("interrupted"),
     EXHAUSTED("exhausted"),
     SUPPRESSED("suppressed"),
+    /** Operator disconnected while the incident was open. Not a suppression. */
+    USER_ENDED("userEnded"),
     ;
 
     companion object {

@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.pairing
 
-import android.Manifest
-import android.os.Build
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -51,6 +51,7 @@ import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
 import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.LocalVPNFilter
+import kotlinx.coroutines.delay
 
 private val pairingSteps = listOf(
     MonitorPairingStep("Find your camera", "Bluetooth scan"),
@@ -76,10 +77,10 @@ private val pairingBodies = listOf(
 @Composable
 fun PairingExperience(
     model: AppModel,
-    permissionsGranted: Boolean,
-    onRequestPermissions: () -> Unit,
+    discovery: PermissionGate,
     onEnableBluetooth: () -> Unit,
 ) {
+    val permissionsGranted = discovery.granted
     val phase by model.session.phaseFlow.collectAsState()
     val failure by model.session.failure.collectAsState()
     val found by model.session.found.collectAsState()
@@ -98,6 +99,25 @@ fun PairingExperience(
         null
     }
     val vpnActive = step == 3 && LocalVPNFilter.isActive(context)
+    var locationOff by remember { mutableStateOf(false) }
+    if (DiscoveryPermissions.discoveryNeedsLocationServices()) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                locationOff = !DiscoveryPermissions.locationServicesOn(context)
+                delay(1_000)
+            }
+        }
+    }
+    val waitingForCamera = scanning && phase == ConnectionPhase.SCANNING && radioOn && permissionsGranted &&
+        !locationOff && found.isEmpty()
+    var slowScan by remember { mutableStateOf(false) }
+    LaunchedEffect(waitingForCamera) {
+        slowScan = false
+        if (!waitingForCamera) return@LaunchedEffect
+        delay(SLOW_SCAN_HINT_MS)
+        slowScan = true
+        DiagnosticCenter.log("info", "ble", "scan", "scan: no camera after ${SLOW_SCAN_HINT_MS / 1_000} s, hint shown")
+    }
     LaunchedEffect(phase) {
         if (phase == ConnectionPhase.OPENING_DATALINK) LocalVPNFilter.noteIfActive(context)
     }
@@ -115,6 +135,7 @@ fun PairingExperience(
         vpnActive = vpnActive,
         bluetoothOn = radioOn,
         permissionsGranted = permissionsGranted,
+        permissionsInSettings = discovery.needsSettings,
     )
     BackHandler(enabled = busy || model.savedCameras.isNotEmpty()) {
         model.cancelPairing()
@@ -125,8 +146,9 @@ fun PairingExperience(
         onPrimary = {
             when {
                 phase == ConnectionPhase.FAILED -> model.session.startScan()
+                // Nearby devices first: Android 12+ needs it to show the Bluetooth prompt.
+                !permissionsGranted -> discovery.request()
                 !radioOn -> onEnableBluetooth()
-                !permissionsGranted -> onRequestPermissions()
                 else -> {
                     val camera = found.firstOrNull { it.id == selectedId }
                     if (camera != null && !busy) model.session.connect(camera)
@@ -154,12 +176,43 @@ fun PairingExperience(
                 )
             }
             if (!permissionsGranted) {
+                val name = DiscoveryPermissions.settingsName(DiscoveryPermissions.discovery())
                 PairingCallout(
-                    title = "Nearby devices",
-                    body = "Allow Bluetooth and nearby devices so we can find your Pocket.",
-                    icon = MonitorIcon.WIFI,
-                    action = "Allow",
-                    onAction = onRequestPermissions,
+                    title = name,
+                    body = when {
+                        discovery.needsSettings ->
+                            "Android won’t ask again. Open Settings › Permissions › $name and choose Allow."
+                        DiscoveryPermissions.discoveryNeedsLocationServices() ->
+                            "Android 10 and 11 need Location to scan for Bluetooth cameras. It is only used to find your Pocket."
+                        else -> "Allow Nearby devices so we can find your Pocket over Bluetooth. Location isn’t needed."
+                    },
+                    icon = MonitorIcon.RADIO,
+                    action = if (discovery.needsSettings) "Open Settings" else "Allow",
+                    onAction = discovery::request,
+                )
+            }
+            if (permissionsGranted && locationOff) {
+                PairingCallout(
+                    title = "Location",
+                    body = "Android 10 and 11 only find Bluetooth cameras while Location is on.",
+                    icon = MonitorIcon.RADIO,
+                    action = "Turn on",
+                    onAction = {
+                        runCatching { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
+                    },
+                )
+            }
+            if (slowScan && waitingForCamera) {
+                PairingCallout(
+                    title = "Still looking",
+                    body = StartupConnectionCopy.STILL_LOOKING,
+                    icon = MonitorIcon.RADIO,
+                )
+            } else if (scanning) {
+                PairingCallout(
+                    title = "Before you pair",
+                    body = StartupConnectionCopy.PAIRING_PRECHECK,
+                    icon = MonitorIcon.TRIANGLE_ALERT,
                 )
             }
         },
@@ -198,6 +251,7 @@ private fun pairingPresentation(
     vpnActive: Boolean,
     bluetoothOn: Boolean,
     permissionsGranted: Boolean,
+    permissionsInSettings: Boolean,
 ): MonitorPairingPresentation {
     val instructions = when (step) {
         1 -> listOf(
@@ -275,8 +329,9 @@ private fun pairingPresentation(
     }
     val (primary, primaryEnabled) = when {
         phase == ConnectionPhase.FAILED -> "Try again" to true
+        !permissionsGranted && permissionsInSettings -> "Open Settings" to true
+        !permissionsGranted -> "Allow ${DiscoveryPermissions.settingsName(DiscoveryPermissions.discovery()).lowercase()}" to true
         !bluetoothOn -> "Turn Bluetooth on" to true
-        !permissionsGranted -> "Allow nearby devices" to true
         scanning -> "Continue" to (picked != null && !busy)
         else -> null to false
     }
@@ -370,14 +425,4 @@ private fun PairingCallout(
     }
 }
 
-fun pocketRuntimePermissions(): Array<String> {
-    val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
-    if (Build.VERSION.SDK_INT >= 31) {
-        perms += Manifest.permission.BLUETOOTH_SCAN
-        perms += Manifest.permission.BLUETOOTH_CONNECT
-    }
-    if (Build.VERSION.SDK_INT >= 33) {
-        perms += Manifest.permission.NEARBY_WIFI_DEVICES
-    }
-    return perms.toTypedArray()
-}
+private const val SLOW_SCAN_HINT_MS = 20_000L

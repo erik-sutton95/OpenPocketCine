@@ -66,8 +66,8 @@ enum ReliabilityReportingPrivacy {
 
     static let contextAllowlist: [String: Set<String>] = [
         "os": ["name", "version", "build"],
-        "device": ["family", "model", "arch"],
-        "app": ["app_version", "app_build", "build_type"],
+        "device": ["family", "model", "arch", "free_memory", "memory_size", "thermal_state"],
+        "app": ["app_version", "app_build", "build_type", "app_memory", "in_foreground"],
         "feed": [
             "schemaVersion", "failingStage", "errorClass", "outcome", "kind",
             "assistState", "hardwareClass", "testSource", "buildIdentity", "cameraFamily",

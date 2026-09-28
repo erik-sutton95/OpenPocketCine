@@ -356,6 +356,14 @@ import Testing
         let envelope = FeedIncidentExport.envelope(from: bundle)
         #expect(envelope.trigger == "bleDropped", "repairs before the incident are not its trigger")
         #expect(envelope.recoveredBy == "endpoint")
+        bundle.repairs.append(
+            FeedRepairRecord(
+                monotonicAt: 11, action: "enable", phase: .locallySent,
+                reason: FeedRepairRecord.firstPictureReason))
+        #expect(
+            FeedIncidentExport.envelope(from: bundle).recoveredBy == "endpoint",
+            "a first-picture resend inside the endpoint repair does not take its credit")
+        bundle.repairs.removeLast()
 
         #expect(FeedIncidentExport.gapBucket(0.4) == "0-2s")
         #expect(FeedIncidentExport.gapBucket(16.3) == "10-20s")
@@ -390,6 +398,23 @@ import Testing
         let final = try #require(result)
         #expect(final.bundle.header.outcome == .recovered)
         #expect(final.bundle.header.endedAtMonotonic == 8)
+    }
+
+    @Test func operatorDisconnectDuringOpenIncidentIsNotSuppressed() throws {
+        var recorder = FeedIncidentRecorder()
+        _ = recorder.beginSession(Fixture.context())
+        _ = recorder.recordSnapshot(Fixture.stall(now: 5, outputAge: 3))
+        let endJob = recorder.endSession(now: 9)
+        let ended = try #require(endJob)
+        #expect(ended.bundle.header.outcome == .userEnded)
+
+        _ = recorder.beginSession(Fixture.context())
+        _ = recorder.recordSnapshot(Fixture.stall(now: 5, outputAge: 3))
+        _ = recorder.noteExhausted(now: 7)
+        let exhaustedJob = recorder.endSession(now: 9)
+        let exhausted = try #require(exhaustedJob)
+        #expect(exhausted.bundle.header.outcome == .exhausted, "the ladder's verdict is kept")
+        #expect(exhausted.bundle.header.endedAtMonotonic == 7)
     }
 
     @Test func oversizedHeaderCannotEscapeDiskSizeCap() throws {

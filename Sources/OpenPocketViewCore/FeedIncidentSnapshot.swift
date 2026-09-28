@@ -159,6 +159,9 @@ public enum FeedIncidentOutcome: String, Equatable, Sendable, Codable {
     case interrupted
     case exhausted
     case suppressed
+    /// The operator disconnected while the incident was still open: the ladder
+    /// had not restored picture. Not a suppression.
+    case userEnded
 }
 
 public enum FeedIncidentSuppression: String, Equatable, Sendable, Codable {
@@ -500,6 +503,9 @@ public enum FeedIncidentNativeBreadcrumb: Sendable {
 }
 
 public struct FeedRepairRecord: Equatable, Sendable, Codable {
+    /// Reason on a first-picture `0x09/0xa8` resend. Recorded, never credited.
+    public static let firstPictureReason = "firstPicture"
+
     public var monotonicAt: TimeInterval
     public var action: String
     public var phase: FeedRepairPhase

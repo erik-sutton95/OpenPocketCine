@@ -124,11 +124,23 @@ class GimbalLimitWatchTest {
         assertEquals(1.0, CamFov.triggerZoomAxis(0.0, 1.0), 0.001)
         assertEquals(-1.0, CamFov.triggerZoomAxis(1.0, 0.0), 0.001)
         assertEquals(null, CameraCommands.pitchTenthDeg(byteArrayOf(0, 0, 0)))
-        val lookDown = ByteArray(22)
+        val lookDown = ByteArray(CameraCommands.ATTITUDE_LENGTH)
+        lookDown[0] = 0xB7.toByte()
+        lookDown[1] = 0xFA.toByte()
         lookDown[4] = 0x01
         lookDown[20] = 0xB3.toByte()
         lookDown[21] = 0x01
         assertEquals(1, CameraCommands.yawTenthDeg(lookDown))
         assertEquals(-435, CameraCommands.pitchTenthDeg(lookDown))
+        assertEquals(-1353, CameraCommands.nativePitchTenthDeg(lookDown))
+        // Only the 50-byte layout is attitude: another length must not move pan/tilt.
+        val short = lookDown.copyOf(22)
+        assertEquals(null, CameraCommands.yawTenthDeg(short))
+        assertEquals(null, CameraCommands.pitchTenthDeg(short))
+        assertEquals(null, CameraCommands.nativePitchTenthDeg(lookDown + 0))
+        val held = GimbalStickMapping(yawTenthDeg = 5, pitchTenthDeg = 7).applyAttitude(short)
+        assertEquals(5, held.yawTenthDeg)
+        assertEquals(7, held.pitchTenthDeg)
+        assertEquals(null, NativeGimbalFeedback.from(DumlFrame(0, 0, 1, 0, 4, 5, short), 1.0))
     }
 }

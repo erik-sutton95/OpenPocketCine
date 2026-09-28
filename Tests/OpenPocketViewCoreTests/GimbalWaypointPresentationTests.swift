@@ -106,5 +106,6 @@ struct GimbalWaypointPresentationTests {
     private func attitude(_ yaw: Int16) -> [UInt8] {
         let bits = UInt16(bitPattern: yaw)
         return [0, 0, 0, 0, UInt8(truncatingIfNeeded: bits), UInt8(bits >> 8)]
+            + [UInt8](repeating: 0, count: 44)
     }
 }

@@ -76,6 +76,8 @@ final class CameraSession {
         }
     }
     var found: [FoundCamera] = []
+    /// A scan has run 20 s without a camera. The wizard then lists what to check.
+    var scanLooksEmpty = false
     /// The body this session is connecting / connected to. Used to persist a saved camera.
     private(set) var connectedCamera: FoundCamera?
     /// Camera-AP SSID after a successful join. Re-read over BLE on the next connect.
@@ -167,6 +169,10 @@ final class CameraSession {
     @ObservationIgnored private var lastFeedFreezeLogAt: Date?
     @ObservationIgnored private var feedRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var feedRecoveryGeneration = 0
+    /// Repair picture deadlines held off Bluetooth recovery in this stall
+    /// episode (core `nextSessionHoldCycles`), and when the last one was.
+    @ObservationIgnored private var sessionHoldCycles = 0
+    @ObservationIgnored private var lastSessionHoldAt: Date?
     @ObservationIgnored private var foregroundCheckTask: Task<Void, Never>?
     @ObservationIgnored private var foregroundGeneration = 0
     @ObservationIgnored private var statusStorage = CameraStatus()
@@ -185,6 +191,7 @@ final class CameraSession {
     @ObservationIgnored private let log = Logger(
         subsystem: "com.opencapture.openpocketcine", category: "session")
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+    @ObservationIgnored private var scanHintTask: Task<Void, Never>?
     @ObservationIgnored private var runTask: Task<Void, Never>?
     @ObservationIgnored private var connectGeneration = 0
     @ObservationIgnored private var reconnectTarget: UUID?
@@ -535,6 +542,8 @@ final class CameraSession {
     @ObservationIgnored private var lastGimbalCommand = (x: 0.0, y: 0.0)
     @ObservationIgnored private var gimbalRampFilter = GimbalRampFilter()
     @ObservationIgnored private var gimbalParamPoll = GimbalParamPoll()
+    /// Operator speed/tilt lock held while head tracking or Motion Control runs on Fast.
+    @ObservationIgnored private var gimbalPrep = GimbalPrepRestore()
     @ObservationIgnored private var moveEngine = GimbalMoveEngine()
     @ObservationIgnored private var moveTask: Task<Void, Never>?
     @ObservationIgnored private var lastMoveAttitudeAt: TimeInterval?
@@ -696,14 +705,22 @@ final class CameraSession {
         isReconnecting = id != nil
         phase = .scanning
         found = []
+        scanLooksEmpty = false
         scanTask?.cancel()
+        scanHintTask?.cancel()
         scanTask = Task {
             guard await ble.waitUntilPoweredOn(), !Task.isCancelled else {
                 if !Task.isCancelled {
-                    phase = .failed(
-                        "Turn on Bluetooth and allow camera access, then try connecting again.")
+                    ControlLiveLog.line("ble: scan blocked \(ble.stateSummary)")
+                    phase = .failed(ble.unavailableReason)
                 }
                 return
+            }
+            scanHintTask = Task {
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled, phase == .scanning, found.isEmpty else { return }
+                ControlLiveLog.line("ble: no camera after 20 s of scanning \(ble.stateSummary)")
+                scanLooksEmpty = true
             }
             for await camera in ble.scan() {
                 if Task.isCancelled { break }
@@ -758,7 +775,10 @@ final class CameraSession {
         connectGeneration += 1
         let generation = connectGeneration
         LocalVPNProbe.noteIfActive()
+        // Local Network prompt now, while Bluetooth pairs, not during the datalink.
+        LocalNetworkAccess.requestEarly()
         scanTask?.cancel()
+        scanHintTask?.cancel()
         abortInFlightRun(preserveDecoder: preserveMonitor)
         reconnectTarget = nil
         isReconnecting = preserveMonitor
@@ -793,6 +813,8 @@ final class CameraSession {
             releaseMultiview()
             return
         }
+        // Before the link closes: do not leave the camera on Fast for the next session.
+        restoreGimbalPrep(gimbalPrep.restoreNow())
         ReliabilityReporting.setCameraSessionActive(false)
         FeedIncidentRuntime.endSession(now: ProcessInfo.processInfo.systemUptime)
         incidentSessionActive = false
@@ -1011,25 +1033,37 @@ final class CameraSession {
         // Camera is still pushing the last GOP. Hold before UDP opens so
         // leftover P-frames cannot set lastPresentedAt and skip first-picture.
         decoder.beginIDRHold()
-        phase = .connectingGatt
-        try await connectBleRetryingDrop(camera)
-        timeline.mark("gatt", now: ProcessInfo.processInfo.systemUptime)
-        try Task.checkCancellation()
-        startFrameRouter()
+        // `0x07/0x45 [00 06]` is a deferred pairing (the camera is still closing a
+        // previous session), not approval. Like Multiview: drop the link, wait, retry.
+        for attempt in 1...3 {
+            phase = .connectingGatt
+            try await connectBleRetryingDrop(camera)
+            if attempt == 1 {
+                timeline.mark("gatt", now: ProcessInfo.processInfo.systemUptime)
+            }
+            try Task.checkCancellation()
+            startFrameRouter()
 
-        // Pair. Wake first (like Mimo), then SetPairingPIN.
-        // First-time pairing shows Approve on the camera and may hold the 0x45 reply
-        // until the user taps — an 8 s wait dies on "Pairing…" as "stopped responding"
-        // while the camera is still waiting. 0x46 can also arrive before 0x45.
-        pairingHold.removeAll()
-        phase = .pairing
-        ble.send(Commands.sessionWake())
-        ble.send(Commands.setPairingPin(pin: camera.model.pairingToken))
-        phase = .awaitingApproval
-        do {
-            try await completePairing()
-        } catch Fail.timeout {
-            throw Fail.pairingTimeout
+            // Pair. Wake first (like Mimo), then SetPairingPIN.
+            // First-time pairing shows Approve on the camera and may hold the 0x45 reply
+            // until the user taps; an 8 s wait dies on "Pairing…" as "stopped responding"
+            // while the camera is still waiting. 0x46 can also arrive before 0x45.
+            pairingHold.removeAll()
+            phase = .pairing
+            ble.send(Commands.sessionWake())
+            ble.send(Commands.setPairingPin(pin: camera.model.pairingToken))
+            phase = .awaitingApproval
+            do {
+                try await completePairing()
+                break
+            } catch Fail.timeout {
+                throw Fail.pairingTimeout
+            } catch Fail.pairingDeferred where attempt < 3 {
+                ControlLiveLog.line("pair: camera deferred pairing (00 06), retry \(attempt) of 2")
+                frameRouter?.cancel()
+                await ble.disconnectAndWait()
+                try await Task.sleep(for: .seconds(3))
+            }
         }
         timeline.mark("pair", now: ProcessInfo.processInfo.systemUptime)
 
@@ -1098,9 +1132,13 @@ final class CameraSession {
             // used to be kept through every failed join (Keychain survives
             // reinstall, and the wizard has no Forget), so the tester in #235
             // could never join again. Drop them; the next tap re-reads over BLE.
-            if credsFromCache {
+            // A missing camera address (Personal Hotspot, slow DHCP) is not a rejected
+            // password; keep the creds for the next tap.
+            if credsFromCache, WiFiJoiner.JoinError.rejectsCredentials(error) {
                 ControlLiveLog.line("creds: join failed with cached creds — dropping cache")
                 forgetWifiCreds(cameraId: camera.id, advertisedName: camera.name, ssid: ssid)
+            } else if credsFromCache {
+                ControlLiveLog.line("creds: join missed the camera address, keeping cache")
             }
             throw error
         }
@@ -1157,6 +1195,8 @@ final class CameraSession {
                 return
             } catch is CancellationError {
                 throw CancellationError()
+            } catch DatalinkDriver.DatalinkError.localNetworkDenied {
+                throw DatalinkDriver.DatalinkError.localNetworkDenied
             } catch {
                 let pathReady = cameraPathReady()
                 if CameraSoftAP.shouldKickAfterHandshakeTimeout(pathReady: pathReady) {
@@ -1563,14 +1603,16 @@ final class CameraSession {
     }
 
     /// Success is `0x07/0x45` `[00 01]` (already paired) or a `0x07/0x46` approval
-    /// request (ACKed in `route()`). `[00 02]` means keep waiting for `0x46`.
+    /// request (ACKed in `route()`). `[00 02]` means keep waiting for `0x46`;
+    /// `[00 06]` is deferred (Android Multiview `PairingDeferred`), never success.
     private func completePairing() async throws {
         let frame = try await waitFrame(
             matching: [(0x07, 0x45), (0x07, 0x46)], timeout: .seconds(90))
-        if frame.cmdSet == 0x07, frame.cmdId == 0x45,
-            frame.payload.count >= 2, frame.payload[1] == 0x02
-        {
-            _ = try await waitFrame(0x07, 0x46, timeout: .seconds(90))
+        guard frame.cmdSet == 0x07, frame.cmdId == 0x45, frame.payload.count >= 2 else { return }
+        switch frame.payload[1] {
+        case 0x02: _ = try await waitFrame(0x07, 0x46, timeout: .seconds(90))
+        case 0x06: throw Fail.pairingDeferred
+        default: break
         }
     }
 
@@ -3074,15 +3116,34 @@ final class CameraSession {
     }
 
     /// Mimo Fast + tilt unlocked. Untracked — a tracked SET can skip while UDP
-    /// is `.waiting`, and `0x4C` Follow can damp the stick.
+    /// is `.waiting`, and `0x4C` Follow can damp the stick. The operator's
+    /// speed and tilt lock come back once the gimbal is idle (`restoreGimbalPrep`).
     func prepHeadTrackGimbal() {
-        guard !isLocked, datalink != nil else { return }
-        let unlock = Commands.setGimbalTiltLock(.unlocked)
-        let fast = Commands.setGimbalSpeed(.fast)
-        let unlockSeq = datalink?.sendUntracked(unlock) ?? 0
-        let fastSeq = datalink?.sendUntracked(fast) ?? 0
+        guard !isLocked, let datalink else { return }
+        let seqs = gimbalPrep.prep(speed: gimbalSpeed, mode: gimbalMode).map {
+            datalink.sendUntracked($0)
+        }
         ControlLiveLog.line(
-            "head-track: gimbal Fast+unlock unlock seq=\(unlockSeq) fast seq=\(fastSeq)"
+            "head-track: gimbal Fast+unlock seq=\(seqs.map(String.init).joined(separator: ",")) restore speed=\(gimbalPrep.speed?.label ?? "-") mode=\(gimbalPrep.mode?.label ?? "-")"
+        )
+    }
+
+    /// Put back the speed/tilt lock that `prepHeadTrackGimbal` replaced. Pins
+    /// keep a Fast readback already in flight from flashing in the menu.
+    private func restoreGimbalPrep(_ restore: GimbalPrepRestore.Restore?) {
+        guard let restore, let datalink else { return }
+        let now = Date.timeIntervalSinceReferenceDate
+        if let speed = restore.speed {
+            gimbalSpeedPin = CameraValuePin(speed, now: now)
+            if gimbalSpeed != speed { gimbalSpeed = speed }
+        }
+        if restore.mode == .tiltLocked, gimbalMode == .follow {
+            gimbalModePin = CameraValuePin(.tiltLocked, now: now)
+            gimbalMode = .tiltLocked
+        }
+        let seqs = restore.frames.map { datalink.sendUntracked($0) }
+        ControlLiveLog.line(
+            "control: gimbal restore speed=\(restore.speed?.label ?? "-") mode=\(restore.mode?.label ?? "-") seq=\(seqs.map(String.init).joined(separator: ","))"
         )
     }
 
@@ -3218,6 +3279,7 @@ final class CameraSession {
     func setGimbalMode(_ mode: GimbalMode) {
         guard canSetGimbalConfiguration else { return }
         cancelProgrammedMove()
+        gimbalPrep.mode = nil
         gimbalFollowFamilyConfirmed = false
         gimbalModePin = CameraValuePin(mode, now: Date.timeIntervalSinceReferenceDate)
         gimbalMode = mode
@@ -3232,6 +3294,7 @@ final class CameraSession {
     func setGimbalSpeed(_ speed: GimbalSpeed) {
         guard canSetGimbalConfiguration else { return }
         cancelProgrammedMove()
+        gimbalPrep.speed = nil
         gimbalSpeedPin = CameraValuePin(speed, now: Date.timeIntervalSinceReferenceDate)
         gimbalSpeed = speed
         let frame = Commands.setGimbalSpeed(speed)
@@ -4503,7 +4566,7 @@ final class CameraSession {
                     receivedIrap: decoder.sawKeyframe,
                     awaitingIrap: decoder.awaitingIDR,
                     hasDecodableReferences: decoder.canReleaseIDRHold,
-                    lastIrapAge: decoder.lastKeyframeAt.map { wall.timeIntervalSince($0) },
+                    lastIrapAge: decoder.lastIrapAt.map { wall.timeIntervalSince($0) },
                     lastSuccessfulOutputAge: decode.outputAge),
                 lifecycle: FeedIncidentLifecycle(
                     foreground: gimbalControlSceneActive, settingsCovered: incidentSettingsCovered,
@@ -4511,6 +4574,7 @@ final class CameraSession {
                     connected: connectedCamera != nil,
                     liveEstablished: decoder.lastPresentedAt != nil,
                     thermalState: String(ProcessInfo.processInfo.thermalState.rawValue),
+                    memoryWarning: DiagnosticCenter.shared.hadRecentMemoryWarning(),
                     lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
                     sceneActive: gimbalControlSceneActive,
                     assistState: decoder.effects.replacesIdentityFeed ? "replacement" : "identity",
@@ -5034,6 +5098,8 @@ final class CameraSession {
             }
             log.info("live: first-picture resend enable (waiting for IDR)")
             guard startCapturedLiveView(reason: "first-picture resend") else { return }
+            recordFeedRepair(
+                "enable", phase: .locallySent, reason: FeedRepairRecord.firstPictureReason)
             liveViewEnableSends += 1
             lastIdrRequest = Date()
             if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
@@ -5213,14 +5279,16 @@ final class CameraSession {
                 // display or in-flight enable is not a failed connection.
                 // Keep this owner and its bounded deadline while gates settle.
                 var sent = false
+                let enableReady = {
+                    self.decoder.isPresentationReady && self.cameraPathReady()
+                        && !self.isBrowsingMedia && !self.status.inPlayback
+                        && !self.liveEnableGate.inFlight
+                }
                 while !Task.isCancelled,
                     self.isLivePictureRepairCurrent(pictureOwner),
                     Date().timeIntervalSince(started) < FeedWatchdog.decoderRepairDeadline
                 {
-                    if self.decoder.isPresentationReady, cameraPathReady(),
-                        !self.isBrowsingMedia, !self.status.inPlayback,
-                        !self.liveEnableGate.inFlight
-                    {
+                    if enableReady() {
                         sent = self.sendRecoverEnable(force: true, reason: "watchdog decoder")
                         if sent { break }
                     }
@@ -5236,9 +5304,45 @@ final class CameraSession {
                     // existing watchdog deadline/path owner handles escalation.
                     return
                 }
-                let restored = await self.waitForRecoveryPicture(
-                    since: started, timeout: .seconds(FeedWatchdog.decoderRepairDeadline),
-                    pictureOwner: pictureOwner)
+                // Resend the keyframe request until an IRAP newer than it lands;
+                // unanswered twice, rebuild the endpoint (FeedWatchdog.decoderRepairStep).
+                var keyframeRequests = 1
+                var restored = false
+                repair: while !Task.isCancelled, self.isLivePictureRepairCurrent(pictureOwner) {
+                    if self.hasFreshRecoveryPicture(since: started) {
+                        restored = true
+                        break
+                    }
+                    let now = Date()
+                    switch FeedWatchdog.decoderRepairStep(
+                        secondsSinceRepairStart: now.timeIntervalSince(started),
+                        secondsSinceLastEnable: now.timeIntervalSince(self.lastIdrRequest),
+                        secondsSinceLastIrap: self.decoder.lastIrapAt.map {
+                            now.timeIntervalSince($0)
+                        },
+                        keyframeRequests: keyframeRequests)
+                    {
+                    case .wait:
+                        break
+                    case .resendKeyframe:
+                        if enableReady(),
+                            self.sendRecoverEnable(force: true, reason: "watchdog keyframe resend")
+                        {
+                            keyframeRequests += 1
+                        }
+                    case .rebuildEndpoint:
+                        self.recordFeedRepair(
+                            "endpoint", phase: .requested, reason: "keyframeUnanswered")
+                        ControlLiveLog.line(
+                            "recovery: action=endpoint effect=requested reason=keyframeUnanswered requests=\(keyframeRequests)"
+                        )
+                        await self.repairDatalink(reason: "keyframe unanswered")
+                        return
+                    case .deadline:
+                        break repair
+                    }
+                    do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+                }
                 guard !Task.isCancelled, self.isLivePictureRepairCurrent(pictureOwner) else {
                     return
                 }
@@ -5262,6 +5366,7 @@ final class CameraSession {
                     FeedIncidentRuntime.noteExhausted(now: ProcessInfo.processInfo.systemUptime)
                     ControlLiveLog.line(
                         "recovery: action=decoder effect=exhausted reason=pictureDeadline")
+                    self.recordFeedRepair("rejoin", phase: .requested, reason: "pictureDeadline")
                     await self.rejoinDatalinkKeepingLive()
                 }
             }
@@ -5270,6 +5375,7 @@ final class CameraSession {
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
             logFeedObserve(snap: snap, watchdog: action)
+            recordFeedRepair("endpoint", phase: .requested, reason: "watchdog")
             rebuildUDPKeepingVT()
         case .fullSessionRejoin:
             // Last rung: the session-preserving rebuild did not bring 9004
@@ -5281,6 +5387,7 @@ final class CameraSession {
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
             logFeedObserve(snap: snap, watchdog: action)
             ControlLiveLog.line("feed: watchdog full datalink rejoin")
+            recordFeedRepair("rejoin", phase: .requested, reason: "watchdog")
             startFeedRecovery { [weak self] in
                 await self?.rejoinDatalinkKeepingLive()
             }
@@ -5732,6 +5839,26 @@ final class CameraSession {
             isLivePictureRepairCurrent(pictureOwner)
         else { return .superseded }
         ControlLiveLog.line("feed: endpoint recovery picture deadline expired")
+        let now = Date()
+        let pictureSinceLastHold =
+            lastSessionHoldAt.map { held in
+                decoder.lastPresentedAt.map { $0 > held } ?? false
+            } ?? false
+        sessionHoldCycles = FeedWatchdog.nextSessionHoldCycles(
+            lastVideoPacketAge: driver.lastVideoPacketAt.map { now.timeIntervalSince($0) },
+            previousCycles: sessionHoldCycles, pictureSinceLastCycle: pictureSinceLastHold)
+        lastSessionHoldAt = now
+        if sessionHoldCycles > 0 {
+            // Video still arrives on this socket: a keyframe/decoder stall, not
+            // a lost camera. Keep BLE; the watchdog ladder owns it again, for at
+            // most maxHeldRepairCycles deadlines in this episode.
+            ControlLiveLog.line(
+                "feed: keep BLE, video still arriving; watchdog owns the stall cycle=\(sessionHoldCycles)"
+            )
+            recordFeedRepair("session", phase: .blocked, reason: "videoLive")
+            feedWatchdog = FeedWatchdog()
+            return .exhausted
+        }
         beginSessionRecovery(
             reason: "endpoint recovery has no fresh picture", trigger: .datalinkLost)
         return .exhausted
@@ -6213,13 +6340,14 @@ final class CameraSession {
             let wasTT180 = gimbalStickMapping.commanded180
             gimbalStickMapping.applyAttitude(frame.payload)
             syncGimbalPose()
-            if frame.payload.count >= 22 {
+            let attitude = GimbalStick.isAttitude(frame.payload)
+            if attitude {
                 lastNativeGimbalWaypoint = GimbalWaypoint.from(
                     yawTenth: GimbalStick.yawTenthDeg(frame.payload),
                     pitchTenth: GimbalStick.pitchTenthDeg(frame.payload), zoom: zoomReadout,
-                    nativePitchTenth: GimbalStick.i16LE(frame.payload, at: 0))
+                    nativePitchTenth: GimbalStick.nativePitchTenthDeg(frame.payload))
             }
-            if frame.payload.count >= 22, let pose = liveGimbalWaypoint {
+            if attitude, let pose = liveGimbalWaypoint {
                 let now = ProcessInfo.processInfo.systemUptime
                 gimbalOverlayMotion.observe(pose, at: now)
                 if let previous = lastMoveObservedPose, let receivedAt = lastMoveAttitudeAt,
@@ -6233,6 +6361,8 @@ final class CameraSession {
                 }
                 if gimbalStickHeld { movePoseStableSince = nil }
                 lastMoveAttitudeAt = now
+                restoreGimbalPrep(
+                    gimbalPrep.restore(busy: nativeHeadToken != nil || gimbalMoveRunning, now: now))
             }
             tickGimbalLimit()
             if gimbalStickMapping.commanded180 != wasTT180 {
@@ -6691,7 +6821,7 @@ final class CameraSession {
     }
 
     enum Fail: LocalizedError {
-        case creds, timeout, pairingTimeout, disconnected
+        case creds, timeout, pairingTimeout, pairingDeferred, disconnected
         case commandTimeout(String)
         case credsEmpty(String)
         case disconnectedDuring(String)
@@ -6708,6 +6838,7 @@ final class CameraSession {
             case .creds: "couldn't read the camera's Wi-Fi credentials"
             case .timeout: "the camera stopped responding"
             case .pairingTimeout: "pairing timed out — tap Approve on the camera if it asked"
+            case .pairingDeferred: StartupConnectionCopy.pairingDeferred
             case .disconnected: "the camera disconnected"
             case .commandTimeout(let name):
                 "\(name) timed out — camera didn't reply (AP still coming up?)"
