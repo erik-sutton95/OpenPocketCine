@@ -112,6 +112,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Gimbal joystick diagonals move as fast as straight pushes on iOS and Android.
+  Deadzone, response curve and sensitivity now act on the stick's throw length
+  and split back along its direction; per-axis curves ran a full 45 degree
+  throw at about 0.71x. A corner throw is clamped to the stick circle.
+- The AE lock haptic is a stronger double heavy tap on both platforms.
 - Android landscape Live View battery and link pills sit clear of the picture,
   aligned with the Lock button, instead of overlapping the feed by 6 dp.
 - Android portrait Live View shows the Recenter focus button after an

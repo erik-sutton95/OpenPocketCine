@@ -293,7 +293,7 @@ fun LiveFeedGestureWell(
                                     hypot(gesture.lastX - gesture.startX, gesture.lastY - gesture.startY) <= holdSlop
                                 if (!pinch.active && still && latestCanLockAe.value()) {
                                     gesture.aeLockHeld = true
-                                    haptics.longPress()
+                                    haptics.lock()
                                 }
                             }
                     }

@@ -2215,10 +2215,32 @@ public enum GimbalStick {
         }
         let pan = (invertPan != mapping.invertPan) ? -x : x
         let tilt = mapping.invertTilt ? -y : y
-        return (
-            axis(tilt, sensitivity: sensitivity, mapping: mapping),
-            axis(pan, sensitivity: sensitivity, mapping: mapping)
-        )
+        let (curvedTilt, curvedPan) = radialThrow(
+            tilt, pan, sensitivity: sensitivity, mapping: mapping)
+        return (wireAxis(curvedTilt), wireAxis(curvedPan))
+    }
+
+    /// Deadzone, curve and sensitivity act on the throw's length, then split back along
+    /// its direction, so a diagonal moves as fast as a straight push. Per-axis curves
+    /// squared each 0.71 component to 0.5: a full 45° throw ran at 0.71x speed.
+    public static func radialThrow(
+        _ a: Double, _ b: Double, sensitivity: Int = defaultSensitivity,
+        mapping: Mapping = .defaults
+    ) -> (Double, Double) {
+        let a = a.isFinite ? a : 0
+        let b = b.isFinite ? b : 0
+        let length = hypot(a, b)
+        guard length > 0 else { return (0, 0) }
+        let throwLength = Swift.min(length, 1)
+        let curved = analogCurve(throwLength, deadzone: mapping.deadzone, expo: mapping.curve.expo)
+        let scaled = Swift.min(curved * sensitivityGain(sensitivity), 1)
+        return (a / length * scaled, b / length * scaled)
+    }
+
+    private static func wireAxis(_ value: Double) -> UInt16 {
+        if value == 0 { return center }
+        let raw = Double(center) + Swift.min(Swift.max(value, -1), 1) * Double(travel)
+        return UInt16(Swift.min(Swift.max(raw.rounded(), Double(min)), Double(max)))
     }
 
     public static func encode(

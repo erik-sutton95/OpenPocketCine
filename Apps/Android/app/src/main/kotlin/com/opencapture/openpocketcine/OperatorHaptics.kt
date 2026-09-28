@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine
 
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.compose.runtime.Composable
@@ -26,6 +28,9 @@ interface OperatorHaptics {
 
     fun limit()
 
+    /** AE lock: stronger than [longPress], two full-strength clicks. */
+    fun lock()
+
     companion object {
         val None: OperatorHaptics =
             object : OperatorHaptics {
@@ -38,6 +43,8 @@ interface OperatorHaptics {
                 override fun longPress() = Unit
 
                 override fun limit() = Unit
+
+                override fun lock() = Unit
             }
     }
 }
@@ -87,6 +94,24 @@ private class ViewOperatorHaptics(
                 HapticFeedbackConstants.LONG_PRESS
             }
         perform(preferred = preferred, fallback = HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    override fun lock() {
+        if (!enabled()) return
+        val vibrator = view.context.getSystemService(Vibrator::class.java)
+        if (vibrator == null || !vibrator.hasVibrator()) return longPress()
+        val double = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            vibrator.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_CLICK)
+        // ponytail: fixed pattern; raise the gap or swap the primitive here if it still reads soft.
+        val effect = if (double) {
+            VibrationEffect.startComposition()
+                .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f)
+                .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f, 70)
+                .compose()
+        } else {
+            VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+        }
+        vibrator.vibrate(effect)
     }
 
     private fun perform(preferred: Int, fallback: Int) {

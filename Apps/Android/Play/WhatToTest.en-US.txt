@@ -20,6 +20,7 @@ New and changed
 
 Fixes
 
+- The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
 - Portrait Live View shows Recenter focus after an off-centre tap. The zoom chip, joystick and gimbal controls have the dark glow of other controls.
 - Media now lists complete SD and internal-storage libraries, retries Nano's briefly empty first response, and keeps storage capacity visible during playback.
 - Shutter angle stays at your chosen value when changing frame rate. Opening the picker no longer changes the saved angle.

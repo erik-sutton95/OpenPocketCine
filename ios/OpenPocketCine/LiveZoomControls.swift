@@ -2,6 +2,7 @@ import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
+import UIKit
 
 /// OpenZCine `MonitorExperience.zoomGesturesTail` / Android `completeDrag`.
 /// Down → clean (DISP 2). Up → live (DISP 1). `nil` if too short or not vertical.
@@ -177,7 +178,16 @@ struct LiveZoomPinchModifier: ViewModifier {
             .gesture(zoomGestures, including: enabled ? .gesture : .none)
             .sensoryFeedback(.impact(weight: .medium), trigger: detentTick)
             .sensoryFeedback(.impact(weight: .light), trigger: focusTick)
-            .sensoryFeedback(.impact(weight: .heavy), trigger: aeLockHeld) { _, held in held }
+            .onChange(of: aeLockHeld) { _, held in if held { Self.playAELockHaptic() } }
+    }
+
+    /// Two full-strength heavy taps: a single heavy impact read too soft for a lock.
+    @MainActor private static func playAELockHaptic() {
+        let generator = UIImpactFeedbackGenerator(style: .heavy)
+        generator.impactOccurred(intensity: 1)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+            generator.impactOccurred(intensity: 1)
+        }
     }
 
     /// OpenZCine `zoomGesturesTail`: one drag beside pinch so they coexist.

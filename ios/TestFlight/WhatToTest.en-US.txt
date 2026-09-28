@@ -17,6 +17,7 @@ New and changed
 
 Fixes
 
+- The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
 - Media lists complete SD and internal libraries, retries Nano's briefly empty first response and keeps capacity visible during playback.
 - Switching clips in Media no longer freezes the app while the previous clip is still being processed.
 - Live View no longer freezes for several seconds after a single dropped video packet. The picture returns with the camera's next keyframe.
