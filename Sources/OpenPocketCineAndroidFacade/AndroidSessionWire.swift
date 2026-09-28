@@ -106,7 +106,7 @@ public enum AndroidSessionWire {
         let glamourJSON = status.glamourEnabled.map { bool($0) } ?? "null"
         let selfieFlipJSON = status.selfieFlip.map { bool($0.isOn) } ?? "null"
         return """
-            {"batteryPercent":\(status.batteryPercent),"batteryMilliVolts":\(status.batteryMilliVolts),"batteryMilliAmps":\(status.batteryMilliAmps),"docked":\(bool(status.docked)),"charging":\(bool(status.charging)),"storageTotalMb":\(status.storageTotalMb),"storageFreeMb":\(status.storageFreeMb),"sdTotalMb":\(status.sdTotalMb),"sdFreeMb":\(status.sdFreeMb),"internalTotalMb":\(status.internalTotalMb),"internalFreeMb":\(status.internalFreeMb),"inPlayback":\(bool(status.inPlayback)),"firmware":\(quote(status.firmware)),"isRecording":\(bool(status.isRecording)),"shootingMode":\(status.shootingMode),"recordElapsedSec":\(status.recordElapsedSec),"recordRemainingSec":\(status.recordRemainingSec),"timecode":\(quote(status.timecode)),"iso":\(status.iso),"shutterDenom":\(status.shutterDenom),"fps":\(status.fps),"expoMode":\(intOrMinus(status.expoMode?.rawValue)),"isoIndex":\(intOrMinus(status.isoIndex?.rawValue)),"colorMode":\(intOrMinus(status.colorMode?.rawValue)),"videoResolution":\(intOrMinus(status.videoResolution?.rawValue)),"fpsIndex":\(intOrMinus(status.videoFormat?.frameRate.rawValue)),"whiteBalanceMode":\(intOrMinus(status.whiteBalance?.mode.rawValue)),"whiteBalanceKelvin":\(status.whiteBalanceKelvin),"whiteBalanceTint":\(status.whiteBalanceTint ?? 0),"focusMode":\(intOrMinus(status.focusMode?.rawValue)),"audioChannel":\(intOrMinus(status.audioChannel?.rawValue)),"vocalBoost":\(intOrMinus(status.vocalBoost?.rawValue)),"audioDspAt2":\(intOrMinus(status.audioDspAt2?.rawValue)),"audioDspBlob":\(quote(blob)),"zoomFactorRaw":\(status.zoomFactorRaw),"availableShutterDenoms":\(ints(status.availableShutterDenoms)),"availableIsoIndices":\(ints(isoCaps)),"evComp":\(intOrMinus(status.evComp?.rawValue)),"meteredEv":\(intOrMinus(status.meteredEv?.rawValue)),"isoLimit":\(intOrMinus(status.isoLimit?.rawValue)),"availableColorModes":\(ints(colorCaps)),"availableVideoFormats":\(ints(formatCaps)),"focusX":\(status.focusX),"focusY":\(status.focusY),"hasCameraFocusPoint":\(bool(status.hasCameraFocusPoint)),"focusTrack":\(intOrMinus(status.focusTrack?.rawValue)),"zoomLens":\(intOrMinus(status.zoomLens)),"zoomFactor":\(zoomFactorJSON),"glamourEnabled":\(glamourJSON),"selfieFlip":\(selfieFlipJSON),"gimbalFace":\(intOrMinus(status.gimbalFace?.rawValue)),"gimbalModeFamily":\(intOrMinus(status.gimbalModeFamily?.rawValue)),"windNR":\(intOrMinus(status.windNR?.rawValue)),"directionalAudio":\(intOrMinus(status.directionalAudio?.rawValue)),"audioMetersLeft":\(status.audioMeters.left.levelDB),"audioMetersRight":\(status.audioMeters.right.levelDB),"audioPeakLeft":\(status.audioMeters.left.peakDB),"audioPeakRight":\(status.audioMeters.right.peakDB)}
+            {"batteryPercent":\(status.batteryPercent),"batteryMilliVolts":\(status.batteryMilliVolts),"batteryMilliAmps":\(status.batteryMilliAmps),"docked":\(bool(status.docked)),"charging":\(bool(status.charging)),"storageTotalMb":\(status.storageTotalMb),"storageFreeMb":\(status.storageFreeMb),"sdTotalMb":\(status.sdTotalMb),"sdFreeMb":\(status.sdFreeMb),"internalTotalMb":\(status.internalTotalMb),"internalFreeMb":\(status.internalFreeMb),"inPlayback":\(bool(status.inPlayback)),"firmware":\(quote(status.firmware)),"isRecording":\(bool(status.isRecording)),"shootingMode":\(status.shootingMode),"recordElapsedSec":\(status.recordElapsedSec),"recordRemainingSec":\(status.recordRemainingSec),"timecode":\(quote(status.timecode)),"iso":\(status.iso),"shutterDenom":\(status.shutterDenom),"fps":\(status.fps),"expoMode":\(intOrMinus(status.expoMode?.rawValue)),"isoIndex":\(intOrMinus(status.isoIndex?.rawValue)),"colorMode":\(intOrMinus(status.colorMode?.rawValue)),"videoResolution":\(intOrMinus(status.videoResolution?.rawValue)),"fpsIndex":\(intOrMinus(status.videoFormat?.frameRate.rawValue)),"whiteBalanceMode":\(intOrMinus(status.whiteBalance?.mode.rawValue)),"whiteBalanceKelvin":\(status.whiteBalanceKelvin),"whiteBalanceTint":\(status.whiteBalanceTint ?? 0),"autoWhiteBalanceKelvin":\(status.autoWhiteBalanceKelvin),"focusMode":\(intOrMinus(status.focusMode?.rawValue)),"audioChannel":\(intOrMinus(status.audioChannel?.rawValue)),"vocalBoost":\(intOrMinus(status.vocalBoost?.rawValue)),"audioDspAt2":\(intOrMinus(status.audioDspAt2?.rawValue)),"audioDspBlob":\(quote(blob)),"zoomFactorRaw":\(status.zoomFactorRaw),"availableShutterDenoms":\(ints(status.availableShutterDenoms)),"availableIsoIndices":\(ints(isoCaps)),"evComp":\(intOrMinus(status.evComp?.rawValue)),"meteredEv":\(intOrMinus(status.meteredEv?.rawValue)),"isoLimit":\(intOrMinus(status.isoLimit?.rawValue)),"availableColorModes":\(ints(colorCaps)),"availableVideoFormats":\(ints(formatCaps)),"focusX":\(status.focusX),"focusY":\(status.focusY),"hasCameraFocusPoint":\(bool(status.hasCameraFocusPoint)),"focusTrack":\(intOrMinus(status.focusTrack?.rawValue)),"zoomLens":\(intOrMinus(status.zoomLens)),"zoomFactor":\(zoomFactorJSON),"glamourEnabled":\(glamourJSON),"selfieFlip":\(selfieFlipJSON),"gimbalFace":\(intOrMinus(status.gimbalFace?.rawValue)),"gimbalModeFamily":\(intOrMinus(status.gimbalModeFamily?.rawValue)),"windNR":\(intOrMinus(status.windNR?.rawValue)),"directionalAudio":\(intOrMinus(status.directionalAudio?.rawValue)),"audioMetersLeft":\(status.audioMeters.left.levelDB),"audioMetersRight":\(status.audioMeters.right.levelDB),"audioPeakLeft":\(status.audioMeters.left.peakDB),"audioPeakRight":\(status.audioMeters.right.peakDB)}
             """
     }
 
@@ -213,6 +213,7 @@ public enum AndroidSessionWire {
         } else {
             status.whiteBalanceKelvin = int("whiteBalanceKelvin", default: -1)
         }
+        status.autoWhiteBalanceKelvin = int("autoWhiteBalanceKelvin", default: -1)
         if let focus = FocusMode(rawValue: UInt8(truncatingIfNeeded: int("focusMode", default: -1)))
         {
             status.focusMode = focus
@@ -1096,6 +1097,29 @@ public enum AndroidSessionWire {
                     pathReady: jsonBool(json, key: "pathReady", default: true),
                     lastBleNotifyAge: jsonOptionalNumber(json, key: "lastBleNotifyAge"),
                     hadVideo: jsonBool(json, key: "hadVideo", default: true)))
+        default:
+            return ""
+        }
+    }
+
+    /// Android JNI: AE / AWB lock. `requestJSON` is `statusJSON`; `aeLockHolds`
+    /// adds `lockShootingMode`. Unknown kind or no lock target is `""`.
+    public static func exposureLockDecision(kind: String, requestJSON: String) -> String {
+        let status = status(fromJSON: requestJSON)
+        switch kind {
+        case "aeLock":
+            guard let lock = AutoExposureLock.capture(status) else { return "" }
+            return "{\"isoIndex\":\(lock.isoIndex.rawValue),\"shutterDenom\":\(lock.shutterDenom),"
+                + "\"shootingMode\":\(lock.shootingMode)}"
+        case "aeLockHolds":
+            // `holds` reads only the shooting mode the lock was taken in.
+            let lock = AutoExposureLock(
+                isoIndex: .auto, shutterDenom: -1,
+                shootingMode: Int(jsonNumber(requestJSON, key: "lockShootingMode", default: -1)))
+            return lock.holds(status) ? "true" : "false"
+        case "awbLock":
+            guard let wb = WhiteBalance.lockingAuto(status) else { return "" }
+            return "{\"kelvin\":\(wb.kelvin),\"tint\":\(wb.tint)}"
         default:
             return ""
         }

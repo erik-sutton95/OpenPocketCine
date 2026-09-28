@@ -963,6 +963,15 @@ public struct WhiteBalance: Equatable, Sendable {
         let hundreds = Int(UInt16(value[5]) | (UInt16(value[6]) << 8))
         return WhiteBalance.custom(kelvin: hundreds * 100, tint: tint)
     }
+
+    /// Auto's live measurement: `@5` alone as K/100. Action 6 T06 46094 reported
+    /// `23 04` while its UI read 3500K, so `@6` is not part of the Kelvin there.
+    /// nil outside the Custom range (2000...10000).
+    public static func autoKelvin(_ value: [UInt8]) -> Int? {
+        guard value.count >= 9, value[4] == WhiteBalanceMode.auto.rawValue else { return nil }
+        let kelvin = Int(value[5]) * 100
+        return (2_000...10_000).contains(kelvin) ? kelvin : nil
+    }
 }
 
 /// `0x02/0x8E` pid `0x0020`. Stereo `02`, Mono `01`, Spatial `03`.
