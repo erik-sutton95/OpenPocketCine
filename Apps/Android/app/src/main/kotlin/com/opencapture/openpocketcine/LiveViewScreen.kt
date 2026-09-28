@@ -764,6 +764,8 @@ fun LiveViewScreen(model: AppModel) {
                     onAssistLongPress = { assist.configureTool = it },
                     chromeInteractive = chromeInteractive,
                     controlBusy = controlBusy,
+                    focusOffCenter = focusOffCenter,
+                    onFocusReset = { model.session.resetFocusPoint() },
                     fpsLabel = fpsLabel,
                     bars = bars,
                     sourceIsVertical = verticalPicture,

@@ -150,7 +150,7 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
             onOpenOptions = { tool, frame -> model.assist.longPressAnchor = frame; model.assist.configureTool = tool })
         if (zones != null) {
             LivePortraitChrome(model, layout, zones, status, locked, { locked = !locked }, sheet,
-                { sheet = it }, model.assist, { model.assist.configureTool = it }, true, false,
+                { sheet = it }, model.assist, { model.assist.configureTool = it }, true, false, false, {},
                 fpsLabel = "25", bars = 4, sourceIsVertical = sourceAspect < 1f,
                 capabilities = capabilities)
         } else {

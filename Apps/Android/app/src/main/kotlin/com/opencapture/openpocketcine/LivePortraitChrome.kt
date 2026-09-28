@@ -209,6 +209,8 @@ fun LivePortraitChrome(
     onAssistLongPress: (LiveAssistTool) -> Unit,
     chromeInteractive: Boolean,
     controlBusy: Boolean,
+    focusOffCenter: Boolean,
+    onFocusReset: () -> Unit,
     fpsLabel: String = "—",
     bars: Int = 0,
     sourceIsVertical: Boolean = false,
@@ -438,6 +440,12 @@ fun LivePortraitChrome(
                     else ChromeRect(0f, 0f, 0f, 0f),
                 uiLocked = uiLocked,
             )
+        }
+        // Same slot as landscape: leading of the stick, on its bottom edge (iOS `focusReset`).
+        if (!uiLocked && focusOffCenter && chromeInteractive) {
+            Box(Modifier.liveModuleFrame(layout.focusReset)) {
+                LiveFocusResetButton(onClick = onFocusReset)
+            }
         }
 
         Box(
