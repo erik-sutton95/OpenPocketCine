@@ -40,6 +40,7 @@ import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.MonitorQuickPreview
 import com.opencapture.monitorui.monitorScrollFade
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -734,9 +735,10 @@ private fun LiveControlSheetContent(
                     }
                 }
                 LiveSheet.EXPO -> {
+                    val aeLocked = model.session.aeLock.collectAsState().value != null
                     CheckedRows(
-                        options = CaptureLists.expoLabels,
-                        selected = CaptureLists.expoSelectedLabel(status.expoMode),
+                        options = CaptureLists.expoLabels(aeLocked),
+                        selected = CaptureLists.expoSelectedLabel(status.expoMode, aeLocked),
                         enabled = enabled,
                     ) { label ->
                         CaptureLists.expoModeFromLabel(label)?.let(model::setExpoMode)
@@ -1348,6 +1350,13 @@ object CaptureLists {
 
     fun expoSelectedLabel(mode: Int): String? = expoLabel(mode).takeIf { it in expoLabels }
 
+    /** iOS `CaptureLists.aeLock`: EXPOSURE tile and drum entry left of Auto while AE-L holds. */
+    const val AE_LOCK = "AE-L"
+
+    fun expoLabels(aeLocked: Boolean): List<String> = if (aeLocked) listOf(AE_LOCK) + expoLabels else expoLabels
+
+    fun expoSelectedLabel(mode: Int, aeLocked: Boolean): String? = if (aeLocked) AE_LOCK else expoSelectedLabel(mode)
+
     fun expoModeFromLabel(label: String): Int? =
         when (label) {
             "Auto" -> CameraCommands.EXPO_AUTO
@@ -1570,6 +1579,7 @@ object CaptureLists {
 
     val evLabels: List<String> = EvComp.allCases.map { it.label }
 
+    /** Core `WhiteBalance.kelvinLadder`; AWB lock snaps to it in the core. */
     val kelvinValues: List<Int> = (2_000..10_000 step 100).toList()
     val kelvinLabels: List<String> = kelvinValues.map { "${it}K" }
     val wbTabs: List<String> = listOf("Mode", "Kelvin", "Tint")

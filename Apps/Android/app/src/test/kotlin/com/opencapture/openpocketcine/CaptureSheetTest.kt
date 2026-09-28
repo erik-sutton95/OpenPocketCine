@@ -740,6 +740,10 @@ class CaptureSheetTest {
         assertEquals("Auto", CaptureLists.expoSelectedLabel(CameraCommands.EXPO_AUTO))
         assertEquals("Manual", CaptureLists.expoSelectedLabel(CameraCommands.EXPO_MANUAL))
         assertEquals(null, CaptureLists.expoSelectedLabel(-1))
+        // AE-L sits left of Auto while locked; Auto or Manual releases it.
+        assertEquals(listOf("AE-L", "Auto", "Manual"), CaptureLists.expoLabels(aeLocked = true))
+        assertEquals("AE-L", CaptureLists.expoSelectedLabel(CameraCommands.EXPO_MANUAL, aeLocked = true))
+        assertEquals(null, CaptureLists.expoModeFromLabel("AE-L"))
         assertEquals(CameraCommands.EXPO_AUTO, CaptureLists.expoModeFromLabel("Auto"))
         assertEquals(CameraCommands.EXPO_MANUAL, CaptureLists.expoModeFromLabel("Manual"))
         assertEquals(null, CaptureLists.expoModeFromLabel("Video"))

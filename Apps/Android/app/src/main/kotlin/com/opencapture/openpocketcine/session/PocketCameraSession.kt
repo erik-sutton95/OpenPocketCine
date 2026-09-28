@@ -3744,6 +3744,12 @@ class PocketCameraSession(
 
     fun setExpoMode(mode: Int) {
         val extra = CameraCommands.expoWireExtra(mode) ?: return
+        // Manual from AE-L keeps the pinned values; the camera is already Manual.
+        if (mode == CameraCommands.EXPO_MANUAL && _aeLock.value != null &&
+            _status.value.expoMode == CameraCommands.EXPO_MANUAL) {
+            _aeLock.value = null
+            return
+        }
         _aeLock.value = null
         if (mode != CameraCommands.EXPO_MANUAL) {
             formatPin?.shutterAngle = null

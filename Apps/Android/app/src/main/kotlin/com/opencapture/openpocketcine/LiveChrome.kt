@@ -984,13 +984,17 @@ data class LiveMonitorLayout(
             return ChromeRect(towardFeed - size / 2f, baseY - size / 2f, size, size)
         }
 
-    /** iOS `aeUnlock`: AE unlock capsule beside the recenter key, toward the feed centre. */
+    /** iOS `aeUnlock`. Portrait without an assist column mirrors Recenter to the well's left edge. */
     val aeUnlock: ChromeRect
         get() {
             val reset = focusReset
-            val width = reset.height * 1.5f
-            val x = if (reset.midX < feed.midX) reset.maxX + 8f else reset.x - 8f - width
-            return ChromeRect(x, reset.y, width, reset.height)
+            val portrait = viewportHeight > viewportWidth
+            val leading = if (usesFieldMonitor && assist.width > 1f) assist.maxX else onFeed.minX + 2f
+            val r = com.opencapture.monitorui.MonitorLayoutPolicy.aeUnlock(
+                com.opencapture.monitorui.MonitorRect(reset.x, reset.y, reset.width, reset.height),
+                leading, feed.midX, portrait,
+            )
+            return ChromeRect(r.x, r.y, r.width, r.height)
         }
 
     companion object {
