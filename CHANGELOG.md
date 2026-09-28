@@ -75,6 +75,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android portrait Live View shows the Recenter focus button after an
+  off-centre focus tap, in the same slot as iOS: leading of the joystick, on
+  its bottom edge. The zoom chip (optical and digital-crop ranges) and the
+  portrait storage readout gain the same dark glow as iOS.
 - A selected shutter angle survives frame-rate changes in Live View, Multiview
   and preset format changes. The matching shutter time is sent after camera
   format confirmation; opening the picker no longer overwrites the saved angle
