@@ -52,7 +52,7 @@ class StationNetworkSetupInputTest {
                         }
                     }
                 }
-                click("Local Wi-Fi")
+                click("Wi-Fi")
                 val beforeCurrent = bounds(awaitText("THIS PHONE IS ON"))
                 val beforeNearby = bounds(awaitText("NEARBY"))
                 assertTrue(abs(beforeCurrent.top - beforeNearby.top) <= 1)
@@ -121,7 +121,7 @@ class StationNetworkSetupInputTest {
                     }
                 }
             }
-            click("Local Wi-Fi")
+            click("Wi-Fi")
             awaitText("Nearby test network")
             click("Test network")
             click("Connect over Wi-Fi")
@@ -174,7 +174,8 @@ class StationNetworkSetupInputTest {
         val frame = bounds(action)
         assertTrue(frame.bottom <= window.bottom)
         assertTrue(window.bottom - frame.bottom < 96 * density, "Action should use the bottom of the safe viewport: $frame within $window")
-        assertTrue(frame.height() >= 48 * density)
+        // The app's camera-page button (iOS `CameraPageButtonStyle`) is 42 dp tall.
+        assertTrue(frame.height() >= 42 * density)
     }
 
     private fun click(text: String) {
