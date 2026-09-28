@@ -2,6 +2,7 @@ Since open beta build 138
 
 New and changed
 
+- Long-press the picture to lock exposure: the focus box turns yellow with AE-L. The sun-and-lock key beside Recenter unlocks. WB Mode adds AWB Lock.
 - Tabs use one highlighted edge instead of boxes, lists fade softly at their edges and tool buttons share one size.
 - Live View indicators are glass pills for camera battery, phone battery and link. Tap the link pill to swap signal and feed fps.
 - Joystick size: Small, Medium or Large in Settings, Controls.
