@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +50,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -63,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
+import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.monitorui.monitorScrollFade
@@ -207,7 +210,7 @@ fun StationNetworkSetup(
         "networks" -> SetupColumns({
             SetupSectionHeader("THIS PHONE IS ON", Modifier.testTag("stationSetup.currentHeader"))
             current?.let { name ->
-                SetupNetworkRow(name, detail = if (saved.any { it.ssid == name }) "Connected · password saved" else "Connected", enabled = !working) { choose(name) }
+                SetupNetworkRow(name, detail = if (saved.any { it.ssid == name }) "Connected · password saved" else "Connected", enabled = !working, lock = true) { choose(name) }
             } ?: SetupNetworkRow(
                 "Show this phone’s Wi-Fi",
                 detail = when {
@@ -224,7 +227,7 @@ fun StationNetworkSetup(
             }
             val known = saved.filter { it.ssid != current }.distinctBy { it.ssid }
             if (known.isNotEmpty()) SetupSectionHeader("SAVED ON THIS PHONE")
-            known.forEach { item -> SetupNetworkRow(item.ssid, detail = "Password saved", enabled = !working) { choose(item.ssid) } }
+            known.forEach { item -> SetupNetworkRow(item.ssid, detail = "Password saved", enabled = !working, lock = true) { choose(item.ssid) } }
         }, {
             // Same height as SetupSectionHeader; Scan again keeps its 48 dp target past the row.
             Row(Modifier.fillMaxWidth().height(SETUP_HEADER_HEIGHT).testTag("stationSetup.nearbyHeader"), verticalAlignment = Alignment.CenterVertically) {
@@ -234,9 +237,9 @@ fun StationNetworkSetup(
                 else TextButton(onClick = ::startScan, enabled = !working, modifier = Modifier.requiredHeight(48.dp)) { Text("Scan again") }
             }
             val nearby = found.filter { it != current && saved.none { saved -> saved.ssid == it } }
-            nearby.forEach { name -> SetupNetworkRow(name, enabled = !working) { choose(name) } }
+            nearby.forEach { name -> SetupNetworkRow(name, enabled = !working, lock = true) { choose(name) } }
             if (scanning || nearby.isEmpty()) {
-                SetupHint(
+                SetupIconHint(if (scanning) null else OpcIcon.SCAN, MaterialTheme.colorScheme.primary,
                     when {
                         scanning -> "The camera is looking for networks… Networks appear here as it finds them."
                         scanFailed -> "The scan did not finish. Turn on a camera and try Scan again."
@@ -257,10 +260,16 @@ fun StationNetworkSetup(
         })
         "hotspot" -> SetupColumns({
             SetupSectionHeader("THIS PHONE’S HOTSPOT")
-            SetupHint(if (hotspotDetected) "Phone hotspot is active" else "Phone hotspot not detected yet. It can appear once a camera joins.")
+            SetupIconHint(if (hotspotDetected) OpcIcon.RADIO else OpcIcon.TRIANGLE_ALERT,
+                if (hotspotDetected) MonitorLinkHealth.stable else MonitorLinkHealth.watch,
+                if (hotspotDetected) "Phone hotspot is active" else "Phone hotspot not detected yet. It can appear once a camera joins.")
             SetupSection("IN SETTINGS")
             SetupHint("1. Turn on this phone’s Wi-Fi hotspot.\n2. Use WPA2 security and 2.4 GHz for compatibility.")
-            TextButton(onClick = ::settings, enabled = !working) { Text("Open Settings") }
+            TextButton(onClick = ::settings, enabled = !working) {
+                OpcIcon(OpcIcon.SETTINGS, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open Settings")
+            }
         }, {
             SetupSectionHeader("HOTSPOT NAME")
             OutlinedTextField(
@@ -352,7 +361,10 @@ fun StationNetworkSetup(
                         ) {
                             when {
                                 lockedNetwork != null -> {
-                                    Text(lockedNetwork.ssid, style = LiveType.display(22f))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        OpcIcon(OpcIcon.WIFI, null, Modifier.size(20.dp))
+                                        Text(lockedNetwork.ssid, style = LiveType.display(22f))
+                                    }
                                     SetupHint("Cameras are using this network. Remove them before changing it.")
                                     Button(onClick = complete) { Text("Done") }
                                 }
@@ -421,8 +433,17 @@ private fun SetupSectionHeader(text: String, modifier: Modifier = Modifier) {
 @Composable
 private fun SetupHint(text: String, modifier: Modifier = Modifier) { Text(text, modifier, style = LiveType.text(13f), color = MaterialTheme.colorScheme.onSurfaceVariant) }
 
+/** iOS status and checklist rows: a leading glyph beside the hint. */
 @Composable
-private fun SetupNetworkRow(title: String, modifier: Modifier = Modifier, detail: String? = null, icon: OpcIcon = OpcIcon.WIFI, enabled: Boolean = true, onClick: () -> Unit) {
+private fun SetupIconHint(icon: OpcIcon?, tint: Color, text: String, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        icon?.let { OpcIcon(it, null, Modifier.size(18.dp), tint) }
+        SetupHint(text)
+    }
+}
+
+@Composable
+private fun SetupNetworkRow(title: String, modifier: Modifier = Modifier, detail: String? = null, icon: OpcIcon = OpcIcon.WIFI, enabled: Boolean = true, lock: Boolean = false, onClick: () -> Unit) {
     Surface(onClick = onClick, enabled = enabled, modifier = modifier, shape = RoundedCornerShape(12.dp),
         color = MonitorPalette.surface, border = BorderStroke(1.dp, MonitorPalette.border)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -431,6 +452,7 @@ private fun SetupNetworkRow(title: String, modifier: Modifier = Modifier, detail
                 Text(title, style = LiveType.text(15f, FontWeight.Medium))
                 detail?.let { SetupHint(it) }
             }
+            if (lock) OpcIcon(OpcIcon.LOCK, null, Modifier.size(13.dp), MonitorPalette.faint)
             if (enabled) OpcIcon(OpcIcon.CHEVRON_RIGHT, null, Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -456,7 +478,7 @@ private fun SetupPasswordField(label: String, value: String, enabled: Boolean, o
 @Composable
 private fun SetupChecklist() {
     SetupSection("BEFORE YOU CONNECT")
-    SetupHint("WPA2 or WPA2/WPA3 mixed — WPA3-only networks can refuse some cameras.")
-    SetupHint("Devices can see each other — guest networks with client isolation block the picture.")
-    SetupHint("Cameras within range — each camera leaves its own Wi-Fi and joins this one.")
+    SetupIconHint(OpcIcon.CHECK, MonitorLinkHealth.stable, "WPA2 or WPA2/WPA3 mixed. WPA3-only networks can refuse some cameras.")
+    SetupIconHint(OpcIcon.CHECK, MonitorLinkHealth.stable, "Devices can see each other. Guest networks with client isolation block the picture.")
+    SetupIconHint(OpcIcon.CHECK, MonitorLinkHealth.stable, "Cameras within range. Each camera leaves its own Wi-Fi and joins this one.")
 }

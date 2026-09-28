@@ -634,12 +634,7 @@ fun LivePortraitAspectToggle(
             .semantics { contentDescription = if (fill) "Fit feed in frame" else "Fill frame with feed" },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            if (fill) "FILL" else "FIT",
-            color = if (fill) LiveDesign.accent else LiveDesign.text,
-            style = LiveType.ui(9f, FontWeight.Bold),
-            maxLines = 1,
-        )
+        OpcIcon(if (fill) OpcIcon.MINIMIZE else OpcIcon.MAXIMIZE, null, Modifier.size(15.dp), LiveDesign.text)
     }
 }
 
@@ -667,9 +662,11 @@ fun LiveCaptureStrip(
         shutterUsesAngle,
         OperatorPrefs.shutterAngleDegrees(context),
     )
-    fun value(sheet: LiveSheet, label: String, readout: String, annotation: String? = null) =
+    fun value(sheet: LiveSheet, label: String, readout: String, annotation: String? = null,
+        valueIcon: OpcIcon? = null, badgeIcon: OpcIcon? = null) =
         com.opencapture.openpocketcine.monitor.MonitorValue(
             sheet.name, label, readout, selected = active == sheet, annotation = annotation,
+            valueIcon = valueIcon, badgeIcon = badgeIcon,
         )
     val values = buildList {
         add(value(LiveSheet.ISO, "ISO", CaptureLists.isoChipValue(status)))
@@ -677,9 +674,11 @@ fun LiveCaptureStrip(
             if (auto) MonitorExposureReadout.autoEvCaption(status.shutterDenom)
             else "SHUTTER",
             if (auto) EvComp.fromRaw(status.evComp)?.label ?: "—" else shutter,
-            if (auto && facePriority) "FACE" else null))
+            if (auto && facePriority) CaptureLists.FACE_PRIORITY_TITLE else null,
+            badgeIcon = if (auto && facePriority) OpcIcon.SCAN else null))
         add(value(LiveSheet.EXPO, "EXPOSURE", if (status.expoMode == CameraCommands.EXPO_MANUAL) "M" else if (auto) "A" else "—"))
-        add(value(LiveSheet.WB, "WB", CaptureLists.wbChipValue(status)))
+        add(value(LiveSheet.WB, "WB", CaptureLists.wbChipValue(status),
+            valueIcon = if (CaptureLists.wbIsAuto(status)) OpcIcon.APERTURE else null))
         if (showFocus) add(value(LiveSheet.FOCUS, "FOCUS", status.focusLabel))
         if (showAperture) add(value(LiveSheet.APERTURE, "APERTURE", ApertureStrategy.tileValue(status)))
         if (CaptureShutterPolicy.showsAudioControls(status.shootingMode)) {

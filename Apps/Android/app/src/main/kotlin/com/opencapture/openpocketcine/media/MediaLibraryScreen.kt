@@ -452,19 +452,19 @@ private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab)
 @Composable
 private fun CategoryTab(tab: MediaLibraryTab, active: Boolean, fill: Boolean = false, onClick: () -> Unit) {
     val haptics = LocalOperatorHaptics.current
-    val (icon, label) =
+    val label =
         when (tab) {
-            MediaLibraryTab.ALL -> OpcIcon.LAYOUT_GRID to "All"
-            MediaLibraryTab.VIDEOS -> OpcIcon.FILM to "Videos"
-            MediaLibraryTab.PHOTOS -> OpcIcon.IMAGE to "Photos"
-            MediaLibraryTab.FAVORITES -> OpcIcon.STAR to "Favorites"
+            MediaLibraryTab.ALL -> "All"
+            MediaLibraryTab.VIDEOS -> "Videos"
+            MediaLibraryTab.PHOTOS -> "Photos"
+            MediaLibraryTab.FAVORITES -> "Favorites"
         }
     MonitorTab(active, { haptics.selection(); onClick() }, Modifier.then(if (fill) Modifier.fillMaxWidth() else Modifier),
         vertical = fill, separator = tab != MediaLibraryTab.entries.first(),
         accessibilityLabel = "Show $label media") {
         Row(Modifier.then(if (fill) Modifier.fillMaxWidth() else Modifier),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OpcIcon(icon, null, Modifier.size(16.dp), if (active) LiveDesign.accent else LiveDesign.muted)
+            // iOS category tabs carry no glyph.
             Text(label, color = if (active) LiveDesign.accent else LiveDesign.muted,
                 style = LiveType.ui(12f, if (active) FontWeight.SemiBold else FontWeight.Medium))
         }
@@ -600,14 +600,22 @@ private fun SelectionTray(count: Int, cacheEnabled: Boolean, deleteEnabled: Bool
     onAll: () -> Unit, onClear: () -> Unit, onCache: () -> Unit, onStar: () -> Unit,
     onDelete: () -> Unit, onShare: () -> Unit) {
     com.opencapture.monitorui.MonitorSelectionTray(count) {
-        Text("All", color = LiveDesign.accent, style = LiveType.ui(11f, FontWeight.SemiBold),
-            modifier = Modifier.height(34.dp).chromeClickable(onClick = onAll).padding(horizontal = 7.dp, vertical = 10.dp))
-        Text("Clear", color = LiveDesign.muted, style = LiveType.ui(11f, FontWeight.SemiBold),
-            modifier = Modifier.height(34.dp).chromeClickable(onClick = onClear).padding(horizontal = 7.dp, vertical = 10.dp))
+        TrayTextChip(OpcIcon.CIRCLE_CHECK, "All", LiveDesign.accent, onAll)
+        TrayTextChip(OpcIcon.X, "Clear", LiveDesign.muted, onClear)
         MediaCircleIconButton(OpcIcon.DOWNLOAD, "Cache selected clips", onCache, enabled = cacheEnabled, size = 34.dp)
         MediaCircleIconButton(OpcIcon.STAR, "Favorite selected clips", onStar, enabled = count > 0, size = 34.dp)
         MediaCircleIconButton(OpcIcon.TRASH, "Delete selected clips", onDelete, enabled = deleteEnabled, size = 34.dp)
         MediaCircleIconButton(OpcIcon.SHARE, "Share selected clips", onShare, enabled = count > 0, size = 34.dp)
+    }
+}
+
+/** iOS selection chip: 13dp glyph beside its label. */
+@Composable
+private fun TrayTextChip(icon: OpcIcon, label: String, tint: Color, onClick: () -> Unit) {
+    Row(Modifier.height(34.dp).chromeClickable(onClick = onClick).padding(horizontal = 7.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        OpcIcon(icon, null, Modifier.size(13.dp), tint)
+        Text(label, color = tint, style = LiveType.ui(11f, FontWeight.SemiBold))
     }
 }
 

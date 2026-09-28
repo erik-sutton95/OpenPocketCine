@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -119,6 +120,7 @@ internal fun AssistToolGlyph(tool: LiveAssistTool, tint: Color, modifier: Modifi
         Box(modifier, contentAlignment = Alignment.Center) {
             Text("EV", style = LiveType.ui(evFontSize, FontWeight.SemiBold), color = tint, maxLines = 1)
         }
-    } else if (icon == null) OpcIcon(if (tool == LiveAssistTool.DESQ) OpcIcon.MAXIMIZE else OpcIcon.APERTURE, null, modifier, tint)
+    } else if (tool == LiveAssistTool.DESQ) OpcIcon(OpcIcon.CHEVRONS_UP_DOWN, null, modifier.rotate(90f), tint)
+    else if (icon == null) OpcIcon(OpcIcon.APERTURE, null, modifier, tint)
     else com.opencapture.monitorui.MonitorAssistIcon(icon, tint, modifier)
 }

@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,13 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,9 +44,7 @@ fun ChromeEditBanner(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Canvas(Modifier.size(12.dp)) {
-            drawEyeGlyph(LiveDesign.accent, slashed = false)
-        }
+        OpcIcon(OpcIcon.EYE, null, Modifier.size(11.dp), LiveDesign.accent)
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text("Editing ${mode.title}", color = LiveDesign.text, style = LiveType.ui(11.5f, FontWeight.SemiBold))
             Text("Tap an eye to show or hide it", color = LiveDesign.muted, style = LiveType.ui(10f))
@@ -91,14 +83,8 @@ fun ChromeEditBadgeLayer(
                 .chromeClickable(onClick = { onToggle(section) }),
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(Modifier.size(12.dp)) {
-                drawEyeGlyph(
-                    color = if (on) LiveDesign.background else LiveDesign.text,
-                    slashed = !on,
-                    filled = true,
-                    pupil = if (on) LiveDesign.accent else Color.Black,
-                )
-            }
+            OpcIcon(if (on) OpcIcon.EYE else OpcIcon.EYE_OFF, null, Modifier.size(11.dp),
+                if (on) LiveDesign.background else LiveDesign.text)
         }
     }
 }
@@ -247,45 +233,4 @@ private fun rank(anchor: BadgeAnchor, preferTrailing: Boolean, preferBottom: Boo
             BadgeAnchor.LEADING, BadgeAnchor.TRAILING -> 1
         }
     return horizontal + vertical
-}
-
-private fun DrawScope.drawEyeGlyph(
-    color: Color,
-    slashed: Boolean,
-    filled: Boolean = false,
-    pupil: Color = color,
-) {
-    val cx = size.width / 2f
-    val cy = size.height / 2f
-    val w = size.width * 0.78f
-    val h = size.height * 0.42f
-    val outline =
-        Path().apply {
-            moveTo(cx - w / 2f, cy)
-            quadraticTo(cx, cy - h, cx + w / 2f, cy)
-            quadraticTo(cx, cy + h, cx - w / 2f, cy)
-            close()
-        }
-    val stroke =
-        Stroke(
-            width = 1.35.dp.toPx(),
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round,
-        )
-    if (filled) {
-        drawPath(outline, color)
-        drawCircle(pupil, radius = size.minDimension * 0.13f, center = Offset(cx, cy))
-    } else {
-        drawPath(outline, color, style = stroke)
-        drawCircle(color, radius = size.minDimension * 0.12f, center = Offset(cx, cy))
-    }
-    if (slashed) {
-        drawLine(
-            color,
-            Offset(size.width * 0.18f, size.height * 0.82f),
-            Offset(size.width * 0.82f, size.height * 0.18f),
-            strokeWidth = 1.5.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
-    }
 }

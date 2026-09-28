@@ -53,9 +53,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
+/** [annotation] is spoken after the value; iOS shows [valueIcon] before and [badgeIcon] after it. */
 @Immutable
 data class MonitorValue(val id: String, val label: String, val value: String,
-    val selected: Boolean = false, val annotation: String? = null)
+    val selected: Boolean = false, val annotation: String? = null,
+    val valueIcon: MonitorIcon? = null, val badgeIcon: MonitorIcon? = null)
 
 /** Camera values are ready-to-display data; adapters retain interpretation and writes. */
 @Composable
@@ -82,8 +84,9 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
         .copy(lineHeight = 10.sp, letterSpacing = MonitorLayoutPolicy.READOUT_LABEL_TRACKING.sp)
     val intrinsic = values.map { item ->
         val valueWidth = measurer.measure(item.value, valueStyle, maxLines = 1).size.width
-        val labelWidth = measurer.measure(item.label + item.annotation?.let { "  $it" }.orEmpty(), labelStyle, maxLines = 1).size.width
-        with(density) { maxOf(valueWidth, labelWidth).toDp().value } + 8f
+        val labelWidth = measurer.measure(item.label, labelStyle, maxLines = 1).size.width
+        val icons = (if (item.valueIcon != null) 20f else 0f) + (if (item.badgeIcon != null) 14f else 0f)
+        with(density) { maxOf(valueWidth.toDp().value + icons, labelWidth.toDp().value) } + 8f
     }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val rowWidth = maxWidth
@@ -110,13 +113,14 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
                             .padding(horizontal = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
-                            Text(item.value, color = if (item.selected) MonitorPalette.accent else MonitorPalette.text,
-                                style = valueStyle, maxLines = 1, softWrap = false)
-                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom) {
-                                Text(item.label, color = if (item.selected) MonitorPalette.accent else MonitorPalette.muted,
-                                    style = labelStyle, maxLines = 1)
-                                item.annotation?.let { Text(it, style = MonitorTypography.readout(7.5f), color = MonitorPalette.muted, maxLines = 1) }
+                            val valueTint = if (item.selected) MonitorPalette.accent else MonitorPalette.text
+                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                item.valueIcon?.let { MonitorIcon(it, null, Modifier.size(17.dp), valueTint) }
+                                Text(item.value, color = valueTint, style = valueStyle, maxLines = 1, softWrap = false)
+                                item.badgeIcon?.let { MonitorIcon(it, null, Modifier.size(11.dp), valueTint) }
                             }
+                            Text(item.label, color = if (item.selected) MonitorPalette.accent else MonitorPalette.muted,
+                                style = labelStyle, maxLines = 1)
                         }
                     }
                     if (grid) repeat(columns - row.size) { Box(Modifier.weight(1f)) }
