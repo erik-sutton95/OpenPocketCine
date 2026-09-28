@@ -6,15 +6,17 @@ public enum WatcherFocusPoint {
         public var x: Int
         public var y: Int
     }
-    public static func map(x: Double, y: Double, width: Double, height: Double, mirrored: Bool)
-        -> Point?
-    {
+    public static func map(
+        x: Double, y: Double, width: Double, height: Double, mirrored: Bool,
+        flippedVertically: Bool = false
+    ) -> Point? {
         guard x.isFinite, y.isFinite, width.isFinite, height.isFinite,
             width > 0, height > 0, x >= 0, y >= 0, x <= width, y <= height
         else { return nil }
         let nx = x / width
+        let ny = y / height
         return Point(
             x: Int(((mirrored ? 1 - nx : nx) * 1000).rounded()),
-            y: Int((y / height * 1000).rounded()))
+            y: Int(((flippedVertically ? 1 - ny : ny) * 1000).rounded()))
     }
 }

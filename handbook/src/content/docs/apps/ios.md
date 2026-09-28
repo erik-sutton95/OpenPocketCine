@@ -178,6 +178,17 @@ LUTs and picture warnings follow the correction, and framing guides align with
 the corrected picture. Desqueeze changes only the display: recordings, shared
 files and scope measurements keep the original image.
 
+### Mirror
+
+Tap **MIRROR** in View Assist to flip the monitor; long-press for its options.
+**Horizontal** flips left-to-right for a camera pointed back at you and is on by
+default. **Vertical** flips top-to-bottom. Turn both on to turn the picture 180°,
+for an underslung camera such as one on a car mount. Tap to focus, drag to
+track, focus and face boxes, and the LEVEL roll reading follow the flipped
+picture. Mirror changes only the display: recordings and scopes stay
+unflipped, and Vertical leaves the joystick directions unchanged. Video
+playback uses the same axes with its own on/off choice.
+
 ## Level
 
 Enable **LEVEL** in View Assist to see how level the picture is against

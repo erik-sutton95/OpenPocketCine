@@ -83,6 +83,7 @@ internal object OpcVulkan {
         zebraMidHalf: Float,
         upscale: Float,
         mirror: Float,
+        mirrorY: Float,
         peakingOn: Float,
         peakingRatioThreshold: Float,
         peakingNoiseGate: Float,

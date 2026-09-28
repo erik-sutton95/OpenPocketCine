@@ -150,8 +150,10 @@ object CrosshairAssist {
 
 object MirrorAssist {
     const val EXPLANATION =
-        "Flips the monitor left-to-right, for a camera pointed back at you. " +
+        "Flips the monitor for a camera pointed back at you or mounted upside down. " +
             "The recording and the scopes are never mirrored."
+    const val HORIZONTAL_HELP = "Left-to-right, for a camera pointed back at you."
+    const val VERTICAL_HELP = "Top-to-bottom, for an underslung mount. Both on turns it 180°."
 
     fun feedScaleX(mirrored: Boolean, squeeze: Float = 1f): Float = if (mirrored) -squeeze else squeeze
 }

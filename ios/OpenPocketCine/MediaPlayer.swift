@@ -494,8 +494,8 @@ struct MediaPlayerView: View {
                         sampleBus: model.frameSamples
                     )
                     .scaleEffect(
-                        x: model.assist.isPlaybackVisible(.mirror) ? -1 : 1,
-                        y: 1,
+                        x: model.assist.playbackEffects.mirror ? -1 : 1,
+                        y: model.assist.playbackEffects.mirrorVertical ? -1 : 1,
                         anchor: .center
                     )
                     .scaleEffect(zoom.scale)

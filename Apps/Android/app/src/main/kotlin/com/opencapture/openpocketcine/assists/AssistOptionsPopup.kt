@@ -219,7 +219,7 @@ private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colo
         LiveAssistTool.GUIDES -> GuidesOptions(state)
         LiveAssistTool.GRID -> GridOptions(state)
         LiveAssistTool.CROSS -> OptionCopy(CrosshairAssist.HELP)
-        LiveAssistTool.MIRROR -> OptionCopy(MirrorAssist.EXPLANATION)
+        LiveAssistTool.MIRROR -> MirrorOptions(state)
         LiveAssistTool.AUDIO -> {
             SettingsInlineRow("Orientation", help = AudioAssist.HELP, showTopDivider = false, stacked = true) {
                 SettingsSegmented(com.opencapture.monitorui.MonitorAudioOrientation.entries.map { it.label },
@@ -573,6 +573,27 @@ private fun GridOptions(state: LiveAssistState) {
                 else -> state.setGridOption(diagonal = !state.gridDiagonal)
             }
         }
+    }
+}
+
+/** iOS `MirrorLongPressMenu`: help copy, then Grid-style axis switches. */
+@Composable
+private fun MirrorOptions(state: LiveAssistState) {
+    val haptics = LocalOperatorHaptics.current
+    OptionCopy(MirrorAssist.EXPLANATION)
+    Spacer(Modifier.height(8.dp))
+    SettingsSwitchInlineRow(
+        "Horizontal", help = MirrorAssist.HORIZONTAL_HELP, isOn = state.mirrorHorizontal,
+        showTopDivider = false, stacked = false,
+    ) {
+        haptics.selection()
+        state.setMirrorAxes(horizontal = !state.mirrorHorizontal)
+    }
+    SettingsSwitchInlineRow(
+        "Vertical", help = MirrorAssist.VERTICAL_HELP, isOn = state.mirrorVertical, stacked = false,
+    ) {
+        haptics.selection()
+        state.setMirrorAxes(vertical = !state.mirrorVertical)
     }
 }
 

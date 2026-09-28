@@ -53,18 +53,20 @@ enum LiveFeedFocusGesture {
     }
 
     static func cameraPoint(
-        _ location: CGPoint, in size: CGSize, mirrored: Bool
+        _ location: CGPoint, in size: CGSize, mirrored: Bool, flippedVertically: Bool = false
     ) -> (x: Double, y: Double) {
         let nx = min(max(Double(location.x / max(size.width, 1)), 0), 1)
         let ny = min(max(Double(location.y / max(size.height, 1)), 0), 1)
-        return (mirrored ? 1 - nx : nx, ny)
+        return (mirrored ? 1 - nx : nx, flippedVertically ? 1 - ny : ny)
     }
 
     static func cameraBox(
-        from: CGPoint, to: CGPoint, in size: CGSize, mirrored: Bool
+        from: CGPoint, to: CGPoint, in size: CGSize, mirrored: Bool,
+        flippedVertically: Bool = false
     ) -> TrackingBox {
-        let a = cameraPoint(from, in: size, mirrored: mirrored)
-        let b = cameraPoint(to, in: size, mirrored: mirrored)
+        let a = cameraPoint(
+            from, in: size, mirrored: mirrored, flippedVertically: flippedVertically)
+        let b = cameraPoint(to, in: size, mirrored: mirrored, flippedVertically: flippedVertically)
         return TrackingBox.normalized(fromX: a.x, fromY: a.y, toX: b.x, toY: b.y)
     }
 }
@@ -249,7 +251,8 @@ struct LiveZoomPinchModifier: ViewModifier {
                 case .tap, .aeLock:
                     if kind == .aeLock, model.session.lockAutoExposure() { return }
                     let point = LiveFeedFocusGesture.cameraPoint(
-                        value.location, in: feedSize, mirrored: model.livePictureViewFlip)
+                        value.location, in: feedSize, mirrored: model.livePictureViewFlip,
+                        flippedVertically: model.assist.flipsVertically)
                     model.session.handleFeedTap(at: CGPoint(x: point.x, y: point.y))
                     focusTick += 1
                 case .track:
@@ -258,7 +261,8 @@ struct LiveZoomPinchModifier: ViewModifier {
                             from: value.startLocation,
                             to: value.location,
                             in: feedSize,
-                            mirrored: model.livePictureViewFlip
+                            mirrored: model.livePictureViewFlip,
+                            flippedVertically: model.assist.flipsVertically
                         )
                     )
                     focusTick += 1

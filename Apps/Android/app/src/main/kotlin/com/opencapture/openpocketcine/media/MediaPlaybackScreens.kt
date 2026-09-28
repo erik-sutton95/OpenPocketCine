@@ -652,7 +652,8 @@ fun MediaPlayerScreen(
             LaunchedEffect(fitted.width, fitted.height) {
                 zoom = zoom.endGesture(fitted.width, fitted.height)
             }
-            val mirror = MirrorAssist.feedScaleX(assist.isPlaybackVisible(LiveAssistTool.MIRROR))
+            val mirrorOn = assist.isPlaybackVisible(LiveAssistTool.MIRROR)
+            val mirror = MirrorAssist.feedScaleX(mirrorOn && assist.mirrorHorizontal)
             val overlayWidthPx = constraints.maxWidth
             val overlayHeightPx = constraints.maxHeight
             val viewportWidth = maxWidth.value
@@ -712,6 +713,7 @@ fun MediaPlayerScreen(
                     backdrop = backdrop,
                     plan = effectsPlan,
                     mirrored = mirror < 0f,
+                    flippedVertically = mirrorOn && assist.mirrorVertical,
                     zoom = zoom,
                     sourceWidth = decodeWidth,
                     sourceHeight = decodeHeight,

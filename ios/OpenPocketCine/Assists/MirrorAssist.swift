@@ -1,47 +1,57 @@
 import SwiftUI
 
-/// OpenZCine `MonitorAssistTool.mirror`.
+/// OpenZCine `MonitorAssistTool.mirror`, plus a vertical axis.
 ///
-/// Tap toggles a left-to-right flip of the monitored picture (a body pointed back at the
-/// operator). There is no H / V / both picker: `hasConfiguration` is false, so the toolbar
-/// long-press does not open options. This menu exists for Display-settings exhaustiveness
-/// and matches OpenZCine `AssistPanel` `.mirror` copy exactly.
+/// Tap toggles the tool. Long-press options pick the axes: Horizontal (a body pointed
+/// back at the operator) and Vertical (an underslung camera). Both on is a 180° turn.
 enum MirrorAssist {
     static let explanation =
-        "Flips the monitor left-to-right, for a camera pointed back at you. "
+        "Flips the monitor for a camera pointed back at you or mounted upside down. "
         + "The recording and the scopes are never mirrored."
+    static let horizontalHelp = "Left-to-right, for a camera pointed back at you."
+    static let verticalHelp = "Top-to-bottom, for an underslung mount. Both on turns it 180°."
 
-    /// OpenZCine `LiveFrameRaster.feedScale` — negative X, never Y.
+    /// OpenZCine `LiveFrameRaster.feedScale`: negative X for Horizontal, negative Y for Vertical.
     static func feedScale(
         mirrored: Bool,
+        flippedVertically: Bool = false,
         squeeze: CGSize = CGSize(width: 1, height: 1)
     ) -> CGSize {
-        guard mirrored else { return squeeze }
-        return CGSize(width: -squeeze.width, height: squeeze.height)
+        CGSize(
+            width: mirrored ? -squeeze.width : squeeze.width,
+            height: flippedVertically ? -squeeze.height : squeeze.height)
     }
 
-    /// OpenZCine `AssistPanel` `.mirror` body — help copy only.
-    static func longPressMenu(
-        assist _: LiveAssistState,
-        compact: Bool = false
-    ) -> MirrorLongPressMenu {
-        MirrorLongPressMenu(compact: compact)
-    }
-
-    static func longPressMenu(compact: Bool = false) -> MirrorLongPressMenu {
-        MirrorLongPressMenu(compact: compact)
+    static func longPressMenu(assist: LiveAssistState) -> MirrorLongPressMenu {
+        MirrorLongPressMenu(assist: assist)
     }
 }
 
-/// OpenZCine `AssistPanel` MIRROR copy: 13pt muted. Android `OptionCopy` is 11pt in the
-/// compact settings strip — `compact` follows that.
+/// Grid-style axis switches under the MIRROR help copy.
 struct MirrorLongPressMenu: View {
-    var compact: Bool = false
+    @Bindable var assist: LiveAssistState
 
     var body: some View {
-        Text(MirrorAssist.explanation)
-            .font(LiveType.ui(size: compact ? 11 : 13))
-            .foregroundStyle(LiveDesign.muted)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(MirrorAssist.explanation)
+                .font(LiveType.ui(size: 13))
+                .foregroundStyle(LiveDesign.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 8)
+            SettingsSwitchInlineRow(
+                title: "Horizontal", help: MirrorAssist.horizontalHelp, showTopDivider: false,
+                isOn: assist.mirrorHorizontal, identifier: "mirror.horizontal"
+            ) {
+                assist.mirrorHorizontal.toggle()
+                assist.persist()
+            }
+            SettingsSwitchInlineRow(
+                title: "Vertical", help: MirrorAssist.verticalHelp,
+                isOn: assist.mirrorVertical, identifier: "mirror.vertical"
+            ) {
+                assist.mirrorVertical.toggle()
+                assist.persist()
+            }
+        }
     }
 }

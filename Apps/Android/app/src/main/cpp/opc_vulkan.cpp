@@ -298,7 +298,7 @@ struct OpcVk {
     float splitOn = 0;
     float splitVertical = 1;
     float zebraHiOn = 0, zebraHi = 1, zebraMidOn = 0, zebraMid = 0.5f, zebraMidHalf = 0.02f;
-    float feedUpscale = 0, mirror = 0;
+    float feedUpscale = 0, mirror = 0, mirrorY = 0;
     float peakingOn = 0, peakingRatio = 2.10f, peakingGate = 0.00174f;
     float peakingColor[3]{1.f, 72.f / 255.f, 64.f / 255.f};
     float zebraHiColor[3]{1, 1, 1};
@@ -1645,7 +1645,7 @@ static void noteAhbReleased(OpcVk* r) {
 static bool feedNeedsGrade(const OpcVk* r) {
     // Fast is present of the bake (or of identity RGB), not a reason to cube.
     return r->lutSize >= 2.f || r->limitsOn > 0.5f || r->zebraHiOn > 0.5f || r->zebraMidOn > 0.5f ||
-           r->splitOn > 0.5f || r->mirror > 0.5f || r->peakingOn > 0.5f;
+           r->splitOn > 0.5f || r->mirror > 0.5f || r->mirrorY > 0.5f || r->peakingOn > 0.5f;
 }
 
 static void beginPass(VkCommandBuffer cmd, VkRenderPass pass, VkFramebuffer fb, uint32_t w, uint32_t h,
@@ -1877,7 +1877,7 @@ static bool renderFrame(OpcVk* r) {
         float displaySize[2];
         float lutSize, limitsPaintSize, limitsWeightSize, limitsOn;
         float splitOn, splitVertical, zebraHiOn, zebraHi, zebraMidOn, zebraMid, zebraMidHalf, feedUpscale;
-        float mirror, peakingOn, pad0, pad1;
+        float mirror, peakingOn, mirrorY, pad1;
         float zebraHiColor[4];
         float zebraMidColor[4];
         float peakingColor[4];
@@ -1900,6 +1900,7 @@ static bool renderFrame(OpcVk* r) {
     fpc.zebraMidHalf = r->zebraMidHalf;
     fpc.feedUpscale = r->feedUpscale;
     fpc.mirror = r->mirror;
+    fpc.mirrorY = r->mirrorY;
     fpc.peakingOn = r->peakingOn;
     memcpy(fpc.zebraHiColor, r->zebraHiColor, 12);
     memcpy(fpc.zebraMidColor, r->zebraMidColor, 12);
@@ -2507,7 +2508,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetFeedFlags(
     JNIEnv*, jclass, jlong h, jfloat lutSize, jfloat limitsOn, jfloat splitOn, jfloat splitVertical,
     jfloat zebraHiOn, jfloat zebraHi, jfloat zebraMidOn, jfloat zebraMid, jfloat zebraMidHalf,
-    jfloat upscale, jfloat mirror, jfloat peakingOn, jfloat peakingRatio, jfloat peakingGate,
+    jfloat upscale, jfloat mirror, jfloat mirrorY, jfloat peakingOn, jfloat peakingRatio, jfloat peakingGate,
     jfloat peakingR, jfloat peakingG, jfloat peakingB) {
     auto* r = fromHandle(h);
     if (!r) return;
@@ -2523,6 +2524,7 @@ Java_com_opencapture_openpocketcine_feed_OpcVulkan_nativeSetFeedFlags(
     r->zebraMidHalf = zebraMidHalf;
     r->feedUpscale = upscale;
     r->mirror = mirror;
+    r->mirrorY = mirrorY;
     if ((peakingOn > 0.5f) != (r->peakingOn > 0.5f)) {
         LOGI("peaking %s ratio=%.2f gate=%g", peakingOn > 0.5f ? "on" : "off", peakingRatio,
              peakingGate);

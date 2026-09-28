@@ -10,7 +10,8 @@ import UIKit
 ///
 /// Mirror is OpenZCine `LiveFrameRaster.feedScale`: a negative-X transform on a host view
 /// that wraps both renderers. Applied at present time (not SwiftUI `scaleEffect`) so
-/// MIRROR assist lands with the presented picture.
+/// MIRROR assist lands with the presented picture. MIRROR Vertical is a negative Y on the
+/// same host; it has no pose latch, so it applies on the toggle.
 struct VideoView: View {
     let decoder: HevcDecoder
     var effects: LiveImageEffects
@@ -27,6 +28,7 @@ struct VideoView: View {
             decoder: decoder,
             effects: rasterEffects,
             assistMirror: effects.mirror,
+            flipVertical: effects.mirrorVertical,
             pictureFlip: pictureFlip,
             sampleBus: sampleBus,
             transfer: transfer,
@@ -48,6 +50,7 @@ struct VideoDisplayRepresentable: UIViewRepresentable {
     let decoder: HevcDecoder
     var effects: LiveImageEffects
     var assistMirror: Bool
+    var flipVertical = false
     var pictureFlip: Bool
     var sampleBus: LiveFrameSampleBus
     var transfer: MonitorTransfer?
@@ -90,6 +93,7 @@ struct VideoDisplayRepresentable: UIViewRepresentable {
             view?.setPictureMirrored(mirrored)
         }
         decoder.assistMirror = assistMirror
+        view.setPictureFlippedVertically(flipVertical)
     }
 
     private func wire(_ decoder: HevcDecoder) {
@@ -106,6 +110,7 @@ final class DisplayLayerView: UIView {
     private let displayLayer: AVSampleBufferDisplayLayer
     private let pictureHost = UIView()
     private var pictureMirrored = false
+    private var pictureFlippedVertically = false
     let ciFeed = CIFeedView()
     var onReady: (() -> Void)?
 
@@ -134,6 +139,12 @@ final class DisplayLayerView: UIView {
         applyPictureTransform()
     }
 
+    func setPictureFlippedVertically(_ flipped: Bool) {
+        guard flipped != pictureFlippedVertically else { return }
+        pictureFlippedVertically = flipped
+        applyPictureTransform()
+    }
+
     func applyHDRDisplay(_ enabled: Bool) {
         LiveHDRDisplay.setEnabled(enabled, screen: window?.screen)
         LiveHDRDisplay.configure(displayLayer, screen: window?.screen)
@@ -141,10 +152,11 @@ final class DisplayLayerView: UIView {
     }
 
     private func applyPictureTransform() {
-        let x = MirrorAssist.feedScale(mirrored: pictureMirrored).width
+        let scale = MirrorAssist.feedScale(
+            mirrored: pictureMirrored, flippedVertically: pictureFlippedVertically)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        pictureHost.transform = CGAffineTransform(scaleX: x, y: 1)
+        pictureHost.transform = CGAffineTransform(scaleX: scale.width, y: scale.height)
         CATransaction.commit()
     }
 

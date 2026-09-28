@@ -782,7 +782,7 @@ struct LiveGimbalWaypointMarks: View {
                                         GimbalWaypointPresentation.normalizedX(
                                             mark.nx,
                                             poseInvertPan: model.session.gimbalPoseInvertPan,
-                                            assistMirror: model.assist.isVisible(.mirror)))
+                                            assistMirror: model.assist.mirrorsHorizontally))
                                         * feed.width,
                                     y: feed.minY + CGFloat(mark.ny) * feed.height)
                                 if connected {
@@ -815,7 +815,7 @@ struct LiveGimbalWaypointMarks: View {
                                     GimbalWaypointPresentation.normalizedX(
                                         mark.nx,
                                         poseInvertPan: model.session.gimbalPoseInvertPan,
-                                        assistMirror: model.assist.isVisible(.mirror)))
+                                        assistMirror: model.assist.mirrorsHorizontally))
                                     * feed.width,
                                 y: feed.minY + CGFloat(mark.ny) * feed.height
                             )

@@ -34,6 +34,7 @@ internal fun PlaybackFeedView(
     backdrop: MonitorBackdropFeed,
     plan: FeedEffectsRenderPlan,
     mirrored: Boolean,
+    flippedVertically: Boolean,
     zoom: AnchoredPinchZoom,
     sourceWidth: Int,
     sourceHeight: Int,
@@ -77,12 +78,12 @@ internal fun PlaybackFeedView(
         val top = (h - h * zoom.scale) / 2f + zoom.offsetY
         Box(Modifier.fillMaxSize().monitorBackdropSource(backdrop.source,
             imageRect = androidx.compose.ui.geometry.Rect(left, top, left + w * zoom.scale, top + h * zoom.scale),
-            mirrored = mirrored))
+            mirrored = mirrored, flippedVertically = flippedVertically))
     Box(
         Modifier.fillMaxSize().graphicsLayer {
             compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
             scaleX = zoom.scale * if (mirrored) -1f else 1f
-            scaleY = zoom.scale
+            scaleY = zoom.scale * if (flippedVertically) -1f else 1f
             translationX = zoom.offsetX
             translationY = zoom.offsetY
         },

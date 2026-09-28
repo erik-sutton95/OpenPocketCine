@@ -56,11 +56,11 @@ enum class LiveAssistTool {
                 MIRROR -> "Mirror"
             }
 
-    /** The fixed camera EV meter, LEVEL and mirror are tap-only toggles. */
+    /** The fixed camera EV meter and LEVEL are tap-only toggles. */
     val hasConfiguration: Boolean
         get() =
             when (this) {
-                EV, LEVEL, MIRROR -> false
+                EV, LEVEL -> false
                 else -> true
             }
 

@@ -25,7 +25,7 @@ layout(push_constant) uniform PC {
     float feedUpscale;
     float mirror;
     float peakingOn;
-    float _pad0;
+    float mirrorY;
     float _pad1;
     vec4 zebraHighlightColor;
     vec4 zebraMidtoneColor;
@@ -68,7 +68,7 @@ vec3 sampleLut(sampler3D cube, float cubeSize, vec3 color) {
 }
 
 vec3 sampleSource(vec2 uv) {
-    return texture(uFeed, vec2(mix(uv.x, 1.0 - uv.x, pc.mirror), uv.y)).rgb;
+    return texture(uFeed, vec2(mix(uv.x, 1.0 - uv.x, pc.mirror), mix(uv.y, 1.0 - uv.y, pc.mirrorY))).rgb;
 }
 
 vec3 sampleSourceAt(vec2 pixel, vec2 sourceSize) {
@@ -116,7 +116,7 @@ void main() {
     if (pc.peakingOn > 0.5) {
         vec2 sourceSize = max(pc.sourceSize, vec2(1.0));
         vec2 texel = 1.0 / sourceSize;
-        vec2 mirrored = vec2(mix(uv.x, 1.0 - uv.x, pc.mirror), uv.y);
+        vec2 mirrored = vec2(mix(uv.x, 1.0 - uv.x, pc.mirror), mix(uv.y, 1.0 - uv.y, pc.mirrorY));
         vec2 centre = (floor(mirrored * sourceSize) + 0.5) * texel;
         float stroke = peakingClosedStroke(centre, texel);
         float under = texture(uPeakingMask, centre).g;
