@@ -248,6 +248,9 @@ class MonitorLayoutPolicyTest {
         assertEquals(layout.stick.maxX - 36f, layout.gimbal.x, .01f)
         assertTrue(layout.stick.maxX <= layout.record.x + .05f)
         assertEquals(8f, MonitorLayoutPolicy.landscapeBottomClearance(0f), .01f)
+        // Galaxy S25 landscape (780 x 360 dp): telemetry pills stay off the 16:9 picture.
+        val s25 = MonitorLayoutPolicy.fieldMonitor(780f, 360f, safeLeading = 59f, hasDisplayCutout = true)
+        assertTrue(s25.gauges.maxX <= s25.picture.x + .01f)
     }
 
 }
