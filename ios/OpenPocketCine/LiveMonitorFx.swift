@@ -38,6 +38,8 @@ struct LiveImageEffects: Equatable, Sendable {
     var splitVertical = true
     /// Left-to-right monitor flip. Applied in `VideoView`, not this compositor.
     var mirror = false
+    /// Top-to-bottom monitor flip (MIRROR Vertical). Same view-space path as `mirror`.
+    var mirrorVertical = false
     /// Anamorphic display stretch. `1` is off. Anamorphic adapters squeeze the source;
     /// this preview-only correction never changes recordings or scope samples.
     var desqueezeFactor: Double = 1

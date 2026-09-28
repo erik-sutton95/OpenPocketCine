@@ -47,14 +47,13 @@ class LiveAssistStateTest {
     }
 
     @Test
-    fun audioHasMonitorOptionsWhileEvLevelAndMirrorStayTapOnly() {
+    fun audioAndMirrorHaveOptionsWhileEvAndLevelStayTapOnly() {
         assertTrue(LiveAssistTool.AUDIO.hasConfiguration)
         assertFalse(LiveAssistTool.EV.hasConfiguration)
         assertFalse(LiveAssistTool.LEVEL.hasConfiguration)
-        assertFalse(LiveAssistTool.MIRROR.hasConfiguration)
+        assertTrue(LiveAssistTool.MIRROR.hasConfiguration)
         for (tool in LiveAssistTool.settingsCases) {
-            if (tool == LiveAssistTool.AUDIO || tool == LiveAssistTool.EV || tool == LiveAssistTool.LEVEL ||
-                tool == LiveAssistTool.MIRROR) continue
+            if (tool == LiveAssistTool.AUDIO || tool == LiveAssistTool.EV || tool == LiveAssistTool.LEVEL) continue
             assertTrue(tool.hasConfiguration, "${tool.name} should open options")
         }
     }
@@ -114,6 +113,27 @@ class LiveAssistStateTest {
         assertTrue(restored.isOn(LiveAssistTool.MIRROR))
         assertTrue(restored.lutOn)
         assertEquals(-1.5, restored.lutExposureStops)
+    }
+
+    @Test
+    fun mirrorAxesPersistAndOnlyApplyWhileToolIsOn() {
+        var saved: String? = null
+        val state = LiveAssistState(onPersist = { saved = it })
+        assertTrue(state.mirrorHorizontal)
+        assertFalse(state.mirrorVertical)
+        state.setMirrorAxes(horizontal = false, vertical = true)
+        assertFalse(state.flipsVertically)
+        state.toggle(LiveAssistTool.MIRROR)
+        assertFalse(state.mirrorsHorizontally)
+        assertTrue(state.flipsVertically)
+        val restored = LiveAssistState(encoded = saved)
+        assertTrue(restored.isOn(LiveAssistTool.MIRROR))
+        assertFalse(restored.mirrorHorizontal)
+        assertTrue(restored.mirrorVertical)
+        // Pre-axis saves keep the old horizontal-only behavior.
+        val legacy = LiveAssistState(encoded = """{"tools":["MIRROR"]}""")
+        assertTrue(legacy.mirrorsHorizontally)
+        assertFalse(legacy.flipsVertically)
     }
 
     @Test

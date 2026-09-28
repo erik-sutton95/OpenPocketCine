@@ -21,7 +21,7 @@ final class AppModel {
     var livePictureViewFlip: Bool {
         GimbalStick.liveViewFlip(
             poseViewFlip: session.gimbalPoseViewFlip,
-            assistMirror: assist.isVisible(.mirror))
+            assistMirror: assist.mirrorsHorizontally)
     }
     var savedCameras: [SavedCamera] = SavedCameraStore.load()
     /// Operator tapped “Pair new camera” from the saved list.
@@ -708,6 +708,7 @@ final class AppModel {
             self.watchRelay.ingestPreview(
                 image, source: source, unmanaged: unmanaged,
                 mirrored: self.session.decoder.presentedPictureFlip ?? false,
+                flippedVertically: self.assist.flipsVertically,
                 timecode: self.session.status.timecodeClock,
                 isRecording: self.session.status.isRecording)
         }

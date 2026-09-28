@@ -56,6 +56,13 @@ public struct TrackingBox: Equatable, Sendable {
             height: max(maxY, other.maxY) - y0)
     }
 
+    /// Camera box to screen box (and back) through the MIRROR flips. Both on is a 180° turn.
+    public func flipped(horizontal: Bool, vertical: Bool) -> TrackingBox {
+        TrackingBox(
+            x: horizontal ? 1 - x - width : x, y: vertical ? 1 - y - height : y,
+            width: width, height: height)
+    }
+
     public init(x: Double, y: Double, width: Double, height: Double) {
         self.x = x
         self.y = y

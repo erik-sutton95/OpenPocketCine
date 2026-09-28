@@ -42,6 +42,10 @@ data class TrackingBox(
 
     fun mirrored(): TrackingBox = copy(x = 1.0 - x - width)
 
+    /** Swift `TrackingBox.flipped`: camera box to screen box (and back) through MIRROR. */
+    fun flipped(horizontal: Boolean, vertical: Boolean): TrackingBox =
+        copy(x = if (horizontal) 1.0 - x - width else x, y = if (vertical) 1.0 - y - height else y)
+
     companion object {
         const val MINIMUM_NORMALIZED_SIZE = 0.05
         const val MIMO_MINIMUM_SIDE = 0.09
@@ -523,8 +527,9 @@ object LiveTrackingChrome {
         feedWidth: Float,
         feedHeight: Float,
         mirrored: Boolean,
+        flippedVertically: Boolean = false,
     ): CancelRect {
-        val drawn = if (mirrored) box.mirrored() else box
+        val drawn = box.flipped(mirrored, flippedVertically)
         val rectRight = ((drawn.x + drawn.width) * feedWidth).toFloat()
         val rectTop = (drawn.y * feedHeight).toFloat()
         val s = CANCEL_HIT_SIZE

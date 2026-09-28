@@ -14,6 +14,16 @@ struct WatcherFocusPointTests {
             WatcherFocusPoint.map(x: 320, y: 180, width: 1280, height: 720, mirrored: false)
                 == .init(x: 250, y: 250))
     }
+    @Test func verticalFlipMapsYAndComposesWithMirror() {
+        #expect(
+            WatcherFocusPoint.map(
+                x: 320, y: 180, width: 1280, height: 720, mirrored: false,
+                flippedVertically: true) == .init(x: 250, y: 750))
+        #expect(
+            WatcherFocusPoint.map(
+                x: 320, y: 180, width: 1280, height: 720, mirrored: true,
+                flippedVertically: true) == .init(x: 750, y: 750))
+    }
     @Test func letterboxAndInvalidGeometryCannotSendFocus() {
         #expect(
             WatcherFocusPoint.map(x: -1, y: 10, width: 720, height: 1280, mirrored: false) == nil)

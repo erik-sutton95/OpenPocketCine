@@ -5,13 +5,13 @@ import XCTest
 
 final class AssistBarChromeTests: XCTestCase {
     func testLongPressEnabledForRemainingTools() {
-        let tapOnly: Set<LiveAssistTool> = [.mirror, .evMeter, .level]
+        let tapOnly: Set<LiveAssistTool> = [.evMeter, .level]
         for tool in LiveAssistTool.settingsCases where !tapOnly.contains(tool) {
             XCTAssertTrue(tool.hasConfiguration, "\(tool.rawValue) should open options")
         }
-        // Audio has local presentation options; mirror remains tap-only.
+        // Audio has local presentation options; mirror picks its flip axes.
         XCTAssertTrue(LiveAssistTool.audioMeters.hasConfiguration)
-        XCTAssertFalse(LiveAssistTool.mirror.hasConfiguration)
+        XCTAssertTrue(LiveAssistTool.mirror.hasConfiguration)
         XCTAssertFalse(LiveAssistTool.level.hasConfiguration)
         XCTAssertTrue(LiveAssistTool.desqueeze.hasConfiguration)
     }

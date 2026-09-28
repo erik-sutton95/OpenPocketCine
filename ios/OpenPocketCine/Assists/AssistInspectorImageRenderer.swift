@@ -149,8 +149,10 @@ final class AssistInspectorImageRenderer: @unchecked Sendable {
             result = result.transformed(
                 by: CGAffineTransform(scaleX: outputScale, y: outputScale))
         }
-        if effects.mirror {
-            result = result.transformed(by: CGAffineTransform(scaleX: -1, y: 1))
+        if effects.mirror || effects.mirrorVertical {
+            result = result.transformed(
+                by: CGAffineTransform(
+                    scaleX: effects.mirror ? -1 : 1, y: effects.mirrorVertical ? -1 : 1))
         }
         let extent = result.extent
         guard extent.width.isFinite, extent.height.isFinite,

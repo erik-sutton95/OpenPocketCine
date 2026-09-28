@@ -352,7 +352,7 @@ private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: 
                 for (sample in preview) {
                     val (nx, ny, onScreen) = GimbalMoveEngine.project(sample, live, aspect)
                     if (!onScreen) { connected = false; continue }
-                    val x = (feed.minX + motionOverlayX(nx, poseInvertPan, model.assist.mirror).toFloat() * feed.width).dp.toPx()
+                    val x = (feed.minX + motionOverlayX(nx, poseInvertPan, model.assist.mirrorsHorizontally).toFloat() * feed.width).dp.toPx()
                     val y = (feed.minY + ny.toFloat() * feed.height).dp.toPx()
                     if (connected) path.lineTo(x, y) else path.moveTo(x, y)
                     connected = true
@@ -368,7 +368,7 @@ private fun LiveGimbalWaypointMarks(model: AppModel, feed: ChromeRect, program: 
                 Modifier
                     .offset {
                         IntOffset(
-                            (feed.minX + motionOverlayX(nx, poseInvertPan, model.assist.mirror).toFloat() * feed.width - 13f).dp.roundToPx(),
+                            (feed.minX + motionOverlayX(nx, poseInvertPan, model.assist.mirrorsHorizontally).toFloat() * feed.width - 13f).dp.roundToPx(),
                             (feed.minY + ny.toFloat() * feed.height - 13f).dp.roundToPx(),
                         )
                     }

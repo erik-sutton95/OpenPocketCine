@@ -12,8 +12,8 @@ struct WatcherLiveView: View {
     private var client: WatcherRelayClient { model.relayClient }
     private var mirrored: Bool {
         GimbalStick.liveViewFlip(
-            poseViewFlip: client.decoder.poseViewFlip, assistMirror: model.assist.isVisible(.mirror)
-        )
+            poseViewFlip: client.decoder.poseViewFlip,
+            assistMirror: model.assist.mirrorsHorizontally)
     }
 
     var body: some View {
@@ -40,7 +40,8 @@ struct WatcherLiveView: View {
                         guard client.canControl,
                             let point = WatcherFocusPoint.map(
                                 x: value.location.x, y: value.location.y,
-                                width: feed.width, height: feed.height, mirrored: mirrored)
+                                width: feed.width, height: feed.height, mirrored: mirrored,
+                                flippedVertically: model.assist.flipsVertically)
                         else { return }
                         focusPoint = CGPoint(x: Double(point.x) / 1000, y: Double(point.y) / 1000)
                         client.sendCommand(

@@ -70,6 +70,7 @@ class MonitorBackdropSource {
     internal var bounds by mutableStateOf(Rect.Zero)
     internal var viewport by mutableStateOf(Rect.Zero)
     internal var mirrored by mutableStateOf(false)
+    internal var flippedVertically by mutableStateOf(false)
 }
 
 val LocalMonitorBackdropSurround = compositionLocalOf { MonitorPalette.backgroundDeep }
@@ -79,7 +80,7 @@ val LocalMonitorBackdrops = compositionLocalOf<List<MonitorBackdropSource>> { em
 /** Geometry only: never records content, reads a Surface, or creates a decoder. */
 @Composable
 fun Modifier.monitorBackdropSource(source: MonitorBackdropSource, imageRect: Rect? = null,
-    mirrored: Boolean = false): Modifier {
+    mirrored: Boolean = false, flippedVertically: Boolean = false): Modifier {
     val position = remember(source) { arrayOfNulls<LayoutCoordinates>(1) }
     fun update(coordinates: LayoutCoordinates) {
         if (!coordinates.isAttached) return
@@ -89,6 +90,7 @@ fun Modifier.monitorBackdropSource(source: MonitorBackdropSource, imageRect: Rec
         source.viewport = viewport
         source.bounds = imageRect?.translate(origin) ?: viewport
         source.mirrored = mirrored
+        source.flippedVertically = flippedVertically
     }
     SideEffect { position[0]?.let(::update) }
     DisposableEffect(source) { onDispose { source.bounds = Rect.Zero; source.viewport = Rect.Zero } }
@@ -131,7 +133,8 @@ internal class MonitorBackdropRenderer : AutoCloseable {
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     private var lastBlur = Float.NaN
     private var lastSaturation = Float.NaN
-    private data class Input(val image: Bitmap?, val bounds: Rect, val viewport: Rect, val mirrored: Boolean)
+    private data class Input(val image: Bitmap?, val bounds: Rect, val viewport: Rect, val mirrored: Boolean,
+        val flippedVertically: Boolean)
     private var inputs = emptyList<Input>()
     private var lastWidth = -1
     private var lastHeight = -1
@@ -161,10 +164,10 @@ internal class MonitorBackdropRenderer : AutoCloseable {
             surround == lastSurround && sources.size == inputs.size && sources.indices.all { index ->
                 val source = sources[index]; val input = inputs[index]
                 source.image === input.image && source.bounds == input.bounds && source.viewport == input.viewport &&
-                    source.mirrored == input.mirrored
+                    source.mirrored == input.mirrored && source.flippedVertically == input.flippedVertically
             }
         if (unchanged) { canvas.drawRenderNode(node); return true }
-        inputs = sources.map { Input(it.image, it.bounds, it.viewport, it.mirrored) }
+        inputs = sources.map { Input(it.image, it.bounds, it.viewport, it.mirrored, it.flippedVertically) }
         lastWidth = w; lastHeight = h; lastOrigin = origin; lastSurround = surround
         val recording = node.beginRecording(w, h)
         try {
@@ -176,7 +179,10 @@ internal class MonitorBackdropRenderer : AutoCloseable {
                 val viewport = source.viewport
                 recording.save()
                 recording.clipRect(viewport.left, viewport.top, viewport.right, viewport.bottom)
-                if (source.mirrored) recording.scale(-1f, 1f, bounds.center.x, bounds.center.y)
+                if (source.mirrored || source.flippedVertically) {
+                    recording.scale(if (source.mirrored) -1f else 1f, if (source.flippedVertically) -1f else 1f,
+                        bounds.center.x, bounds.center.y)
+                }
                 recording.drawBitmap(bitmap, null, RectF(bounds.left, bounds.top, bounds.right, bounds.bottom), paint)
                 recording.restore()
             }

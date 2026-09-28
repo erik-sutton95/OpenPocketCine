@@ -406,14 +406,14 @@ class AppModel(
             x,
             y,
             gimbalStickSensitivity,
-            assist.mirror,
+            assist.mirrorsHorizontally,
             mapping = virtualJoystickMapping,
         )
     }
 
     fun updateGimbalPadStick(x: Float, y: Float) {
         if (uiLocked) return
-        session.updateGimbalStick(x, y, gimbalStickSensitivity, assist.mirror)
+        session.updateGimbalStick(x, y, gimbalStickSensitivity, assist.mirrorsHorizontally)
     }
 
     fun endGimbalStick() = session.endGimbalStick()

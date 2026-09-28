@@ -264,7 +264,8 @@ internal class LiveVulkanSession(
         histoRect: GpuRect?,
         vector: GpuRect?,
         uiScale: Float = 1f,
-        pictureMirrored: Boolean = assist.isVisible(LiveAssistTool.MIRROR),
+        pictureMirrored: Boolean = assist.mirrorsHorizontally,
+        pictureFlippedVertically: Boolean = assist.flipsVertically,
     ) {
         val native = handle
         if (native == 0L || presentGate.isReleased) return
@@ -309,6 +310,7 @@ internal class LiveVulkanSession(
                 0f
             },
             if (pictureMirrored) 1f else 0f,
+            if (pictureFlippedVertically) 1f else 0f,
             if (plan.peaking) 1f else 0f,
             plan.peakingRatioThreshold,
             plan.peakingNoiseGate,

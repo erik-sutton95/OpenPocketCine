@@ -199,7 +199,7 @@ final class GimbalGamepadBridge {
             if !model.gimbalPadHeld { model.gimbalPadHeld = true }
             model.session.updateGimbalStick(
                 x: x, y: y, sensitivity: model.gimbalStickSensitivity,
-                assistMirror: model.assist.isVisible(.mirror))
+                assistMirror: model.assist.mirrorsHorizontally)
         }
 
         zoomY = CamFov.triggerZoomAxis(

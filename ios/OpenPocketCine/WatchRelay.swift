@@ -64,7 +64,7 @@ struct WatchPreviewPump {
         private var pendingPreview:
             (
                 image: CIImage, source: CVPixelBuffer?, unmanaged: Bool, mirrored: Bool,
-                timecode: String, isRecording: Bool
+                flippedVertically: Bool, timecode: String, isRecording: Bool
             )?
         /// Pipeline hides WatchConnectivity RTT (fps ≈ depth/RTT). One in flight
         /// capped the wrist at ~1/RTT (~8–12 fps). Encode is detached so three
@@ -124,12 +124,13 @@ struct WatchPreviewPump {
         /// cube owns the picture). Pixel backing must live until encode returns.
         func ingestPreview(
             _ image: CIImage, source: CVPixelBuffer? = nil, unmanaged: Bool = false,
-            mirrored: Bool = false, timecode: String, isRecording: Bool
+            mirrored: Bool = false, flippedVertically: Bool = false, timecode: String,
+            isRecording: Bool
         ) {
             guard isReady else { return }
             pendingPreview = (
                 image: image, source: source, unmanaged: unmanaged, mirrored: mirrored,
-                timecode: timecode, isRecording: isRecording
+                flippedVertically: flippedVertically, timecode: timecode, isRecording: isRecording
             )
             pumpFrames()
         }
@@ -146,6 +147,7 @@ struct WatchPreviewPump {
                     source: boxed.value.source,
                     unmanaged: boxed.value.unmanaged,
                     mirrored: boxed.value.mirrored,
+                    flippedVertically: boxed.value.flippedVertically,
                     timecode: boxed.value.timecode,
                     isRecording: boxed.value.isRecording,
                     width: params.width,
@@ -191,20 +193,22 @@ struct WatchPreviewPump {
 
         nonisolated private static func encodeFrame(
             image: CIImage, source: CVPixelBuffer?, unmanaged: Bool, mirrored: Bool,
-            timecode: String, isRecording: Bool, width: CGFloat, quality: CGFloat
+            flippedVertically: Bool, timecode: String, isRecording: Bool, width: CGFloat,
+            quality: CGFloat
         ) -> Data? {
             let jpeg: Data?
             if unmanaged {
                 jpeg = thumbnailData(
-                    from: image, unmanaged: true, mirrored: mirrored, maxWidth: width,
-                    quality: quality)
+                    from: image, unmanaged: true, mirrored: mirrored,
+                    flippedVertically: flippedVertically, maxWidth: width, quality: quality)
             } else if let source {
                 jpeg = thumbnailData(
-                    from: source, mirrored: mirrored, maxWidth: width, quality: quality)
+                    from: source, mirrored: mirrored, flippedVertically: flippedVertically,
+                    maxWidth: width, quality: quality)
             } else {
                 jpeg = thumbnailData(
-                    from: image, unmanaged: false, mirrored: mirrored, maxWidth: width,
-                    quality: quality)
+                    from: image, unmanaged: false, mirrored: mirrored,
+                    flippedVertically: flippedVertically, maxWidth: width, quality: quality)
             }
             guard let jpeg else { return nil }
             let frame = WatchRelayFrame(jpeg: jpeg, timecode: timecode, isRecording: isRecording)
@@ -249,7 +253,8 @@ struct WatchPreviewPump {
         /// Identity path. Matches `AVSampleBufferDisplayLayer` better than a
         /// DeviceRGB CI bake (that bake was a visible Rec.709 contrast shift).
         nonisolated static func thumbnailData(
-            from buffer: CVPixelBuffer, mirrored: Bool = false, maxWidth: CGFloat, quality: CGFloat
+            from buffer: CVPixelBuffer, mirrored: Bool = false, flippedVertically: Bool = false,
+            maxWidth: CGFloat, quality: CGFloat
         ) -> Data? {
             var imageOut: CGImage?
             let status = VTCreateCGImageFromCVPixelBuffer(
@@ -257,11 +262,13 @@ struct WatchPreviewPump {
                 imageOut: &imageOut)
             guard status == noErr, let cg = imageOut,
                 let jpeg = encodedFrameData(
-                    scaledImage(cg, mirrored: mirrored, maxWidth: maxWidth), quality: quality)
+                    scaledImage(
+                        cg, mirrored: mirrored, flippedVertically: flippedVertically,
+                        maxWidth: maxWidth), quality: quality)
             else {
                 return thumbnailData(
                     from: CIImage(cvPixelBuffer: buffer), unmanaged: false, mirrored: mirrored,
-                    maxWidth: maxWidth, quality: quality)
+                    flippedVertically: flippedVertically, maxWidth: maxWidth, quality: quality)
             }
             return jpeg
         }
@@ -302,16 +309,18 @@ struct WatchPreviewPump {
 
         nonisolated static func thumbnailData(
             from image: CIImage, unmanaged: Bool = false, mirrored: Bool = false,
-            maxWidth: CGFloat, quality: CGFloat
+            flippedVertically: Bool = false, maxWidth: CGFloat, quality: CGFloat
         ) -> Data? {
             let extent = image.extent
             guard extent.width > 1, extent.height > 1 else { return nil }
             let scale = min(1, maxWidth / extent.width)
             let oriented =
-                mirrored
+                mirrored || flippedVertically
                 ? image.transformed(
                     by: CGAffineTransform(
-                        a: -1, b: 0, c: 0, d: 1, tx: extent.minX + extent.maxX, ty: 0))
+                        a: mirrored ? -1 : 1, b: 0, c: 0, d: flippedVertically ? -1 : 1,
+                        tx: mirrored ? extent.minX + extent.maxX : 0,
+                        ty: flippedVertically ? extent.minY + extent.maxY : 0))
                 : image
             let scaled = oriented.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             let target = scaled.extent.integral
@@ -330,7 +339,7 @@ struct WatchPreviewPump {
         }
 
         nonisolated private static func scaledImage(
-            _ cg: CGImage, mirrored: Bool, maxWidth: CGFloat
+            _ cg: CGImage, mirrored: Bool, flippedVertically: Bool, maxWidth: CGFloat
         ) -> UIImage {
             let width = CGFloat(cg.width)
             let height = CGFloat(cg.height)
@@ -346,6 +355,10 @@ struct WatchPreviewPump {
                 if mirrored {
                     renderer.cgContext.translateBy(x: size.width, y: 0)
                     renderer.cgContext.scaleBy(x: -1, y: 1)
+                }
+                if flippedVertically {
+                    renderer.cgContext.translateBy(x: 0, y: size.height)
+                    renderer.cgContext.scaleBy(x: 1, y: -1)
                 }
                 UIImage(cgImage: cg).draw(in: CGRect(origin: .zero, size: size))
             }
@@ -401,7 +414,8 @@ struct WatchPreviewPump {
         func ingestState(_ state: WatchRelayState) {}
         func ingestPreview(
             _ image: CIImage, source: CVPixelBuffer? = nil, unmanaged: Bool = false,
-            mirrored: Bool = false, timecode: String, isRecording: Bool
+            mirrored: Bool = false, flippedVertically: Bool = false, timecode: String,
+            isRecording: Bool
         ) {}
         nonisolated static func encodedFrameData(_ image: UIImage, quality: CGFloat) -> Data? {
             image.jpegData(compressionQuality: quality)

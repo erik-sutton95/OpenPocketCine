@@ -114,7 +114,7 @@ struct LiveGimbalStick: View {
                     model.session.updateGimbalStick(
                         x: mapped.commandX, y: mapped.commandY,
                         sensitivity: model.gimbalStickSensitivity,
-                        assistMirror: model.assist.isVisible(.mirror),
+                        assistMirror: model.assist.mirrorsHorizontally,
                         mapping: model.virtualJoystickMapping)
                 }
             }

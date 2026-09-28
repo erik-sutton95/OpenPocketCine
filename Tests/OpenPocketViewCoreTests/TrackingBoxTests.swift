@@ -4,6 +4,19 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct TrackingBoxTests {
+    @Test func flipsAreIndependentAndSelfInverse() {
+        let box = TrackingBox(x: 0.1, y: 0.2, width: 0.3, height: 0.4)
+        #expect(box.flipped(horizontal: false, vertical: false) == box)
+        let h = box.flipped(horizontal: true, vertical: false)
+        #expect(abs(h.x - 0.6) < 1e-9 && h.y == 0.2)
+        let v = box.flipped(horizontal: false, vertical: true)
+        #expect(v.x == 0.1 && abs(v.y - 0.4) < 1e-9)
+        let both = box.flipped(horizontal: true, vertical: true)
+        #expect(abs(both.x - 0.6) < 1e-9 && abs(both.y - 0.4) < 1e-9)
+        let back = both.flipped(horizontal: true, vertical: true)
+        #expect(abs(back.x - box.x) < 1e-9 && abs(back.y - box.y) < 1e-9)
+    }
+
     @Test func setTrackingBoxMatchesMimoLayout() {
         let frame = Commands.setTrackingBox(
             id: 0x2726, x: 0.418, y: 0.525, width: 0.484, height: 0.461)

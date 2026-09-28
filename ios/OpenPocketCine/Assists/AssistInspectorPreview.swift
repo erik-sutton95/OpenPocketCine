@@ -83,7 +83,8 @@ enum AssistInspectorPreviewPolicy {
         result.faceAF = false
         result.inspectorSample = false
         result.colorMode = transfer.colorMode
-        result.mirror = tool == .mirror || result.mirror
+        result.mirror = (tool == .mirror && assist.mirrorHorizontal) || result.mirror
+        result.mirrorVertical = (tool == .mirror && assist.mirrorVertical) || result.mirrorVertical
         if tool == .lut {
             result.splitComparison = assist.splitComparison
         }

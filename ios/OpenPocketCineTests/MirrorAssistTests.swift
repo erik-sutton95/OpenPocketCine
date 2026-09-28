@@ -14,6 +14,47 @@ final class MirrorAssistTests: XCTestCase {
         XCTAssertEqual(on.height, 1, "Y must stay +1 — a negative Y is a vertical flip")
     }
 
+    func testVerticalFlipIsNegativeYAndComposesWithMirror() {
+        let v = MirrorAssist.feedScale(mirrored: false, flippedVertically: true)
+        XCTAssertEqual(v.width, 1)
+        XCTAssertEqual(v.height, -1)
+        let both = MirrorAssist.feedScale(mirrored: true, flippedVertically: true)
+        XCTAssertEqual(both.width, -1, "both axes is a 180° turn")
+        XCTAssertEqual(both.height, -1)
+    }
+
+    func testVerticalFlipMapsTapBackToCameraSpace() {
+        // Underslung: the operator taps the top-left of the screen, the camera sees bottom-left.
+        let size = CGSize(width: 400, height: 200)
+        let p = LiveFeedFocusGesture.cameraPoint(
+            CGPoint(x: 100, y: 50), in: size, mirrored: false, flippedVertically: true)
+        XCTAssertEqual(p.x, 0.25, accuracy: 1e-9)
+        XCTAssertEqual(p.y, 0.75, accuracy: 1e-9)
+        let box = LiveFeedFocusGesture.cameraBox(
+            from: CGPoint(x: 0, y: 0), to: CGPoint(x: 100, y: 50), in: size, mirrored: true,
+            flippedVertically: true)
+        XCTAssertEqual(box.x, 0.75, accuracy: 1e-9)
+        XCTAssertEqual(box.y, 0.75, accuracy: 1e-9)
+    }
+
+    func testMirrorAxesPersistAndOnlyApplyWhileToolIsOn() {
+        let state = LiveAssistState()
+        state.mirror = false
+        state.mirrorHorizontal = false
+        state.mirrorVertical = true
+        XCTAssertFalse(state.flipsVertically)
+        state.mirror = true
+        XCTAssertFalse(state.mirrorsHorizontally)
+        XCTAssertTrue(state.flipsVertically)
+        XCTAssertTrue(state.effects.mirrorVertical)
+        XCTAssertFalse(state.effects.mirror)
+
+        let restored = LiveAssistState()
+        OperatorPrefs.Snapshot(state).apply(to: restored)
+        XCTAssertFalse(restored.mirrorHorizontal)
+        XCTAssertTrue(restored.mirrorVertical)
+    }
+
     func testFeedScalePreservesDesqueezeOnXOnly() {
         let squeeze = CGSize(width: 1.33, height: 1)
         let on = MirrorAssist.feedScale(mirrored: true, squeeze: squeeze)
