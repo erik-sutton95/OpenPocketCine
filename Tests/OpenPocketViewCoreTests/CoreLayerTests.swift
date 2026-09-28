@@ -253,6 +253,37 @@ import Testing
         #expect(s.internalTotalMb == 0)  // confirmed absent, not unknown(-1)
     }
 
+    @Test func playbackZeroStorageDoesNotEraseKnownCapacity() {
+        var reported = [UInt8](repeating: 0, count: 22)
+        reported[6] = 0x00
+        reported[7] = 0xFA  // 64,000 MiB
+        reported[10] = 0x00
+        reported[11] = 0x7D  // 32,000 MiB
+        var status = CameraStatus()
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0, cmdSet: 0x02, cmdId: 0xDC,
+                    payload: reported), to: &status))
+        #expect(status.sdTotalMb == 64_000 && status.sdFreeMb == 32_000)
+
+        let blank = [UInt8](repeating: 0, count: 22)
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0, cmdSet: 0x02, cmdId: 0xDC,
+                    payload: blank), to: &status))
+        #expect(status.sdTotalMb == 64_000 && status.sdFreeMb == 32_000)
+
+        var noCard = CameraStatus()
+        #expect(
+            CameraStatusDecoder.apply(
+                .init(
+                    sender: 0, receiver: 0, seq: 0, flags: 0, cmdSet: 0x02, cmdId: 0xDC,
+                    payload: blank), to: &noCard))
+        #expect(noCard.sdTotalMb == 0 && noCard.sdFreeMb == 0)
+    }
+
     @Test func gimbalHeartbeatSwallowed() {
         var s = CameraStatus()
         #expect(

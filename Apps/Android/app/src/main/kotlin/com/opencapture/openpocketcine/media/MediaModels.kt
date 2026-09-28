@@ -16,6 +16,8 @@ data class MediaFile(
     val fps: Int? = null,
     val proxyPath: String? = null,
     val storage: Int = 0,
+    /** True when storage came from the counter of a store-specific `0x26` query. */
+    val storageKnown: Boolean = false,
     val group: Int = 0,
     val handleShared: Boolean = false,
     /**
@@ -24,7 +26,7 @@ data class MediaFile(
      */
     val handleCandidate: Long = 0L,
 ) {
-    val id: String get() = path
+    val id: String get() = MediaListCommand.pageKey(this)
     val filename: String get() = path.substringAfterLast('/')
     val fileExtension: String get() = filename.substringAfterLast('.', missingDelimiterValue = "").uppercase(Locale.US)
     val kind: MediaKind get() = MediaKind.fromExtension(fileExtension)
@@ -197,13 +199,32 @@ object MediaHTTP {
     }
 }
 
+data class MediaPageSliceInfo(
+    val declared: Int,
+    val records: Int,
+    val endMarker: Boolean,
+    val ended: Boolean,
+) {
+    val incomplete: Boolean
+        get() = declared in 1..MediaListCommand.COUNT_MAX && records < declared
+}
+
+data class MediaPageStep(
+    val fresh: List<MediaFile>,
+    val sdCursor: Long,
+    val internalCursor: Long,
+    val moreAvailable: Boolean,
+)
+
 /** `0x00/0x26` list payloads. Byte-identical to Osmosis / Mimo. */
 object MediaListCommand {
     const val PAGE_SIZE = 45
+    const val COUNT_MAX = 512
     const val NEWEST_SD = 0x00000001L
     const val NEWEST_INTERNAL = 0x40000001L
-    const val VIDEO_HANDLE_BASE = 0x40000000L
     const val INTERNAL_BIT = 0x40000000L
+    const val SD_STORAGE = 0
+    const val INTERNAL_STORAGE = 1
     const val SD_COUNTER: Int = 1
     const val INTERNAL_COUNTER: Int = 2
 
@@ -236,18 +257,91 @@ object MediaListCommand {
         return payload
     }
 
-    /** Oldest video handle on this page — seeds the next `0x00/0x26` cursor. */
-    fun oldestVideoHandle(handles: List<Long>): Long? =
-        handles.filter { it >= VIDEO_HANDLE_BASE }.minOrNull()
+    fun storeOf(file: MediaFile): Int {
+        if (file.storageKnown) return file.storage
+        val handle = if (file.handle != 0L) file.handle else file.cmdHandle
+        if (handle != 0L) return if ((handle and INTERNAL_BIT) == 0L) SD_STORAGE else INTERNAL_STORAGE
+        return if (file.group == INTERNAL_STORAGE) INTERNAL_STORAGE else SD_STORAGE
+    }
 
-    /** Oldest video handle strictly older than [current], or null at the end of the library. */
-    fun nextCursor(handles: List<Long>, current: Long): Long? =
-        handles.filter { it >= VIDEO_HANDLE_BASE && it < current }.minOrNull()
+    /** Store-qualified because the same camera path may exist on both stores. */
+    fun pageKey(file: MediaFile): String = "${storeOf(file)}:${file.path}"
+
+    fun storeSlice(page: List<MediaFile>, store: Int): List<MediaFile> =
+        page.filter { storeOf(it) == store }
+
+    fun oldestHandle(page: List<MediaFile>, store: Int, below: Long? = null): Long? =
+        storeSlice(page, store)
+            .map { it.handle }
+            .filter { it != 0L && (below == null || it < below) }
+            .minOrNull()
+
+    fun seedPagination(
+        page: List<MediaFile>,
+        seen: MutableSet<String>,
+        slices: Map<Int, MediaPageSliceInfo> = emptyMap(),
+    ): MediaPageStep =
+        pageStep(NEWEST_SD, NEWEST_INTERNAL, page, seen, slices, initial = true)
+
+    fun stepPagination(
+        sdCursor: Long,
+        internalCursor: Long,
+        page: List<MediaFile>,
+        seen: MutableSet<String>,
+        slices: Map<Int, MediaPageSliceInfo> = emptyMap(),
+    ): MediaPageStep =
+        pageStep(sdCursor, internalCursor, page, seen, slices, initial = false)
 
     fun hasOlderPage(recordCount: Int, cursor: Long?): Boolean {
         val c = cursor ?: return false
         if (c <= 0L) return false
         return recordCount >= PAGE_SIZE
+    }
+
+    fun storeHasOlderPage(
+        sliceSize: Int,
+        cursorMoved: Boolean,
+        info: MediaPageSliceInfo?,
+    ): Boolean =
+        when {
+            !cursorMoved -> false
+            info == null -> sliceSize >= PAGE_SIZE
+            info.incomplete -> true
+            info.endMarker -> false
+            else -> sliceSize >= PAGE_SIZE
+        }
+
+    private fun pageStep(
+        sdCursor: Long,
+        internalCursor: Long,
+        page: List<MediaFile>,
+        seen: MutableSet<String>,
+        slices: Map<Int, MediaPageSliceInfo>,
+        initial: Boolean,
+    ): MediaPageStep {
+        val fresh = page.filter { seen.add(pageKey(it)) }
+        val sdOldest = oldestHandle(page, SD_STORAGE, if (initial) null else sdCursor)
+        val internalOldest = oldestHandle(page, INTERNAL_STORAGE, if (initial) null else internalCursor)
+        val more =
+            fresh.isNotEmpty() &&
+                (
+                    storeHasOlderPage(
+                        storeSlice(page, SD_STORAGE).size,
+                        sdOldest != null,
+                        slices[SD_STORAGE],
+                    ) ||
+                        storeHasOlderPage(
+                            storeSlice(page, INTERNAL_STORAGE).size,
+                            internalOldest != null,
+                            slices[INTERNAL_STORAGE],
+                        )
+                )
+        return MediaPageStep(
+            fresh = fresh,
+            sdCursor = sdOldest ?: sdCursor,
+            internalCursor = internalOldest ?: internalCursor,
+            moreAvailable = more,
+        )
     }
 }
 

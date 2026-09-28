@@ -88,10 +88,10 @@ public enum DumlTransport {
     }
 
     /// Three window cursors in a pktType-0x04 ACK (and in 34-byte pktType-0x01 telemetry).
-    /// Mimo echoes video (`0x02`) in group 0, ackedData (`0x03`) in group 1, and a third
-    /// channel in group 2. Command replies — including Selfie Flip GET `0x02/0x8E` pid
-    /// `0x38` — ride `0x03`. Repeating handshake `baseSeq` in group 1 leaves that window
-    /// un-ACKed; the camera then stops `0x03` after a few dozen packets.
+    /// Mimo echoes video (`0x02`) in group 0, reliable command/download data in group 1,
+    /// and a third channel in group 2. Command replies ride `0x03`; media `0x00/0x27`
+    /// chunks advance the same window through telemetry. Repeating handshake `baseSeq`
+    /// in group 1 eventually stalls either stream.
     public struct AckWindows: Equatable, Sendable {
         public var video: UInt16
         public var ackedData: UInt16
@@ -128,26 +128,44 @@ public enum DumlTransport {
             seen ? stored : fallback
         }
 
+        /// Sequence numbers advance modulo UInt16. Accept only the forward half of the ring so a
+        /// delayed telemetry frame cannot rewind the reliable window after a newer `0x03` reply.
+        public static func isForward(candidate: UInt16, from current: UInt16) -> Bool {
+            let delta = candidate &- current
+            return delta != 0 && delta < 0x8000
+        }
+
+        private static func advanced(
+            stored: UInt16, seen: Bool, candidate: UInt16
+        ) -> (stored: UInt16, seen: Bool) {
+            if !seen || candidate == stored || isForward(candidate: candidate, from: stored) {
+                return (candidate, true)
+            }
+            return (stored, seen)
+        }
+
         public func advancing(datagram: [UInt8]) -> AckWindows {
             var next = self
             guard datagram.count >= 8 else { return next }
             switch datagram[6] {
             case PktType.telemetry.rawValue:
                 if let w = DumlTransport.ackWindows(fromTelemetry: datagram) {
-                    // Same class of bug as group 0: `ackedData == 0` is a real
-                    // 8-aligned seq. Telemetry must not rewind group 1 after
-                    // `0x03` has been seen (that muted SET/Flip while HEVC lived).
-                    if Self.shouldSeedCursorFromTelemetry(hasSeq: next.hasAckedData) {
-                        next.ackedData = w.ackedData
-                        next.hasAckedData = true
-                    }
+                    // `0` is a real 8-aligned seq. Merge command replies and media/download
+                    // telemetry forward-only so a delayed status frame cannot rewind group 1.
+                    let reliable = Self.advanced(
+                        stored: next.ackedData, seen: next.hasAckedData,
+                        candidate: w.ackedData)
+                    next.ackedData = reliable.stored
+                    next.hasAckedData = reliable.seen
                     next.extra = w.extra
                     next.hasExtra = true
                 }
             case PktType.ackedData.rawValue:
                 if let seq = DumlTransport.transportSeq(datagram) {
-                    next.ackedData = seq
-                    next.hasAckedData = true
+                    let reliable = Self.advanced(
+                        stored: next.ackedData, seen: next.hasAckedData, candidate: seq)
+                    next.ackedData = reliable.stored
+                    next.hasAckedData = reliable.seen
                 }
             default:
                 break

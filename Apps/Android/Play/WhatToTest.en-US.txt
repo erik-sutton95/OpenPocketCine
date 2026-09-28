@@ -13,6 +13,7 @@ New and changed
 
 Fixes
 
+- Media now lists complete SD and internal-storage libraries, retries Nano's briefly empty first response, and keeps storage capacity visible during playback.
 - The joystick and gimbal controls now have the same dark glow as other live-view controls, making them easier to see over bright footage.
 - Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
 - Osmo Nano no longer shows zoom controls: the zoom chip, pinch, hold disc and gamepad zoom are hidden, and no zoom is sent.
@@ -23,7 +24,7 @@ Fixes
 
 What to test
 
-- If Live View freezes while the camera stays connected, note the time and send Connection setup → Share Diagnostics: it now includes more detail about the stall.
+- Open Media on a camera with many clips or both storage types. On Nano, open it immediately after playback starts. Confirm all clips and capacity appear.
 - Open Multiview with two or more cameras: record the group, switch Grid and Center stage, double-tap a tile, then close and connect one camera normally.
 - Turn on LEVEL and roll the handle in FPV: the roll meter should move with the picture. With Double-tap set to Level, angle the handle forward and double-tap.
 - In Media, open a clip, tap the trash icon, and try Cancel, then Delete. Over a bright scene, check the dark glow around the joystick and gimbal controls.

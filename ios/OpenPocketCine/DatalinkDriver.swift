@@ -9,8 +9,8 @@ import os
 /// counters, the peer-cursor echo).
 ///
 /// Video (pktType 0x02) is best-effort UDP. Mimo keeps the camera's send windows open with a
-/// pktType-0x04 ACK ~40 times a second: group 0 = latest video seq, group 1 = latest
-/// pktType-0x03 (command replies, including Flip GET), group 2 = telemetry extra. Receive is
+/// pktType-0x04 ACK ~40 times a second: group 0 = latest video seq, group 1 = the
+/// forward-most reliable command/download cursor, group 2 = telemetry extra. Receive is
 /// re-armed on the UDP queue (never the main actor) so a busy UI cannot stall the socket.
 @MainActor
 final class DatalinkDriver {
@@ -131,6 +131,7 @@ final class DatalinkDriver {
         var udpSeq: UInt16 = 0
         var lastFlipGetAt: TimeInterval = 0
         var liveAccepting = false
+        var mediaBrowsing = false
         var ackedDataCursor: UInt16 = 0
         var sawAckedData = false
         var extraCursor: UInt16 = 0
@@ -188,6 +189,9 @@ final class DatalinkDriver {
     var isFlowHealthy: Bool { writeHealthy && isConnectionReady }
     var isRebuilding: Bool { rebuilding }
     var isClosed: Bool { closed }
+    func setMediaBrowsing(_ browsing: Bool) {
+        wire.withLock { $0.mediaBrowsing = browsing }
+    }
     var secondsSinceLastRebuild: TimeInterval? {
         lastRebuildAt.map { Date().timeIntervalSince($0) }
     }
@@ -1237,6 +1241,7 @@ final class DatalinkDriver {
             guard now - w.lastFlipGetAt >= 1 else { return .wait }
             w.lastFlipGetAt = now
             guard w.liveAccepting else { return .skip("notLive") }
+            guard !w.mediaBrowsing else { return .skip("media") }
             guard let conn = w.conn else { return .skip("noConn") }
             guard case .ready = conn.state else { return .skip("notReady") }
             w.cmdCounter &+= 1
@@ -1411,8 +1416,8 @@ final class DatalinkDriver {
         }
     }
 
-    /// pktType `0x03` is the command-reply window (every GET/SET ACK, not
-    /// Flip alone). Mimo echoes that transport seq in ACK group 1.
+    /// Group 1 is shared by pktType `0x03` command replies and media downloads advertised
+    /// through telemetry. Merge both forward-only; a delayed status frame cannot rewind it.
     nonisolated private func noteAckWindows(_ bytes: [UInt8]) {
         let next = wire.withLock { w -> (DumlTransport.AckWindows, Bool) in
             let prev = w.ackedDataCursor

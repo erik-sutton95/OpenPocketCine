@@ -13,6 +13,9 @@ public struct MediaFile: Equatable, Sendable, Identifiable, Hashable, Codable {
     public var fps: Int?
     public var proxyPath: String?
     public var storage: Int
+    /// True when `storage` came from the counter of a store-specific `0x26` query.
+    /// Nil is retained for catalogs written before this field existed.
+    public var storageKnown: Bool?
     public var group: Int
     public var handleShared: Bool
     /// The handle read at the marker's fixed position, before the base+step fit has vouched for it.
@@ -31,6 +34,7 @@ public struct MediaFile: Equatable, Sendable, Identifiable, Hashable, Codable {
         fps: Int? = nil,
         proxyPath: String? = nil,
         storage: Int = 0,
+        storageKnown: Bool? = nil,
         group: Int = 0,
         handleShared: Bool = false,
         handleCandidate: UInt32 = 0
@@ -46,12 +50,14 @@ public struct MediaFile: Equatable, Sendable, Identifiable, Hashable, Codable {
         self.fps = fps
         self.proxyPath = proxyPath
         self.storage = storage
+        self.storageKnown = storageKnown
         self.group = group
         self.handleShared = handleShared
         self.handleCandidate = handleCandidate
     }
 
-    public var id: String { path }
+    /// Store-qualified because two cards may legitimately contain the same camera path.
+    public var id: String { MediaListCommand.pageKey(self) }
     public var filename: String { (path as NSString).lastPathComponent }
     public var fileExtension: String {
         (filename as NSString).pathExtension.uppercased()
@@ -114,6 +120,44 @@ public struct MediaFile: Equatable, Sendable, Identifiable, Hashable, Codable {
         f.dateFormat = "yyyyMMddHHmmss"
         return f
     }()
+}
+
+/// Wire evidence for one store's answer to a `0x00/0x26` page query.
+public struct MediaPageSliceInfo: Equatable, Sendable {
+    public var declared: Int
+    public var records: Int
+    public var endMarker: Bool
+    public var ended: Bool
+
+    public init(declared: Int, records: Int, endMarker: Bool, ended: Bool) {
+        self.declared = declared
+        self.records = records
+        self.endMarker = endMarker
+        self.ended = ended
+    }
+
+    /// A plausible header promised more records than reached the decoder.
+    public var incomplete: Bool {
+        (1...MediaListCommand.countMax).contains(declared) && records < declared
+    }
+}
+
+/// Result of advancing the independent SD and internal-storage page cursors.
+public struct MediaPageStep: Equatable, Sendable {
+    public var fresh: [MediaFile]
+    public var sdCursor: UInt32
+    public var internalCursor: UInt32
+    public var moreAvailable: Bool
+
+    public init(
+        fresh: [MediaFile], sdCursor: UInt32, internalCursor: UInt32,
+        moreAvailable: Bool
+    ) {
+        self.fresh = fresh
+        self.sdCursor = sdCursor
+        self.internalCursor = internalCursor
+        self.moreAvailable = moreAvailable
+    }
 }
 
 public enum MediaKind: String, Sendable, Codable {
@@ -273,10 +317,12 @@ public enum MediaHTTP {
 /// `0x00/0x26` list payloads. Byte-identical to Osmosis / Mimo.
 public enum MediaListCommand {
     public static let pageSize = 45
+    public static let countMax = 512
     public static let newestSD: UInt32 = 0x0000_0001
     public static let newestInternal: UInt32 = 0x4000_0001
-    public static let videoHandleBase: UInt32 = 0x4000_0000
     public static let internalBit: UInt32 = 0x4000_0000
+    public static let sdStorage = 0
+    public static let internalStorage = 1
     public static let sdCounter: UInt8 = 1
     public static let internalCounter: UInt8 = 2
 
@@ -306,35 +352,127 @@ public enum MediaListCommand {
         return payload
     }
 
-    /// Oldest video handle on this page — seeds the next `0x00/0x26` cursor.
-    public static func oldestVideoHandle(_ handles: [UInt32]) -> UInt32? {
-        handles.filter { $0 >= videoHandleBase }.min()
+    /// Store selected by the query that returned `file`, falling back to the handle bit only when
+    /// the camera did not echo request counters.
+    public static func store(of file: MediaFile) -> Int {
+        if file.storageKnown == true { return file.storage }
+        let handle = file.handle != 0 ? file.handle : file.cmdHandle
+        if handle != 0 { return (handle & internalBit) == 0 ? sdStorage : internalStorage }
+        return file.group == internalStorage ? internalStorage : sdStorage
     }
 
-    /// Oldest video handle strictly older than `cursor`, or nil at the end of the library.
-    public static func nextCursor(handles: [UInt32], current: UInt32) -> UInt32? {
-        let older = handles.filter { $0 >= videoHandleBase && $0 < current }
-        return older.min()
+    /// Dedup and UI identity across pages. The same path may exist on both stores.
+    public static func pageKey(_ file: MediaFile) -> String {
+        "\(store(of: file)):\(file.path)"
     }
 
+    public static func storeSlice(_ page: [MediaFile], store: Int) -> [MediaFile] {
+        page.filter { self.store(of: $0) == store }
+    }
+
+    /// Oldest usable handle in one store, optionally strictly below its current cursor.
+    public static func oldestHandle(
+        _ page: [MediaFile], store: Int, below: UInt32? = nil
+    ) -> UInt32? {
+        storeSlice(page, store: store)
+            .map(\.handle)
+            .filter { handle in
+                guard handle != 0 else { return false }
+                return below.map { handle < $0 } ?? true
+            }
+            .min()
+    }
+
+    /// First page: replace each newest-page selector with that store's oldest returned handle.
+    public static func seedPagination(
+        page: [MediaFile], seen: inout Set<String>,
+        slices: [Int: MediaPageSliceInfo] = [:]
+    ) -> MediaPageStep {
+        pageStep(
+            sdCursor: newestSD, internalCursor: newestInternal, page: page, seen: &seen,
+            slices: slices, initial: true)
+    }
+
+    /// Older page: advance each store only from handles in its own returned slice.
+    public static func stepPagination(
+        sdCursor: UInt32, internalCursor: UInt32, page: [MediaFile],
+        seen: inout Set<String>, slices: [Int: MediaPageSliceInfo] = [:]
+    ) -> MediaPageStep {
+        pageStep(
+            sdCursor: sdCursor, internalCursor: internalCursor, page: page, seen: &seen,
+            slices: slices, initial: false)
+    }
+
+    /// A complete short page is final; a full page probably has an older page.
     public static func hasOlderPage(recordCount: Int, cursor: UInt32?) -> Bool {
         guard let cursor, cursor > 0 else { return false }
         return recordCount >= pageSize
+    }
+
+    /// Per-store end rule. Truncation outranks the final-page marker because missing chunks can sit
+    /// before the record that carries that marker.
+    public static func storeHasOlderPage(
+        sliceSize: Int, cursorMoved: Bool, info: MediaPageSliceInfo?
+    ) -> Bool {
+        guard cursorMoved else { return false }
+        guard let info else { return sliceSize >= pageSize }
+        if info.incomplete { return true }
+        if info.endMarker { return false }
+        return sliceSize >= pageSize
+    }
+
+    private static func pageStep(
+        sdCursor: UInt32, internalCursor: UInt32, page: [MediaFile],
+        seen: inout Set<String>, slices: [Int: MediaPageSliceInfo], initial: Bool
+    ) -> MediaPageStep {
+        var fresh: [MediaFile] = []
+        for file in page where seen.insert(pageKey(file)).inserted { fresh.append(file) }
+        let sdOldest = oldestHandle(
+            page, store: sdStorage, below: initial ? nil : sdCursor)
+        let internalOldest = oldestHandle(
+            page, store: internalStorage, below: initial ? nil : internalCursor)
+        let more = !fresh.isEmpty
+            && (storeHasOlderPage(
+                sliceSize: storeSlice(page, store: sdStorage).count,
+                cursorMoved: sdOldest != nil, info: slices[sdStorage])
+                || storeHasOlderPage(
+                    sliceSize: storeSlice(page, store: internalStorage).count,
+                    cursorMoved: internalOldest != nil, info: slices[internalStorage]))
+        return MediaPageStep(
+            fresh: fresh, sdCursor: sdOldest ?? sdCursor,
+            internalCursor: internalOldest ?? internalCursor, moreAvailable: more)
     }
 }
 
 /// Strip `0x00/0x27` 10-byte sub-headers and concat data chunks in arrival order.
 public struct MediaChunkAssembler: Sendable {
     public private(set) var chunksByCounter: [UInt8: [UInt8]] = [:]
+    public private(set) var chunkCountsByCounter: [UInt8: Int] = [:]
+    public private(set) var startedCounters: Set<UInt8> = []
+    public private(set) var dataCounters: Set<UInt8> = []
+    public private(set) var endedCounters: Set<UInt8> = []
     public private(set) var chunkCount = 0
-    public private(set) var sawEnd = false
+    public var sawEnd: Bool { !endedCounters.isEmpty }
 
     public init() {}
 
     public mutating func reset() {
         chunksByCounter = [:]
+        chunkCountsByCounter = [:]
+        startedCounters = []
+        dataCounters = []
+        endedCounters = []
         chunkCount = 0
-        sawEnd = false
+    }
+
+    /// Forget one store before its one-shot mount-race retry, retaining the other store's answer.
+    public mutating func reset(counter: UInt8) {
+        chunksByCounter[counter] = nil
+        let removed = chunkCountsByCounter.removeValue(forKey: counter) ?? 0
+        chunkCount = max(0, chunkCount - removed)
+        startedCounters.remove(counter)
+        dataCounters.remove(counter)
+        endedCounters.remove(counter)
     }
 
     /// Accept a decoded DUML frame. Only `0x00/0x27` contributes.
@@ -348,19 +486,43 @@ public struct MediaChunkAssembler: Sendable {
     public mutating func ingestPayload(_ payload: [UInt8]) -> Bool {
         guard payload.count >= 10, payload[0] == 0x4A else { return false }
         let subtype = payload[1]
+        let counter = payload[4]
+        if subtype == 0x04 {
+            startedCounters.insert(counter)
+            return true
+        }
         if subtype == 0x03 {
-            sawEnd = true
+            endedCounters.insert(counter)
             return true
         }
         guard subtype == 0x01, payload.count > 10 else { return false }
-        let counter = payload[4]
+        dataCounters.insert(counter)
         chunksByCounter[counter, default: []].append(contentsOf: payload.dropFirst(10))
+        chunkCountsByCounter[counter, default: 0] += 1
         chunkCount += 1
         return true
     }
 
     public func assembled(counter: UInt8) -> [UInt8] {
         chunksByCounter[counter] ?? []
+    }
+
+    public func chunkCount(counter: UInt8) -> Int { chunkCountsByCounter[counter] ?? 0 }
+
+    public func didEnd(counter: UInt8) -> Bool { endedCounters.contains(counter) }
+
+    /// Start-without-data is the camera's empty-store closure; data streams need an explicit end.
+    public func isClosed(counter: UInt8) -> Bool {
+        endedCounters.contains(counter)
+            || (startedCounters.contains(counter) && !dataCounters.contains(counter))
+    }
+
+    /// All requested answers closed and at least one carried data. Empty libraries use quiet fallback.
+    public func streamsEnded(requiredCounters: [UInt8]) -> Bool {
+        guard !dataCounters.isEmpty else { return false }
+        let observed = startedCounters.union(dataCounters).union(endedCounters)
+        return requiredCounters.allSatisfy { isClosed(counter: $0) }
+            && observed.allSatisfy { isClosed(counter: $0) }
     }
 
     public func assembledMerged() -> [UInt8] {
@@ -372,6 +534,9 @@ public struct MediaChunkAssembler: Sendable {
     }
 
     public var isEmpty: Bool { chunkCount == 0 }
+    public var hasResponse: Bool {
+        !startedCounters.isEmpty || !dataCounters.isEmpty || !endedCounters.isEmpty
+    }
 }
 
 /// CompositePack TLV decode. Port of Osmosis `CameraSession.decodeComposite`.
@@ -416,6 +581,40 @@ public enum MediaManifest {
     public static func headerCount(_ bytes: [UInt8]) -> Int {
         guard bytes.count >= 4 else { return 0 }
         return Int(u32(bytes, 0))
+    }
+
+    public static func recordCount(_ bytes: [UInt8]) -> Int {
+        var paths = Set<String>()
+        var i = 0
+        while i < bytes.count {
+            if let field = readPath(bytes, i, sub: 1, prefix: "DCIM/") {
+                paths.insert(field.value)
+                i = field.end
+            } else {
+                i += 1
+            }
+        }
+        return paths.count
+    }
+
+    /// `0c 01` immediately before the final record's `0d` name field.
+    public static func hasEndMarker(_ bytes: [UInt8]) -> Bool {
+        guard bytes.count >= 3 else { return false }
+        for i in 0..<(bytes.count - 2)
+        where bytes[i] == 0x0C && bytes[i + 1] == 0x01 && bytes[i + 2] == 0x0D {
+            return true
+        }
+        return false
+    }
+
+    public static func sliceInfo(
+        assembler: MediaChunkAssembler, counter: UInt8
+    ) -> MediaPageSliceInfo {
+        let bytes = assembler.assembled(counter: counter)
+        return MediaPageSliceInfo(
+            declared: bytes.count >= 4 ? headerCount(bytes) : -1,
+            records: recordCount(bytes), endMarker: hasEndMarker(bytes),
+            ended: assembler.didEnd(counter: counter))
     }
 
     // MARK: - CompositePack
@@ -773,6 +972,7 @@ public enum MediaManifest {
             if fallback {
                 next.storage = MediaHTTP.storageGuess(
                     handle: file.handle != 0 ? file.handle : file.cmdHandle, singleSdStorage: false)
+                next.storageKnown = false
             }
             return next
         }
@@ -781,6 +981,7 @@ public enum MediaManifest {
     private static func stamp(_ file: MediaFile, storage: Int, group: Int) -> MediaFile {
         var next = file
         next.storage = storage
+        next.storageKnown = true
         next.group = group
         return next
     }

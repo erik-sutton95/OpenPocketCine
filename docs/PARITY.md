@@ -75,6 +75,22 @@ preserving active endpoint negotiation; the return owner uses the serialized
 feed-recovery slot. A genuine negotiation failure still escalates. A retained
 image or a handshake alone cannot complete recovery.
 
+## Media manifest pagination
+
+Both shells now apply the Osmosis media-list corrections together: ACK group 1
+advances from command replies and media-download telemetry without rewinding;
+`0x27` completion is tracked per request counter; SD and internal stores keep
+independent cursors and store-qualified identities; plausible header count,
+decoded count and the `0c 01 0d` marker decide whether to keep paging. The
+initial playback-held empty-SD answer is retried once for Nano's mount race.
+Playback storage pushes cannot erase a known SD capacity or infer a one-store
+topology, and the live-only Selfie Flip GET pauses while playback is held.
+
+Portable Swift and Android JVM regressions cover the shared decisions. Physical
+qualification is still pending on iOS and Android: exercise empty SD, internal
+only, both stores (including duplicate paths), more than 45 items, a final full
+page, delete/reload, and return to live view while checking 40 Hz ACK continuity.
+
 ## Photo LUT View Assist
 
 Photo and Live Photo use Normal / Rec.709 for live LUT selection and image

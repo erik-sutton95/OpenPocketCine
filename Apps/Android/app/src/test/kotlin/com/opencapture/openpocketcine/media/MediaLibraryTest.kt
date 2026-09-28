@@ -213,6 +213,11 @@ class MediaLibraryTest {
     @Test
     fun chunkAssemblerStripsSubheader() {
         val assembler = MediaChunkAssembler()
+        assertTrue(
+            assembler.ingestPayload(
+                byteArrayOf(0x4A, 0x04, 0, 0, 0x02, 0, 0, 0, 0, 0),
+            ),
+        )
         val payload =
             byteArrayOf(0x4A, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xDE.toByte(), 0xAD.toByte())
         assertTrue(assembler.ingest(cmdSet = 0x00, cmdId = 0x27, payload = payload))
@@ -225,18 +230,141 @@ class MediaLibraryTest {
             )
         assertTrue(ended)
         assertTrue(assembler.sawEnd)
+        assertTrue(assembler.didEnd(2))
+        assertFalse(assembler.didEnd(1))
+        assertTrue(assembler.streamsEnded(setOf(2)))
     }
 
     @Test
-    fun nextCursorUsesOldestVideoHandle() {
-        val files = MediaManifest.decode(fixture())
-        val handles = files.map { it.handle }
-        val oldest = MediaListCommand.oldestVideoHandle(handles)
-        assertEquals(handles.minOrNull(), oldest)
-        assertFalse(MediaListCommand.hasOlderPage(recordCount = 34, cursor = oldest))
-        assertTrue(MediaListCommand.hasOlderPage(recordCount = 45, cursor = oldest))
-        val older = MediaListCommand.nextCursor(handles, files[0].handle)
-        assertEquals(files.drop(1).minOf { it.handle }, older)
+    fun chunkCompletionIsPerCounter() {
+        fun control(subtype: Int, counter: Int): ByteArray =
+            byteArrayOf(0x4A, subtype.toByte(), 0, 0, counter.toByte(), 0, 0, 0, 0, 0)
+        fun data(counter: Int): ByteArray = control(0x01, counter) + byteArrayOf(counter.toByte())
+
+        val assembler = MediaChunkAssembler()
+        assertTrue(assembler.ingestPayload(control(0x04, 1)))
+        assertTrue(assembler.ingestPayload(data(1)))
+        assertTrue(assembler.ingestPayload(control(0x03, 1)))
+        assertFalse(assembler.streamsEnded(setOf(1, 2)))
+        assertTrue(assembler.ingestPayload(control(0x04, 2)))
+        assertTrue(assembler.ingestPayload(data(2)))
+        assertFalse(assembler.streamsEnded(setOf(1, 2)))
+        assertTrue(assembler.ingestPayload(control(0x03, 2)))
+        assertTrue(assembler.streamsEnded(setOf(1, 2)))
+
+        assembler.reset()
+        assertTrue(assembler.ingestPayload(control(0x04, 1)))
+        assertTrue(assembler.ingestPayload(control(0x04, 2)))
+        assertTrue(assembler.ingestPayload(data(2)))
+        assertTrue(assembler.ingestPayload(control(0x03, 2)))
+        assertTrue(assembler.streamsEnded(setOf(1, 2)))
+        assertFalse(assembler.streamsEnded(setOf(1, 2, 3)))
+    }
+
+    @Test
+    fun paginationAdvancesBothStoresAndKeepsDuplicatePaths() {
+        fun file(index: Int, store: Int, path: String? = null): MediaFile {
+            val base = if (store == 0) 0x00100000L else 0x40100000L
+            return MediaFile(
+                path = path ?: "DCIM/DJI_001/F${store}_$index.MP4",
+                thumbPath = "T",
+                handle = base + index * 0x40L,
+                storage = store,
+                storageKnown = true,
+                group = store,
+            )
+        }
+        val page =
+            (1..45).map { file(it, 0) } +
+                (1..45).map { file(it, 1) } +
+                file(46, 0, "DCIM/DJI_001/SAME.MP4") +
+                file(46, 1, "DCIM/DJI_001/SAME.MP4")
+        val seen = hashSetOf<String>()
+        val seeded = MediaListCommand.seedPagination(page, seen)
+        assertEquals(92, seeded.fresh.size)
+        assertEquals(0x00100040L, seeded.sdCursor)
+        assertEquals(0x40100040L, seeded.internalCursor)
+        assertTrue(seeded.moreAvailable)
+        assertEquals(2, page.takeLast(2).map { it.id }.toSet().size)
+
+        val older =
+            listOf(
+                file(0, 0),
+                MediaFile(
+                    path = "DCIM/DJI_001/I0.MP4",
+                    thumbPath = "T",
+                    handle = 0x400FFFC0L,
+                    storage = 1,
+                    storageKnown = true,
+                    group = 1,
+                ),
+            )
+        val stepped = MediaListCommand.stepPagination(
+            seeded.sdCursor,
+            seeded.internalCursor,
+            older,
+            seen,
+        )
+        assertEquals(0x00100000L, stepped.sdCursor)
+        assertEquals(0x400FFFC0L, stepped.internalCursor)
+    }
+
+    @Test
+    fun paginationContinuesWithEitherStoreAlone() {
+        fun page(store: Int): List<MediaFile> {
+            val base = if (store == 0) 0x00040000L else 0x40040000L
+            return (1..45).map { index ->
+                MediaFile(
+                    path = "DCIM/DJI_001/S${store}_$index.MP4",
+                    thumbPath = "T",
+                    handle = base + index * 0x10L,
+                    storage = store,
+                    storageKnown = true,
+                    group = store,
+                )
+            }
+        }
+
+        val sd = MediaListCommand.seedPagination(page(0), hashSetOf())
+        assertEquals(0x00040010L, sd.sdCursor)
+        assertEquals(MediaListCommand.NEWEST_INTERNAL, sd.internalCursor)
+        assertTrue(sd.moreAvailable)
+
+        val internal = MediaListCommand.seedPagination(page(1), hashSetOf())
+        assertEquals(MediaListCommand.NEWEST_SD, internal.sdCursor)
+        assertEquals(0x40040010L, internal.internalCursor)
+        assertTrue(internal.moreAvailable)
+    }
+
+    @Test
+    fun pageWireFactsControlEndOfPagination() {
+        val path = "DCIM/DJI_001/ONE".toByteArray()
+        val field = byteArrayOf(0x1A, (path.size + 6).toByte(), 0, 0, 0, 1) + path
+        val truncated = byteArrayOf(2, 0, 0, 0) + field + byteArrayOf(0x0C, 0x01, 0x0D)
+        assertEquals(1, MediaManifest.recordCount(truncated))
+        assertTrue(MediaManifest.hasEndMarker(truncated))
+        val info = MediaPageSliceInfo(
+            declared = MediaManifest.headerCount(truncated),
+            records = 1,
+            endMarker = true,
+            ended = false,
+        )
+        assertTrue(info.incomplete)
+        assertTrue(MediaListCommand.storeHasOlderPage(1, cursorMoved = true, info = info))
+        assertFalse(
+            MediaListCommand.storeHasOlderPage(
+                1,
+                cursorMoved = true,
+                info = MediaPageSliceInfo(1, 1, endMarker = false, ended = true),
+            ),
+        )
+        assertFalse(
+            MediaListCommand.storeHasOlderPage(
+                45,
+                cursorMoved = true,
+                info = MediaPageSliceInfo(45, 45, endMarker = true, ended = true),
+            ),
+        )
     }
 
     @Test

@@ -8,15 +8,29 @@ import kotlin.math.roundToInt
 /** Strip `0x00/0x27` 10-byte sub-headers and concat data chunks in arrival order. */
 class MediaChunkAssembler {
     private val chunksByCounter = LinkedHashMap<Int, ByteArray>()
+    private val chunkCountsByCounter = HashMap<Int, Int>()
+    private val startedCounters = HashSet<Int>()
+    private val dataCounters = HashSet<Int>()
+    private val endedCounters = HashSet<Int>()
     var chunkCount: Int = 0
         private set
-    var sawEnd: Boolean = false
-        private set
+    val sawEnd: Boolean get() = endedCounters.isNotEmpty()
 
     fun reset() {
         chunksByCounter.clear()
+        chunkCountsByCounter.clear()
+        startedCounters.clear()
+        dataCounters.clear()
+        endedCounters.clear()
         chunkCount = 0
-        sawEnd = false
+    }
+
+    fun reset(counter: Int) {
+        chunksByCounter.remove(counter)
+        chunkCount = (chunkCount - (chunkCountsByCounter.remove(counter) ?: 0)).coerceAtLeast(0)
+        startedCounters.remove(counter)
+        dataCounters.remove(counter)
+        endedCounters.remove(counter)
     }
 
     fun ingest(frame: DumlFrame): Boolean {
@@ -34,21 +48,41 @@ class MediaChunkAssembler {
     fun ingestPayload(payload: ByteArray): Boolean {
         if (payload.size < 10 || payload[0] != 0x4A.toByte()) return false
         val subtype = payload[1].toInt() and 0xFF
+        val counter = payload[4].toInt() and 0xFF
+        if (subtype == 0x04) {
+            startedCounters.add(counter)
+            return true
+        }
         if (subtype == 0x03) {
-            sawEnd = true
+            endedCounters.add(counter)
             return true
         }
         if (subtype != 0x01 || payload.size <= 10) return false
-        val counter = payload[4].toInt() and 0xFF
+        dataCounters.add(counter)
         val chunk = payload.copyOfRange(10, payload.size)
         val existing = chunksByCounter[counter]
         chunksByCounter[counter] =
             if (existing == null) chunk else existing + chunk
+        chunkCountsByCounter[counter] = (chunkCountsByCounter[counter] ?: 0) + 1
         chunkCount += 1
         return true
     }
 
     fun assembled(counter: Int): ByteArray = chunksByCounter[counter] ?: ByteArray(0)
+
+    fun chunkCount(counter: Int): Int = chunkCountsByCounter[counter] ?: 0
+
+    fun didEnd(counter: Int): Boolean = endedCounters.contains(counter)
+
+    fun isClosed(counter: Int): Boolean =
+        endedCounters.contains(counter) ||
+            (startedCounters.contains(counter) && !dataCounters.contains(counter))
+
+    fun streamsEnded(requiredCounters: Set<Int>): Boolean {
+        if (dataCounters.isEmpty()) return false
+        val observed = startedCounters + dataCounters + endedCounters
+        return requiredCounters.all(::isClosed) && observed.all(::isClosed)
+    }
 
     fun assembledMerged(): ByteArray {
         if (chunksByCounter.isEmpty()) return ByteArray(0)
@@ -65,6 +99,8 @@ class MediaChunkAssembler {
     }
 
     val isEmpty: Boolean get() = chunkCount == 0
+    val hasResponse: Boolean
+        get() = startedCounters.isNotEmpty() || dataCounters.isNotEmpty() || endedCounters.isNotEmpty()
 }
 
 /** CompositePack TLV decode. Port of Osmosis `CameraSession.decodeComposite`. */
@@ -103,6 +139,40 @@ object MediaManifest {
     fun headerCount(bytes: ByteArray): Int {
         if (bytes.size < 4) return 0
         return u32(bytes, 0).toInt()
+    }
+
+    fun recordCount(bytes: ByteArray): Int {
+        val paths = HashSet<String>()
+        var i = 0
+        while (i < bytes.size) {
+            val field = readPath(bytes, i, sub = 1, prefix = "DCIM/")
+            if (field != null) {
+                paths.add(field.value)
+                i = field.end
+            } else {
+                i += 1
+            }
+        }
+        return paths.size
+    }
+
+    fun hasEndMarker(bytes: ByteArray): Boolean {
+        for (i in 0 until (bytes.size - 2).coerceAtLeast(0)) {
+            if (u8(bytes, i) == 0x0C && u8(bytes, i + 1) == 0x01 && u8(bytes, i + 2) == 0x0D) {
+                return true
+            }
+        }
+        return false
+    }
+
+    fun sliceInfo(assembler: MediaChunkAssembler, counter: Int): MediaPageSliceInfo {
+        val bytes = assembler.assembled(counter)
+        return MediaPageSliceInfo(
+            declared = if (bytes.size >= 4) headerCount(bytes) else -1,
+            records = recordCount(bytes),
+            endMarker = hasEndMarker(bytes),
+            ended = assembler.didEnd(counter),
+        )
     }
 
     private data class MediaAnchor(val pos: Int, val end: Int, val path: String)
@@ -468,12 +538,15 @@ object MediaManifest {
                 file
             } else {
                 val handle = if (file.handle != 0L) file.handle else file.cmdHandle
-                file.copy(storage = MediaHTTP.storageGuess(handle, singleSdStorage = false))
+                file.copy(
+                    storage = MediaHTTP.storageGuess(handle, singleSdStorage = false),
+                    storageKnown = false,
+                )
             }
         }
 
     private fun stamp(file: MediaFile, storage: Int, group: Int): MediaFile =
-        file.copy(storage = storage, group = group)
+        file.copy(storage = storage, storageKnown = true, group = group)
 
     private fun u8(bytes: ByteArray, i: Int): Int = bytes[i].toInt() and 0xFF
 

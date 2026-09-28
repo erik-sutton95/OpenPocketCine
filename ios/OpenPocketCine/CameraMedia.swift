@@ -62,6 +62,11 @@ enum MediaOperatorCopy {
     static let clipNotCached = "This clip is not cached on the phone."
 }
 
+private struct MediaQueryPage {
+    var files: [MediaFile]
+    var slices: [Int: MediaPageSliceInfo]
+}
+
 /// Playback-held media list + SoftAP HTTP cache. Owned by `CameraSession`.
 @MainActor
 final class CameraMedia {
@@ -769,11 +774,13 @@ extension CameraSession {
         loadMediaFavorites()
         loadCachedCatalogIfNeeded()
         guard hasMediaDatalink, isLivePhase else {
+            datalink?.setMediaBrowsing(false)
             isBrowsingMedia = true
             mediaFetchInProgress = false
             mediaNote = mediaFiles.isEmpty ? MediaOperatorCopy.notConnected : nil
             return
         }
+        datalink?.setMediaBrowsing(true)
         if cameraGalleryOpen {
             // The camera owns playback (#273). DJI Mimo sends no enter-playback or
             // listing here; ours showed "Playback in progress" on the body and took
@@ -809,11 +816,17 @@ extension CameraSession {
         // A full rejoin briefly has no driver while negotiating its replacement.
         // Preserve that owner and queue this return behind it, rather than lose
         // the only new picture/enable owner when the old generation retires.
-        guard hasMediaDatalink || hasFeedRecoveryInFlight else { return }
+        guard hasMediaDatalink || hasFeedRecoveryInFlight else {
+            datalink?.setMediaBrowsing(false)
+            return
+        }
         cameraMedia.resumeLiveTask = Task { [weak self] in
             guard let self else { return }
             defer {
-                if token == self.cameraMedia.resumeID { self.cameraMedia.resumeLiveTask = nil }
+                if token == self.cameraMedia.resumeID {
+                    self.cameraMedia.resumeLiveTask = nil
+                    if !self.isBrowsingMedia { self.datalink?.setMediaBrowsing(false) }
+                }
             }
             await self.claimMediaLiveRecovery(token: token) { [weak self] in
                 await self?.resumeLiveViewAfterMedia(token: token)
@@ -1203,6 +1216,7 @@ extension CameraSession {
         let decision = MediaBrowsePolicy.afterEnterPlayback(entered)
         cameraMedia.playbackHeld = entered
         if !entered {
+            datalink?.setMediaBrowsing(false)
             ControlLiveLog.line("media: enter playback failed — listing newest page")
         }
         guard decision.keepBrowsing else {
@@ -1241,42 +1255,30 @@ extension CameraSession {
         }
         var collected: [MediaFile] = []
         var seen = Set<String>()
-        var pageCursor: UInt32?
+        var sdCursor = MediaListCommand.newestSD
+        var internalCursor = MediaListCommand.newestInternal
         var first = true
         while !Task.isCancelled, id == cameraMedia.browseID {
-            let page: [MediaFile]
-            if first {
-                page = await queryMediaPage(internalCursor: MediaListCommand.newestInternal)
-                first = false
-            } else if let cursor = pageCursor {
-                page = await queryMediaPage(internalCursor: cursor)
-            } else {
-                break
-            }
-            var added = 0
-            for file in page {
-                if seen.insert(file.path).inserted {
-                    collected.append(applyFavoriteOverlay(file))
-                    added += 1
-                }
-            }
+            let page = await queryMediaPage(
+                sdCursor: sdCursor, internalCursor: internalCursor,
+                retryEmptySD: first && cameraMedia.playbackHeld)
+            let step =
+                first
+                ? MediaListCommand.seedPagination(
+                    page: page.files, seen: &seen, slices: page.slices)
+                : MediaListCommand.stepPagination(
+                    sdCursor: sdCursor, internalCursor: internalCursor,
+                    page: page.files, seen: &seen, slices: page.slices)
+            first = false
+            sdCursor = step.sdCursor
+            internalCursor = step.internalCursor
+            collected.append(contentsOf: step.fresh.map { applyFavoriteOverlay($0) })
             publishMediaFiles(collected)
-            if !includeOlderPages { break }
-            let handles = page.map(\.handle)
-            let newest =
-                handles.filter { $0 >= MediaListCommand.videoHandleBase }.max()
-                ?? MediaListCommand.newestInternal
-            pageCursor =
-                MediaListCommand.nextCursor(handles: handles, current: newest)
-                ?? handles.filter { $0 >= MediaListCommand.videoHandleBase }.min()
-            if added == 0 || page.count < MediaListCommand.pageSize { break }
-            if !MediaListCommand.hasOlderPage(recordCount: page.count, cursor: pageCursor) {
-                break
-            }
+            if !includeOlderPages || !step.moreAvailable { break }
         }
         guard id == cameraMedia.browseID else { return }
         if collected.isEmpty {
-            if cameraMedia.assembler.chunkCount == 0, !cameraMedia.assembler.sawEnd {
+            if !cameraMedia.assembler.hasResponse {
                 mediaNote = MediaOperatorCopy.listFailed
             } else {
                 mediaNote = MediaOperatorCopy.noClips
@@ -1287,51 +1289,98 @@ extension CameraSession {
     }
 
     private func listNewestMediaPage() async {
-        let page = await queryMediaPage(internalCursor: MediaListCommand.newestInternal)
+        let page = await queryMediaPage(
+            sdCursor: MediaListCommand.newestSD,
+            internalCursor: MediaListCommand.newestInternal,
+            retryEmptySD: cameraMedia.playbackHeld)
         var seen = Set<String>()
         var collected: [MediaFile] = []
-        for file in page where seen.insert(file.path).inserted {
+        for file in page.files where seen.insert(MediaListCommand.pageKey(file)).inserted {
             collected.append(applyFavoriteOverlay(file))
         }
-        for file in mediaFiles where seen.insert(file.path).inserted {
+        for file in mediaFiles where seen.insert(MediaListCommand.pageKey(file)).inserted {
             collected.append(file)
         }
         publishMediaFiles(collected)
     }
 
-    private func queryMediaPage(internalCursor: UInt32) async -> [MediaFile] {
+    private func queryMediaPage(
+        sdCursor: UInt32, internalCursor: UInt32, retryEmptySD: Bool
+    ) async -> MediaQueryPage {
         cameraMedia.assembler.reset()
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(12))
         sendMediaFrame(
             Commands.mediaList(
-                counter: MediaListCommand.sdCounter, cursor: MediaListCommand.newestSD))
-        await collectMediaChunks(floor: .milliseconds(800), idle: .milliseconds(200))
+                counter: MediaListCommand.sdCounter, cursor: sdCursor))
+        await collectMediaChunks(
+            counter: MediaListCommand.sdCounter, floor: .milliseconds(800),
+            idle: .seconds(1), deadline: deadline)
         sendMediaFrame(Commands.mediaListTrigger())
-        await collectMediaChunks(floor: .milliseconds(400), idle: .milliseconds(200))
+        await collectMediaChunks(
+            counter: nil, floor: .milliseconds(400), idle: .milliseconds(200),
+            deadline: deadline)
         sendMediaFrame(
             Commands.mediaList(
                 counter: MediaListCommand.internalCounter, cursor: internalCursor))
-        await collectMediaChunks(floor: .milliseconds(800), idle: .milliseconds(800))
-        return MediaManifest.decodeStores(assembler: cameraMedia.assembler)
+        await collectMediaChunks(
+            counter: MediaListCommand.internalCounter, floor: .milliseconds(800),
+            idle: .seconds(1), deadline: deadline)
+
+        // Nano can confirm playback before its dock SD is mounted (`0x26` replies d8 and opens a
+        // start-only stream). Re-ask once after the first two-store pass instead of delaying all bodies.
+        if retryEmptySD,
+            cameraMedia.assembler.assembled(counter: MediaListCommand.sdCounter).isEmpty,
+            clock.now < deadline
+        {
+            ControlLiveLog.line("media: SD store answered empty â€” re-asking once")
+            cameraMedia.assembler.reset(counter: MediaListCommand.sdCounter)
+            sendMediaFrame(
+                Commands.mediaList(counter: MediaListCommand.sdCounter, cursor: sdCursor))
+            await collectMediaChunks(
+                counter: MediaListCommand.sdCounter, floor: .milliseconds(800),
+                idle: .seconds(1), deadline: deadline)
+            sendMediaFrame(Commands.mediaListTrigger())
+            await collectMediaChunks(
+                counter: MediaListCommand.sdCounter, floor: .milliseconds(400),
+                idle: .seconds(1), deadline: deadline)
+        }
+
+        let slices = [
+            MediaListCommand.sdStorage: MediaManifest.sliceInfo(
+                assembler: cameraMedia.assembler, counter: MediaListCommand.sdCounter),
+            MediaListCommand.internalStorage: MediaManifest.sliceInfo(
+                assembler: cameraMedia.assembler, counter: MediaListCommand.internalCounter),
+        ]
+        return MediaQueryPage(
+            files: MediaManifest.decodeStores(assembler: cameraMedia.assembler), slices: slices)
     }
 
-    private func collectMediaChunks(floor: Duration, idle: Duration, cap: Duration = .seconds(8))
-        async
-    {
+    private func collectMediaChunks(
+        counter: UInt8?, floor: Duration, idle: Duration, deadline: ContinuousClock.Instant
+    ) async {
         let clock = ContinuousClock()
         let start = clock.now
         var lastChange = start
-        var lastCount = cameraMedia.assembler.chunkCount
+        var lastCount =
+            counter.map { cameraMedia.assembler.chunkCount(counter: $0) }
+            ?? cameraMedia.assembler.chunkCount
         while !Task.isCancelled {
             let now = clock.now
-            if now - start >= cap { break }
-            if cameraMedia.assembler.sawEnd, now - start >= floor { break }
+            if now >= deadline { break }
+            if let counter, now - start >= floor,
+                cameraMedia.assembler.didEnd(counter: counter)
+            { break }
             try? await Task.sleep(for: .milliseconds(50))
-            let count = cameraMedia.assembler.chunkCount
+            let count =
+                counter.map { cameraMedia.assembler.chunkCount(counter: $0) }
+                ?? cameraMedia.assembler.chunkCount
             if count != lastCount {
                 lastCount = count
                 lastChange = clock.now
             }
-            if now - start >= floor, now - lastChange >= idle { break }
+            let afterSleep = clock.now
+            if afterSleep - start >= floor, afterSleep - lastChange >= idle { break }
         }
     }
 
@@ -1418,8 +1467,12 @@ extension CameraSession {
     }
 
     private var usesSingleSdStorage: Bool {
-        if status.internalTotalMb == 0 { return true }
-        return connectedCamera?.model.name.localizedCaseInsensitiveContains("Pocket 3") == true
+        if connectedCamera?.model.name.localizedCaseInsensitiveContains("Pocket 3") == true {
+            return true
+        }
+        // Playback storage pushes are not topology evidence: Nano reports one zeroed block while
+        // both internal and dock-SD manifests remain reachable.
+        return !status.inPlayback && status.internalTotalMb == 0
     }
 
     private var isLivePhase: Bool {

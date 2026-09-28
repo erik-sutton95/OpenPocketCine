@@ -69,9 +69,8 @@ import Testing
     }
 
     /// Mimo's 40 Hz pktType-0x04 is three window groups, not video+baseSeq+baseSeq.
-    /// Group 1 is the latest pktType-0x03 (ackedData) transport seq — Flip GET
-    /// replies are 0x03, and echoing handshake baseSeq there fills the camera's
-    /// command-reply window after ~25 GETs / a few body Flip presses.
+    /// Group 1 is the shared reliable command/download cursor. Command replies
+    /// arrive as pktType `0x03`; media chunks advance it through telemetry.
     @Test func ackPayloadEchoesAckedDataCursor() {
         let p = DumlTransport.ackPayload(
             peerCursor: 0xA9D8, ackedDataCursor: 0xCD38, extraCursor: 0xDDA0)
@@ -144,6 +143,31 @@ import Testing
         #expect(
             DumlTransport.AckWindows.windowCursor(stored: 0, seen: false, fallback: 0x1000)
                 == 0x1000)
+    }
+
+    /// Media `0x27` chunks advance the reliable/download cursor advertised in telemetry even after
+    /// a command reply has seeded group 1. Forward updates, including wraparound, must be echoed.
+    @Test func ackWindowsAdvanceForwardFromTelemetryAfterAckedData() {
+        func telemetry(_ reliable: UInt16) -> [UInt8] {
+            var bytes = [UInt8](repeating: 0, count: 34)
+            bytes[6] = 0x01
+            bytes[18] = UInt8(reliable & 0xFF)
+            bytes[19] = UInt8(reliable >> 8)
+            return bytes
+        }
+        var windows = DumlTransport.AckWindows().advancing(
+            datagram: DumlTransport.transportHeader(
+                pktType: 0x03, payloadLen: 0, sessionId: 1, seq: 0x1000))
+        windows = windows.advancing(datagram: telemetry(0x1020))
+        #expect(windows.ackedData == 0x1020)
+        windows = windows.advancing(datagram: telemetry(0x0FF8))
+        #expect(windows.ackedData == 0x1020)  // delayed status cannot rewind
+
+        windows = DumlTransport.AckWindows(
+            ackedData: 0xFFF8, hasAckedData: true
+        ).advancing(datagram: telemetry(0x0008))
+        #expect(windows.ackedData == 0x0008)
+        #expect(DumlTransport.AckWindows.isForward(candidate: 0x0008, from: 0xFFF8))
     }
 
     // scanFrames must find the DUML frame buried under the transport + routing wrapper.

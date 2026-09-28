@@ -27,13 +27,13 @@ model was not recorded. Android physical verification remains pending.
 | `0x00/0x88` | app registration / keepalive | ~1 Hz with the full `17 … APP` payload; video stops ~8–10 s after the last one ([details](../duml-transport/#registration-holds-live-video)) |
 | `0x00/0x99` | subscribe to a status key | battery, storage, mode, ... |
 | `0x02/0x0c` | enter/exit playback | `01 01 00 01` / `01 01 00 00`. Hold with `0x00/0x88` ~1 Hz. Do not poll `0x02/0x8E` while held. |
-| `0x00/0x26` | media list request | cursor `@10` u32-LE; ctr `@4`. Trigger `4a040e10`. Newest page needs no playback; older pages do. |
-| `0x00/0x27` | media list chunks | `[10B sub][chunk]`; subtype `01` is data. Concat in arrival order → CompositePack. |
+| `0x00/0x26` | media list request | cursor `@10` u32-LE; ctr `@4`. Counter 1 SD and counter 2 internal have independent cursors. Trigger `4a040e10`. Newest page needs no playback; older pages do. |
+| `0x00/0x27` | media list chunks | `[10B sub][chunk]`; subtype `04` start, `01` data, `03` end, all per request counter. Concat data per counter in arrival order → CompositePack. ACK-window group 1 must advance while these stream. |
 | `0x00/0x28` | delete media | `[count][handle:u32][counter:u32] 00 [count:u32] 01 01 00 00`. Do not re-send. |
 | `0x02/0xBF` | favorite / star | `01 01 [handle][counter] 00 [on] 00 00 00`. Nano star byte `== 1` only. |
 | HTTP `/v2` | SoftAP file fetch | See [HTTP media](../media/). |
 | `0x0d/0x02` | **battery push** | percent at payload offset 20 |
-| `0x02/0xdc` | **storage push** | SD + internal capacity/free |
+| `0x02/0xdc` | **storage push** | SD + internal capacity/free. Preserve a previously known positive SD capacity across a transient zeroed playback push. |
 | `0x02/0x80` | active-store + playback bit | unsolicited |
 | `0x09/0xa8` | **live-view enable** | starts pktType-0x02 video. Pocket `rcv=0x08`; Nano and Action 6 `rcv=0x41` |
 | `0x02/0x09` | **Nano live gate** | Mimo `00…03` with enable, `00…04` on stop. ACK `00`. Pocket unused |
