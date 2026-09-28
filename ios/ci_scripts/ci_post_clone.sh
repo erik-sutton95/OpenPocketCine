@@ -15,11 +15,39 @@ set -eu
 
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
+# Each step names itself: Xcode Cloud reports only the script's exit code.
+step() { echo "ci_post_clone: $*"; }
+
+# A Homebrew hiccup failed an archive in 22 s with "exited with code 1"
+# (2026-09-28, same inputs as the archive before it). No auto-update, three
+# tries, then the pinned release from GitHub.
+XCODEGEN_VERSION=2.46.0
+install_xcodegen() {
+  for attempt in 1 2 3; do
+    step "brew install xcodegen (attempt $attempt)"
+    if HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install xcodegen; then
+      return 0
+    fi
+    sleep 5
+  done
+  step "brew failed; downloading XcodeGen $XCODEGEN_VERSION"
+  dir="${TMPDIR:-/tmp}/xcodegen-$XCODEGEN_VERSION"
+  rm -rf "$dir" && mkdir -p "$dir"
+  curl -fsSL --retry 3 -o "$dir/xcodegen.zip" \
+    "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+  unzip -q "$dir/xcodegen.zip" -d "$dir"
+  PATH="$dir/xcodegen/bin:$PATH"
+  export PATH
+}
+
 if ! command -v xcodegen >/dev/null 2>&1; then
-  brew install xcodegen
+  install_xcodegen
 fi
+step "xcodegen $(xcodegen --version 2>/dev/null) generate"
 (cd ios && xcodegen generate)
+step "sync Package.resolved"
 sh ios/sync-package-resolved.sh
+step "write Frame.io and Sentry xcconfig"
 
 cat > ios/OpenPocketCine/Frameio.local.xcconfig <<EOF
 FRAMEIO_CLIENT_ID = ${FRAMEIO_CLIENT_ID:-}
