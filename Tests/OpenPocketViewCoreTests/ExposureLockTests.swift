@@ -35,6 +35,11 @@ import Testing
         _ = CameraStatusDecoder.applySubscribePush(
             SubscribePush.pack(name: "cam_image_effect", value: auto), to: &status)
         #expect(WhiteBalance.lockingAuto(status) == .custom(kelvin: 3_500, tint: 20))
+        // Snaps to the Custom drum: nearest 100K, a tie keeps the lower value.
+        #expect(WhiteBalance.snappedKelvin(4_900) == 4_900)
+        #expect(WhiteBalance.snappedKelvin(4_950) == 4_900)
+        #expect(WhiteBalance.snappedKelvin(4_951) == 5_000)
+        #expect(WhiteBalance.snappedKelvin(1_500) == 2_000)
 
         var custom = auto
         custom[4] = 0x06

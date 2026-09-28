@@ -37,12 +37,23 @@ public struct AutoExposureLock: Equatable, Sendable {
 }
 
 extension WhiteBalance {
-    /// AWB lock: Custom at the live Auto Kelvin, keeping tint. nil unless Auto
-    /// reports a Kelvin in the Custom range.
+    /// Custom Kelvin drum on both shells (Android `CaptureLists.kelvinValues` mirrors it).
+    /// One ladder for every model: Action 6 accepted single 100K steps (2000 → 2100K).
+    public static let kelvinLadder = Array(stride(from: 2_000, through: 10_000, by: 100))
+
+    /// Nearest drum value; a tie keeps the lower (warmer) value.
+    public static func snappedKelvin(_ kelvin: Int) -> Int {
+        kelvinLadder.min { abs($0 - kelvin) < abs($1 - kelvin) } ?? kelvin
+    }
+
+    /// AWB lock: Custom at the live Auto Kelvin snapped to the drum, keeping
+    /// tint. nil unless Auto reports a Kelvin in the Custom range.
     public static func lockingAuto(_ status: CameraStatus) -> WhiteBalance? {
         guard status.whiteBalance?.mode == .auto, status.autoWhiteBalanceKelvin > 0 else {
             return nil
         }
-        return .custom(kelvin: status.autoWhiteBalanceKelvin, tint: status.whiteBalanceTint ?? 0)
+        return .custom(
+            kelvin: snappedKelvin(status.autoWhiteBalanceKelvin), tint: status.whiteBalanceTint ?? 0
+        )
     }
 }
