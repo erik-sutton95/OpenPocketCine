@@ -744,6 +744,22 @@ class CaptureSheetTest {
         assertEquals(listOf("AE-L", "Auto", "Manual"), CaptureLists.expoLabels(aeLocked = true))
         assertEquals("AE-L", CaptureLists.expoSelectedLabel(CameraCommands.EXPO_MANUAL, aeLocked = true))
         assertEquals(null, CaptureLists.expoModeFromLabel("AE-L"))
+    }
+
+    @Test
+    fun awbLockIsAModeStopLeftOfAutoAndStaysSelectedWhileLocked() {
+        val auto = CameraStatus(wbMode = CameraCommands.WB_AUTO)
+        assertEquals(listOf("AWB Lock", "Auto", "Custom"), CaptureLists.wbModeRows(offersLock = true))
+        assertEquals(listOf("Auto", "Custom"), CaptureLists.wbModeRows(offersLock = false))
+        assertEquals("Auto", CaptureLists.wbModeRowSelected(auto))
+        // Locked: the camera is Custom, but the stop, tab and tile stay AWB Lock.
+        val locked = CameraStatus(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = 4_900)
+        assertEquals("AWB Lock", CaptureLists.wbModeRowSelected(locked, awbLocked = true))
+        assertEquals(CaptureLists.WB_TAB_MODE, CaptureLists.wbInitialTab(locked, awbLocked = true))
+        assertEquals("AWB-L", CaptureLists.wbChipValue(locked, awbLocked = true))
+        // Unlocked Custom returns to the Kelvin tab and value.
+        assertEquals(CaptureLists.WB_TAB_KELVIN, CaptureLists.wbInitialTab(locked))
+        assertEquals("4900K", CaptureLists.wbChipValue(locked))
         assertEquals(CameraCommands.EXPO_AUTO, CaptureLists.expoModeFromLabel("Auto"))
         assertEquals(CameraCommands.EXPO_MANUAL, CaptureLists.expoModeFromLabel("Manual"))
         assertEquals(null, CaptureLists.expoModeFromLabel("Video"))

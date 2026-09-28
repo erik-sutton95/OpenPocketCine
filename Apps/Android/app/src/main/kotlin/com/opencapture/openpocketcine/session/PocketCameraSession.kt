@@ -515,6 +515,10 @@ class PocketCameraSession(
     private val _aeLock = MutableStateFlow<AutoExposureLock?>(null)
     val aeLock: StateFlow<AutoExposureLock?> = _aeLock.asStateFlow()
     private var aeLockChecked: Pair<Int, Int>? = null
+    /** WB Mode AWB Lock: the locked Custom Kelvin. Cleared like [aeLock] (core `AutoWhiteBalanceLock`). */
+    private val _awbLockKelvin = MutableStateFlow<Int?>(null)
+    val awbLockKelvin: StateFlow<Int?> = _awbLockKelvin.asStateFlow()
+    private var awbLockChecked: Pair<Int, Int>? = null
     private val _isReconnecting = MutableStateFlow(false)
     val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
 
@@ -753,6 +757,7 @@ class PocketCameraSession(
         shootingModePin = null
         whiteBalancePin = null
         _aeLock.value = null
+        _awbLockKelvin.value = null
         focusPin = null
         isoLimitPin = null
         aperturePin = null
@@ -2691,6 +2696,7 @@ class PocketCameraSession(
         next = absorbStaleColor(next, reported)
         next = absorbStaleWhiteBalance(next, reported.wbMode >= 0 &&
             (reported.wbMode != CameraCommands.WB_CUSTOM || reported.wbKelvin >= 2000))
+        reconcileAwbLock(next)
         next = absorbStaleFocus(next, reported.focusMode >= 0, reported.focusTrack >= 0)
         next = absorbStaleIsoLimit(next, reported.isoLimit >= 0)
         aperturePin?.let { pin ->
@@ -3816,13 +3822,33 @@ class PocketCameraSession(
             ?.let { runCatching { JSONObject(it) }.getOrNull() }
             ?.let { it.getInt("kelvin") to it.getInt("tint") }
 
-    /** Pins the live Auto Kelvin as Custom (no captured native AWB lock). */
+    /**
+     * Pins the live Auto Kelvin as Custom (no captured native AWB lock). iOS
+     * `lockAutoWhiteBalance`: the optimistic Custom lands first, so the lock never sees a stale Auto.
+     */
     fun lockAutoWhiteBalance() {
+        if (_awbLockKelvin.value != null) return
         val (kelvin, tint) = autoWhiteBalanceLock() ?: return
         setWhiteBalance(kelvin, tint)
+        val now = _status.value
+        if (now.wbMode == CameraCommands.WB_CUSTOM && now.wbKelvin == kelvin) {
+            awbLockChecked = null
+            _awbLockKelvin.value = kelvin
+        }
+    }
+
+    /** Only the reported (WB mode, Kelvin) decide `holds`, so ask the core when that pair moves. */
+    private fun reconcileAwbLock(status: CameraStatus) {
+        val kelvin = _awbLockKelvin.value ?: return
+        val key = status.wbMode to status.wbKelvin
+        if (key == awbLockChecked) return
+        awbLockChecked = key
+        val request = JSONObject(status.toJson()).put("lockKelvin", kelvin)
+        if (exposureLockDecision("awbLockHolds", request.toString()) == "false") _awbLockKelvin.value = null
     }
 
     fun setWhiteBalanceAuto(tint: Int? = null) {
+        _awbLockKelvin.value = null
         val previous = _status.value
         val next = (tint ?: _status.value.wbTint).coerceIn(-100, 100)
         whiteBalancePin =
@@ -3853,6 +3879,13 @@ class PocketCameraSession(
     fun setWhiteBalance(kelvin: Int, tint: Int) {
         val previous = _status.value
         val (k, t) = CameraCommands.clampWhiteBalanceCustom(kelvin, tint)
+        // Custom from AWB Lock keeps the locked value; the camera is already there.
+        if (_awbLockKelvin.value != null && previous.wbMode == CameraCommands.WB_CUSTOM &&
+            previous.wbKelvin == k && previous.wbTint == t) {
+            _awbLockKelvin.value = null
+            return
+        }
+        _awbLockKelvin.value = null
         whiteBalancePin =
             WhiteBalancePin(
                 wbMode = CameraCommands.WB_CUSTOM,

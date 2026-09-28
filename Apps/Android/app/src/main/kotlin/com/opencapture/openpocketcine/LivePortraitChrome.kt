@@ -666,6 +666,7 @@ fun LiveCaptureStrip(
     val context = LocalContext.current
     val auto = status.expoMode == CameraCommands.EXPO_AUTO
     val aeLocked = model?.session?.aeLock?.collectAsState()?.value != null
+    val awbLocked = model?.session?.awbLockKelvin?.collectAsState()?.value != null
     val shutter = captureShutterReadout(
         status,
         shutterUsesAngle,
@@ -687,8 +688,8 @@ fun LiveCaptureStrip(
             badgeIcon = if (auto && facePriority) OpcIcon.SCAN else null))
         add(value(LiveSheet.EXPO, "EXPOSURE", if (aeLocked) CaptureLists.AE_LOCK
             else if (status.expoMode == CameraCommands.EXPO_MANUAL) "M" else if (auto) "A" else "—"))
-        add(value(LiveSheet.WB, "WB", CaptureLists.wbChipValue(status),
-            valueIcon = if (CaptureLists.wbIsAuto(status)) OpcIcon.APERTURE else null))
+        add(value(LiveSheet.WB, "WB", CaptureLists.wbChipValue(status, awbLocked),
+            valueIcon = if (CaptureLists.wbIsAuto(status) && !awbLocked) OpcIcon.APERTURE else null))
         if (showFocus) add(value(LiveSheet.FOCUS, "FOCUS", status.focusLabel))
         if (showAperture) add(value(LiveSheet.APERTURE, "APERTURE", ApertureStrategy.tileValue(status)))
         if (CaptureShutterPolicy.showsAudioControls(status.shootingMode)) {

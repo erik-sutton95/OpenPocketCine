@@ -362,7 +362,7 @@ private fun LiveControlSheetContent(
                 reseatShutterOrEv()
             }
             LiveSheet.WB -> {
-                selectedMode = CaptureLists.wbInitialTab(status)
+                selectedMode = CaptureLists.wbInitialTab(status, model.session.awbLockKelvin.value != null)
                 reseatWb()
             }
             LiveSheet.AUDIO -> selectedMode = CaptureLists.audioInitialTab()
@@ -673,11 +673,12 @@ private fun LiveControlSheetContent(
                 }
                 LiveSheet.WB -> {
                     when (selectedMode) {
-                        0 ->
+                        0 -> {
+                            val awbLocked = model.session.awbLockKelvin.collectAsState().value != null
                             CheckedRows(
-                                options = (if (model.session.autoWhiteBalanceLock(status) != null)
-                                    listOf(CaptureLists.AWB_LOCK) else emptyList()) + CaptureLists.wbModeRows,
-                                selected = CaptureLists.wbModeRowSelected(status),
+                                options = CaptureLists.wbModeRows(
+                                    awbLocked || model.session.autoWhiteBalanceLock(status) != null),
+                                selected = CaptureLists.wbModeRowSelected(status, awbLocked),
                                 enabled = enabled,
                             ) { label ->
                                 if (label == CaptureLists.AWB_LOCK) {
@@ -689,6 +690,7 @@ private fun LiveControlSheetContent(
                                     model.setWhiteBalance(custom.first, custom.second)
                                 }
                             }
+                        }
                         1 ->
                             Box(Modifier.wrapContentHeight().fillMaxWidth()) {
                                 CaptureDrumWheel(
@@ -1088,7 +1090,7 @@ private fun initialSelectedMode(
         LiveSheet.SHUTTER ->
             if (!isEvSheet && model.shutterUsesAngle && !CameraCommands.isPhotoMode(status.shootingMode)) 1
             else 0
-        LiveSheet.WB -> CaptureLists.wbInitialTab(status)
+        LiveSheet.WB -> CaptureLists.wbInitialTab(status, model.session.awbLockKelvin.value != null)
         LiveSheet.FORMAT -> {
             val format = VideoFormat.current(status)
             CaptureLists.formatResolutions(status).indexOf(format.resolution).coerceAtLeast(0)
@@ -1586,6 +1588,11 @@ object CaptureLists {
     val wbModeRows: List<String> = listOf("Auto", "Custom")
     /** iOS `CaptureLists.awbLock`: WB Mode drum entry left of Auto. */
     const val AWB_LOCK = "AWB Lock"
+    /** iOS `CaptureLists.awbLockTile`: WB tile while locked; `AWB Lock` would outgrow `10000K`. */
+    const val AWB_LOCK_TILE = "AWB-L"
+
+    /** iOS `whiteBalanceModeLabels`: AWB Lock left of Auto when offered or held. */
+    fun wbModeRows(offersLock: Boolean): List<String> = if (offersLock) listOf(AWB_LOCK) + wbModeRows else wbModeRows
     const val WB_TAB_MODE = 0
     const val WB_TAB_KELVIN = 1
     const val WB_TAB_TINT = 2
@@ -1871,11 +1878,12 @@ object CaptureLists {
 
     fun kelvinFromLabel(label: String): Int? = label.removeSuffix("K").toIntOrNull()
 
-    fun wbInitialTab(status: CameraStatus): Int =
-        if (status.wbMode == CameraCommands.WB_CUSTOM) WB_TAB_KELVIN else WB_TAB_MODE
+    /** AWB Lock is a Mode choice, not an active Kelvin. */
+    fun wbInitialTab(status: CameraStatus, awbLocked: Boolean = false): Int =
+        if (status.wbMode == CameraCommands.WB_CUSTOM && !awbLocked) WB_TAB_KELVIN else WB_TAB_MODE
 
-    fun wbModeRowSelected(status: CameraStatus): String =
-        if (status.wbMode == CameraCommands.WB_CUSTOM) "Custom" else "Auto"
+    fun wbModeRowSelected(status: CameraStatus, awbLocked: Boolean = false): String =
+        if (awbLocked) AWB_LOCK else if (status.wbMode == CameraCommands.WB_CUSTOM) "Custom" else "Auto"
 
     fun wbSendsAuto(label: String): Boolean = label == "Auto"
 
@@ -2056,8 +2064,8 @@ object CaptureLists {
             else -> "—"
         }
 
-    fun wbChipValue(status: CameraStatus): String =
-        when (status.wbMode) {
+    fun wbChipValue(status: CameraStatus, awbLocked: Boolean = false): String =
+        if (awbLocked) AWB_LOCK_TILE else when (status.wbMode) {
             CameraCommands.WB_CUSTOM -> if (status.wbKelvin > 0) "${status.wbKelvin}K" else "Custom"
             CameraCommands.WB_AUTO -> "Auto"
             else -> "—"

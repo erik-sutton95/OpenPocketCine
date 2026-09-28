@@ -44,11 +44,16 @@ internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: 
                 selected, enabled = !auto || !model.facePriorityExposureEnabled,
                 context = "${status.fps}:${status.availableShutterDenoms}:${status.expoMode}:$angle:${status.shootingMode}"))
         }
-        LiveSheet.WB -> chrome(
-            if (status.wbMode == CameraCommands.WB_CUSTOM)
-                MonitorQuickControl(CaptureLists.kelvinLabels, CaptureLists.wbDrumSelection(status), context = "${CaptureLists.currentTint(status)}")
-            else MonitorQuickControl(CaptureLists.wbModeRows, CaptureLists.wbModeRowSelected(status),
-                context = "${status.wbMode}:${CaptureLists.currentKelvin(status)}:${CaptureLists.currentTint(status)}"))
+        LiveSheet.WB -> {
+            val awbLocked = model.session.awbLockKelvin.value != null
+            chrome(
+                if (status.wbMode == CameraCommands.WB_CUSTOM && !awbLocked)
+                    MonitorQuickControl(CaptureLists.kelvinLabels, CaptureLists.wbDrumSelection(status), context = "${CaptureLists.currentTint(status)}")
+                else MonitorQuickControl(
+                    CaptureLists.wbModeRows(awbLocked || model.session.autoWhiteBalanceLock(status) != null),
+                    CaptureLists.wbModeRowSelected(status, awbLocked),
+                    context = "${status.wbMode}:${CaptureLists.currentKelvin(status)}:${CaptureLists.currentTint(status)}"))
+        }
         LiveSheet.FOCUS -> chrome(captureQuickFocusControl(status))
         LiveSheet.APERTURE -> chrome(MonitorQuickControl(CaptureLists.apertureLabels(status),
             ApertureStrategy.label(status.apertureStrategy).orEmpty()))
@@ -152,7 +157,8 @@ internal fun applyCaptureQuickControl(sheet: LiveSheet, value: String, status: C
             CaptureLists.ShutterDrumCommand.Ignored -> Unit
         }
         LiveSheet.WB -> {
-            if (status.wbMode == CameraCommands.WB_CUSTOM) {
+            if (value == CaptureLists.AWB_LOCK) model.session.lockAutoWhiteBalance()
+            else if (status.wbMode == CameraCommands.WB_CUSTOM && model.session.awbLockKelvin.value == null) {
                 CaptureLists.wbCustomFromKelvinLabel(value, status)?.let { model.setWhiteBalance(it.first, it.second) }
             } else if (CaptureLists.wbSendsAuto(value)) model.setWhiteBalanceAuto()
             else CaptureLists.wbCustomFromStatus(status).let { model.setWhiteBalance(it.first, it.second) }
