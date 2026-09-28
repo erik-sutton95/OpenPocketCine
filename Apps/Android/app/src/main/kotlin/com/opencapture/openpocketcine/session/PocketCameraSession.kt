@@ -69,6 +69,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.math.abs
 import kotlin.math.hypot
 import java.util.Locale
+import org.json.JSONObject
 
 /** Main-thread admission closes before negotiation is dispatched to the IO worker. */
 internal class EndpointCommandAdmission {
@@ -484,6 +485,10 @@ class PocketCameraSession(
     private var trackingPollJob: Job? = null
     private val _trackingHud = MutableStateFlow(TrackingHud())
     val trackingHud: StateFlow<TrackingHud> = _trackingHud.asStateFlow()
+    /** Feed long-press AE lock. Status that no longer `holds` it clears it (core policy). */
+    private val _aeLock = MutableStateFlow<AutoExposureLock?>(null)
+    val aeLock: StateFlow<AutoExposureLock?> = _aeLock.asStateFlow()
+    private var aeLockChecked: Pair<Int, Int>? = null
     private val _isReconnecting = MutableStateFlow(false)
     val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
 
@@ -716,6 +721,7 @@ class PocketCameraSession(
         gimbalFollowFamilyConfirmed = false
         shootingModePin = null
         whiteBalancePin = null
+        _aeLock.value = null
         focusPin = null
         isoLimitPin = null
         aperturePin = null
@@ -2404,6 +2410,7 @@ class PocketCameraSession(
         next = CamFov.absorb(next)
         // Reconcile the explicit Manual pin before accepting an Auto report.
         next = absorbStaleExpo(next, reported)
+        reconcileAeLock(next)
         if (next.expoMode == CameraCommands.EXPO_AUTO && formatPin?.shutterAngle != null) {
             formatPin?.shutterAngle = null
             clearExpoPin(shutter = true)
@@ -2675,6 +2682,8 @@ class PocketCameraSession(
         get() = feedRecoveryJob != null
 
     fun setShootingMode(raw: Int) {
+        // Return the old mode to Auto before leaving it; the camera keeps Manual per mode.
+        unlockAutoExposure()
         val previous = _status.value
         val revision = ++shootingModeRevision
         shootingModePin =
@@ -3465,6 +3474,7 @@ class PocketCameraSession(
 
     fun setExpoMode(mode: Int) {
         val extra = CameraCommands.expoWireExtra(mode) ?: return
+        _aeLock.value = null
         if (mode != CameraCommands.EXPO_MANUAL) {
             formatPin?.shutterAngle = null
             clearExpoPin(shutter = true)
@@ -3483,6 +3493,57 @@ class PocketCameraSession(
                 }
             },
         )
+    }
+
+    private fun exposureLockDecision(kind: String, json: String): String? =
+        if (SwiftCore.isAvailable) SwiftCore.exposureLockDecision(kind, json)?.takeIf { it.isNotEmpty() } else null
+
+    val canLockAutoExposure: Boolean
+        get() = _aeLock.value == null && exposureLockDecision("aeLock", _status.value.toJson()) != null
+
+    /** Pins the applied Auto exposure as Manual (no captured native AE lock). iOS `lockAutoExposure`. */
+    fun lockAutoExposure(): Boolean {
+        val dl = datalink
+        if (_aeLock.value != null || !controlLeaseAllows() || dl == null ||
+            !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) return false
+        val lock = exposureLockDecision("aeLock", _status.value.toJson())
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?.let { AutoExposureLock(it.getInt("isoIndex"), it.getInt("shutterDenom"), it.getInt("shootingMode")) }
+            ?: return false
+        setExpoMode(CameraCommands.EXPO_MANUAL)
+        setIsoIndex(lock.isoIndex)
+        setShutterDenom(lock.shutterDenom)
+        aeLockChecked = null
+        _aeLock.value = lock
+        Log.i(TAG, "ae-lock: ISO index ${lock.isoIndex} 1/${lock.shutterDenom}")
+        return true
+    }
+
+    fun unlockAutoExposure() {
+        if (_aeLock.value == null) return
+        setExpoMode(CameraCommands.EXPO_AUTO)
+    }
+
+    /** Only (expo mode, shooting mode) decide `holds`, so ask the core when that pair moves. */
+    private fun reconcileAeLock(status: CameraStatus) {
+        val lock = _aeLock.value ?: return
+        val key = status.expoMode to status.shootingMode
+        if (key == aeLockChecked) return
+        aeLockChecked = key
+        val request = JSONObject(status.toJson()).put("lockShootingMode", lock.shootingMode)
+        if (exposureLockDecision("aeLockHolds", request.toString()) == "false") _aeLock.value = null
+    }
+
+    /** `(kelvin, tint)` for AWB lock, or null unless Auto reports a live Kelvin. */
+    fun autoWhiteBalanceLock(status: CameraStatus = _status.value): Pair<Int, Int>? =
+        exposureLockDecision("awbLock", status.toJson())
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?.let { it.getInt("kelvin") to it.getInt("tint") }
+
+    /** Pins the live Auto Kelvin as Custom (no captured native AWB lock). */
+    fun lockAutoWhiteBalance() {
+        val (kelvin, tint) = autoWhiteBalanceLock() ?: return
+        setWhiteBalance(kelvin, tint)
     }
 
     fun setWhiteBalanceAuto(tint: Int? = null) {

@@ -230,6 +230,9 @@ data class DumlFrame(
         sender * 31 + receiver + seq + flags + cmdSet + cmdId + payload.contentHashCode()
 }
 
+/** Core `AutoExposureLock`: the Manual values an AE lock pinned. `isoIndex` is the wire byte. */
+data class AutoExposureLock(val isoIndex: Int, val shutterDenom: Int, val shootingMode: Int)
+
 data class CameraStatus(
     val batteryPercent: Int = -1,
     val batteryMilliVolts: Int = 0,
@@ -267,6 +270,8 @@ data class CameraStatus(
     /** Last Custom Kelvin. Auto does not clear this. `-1` unknown. */
     val wbKelvin: Int = -1,
     val wbTint: Int = 0,
+    /** Live Auto WB, `cam_image_effect` `@5` K/100 while Auto. `-1` unknown / not Auto. */
+    val autoWbKelvin: Int = -1,
     /** `01` Single / `02` Continuous from `cam_lens_state` `@0` `B1`/`B2`. `-1` unknown. */
     val focusMode: Int = -1,
     /** `0x8E` pid `0x0020` — `01` Mono / `02` Stereo / `03` Spatial. `-1` unknown. */
@@ -523,6 +528,7 @@ data class CameraStatus(
             wbMode = prev.wbMode,
             wbKelvin = prev.wbKelvin,
             wbTint = prev.wbTint,
+            autoWbKelvin = prev.autoWbKelvin,
             focusMode = prev.focusMode,
             audioChannel = prev.audioChannel,
             windNr = prev.windNr,
@@ -592,6 +598,7 @@ data class CameraStatus(
             .put("whiteBalanceMode", wbMode)
             .put("whiteBalanceKelvin", wbKelvin)
             .put("whiteBalanceTint", wbTint)
+            .put("autoWhiteBalanceKelvin", autoWbKelvin)
             .put("focusMode", focusMode)
             .put("audioChannel", audioChannel)
             .put("vocalBoost", vocalBoost)
@@ -688,6 +695,7 @@ data class CameraStatus(
                     wbMode = obj.optInt("whiteBalanceMode", obj.optInt("wbMode", -1)),
                     wbKelvin = obj.optInt("whiteBalanceKelvin", obj.optInt("wbKelvin", -1)),
                     wbTint = obj.optInt("whiteBalanceTint", obj.optInt("wbTint", 0)),
+                    autoWbKelvin = obj.optInt("autoWhiteBalanceKelvin", -1),
                     focusMode = obj.optInt("focusMode", -1),
                     audioChannel = obj.optInt("audioChannel", -1),
                     vocalBoost = obj.optInt("vocalBoost", -1),

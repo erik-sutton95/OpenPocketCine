@@ -258,6 +258,12 @@ object SwiftCore {
      */
     external fun multicamDecision(kind: String, requestJSON: String): String?
 
+    /**
+     * AE / AWB lock (`AndroidSessionWire.exposureLockDecision`). [requestJSON] is a
+     * status JSON; `aeLockHolds` adds the lock fields. Empty when there is no target.
+     */
+    external fun exposureLockDecision(kind: String, requestJSON: String): String?
+
     external fun multiviewRecoveryCreate(): Long
 
     /** `op`: `action` (watchdog snapshot JSON), `beginRejoin`, `fail`, `failed`, `reset`. */

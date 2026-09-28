@@ -984,6 +984,15 @@ data class LiveMonitorLayout(
             return ChromeRect(towardFeed - size / 2f, baseY - size / 2f, size, size)
         }
 
+    /** iOS `aeUnlock`: AE unlock capsule beside the recenter key, toward the feed centre. */
+    val aeUnlock: ChromeRect
+        get() {
+            val reset = focusReset
+            val width = reset.height * 1.5f
+            val x = if (reset.midX < feed.midX) reset.maxX + 8f else reset.x - 8f - width
+            return ChromeRect(x, reset.y, width, reset.height)
+        }
+
     companion object {
         fun fit(
             viewportWidth: Float,
@@ -2184,6 +2193,25 @@ fun LiveFocusResetButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
             tint = LiveDesign.text,
             modifier = Modifier.size(18.dp),
         )
+    }
+}
+
+/** iOS `LiveAutoExposureUnlockButton`: releases the feed AE lock back to Auto. */
+@Composable
+fun LiveAutoExposureUnlockButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Row(
+        modifier
+            .fillMaxSize()
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, LiveDesign.hairline, CircleShape)
+            .chromeClickable(onClick = onClick)
+            .semantics { contentDescription = "Unlock exposure" },
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OpcIcon(icon = OpcIcon.SUN, contentDescription = null, tint = LiveDesign.aeLock, modifier = Modifier.size(15.dp))
+        OpcIcon(icon = OpcIcon.LOCK_OPEN, contentDescription = null, tint = LiveDesign.aeLock, modifier = Modifier.size(13.dp))
     }
 }
 

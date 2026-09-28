@@ -165,8 +165,12 @@ fun LiveFeedGestureWell(
     onPinch: (magnification: Float) -> Unit,
     onPinchEnd: () -> Unit,
     onTrack: (TrackingBox) -> Unit = {},
+    /** Still long press past [LiveFeedFocusGesture.AE_LOCK_HOLD_SEC]; false falls back to [onTap]. */
+    onAeLock: () -> Boolean = { false },
+    canLockAe: () -> Boolean = { false },
 ) {
     val density = LocalDensity.current
+    val haptics = LocalOperatorHaptics.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val latestOnPinch = rememberUpdatedState(onPinch)
@@ -174,6 +178,8 @@ fun LiveFeedGestureWell(
     val latestOnTap = rememberUpdatedState(onTap)
     val latestOnSwipe = rememberUpdatedState(onSwipeClean)
     val latestOnTrack = rememberUpdatedState(onTrack)
+    val latestOnAeLock = rememberUpdatedState(onAeLock)
+    val latestCanLockAe = rememberUpdatedState(canLockAe)
     var draft by remember { mutableStateOf<TrackingBox?>(null) }
     val swipeFloor = with(density) { 44.dp.toPx() }
     val holdSlop = with(density) { LiveFeedFocusGesture.TRACK_HOLD_SLOP.dp.toPx() }
@@ -264,6 +270,7 @@ fun LiveFeedGestureWell(
                         gesture.lastX = event.x
                         gesture.lastY = event.y
                         gesture.armed = false
+                        gesture.aeLockHeld = false
                         gesture.hold?.cancel()
                         gesture.hold =
                             scope.launch {
@@ -273,6 +280,18 @@ fun LiveFeedGestureWell(
                                 if (!pinch.active && slop <= holdSlop) {
                                     gesture.armed = true
                                     draft = feedBox(gesture.startX, gesture.startY, gesture.lastX, gesture.lastY)
+                                } else {
+                                    return@launch
+                                }
+                                delay(
+                                    ((LiveFeedFocusGesture.AE_LOCK_HOLD_SEC - LiveFeedFocusGesture.TRACK_HOLD_SEC) *
+                                        1000).toLong(),
+                                )
+                                val still =
+                                    hypot(gesture.lastX - gesture.startX, gesture.lastY - gesture.startY) <= holdSlop
+                                if (!pinch.active && still && latestCanLockAe.value()) {
+                                    gesture.aeLockHeld = true
+                                    haptics.longPress()
                                 }
                             }
                     }
@@ -298,12 +317,17 @@ fun LiveFeedGestureWell(
                                 pinched = false,
                                 armed = gesture.armed,
                                 swipeFloor = swipeFloor,
+                                aeLockHeld = gesture.aeLockHeld,
                             )
                         when (kind) {
                             LiveFeedFocusGesture.Kind.DISP_CLEAN -> latestOnSwipe.value(true)
                             LiveFeedFocusGesture.Kind.DISP_LIVE -> latestOnSwipe.value(false)
                             LiveFeedFocusGesture.Kind.TAP ->
                                 feedNorm(gesture.lastX, gesture.lastY)?.let { latestOnTap.value(it) }
+                            LiveFeedFocusGesture.Kind.AE_LOCK ->
+                                if (!latestOnAeLock.value()) {
+                                    feedNorm(gesture.lastX, gesture.lastY)?.let { latestOnTap.value(it) }
+                                }
                             LiveFeedFocusGesture.Kind.TRACK ->
                                 latestOnTrack.value(
                                     feedBox(gesture.startX, gesture.startY, gesture.lastX, gesture.lastY),
@@ -311,6 +335,7 @@ fun LiveFeedGestureWell(
                             null -> Unit
                         }
                         gesture.armed = false
+                        gesture.aeLockHeld = false
                         draft = null
                     }
                 }
@@ -349,6 +374,7 @@ private class FeedGestureState {
     var lastX = 0f
     var lastY = 0f
     var armed = false
+    var aeLockHeld = false
     var hold: Job? = null
 }
 
