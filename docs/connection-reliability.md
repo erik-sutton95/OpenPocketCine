@@ -24,7 +24,7 @@ Match Mimo: diagnose the failure, then the cheapest repair — not rebuild +
 | [#93](https://github.com/erik-sutton95/OpenPocketCine/issues/93) | Audit + leftover wiring. This file is that audit. |
 | [#146](https://github.com/erik-sutton95/OpenPocketCine/issues/146) | Glass-to-glass lag on build 32. Merge into #148 if the take is a freeze presenting as lag. |
 | [#147](https://github.com/erik-sutton95/OpenPocketCine/issues/147) | WAITING FOR LIVE VIEW. SoftAP-never-joined (5G in the status bar) is still open. A second P3 well — 4K 25/30 boot, HUD/gimbal live, black until 1080→4K — is the first-picture format poke in [`live-session.md`](live-session.md). Separate from mid-session freeze. |
-| [#149](https://github.com/erik-sutton95/OpenPocketCine/pull/149) | ACK group 1 = latest pktType `0x03`. Control reliability. **Not** the #148 freeze. TF 29/32 did not include this. |
+| [#149](https://github.com/erik-sutton95/OpenPocketCine/pull/149) | ACK group 1 is the shared reliable command/download window: pktType `0x03` replies plus forward telemetry progress from media chunks. Control and manifest reliability. **Not** the #148 freeze. TF 29/32 did not include this. |
 | [#193](https://github.com/erik-sutton95/OpenPocketCine/issues/193) | TestFlight 0.1.0 (32): reconnect after a Pocket 4 Pro **power cycle**. `SessionRecovery`, not the watchdog. Recovery outcomes now land in `control-live.log` (`session: drop` / `recovery attempt failed phase=…` / `stalled` / `recovered` / `exhausted`) so a tester log names the stuck stage. iOS keeps the held frame across attempts (Android already did). |
 | [#221](https://github.com/erik-sutton95/OpenPocketCine/issues/221) | Pocket 3 first picture still black until the operator changes FORMAT or COLOR (iPhone and iPad). #147 poke is on 0.1.0 (59); a guessed 4K 30 SET before camcap, or burning the one-shot before the SET left, leaves the encoder off. `feed: first-picture` in `control-live.log`. |
 | [#239](https://github.com/erik-sutton95/OpenPocketCine/issues/239) | **P2 / environment.** AdGuard, Blokada, RethinkDNS (local VPN) drop UDP live view after SoftAP join. Same on Mimo / DJI Fly. Not a bind-ladder bug — `VpnService` without `allowBypass()` wins. Wizard + live-wait copy, `vpn=` on diagnostics, handbook FAQ. |
@@ -36,12 +36,13 @@ pktType `0x04` at 40 Hz carries **three** camera send windows:
 | Group | Cursor | Stale means |
 | --- | --- | --- |
 | 0 | Latest `0x02` (HEVC) seq | Video window closes → freeze / Reconnecting |
-| 1 | Latest `0x03` (command replies, including Flip GET) | `0x03` stops; HEVC and `0x01` HUD keep moving |
+| 1 | Forward-most reliable cursor from pktType `0x03` replies and telemetry during media downloads | Commands stop or a `0x27` manifest truncates; HEVC and `0x01` HUD may keep moving |
 | 2 | Extra from 34-byte `0x01` | Unknown. Not characterized. |
 
-Group 1 going stale looks like “controls mute, picture fine.” #148 is the
-opposite. Do not treat merging #149 as the freeze fix. Do not tear UDP to
-unstick `0x03` — only echoing that seq, or a **new handshake**, resets it.
+Group 1 going stale looks like “controls mute, picture fine” in live view, or a
+short/truncated media page in playback. #148 is the opposite. Do not treat this
+as the freeze fix. Do not tear UDP to unstick it — echo the forward-most cursor;
+only a **new handshake** resets a genuinely wedged window.
 
 ## Repair owners (production)
 
@@ -156,8 +157,8 @@ later observe line on `decoderWedged` and hid the real class.
 4. **BLE drop** → session recovery, not the watchdog. `session: drop`.
 5. **ACK group 0 stuck** (video cursor 0 or clobbered by 34-byte `0x01`).
    Low likelihood if 40 Hz group 0 is echoing `0x02`. Confirm on a take;
-   do not lead with it. Group 1 has the same seq-`0` trap: telemetry must
-   not overwrite a seen `0x03` cursor of `0` (controls mute, picture fine).
+   do not lead with it. Group 1 has the same seq-`0` trap: merge replies and
+   telemetry forward-only instead of treating zero as missing or rewinding it.
 
 Physical take 2026-08-28 (`es_iphone16`): first `feed: observe` was
 `diagnose=encoderPaused watchdog=resendLiveViewEnable`, then 2 s later
@@ -185,7 +186,9 @@ rebuild only when no picture is up. Do not `still holding for IDR` while
 `lastVideo` is young. Mimo first look after DHCP is tens of ms; a 2 s
 rebuild is the 30–45 s Waiting for live view.
 
-Do not change stall numbers or ACK group 1 without a new take.
+Do not change stall numbers or alter group-1 semantics again without a new take.
+The command/download merge is imported from Osmosis camera evidence; physical
+OpenPocketCine media qualification remains pending on both shells.
 
 Decoder-output recovery and typed incidents do not replace that take. A passing
 short stress harness run, if later recorded, is that phone/camera/build only.

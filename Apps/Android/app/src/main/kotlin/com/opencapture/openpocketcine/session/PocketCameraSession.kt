@@ -3244,6 +3244,11 @@ class PocketCameraSession(
         return mediaPictureGeneration
     }
 
+    /** Suspend the live-only Selfie Flip GET while playback/listing owns the camera. */
+    fun setMediaTransportBrowsing(browsing: Boolean) {
+        datalink?.setMediaBrowsing(browsing)
+    }
+
     private fun ownsLivePicture(owner: Long): Boolean =
         com.opencapture.openpocketcine.media.MediaLiveResume.isCurrentPictureOwner(
             owner, mediaPictureGeneration, isBrowsingMedia)

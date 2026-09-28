@@ -186,6 +186,7 @@ internal fun MediaFile.toJson(): JSONObject =
         if (fps != null) put("fps", fps) else put("fps", JSONObject.NULL)
         if (proxyPath != null) put("proxyPath", proxyPath) else put("proxyPath", JSONObject.NULL)
         put("storage", storage)
+        put("storageKnown", storageKnown)
         put("group", group)
         put("handleShared", handleShared)
     }
@@ -203,6 +204,7 @@ internal fun MediaFile.Companion.fromJson(obj: JSONObject): MediaFile =
         fps = if (obj.isNull("fps")) null else obj.optInt("fps"),
         proxyPath = obj.optStringOrNull("proxyPath"),
         storage = obj.optInt("storage"),
+        storageKnown = obj.optBoolean("storageKnown", false),
         group = obj.optInt("group"),
         handleShared = obj.optBoolean("handleShared"),
     )

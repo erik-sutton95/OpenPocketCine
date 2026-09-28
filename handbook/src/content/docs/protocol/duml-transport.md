@@ -47,6 +47,12 @@ On the UDP datalink each DUML frame is wrapped in an **8-byte transport header**
 
 Live view is **not** a separate port. Video is datalink `pktType 0x02` on the same UDP 9004 socket. See [live view](../live-view/).
 
-pktType `0x04` window ACK is 34 bytes: 8-byte transport header + 26-byte payload of three duplicated-u16 groups (video seq, `0x03` ackedData seq, extra). Mimo copies the `0x03` seq into group 1; command GET replies including Selfie Flip pid `0x38` use `0x03`.
+pktType `0x04` window ACK is 34 bytes: 8-byte transport header + 26-byte
+payload of three duplicated-u16 groups (video, reliable command/download,
+extra). Group 1 is shared: command replies, including Selfie Flip pid `0x38`,
+arrive as pktType `0x03`, while media-list `0x00/0x27` chunks advance the cursor
+advertised at bytes 18–19 of 34-byte pktType `0x01` telemetry. Merge both
+sources forward modulo `UInt16`; a delayed telemetry frame must not rewind a
+newer reply cursor. Echo that result at 40 Hz or a manifest can stop mid-page.
 
 Transport parsing lives in `Sources/OpenPocketViewCore/DumlTransport.swift`.

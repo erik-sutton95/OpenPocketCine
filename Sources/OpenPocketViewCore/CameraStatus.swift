@@ -196,8 +196,11 @@ public enum CameraStatusDecoder {
             let sdTotal = Int(u32(p, 6))
             let sdFree = Int(u32(p, 10))
             let hasInternal = p.count >= 32
-            if sane(sdTotal) { status.sdTotalMb = sdTotal }
-            if sane(sdFree) { status.sdFreeMb = sdFree }
+            // Nano sends a well-formed 0/0 first block throughout playback even with mounted media.
+            // Preserve a previously observed positive capacity instead of blanking storage status.
+            let firstBlockBlanked = sdTotal == 0 && status.sdTotalMb > 0
+            if sane(sdTotal), !firstBlockBlanked { status.sdTotalMb = sdTotal }
+            if sane(sdFree), !firstBlockBlanked { status.sdFreeMb = sdFree }
             if hasInternal {
                 let it = Int(u32(p, 24))
                 let ifree = Int(u32(p, 28))

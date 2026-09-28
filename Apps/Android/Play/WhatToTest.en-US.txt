@@ -18,21 +18,22 @@ New and changed
 
 Fixes
 
+- Media now lists complete SD and internal-storage libraries, retries Nano's briefly empty first response, and keeps storage capacity visible during playback.
 - Shutter angle stays at your chosen value when changing frame rate. Opening the picker no longer changes the saved angle.
 - A new track no longer flashes on a previously tracked face.
 - Multiview Exit retries a temporary pairing refusal before showing an error; cameras already returned to their Wi-Fi stay untouched.
 - Wi-Fi headings and fields align, Connect stays above the keyboard, and connecting or cancelling waits for scan cleanup.
-- The joystick adapts between bright and dark ink over the picture, without a dark halo.
+- The joystick and gimbal controls now have the same dark glow as other live-view controls, making them easier to see over bright footage.
 - Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
 - Osmo Nano no longer shows zoom controls, and DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
 - Live View no longer crashes on some phone and monitor screen sizes while gimbal controls are shown.
-- Live View no longer freezes for several seconds after a single dropped video packet.
-- Live View no longer crashes over and over on some MediaTek phones. After two crashes it uses a compatible display mode for this version.
+- Live View no longer freezes for several seconds after a single dropped video packet. The picture returns as soon as the camera sends a fresh keyframe.
+- Live View no longer crashes when it opens on MediaTek phones such as Redmi 10, Poco X3 GT and Galaxy A41.
 
 What to test
 
-- If Live View freezes while the camera stays connected, note the time and send Connection setup, Share Diagnostics.
+- Open Media on a camera with many clips or both storage types. On Nano, open it right after playback starts. Confirm all clips and capacity appear.
 - In Multiview, try Grid and Center stage in both orientations, open Camera settings, and switch apps to check feeds resume. Exit once.
 - Double-tap an object to track it, with a face in the scene. Set the joystick to Large. Set 180° and change FPS: angle should stay 180°.
-- Turn on LEVEL and roll the handle in FPV. In Media, try Cancel and Delete on a clip.
+- Turn on LEVEL and roll the handle in FPV. In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
 - On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.

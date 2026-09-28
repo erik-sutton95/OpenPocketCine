@@ -1345,6 +1345,13 @@ static bool importAhb(OpcVk* r, AHardwareBuffer* hb) {
 
     AHardwareBuffer_Desc desc{};
     AHardwareBuffer_describe(hb, &desc);
+    // VUID-VkMemoryAllocateInfo-pNext-02390: an imported image AHB must carry a
+    // GPU usage. Refuse instead of letting a vendor driver fault (MediaTek
+    // gralloc_extra_query SIGSEGV, ANDROID-E); the caller falls back.
+    if (!(desc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE)) {
+        LOGE("AHB usage 0x%llx lacks GPU_SAMPLED_IMAGE", (unsigned long long)desc.usage);
+        return false;
+    }
 
     VkAndroidHardwareBufferFormatPropertiesANDROID fmt{
         VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID};

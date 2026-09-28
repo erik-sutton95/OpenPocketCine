@@ -20,6 +20,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+private data class MediaQueryPage(
+    val files: List<MediaFile>,
+    val slices: Map<Int, MediaPageSliceInfo>,
+)
+
 class MediaLibraryController(
     context: Context,
     private val session: PocketCameraSession,
@@ -80,10 +85,12 @@ class MediaLibraryController(
         browsing = true
         session.markBrowsingMedia(true)
         if (!isLive) {
+            session.setMediaTransportBrowsing(false)
             fetchInProgress = false
             note = if (files.isEmpty()) MediaOperatorCopy.NOT_CONNECTED else null
             return
         }
+        session.setMediaTransportBrowsing(true)
         if (session.cameraGalleryOpen.value) {
             // The camera owns playback (#273). DJI Mimo sends no enter or listing;
             // ours put "Playback in progress" on the body. Show the cached catalog.
@@ -111,7 +118,10 @@ class MediaLibraryController(
         note = null
         unhookFrames?.invoke()
         unhookFrames = null
-        if (!isLive) return
+        if (!isLive) {
+            session.setMediaTransportBrowsing(false)
+            return
+        }
         val token = nextResumeId()
         resumeJob =
             resumeScope.launch {
@@ -350,6 +360,7 @@ class MediaLibraryController(
         val decision = MediaBrowsePolicy.afterEnterPlayback(entered)
         playbackHeld = entered
         if (!entered) {
+            session.setMediaTransportBrowsing(false)
             Log.i(TAG, "media: enter playback failed — listing newest page")
         }
         if (!decision.keepBrowsing) {
@@ -392,40 +403,35 @@ class MediaLibraryController(
         try {
             val collected = ArrayList<MediaFile>()
             val seen = HashSet<String>()
-            var pageCursor: Long? = null
+            var sdCursor = MediaListCommand.NEWEST_SD
+            var internalCursor = MediaListCommand.NEWEST_INTERNAL
             var first = true
             while (id == browseGeneration) {
-                val page =
+                val page = queryPage(sdCursor, internalCursor, retryEmptySd = first && playbackHeld)
+                val step =
                     if (first) {
-                        first = false
-                        queryPage(MediaListCommand.NEWEST_INTERNAL)
+                        MediaListCommand.seedPagination(page.files, seen, page.slices)
                     } else {
-                        val cursor = pageCursor ?: break
-                        queryPage(cursor)
+                        MediaListCommand.stepPagination(
+                            sdCursor,
+                            internalCursor,
+                            page.files,
+                            seen,
+                            page.slices,
+                        )
                     }
-                var added = 0
-                for (file in page) {
-                    if (seen.add(file.path)) {
-                        collected.add(applyFavoriteOverlay(file))
-                        added += 1
-                    }
-                }
+                first = false
+                sdCursor = step.sdCursor
+                internalCursor = step.internalCursor
+                collected.addAll(step.fresh.map(::applyFavoriteOverlay))
                 publish(collected)
-                if (!includeOlderPages) break
-                val handles = page.map { it.handle }
-                val newest =
-                    handles.filter { it >= MediaListCommand.VIDEO_HANDLE_BASE }.maxOrNull()
-                        ?: MediaListCommand.NEWEST_INTERNAL
-                pageCursor = MediaListCommand.nextCursor(handles, newest)
-                    ?: handles.filter { it >= MediaListCommand.VIDEO_HANDLE_BASE }.minOrNull()
-                if (added == 0 || page.size < MediaListCommand.PAGE_SIZE) break
-                if (!MediaListCommand.hasOlderPage(page.size, pageCursor)) break
+                if (!includeOlderPages || !step.moreAvailable) break
             }
             if (id != browseGeneration) return
             note =
                 when {
                     collected.isNotEmpty() -> null
-                    assembler.chunkCount == 0 && !assembler.sawEnd -> MediaOperatorCopy.LIST_FAILED
+                    !assembler.hasResponse -> MediaOperatorCopy.LIST_FAILED
                     else -> MediaOperatorCopy.NO_CLIPS
                 }
         } finally {
@@ -433,60 +439,119 @@ class MediaLibraryController(
         }
     }
 
-    private suspend fun queryPage(internalCursor: Long): List<MediaFile> {
+    private suspend fun queryPage(
+        sdCursor: Long,
+        internalCursor: Long,
+        retryEmptySd: Boolean,
+    ): MediaQueryPage {
         assembler.reset()
-        link.sendMediaList(MediaListCommand.SD_COUNTER, MediaListCommand.NEWEST_SD)
-        collectChunks(floorMs = 800, idleMs = 200)
+        val deadlineMs = SystemClock.elapsedRealtime() + 12_000L
+        link.sendMediaList(MediaListCommand.SD_COUNTER, sdCursor)
+        collectChunks(
+            MediaListCommand.SD_COUNTER,
+            floorMs = 800,
+            idleMs = 1_000,
+            deadlineMs = deadlineMs,
+        )
         link.sendMediaListTrigger()
-        collectChunks(floorMs = 400, idleMs = 200)
+        collectChunks(null, floorMs = 400, idleMs = 200, deadlineMs = deadlineMs)
         link.sendMediaList(MediaListCommand.INTERNAL_COUNTER, internalCursor)
-        collectChunks(floorMs = 800, idleMs = 800)
-        return MediaManifest.decodeStores(assembler)
+        collectChunks(
+            MediaListCommand.INTERNAL_COUNTER,
+            floorMs = 800,
+            idleMs = 1_000,
+            deadlineMs = deadlineMs,
+        )
+
+        if (
+            retryEmptySd &&
+            assembler.assembled(MediaListCommand.SD_COUNTER).isEmpty() &&
+            SystemClock.elapsedRealtime() < deadlineMs
+        ) {
+            Log.i(TAG, "media: SD store answered empty â€” re-asking once")
+            assembler.reset(MediaListCommand.SD_COUNTER)
+            link.sendMediaList(MediaListCommand.SD_COUNTER, sdCursor)
+            collectChunks(
+                MediaListCommand.SD_COUNTER,
+                floorMs = 800,
+                idleMs = 1_000,
+                deadlineMs = deadlineMs,
+            )
+            link.sendMediaListTrigger()
+            collectChunks(
+                MediaListCommand.SD_COUNTER,
+                floorMs = 400,
+                idleMs = 1_000,
+                deadlineMs = deadlineMs,
+            )
+        }
+
+        val slices =
+            mapOf(
+                MediaListCommand.SD_STORAGE to
+                    MediaManifest.sliceInfo(assembler, MediaListCommand.SD_COUNTER),
+                MediaListCommand.INTERNAL_STORAGE to
+                    MediaManifest.sliceInfo(assembler, MediaListCommand.INTERNAL_COUNTER),
+            )
+        return MediaQueryPage(MediaManifest.decodeStores(assembler), slices)
     }
 
-    private suspend fun collectChunks(floorMs: Long, idleMs: Long, capMs: Long = 8_000) {
+    private suspend fun collectChunks(
+        counter: Int?,
+        floorMs: Long,
+        idleMs: Long,
+        deadlineMs: Long,
+    ) {
         val start = SystemClock.elapsedRealtime()
         var lastChange = start
-        var lastCount = assembler.chunkCount
+        var lastCount = counter?.let { assembler.chunkCount(it) } ?: assembler.chunkCount
         while (true) {
             val now = SystemClock.elapsedRealtime()
-            if (now - start >= capMs) break
-            if (assembler.sawEnd && now - start >= floorMs) break
+            if (now >= deadlineMs) break
+            if (counter != null && now - start >= floorMs && assembler.didEnd(counter)) break
             delay(50)
-            val count = assembler.chunkCount
+            val count = counter?.let { assembler.chunkCount(it) } ?: assembler.chunkCount
             if (count != lastCount) {
                 lastCount = count
                 lastChange = SystemClock.elapsedRealtime()
             }
-            if (now - start >= floorMs && now - lastChange >= idleMs) break
+            val afterDelay = SystemClock.elapsedRealtime()
+            if (afterDelay - start >= floorMs && afterDelay - lastChange >= idleMs) break
         }
     }
 
     private suspend fun resumeLiveView(token: Int, pictureOwner: Long) {
-        val resumeAt = SystemClock.elapsedRealtime()
-        val result = MediaLiveResumeRunner.run(
-            timeoutMs = com.opencapture.openpocketcine.session.LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS,
-            nowMs = SystemClock::elapsedRealtime,
-            isCurrent = { token == resumeGeneration && !browsing && session.ownsMediaLiveResume(pictureOwner) },
-            inPlayback = { link.inPlayback },
-            pictureFresh = { session.hasRecoveryPicture(resumeAt) },
-            exitPlayback = {
-                var acked = false
-                val unhook = link.addFrameListener { frame ->
-                    if (frame.cmdSet == MediaCommands.SET_CAMERA &&
-                        frame.cmdId == MediaCommands.CMD_PLAYBACK &&
-                        MediaCommands.isReplySuccess(frame.payload)) acked = true
-                }
-                try {
-                    link.sendExitPlayback()
-                    delay(450)
-                } finally { unhook() }
-                acked
-            },
-            enableLiveView = link::enableLiveView,
-        )
-        if (result == MediaLiveResumeRunner.Result.EXHAUSTED) {
-            session.mediaLiveResumeExhausted(pictureOwner)
+        try {
+            val resumeAt = SystemClock.elapsedRealtime()
+            val result = MediaLiveResumeRunner.run(
+                timeoutMs = com.opencapture.openpocketcine.session.LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS,
+                nowMs = SystemClock::elapsedRealtime,
+                isCurrent = { token == resumeGeneration && !browsing && session.ownsMediaLiveResume(pictureOwner) },
+                inPlayback = { link.inPlayback },
+                pictureFresh = { session.hasRecoveryPicture(resumeAt) },
+                exitPlayback = {
+                    var acked = false
+                    val unhook = link.addFrameListener { frame ->
+                        if (frame.cmdSet == MediaCommands.SET_CAMERA &&
+                            frame.cmdId == MediaCommands.CMD_PLAYBACK &&
+                            MediaCommands.isReplySuccess(frame.payload)
+                        ) acked = true
+                    }
+                    try {
+                        link.sendExitPlayback()
+                        delay(450)
+                    } finally { unhook() }
+                    acked
+                },
+                enableLiveView = link::enableLiveView,
+            )
+            if (result == MediaLiveResumeRunner.Result.EXHAUSTED) {
+                session.mediaLiveResumeExhausted(pictureOwner)
+            }
+        } finally {
+            if (token == resumeGeneration && !browsing) {
+                session.setMediaTransportBrowsing(false)
+            }
         }
     }
 
@@ -558,8 +623,10 @@ class MediaLibraryController(
 
     private val usesSingleSdStorage: Boolean
         get() {
-            if (link.internalTotalMb == 0) return true
-            return link.cameraName.contains("Pocket 3", ignoreCase = true)
+            if (link.cameraName.contains("Pocket 3", ignoreCase = true)) return true
+            // Playback storage pushes are not topology evidence: Nano reports one zeroed block while
+            // both internal and dock-SD manifests remain reachable.
+            return !link.inPlayback && link.internalTotalMb == 0
         }
 
     private val isNanoBody: Boolean

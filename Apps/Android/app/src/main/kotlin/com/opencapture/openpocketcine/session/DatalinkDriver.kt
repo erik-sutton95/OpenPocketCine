@@ -21,6 +21,11 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
 
+internal fun isForwardReliableCursor(current: Int, candidate: Int): Boolean {
+    val delta = (candidate - current) and 0xFFFF
+    return delta != 0 && delta < 0x8000
+}
+
 /** Latest-value native stream. Scheduling and writes run on one serial TX executor.
  * Caller operations never hold this lock across a write, so STOP can fence queued work immediately.
  */
@@ -273,7 +278,7 @@ class DatalinkDriver internal constructor(
     /** Latest video transport seq — ACK pump must echo this (iOS `videoAssembler.peerCursor`). */
     private val peerCursor = AtomicInteger(0)
     private val hasVideoSeq = AtomicBoolean(false)
-    /** pktType 0x03 command-reply window (every GET/SET ACK). Mimo ACK group 1. */
+    /** Shared reliable command/download window. Mimo ACK group 1. */
     private val ackedDataCursor = AtomicInteger(0)
     private val hasAckedData = AtomicBoolean(false)
     /** Third ACK group, seeded from 34-byte pktType 0x01 telemetry. */
@@ -282,6 +287,7 @@ class DatalinkDriver internal constructor(
     private val handshakeAdmission = DatalinkHandshakeAdmission()
     private val handshakeAcked: Boolean get() = handshakeAdmission.initialCommandSequence() != null
     @Volatile private var liveViewEnabled = false
+    private val mediaBrowsing = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private var depacketizer = 0L
     private val inboundLogs = AtomicInteger(0)
@@ -331,6 +337,10 @@ class DatalinkDriver internal constructor(
     }
     val isRebuilding: Boolean get() = rebuilding
     val needsRebuild: Boolean get() = socketHealth.needsRebuild
+    fun setMediaBrowsing(browsing: Boolean) {
+        mediaBrowsing.set(browsing)
+    }
+
     val isClosed: Boolean get() = closed.get()
 
     /**
@@ -817,7 +827,7 @@ class DatalinkDriver internal constructor(
                         flipTicks += 1
                         if (flipTicks >= 40) {
                             flipTicks = 0
-                            sendCommand(SwiftCore.CMD_GET_SELFIE_FLIP)
+                            if (!mediaBrowsing.get()) sendCommand(SwiftCore.CMD_GET_SELFIE_FLIP)
                         }
                         try {
                             Thread.sleep(ACK_INTERVAL_MS)
@@ -1049,7 +1059,7 @@ class DatalinkDriver internal constructor(
         sendWindowAck()
     }
 
-    /** Handbook / iOS `noteAckWindows`: 0x03 seq in ACK group 1, 0x01 seeds extra. */
+    /** Merge pktType 0x03 replies and the telemetry download cursor into ACK group 1. */
     private fun noteAckWindows(datagram: ByteArray) {
         if (datagram.size < 8) return
         when (datagram[6].toInt() and 0xFF) {
@@ -1058,24 +1068,35 @@ class DatalinkDriver internal constructor(
                     (datagram[18].toInt() and 0xFF) or ((datagram[19].toInt() and 0xFF) shl 8)
                 val extra =
                     (datagram[26].toInt() and 0xFF) or ((datagram[27].toInt() and 0xFF) shl 8)
-                if (!hasAckedData.get()) {
-                    ackedDataCursor.set(acked)
-                    hasAckedData.set(true)
-                }
+                advanceReliableCursor(acked)
                 extraCursor.set(extra)
                 hasExtra.set(true)
             }
             0x03 -> {
                 val seq = SwiftCore.transportSeq(datagram)
                 if (seq >= 0) {
-                    ackedDataCursor.set(seq)
-                    hasAckedData.set(true)
+                    advanceReliableCursor(seq)
                 }
             }
         }
     }
 
-    /** Handbook / iOS `sendWindowAck`: 34 B pktType 0x04 echoing video + 0x03 cursors. */
+    /** Group 1 is shared by command replies and media downloads; advance from either source. */
+    private fun advanceReliableCursor(candidate: Int) {
+        val next = candidate and 0xFFFF
+        if (!hasAckedData.get()) {
+            ackedDataCursor.set(next)
+            hasAckedData.set(true)
+            return
+        }
+        while (true) {
+            val current = ackedDataCursor.get()
+            if (next == current || !isForwardReliableCursor(current, next)) return
+            if (ackedDataCursor.compareAndSet(current, next)) return
+        }
+    }
+
+    /** Handbook / iOS `sendWindowAck`: 34 B pktType 0x04 echoing video + reliable cursors. */
     private fun sendWindowAck() = ackDispatch.request()
 
     /** Read all cursors at emission time; delayed ACKs cannot queue stale windows. */

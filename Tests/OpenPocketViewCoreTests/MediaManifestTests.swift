@@ -154,6 +154,9 @@ import Testing
 
     @Test func chunkAssemblerStripsSubheader() {
         var assembler = MediaChunkAssembler()
+        let acceptedStart = assembler.ingestPayload(
+            [0x4A, 0x04, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00])
+        #expect(acceptedStart)
         var payload: [UInt8] = [0x4A, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]
         payload += [0xDE, 0xAD]
         let frame = Duml.Frame(
@@ -169,17 +172,125 @@ import Testing
                 payload: [0x4A, 0x03, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]))
         #expect(ended)
         #expect(assembler.sawEnd)
+        #expect(assembler.didEnd(counter: 2))
+        #expect(!assembler.didEnd(counter: 1))
+        #expect(assembler.streamsEnded(requiredCounters: [2]))
     }
 
-    @Test func nextCursorUsesOldestVideoHandle() {
-        let files = MediaManifest.decode(fixture)
-        let handles = files.map(\.handle)
-        let oldest = MediaListCommand.oldestVideoHandle(handles)
-        #expect(oldest == handles.min())
-        #expect(MediaListCommand.hasOlderPage(recordCount: 34, cursor: oldest) == false)
-        #expect(MediaListCommand.hasOlderPage(recordCount: 45, cursor: oldest) == true)
-        let older = MediaListCommand.nextCursor(handles: handles, current: files[0].handle)
-        #expect(older == files.dropFirst().map(\.handle).min())
+    @Test func chunkCompletionIsPerCounter() {
+        func control(_ subtype: UInt8, _ counter: UInt8) -> [UInt8] {
+            [0x4A, subtype, 0, 0, counter, 0, 0, 0, 0, 0]
+        }
+        func data(_ counter: UInt8) -> [UInt8] { control(0x01, counter) + [counter] }
+
+        var assembler = MediaChunkAssembler()
+        let acceptedSDStart = assembler.ingestPayload(control(0x04, 1))
+        #expect(acceptedSDStart)
+        let acceptedSDData = assembler.ingestPayload(data(1))
+        #expect(acceptedSDData)
+        let acceptedSDEnd = assembler.ingestPayload(control(0x03, 1))
+        #expect(acceptedSDEnd)
+        #expect(!assembler.streamsEnded(requiredCounters: [1, 2]))
+        let acceptedInternalStart = assembler.ingestPayload(control(0x04, 2))
+        #expect(acceptedInternalStart)
+        let acceptedInternalData = assembler.ingestPayload(data(2))
+        #expect(acceptedInternalData)
+        #expect(!assembler.streamsEnded(requiredCounters: [1, 2]))
+        let acceptedInternalEnd = assembler.ingestPayload(control(0x03, 2))
+        #expect(acceptedInternalEnd)
+        #expect(assembler.streamsEnded(requiredCounters: [1, 2]))
+
+        assembler.reset()
+        let acceptedEmptySDStart = assembler.ingestPayload(control(0x04, 1))
+        #expect(acceptedEmptySDStart)
+        let acceptedSecondInternalStart = assembler.ingestPayload(control(0x04, 2))
+        #expect(acceptedSecondInternalStart)
+        let acceptedSecondInternalData = assembler.ingestPayload(data(2))
+        #expect(acceptedSecondInternalData)
+        let acceptedSecondInternalEnd = assembler.ingestPayload(control(0x03, 2))
+        #expect(acceptedSecondInternalEnd)
+        #expect(assembler.streamsEnded(requiredCounters: [1, 2]))
+        #expect(!assembler.streamsEnded(requiredCounters: [1, 2, 3]))
+    }
+
+    @Test func paginationAdvancesBothStoresAndKeepsDuplicatePaths() {
+        func file(_ index: Int, store: Int, path: String? = nil) -> MediaFile {
+            let base: UInt32 = store == 0 ? 0x0010_0000 : 0x4010_0000
+            return MediaFile(
+                path: path ?? "DCIM/DJI_001/F\(store)_\(index).MP4", thumbPath: "T",
+                handle: base + UInt32(index * 0x40), storage: store, storageKnown: true,
+                group: store)
+        }
+        var page = (1...45).map { file($0, store: 0) }
+        page += (1...45).map { file($0, store: 1) }
+        page += [file(46, store: 0, path: "DCIM/DJI_001/SAME.MP4")]
+        page += [file(46, store: 1, path: "DCIM/DJI_001/SAME.MP4")]
+        var seen = Set<String>()
+        let seeded = MediaListCommand.seedPagination(page: page, seen: &seen)
+        #expect(seeded.fresh.count == 92)
+        #expect(seeded.sdCursor == 0x0010_0040)
+        #expect(seeded.internalCursor == 0x4010_0040)
+        #expect(seeded.moreAvailable)
+        #expect(Set(page.suffix(2).map(\.id)).count == 2)
+
+        let older = [
+            file(0, store: 0),
+            MediaFile(
+                path: "DCIM/DJI_001/I0.MP4", thumbPath: "T", handle: 0x400F_FFC0,
+                storage: 1, storageKnown: true, group: 1),
+        ]
+        let stepped = MediaListCommand.stepPagination(
+            sdCursor: seeded.sdCursor, internalCursor: seeded.internalCursor,
+            page: older, seen: &seen)
+        #expect(stepped.sdCursor == 0x0010_0000)
+        #expect(stepped.internalCursor == 0x400F_FFC0)
+    }
+
+    @Test func paginationContinuesWithEitherStoreAlone() {
+        func page(store: Int) -> [MediaFile] {
+            let base: UInt32 = store == 0 ? 0x0004_0000 : 0x4004_0000
+            return (1...45).map { index in
+                MediaFile(
+                    path: "DCIM/DJI_001/S\(store)_\(index).MP4", thumbPath: "T",
+                    handle: base + UInt32(index * 0x10), storage: store,
+                    storageKnown: true, group: store)
+            }
+        }
+
+        var sdSeen = Set<String>()
+        let sd = MediaListCommand.seedPagination(page: page(store: 0), seen: &sdSeen)
+        #expect(sd.sdCursor == 0x0004_0010)
+        #expect(sd.internalCursor == MediaListCommand.newestInternal)
+        #expect(sd.moreAvailable)
+
+        var internalSeen = Set<String>()
+        let internalPage = MediaListCommand.seedPagination(
+            page: page(store: 1), seen: &internalSeen)
+        #expect(internalPage.sdCursor == MediaListCommand.newestSD)
+        #expect(internalPage.internalCursor == 0x4004_0010)
+        #expect(internalPage.moreAvailable)
+    }
+
+    @Test func pageWireFactsControlEndOfPagination() {
+        let path = Array("DCIM/DJI_001/ONE".utf8)
+        let field: [UInt8] = [0x1A, UInt8(path.count + 6), 0, 0, 0, 1] + path
+        let truncated: [UInt8] = [2, 0, 0, 0] + field + [0x0C, 0x01, 0x0D]
+        #expect(MediaManifest.recordCount(truncated) == 1)
+        #expect(MediaManifest.hasEndMarker(truncated))
+        let info = MediaPageSliceInfo(
+            declared: MediaManifest.headerCount(truncated), records: 1,
+            endMarker: true, ended: false)
+        #expect(info.incomplete)
+        #expect(
+            MediaListCommand.storeHasOlderPage(sliceSize: 1, cursorMoved: true, info: info))
+
+        let complete = MediaPageSliceInfo(declared: 1, records: 1, endMarker: false, ended: true)
+        #expect(
+            !MediaListCommand.storeHasOlderPage(sliceSize: 1, cursorMoved: true, info: complete))
+        let fullFinal = MediaPageSliceInfo(
+            declared: 45, records: 45, endMarker: true, ended: true)
+        #expect(
+            !MediaListCommand.storeHasOlderPage(sliceSize: 45, cursorMoved: true, info: fullFinal))
     }
 
     @Test func queryFiltersAndSorts() {
