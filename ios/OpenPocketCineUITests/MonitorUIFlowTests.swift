@@ -321,6 +321,22 @@ final class MonitorUIFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["monitor.system.display"].isHittable)
     }
 
+    func testFocusRecenterShowsInPortraitAndLandscape() {
+        app.launch()
+        let reset = app.buttons["monitor.system.focusReset"]
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            rotate(orientation)
+            XCTAssertTrue(app.buttons["monitor.system.record"].waitForExistence(timeout: 10))
+            // An off-centre tap-to-focus is what offers Recenter.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3)).tap()
+            XCTAssertTrue(reset.waitForExistence(timeout: 5))
+            XCTAssertTrue(reset.isHittable)
+            capture("focus-recenter-\(orientation.rawValue)")
+            reset.tap()
+            XCTAssertTrue(reset.waitForNonExistence(timeout: 5))
+        }
+    }
+
     func testAssistInspectorTabsSurviveRotation() {
         app.launch()
         app.buttons["monitor.assists.expand"].tap()

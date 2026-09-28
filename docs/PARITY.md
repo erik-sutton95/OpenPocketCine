@@ -221,8 +221,8 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   0.62 expanded, 0.82 info and 0.86 delivery. Text and icons use tighter,
   darker local black shadows, independently of the plate tint. Readout
   halos fade instead of clipping at the glyph or tile bounds.
-  Gimbal-controls icons retain the local glow. The joystick ring/knob instead
-  uses native difference compositing at rest, adapting bright/dark ink to the
+  Gimbal-controls icons and the zoom chip label retain the local glow. The
+  joystick ring/knob instead uses native difference compositing at rest, adapting bright/dark ink to the
   picture with no halo, image readback or sampling timer. Held ink stays cyan
   with normal compositing. Touch geometry and command cadence stay unchanged.
   Compact

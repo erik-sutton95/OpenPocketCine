@@ -19,6 +19,7 @@ New and changed
 
 Fixes
 
+- Portrait Live View shows Recenter focus after an off-centre tap, as landscape does. The zoom chip has the same dark glow as the other live controls.
 - Media now lists complete SD and internal-storage libraries, retries Nano's briefly empty first response, and keeps storage capacity visible during playback.
 - Shutter angle stays at your chosen value when changing frame rate. Opening the picker no longer changes the saved angle.
 - A new track no longer flashes on a previously tracked face.

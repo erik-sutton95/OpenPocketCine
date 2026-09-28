@@ -101,6 +101,21 @@ class LiveMonitorLayoutTest {
         LiveChromeMetrics.scale = 1f
     }
 
+    /** iOS `FieldMonitorLayout.focusReset`: leading of the stick on its bottom edge in both orientations. */
+    @Test
+    fun focusRecenterSitsLeadingOfTheStickInPortraitAndLandscape() {
+        for ((w, h) in listOf(393f to 852f, 852f to 393f)) {
+            val layout = LiveMonitorLayout.fieldMonitor(w, h, 0f, 0f, if (h > w) 59f else 0f, 34f,
+                showsBottomBars = true)
+            val stick = layout.gimbalCluster(showGimbalButton = true).stick
+            val reset = layout.focusReset
+            assertFalse(reset.isEmpty, "Recenter needs a slot in ${w}x$h")
+            assertEquals(stick.minX - 50f, reset.minX, 0.05f)
+            assertEquals(stick.maxY, reset.maxY, 0.05f)
+            assertTrue(reset.maxY <= layout.capture.minY)
+        }
+    }
+
     @Test
     fun portraitFillCropsSixteenNineToTheWellCenter() {
         val well = ChromeRect(0f, 95f, 390f, 390f * 16f / 9f)

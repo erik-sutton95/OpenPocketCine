@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorZoomCaption
+import com.opencapture.monitorui.monitorReadoutShadow
 import com.opencapture.openpocketcine.session.CamFov
 import com.opencapture.openpocketcine.session.CameraStatus
 import com.opencapture.openpocketcine.session.LiveFeedFocusGesture
@@ -145,6 +146,7 @@ fun LiveZoomChip(
             color = ink.copy(alpha = if (locked || dimmed) 0.4f else 1f),
             style = LiveType.ui(18f, FontWeight.Medium),
             maxLines = 1,
+            modifier = Modifier.monitorReadoutShadow(),
         )
     }
 }

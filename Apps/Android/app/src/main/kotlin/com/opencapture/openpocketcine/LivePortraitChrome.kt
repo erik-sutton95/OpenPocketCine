@@ -209,6 +209,8 @@ fun LivePortraitChrome(
     onAssistLongPress: (LiveAssistTool) -> Unit,
     chromeInteractive: Boolean,
     controlBusy: Boolean,
+    focusOffCenter: Boolean,
+    onFocusReset: () -> Unit,
     fpsLabel: String = "—",
     bars: Int = 0,
     sourceIsVertical: Boolean = false,
@@ -255,7 +257,7 @@ fun LivePortraitChrome(
                     model.phoneBatteryPercent, status.batteryPercent, horizontal = !tablet)
             }
             if (model.chromeSectionMounts(PocketDispSection.STORAGE)) {
-                Row(Modifier.liveModuleFrame(ChromeRect(14f, if (tablet) 52f else gaugeTop, 120f, 28f)),
+                Row(Modifier.liveModuleFrame(ChromeRect(14f, if (tablet) 52f else gaugeTop, 120f, 28f)).monitorReadoutShadow(),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     SdCardGlyph(LiveDesign.text)
                     Text(portraitStorageLabel(status).substringBefore(" ·"), style = LiveType.mono(13.5f, FontWeight.SemiBold))
@@ -438,6 +440,12 @@ fun LivePortraitChrome(
                     else ChromeRect(0f, 0f, 0f, 0f),
                 uiLocked = uiLocked,
             )
+        }
+        // Same slot as landscape: leading of the stick, on its bottom edge (iOS `focusReset`).
+        if (!uiLocked && focusOffCenter && chromeInteractive) {
+            Box(Modifier.liveModuleFrame(layout.focusReset)) {
+                LiveFocusResetButton(onClick = onFocusReset)
+            }
         }
 
         Box(
