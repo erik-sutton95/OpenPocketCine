@@ -118,9 +118,11 @@ import XCTest
         let session = fixture()
         let tile = session.tiles[0]
         let layer = tile.decoder.displayLayer
+        // A reachable tile state: body turned 180 and the tile's own Auto LUT. The
+        // settings preview re-derives the tile's effects (#447); the editor must not.
+        tile.pose.commanded180 = true
+        tile.updateLUT()
         let effects = tile.decoder.effects
-        tile.decoder.poseViewFlip = true
-        tile.decoder.assistMirror = true
         var handoffs = 0
         var sourceCallbacks = 0
         tile.decoder.onHandoffNeedsIDR = { handoffs += 1 }
@@ -129,14 +131,14 @@ import XCTest
         XCTAssertTrue(model.session.isMultiviewControlsOnly)
         XCTAssertNil(tile.liveModel)
         XCTAssertTrue(tile.decoder.poseViewFlip)
-        XCTAssertTrue(tile.decoder.assistMirror)
+        XCTAssertFalse(tile.decoder.assistMirror)
         model.session.receiveMultiview(wb(.custom(kelvin: 4000, tint: 0)))
         model.session.adoptMultiviewPose(GimbalStickMapping())
         session.closeCameraSettings()
         XCTAssertTrue(tile.decoder.displayLayer === layer)
         XCTAssertEqual(tile.decoder.effects, effects)
         XCTAssertTrue(tile.decoder.poseViewFlip)
-        XCTAssertTrue(tile.decoder.assistMirror)
+        XCTAssertFalse(tile.decoder.assistMirror)
         tile.decoder.onHandoffNeedsIDR?()
         XCTAssertEqual(handoffs, 1)
         var buffer: CVPixelBuffer?
