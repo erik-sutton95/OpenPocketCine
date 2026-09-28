@@ -1479,9 +1479,14 @@ portrait/landscape UI checks pass. Physical iPhone 16 Pro Max with a Pocket 4 Pr
 Wi-Fi from the camera's access point (live 23 s after the join), Camera Wi-Fi
 back (live in 13 s) and Wi-Fi again (24 s) all went live and stayed live.
 
-Exceptions: Android keeps the single camera Wi-Fi path; its Multiview already
-provisions the phone hotspot and a port would reuse `StationJoin` through the
-facade. The hotspot setup and Action 6 still need physical proof.
+Android has the same chips, Add setup sheet (the shared `StationNetworkSetup`
+form with per-camera copy), connect progress and failure actions. Its station
+sequence is a Kotlin `StationJoin` mirroring core, which Android Multiview now
+uses too; the session binds the datalink to the Wi-Fi `Network` (the hotspot
+path is unbound) and verifies `07/07` over UDP before registering. Exceptions:
+Android has no Personal Hotspot prompt, since it detects the tethering
+interface directly and a hotspot failure says so. The hotspot setup and Action 6
+still need physical proof on both platforms.
 
 ### Shared Multiview network wizard
 

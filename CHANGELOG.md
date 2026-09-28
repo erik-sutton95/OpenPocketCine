@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Per-camera **setups** on Android **Your cameras** (discussion #406), matching
+  iOS: each saved camera keeps Camera Wi-Fi and can add **Wi-Fi** (a router this
+  phone joins too) or **Hotspot** (this phone's hotspot) from **Add setup**.
+  Setup chips switch between them, a progress bar shows the four connect steps
+  and a failed connect offers Edit setup, Try again or Camera Wi-Fi. The
+  station sequence moves out of Multiview into a shared Kotlin `StationJoin`,
+  and a Camera Wi-Fi connect after a setup restores the camera's access point
+  first.
+
 ### Changed
 
 - Camera, recording and settings tabs use only a bottom or left edge line with

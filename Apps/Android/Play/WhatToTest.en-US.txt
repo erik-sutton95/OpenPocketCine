@@ -10,6 +10,7 @@ New and changed
 - Multiview redesign: bigger main picture, scrolling camera strip, Live View's toolbar, and camera values inside the selected tile.
 - Multiview Camera settings is a side panel with a tab per camera and a live preview of that camera.
 - Multiview network setup groups current, saved and nearby Wi-Fi, scans automatically, remembers passwords and offers hotspot help and retry.
+- Saved cameras can also connect over your Wi-Fi or this phone's hotspot: tap Add setup on the camera card, then switch with its setup chips.
 - New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots.
 - Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
 - Osmo Action 6 support: live view, D-Log M with the official LUT, Photo, Timelapse and a live APERTURE tile. Not yet checked on a real Action 6.

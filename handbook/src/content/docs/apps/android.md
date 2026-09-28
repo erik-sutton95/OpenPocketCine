@@ -471,6 +471,14 @@ returning to the monitor must not leave a black well. Leaving live view,
 opening clips, or rotating must drop the Vulkan swapchain with the window —
 present after that is a skip, not a crash.
 
+Saved cameras connect over **Camera Wi-Fi** by default. **Add setup** on a
+camera card adds **Wi-Fi** (a router this phone joins too) or **Hotspot** (this
+phone's hotspot): the camera leaves its own access point for that network and
+the app finds it there by its Bluetooth identity. Tap a setup chip to connect
+over it; long-press a Wi-Fi or Hotspot chip to forget it. Choosing Camera
+Wi-Fi again restores the camera's access point first. If a router keeps the
+phone and camera apart (client isolation, MLO on Wi-Fi 7), use Hotspot.
+
 Wi-Fi passwords stay in Keystore, not saved-camera JSON. Pairing and live view
 need a **physical** Android phone.
 

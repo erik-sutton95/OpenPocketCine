@@ -319,14 +319,7 @@ class MultiviewSession(
     private var networkScanJob: Job? = null
     private var monitor: Job? = null
     private var running = false
-    private val joinPolicy: JSONObject by lazy {
-        SwiftCore.multicamDecision("joinPolicy", "{}")?.let { runCatching { JSONObject(it) }.getOrNull() }
-            ?: JSONObject()
-    }
-    private val maximumJoinAttempts get() = joinPolicy.optInt("maximumAttempts", 3)
-    private val prepareSettleMs get() = joinPolicy.optLong("prepareSettleSeconds", 10) * 1_000
-    private val joinReplyTimeoutMs get() = (joinPolicy.optDouble("replyTimeoutSeconds", 45.0) * 1_000).toLong()
-    private val retryDelayMs get() = joinPolicy.optLong("retryDelaySeconds", 5) * 1_000
+    private val joinPolicy: StationJoin.Policy by lazy { StationJoin.Policy.fromCore() }
 
     internal fun controlsAvailable(tile: Tile): Boolean =
         running && applicationActive && !closing && !busy && tile.camera != null && tile.controlHost != null &&
@@ -625,112 +618,44 @@ class MultiviewSession(
             stage = "camera Wi-Fi identity"
             val identity = readIdentity(client)
             if (identity.size <= 2 || identity[0].toInt() != 0) throw MultiviewFailure.Rejected()
-            if (camera.hasMultiviewPreview && !experimental) {
-                tile.status = "Selecting Video mode"
-                client.send(SwiftCore.CMD_MULTICAM_VIDEO_MODE)
-                delay(2_000)
-            }
             stage = "station role"
-            val role = client.exchange(SwiftCore.CMD_MULTICAM_WIFI_WORK_MODE).payload
-            val allowMissing = experimental || (camera.multicamSupport().missingRoleQueryE0 && role.hexString() == "e0")
-            val decision = SwiftCore.multicamDecision(
-                "stationDecision",
-                JSONObject().put("reply", role.hexString()).put("allowMissingQuery", allowMissing).toString(),
-            ) ?: "reject"
-            val missingRoleQuery = decision == "setWithoutReadback"
-            log("multiview: station experimental=$experimental decision=$decision")
-            if (decision != "alreadyStation") {
-                if (decision == "reject") {
-                    throw MultiviewFailure.Message(
-                        "This camera did not report a supported Wi-Fi mode. Shared Wi-Fi setup is experimental for this model.")
-                }
-                val switched = client.exchange(SwiftCore.CMD_MULTICAM_STATION_MODE, "1").payload
-                val accepted = SwiftCore.multicamDecision(
-                    "acceptsSetter",
-                    JSONObject().put("reply", switched.hexString()).put("missingQuery", missingRoleQuery).toString(),
-                ) == "true"
-                if (!accepted) throw MultiviewFailure.Message("The camera did not accept shared Wi-Fi mode.")
-                // The bounded experimental path also permits the captured missing-getter shape.
-                // Its join result and subsequent LAN identity check remain required.
-                if (!missingRoleQuery) {
-                    var stationReady = false
-                    for (poll in 0 until 6) {
-                        val reported = client.exchange(SwiftCore.CMD_MULTICAM_WIFI_WORK_MODE).payload.hexString()
-                        if (reported == "0001") {
-                            stationReady = true
-                            break
-                        }
-                        if (reported != "0000") throw MultiviewFailure.Rejected()
-                        delay(2_000)
-                    }
-                    if (!stationReady) {
-                        throw MultiviewFailure.Message("Camera Wi-Fi is still starting. Retry with the camera nearby.")
-                    }
-                }
-            }
+            // Kept through a lost join reply so reconnect can re-run discovery only.
             tile.identity = identity
-            stage = "camera Wi-Fi join"
-            tile.status = "Waiting for camera Wi-Fi"
-            delay(prepareSettleMs)
-            var attempt = 1
-            joinLoop@ while (attempt <= maximumJoinAttempts) {
-                tile.status = "Joining Wi-Fi · attempt $attempt of $maximumJoinAttempts"
-                val joined = try {
-                    client.exchange(SwiftCore.CMD_MULTICAM_JOIN, "$ssid\u001f$password", joinReplyTimeoutMs)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    log("multiview: join reply timeout; checking verified LAN identity")
-                    // A lost BLE reply is not proof that association failed.
-                    if (!usePhoneHotspot || path.address(true) != null) {
+            val outcome = try {
+                StationJoin(
+                    ssid = ssid, password = password, hotspot = usePhoneHotspot,
+                    hasPreview = camera.hasMultiviewPreview,
+                    missingRoleQueryE0 = camera.multicamSupport().missingRoleQueryE0,
+                    experimental = experimental,
+                    policy = joinPolicy,
+                ).run(
+                    identity,
+                    exchange = { kind, extra, timeoutMs -> client.exchange(kind, extra, timeoutMs).payload },
+                    send = { client.send(it) },
+                    status = { text ->
+                        tile.status = text
+                        if (text.startsWith("Waiting for camera")) stage = "camera Wi-Fi join"
+                    },
+                    hotspotReady = { path.address(true) != null },
+                    verifyOnNetwork = {
                         try {
                             discoverPreview(tile, camera, identity)
-                            networkStore.save(ssid, password, usePhoneHotspot)
-                            return
+                            true
                         } catch (error: CancellationException) {
                             throw error
                         } catch (_: Exception) {
-                            // Not found on the LAN: fall through to the bounded join retry.
+                            false
                         }
-                    }
-                    if (attempt < maximumJoinAttempts) {
-                        delay(retryDelayMs)
-                        attempt += 1
-                        continue@joinLoop
-                    }
-                    tile.identity = null
-                    throw MultiviewFailure.Message("Camera Wi-Fi did not respond. Retry setup with the camera nearby.")
-                }
-                // Only the fixed-size result is logged, never the credential request.
-                log("multiview: Wi-Fi join attempt=$attempt result=${joined.payload.take(4).toByteArray().hexString()}")
-                when (
-                    SwiftCore.multicamDecision(
-                        "joinDecision",
-                        JSONObject().put("reply", joined.payload.hexString()).put("attempt", attempt).toString(),
-                    )
-                ) {
-                    "connected" -> break@joinLoop
-                    "retry" -> {
-                        tile.status = "Retrying Wi-Fi connection"
-                        delay(retryDelayMs)
-                        attempt += 1
-                    }
-                    else -> {
-                        tile.identity = null
-                        throw MultiviewFailure.Message(
-                            "The camera could not join the shared Wi-Fi. Check its name and password, and make sure the network is in range.")
-                    }
-                }
+                    },
+                    log = { log("multiview: $it") },
+                )
+            } catch (error: StationJoin.Failure) {
+                tile.identity = null
+                throw error
             }
-            tile.identity = identity
-            if (usePhoneHotspot) {
-                tile.status = "Waiting for Personal Hotspot"
-                val deadline = SystemClock.elapsedRealtime() + 15_000
-                while (path.address(true) == null && SystemClock.elapsedRealtime() < deadline) delay(250)
-                if (path.address(true) == null) {
-                    throw MultiviewFailure.Message(
-                        "Turn on the hotspot and let other devices join, then retry. The hotspot network is not available yet.")
-                }
+            if (outcome == StationJoin.Outcome.VERIFIED) {
+                networkStore.save(ssid, password, usePhoneHotspot)
+                return
             }
             networkStore.save(ssid, password, usePhoneHotspot)
             client.close()

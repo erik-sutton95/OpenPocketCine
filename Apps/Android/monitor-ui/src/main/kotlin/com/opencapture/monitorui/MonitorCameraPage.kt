@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -178,6 +179,18 @@ fun MonitorCameraCard(
     onCancel: (() -> Unit)? = null,
     glyph: @Composable () -> Unit,
     options: @Composable () -> Unit = {},
+    /** Saved-camera setups (#406); empty hides the chip row. */
+    setups: List<MonitorSetupChip> = emptyList(),
+    canAddSetup: Boolean = false,
+    /** False while any camera is connecting (iOS disables the chips while busy). */
+    setupsEnabled: Boolean = true,
+    onSetup: ((MonitorSetupChip) -> Unit)? = null,
+    onAddSetup: (() -> Unit)? = null,
+    onForgetSetup: ((MonitorSetupChip) -> Unit)? = null,
+    /** Connection progress while [busy]; empty keeps the one-line status. */
+    steps: List<MonitorConnectStep> = emptyList(),
+    failure: MonitorConnectFailure? = null,
+    onFailureAction: ((String) -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(MonitorLayoutPolicy.CAMERA_CARD_CORNER.dp)
     val fill = if (primary) CameraCardPrimaryFill else CameraCardFill
@@ -241,12 +254,28 @@ fun MonitorCameraCard(
                 )
             }
         }
+        if (setups.isNotEmpty() && onSetup != null) {
+            MonitorSetupChips(title, setups, canAddSetup, setupsEnabled, onSetup, onAddSetup, onForgetSetup)
+        }
+        if (busy && steps.isNotEmpty()) MonitorConnectProgressBar(steps)
+        if (failure != null && !busy) MonitorConnectFailureBanner(failure, enabled, onFailureAction)
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            if (busy) {
+            if (busy && steps.isNotEmpty()) {
+                Text(
+                    MonitorConnectProgress.caption(steps),
+                    color = MonitorPalette.muted,
+                    style = MonitorTypography.text(10.5f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            } else if (failure != null && !busy) {
+                Spacer(Modifier.weight(1f))
+            } else if (busy) {
                 Row(
                     Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
@@ -278,13 +307,25 @@ fun MonitorCameraCard(
                 )
             }
             options()
-            MonitorCameraAction(
-                text = if (busy) "Cancel" else actionTitle,
-                primary = primary && !busy,
-                enabled = if (busy) onCancel != null else enabled,
-                contentDescription = if (busy) "Cancel connecting to $title" else "$actionTitle $title",
-                onClick = { if (busy) onCancel?.invoke() else onOpen() },
-            )
+            if (failure != null && !busy && onFailureAction != null) {
+                failure.actions.forEach { action ->
+                    MonitorCameraAction(
+                        text = action.title,
+                        primary = action.primary,
+                        enabled = enabled,
+                        contentDescription = "${action.title} ${title}",
+                        onClick = { onFailureAction(action.id) },
+                    )
+                }
+            } else {
+                MonitorCameraAction(
+                    text = if (busy) "Cancel" else actionTitle,
+                    primary = primary && !busy,
+                    enabled = if (busy) onCancel != null else enabled,
+                    contentDescription = if (busy) "Cancel connecting to $title" else "$actionTitle $title",
+                    onClick = { if (busy) onCancel?.invoke() else onOpen() },
+                )
+            }
         }
     }
 }
