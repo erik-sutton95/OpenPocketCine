@@ -238,10 +238,15 @@ extension LiveMonitorLayout {
 
     /// AE unlock capsule beside the recenter key, on the side toward the feed centre.
     var aeUnlock: CGRect {
+        if let presentation { return presentation.aeUnlock.cgRect }
         let reset = focusReset
-        let width = reset.height * 1.5
-        let x = reset.midX < feed.midX ? reset.maxX + 8 : reset.minX - 8 - width
-        return CGRect(x: x, y: reset.minY, width: width, height: reset.height)
+        // No assist column here: portrait mirrors Recenter to the well's left edge.
+        return FieldMonitorLayout.aeUnlock(
+            focusReset: MonitorRect(
+                x: reset.minX, y: reset.minY, width: reset.width, height: reset.height),
+            leadingColumnMaxX: onFeed.minX + 2, pictureMidX: feed.midX,
+            portrait: viewport.height > viewport.width
+        ).cgRect
     }
 
     /// OpenZCine recenter key. Landscape: just past the battery, toward the feed,

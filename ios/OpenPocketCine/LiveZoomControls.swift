@@ -164,7 +164,6 @@ struct LiveZoomPinchModifier: ViewModifier {
     @State private var pinchUsed = false
     @State private var detentTick = 0.0
     @State private var focusTick = 0
-    @State private var armTick = 0
     @State private var trackArmed = false
     @State private var aeLockHeld = false
     @State private var holdStarted = false
@@ -176,7 +175,6 @@ struct LiveZoomPinchModifier: ViewModifier {
             .gesture(zoomGestures, including: enabled ? .gesture : .none)
             .sensoryFeedback(.impact(weight: .medium), trigger: detentTick)
             .sensoryFeedback(.impact(weight: .light), trigger: focusTick)
-            .sensoryFeedback(.impact(weight: .medium), trigger: armTick)
             .sensoryFeedback(.impact(weight: .heavy), trigger: aeLockHeld) { _, held in held }
     }
 
@@ -275,8 +273,8 @@ struct LiveZoomPinchModifier: ViewModifier {
             guard !Task.isCancelled, enabled, !pinchUsed else { return }
             let slop = hypot(lastTranslation.width, lastTranslation.height)
             guard slop <= LiveFeedFocusGesture.trackHoldSlop else { return }
+            // Arming is silent (Android parity): a still press only buzzes when AE can lock.
             trackArmed = true
-            armTick += 1
             try? await Task.sleep(
                 for: .seconds(
                     LiveFeedFocusGesture.aeLockHoldDuration

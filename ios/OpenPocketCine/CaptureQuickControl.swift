@@ -92,13 +92,14 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             supportsFocusMode: model.session.supportsFocusMode,
             facePriorityExposureEnabled: model.facePriorityExposureEnabled,
             shutterUsesAngle: OperatorPrefs.shutterUsesAngle,
-            shutterAngleDegrees: OperatorPrefs.shutterAngleDegrees)
+            shutterAngleDegrees: OperatorPrefs.shutterAngleDegrees,
+            aeLocked: model.session.autoExposureLock != nil)
     }
 
     static func primary(
         _ sheet: CaptureSheet, status: CameraStatus, cameraModel: CameraModel? = nil,
         supportsFocusMode: Bool = false, facePriorityExposureEnabled: Bool = false,
-        shutterUsesAngle: Bool = false, shutterAngleDegrees: Double = 180
+        shutterUsesAngle: Bool = false, shutterAngleDegrees: Double = 180, aeLocked: Bool = false
     ) -> Self? {
         switch sheet {
         case .iso:
@@ -165,8 +166,10 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
                 selection: status.apertureStrategy?.label ?? "")
         case .exposure:
             return Self(
-                kind: .exposure, title: "EXPOSURE", options: ExpoMode.allCases.map(\.label),
-                selection: status.expoMode?.label ?? "")
+                kind: .exposure, title: "EXPOSURE",
+                options: CaptureLists.exposureLabels(aeLocked: aeLocked),
+                selection: CaptureLists.exposureSelection(status.expoMode, aeLocked: aeLocked)
+                    ?? "")
         case .audio:
             guard !status.isPhoto else { return nil }
             return Self(

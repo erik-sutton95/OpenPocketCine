@@ -1801,6 +1801,11 @@ final class CameraSession {
     }
 
     func setExpoMode(_ mode: ExpoMode) {
+        // Manual from AE-L keeps the pinned values; the camera is already Manual.
+        if mode == .manual, autoExposureLock != nil, status.expoMode == .manual {
+            autoExposureLock = nil
+            return
+        }
         autoExposureLock = nil
         if mode != .manual {
             formatPin?.shutterAngle = nil
