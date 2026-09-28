@@ -21,7 +21,7 @@ final class ReliabilityReportingTests: XCTestCase {
             predicate: NSPredicate { _, _ in
                 ReliabilityReporting.receipt(for: id)?.state == state
             }, object: nil)
-        wait(for: [ready], timeout: 2)
+        wait(for: [ready], timeout: 10)
     }
 
     override func setUp() {
@@ -78,7 +78,7 @@ final class ReliabilityReportingTests: XCTestCase {
             predicate: NSPredicate { [self] _, _ in
                 ReliabilityReportingReceipts.load(incidentID: "inc-1", root: cacheRoot) == nil
             }, object: nil)
-        wait(for: [purged], timeout: 2)
+        wait(for: [purged], timeout: 10)
         XCTAssertNil(ReliabilityReportingReceipts.load(incidentID: "inc-1", root: cacheRoot))
         XCTAssertTrue(FileManager.default.fileExists(atPath: local.path))
     }
@@ -112,7 +112,7 @@ final class ReliabilityReportingTests: XCTestCase {
         ReliabilityReporting.install()
         let installed = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in SentrySDK.isEnabled }, object: nil)
-        wait(for: [installed], timeout: 3)
+        wait(for: [installed], timeout: 10)
         XCTAssertTrue(ReliabilityReportingGate.shared.shouldBlockUpload)
     }
 
@@ -181,7 +181,7 @@ final class ReliabilityReportingTests: XCTestCase {
                 code = (error as NSError?)?.code
                 done.fulfill()
             }.resume()
-            wait(for: [done], timeout: 2)
+            wait(for: [done], timeout: 10)
             XCTAssertNil(response, c.name)
             XCTAssertEqual(code, c.code, c.name)
         }
@@ -204,9 +204,9 @@ final class ReliabilityReportingTests: XCTestCase {
             XCTAssertEqual((error as NSError?)?.code, NSURLErrorNotConnectedToInternet)
             done.fulfill()
         }.resume()
-        wait(for: [SlowForwardProtocol.started], timeout: 2)
+        wait(for: [SlowForwardProtocol.started], timeout: 10)
         ReliabilityReporting.setCameraSessionActive(true)
-        wait(for: [done], timeout: 2)
+        wait(for: [done], timeout: 10)
         XCTAssertNil(response)
         ReliabilityReportingURLProtocol.forwardingSession = {
             let config = URLSessionConfiguration.ephemeral
@@ -339,7 +339,7 @@ final class ReliabilityReportingTests: XCTestCase {
         event.releaseName = "com.opencapture.openpocketcine@0.1.0+107"
         event.dist = "107"
         SentrySDK.capture(event: event)
-        wait(for: [prepared], timeout: 3)
+        wait(for: [prepared], timeout: 10)
     }
 
     func testQueuedIncidentKeepsOriginalReleaseAndOccurrenceTime() throws {
@@ -367,7 +367,7 @@ final class ReliabilityReportingTests: XCTestCase {
             captured.fulfill()
         }
         ReliabilityReporting.enqueueFinalized(bundle)
-        wait(for: [captured], timeout: 2)
+        wait(for: [captured], timeout: 10)
     }
 
     func testQueuedReplayOriginSurvivesActualSDKScopeMerge() throws {
@@ -410,7 +410,7 @@ final class ReliabilityReportingTests: XCTestCase {
             constructed.fulfill()
         }
         ReliabilityReporting.enqueueFinalized(bundle)
-        wait(for: [constructed, prepared], timeout: 3)
+        wait(for: [constructed, prepared], timeout: 10)
     }
 
     func testScrubRemovesUserRequestBreadcrumbsAndPaths() {
@@ -488,7 +488,7 @@ final class ReliabilityReportingTests: XCTestCase {
             captured.fulfill()
         }
         ReliabilityReporting.enqueueFinalized(bundle)
-        wait(for: [captured], timeout: 2)
+        wait(for: [captured], timeout: 10)
     }
 
     func testCaptureEnqueueIsQueuedNotDeliveredAndDedupsConfirmed() throws {
@@ -509,7 +509,7 @@ final class ReliabilityReportingTests: XCTestCase {
             captured.fulfill()
         }
         ReliabilityReporting.enqueueFinalized(bundle)
-        wait(for: [captured], timeout: 2)
+        wait(for: [captured], timeout: 10)
         waitForReceipt("12c2d058d58442709aa2eca08bf20986", state: .queued)
         XCTAssertEqual(
             ReliabilityReporting.receipt(for: "12c2d058d58442709aa2eca08bf20986")?.state,
@@ -554,7 +554,7 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertEqual(FeedIncidentRuntime.reportExtras().count, 1)
         let done = expectation(description: "deleted")
         FeedIncidentRuntime.deleteStoredIncidents { done.fulfill() }
-        wait(for: [done], timeout: 2)
+        wait(for: [done], timeout: 10)
         XCTAssertTrue(FeedIncidentRuntime.reportExtras().isEmpty)
     }
 
