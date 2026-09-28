@@ -25,6 +25,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Android icons match iOS on every shared control: Multiview's LUT tool uses
+  the View Assist LUT glyph and Exit an X, Live View battery, eye, tracking
+  cancel, Fit/Fill, ISO native star, WB Auto and Face Priority badges, the
+  recovery overlay, media selection and share, Settings reset and the Wi-Fi
+  setup rows use the iOS Lucide glyphs. A test keeps both icon sets identical.
 - The Android Wi-Fi and Hotspot setup wizard, on Multiview and on a saved
   camera's Add setup, now matches iOS page for page: the same sheet and title
   bar, choice cards, network groups, password and hotspot checklists, pinned
@@ -97,6 +102,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android landscape Live View battery and link pills sit clear of the picture,
+  aligned with the Lock button, instead of overlapping the feed by 6 dp.
 - Android portrait Live View shows the Recenter focus button after an
   off-centre focus tap, in the same slot as iOS: leading of the joystick, on
   its bottom edge. The zoom chip (optical and digital-crop ranges) and the
