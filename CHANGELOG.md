@@ -25,6 +25,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- The Android Wi-Fi and Hotspot setup wizard, on Multiview and on a saved
+  camera's Add setup, now matches iOS page for page: the same sheet and title
+  bar, choice cards, network groups, password and hotspot checklists, pinned
+  Connect button and Multiview's Shared Wi-Fi page. Saved cameras' own Wi-Fi
+  names are no longer offered as Multiview networks.
 - Camera, recording and settings tabs use only a bottom or left edge line with
   a highlighted selected segment, without boxes, fills or inter-tab dividers.
   Settings scroll content fades in opacity at available edges; the painted

@@ -1500,10 +1500,18 @@ ownership. Assigned cameras keep network setup read-only. Every new stage still
 requires an explicit network confirmation.
 
 iOS Add setup and Multiview share one `StationNetworkSetupView` and one camera
-scan implementation. Android's `StationNetworkSetup` accepts injected scan and
-connect actions; Android still has no per-camera Add setup entry point. OS
-permission and Settings affordances differ, and Android names the host source
-**Phone hotspot**. Passwords remain in the existing device-only stores. This
+scan implementation. Android's `StationNetworkSetup` is a 1:1 port for both
+Add setup and Multiview: the same large sheet (grabber, 38 dp top corners,
+full screen in landscape), inline title with Cancel/back, page stack, choice
+cards, grouped network rows, password and hotspot pages, Shared Wi-Fi page,
+copy, sizes and scan rules, checked side by side on an iPhone 16 Pro Max
+simulator and a Galaxy S25. Exceptions: Android copy says phone, hotspot and
+this phone where iOS says iPhone, Personal Hotspot and Keychain, with Android
+Settings paths; the bar title and buttons use the system font, drawn as iOS 26
+glass capsules; the spinner is Android's; there is no configured-SSID list
+(iOS `NEHotspotConfigurationManager`) and no in-wizard Location prompt, so a
+missing permission or Location off shows the Settings row instead. Passwords
+remain in the existing device-only stores. This
 changes setup only; live ACK, watchdog, decoder and enable budgets are unchanged.
 
 Automated qualification includes iOS Add setup and Multiview navigation/password

@@ -268,6 +268,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
         if (showNetwork) {
             MultiviewNetworkSetup(
                 session = session,
+                cameraSsids = model.savedCameras.mapNotNull { it.lastSSID }.toSet(),
                 cancel = {
                     showNetwork = false
                     if (!session.networkConfigured) closeStage()
@@ -842,7 +843,12 @@ private class TileTextureListener(
 // --- Network setup ---------------------------------------------------------------------------------
 
 @Composable
-private fun MultiviewNetworkSetup(session: MultiviewSession, cancel: () -> Unit, complete: () -> Unit) {
+private fun MultiviewNetworkSetup(
+    session: MultiviewSession,
+    cameraSsids: Set<String>,
+    cancel: () -> Unit,
+    complete: () -> Unit,
+) {
     val saved = remember { session.savedNetworks() }
     com.opencapture.openpocketcine.pairing.StationNetworkSetup(
         savedNetworks = saved,
@@ -859,6 +865,7 @@ private fun MultiviewNetworkSetup(session: MultiviewSession, cancel: () -> Unit,
             MultiviewNetworkStore.Network(session.ssid, "", session.usePhoneHotspot)
         } else null,
         warning = session.networkSetupError,
+        cameraSsids = cameraSsids,
     )
 }
 
