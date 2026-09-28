@@ -26,12 +26,16 @@ A rejected or unconfirmed change returns to the reported camera value after sett
 Long-press the picture without moving (about 0.6 s, after the haptic) and lift
 to lock exposure while exposure is Auto: the focus box turns yellow with an
 **AE-L** tag, and a sun-and-open-lock key beside the focus recenter button
-returns exposure to Auto. The lock switches the camera to Manual at its current
-Auto ISO (nearest whole stop) and shutter; choosing an exposure mode, changing
-shooting mode or an Auto report from the camera ends it. Dragging after the
-hold still draws a tracking box. White balance **Mode** offers **AWB Lock**
-beside Auto while Auto reports a live Kelvin; it sets Custom at that Kelvin and
-keeps tint. Neither is a camera-native lock and both await hardware testing.
+returns exposure to Auto (in portrait it sits at the left, beside the View
+Assist tools). **EXPOSURE** reads **AE-L** while locked, and its picker lists
+**AE-L** left of Auto: choose Auto to return to Auto, or Manual to keep the
+locked values as ordinary Manual. The lock switches the camera to Manual at its
+current Auto ISO (nearest whole stop) and shutter; changing shooting mode or an
+Auto report from the camera also ends it. The haptic only comes when a lock is
+possible; a hold in Manual or while locked is silent. Dragging after the hold
+still draws a tracking box. White balance **Mode** offers **AWB Lock** beside
+Auto while Auto reports a live Kelvin; it sets Custom at that Kelvin, snapped to
+the Kelvin drum, and keeps tint. Neither is a camera-native lock and both await hardware testing.
 Capture tabs retain their matching labels while camera updates change the available modes.
 Hold Record to open shooting mode.
 In **Photo**, the capture control becomes a shutter and takes a photo immediately,

@@ -18,10 +18,13 @@ All notable changes to this project are documented here. The format is based on
   first.
 - AE lock on iOS and Android: a still long-press on the live picture locks Auto
   exposure by pinning the camera's current ISO and shutter as Manual. The focus
-  box turns yellow with an AE-L tag, and a sun-and-lock key beside the focus
-  recenter button returns to Auto. White balance Mode adds AWB Lock, which sets
-  Custom at the camera's live Auto Kelvin. Neither uses a camera-native lock;
-  hardware behavior is not yet verified.
+  box turns yellow with an AE-L tag, EXPOSURE reads AE-L, and a sun-and-lock
+  key beside the focus recenter button (left side in portrait) returns to Auto.
+  Choosing Auto or Manual under EXPOSURE also ends the lock; Manual keeps the
+  locked values. The press only buzzes when a lock is possible, so holding the
+  picture in Manual is silent. White balance Mode adds AWB Lock, which sets
+  Custom at the camera's live Auto Kelvin snapped to the Kelvin drum. Neither
+  uses a camera-native lock.
 
 ### Changed
 
