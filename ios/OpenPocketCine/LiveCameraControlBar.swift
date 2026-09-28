@@ -164,6 +164,7 @@ struct LiveCameraControlBar: View {
     }
 
     private var wbValue: String {
+        if model.session.autoWhiteBalanceLock != nil { return CaptureLists.awbLockTile }
         switch model.session.status.whiteBalance?.mode {
         case .custom:
             let k = model.session.status.whiteBalanceKelvin

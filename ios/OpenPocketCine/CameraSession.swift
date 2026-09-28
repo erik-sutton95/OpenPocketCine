@@ -59,6 +59,9 @@ final class CameraSession {
             let previous = statusStorage
             statusStorage = newValue
             if let lock = autoExposureLock, !lock.holds(newValue) { autoExposureLock = nil }
+            if let lock = autoWhiteBalanceLock, !lock.holds(newValue) {
+                autoWhiteBalanceLock = nil
+            }
             guard newValue != previous else { return }
             guard
                 LiveChromeThrottle.shouldNotify(
@@ -335,6 +338,8 @@ final class CameraSession {
     var focusPoint: CGPoint = CGPoint(x: 0.5, y: 0.5)
     /// Feed long-press AE lock. Any status that no longer `holds` it clears it.
     private(set) var autoExposureLock: AutoExposureLock?
+    /// WB Mode AWB Lock. Cleared like `autoExposureLock` when status stops holding it.
+    private(set) var autoWhiteBalanceLock: AutoWhiteBalanceLock?
     /// Operator-drawn search rect while the camera is still hunting a subject.
     var searchBox: TrackingBox?
     /// Locked subject box. Camera floats when `0xA5` carries them; else a tight stand-in.
@@ -843,6 +848,7 @@ final class CameraSession {
         expoPin = nil
         expoGeneration = 0
         autoExposureLock = nil
+        autoWhiteBalanceLock = nil
         audioPin = nil
         formatPin = nil
         colorPin = nil
@@ -2624,23 +2630,32 @@ final class CameraSession {
 
     var canLockAutoWhiteBalance: Bool { WhiteBalance.lockingAuto(status) != nil }
 
-    /// Pins the live Auto Kelvin as Custom (no captured native AWB lock).
+    /// Pins the live Auto Kelvin as Custom (no captured native AWB lock). The
+    /// optimistic Custom lands first, so the lock never sees a stale Auto.
     func lockAutoWhiteBalance() {
-        guard let wb = WhiteBalance.lockingAuto(status) else { return }
+        guard autoWhiteBalanceLock == nil, let wb = WhiteBalance.lockingAuto(status) else { return }
         setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
+        if status.whiteBalance == wb {
+            autoWhiteBalanceLock = AutoWhiteBalanceLock(kelvin: wb.kelvin)
+        }
     }
 
     func setWhiteBalanceAuto(tint: Int? = nil) {
+        autoWhiteBalanceLock = nil
         let next = min(max(tint ?? status.whiteBalanceTint ?? 0, -100), 100)
         fireWhiteBalance(.auto(tint: next))
     }
 
     func setWhiteBalanceCustom(kelvin: Int, tint: Int) {
-        fireWhiteBalance(
-            .custom(
-                kelvin: min(max(kelvin, 2_000), 10_000),
-                tint: min(max(tint, -100), 100)
-            ))
+        let wb = WhiteBalance.custom(
+            kelvin: min(max(kelvin, 2_000), 10_000), tint: min(max(tint, -100), 100))
+        // Custom from AWB Lock keeps the locked value; the camera is already there.
+        if autoWhiteBalanceLock != nil, status.whiteBalance == wb {
+            autoWhiteBalanceLock = nil
+            return
+        }
+        autoWhiteBalanceLock = nil
+        fireWhiteBalance(wb)
     }
 
     private func fireWhiteBalance(_ wb: WhiteBalance) {

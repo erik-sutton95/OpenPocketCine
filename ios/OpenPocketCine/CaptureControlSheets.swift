@@ -375,10 +375,12 @@ struct CapturePickerPanel: View {
             }
         case .wb:
             if selectedMode == 0 {
+                let awbLocked = model.session.autoWhiteBalanceLock != nil
                 choiceDrum(
-                    (model.session.canLockAutoWhiteBalance ? [CaptureLists.awbLock] : [])
-                        + WhiteBalanceMode.allCases.map(\.label),
-                    selected: model.session.status.whiteBalance?.mode.label
+                    CaptureLists.whiteBalanceModeLabels(
+                        offersLock: awbLocked || model.session.canLockAutoWhiteBalance),
+                    selected: CaptureLists.whiteBalanceModeSelection(
+                        model.session.status.whiteBalance, awbLocked: awbLocked)
                 ) { label in
                     if label == CaptureLists.awbLock {
                         model.session.lockAutoWhiteBalance()
@@ -704,7 +706,10 @@ struct CapturePickerPanel: View {
             reseatShutterOrEv()
         case .wb:
             let mode = model.session.status.whiteBalance?.mode
-            selectedMode = (mode == nil || mode == .auto) ? 0 : 1
+            // AWB Lock is a Mode choice, not an active Kelvin.
+            let modeTab =
+                mode == nil || mode == .auto || model.session.autoWhiteBalanceLock != nil
+            selectedMode = modeTab ? 0 : 1
             let k = "\(currentKelvin)K"
             drumSelection =
                 (2_000...10_000).contains(model.session.status.whiteBalanceKelvin) ? k : ""
@@ -1259,8 +1264,19 @@ enum CaptureLists {
 
     static let kelvinValues = WhiteBalance.kelvinLadder
     static let kelvinLabels = kelvinValues.map { "\($0)K" }
-    /// WB Mode drum entry left of Auto: Custom at the live Auto Kelvin.
+    /// WB Mode drum entry left of Auto: Custom at the live Auto Kelvin. It stays
+    /// selected while the lock holds; Auto or Custom releases it.
     static let awbLock = "AWB Lock"
+    /// WB tile while locked; `AWB Lock` would outgrow the tile's `10000K` width.
+    static let awbLockTile = "AWB-L"
+
+    static func whiteBalanceModeLabels(offersLock: Bool) -> [String] {
+        (offersLock ? [awbLock] : []) + WhiteBalanceMode.allCases.map(\.label)
+    }
+
+    static func whiteBalanceModeSelection(_ wb: WhiteBalance?, awbLocked: Bool) -> String? {
+        awbLocked ? awbLock : wb?.mode.label
+    }
     /// EXPOSURE tile and drum entry left of Auto while the feed AE lock holds.
     /// Auto or Manual releases it; the entry leaves the drum once released.
     static let aeLock = "AE-L"

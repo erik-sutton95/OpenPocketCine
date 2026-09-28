@@ -39,6 +39,28 @@ final class CaptureQuickSnapshotTests: XCTestCase {
         }
     }
 
+    func testAWBLockIsAWBModeStopLeftOfAutoAndStaysSelectedWhileLocked() throws {
+        var status = CameraStatus()
+        status.whiteBalance = .auto(tint: 0)
+        let offered = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(.wb, status: status, offersAwbLock: true))
+        XCTAssertEqual(offered.options, ["AWB Lock", "Auto", "Custom"])
+        XCTAssertEqual(offered.selection, "Auto")
+        XCTAssertEqual(
+            CaptureQuickSnapshot.primary(.wb, status: status)?.options, ["Auto", "Custom"])
+        // Locked: the camera is Custom, but the stop and the tile stay AWB Lock.
+        status.whiteBalance = .custom(kelvin: 4_900, tint: 0)
+        status.whiteBalanceKelvin = 4_900
+        let locked = try XCTUnwrap(
+            CaptureQuickSnapshot.primary(.wb, status: status, awbLocked: true))
+        XCTAssertEqual(locked.kind, .whiteBalanceMode)
+        XCTAssertEqual(locked.options, ["AWB Lock", "Auto", "Custom"])
+        XCTAssertEqual(locked.selection, "AWB Lock")
+        XCTAssertEqual(CaptureLists.awbLockTile, "AWB-L")
+        // Unlocked Custom returns to the Kelvin drum.
+        XCTAssertEqual(CaptureQuickSnapshot.primary(.wb, status: status)?.kind, .kelvin)
+    }
+
     func testSourceIdentityIgnoresLiveHUDSelection() throws {
         var status = CameraStatus()
         status.expoMode = .manual
