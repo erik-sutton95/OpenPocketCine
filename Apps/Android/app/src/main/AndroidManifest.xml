@@ -29,7 +29,7 @@
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Android 12+ ignores a fine-location request without coarse. Location is asked only
-         for this phone's Wi-Fi name, and for the Bluetooth scan on Android 10 and 11. -->
+        for this phone's Wi-Fi name, and for the Bluetooth scan on Android 10 and 11. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <uses-feature

@@ -35,7 +35,7 @@ Wi-Fi and Hotspot setup, to show which Wi-Fi this phone is on; only the network
 name is read. Joining the camera's Wi-Fi needs no extra permission. If Android no
 longer shows a permission prompt, the pairing screen's **Open Settings** opens
 this app's page in Android Settings
-([Troubleshooting](../../guides/troubleshooting/#camera-does-not-appear)).
+([Troubleshooting](../../guides/troubleshooting/)).
 
 On **Your cameras**, PAIRED and NEARBY groups separate remembered cameras from
 new discoveries. Select a camera to see its connection progress and **Cancel**.
