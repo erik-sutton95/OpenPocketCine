@@ -28,6 +28,27 @@ struct FieldMonitorLayoutTests {
         }
     }
 
+    @Test func portraitAEUnlockClearsFitFillRecenterAndJoystick() {
+        func overlaps(_ a: MonitorRect, _ b: MonitorRect) -> Bool {
+            a.x < b.maxX && b.x < a.maxX && a.y < b.maxY && b.y < a.maxY
+        }
+        for (width, height) in [(375.0, 812.0), (393, 852), (440, 956)] {
+            for joystick in MonitorJoystickSize.allCases {
+                let layout = FieldMonitorLayout(
+                    width: width, height: height, safeArea: .init(top: 59, bottom: 34),
+                    joystick: joystick)
+                let unlock = layout.aeUnlock
+                for other in [
+                    layout.aspectToggle, layout.focusReset, layout.stick, layout.zoom,
+                    layout.gimbal, layout.assists,
+                ] {
+                    #expect(!overlaps(unlock, other), "\(width) \(joystick)")
+                }
+                #expect(unlock.maxX < layout.viewport.midX && unlock.maxY <= layout.values.y)
+            }
+        }
+    }
+
     @Test func landscapeCameraValuesClearTheHomeIndicator() {
         let layout = FieldMonitorLayout(
             width: 852, height: 393, safeArea: .init(bottom: 21, trailing: 59))

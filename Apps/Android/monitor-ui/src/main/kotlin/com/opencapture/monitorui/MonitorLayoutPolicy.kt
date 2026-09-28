@@ -313,6 +313,22 @@ object MonitorLayoutPolicy {
         )
     }
 
+    /**
+     * iOS `FieldMonitorLayout.aeUnlock`: capsule 1.5x the Recenter key wide. Landscape:
+     * beside Recenter, toward the picture centre. Portrait: mirrored to the left, just
+     * right of the View Assist column on Recenter's baseline, clear of Fit/Fill (centred)
+     * and the joystick cluster at any width or joystick size.
+     */
+    fun aeUnlock(reset: MonitorRect, leadingColumnMaxX: Float, pictureMidX: Float, portrait: Boolean): MonitorRect {
+        val width = reset.height * 1.5f
+        val x = when {
+            portrait -> leadingColumnMaxX + 8f
+            reset.midX < pictureMidX -> reset.maxX + 8f
+            else -> reset.x - 8f - width
+        }
+        return MonitorRect(x, reset.y, width, reset.height)
+    }
+
     /** 44 dp compass above the zoom row, trailing-aligned with the stick. */
     fun headTrack(stick: MonitorRect, zoom: MonitorRect): MonitorRect =
         MonitorRect(stick.maxX - 44f, zoom.y - 8f - 44f, 44f, 44f)

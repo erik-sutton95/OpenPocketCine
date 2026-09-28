@@ -260,6 +260,28 @@ public struct FieldMonitorLayout: Equatable, Sendable {
         safeBottom > 0 ? max(safeBottom, 14) + 10 : 8
     }
 
+    /// AE unlock capsule, 1.5× the Recenter key wide. Landscape: beside Recenter,
+    /// toward the picture centre. Portrait: mirrored to the left, just right of
+    /// the View Assist column on Recenter's baseline, so it clears Fit/Fill (centred)
+    /// and the joystick cluster at any width or joystick size.
+    public static func aeUnlock(
+        focusReset reset: MonitorRect, leadingColumnMaxX: Double, pictureMidX: Double,
+        portrait: Bool
+    ) -> MonitorRect {
+        let width = reset.height * 1.5
+        let x =
+            portrait
+            ? leadingColumnMaxX + 8
+            : reset.midX < pictureMidX ? reset.maxX + 8 : reset.x - 8 - width
+        return MonitorRect(x: x, y: reset.y, width: width, height: reset.height)
+    }
+
+    public var aeUnlock: MonitorRect {
+        Self.aeUnlock(
+            focusReset: focusReset, leadingColumnMaxX: assists.maxX, pictureMidX: picture.midX,
+            portrait: portrait)
+    }
+
     /// 44 pt compass above the zoom row, trailing-aligned with the stick.
     public static func headTrack(stick: MonitorRect, zoom: MonitorRect) -> MonitorRect {
         MonitorRect(x: stick.maxX - 44, y: zoom.y - 8 - 44, width: 44, height: 44)
