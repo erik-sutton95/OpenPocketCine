@@ -1103,7 +1103,8 @@ public enum AndroidSessionWire {
     }
 
     /// Android JNI: AE / AWB lock. `requestJSON` is `statusJSON`; `aeLockHolds`
-    /// adds `lockShootingMode`. Unknown kind or no lock target is `""`.
+    /// adds `lockShootingMode`, `awbLockHolds` adds `lockKelvin`. Unknown kind or
+    /// no lock target is `""`.
     public static func exposureLockDecision(kind: String, requestJSON: String) -> String {
         let status = status(fromJSON: requestJSON)
         switch kind {
@@ -1116,6 +1117,10 @@ public enum AndroidSessionWire {
             let lock = AutoExposureLock(
                 isoIndex: .auto, shutterDenom: -1,
                 shootingMode: Int(jsonNumber(requestJSON, key: "lockShootingMode", default: -1)))
+            return lock.holds(status) ? "true" : "false"
+        case "awbLockHolds":
+            let lock = AutoWhiteBalanceLock(
+                kelvin: Int(jsonNumber(requestJSON, key: "lockKelvin", default: -1)))
             return lock.holds(status) ? "true" : "false"
         case "awbLock":
             guard let wb = WhiteBalance.lockingAuto(status) else { return "" }

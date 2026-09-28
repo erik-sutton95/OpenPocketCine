@@ -47,5 +47,19 @@ import Testing
             SubscribePush.pack(name: "cam_image_effect", value: custom), to: &status)
         #expect(status.autoWhiteBalanceKelvin == -1)
         #expect(WhiteBalance.lockingAuto(status) == nil)
+
+        // The lock holds while the body reports Custom at the locked Kelvin.
+        let lock = AutoWhiteBalanceLock(kelvin: 3_500)
+        custom[5] = 0x23
+        custom[6] = 0x00
+        _ = CameraStatusDecoder.applySubscribePush(
+            SubscribePush.pack(name: "cam_image_effect", value: custom), to: &status)
+        #expect(lock.holds(status))
+        status.whiteBalance = .custom(kelvin: 3_600, tint: 20)
+        #expect(!lock.holds(status))
+        status.whiteBalance = .auto(tint: 20)
+        #expect(!lock.holds(status))
+        status.whiteBalance = nil
+        #expect(lock.holds(status))
     }
 }

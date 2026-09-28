@@ -36,6 +36,19 @@ public struct AutoExposureLock: Equatable, Sendable {
     }
 }
 
+/// AWB lock state: the Custom Kelvin that AWB Lock set. Another reported
+/// mode or Kelvin (a body change, a failed SET) ends it; unknown WB keeps it.
+public struct AutoWhiteBalanceLock: Equatable, Sendable {
+    public let kelvin: Int
+
+    public init(kelvin: Int) { self.kelvin = kelvin }
+
+    public func holds(_ status: CameraStatus) -> Bool {
+        guard let wb = status.whiteBalance else { return true }
+        return wb.mode == .custom && wb.kelvin == kelvin
+    }
+}
+
 extension WhiteBalance {
     /// Custom Kelvin drum on both shells (Android `CaptureLists.kelvinValues` mirrors it).
     /// One ladder for every model: Action 6 accepted single 100K steps (2000 → 2100K).
