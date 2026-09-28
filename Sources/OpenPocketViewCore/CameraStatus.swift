@@ -64,6 +64,8 @@ public struct CameraStatus: Equatable, Sendable {
     /// Last Custom Kelvin (2000…10000). Auto does not clear this — Custom tap
     /// restores it. `-1` unknown (never seen Custom).
     public var whiteBalanceKelvin: Int = -1
+    /// Live Auto WB from `cam_image_effect` `@5` (K/100) while Auto. `-1` unknown / not Auto.
+    public var autoWhiteBalanceKelvin: Int = -1
     /// Tint from `whiteBalance` (`−100…+100`). nil unknown.
     public var whiteBalanceTint: Int?
     /// Focus from `cam_lens_state` `@0` (`B1` Single / `B2` Continuous).
@@ -360,6 +362,8 @@ public enum CameraStatusDecoder {
                     status.whiteBalanceKelvin = wb.kelvin
                 }
                 status.whiteBalanceTint = wb.tint
+                status.autoWhiteBalanceKelvin =
+                    wb.mode == .auto ? WhiteBalance.autoKelvin(item.value) ?? -1 : -1
             }
             return true
         case "cam_lens_state" where !item.value.isEmpty:

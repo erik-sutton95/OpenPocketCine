@@ -23,6 +23,15 @@ as `EV`. Tap a value for the full details drawer;
 hold or drag for a compact dial. Lift to apply the selected value. Camera controls hold your selection while the
 camera confirms it, so an older status update does not briefly move the dial back.
 A rejected or unconfirmed change returns to the reported camera value after settling.
+Long-press the picture without moving (about 0.6 s, after the haptic) and lift
+to lock exposure while exposure is Auto: the focus box turns yellow with an
+**AE-L** tag, and a sun-and-open-lock key beside the focus recenter button
+returns exposure to Auto. The lock switches the camera to Manual at its current
+Auto ISO (nearest whole stop) and shutter; choosing an exposure mode, changing
+shooting mode or an Auto report from the camera ends it. Dragging after the
+hold still draws a tracking box. White balance **Mode** offers **AWB Lock**
+beside Auto while Auto reports a live Kelvin; it sets Custom at that Kelvin and
+keeps tint. Neither is a camera-native lock and both await hardware testing.
 Capture tabs retain their matching labels while camera updates change the available modes.
 Hold Record to open shooting mode.
 In **Photo**, the capture control becomes a shutter and takes a photo immediately,

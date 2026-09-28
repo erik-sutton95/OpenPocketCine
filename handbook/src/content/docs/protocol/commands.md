@@ -96,6 +96,21 @@ has automated coverage on both platforms. The operator confirmed the corrected
 vertical 3K picker on an iPhone on 2026-09-11; Android and on-camera fps-change
 verification remain pending.
 
+## AE and AWB lock
+
+No capture holds a camera-native AE or AWB lock. `0x02/0x68` (classic DUML AE
+Lock Status Set) only appears as payload `08` in the Mimo tap-focus burst and
+before live entry; there is no captured clear or unlock payload, so the apps do
+not send it as a lock. AE lock instead sends `0x02/0x1E` Manual, `0x02/0x2A` at
+the ISO index nearest `cam_expo_param` `@16`, and `0x02/0x28` at the applied
+Auto shutter `@20–22` (nearest `camcap_shutter` entry). Unlock sends
+`0x02/0x1E` Auto. AWB lock sends `0x02/0x2C` Custom at the Auto measurement,
+read as `cam_image_effect` `@5` alone (K/100, 2000–10000 K) because the
+[Action 6 survey](../../devices/action-6/settings/) reported `23 04` while its
+UI read 3500 K. This writes the Auto measurement once, at the operator's
+request; it is still never parsed as the Custom Kelvin. Pocket 3 / 4 Auto
+`@5` has not been compared with Mimo's displayed Kelvin.
+
 ## Camera-metered EV
 
 The existing `0x00/0x99` subscription for `cam_expo_param` reports two distinct

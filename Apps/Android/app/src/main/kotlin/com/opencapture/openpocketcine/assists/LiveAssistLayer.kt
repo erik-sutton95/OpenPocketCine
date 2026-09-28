@@ -85,6 +85,8 @@ fun LiveAssistLayer(
     tracking: com.opencapture.openpocketcine.session.TrackingHud =
         com.opencapture.openpocketcine.session.TrackingHud(),
     showTapFocusBox: Boolean = true,
+    /** AE lock: the focus box turns yellow with an `AE-L` tag. */
+    aeLocked: Boolean = false,
     /** Picture well in the same space as [modifier]; defaults to the layer box. */
     feedFrame: ChromeRect? = null,
     /** Recorded image within the source raster, excluding camera-added padding. AF keeps [feedFrame]. */
@@ -172,6 +174,7 @@ fun LiveAssistLayer(
                     focus = focus,
                     mirrored = pictureMirrored,
                     showTapFocusBox = showTapFocusBox && focus != null,
+                    aeLocked = aeLocked,
                     modifier = Modifier.fillMaxSize(),
                 )
             }

@@ -142,6 +142,14 @@ class TrackingBoxTest {
         assertEquals(LiveFeedFocusGesture.Kind.DISP_CLEAN, LiveFeedFocusGesture.classify(0f, 45f))
         assertEquals(LiveFeedFocusGesture.Kind.DISP_LIVE, LiveFeedFocusGesture.classify(0f, -45f))
         assertNull(LiveFeedFocusGesture.classify(4f, -3f, pinched = true))
+        assertEquals(
+            LiveFeedFocusGesture.Kind.AE_LOCK,
+            LiveFeedFocusGesture.classify(4f, 3f, armed = true, aeLockHeld = true),
+        )
+        assertEquals(
+            LiveFeedFocusGesture.Kind.TRACK,
+            LiveFeedFocusGesture.classify(30f, 8f, armed = true, aeLockHeld = true),
+        )
     }
 
     @Test

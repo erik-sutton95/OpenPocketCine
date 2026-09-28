@@ -58,6 +58,7 @@ final class CameraSession {
         set {
             let previous = statusStorage
             statusStorage = newValue
+            if let lock = autoExposureLock, !lock.holds(newValue) { autoExposureLock = nil }
             guard newValue != previous else { return }
             guard
                 LiveChromeThrottle.shouldNotify(
@@ -332,6 +333,8 @@ final class CameraSession {
     @ObservationIgnored let cameraMedia: CameraMedia
     /// Last tap-to-focus point in feed-normalized 0…1. Always drawn when not tracking.
     var focusPoint: CGPoint = CGPoint(x: 0.5, y: 0.5)
+    /// Feed long-press AE lock. Any status that no longer `holds` it clears it.
+    private(set) var autoExposureLock: AutoExposureLock?
     /// Operator-drawn search rect while the camera is still hunting a subject.
     var searchBox: TrackingBox?
     /// Locked subject box. Camera floats when `0xA5` carries them; else a tight stand-in.
@@ -839,6 +842,7 @@ final class CameraSession {
         zoomPinchSlew = nil
         expoPin = nil
         expoGeneration = 0
+        autoExposureLock = nil
         audioPin = nil
         formatPin = nil
         colorPin = nil
@@ -1693,6 +1697,8 @@ final class CameraSession {
         guard !isMultiviewControlsOnly || (admitsMultiviewControl && !status.isRecording) else {
             return
         }
+        // Return the old mode to Auto before leaving it; the camera keeps Manual per mode.
+        unlockAutoExposure()
         captureModeGeneration &+= 1
         let modeGeneration = captureModeGeneration
         let sessionGeneration = controlGeneration
@@ -1795,6 +1801,7 @@ final class CameraSession {
     }
 
     func setExpoMode(_ mode: ExpoMode) {
+        autoExposureLock = nil
         if mode != .manual {
             formatPin?.shutterAngle = nil
             clearExpoPin(shutter: true)
@@ -2584,6 +2591,38 @@ final class CameraSession {
         let note = controlNote
         setShutterDenom(denom)
         if controlNote == nil { controlNote = note }
+    }
+
+    var canLockAutoExposure: Bool {
+        autoExposureLock == nil && AutoExposureLock.capture(status) != nil
+    }
+
+    /// Pins the applied Auto exposure as Manual (no captured native AE lock).
+    /// Manual rides the same socket right before ISO and shutter.
+    @discardableResult
+    func lockAutoExposure() -> Bool {
+        guard autoExposureLock == nil, admitsMultiviewControl, datalink != nil,
+            datalink?.isRebuilding != true, let lock = AutoExposureLock.capture(status)
+        else { return false }
+        setExpoMode(.manual)
+        setISO(lock.isoIndex)
+        setShutterDenom(lock.shutterDenom)
+        autoExposureLock = lock
+        ControlLiveLog.line("ae-lock: ISO \(lock.isoIndex.label) 1/\(lock.shutterDenom)")
+        return true
+    }
+
+    func unlockAutoExposure() {
+        guard autoExposureLock != nil else { return }
+        setExpoMode(.auto)
+    }
+
+    var canLockAutoWhiteBalance: Bool { WhiteBalance.lockingAuto(status) != nil }
+
+    /// Pins the live Auto Kelvin as Custom (no captured native AWB lock).
+    func lockAutoWhiteBalance() {
+        guard let wb = WhiteBalance.lockingAuto(status) else { return }
+        setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
     }
 
     func setWhiteBalanceAuto(tint: Int? = nil) {

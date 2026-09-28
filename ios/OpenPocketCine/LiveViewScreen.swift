@@ -464,6 +464,7 @@ struct LiveViewScreen: View {
                     stick: Self.cgRect(self.gimbalCluster(layout).stick),
                     gimbalButton: Self.cgRect(self.gimbalCluster(layout).controls),
                     reset: resetAvailable ? layout.focusReset : .zero,
+                    aeUnlock: model.session.autoExposureLock != nil ? layout.aeUnlock : .zero,
                     cancel: trackingCancelRect(subject, in: layout),
                     calibrate: model.headTrackingEnabled
                         && OsmoMonitorPresentation.capabilities(model.session).headTracking
@@ -673,6 +674,13 @@ struct LiveViewScreen: View {
                 }
             }
             .zIndex(3)
+
+            if !interfaceLocked, chromeInteractive, model.session.autoExposureLock != nil {
+                LiveAutoExposureUnlockButton()
+                    .liveModuleFrame(layout.aeUnlock)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    .zIndex(3)
+            }
 
             LiveFocusScope { _, subject in
                 if !interfaceLocked, chromeInteractive, subject != nil {
@@ -1050,6 +1058,7 @@ private struct LiveFeedAssistsPane: View {
                 sceneFaces: showBox ? model.session.dimmedFaces : [],
                 showFocusChrome: showBox,
                 showTapFocusBox: model.session.supportsTapFocus,
+                aeLocked: model.session.autoExposureLock != nil,
                 sourceAspect: model.session.pictureAspect,
                 pictureAspect: CGFloat(
                     model.session.status.videoFormat?.resolution.ratio

@@ -1277,6 +1277,8 @@ struct FeedAlignedAssists: View {
     var sceneFaces: [TrackingBox] = []
     var showFocusChrome = true
     var showTapFocusBox = true
+    /// AE lock: the focus / metering box turns yellow with an `AE-L` tag.
+    var aeLocked = false
     /// When set (letterboxed clip playback), framing overlays align to this rect
     /// instead of the full geometry — OpenZCine `FeedAlignedAssists(feed:)`.
     var feed: CGRect? = nil
@@ -1336,7 +1338,8 @@ struct FeedAlignedAssists: View {
                             feed: focusFeed,
                             normalized: mirrored
                                 ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
-                                : focusPoint
+                                : focusPoint,
+                            aeLocked: aeLocked
                         )
                     case .subject(let box):
                         SubjectBoxView(feed: focusFeed, box: mirroredBox(box, mirrored))
@@ -1347,12 +1350,13 @@ struct FeedAlignedAssists: View {
                             lineWidth: 1.6
                         )
                     case .focus:
-                        if showTapFocusBox {
+                        if showTapFocusBox || aeLocked {
                             FocusBoxView(
                                 feed: focusFeed,
                                 normalized: mirrored
                                     ? CGPoint(x: 1 - focusPoint.x, y: focusPoint.y)
-                                    : focusPoint
+                                    : focusPoint,
+                                aeLocked: aeLocked
                             )
                         }
                     }
@@ -1513,20 +1517,34 @@ private struct SubjectBoxView: View {
 private struct FocusBoxView: View {
     let feed: CGRect
     let normalized: CGPoint
+    var aeLocked = false
 
     var body: some View {
         let side = min(feed.width, feed.height) * 0.14
         let rect = CGRect(x: 0, y: 0, width: side, height: side)
-        RoundedRectangle(
-            cornerRadius: LiveTrackingChrome.cornerRadius(for: rect), style: .continuous
-        )
-        .stroke(LiveDesign.accent, lineWidth: 1.5)
-        .shadow(color: .black.opacity(0.6), radius: 1)
-        .frame(width: side, height: side)
-        .position(
-            x: feed.minX + normalized.x * feed.width,
-            y: feed.minY + normalized.y * feed.height
-        )
+        let x = feed.minX + normalized.x * feed.width
+        let y = feed.minY + normalized.y * feed.height
+        // The tag sits right of the box, or left when the box is near the right edge.
+        let tagLeading = x + side / 2 + 26 > feed.maxX
+        ZStack {
+            RoundedRectangle(
+                cornerRadius: LiveTrackingChrome.cornerRadius(for: rect), style: .continuous
+            )
+            .stroke(aeLocked ? LiveDesign.aeLock : LiveDesign.accent, lineWidth: 1.5)
+            .shadow(color: .black.opacity(0.6), radius: 1)
+            .frame(width: side, height: side)
+            .position(x: x, y: y)
+            if aeLocked {
+                Text("AE-L")
+                    .font(MonitorTheme.font(9, weight: .semibold))
+                    .kerning(0.5)
+                    .foregroundStyle(LiveDesign.aeLock)
+                    .shadow(color: .black.opacity(0.8), radius: 1.5, y: 0.5)
+                    .fixedSize()
+                    .position(
+                        x: tagLeading ? x - side / 2 - 14 : x + side / 2 + 14, y: y - side / 2 + 6)
+            }
+        }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

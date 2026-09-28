@@ -2,6 +2,7 @@ Since open beta build 158
 
 New and changed
 
+- Long-press the picture to lock exposure: the focus box turns yellow with AE-L. The sun-and-lock key beside Recenter unlocks. WB Mode adds AWB Lock.
 - Multiview redesign: bigger main picture, scrolling camera strip, Live View's toolbar, and camera values inline in the selected tile.
 - Multiview Grid and Center stage both work in portrait and landscape, with Exit and Wi-Fi together and Record and DISP in Live View's places.
 - Multiview Camera settings is a side panel with a tab per camera and a live preview of that camera.

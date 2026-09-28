@@ -55,6 +55,7 @@ enum class MonitorIcon(
     LINK_2_OFF("link-2-off", R.drawable.opc_lucide_link_2_off),
     LIST_FILTER("list-filter", R.drawable.opc_lucide_list_filter),
     LOCK("lock", R.drawable.opc_lucide_lock),
+    LOCK_OPEN("lock-open", R.drawable.opc_lucide_lock_open),
     MAXIMIZE("maximize", R.drawable.opc_lucide_maximize),
     MENU("menu", R.drawable.opc_lucide_menu),
     MINIMIZE("minimize", R.drawable.opc_lucide_minimize),

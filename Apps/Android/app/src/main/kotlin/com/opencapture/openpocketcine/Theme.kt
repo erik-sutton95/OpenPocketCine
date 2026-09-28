@@ -93,6 +93,8 @@ object LiveDesign {
     val rec = com.opencapture.monitorui.MonitorPalette.recording
     val info = accent
     val amber = Color(0.914f, 0.674f, 0.208f)
+    /** AE lock yellow: the focus box, its `AE-L` tag and the unlock key. */
+    val aeLock = Color(0xFFF5D052)
     val accentDim = Color(0x2900A3E0)
     val hairlineStrong = Color.White.copy(alpha = 0.10f)
     val hairline = com.opencapture.monitorui.MonitorPalette.border

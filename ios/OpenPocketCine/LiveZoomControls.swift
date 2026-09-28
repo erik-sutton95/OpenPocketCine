@@ -24,6 +24,7 @@ enum LiveFeedFocusGesture {
     enum Kind: Equatable {
         case tap
         case track
+        case aeLock
         case dispClean
         case dispLive
     }
@@ -32,14 +33,17 @@ enum LiveFeedFocusGesture {
     /// Short enough to feel like a press, long enough that a swipe never arms.
     static let trackHoldDuration: TimeInterval = 0.20
     static let trackHoldSlop: CGFloat = 10
+    /// A still press this long releases as AE lock instead of tap focus.
+    static let aeLockHoldDuration: TimeInterval = 0.6
 
     static func classify(
-        translation: CGSize, pinched: Bool = false, armed: Bool = false
+        translation: CGSize, pinched: Bool = false, armed: Bool = false, aeLockHeld: Bool = false
     ) -> Kind? {
         if pinched { return nil }
         let distance = hypot(translation.width, translation.height)
         if armed {
-            return distance >= trackMinimum ? .track : .tap
+            if distance >= trackMinimum { return .track }
+            return aeLockHeld ? .aeLock : .tap
         }
         if let clean = LiveDispSwipe.wantsClean(translation: translation) {
             return clean ? .dispClean : .dispLive
@@ -75,6 +79,7 @@ struct LiveZoomPinchWell: View {
     var stick: CGRect = .zero
     var gimbalButton: CGRect = .zero
     var reset: CGRect = .zero
+    var aeUnlock: CGRect = .zero
     var cancel: CGRect = .zero
     var calibrate: CGRect = .zero
     var enabled: Bool
@@ -86,6 +91,7 @@ struct LiveZoomPinchWell: View {
         let stickInFeed = stick.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let gimbalInFeed = gimbalButton.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let resetInFeed = reset.offsetBy(dx: -feed.minX, dy: -feed.minY)
+        let aeUnlockInFeed = aeUnlock.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let cancelInFeed = cancel.offsetBy(dx: -feed.minX, dy: -feed.minY)
         let calibrateInFeed = calibrate.offsetBy(dx: -feed.minX, dy: -feed.minY)
         ZStack {
@@ -98,7 +104,8 @@ struct LiveZoomPinchWell: View {
         .contentShape(
             .interaction,
             LiveZoomPinchHitShape(holes: [
-                chipInFeed, stickInFeed, gimbalInFeed, resetInFeed, cancelInFeed, calibrateInFeed,
+                chipInFeed, stickInFeed, gimbalInFeed, resetInFeed, aeUnlockInFeed, cancelInFeed,
+                calibrateInFeed,
             ]),
             eoFill: true
         )
@@ -159,6 +166,7 @@ struct LiveZoomPinchModifier: ViewModifier {
     @State private var focusTick = 0
     @State private var armTick = 0
     @State private var trackArmed = false
+    @State private var aeLockHeld = false
     @State private var holdStarted = false
     @State private var holdTask: Task<Void, Never>?
     @State private var lastTranslation: CGSize = .zero
@@ -169,6 +177,7 @@ struct LiveZoomPinchModifier: ViewModifier {
             .sensoryFeedback(.impact(weight: .medium), trigger: detentTick)
             .sensoryFeedback(.impact(weight: .light), trigger: focusTick)
             .sensoryFeedback(.impact(weight: .medium), trigger: armTick)
+            .sensoryFeedback(.impact(weight: .heavy), trigger: aeLockHeld) { _, held in held }
     }
 
     /// OpenZCine `zoomGesturesTail`: one drag beside pinch so they coexist.
@@ -224,20 +233,23 @@ struct LiveZoomPinchModifier: ViewModifier {
             }
             .onEnded { value in
                 let armed = trackArmed
+                let aeLock = aeLockHeld
                 cancelTrackHold()
                 draftStart = nil
                 draftEnd = nil
                 guard enabled else { return }
                 guard
                     let kind = LiveFeedFocusGesture.classify(
-                        translation: value.translation, pinched: pinchUsed, armed: armed)
+                        translation: value.translation, pinched: pinchUsed, armed: armed,
+                        aeLockHeld: aeLock)
                 else { return }
                 switch kind {
                 case .dispClean:
                     model.setDisplayMode(clean: true)
                 case .dispLive:
                     model.setDisplayMode(clean: false)
-                case .tap:
+                case .tap, .aeLock:
+                    if kind == .aeLock, model.session.lockAutoExposure() { return }
                     let point = LiveFeedFocusGesture.cameraPoint(
                         value.location, in: feedSize, mirrored: model.livePictureViewFlip)
                     model.session.handleFeedTap(at: CGPoint(x: point.x, y: point.y))
@@ -265,6 +277,16 @@ struct LiveZoomPinchModifier: ViewModifier {
             guard slop <= LiveFeedFocusGesture.trackHoldSlop else { return }
             trackArmed = true
             armTick += 1
+            try? await Task.sleep(
+                for: .seconds(
+                    LiveFeedFocusGesture.aeLockHoldDuration
+                        - LiveFeedFocusGesture.trackHoldDuration))
+            guard !Task.isCancelled, !pinchUsed,
+                hypot(lastTranslation.width, lastTranslation.height)
+                    <= LiveFeedFocusGesture.trackHoldSlop,
+                model.session.canLockAutoExposure
+            else { return }
+            aeLockHeld = true
         }
     }
 
@@ -273,6 +295,7 @@ struct LiveZoomPinchModifier: ViewModifier {
         holdTask = nil
         holdStarted = false
         trackArmed = false
+        aeLockHeld = false
         lastTranslation = .zero
     }
 }

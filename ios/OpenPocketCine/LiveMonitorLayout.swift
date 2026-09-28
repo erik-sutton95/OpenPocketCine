@@ -236,6 +236,14 @@ extension LiveMonitorLayout {
         CGRect(x: region.x, y: region.y, width: region.width, height: region.height)
     }
 
+    /// AE unlock capsule beside the recenter key, on the side toward the feed centre.
+    var aeUnlock: CGRect {
+        let reset = focusReset
+        let width = reset.height * 1.5
+        let x = reset.midX < feed.midX ? reset.maxX + 8 : reset.minX - 8 - width
+        return CGRect(x: x, y: reset.minY, width: width, height: reset.height)
+    }
+
     /// OpenZCine recenter key. Landscape: just past the battery, toward the feed,
     /// above the assist bar. Portrait: bottom-right of the feed.
     var focusReset: CGRect {

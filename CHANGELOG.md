@@ -16,6 +16,12 @@ All notable changes to this project are documented here. The format is based on
   station sequence moves out of Multiview into a shared Kotlin `StationJoin`,
   and a Camera Wi-Fi connect after a setup restores the camera's access point
   first.
+- AE lock on iOS and Android: a still long-press on the live picture locks Auto
+  exposure by pinning the camera's current ISO and shutter as Manual. The focus
+  box turns yellow with an AE-L tag, and a sun-and-lock key beside the focus
+  recenter button returns to Auto. White balance Mode adds AWB Lock, which sets
+  Custom at the camera's live Auto Kelvin. Neither uses a camera-native lock;
+  hardware behavior is not yet verified.
 
 ### Changed
 

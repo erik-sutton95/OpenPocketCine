@@ -674,11 +674,14 @@ private fun LiveControlSheetContent(
                     when (selectedMode) {
                         0 ->
                             CheckedRows(
-                                options = CaptureLists.wbModeRows,
+                                options = (if (model.session.autoWhiteBalanceLock(status) != null)
+                                    listOf(CaptureLists.AWB_LOCK) else emptyList()) + CaptureLists.wbModeRows,
                                 selected = CaptureLists.wbModeRowSelected(status),
                                 enabled = enabled,
                             ) { label ->
-                                if (CaptureLists.wbSendsAuto(label)) {
+                                if (label == CaptureLists.AWB_LOCK) {
+                                    model.session.lockAutoWhiteBalance()
+                                } else if (CaptureLists.wbSendsAuto(label)) {
                                     model.setWhiteBalanceAuto()
                                 } else {
                                     val custom = CaptureLists.wbCustomFromStatus(status)
@@ -1571,6 +1574,8 @@ object CaptureLists {
     val kelvinLabels: List<String> = kelvinValues.map { "${it}K" }
     val wbTabs: List<String> = listOf("Mode", "Kelvin", "Tint")
     val wbModeRows: List<String> = listOf("Auto", "Custom")
+    /** iOS `CaptureLists.awbLock`: WB Mode drum entry left of Auto. */
+    const val AWB_LOCK = "AWB Lock"
     const val WB_TAB_MODE = 0
     const val WB_TAB_KELVIN = 1
     const val WB_TAB_TINT = 2

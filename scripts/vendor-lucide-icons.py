@@ -60,6 +60,7 @@ ICON_NAMES = [
     "link-2-off",
     "list-filter",
     "lock",
+    "lock-open",
     "maximize",
     "menu",
     "minimize",

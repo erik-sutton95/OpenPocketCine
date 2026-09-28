@@ -144,6 +144,7 @@ fun LiveViewScreen(model: AppModel) {
     val zoomDialReadout by model.session.zoomDialReadout.collectAsState()
     val zoomPinching by model.session.zoomPinching.collectAsState()
     val trackingHud by model.session.trackingHud.collectAsState()
+    val aeLock by model.session.aeLock.collectAsState()
     val poseViewFlip by model.session.gimbalPoseViewFlip.collectAsState()
     val poseInvertPan by model.session.gimbalPoseInvertPan.collectAsState()
     val gimbalLimitPulse by model.session.gimbalLimitPulse.collectAsState()
@@ -626,6 +627,8 @@ fun LiveViewScreen(model: AppModel) {
                     onTrack = { box ->
                         model.session.startTracking(if (liveViewFlip) box.mirrored() else box)
                     },
+                    onAeLock = { model.session.lockAutoExposure() },
+                    canLockAe = { model.session.canLockAutoExposure },
                 )
             }
 
@@ -637,7 +640,8 @@ fun LiveViewScreen(model: AppModel) {
                     tracking = trackingHud,
                     showTapFocusBox =
                         model.chromeSectionMounts(PocketDispSection.FOCUS_BOX) &&
-                            model.session.supportsTapFocus,
+                            (model.session.supportsTapFocus || aeLock != null),
+                    aeLocked = aeLock != null,
                     locked = uiLocked,
                     feedFrame = if (desqueezeVisible) pictureContent else layout.onFeed.fittedContent(
                         VideoResolution.fromRaw(status.resolutionCode)?.ratio ?: pictureAspect),
@@ -745,6 +749,12 @@ fun LiveViewScreen(model: AppModel) {
                         mirrored = liveViewFlip,
                         onClick = { model.session.cancelSubjectTracking() },
                     )
+                }
+            }
+            // iOS: beside the recenter key in both orientations, only while AE is locked.
+            if (!uiLocked && chromeInteractive && aeLock != null) {
+                Box(Modifier.liveModuleFrame(layout.aeUnlock).zIndex(3f)) {
+                    LiveAutoExposureUnlockButton(onClick = { model.session.unlockAutoExposure() })
                 }
             }
 

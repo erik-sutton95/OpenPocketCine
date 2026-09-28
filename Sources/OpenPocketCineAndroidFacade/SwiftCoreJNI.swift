@@ -399,6 +399,18 @@
                 requestJSON: swiftString(env, requestJSON) ?? "{}"))
     }
 
+    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_exposureLockDecision")
+    public func swiftCoreExposureLockDecision(
+        env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
+        kind: jstring?, requestJSON: jstring?
+    ) -> jstring? {
+        javaString(
+            env,
+            AndroidSessionWire.exposureLockDecision(
+                kind: swiftString(env, kind) ?? "",
+                requestJSON: swiftString(env, requestJSON) ?? "{}"))
+    }
+
     @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multicamDecision")
     public func swiftCoreMulticamDecision(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
