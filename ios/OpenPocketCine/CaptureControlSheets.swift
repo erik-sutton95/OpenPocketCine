@@ -376,10 +376,13 @@ struct CapturePickerPanel: View {
         case .wb:
             if selectedMode == 0 {
                 choiceDrum(
-                    WhiteBalanceMode.allCases.map(\.label),
+                    (model.session.canLockAutoWhiteBalance ? [CaptureLists.awbLock] : [])
+                        + WhiteBalanceMode.allCases.map(\.label),
                     selected: model.session.status.whiteBalance?.mode.label
                 ) { label in
-                    if label == WhiteBalanceMode.auto.label {
+                    if label == CaptureLists.awbLock {
+                        model.session.lockAutoWhiteBalance()
+                    } else if label == WhiteBalanceMode.auto.label {
                         model.session.setWhiteBalanceAuto()
                     } else {
                         model.session.setWhiteBalanceCustom(
@@ -1253,6 +1256,8 @@ enum CaptureLists {
 
     static let kelvinValues = Array(stride(from: 2_000, through: 10_000, by: 100))
     static let kelvinLabels = kelvinValues.map { "\($0)K" }
+    /// WB Mode drum entry left of Auto: Custom at the live Auto Kelvin.
+    static let awbLock = "AWB Lock"
 
     static func kelvin(from label: String) -> Int? {
         Int(label.replacingOccurrences(of: "K", with: ""))

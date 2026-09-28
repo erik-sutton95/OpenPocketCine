@@ -36,6 +36,8 @@ enum LiveDesign {
     static let accentDim = MonitorTheme.accent.opacity(0.16)
     static var amber: Color { LiveHDRDisplay.chromeColor(red: 0.914, green: 0.674, blue: 0.208) }
     static var good: Color { LiveHDRDisplay.chromeColor(red: 0.18, green: 0.78, blue: 0.42) }
+    /// AE lock yellow: the focus box, its `AE-L` tag and the unlock key.
+    static var aeLock: Color { LiveHDRDisplay.chromeColor(hex: 0xF5D052) }
     static var rec: Color { LiveHDRDisplay.chromeColor(hex: 0xD13034) }
     static var info: Color { accent }
     static let cornerRadius = DesignTokens.cornerRadius

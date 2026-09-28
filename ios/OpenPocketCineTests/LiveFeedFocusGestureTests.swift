@@ -41,6 +41,13 @@ final class LiveFeedFocusGestureTests: XCTestCase {
                     translation: translation, pinched: pinched, armed: armed),
                 expected, name)
         }
+        // A still long press locks AE; dragging after it still draws a track box.
+        XCTAssertEqual(
+            LiveFeedFocusGesture.classify(
+                translation: CGSize(width: 4, height: 3), armed: true, aeLockHeld: true), .aeLock)
+        XCTAssertEqual(
+            LiveFeedFocusGesture.classify(
+                translation: CGSize(width: 30, height: 8), armed: true, aeLockHeld: true), .track)
         // An unarmed drag must never start tracking, whatever else it becomes.
         for translation in [
             CGSize(width: 30, height: 8), CGSize(width: -20, height: -20),
