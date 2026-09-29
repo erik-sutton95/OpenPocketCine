@@ -3073,10 +3073,31 @@ class PocketCameraSession(
 
     fun zoomStops(): List<Double> {
         val model = connectedCamera?.model ?: CameraModel.default
-        return model.activeZoomStops(_status.value.resolutionCode, _status.value.shootingMode)
+        val status = _status.value
+        return model.activeZoomStops(
+            status.resolutionCode,
+            status.shootingMode,
+            status.zoomLensMin,
+            status.zoomLensMax,
+        )
     }
 
     fun zoomMax(): Double = zoomStops().lastOrNull() ?: 1.0
+
+    /**
+     * The widest the body will actually go. Normally 1×, but Pocket 3 Med-Tele parks a
+     * 40 mm lens in front and clamps anything wider back to it, so the dial must not
+     * offer travel the camera will refuse to honour.
+     */
+    fun zoomMin(): Double = zoomStops().firstOrNull() ?: 1.0
+
+    /**
+     * The stops that are optics rather than a crop of them, for the caption and the
+     * digital-crop warning — see [CameraModel.opticalZoomStops].
+     */
+    fun zoomOpticalStops(): List<Double> =
+        (connectedCamera?.model ?: CameraModel.default)
+            .opticalZoomStops(zoomStops(), _status.value.zoomLensMin)
 
     fun zoomNextJump(): Double = CamFov.nextJump(zoomCycleFrom(), zoomStops())
 
@@ -3151,7 +3172,7 @@ class PocketCameraSession(
             lastPinchLens = null
             lastPinchLogTenths = null
         }
-        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification, zoomMax())
+        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification, zoomMax(), zoomMin())
         if (blockZoomColorHopIfRecording(factor)) return
         val first = zoomPinchPreview == null
         dropDLog2ForZoom(factor)
@@ -4152,7 +4173,12 @@ class PocketCameraSession(
                     zoomCycleFrom(),
                     connectedCamera
                         ?.model
-                        ?.activeZoomStops(format.resolution.rawValue, modeAtSet)
+                        ?.activeZoomStops(
+                            format.resolution.rawValue,
+                            modeAtSet,
+                            _status.value.zoomLensMin,
+                            _status.value.zoomLensMax,
+                        )
                         .orEmpty(),
                 )
         }

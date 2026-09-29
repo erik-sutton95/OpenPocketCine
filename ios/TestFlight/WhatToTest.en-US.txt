@@ -26,6 +26,7 @@ Fixes
 - Tapping to move focus no longer snaps back to the old point first. A new track no longer flashes on a previously tracked face.
 - A vertical camera feed fits whole in portrait, and Live View refits when the camera turns between horizontal and vertical.
 - Value drums open on the current value instead of sliding in.
+- Pocket 3 Med-Tele zoom cycles 2x, 3x and 4x instead of wrapping to an unreachable 1x. Without Med-Tele, 2.7K 3x shows the digital-crop warning.
 - Multiview repairs its picture after returning from another app, keeping the camera connected while it waits.
 - Multiview Exit retries a temporary pairing refusal before showing an error; cameras already returned to their Wi-Fi stay untouched.
 - Wi-Fi headings and fields align, Connect stays above the keyboard, and connecting or cancelling waits for scan cleanup.

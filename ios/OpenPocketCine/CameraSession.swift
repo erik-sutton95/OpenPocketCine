@@ -448,10 +448,20 @@ final class CameraSession {
     var zoomStop: Double = 1
     var zoomStops: [Double] {
         connectedCamera?.model.activeZoomStops(
-            resolution: status.videoResolution, shootingMode: status.shootingMode)
+            resolution: status.videoResolution, shootingMode: status.shootingMode,
+            lensMin: status.zoomLensMin, lensMax: status.zoomLensMax)
             ?? CamFov.jumps
     }
     var zoomMax: Double { zoomStops.last ?? 1 }
+    /// The widest the body will actually go. Med-Tele holds it above 1x, and an
+    /// ask below it is clamped, not refused, so the UI has to stop there itself.
+    var zoomMin: Double { zoomStops.first ?? 1 }
+    /// Which of the cycle's stops are a real lens rather than a crop — see
+    /// `CameraModel.opticalZoomStops`.
+    var zoomOpticalStops: [Double] {
+        connectedCamera?.model.opticalZoomStops(cycle: zoomStops, lensMin: status.zoomLensMin)
+            ?? [1]
+    }
     /// Pinch HUD between `cam_fov` pushes. Nil when fingers are up.
     var zoomPinchPreview: Double?
     /// Chip-tap target until `cam_fov` catches up, on the same settle window as
@@ -3009,7 +3019,8 @@ final class CameraSession {
                 size: format.resolution.sizeTitle,
                 held: zoomCycleFrom,
                 stops: connectedCamera?.model.activeZoomStops(
-                    resolution: format.resolution, shootingMode: status.shootingMode) ?? [])
+                    resolution: format.resolution, shootingMode: status.shootingMode,
+                    lensMin: status.zoomLensMin, lensMax: status.zoomLensMax) ?? [])
         }
     }
 

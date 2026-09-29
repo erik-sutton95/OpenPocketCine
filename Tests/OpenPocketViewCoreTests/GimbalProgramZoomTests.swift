@@ -52,6 +52,31 @@ import Testing
         #expect(GimbalProgramZoom(program: program, model: model, status: status(nil)).failureReason != nil)
     }
 
+    @Test func medTeleWindowReplacesTheFormatRange() {
+        let pocket3 = CameraModel.resolve(modelId: 0x20, name: "OsmoPocket3-Test")
+        var medTele = status()
+        medTele.videoResolution = .p4K
+        medTele.zoomLens = 434
+        medTele.zoomLensMin = 434
+        medTele.zoomLensMax = 868
+        let tele = GimbalProgram(a: .init(yawDeg: 0, pitchDeg: 0, zoom: 2),
+            b: .init(yawDeg: 20, pitchDeg: 0, zoom: 4),
+            c: .init(yawDeg: 30, pitchDeg: 0, zoom: 3), durationAB: 3, durationBC: 2)
+        // 4K alone caps a Pocket 3 at 2×; the Med-Tele body reaches 2×…4× there.
+        var zoom = GimbalProgramZoom(program: tele, model: pocket3, status: medTele)
+        #expect(zoom.failureReason == nil)
+        #expect(zoom.lensTarget(for: 4, at: 0) == CamFov.pinchLens(for: 4))
+        // 1× is below the floor the body clamps to, so it is never sent.
+        #expect(zoom.lensTarget(for: 1, at: 1) == nil)
+        var normal = medTele
+        normal.zoomLensMin = nil
+        normal.zoomLensMax = nil
+        #expect(GimbalProgramZoom(program: tele, model: pocket3, status: normal).failureReason
+            == "Saved zoom exceeds the current FORMAT limit")
+        #expect(GimbalProgramZoom(program: program, model: pocket3, status: medTele).failureReason
+            == "Saved zoom exceeds the current FORMAT limit")
+    }
+
     @Test func lensDispatchIsDistinctAndNoFasterThanTwentyHertz() {
         var zoom = GimbalProgramZoom(program: program, model: model, status: status())
         #expect(zoom.lensTarget(for: 1, at: 0) == CamFov.lens1x)

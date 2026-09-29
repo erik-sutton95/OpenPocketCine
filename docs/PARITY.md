@@ -125,7 +125,7 @@ write the exception in the table in the same PR.
 | Live chrome | DISP 1/2 maps, Field Monitor geometry (portrait 3×2 camera values, landscape row, fit/fill, corner controls), picker chrome, record as bottom sheet, zoom chip, gimbal 1–5 gain, expo stick throw (on-screen and a connected game controller), stick pan picture-relative (invert pan on rotate-180 at settle, not joystick 180; extra-mirror = TT180 && Selfie Flip off; MIRROR assist XORs), rec lamp `pressShutter`. Game controller (discussion #159): selected Left/Right stick is the gimbal stick (Left by default); Cross/A records (skips the rec-confirmation sheet); Circle/B recenters; Square/X is rotate-180; Triangle/Y tracks a face in frame or cancels; L1/R1 jump zoom out/in (out does not wrap to tele); L2/R2 hold-to-zoom (deeper trigger is faster); D-pad up/down ISO, left/right shutter; shutter-angle readouts follow the resulting camera value. Controls offers a saved Gimbal joystick Left/Right choice. Toast Gamepad connected/disconnected. Unplug rests stick and zoom. Controls **Gamepad** row is Connected / Not connected. Limit haptic is a rising-edge pulse after the head moves then stalls (phone plus controller rumble). Mapping, extra deadzone slider, and Linear/Smooth/Cinematic curves are not a Controls picker (fixed map; existing 0.08 deadzone + expo + 1–5 gain). iPad hides the system time / battery bar (HUD chips stay). Control toast parks under the mounted top bar (DISP 1 / operator-shown status bar) and on the feed edge when that bar is off (DISP 2). | iOS compositor-owned material vs Android composited translucent tint (no backdrop frame capture); Lucide icons plus the exact custom View Assist catalog. User-approved Android exception: hide both system bars in live view and photo/video playback; other pages hide the status bar while retaining system navigation (buttons or gestures, as configured on the phone). Chrome reserves navigation and display-cutout insets; the platform owns transient status-bar reveal. DualSense rumble uses `GCDeviceHaptics` on iOS and the pad `Vibrator` on Android (phone vibrator if the pad has none). iOS binds `GCController`; Android `KeyEvent`/`MotionEvent` plus `InputManager` for connect. Both shells GET Selfie Flip pid `0x0038` ~1 Hz on the live UDP ACK pump (untracked; not the shared `0x8E` SET/GET waiter) and echo pktType-`0x03` seq in window-ACK group 1 so those replies do not stall. A keepalive BLE Flip GET fires when UDP replies go stale (≥2 s). | **physical** both |
 | Assists | Toolbar 1:1 (LUT, PEAK, FALSE, ZEBRA, WAVE, PARADE, HISTO, VECTOR, LIGHTS, ND, AUDIO, GUIDES, GRID, CROSS, DE-SQ, MIRROR); collapsed palette ranked by use; expanded catalog; leading options inspector; WAVE hold-without-drag opens options; scope plate metrics (`ScopeMiniChrome`); ND is a small HUD chip that first opens in the center, directly draggable like other scope panels; long-press Units switches Stops / ND32 / ND 0.3 (suggestion only, not a SET); number fields in those options (Zebra Highlight / Midtone) lift above the keyboard; number-pad Done dismisses the pad (tap outside still dismisses the popup). GUIDES / GRID / CROSS map to the recorded picture rect (1:1 is the square inside a 16:9 live well), not letterbox padding. | Metal vs Vulkan vs GLES; Vision vs ML Kit Face Detection; native compositors; inspectors reuse existing scope products and bounded source samples | Existing effects: **physical** both; new chrome: UI 2.0 qualification below. Guide-to-picture geometry: core tests; **physical** pending both. |
 | Camera SETs | `CameraSetMailbox` fire-and-forget + 300 ms retransmit + 2 s settle; missed ACK does not revert HUD. FORMAT pin holds the chip/sheet until `cam_video_param_v2` reports the pair — other HUD copies are not confirmation. Empty `camcap_shutter` uses a documented video ladder (not the live 1/N alone) so Speed and Angle can SET; a published table still wins. WB `0x02/0x2C` Auto keeps tint (`00 00 00 <tint i16>`); Custom is kelvin+tint; one in flight (100 ms coalesce). COLOR drum follows the body (D-Log2 is Pocket 4 Pro only; Pocket 4 Normal/HDR/D-Log; Pocket 3 Normal/HDR/D-Log M; Nano 8-bit/10-bit/D-Log M). Auto ISO range floor is 50 on Pocket 3 / Pocket 4 and 100 on Pocket 4 Pro (wide); SET bytes unchanged. ISO D-Log ↔ D-Log2 hop; audio blobs and tap-focus stay round-trips. Two genuine SET timeouts in 5 s may rebuild UDP only when video **and** status are stale (encoder-pause with young `0x01` must not tear the socket). | JNI vs Swift `fireCamera` | **physical** both. Pocket 3 empty-cap shutter/FORMAT: core tests; physical pending. |
-| Zoom | Pocket 4 Pro single tap cycles 1× / 3× and double tap cycles 6× / 12×. Other cameras retain their supported single-tap stops. Hold opens the continuous logarithmic dial through the same coalesced pinch path and safety checks. Supported body stops: Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×. Nano is a fixed 1× prime (DJI spec): `supportsZoom` is false, so the chip, disc, pinch and gamepad zoom are hidden or inert and no `0xB8` SET is sent (#413). Pocket 3 is per-FORMAT and measured on a body — 1080 1×/2×/4×, 2.7K and 2160 1:1 1×/2×/3×, 4K and 3K 1:1 1×/2× (see Pocket 3 zoom ceiling per FORMAT). A FORMAT whose ceiling is below the held stop walks the chip back and says so once — `4K caps zoom at 2×` — instead of dropping silently. SlowMo / TimeLapse / SuperNight drop digital zoom (Pro keeps 1×/3× optical). `CamFov` hybrid readout; pinch clamps to that max at 20 Hz without ACK wait. Idle D-Log2 hops to D-Log on the first step off 1× (`0x02/0x42`) and **holds every `0xB8` until `cam_image_effect` is D-Log** — color ACK and an optimistic HUD pin are not enough; the body ignores zoom while still D-Log2. The chip stays at live 1× until that hop lands. While rolling in D-Log2 the chip is gray (0.4, same as lock) but still hittable: tap and pinch toast `Can't change color while recording — D-Log2 can't zoom` and send neither zoom nor color. D-Log / Rec.709 / HLG still zoom while rolling. Chip / pinch must not drop the live picture (same-raster VPS is not an IDR hold; 4 s watchdog grace while the lens slews). | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
+| Zoom | Pocket 4 Pro single tap cycles 1× / 3× and double tap cycles 6× / 12×. Other cameras retain their supported single-tap stops. Hold opens the continuous logarithmic dial through the same coalesced pinch path and safety checks. Supported body stops: Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×. Nano is a fixed 1× prime (DJI spec): `supportsZoom` is false, so the chip, disc, pinch and gamepad zoom are hidden or inert and no `0xB8` SET is sent (#413). Pocket 3 is per-FORMAT and measured on a body — 1080 1×/2×/4×, 2.7K and 2160 1:1 1×/2×/3×, 4K and 3K 1:1 1×/2× (see Pocket 3 zoom ceiling per FORMAT). A FORMAT whose ceiling is below the held stop walks the chip back and says so once — `4K caps zoom at 2×` — instead of dropping silently. Pocket 3 **Med-Tele** replaces that per-FORMAT range with a fixed 2×/3×/4× in every FORMAT, read from the `cam_lens_state` wide/tele limits; the 2× base is the second lens, so it is captioned TELE and not digital-crop amber, and the dial's floor moves to 2× (see Pocket 3 Med-Tele zoom range). SlowMo / TimeLapse / SuperNight drop digital zoom (Pro keeps 1×/3× optical; Pocket 3 under Med-Tele keeps its optical 2× base). `CamFov` hybrid readout; pinch clamps to that max at 20 Hz without ACK wait. Idle D-Log2 hops to D-Log on the first step off 1× (`0x02/0x42`) and **holds every `0xB8` until `cam_image_effect` is D-Log** — color ACK and an optimistic HUD pin are not enough; the body ignores zoom while still D-Log2. The chip stays at live 1× until that hop lands. While rolling in D-Log2 the chip is gray (0.4, same as lock) but still hittable: tap and pinch toast `Can't change color while recording — D-Log2 can't zoom` and send neither zoom nor color. D-Log / Rec.709 / HLG still zoom while rolling. Chip / pinch must not drop the live picture (same-raster VPS is not an IDR hold; 4 s watchdog grace while the lens slews). | Hit-testing over SurfaceView vs SwiftUI | **physical** both |
 | AE / AWB lock | Still long-press (0.6 s, haptic) then lift on the feed locks Auto exposure: core `AutoExposureLock` pins `@16` ISO (nearest whole stop) and applied shutter as Manual; yellow focus box with `AE-L`; EXPOSURE tile reads `AE-L` and its drum adds `AE-L` left of Auto (Auto unlocks; Manual only drops the lock, no SET); sun + lock-open unlock key beside the focus recenter key while locked (portrait: right of the View Assist column, `FieldMonitorLayout.aeUnlock` / `MonitorLayoutPolicy.aeUnlock`), returning to Auto. The hold haptic fires only when a lock is possible; track arming is silent on both. Exposure-mode choice, shooting-mode change (unlock is sent first), disconnect or an Auto report clears it. WB Mode drum and WB quick dial add **AWB Lock** left of Auto while Auto reports `cam_image_effect` `@5`: Custom at that Kelvin snapped to core `WhiteBalance.kelvinLadder` (2000–10000 K, 100 K; the drum on both), same tint. Core `AutoWhiteBalanceLock` keeps AWB Lock selected (tile `AWB-L`, sheet opens on Mode) until Auto / Custom / Kelvin / tint is chosen (Custom at the same value sends nothing) or the camera reports another mode or Kelvin. No native `0x02/0x68` lock (no captured clear). | Android reads capture / holds / AWB target through JNI `exposureLockDecision`; iOS calls the core directly. | **physical** pending both |
 | Tracking | Long-press+drag search box `0x02/0xA6`; tap face bracket → ActiveTrack; green cancel X and focus-reset. Gamepad Triangle/Y tracks the AF-C face in frame, or cancels if already tracking. | Vision vs ML Kit Face Detection | **physical** both |
 | Motion Control speed | No operator rate calibration. No artificial speed ceiling; duration controls retain a 0.5 s floor. Native maximum repeatable speed is not yet qualified. Takes (and iOS head tracking) run on Fast with tilt unlocked and restore the operator's Speed / Tilt locked 1 s after release or on disconnect. Native pitch is planned from the live pose at Start. | Both shells | **physical** both |
@@ -312,8 +312,10 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   whole-stop snapping. Reaching or crossing a whole stop gives one haptic pulse;
   labels and accessibility steps still use hundredths.
   The disc hub shows hundredths (1.53×); the chip still shows tenths. Past the
-  last optical stop (Pocket 4 Pro 6× / 12×) the chip uses the same digital-crop
-  amber as the disc ticks.
+  body's last optical stop (Pocket 4 Pro 6× / 12×; Pocket 3 under Med-Tele
+  anything over 2×) the chip uses the same digital-crop amber as the disc
+  ticks. The boundary is read from the reported optical stops, never a
+  hardcoded 3×, so a body with a 2× tele annotates correctly.
 - The expanded Motion Control editor passes joystick and zoom-chip touches to
   the original controls. Single/double tap keeps the existing zoom stops; a hold
   opens the existing zoom disc above the editor. Closing the disc restores the
@@ -868,6 +870,73 @@ lands on 1× under the note rather than on the new ceiling. The chip cycle then
 walked 1×/2×/3× on 2.7K and 1×/2× on 4K, each chip pin released by a matching
 `cam_fov` within ~0.5 s. Physical iOS verification of the corrected stops and
 of this note remains pending: no iPhone is available to this project.
+
+### Pocket 3 Med-Tele zoom range (2026-09-20)
+
+Med-Tele is the Pocket 3's second lens: a 2× / 40 mm view the body enters from
+its own UI. It is announced in no capability push, and the four symptoms it
+caused all came from one wrong assumption — that 1× is always reachable.
+
+The state *is* readable. `cam_lens_state` carries the accepted lens window as
+u16-LE at `@10` (wide) and `@12` (tele). Only the **wide** limit is the signal:
+it is 217 normally and 434 under Med-Tele, in every FORMAT, and a floor above
+`CamFov.lens1x` can only be a second lens. The tele limit is left out of the
+test because with Med-Tele off it is the FORMAT's own digital ceiling — 868 at
+1080P, 651 at 2.7K, 434 at 4K, exactly 217 × `pocket3ZoomMax` — which says
+nothing about the lens. So `CamFov.isMedTele` tests the floor alone, and
+`medTeleStops` turns the window (434…868) into whole stops — 2 / 3 / 4. No SET was invented; see the
+[survey](../handbook/src/content/docs/devices/pocket-3/controls.md#reading-med-tele-back-2026-09-20).
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Chip cycled 2× → 3× → 1× and the framing did not return | `nextJump` wrapped to `cycle[0]` = 1×, whose lens 217 the body **clamps** back to 434 | cycle is 2 / 3 / 4 under Med-Tele; the wrap lands on a stop that exists |
+| Dial capped at 2× | ceiling came from `pocket3ZoomMax`, measured in normal mode — 2.0 at 4K, which under Med-Tele is the **floor** | stops come from the reported window, so the dial spans 2…4 |
+| Dial travel below 2× was dead | scale was pinned to a 1× minimum | `minimum` threaded through `MonitorZoomDisc` / `MonitorZoomScale`; the needle sits at the far-left stop at 2.00× |
+| 2× shown amber as "digital crop" | the caption hardcoded 3× as the only optical tele | `MonitorZoomCaption` / `MonitorZoomStops` read the tele off the reported optical stops; 2× reads **TELE** |
+
+The readout arithmetic was already right and was not touched:
+`factorFromLens(L)` reduces to `L / 217` ≡ `2 × (L / 434)`, the true composed
+factor. Digital zoom therefore keeps composing on top of the optical base — 2×
+optical with 2× digital reads 4×, which is what the operator sees.
+
+The limits reach the shells through the **Swift core**, not alongside it:
+`SwiftCore.applyStatus` rebuilds `CameraStatus` wholesale and skips
+`preservingExtras` whenever the new status has HUD fields, so a Kotlin-only
+field is wiped on nearly every frame. `CameraStatus.zoomLensMin` /
+`zoomLensMax` are parsed in core and carried over the Android wire JSON.
+
+Digital-locked modes (SlowMo / TimeLapse / SuperNight) keep the first stop
+rather than 1×: under Med-Tele the optical base is 2×, and 1× is not reachable.
+
+Cross-language vectors live in `Tests/Fixtures/camfov-vectors.tsv`
+(`medTeleStops`, `zoomStopsLens`, `stopWithinCycle` floors), driving both
+`CamFovVectorTests.swift` and `CamFovVectorTest.kt`.
+
+Verification: core and shell unit tests both sides, and **physical Android** on
+2026-09-20 (Pocket 3 Med-Tele, Galaxy S23 Ultra, debug build, live UDP). The
+chip read TELE over a white 2×, cycled 2 → 3 → 4 → 2 with the framing returning
+exactly to its start, and the dial opened at 2.00× with the needle at the
+far-left stop and centred at 3.00×, confirming a 2…4 scale; the operator drove
+a drag end to end. Physical iOS verification remains pending: no iPhone is
+available to this project.
+
+### Pocket 3 optical stops per body (2026-09-21)
+
+Reported on Android at 2.7K30 with Med-Tele off: holding 3× captioned it
+**TELE** and dropped the amber digital-crop warning. The 3× there is a crop —
+the Pocket 3's only second lens is Med-Tele's 2×. Both shells fell back to "a
+cycle containing 3× has an optical 3×", written for the Pocket 4 Pro's 60 mm
+tele, and a Pocket 3 at 2.7K cycles 1×/2×/3×.
+
+The rule now lives in `CameraModel.opticalZoomStops(cycle:lensMin:)`, one per
+language, and is decided by **body**: a Pocket 3's optics are 1×/2× while
+`cam_lens_state` reports a wide limit above 1× and 1× otherwise, never 1×/3×.
+Other bodies keep the previous rule. Cross-language vectors: `opticalStops` in
+`Tests/Fixtures/camfov-vectors.tsv`.
+
+Verification: physical Pocket 3 + Galaxy S23 Ultra (2026-09-25): without
+Med-Tele, 3× at 2.7K and at 1080P reads as a digital crop, not TELE. Physical
+iOS pending: no iPhone is available to this project.
 
 ### Zoom chip pin expiry (2026-09-18)
 

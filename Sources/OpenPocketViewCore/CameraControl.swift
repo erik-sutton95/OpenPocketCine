@@ -2501,6 +2501,52 @@ public enum CamFov {
         return lens
     }
 
+    /// `cam_lens_state` u16-LE `@10` — the widest lens the body will accept now.
+    public static func lensMinAt10(_ value: [UInt8]) -> UInt16? { lensLimit(value, at: 10) }
+
+    /// `cam_lens_state` u16-LE `@12` — the longest lens the body will accept now.
+    public static func lensMaxAt12(_ value: [UInt8]) -> UInt16? { lensLimit(value, at: 12) }
+
+    private static func lensLimit(_ value: [UInt8], at: Int) -> UInt16? {
+        guard value.count >= at + 2 else { return nil }
+        let lens = UInt16(value[at]) | (UInt16(value[at + 1]) << 8)
+        guard (100...3_000).contains(lens) else { return nil }
+        return lens
+    }
+
+    /// Med-Tele (Pocket 3, 2x / 40 mm) is on when the body lifts its own wide
+    /// limit off `lens1x`. Measured on a Pocket 3: the floor is 217 normally and
+    /// 434 under Med-Tele, in every FORMAT. Only the floor is tested — with
+    /// Med-Tele off the tele limit is the FORMAT's own digital ceiling (868 at
+    /// 1080P, 651 at 2.7K, 434 at 4K), so it says nothing about which lens is in
+    /// front of the sensor.
+    ///
+    /// `cam_status` `@5` also flips (`0x01` → `0x0D`), but the floor is the
+    /// signal that matters: the body clamps an ask to these limits instead of
+    /// refusing it, so asking below the floor silently parks the lens there.
+    /// The test sits halfway between the two floors, so a one-step wobble on
+    /// 217 cannot read as Med-Tele and 434 cannot read as off.
+    public static func isMedTele(lensMin: UInt16) -> Bool { lensMin >= medTeleThreshold }
+    static let medTeleThreshold: UInt16 = lens1x + lens1x / 2
+
+    /// The chip cycle while Med-Tele holds the floor up: whole factors from the
+    /// body's own floor to its own ceiling, which is 2x…4x on a Pocket 3.
+    ///
+    /// 1x is deliberately absent. It is unreachable — the camera clamps a wider
+    /// ask back to the floor — so offering it would spend a tap to go nowhere.
+    /// Nil when Med-Tele is off or the body has not reported its limits yet, and
+    /// the caller keeps the per-FORMAT table.
+    public static func medTeleStops(lensMin: UInt16, lensMax: UInt16) -> [Double]? {
+        guard isMedTele(lensMin: lensMin),
+            let low = factor(lens: lensMin),
+            let high = factor(lens: lensMax)
+        else { return nil }
+        let first = Int((low - 0.05).rounded(.up))
+        let last = Int((high + 0.05).rounded(.down))
+        guard last >= first else { return [displayTenths(low)] }
+        return (first...last).map(Double.init)
+    }
+
     /// Operator factor from `cam_fov` `@0`. Inverted vs `@0 / 1024`.
     public static func factor(raw: UInt32) -> Double {
         if raw == 0 { return minFactor }
@@ -2540,9 +2586,10 @@ public enum CamFov {
     /// A FORMAT change can drop the ceiling under a stop the operator already
     /// picked — 2.7K offers 3×, 4K stops at 2×. The stop is only the readout's
     /// last resort, before any `cam_fov` lands, but even then it must not
-    /// advertise a factor this FORMAT would refuse.
+    /// advertise a factor this FORMAT would refuse. Med-Tele does the same from
+    /// below, so the floor holds too.
     public static func stopWithinCycle(_ stop: Double, stops: [Double]) -> Double {
-        clamp(stop, max: stops.last ?? minFactor)
+        Swift.max(clamp(stop, max: stops.last ?? minFactor), stops.first ?? minFactor)
     }
 
     /// The line to show when a new FORMAT pulls the zoom ceiling out from
@@ -2636,9 +2683,10 @@ public enum CamFov {
 
     /// Unquantized pinch target. The chip still shows `displayTenths`.
     public static func pinchFactor(
-        anchor: Double, magnification: Double, max: Double = maxFactor
+        anchor: Double, magnification: Double,
+        max: Double = maxFactor, min: Double = minFactor
     ) -> Double {
-        clamp(anchor * magnification, max: max)
+        Swift.max(clamp(anchor * magnification, max: max), clamp(min, max: max))
     }
 
     /// Right trigger minus left trigger onto −1…1 (positive = zoom in).
@@ -2655,11 +2703,13 @@ public enum CamFov {
 
     /// Hold-to-zoom: `y` is R2−L2 (−1…1). Integrate `dt` seconds of analog rate.
     public static func zoomStep(
-        current: Double, y: Double, dt: Double, max: Double = maxFactor
+        current: Double, y: Double, dt: Double,
+        max: Double = maxFactor, min: Double = minFactor
     ) -> Double {
-        guard dt > 0 else { return clamp(current, max: max) }
+        let floor = clamp(min, max: max)
+        guard dt > 0 else { return Swift.max(clamp(current, max: max), floor) }
         let t = GimbalStick.linearThrow(y)
-        return clamp(current + t * zoomRatePerSecond * dt, max: max)
+        return Swift.max(clamp(current + t * zoomRatePerSecond * dt, max: max), floor)
     }
 
     /// Slider lens for a pinch target. Not snapped to 0.1× — Mimo steps lens by 1.
