@@ -2,6 +2,7 @@ Since open beta build 158
 
 New and changed
 
+- False color code cleanup.
 - Long-press MIRROR for Horizontal and Vertical. Turn both on to see an underslung camera, such as on a car mount, the right way up.
 - Long-press the picture to lock exposure: the focus box turns yellow with AE-L. The sun-and-lock key beside Recenter unlocks. WB Mode adds AWB Lock.
 - Multiview redesign: bigger main picture, scrolling camera strip, Live View's toolbar, and camera values inline in the selected tile.

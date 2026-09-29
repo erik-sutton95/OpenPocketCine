@@ -37,6 +37,7 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- False color code cleanup on iOS and Android.
 - Android icons match iOS on every shared control: Multiview's LUT tool uses
   the View Assist LUT glyph and Exit an X, Live View battery, eye, tracking
   cancel, Fit/Fill, ISO native star, WB Auto and Face Priority badges, the
@@ -409,10 +410,6 @@ separate iOS and Android lists.
   curve. Off by default. Exclusive with Bake LUT. Rec.709 display stays
   Bake LUT. Camera original untouched. D-Log M is out. Android share
   still the original (`docs/PARITY.md`).
-
-- False color **EL Zone** scale: 15 contiguous scene-EV bands around 18%
-  gray. +6 and above white, −6 and below black. Extra D-Log2 headroom
-  stays white, not a separate clip stripe. iOS and Android.
 
 - False color **IRE** is six video-level WAVE zones over grayscale
   (crush / near-black / 18% gray / +1 stop / 80 / 95 clip). **CineStop**

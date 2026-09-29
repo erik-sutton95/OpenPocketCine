@@ -352,7 +352,6 @@ internal object FeedEffectsRenderPlanFactory {
                 FalseColorScale.STOPS -> 0
                 FalseColorScale.IRE -> 1
                 FalseColorScale.LIMITS -> 2
-                FalseColorScale.EL_ZONE -> 3
             }
         val kind = if (paint) "paint" else "weight"
         return PackedCubeCache.value("$kind:$ordinal:$colorMode:$iso") {

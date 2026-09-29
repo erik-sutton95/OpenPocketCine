@@ -186,8 +186,7 @@ object SettingsHelpCopy {
     const val FALSE_COLOR_SCALE =
         "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
             "CineStop paints video-level IRE stripes (green 41–48, pink 61–70, red clip) " +
-            "over luminance grayscale. EL Zone paints 15 contiguous stops from 18% gray: " +
-            "+6 and above white, −6 and below black. IRE paints six video-level zones over " +
+            "over luminance grayscale. IRE paints six video-level zones over " +
             "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one " +
             "stop over, yellow near clip, red clip. Limits paints only shadow and " +
             "highlight warnings, leaving other colors untouched."
@@ -958,7 +957,7 @@ private fun FalseColorAssistCard(assist: LiveAssistState, colorMode: Int) {
             stacked = true,
         ) {
             SettingsSegmented(
-                options = listOf("CineStop", "EL Zone", "IRE", "Limits"),
+                options = listOf("CineStop", "IRE", "Limits"),
                 selected = assist.falseColorScale.menuLabel,
             ) { label ->
                 assist.setFalseColor(scale = FalseColorScale.fromMenuLabel(label))

@@ -208,7 +208,7 @@ object SwiftCore {
     /** Generated Creative look (Mono / Contrast / Warm / Cool). */
     external fun packCreativeLut(title: String, exposureStops: Double, colorMode: Int): ByteArray?
 
-    /** Overlay paint cube for FALSE (`0` CineStop / `1` IRE / `2` Limits / `3` EL Zone). */
+    /** Overlay paint cube for FALSE (`0` CineStop / `1` IRE / `2` Limits). */
     external fun packFalseColorPaint(scaleOrdinal: Int, colorMode: Int, iso: Int): ByteArray?
 
     /** Overlay weight cube paired with [packFalseColorPaint]. */

@@ -65,7 +65,7 @@ final class FalseColorAssistTests: XCTestCase {
     }
 
     func testScaleOptionsMatchOpenZCine() {
-        XCTAssertEqual(FalseColorAssist.scaleOptions, ["CineStop", "EL Zone", "IRE", "Limits"])
+        XCTAssertEqual(FalseColorAssist.scaleOptions, ["CineStop", "IRE", "Limits"])
         XCTAssertEqual(FalseColorAssist.Options.default.scale, .stops)
         XCTAssertTrue(FalseColorAssist.Options.default.referenceEnabled)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "CineStop"), .stops)
@@ -73,13 +73,10 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "ZC Stops"), .stops)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "IRE"), .ire)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "Limits"), .limits)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "EL Zone"), .elZone)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "unknown"), .stops)
         XCTAssertEqual(FalseColorAssist.menuLabel(for: .stops), "CineStop")
         XCTAssertEqual(FalseColorAssist.menuLabel(for: .ire), "IRE")
         XCTAssertEqual(FalseColorAssist.menuLabel(for: .limits), "Limits")
-        XCTAssertEqual(FalseColorAssist.menuLabel(for: .elZone), "EL Zone")
-        XCTAssertTrue(FalseColorAssist.scaleHelp.contains("EL Zone"))
         XCTAssertTrue(FalseColorAssist.scaleHelp.contains("CineStop"))
         XCTAssertEqual(FalseColorScaleKind(rawValue: "ZC Stops") ?? .stops, .stops)
         XCTAssertEqual(LiveImageEffects().falseColorScale, .stops)
@@ -111,8 +108,6 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(assist.falseColorScale, .limits)
         FalseColorAssist.selectScale("CineStop", assist: assist)
         XCTAssertEqual(assist.falseColorScale, .stops)
-        FalseColorAssist.selectScale("EL Zone", assist: assist)
-        XCTAssertEqual(assist.falseColorScale, .elZone)
     }
 
     /// OpenZCine `testFalseColorReferenceUsesCompactProportionalScales`.
@@ -149,7 +144,6 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(
             FalseColorReference.axisLabels(scale: .limits),
             ["crushed", "midtones untouched", "clipped"])
-        XCTAssertEqual(FalseColorReference.axisLabels(scale: .elZone), [])
         XCTAssertEqual(FalseColorReference.curveKeyLabel(.dlog2), "D-Log2")
         XCTAssertEqual(FalseColorReference.curveKeyLabel(.dlog), "D-Log")
         XCTAssertEqual(FalseColorReference.curveKeyLabel(.rec709), "709")
@@ -166,17 +160,6 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(limits[3].lowerFraction, 0.99, accuracy: 0.0001)
         XCTAssertEqual(limits[3].upperFraction, 1, accuracy: 0.0001)
 
-        let elZone = FalseColorReference.segments(scale: .elZone, transfer: .dlog2)
-        XCTAssertEqual(elZone.count, 15)
-        XCTAssertEqual(elZone.first?.lowerFraction, 0)
-        XCTAssertEqual(elZone.last?.upperFraction, 1)
-        for index in 0..<(elZone.count - 1) {
-            XCTAssertEqual(
-                elZone[index].upperFraction, elZone[index + 1].lowerFraction, accuracy: 0.0001)
-        }
-        XCTAssertEqual(
-            FalseColorReference.elZoneAxisMarkers().map(\.label),
-            ["−6", "−3", "18%", "+3", "+6"])
     }
 
     func testIREOverlayPaintsRec709GreyGreenAndDLog2GreyAsAGap() {
@@ -206,26 +189,6 @@ final class FalseColorAssistTests: XCTestCase {
         let dlogClip = PocketFalseColorMap.overlayPaintCube(scale: .ire, transfer: .dlog)
             .map(red: dlogC, green: dlogC, blue: dlogC)
         XCTAssertGreaterThan(dlogClip.red, dlogClip.green, "D-Log live-tap max 223 is the clip band")
-    }
-
-    func testELZonePaintsGrayAtEighteenAndWhiteAbovePlusSix() {
-        let cube = PocketFalseColorMap.overlayPaintCube(scale: .elZone, transfer: .dlog2)
-        let g = Float(MonitorTransfer.dlog2.middleGrayEncoded)
-        let gray = cube.map(red: g, green: g, blue: g)
-        XCTAssertEqual(gray.red, gray.green, accuracy: 0.08)
-        XCTAssertEqual(gray.green, gray.blue, accuracy: 0.08)
-        XCTAssertGreaterThan(gray.red, 0.4)
-        XCTAssertLessThan(gray.red, 0.7)
-
-        let clip = Float(ScopeExposureCeiling.clipEncoded(transfer: .dlog2))
-        let over = cube.map(red: clip, green: clip, blue: clip)
-        XCTAssertGreaterThan(over.red, 0.9)
-        XCTAssertGreaterThan(over.green, 0.9)
-        XCTAssertGreaterThan(over.blue, 0.9)
-
-        let weight = PocketFalseColorMap.overlayWeightCube(scale: .elZone, transfer: .dlog2)
-            .map(red: g, green: g, blue: g)
-        XCTAssertGreaterThan(weight.red, 0.9, "EL Zone covers the picture, not a hole")
     }
 
     func testPostLUTCodesAreADifferentIREBand() throws {

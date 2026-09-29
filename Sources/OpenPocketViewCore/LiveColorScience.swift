@@ -688,20 +688,11 @@ public struct LiveFalseColorBand: Equatable, Sendable {
     }
 }
 
-/// False-colour scale names. CineStop / IRE / Limits use WAVE IRE; EL Zone uses scene EV.
+/// False-colour scale names. All scales key WAVE IRE.
 public enum LiveFalseColorScale: String, CaseIterable, Sendable {
     case stops = "Stops"
     case ire = "IRE"
     case limits = "Limits"
-    case elZone = "EL Zone"
-
-    /// EL Zone keys scene EV around 18% grey. CineStop / IRE / Limits key WAVE IRE.
-    public var usesSceneStops: Bool {
-        switch self {
-        case .elZone: true
-        case .stops, .ire, .limits: false
-        }
-    }
 }
 
 /// Zebra defaults on the ``ScopeDisplayScale/monitorPercent(_:transfer:)`` axis.
@@ -790,9 +781,7 @@ public enum LiveColorScience {
         stops(linear: linearize(encoded, transfer: transfer))
     }
 
-    /// IRE / Limits / CineStop ride the WAVE axis. EL Zone is scene-referred
-    /// ±6 around 18% grey — extra D-Log2 headroom stays the +6 white, not a
-    /// camera-clip stripe.
+    /// IRE / Limits / CineStop ride the WAVE axis.
     public static func falseColorBands(
         _ scale: LiveFalseColorScale, transfer: MonitorTransfer, clipEncoded: Double? = nil
     ) -> [LiveFalseColorBand] {
@@ -800,14 +789,13 @@ public enum LiveColorScience {
         case .stops: cineStopBands
         case .ire: ireBands
         case .limits: limitBands
-        case .elZone: elZoneBands
         }
     }
 
     public static func falseColorBand(
         value: Double, scale: LiveFalseColorScale, transfer: MonitorTransfer
     ) -> LiveFalseColorBand? {
-        let candidate = scale.usesSceneStops ? value : clamp(value, 0, 100)
+        let candidate = clamp(value, 0, 100)
         return falseColorBands(scale, transfer: transfer).first { $0.contains(candidate) }
     }
 
@@ -1078,27 +1066,6 @@ extension LiveColorScience {
         ire(5, 10, 0.28, 0.37, 0.85, "5–9"),
         ire(94, 99, 0.89, 0.72, 0.29, "94–98"),
         ire(99, .infinity, 0.78, 0.28, 0.18, "99–100"),
-    ]
-
-    /// Scene-referred EL Zone. Palette from the public EL Zone System chart
-    /// (18% grey / ±½ skin / ±1…±5). +6 and above are white; −6 and below
-    /// are black — extra D-Log2 headroom is not a separate clip stripe.
-    fileprivate static let elZoneBands: [LiveFalseColorBand] = [
-        band(-.infinity, -5.5, 0, 0, 0, "−6"),
-        band(-5.5, -4.5, 158, 127, 183, "−5"),
-        band(-4.5, -3.5, 30, 114, 163, "−4"),
-        band(-3.5, -2.5, 54, 174, 226, "−3"),
-        band(-2.5, -1.5, 36, 164, 78, "−2"),
-        band(-1.5, -0.75, 97, 185, 78, "−1"),
-        band(-0.75, -0.25, 147, 198, 72, "−½"),
-        band(-0.25, 0.25, 143, 139, 132, "18%"),
-        band(0.25, 0.75, 251, 227, 51, "+½"),
-        band(0.75, 1.5, 255, 247, 170, "+1"),
-        band(1.5, 2.5, 241, 113, 53, "+2"),
-        band(2.5, 3.5, 242, 165, 81, "+3"),
-        band(3.5, 4.5, 234, 34, 46, "+4"),
-        band(4.5, 5.5, 224, 127, 142, "+5"),
-        band(5.5, .infinity, 255, 255, 255, "+6"),
     ]
 
     private static func band(

@@ -2,6 +2,7 @@ Since open beta build 138
 
 New and changed
 
+- False color code cleanup.
 - Long-press MIRROR for Horizontal and Vertical. Turn both on to see an underslung camera, such as on a car mount, the right way up.
 - Long-press the picture to lock exposure: the focus box turns yellow with AE-L. The sun-and-lock key beside Recenter unlocks. WB Mode adds AWB Lock.
 - Tabs use one highlighted edge instead of boxes and tool buttons share one size.
@@ -10,12 +11,12 @@ New and changed
 - Double-tap the picture to start object tracking, as on the camera.
 - Experimental Multiview: the grid button on Your cameras monitors up to four Osmo cameras on shared Wi-Fi or a phone hotspot, with Auto LUT and per-tile or group recording.
 - Multiview redesign: bigger main picture, camera strip, Live View's toolbar and a Camera settings side panel.
-- Wi-Fi and Hotspot setup, in Multiview and Add setup, uses choice cards, grouped networks, checklists and a pinned Connect button.
+- Wi-Fi and Hotspot setup uses choice cards, grouped networks, checklists and a pinned Connect button.
 - Saved cameras can also connect over your Wi-Fi or this phone's hotspot: tap Add setup on the camera card, then switch with its setup chips.
 - New LEVEL View Assist: roll and tilt meters from the camera's own sensor, with a bubble for top-down and straight-up shots.
 - Gimbal drawer Double-tap: keep Recenter, or choose Level so a joystick or gamepad double-tap moves the lens to level or straight down. Experimental.
 - Osmo Action 6 support: live view, D-Log M with the official LUT, Photo, Timelapse and a live APERTURE tile. Not yet checked on a real Action 6.
-- Live View uses about 60% less CPU with a LUT, PEAK or WAVE on a Galaxy S25, with the same frame rate.
+- Live View uses about 60% less CPU with a LUT, PEAK or WAVE on a Galaxy S25.
 - Devices without Google Play can install the APK from GitHub Releases.
 
 Fixes
@@ -32,7 +33,7 @@ Fixes
 - Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
 - Osmo Nano no longer shows zoom controls, and DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
 - Live View no longer freezes for seconds after one dropped video packet. The picture returns with the camera's next keyframe.
-- Live View no longer crashes on MediaTek phones (Redmi 10, Poco X3 GT, Galaxy A41) or on some screen sizes with gimbal controls shown.
+- Live View no longer crashes on MediaTek phones or on some screen sizes with gimbal controls shown.
 
 What to test
 

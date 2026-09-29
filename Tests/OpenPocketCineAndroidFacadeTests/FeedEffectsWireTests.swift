@@ -30,7 +30,7 @@ struct FeedEffectsWireTests {
         #expect(abs(scalars[0] - 1) < 0.02)
     }
 
-    @Test(arguments: [(1, LiveFalseColorScale.ire), (3, .elZone)])
+    @Test(arguments: [(0, LiveFalseColorScale.stops), (1, .ire)])
     func packedOpaqueWeightFillsTheCube(ordinal: Int, scale: LiveFalseColorScale) throws {
         #expect(FeedEffectsWire.falseColorScale(ordinal) == scale)
         let packed = try #require(

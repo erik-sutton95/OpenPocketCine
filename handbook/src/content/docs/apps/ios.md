@@ -272,9 +272,8 @@ space after rotation or resizing, including saved positions. Long-press a View A
   [Action 6 survey](https://openpocketcine.app/docs/devices/action-6/) and is
   not yet checked on a camera.
 - Scopes, exposure/focus assists, framing tools, customizable DISP chrome.
-  False color Scale is CineStop / EL Zone / IRE / Limits. CineStop is
-  video-level IRE stripes over grayscale. EL Zone is 15 contiguous stops
-  from 18% gray (+6 white, −6 black). IRE is six video-level zones over
+  False color Scale is CineStop / IRE / Limits. CineStop is
+  video-level IRE stripes over grayscale. IRE is six video-level zones over
   grayscale (crush, near-black, 18% gray, +1 stop, near clip, clip).
   Long-press options lift above the keyboard so number fields (Zebra
   Highlight / Midtone) stay visible; Done dismisses the number pad.
@@ -594,8 +593,8 @@ the picture during the transition.
 
 D-Log M uses a direct 0–100 preview-signal scale for waveform, parade, histogram
 and zebras, without the D-Log black-point or ISO ceiling. Low/high signal warnings
-do not establish where the camera sensor loses detail. EL Zone (`DLM ≈`) and the
-gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
+do not establish where the camera sensor loses detail. The false color
+reference (`DLM ≈`) and gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
 especially on other D-Log M cameras. Live-preview calibration remains pending.
 
 ND recommendations also derive stops from that estimated curve. Treat D-Log M

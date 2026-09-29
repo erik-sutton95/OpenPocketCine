@@ -1038,20 +1038,9 @@ fun SettingsFalseColorKey(scale: FalseColorScale, colorMode: Int) {
                 )
             }
         }
-        if (scale == FalseColorScale.EL_ZONE) {
-            BoxWithConstraints(Modifier.fillMaxWidth().height(12.dp)) {
-                val rulerWidth = maxWidth
-                FalseColorReference.elZoneAxisMarkers().forEach { marker ->
-                    Text(marker.label, style = LiveType.mono(7f), color = LiveDesign.muted,
-                        modifier = Modifier.offset(x = (rulerWidth * marker.fraction.toFloat() - 8.dp)
-                            .coerceIn(0.dp, (rulerWidth - 16.dp).coerceAtLeast(0.dp))))
-                }
-            }
-        } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                FalseColorReference.axisLabels(scale).forEach { label ->
-                    Text(label, style = LiveType.ui(7f), color = LiveDesign.muted)
-                }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            FalseColorReference.axisLabels(scale).forEach { label ->
+                Text(label, style = LiveType.ui(7f), color = LiveDesign.muted)
             }
         }
     }

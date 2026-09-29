@@ -361,10 +361,7 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   NBDL (2.5–10 blue), 18%MG (38–42 green), MG+1 (52–56 pink), 80%WC
   (80–95 yellow), 95%WC (95–100 red). Rec.709 18% hits 18%MG; D-Log2
   18% is a gap. 95%WC is live-tap ceiling red.
-- EL Zone is scene-EV: 15 contiguous bands around 18% gray; +6 and above
-  white, −6 and below black. The reference ruler is −6/−3/18%/+3/+6, not
-  stretched to live-tap clip.
-- FALSE Scale is CineStop / EL Zone / IRE / Limits.
+- FALSE Scale is CineStop / IRE / Limits.
 - Gimbal cluster: stick + zoom chip + gimbal-controls button as one
   trailing-bottom parking spot in every orientation. Zoom stacks above the
   stick. The gimbal button sits beside the plain zoom value above the stick. On width-constrained iPad, record sits
@@ -598,7 +595,7 @@ rotations with false color, peaking, and zebras active. See `docs/live-session.m
 ### D-Log M signal scopes
 
 Swift and Kotlin preserve the full normalized signal axis for D-Log M without
-D-Log black/EI anchors. The iOS scope chip is `DLM ≈`; EL Zone reference is `DLM ≈`
+D-Log black/EI anchors. The iOS scope chip is `DLM ≈`; the false color reference is `DLM ≈`
 on both shells, with help explaining the Pocket 3 estimate. No implicit D-Log
 vectorscope LUT is used. Signal endpoints are not measured sensor limits.
 Synthetic all-code/ISO tests cover the mapping. Pocket 3/iPhone was checked on

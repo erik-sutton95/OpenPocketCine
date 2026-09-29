@@ -262,7 +262,7 @@ switches; two-option segments can stay inline, three or more stack below title.
 | --- | --- | --- |
 | LUT | DJI/Creative/Custom families; look choices/import; exposure −3…+3 in 0.5 steps; 50/50 split | 3965–3971 |
 | Peaking | Low/Med/High; White/Blue/Red/Green swatches | 3972–3976 |
-| False colour | PStops/IRE/Limits/EL Zone; proportional reference ramp; Reference display switch | 3977–3982 |
+| False colour | PStops/IRE/Limits; proportional reference ramp; Reference display switch | 3977–3982 |
 | Zebra | 0–255 / IRE units; independent Highlight and Midtone switches; 0…100 display-axis thresholds; highlight White/Amber/Red; midtone Amber/Cyan/Green | 3987–3997 |
 | Waveform | Luma/RGB; brightness 0…200%, 10 steps; Safe clip, Safe crush, Middle gray | 3998–4002 |
 | Parade | RGB/YRGB; brightness and guide switches as waveform | 4003–4007 |

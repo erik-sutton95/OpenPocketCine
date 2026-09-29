@@ -22,7 +22,6 @@ public enum FeedEffectsWire {
         case 0: .stops
         case 1: .ire
         case 2: .limits
-        case 3: .elZone
         default: nil
         }
     }
@@ -42,7 +41,7 @@ public enum FeedEffectsWire {
         }
     }
 
-    /// Packed-2D RGBA8 overlay weight. IRE / CineStop / EL Zone are opaque; Limits is holes-only.
+    /// Packed-2D RGBA8 overlay weight. IRE / CineStop are opaque; Limits is holes-only.
     public static func packedFalseColorWeight(
         scaleOrdinal: Int, colorModeCode: Int, iso: Int
     ) -> [UInt8]? {
@@ -115,12 +114,9 @@ public enum FeedEffectsWire {
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
-                    let value =
-                        scale.usesSceneStops
-                        ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let chosen = component(
                         overlayPaint(
-                            value: value, scale: scale, bands: bandList,
+                            value: ire, scale: scale, bands: bandList,
                             monitorGray: ire / 100))
                     rgb.append(Float(chosen.0))
                     rgb.append(Float(chosen.1))
@@ -143,7 +139,7 @@ public enum FeedEffectsWire {
         monitorGray: Double
     ) -> (red: Double, green: Double, blue: Double, weight: Double) {
         switch scale {
-        case .stops, .ire, .elZone:
+        case .stops, .ire:
             let color = renderedColor(
                 value: value, scale: scale, bands: bands,
                 source: (0, 0, 0), monitorGray: monitorGray)
@@ -151,7 +147,7 @@ public enum FeedEffectsWire {
         case .limits:
             break
         }
-        let width = transitionWidth(scale)
+        let width = transitionWidth
         var paint = (red: 0.0, green: 0.0, blue: 0.0)
         var total = 0.0
         for item in bands {
@@ -175,7 +171,7 @@ public enum FeedEffectsWire {
     ) -> (red: Double, green: Double, blue: Double) {
         let base: (red: Double, green: Double, blue: Double)
         switch scale {
-        case .stops, .ire, .elZone:
+        case .stops, .ire:
             let gray = min(1, max(0, monitorGray))
             base = (gray, gray, gray)
         case .limits:
@@ -186,7 +182,7 @@ public enum FeedEffectsWire {
             )
         }
         let weighted = bands.map {
-            ($0, bandWeight(value: value, band: $0, width: transitionWidth(scale)))
+            ($0, bandWeight(value: value, band: $0, width: transitionWidth))
         }
         let total = weighted.reduce(0) { $0 + $1.1 }
         guard total > 0 else { return base }
@@ -243,12 +239,7 @@ public enum FeedEffectsWire {
         return progress * progress * (3 - 2 * progress)
     }
 
-    private static func transitionWidth(_ scale: LiveFalseColorScale) -> Double {
-        switch scale {
-        case .elZone: 0.05
-        case .stops, .ire, .limits: 0.5
-        }
-    }
+    private static let transitionWidth = 0.5
 
     private static let cacheLock = NSLock()
     // Protected by cacheLock.

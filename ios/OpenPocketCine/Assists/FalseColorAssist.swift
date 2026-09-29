@@ -6,20 +6,19 @@ import UIKit
 /// OpenZCine `AssistQuickSettingsContent.falseColorRows` + `FalseColorReference`.
 ///
 /// Long-press options:
-/// * Scale — CineStop / EL Zone / IRE / Limits
+/// * Scale — CineStop / IRE / Limits
 /// * Reference Display — compact color key over live view; turning it on arms False Color
 enum FalseColorAssist {
     /// OpenZCine Scale help, Pocket curves in the first sentence.
     static let scaleHelp =
         "The camera color mode selects D-Log, D-Log2, D-Log M, Rec.709, or HLG automatically. "
         + "CineStop paints video-level IRE stripes (green 41–48, pink 61–70, red clip) "
-        + "over luminance grayscale. EL Zone paints 15 contiguous stops from 18% gray: "
-        + "+6 and above white, −6 and below black. IRE paints six video-level zones over "
+        + "over luminance grayscale. IRE paints six video-level zones over "
         + "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one "
         + "stop over, yellow near clip, red clip. Limits paints only shadow and "
         + "highlight warnings, leaving other colors untouched."
-        + " D-Log M uses a direct 0–100 signal scale. Its EL Zone and gray guide are "
-        + "Pocket 3 estimates, not calibrated sensor limits. Use IRE for signal "
+        + " D-Log M uses a direct 0–100 signal scale. Its gray guide is a "
+        + "Pocket 3 estimate, not a calibrated sensor limit. Use IRE for signal "
         + "measurements on other D-Log M cameras."
 
     /// OpenZCine `falseColorRows` Reference Display help.
@@ -27,7 +26,7 @@ enum FalseColorAssist {
         "Show a compact color key over live view while False Color is active."
 
     /// OpenZCine `AssistQuickSettingsContent` Scale segments.
-    static let scaleOptions = ["CineStop", "EL Zone", "IRE", "Limits"]
+    static let scaleOptions = ["CineStop", "IRE", "Limits"]
 
     struct Options: Equatable, Codable, Sendable {
         var scale: FalseColorScaleKind
@@ -40,7 +39,6 @@ enum FalseColorAssist {
         switch label {
         case "IRE": .ire
         case "Limits": .limits
-        case "EL Zone": .elZone
         default: .stops
         }
     }
@@ -56,11 +54,6 @@ enum FalseColorAssist {
             [
                 "0–4", "5", "10–12", "41–48", "61–70", "92–93", "94–95",
                 "96–98", "99–100",
-            ]
-        case .elZone:
-            [
-                "−6", "−5", "−4", "−3", "−2", "−1", "−½", "18%",
-                "+½", "+1", "+2", "+3", "+4", "+5", "+6",
             ]
         case .ire:
             ["BDL", "NBDL", "18%MG", "MG+1", "80%WC", "95%WC"]
@@ -243,12 +236,6 @@ struct FalseColorReference: View {
         let band: LiveFalseColorBand
     }
 
-    struct AxisMarker: Equatable, Identifiable {
-        let id: Int
-        let label: String
-        let fraction: Double
-    }
-
     static let panelSize = CGSize(width: 264, height: 52)
 
     var scale: FalseColorScaleKind
@@ -279,7 +266,6 @@ struct FalseColorReference: View {
     /// OpenZCine `FalseColorReference.axisLabels`.
     static func axisLabels(scale: FalseColorScaleKind) -> [String] {
         switch scale {
-        case .elZone: []
         case .stops, .ire: ["crush", "18%", "skin", "clip"]
         case .limits: ["crushed", "midtones untouched", "clipped"]
         }
@@ -351,122 +337,37 @@ struct FalseColorReference: View {
     static func segments(
         scale: FalseColorScaleKind, transfer: MonitorTransfer
     ) -> [Segment] {
-        let bands = PocketFalseColorMap.bands(scale: scale, transfer: transfer)
-        switch scale {
-        case .elZone:
-            let domain = stopReferenceDomain(scale: scale, transfer: transfer)
-            return bands.enumerated().map { index, band in
-                Segment(
-                    id: index,
-                    lowerFraction: stopFraction(
-                        band.lowerBound, in: domain, infiniteFallback: 0),
-                    upperFraction: stopFraction(
-                        band.upperBound, in: domain, infiniteFallback: 1),
-                    band: band)
-            }
-        case .stops, .ire, .limits:
-            return bands.enumerated().map { index, band in
-                Segment(
-                    id: index,
-                    lowerFraction: min(1, max(0, band.lowerBound / 100)),
-                    upperFraction: band.upperBound.isFinite
-                        ? min(1, max(0, band.upperBound / 100)) : 1,
-                    band: band)
-            }
+        PocketFalseColorMap.bands(scale: scale, transfer: transfer).enumerated().map {
+            index, band in
+            Segment(
+                id: index,
+                lowerFraction: min(1, max(0, band.lowerBound / 100)),
+                upperFraction: band.upperBound.isFinite
+                    ? min(1, max(0, band.upperBound / 100)) : 1,
+                band: band)
         }
     }
 
-    static func stopAxisMarkers(transfer: MonitorTransfer) -> [AxisMarker] {
-        axisMarkers(
-            [
-                ("Min", PocketFalseColorMap.minimumSceneStop),
-                ("−3", -3),
-                ("18%", 0),
-                ("Skin", 1),
-                ("+2", 2),
-                ("Max", PocketFalseColorMap.maximumSceneStop(transfer: transfer)),
-            ],
-            domain: stopReferenceDomain(scale: .stops, transfer: transfer))
-    }
-
-    static func elZoneAxisMarkers() -> [AxisMarker] {
-        axisMarkers(
-            [("−6", -6), ("−3", -3), ("18%", 0), ("+3", 3), ("+6", 6)],
-            domain: elZoneReferenceDomain)
-    }
-
-    private static let elZoneReferenceDomain: ClosedRange<Double> = -6.5...6.5
-
-    private static func axisMarkers(
-        _ markers: [(String, Double)], domain: ClosedRange<Double>
-    ) -> [AxisMarker] {
-        markers.enumerated().map { index, marker in
-            AxisMarker(
-                id: index, label: marker.0,
-                fraction: stopFraction(marker.1, in: domain, infiniteFallback: 0))
-        }
-    }
-
-    private static func stopReferenceDomain(
-        scale: FalseColorScaleKind, transfer: MonitorTransfer
-    ) -> ClosedRange<Double> {
-        if scale == .elZone { return elZoneReferenceDomain }
-        let lower = PocketFalseColorMap.minimumSceneStop - 1.0 / 6
-        let upper = max(6, PocketFalseColorMap.maximumSceneStop(transfer: transfer) + 1.0 / 6)
-        return lower...upper
-    }
-
-    private static func stopFraction(
-        _ value: Double, in domain: ClosedRange<Double>, infiniteFallback: Double
-    ) -> Double {
-        guard value.isFinite else { return infiniteFallback }
-        return min(1, max(0, (value - domain.lowerBound) / (domain.upperBound - domain.lowerBound)))
-    }
-
-    @ViewBuilder private var axisView: some View {
-        if scale == .elZone {
-            GeometryReader { geometry in
-                MonitorSnapshotRows(Self.elZoneAxisMarkers()) { marker in
-                    Text(marker.label)
-                        .font(
-                            inspector
-                                ? MonitorTheme.font(7, weight: .medium)
-                                : .system(size: 5.5, weight: .medium, design: .monospaced)
-                        )
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                        .position(
-                            x: min(
-                                geometry.size.width - 8,
-                                max(8, geometry.size.width * marker.fraction)),
-                            y: inspector ? 4.5 : 3.5)
-                }
-            }
-            .frame(height: inspector ? 9 : 7)
-        } else {
-            HStack(spacing: 4) {
-                MonitorSnapshotRows(Array(Self.axisLabels(scale: scale).enumerated()), id: \.offset)
-                {
-                    index, label in
-                    if index > 0 { Spacer(minLength: 0) }
-                    Text(label)
-                        .font(
-                            inspector
-                                ? MonitorTheme.font(7, weight: .medium)
-                                : .system(size: 5.5, weight: .medium, design: .monospaced)
-                        )
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
+    private var axisView: some View {
+        HStack(spacing: 4) {
+            MonitorSnapshotRows(Array(Self.axisLabels(scale: scale).enumerated()), id: \.offset)
+            {
+                index, label in
+                if index > 0 { Spacer(minLength: 0) }
+                Text(label)
+                    .font(
+                        inspector
+                            ? MonitorTheme.font(7, weight: .medium)
+                            : .system(size: 5.5, weight: .medium, design: .monospaced)
+                    )
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
     }
 
     private var neutralGradientColors: [Color] {
-        switch scale {
-        case .elZone: [Color(white: 0.04), Color(white: 0.86)]
-        case .stops, .ire, .limits: [Color(white: 0.54), Color(white: 0.75)]
-        }
+        [Color(white: 0.54), Color(white: 0.75)]
     }
 }

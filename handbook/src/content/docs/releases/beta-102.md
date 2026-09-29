@@ -21,7 +21,7 @@ experimental. Features are listed separately for each platform.
 - Experimental AirPods head tracking follows calibrated head direction more directly. Manual control wins; changing gimbal mode turns tracking off.
 - Drag scopes, LIGHTS and ND directly; drag a corner to resize. Panels fit under bars and the joystick, with equal left/right spacing.
 - ND assist suggests a filter strength to balance exposure, with Stops, ND factor and optical-density units.
-- New false-color choices include CineStop, six-zone IRE and EL Zone, with matching reference legends.
+- New false-color choices include CineStop and six-zone IRE, with matching reference legends.
 - Experimental Multiview monitors Osmo cameras on shared Wi-Fi, with saved stages, grid or Center stage, per-camera looks and group recording.
 - Share this feed lets other iPhones and iPads on the same camera Wi-Fi watch with local assists, request camera controls and reconnect after interruptions.
 - Apple Watch adds live preview, timecode, storage, camera battery, record and shutter controls. The paired iPhone stays connected to the camera.
@@ -61,7 +61,7 @@ experimental. Features are listed separately for each platform.
 - Experimental Motion Control adds timed A-to-B or A-to-B-to-C moves, smoothing, a countdown, and Pause, Resume and Stop.
 - Drag scopes, LIGHTS and ND directly; drag a corner to resize. Panels fit under bars and the joystick, with equal left/right spacing.
 - ND assist suggests a filter strength to balance exposure, with Stops, ND factor and optical-density units.
-- New false-color choices include CineStop, six-zone IRE and EL Zone, with matching reference legends.
+- New false-color choices include CineStop and six-zone IRE, with matching reference legends.
 - Your cameras shows joining progress and Cancel on the selected camera row, with camera names and connection buttons arranged more clearly.
 - Manual joystick and gamepad input takes over from programmed gimbal moves.
 - Share Diagnostics from pairing or Operator Setup > System to report connection and playback problems.

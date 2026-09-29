@@ -94,7 +94,7 @@ Evidence labels:
 | [#316](https://github.com/erik-sutton95/OpenPocketCine/pull/316) | Multiview, live decoding, D-Log M scopes, Pocket 3 FORMAT fallback | Both app pages, Multiview guide, BLE, commands and live-view pages updated | Physical three-camera iPhone preview/record, five Pocket 3 reconnects and D-Log M scope routing recorded. Pocket 3 2.7K record/reconnect, AP restoration, saved stages, hotspot, full borrowed controls and Android physical checks pending. Several old statements conflict with these additions; see below. |
 | [#308](https://github.com/erik-sutton95/OpenPocketCine/pull/308) | Native Motion Control and AirPods tracking | Both app pages and command catalog updated | Physical Pocket 4 Pro/iPhone motion and pause/resume checks. Pocket 3, Android, optical repeatability and end-to-end AirPods wearer qualification pending. |
 | [#306](https://github.com/erik-sutton95/OpenPocketCine/pull/306) | Shared-Wi-Fi watcher relay and controls | iOS page and live-view transport updated | Automated real-socket, recovery and load tests. Earlier one-iPad smoothness report is physical evidence for that earlier configuration. Final QR/passcode/recovery build and multiple wireless watchers remain pending. |
-| [#305](https://github.com/erik-sutton95/OpenPocketCine/pull/305) | CineStop, six-zone IRE and EL Zone | Both app pages updated | PR records physical iPhone installation/check with the scales and automated iOS/Android tests. Does not calibrate Pocket 3 scene exposure. |
+| [#305](https://github.com/erik-sutton95/OpenPocketCine/pull/305) | CineStop and six-zone IRE false color | Both app pages updated | PR records physical iPhone installation/check with the scales and automated iOS/Android tests. Does not calibrate Pocket 3 scene exposure. |
 | [#304](https://github.com/erik-sutton95/OpenPocketCine/pull/304) | ND recommendation | Both app pages updated; #319 supersedes placement/unit details | Physical Pocket 4 Pro/iPhone assist check. Android physical pending. |
 | [#318](https://github.com/erik-sutton95/OpenPocketCine/pull/318) | js-yaml update | Handbook dependency lockfile only | No operator/protocol change. |
 | [#302](https://github.com/erik-sutton95/OpenPocketCine/pull/302) | SoftAP unicast evidence | DUML transport, iOS protocol, live-view and Wi-Fi pages updated | Existing single-client captures; second-client handshake behavior explicitly untested. No proof that the camera can never support a second client. |
@@ -191,7 +191,7 @@ PRs: [#277](https://github.com/erik-sutton95/OpenPocketCine/pull/277),
 ### 4. Extend the D-Log M accuracy caveat to the affected controls
 
 Priority: high. Both app pages correctly distinguish normalized signal scopes
-from estimated EL Zone/gray values. They do not mention the separate engineering
+from estimated gray values. They do not mention the separate engineering
 qualification that **LUT exposure compensation, baked exposure and Face Priority
 EV still use the pre-existing D-Log approximation for D-Log M**. Add this short
 limitation beside LUT/exposure descriptions and link the curve investigation.
