@@ -518,7 +518,7 @@ object FalseColorBands {
             FalseColorScale.SCENE_STOPS -> sceneStopBands(clipStops(transfer, rec709))
             FalseColorScale.STOPS -> cineStopBands()
             FalseColorScale.IRE -> ireBands()
-            FalseColorScale.LIMITS -> limitBands()
+            FalseColorScale.LIMITS -> limitBands(limitShelfIRE(transfer, rec709))
         }
 
     /** iOS `LiveColorScience.cineStopBands`: the Video scale, Video Mode IRE with grayscale gaps. */
@@ -545,13 +545,31 @@ object FalseColorBands {
             Band(95.0, Double.POSITIVE_INFINITY, 220 / 255.0, 51 / 255.0, 33 / 255.0, "95%WC"),
         )
 
-    fun limitBands(): List<Band> =
-        listOf(
-            Band(0.0, 5.0, 0.44, 0.22, 0.76, "0–4"),
-            Band(5.0, 10.0, 0.28, 0.37, 0.85, "5–9"),
-            Band(94.0, 99.0, 0.89, 0.72, 0.29, "94–98"),
-            Band(99.0, Double.POSITIVE_INFINITY, 0.78, 0.28, 0.18, "99–100"),
-        )
+    /** iOS `LiveColorScience.limitBands(shelfIRE:)`: clip starts on the clip shelf, never above 99 IRE. */
+    fun limitBands(shelfIRE: Double? = null): List<Band> {
+        val bands =
+            listOf(
+                Band(0.0, 5.0, 0.44, 0.22, 0.76, "0–4"),
+                Band(5.0, 10.0, 0.28, 0.37, 0.85, "5–9"),
+                Band(94.0, 99.0, 0.89, 0.72, 0.29, "94–98"),
+                Band(99.0, Double.POSITIVE_INFINITY, 0.78, 0.28, 0.18, "99–100"),
+            )
+        if (shelfIRE == null || shelfIRE >= 99 || shelfIRE <= bands[2].lowerBound) return bands
+        return bands.mapIndexed { index, band ->
+            when (index) {
+                2 -> band.copy(upperBound = shelfIRE)
+                3 -> band.copy(lowerBound = shelfIRE)
+                else -> band
+            }
+        }
+    }
+
+    /** iOS `falseColorClip` for Limits: the clip shelf in WAVE IRE, on Rec.709 when 709 reads the look. */
+    fun limitShelfIRE(transfer: MonitorTransfer, rec709: Boolean = false): Double {
+        val t = if (readsThroughLook(transfer, rec709)) MonitorTransfer.REC709 else transfer
+        val shelf = maxOf(0.0, ScopeExposureCeiling.clipEncoded(t) - ScopeExposureCeiling.CLIP_SHELF_CODES / 255.0)
+        return ScopeDisplayScale.monitorPercent(shelf, t)
+    }
 
     /** iOS `LiveColorScience.sceneStopDefaultClip`: clip starts at +11 when the ceiling is unknown. */
     const val SCENE_STOP_DEFAULT_CLIP = 10.5

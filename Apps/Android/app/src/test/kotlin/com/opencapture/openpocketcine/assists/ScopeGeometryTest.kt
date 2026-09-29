@@ -9,6 +9,25 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ScopeGeometryTest {
+    /** Swift `falseColorClip(.limits)` + `falseColorBands(.limits)` clip edge, probed 2026-09-29. */
+    @Test
+    fun limitsKeyClipsOnTheSwiftShelfForLogAnd709() {
+        val swift =
+            mapOf(
+                (MonitorTransfer.DLOG2 to false) to 97.1251,
+                (MonitorTransfer.DLOG2 to true) to 97.2549,
+                (MonitorTransfer.DLOG to false) to 96.5308,
+                (MonitorTransfer.DLOG to true) to 97.2549,
+                (MonitorTransfer.DLOGM to false) to 97.2549,
+                (MonitorTransfer.REC709 to false) to 97.2549,
+            )
+        for ((key, edge) in swift) {
+            val (transfer, rec709) = key
+            val clip = FalseColorBands.bands(FalseColorScale.LIMITS, transfer, rec709)[3]
+            assertEquals(edge, clip.lowerBound, 0.01, "$transfer rec709=$rec709")
+        }
+    }
+
     @Test
     fun waveformPlotGuttersDoNotScaleWithPanelSoIre100StaysOnTheGuide() {
         val d = 3f
