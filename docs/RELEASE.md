@@ -71,6 +71,42 @@ core, so they should not.
 
 Do not tag `v0.1.0` retroactively unless you are cutting that train on purpose.
 
+## Sideload APK
+
+Every merge into `main` that changes the app (Android, iOS or the shared Swift
+core) gets a new GitHub sideload APK, so Android users without Play stay on the
+latest build. Docs-only and CI-only merges do not need one. Sideload tags are
+`sideload-v<versionName>-<n>`, where `<n>` counts sideload builds on the train
+(`sideload-v0.1.5-5` was `versionCode` 6).
+
+1. **Bump.** One `chore(android)` PR raises `openpocketcine.versionCode` in
+   `Apps/Android/gradle.properties` by one (Android refuses to install over an
+   equal code) and points both README APK links at the next tag. Merge it.
+2. **Build** from that `main` commit with the release keystore and the Android
+   Sentry DSN (both local only, under `.local/android/`, never committed):
+
+   ```bash
+   export ANDROID_KEYSTORE_FILE=… ANDROID_KEYSTORE_PASSWORD=… \
+     ANDROID_KEY_ALIAS=… ANDROID_KEY_PASSWORD=… SENTRY_DSN_ANDROID=…
+   just android-core
+   (cd Apps/Android && ./gradlew assembleRelease)
+   ```
+
+   Check `aapt2 dump badging` shows the new `versionCode`, and
+   `apksigner verify --print-certs` the same certificate as the previous
+   sideload APK.
+3. **Publish** `app-release.apk` as `OpenPocketCine-<versionName>-<n>-sideload.apk`:
+
+   ```bash
+   gh release create sideload-v0.1.5-6 OpenPocketCine-0.1.5-6-sideload.apk \
+     --target <main sha> --title "OpenPocketCine 0.1.5 (6)" --latest \
+     --notes "<what changed, in user terms>
+
+   Installs over any earlier OpenPocketCine 0.1.5 sideload build. One arm64 APK, Android 10 or newer. A Google Play copy is signed differently: remove it before installing."
+   ```
+
+   Keep earlier sideload releases unless they must be withdrawn.
+
 ## Hotfix / freeze (rare)
 
 A `release/x.y` or `hotfix/x.y.z` branch exists only when **all** of these hold:
