@@ -1750,6 +1750,15 @@ public struct GimbalStickMapping: Equatable, Sendable {
     /// Invert pan with TT180 so stick pan stays picture-relative.
     public var invertPan: Bool { commanded180 }
 
+    /// The app starts moving the gimbal. A pending seed resolves to the pose
+    /// seen so far: past this point any |yaw| > 90° is our own pan, not a
+    /// reconnect-at-180. With no attitude yet the seed stays open.
+    public mutating func noteAppMotion() {
+        guard !poseSeeded, pendingWant180.isEmpty, yawTenthDeg != nil else { return }
+        poseSeeded = true
+        poseSeedFrontCount = 0
+    }
+
     public mutating func noteRotate180() {
         noteRotate180(fromBody: false)
     }

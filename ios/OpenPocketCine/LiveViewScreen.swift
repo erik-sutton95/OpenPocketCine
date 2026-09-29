@@ -1259,6 +1259,7 @@ private struct LiveScopeOverlays: View {
                 scale: model.assist.falseColorScale,
                 transfer: model.monitorTransfer
                     ?? MonitorTransfer(model.monitorColorMode ?? .normal),
+                rec709: model.assist.falseColorRec709,
                 bounds: canvas, chromeClearance: clearance, hapticsEnabled: model.hapticsEnabled,
                 onConfigure: { model.assist.configureTool = .falseColor })
         }

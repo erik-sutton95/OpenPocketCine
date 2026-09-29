@@ -23,9 +23,13 @@ public enum FeedEffectsWire {
         case 1: .ire
         case 2: .limits
         case 3: .sceneStops
+        case 4...7: falseColorScale(ordinal - 4)
         default: nil
         }
     }
+
+    /// Ordinals 4…7 are 0…3 read through the official Rec.709 look (Read: 709 / LOG).
+    public static func readsRec709Look(_ ordinal: Int) -> Bool { (4...7).contains(ordinal) }
 
     /// Packed-2D RGBA8 overlay paint (`n³ × 4`). Sampled on encoded camera codes.
     public static func packedFalseColorPaint(
@@ -33,10 +37,10 @@ public enum FeedEffectsWire {
     ) -> [UInt8]? {
         guard let scale = falseColorScale(scaleOrdinal) else { return nil }
         let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
-        let key = cacheKey("paint", scale: scale, transfer: transfer)
+        let key = cacheKey(readsRec709Look(scaleOrdinal) ? "paint709" : "paint", scale: scale, transfer: transfer)
         return cached(key) {
             LUTLibraryWire.packedRGBA(
-                cube: overlayCube(scale: scale, transfer: transfer) {
+                cube: overlayCube(scale: scale, transfer: transfer, rec709: readsRec709Look(scaleOrdinal)) {
                     ($0.red, $0.green, $0.blue)
                 })
         }
@@ -48,10 +52,10 @@ public enum FeedEffectsWire {
     ) -> [UInt8]? {
         guard let scale = falseColorScale(scaleOrdinal) else { return nil }
         let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
-        let key = cacheKey("weight", scale: scale, transfer: transfer)
+        let key = cacheKey(readsRec709Look(scaleOrdinal) ? "weight709" : "weight", scale: scale, transfer: transfer)
         return cached(key) {
             LUTLibraryWire.packedRGBA(
-                cube: overlayCube(scale: scale, transfer: transfer) {
+                cube: overlayCube(scale: scale, transfer: transfer, rec709: readsRec709Look(scaleOrdinal)) {
                     ($0.weight, $0.weight, $0.weight)
                 })
         }
@@ -98,15 +102,17 @@ public enum FeedEffectsWire {
     private static func overlayCube(
         scale: LiveFalseColorScale,
         transfer: MonitorTransfer,
+        rec709: Bool,
         component: ((red: Double, green: Double, blue: Double, weight: Double)) -> (
             Double, Double, Double
         )
     ) -> CubeLUT {
         let size = falseColorCubeSize
         let denom = Double(size - 1)
+        // 709 reading: every scale evaluates the official look as a Rec.709 feed.
+        let clip = LiveColorScience.falseColorClip(scale: scale, transfer: transfer, rec709: rec709)
         let bandList = LiveColorScience.falseColorBands(
-            scale, transfer: transfer,
-            clipEncoded: ScopeExposureCeiling.clipEncoded(transfer: transfer), latticeSize: size)
+            scale, transfer: clip.transfer, clipEncoded: clip.ceiling, latticeSize: size)
         var rgb = [Float]()
         rgb.reserveCapacity(size * size * size * 3)
         for b in 0..<size {
@@ -116,10 +122,12 @@ public enum FeedEffectsWire {
                     let eg = Double(g) / denom
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
-                    let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
+                    let read = LiveColorScience.falseColorReading(
+                        encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale)
+                    let ire = ScopeDisplayScale.monitorPercent(read.encoded, transfer: read.transfer)
                     let value =
                         scale.usesSceneStops
-                        ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
+                        ? LiveColorScience.stops(encoded: read.encoded, transfer: read.transfer) : ire
                     let chosen = component(
                         overlayPaint(
                             value: value, scale: scale, bands: bandList,

@@ -289,6 +289,23 @@ private fun FalseColorOptions(state: LiveAssistState, colorMode: Int) {
             state.setFalseColor(scale = FalseColorScale.fromMenuLabel(label))
         }
     }
+    SettingsInlineRow(
+        "Read",
+        help =
+            "How false color reads log footage. 709 reads the camera's official Rec.709 look, " +
+                "the way RED, ARRI and most monitors apply false color, so clip means clipped in " +
+                "the Rec.709 image. LOG reads the raw signal like WAVE, with the full highlight " +
+                "range and the camera's own clip.",
+        stacked = true,
+    ) {
+        SettingsSegmented(
+            options = listOf("LOG", "709"),
+            selected = if (state.falseColorRec709) "709" else "LOG",
+        ) { label ->
+            haptics.selection()
+            state.setFalseColorRead(label == "709")
+        }
+    }
     Text("REFERENCE KEY", style = LiveType.ui(8f, FontWeight.Medium).copy(letterSpacing = 1.sp),
         color = LiveDesign.faint, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
     FalseColorReferenceRuler(state, colorMode, Modifier.fillMaxWidth().height(52.dp))

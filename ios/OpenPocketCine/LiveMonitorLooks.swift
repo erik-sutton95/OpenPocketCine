@@ -37,12 +37,16 @@ enum PocketFalseColorMap {
         var scale: FalseColorScaleKind
         var transfer: MonitorTransfer
         var clipByte: Int
+        /// Video / IRE read through the official Rec.709 look (``FalseColorLogReading``).
+        var rec709: Bool
     }
 
     private struct OverlayKey: Hashable, Sendable {
         var scale: FalseColorScaleKind
         var transfer: MonitorTransfer
         var managedRender: Bool
+        /// Read: 709 / LOG. Without it a toggle returned the cached overlay forever.
+        var rec709 = FalseColorLogReading.rec709
     }
 
     struct OverlayMaps: Sendable {
@@ -106,7 +110,8 @@ enum PocketFalseColorMap {
     ) -> CubeKey {
         CubeKey(
             kind: kind, scale: scale, transfer: transfer,
-            clipByte: ScopeExposureCeiling.clipByte(transfer: transfer))
+            clipByte: ScopeExposureCeiling.clipByte(transfer: transfer),
+            rec709: FalseColorLogReading.rec709)
     }
 
     static func cube(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> CubeLUT {
@@ -193,10 +198,11 @@ enum PocketFalseColorMap {
             }
             let paintKey = CubeKey(
                 kind: key.managedRender ? .overlayPaintDisplay : .overlayPaint,
-                scale: key.scale, transfer: key.transfer, clipByte: clip)
+                scale: key.scale, transfer: key.transfer, clipByte: clip,
+                rec709: key.rec709)
             let weightKey = CubeKey(
                 kind: .overlayWeight, scale: key.scale,
-                transfer: key.transfer, clipByte: clip)
+                transfer: key.transfer, clipByte: clip, rec709: key.rec709)
             let paint = build(paintKey)
             let weight = build(weightKey)
             let maps = OverlayMaps(
@@ -247,11 +253,14 @@ enum PocketFalseColorMap {
         overlayWeightCube(scale: .limits, mode: mode)
     }
 
-    static func bands(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> [LiveFalseColorBand]
-    {
-        LiveColorScience.falseColorBands(
-            scale.liveScale, transfer: transfer,
-            clipEncoded: ScopeExposureCeiling.clipEncoded(transfer: transfer))
+    static func bands(
+        scale: FalseColorScaleKind, transfer: MonitorTransfer,
+        rec709: Bool = FalseColorLogReading.rec709
+    ) -> [LiveFalseColorBand] {
+        let clip = LiveColorScience.falseColorClip(
+            scale: scale.liveScale, transfer: transfer, rec709: rec709)
+        return LiveColorScience.falseColorBands(
+            scale.liveScale, transfer: clip.transfer, clipEncoded: clip.ceiling)
     }
 
     static func bands(scale: FalseColorScaleKind, mode: ColorMode) -> [LiveFalseColorBand] {
@@ -296,9 +305,12 @@ enum PocketFalseColorMap {
     private static func build(_ key: CubeKey) -> CubeLUT {
         switch key.kind {
         case .full:
-            buildCube(scale: key.scale, transfer: key.transfer, clipByte: key.clipByte)
+            buildCube(
+                scale: key.scale, transfer: key.transfer, clipByte: key.clipByte, rec709: key.rec709)
         case .overlayPaint:
-            overlayCube(scale: key.scale, transfer: key.transfer, clipByte: key.clipByte) {
+            overlayCube(
+                scale: key.scale, transfer: key.transfer, clipByte: key.clipByte, rec709: key.rec709
+            ) {
                 ($0.red, $0.green, $0.blue)
             }
         case .overlayPaintDisplay:
@@ -306,12 +318,16 @@ enum PocketFalseColorMap {
             // (≈ sRGB encode; the measured "untagged cube result gets lifted"
             // from `LiveMonitorWorkingSpace`). Store decode(target) so the encode
             // lands the band on its authored color.
-            overlayCube(scale: key.scale, transfer: key.transfer, clipByte: key.clipByte) {
+            overlayCube(
+                scale: key.scale, transfer: key.transfer, clipByte: key.clipByte, rec709: key.rec709
+            ) {
                 (srgbDecode($0.red), srgbDecode($0.green), srgbDecode($0.blue))
             }
         case .overlayWeight:
             // Mask values are consumed in working space, never output-converted.
-            overlayCube(scale: key.scale, transfer: key.transfer, clipByte: key.clipByte) {
+            overlayCube(
+                scale: key.scale, transfer: key.transfer, clipByte: key.clipByte, rec709: key.rec709
+            ) {
                 ($0.weight, $0.weight, $0.weight)
             }
         }
@@ -324,15 +340,23 @@ enum PocketFalseColorMap {
     }
 
     private static func buildCube(
-        scale: FalseColorScaleKind, transfer: MonitorTransfer, clipByte: Int
+        scale: FalseColorScaleKind, transfer: MonitorTransfer, clipByte: Int, rec709: Bool
     ) -> CubeLUT {
         let size = cubeSize
         let denom = Double(size - 1)
         // Hoisted: `falseColorBands` per lattice point rebuilt the band table
         // 64³ times — the seconds-long warm behind FALSE "missing" on device.
         let anchors = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
+        // 709 reading: every scale evaluates the official look as a Rec.709 feed.
+        let viaLook =
+            LiveColorScience.readsThroughLook(transfer: transfer, rec709: rec709)
+            && !scale.liveScale.usesSceneStops
+        let clip = LiveColorScience.falseColorClip(
+            scale: scale.liveScale, transfer: transfer, rec709: rec709)
         let bandList = LiveColorScience.falseColorBands(
-            scale.liveScale, transfer: transfer, clipEncoded: anchors.clip, latticeSize: size)
+            scale.liveScale, transfer: clip.transfer,
+            clipEncoded: clip.transfer == transfer && !rec709 ? anchors.clip : clip.ceiling,
+            latticeSize: size)
         var rgb = [Float]()
         rgb.reserveCapacity(size * size * size * 3)
         for b in 0..<size {
@@ -343,16 +367,23 @@ enum PocketFalseColorMap {
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let level = ScopeDisplayScale.waveformLevel(yEnc, anchors: anchors)
-                    let ire = min(
-                        100,
-                        max(
-                            0,
-                            (level - ScopeDisplayScale.crushLevel)
-                                / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel) * 100
-                        ))
+                    let read = LiveColorScience.falseColorReading(
+                        encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale.liveScale)
+                    let ire =
+                        viaLook
+                        ? ScopeDisplayScale.monitorPercent(read.encoded, transfer: .rec709)
+                        : min(
+                            100,
+                            max(
+                                0,
+                                (level - ScopeDisplayScale.crushLevel)
+                                    / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel)
+                                    * 100
+                            ))
                     let value =
                         scale.liveScale.usesSceneStops
-                        ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
+                        ? LiveColorScience.stops(encoded: read.encoded, transfer: read.transfer)
+                        : ire
                     let color = renderedColor(
                         value: value, scale: scale, bands: bandList,
                         source: (er, eg, eb),
@@ -370,6 +401,7 @@ enum PocketFalseColorMap {
         scale: FalseColorScaleKind,
         transfer: MonitorTransfer,
         clipByte: Int,
+        rec709: Bool,
         component: ((red: Double, green: Double, blue: Double, weight: Double)) -> (
             Double, Double, Double
         )
@@ -378,8 +410,16 @@ enum PocketFalseColorMap {
         let denom = Double(size - 1)
         // Hoisted out of the 64³ walk — see `buildCube`.
         let anchors = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
+        // 709 reading: every scale evaluates the official look as a Rec.709 feed.
+        let viaLook =
+            LiveColorScience.readsThroughLook(transfer: transfer, rec709: rec709)
+            && !scale.liveScale.usesSceneStops
+        let clip = LiveColorScience.falseColorClip(
+            scale: scale.liveScale, transfer: transfer, rec709: rec709)
         let bandList = LiveColorScience.falseColorBands(
-            scale.liveScale, transfer: transfer, clipEncoded: anchors.clip, latticeSize: size)
+            scale.liveScale, transfer: clip.transfer,
+            clipEncoded: clip.transfer == transfer && !rec709 ? anchors.clip : clip.ceiling,
+            latticeSize: size)
         var rgb = [Float]()
         rgb.reserveCapacity(size * size * size * 3)
         for b in 0..<size {
@@ -390,16 +430,23 @@ enum PocketFalseColorMap {
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let level = ScopeDisplayScale.waveformLevel(yEnc, anchors: anchors)
-                    let ire = min(
-                        100,
-                        max(
-                            0,
-                            (level - ScopeDisplayScale.crushLevel)
-                                / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel) * 100
-                        ))
+                    let read = LiveColorScience.falseColorReading(
+                        encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale.liveScale)
+                    let ire =
+                        viaLook
+                        ? ScopeDisplayScale.monitorPercent(read.encoded, transfer: .rec709)
+                        : min(
+                            100,
+                            max(
+                                0,
+                                (level - ScopeDisplayScale.crushLevel)
+                                    / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel)
+                                    * 100
+                            ))
                     let value =
                         scale.liveScale.usesSceneStops
-                        ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
+                        ? LiveColorScience.stops(encoded: read.encoded, transfer: read.transfer)
+                        : ire
                     let chosen = component(
                         overlayPaint(
                             value: value, scale: scale, bands: bandList,

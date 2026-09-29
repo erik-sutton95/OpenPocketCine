@@ -62,6 +62,8 @@ final class FalseColorReferencePositionStore {
 struct FalseColorReferenceOverlay: View {
     let scale: FalseColorScaleKind
     let transfer: MonitorTransfer
+    /// Read: 709 / LOG, so a flip redraws the key over the picture.
+    var rec709 = FalseColorLogReading.rec709
     let bounds: CGRect
     var chromeClearance: EdgeInsets = EdgeInsets()
     var hapticsEnabled = false
@@ -85,7 +87,8 @@ struct FalseColorReferenceOverlay: View {
             dragCenter ?? store.positions.center(in: bounds, size: size, movement: movement)
         ZStack {
             Color.clear.contentShape(Rectangle())
-            FalseColorReference(scale: scale, transfer: transfer).allowsHitTesting(false)
+            FalseColorReference(scale: scale, transfer: transfer, rec709: rec709)
+                .allowsHitTesting(false)
         }
         .scaleEffect(fit)
         .frame(width: size.width, height: size.height)

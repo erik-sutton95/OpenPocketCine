@@ -24,6 +24,9 @@ struct LiveImageEffects: Equatable, Sendable {
     var peakingColor: PeakingPaint = .red
     var peakingSensitivity: PeakingSense = .medium
     var falseColorScale: FalseColorScaleKind = .sceneStops
+    /// Read: 709 (official Rec.709 look) or LOG (signal). Part of the effects so a
+    /// change re-renders and rebakes the overlay.
+    var falseColorRec709 = false
     var zebraHighlight = true
     var zebraMidtone = true
     var zebraHighlightIRE: Double = LiveZebra.highlightIRE
@@ -337,6 +340,7 @@ enum LiveMonitorCompositor {
     private static func applyFalseColor(
         over base: CIImage, codes: CIImage, extent: CGRect, effects: LiveImageEffects
     ) -> CIImage {
+        FalseColorLogReading.set(rec709: effects.falseColorRec709)
         guard
             let maps = PocketFalseColorMap.overlayPairData(
                 scale: effects.falseColorScale, mode: effects.colorMode),

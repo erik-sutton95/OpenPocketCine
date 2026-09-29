@@ -381,7 +381,12 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   NBDL (2.5–10 blue), 18%MG (38–42 green), MG+1 (52–56 pink), 80%WC
   (80–95 yellow), 95%WC (95–100 red). Rec.709 18% hits 18%MG; D-Log2
   18% is a gap. 95%WC is live-tap ceiling red.
-- FALSE Scale is CineStop / Video / IRE / Limits.
+- FALSE Scale is CineStop / Video / IRE / Limits. A Read row on every scale
+  picks LOG (default) or 709: 709 reads each pre-LUT code through the grey
+  axis of DJI's official Rec.709 cube (`LiveColorScience.rec709LookIRE`; D-Log M
+  uses the Nano cube), the way RED Video Mode and ARRI apply these scales; LOG
+  reads the signal like WAVE (default). Rec.709 / HLG always read the signal. Android
+  passes the choice as scale ordinals 4 / 5. Saved as `falseColorRec709`.
 - Gimbal cluster: stick + zoom chip + gimbal-controls button as one
   trailing-bottom parking spot in every orientation. Zoom stacks above the
   stick. The gimbal button sits beside the plain zoom value above the stick. On width-constrained iPad, record sits

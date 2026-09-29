@@ -424,15 +424,16 @@ private fun FocusBox(nx: Float, ny: Float) {
 @Composable
 internal fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier) {
     val transfer = MonitorTransfer.fromColorMode(colorMode)
-    val segments = FalseColorReference.segments(state.falseColorScale, transfer)
+    val rec709 = state.falseColorRec709
+    val segments = FalseColorReference.segments(state.falseColorScale, transfer, rec709)
     val markers =
         if (state.falseColorScale.usesSceneStops) {
-            FalseColorReference.sceneStopMarkers(transfer)
+            FalseColorReference.sceneStopMarkers(transfer, rec709)
         } else {
             emptyList()
         }
     val axis = FalseColorReference.axisLabels(state.falseColorScale)
-    val curve = FalseColorReference.curveKeyLabel(colorMode)
+    val curve = FalseColorReference.curveKeyLabel(colorMode, rec709)
     Box(
         modifier
             .size(ScopePanelSize.falseColorReference.width.dp, ScopePanelSize.falseColorReference.height.dp)

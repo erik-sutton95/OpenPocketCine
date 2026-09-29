@@ -2,7 +2,7 @@ Since open beta build 138
 
 New and changed
 
-- New CineStop false color: greens below 18% gray, gray at 18%, pink +1 skin, yellow +2 upper skin, red clip. The old scale is now Video.
+- New CineStop false color: greens below 18% gray, gray at 18%, pink +1 skin, yellow +2 upper skin, red clip. Old scale is now Video; Read picks 709 or LOG.
 - Long-press MIRROR for Horizontal and Vertical. Turn both on to see an underslung camera, such as on a car mount, the right way up.
 - Long-press the picture to lock exposure: the focus box turns yellow with AE-L. The sun-and-lock key beside Recenter unlocks. WB Mode adds AWB Lock.
 - Tabs use one highlighted edge and tool buttons share one size.

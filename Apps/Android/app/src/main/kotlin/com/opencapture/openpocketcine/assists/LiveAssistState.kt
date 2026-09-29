@@ -152,6 +152,8 @@ class LiveAssistState(
 
     var falseColorScale by mutableStateOf(FalseColorScale.SCENE_STOPS)
     var falseColorReference by mutableStateOf(true)
+    /** iOS `falseColorRec709`: every false color scale reads log through the official Rec.709 look (709) or the signal (LOG). */
+    var falseColorRec709 by mutableStateOf(false)
 
     var zebraUnit by mutableStateOf(ZebraUnit.IRE)
     var zebraHighlight by mutableStateOf(true)
@@ -373,6 +375,11 @@ class LiveAssistState(
         persist()
     }
 
+    fun setFalseColorRead(rec709: Boolean) {
+        falseColorRec709 = rec709
+        persist()
+    }
+
     fun setZebraHighlight(enabled: Boolean = zebraHighlight, ire: Double = zebraHighlightIRE, color: ZebraPaint = zebraHighlightColor) {
         zebraHighlight = enabled
         zebraHighlightIRE = ire.coerceIn(0.0, 100.0)
@@ -550,6 +557,7 @@ class LiveAssistState(
             .put("peakingSensitivity", peakingSensitivity.label)
             .put("falseColorScale", falseColorScale.persisted)
             .put("falseColorReference", falseColorReference)
+            .put("falseColorRec709", falseColorRec709)
             .put("zebraUnit", zebraUnit.persisted)
             .put("zebraHighlight", zebraHighlight)
             .put("zebraMidtone", zebraMidtone)
@@ -656,6 +664,7 @@ class LiveAssistState(
         peakingSensitivity = PeakingSense.fromPersisted(obj.optString("peakingSensitivity", PeakingSense.MED.label))
         falseColorScale = FalseColorScale.fromPersisted(obj.optString("falseColorScale", FalseColorScale.SCENE_STOPS.persisted))
         falseColorReference = obj.optBoolean("falseColorReference", true)
+        falseColorRec709 = obj.optBoolean("falseColorRec709", false)
         zebraUnit = ZebraUnit.fromPersisted(obj.optString("zebraUnit", ZebraUnit.IRE.persisted))
         zebraHighlight = obj.optBoolean("zebraHighlight", true)
         zebraMidtone = obj.optBoolean("zebraMidtone", true)

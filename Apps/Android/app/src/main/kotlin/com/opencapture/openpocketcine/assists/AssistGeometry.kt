@@ -513,9 +513,9 @@ object FalseColorBands {
         fun contains(value: Double): Boolean = value >= lowerBound && value < upperBound
     }
 
-    fun bands(scale: FalseColorScale, transfer: MonitorTransfer): List<Band> =
+    fun bands(scale: FalseColorScale, transfer: MonitorTransfer, rec709: Boolean = false): List<Band> =
         when (scale) {
-            FalseColorScale.SCENE_STOPS -> sceneStopBands(clipStops(transfer))
+            FalseColorScale.SCENE_STOPS -> sceneStopBands(clipStops(transfer, rec709))
             FalseColorScale.STOPS -> cineStopBands()
             FalseColorScale.IRE -> ireBands()
             FalseColorScale.LIMITS -> limitBands()
@@ -556,9 +556,24 @@ object FalseColorBands {
     /** iOS `LiveColorScience.sceneStopDefaultClip`: clip starts at +11 when the ceiling is unknown. */
     const val SCENE_STOP_DEFAULT_CLIP = 10.5
 
-    /** Scene stops at this curve's clip shelf; the CineStop clip band starts here. */
-    fun clipStops(transfer: MonitorTransfer): Double {
-        val shelf = ScopeExposureCeiling.clipEncoded(transfer) - ScopeExposureCeiling.CLIP_SHELF_CODES / 255.0
+    /**
+     * iOS `LiveColorScience.falseColorClip(.sceneStops, rec709: true)`: encoded code where each
+     * official Rec.709 look first saturates (33-point gray axis). Pinned by the Swift test
+     * `cineStopAt709ClipMatchesTheAndroidMirror`.
+     */
+    private val LOOK_SATURATION =
+        mapOf(MonitorTransfer.DLOG2 to 30 / 32.0, MonitorTransfer.DLOG to 1.0, MonitorTransfer.DLOGM to 1.0)
+
+    /** True when 709 applies: the operator picked 709 and this curve has an official look. */
+    fun readsThroughLook(transfer: MonitorTransfer, rec709: Boolean): Boolean =
+        rec709 && transfer in LOOK_SATURATION
+
+    /** Scene stops at this curve's clip shelf; the CineStop clip band starts here. At 709 the look's clip. */
+    fun clipStops(transfer: MonitorTransfer, rec709: Boolean = false): Double {
+        val ceiling =
+            if (readsThroughLook(transfer, rec709)) LOOK_SATURATION.getValue(transfer)
+            else ScopeExposureCeiling.clipEncoded(transfer)
+        val shelf = ceiling - ScopeExposureCeiling.CLIP_SHELF_CODES / 255.0
         val stops = LiveColorScience.stops(maxOf(0.0, shelf), transfer)
         return if (stops.isFinite()) stops else SCENE_STOP_DEFAULT_CLIP
     }
@@ -633,11 +648,12 @@ object FalseColorReference {
     data class AxisMarker(val label: String, val fraction: Double)
 
     /** iOS `FalseColorReference.sceneStopDomain`: crush to one stop past this curve's clip. */
-    private fun sceneStopDomain(transfer: MonitorTransfer): ClosedRange<Double> =
-        -8.5..(maxOf(2.5, FalseColorBands.clipStops(transfer)) + 1)
+    private fun sceneStopDomain(transfer: MonitorTransfer, rec709: Boolean): ClosedRange<Double> =
+        -8.5..(maxOf(2.5, FalseColorBands.clipStops(transfer, rec709)) + 1)
 
-    fun curveKeyLabel(colorMode: Int): String =
-        when (colorMode) {
+    fun curveKeyLabel(colorMode: Int, rec709: Boolean = false): String =
+        if (FalseColorBands.readsThroughLook(MonitorTransfer.fromColorMode(colorMode), rec709)) "709"
+        else when (colorMode) {
             com.opencapture.openpocketcine.session.CameraCommands.COLOR_HDR -> "HLG"
             com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG -> "D-Log"
             com.opencapture.openpocketcine.session.CameraCommands.COLOR_DLOG_M -> "DLM ≈"
@@ -652,18 +668,18 @@ object FalseColorReference {
             FalseColorScale.LIMITS -> listOf("crushed", "midtones untouched", "clipped")
         }
 
-    fun segments(scale: FalseColorScale, transfer: MonitorTransfer): List<Segment> =
-        FalseColorBands.bands(scale, transfer).map { band ->
+    fun segments(scale: FalseColorScale, transfer: MonitorTransfer, rec709: Boolean = false): List<Segment> =
+        FalseColorBands.bands(scale, transfer, rec709).map { band ->
             Segment(
-                lowerFraction = fraction(band.lowerBound, scale, transfer, infiniteFallback = 0.0),
-                upperFraction = fraction(band.upperBound, scale, transfer, infiniteFallback = 1.0),
+                lowerFraction = fraction(band.lowerBound, scale, transfer, rec709, infiniteFallback = 0.0),
+                upperFraction = fraction(band.upperBound, scale, transfer, rec709, infiniteFallback = 1.0),
                 band = band,
             )
         }
 
     /** iOS `FalseColorReference.sceneStopMarkers`: every second stop, 1½ stops clear of clip. */
-    fun sceneStopMarkers(transfer: MonitorTransfer): List<AxisMarker> {
-        val clip = FalseColorBands.clipStops(transfer)
+    fun sceneStopMarkers(transfer: MonitorTransfer, rec709: Boolean = false): List<AxisMarker> {
+        val clip = FalseColorBands.clipStops(transfer, rec709)
         val marks =
             generateSequence(-6) { it + 2 }.takeWhile { it < clip - 1.5 }
                 .map { stop ->
@@ -671,7 +687,7 @@ object FalseColorReference {
                     label to stop.toDouble()
                 }.toList() + ("clip" to clip)
         return marks.map { (label, stop) ->
-            AxisMarker(label, fraction(stop, FalseColorScale.SCENE_STOPS, transfer, infiniteFallback = 1.0))
+            AxisMarker(label, fraction(stop, FalseColorScale.SCENE_STOPS, transfer, rec709, infiniteFallback = 1.0))
         }
     }
 
@@ -679,11 +695,12 @@ object FalseColorReference {
         value: Double,
         scale: FalseColorScale,
         transfer: MonitorTransfer,
+        rec709: Boolean,
         infiniteFallback: Double,
     ): Double {
         if (!value.isFinite()) return infiniteFallback
         if (!scale.usesSceneStops) return (value / 100.0).coerceIn(0.0, 1.0)
-        val domain = sceneStopDomain(transfer)
+        val domain = sceneStopDomain(transfer, rec709)
         return ((value - domain.start) / (domain.endInclusive - domain.start)).coerceIn(0.0, 1.0)
     }
 }

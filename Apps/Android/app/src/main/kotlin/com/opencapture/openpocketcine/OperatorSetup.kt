@@ -192,8 +192,8 @@ object SettingsHelpCopy {
             "Video paints video-level IRE stripes (green 41–48, pink 61–70, red clip) " +
             "over luminance grayscale. IRE paints six video-level zones over " +
             "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one " +
-            "stop over, yellow near clip, red clip. Video and IRE read the camera signal, " +
-            "like WAVE. Limits paints only shadow and highlight warnings, leaving other colors untouched."
+            "stop over, yellow near clip, red clip. On log, Video and IRE read the camera's " +
+            "Rec.709 look (709) or the raw signal (LOG), set under Read. Limits paints only shadow and highlight warnings, leaving other colors untouched."
     const val FALSE_COLOR_REFERENCE =
         "Show a compact color key over live view while False Color is active."
     const val PEAKING_SENSITIVITY =

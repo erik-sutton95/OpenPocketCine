@@ -708,6 +708,27 @@ public enum LiveFalseColorScale: String, CaseIterable, Sendable {
     public var edgeSoftness: Double { usesSceneStops ? 0.05 : 0.5 }
 }
 
+/// Operator choice for how false colour reads log curves: the signal like WAVE
+/// (LOG, default) or the camera's official Rec.709 look (709). Shells set it from settings;
+/// the iOS cube keys include it so a change rebakes.
+public enum FalseColorLogReading {
+    private static let lock = NSLock()
+    // Protected by lock.
+    nonisolated(unsafe) private static var readsRec709 = false
+
+    public static var rec709: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return readsRec709
+    }
+
+    public static func set(rec709: Bool) {
+        lock.lock()
+        readsRec709 = rec709
+        lock.unlock()
+    }
+}
+
 /// Zebra defaults on the ``ScopeDisplayScale/monitorPercent(_:transfer:)`` axis.
 /// Midtone 55 is OpenZCine's (`AssistConfiguration.Zebra`). Highlight is **99**,
 /// not OpenZCine's 100: 100 is the live-tap ceiling byte itself (D-Log2 247),
@@ -1108,6 +1129,85 @@ extension LiveColorScience {
         ire(94, 99, 0.89, 0.72, 0.29, "94–98"),
         ire(99, .infinity, 0.78, 0.28, 0.18, "99–100"),
     ]
+
+    /// Video level (0…100 IRE) of an encoded neutral code through the camera's official
+    /// Rec.709 look. Video / IRE use it when the operator picks the 709 reading
+    /// (``FalseColorLogReading``). The official cubes are neutral on their grey axis,
+    /// so their tone curve is the whole story for luma. Curves without an official
+    /// look (Rec.709, HLG, future brands) return `nil` and stay on the signal.
+    public static func rec709LookIRE(encoded: Double, transfer: MonitorTransfer) -> Double? {
+        guard let curve = rec709LookCurve(transfer) else { return nil }
+        let position = clamp01(encoded) * Double(curve.count - 1)
+        let index = min(Int(position), curve.count - 2)
+        let fraction = position - Double(index)
+        return (curve[index] + (curve[index + 1] - curve[index]) * fraction) * 100
+    }
+
+    /// Luma of the grey axis (33 points) of DJI's official Rec.709 cubes: Pocket 4P D-Log2
+    /// and D-Log, Nano D-Log M. Regenerate from the cubes if DJI updates them.
+    private static func rec709LookCurve(_ transfer: MonitorTransfer) -> [Double]? {
+        switch transfer {
+        case .dlog2:
+            [
+                0.0000, 0.0048, 0.0294, 0.0657, 0.1016, 0.1390, 0.1854, 0.2390, 0.2987, 0.3631,
+                0.4300, 0.4976, 0.5651, 0.6306, 0.6930, 0.7508, 0.8024, 0.8471, 0.8847, 0.9152,
+                0.9392, 0.9571, 0.9702, 0.9796, 0.9865, 0.9916, 0.9953, 0.9977, 0.9991, 0.9998,
+                1.0000, 1.0000, 1.0000,
+            ]
+        case .dlog:
+            [
+                0.0000, 0.0162, 0.0253, 0.0379, 0.0519, 0.0697, 0.0938, 0.1231, 0.1583, 0.1974,
+                0.2451, 0.2989, 0.3568, 0.4155, 0.4741, 0.5322, 0.5896, 0.6463, 0.7019, 0.7561,
+                0.8081, 0.8543, 0.8922, 0.9224, 0.9459, 0.9636, 0.9762, 0.9849, 0.9905, 0.9939,
+                0.9962, 0.9988, 1.0000,
+            ]
+        case .dlogm:
+            [
+                0.0000, 0.0029, 0.0115, 0.0275, 0.0535, 0.0849, 0.1192, 0.1552, 0.1925, 0.2303,
+                0.2692, 0.3090, 0.3488, 0.3883, 0.4239, 0.4563, 0.4874, 0.5193, 0.5538, 0.5908,
+                0.6299, 0.6685, 0.7057, 0.7404, 0.7743, 0.8073, 0.8402, 0.8727, 0.9040, 0.9332,
+                0.9604, 0.9832, 1.0000,
+            ]
+        case .rec709, .hdr:
+            nil
+        }
+    }
+
+    /// True when the 709 reading applies: the operator picked 709 and this curve has an
+    /// official Rec.709 look. Every false colour scale then reads the look as Rec.709.
+    public static func readsThroughLook(transfer: MonitorTransfer, rec709: Bool) -> Bool {
+        rec709 && rec709LookCurve(transfer) != nil
+    }
+
+    /// The code and curve a false colour scale evaluates: the camera signal (LOG), or with
+    /// the 709 reading the official look's Rec.709 code, as if the camera sent Rec.709.
+    /// CineStop always reads real scene stops; 709 only moves its clip (see
+    /// ``falseColorClip(scale:transfer:rec709:)``).
+    public static func falseColorReading(
+        encoded: Double, transfer: MonitorTransfer, rec709: Bool,
+        scale: LiveFalseColorScale = .ire
+    ) -> (encoded: Double, transfer: MonitorTransfer) {
+        guard rec709, !scale.usesSceneStops,
+            let look = rec709LookIRE(encoded: encoded, transfer: transfer)
+        else { return (encoded, transfer) }
+        return (look / 100, .rec709)
+    }
+
+    /// The curve a scale's bands are built on and the ceiling its clip band keys: the
+    /// camera's live-tap ceiling (LOG), the Rec.709 top (709, video-level scales), or
+    /// for CineStop at 709 the log code where the official look saturates.
+    public static func falseColorClip(
+        scale: LiveFalseColorScale, transfer: MonitorTransfer, rec709: Bool
+    ) -> (transfer: MonitorTransfer, ceiling: Double) {
+        guard readsThroughLook(transfer: transfer, rec709: rec709),
+            let curve = rec709LookCurve(transfer)
+        else { return (transfer, ScopeExposureCeiling.clipEncoded(transfer: transfer)) }
+        guard scale.usesSceneStops else {
+            return (.rec709, ScopeExposureCeiling.clipEncoded(transfer: .rec709))
+        }
+        let top = curve.firstIndex { $0 >= 0.9999 } ?? (curve.count - 1)
+        return (transfer, Double(top) / Double(curve.count - 1))
+    }
 
     /// Encoded clip shelf under a ceiling (``ScopeExposureCeiling/clipShelfCodes``),
     /// snapped down to a cube lattice point when `latticeSize` is given.

@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- False color **Read** option for every scale on iOS and Android. LOG (the
+  default) reads the raw signal like the waveform, with the full highlight
+  range. 709 reads log through the camera's official Rec.709 look, the way RED
+  Video Mode, ARRI and most monitors apply false color, so 18% gray lands in
+  IRE's green and clip means clipped in the Rec.709 image.
 - **CineStop** false color on iOS and Android: five whole-stop zones around
   18% gray. Dark green is −2, yellow-green −1, gray 0, light pink +1 (skin
   anchor) and soft yellow +2 (upper skin limit). Red is clipped at the
@@ -125,6 +130,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Live View no longer mirrors when you pan past 90° with the joystick right
+  after connecting (iOS and Android). The app sometimes mistook its own pan
+  for a camera reconnecting in selfie position, which mirrored the picture
+  and inverted the stick until release. Multiview tiles keep the Live View
+  pose after closing.
+- A dropped feed recovers about 2.5 s sooner. The app's own restart request
+  no longer counts as a camera setting change that holds the next repair
+  step.
 - Traffic Lights, histogram lamps, zebra and false color now agree on what
   clipped means on iOS and Android. The lamps used to fire from 95 IRE on
   any channel, so a scene just under clip lit every lamp while the waveform

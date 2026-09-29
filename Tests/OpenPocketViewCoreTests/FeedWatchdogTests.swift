@@ -439,6 +439,22 @@ import Testing
         #expect(dog.tick(snap) == .resendLiveViewEnable, "grace over, status young — encoder pause")
     }
 
+    /// Field 2026-09-29: the watchdog's own enable reset the SET clock and held
+    /// the UDP rebuild that brought the picture back until 6.6 s instead of ~4 s.
+    @Test func ownRecoverEnableIsNotACameraSet() {
+        var dog = FeedWatchdog()
+        var snap = Self.snap(now: 10, frameAge: 2.5, videoAge: 2.5, statusAge: 0.2, bleAge: 0.2)
+        snap.secondsSinceLastEnable = 20
+        #expect(dog.tick(snap) == .resendLiveViewEnable)
+        snap.now = 11.6
+        snap.lastDecodedFrameAge = 4.1
+        snap.lastVideoPacketAge = 4.1
+        snap.lastAccessUnitAge = 4.1
+        snap.secondsSinceLastEnable = 1.6
+        snap.secondsSinceCameraSet = 1.6
+        #expect(dog.tick(snap) == .reopenDatalink, "unanswered enable escalates on its own window")
+    }
+
     @Test func gopResetSilenceDoesNotRebuildUDP() {
         var dog = FeedWatchdog()
         var snap = Self.snap(now: 10, frameAge: 3.0, videoAge: 3.0, bleAge: 0.2)

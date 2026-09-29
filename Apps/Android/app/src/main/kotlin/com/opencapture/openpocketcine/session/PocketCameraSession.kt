@@ -673,6 +673,9 @@ class PocketCameraSession(
         _phase.value = ConnectionPhase.LIVE
     }
 
+    val multiviewPose: GimbalStickMapping
+        get() = gimbalStickMapping
+
     fun adoptMultiviewPose(pose: GimbalStickMapping) {
         if (!isMultiviewBorrowed || isMultiviewControlOnly) return
         gimbalStickMapping = pose
@@ -4665,6 +4668,7 @@ class PocketCameraSession(
             return
         }
         lastGimbalThrowAt = lastGimbalStickAt
+        gimbalStickMapping = gimbalStickMapping.noteAppMotion()
         tickGimbalLimit()
         captureStableSince = 0L
         captureStablePose = null

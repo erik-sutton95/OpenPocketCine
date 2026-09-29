@@ -622,6 +622,54 @@ struct LiveColorScienceTests {
                 .label == "clip", "CineStop paints the clip shelf red")
     }
 
+    @Test func videoAndIreReadLogAsTheOperatorChooses() {
+        func ire(_ linear: Double, _ transfer: MonitorTransfer, rec709: Bool) -> Double {
+            let read = LiveColorScience.falseColorReading(
+                encoded: LiveColorScience.encode(linear, transfer: transfer), transfer: transfer,
+                rec709: rec709)
+            return ScopeDisplayScale.monitorPercent(read.encoded, transfer: read.transfer)
+        }
+        func label(_ value: Double) -> String? {
+            LiveColorScience.falseColorBand(value: value, scale: .ire, transfer: .rec709)?.label
+        }
+        // 709: DJI's official looks put 18% grey at 38–41 IRE and +1 stop at 53–54.
+        for transfer in [MonitorTransfer.dlog2, .dlog, .dlogm] {
+            #expect(label(ire(0.18, transfer, rec709: true)) == "18%MG", "\(transfer) 709 grey")
+            #expect(label(ire(0.36, transfer, rec709: true)) == "MG+1", "\(transfer) 709 +1")
+        }
+        // LOG: the signal, like WAVE, so D-Log2 grey (~30) is a gap.
+        #expect(label(ire(0.18, .dlog2, rec709: false)) == nil)
+        // Curves without an official look always read the signal.
+        #expect(LiveColorScience.rec709LookIRE(encoded: 0.5, transfer: .rec709) == nil)
+        #expect(!LiveColorScience.readsThroughLook(transfer: .rec709, rec709: true))
+        #expect(LiveColorScience.readsThroughLook(transfer: .dlog2, rec709: true))
+    }
+
+    @Test func cineStopAt709KeepsSceneStopsAndClipsWhereTheLookClips() {
+        let log = LiveColorScience.falseColorClip(scale: .sceneStops, transfer: .dlog2, rec709: false)
+        let look = LiveColorScience.falseColorClip(scale: .sceneStops, transfer: .dlog2, rec709: true)
+        #expect(look.transfer == .dlog2, "CineStop stays on scene stops at 709")
+        #expect(look.ceiling < log.ceiling, "the Rec.709 look saturates before the sensor")
+        let bands = LiveColorScience.falseColorBands(
+            .sceneStops, transfer: look.transfer, clipEncoded: look.ceiling)
+        #expect(bands.contains { $0.label == "highlights" }, "light gray still sits above +2")
+        let read = LiveColorScience.falseColorReading(
+            encoded: 0.5, transfer: .dlog2, rec709: true, scale: .sceneStops)
+        #expect(read.encoded == 0.5 && read.transfer == .dlog2)
+    }
+
+    /// Android `FalseColorBands.LOOK_SATURATION` mirrors these; change both together.
+    @Test func cineStopAt709ClipMatchesTheAndroidMirror() {
+        let android: [MonitorTransfer: Double] = [.dlog2: 30.0 / 32, .dlog: 1, .dlogm: 1]
+        for (transfer, ceiling) in android {
+            let clip = LiveColorScience.falseColorClip(scale: .sceneStops, transfer: transfer, rec709: true)
+            #expect(clip.ceiling == ceiling, "\(transfer)")
+        }
+        for transfer in [MonitorTransfer.rec709, .hdr] {
+            #expect(!LiveColorScience.readsThroughLook(transfer: transfer, rec709: true))
+        }
+    }
+
     @Test func monitorPercentIsTheWaveAxis() {
         func percent(_ encoded: Double, _ transfer: MonitorTransfer) -> Double {
             ScopeDisplayScale.monitorPercent(encoded, transfer: transfer)

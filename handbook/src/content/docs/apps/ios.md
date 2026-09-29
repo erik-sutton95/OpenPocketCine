@@ -279,7 +279,9 @@ space after rotation or resizing, including saved positions. Long-press a View A
   clipped and violet is crushed; other shadows are flat dark gray and other
   highlights flat light gray. Video is
   video-level IRE stripes over grayscale. IRE is six video-level zones over
-  grayscale (crush, near-black, 18% gray, +1 stop, near clip, clip).
+  grayscale (crush, near-black, 18% gray, +1 stop, near clip, clip). Read
+  picks LOG (the raw signal, like WAVE, the default) or 709 (the camera's
+  Rec.709 look) for every scale.
   Long-press options lift above the keyboard so number fields (Zebra
   Highlight / Midtone) stay visible; Done dismisses the number pad.
   Long-press LUT: DJI / Creative / Custom. DJI Auto uses the official Rec.709

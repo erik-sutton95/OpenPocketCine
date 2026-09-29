@@ -156,7 +156,9 @@ class MotionControlInteractionTest {
         val rotating = front.noteRotate180().applyAttitude(attitude(1000))
         val settled = rotating.applyAttitude(attitude(1800))
         val reconnect = GimbalStickMapping().applyAttitude(attitude(1800))
-        for (mapping in listOf(front, manual, rotating)) {
+        val stickFirst = GimbalStickMapping().applyAttitude(attitude(300)).noteAppMotion()
+            .applyAttitude(attitude(944))
+        for (mapping in listOf(front, manual, rotating, stickFirst)) {
             assertFalse(mapping.invertPan)
             assertEquals(0.2, motionOverlayX(0.2, mapping.invertPan, false), 1e-9)
         }

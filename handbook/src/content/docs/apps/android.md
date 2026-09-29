@@ -392,7 +392,9 @@ light pink +1 (skin) and soft yellow +2 (upper skin limit). Red is clipped
 and violet is crushed; other shadows are flat dark gray and other
 highlights flat light gray. Video is video-level IRE stripes over
 grayscale. IRE is six video-level zones over grayscale
-(crush, near-black, 18% gray, +1 stop, near clip, clip).
+(crush, near-black, 18% gray, +1 stop, near clip, clip). Read picks LOG
+(the raw signal, like WAVE, the default) or 709 (the camera's Rec.709 look)
+for every scale.
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). Photo and Live Photo use Rec.709 for live
 monitoring. DJI log conversions are hidden and bypassed, including saved manual

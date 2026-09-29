@@ -106,6 +106,27 @@ struct FeedEffectsWireTests {
         }
     }
 
+    @Test
+    func packedIREOrdinalFiveReadsDLog2GreyThroughTheRec709Look() throws {
+        ScopeExposureCeiling.reset()
+        #expect(FeedEffectsWire.falseColorScale(5) == .ire)
+        #expect(FeedEffectsWire.readsRec709Look(5) && !FeedEffectsWire.readsRec709Look(1))
+        let size = FeedEffectsWire.falseColorCubeSize
+        let i = Int((MonitorTransfer.dlog2.middleGrayEncoded * Double(size - 1)).rounded())
+        func grey(_ ordinal: Int) throws -> (Int, Int, Int) {
+            let packed = try #require(
+                FeedEffectsWire.packedFalseColorPaint(
+                    scaleOrdinal: ordinal, colorModeCode: Int(ColorMode.dLog2.rawValue),
+                    iso: 1600))
+            let dst = (i * size * size + i * size + i) * 4
+            return (Int(packed[dst]), Int(packed[dst + 1]), Int(packed[dst + 2]))
+        }
+        let look = try grey(5)
+        #expect(look.1 > look.0 + 40 && look.1 > look.2 + 40, "709: D-Log2 18% is 18%MG green")
+        let log = try grey(1)
+        #expect(abs(log.0 - log.1) < 12 && abs(log.1 - log.2) < 12, "LOG: D-Log2 18% is a gap")
+    }
+
     @Test(arguments: [(0, LiveFalseColorScale.stops), (1, .ire), (3, .sceneStops)])
     func packedOpaqueWeightFillsTheCube(ordinal: Int, scale: LiveFalseColorScale) throws {
         #expect(FeedEffectsWire.falseColorScale(ordinal) == scale)

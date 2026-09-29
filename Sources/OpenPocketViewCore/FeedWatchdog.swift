@@ -627,8 +627,15 @@ public struct FeedWatchdog: Equatable, Sendable {
     private static func shouldHoldForControlGrace(
         _ snap: Snapshot, stalledStageAge: TimeInterval?
     ) -> Bool {
-        shouldHoldForCameraSet(
-            secondsSinceSet: snap.secondsSinceCameraSet, lastVideoPacketAge: stalledStageAge)
+        // Our own `0x09/0xa8` goes out as a command too. It is not an operator
+        // SET and must not hold the rung that follows it.
+        let ownEnable =
+            snap.secondsSinceCameraSet.flatMap { set in
+                snap.secondsSinceLastEnable.map { abs($0 - set) < 0.25 }
+            } ?? false
+        return !ownEnable
+            && shouldHoldForCameraSet(
+                secondsSinceSet: snap.secondsSinceCameraSet, lastVideoPacketAge: stalledStageAge)
             || FocusTrackMode.shouldHoldWatchdog(
                 secondsSinceSet: snap.secondsSinceFocusTrackSet,
                 lastVideoPacketAge: stalledStageAge)
