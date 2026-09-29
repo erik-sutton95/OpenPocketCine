@@ -163,7 +163,8 @@ Pairing and live view need a real camera nearby. See the
   </tr>
 </table>
 
-Also covered by [Gadget Pilipinas](https://www.gadgetpilipinas.net/2026/08/openpocketcine-for-osmo-pocket/)
+Also covered by [Newsshooter](https://www.newsshooter.com/2026/09/28/openpocketcine-free-field-monitor-for-dji-osmo-pocket-4-4p/),
+[Gadget Pilipinas](https://www.gadgetpilipinas.net/2026/08/openpocketcine-for-osmo-pocket/)
 and [Mark Exploring New Stuff](https://www.youtube.com/watch?v=cqGz6-kFcDA).
 
 ## Roadmap
