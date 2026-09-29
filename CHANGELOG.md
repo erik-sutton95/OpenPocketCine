@@ -246,6 +246,9 @@ All notable changes to this project are documented here. The format is based on
   first-picture resends. An incident still open when the operator disconnects
   ends as `userEnded` (a warning) on both platforms, not `suppressed`.
 
+- Android: the portrait gimbal panel is only as tall as its content instead of
+  a fixed, mostly empty half of the screen.
+
 ## [0.1.5] - 2026-09-24
 
 Cumulative operator-facing notes for the open beta build 138 (0.1.0) → 0.1.5

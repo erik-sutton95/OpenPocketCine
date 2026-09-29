@@ -23,12 +23,12 @@ Fixes
 - Pairing finds the camera with only Nearby devices allowed (Location on Android 10 and 11). If Android stops asking, Allow opens Settings.
 - Pairing reminds you to turn off DJI Frame Tap and force quit DJI Mimo.
 - The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
-- Portrait Live View shows Recenter focus after an off-centre tap. The zoom chip, joystick and gimbal controls have the dark glow of other controls.
+- Portrait Live View shows Recenter focus after an off-centre tap and the gimbal panel fits its controls. Zoom chip, joystick and gimbal controls glow like the rest.
 - Media lists complete SD and internal-storage libraries and keeps capacity visible during playback.
 - Shutter angle stays at your chosen value when changing frame rate. Opening the picker no longer changes the saved angle.
 - A new track no longer flashes on a previously tracked face.
 - Multiview Exit retries a temporary pairing refusal before showing an error.
-- Wi-Fi headings and fields align, Connect stays above the keyboard, and connecting or cancelling waits for scan cleanup.
+- Wi-Fi headings and fields align, Connect stays above the keyboard, and connect or cancel waits for scan cleanup.
 - Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
 - Osmo Nano no longer shows zoom controls, and DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
 - Live View no longer freezes for seconds after one dropped video packet. The picture returns with the camera's next keyframe.
