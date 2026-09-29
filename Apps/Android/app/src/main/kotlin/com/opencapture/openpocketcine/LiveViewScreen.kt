@@ -1543,6 +1543,8 @@ internal fun LandscapeChrome(
                     portrait = false, locked = uiLocked || !hits,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    // The palette is a Popup, over every menu: it steps aside while one is open.
+                    inspectorOpen = captureOpen || model.liveGimbalPanel != LiveGimbalPanel.NONE,
                     onBoundsChanged = onAssistBoundsChanged,
                 )
             }

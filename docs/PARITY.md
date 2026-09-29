@@ -869,6 +869,15 @@ walked 1×/2×/3× on 2.7K and 1×/2× on 4K, each chip pin released by a matchi
 `cam_fov` within ~0.5 s. Physical iOS verification of the corrected stops and
 of this note remains pending: no iPhone is available to this project.
 
+### Android assist palette over inspectors (2026-09-21)
+
+Found while proving the Pocket 3 MT button on the S23 Ultra; recorded here
+because it does not touch iOS.
+
+| Fix | Why iOS is not changed |
+| --- | --- |
+| The assist cluster hides while the capture drawer or a gimbal panel is open (`MonitorAssistCluster(inspectorOpen:)`) | On Android the assist palette is a Compose `Popup`, its own window above every inspector. SwiftUI draws the palette in the view tree, under the inspector |
+
 ### Zoom chip pin expiry (2026-09-18)
 
 The survey left the chip latched: `zoomOptimistic` — the asked-for factor the

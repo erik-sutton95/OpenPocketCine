@@ -114,6 +114,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android assist tools no longer sit on top of the capture drawer or a gimbal
+  panel. The palette is a separate popup window above every inspector, so it
+  now hides while one is open; iOS already draws it underneath.
 - Android portrait Live View shows a vertical camera picture whole, like iOS:
   it fits inside the picture area and rests on the control bar. Sizing it to
   the area's height clipped both sides on narrow phones.
