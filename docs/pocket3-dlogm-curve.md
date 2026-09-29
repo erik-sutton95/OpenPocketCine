@@ -38,7 +38,7 @@ parade, histogram and zebra coordinates preserve normalized preview signal:
 once in the existing decoder-to-scope path.
 
 Scene-stop calculations use the empirical Pocket 3 neutral fit above. The false
-color reference is marked `DLM ≈`; its gray guide is an estimate. The input
+color reference is marked `DLM ≈`; its gray guide and CineStop stops are estimates. The input
 endpoint is not a measured sensor maximum. This fallback is unvalidated on the
 Pocket 3 live stream and on other D-Log M bodies; use IRE for signal measurements
 on those cameras. No D-Gamut transform or D-Log LUT is automatically applied to

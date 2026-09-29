@@ -150,7 +150,7 @@ class LiveAssistState(
     var peakingColor by mutableStateOf(PeakingColor.RED)
     var peakingSensitivity by mutableStateOf(PeakingSense.MED)
 
-    var falseColorScale by mutableStateOf(FalseColorScale.STOPS)
+    var falseColorScale by mutableStateOf(FalseColorScale.SCENE_STOPS)
     var falseColorReference by mutableStateOf(true)
 
     var zebraUnit by mutableStateOf(ZebraUnit.IRE)
@@ -654,7 +654,7 @@ class LiveAssistState(
         gridDiagonal = obj.optBoolean("gridDiagonal", false)
         peakingColor = PeakingColor.fromPersisted(obj.optString("peakingColor", PeakingColor.RED.label))
         peakingSensitivity = PeakingSense.fromPersisted(obj.optString("peakingSensitivity", PeakingSense.MED.label))
-        falseColorScale = FalseColorScale.fromPersisted(obj.optString("falseColorScale", FalseColorScale.STOPS.persisted))
+        falseColorScale = FalseColorScale.fromPersisted(obj.optString("falseColorScale", FalseColorScale.SCENE_STOPS.persisted))
         falseColorReference = obj.optBoolean("falseColorReference", true)
         zebraUnit = ZebraUnit.fromPersisted(obj.optString("zebraUnit", ZebraUnit.IRE.persisted))
         zebraHighlight = obj.optBoolean("zebraHighlight", true)

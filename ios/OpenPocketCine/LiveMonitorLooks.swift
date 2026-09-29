@@ -147,7 +147,7 @@ enum PocketFalseColorMap {
             .map { ($0.dimension, $0.paint) }
     }
 
-    /// IRE / CineStop full lattice: WAVE-axis grayscale with the painted zones.
+    /// CineStop / Video / IRE full lattice: grayscale base with the painted zones.
     /// Not used on the live path — replacing the identity feed with this cube
     /// was the DeviceRGB contrast shift. Tests still sample it.
     static func fullPaintData(scale: FalseColorScaleKind, mode: ColorMode) -> (Int, Data)? {
@@ -249,7 +249,9 @@ enum PocketFalseColorMap {
 
     static func bands(scale: FalseColorScaleKind, transfer: MonitorTransfer) -> [LiveFalseColorBand]
     {
-        LiveColorScience.falseColorBands(scale.liveScale, transfer: transfer)
+        LiveColorScience.falseColorBands(
+            scale.liveScale, transfer: transfer,
+            clipEncoded: ScopeExposureCeiling.clipEncoded(transfer: transfer))
     }
 
     static func bands(scale: FalseColorScaleKind, mode: ColorMode) -> [LiveFalseColorBand] {
@@ -330,7 +332,7 @@ enum PocketFalseColorMap {
         // 64³ times — the seconds-long warm behind FALSE "missing" on device.
         let anchors = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
         let bandList = LiveColorScience.falseColorBands(
-            scale.liveScale, transfer: transfer, clipEncoded: anchors.clip)
+            scale.liveScale, transfer: transfer, clipEncoded: anchors.clip, latticeSize: size)
         var rgb = [Float]()
         rgb.reserveCapacity(size * size * size * 3)
         for b in 0..<size {
@@ -348,8 +350,11 @@ enum PocketFalseColorMap {
                             (level - ScopeDisplayScale.crushLevel)
                                 / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel) * 100
                         ))
+                    let value =
+                        scale.liveScale.usesSceneStops
+                        ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let color = renderedColor(
-                        value: ire, scale: scale, bands: bandList,
+                        value: value, scale: scale, bands: bandList,
                         source: (er, eg, eb),
                         monitorGray: ire / 100)
                     rgb.append(Float(color.red))
@@ -374,7 +379,7 @@ enum PocketFalseColorMap {
         // Hoisted out of the 64³ walk — see `buildCube`.
         let anchors = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
         let bandList = LiveColorScience.falseColorBands(
-            scale.liveScale, transfer: transfer, clipEncoded: anchors.clip)
+            scale.liveScale, transfer: transfer, clipEncoded: anchors.clip, latticeSize: size)
         var rgb = [Float]()
         rgb.reserveCapacity(size * size * size * 3)
         for b in 0..<size {
@@ -392,9 +397,12 @@ enum PocketFalseColorMap {
                             (level - ScopeDisplayScale.crushLevel)
                                 / (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel) * 100
                         ))
+                    let value =
+                        scale.liveScale.usesSceneStops
+                        ? LiveColorScience.stops(encoded: yEnc, transfer: transfer) : ire
                     let chosen = component(
                         overlayPaint(
-                            value: ire, scale: scale, bands: bandList,
+                            value: value, scale: scale, bands: bandList,
                             monitorGray: ire / 100))
                     rgb.append(Float(chosen.0))
                     rgb.append(Float(chosen.1))
@@ -413,13 +421,13 @@ enum PocketFalseColorMap {
         return w.red * red + w.green * green + w.blue * blue
     }
 
-    /// Band colour + coverage. Limits: weight 0 leaves the picture. IRE / CineStop
-    /// always paint — gaps are WAVE grayscale, not a hole onto the camera image.
+    /// Band colour + coverage. Limits: weight 0 leaves the picture. CineStop / Video /
+    /// IRE always paint; gaps are WAVE grayscale, not a hole onto the camera image.
     private static func overlayPaint(
         value: Double, scale: FalseColorScaleKind, bands: [LiveFalseColorBand], monitorGray: Double
     ) -> (red: Double, green: Double, blue: Double, weight: Double) {
         switch scale {
-        case .stops, .ire:
+        case .sceneStops, .stops, .ire:
             let color = renderedColor(
                 value: value, scale: scale, bands: bands,
                 source: (0, 0, 0), monitorGray: monitorGray)
@@ -451,7 +459,7 @@ enum PocketFalseColorMap {
     ) -> (red: Double, green: Double, blue: Double) {
         let base: (red: Double, green: Double, blue: Double)
         switch scale {
-        case .stops, .ire:
+        case .sceneStops, .stops, .ire:
             let gray = min(1, max(0, monitorGray))
             base = (gray, gray, gray)
         case .limits:
@@ -523,18 +531,20 @@ enum PocketFalseColorMap {
 extension FalseColorScaleKind {
     var liveScale: LiveFalseColorScale {
         switch self {
+        case .sceneStops: .sceneStops
         case .stops: .stops
         case .ire: .ire
         case .limits: .limits
         }
     }
 
-    var transitionWidth: Double { 0.5 }
+    var transitionWidth: Double { liveScale.edgeSoftness }
 
     /// OpenZCine `FalseColorReference.scaleLabel`.
     var referenceScaleLabel: String {
         switch self {
-        case .stops: "CineStop"
+        case .sceneStops: "CineStop"
+        case .stops: "Video"
         case .ire: "IRE"
         case .limits: "Limits"
         }
@@ -544,8 +554,11 @@ extension FalseColorScaleKind {
     /// Labels come from ``FalseColorAssist/legendLabels(scale:)`` so WAVE-axis
     /// copy can differ from ``LiveColorScience`` without rewriting the mapper.
     func legendStops(transfer: MonitorTransfer) -> [LiveFalseColorBand] {
-        zip(
-            PocketFalseColorMap.bands(scale: self, transfer: transfer),
+        let bands = PocketFalseColorMap.bands(scale: self, transfer: transfer)
+        // CineStop labels come from core: the clip band moves with the camera.
+        guard !liveScale.usesSceneStops else { return bands }
+        return zip(
+            bands,
             FalseColorAssist.legendLabels(scale: self)
         ).map { band, label in
             LiveFalseColorBand(

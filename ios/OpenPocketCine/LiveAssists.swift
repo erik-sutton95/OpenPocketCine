@@ -227,7 +227,7 @@ final class LiveAssistState {
     var gridDiagonal = false
     var peakingColor: PeakingPaint = .red
     var peakingSensitivity: PeakingSense = .medium
-    var falseColorScale: FalseColorScaleKind = .stops
+    var falseColorScale: FalseColorScaleKind = .sceneStops
     var falseColorReference = true
     var zebraHighlight = true
     var zebraMidtone = true
@@ -1252,7 +1252,7 @@ enum OperatorPrefs {
             s.gridDiagonal = gridDiagonal
             s.peakingColor = PeakingPaint(rawValue: peakingColor) ?? .red
             s.peakingSensitivity = PeakingSense(rawValue: peakingSensitivity) ?? .medium
-            s.falseColorScale = FalseColorScaleKind(rawValue: falseColorScale) ?? .stops
+            s.falseColorScale = FalseColorScaleKind(rawValue: falseColorScale) ?? .sceneStops
             s.falseColorReference = falseColorReference
             s.zebraHighlight = zebraHighlight
             s.zebraMidtone = zebraMidtone

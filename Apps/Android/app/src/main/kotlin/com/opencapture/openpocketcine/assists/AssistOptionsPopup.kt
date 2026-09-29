@@ -270,16 +270,19 @@ private fun FalseColorOptions(state: LiveAssistState, colorMode: Int) {
         "Scale",
         help =
             "The camera color mode selects D-Log, D-Log2, D-Log M, Rec.709, or HLG automatically. " +
-                "CineStop paints video-level IRE stripes over luminance grayscale. IRE paints " +
+                "CineStop paints five stops around 18% gray: dark green −2, yellow-green −1, gray, " +
+                "pink +1 skin, yellow +2 upper skin, red clip, violet crush, flat gray elsewhere. " +
+                "Video paints video-level IRE stripes over " +
+                "luminance grayscale. IRE paints " +
                 "six video-level zones over luminance grayscale. Limits " +
                 "paints only shadow and highlight warnings." +
-                " D-Log M uses a direct 0–100 signal scale. Its gray guide is a " +
-                "Pocket 3 estimate, not a calibrated sensor limit. Use IRE on other D-Log M cameras.",
+                " D-Log M uses a direct 0–100 signal scale. Its gray guide and CineStop stops are " +
+                "Pocket 3 estimates, not calibrated sensor limits. Use IRE on other D-Log M cameras.",
         showTopDivider = false,
         stacked = true,
     ) {
         SettingsSegmented(
-            options = listOf("CineStop", "IRE", "Limits"),
+            options = listOf("CineStop", "Video", "IRE", "Limits"),
             selected = state.falseColorScale.menuLabel,
         ) { label ->
             haptics.selection()

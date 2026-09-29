@@ -6,19 +6,23 @@ import UIKit
 /// OpenZCine `AssistQuickSettingsContent.falseColorRows` + `FalseColorReference`.
 ///
 /// Long-press options:
-/// * Scale — CineStop / IRE / Limits
+/// * Scale: CineStop / Video / IRE / Limits
 /// * Reference Display — compact color key over live view; turning it on arms False Color
 enum FalseColorAssist {
     /// OpenZCine Scale help, Pocket curves in the first sentence.
     static let scaleHelp =
         "The camera color mode selects D-Log, D-Log2, D-Log M, Rec.709, or HLG automatically. "
-        + "CineStop paints video-level IRE stripes (green 41–48, pink 61–70, red clip) "
+        + "CineStop paints five stops around 18% gray, read through the "
+        + "camera's log curve: dark green −2, yellow-green −1, gray at 18%, light pink +1 "
+        + "(skin), soft yellow +2 (upper skin limit). Red is clipped and violet is crushed; "
+        + "other shadows are flat dark gray and other highlights flat light gray. "
+        + "Video paints video-level IRE stripes (green 41–48, pink 61–70, red clip) "
         + "over luminance grayscale. IRE paints six video-level zones over "
         + "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one "
-        + "stop over, yellow near clip, red clip. Limits paints only shadow and "
-        + "highlight warnings, leaving other colors untouched."
-        + " D-Log M uses a direct 0–100 signal scale. Its gray guide is a "
-        + "Pocket 3 estimate, not a calibrated sensor limit. Use IRE for signal "
+        + "stop over, yellow near clip, red clip. Video and IRE read the camera signal, "
+        + "like WAVE. Limits paints only shadow and highlight warnings, leaving other colors untouched."
+        + " D-Log M uses a direct 0–100 signal scale. Its gray guide and CineStop "
+        + "stops are Pocket 3 estimates, not calibrated sensor limits. Use IRE for signal "
         + "measurements on other D-Log M cameras."
 
     /// OpenZCine `falseColorRows` Reference Display help.
@@ -26,20 +30,21 @@ enum FalseColorAssist {
         "Show a compact color key over live view while False Color is active."
 
     /// OpenZCine `AssistQuickSettingsContent` Scale segments.
-    static let scaleOptions = ["CineStop", "IRE", "Limits"]
+    static let scaleOptions = ["CineStop", "Video", "IRE", "Limits"]
 
     struct Options: Equatable, Codable, Sendable {
         var scale: FalseColorScaleKind
         var referenceEnabled: Bool
 
-        static let `default` = Options(scale: .stops, referenceEnabled: true)
+        static let `default` = Options(scale: .sceneStops, referenceEnabled: true)
     }
 
     static func scale(forMenuLabel label: String) -> FalseColorScaleKind {
         switch label {
+        case "Video", "PStops", "ZC Stops": .stops
         case "IRE": .ire
         case "Limits": .limits
-        default: .stops
+        default: .sceneStops
         }
     }
 
@@ -48,8 +53,11 @@ enum FalseColorAssist {
         scale.referenceScaleLabel
     }
 
+    /// WAVE-axis legend copy. CineStop labels come from core (see `legendStops`).
     static func legendLabels(scale: FalseColorScaleKind) -> [String] {
         switch scale {
+        case .sceneStops:
+            []
         case .stops:
             [
                 "0–4", "5", "10–12", "41–48", "61–70", "92–93", "94–95",
@@ -236,6 +244,12 @@ struct FalseColorReference: View {
         let band: LiveFalseColorBand
     }
 
+    struct AxisMarker: Equatable, Identifiable {
+        let id: Int
+        let label: String
+        let fraction: Double
+    }
+
     static let panelSize = CGSize(width: 264, height: 52)
 
     var scale: FalseColorScaleKind
@@ -266,6 +280,7 @@ struct FalseColorReference: View {
     /// OpenZCine `FalseColorReference.axisLabels`.
     static func axisLabels(scale: FalseColorScaleKind) -> [String] {
         switch scale {
+        case .sceneStops: []
         case .stops, .ire: ["crush", "18%", "skin", "clip"]
         case .limits: ["crushed", "midtones untouched", "clipped"]
         }
@@ -341,14 +356,88 @@ struct FalseColorReference: View {
             index, band in
             Segment(
                 id: index,
-                lowerFraction: min(1, max(0, band.lowerBound / 100)),
-                upperFraction: band.upperBound.isFinite
-                    ? min(1, max(0, band.upperBound / 100)) : 1,
+                lowerFraction: fraction(
+                    band.lowerBound, scale: scale, transfer: transfer, infiniteFallback: 0),
+                upperFraction: fraction(
+                    band.upperBound, scale: scale, transfer: transfer, infiniteFallback: 1),
                 band: band)
         }
     }
 
-    private var axisView: some View {
+    /// Scene stops at this curve's clip shelf, where CineStop's clip band starts.
+    static func sceneStopClip(transfer: MonitorTransfer) -> Double {
+        let ceiling = LiveColorScience.stops(
+            encoded: LiveColorScience.clipShelf(
+                ceiling: ScopeExposureCeiling.clipEncoded(transfer: transfer)),
+            transfer: transfer)
+        return ceiling.isFinite ? ceiling : LiveColorScience.sceneStopDefaultClip
+    }
+
+    /// CineStop ruler span in scene stops: crush on the left, one stop past this
+    /// curve's clip on the right, so every stop the camera records gets room.
+    static func sceneStopDomain(transfer: MonitorTransfer) -> ClosedRange<Double> {
+        -8.5...(max(2.5, sceneStopClip(transfer: transfer)) + 1)
+    }
+
+    /// CineStop axis: every second stop from −6, stopping 1½ stops short of this
+    /// curve's clip so no label collides with the clip mark, then clip.
+    static func sceneStopMarkers(transfer: MonitorTransfer) -> [AxisMarker] {
+        let clip = sceneStopClip(transfer: transfer)
+        var marks: [(String, Double)] = []
+        for stop in stride(from: -6, to: clip - 1.5, by: 2) {
+            marks.append((stopLabel(Int(stop)), stop))
+        }
+        marks.append(("clip", clip))
+        return marks.enumerated().map { index, mark in
+            AxisMarker(
+                id: index, label: mark.0,
+                fraction: fraction(
+                    mark.1, scale: .sceneStops, transfer: transfer, infiniteFallback: 1))
+        }
+    }
+
+    private static func stopLabel(_ stop: Int) -> String {
+        if stop == 0 { return "18%" }
+        return stop < 0 ? "−\(-stop)" : "+\(stop)"
+    }
+
+    private static func fraction(
+        _ value: Double, scale: FalseColorScaleKind, transfer: MonitorTransfer,
+        infiniteFallback: Double
+    ) -> Double {
+        guard value.isFinite else { return infiniteFallback }
+        guard scale.liveScale.usesSceneStops else { return min(1, max(0, value / 100)) }
+        let domain = sceneStopDomain(transfer: transfer)
+        return min(
+            1, max(0, (value - domain.lowerBound) / (domain.upperBound - domain.lowerBound)))
+    }
+
+    @ViewBuilder private var axisView: some View {
+        if scale.liveScale.usesSceneStops {
+            GeometryReader { geometry in
+                MonitorSnapshotRows(Self.sceneStopMarkers(transfer: transfer)) { marker in
+                    Text(marker.label)
+                        .font(
+                            inspector
+                                ? MonitorTheme.font(7, weight: .medium)
+                                : .system(size: 5.5, weight: .medium, design: .monospaced)
+                        )
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                        .position(
+                            x: min(
+                                geometry.size.width - 8,
+                                max(8, geometry.size.width * marker.fraction)),
+                            y: inspector ? 4.5 : 3.5)
+                }
+            }
+            .frame(height: inspector ? 9 : 7)
+        } else {
+            waveAxisView
+        }
+    }
+
+    private var waveAxisView: some View {
         HStack(spacing: 4) {
             MonitorSnapshotRows(Array(Self.axisLabels(scale: scale).enumerated()), id: \.offset)
             {

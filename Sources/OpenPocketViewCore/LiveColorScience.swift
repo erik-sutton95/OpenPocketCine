@@ -157,6 +157,22 @@ public enum ScopeExposureCeiling: Sendable {
         store.withLock { $0 = ExposureCeilingStore.State() }
     }
 
+    /// Clipped detail sits on a shelf under the ceiling, not on the ceiling byte
+    /// itself, and white balance moves it: device journals show 242–247 on clipped
+    /// highlights at D-Log2 ISO 1600 (a blown window read 242–244 on 2026-09-29) and
+    /// 219–223 on D-Log. Every clip tool (Traffic Lights, HISTO lamps, zebra 100%,
+    /// CineStop red) keys this shelf so they agree. The live stream is 8-bit HEVC
+    /// (`scope tap format: 420v`), so near clip and clipped sit only a few codes apart
+    /// at the D-Log2 top; a blown window measured 242–244 on 2026-09-29. 7 codes
+    /// (about ⅓ stop at the D-Log2 top) catches that reliably, so the tools read
+    /// "clipped or within about ⅓ stop of it".
+    public static let clipShelfCodes = 7
+
+    /// First byte of the clip shelf (D-Log2 ISO 1600 → 240).
+    public static func clipShelfByte(transfer: MonitorTransfer, iso: Int? = nil) -> Int {
+        max(1, clipByte(transfer: transfer, iso: iso) - clipShelfCodes)
+    }
+
     /// Encoded curve fraction of the live-tap clip (D-Log2 → 247/255, D-Log → 223/255).
     public static func clipEncoded(transfer: MonitorTransfer, iso: Int? = nil) -> Double {
         Double(clipByte(transfer: transfer, iso: iso)) / 255.0
@@ -296,8 +312,9 @@ public struct ScopeAnchors: Equatable, Sendable {
     public let midLevel: Double
 
     /// Traffic-light band edges on the 0…255 byte axis.
-    /// `clipFloorByte…255` is the clip *zone* (WAVE IRE 95, matching HISTO
-    /// and zebra's highlight start). `clipEdgeByte` is the 100-line ceiling.
+    /// `clipFloorByte…255` is the clip shelf (``ScopeExposureCeiling/clipShelfCodes``
+    /// under the ceiling), the same clip every tool uses. `clipEdgeByte` is the
+    /// 100-line ceiling.
     public let clipEdgeByte: Int
     public let clipFloorByte: Int
     public let crushFloorByte: Int
@@ -317,29 +334,7 @@ public struct ScopeAnchors: Equatable, Sendable {
         let span = max(0, clip - black) * 255
         let crushFloor = Int((black * 255).rounded(.down))
         let crushEdge = Int((black * 255 + 0.02 * span).rounded(.up))
-        // WAVE IRE 95 — same mark HISTO already draws, and just below
-        // zebra's soft highlight start (threshold − 1/40). Journal shelf
-        // 243–246 has luma a few codes under maxRGB; 2% (byte 242) missed
-        // it. 188 is ~76 IRE and stays out. Computed here (not via
-        // signalNative) so make() cannot recurse.
-        let target95 =
-            ScopeDisplayScale.crushLevel
-            + 0.95 * (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel)
-        let encoded95: Double
-        if clip <= mid || mid <= black {
-            encoded95 = black + 0.95 * (clip - black)
-        } else if target95 <= midLevel {
-            let t =
-                (target95 - ScopeDisplayScale.crushLevel)
-                / max(midLevel - ScopeDisplayScale.crushLevel, 1e-9)
-            encoded95 = black + t * (mid - black)
-        } else {
-            let t =
-                (target95 - midLevel)
-                / max(ScopeDisplayScale.clipLevel - midLevel, 1e-9)
-            encoded95 = mid + t * (clip - mid)
-        }
-        let clipFloor = min(clipEdge, max(0, Int((encoded95 * 255).rounded(.down))))
+        let clipFloor = max(0, clipEdge - ScopeExposureCeiling.clipShelfCodes)
         return ScopeAnchors(
             black: black, mid: mid, clip: clip, midLevel: midLevel,
             clipEdgeByte: clipEdge,
@@ -438,6 +433,16 @@ public enum ScopeDisplayScale {
         }
         let t = (target - a.midLevel) / max(clipLevel - a.midLevel, 1e-9)
         return a.mid + t * (a.clip - a.mid)
+    }
+
+    /// Zebra highlight threshold: the monitor percentage, but never above the clip
+    /// shelf, so 100% paints clipped detail (which sits a few codes under the ceiling).
+    public static func zebraHighlightNative(
+        monitorPercent percent: Double, transfer: MonitorTransfer, iso: Int? = nil
+    ) -> Double {
+        min(
+            signalNative(monitorPercent: percent, transfer: transfer, iso: iso),
+            Double(ScopeExposureCeiling.clipShelfByte(transfer: transfer, iso: iso)) / 255)
     }
 
     /// 256-entry `waveformLevel` lookup for the hot sampling/vertex paths.
@@ -688,11 +693,19 @@ public struct LiveFalseColorBand: Equatable, Sendable {
     }
 }
 
-/// False-colour scale names. All scales key WAVE IRE.
+/// False-colour scale names. Video (`stops`) / IRE / Limits key WAVE IRE;
+/// CineStop (`sceneStops`) keys scene stops around 18% grey.
 public enum LiveFalseColorScale: String, CaseIterable, Sendable {
     case stops = "Stops"
     case ire = "IRE"
     case limits = "Limits"
+    case sceneStops = "SceneStops"
+
+    public var usesSceneStops: Bool { self == .sceneStops }
+
+    /// Half-width of the soft band edge in the cube bakes: half an IRE on the WAVE
+    /// axis, a twentieth of a stop on CineStop.
+    public var edgeSoftness: Double { usesSceneStops ? 0.05 : 0.5 }
 }
 
 /// Zebra defaults on the ``ScopeDisplayScale/monitorPercent(_:transfer:)`` axis.
@@ -781,22 +794,50 @@ public enum LiveColorScience {
         stops(linear: linearize(encoded, transfer: transfer))
     }
 
-    /// IRE / Limits / CineStop ride the WAVE axis.
+    /// Video / IRE / Limits ride the WAVE axis. CineStop rides scene stops.
+    /// `clipEncoded` is the camera ceiling: Limits and CineStop start their clip
+    /// band on its clip shelf. Cube bakes pass `latticeSize` so the shelf snaps to
+    /// the lattice point below it, or trilinear sampling would blend a blown
+    /// highlight between the clip colour and the band under it.
     public static func falseColorBands(
-        _ scale: LiveFalseColorScale, transfer: MonitorTransfer, clipEncoded: Double? = nil
+        _ scale: LiveFalseColorScale, transfer: MonitorTransfer, clipEncoded: Double? = nil,
+        latticeSize: Int? = nil
     ) -> [LiveFalseColorBand] {
+        let shelf = clipEncoded.map { clipShelf(ceiling: $0, latticeSize: latticeSize) }
+        // On a lattice the shelf point itself must be fully clip, not a 50/50 soft edge.
+        let soften = latticeSize == nil ? 0 : scale.edgeSoftness
         switch scale {
-        case .stops: cineStopBands
-        case .ire: ireBands
-        case .limits: limitBands
+        case .stops: return cineStopBands
+        case .ire: return ireBands
+        case .limits:
+            return limitBands(
+                shelfIRE: shelf.map {
+                    ScopeDisplayScale.monitorPercent($0, transfer: transfer) - soften
+                })
+        case .sceneStops:
+            return sceneStopBands(
+                clipStops: shelf.map { stops(encoded: $0, transfer: transfer) - soften })
         }
     }
 
+    /// Limits with its clip band starting on the clip shelf (never above 99 IRE).
+    fileprivate static func limitBands(shelfIRE: Double?) -> [LiveFalseColorBand] {
+        guard let edge = shelfIRE, edge < 99, edge > limitBands[2].lowerBound else {
+            return limitBands
+        }
+        var bands = limitBands
+        bands[2].upperBound = edge
+        bands[3].lowerBound = edge
+        return bands
+    }
+
     public static func falseColorBand(
-        value: Double, scale: LiveFalseColorScale, transfer: MonitorTransfer
+        value: Double, scale: LiveFalseColorScale, transfer: MonitorTransfer,
+        clipEncoded: Double? = nil
     ) -> LiveFalseColorBand? {
-        let candidate = clamp(value, 0, 100)
-        return falseColorBands(scale, transfer: transfer).first { $0.contains(candidate) }
+        let candidate = scale.usesSceneStops ? value : clamp(value, 0, 100)
+        return falseColorBands(scale, transfer: transfer, clipEncoded: clipEncoded)
+            .first { $0.contains(candidate) }
     }
 
     // MARK: - Private transfers
@@ -1034,7 +1075,7 @@ public struct ColorMatrix3: Equatable, Sendable {
 // MARK: - False-colour tables (WAVE IRE / EI-relative stops)
 
 extension LiveColorScience {
-    /// CineStop — published Video Mode IRE on the WAVE axis. Gaps are grayscale.
+    /// Video (formerly CineStop): published Video Mode IRE on the WAVE axis. Gaps are grayscale.
     /// Rec.709 18% (~41) hits 41–48 green; D-Log2 18% (30.50) is a gap.
     fileprivate static let cineStopBands: [LiveFalseColorBand] = [
         ire(0, 5, 0.44, 0.22, 0.76, "0–4"),
@@ -1067,6 +1108,45 @@ extension LiveColorScience {
         ire(94, 99, 0.89, 0.72, 0.29, "94–98"),
         ire(99, .infinity, 0.78, 0.28, 0.18, "99–100"),
     ]
+
+    /// Encoded clip shelf under a ceiling (``ScopeExposureCeiling/clipShelfCodes``),
+    /// snapped down to a cube lattice point when `latticeSize` is given.
+    public static func clipShelf(ceiling: Double, latticeSize: Int? = nil) -> Double {
+        let shelf = max(0, ceiling - Double(ScopeExposureCeiling.clipShelfCodes) / 255)
+        guard let size = latticeSize, size > 1 else { return shelf }
+        return (shelf * Double(size - 1)).rounded(.down) / Double(size - 1)
+    }
+
+    /// Scene stops where clip starts when the camera ceiling is unknown (+11).
+    public static let sceneStopDefaultClip = 10.5
+
+    /// CineStop: five whole-stop zones around 18% grey, identical on every camera:
+    /// −2 dark green, −1 yellow-green, 0 grey, +1 light pink (skin anchor), +2 soft
+    /// yellow (upper skin limit). Violet is crushed (−7 and below) and red is
+    /// clipped from the camera ceiling. Other shadows are one flat dark grey and
+    /// other highlights one flat light grey, so scene texture never distracts.
+    /// Zones past the ceiling never paint.
+    fileprivate static func sceneStopBands(clipStops: Double?) -> [LiveFalseColorBand] {
+        let clip = clipStops.flatMap { $0.isFinite ? $0 : nil } ?? sceneStopDefaultClip
+        let zones = [
+            band(-2.5, -1.5, 39, 76, 0, "−2"),
+            band(-1.5, -0.5, 155, 196, 56, "−1"),
+            band(-0.5, 0.5, 127, 127, 127, "18%"),
+            band(0.5, 1.5, 221, 174, 180, "+1"),
+            band(1.5, 2.5, 252, 232, 96, "+2"),
+        ]
+        var bands = [
+            band(-.infinity, -6.5, 75, 8, 165, "crush"),
+            band(-6.5, -2.5, 102, 102, 102, "shadows"),
+        ]
+        for var zone in zones where zone.lowerBound < clip {
+            zone.upperBound = min(zone.upperBound, clip)
+            bands.append(zone)
+        }
+        if clip > 2.5 { bands.append(band(2.5, clip, 179, 178, 178, "highlights")) }
+        bands.append(band(clip, .infinity, 245, 39, 0, "clip"))
+        return bands
+    }
 
     private static func band(
         _ lo: Double, _ hi: Double,

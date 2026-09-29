@@ -153,7 +153,7 @@ class LiveColorScienceTest {
     fun trafficEdgesFollowTheAnchors() {
         val dlog2 = ScopeAnchors.make(MonitorTransfer.DLOG2, 1600)
         assertEquals(247, dlog2.clipEdgeByte)
-        assertTrue(dlog2.clipFloorByte <= 237)
+        assertEquals(240, dlog2.clipFloorByte)
         assertTrue(dlog2.clipFloorByte > 188)
         assertEquals(223, ScopeAnchors.make(MonitorTransfer.DLOG, 1600).clipEdgeByte)
         assertEquals(223, ScopeAnchors.make(MonitorTransfer.DLOG, 400).clipEdgeByte)

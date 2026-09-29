@@ -45,6 +45,8 @@ final class LiveFeedOrientationTests: XCTestCase {
             "IRE / PStops remap both halves — same gate as Android")
         lutSplit.falseColorScale = .limits
         XCTAssertTrue(lutSplit.appliesSplitComparison)
+        lutSplit.falseColorScale = .sceneStops
+        XCTAssertFalse(lutSplit.appliesSplitComparison, "CineStop remaps both halves like IRE")
     }
 
     func testCompositorKeepsVerticalMarkerForEveryGPUAssist() {

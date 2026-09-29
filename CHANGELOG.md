@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **CineStop** false color on iOS and Android: five whole-stop zones around
+  18% gray. Dark green is −2, yellow-green −1, gray 0, light pink +1 (skin
+  anchor) and soft yellow +2 (upper skin limit). Red is clipped at the
+  camera's own ceiling and violet is crushed. Other shadows are flat dark
+  gray and other highlights flat light gray, so scene texture never
+  distracts. Each log curve (D-Log, D-Log2, D-Log M, HLG, Rec.709) is
+  decoded to real scene stops first, so a zone means the same stop on every
+  curve and camera. CineStop is the default scale for new setups.
 - MIRROR View Assist options on iOS and Android: **Horizontal** (on by
   default, the existing flip) and **Vertical**. Both on turns the monitor 180°
   for an underslung camera, such as on a car mount. Live View on every render
@@ -37,6 +45,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- The previous CineStop false color scale is now called **Video**. Saved
+  choices keep the same scale under the new name.
 - False color code cleanup on iOS and Android.
 - Android icons match iOS on every shared control: Multiview's LUT tool uses
   the View Assist LUT glyph and Exit an X, Live View battery, eye, tracking
@@ -115,6 +125,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Traffic Lights, histogram lamps, zebra and false color now agree on what
+  clipped means on iOS and Android. The lamps used to fire from 95 IRE on
+  any channel, so a scene just under clip lit every lamp while the waveform
+  and zebra showed nothing. All of them now use the camera's measured clip
+  shelf, about a third of a stop under the live-tap ceiling because the 8-bit
+  live stream puts a blown D-Log2 highlight at 242–244 rather than the 247
+  ceiling, and zebra at 100% finally marks clipped highlights. Limits and
+  CineStop paint a blown highlight fully red instead of a faint pink blend.
 - Android portrait Live View shows a vertical camera picture whole, like iOS:
   it fits inside the picture area and rests on the control bar. Sizing it to
   the area's height clipped both sides on narrow phones.

@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.assists
 import com.opencapture.openpocketcine.feed.LiveColorScience
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.feed.ScopeDisplayScale
+import com.opencapture.openpocketcine.feed.ScopeExposureCeiling
 import com.opencapture.openpocketcine.feed.WaveformIre
 import com.opencapture.openpocketcine.session.CameraStatus
 import kotlin.math.abs
@@ -247,7 +248,7 @@ object HistogramAssist {
     const val TRAFFIC_OUTER_PAD = 6f
     const val TRAFFIC_LINE_GAP = 4f
     const val TRAFFIC_LIGHTS_TITLE = "Traffic Lights"
-    const val TRAFFIC_LIGHTS_HELP = "Show small RGB edge blocks for crushed and clipped channels."
+    const val TRAFFIC_LIGHTS_HELP = "Show small RGB edge blocks for crushed and clipped channels. Clip lights from about a third of a stop under the camera's clip, the same point zebra 100% and CineStop use."
     const val COMPENSATION_TITLE = "Crush/Clip Compensation"
     const val COMPENSATION_HELP =
         "Stops of crush/clip tolerance before a traffic light glows. Shared with the goal-post meter."
@@ -514,12 +515,13 @@ object FalseColorBands {
 
     fun bands(scale: FalseColorScale, transfer: MonitorTransfer): List<Band> =
         when (scale) {
+            FalseColorScale.SCENE_STOPS -> sceneStopBands(clipStops(transfer))
             FalseColorScale.STOPS -> cineStopBands()
             FalseColorScale.IRE -> ireBands()
             FalseColorScale.LIMITS -> limitBands()
         }
 
-    /** iOS `LiveColorScience.cineStopBands` — Video Mode IRE, grayscale gaps. */
+    /** iOS `LiveColorScience.cineStopBands`: the Video scale, Video Mode IRE with grayscale gaps. */
     fun cineStopBands(): List<Band> =
         listOf(
             Band(0.0, 5.0, 0.44, 0.22, 0.76, "0–4"),
@@ -550,6 +552,44 @@ object FalseColorBands {
             Band(94.0, 99.0, 0.89, 0.72, 0.29, "94–98"),
             Band(99.0, Double.POSITIVE_INFINITY, 0.78, 0.28, 0.18, "99–100"),
         )
+
+    /** iOS `LiveColorScience.sceneStopDefaultClip`: clip starts at +11 when the ceiling is unknown. */
+    const val SCENE_STOP_DEFAULT_CLIP = 10.5
+
+    /** Scene stops at this curve's clip shelf; the CineStop clip band starts here. */
+    fun clipStops(transfer: MonitorTransfer): Double {
+        val shelf = ScopeExposureCeiling.clipEncoded(transfer) - ScopeExposureCeiling.CLIP_SHELF_CODES / 255.0
+        val stops = LiveColorScience.stops(maxOf(0.0, shelf), transfer)
+        return if (stops.isFinite()) stops else SCENE_STOP_DEFAULT_CLIP
+    }
+
+    /**
+     * iOS `LiveColorScience.sceneStopBands`: CineStop, five whole-stop zones around 18% gray,
+     * violet crush, red clip at the camera's ceiling, flat dark gray below and light gray above.
+     */
+    fun sceneStopBands(clipStops: Double = SCENE_STOP_DEFAULT_CLIP): List<Band> {
+        val clip = if (clipStops.isFinite()) clipStops else SCENE_STOP_DEFAULT_CLIP
+        return buildList {
+            add(rgb(Double.NEGATIVE_INFINITY, -6.5, 75, 8, 165, "crush"))
+            add(rgb(-6.5, -2.5, 102, 102, 102, "shadows"))
+            SCENE_STOP_ZONES.filter { it.lowerBound < clip }
+                .forEach { add(it.copy(upperBound = minOf(it.upperBound, clip))) }
+            if (clip > 2.5) add(rgb(2.5, clip, 179, 178, 178, "highlights"))
+            add(rgb(clip, Double.POSITIVE_INFINITY, 245, 39, 0, "clip"))
+        }
+    }
+
+    private val SCENE_STOP_ZONES =
+        listOf(
+            rgb(-2.5, -1.5, 39, 76, 0, "−2"),
+            rgb(-1.5, -0.5, 155, 196, 56, "−1"),
+            rgb(-0.5, 0.5, 127, 127, 127, "18%"),
+            rgb(0.5, 1.5, 221, 174, 180, "+1"),
+            rgb(1.5, 2.5, 252, 232, 96, "+2"),
+        )
+
+    private fun rgb(lo: Double, hi: Double, r: Int, g: Int, b: Int, label: String) =
+        Band(lo, hi, r / 255.0, g / 255.0, b / 255.0, label)
 }
 
 object AssistLongPress {
@@ -590,6 +630,12 @@ object FalseColorReference {
         val band: FalseColorBands.Band,
     )
 
+    data class AxisMarker(val label: String, val fraction: Double)
+
+    /** iOS `FalseColorReference.sceneStopDomain`: crush to one stop past this curve's clip. */
+    private fun sceneStopDomain(transfer: MonitorTransfer): ClosedRange<Double> =
+        -8.5..(maxOf(2.5, FalseColorBands.clipStops(transfer)) + 1)
+
     fun curveKeyLabel(colorMode: Int): String =
         when (colorMode) {
             com.opencapture.openpocketcine.session.CameraCommands.COLOR_HDR -> "HLG"
@@ -601,6 +647,7 @@ object FalseColorReference {
 
     fun axisLabels(scale: FalseColorScale): List<String> =
         when (scale) {
+            FalseColorScale.SCENE_STOPS -> emptyList()
             FalseColorScale.STOPS, FalseColorScale.IRE -> listOf("crush", "18%", "skin", "clip")
             FalseColorScale.LIMITS -> listOf("crushed", "midtones untouched", "clipped")
         }
@@ -608,16 +655,37 @@ object FalseColorReference {
     fun segments(scale: FalseColorScale, transfer: MonitorTransfer): List<Segment> =
         FalseColorBands.bands(scale, transfer).map { band ->
             Segment(
-                lowerFraction = (band.lowerBound / 100.0).coerceIn(0.0, 1.0),
-                upperFraction =
-                    if (band.upperBound.isFinite()) {
-                        (band.upperBound / 100.0).coerceIn(0.0, 1.0)
-                    } else {
-                        1.0
-                    },
+                lowerFraction = fraction(band.lowerBound, scale, transfer, infiniteFallback = 0.0),
+                upperFraction = fraction(band.upperBound, scale, transfer, infiniteFallback = 1.0),
                 band = band,
             )
         }
+
+    /** iOS `FalseColorReference.sceneStopMarkers`: every second stop, 1½ stops clear of clip. */
+    fun sceneStopMarkers(transfer: MonitorTransfer): List<AxisMarker> {
+        val clip = FalseColorBands.clipStops(transfer)
+        val marks =
+            generateSequence(-6) { it + 2 }.takeWhile { it < clip - 1.5 }
+                .map { stop ->
+                    val label = if (stop == 0) "18%" else if (stop < 0) "−${-stop}" else "+$stop"
+                    label to stop.toDouble()
+                }.toList() + ("clip" to clip)
+        return marks.map { (label, stop) ->
+            AxisMarker(label, fraction(stop, FalseColorScale.SCENE_STOPS, transfer, infiniteFallback = 1.0))
+        }
+    }
+
+    private fun fraction(
+        value: Double,
+        scale: FalseColorScale,
+        transfer: MonitorTransfer,
+        infiniteFallback: Double,
+    ): Double {
+        if (!value.isFinite()) return infiniteFallback
+        if (!scale.usesSceneStops) return (value / 100.0).coerceIn(0.0, 1.0)
+        val domain = sceneStopDomain(transfer)
+        return ((value - domain.start) / (domain.endInclusive - domain.start)).coerceIn(0.0, 1.0)
+    }
 }
 
 /**
