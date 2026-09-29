@@ -2,7 +2,7 @@ Since open beta build 158
 
 New and changed
 
-- False color code cleanup.
+- New CineStop false color: greens below 18% gray, gray at 18%, pink +1 skin, yellow +2 upper skin, red clip. Old scale is now Video; Read picks 709 or LOG.
 - Long-press MIRROR for Horizontal and Vertical. Turn both on to see an underslung camera, such as on a car mount, the right way up.
 - Long-press the picture to lock exposure: the focus box turns yellow with AE-L. The sun-and-lock key beside Recenter unlocks. WB Mode adds AWB Lock.
 - Multiview redesign: bigger main picture, scrolling camera strip, Live View's toolbar, and camera values inline in the selected tile.
@@ -18,6 +18,7 @@ New and changed
 
 Fixes
 
+- Traffic Lights no longer flag clipping just under clip, and zebra at 100% now marks clipped highlights.
 - Pairing says what blocks it: Bluetooth or Local Network access (with Open Settings), Personal Hotspot, or DJI Frame Tap and DJI Mimo holding the camera.
 - The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
 - Media lists complete SD and internal libraries, retries Nano's briefly empty first response and keeps capacity visible during playback.

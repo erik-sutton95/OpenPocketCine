@@ -185,11 +185,15 @@ object SettingsHelpCopy {
         "How the live-view frame is enlarged to fill the panel. The camera sends far fewer pixels than the panel has, so something always does this. Off is a plain sample, Fast is a fixed sharpening kernel, and Quality is the OS spatial upscaler.\n\nAI is different in kind: it is a machine-learning model that INFERS detail the camera never captured. It gives the sharpest-looking picture, but the fine texture it adds is invented — plausible rather than real — so it can suggest crispness the lens did not record. Judge critical focus on Quality or Fast, and treat AI as a viewing aid rather than evidence.\n\nOnly the options this device supports are shown."
     const val FALSE_COLOR_SCALE =
         "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
-            "CineStop paints video-level IRE stripes (green 41–48, pink 61–70, red clip) " +
+            "CineStop paints five stops around 18% gray, read through the " +
+            "camera's log curve: dark green −2, yellow-green −1, gray at 18%, light pink +1 " +
+            "(skin), soft yellow +2 (upper skin limit). Red is clipped and violet is crushed; " +
+            "other shadows are flat dark gray and other highlights flat light gray. " +
+            "Video paints video-level IRE stripes (green 41–48, pink 61–70, red clip) " +
             "over luminance grayscale. IRE paints six video-level zones over " +
             "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one " +
-            "stop over, yellow near clip, red clip. Limits paints only shadow and " +
-            "highlight warnings, leaving other colors untouched."
+            "stop over, yellow near clip, red clip. On log, Video and IRE read the camera's " +
+            "Rec.709 look (709) or the raw signal (LOG), set under Read. Limits paints only shadow and highlight warnings, leaving other colors untouched."
     const val FALSE_COLOR_REFERENCE =
         "Show a compact color key over live view while False Color is active."
     const val PEAKING_SENSITIVITY =
@@ -947,7 +951,7 @@ private fun FalseColorAssistCard(assist: LiveAssistState, colorMode: Int) {
     SettingsRowCard(
         title = "False Color",
         onReset = {
-            assist.setFalseColor(scale = FalseColorScale.STOPS, reference = true)
+            assist.setFalseColor(scale = FalseColorScale.SCENE_STOPS, reference = true)
         },
     ) {
         SettingsInlineRow(
@@ -957,7 +961,7 @@ private fun FalseColorAssistCard(assist: LiveAssistState, colorMode: Int) {
             stacked = true,
         ) {
             SettingsSegmented(
-                options = listOf("CineStop", "IRE", "Limits"),
+                options = listOf("CineStop", "Video", "IRE", "Limits"),
                 selected = assist.falseColorScale.menuLabel,
             ) { label ->
                 assist.setFalseColor(scale = FalseColorScale.fromMenuLabel(label))

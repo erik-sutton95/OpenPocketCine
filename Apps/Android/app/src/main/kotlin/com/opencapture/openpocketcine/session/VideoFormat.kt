@@ -592,6 +592,11 @@ data class GimbalStickMapping(
     val invertPan: Boolean
         get() = commanded180
 
+    /** App starts moving the gimbal: a pending seed resolves to front. iOS parity. */
+    fun noteAppMotion(): GimbalStickMapping =
+        if (poseSeeded || pendingWant180.isNotEmpty() || yawTenthDeg == null) this
+        else copy(poseSeeded = true, poseSeedFrontCount = 0)
+
     fun noteRotate180(): GimbalStickMapping = noteRotate180(fromBody = false)
 
     fun noteRotate180(fromBody: Boolean): GimbalStickMapping =

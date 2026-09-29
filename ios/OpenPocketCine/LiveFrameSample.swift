@@ -486,6 +486,8 @@ final class LiveAssistEngine: @unchecked Sendable {
             log.info(
                 "scope tap \(fourCC, privacy: .public) \(srcW)x\(srcH) planes=\(planes) ioSurface=\(ioSurface) -> \(packed.width)x\(packed.height) max=\(maxLuma) points=\(points)"
             )
+            ControlLiveLog.line(
+                "scope tap format: \(fourCC) \(srcW)x\(srcH) planes=\(planes) -> \(packed.width)x\(packed.height)")
         } else {
             log.error(
                 "scope tap FAILED \(fourCC, privacy: .public) \(srcW)x\(srcH) planes=\(planes) ioSurface=\(ioSurface)"

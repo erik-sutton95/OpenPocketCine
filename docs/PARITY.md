@@ -351,17 +351,42 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   an exception for this change: no Android device was available; matching geometry
   tests, the debug build, and lint pass. The operator approved merging after CI.
 - Histogram gutters 17.5 dp (traffic lamps + 0 / 100), not 17.5 px.
+- Clipped means the live-tap clip shelf on both shells: the ceiling minus
+  `ScopeExposureCeiling.clipShelfCodes` (7 codes; D-Log2 ISO 1600 → 240–247,
+  about ⅓ stop). The live stream is 8-bit HEVC (`420v`) and a blown window
+  read 242–244, so the clip tools mean "clipped or within about ⅓ stop".
+  Limits and CineStop start their clip band on the shelf too; the cube bakes
+  snap it to the lattice point below and pull it in by the soft-edge width, so
+  trilinear sampling paints clipped highlights fully red.
+  Traffic Lights and HISTO lamps light when any channel reaches it, zebra
+  100% paints it (highlight zebra compares the brightest channel), and
+  CineStop red starts there. The WAVE 100 line stays the ceiling itself.
 - Zebra stored thresholds stay 0–100 IRE; 0–255 readout is encoded codes via
   `ScopeDisplayScale.signalNative`.
-- CineStop (formerly PStops) is Video Mode IRE on the WAVE axis: sparse
-  0–4 / 5 / 10–12 / 41–48 / 61–70 / 92–100 stripes over grayscale. Rec.709
-  18% hits 41–48 green; D-Log2 18% is a gap. Saved PStops / ZC Stops still
-  load as CineStop.
+- CineStop paints five whole-stop scene zones around 18% gray, identical on
+  every camera because each curve is decoded to scene stops first: −2 dark
+  green, −1 yellow-green, 0 gray (127), +1 light pink (skin anchor), +2 soft
+  yellow (upper skin limit). Violet is crushed (−7 and below) and red is
+  clipped from the camera's live-tap ceiling (+11 when unknown). Other
+  shadows are flat dark gray (102) and other highlights flat light gray
+  (179); zones past the ceiling never paint. The ruler runs from −8.5 to one
+  stop past this curve's clip, labelled every second stop from −6 and kept
+  1½ stops clear of the clip mark (D-Log2 at ISO 1600 reads +8, clip). Saved
+  key `SceneStops`; default.
+- Video (formerly PStops, then CineStop) is Video Mode IRE on the WAVE axis:
+  sparse 0–4 / 5 / 10–12 / 41–48 / 61–70 / 92–100 stripes over grayscale.
+  Rec.709 18% hits 41–48 green; D-Log2 18% is a gap. Its saved key stays
+  `CineStop`, so earlier CineStop, PStops and ZC Stops choices load as Video.
 - IRE is six video-level WAVE zones over grayscale: BDL (0–2.5 purple),
   NBDL (2.5–10 blue), 18%MG (38–42 green), MG+1 (52–56 pink), 80%WC
   (80–95 yellow), 95%WC (95–100 red). Rec.709 18% hits 18%MG; D-Log2
   18% is a gap. 95%WC is live-tap ceiling red.
-- FALSE Scale is CineStop / IRE / Limits.
+- FALSE Scale is CineStop / Video / IRE / Limits. A Read row on every scale
+  picks LOG (default) or 709: 709 reads each pre-LUT code through the grey
+  axis of DJI's official Rec.709 cube (`LiveColorScience.rec709LookIRE`; D-Log M
+  uses the Nano cube), the way RED Video Mode and ARRI apply these scales; LOG
+  reads the signal like WAVE (default). Rec.709 / HLG always read the signal. Android
+  passes the choice as scale ordinals 4 / 5. Saved as `falseColorRec709`.
 - Gimbal cluster: stick + zoom chip + gimbal-controls button as one
   trailing-bottom parking spot in every orientation. Zoom stacks above the
   stick. The gimbal button sits beside the plain zoom value above the stick. On width-constrained iPad, record sits

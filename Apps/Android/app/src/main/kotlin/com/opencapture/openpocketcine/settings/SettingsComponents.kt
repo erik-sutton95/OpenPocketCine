@@ -1024,7 +1024,8 @@ fun PanelCloseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 /** Compact settings key; uses the same transfer-aware bands as the live reference. */
 @Composable
 fun SettingsFalseColorKey(scale: FalseColorScale, colorMode: Int) {
-    val segments = FalseColorReference.segments(scale, MonitorTransfer.fromColorMode(colorMode))
+    val transfer = MonitorTransfer.fromColorMode(colorMode)
+    val segments = FalseColorReference.segments(scale, transfer)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Canvas(Modifier.fillMaxWidth().height(11.dp)) {
             drawRect(Color.White.copy(alpha = 0.5f))
@@ -1038,9 +1039,20 @@ fun SettingsFalseColorKey(scale: FalseColorScale, colorMode: Int) {
                 )
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            FalseColorReference.axisLabels(scale).forEach { label ->
-                Text(label, style = LiveType.ui(7f), color = LiveDesign.muted)
+        if (scale.usesSceneStops) {
+            BoxWithConstraints(Modifier.fillMaxWidth().height(12.dp)) {
+                val rulerWidth = maxWidth
+                FalseColorReference.sceneStopMarkers(transfer).forEach { marker ->
+                    Text(marker.label, style = LiveType.mono(7f), color = LiveDesign.muted,
+                        modifier = Modifier.offset(x = (rulerWidth * marker.fraction.toFloat() - 8.dp)
+                            .coerceIn(0.dp, (rulerWidth - 16.dp).coerceAtLeast(0.dp))))
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                FalseColorReference.axisLabels(scale).forEach { label ->
+                    Text(label, style = LiveType.ui(7f), color = LiveDesign.muted)
+                }
             }
         }
     }

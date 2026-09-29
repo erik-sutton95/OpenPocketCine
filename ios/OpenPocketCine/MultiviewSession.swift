@@ -378,6 +378,7 @@ final class MultiviewSession {
     func closeLiveView() {
         for tile in tiles where tile.liveModel != nil {
             tile.lutEnabled = tile.liveModel?.assist.lutEnabled ?? tile.lutEnabled
+            if let session = tile.liveModel?.session { tile.pose = session.multiviewPose }
             tile.liveModel?.session.releaseMultiview()
             tile.liveModel?.multiviewExit = nil
             tile.liveModel = nil

@@ -22,9 +22,14 @@ public enum FeedEffectsWire {
         case 0: .stops
         case 1: .ire
         case 2: .limits
+        case 3: .sceneStops
+        case 4...7: falseColorScale(ordinal - 4)
         default: nil
         }
     }
+
+    /// Ordinals 4…7 are 0…3 read through the official Rec.709 look (Read: 709 / LOG).
+    public static func readsRec709Look(_ ordinal: Int) -> Bool { (4...7).contains(ordinal) }
 
     /// Packed-2D RGBA8 overlay paint (`n³ × 4`). Sampled on encoded camera codes.
     public static func packedFalseColorPaint(
@@ -32,25 +37,25 @@ public enum FeedEffectsWire {
     ) -> [UInt8]? {
         guard let scale = falseColorScale(scaleOrdinal) else { return nil }
         let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
-        let key = cacheKey("paint", scale: scale, transfer: transfer)
+        let key = cacheKey(readsRec709Look(scaleOrdinal) ? "paint709" : "paint", scale: scale, transfer: transfer)
         return cached(key) {
             LUTLibraryWire.packedRGBA(
-                cube: overlayCube(scale: scale, transfer: transfer) {
+                cube: overlayCube(scale: scale, transfer: transfer, rec709: readsRec709Look(scaleOrdinal)) {
                     ($0.red, $0.green, $0.blue)
                 })
         }
     }
 
-    /// Packed-2D RGBA8 overlay weight. IRE / CineStop are opaque; Limits is holes-only.
+    /// Packed-2D RGBA8 overlay weight. CineStop / Video / IRE are opaque; Limits is holes-only.
     public static func packedFalseColorWeight(
         scaleOrdinal: Int, colorModeCode: Int, iso: Int
     ) -> [UInt8]? {
         guard let scale = falseColorScale(scaleOrdinal) else { return nil }
         let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
-        let key = cacheKey("weight", scale: scale, transfer: transfer)
+        let key = cacheKey(readsRec709Look(scaleOrdinal) ? "weight709" : "weight", scale: scale, transfer: transfer)
         return cached(key) {
             LUTLibraryWire.packedRGBA(
-                cube: overlayCube(scale: scale, transfer: transfer) {
+                cube: overlayCube(scale: scale, transfer: transfer, rec709: readsRec709Look(scaleOrdinal)) {
                     ($0.weight, $0.weight, $0.weight)
                 })
         }
@@ -61,7 +66,7 @@ public enum FeedEffectsWire {
         colorModeCode: Int, iso: Int, highlightIRE: Double, midtoneIRE: Double
     ) -> [Float] {
         let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
-        let highlight = ScopeDisplayScale.signalNative(
+        let highlight = ScopeDisplayScale.zebraHighlightNative(
             monitorPercent: highlightIRE, transfer: transfer, iso: iso)
         let half = LiveZebra.midtoneHalfWidthIRE
         let lo = ScopeDisplayScale.signalNative(
@@ -97,13 +102,17 @@ public enum FeedEffectsWire {
     private static func overlayCube(
         scale: LiveFalseColorScale,
         transfer: MonitorTransfer,
+        rec709: Bool,
         component: ((red: Double, green: Double, blue: Double, weight: Double)) -> (
             Double, Double, Double
         )
     ) -> CubeLUT {
         let size = falseColorCubeSize
         let denom = Double(size - 1)
-        let bandList = LiveColorScience.falseColorBands(scale, transfer: transfer)
+        // 709 reading: every scale evaluates the official look as a Rec.709 feed.
+        let clip = LiveColorScience.falseColorClip(scale: scale, transfer: transfer, rec709: rec709)
+        let bandList = LiveColorScience.falseColorBands(
+            scale, transfer: clip.transfer, clipEncoded: clip.ceiling, latticeSize: size)
         var rgb = [Float]()
         rgb.reserveCapacity(size * size * size * 3)
         for b in 0..<size {
@@ -113,10 +122,15 @@ public enum FeedEffectsWire {
                     let eg = Double(g) / denom
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
-                    let ire = ScopeDisplayScale.monitorPercent(yEnc, transfer: transfer)
+                    let read = LiveColorScience.falseColorReading(
+                        encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale)
+                    let ire = ScopeDisplayScale.monitorPercent(read.encoded, transfer: read.transfer)
+                    let value =
+                        scale.usesSceneStops
+                        ? LiveColorScience.stops(encoded: read.encoded, transfer: read.transfer) : ire
                     let chosen = component(
                         overlayPaint(
-                            value: ire, scale: scale, bands: bandList,
+                            value: value, scale: scale, bands: bandList,
                             monitorGray: ire / 100))
                     rgb.append(Float(chosen.0))
                     rgb.append(Float(chosen.1))
@@ -139,7 +153,7 @@ public enum FeedEffectsWire {
         monitorGray: Double
     ) -> (red: Double, green: Double, blue: Double, weight: Double) {
         switch scale {
-        case .stops, .ire:
+        case .stops, .ire, .sceneStops:
             let color = renderedColor(
                 value: value, scale: scale, bands: bands,
                 source: (0, 0, 0), monitorGray: monitorGray)
@@ -147,7 +161,7 @@ public enum FeedEffectsWire {
         case .limits:
             break
         }
-        let width = transitionWidth
+        let width = transitionWidth(scale)
         var paint = (red: 0.0, green: 0.0, blue: 0.0)
         var total = 0.0
         for item in bands {
@@ -171,7 +185,7 @@ public enum FeedEffectsWire {
     ) -> (red: Double, green: Double, blue: Double) {
         let base: (red: Double, green: Double, blue: Double)
         switch scale {
-        case .stops, .ire:
+        case .stops, .ire, .sceneStops:
             let gray = min(1, max(0, monitorGray))
             base = (gray, gray, gray)
         case .limits:
@@ -182,7 +196,7 @@ public enum FeedEffectsWire {
             )
         }
         let weighted = bands.map {
-            ($0, bandWeight(value: value, band: $0, width: transitionWidth))
+            ($0, bandWeight(value: value, band: $0, width: transitionWidth(scale)))
         }
         let total = weighted.reduce(0) { $0 + $1.1 }
         guard total > 0 else { return base }
@@ -239,7 +253,9 @@ public enum FeedEffectsWire {
         return progress * progress * (3 - 2 * progress)
     }
 
-    private static let transitionWidth = 0.5
+    private static func transitionWidth(_ scale: LiveFalseColorScale) -> Double {
+        scale.edgeSoftness
+    }
 
     private static let cacheLock = NSLock()
     // Protected by cacheLock.

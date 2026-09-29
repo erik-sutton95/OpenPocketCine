@@ -183,13 +183,13 @@ internal object FeedEffectsRenderPlanFactory {
         val gateScale = scalars?.getOrNull(3) ?: 1f
         val paint =
             if (falseColor) {
-                falseColorCube(paint = true, assist.falseColorScale, colorMode, iso)
+                falseColorCube(paint = true, assist.falseColorScale, colorMode, iso, assist.falseColorRec709)
             } else {
                 null
             }
         val weight =
             if (falseColor) {
-                falseColorCube(paint = false, assist.falseColorScale, colorMode, iso)
+                falseColorCube(paint = false, assist.falseColorScale, colorMode, iso, assist.falseColorRec709)
             } else {
                 null
             }
@@ -345,13 +345,16 @@ internal object FeedEffectsRenderPlanFactory {
         scale: FalseColorScale,
         colorMode: Int,
         iso: Int,
+        rec709: Boolean,
     ): FeedEffectsCube? {
         if (!SwiftCore.isAvailable) return null
+        // 4…7 = each scale read through the official Rec.709 look (Swift `FeedEffectsWire`).
         val ordinal =
             when (scale) {
-                FalseColorScale.STOPS -> 0
-                FalseColorScale.IRE -> 1
-                FalseColorScale.LIMITS -> 2
+                FalseColorScale.STOPS -> if (rec709) 4 else 0
+                FalseColorScale.IRE -> if (rec709) 5 else 1
+                FalseColorScale.LIMITS -> if (rec709) 6 else 2
+                FalseColorScale.SCENE_STOPS -> if (rec709) 7 else 3
             }
         val kind = if (paint) "paint" else "weight"
         return PackedCubeCache.value("$kind:$ordinal:$colorMode:$iso") {

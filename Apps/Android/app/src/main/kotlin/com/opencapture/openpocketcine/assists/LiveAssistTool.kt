@@ -192,24 +192,33 @@ enum class PeakingSense(val label: String) {
     }
 }
 
+/**
+ * [persisted] is the saved key. [STOPS] is the scale now labeled Video; its key stays
+ * "CineStop" so saved settings keep the scale they chose. CineStop is [SCENE_STOPS].
+ */
 enum class FalseColorScale(val persisted: String, val menuLabel: String) {
-    STOPS("CineStop", "CineStop"),
+    SCENE_STOPS("SceneStops", "CineStop"),
+    STOPS("CineStop", "Video"),
     IRE("IRE", "IRE"),
     LIMITS("Limits", "Limits"),
     ;
 
+    val usesSceneStops: Boolean get() = this == SCENE_STOPS
+
     companion object {
         fun fromPersisted(raw: String): FalseColorScale =
-            entries.firstOrNull {
-                it.persisted == raw || it.menuLabel == raw || it.name == raw
-                    || raw == "Stops" || raw == "ZC Stops" || raw == "PStops"
-            } ?: STOPS
+            entries.firstOrNull { it.persisted == raw || it.name == raw }
+                ?: when (raw) {
+                    "Stops", "ZC Stops", "PStops" -> STOPS
+                    else -> SCENE_STOPS
+                }
 
         fun fromMenuLabel(label: String): FalseColorScale =
             when (label) {
+                "Video" -> STOPS
                 "IRE" -> IRE
                 "Limits" -> LIMITS
-                else -> STOPS
+                else -> SCENE_STOPS
             }
     }
 }

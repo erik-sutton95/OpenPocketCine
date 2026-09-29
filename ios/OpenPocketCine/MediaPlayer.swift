@@ -1210,6 +1210,7 @@ struct MediaPlayerView: View {
                 scale: model.assist.falseColorScale,
                 transfer: model.monitorTransfer
                     ?? MonitorTransfer(model.assist.monitorColorMode ?? .normal),
+                rec709: model.assist.falseColorRec709,
                 bounds: canvas, chromeClearance: clearance, hapticsEnabled: model.hapticsEnabled,
                 onConfigure: { presentPlaybackAssistOptions(.falseColor) })
         }

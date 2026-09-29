@@ -9,6 +9,25 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ScopeGeometryTest {
+    /** Swift `falseColorClip(.limits)` + `falseColorBands(.limits)` clip edge, probed 2026-09-29. */
+    @Test
+    fun limitsKeyClipsOnTheSwiftShelfForLogAnd709() {
+        val swift =
+            mapOf(
+                (MonitorTransfer.DLOG2 to false) to 97.1251,
+                (MonitorTransfer.DLOG2 to true) to 97.2549,
+                (MonitorTransfer.DLOG to false) to 96.5308,
+                (MonitorTransfer.DLOG to true) to 97.2549,
+                (MonitorTransfer.DLOGM to false) to 97.2549,
+                (MonitorTransfer.REC709 to false) to 97.2549,
+            )
+        for ((key, edge) in swift) {
+            val (transfer, rec709) = key
+            val clip = FalseColorBands.bands(FalseColorScale.LIMITS, transfer, rec709)[3]
+            assertEquals(edge, clip.lowerBound, 0.01, "$transfer rec709=$rec709")
+        }
+    }
+
     @Test
     fun waveformPlotGuttersDoNotScaleWithPanelSoIre100StaysOnTheGuide() {
         val d = 3f
@@ -272,11 +291,11 @@ class ScopeGeometryTest {
     }
 
     @Test
-    fun falseColorCineStopRulerUsesVideoModeIre() {
-        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromMenuLabel("CineStop"))
+    fun falseColorVideoRulerUsesVideoModeIre() {
+        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromMenuLabel("Video"))
         assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("PStops"))
         assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("ZC Stops"))
-        assertEquals("CineStop", FalseColorScale.STOPS.menuLabel)
+        assertEquals("Video", FalseColorScale.STOPS.menuLabel)
         val transfer = MonitorTransfer.DLOG2
         val stops = FalseColorReference.segments(FalseColorScale.STOPS, transfer)
         assertEquals(9, stops.size)
@@ -305,7 +324,53 @@ class ScopeGeometryTest {
 
     @Test
     fun unknownSavedScaleFallsBackToCineStop() {
-        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("unknown"))
-        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromMenuLabel("unknown"))
+        assertEquals(FalseColorScale.SCENE_STOPS, FalseColorScale.fromPersisted("unknown"))
+        assertEquals(FalseColorScale.SCENE_STOPS, FalseColorScale.fromMenuLabel("unknown"))
+    }
+
+    @Test
+    fun savedCineStopKeyKeepsTheVideoScale() {
+        // "CineStop" was the Video scale's saved key before the scene-stop scale took the name.
+        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("CineStop"))
+        assertEquals(FalseColorScale.SCENE_STOPS, FalseColorScale.fromPersisted("SceneStops"))
+        assertEquals(FalseColorScale.SCENE_STOPS, FalseColorScale.fromMenuLabel("CineStop"))
+        assertEquals("CineStop", FalseColorScale.SCENE_STOPS.menuLabel)
+    }
+
+    @Test
+    fun cineStopMatchesCoreZonesAndFollowsTheCeiling() {
+        val bands = FalseColorBands.sceneStopBands()
+        assertEquals(
+            listOf("crush", "shadows", "−2", "−1", "18%", "+1", "+2", "highlights", "clip"),
+            bands.map { it.label },
+        )
+        fun label(stops: Double) = bands.firstOrNull { it.contains(stops) }?.label
+        assertEquals("crush", label(Double.NEGATIVE_INFINITY))
+        assertEquals("−2", label(-2.0))
+        assertEquals("18%", label(0.0))
+        assertEquals("+1", label(1.0))
+        assertEquals("+2", label(2.0))
+        assertEquals("shadows", label(-6.0))
+        assertEquals("highlights", label(10.0))
+        assertEquals("clip", label(10.6))
+        listOf(-5.0, -3.0).forEach { assertEquals("shadows", label(it)) }
+        listOf(3.0, 5.0, 9.4).forEach { assertEquals("highlights", label(it)) }
+        val gray = bands.first { it.label == "18%" }
+        assertEquals(gray.red, gray.green, 0.0)
+        assertEquals(gray.green, gray.blue, 0.0)
+
+        val rec709 = FalseColorBands.sceneStopBands(FalseColorBands.clipStops(MonitorTransfer.REC709))
+        assertEquals("+2", rec709.first { it.contains(2.0) }.label)
+        assertEquals("clip", rec709.last().label)
+
+        assertEquals(
+            listOf("−6", "−4", "−2", "18%", "+2", "+4", "+6", "+8", "clip"),
+            FalseColorReference.sceneStopMarkers(MonitorTransfer.DLOG2).map { it.label },
+        )
+        assertEquals(
+            listOf("−6", "−4", "−2", "18%", "clip"),
+            FalseColorReference.sceneStopMarkers(MonitorTransfer.REC709).map { it.label },
+        )
+        assertTrue(FalseColorReference.axisLabels(FalseColorScale.SCENE_STOPS).isEmpty())
     }
 }

@@ -67,7 +67,7 @@ Other Osmo models can appear in Bluetooth scan; other Action models and 360 live
 
 - **Read the image like a colorist.** Waveform, RGB parade, histogram and vectorscope run live
   beside the picture you are judging. Drag and resize them anywhere.
-- **Catch exposure and focus before the take.** False color (CineStop, IRE and Limits), zebras,
+- **Catch exposure and focus before the take.** False color (CineStop scene stops, Video, IRE and Limits), zebras,
   Traffic Lights, focus peaking, an EV meter, ND suggestions and LEVEL roll and tilt meters.
 - **Frame once for every delivery.** Grids, aspect guides and a center crosshair, in landscape
   and portrait.

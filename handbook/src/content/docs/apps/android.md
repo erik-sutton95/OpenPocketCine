@@ -385,9 +385,16 @@ for that color SET before any zoom write (the chip stays at 1× until
 D-Log lands).
 Long-press View Assist options lift above the keyboard so Zebra Highlight /
 Midtone stay visible (Done on the number pad), matching iOS. False color
-Scale is CineStop / IRE / Limits. CineStop is video-level IRE
-stripes over grayscale. IRE is six video-level zones over grayscale
-(crush, near-black, 18% gray, +1 stop, near clip, clip).
+Scale is CineStop / Video / IRE / Limits. CineStop paints five stops
+around 18% gray, the same on every camera because it reads
+each log curve in real stops: dark green −2, yellow-green −1, gray at 18%,
+light pink +1 (skin) and soft yellow +2 (upper skin limit). Red is clipped
+and violet is crushed; other shadows are flat dark gray and other
+highlights flat light gray. Video is video-level IRE stripes over
+grayscale. IRE is six video-level zones over grayscale
+(crush, near-black, 18% gray, +1 stop, near clip, clip). Read picks LOG
+(the raw signal, like WAVE, the default) or 709 (the camera's Rec.709 look)
+for every scale.
 Long-press LUT for the same exposure compensation as iOS (−3…+3 at ½ stop,
 input-referred before the cube). Photo and Live Photo use Rec.709 for live
 monitoring. DJI log conversions are hidden and bypassed, including saved manual
@@ -561,7 +568,7 @@ Nikon PTP-IP, AccessorySetupKit, OCR SSID scanner, USB-C/HDMI paths.
 D-Log M uses a direct 0–100 preview-signal scale for waveform, parade, histogram
 and zebras, without the D-Log black-point or ISO ceiling. Low/high signal warnings
 do not establish where the camera sensor loses detail. The false color
-reference (`DLM ≈`) and gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
+reference (`DLM ≈`), CineStop stops and gray guide use an estimated Pocket 3 curve; use IRE for signal measurements,
 especially on other D-Log M cameras. Live-preview calibration remains pending.
 
 ND recommendations also derive stops from that estimated curve. Treat D-Log M

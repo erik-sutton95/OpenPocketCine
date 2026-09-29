@@ -227,8 +227,12 @@ final class LiveAssistState {
     var gridDiagonal = false
     var peakingColor: PeakingPaint = .red
     var peakingSensitivity: PeakingSense = .medium
-    var falseColorScale: FalseColorScaleKind = .stops
+    var falseColorScale: FalseColorScaleKind = .sceneStops
     var falseColorReference = true
+    /// Video / IRE read log through the official Rec.709 look (709) or the signal (LOG).
+    var falseColorRec709 = false {
+        didSet { FalseColorLogReading.set(rec709: falseColorRec709) }
+    }
     var zebraHighlight = true
     var zebraMidtone = true
     var zebraHighlightIRE: Double = LiveZebra.highlightIRE
@@ -333,6 +337,7 @@ final class LiveAssistState {
             peakingColor: peakingColor,
             peakingSensitivity: peakingSensitivity,
             falseColorScale: falseColorScale,
+            falseColorRec709: falseColorRec709,
             zebraHighlight: zebraHighlight,
             zebraMidtone: zebraMidtone,
             zebraHighlightIRE: zebraHighlightIRE,
@@ -1172,6 +1177,8 @@ enum OperatorPrefs {
         var peakingSensitivity: String
         var falseColorScale: String
         var falseColorReference: Bool
+        /// Optional so settings saved before the LOG / 709 choice still decode.
+        var falseColorRec709: Bool?
         var zebraHighlight: Bool
         var zebraMidtone: Bool
         var zebraHighlightIRE: Double
@@ -1203,6 +1210,7 @@ enum OperatorPrefs {
             peakingSensitivity = s.peakingSensitivity.rawValue
             falseColorScale = s.falseColorScale.rawValue
             falseColorReference = s.falseColorReference
+            falseColorRec709 = s.falseColorRec709
             zebraHighlight = s.zebraHighlight
             zebraMidtone = s.zebraMidtone
             zebraHighlightIRE = s.zebraHighlightIRE
@@ -1252,8 +1260,9 @@ enum OperatorPrefs {
             s.gridDiagonal = gridDiagonal
             s.peakingColor = PeakingPaint(rawValue: peakingColor) ?? .red
             s.peakingSensitivity = PeakingSense(rawValue: peakingSensitivity) ?? .medium
-            s.falseColorScale = FalseColorScaleKind(rawValue: falseColorScale) ?? .stops
+            s.falseColorScale = FalseColorScaleKind(rawValue: falseColorScale) ?? .sceneStops
             s.falseColorReference = falseColorReference
+            s.falseColorRec709 = falseColorRec709 ?? false
             s.zebraHighlight = zebraHighlight
             s.zebraMidtone = zebraMidtone
             s.zebraHighlightIRE = zebraHighlightIRE

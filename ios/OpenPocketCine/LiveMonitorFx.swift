@@ -4,9 +4,9 @@ import OpenPocketViewCore
 import UIKit
 
 /// Local GPU monitor tools. Peaking, false colour, and zebra measure **source
-/// camera codes** — the same pre-LUT buffer WAVE / HISTO tap. Never the cube look.
-/// False colour IRE / Limits use `ScopeDisplayScale.monitorPercent` for the active
-/// `ColorMode`. LUT and de-squeeze are display-only CI ops. Mirror is a view-space
+/// camera codes**: the same pre-LUT buffer WAVE / HISTO tap. Never the active LUT.
+/// False colour Limits uses `ScopeDisplayScale.monitorPercent` for the active
+/// `ColorMode`, as do Video / IRE; CineStop reads scene stops. LUT and de-squeeze are display-only CI ops. Mirror is a view-space
 /// flip (`MirrorAssist.feedScale`) so it never lands in this graph.
 struct LiveImageEffects: Equatable, Sendable {
     var peaking = false
@@ -23,7 +23,10 @@ struct LiveImageEffects: Equatable, Sendable {
 
     var peakingColor: PeakingPaint = .red
     var peakingSensitivity: PeakingSense = .medium
-    var falseColorScale: FalseColorScaleKind = .stops
+    var falseColorScale: FalseColorScaleKind = .sceneStops
+    /// Read: 709 (official Rec.709 look) or LOG (signal). Part of the effects so a
+    /// change re-renders and rebakes the overlay.
+    var falseColorRec709 = false
     var zebraHighlight = true
     var zebraMidtone = true
     var zebraHighlightIRE: Double = LiveZebra.highlightIRE
@@ -114,7 +117,10 @@ typealias PeakingPaint = PeakingAssist.Color
 /// OpenZCine `Peaking.Sensitivity` — detector steps live on ``PeakingAssist/Sensitivity``.
 typealias PeakingSense = PeakingAssist.Sensitivity
 
+/// Raw values are the persisted keys. `stops` is the scale now labeled Video;
+/// its key stays "CineStop" so saved settings keep the scale they chose.
 enum FalseColorScaleKind: String, CaseIterable, Codable, Sendable {
+    case sceneStops = "SceneStops"
     case stops = "CineStop"
     case ire = "IRE"
     case limits = "Limits"
@@ -328,12 +334,13 @@ enum LiveMonitorCompositor {
 
     /// Paint from pre-LUT camera codes, composited over the displayed look.
     /// Limits is holes-only (shadow / highlight warnings over the picture).
-    /// IRE / CineStop paint the full remap — WAVE grayscale in the gaps,
+    /// CineStop / Video / IRE paint the full remap: WAVE grayscale in the gaps,
     /// not a hole onto camera colour. The first map warms asynchronously; exposure
     /// updates retain the last complete paint/mask pair until its replacement lands.
     private static func applyFalseColor(
         over base: CIImage, codes: CIImage, extent: CGRect, effects: LiveImageEffects
     ) -> CIImage {
+        FalseColorLogReading.set(rec709: effects.falseColorRec709)
         guard
             let maps = PocketFalseColorMap.overlayPairData(
                 scale: effects.falseColorScale, mode: effects.colorMode),
@@ -722,7 +729,7 @@ enum LiveMonitorCompositor {
         var output = base
         if zebra.highlightEnabled {
             let rgb = zebra.highlightColor.rgb
-            let threshold = ScopeDisplayScale.signalNative(
+            let threshold = ScopeDisplayScale.zebraHighlightNative(
                 monitorPercent: zebra.highlightIRE, transfer: transfer)
             output = blendStripedZebra(
                 over: output, mask: thresholdMask(hot, above: threshold),

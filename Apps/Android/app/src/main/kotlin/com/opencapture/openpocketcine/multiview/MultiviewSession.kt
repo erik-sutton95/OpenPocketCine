@@ -343,6 +343,7 @@ class MultiviewSession(
         for (tile in tiles) {
             val model = tile.liveModel ?: continue
             tile.lutEnabled = model.borrowedLutEnabled()
+            tile.pose = model.session.multiviewPose
             model.session.releaseMultiview()
             model.multiviewExit = null
             model.close()

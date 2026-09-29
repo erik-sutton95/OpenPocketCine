@@ -269,7 +269,7 @@ struct LiveColorScienceTests {
         }
         let dlog2 = ScopeAnchors.make(transfer: .dlog2, iso: 1600)
         #expect(dlog2.clipEdgeByte == 247)
-        #expect(dlog2.clipFloorByte <= 237, "IRE 95 must include journal shelf luma (~240)")
+        #expect(dlog2.clipFloorByte == 240, "the clip shelf under the 247 ceiling, not WAVE 95")
         #expect(dlog2.clipFloorByte > 188, "188 stays recoverable, not a clip lamp")
         #expect(ScopeAnchors.make(transfer: .dlog, iso: 1600).clipEdgeByte == 223)
         #expect(ScopeAnchors.make(transfer: .dlog, iso: 400).clipEdgeByte == 223)
@@ -326,12 +326,18 @@ struct LiveColorScienceTests {
         let shelfReading = ScopeTrafficLights.reading(
             red: shelf, green: shelf, blue: shelf, transfer: .dlog2)
         #expect(shelfReading.anyClip, "live-tap shelf 243–247 must light the clip lamps")
-        // Journal maxRGB is 243–246; BT.2020 luma of that shelf sits ~240.
-        let lumaShelf = histogram(spikeAt: 240)
-        let lumaReading = ScopeTrafficLights.reading(
-            red: lumaShelf, green: lumaShelf, blue: lumaShelf,
-            luma: lumaShelf, transfer: .dlog2)
-        #expect(lumaReading.anyClip, "luma 240 of a 244-max door must light the lamps")
+        // Journal maxRGB is 243–246 while BT.2020 luma of that door sits ~240: the
+        // channels on the shelf light every lamp even though luma is under it.
+        let door = histogram(spikeAt: 244)
+        let doorReading = ScopeTrafficLights.reading(
+            red: door, green: door, blue: door,
+            luma: histogram(spikeAt: 240), transfer: .dlog2)
+        #expect(doorReading.anyClip, "a 244-max door with luma 240 must light the lamps")
+        let nearClip = histogram(spikeAt: 238)
+        #expect(
+            !ScopeTrafficLights.reading(
+                red: nearClip, green: nearClip, blue: nearClip, luma: nearClip, transfer: .dlog2
+            ).anyClip, "238 (about 97 IRE) is near clip, not clipped")
         let atCeiling = histogram(spikeAt: 247)
         let clipped = ScopeTrafficLights.reading(
             red: atCeiling, green: atCeiling, blue: atCeiling, transfer: .dlog2)
@@ -510,6 +516,158 @@ struct LiveColorScienceTests {
         #expect(abs(LiveColorScience.stops(linear: 475) - 11.366) < 0.01)
         #expect(abs(LiveColorScience.stops(linear: 42) - 7.867) < 0.01)
         #expect(LiveColorScience.stops(linear: 0) == -.infinity)
+    }
+
+    @Test func sceneStopsPaintFiveZonesAroundGray() {
+        let bands = LiveColorScience.falseColorBands(.sceneStops, transfer: .dlog2)
+        #expect(
+            bands.map(\.label) == [
+                "crush", "shadows", "−2", "−1", "18%", "+1", "+2", "highlights", "clip",
+            ])
+        #expect(bands.first?.lowerBound == -.infinity && bands.last?.upperBound == .infinity)
+        for index in 0..<(bands.count - 1) {
+            #expect(bands[index].upperBound == bands[index + 1].lowerBound, "every stop is painted")
+        }
+        func label(_ stops: Double) -> String? {
+            LiveColorScience.falseColorBand(value: stops, scale: .sceneStops, transfer: .dlog2)?
+                .label
+        }
+        #expect(label(-.infinity) == "crush")
+        #expect(label(-7) == "crush")
+        #expect(label(-6) == "shadows")
+        #expect(label(-2) == "−2")
+        #expect(label(-1) == "−1")
+        #expect(label(0) == "18%")
+        #expect(label(1) == "+1")
+        #expect(label(2) == "+2")
+        #expect(label(10) == "highlights", "unknown ceiling clips from +11")
+        #expect(label(10.6) == "clip")
+        for stops in [-5.0, -3] { #expect(label(stops) == "shadows") }
+        for stops in [3.0, 5, 9.4] { #expect(label(stops) == "highlights") }
+        #expect(LiveFalseColorScale.sceneStops.usesSceneStops)
+        #expect(!LiveFalseColorScale.stops.usesSceneStops)
+    }
+
+    @Test func sceneStopPaletteIsPinned() {
+        let bands = LiveColorScience.falseColorBands(.sceneStops, transfer: .dlog2)
+        let palette: [(String, Double, Double, Double)] = [
+            ("crush", 75, 8, 165), ("shadows", 102, 102, 102), ("−2", 39, 76, 0),
+            ("−1", 155, 196, 56), ("18%", 127, 127, 127), ("+1", 221, 174, 180),
+            ("+2", 252, 232, 96), ("highlights", 179, 178, 178), ("clip", 245, 39, 0),
+        ]
+        #expect(bands.map(\.label) == palette.map(\.0))
+        for (band, expected) in zip(bands, palette) {
+            #expect(
+                band.red == expected.1 / 255 && band.green == expected.2 / 255
+                    && band.blue == expected.3 / 255, "\(band.label)")
+        }
+    }
+
+    @Test func sceneStopClipFollowsTheCameraCeiling() {
+        func label(_ stops: Double, _ transfer: MonitorTransfer, clip: Double?) -> String? {
+            LiveColorScience.falseColorBand(
+                value: stops, scale: .sceneStops, transfer: transfer, clipEncoded: clip)?.label
+        }
+        let dlog2Clip = ScopeExposureCeiling.clipEncoded(transfer: .dlog2, iso: 1600)
+        let dlog2Stops = LiveColorScience.stops(encoded: dlog2Clip, transfer: .dlog2)
+        #expect(dlog2Stops > 10.5)
+        #expect(label(dlog2Stops - 0.5, .dlog2, clip: dlog2Clip) == "highlights")
+        #expect(label(dlog2Stops, .dlog2, clip: dlog2Clip) == "clip")
+
+        let rec709Clip = ScopeExposureCeiling.clipEncoded(transfer: .rec709)
+        let rec709Stops = LiveColorScience.stops(encoded: rec709Clip, transfer: .rec709)
+        #expect(rec709Stops < 2.5)
+        #expect(label(rec709Stops - 0.1, .rec709, clip: rec709Clip) == "+2")
+        #expect(label(rec709Stops, .rec709, clip: rec709Clip) == "clip")
+        let rec709Labels = LiveColorScience.falseColorBands(
+            .sceneStops, transfer: .rec709, clipEncoded: rec709Clip
+        ).map(\.label)
+        #expect(!rec709Labels.contains("highlights"), "Rec.709 clips inside +2")
+    }
+
+    @Test func clipToolsAgreeOnTheClipShelf() {
+        ScopeExposureCeiling.reset()
+        ScopeExposureCeiling.setISO(1600)
+        defer { ScopeExposureCeiling.reset() }
+        func histogram(atByte byte: Int, pixels: Int = 40) -> [Int] {
+            var bins = [Int](repeating: 0, count: 256)
+            bins[Int(MonitorTransfer.dlog2.middleGrayEncoded * 255)] = 5_000
+            bins[byte] = pixels
+            return bins
+        }
+        func lamps(_ bins: [Int]) -> ScopeTrafficLightsReading {
+            ScopeTrafficLights.reading(
+                red: bins, green: bins, blue: bins, luma: bins, transfer: .dlog2)
+        }
+        let underClip = Int(
+            (ScopeDisplayScale.signalNative(monitorPercent: 93, transfer: .dlog2) * 255).rounded())
+        #expect(underClip < 240)
+        #expect(!lamps(histogram(atByte: underClip)).anyClip, "93 IRE is under clip")
+        #expect(lamps(histogram(atByte: 244)).anyClip, "the clip shelf is clipped")
+        #expect(lamps(histogram(atByte: 242)).anyClip, "a blown window read 242 on device")
+
+        #expect(ScopeExposureCeiling.clipShelfByte(transfer: .dlog2) == 240)
+        let zebra100 = ScopeDisplayScale.zebraHighlightNative(monitorPercent: 100, transfer: .dlog2)
+        #expect(zebra100 * 255 <= 240.0001, "zebra 100% fires on the clip shelf")
+        #expect(
+            ScopeDisplayScale.zebraHighlightNative(monitorPercent: 90, transfer: .dlog2)
+                == ScopeDisplayScale.signalNative(monitorPercent: 90, transfer: .dlog2),
+            "lower zebra settings are unchanged")
+
+        let ceiling = ScopeExposureCeiling.clipEncoded(transfer: .dlog2)
+        let shelfStops = LiveColorScience.stops(encoded: 244.0 / 255, transfer: .dlog2)
+        #expect(
+            LiveColorScience.falseColorBand(
+                value: shelfStops, scale: .sceneStops, transfer: .dlog2, clipEncoded: ceiling)?
+                .label == "clip", "CineStop paints the clip shelf red")
+    }
+
+    @Test func videoAndIreReadLogAsTheOperatorChooses() {
+        func ire(_ linear: Double, _ transfer: MonitorTransfer, rec709: Bool) -> Double {
+            let read = LiveColorScience.falseColorReading(
+                encoded: LiveColorScience.encode(linear, transfer: transfer), transfer: transfer,
+                rec709: rec709)
+            return ScopeDisplayScale.monitorPercent(read.encoded, transfer: read.transfer)
+        }
+        func label(_ value: Double) -> String? {
+            LiveColorScience.falseColorBand(value: value, scale: .ire, transfer: .rec709)?.label
+        }
+        // 709: DJI's official looks put 18% grey at 38–41 IRE and +1 stop at 53–54.
+        for transfer in [MonitorTransfer.dlog2, .dlog, .dlogm] {
+            #expect(label(ire(0.18, transfer, rec709: true)) == "18%MG", "\(transfer) 709 grey")
+            #expect(label(ire(0.36, transfer, rec709: true)) == "MG+1", "\(transfer) 709 +1")
+        }
+        // LOG: the signal, like WAVE, so D-Log2 grey (~30) is a gap.
+        #expect(label(ire(0.18, .dlog2, rec709: false)) == nil)
+        // Curves without an official look always read the signal.
+        #expect(LiveColorScience.rec709LookIRE(encoded: 0.5, transfer: .rec709) == nil)
+        #expect(!LiveColorScience.readsThroughLook(transfer: .rec709, rec709: true))
+        #expect(LiveColorScience.readsThroughLook(transfer: .dlog2, rec709: true))
+    }
+
+    @Test func cineStopAt709KeepsSceneStopsAndClipsWhereTheLookClips() {
+        let log = LiveColorScience.falseColorClip(scale: .sceneStops, transfer: .dlog2, rec709: false)
+        let look = LiveColorScience.falseColorClip(scale: .sceneStops, transfer: .dlog2, rec709: true)
+        #expect(look.transfer == .dlog2, "CineStop stays on scene stops at 709")
+        #expect(look.ceiling < log.ceiling, "the Rec.709 look saturates before the sensor")
+        let bands = LiveColorScience.falseColorBands(
+            .sceneStops, transfer: look.transfer, clipEncoded: look.ceiling)
+        #expect(bands.contains { $0.label == "highlights" }, "light gray still sits above +2")
+        let read = LiveColorScience.falseColorReading(
+            encoded: 0.5, transfer: .dlog2, rec709: true, scale: .sceneStops)
+        #expect(read.encoded == 0.5 && read.transfer == .dlog2)
+    }
+
+    /// Android `FalseColorBands.LOOK_SATURATION` mirrors these; change both together.
+    @Test func cineStopAt709ClipMatchesTheAndroidMirror() {
+        let android: [MonitorTransfer: Double] = [.dlog2: 30.0 / 32, .dlog: 1, .dlogm: 1]
+        for (transfer, ceiling) in android {
+            let clip = LiveColorScience.falseColorClip(scale: .sceneStops, transfer: transfer, rec709: true)
+            #expect(clip.ceiling == ceiling, "\(transfer)")
+        }
+        for transfer in [MonitorTransfer.rec709, .hdr] {
+            #expect(!LiveColorScience.readsThroughLook(transfer: transfer, rec709: true))
+        }
     }
 
     @Test func monitorPercentIsTheWaveAxis() {

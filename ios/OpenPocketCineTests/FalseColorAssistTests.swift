@@ -65,27 +65,32 @@ final class FalseColorAssistTests: XCTestCase {
     }
 
     func testScaleOptionsMatchOpenZCine() {
-        XCTAssertEqual(FalseColorAssist.scaleOptions, ["CineStop", "IRE", "Limits"])
-        XCTAssertEqual(FalseColorAssist.Options.default.scale, .stops)
+        XCTAssertEqual(FalseColorAssist.scaleOptions, ["CineStop", "Video", "IRE", "Limits"])
+        XCTAssertEqual(FalseColorAssist.Options.default.scale, .sceneStops)
         XCTAssertTrue(FalseColorAssist.Options.default.referenceEnabled)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "CineStop"), .stops)
+        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "CineStop"), .sceneStops)
+        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "Video"), .stops)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "PStops"), .stops)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "ZC Stops"), .stops)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "IRE"), .ire)
         XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "Limits"), .limits)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "unknown"), .stops)
-        XCTAssertEqual(FalseColorAssist.menuLabel(for: .stops), "CineStop")
+        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "unknown"), .sceneStops)
+        XCTAssertEqual(FalseColorAssist.menuLabel(for: .sceneStops), "CineStop")
+        XCTAssertEqual(FalseColorAssist.menuLabel(for: .stops), "Video")
         XCTAssertEqual(FalseColorAssist.menuLabel(for: .ire), "IRE")
         XCTAssertEqual(FalseColorAssist.menuLabel(for: .limits), "Limits")
         XCTAssertTrue(FalseColorAssist.scaleHelp.contains("CineStop"))
-        XCTAssertEqual(FalseColorScaleKind(rawValue: "ZC Stops") ?? .stops, .stops)
-        XCTAssertEqual(LiveImageEffects().falseColorScale, .stops)
+        XCTAssertTrue(FalseColorAssist.scaleHelp.contains("Video"))
+        // A saved "CineStop" predates the scene-stop scale: it keeps the Video scale.
+        XCTAssertEqual(FalseColorScaleKind(rawValue: "CineStop"), .stops)
+        XCTAssertEqual(FalseColorScaleKind(rawValue: "SceneStops"), .sceneStops)
+        XCTAssertEqual(LiveImageEffects().falseColorScale, .sceneStops)
     }
 
     /// Legend copy is pinned once, in core `LiveColorScienceTests`; the shell must
     /// match it band for band (the `zip` in `legendStops` would silently truncate).
     func testLegendLabelsMatchCoreFalseColorBands() {
-        for scale in FalseColorScaleKind.allCases {
+        for scale in FalseColorScaleKind.allCases where !scale.liveScale.usesSceneStops {
             let core = PocketFalseColorMap.bands(scale: scale, transfer: .dlog2).map(\.label)
             XCTAssertEqual(FalseColorAssist.legendLabels(scale: scale), core, "\(scale) labels")
             XCTAssertEqual(
@@ -106,8 +111,68 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(assist.falseColorScale, .ire)
         FalseColorAssist.selectScale("Limits", assist: assist)
         XCTAssertEqual(assist.falseColorScale, .limits)
-        FalseColorAssist.selectScale("CineStop", assist: assist)
+        FalseColorAssist.selectScale("Video", assist: assist)
         XCTAssertEqual(assist.falseColorScale, .stops)
+        FalseColorAssist.selectScale("CineStop", assist: assist)
+        XCTAssertEqual(assist.falseColorScale, .sceneStops)
+    }
+
+    func testCineStopRulerPlacesZonesOnTheStopAxis() {
+        ScopeExposureCeiling.reset()
+        let segments = FalseColorReference.segments(scale: .sceneStops, transfer: .dlog2)
+        XCTAssertEqual(
+            segments.map(\.band.label),
+            ["crush", "shadows", "−2", "−1", "18%", "+1", "+2", "highlights", "clip"])
+        XCTAssertEqual(segments.first?.lowerFraction, 0)
+        XCTAssertEqual(segments.last?.upperFraction, 1)
+        for index in 0..<(segments.count - 1) {
+            XCTAssertEqual(
+                segments[index].upperFraction, segments[index + 1].lowerFraction, accuracy: 0.0001)
+        }
+        XCTAssertEqual(
+            FalseColorReference.sceneStopMarkers(transfer: .dlog2).map(\.label),
+            ["−6", "−4", "−2", "18%", "+2", "+4", "+6", "+8", "clip"],
+            "D-Log2 at ISO 1600: +10 would collide with the +10.9 clip mark")
+        XCTAssertEqual(
+            FalseColorReference.sceneStopMarkers(transfer: .rec709).map(\.label),
+            ["−6", "−4", "−2", "18%", "clip"], "Rec.709 clips at +2.5")
+        let labels = FalseColorReference.sceneStopMarkers(transfer: .dlog2)
+        for index in 0..<(labels.count - 1) {
+            XCTAssertGreaterThan(
+                labels[index + 1].fraction - labels[index].fraction, 0.06, "labels never crowd")
+        }
+        let rec709Clip = FalseColorReference.sceneStopMarkers(transfer: .rec709).last
+        XCTAssertEqual(
+            rec709Clip?.fraction ?? 0, 11.0 / 12, accuracy: 0.01,
+            "the ruler ends one stop past this curve's clip")
+        XCTAssertEqual(FalseColorReference.axisLabels(scale: .sceneStops), [])
+    }
+
+    func testCineStopPaintsEveryStopFlat() {
+        let cube = PocketFalseColorMap.overlayPaintCube(scale: .sceneStops, transfer: .dlog2)
+        func sample(stops: Double) -> (red: Float, green: Float, blue: Float) {
+            let code = Float(LiveColorScience.encode(0.18 * pow(2, stops), transfer: .dlog2))
+            let rgb = cube.map(red: code, green: code, blue: code)
+            return (rgb.red, rgb.green, rgb.blue)
+        }
+        let gray = sample(stops: 0)
+        XCTAssertEqual(gray.red, 127.0 / 255, accuracy: 0.03, "0 stops is gray")
+        XCTAssertEqual(gray.red, gray.green, accuracy: 0.01)
+        XCTAssertEqual(gray.green, gray.blue, accuracy: 0.01)
+        let upper = sample(stops: 2)
+        XCTAssertEqual(upper.red, 252.0 / 255, accuracy: 0.04, "+2 is soft yellow")
+        XCTAssertEqual(upper.green, 232.0 / 255, accuracy: 0.04)
+        let shadows = sample(stops: -4)
+        XCTAssertEqual(shadows.red, 102.0 / 255, accuracy: 0.03, "−4 stops is flat dark gray")
+        XCTAssertEqual(shadows.red, shadows.blue, accuracy: 0.01)
+        let highlights = sample(stops: 5)
+        XCTAssertEqual(highlights.red, 179.0 / 255, accuracy: 0.03, "+5 stops is flat light gray")
+        let over = cube.map(red: 1, green: 1, blue: 1)
+        XCTAssertGreaterThan(over.red, 0.8, "past the live-tap ceiling is clip red")
+        XCTAssertLessThan(over.green, 0.3)
+        let weight = PocketFalseColorMap.overlayWeightCube(scale: .sceneStops, transfer: .dlog2)
+            .map(red: 0.5, green: 0.5, blue: 0.5)
+        XCTAssertGreaterThan(weight.red, 0.9, "CineStop covers the picture, not a hole")
     }
 
     /// OpenZCine `testFalseColorReferenceUsesCompactProportionalScales`.
@@ -156,8 +221,13 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(limits[1].lowerFraction, 0.05, accuracy: 0.0001)
         XCTAssertEqual(limits[1].upperFraction, 0.10, accuracy: 0.0001)
         XCTAssertEqual(limits[2].lowerFraction, 0.94, accuracy: 0.0001)
-        XCTAssertEqual(limits[2].upperFraction, 0.99, accuracy: 0.0001)
-        XCTAssertEqual(limits[3].lowerFraction, 0.99, accuracy: 0.0001)
+        // Limits clip starts on the clip shelf every clip tool shares, not 99 IRE.
+        let shelfIRE = ScopeDisplayScale.monitorPercent(
+            LiveColorScience.clipShelf(ceiling: ScopeExposureCeiling.clipEncoded(transfer: .dlog2)),
+            transfer: .dlog2)
+        XCTAssertLessThan(shelfIRE, 99)
+        XCTAssertEqual(limits[2].upperFraction, shelfIRE / 100, accuracy: 0.0001)
+        XCTAssertEqual(limits[3].lowerFraction, shelfIRE / 100, accuracy: 0.0001)
         XCTAssertEqual(limits[3].upperFraction, 1, accuracy: 0.0001)
 
     }
@@ -209,7 +279,7 @@ final class FalseColorAssistTests: XCTestCase {
         )
     }
 
-    func testCineStopGapsAreGrayscaleAndRec709EighteenIsGreen() {
+    func testVideoGapsAreGrayscaleAndRec709EighteenIsGreen() {
         let encoded = Float(ScopeDisplayScale.signalNative(monitorPercent: 20, transfer: .dlog2))
         let overlay = PocketFalseColorMap.overlayPaintCube(scale: .stops, transfer: .dlog2)
             .map(red: encoded, green: encoded, blue: encoded)
@@ -220,7 +290,7 @@ final class FalseColorAssistTests: XCTestCase {
         let grey = Float(MonitorTransfer.dlog2.middleGrayEncoded)
         let dlog2 = PocketFalseColorMap.cube(scale: .stops, transfer: .dlog2)
             .map(red: grey, green: grey, blue: grey)
-        XCTAssertEqual(dlog2.red, dlog2.green, accuracy: 0.06, "D-Log2 18% is a CineStop gap")
+        XCTAssertEqual(dlog2.red, dlog2.green, accuracy: 0.06, "D-Log2 18% is a Video gap")
         let rec709Grey = Float(MonitorTransfer.rec709.middleGrayEncoded)
         let rec709 = PocketFalseColorMap.cube(scale: .stops, transfer: .rec709)
             .map(red: rec709Grey, green: rec709Grey, blue: rec709Grey)
@@ -228,7 +298,7 @@ final class FalseColorAssistTests: XCTestCase {
         let overlayWeight = PocketFalseColorMap.overlayWeightCube(scale: .stops, transfer: .dlog2)
             .map(red: encoded, green: encoded, blue: encoded)
         XCTAssertGreaterThan(
-            overlayWeight.red, 0.9, "CineStop gaps cover the picture, not punch through")
+            overlayWeight.red, 0.9, "Video gaps cover the picture, not punch through")
     }
 
     /// The compositor reads the async-warmed cube bytes (`overlayPaintData` /
@@ -293,7 +363,7 @@ final class FalseColorAssistTests: XCTestCase {
 
     func testCompositorStopsPaintsGrayInTheGaps() throws {
         try warmOverlayCubes(scale: .stops, mode: .dLog2)
-        // IRE 20 is a CineStop gap (between 12 and 41). WAVE gray, not camera colour.
+        // IRE 20 is a Video gap (between 12 and 41). WAVE gray, not camera colour.
         let encoded = UInt8(
             clamping: Int(
                 (ScopeDisplayScale.signalNative(monitorPercent: 20, transfer: .dlog2) * 255)
@@ -305,9 +375,9 @@ final class FalseColorAssistTests: XCTestCase {
         fx.colorMode = .dLog2
         let product = LiveMonitorCompositor.applyProduct(to: codes, effects: fx, display: codes)
         let rgb = Self.sampleRGB(product.image)
-        XCTAssertEqual(rgb.0, rgb.1, accuracy: 0.06, "CineStop gap is WAVE gray")
+        XCTAssertEqual(rgb.0, rgb.1, accuracy: 0.06, "Video gap is WAVE gray")
         XCTAssertEqual(rgb.1, rgb.2, accuracy: 0.06)
-        XCTAssertGreaterThan(rgb.0, 0.12, "CineStop gaps must not collapse to black")
+        XCTAssertGreaterThan(rgb.0, 0.12, "Video gaps must not collapse to black")
     }
 
     func testLimitsOverlayShowsLUTBetweenZones() throws {
@@ -354,7 +424,7 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertGreaterThan(clipOn.0, clipOn.1, "99–100 must stay the clip paint when LUT is on")
     }
 
-    func testAssistOverlayPaintsGrayInCineStopGap() throws {
+    func testAssistOverlayPaintsGrayInVideoGap() throws {
         try warmOverlayCubes(scale: .stops, mode: .dLog2, recordReadinessDuration: true)
         let encoded = UInt8(
             clamping: Int(
@@ -368,7 +438,7 @@ final class FalseColorAssistTests: XCTestCase {
         let overlay = LiveMonitorCompositor.assistOverlay(from: codes, effects: fx)
         XCTAssertGreaterThan(
             Self.maxAlpha(overlay), 0.85,
-            "CineStop gap is WAVE gray over the picture, not a transparent hole")
+            "Video gap is WAVE gray over the picture, not a transparent hole")
         let rgb = Self.sampleRGB(overlay)
         XCTAssertEqual(rgb.0, rgb.1, accuracy: 0.06)
         XCTAssertEqual(rgb.1, rgb.2, accuracy: 0.06)

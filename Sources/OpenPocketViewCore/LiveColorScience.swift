@@ -157,6 +157,22 @@ public enum ScopeExposureCeiling: Sendable {
         store.withLock { $0 = ExposureCeilingStore.State() }
     }
 
+    /// Clipped detail sits on a shelf under the ceiling, not on the ceiling byte
+    /// itself, and white balance moves it: device journals show 242–247 on clipped
+    /// highlights at D-Log2 ISO 1600 (a blown window read 242–244 on 2026-09-29) and
+    /// 219–223 on D-Log. Every clip tool (Traffic Lights, HISTO lamps, zebra 100%,
+    /// CineStop red) keys this shelf so they agree. The live stream is 8-bit HEVC
+    /// (`scope tap format: 420v`), so near clip and clipped sit only a few codes apart
+    /// at the D-Log2 top; a blown window measured 242–244 on 2026-09-29. 7 codes
+    /// (about ⅓ stop at the D-Log2 top) catches that reliably, so the tools read
+    /// "clipped or within about ⅓ stop of it".
+    public static let clipShelfCodes = 7
+
+    /// First byte of the clip shelf (D-Log2 ISO 1600 → 240).
+    public static func clipShelfByte(transfer: MonitorTransfer, iso: Int? = nil) -> Int {
+        max(1, clipByte(transfer: transfer, iso: iso) - clipShelfCodes)
+    }
+
     /// Encoded curve fraction of the live-tap clip (D-Log2 → 247/255, D-Log → 223/255).
     public static func clipEncoded(transfer: MonitorTransfer, iso: Int? = nil) -> Double {
         Double(clipByte(transfer: transfer, iso: iso)) / 255.0
@@ -296,8 +312,9 @@ public struct ScopeAnchors: Equatable, Sendable {
     public let midLevel: Double
 
     /// Traffic-light band edges on the 0…255 byte axis.
-    /// `clipFloorByte…255` is the clip *zone* (WAVE IRE 95, matching HISTO
-    /// and zebra's highlight start). `clipEdgeByte` is the 100-line ceiling.
+    /// `clipFloorByte…255` is the clip shelf (``ScopeExposureCeiling/clipShelfCodes``
+    /// under the ceiling), the same clip every tool uses. `clipEdgeByte` is the
+    /// 100-line ceiling.
     public let clipEdgeByte: Int
     public let clipFloorByte: Int
     public let crushFloorByte: Int
@@ -317,29 +334,7 @@ public struct ScopeAnchors: Equatable, Sendable {
         let span = max(0, clip - black) * 255
         let crushFloor = Int((black * 255).rounded(.down))
         let crushEdge = Int((black * 255 + 0.02 * span).rounded(.up))
-        // WAVE IRE 95 — same mark HISTO already draws, and just below
-        // zebra's soft highlight start (threshold − 1/40). Journal shelf
-        // 243–246 has luma a few codes under maxRGB; 2% (byte 242) missed
-        // it. 188 is ~76 IRE and stays out. Computed here (not via
-        // signalNative) so make() cannot recurse.
-        let target95 =
-            ScopeDisplayScale.crushLevel
-            + 0.95 * (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel)
-        let encoded95: Double
-        if clip <= mid || mid <= black {
-            encoded95 = black + 0.95 * (clip - black)
-        } else if target95 <= midLevel {
-            let t =
-                (target95 - ScopeDisplayScale.crushLevel)
-                / max(midLevel - ScopeDisplayScale.crushLevel, 1e-9)
-            encoded95 = black + t * (mid - black)
-        } else {
-            let t =
-                (target95 - midLevel)
-                / max(ScopeDisplayScale.clipLevel - midLevel, 1e-9)
-            encoded95 = mid + t * (clip - mid)
-        }
-        let clipFloor = min(clipEdge, max(0, Int((encoded95 * 255).rounded(.down))))
+        let clipFloor = max(0, clipEdge - ScopeExposureCeiling.clipShelfCodes)
         return ScopeAnchors(
             black: black, mid: mid, clip: clip, midLevel: midLevel,
             clipEdgeByte: clipEdge,
@@ -438,6 +433,16 @@ public enum ScopeDisplayScale {
         }
         let t = (target - a.midLevel) / max(clipLevel - a.midLevel, 1e-9)
         return a.mid + t * (a.clip - a.mid)
+    }
+
+    /// Zebra highlight threshold: the monitor percentage, but never above the clip
+    /// shelf, so 100% paints clipped detail (which sits a few codes under the ceiling).
+    public static func zebraHighlightNative(
+        monitorPercent percent: Double, transfer: MonitorTransfer, iso: Int? = nil
+    ) -> Double {
+        min(
+            signalNative(monitorPercent: percent, transfer: transfer, iso: iso),
+            Double(ScopeExposureCeiling.clipShelfByte(transfer: transfer, iso: iso)) / 255)
     }
 
     /// 256-entry `waveformLevel` lookup for the hot sampling/vertex paths.
@@ -688,11 +693,40 @@ public struct LiveFalseColorBand: Equatable, Sendable {
     }
 }
 
-/// False-colour scale names. All scales key WAVE IRE.
+/// False-colour scale names. Video (`stops`) / IRE / Limits key WAVE IRE;
+/// CineStop (`sceneStops`) keys scene stops around 18% grey.
 public enum LiveFalseColorScale: String, CaseIterable, Sendable {
     case stops = "Stops"
     case ire = "IRE"
     case limits = "Limits"
+    case sceneStops = "SceneStops"
+
+    public var usesSceneStops: Bool { self == .sceneStops }
+
+    /// Half-width of the soft band edge in the cube bakes: half an IRE on the WAVE
+    /// axis, a twentieth of a stop on CineStop.
+    public var edgeSoftness: Double { usesSceneStops ? 0.05 : 0.5 }
+}
+
+/// Operator choice for how false colour reads log curves: the signal like WAVE
+/// (LOG, default) or the camera's official Rec.709 look (709). Shells set it from settings;
+/// the iOS cube keys include it so a change rebakes.
+public enum FalseColorLogReading {
+    private static let lock = NSLock()
+    // Protected by lock.
+    nonisolated(unsafe) private static var readsRec709 = false
+
+    public static var rec709: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return readsRec709
+    }
+
+    public static func set(rec709: Bool) {
+        lock.lock()
+        readsRec709 = rec709
+        lock.unlock()
+    }
 }
 
 /// Zebra defaults on the ``ScopeDisplayScale/monitorPercent(_:transfer:)`` axis.
@@ -781,22 +815,50 @@ public enum LiveColorScience {
         stops(linear: linearize(encoded, transfer: transfer))
     }
 
-    /// IRE / Limits / CineStop ride the WAVE axis.
+    /// Video / IRE / Limits ride the WAVE axis. CineStop rides scene stops.
+    /// `clipEncoded` is the camera ceiling: Limits and CineStop start their clip
+    /// band on its clip shelf. Cube bakes pass `latticeSize` so the shelf snaps to
+    /// the lattice point below it, or trilinear sampling would blend a blown
+    /// highlight between the clip colour and the band under it.
     public static func falseColorBands(
-        _ scale: LiveFalseColorScale, transfer: MonitorTransfer, clipEncoded: Double? = nil
+        _ scale: LiveFalseColorScale, transfer: MonitorTransfer, clipEncoded: Double? = nil,
+        latticeSize: Int? = nil
     ) -> [LiveFalseColorBand] {
+        let shelf = clipEncoded.map { clipShelf(ceiling: $0, latticeSize: latticeSize) }
+        // On a lattice the shelf point itself must be fully clip, not a 50/50 soft edge.
+        let soften = latticeSize == nil ? 0 : scale.edgeSoftness
         switch scale {
-        case .stops: cineStopBands
-        case .ire: ireBands
-        case .limits: limitBands
+        case .stops: return cineStopBands
+        case .ire: return ireBands
+        case .limits:
+            return limitBands(
+                shelfIRE: shelf.map {
+                    ScopeDisplayScale.monitorPercent($0, transfer: transfer) - soften
+                })
+        case .sceneStops:
+            return sceneStopBands(
+                clipStops: shelf.map { stops(encoded: $0, transfer: transfer) - soften })
         }
     }
 
+    /// Limits with its clip band starting on the clip shelf (never above 99 IRE).
+    fileprivate static func limitBands(shelfIRE: Double?) -> [LiveFalseColorBand] {
+        guard let edge = shelfIRE, edge < 99, edge > limitBands[2].lowerBound else {
+            return limitBands
+        }
+        var bands = limitBands
+        bands[2].upperBound = edge
+        bands[3].lowerBound = edge
+        return bands
+    }
+
     public static func falseColorBand(
-        value: Double, scale: LiveFalseColorScale, transfer: MonitorTransfer
+        value: Double, scale: LiveFalseColorScale, transfer: MonitorTransfer,
+        clipEncoded: Double? = nil
     ) -> LiveFalseColorBand? {
-        let candidate = clamp(value, 0, 100)
-        return falseColorBands(scale, transfer: transfer).first { $0.contains(candidate) }
+        let candidate = scale.usesSceneStops ? value : clamp(value, 0, 100)
+        return falseColorBands(scale, transfer: transfer, clipEncoded: clipEncoded)
+            .first { $0.contains(candidate) }
     }
 
     // MARK: - Private transfers
@@ -1034,7 +1096,7 @@ public struct ColorMatrix3: Equatable, Sendable {
 // MARK: - False-colour tables (WAVE IRE / EI-relative stops)
 
 extension LiveColorScience {
-    /// CineStop — published Video Mode IRE on the WAVE axis. Gaps are grayscale.
+    /// Video (formerly CineStop): published Video Mode IRE on the WAVE axis. Gaps are grayscale.
     /// Rec.709 18% (~41) hits 41–48 green; D-Log2 18% (30.50) is a gap.
     fileprivate static let cineStopBands: [LiveFalseColorBand] = [
         ire(0, 5, 0.44, 0.22, 0.76, "0–4"),
@@ -1067,6 +1129,124 @@ extension LiveColorScience {
         ire(94, 99, 0.89, 0.72, 0.29, "94–98"),
         ire(99, .infinity, 0.78, 0.28, 0.18, "99–100"),
     ]
+
+    /// Video level (0…100 IRE) of an encoded neutral code through the camera's official
+    /// Rec.709 look. Video / IRE use it when the operator picks the 709 reading
+    /// (``FalseColorLogReading``). The official cubes are neutral on their grey axis,
+    /// so their tone curve is the whole story for luma. Curves without an official
+    /// look (Rec.709, HLG, future brands) return `nil` and stay on the signal.
+    public static func rec709LookIRE(encoded: Double, transfer: MonitorTransfer) -> Double? {
+        guard let curve = rec709LookCurve(transfer) else { return nil }
+        let position = clamp01(encoded) * Double(curve.count - 1)
+        let index = min(Int(position), curve.count - 2)
+        let fraction = position - Double(index)
+        return (curve[index] + (curve[index + 1] - curve[index]) * fraction) * 100
+    }
+
+    /// Luma of the grey axis (33 points) of DJI's official Rec.709 cubes: Pocket 4P D-Log2
+    /// and D-Log, Nano D-Log M. Regenerate from the cubes if DJI updates them.
+    private static func rec709LookCurve(_ transfer: MonitorTransfer) -> [Double]? {
+        switch transfer {
+        case .dlog2:
+            [
+                0.0000, 0.0048, 0.0294, 0.0657, 0.1016, 0.1390, 0.1854, 0.2390, 0.2987, 0.3631,
+                0.4300, 0.4976, 0.5651, 0.6306, 0.6930, 0.7508, 0.8024, 0.8471, 0.8847, 0.9152,
+                0.9392, 0.9571, 0.9702, 0.9796, 0.9865, 0.9916, 0.9953, 0.9977, 0.9991, 0.9998,
+                1.0000, 1.0000, 1.0000,
+            ]
+        case .dlog:
+            [
+                0.0000, 0.0162, 0.0253, 0.0379, 0.0519, 0.0697, 0.0938, 0.1231, 0.1583, 0.1974,
+                0.2451, 0.2989, 0.3568, 0.4155, 0.4741, 0.5322, 0.5896, 0.6463, 0.7019, 0.7561,
+                0.8081, 0.8543, 0.8922, 0.9224, 0.9459, 0.9636, 0.9762, 0.9849, 0.9905, 0.9939,
+                0.9962, 0.9988, 1.0000,
+            ]
+        case .dlogm:
+            [
+                0.0000, 0.0029, 0.0115, 0.0275, 0.0535, 0.0849, 0.1192, 0.1552, 0.1925, 0.2303,
+                0.2692, 0.3090, 0.3488, 0.3883, 0.4239, 0.4563, 0.4874, 0.5193, 0.5538, 0.5908,
+                0.6299, 0.6685, 0.7057, 0.7404, 0.7743, 0.8073, 0.8402, 0.8727, 0.9040, 0.9332,
+                0.9604, 0.9832, 1.0000,
+            ]
+        case .rec709, .hdr:
+            nil
+        }
+    }
+
+    /// True when the 709 reading applies: the operator picked 709 and this curve has an
+    /// official Rec.709 look. Every false colour scale then reads the look as Rec.709.
+    public static func readsThroughLook(transfer: MonitorTransfer, rec709: Bool) -> Bool {
+        rec709 && rec709LookCurve(transfer) != nil
+    }
+
+    /// The code and curve a false colour scale evaluates: the camera signal (LOG), or with
+    /// the 709 reading the official look's Rec.709 code, as if the camera sent Rec.709.
+    /// CineStop always reads real scene stops; 709 only moves its clip (see
+    /// ``falseColorClip(scale:transfer:rec709:)``).
+    public static func falseColorReading(
+        encoded: Double, transfer: MonitorTransfer, rec709: Bool,
+        scale: LiveFalseColorScale = .ire
+    ) -> (encoded: Double, transfer: MonitorTransfer) {
+        guard rec709, !scale.usesSceneStops,
+            let look = rec709LookIRE(encoded: encoded, transfer: transfer)
+        else { return (encoded, transfer) }
+        return (look / 100, .rec709)
+    }
+
+    /// The curve a scale's bands are built on and the ceiling its clip band keys: the
+    /// camera's live-tap ceiling (LOG), the Rec.709 top (709, video-level scales), or
+    /// for CineStop at 709 the log code where the official look saturates.
+    public static func falseColorClip(
+        scale: LiveFalseColorScale, transfer: MonitorTransfer, rec709: Bool
+    ) -> (transfer: MonitorTransfer, ceiling: Double) {
+        guard readsThroughLook(transfer: transfer, rec709: rec709),
+            let curve = rec709LookCurve(transfer)
+        else { return (transfer, ScopeExposureCeiling.clipEncoded(transfer: transfer)) }
+        guard scale.usesSceneStops else {
+            return (.rec709, ScopeExposureCeiling.clipEncoded(transfer: .rec709))
+        }
+        let top = curve.firstIndex { $0 >= 0.9999 } ?? (curve.count - 1)
+        return (transfer, Double(top) / Double(curve.count - 1))
+    }
+
+    /// Encoded clip shelf under a ceiling (``ScopeExposureCeiling/clipShelfCodes``),
+    /// snapped down to a cube lattice point when `latticeSize` is given.
+    public static func clipShelf(ceiling: Double, latticeSize: Int? = nil) -> Double {
+        let shelf = max(0, ceiling - Double(ScopeExposureCeiling.clipShelfCodes) / 255)
+        guard let size = latticeSize, size > 1 else { return shelf }
+        return (shelf * Double(size - 1)).rounded(.down) / Double(size - 1)
+    }
+
+    /// Scene stops where clip starts when the camera ceiling is unknown (+11).
+    public static let sceneStopDefaultClip = 10.5
+
+    /// CineStop: five whole-stop zones around 18% grey, identical on every camera:
+    /// −2 dark green, −1 yellow-green, 0 grey, +1 light pink (skin anchor), +2 soft
+    /// yellow (upper skin limit). Violet is crushed (−7 and below) and red is
+    /// clipped from the camera ceiling. Other shadows are one flat dark grey and
+    /// other highlights one flat light grey, so scene texture never distracts.
+    /// Zones past the ceiling never paint.
+    fileprivate static func sceneStopBands(clipStops: Double?) -> [LiveFalseColorBand] {
+        let clip = clipStops.flatMap { $0.isFinite ? $0 : nil } ?? sceneStopDefaultClip
+        let zones = [
+            band(-2.5, -1.5, 39, 76, 0, "−2"),
+            band(-1.5, -0.5, 155, 196, 56, "−1"),
+            band(-0.5, 0.5, 127, 127, 127, "18%"),
+            band(0.5, 1.5, 221, 174, 180, "+1"),
+            band(1.5, 2.5, 252, 232, 96, "+2"),
+        ]
+        var bands = [
+            band(-.infinity, -6.5, 75, 8, 165, "crush"),
+            band(-6.5, -2.5, 102, 102, 102, "shadows"),
+        ]
+        for var zone in zones where zone.lowerBound < clip {
+            zone.upperBound = min(zone.upperBound, clip)
+            bands.append(zone)
+        }
+        if clip > 2.5 { bands.append(band(2.5, clip, 179, 178, 178, "highlights")) }
+        bands.append(band(clip, .infinity, 245, 39, 0, "clip"))
+        return bands
+    }
 
     private static func band(
         _ lo: Double, _ hi: Double,

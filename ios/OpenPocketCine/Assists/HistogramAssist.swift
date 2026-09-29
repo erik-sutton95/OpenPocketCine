@@ -44,7 +44,7 @@ enum HistogramAssist {
 
     static let trafficLightsTitle = "Traffic Lights"
     static let trafficLightsHelp =
-        "Show small RGB edge blocks for crushed and clipped channels."
+        "Show small RGB edge blocks for crushed and clipped channels. Clip lights from about a third of a stop under the camera's clip, the same point zebra 100% and CineStop use."
     static let compensationTitle = "Crush/Clip Compensation"
     static let compensationHelp =
         "Stops of crush/clip tolerance before a traffic light glows. Shared with the goal-post meter."

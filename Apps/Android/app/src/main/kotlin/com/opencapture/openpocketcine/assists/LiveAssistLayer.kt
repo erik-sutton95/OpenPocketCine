@@ -424,9 +424,16 @@ private fun FocusBox(nx: Float, ny: Float) {
 @Composable
 internal fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, modifier: Modifier = Modifier) {
     val transfer = MonitorTransfer.fromColorMode(colorMode)
-    val segments = FalseColorReference.segments(state.falseColorScale, transfer)
+    val rec709 = state.falseColorRec709
+    val segments = FalseColorReference.segments(state.falseColorScale, transfer, rec709)
+    val markers =
+        if (state.falseColorScale.usesSceneStops) {
+            FalseColorReference.sceneStopMarkers(transfer, rec709)
+        } else {
+            emptyList()
+        }
     val axis = FalseColorReference.axisLabels(state.falseColorScale)
-    val curve = FalseColorReference.curveKeyLabel(colorMode)
+    val curve = FalseColorReference.curveKeyLabel(colorMode, rec709)
     Box(
         modifier
             .size(ScopePanelSize.falseColorReference.width.dp, ScopePanelSize.falseColorReference.height.dp)
@@ -468,7 +475,23 @@ internal fun FalseColorReferenceRuler(state: LiveAssistState, colorMode: Int, mo
             fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
             modifier = Modifier.align(Alignment.TopEnd),
         )
-        if (axis.isNotEmpty()) {
+        if (markers.isNotEmpty()) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxSize().padding(top = 26.dp)) {
+                markers.forEach { marker ->
+                    Text(
+                        marker.label,
+                        color = LiveDesign.muted,
+                        fontSize = 5.5.sp,
+                        fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
+                        modifier =
+                            Modifier.offset(
+                                x = (ScopePanelSize.falseColorReference.width * marker.fraction.toFloat() - 10f).dp,
+                                y = 0.dp,
+                            ),
+                    )
+                }
+            }
+        } else if (axis.isNotEmpty()) {
             Row(
                 Modifier.align(Alignment.BottomStart).fillMaxSize().padding(top = 26.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,

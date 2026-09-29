@@ -38,6 +38,7 @@ internal fun rememberLiveFeedEffectsPlan(
     val peakingColor = assist.peakingColor
     val peakingSense = assist.peakingSensitivity
     val falseScale = assist.falseColorScale
+    val falseRec709 = assist.falseColorRec709
     val zebraHighlight = assist.zebraHighlight
     val zebraMidtone = assist.zebraMidtone
     val zebraHighlightIRE = assist.zebraHighlightIRE
@@ -70,6 +71,7 @@ internal fun rememberLiveFeedEffectsPlan(
         peakingColor,
         peakingSense,
         falseScale,
+        falseRec709,
         zebraHighlight,
         zebraMidtone,
         zebraHighlightIRE,
