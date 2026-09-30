@@ -6,7 +6,7 @@ not a new protocol or architecture contract.
 Correction status: the documentation changes identified in items 1–4 and 6–7
 below are applied in this worktree, including Multiview navigation and the stale
 engineering paragraphs. Item 5 now has a separate
-[Pocket 3 survey reference](../handbook/src/content/docs/devices/pocket-3/index.md),
+[Pocket 3 survey reference](https://opencapture.org/openpocketcine/docs/devices/pocket-3/),
 linked from navigation and the command catalog. Its UI, accepted-request,
 status and inspected-file evidence are explicitly distinguished. The
 [reference result map](pocket3-reference-checklist.md) records the remaining
@@ -90,7 +90,7 @@ Evidence labels:
 | [#323](https://github.com/erik-sutton95/OpenPocketCine/pull/323) | Coffee embed script | Landing page only; handbook update unnecessary | No camera behavior change. |
 | [#322](https://github.com/erik-sutton95/OpenPocketCine/pull/322) | Coffee support button | Landing page only; handbook update unnecessary | No camera behavior change. |
 | [#319](https://github.com/erik-sutton95/OpenPocketCine/pull/319) | Movable ND chip and units | Both app pages cover hold-drag and Stops / ND32 / ND 0.3 | Physical iPhone chip/drag/unit check. Physical Android pending. D-Log M estimate caveat should accompany the ND description. |
-| [#320](https://github.com/erik-sutton95/OpenPocketCine/pull/320) | Recent-feature release notes | [Keeping docs current](../handbook/src/content/docs/contribute/documentation.md) updated | Documentation and note-validator tests; no app behavior change. |
+| [#320](https://github.com/erik-sutton95/OpenPocketCine/pull/320) | Recent-feature release notes | [Keeping docs current](https://opencapture.org/openpocketcine/docs/contribute/documentation/) updated | Documentation and note-validator tests; no app behavior change. |
 | [#316](https://github.com/erik-sutton95/OpenPocketCine/pull/316) | Multiview, live decoding, D-Log M scopes, Pocket 3 FORMAT fallback | Both app pages, Multiview guide, BLE, commands and live-view pages updated | Physical three-camera iPhone preview/record, five Pocket 3 reconnects and D-Log M scope routing recorded. Pocket 3 2.7K record/reconnect, AP restoration, saved stages, hotspot, full borrowed controls and Android physical checks pending. Several old statements conflict with these additions; see below. |
 | [#308](https://github.com/erik-sutton95/OpenPocketCine/pull/308) | Native Motion Control and AirPods tracking | Both app pages and command catalog updated | Physical Pocket 4 Pro/iPhone motion and pause/resume checks. Pocket 3, Android, optical repeatability and end-to-end AirPods wearer qualification pending. |
 | [#306](https://github.com/erik-sutton95/OpenPocketCine/pull/306) | Shared-Wi-Fi watcher relay and controls | iOS page and live-view transport updated | Automated real-socket, recovery and load tests. Earlier one-iPad smoothness report is physical evidence for that earlier configuration. Final QR/passcode/recovery build and multiple wireless watchers remain pending. |
@@ -119,7 +119,7 @@ claims and the FORMAT corrections; their physical claims remain attributed.
 
 ### 1. Correct the Pocket 3 codec table and obsolete qualification text
 
-Priority: high. [Live view](../handbook/src/content/docs/protocol/live-view.md)
+Priority: high. [Live view](https://opencapture.org/openpocketcine/docs/protocol/live-view/)
 says all “Pocket” previews are HEVC, and later says “Nano sends AVC while Pocket
 sends HEVC.” The same page now describes captured **Pocket 3 AVC** startup.
 The iOS feature list mentions AVC only for Nano. This can cause a contributor to
@@ -144,10 +144,10 @@ Sources: [PR #316](https://github.com/erik-sutton95/OpenPocketCine/pull/316),
 
 ### 2. Make Multiview discoverable and state its observed recovery limit
 
-Priority: high. [Multiview guide](../handbook/src/content/docs/guides/multiview-prototype.md)
-is detailed, but [sidebar configuration](../handbook/astro.config.mjs),
-[overview](../handbook/src/content/docs/index.mdx) and
-[iOS page](../handbook/src/content/docs/apps/ios.md) provide no Multiview entry.
+Priority: high. [Multiview guide](https://opencapture.org/openpocketcine/docs/guides/multiview-prototype/)
+is detailed, but sidebar configuration (`handbook/astro.config.mjs`),
+[overview](https://opencapture.org/openpocketcine/docs/) and
+[iOS page](https://opencapture.org/openpocketcine/docs/apps/ios/) provide no Multiview entry.
 A published page that visitors cannot find does not adequately announce a major
 new feature.
 
@@ -169,7 +169,7 @@ Sources: [PR #316](https://github.com/erik-sutton95/OpenPocketCine/pull/316),
 ### 3. Surface Pocket 3's capability fallback and mode qualification
 
 Priority: high. Both app pages describe FORMAT as camera-advertised choices
-only. [Command catalog](../handbook/src/content/docs/protocol/commands.md#pocket-3-format-choices-without-a-capability-table)
+only. [Command catalog](https://opencapture.org/openpocketcine/docs/protocol/commands/#pocket-3-format-choices-without-a-capability-table)
 correctly documents the Pocket 3 normal-Video fallback when the camera rejects
 the capability request. Link that section from both app pages and explain that
 reported capabilities take precedence, selection waits for camera confirmation,
@@ -246,8 +246,8 @@ Sources: [PR #308](https://github.com/erik-sutton95/OpenPocketCine/pull/308),
 
 ### 7. Correct the Android install link description
 
-Priority: low. The [overview](../handbook/src/content/docs/index.mdx) calls
-Android “not on Play yet.” The [Android page](../handbook/src/content/docs/apps/android.md)
+Priority: low. The [overview](https://opencapture.org/openpocketcine/docs/) calls
+Android “not on Play yet.” The [Android page](https://opencapture.org/openpocketcine/docs/apps/android/)
 describes Google Play closed testing and links to the landing page. Replace the
 overview label with “Google Play closed testing” to match the current install
 guidance. Do not imply a public production-store release.
@@ -268,7 +268,7 @@ obsolete facts in future implementations.
 ## Physical evidence to prioritize before returning Pocket 3
 
 The survey now supplies a substantial part of the original evidence queue.
-The [public reference](https://openpocketcine.app/docs/devices/pocket-3/) and
+The [public reference](https://opencapture.org/openpocketcine/docs/devices/pocket-3/) and
 [result map](pocket3-reference-checklist.md) distinguish completed observations
 from remaining checks; they do not claim an exhaustive sweep or prove OPC parity.
 

@@ -279,15 +279,13 @@ fi
 pause "Secret scanning, push protection, and private reporting are on?"
 
 # ── 6. Verify the public surfaces ────────────────────────────────────────
-stage "Verify Pages, CI, and Xcode Cloud"
-open_url "https://openpocketcine.app/"
-step "Landing page still loads over HTTPS. Custom domain openpocketcine.app is unchanged."
+stage "Verify CI and Xcode Cloud"
 open_url "https://github.com/erik-sutton95/OpenPocketCine/actions"
 step "Workflow CI is Active (not disabled). After this branch merges, PRs must show a green 'CI gate'."
 step "Native Swift/iOS and Android jobs run on public repos (hosted macOS is then free)."
 open_url "https://appstoreconnect.apple.com/apps"
 step "Xcode Cloud still lists erik-sutton95/OpenPocketCine. Reconnect GitHub if the workflow lost the repo."
-note "No GitHub Actions secrets are required for CI. Optional Pages variable: TESTFLIGHT_URL."
-pause "Pages, Actions, and Xcode Cloud look healthy?"
+note "No GitHub Actions secrets are required for CI."
+pause "Actions and Xcode Cloud look healthy?"
 
 finish

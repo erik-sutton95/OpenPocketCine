@@ -42,8 +42,8 @@ re-run the checklist.
   Route contact through GitHub-native channels (Security Advisories, maintainer profiles).
 - **Vendor / proprietary protocol material.** Any vendor SDK, specification PDF, header, binary, or
   network capture (`*.pcap`, `*.pcapng`). Protocol facts must be attributable to public sources in
-  the [protocol handbook](https://openpocketcine.app/docs/)
-  (`handbook/src/content/docs/`) and hardware observation — never pasted from proprietary
+  the [protocol handbook](https://opencapture.org/openpocketcine/docs/)
+  and hardware observation — never pasted from proprietary
   DJI documentation.
 - **Unofficial LUT dumps.** The bundled official Rec.709 cubes under
   `ios/OpenPocketCine/Resources/` and `Apps/Android/app/src/main/assets/luts/` are
@@ -52,7 +52,7 @@ re-run the checklist.
 - **Internal planning dumps.** `.planning/`, `STATUS.md`, and `OVERNIGHT.md` are local working
   notes. Public direction lives in [`ROADMAP.md`](ROADMAP.md).
 - **Raw working media.** Layered design files, unreviewed captures, and full-resolution marketing
-  sources stay under `.local/`. Only reviewed, optimized runtime exports belong in `site/`.
+  sources stay under `.local/`. Only reviewed, optimized README images belong in `docs/assets/`.
 - **Live-view UI dumps.** Phone screenshots of a connected camera (home interiors, people,
   private spaces) stay out of the repo. Keep them on the local Desktop review folder or
   `/images/` (gitignored). Never commit them.

@@ -3,7 +3,7 @@
 OpenPocketCine’s Android app lives in this repository (`Apps/Android/`,
 `Sources/OpenPocketCineAndroidFacade/`). Closed testing is the TestFlight analog:
 signed AAB from GitHub Actions onto Play, waitlist on
-[openpocketcine.app](https://openpocketcine.app/). iOS is the daily driver. Setup:
+[opencapture.org/openpocketcine](https://opencapture.org/openpocketcine/). iOS is the daily driver. Setup:
 [`docs/android-play-ci.md`](docs/android-play-ci.md).
 
 Business logic stays in **`OpenPocketViewCore`** (UI-free, I/O-free Foundation).

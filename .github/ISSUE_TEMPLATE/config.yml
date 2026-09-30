@@ -2,7 +2,7 @@ blank_issues_enabled: false
 
 contact_links:
   - name: Protocol handbook
-    url: https://openpocketcine.app/docs/
+    url: https://opencapture.org/openpocketcine/docs/
     about: BLE pairing, camera Wi-Fi, and DUML as implemented in OpenPocketCine.
 
   - name: Security vulnerability

@@ -519,7 +519,7 @@ say "This is the Android analog of Xcode Cloud → TestFlight, matching OpenZCin
 say "Package: com.opencapture.openpocketcine. Track: Closed testing (alpha)."
 say "All apps opens once. After you click OpenPocketCine we reuse that app URL."
 say "Secrets go in the play-closed GitHub Environment, never in pull_request workflows."
-note "Privacy policy is already live: https://openpocketcine.app/privacy/"
+note "Privacy policy is already live: https://opencapture.org/openpocketcine/privacy/"
 pause "Ready to start?"
 
 # ── 1. Developer account ─────────────────────────────────────────────────
@@ -553,10 +553,10 @@ step "App name: OpenPocketCine"
 step "Short description (80 characters): Open-source field monitor for DJI Osmo. Live view, scopes, camera control."
 step "Full description: paste from docs/android-play-ci.md (Store listing copy)."
 step "App category: Photography (or Video Players & Editors if Photography is gone)."
-step "Email: a mailbox you read. Privacy policy: https://openpocketcine.app/privacy/"
+step "Email: a mailbox you read. Privacy policy: https://opencapture.org/openpocketcine/privacy/"
 step "Phone screenshots: Android captures of the monitor, not iPhone screenshots. At least 2."
-step "Hi-res icon: 512×512 PNG. Feature graphic: 1024×500. Use site/assets/icon.png as a start."
-note "Support URL: https://openpocketcine.app/support/"
+step "Hi-res icon: 512×512 PNG. Feature graphic: 1024×500. Use docs/assets/icon.png as a start."
+note "Support URL: https://opencapture.org/openpocketcine/support/"
 pause "Listing fields are saved, even if graphics are still TODO?"
 
 # ── 4. Questionnaires ────────────────────────────────────────────────────

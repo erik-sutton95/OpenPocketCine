@@ -11,9 +11,9 @@ document must not be read as an OpenPocketCine support claim.
 The reference method follows the [capture guide](capture-guide.md) and the
 [Pocket 3 evidence map](pocket3-reference-checklist.md). Raw phone IP/Bluetooth
 traces, screenshots, device identities, originals and exact command payloads
-remain in ignored `captures/action6-20260921/`. The [public device reference](../handbook/src/content/docs/devices/action-6/index.md)
+remain in ignored `captures/action6-20260921/`. The [public device reference](https://opencapture.org/openpocketcine/docs/devices/action-6/)
 separates this hardware survey from DJI's published features. The [command
-comparison](../handbook/src/content/docs/devices/action-6/commands.md) is the
+comparison](https://opencapture.org/openpocketcine/docs/devices/action-6/commands/) is the
 implementation entry point; detailed facts have one home in the handbook.
 
 ## Evidence requirements
@@ -101,14 +101,14 @@ screen inspection is not execution.
 ## Implementation handoff
 
 Produce a model-specific command comparison against the existing
-[catalog](../handbook/src/content/docs/protocol/commands.md): startup, live
+[catalog](https://opencapture.org/openpocketcine/docs/protocol/commands/): startup, live
 enable, subscription support, camera settings, aperture, stabilization/FOV,
 record/photo, storage and media. Mark each command as observed, accepted,
 effect-verified, different or untested; shared opcode names alone establish no
 compatibility. Keep unknown bytes and model restrictions explicit.
 
 This survey changed no shell behavior. The apps implemented from it later; the
-[device page](../handbook/src/content/docs/devices/action-6/index.md#openpocketcine-app-status)
+[device page](https://opencapture.org/openpocketcine/docs/devices/action-6/#openpocketcine-app-status)
 lists what is wired and that it still needs physical proof. Implementing discovered controls and
 proving them in both apps are subsequent work; Mimo observations do not satisfy
 physical OpenPocketCine verification.

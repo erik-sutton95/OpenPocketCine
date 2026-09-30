@@ -71,7 +71,7 @@ scene, sheet and repair state no longer gate it (Control Center used to kill the
 picture after 10 s). The encoder-pause rung re-registers before its enable. With
 the heartbeat forced off for 30 s on an iPhone, that rung restored video on the
 same socket 2.0 s after each stop, twice, with no endpoint rebuild. See the
-[protocol note](../handbook/src/content/docs/protocol/duml-transport.md).
+[protocol note](https://opencapture.org/openpocketcine/docs/protocol/duml-transport/).
 
 After picture, the ladder is one enable for encoder pause, then one
 negotiated UDP rebuild. A rebuild already performed by another gated caller

@@ -179,12 +179,12 @@ Osmo Pocket 4 Pro. Pocket 4 and Pocket 3 are untested. There is no account
 in the app.
 
 Source: https://github.com/erik-sutton95/OpenPocketCine
-Docs: https://openpocketcine.app/docs/
-Privacy: https://openpocketcine.app/privacy/
+Docs: https://opencapture.org/openpocketcine/docs/
+Privacy: https://opencapture.org/openpocketcine/privacy/
 ```
 
-Privacy policy URL: <https://openpocketcine.app/privacy/>
-Support URL: <https://openpocketcine.app/support/>
+Privacy policy URL: <https://opencapture.org/openpocketcine/privacy/>
+Support URL: <https://opencapture.org/openpocketcine/support/>
 
 Phone screenshots must be **Android** captures. Do not reuse iPhone marketing
 frames on the Play listing.

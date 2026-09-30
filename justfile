@@ -8,16 +8,15 @@ default:
 # ── Setup ──────────────────────────────────────────────────────────────────
 # Install the meta-check tools used by `just check` (macOS / Homebrew),
 # and enable the repo's git hooks (pre-commit secret scan + proprietary guard).
-# Node is required for the public handbook (`just handbook`).
 setup:
-    brew install node typos-cli editorconfig-checker lychee markdownlint-cli2 actionlint gitleaks swift-format xcodegen
+    brew install typos-cli editorconfig-checker lychee markdownlint-cli2 actionlint gitleaks swift-format xcodegen
     git config core.hooksPath .githooks
 
 # ── Meta checks (run today; mirrored in CI) ─────────────────────────────────
 # Run every repository quality check that this tree currently supports.
 # `swift-lint` is available as `just lint` after `just format`; the existing tree is not
 # yet fully swift-format clean, so it is not a merge gate.
-check: hygiene site-check testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test connection-stress-test swift-test handbook-build
+check: hygiene testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test connection-stress-test swift-test
 
 # Verify release reporting configuration without network or real credentials.
 sentry-test:
@@ -26,10 +25,6 @@ sentry-test:
 # Reject tracked proprietary, secret-bearing, generated, or machine-specific files.
 hygiene:
     ./scripts/check-repository-hygiene.sh
-
-# Validate the deploy-ready landing-page tree and all local asset references.
-site-check:
-    ./scripts/check-site.sh
 
 # Spell-check the repository.
 typos:
@@ -40,10 +35,8 @@ lint-md:
     markdownlint-cli2 "**/*.md"
 
 # Check that on-disk links resolve (offline; no network flakiness).
-# The GitHub Pages landing page is validated by `site-check` instead.
-# handbook/node_modules and build output are generated; skip them.
 check-links:
-    lychee --no-progress --offline --exclude-path vendor --exclude-path ref --exclude-path docs/design --exclude-path site .
+    lychee --no-progress --offline --exclude-path vendor --exclude-path ref --exclude-path docs/design .
 
 # Verify files obey .editorconfig.
 check-editorconfig:
@@ -210,30 +203,6 @@ run:
 # Remove SwiftPM build artifacts.
 clean:
     swift package clean
-
-# ── Public handbook (Astro Starlight: protocol, apps, setup) ───────────────
-# Local preview at http://localhost:4321/. Production is /docs/ on Pages.
-
-handbook:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ ! -d handbook/node_modules ]]; then
-        npm --prefix handbook ci
-    fi
-    ASTRO_TELEMETRY_DISABLED=1 npm --prefix handbook run dev -- --host 127.0.0.1 --port 4321
-
-handbook-build:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ ! -d handbook/node_modules ]]; then
-        npm --prefix handbook ci
-    fi
-    ASTRO_TELEMETRY_DISABLED=1 HANDBOOK_BASE="${HANDBOOK_BASE:-/docs}" npm --prefix handbook run build
-    python3 scripts/check-handbook-links.py --base "${HANDBOOK_BASE:-/docs}"
-
-# Merge landing page + handbook into public-site/ as GitHub Pages will ship it.
-handbook-stage:
-    ./scripts/stage-pages.sh public-site
 
 # ── Android production stack ────────────────────────────────────────────────
 # JAVA_HOME falls back to the Homebrew OpenJDK so recipes work without shell setup.

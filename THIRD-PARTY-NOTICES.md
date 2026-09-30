@@ -33,7 +33,7 @@ native shells are our own work.
 
 No DJI SDK or proprietary DJI documentation is included in, distributed with, or required by this
 project (see [NOTICE](NOTICE), the
-[protocol handbook](https://openpocketcine.app/docs/), and
+[protocol handbook](https://opencapture.org/openpocketcine/docs/), and
 [`docs/protocol-notes.md`](docs/protocol-notes.md)).
 
 ## Lucide HUD icons

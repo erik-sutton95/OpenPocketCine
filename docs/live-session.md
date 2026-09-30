@@ -380,8 +380,7 @@ the live well repeats it after 8 s with no picture when a tunnel is on.
 - Stall / recover: [`feed-watchdog.md`](feed-watchdog.md)
 - Operator-visible match: [`PARITY.md`](PARITY.md)
 - Live-path SLOs: [`PERFORMANCE.md`](PERFORMANCE.md)
-- Wire format: [protocol handbook live view](https://openpocketcine.app/docs/protocol/live-view/)
-  (Markdown source: `handbook/src/content/docs/protocol/live-view.md`)
+- Wire format: [protocol handbook live view](https://opencapture.org/openpocketcine/docs/protocol/live-view/)
 - One client vs many (camera multicast won't-do): [`protocol-notes.md`](protocol-notes.md#one-client-vs-many)
 
 ## Nano queue pressure

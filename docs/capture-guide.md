@@ -212,7 +212,7 @@ there was no captured success reply, and the notes explicitly retain that limit.
 Replay one verified operation at a time using fresh session state and correctly
 encoded checksums/sequence numbers. Do not blindly replay a capture's full command
 burst. Start with identity/read-only status where possible, then verify a write
-on the camera and through returned status. See the [BLE protocol](../handbook/src/content/docs/protocol/ble.md)
+on the camera and through returned status. See the [BLE protocol](https://opencapture.org/openpocketcine/docs/protocol/ble/)
 for the station-role findings and model-specific differences.
 
 ## Diagnose a preview freeze with replay
@@ -256,7 +256,7 @@ was needed to reproduce the bug. The two findings were:
 Turning Zebra off and rebuilding the local decoder at the next IDR did not fix
 that malformed input. A pacing experiment was removed without deploying it. The
 corrected live Nano monitor was then confirmed smooth by the operator at about
-25 fps. Exact wire layout belongs in the [live-view protocol](../handbook/src/content/docs/protocol/live-view.md).
+25 fps. Exact wire layout belongs in the [live-view protocol](https://opencapture.org/openpocketcine/docs/protocol/live-view/).
 
 Use XCTest to operate the real phone UI. For visual evidence, use an iPhone screen
 recording or phone screenshot—not the Mac webcam. Check base-picture motion as
@@ -282,7 +282,7 @@ ownership of stream repair.
 
 ## Automated Mimo mode surveys
 
-The [Pocket 4 Pro survey](../handbook/src/content/docs/devices/pocket-4-pro/index.md)
+The [Pocket 4 Pro survey](https://opencapture.org/openpocketcine/docs/devices/pocket-4-pro/)
 used XCTest/WebDriverAgent with W3C viewport pointer actions, screenshots and
 RVI captures. Use one phone operator at a time; decoding closed takes can run
 separately. Keep the action journal and raw files in the ignored capture folder.
