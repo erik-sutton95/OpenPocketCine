@@ -14,6 +14,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -29,6 +34,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.session.FocusOverlay
+import com.opencapture.openpocketcine.session.LiveFeedFocusGesture
 import com.opencapture.openpocketcine.session.LiveTrackingChrome
 import com.opencapture.openpocketcine.session.TrackingBox
 import com.opencapture.openpocketcine.session.TrackingHud
@@ -44,8 +50,10 @@ fun LiveFocusTrackingLayer(
     modifier: Modifier = Modifier,
     aeLocked: Boolean = false,
     flippedVertically: Boolean = false,
+    focusLocked: Boolean = false,
 ) {
     val measurer = rememberTextMeasurer()
+    val lockIcon = if (focusLocked) painterResource(OpcIcon.LOCK.drawableRes) else null
     Canvas(modifier.fillMaxSize()) {
         val aeTag =
             if (aeLocked) {
@@ -78,14 +86,14 @@ fun LiveFocusTrackingLayer(
         when (val overlay = hud.overlay) {
             is FocusOverlay.Search -> {
                 drawBracket(feedRect(overlay.box), LiveDesign.text.copy(alpha = 0.88f), 1.5.dp.toPx())
-                if (showTapFocusBox && focus != null) drawFocusBox(focus, mirrored, flippedVertically, aeTag)
+                if (showTapFocusBox && focus != null) drawFocusBox(focus, mirrored, flippedVertically, aeTag, lockIcon)
             }
             is FocusOverlay.Subject ->
                 drawBracket(feedRect(overlay.box), LiveDesign.good, 2.dp.toPx())
             is FocusOverlay.Face ->
                 drawBracket(feedRect(overlay.box), LiveDesign.text.copy(alpha = 0.92f), 1.6.dp.toPx())
             FocusOverlay.Focus ->
-                if (showTapFocusBox && focus != null) drawFocusBox(focus, mirrored, flippedVertically, aeTag)
+                if (showTapFocusBox && focus != null) drawFocusBox(focus, mirrored, flippedVertically, aeTag, lockIcon)
         }
     }
 }
@@ -126,24 +134,34 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFocusBox(
     mirrored: Boolean,
     flippedVertically: Boolean,
     aeTag: TextLayoutResult?,
+    lockIcon: Painter?,
 ) {
     val nx = if (mirrored) 1f - focus.first else focus.first
     val ny = if (flippedVertically) 1f - focus.second else focus.second
-    val side = min(size.width, size.height) * 0.14f
+    val side = min(size.width, size.height) * LiveFeedFocusGesture.FOCUS_BOX_SIDE_FRACTION
     val cx = nx * size.width
     val cy = ny * size.height
+    val tint = if (aeTag != null) LiveDesign.aeLock else LiveDesign.accent
+    // iOS `FocusBoxView`: tags sit right of the box, or left near the right edge.
+    val tagGap = 3.dp.toPx()
+    val tagWidth = aeTag?.size?.width?.toFloat() ?: (23.dp.toPx() - tagGap)
+    val leading = cx + side / 2f + tagGap + tagWidth > size.width
     if (aeTag != null) {
-        // iOS `FocusBoxView`: right of the box, or left near the right edge.
-        val gap = 3.dp.toPx()
-        val w = aeTag.size.width.toFloat()
-        val right = cx + side / 2f + gap
-        val x = if (right + w > size.width) cx - side / 2f - gap - w else right
+        val x = if (leading) cx - side / 2f - tagGap - tagWidth else cx + side / 2f + tagGap
         drawText(aeTag, topLeft = Offset(x, cy - side / 2f + 6.dp.toPx() - aeTag.size.height / 2f))
     }
+    if (lockIcon != null) {
+        val icon = 10.dp.toPx()
+        val gap = 5.dp.toPx()
+        val x = if (leading) cx - side / 2f - gap - icon else cx + side / 2f + gap
+        translate(x, cy + side / 2f - 6.dp.toPx() - icon / 2f) {
+            with(lockIcon) { draw(Size(icon, icon), colorFilter = ColorFilter.tint(tint)) }
+        }
+    }
     drawRoundRect(
-        if (aeTag != null) LiveDesign.aeLock else LiveDesign.accent,
+        tint,
         topLeft = Offset(cx - side / 2f, cy - side / 2f),
-        size = androidx.compose.ui.geometry.Size(side, side),
+        size = Size(side, side),
         cornerRadius = androidx.compose.ui.geometry.CornerRadius(max(6f, side * 0.12f)),
         style = Stroke(1.5.dp.toPx()),
     )

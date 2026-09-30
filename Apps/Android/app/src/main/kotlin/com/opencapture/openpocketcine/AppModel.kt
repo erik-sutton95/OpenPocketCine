@@ -52,6 +52,8 @@ class AppModel(
         private set
     var isPairingNewCamera by mutableStateOf(false)
     var showsLaunchSplash by mutableStateOf(true)
+    /** Long-press on the tap-focus box locks it: feed taps no longer move focus. */
+    var focusBoxLocked by mutableStateOf(false)
     var coreVersion by mutableStateOf<String?>(null)
     var homePanel by mutableStateOf<AppPanel?>(null)
     /** The Multiview stage covers the camera home until it closes. */
@@ -355,7 +357,10 @@ class AppModel(
 
     fun cancelTracking() = session.cancelTracking()
 
-    fun resetFocusPoint() = session.resetFocusPoint()
+    fun resetFocusPoint() {
+        focusBoxLocked = false
+        session.resetFocusPoint()
+    }
 
     fun beginMediaBrowse() = session.beginMediaBrowse()
 
@@ -563,6 +568,7 @@ class AppModel(
     }
 
     fun disconnect() {
+        focusBoxLocked = false
         session.disconnect()
         if (!SavedCameras.launchShowsWizard(savedCameras)) session.startScan()
     }

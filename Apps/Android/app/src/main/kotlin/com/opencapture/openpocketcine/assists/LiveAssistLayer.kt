@@ -87,6 +87,8 @@ fun LiveAssistLayer(
     showTapFocusBox: Boolean = true,
     /** AE lock: the focus box turns yellow with an `AE-L` tag. */
     aeLocked: Boolean = false,
+    /** Long-press lock on the tap-focus box: a lock tag at its lower corner. */
+    focusLocked: Boolean = false,
     /** Picture well in the same space as [modifier]; defaults to the layer box. */
     feedFrame: ChromeRect? = null,
     /** Recorded image within the source raster, excluding camera-added padding. AF keeps [feedFrame]. */
@@ -178,6 +180,7 @@ fun LiveAssistLayer(
                     flippedVertically = pictureFlippedVertically,
                     showTapFocusBox = showTapFocusBox && focus != null,
                     aeLocked = aeLocked,
+                    focusLocked = focusLocked,
                     modifier = Modifier.fillMaxSize(),
                 )
             }

@@ -153,6 +153,21 @@ class TrackingBoxTest {
     }
 
     @Test
+    fun pressOnTheFocusBoxHitsItWithAFingersMargin() {
+        // iOS `testPressOnTheFocusBoxHitsItWithAFingersMargin`: box side 63, reach 31.5 + 14.
+        fun hits(x: Float, y: Float, focus: Pair<Float, Float>, mirrored: Boolean, flipV: Boolean = false) =
+            LiveFeedFocusGesture.hitsFocusBox(x, y, focus, 800f, 450f, mirrored, flipV)
+        val focus = 0.25f to 0.5f // (200, 225) in the well
+        assertTrue(hits(200f, 225f, focus, mirrored = false))
+        assertTrue(hits(245f, 180f, focus, mirrored = false))
+        assertTrue(!hits(247f, 225f, focus, mirrored = false))
+        // Mirrored preview: the box is drawn at 1 - x.
+        assertTrue(hits(600f, 225f, focus, mirrored = true))
+        assertTrue(!hits(200f, 225f, focus, mirrored = true))
+        assertTrue(hits(200f, 450f - 100f, 0.25f to 100f / 450f, mirrored = false, flipV = true))
+    }
+
+    @Test
     fun faceHoldSurvivesBriefMissAndDropsAfterTimeout() {
         val locked = TrackingBox(0.40, 0.30, 0.20, 0.25)
         assertTrue(!FaceTrackHold.shouldDrop(0.15))

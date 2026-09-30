@@ -33,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -170,9 +171,16 @@ fun LiveFeedGestureWell(
     /** Still long press past [LiveFeedFocusGesture.AE_LOCK_HOLD_SEC]; false falls back to [onTap]. */
     onAeLock: () -> Boolean = { false },
     canLockAe: () -> Boolean = { false },
+    /** Camera point of the plain tap-focus box, or null when it cannot be pressed. */
+    focusBox: Pair<Float, Float>? = null,
+    mirrored: Boolean = false,
+    flippedVertically: Boolean = false,
+    /** A still hold on [focusBox] toggles its lock instead of AE lock; returns the new state. */
+    onToggleFocusLock: () -> Boolean = { false },
 ) {
     val density = LocalDensity.current
     val haptics = LocalOperatorHaptics.current
+    val view = LocalView.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val latestOnPinch = rememberUpdatedState(onPinch)
@@ -182,9 +190,11 @@ fun LiveFeedGestureWell(
     val latestOnTrack = rememberUpdatedState(onTrack)
     val latestOnAeLock = rememberUpdatedState(onAeLock)
     val latestCanLockAe = rememberUpdatedState(canLockAe)
+    val latestOnToggleFocusLock = rememberUpdatedState(onToggleFocusLock)
     var draft by remember { mutableStateOf<TrackingBox?>(null) }
     val swipeFloor = with(density) { 44.dp.toPx() }
     val holdSlop = with(density) { LiveFeedFocusGesture.TRACK_HOLD_SLOP.dp.toPx() }
+    val focusBoxMargin = with(density) { LiveFeedFocusGesture.FOCUS_BOX_HIT_MARGIN.dp.toPx() }
     val feedLeft = with(density) { (feed?.x ?: 0f).dp.toPx() }
     val feedTop = with(density) { (feed?.y ?: 0f).dp.toPx() }
     val feedW = with(density) { (feed?.width ?: 0f).dp.toPx() }.coerceAtLeast(1f)
@@ -273,6 +283,13 @@ fun LiveFeedGestureWell(
                         gesture.lastY = event.y
                         gesture.armed = false
                         gesture.aeLockHeld = false
+                        gesture.focusLockToggled = false
+                        gesture.onFocusBox =
+                            feed != null && focusBox != null &&
+                                LiveFeedFocusGesture.hitsFocusBox(
+                                    event.x - feedLeft, event.y - feedTop, focusBox, feedW, feedH,
+                                    mirrored, flippedVertically, focusBoxMargin,
+                                )
                         gesture.hold?.cancel()
                         gesture.hold =
                             scope.launch {
@@ -291,7 +308,16 @@ fun LiveFeedGestureWell(
                                 )
                                 val still =
                                     hypot(gesture.lastX - gesture.startX, gesture.lastY - gesture.startY) <= holdSlop
-                                if (!pinch.active && still && latestCanLockAe.value()) {
+                                if (pinch.active || !still) return@launch
+                                if (gesture.onFocusBox) {
+                                    gesture.focusLockToggled = true
+                                    val locked = latestOnToggleFocusLock.value()
+                                    haptics.lock()
+                                    @Suppress("DEPRECATION")
+                                    view.announceForAccessibility(
+                                        if (locked) "Focus box locked" else "Focus box unlocked",
+                                    )
+                                } else if (latestCanLockAe.value()) {
                                     gesture.aeLockHeld = true
                                     haptics.lock()
                                 }
@@ -312,7 +338,8 @@ fun LiveFeedGestureWell(
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         gesture.hold?.cancel()
                         gesture.hold = null
-                        val kind =
+                        // The hold already toggled the focus box lock; the release does nothing else.
+                        val kind = if (gesture.focusLockToggled) null else
                             LiveFeedFocusGesture.classify(
                                 gesture.lastX - gesture.startX,
                                 gesture.lastY - gesture.startY,
@@ -377,6 +404,9 @@ private class FeedGestureState {
     var lastY = 0f
     var armed = false
     var aeLockHeld = false
+    /** The press started on the tap-focus box, so a long hold toggles its lock. */
+    var onFocusBox = false
+    var focusLockToggled = false
     var hold: Job? = null
 }
 

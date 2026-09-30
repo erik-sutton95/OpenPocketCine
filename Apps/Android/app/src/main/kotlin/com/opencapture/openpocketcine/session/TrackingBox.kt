@@ -549,8 +549,30 @@ object LiveFeedFocusGesture {
     const val TRACK_MINIMUM = 24f
     const val TRACK_HOLD_SEC = 0.20
     const val TRACK_HOLD_SLOP = 10f
-    /** A still press this long releases as AE lock instead of tap focus. */
+    /** A still press this long releases as AE lock instead of tap focus. On the focus box it toggles the box lock. */
     const val AE_LOCK_HOLD_SEC = 0.6
+    /** Focus box side as a share of the feed's short side (`drawFocusBox`). */
+    const val FOCUS_BOX_SIDE_FRACTION = 0.14f
+    /** Room around the focus box that still counts as pressing it, in dp. */
+    const val FOCUS_BOX_HIT_MARGIN = 14f
+    const val FOCUS_LOCKED_NOTE = "Focus box locked. Long-press it to unlock."
+
+    /** iOS `hitsFocusBox`: whether (x, y) in a width x height well presses the box at camera point [focus]. */
+    fun hitsFocusBox(
+        x: Float,
+        y: Float,
+        focus: Pair<Float, Float>,
+        width: Float,
+        height: Float,
+        mirrored: Boolean,
+        flippedVertically: Boolean = false,
+        margin: Float = FOCUS_BOX_HIT_MARGIN,
+    ): Boolean {
+        val bx = (if (mirrored) 1f - focus.first else focus.first) * width
+        val by = (if (flippedVertically) 1f - focus.second else focus.second) * height
+        val reach = min(width, height) * FOCUS_BOX_SIDE_FRACTION / 2f + margin
+        return abs(x - bx) <= reach && abs(y - by) <= reach
+    }
 
     fun classify(
         dx: Float,
