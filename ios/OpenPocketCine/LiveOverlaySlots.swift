@@ -66,6 +66,7 @@ struct LiveFocusResetButton: View {
 
     var body: some View {
         Button {
+            model.focusBoxLocked = false
             model.session.resetFocusPoint()
         } label: {
             OpcIcon.rotateCw

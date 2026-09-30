@@ -1059,6 +1059,7 @@ private struct LiveFeedAssistsPane: View {
                 showFocusChrome: showBox,
                 showTapFocusBox: model.session.supportsTapFocus,
                 aeLocked: model.session.autoExposureLock != nil,
+                focusLocked: model.focusBoxLocked,
                 sourceAspect: model.session.pictureAspect,
                 pictureAspect: CGFloat(
                     model.session.status.videoFormat?.resolution.ratio

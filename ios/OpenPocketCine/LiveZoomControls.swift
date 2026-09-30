@@ -34,8 +34,25 @@ enum LiveFeedFocusGesture {
     /// Short enough to feel like a press, long enough that a swipe never arms.
     static let trackHoldDuration: TimeInterval = 0.20
     static let trackHoldSlop: CGFloat = 10
-    /// A still press this long releases as AE lock instead of tap focus.
+    /// A still press this long releases as AE lock instead of tap focus. On the focus
+    /// box it toggles the box lock instead.
     static let aeLockHoldDuration: TimeInterval = 0.6
+    /// Focus box side as a share of the feed's short side (`FocusBoxView`).
+    static let focusBoxSideFraction: CGFloat = 0.14
+    /// Room around the focus box that still counts as pressing it.
+    static let focusBoxHitMargin: CGFloat = 14
+    static let focusLockedNote = "Focus box locked. Long-press it to unlock."
+
+    /// Whether `location` (well coordinates) presses the tap-focus box at camera point `focus`.
+    static func hitsFocusBox(
+        _ location: CGPoint, focus: CGPoint, in size: CGSize, mirrored: Bool,
+        flippedVertically: Bool = false
+    ) -> Bool {
+        let x = (mirrored ? 1 - focus.x : focus.x) * size.width
+        let y = (flippedVertically ? 1 - focus.y : focus.y) * size.height
+        let reach = min(size.width, size.height) * focusBoxSideFraction / 2 + focusBoxHitMargin
+        return abs(location.x - x) <= reach && abs(location.y - y) <= reach
+    }
 
     static func classify(
         translation: CGSize, pinched: Bool = false, armed: Bool = false, aeLockHeld: Bool = false
@@ -172,6 +189,9 @@ struct LiveZoomPinchModifier: ViewModifier {
     @State private var holdStarted = false
     @State private var holdTask: Task<Void, Never>?
     @State private var lastTranslation: CGSize = .zero
+    /// The press started on the tap-focus box, so a long hold toggles its lock.
+    @State private var pressOnFocusBox = false
+    @State private var focusLockToggled = false
 
     func body(content: Content) -> some View {
         content
@@ -226,6 +246,7 @@ struct LiveZoomPinchModifier: ViewModifier {
                 lastTranslation = value.translation
                 if !holdStarted {
                     holdStarted = true
+                    pressOnFocusBox = pressesFocusBox(value.startLocation)
                     beginTrackHold()
                 }
                 let slop = hypot(value.translation.width, value.translation.height)
@@ -244,7 +265,9 @@ struct LiveZoomPinchModifier: ViewModifier {
             .onEnded { value in
                 let armed = trackArmed
                 let aeLock = aeLockHeld
+                let toggledLock = focusLockToggled
                 cancelTrackHold()
+                if toggledLock { return }
                 draftStart = nil
                 draftEnd = nil
                 guard enabled else { return }
@@ -260,6 +283,10 @@ struct LiveZoomPinchModifier: ViewModifier {
                     model.setDisplayMode(clean: false)
                 case .tap, .aeLock:
                     if kind == .aeLock, model.session.lockAutoExposure() { return }
+                    guard !model.focusBoxLocked else {
+                        model.session.controlNote = LiveFeedFocusGesture.focusLockedNote
+                        return
+                    }
                     let point = LiveFeedFocusGesture.cameraPoint(
                         value.location, in: feedSize, mirrored: model.livePictureViewFlip,
                         flippedVertically: model.assist.flipsVertically)
@@ -295,9 +322,18 @@ struct LiveZoomPinchModifier: ViewModifier {
                         - LiveFeedFocusGesture.trackHoldDuration))
             guard !Task.isCancelled, !pinchUsed,
                 hypot(lastTranslation.width, lastTranslation.height)
-                    <= LiveFeedFocusGesture.trackHoldSlop,
-                model.session.canLockAutoExposure
+                    <= LiveFeedFocusGesture.trackHoldSlop
             else { return }
+            if pressOnFocusBox {
+                model.focusBoxLocked.toggle()
+                focusLockToggled = true
+                Self.playAELockHaptic()
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: model.focusBoxLocked ? "Focus box locked" : "Focus box unlocked")
+                return
+            }
+            guard model.session.canLockAutoExposure else { return }
             aeLockHeld = true
         }
     }
@@ -309,6 +345,15 @@ struct LiveZoomPinchModifier: ViewModifier {
         trackArmed = false
         aeLockHeld = false
         lastTranslation = .zero
+        pressOnFocusBox = false
+        focusLockToggled = false
+    }
+
+    private func pressesFocusBox(_ location: CGPoint) -> Bool {
+        guard model.session.supportsTapFocus, case .focus = model.session.focusOverlay else { return false }
+        return LiveFeedFocusGesture.hitsFocusBox(
+            location, focus: model.session.focusPoint, in: feedSize,
+            mirrored: model.livePictureViewFlip, flippedVertically: model.assist.flipsVertically)
     }
 }
 

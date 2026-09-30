@@ -27,6 +27,8 @@ final class AppModel {
     /// Operator tapped “Pair new camera” from the saved list.
     var isPairingNewCamera = false
     var showsLaunchSplash = true
+    /// Long-press on the tap-focus box locks it: feed taps no longer move focus.
+    var focusBoxLocked = false
     var assist = LiveAssistState()
     /// Decoded-frame scopes. Filled by `HevcDecoder.handleDecodedFrame` — not camera DUML.
     var frameSamples = LiveFrameSampleBus()
@@ -665,6 +667,7 @@ final class AppModel {
     func refreshMedia() { Task { await session.refreshMedia() } }
 
     func disconnect() {
+        focusBoxLocked = false
         session.disconnect()
         frameSamples.reset()
         if CameraStartupPolicy.launchDestination(savedCameras: savedCameras) == .savedCameras {

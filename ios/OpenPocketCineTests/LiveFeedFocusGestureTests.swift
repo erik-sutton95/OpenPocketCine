@@ -75,4 +75,19 @@ final class LiveFeedFocusGestureTests: XCTestCase {
             XCTAssertEqual(LiveDispSwipe.wantsClean(translation: translation), expected, name)
         }
     }
+
+    func testPressOnTheFocusBoxHitsItWithAFingersMargin() {
+        let size = CGSize(width: 800, height: 450)  // box side 63 pt, reach 31.5 + 14
+        let focus = CGPoint(x: 0.25, y: 0.5)  // (200, 225) on screen
+        XCTAssertTrue(LiveFeedFocusGesture.hitsFocusBox(CGPoint(x: 200, y: 225), focus: focus, in: size, mirrored: false))
+        XCTAssertTrue(LiveFeedFocusGesture.hitsFocusBox(CGPoint(x: 245, y: 180), focus: focus, in: size, mirrored: false))
+        XCTAssertFalse(LiveFeedFocusGesture.hitsFocusBox(CGPoint(x: 247, y: 225), focus: focus, in: size, mirrored: false))
+        // Mirrored preview: the box is drawn at 1 - x.
+        XCTAssertTrue(LiveFeedFocusGesture.hitsFocusBox(CGPoint(x: 600, y: 225), focus: focus, in: size, mirrored: true))
+        XCTAssertFalse(LiveFeedFocusGesture.hitsFocusBox(CGPoint(x: 200, y: 225), focus: focus, in: size, mirrored: true))
+        XCTAssertTrue(
+            LiveFeedFocusGesture.hitsFocusBox(
+                CGPoint(x: 200, y: 450 - 100), focus: CGPoint(x: 0.25, y: 100.0 / 450), in: size,
+                mirrored: false, flippedVertically: true))
+    }
 }
