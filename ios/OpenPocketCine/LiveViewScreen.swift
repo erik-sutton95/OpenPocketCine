@@ -273,6 +273,16 @@ struct LiveViewScreen: View {
             .accessibilityHidden(!model.session.isFeedWarming || !liveChromeVisible)
             .allowsHitTesting(false)
 
+            // An MT swap runs behind black: the body's lens change is not pretty.
+            if model.session.supportsMedTele {
+                LiveMedTeleFade()
+                    .frame(width: layout.onFeed.width, height: layout.onFeed.height)
+                    .offset(x: layout.onFeed.minX, y: layout.onFeed.minY)
+                    .frame(
+                        width: layout.viewport.width, height: layout.viewport.height,
+                        alignment: .topLeading)
+            }
+
             chrome(layout)
                 .environment(\.interfaceLocked, interfaceLocked)
                 .opacity(zoomDialVisible ? 0.16 : 1)
@@ -614,6 +624,16 @@ struct LiveViewScreen: View {
                         captureControlsPresented || !liveChromeVisible || zoomDialMounted
                     )
                     .zIndex(2)
+                if editingMode == nil, model.session.supportsMedTele {
+                    LiveMedTeleButton()
+                        .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).medTele))
+                        .opacity(captureControlsPresented ? 0 : 1)
+                        .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
+                        .accessibilityHidden(
+                            captureControlsPresented || !liveChromeVisible || zoomDialMounted
+                        )
+                        .zIndex(2)
+                }
             }
 
             if showsGimbalButton {
@@ -816,9 +836,10 @@ struct LiveViewScreen: View {
                     ?? (layout.viewport.height > layout.viewport.width)) ? .bottom : .trailing,
                 bottomClearance: 0,
                 isPresented: zoomDialVisible,
-                scale: MonitorZoomScale(minimum: 1, maximum: model.session.zoomMax),
+                scale: MonitorZoomScale(
+                    minimum: model.session.zoomMin, maximum: model.session.zoomMax),
                 marks: Array(Set([1, 1.5, 2, 4, 6, 9] + model.session.zoomStops)).sorted(),
-                opticalStops: model.session.zoomStops.contains(3) ? [1, 3] : [1],
+                opticalStops: model.session.zoomOpticalStops,
                 caption: OsmoMonitorPresentation.zoomCaption(model.session),
                 value: Binding(
                     get: { model.session.zoomDialReadout },

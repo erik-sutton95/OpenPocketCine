@@ -606,6 +606,14 @@ fun LiveViewScreen(model: AppModel) {
             }
             }
 
+            // An MT swap runs behind black: the body's lens change is not pretty.
+            if (model.session.supportsMedTele) {
+                LiveMedTeleFade(
+                    model.session,
+                    Modifier.liveModuleFrame(if (desqueezeVisible) pictureContent else layout.onFeed),
+                )
+            }
+
             // Passive source geometry; this box draws and captures nothing.
             Box(Modifier.liveModuleFrame(layout.onFeed).monitorBackdropSource(backdrop.source,
                 imageRect = androidx.compose.ui.geometry.Rect(
@@ -1498,10 +1506,14 @@ internal fun LandscapeChrome(
                     { model.session.setZoom(LiveZoom.nextJump(model.session.zoomCycleFrom(), stops)) }
                 },
                 maximum = model.session.zoomMax(),
-                opticalStops = if (3.0 in model.session.zoomStops()) listOf(1.0, 3.0) else listOf(1.0),
+                minimum = model.session.zoomMin(),
+                opticalStops = model.session.zoomOpticalStops(),
                 onDial = model.session::updateZoomPinch,
                 onDialEnd = model.session::endZoomPinch,
             )
+            if (editing == null && model.session.supportsMedTele) {
+                LiveMedTeleButton(model.session, uiLocked, GimbalCluster(stick, zoom, gimbalButton).medTele)
+            }
         }
         if (!captureOpen && capabilities.gimbal &&
             model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) &&

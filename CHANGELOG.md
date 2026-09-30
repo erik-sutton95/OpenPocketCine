@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Pocket 3 **MT** button, beside the zoom chip: takes Med-Tele, the body's 2×
+  lens, on and off without leaving the app. Each tap takes any digital crop off
+  first and lands on the lens's base, 2× or 1×; the picture goes black over the
+  swap. The button is dimmed where the camera would silently ignore it: while
+  recording, outside Normal colour and outside Video mode. A tap there says why.
+  Not yet verified on a device in this form.
 - False color **Read** option for every scale on iOS and Android. LOG (the
   default) reads the raw signal like the waveform, with the full highlight
   range. 709 reads log through the camera's official Rec.709 look, the way RED
@@ -688,6 +694,22 @@ separate iOS and Android lists.
   the defect. Physical camera qualification remains pending; the
   [Sentry audit](docs/audits/2026-09-21-sentry-crashes-dropouts.md) records the
   remaining discovery, dropout and native-crash investigations.
+- Pocket 3 zoom under **Med-Tele**, the body's 2× lens. Both shells now read the
+  accepted lens window the camera already reports and offer the range that
+  actually exists: the chip cycles 2× / 3× / 4× instead of wrapping to an
+  unreachable 1×, the held dial spans 2×…4× instead of stopping at its own
+  floor, and the 2× base is captioned TELE rather than warned about as a digital
+  crop. Digital zoom keeps composing on top, so 2× optical with 2× digital reads
+  4×. Modes that lock digital zoom keep the optical 2× base. The optical/digital
+  boundary is now read from the body's reported stops instead of assuming 3×.
+  Gimbal programs with zoom waypoints check the same 2×…4× window, so a saved
+  4× move runs under Med-Tele in 4K and a 1× waypoint is refused rather than
+  parked on the floor. Med-Tele is read from a floor halfway between the two
+  measured limits, so a one-step wobble cannot flip it.
+- A Pocket 3 without Med-Tele no longer captions its 2.7K 3× as TELE. That 3×
+  is a crop, and it now gets the digital-crop warning like any other. Which
+  stops are optical is decided per body: on a Pocket 3 that is only the Med-Tele
+  2×, while the lens is on.
 - Android Bluetooth setup checks rejected native writes instead of waiting for
   callbacks that may never arrive. The tolerated notification fallback advances
   to the next characteristic. Failed required notification registration and

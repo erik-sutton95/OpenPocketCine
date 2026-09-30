@@ -430,10 +430,14 @@ fun LivePortraitChrome(
                     { model.session.setZoom(LiveZoom.nextJump(model.session.zoomCycleFrom(), stops)) }
                 },
                 maximum = model.session.zoomMax(),
-                opticalStops = if (3.0 in model.session.zoomStops()) listOf(1.0, 3.0) else listOf(1.0),
+                minimum = model.session.zoomMin(),
+                opticalStops = model.session.zoomOpticalStops(),
                 onDial = model.session::updateZoomPinch,
                 onDialEnd = model.session::endZoomPinch,
             )
+            if (editing == null && model.session.supportsMedTele) {
+                LiveMedTeleButton(model.session, uiLocked, cluster.medTele)
+            }
         }
 
         if (!captureOpen && showGimbalButton && !gimbalButton.isEmpty) {

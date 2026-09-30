@@ -89,12 +89,15 @@ internal fun nativeProgramZoomFailure(program: GimbalProgram, model: CameraModel
             CameraCommands.COLOR_HDR, CameraCommands.COLOR_DLOG, CameraCommands.COLOR_DLOG_M)) {
         return "Wait for camera color mode before a zoom move"
     }
-    val ceiling = model.activeZoomStops(status.resolutionCode, status.shootingMode).lastOrNull() ?: 1.0
-    if (listOfNotNull(program.a, program.b, program.c).any { !it.zoom.isFinite() || it.zoom < 1.0 || it.zoom > ceiling }) {
+    // The body's own lens window outranks the FORMAT table: under Pocket 3 Med-Tele it is 2×…4×.
+    val stops = model.activeZoomStops(status.resolutionCode, status.shootingMode, status.zoomLensMin, status.zoomLensMax)
+    val floor = stops.firstOrNull() ?: 1.0
+    val ceiling = stops.lastOrNull() ?: 1.0
+    if (listOfNotNull(program.a, program.b, program.c).any { !it.zoom.isFinite() || it.zoom < floor || it.zoom > ceiling }) {
         return "Saved zoom exceeds the current FORMAT limit"
     }
-    if (status.zoomFactor?.let { it.isFinite() && it in 1.0..ceiling } != true ||
-        target?.let { !it.isFinite() || it !in 1.0..ceiling } == true) return "Wait for camera zoom feedback"
+    if (status.zoomFactor?.let { it.isFinite() && it in floor..ceiling } != true ||
+        target?.let { !it.isFinite() || it !in floor..ceiling } == true) return "Wait for camera zoom feedback"
     return null
 }
 

@@ -189,6 +189,8 @@ object StatusExtras {
             0xB2 -> next = next.copy(focusMode = CameraCommands.FOCUS_CONTINUOUS)
         }
         CamFov.lensAt14(value)?.let { lens -> next = next.copy(zoomLens = lens) }
+        CamFov.lensMinAt10(value)?.let { lens -> next = next.copy(zoomLensMin = lens) }
+        CamFov.lensMaxAt12(value)?.let { lens -> next = next.copy(zoomLensMax = lens) }
         return CamFov.absorb(next)
     }
 

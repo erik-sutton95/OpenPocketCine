@@ -61,12 +61,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.coroutineContext
@@ -462,6 +464,13 @@ class PocketCameraSession(
     private var pendingZoomAfterHop: Double? = null
     private var zoomStop = 1.0
     private var zoomStopTouched = false
+    /**
+     * The lens an MT swap is headed for while it runs, null otherwise. The live view
+     * stays black and the MT button dimmed for as long as it is set — see [toggleMedTele].
+     */
+    private val _medTeleSwap = MutableStateFlow<Boolean?>(null)
+    val medTeleSwap: StateFlow<Boolean?> = _medTeleSwap.asStateFlow()
+    private var medTeleJob: Job? = null
     var zoomPinchPreview: Double? = null
         private set
     /**
@@ -760,6 +769,9 @@ class PocketCameraSession(
         _failure.value = null
         _controlNote.value = null
         _controlBusy.value = false
+        medTeleJob?.cancel()
+        medTeleJob = null
+        _medTeleSwap.value = null
         formatPin = null
         shootingModeRevision++
         colorPin = null
@@ -3076,12 +3088,117 @@ class PocketCameraSession(
 
     fun zoomStops(): List<Double> {
         val model = connectedCamera?.model ?: CameraModel.default
-        return model.activeZoomStops(_status.value.resolutionCode, _status.value.shootingMode)
+        val status = _status.value
+        return model.activeZoomStops(
+            status.resolutionCode,
+            status.shootingMode,
+            status.zoomLensMin,
+            status.zoomLensMax,
+        )
     }
 
     fun zoomMax(): Double = zoomStops().lastOrNull() ?: 1.0
 
+    /**
+     * The widest the body will actually go. Normally 1×, but Pocket 3 Med-Tele parks a
+     * 40 mm lens in front and clamps anything wider back to it, so the dial must not
+     * offer travel the camera will refuse to honour.
+     */
+    fun zoomMin(): Double = zoomStops().firstOrNull() ?: 1.0
+
+    /**
+     * The stops that are optics rather than a crop of them, for the caption and the
+     * digital-crop warning — see [CameraModel.opticalZoomStops].
+     */
+    fun zoomOpticalStops(): List<Double> =
+        (connectedCamera?.model ?: CameraModel.default)
+            .opticalZoomStops(zoomStops(), _status.value.zoomLensMin)
+
     fun zoomNextJump(): Double = CamFov.nextJump(zoomCycleFrom(), zoomStops())
+
+    /** The MT button's body: only a Pocket 3 has the second lens. */
+    val supportsMedTele: Boolean
+        get() = supportsZoom && connectedCamera?.model?.isPocket3 == true
+
+    /**
+     * The MT button: put the Pocket 3's Med-Tele lens on, or take it off, landing on the
+     * new lens's base (2× on, 1× off).
+     *
+     * The picture fades to black first, and comes back when the reported floor shows the
+     * new lens or the deadline passes, so the body's lens change never shows. One swap at
+     * a time: a tap while one runs is dropped, and the button is dimmed to say so.
+     *
+     * Measured: the swap keeps the digital crop, not the factor (MT 4× comes off as wide
+     * 2×), so a crop comes off first, on the lens still in front.
+     *
+     * Refused on the tap in the states [CamFov.medTeleRefusal] names, where the body would
+     * ignore it silently. ActiveTrack survives the send but its subject does not, so the
+     * track is cleared here, the moment the operator caused it.
+     */
+    fun toggleMedTele() {
+        if (!supportsMedTele || _medTeleSwap.value != null) return
+        if (datalink == null) {
+            _controlNote.value = "Med-Tele not available"
+            return
+        }
+        val status = _status.value
+        CamFov.medTeleRefusal(status.colorMode, status.isRecording, status.shootingMode)?.let {
+            _controlNote.value = it
+            return
+        }
+        if (_gimbalMoveRunning.value) cancelProgrammedMove()
+        val on = !(status.zoomLensMin >= 0 && CamFov.isMedTele(status.zoomLensMin))
+        Log.i(TAG, "zoom: Med-Tele ${if (on) "on" else "off"} (floor ${status.zoomLensMin})")
+        cancelTracking(sendClear = isTrackingActive)
+        // A coalesced pinch write belongs to the lens that is going away.
+        zoomPinchPreview = null
+        pendingZoomPayload = null
+        zoomFlushJob?.cancel()
+        zoomFlushJob = null
+        _medTeleSwap.value = on
+        medTeleJob = scope.launch {
+            // Every wait below is bounded, so this always ends and the picture comes back.
+            try {
+                runMedTeleSwap(on)
+            } finally {
+                _medTeleSwap.value = null
+                medTeleJob = null
+            }
+        }
+    }
+
+    private suspend fun runMedTeleSwap(on: Boolean) {
+        val startedAt = SystemClock.elapsedRealtime()
+        val name = if (on) "Med-Tele on" else "Med-Tele off"
+        delay(CamFov.MED_TELE_FADE_MS)
+        val here = if (on) 1.0 else 2.0
+        val live = _status.value.zoomFactor
+        if (live != null && !CamFov.matches(live, here)) {
+            fireZoom(CameraCommands.zoomLens(CamFov.lensPosition(here)), announce = true, name = name)
+            val reset = withTimeoutOrNull(CamFov.MED_TELE_CROP_RESET_TIMEOUT_MS) {
+                _status.first { s -> s.zoomFactor?.let { CamFov.matches(it, here) } ?: true }
+            }
+            if (reset == null) Log.i(TAG, "zoom: Med-Tele crop reset not seen, swapping anyway")
+        }
+        val dl = datalink ?: return
+        dl.sendDuml(0x02, CameraCommands.CMD_MED_TELE, CameraCommands.medTele(on))
+        lastZoomWireAt = SystemClock.elapsedRealtime()
+        _controlNote.value = name
+        val landed = withTimeoutOrNull(CamFov.MED_TELE_SWAP_TIMEOUT_MS) {
+            _status.first { s -> s.zoomLensMin >= 0 && CamFov.isMedTele(s.zoomLensMin) == on }
+        }
+        val took = SystemClock.elapsedRealtime() - startedAt
+        if (landed == null) {
+            Log.i(TAG, "zoom: Med-Tele ${if (on) "on" else "off"} not seen after $took ms")
+            _controlNote.value = "Med-Tele — camera did not switch"
+            return
+        }
+        Log.i(TAG, "zoom: Med-Tele ${if (on) "on" else "off"} landed after $took ms, floor ${landed.zoomLensMin}")
+        // Turning Med-Tele on, the body restores the zoom it last had under Med-Tele,
+        // which a swap made on the body may have left above 2×: take its word.
+        markZoomStop(landed.zoomFactor ?: if (on) 2.0 else 1.0)
+        refreshZoomHud()
+    }
 
     fun setZoomLens(position: Int) {
         fireZoom(CameraCommands.zoomLens(position), announce = false, name = "Zoom slider")
@@ -3154,7 +3271,7 @@ class PocketCameraSession(
             lastPinchLens = null
             lastPinchLogTenths = null
         }
-        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification, zoomMax())
+        val factor = CamFov.pinchFactor(zoomPinchAnchor, magnification, zoomMax(), zoomMin())
         if (blockZoomColorHopIfRecording(factor)) return
         val first = zoomPinchPreview == null
         dropDLog2ForZoom(factor)
@@ -4155,7 +4272,12 @@ class PocketCameraSession(
                     zoomCycleFrom(),
                     connectedCamera
                         ?.model
-                        ?.activeZoomStops(format.resolution.rawValue, modeAtSet)
+                        ?.activeZoomStops(
+                            format.resolution.rawValue,
+                            modeAtSet,
+                            _status.value.zoomLensMin,
+                            _status.value.zoomLensMax,
+                        )
                         .orEmpty(),
                 )
         }
