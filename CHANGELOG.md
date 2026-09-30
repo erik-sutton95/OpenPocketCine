@@ -281,9 +281,9 @@ All notable changes to this project are documented here. The format is based on
 ## [0.1.5] - 2026-09-24
 
 Cumulative operator-facing notes for the open beta build 138 (0.1.0) → 0.1.5
-update are in the [0.1.5 release notes](https://opencapture.org/openpocketcine/docs/releases/0-1-5/),
+update are in the [0.1.5 release notes](handbook/src/content/docs/releases/0-1-5.md),
 and for the build 63 → 102 update in the
-[beta 102 release notes](https://opencapture.org/openpocketcine/docs/releases/beta-102/), each with
+[beta 102 release notes](handbook/src/content/docs/releases/beta-102.md), each with
 separate iOS and Android lists.
 
 - Experimental AirPods head tracking now maps shared-forward head direction to

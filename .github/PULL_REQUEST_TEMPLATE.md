@@ -20,6 +20,6 @@ CHANGELOG.md stays cumulative. For a build with no tester-facing behavior, say t
 - [ ] Native production changes: `just native-check` passes, or the relevant platform check is noted.
 - [ ] Commits follow Conventional Commits.
 - [ ] No captures, Wi-Fi passwords, unofficial LUT dumps, signing material, or other secrets.
-- [ ] Docs/CHANGELOG updated if behavior or setup changed. Public handbook pages (private repo `erik-sutton95/opencapture-site`) updated when protocol, app, or setup visitors read has changed.
+- [ ] Docs/CHANGELOG updated if behavior or setup changed. Public handbook pages updated when protocol, app, or setup visitors read has changed.
 - [ ] TestFlight- or Play-triggering changes replace WhatToTest with the this-build window (`docs/tester-notes.md`).
 - [ ] iOS release PRs: bump `MARKETING_VERSION` in `ios/Config/Version.xcconfig` when starting a new version train.

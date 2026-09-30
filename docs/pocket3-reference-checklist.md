@@ -7,7 +7,7 @@ OpenPocketCine support claim. The physical survey used Pocket 3 firmware
 
 The [public Pocket 3 reference](https://opencapture.org/openpocketcine/docs/devices/pocket-3/)
 is the home for sanitized observations, command/status mappings and inspected
-file properties. Its [source](https://opencapture.org/openpocketcine/docs/devices/pocket-3/)
+file properties. Its [source](../handbook/src/content/docs/devices/pocket-3/index.md)
 is updated in this worktree; that does not itself establish publication.
 Private screenshots, action timestamps, packets and media stay in the local
 ledger described by the [capture guide](capture-guide.md).
@@ -41,9 +41,9 @@ what its screenshot, packet or preserved file actually shows.
 
 These labels are complementary. No single label proves persistence, a calibrated
 physical effect, every setting combination or support in an OPC build. The
-[command catalog](https://opencapture.org/openpocketcine/docs/protocol/commands/) records wire
-facts; the [iOS](https://opencapture.org/openpocketcine/docs/apps/ios/) and
-[Android](https://opencapture.org/openpocketcine/docs/apps/android/) pages describe app support.
+[command catalog](../handbook/src/content/docs/protocol/commands.md) records wire
+facts; the [iOS](../handbook/src/content/docs/apps/ios.md) and
+[Android](../handbook/src/content/docs/apps/android.md) pages describe app support.
 
 ## Preserved-file result
 
@@ -75,20 +75,20 @@ nine DNGs from the short Timelapse, and 151 from the full five-minute Timelapse.
 All 170 DNGs, including the Photo, have independently validated full-resolution
 CFA arrays and distinct array hashes. The card also contains 13 fully decoded
 JPEG panorama components and three fully decoded Slow Motion AAC sidecars.
-See [camera originals and companions](https://opencapture.org/openpocketcine/docs/devices/pocket-3/media/#camera-http-originals-and-companions).
+See [camera originals and companions](../handbook/src/content/docs/devices/pocket-3/media.md#camera-http-originals-and-companions).
 
 A separate local-editor collection contains **six processed MOV derivatives /
 137,719,683 bytes**, all fully decoded. It qualifies 10-bit On/Off, Color Recovery
 D-LOG M/None and local Glamour On/Off export pairs. These are not camera originals;
 the later Device Download → Video with Glamour Effects workflow is separate.
-See [local editor and exports](https://opencapture.org/openpocketcine/docs/devices/pocket-3/album/#mimo-local-editor-and-exports).
+See [local editor and exports](../handbook/src/content/docs/devices/pocket-3/album.md#mimo-local-editor-and-exports).
 
 A later **13,871,016-byte Device effects-download derivative** and its
 **50,164,533-byte camera original** fully decode: both are 1728×3072, 25fps,
 155 frames / 6.200s, while HEVC 10-bit in the original becomes HEVC 8-bit in the
 derivative. The original's 48 HTTP ranges and both preserved hashes validate.
 This closes that download workflow for one take; the sticker-only scene does
-not establish facial-effect efficacy. See [Mimo album](https://opencapture.org/openpocketcine/docs/devices/pocket-3/album/#mimo-album).
+not establish facial-effect efficacy. See [Mimo album](../handbook/src/content/docs/devices/pocket-3/album.md#mimo-album).
 
 The initial webcam collection separately preserves **four lossless host video
 artifacts / 361 frames** and a **5.013333-second, 48 kHz stereo microphone sample**.
@@ -97,7 +97,7 @@ frames**. Decoded pixels and PCM match the retained host buffers/samples.
 The operator's color selection is separate from measured encoding; the initial
 pass's color remains unknown, and neither pass proves a log curve or 10-bit USB
 delivery. These receiver artifacts are not SD recordings.
-See [USB webcam](https://opencapture.org/openpocketcine/docs/devices/pocket-3/webcam/#usb-webcam).
+See [USB webcam](../handbook/src/content/docs/devices/pocket-3/webcam.md#usb-webcam).
 
 A later **49,045,559-byte native portrait camera original** validates
 1728×3072 HEVC Main 10 at 25fps, 151 frames / 6.040s and stereo AAC. All 47 HTTP
@@ -106,7 +106,7 @@ Its subsequently preserved phone import matches by complete SHA-256 and length;
 this is another copy of the same recording.
 The identity rotation transform and an upright, filled 9:16 decoded frame
 establish native portrait composition. This additional recording is outside the
-earlier card-copy inventory. See [native portrait recording](https://opencapture.org/openpocketcine/docs/devices/pocket-3/modes/#native-portrait-recording).
+earlier card-copy inventory. See [native portrait recording](../handbook/src/content/docs/devices/pocket-3/modes.md#native-portrait-recording).
 
 ## Shooting-mode result map
 
@@ -124,8 +124,8 @@ earlier card-copy inventory. See [native portrait recording](https://opencapture
 | Hyperlapse | All six resolution/rate choices selected; Auto/2X/5X/10X/15X/30X menu. Auto and 2X recording flows and downloaded outputs inspected. | Actual acceleration ratio, Auto decisions and each speed's output. A recording HUD's 1X indicator was not a newly selected menu speed. |
 
 Exact payloads and file measurements belong in the public reference's
-[mode tables](https://opencapture.org/openpocketcine/docs/devices/pocket-3/modes/#shooting-modes-and-formats)
-and [preserved-media section](https://opencapture.org/openpocketcine/docs/devices/pocket-3/media/#color-recording-and-preserved-media).
+[mode tables](../handbook/src/content/docs/devices/pocket-3/modes.md#shooting-modes-and-formats)
+and [preserved-media section](../handbook/src/content/docs/devices/pocket-3/media.md#color-recording-and-preserved-media).
 
 ## Controls, menus and connections
 
@@ -226,7 +226,7 @@ evidence and offline tests cannot answer.
 The final iPhone check also confirmed the corrected vertical 3K FORMAT picker.
 The empty-list fallback now retains the reported portrait resolution on both
 platforms. Physical Android and an on-camera fps-change check remain pending;
-see [the picker correction](https://opencapture.org/openpocketcine/docs/devices/pocket-3/modes/#openpocketcine-portrait-format-picker).
+see [the picker correction](../handbook/src/content/docs/devices/pocket-3/modes.md#openpocketcine-portrait-format-picker).
 
 ## Before promoting a result
 

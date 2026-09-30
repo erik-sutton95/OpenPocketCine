@@ -15,6 +15,7 @@
           - "Sources/OpenPocketViewCore/Ble*.swift"
           - "Sources/OpenPocketViewCore/Connection*.swift"
           - "docs/protocol-notes.md"
+          - "handbook/**/*"
           - "tools/**/*"
 
 "area:ios":
@@ -72,6 +73,7 @@
           - ".github/**/*"
           - "README.md"
           - "CONTRIBUTING.md"
+          - "handbook/**/*"
 
 "area:android":
   - changed-files:

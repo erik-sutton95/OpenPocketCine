@@ -5,7 +5,7 @@ name: CI
 # CI gate failed twice whenever anything failed. Post-merge coverage is `push`
 # to main. Re-run a branch without a PR via workflow_dispatch.
 #
-# Required check on `main` is **CI gate**. Native / Android skip when
+# Required check on `main` is **CI gate**. Native / Android / handbook skip when
 # their paths did not change; skip is success. Do not add those job names to
 # branch protection — a skipped required check blocks the PR.
 on:
@@ -151,6 +151,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       android: ${{ steps.filter.outputs.android }}
+      handbook: ${{ steps.filter.outputs.handbook }}
     steps:
       # `dorny/paths-filter` fetches the base ref to diff on push / dispatch, which
       # needs the checkout's git credentials — so this job keeps them (unlike the
@@ -191,6 +192,12 @@ jobs:
               - 'scripts/android-*.sh'
               - 'scripts/ci-install-swift-android.sh'
               - 'justfile'
+              - '.github/workflows/ci.yml'
+            handbook:
+              - 'handbook/**'
+              - 'scripts/check-handbook-links.py'
+              - 'justfile'
+              - '.lycheeignore'
               - '.github/workflows/ci.yml'
 
   native:
@@ -248,15 +255,39 @@ jobs:
           SWIFT_ANDROID_SDK_ID: swift-6.3.3-RELEASE_android
         run: ./gradlew assembleDebug test lint
 
+  handbook:
+    name: Protocol handbook
+    needs: changes
+    if: ${{ needs.changes.outputs.handbook == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: handbook/package-lock.json
+      - name: Install handbook dependencies
+        run: npm --prefix handbook ci
+      - name: Build handbook at /openpocketcine/docs/
+        env:
+          ASTRO_TELEMETRY_DISABLED: "1"
+          HANDBOOK_BASE: /openpocketcine/docs
+        run: |
+          npm --prefix handbook run build
+          python3 scripts/check-handbook-links.py --base /openpocketcine/docs
+
   gate:
     name: CI gate
-    # The single required status check on `main` (name must stay "CI gate"). `native`
-    # and `android` are conditional, and a required check that never reports
+    # The single required status check on `main` (name must stay "CI gate"). `native`,
+    # `android`, and `handbook` are conditional, and a required check that never reports
     # leaves a pull request blocked forever — so this job always runs and collapses every
     # other job's result into one verdict. Path-filter skips and private-repo native/
     # android skips are success.
     if: always()
-    needs: [meta, changes, native, android]
+    needs: [meta, changes, native, android, handbook]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to have passed or been deliberately skipped

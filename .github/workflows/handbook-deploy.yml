@@ -1,0 +1,33 @@
+name: Handbook deploy
+
+# The handbook source stays in handbook/. The website (private repo
+# erik-sutton95/opencapture-site) clones this repo at build time, so a merge
+# that touches the handbook only has to ask Vercel for a new build.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "handbook/**"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: handbook-deploy
+  cancel-in-progress: true
+
+jobs:
+  trigger:
+    name: Trigger Vercel deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the Vercel deploy hook
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [[ -z "$VERCEL_DEPLOY_HOOK" ]]; then
+            echo "::notice::VERCEL_DEPLOY_HOOK is not set; skipping the handbook deploy."
+            exit 0
+          fi
+          curl -fsS -X POST "$VERCEL_DEPLOY_HOOK" > /dev/null
+          echo "Vercel deploy requested."

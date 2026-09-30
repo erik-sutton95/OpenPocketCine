@@ -43,7 +43,7 @@ re-run the checklist.
 - **Vendor / proprietary protocol material.** Any vendor SDK, specification PDF, header, binary, or
   network capture (`*.pcap`, `*.pcapng`). Protocol facts must be attributable to public sources in
   the [protocol handbook](https://opencapture.org/openpocketcine/docs/)
-  and hardware observation — never pasted from proprietary
+  (`handbook/src/content/docs/`) and hardware observation — never pasted from proprietary
   DJI documentation.
 - **Unofficial LUT dumps.** The bundled official Rec.709 cubes under
   `ios/OpenPocketCine/Resources/` and `Apps/Android/app/src/main/assets/luts/` are

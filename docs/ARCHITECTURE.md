@@ -292,4 +292,4 @@ See [`live-session.md`](live-session.md), [`feed-watchdog.md`](feed-watchdog.md)
 and [`ANDROID.md`](../ANDROID.md).
 
 See the [protocol handbook](https://opencapture.org/openpocketcine/docs/) for wire-level detail
-(source in the private repo `erik-sutton95/opencapture-site`; stub at [`protocol-notes.md`](protocol-notes.md)).
+(Markdown source in `handbook/src/content/docs/`; stub at [`protocol-notes.md`](protocol-notes.md)).

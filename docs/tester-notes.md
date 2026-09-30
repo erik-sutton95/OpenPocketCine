@@ -106,8 +106,7 @@ change Android's version code. Follow it with the usual **New and changed**,
 cap. Each bullet still stays within 200 characters. Routine notes without the
 marker retain their smaller limits.
 
-Publish the full platform lists together in the handbook's release notes
-(private repo `erik-sutton95/opencapture-site`) and
+Publish the full platform lists together in the handbook's release notes and
 link them from Play's 500-character short summary. Keep the cumulative
 `CHANGELOG.md` accurate too. Record the baseline build and target beta build
 with the public release notes so the next update has a clear starting point.

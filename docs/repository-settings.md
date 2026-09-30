@@ -39,18 +39,21 @@ CI (`.github/workflows/ci.yml`) runs **once** per pull request (`pull_request`
 into `main`) and once per merge (`push` to `main`). Feature-branch pushes do
 not start a second suite: that duplicated every job on the PR checks list.
 Re-run a branch without a PR with **Run workflow**. Meta checks always run and
-include gitleaks. Native iOS and Android run only when
+include gitleaks. Native iOS, Android, and the protocol handbook run only when
 their paths change (and native/Android also skip while the repository is
 private so they do not burn paid macOS minutes). Skipped jobs are success.
-The **CI gate** job is the only required check — do not require Native
-or Android by name, or a docs PR stays blocked waiting for a check
+The **CI gate** job is the only required check — do not require Native,
+Android, or handbook by name, or a docs PR stays blocked waiting for a check
 that never reports. The Android job installs the official Swift 6.3.3 Android
 SDK with `scripts/ci-install-swift-android.sh` — do not switch back to
 `skiptools/swift-android-action`; that composite references `actions/cache@v5`
 and `reactivecircus/android-emulator-runner@v2`, which SHA pinning rejects.
 
-The website and handbook live in the private repo `erik-sutton95/opencapture-site` and deploy to Vercel
-([opencapture.org/openpocketcine](https://opencapture.org/openpocketcine/)). The PR labeler
+The handbook source stays in `handbook/` here and deploys to
+<https://opencapture.org/openpocketcine/docs/> via a Vercel deploy hook on
+merge (`.github/workflows/handbook-deploy.yml`, secret `VERCEL_DEPLOY_HOOK`).
+The rest of the website lives in the private repo
+`erik-sutton95/opencapture-site`. The PR labeler
 uses `pull_request_target` and does **not** check out pull-request code.
 
 ## Security

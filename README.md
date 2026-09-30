@@ -214,6 +214,7 @@ just check          # run repository quality checks
 just test           # run Swift package tests
 just native-check   # run Swift tests and build the native iOS app
 just android-check  # build, test, and lint Android
+just handbook       # docs at http://127.0.0.1:4321/
 ```
 
 The iOS Xcode project is generated:

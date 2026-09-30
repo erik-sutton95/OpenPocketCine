@@ -1,8 +1,9 @@
 # Protocol notes
 
-Human-readable protocol handbook (BLE, camera Wi-Fi, DUML) lives at
-[opencapture.org/openpocketcine/docs](https://opencapture.org/openpocketcine/docs/).
-The website and handbook live in the private repo `erik-sutton95/opencapture-site` and deploy to Vercel.
+Human-readable protocol handbook (BLE, camera Wi-Fi, DUML) lives in
+[`handbook/src/content/docs/`](../handbook/src/content/docs/). Read it at
+[opencapture.org/openpocketcine/docs](https://opencapture.org/openpocketcine/docs/). Preview locally
+with `just handbook` (http://localhost:4321/).
 
 OpenPocketCine is not affiliated with DJI. No DJI SDK or confidential spec is in
 this repo. Packet captures stay in gitignored `captures/` and are never
@@ -91,6 +92,6 @@ It is not camera multicast. The body never sourced mDNS in these takes. Mimo
 advertises `_djimimo._tcp.local` from the phone.
 
 NDI/SRT is not implemented. One-phone-many-cameras is the separate experimental
-[Multiview stage](https://opencapture.org/openpocketcine/docs/guides/multiview-prototype/),
+[Multiview stage](../handbook/src/content/docs/guides/multiview-prototype.md),
 where cameras join a shared network and keep independent datalinks. It is not
 the one-camera/many-watchers relay described here.

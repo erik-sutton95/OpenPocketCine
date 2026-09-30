@@ -12,9 +12,8 @@ engineering. By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT
 
 No vendor SDK is included or required — the camera protocol is reverse-engineered from public
 behavior. Public docs (protocol, apps, setup):
-[opencapture.org/openpocketcine/docs](https://opencapture.org/openpocketcine/docs/).
-The website and handbook live in the private repo `erik-sutton95/opencapture-site`
-and deploy to Vercel. Keep those pages current alongside your PR. See
+[opencapture.org/openpocketcine/docs](https://opencapture.org/openpocketcine/docs/) (`just handbook` locally).
+Keep those pages current in the same PR — see
 [Keeping docs current](https://opencapture.org/openpocketcine/docs/contribute/documentation/).
 
 **Hygiene** (secrets, captures, unofficial LUTs): [`docs/commit-hygiene.md`](docs/commit-hygiene.md)
@@ -55,7 +54,7 @@ GitHub-specific:
 
 - Open a pull request into `main`. Actions runs on the PR, not a second time
   on the branch push. The required check is **CI gate** (Meta checks, Native
-  Swift/iOS, and Android feed that gate and skip when
+  Swift/iOS, Android, and the protocol handbook feed that gate and skip when
   their paths did not change). The PR template must be filled in. Maintainer
   GitHub settings: [`docs/repository-settings.md`](docs/repository-settings.md).
 - Changes that can trigger a TestFlight build must **replace**

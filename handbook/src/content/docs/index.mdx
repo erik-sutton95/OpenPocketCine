@@ -1,0 +1,54 @@
+---
+title: OpenPocketCine docs
+description: Protocol, apps, and how to build OpenPocketCine — the public handbook at opencapture.org/openpocketcine/docs.
+---
+
+OpenPocketCine is the open field monitor for DJI Osmo. These pages are the
+**public handbook**: protocol, both apps, and how to build and maintain the
+project. Markdown in `handbook/src/content/docs/` is the source. Preview with
+`just handbook`. Engineering contracts that agents follow (`docs/PARITY.md`,
+`docs/live-session.md`, …) stay in the git repo and are not uploaded here.
+
+OpenPocketCine is not affiliated with DJI. No DJI SDK or confidential spec is in
+this repository. Protocol facts come from public behavior and hardware we test.
+
+:::caution[Do not publish captures]
+Packet captures stay in gitignored `captures/` and are never committed. Do not
+open issues with pcaps or SoftAP passwords.
+:::
+
+## Start here
+
+- [Setup and build](./guides/setup/) — `just`, Xcode, Android, quality gate
+- [Troubleshooting](./guides/troubleshooting/) — pairing, Wi-Fi, live view, VPNs / ad blockers
+- [Multiview prototype](./guides/multiview-prototype/) — experimental multicamera monitoring on iPhone, iPad and Android
+- [Architecture](./apps/architecture/) — portable Swift core, SwiftUI, Compose
+- [iOS app](./apps/ios/) — physical device, XcodeGen, TestFlight
+- [Android app](./apps/android/) — JNI, Gradle, Google Play closed testing
+- [Keeping docs current](./contribute/documentation/) — what to update in the same PR
+
+## Osmo Devices
+
+[Device references](./devices/) collect captured command sets and capability
+surveys by camera model. Start here for model-specific behavior and firmware limits:
+
+- [Osmo Pocket 3](./devices/pocket-3/) — physical Mimo survey and implementation gaps
+- [Osmo Pocket 4 Pro](./devices/pocket-4-pro/) — Slow Motion, Photo and Live Photo commands
+- [Osmo Action 6](./devices/action-6/) — connection, formats, aperture, controls and original media
+
+## Shared protocol
+
+BLE is control only; bulk data goes over Wi-Fi.
+
+```text
+BLE scan → GATT connect → app-pairing → read Wi-Fi creds → join AP → UDP DUML → HTTP media
+```
+
+- [Connection spine](./protocol/connection/)
+- [BLE pairing](./protocol/ble/)
+- [Camera Wi-Fi](./protocol/wifi/)
+- [DUML frame](./protocol/duml-frame/) · [transport](./protocol/duml-transport/)
+- [Command catalog](./protocol/commands/)
+- [Live view](./protocol/live-view/)
+- [HTTP media](./protocol/media/)
+- [iOS protocol notes](./protocol/ios/)

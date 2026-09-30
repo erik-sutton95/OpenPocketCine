@@ -18,6 +18,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 | `Apps/Android/` | Compose shell and adapters |
 | `Sources/OpenPocketCineAndroidFacade/` | Android JNI facade |
 | `docs/` | Engineering references |
+| `handbook/src/content/docs/` | Public docs site (apps, protocol, setup) |
 | `.github/` | CI and templates |
 
 `captures/` is gitignored.
@@ -48,8 +49,8 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - **live-session** — freeze, black feed, reconnect, UDP bind, ACK, decoder: [`docs/live-session.md`](docs/live-session.md)
 - **watchdog** — stall, GOP-reset grace, recover `0x09/0xa8`: [`docs/feed-watchdog.md`](docs/feed-watchdog.md)
 - **reliability** — freeze-in-seconds, ACK windows, repair owner: [`docs/connection-reliability.md`](docs/connection-reliability.md)
-- **protocol** — DUML, BLE, opcode, pktType, HEVC/AVC payload: [handbook protocol pages](https://opencapture.org/openpocketcine/docs/protocol/)
-- **handbook** — public docs at opencapture.org/openpocketcine/docs, setup, iOS/Android app pages. Source: private repo `erik-sutton95/opencapture-site`
+- **protocol** — DUML, BLE, opcode, pktType, HEVC/AVC payload: `handbook/src/content/docs/protocol/`
+- **handbook** — public docs at opencapture.org/openpocketcine/docs, setup, iOS/Android app pages: `handbook/src/content/docs/`
 - **hygiene** — commit/PR that might touch secrets, LUTs, captures, identity: [`docs/commit-hygiene.md`](docs/commit-hygiene.md)
 - **contributing** — issues vs discussions, labels, human setup: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **budget** — smoothness, fps, jank, HUD Hz, scope tap, ACK rate, thermal: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
@@ -71,7 +72,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 
 ## Completion
 
-A task is not done until `just check` is green for the paths touched, docs that describe the behavior are updated, **parity** is held or an exception is recorded in `docs/PARITY.md`, no forbidden paths are staged, and operator-visible work is **physical** for the platform changed. A live-path change also still meets **budget**. Protocol, app, or setup that visitors read is updated in the **handbook** (private repo `erik-sutton95/opencapture-site`) alongside the PR — [Keeping docs current](https://opencapture.org/openpocketcine/docs/contribute/documentation/).
+A task is not done until `just check` is green for the paths touched, docs that describe the behavior are updated, **parity** is held or an exception is recorded in `docs/PARITY.md`, no forbidden paths are staged, and operator-visible work is **physical** for the platform changed. A live-path change also still meets **budget**. Protocol, app, or setup that visitors read is updated in the **handbook** (`handbook/src/content/docs/`) in the same PR — [Keeping docs current](handbook/src/content/docs/contribute/documentation.md).
 
 ## Sediment
 
