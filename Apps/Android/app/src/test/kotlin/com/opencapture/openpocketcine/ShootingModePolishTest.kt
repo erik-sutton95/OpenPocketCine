@@ -304,13 +304,29 @@ class ShootingModePolishTest {
     }
 
     @Test
+    fun portraitRecSetupShowsCurrentFormatWithColorCaption() {
+        val video = CameraStatus(
+            shootingMode = CameraCommands.SHOOT_VIDEO,
+            resolutionCode = VideoResolution.P4K.rawValue,
+            fpsIndex = VideoFrameRate.FPS25.rawValue,
+            colorMode = CameraCommands.COLOR_DLOG2,
+        )
+        assertEquals("4K25p", CaptureShutterPolicy.portraitSetupLabel(video))
+        assertEquals("D-Log2", CaptureShutterPolicy.portraitSetupCaption(video, "pocket"))
+        assertNull(CaptureShutterPolicy.portraitSetupCaption(video.copy(colorMode = -1), "pocket"))
+        val photo = video.copy(shootingMode = CameraCommands.SHOOT_PHOTO)
+        assertEquals("MODE", CaptureShutterPolicy.portraitSetupLabel(photo))
+        assertNull(CaptureShutterPolicy.portraitSetupCaption(photo, "pocket"))
+    }
+
+    @Test
     fun portraitPhotoOpensModeNotRecSetup() {
-        assertEquals("MODE", CaptureShutterPolicy.portraitSetupLabel(CameraCommands.SHOOT_PHOTO))
+        assertEquals("MODE", CaptureShutterPolicy.portraitSetupLabel(CameraStatus(shootingMode = CameraCommands.SHOOT_PHOTO)))
         assertEquals(LiveSheet.MODE, CaptureShutterPolicy.portraitSetupSheet(CameraCommands.SHOOT_PHOTO))
         assertTrue(CaptureShutterPolicy.portraitSetupOpensMode(CameraCommands.SHOOT_PHOTO))
-        assertEquals("REC SETUP", CaptureShutterPolicy.portraitSetupLabel(CameraCommands.SHOOT_VIDEO))
+        assertEquals("REC SETUP", CaptureShutterPolicy.portraitSetupLabel(CameraStatus(shootingMode = CameraCommands.SHOOT_VIDEO)))
         assertEquals(LiveSheet.FORMAT, CaptureShutterPolicy.portraitSetupSheet(CameraCommands.SHOOT_VIDEO))
-        assertEquals("REC SETUP", CaptureShutterPolicy.portraitSetupLabel(CameraCommands.SHOOT_SUPER_NIGHT))
+        assertEquals("REC SETUP", CaptureShutterPolicy.portraitSetupLabel(CameraStatus(shootingMode = CameraCommands.SHOOT_SUPER_NIGHT)))
         assertFalse(CaptureShutterPolicy.canRevertFormatFailure(CameraCommands.SHOOT_PHOTO, CameraCommands.SHOOT_VIDEO))
         assertTrue(CaptureShutterPolicy.canRevertFormatFailure(CameraCommands.SHOOT_VIDEO, CameraCommands.SHOOT_VIDEO))
         val fourK30 = VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS30)
@@ -419,7 +435,7 @@ class ShootingModePolishTest {
         assertFalse(
             CaptureShutterPolicy.requiresRecordConfirmation(true, CameraCommands.SHOOT_LIVE_PHOTO),
         )
-        assertEquals("MODE", CaptureShutterPolicy.portraitSetupLabel(CameraCommands.SHOOT_LIVE_PHOTO))
+        assertEquals("MODE", CaptureShutterPolicy.portraitSetupLabel(CameraStatus(shootingMode = CameraCommands.SHOOT_LIVE_PHOTO)))
         assertEquals(listOf("Mode"), CaptureShutterPolicy.recordingCategoryTabs(CameraCommands.SHOOT_LIVE_PHOTO))
         assertEquals(LiveSheet.MODE, CaptureShutterPolicy.opening(LiveSheet.COLOR, CameraCommands.SHOOT_LIVE_PHOTO))
         assertEquals(LiveSheet.MODE, CaptureShutterPolicy.retainedSheet(LiveSheet.FORMAT, CameraCommands.SHOOT_LIVE_PHOTO))

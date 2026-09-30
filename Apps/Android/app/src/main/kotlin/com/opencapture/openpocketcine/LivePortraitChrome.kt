@@ -51,6 +51,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -280,9 +282,15 @@ fun LivePortraitChrome(
                     Box(Modifier.align(Alignment.CenterStart).padding(start = 14.dp)) { RecChip(status.isRecording, status.recordElapsedSec) }
                 }
                 val setupSheet = CaptureShutterPolicy.portraitSetupSheet(status.shootingMode)
-                Text(
-                    CaptureShutterPolicy.portraitSetupLabel(status.shootingMode),
-                    style = LiveType.ui(13f, FontWeight.Medium),
+                val setupIsMode = CaptureShutterPolicy.portraitSetupOpensMode(status.shootingMode)
+                val setupValue = CaptureShutterPolicy.portraitSetupLabel(status)
+                val setupCaption = CaptureShutterPolicy.portraitSetupCaption(
+                    status, model.session.connectedCamera?.model?.family ?: "pocket")
+                val setupTint =
+                    if (sheet == setupSheet || recOwner.active == setupSheet.name) LiveDesign.accent else LiveDesign.text
+                // iOS: the format sits on the timecode line at its size; the color hangs smaller below.
+                Box(
+                    contentAlignment = Alignment.BottomEnd,
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 14.dp)
                         .monitorReadoutGesture(
                             captureQuickControl(setupSheet, status, model, recContext, recLifetime),
@@ -299,8 +307,31 @@ fun LivePortraitChrome(
                             },
                             fromTop = true, ceilingY = readoutFrame.maxY,
                             onPreviewBegin = { notifyTop(true) },
-                        ),
-                )
+                        )
+                        .clearAndSetSemantics {
+                            contentDescription = if (setupIsMode) "Shooting mode" else "Recording options"
+                            stateDescription = setupValue
+                        },
+                ) {
+                    Text(
+                        setupValue,
+                        color = setupTint,
+                        style = if (setupIsMode) LiveType.mono(12f, FontWeight.SemiBold)
+                        else LiveType.mono(if (tablet) 25f else 23f, FontWeight.Medium),
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    if (setupCaption != null) {
+                        Text(
+                            setupCaption,
+                            color = setupTint,
+                            style = LiveType.ui(11f, FontWeight.SemiBold),
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.offset(y = 18.dp).wrapContentWidth(Alignment.End, unbounded = true),
+                        )
+                    }
+                }
             }
         }
 

@@ -1274,6 +1274,14 @@ iOS remains the visual baseline and is unchanged in this adjustment.
 Android portrait STBY/timecode/REC SETUP sits 6 dp lower at the user’s request;
 the shared frame also moves its tap/hold picker anchor. Landscape is unchanged.
 
+### Portrait recording format readout
+
+The portrait REC SETUP control shows the current format as its value (resolution
+tab title plus frame-rate drum label, e.g. `4K25p`) at the timecode size, with the
+color mode label hanging smaller beneath it; both turn accent while its sheet or
+quick control is open. `REC SETUP` appears only until a video format is known.
+Stills keep the small `MODE` label, which opens the Mode sheet. iOS and Android match.
+
 ### Android Operator Setup alignment
 
 Android Settings follows the iOS card borders, row spacing, compact information

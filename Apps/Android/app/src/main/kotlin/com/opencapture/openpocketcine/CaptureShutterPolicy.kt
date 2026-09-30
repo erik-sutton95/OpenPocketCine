@@ -3,6 +3,8 @@ package com.opencapture.openpocketcine
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.session.CameraCommands
 import com.opencapture.openpocketcine.session.CameraModel
+import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.openpocketcine.session.VideoFormat
 
 /** Snapshot of the rec lamp when confirmation opened. Any field change dismisses it. */
 internal data class RecordConfirmationRequest(
@@ -62,8 +64,16 @@ internal object CaptureShutterPolicy {
 
     fun portraitSetupOpensMode(shootingMode: Int): Boolean = isStillCapture(shootingMode)
 
-    fun portraitSetupLabel(shootingMode: Int): String =
-        if (portraitSetupOpensMode(shootingMode)) "MODE" else "REC SETUP"
+    /** iOS `recSetupFormat`: the current format ("4K25p"), "REC SETUP" until one is known. Stills keep "MODE". */
+    fun portraitSetupLabel(status: CameraStatus): String =
+        if (portraitSetupOpensMode(status.shootingMode)) "MODE"
+        else VideoFormat.parse(status.resolutionCode, status.fpsIndex)
+            ?.let { "${it.resolution.tabTitle}${it.frameRate.drumLabel}" } ?: "REC SETUP"
+
+    /** iOS `recSetupColor`: color mode hanging under the format; none for stills or before `@2` arrives. */
+    fun portraitSetupCaption(status: CameraStatus, family: String): String? =
+        if (portraitSetupOpensMode(status.shootingMode) || status.colorMode < 0) null
+        else CameraCommands.colorLabel(status.colorMode, family)
 
     fun portraitSetupSheet(shootingMode: Int): LiveSheet =
         if (portraitSetupOpensMode(shootingMode)) LiveSheet.MODE else LiveSheet.FORMAT
