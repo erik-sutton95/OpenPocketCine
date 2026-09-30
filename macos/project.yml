@@ -1,0 +1,49 @@
+name: OpenPocketCineMac
+options:
+  bundleIdPrefix: com.opencapture
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  OpenPocketViewCore:
+    path: ..
+
+targets:
+  OpenPocketCineMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: OpenPocketCineMac
+      - path: ../ios/OpenPocketCine/BleLink.swift
+      - path: ../ios/OpenPocketCine/DatalinkDriver.swift
+      - path: ../ios/OpenPocketCine/MultiviewProvisioner.swift
+      - path: ../ios/OpenPocketCine/MultiviewDiscovery.swift
+    dependencies:
+      - package: OpenPocketViewCore
+        product: OpenPocketViewCore
+      - package: OpenPocketViewCore
+        product: OpenPocketCineMacCore
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.opencapture.openpocketcine.mac
+        PRODUCT_NAME: OpenPocketCineMac
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: OpenPocketCine
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "OpenPocketCine uses Bluetooth to find Osmo cameras and move them onto the shared Wi-Fi."
+        INFOPLIST_KEY_NSLocationUsageDescription: "OpenPocketCine reads the name of the Wi-Fi this Mac is already using so cameras can join that same network. Your location is not stored."
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "OpenPocketCine reads the name of the Wi-Fi this Mac is already using so cameras can join that same network. Your location is not stored."
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "OpenPocketCine finds cameras on the shared Wi-Fi and receives their live pictures."
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+
+schemes:
+  OpenPocketCineMac:
+    build:
+      targets:
+        OpenPocketCineMac: all

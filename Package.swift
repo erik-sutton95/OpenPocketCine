@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "MonitorPresentation", targets: ["MonitorPresentation"]),
         .library(name: "MonitorUI", targets: ["MonitorUI"]),
         .library(name: "OpenPocketViewCore", targets: ["OpenPocketViewCore"]),
+        .library(name: "OpenPocketCineMacCore", targets: ["OpenPocketCineMacCore"]),
         // JNI facade consumed by the Android app (`just android-core`). The JNI
         // shims are `#if os(Android)`-gated; on Darwin only the wire helpers
         // compile, so iOS/macOS behavior is unchanged.
@@ -30,6 +31,11 @@ let package = Package(
         ),
         .testTarget(name: "MonitorPresentationTests", dependencies: ["MonitorPresentation"]),
         .target(name: "OpenPocketViewCore"),
+        .target(name: "OpenPocketCineMacCore"),
+        .testTarget(
+            name: "OpenPocketCineMacCoreTests",
+            dependencies: ["OpenPocketCineMacCore"]
+        ),
         .testTarget(
             name: "OpenPocketViewCoreTests",
             dependencies: ["OpenPocketViewCore"],
