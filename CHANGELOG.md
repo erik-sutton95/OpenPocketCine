@@ -130,6 +130,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android Live View shows the whole picture with the camera held upright,
+  such as an Osmo Nano turned to portrait. The renderer cropped the vertical
+  frame to its middle 16:9 strip before grading and cropped it again for
+  display, so the picture was heavily zoomed in with no way back out.
 - Live View no longer mirrors when you pan past 90° with the joystick right
   after connecting (iOS and Android). The app sometimes mistook its own pan
   for a camera reconnecting in selfie position, which mirrored the picture

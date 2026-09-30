@@ -29,10 +29,11 @@ Fixes
 - Shutter angle stays at your chosen value when changing frame rate or opening the picker.
 - A new track no longer flashes on a previously tracked face.
 - Multiview Exit retries a temporary pairing refusal before showing an error.
-- Wi-Fi headings and fields align, Connect stays above the keyboard, and connecting or cancelling waits for scan cleanup.
-- Deleting a clip from clip playback works again: Delete and Cancel no longer play or pause the clip behind the dialog.
+- Wi-Fi setup fields align and Connect stays above the keyboard.
+- Deleting a clip from playback works again, without playing or pausing the clip behind the dialog.
+- Live View shows the whole picture with the camera held upright, instead of a heavily zoomed crop.
 - Osmo Nano no longer shows zoom controls, and DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
-- Live View no longer freezes for seconds after one dropped video packet. The picture returns with the camera's next keyframe.
+- Live View no longer freezes for seconds after one dropped video packet.
 - Live View no longer crashes on MediaTek phones or with gimbal controls on some screens.
 
 What to test
@@ -41,4 +42,4 @@ What to test
 - In Multiview, try Grid and Center stage in both orientations, open Camera settings, and switch apps to check feeds resume. Exit once.
 - Double-tap an object to track it, with a face in the scene. Set the joystick to Large. Set 180° and change FPS: angle should stay 180°.
 - Turn on LEVEL and roll the handle in FPV. In Media, open a clip, tap the trash icon, and try Cancel, then Delete.
-- On Nano, confirm there is no zoom chip. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.
+- On Nano, confirm there is no zoom chip and the whole picture shows with the camera upright. If you have an Action 6, check live view, APERTURE, COLOR, Photo and Timelapse.
