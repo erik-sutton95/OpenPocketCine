@@ -324,9 +324,10 @@ class AppModel(
         phoneCharging = charging
     }
 
-    fun pressRecord() = session.pressRecord()
-
-    fun pressShutter() = session.pressShutter()
+    /** Rec lamp, after any confirmation: an explicit start or stop through the CORE-02 seam. */
+    fun pressShutter() {
+        session.control.shutter()
+    }
 
     fun setEv(thirds: Int) = session.setEv(thirds)
 
@@ -366,15 +367,21 @@ class AppModel(
 
     fun endMediaBrowse() = session.endMediaBrowse()
 
-    fun setIsoIndex(index: Int) = session.setIsoIndex(index)
+    fun setIsoIndex(index: Int) {
+        session.control.setIsoIndex(index)
+    }
 
     fun setShutterDenom(denom: Int) = session.setShutterDenom(denom)
 
     fun setExpoMode(mode: Int) = session.setExpoMode(mode)
 
-    fun setWhiteBalanceAuto(tint: Int? = null) = session.setWhiteBalanceAuto(tint)
+    fun setWhiteBalanceAuto(tint: Int? = null) {
+        session.control.setWhiteBalanceAuto(tint)
+    }
 
-    fun setWhiteBalance(kelvin: Int, tint: Int) = session.setWhiteBalance(kelvin, tint)
+    fun setWhiteBalance(kelvin: Int, tint: Int) {
+        session.control.setWhiteBalanceCustom(kelvin, tint)
+    }
 
     fun setFocusMode(continuous: Boolean) = session.setFocusMode(continuous)
 

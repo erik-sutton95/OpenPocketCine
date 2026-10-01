@@ -158,7 +158,7 @@ internal suspend fun ensureEndpointCommandCurrent(currentGeneration: Long) {
 class PocketCameraSession(
     context: Context, borrowing: HevcDecoder? = null,
     private val controlLease: MultiviewControlLease? = null,
-) : CameraSessionSeam {
+) : CameraSessionSeam, PocketControlPort {
     init { require(controlLease == null || borrowing != null) }
     internal val isMultiviewControlOnly: Boolean get() = controlLease != null
     private fun controlLeaseAllows(): Boolean = controlLease?.allows() != false
@@ -415,6 +415,21 @@ class PocketCameraSession(
     private var recoveryCameraId: String? = null
     private var recoveryDeviceName = ""
     private var datalink: DatalinkDriver? = null
+        set(value) {
+            val replaced = field !== value
+            field = value
+            if (replaced) controlSeam?.linkDidChange()
+        }
+
+    /** OpenCineCore seam for ISO, white balance and record (CORE-02). UI controls submit here. */
+    val control: DjiCameraSessionAdapter
+        get() = controlSeam ?: DjiCameraSessionAdapter(this, scope).also { controlSeam = it }
+    private var controlSeam: DjiCameraSessionAdapter? = null
+
+    // Camera-reported values for the seam. [status] carries optimistic HUD values; these never do.
+    private var reportedIsoIndex: Int? = null
+    private var reportedWhiteBalance: ReportedWhiteBalance? = null
+    private var reportedRecording: Boolean? = null
     private var connectJob: Job? = null
     private var keepaliveJob: Job? = null
     private var frameJob: Job? = null
@@ -757,6 +772,9 @@ class PocketCameraSession(
         mediaReturnPending = false
         _phase.value = ConnectionPhase.IDLE
         _status.value = CameraStatus()
+        reportedIsoIndex = null
+        reportedWhiteBalance = null
+        reportedRecording = null
         _failure.value = null
         _controlNote.value = null
         _controlBusy.value = false
@@ -2796,9 +2814,11 @@ class PocketCameraSession(
             next = held
             audioPin = nextPin
         }
+        noteReportedControlValues(frame, next, reported)
         if (isMultiviewControlOnly) {
             if (next != prev) { telemetryStatus = next; _status.value = next }
             rematchShutterAngle(angleRematch)
+            controlSeam?.sessionDidChange()
             return
         }
         if (next.selfieFlip != prev.selfieFlip) {
@@ -2889,46 +2909,76 @@ class PocketCameraSession(
         }
         rematchShutterAngle(angleRematch)
         confirmZoomColorHopIfReady()
+        controlSeam?.sessionDidChange()
     }
 
-    fun pressRecord() {
-        val starting = !_status.value.isRecording
+    /** Only this frame's own decode counts: never a pin-held or optimistic value. */
+    private fun noteReportedControlValues(frame: DumlFrame, decoded: CameraStatus, reported: CameraStatus) {
+        if (reported.isoIndex >= 0) reportedIsoIndex = reported.isoIndex
+        if (reported.wbMode == CameraCommands.WB_AUTO) {
+            reportedWhiteBalance = ReportedWhiteBalance(CameraCommands.WB_AUTO, 0, reported.wbTint)
+        } else if (reported.wbMode == CameraCommands.WB_CUSTOM && reported.wbKelvin >= 2_000) {
+            reportedWhiteBalance = ReportedWhiteBalance(CameraCommands.WB_CUSTOM, reported.wbKelvin, reported.wbTint)
+        }
+        // `0x02/0x80` carries the recording bit; the JNI decode of this frame is camera truth.
+        if (frame.cmdSet == 0x02 && frame.cmdId == 0x80 && frame.payload.size >= 13) {
+            reportedRecording = decoded.isRecording
+        }
+    }
+
+    override fun controlState(): PocketControlState {
+        val dl = datalink
+        val status = _status.value
+        return PocketControlState(
+            linkReady = dl != null && endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding),
+            authorized = controlLeaseAllows(),
+            recovering = dl?.isRebuilding == true || recoveryJob?.isActive == true,
+            phase = _phase.value,
+            cameraId = connectedCamera?.id,
+            shootingMode = status.shootingMode,
+            busy = _controlBusy.value || isBrowsingMedia,
+            isoChoices = CaptureLists.isoIndices(status).filter { it != 0 || CaptureLists.offersIsoAuto(status) },
+            isoIndex = reportedIsoIndex,
+            whiteBalance = reportedWhiteBalance,
+            recording = reportedRecording,
+            batteryPercent = status.batteryPercent.takeIf { it in 0..100 },
+            storageFreeMb = status.storageFreeMb.takeIf { status.storageTotalMb > 0 },
+        )
+    }
+
+    override fun noteControlRejection(note: String) {
+        _controlNote.value = note
+    }
+
+    /** Photo still. The rec lamp reaches this through `control.shutter()`. */
+    override fun takePhoto() {
         _controlBusy.value = true
         fireKind(
-            if (starting) SwiftCore.CMD_RECORD_START else SwiftCore.CMD_RECORD_STOP,
-            null,
-            if (starting) "Record" else "Stop",
+            SwiftCore.CMD_SHOOT_PHOTO,
+            CaptureShutterPolicy.shootPhotoExtra(start = true),
+            "Photo",
+            retransmits = false,
             onSettle = { _controlBusy.value = false },
         )
     }
 
-    /** Rec lamp: Photo still; Pocket 3 TimeLapse `0x02/0x01`; else video record. */
-    fun pressShutter() {
-        val status = _status.value
-        val cameraName = connectedCamera?.model?.name
-        when (CaptureShutterPolicy.captureKind(status.shootingMode, cameraName)) {
-            CaptureShutterPolicy.CaptureKind.PHOTO -> {
-                _controlBusy.value = true
-                fireKind(
-                    SwiftCore.CMD_SHOOT_PHOTO,
-                    CaptureShutterPolicy.shootPhotoExtra(start = true),
-                    "Photo",
-                    retransmits = false,
-                    onSettle = { _controlBusy.value = false },
-                )
-            }
-            CaptureShutterPolicy.CaptureKind.SHUTTER_TRIGGER -> {
-                val starting = !status.isRecording
-                _controlBusy.value = true
-                fireKind(
-                    SwiftCore.CMD_SHOOT_PHOTO,
-                    CaptureShutterPolicy.shootPhotoExtra(start = starting),
-                    if (starting) "TimeLapse" else "Stop",
-                    onSettle = { _controlBusy.value = false },
-                )
-            }
-            CaptureShutterPolicy.CaptureKind.VIDEO_RECORD -> pressRecord()
-        }
+    /**
+     * Explicit start or stop; callers go through `control`, which checks the reported state
+     * first. Pocket 3 TimeLapse `0x02/0x01`; else video record `0x02/0x02`.
+     */
+    override fun setRecording(start: Boolean, onStage: ((ControlWireEvent) -> Unit)?) {
+        val trigger =
+            CaptureShutterPolicy.captureKind(_status.value.shootingMode, connectedCamera?.model?.name) ==
+                CaptureShutterPolicy.CaptureKind.SHUTTER_TRIGGER
+        _controlBusy.value = true
+        fireKind(
+            if (trigger) SwiftCore.CMD_SHOOT_PHOTO else if (start) SwiftCore.CMD_RECORD_START else SwiftCore.CMD_RECORD_STOP,
+            if (trigger) CaptureShutterPolicy.shootPhotoExtra(start = start) else null,
+            if (trigger) (if (start) "TimeLapse" else "Stop") else if (start) "Record" else "Stop",
+            onStage = onStage,
+            expect = { reportedRecording == start },
+            onSettle = { _controlBusy.value = false },
+        )
     }
 
     fun setEv(thirds: Int) {
@@ -3385,7 +3435,7 @@ class PocketCameraSession(
         when (action) {
             GamepadOperatorAction.RECORD -> {
                 if (_controlBusy.value) return
-                pressShutter()
+                control.shutter()
             }
             GamepadOperatorAction.RECENTER -> performGimbalDoubleTap()
             GamepadOperatorAction.FLIP -> flipGimbal()
@@ -3731,7 +3781,7 @@ class PocketCameraSession(
         }
     }
 
-    fun setIsoIndex(index: Int) {
+    override fun setIsoIndex(index: Int, onStage: ((ControlWireEvent) -> Unit)?) {
         val previous = _status.value.isoIndex
         pinExpo(isoIndex = index)
         _status.value = _status.value.copy(isoIndex = index)
@@ -3740,6 +3790,8 @@ class PocketCameraSession(
             "$index",
             "ISO",
             coalesce = true,
+            onStage = onStage,
+            expect = { reportedIsoIndex == index },
             onFail = {
                 if (_status.value.isoIndex == index) {
                     clearExpoPin(iso = true)
@@ -3917,7 +3969,7 @@ class PocketCameraSession(
         if (exposureLockDecision("awbLockHolds", request.toString()) == "false") _awbLockKelvin.value = null
     }
 
-    fun setWhiteBalanceAuto(tint: Int? = null) {
+    override fun setWhiteBalanceAuto(tint: Int?, onStage: ((ControlWireEvent) -> Unit)?) {
         _awbLockKelvin.value = null
         val previous = _status.value
         val next = (tint ?: _status.value.wbTint).coerceIn(-100, 100)
@@ -3935,6 +3987,8 @@ class PocketCameraSession(
             "$next",
             "WB Auto tint $next",
             coalesce = true,
+            onStage = onStage,
+            expect = { reportedWhiteBalance == ReportedWhiteBalance(CameraCommands.WB_AUTO, 0, next) },
             onFail = {
                 if (whiteBalancePin === requestPin) {
                     whiteBalancePin = null
@@ -3946,13 +4000,14 @@ class PocketCameraSession(
         )
     }
 
-    fun setWhiteBalance(kelvin: Int, tint: Int) {
+    override fun setWhiteBalance(kelvin: Int, tint: Int, onStage: ((ControlWireEvent) -> Unit)?) {
         val previous = _status.value
         val (k, t) = CameraCommands.clampWhiteBalanceCustom(kelvin, tint)
         // Custom from AWB Lock keeps the locked value; the camera is already there.
         if (_awbLockKelvin.value != null && previous.wbMode == CameraCommands.WB_CUSTOM &&
             previous.wbKelvin == k && previous.wbTint == t) {
             _awbLockKelvin.value = null
+            onStage?.invoke(ControlWireEvent.CONFIRMED)
             return
         }
         _awbLockKelvin.value = null
@@ -3970,6 +4025,8 @@ class PocketCameraSession(
             "$k\u001f$t",
             "WB ${k}K tint $t",
             coalesce = true,
+            onStage = onStage,
+            expect = { reportedWhiteBalance == ReportedWhiteBalance(CameraCommands.WB_CUSTOM, k, t) },
             onFail = {
                 if (whiteBalancePin === requestPin) {
                     whiteBalancePin = null
@@ -5418,12 +5475,15 @@ class PocketCameraSession(
         name: String,
         coalesce: Boolean = false,
         retransmits: Boolean = true,
+        onStage: ((ControlWireEvent) -> Unit)? = null,
+        expect: (() -> Boolean)? = null,
         onFail: (() -> Unit)? = null,
         onSettle: ((Boolean) -> Unit)? = null,
     ) {
         val dl = datalink
         if (!controlLeaseAllows() || dl == null || !endpointCommandAdmission.allows(dl.isClosed, dl.isRebuilding)) {
             _controlNote.value = "not live"
+            onStage?.invoke(ControlWireEvent.NOT_SENT)
             onFail?.invoke()
             onSettle?.invoke(false)
             if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(SwiftCore.waitKey(kind), false)
@@ -5440,9 +5500,12 @@ class PocketCameraSession(
                 onFail = onFail,
                 onSettle = onSettle,
                 retransmits = retransmits,
+                onStage = onStage,
+                expect = expect,
             )
         if (coalesce && inflight.containsKey(key)) {
-            inflightPending[key] = send
+            // Latest wins: the replaced request never reaches the wire.
+            inflightPending.put(key, send)?.onStage?.invoke(ControlWireEvent.NOT_SENT)
             return
         }
         launchInflight(key, send)
@@ -5450,8 +5513,9 @@ class PocketCameraSession(
 
     private fun launchInflight(key: Int, send: InflightSend) {
         inflight[key] = send
-        inflightPending.remove(key)
+        inflightPending.remove(key)?.takeIf { it !== send }?.onStage?.invoke(ControlWireEvent.NOT_SENT)
         transmit(send)
+        send.onStage?.invoke(ControlWireEvent.SENT)
         if (send.retransmits) {
             scope.launch {
                 delay(300)
@@ -5493,6 +5557,7 @@ class PocketCameraSession(
             send.onFail?.invoke()
             _controlNote.value = "${send.name}: ${parsed.message}"
         }
+        send.onStage?.invoke(if (ok) ControlWireEvent.ACKNOWLEDGED else ControlWireEvent.REFUSED)
         send.onSettle?.invoke(ok)
         Log.i(TAG, "control: ${send.name} ack=${if (ok) "ok" else parsed.message}")
         inflightPending.remove(key)?.let { launchInflight(key, it) }
@@ -5519,7 +5584,11 @@ class PocketCameraSession(
                 noteCommandTimeout()
             }
         }
-        send.onSettle?.invoke(true)
+        // No ACK in the settle window. A SET that names its readback settles on what the
+        // camera reports, never on success by default.
+        val matched = send.expect?.invoke()
+        send.onStage?.invoke(if (matched == true) ControlWireEvent.CONFIRMED else ControlWireEvent.UNCONFIRMED)
+        send.onSettle?.invoke(matched ?: true)
         inflightPending.remove(key)?.let { launchInflight(key, it) }
     }
 
@@ -5667,6 +5736,10 @@ class PocketCameraSession(
         val onSettle: ((Boolean) -> Unit)?,
         val retransmits: Boolean,
         var retransmitted: Boolean = false,
+        /** Wire progress for the OpenCineCore seam. */
+        val onStage: ((ControlWireEvent) -> Unit)? = null,
+        /** The camera reports the requested value. */
+        val expect: (() -> Boolean)? = null,
     )
 
     private class FrameWaiter(
