@@ -62,7 +62,7 @@ import XCTest
 
     func testRecordingConfirmationRejectsChangedCameraStateAndMembership() {
         let session = MultiviewUIReview.makeSession(count: 2)
-        for tile in session.recordingTiles { tile.recordingAvailable = true }
+        for tile in session.recordingTiles { link(tile) }
         let original = MultiviewRecordContext(session: session)
         XCTAssertTrue(original.canConfirm)
         XCTAssertTrue(original.stopping)
@@ -87,7 +87,7 @@ import XCTest
         let session = MultiviewUIReview.makeSession(count: 1)
         let tile = session.tiles[0]
         XCTAssertFalse(MultiviewRecordContext(session: session, tile: tile).canConfirm)
-        tile.recordingAvailable = true
+        link(tile)
         XCTAssertTrue(MultiviewRecordContext(session: session, tile: tile).canConfirm)
         tile.recovering = true
         XCTAssertFalse(MultiviewRecordContext(session: session, tile: tile).canConfirm)
@@ -181,5 +181,12 @@ import XCTest
             XCTAssertEqual(displayHosts(in: controller.view).count, 4)
             XCTAssertEqual(strip.contentOffset.y, 0, accuracy: 0.01)
         }
+    }
+
+    /// A live control link with a fresh record report, as `openPreview` and the 1 s monitor leave it.
+    private func link(_ tile: MultiviewSession.Tile) {
+        tile.driver = DatalinkDriver(port: 9020, tcpPoke: false, pairingToken: "")
+        tile.controlHost = "192.0.2.20"
+        tile.recordingAvailable = true
     }
 }

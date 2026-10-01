@@ -1,5 +1,7 @@
 import Foundation
 import Observation
+import OpenCineCore
+import OpenCineMulticam
 import OpenPocketViewCore
 import UIKit
 
@@ -9,6 +11,13 @@ final class MultiviewSession {
     @MainActor @Observable final class Tile: Identifiable {
         let id = UUID()
         let decoder = HevcDecoder()
+        /// This tile's camera as a common session (MULTI-02): one per tile for its lifetime, so
+        /// selection, layout and rotation never change it. Its control epoch advances when the
+        /// tile's link or camera is replaced.
+        let control: DJICameraSessionAdapter
+        let controlPort: MultiviewTileControl
+        /// The tile's picture stream, named for the multicam engine.
+        let stream = StreamID()
         var liveModel: AppModel?
         // A settings editor borrows only the command/status path. It never owns the feed.
         var controlsModel: AppModel?
@@ -28,6 +37,7 @@ final class MultiviewSession {
             didSet {
                 liveModel?.session.datalink = nil
                 retireControls()
+                if driver !== oldValue { control.linkDidChange() }
             }
         }
         var connecting = false { didSet { if connecting { retireControls() } } }
@@ -37,7 +47,14 @@ final class MultiviewSession {
         var identity: [UInt8]?
         // Per ACK frame bookkeeping; no view reads it.
         @ObservationIgnored var responses: [UInt16: Duml.Frame] = [:]
-        var camera: FoundCamera? { didSet { if camera?.id != oldValue?.id { retireControls() } } }
+        var camera: FoundCamera? {
+            didSet {
+                if camera?.id != oldValue?.id {
+                    retireControls()
+                    control.linkDidChange()
+                }
+            }
+        }
         var status = "Add camera"
         var failureMessage: String?
         var recovery = MultiviewRecovery()
@@ -177,14 +194,22 @@ final class MultiviewSession {
             didSet {
                 let active = recordingObservation?.active
                 if active != recordingActive { recordingActive = active }
+                control.sessionDidChange()
             }
         }
         private(set) var recordingActive: Bool?
         init() {
+            let port = MultiviewTileControl()
+            controlPort = port
+            control = DJICameraSessionAdapter(session: port)
+            // Backstops only: the tile's own 8 s confirmation window decides first.
+            control.wireTimeout = .seconds(9)
+            control.readbackTimeout = .seconds(9)
             decoder.feedUpscaler = .off
             decoder.onPresentedFrame = { [weak self] in
                 self?.liveModel?.session.noteMultiviewFrame()
             }
+            port.tile = self
         }
         var lastEnable = Date.distantPast
         var enableSends = 0
@@ -286,12 +311,11 @@ final class MultiviewSession {
     var password = ""
     var groupRecordingBusy = false
     var groupRecordingNote: String?
+    /// Settings-editor leases (OpenCineMulticam): one per open editor, asked before every SET.
+    @ObservationIgnored var editorLeases = EditorLeases()
     var recordingTiles: [Tile] { tiles.filter { $0.camera != nil } }
     var anyRecording: Bool { recordingTiles.contains { $0.recordingActive == true } }
-    var canRecordTogether: Bool {
-        !busy && !groupRecordingBusy && !recordingTiles.isEmpty
-            && recordingTiles.allSatisfy { $0.recordingAvailable && !$0.recordingBusy }
-    }
+    var canRecordTogether: Bool { !busy && !groupRecordingBusy && recordPlan().isExecutable }
 
     var networkConfigured = false
     var configuringNetwork = false
@@ -793,30 +817,6 @@ final class MultiviewSession {
         await connectPreview(tile)
     }
 
-    func toggleAllRecording() async {
-        guard canRecordTogether else { return }
-        let stop = anyRecording
-        let targets = recordingTiles.filter { $0.recordingObservation?.active != !stop }
-        groupRecordingBusy = true
-        groupRecordingNote = stop ? "Stopping cameras…" : "Starting cameras…"
-        await withTaskGroup(of: Void.self) { group in
-            for tile in targets {
-                group.addTask { @MainActor in await self.recording(!stop, tile: tile) }
-            }
-        }
-        let confirmed = targets.filter {
-            $0.recordingNote == (stop ? "Recording stopped" : "Recording")
-        }.count
-        let allMatch = recordingTiles.allSatisfy {
-            $0.recordingAvailable && $0.recordingObservation?.active == !stop
-        }
-        groupRecordingNote =
-            confirmed == targets.count && allMatch
-            ? (stop ? "Recording stopped" : "Recording on \(confirmed) cameras")
-            : "\(confirmed) of \(targets.count) confirmed · check camera tiles"
-        groupRecordingBusy = false
-    }
-
     func add(_ camera: FoundCamera, to tile: Tile, experimental: Bool = false) async {
         guard camera.appearsInMultiview, camera.hasMultiviewPreview || experimental else {
             error = "Multiview preview is not available for this camera model yet."
@@ -1058,45 +1058,6 @@ final class MultiviewSession {
         tile.publishing = true
         tile.previewStarted = Date()
         if !tile.hasPicture { tile.status = "Waiting for video" }
-    }
-
-    func toggleRecording(_ tile: Tile) async {
-        guard !groupRecordingBusy, let observation = tile.recordingObservation,
-            Date().timeIntervalSince(observation.received) < 3
-        else { return }
-        await recording(!observation.active, tile: tile)
-    }
-
-    /// Commands share the tile's existing UDP session; opening another would replace preview.
-    func recording(_ enabled: Bool, tile: Tile) async {
-        guard running, !tile.recordingBusy, let driver = tile.driver, tile.controlHost != nil else {
-            return
-        }
-        tile.recordingBusy = true
-        defer { tile.recordingBusy = false }
-        let sent = Date()
-        let seq = driver.send(enabled ? Commands.recordStart() : Commands.recordStop())
-        tile.recordingNote = "Waiting for camera confirmation"
-        do {
-            let deadline = sent.addingTimeInterval(8)
-            while running && tile.driver === driver && Date() < deadline {
-                try await Task.sleep(for: .milliseconds(100))
-                if let reply = tile.responses[seq], reply.cmdSet == 2, reply.cmdId == 2,
-                    reply.payload != [0]
-                {
-                    tile.recordingNote = "Recording command rejected · check camera"
-                    return
-                }
-                if let observation = tile.recordingObservation,
-                    observation.received > sent, observation.active == enabled
-                {
-                    ControlLiveLog.line("multiview: station recording confirmed active=\(enabled)")
-                    tile.recordingNote = enabled ? "Recording" : "Recording stopped"
-                    return
-                }
-            }
-        } catch {}
-        tile.recordingNote = "No confirmation · check camera"
     }
 
     func remove(_ tile: Tile) async -> Bool {

@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineMulticam
 import OpenPocketViewCore
 import SwiftUI
 
@@ -21,16 +22,21 @@ extension MultiviewSession {
         model.frameSamples = tile.sampleBus
         tile.controlsModel = model
         tile.previewDemand = true
-        let driver = tile.driver
-        editor.multiviewControlAdmission = { [weak self, weak tile, weak editor, weak driver] in
-            guard let self, let tile, let editor else { return false }
-            return tile.controlsModel?.session === editor && tile.camera?.id == camera.id
-                && tile.driver === driver && self.controlsAvailable(for: tile)
+        // The engine's editor lease names this tile's session and control epoch: a replaced
+        // link or camera, a lost authority or the next editor retires it (plan 7.5).
+        let lease = try? editorLeases.open(tile.entryID, in: multicamGroup, at: multicamSnapshot())
+        editor.multiviewControlAdmission = { [weak self, weak tile, weak editor] in
+            guard let self, let tile, let editor, let lease else { return false }
+            return tile.controlsModel?.session === editor
+                && editorLeases.refusal(for: lease, in: multicamGroup, at: multicamSnapshot())
+                    == nil
+                && controlsAvailable(for: tile)
         }
         return model
     }
 
     func closeCameraSettings() {
+        editorLeases.closeAll()
         for tile in tiles { tile.retireControls() }
     }
 }
