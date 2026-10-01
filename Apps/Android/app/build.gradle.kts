@@ -256,7 +256,7 @@ tasks.named("preBuild").configure {
 
 dependencies {
     implementation(project(":core-api"))
-    implementation(project(":monitor-ui"))
+    implementation(libs.opencine.monitor.ui)
     implementation("com.opencapture.opencine:core:0.1.0-SNAPSHOT")
 
     implementation(platform(libs.compose.bom))

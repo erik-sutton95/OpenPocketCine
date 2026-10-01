@@ -107,7 +107,7 @@ jobs:
           # has no operator-visible work to describe. `src/debug/` is exempt on the
           # same grounds: the Play artifact is the release variant, which never
           # merges that source set. Matched per module rather than per name, so
-          # monitor-ui and any module added later are exempt on the same terms as
+          # core-api and any module added later are exempt on the same terms as
           # app instead of silently demanding notes.
           production_files="$(grep -E '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Sources/CJNI/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/android-release-notes|Apps/Android/[^/]+/src/(test|androidTest|debug)/)' || true)"
           if [[ -n "$production_files" ]]; then
@@ -218,6 +218,11 @@ jobs:
           xcode-version: latest-stable
       - name: Install native tooling
         run: brew install just swift-format xcodegen || true
+      # Candidate (OpenCineUI UI-01): ios/project.yml takes MonitorUI and MonitorPresentation
+      # from a sibling checkout at ../OpenCineUI, pinned by SHA in opencine-pins.txt. Works only
+      # once that repository is published. Delete when the app pins OpenCineUI by url + version.
+      - name: Check out pinned OpenCine packages next to the repository
+        run: scripts/checkout-opencine.sh
       - name: Run native checks
         run: just native-check
 
@@ -236,6 +241,12 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
+      # OpenCineUI candidate wiring (UI-02). Apps/Android/settings.gradle.kts
+      # includes ../../../OpenCineUI/Android, a sibling checkout pinned by SHA in
+      # opencine-pins.txt. Works only once the OpenCineUI remote exists (owner/URL not final).
+      - name: Check out pinned OpenCine packages next to the repository
+        run: scripts/checkout-opencine.sh
+
       # Do not use skiptools/swift-android-action: it references actions/cache@v5 and
       # reactivecircus/android-emulator-runner@v2, which SHA pinning rejects even when
       # those steps are skipped. The script installs Swift 6.3.3 if the runner's differs.
@@ -253,7 +264,7 @@ jobs:
         working-directory: Apps/Android
         env:
           SWIFT_ANDROID_SDK_ID: swift-6.3.3-RELEASE_android
-        run: ./gradlew assembleDebug test lint
+        run: ./gradlew assembleDebug test lint :Android:monitor-ui:testDebugUnitTest :Android:monitor-ui:lint
 
   handbook:
     name: Protocol handbook

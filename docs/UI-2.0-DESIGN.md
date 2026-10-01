@@ -601,7 +601,7 @@ and round caps/joins (1267/1283); the extracted assets retain all of these.
 
 `ICONS.PEAK` is an unused focus-cross glyph; the actual peaking tile selects
 `MOUNTAIN`. Likewise the actual guides tile uses `GUIDES`, not the unused nested
-`GUIDE` icon. SVG sources live in `Sources/MonitorUI/Resources/Icons/assist/` and
-`Apps/Android/monitor-ui/src/main/assets/icons/assist/`; Android vector drawable
+`GUIDE` icon. SVG sources live in OpenCineUI `Sources/MonitorUI/Resources/Icons/assist/` and
+OpenCineUI `Android/monitor-ui/src/main/assets/icons/assist/`; Android vector drawable
 names use the same stems with underscores. Source comments attribute part of
 this artwork to Tabler. Both packages include its [MIT license](https://github.com/tabler/tabler-icons/blob/main/LICENSE).

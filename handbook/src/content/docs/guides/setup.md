@@ -22,6 +22,9 @@ Needs [XcodeGen](https://github.com/yonaskolov/XcodeGen) (`brew install xcodegen
 cd ios && xcodegen generate && open OpenPocketCine.xcodeproj
 ```
 
+The iOS app also needs the shared UI package OpenCineUI (`MonitorUI`, `MonitorPresentation`)
+checked out next to this repository, at `../OpenCineUI`; `ios/project.yml` references it by path.
+
 The Simulator has no Bluetooth or camera Wi-Fi. Select a physical iPhone, set
 your Team under Signing, and enable **Hotspot Configuration** on the App ID.
 Native gate: `just native-check`.
@@ -38,7 +41,9 @@ More: [iOS app](../../apps/ios/).
 ## Android
 
 Needs Android Studio / JDK 17+ and the Swift Android SDK pin in `ANDROID.md`
-(Swift 6.3.3). From the repo root:
+(Swift 6.3.3), plus an OpenCineUI checkout next to this repository
+(`../OpenCineUI`): the Android build includes its shared Compose UI. From the
+repo root:
 
 ```bash
 just android-core     # cross-compile OpenPocketViewCore → jniLibs

@@ -12,18 +12,35 @@ def identity(root: Path, platform: str, configuration: str) -> str:
         paths += ["ios/OpenPocketCine", "ios/Config", "ios/project.yml", "ios/ci_scripts", "tools/stamp-source-revision.sh"]
     else:
         paths += ["Apps/Android", "scripts/android-stage-swift-core.sh"]
+    digest = hashlib.sha256()
+    digest.update(("opc-build-v1\0" + platform + "\0" + configuration + "\0").encode())
+    add_files(digest, root, paths)
+    # ponytail: each app build compiles shared packages from sibling checkouts named by
+    # path (ios/project.yml, Apps/Android/settings.gradle.kts). Hash them while those path
+    # dependencies exist; a url + version pin moves into the lockfiles instead.
+    for name, sibling_paths in SIBLING_PACKAGES[platform]:
+        sibling = root.resolve().parent / name
+        if (sibling / ".git").exists():
+            add_files(digest, sibling, sibling_paths, prefix=name.encode() + b"/")
+    return platform + "-" + digest.hexdigest()[:32]
+
+
+SIBLING_PACKAGES = {
+    "ios": [("OpenCineUI", ["Package.swift", "Sources"])],
+    "android": [("OpenCineUI", ["Android"])],
+}
+
+
+def add_files(digest, root: Path, paths: list[str], prefix: bytes = b"") -> None:
     listed = subprocess.check_output(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *paths], cwd=root
     )
-    digest = hashlib.sha256()
-    digest.update(("opc-build-v1\0" + platform + "\0" + configuration + "\0").encode())
     for name in sorted(set(listed.split(b"\0")) - {b""}):
         path = root / name.decode()
         if not path.is_file() or path.is_symlink():
             continue
-        digest.update(name + b"\0")
+        digest.update(prefix + name + b"\0")
         digest.update(hashlib.sha256(path.read_bytes()).digest())
-    return platform + "-" + digest.hexdigest()[:32]
 
 
 if __name__ == "__main__":
