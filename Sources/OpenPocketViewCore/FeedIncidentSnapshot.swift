@@ -57,7 +57,8 @@ public enum FeedIncidentBuildIdentity {
 public enum FeedIncidentBounds {
     public static let preludeSeconds: TimeInterval = 60
     public static let aftermathSeconds: TimeInterval = 30
-    public static let stallThreshold: TimeInterval = FeedWatchdog.stallThreshold
+    /// Neutral 2 s freeze bound; a test pins it to the DJI `FeedWatchdog.stallThreshold`.
+    public static let stallThreshold: TimeInterval = FeedPresentPolicy.freezeThreshold
     public static let stringLength = 96
     public static let ringCount = 60
     public static let breadcrumbRing = 32

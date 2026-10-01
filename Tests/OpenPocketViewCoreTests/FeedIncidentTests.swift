@@ -4,6 +4,11 @@ import Testing
 @testable import OpenPocketViewCore
 
 @Suite struct FeedIncidentRecorderTests {
+    /// The incident stall bound is neutral now; it must stay the DJI watchdog stall.
+    @Test func incidentStallMatchesWatchdogStall() {
+        #expect(FeedIncidentBounds.stallThreshold == FeedWatchdog.stallThreshold)
+    }
+
     @Test func freshInputStaleOutputStartsIncident() {
         var recorder = FeedIncidentRecorder(makeIncidentID: { "inc-fresh" })
         _ = recorder.beginSession(Fixture.context())

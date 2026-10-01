@@ -182,7 +182,7 @@ public enum LiveFeedWarmup {
         rollingIntervals: Int = 0,
         recovering: Bool = false,
         secondsSinceLastPresented: TimeInterval? = nil,
-        stall: TimeInterval = FeedWatchdog.stallThreshold
+        stall: TimeInterval = FeedPresentPolicy.freezeThreshold
     ) -> Bool {
         _ = recovering
         _ = secondsSinceLastPresented
