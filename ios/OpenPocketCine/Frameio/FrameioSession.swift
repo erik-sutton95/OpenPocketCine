@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineFrameIO
 import OpenPocketViewCore
 
 struct FrameioProjectListing: Equatable, Sendable {
@@ -49,11 +50,11 @@ extension AppModel {
         frameioConnecting = true
         defer { frameioConnecting = false }
         _ = try await FrameioAuthCoordinator(config: config).signIn()
-        frameioUser = try? await FrameioService(config: config).currentUser()
+        frameioUser = try? await FrameioClient.pocket(config).currentUser()
     }
 
     func disconnectFrameio() {
-        FrameioTokenStore.clear()
+        FrameioTokenStore().clear()
         frameioUser = nil
         FrameioDestination.persist(nil)
     }
@@ -62,13 +63,13 @@ extension AppModel {
         guard isFrameioConnected, frameioUser == nil, let config = frameioConfiguration else {
             return
         }
-        frameioUser = try? await FrameioService(config: config).currentUser()
+        frameioUser = try? await FrameioClient.pocket(config).currentUser()
     }
 
     func loadFrameioProjectListing() async throws -> FrameioProjectListing {
         guard let config = frameioConfiguration else { throw FrameioError.notConfigured }
         if !isFrameioConnected { try await connectFrameio() }
-        let service = FrameioService(config: config)
+        let service = FrameioClient.pocket(config)
         if frameioUser == nil { frameioUser = try? await service.currentUser() }
         guard let account = try await service.accounts().first else { throw FrameioError.noProject }
         guard let workspace = try await service.workspaces(accountID: account.id).first else {
@@ -88,7 +89,7 @@ extension AppModel {
     ) async throws -> FrameioProject {
         guard let config = frameioConfiguration else { throw FrameioError.notConfigured }
         if !isFrameioConnected { try await connectFrameio() }
-        return try await FrameioService(config: config).createProject(
+        return try await FrameioClient.pocket(config).createProject(
             accountID: accountID, workspaceID: workspaceID, name: name)
     }
 
@@ -112,22 +113,25 @@ extension AppModel {
     ) async throws {
         guard let config = frameioConfiguration else { throw FrameioError.notConfigured }
         if !isFrameioConnected { try await connectFrameio() }
-        let service = FrameioService(config: config)
+        let service = FrameioClient.pocket(config)
         if frameioUser == nil { frameioUser = try? await service.currentUser() }
         let destination = try await resolveFrameioDestination(using: service)
         let size =
             (try? FileManager.default.attributesOfItem(atPath: sourceURL.path)[.size]
             as? NSNumber)?.intValue ?? 0
         let mediaType = FrameioMediaType.forFilename(filename)
-        _ = try await service.upload(
+        let fileID = try await service.upload(
             fileURL: sourceURL, name: filename, mediaType: mediaType,
             fileSize: size, accountID: destination.accountID, folderID: destination.folderID
         ) { fraction in
             onProgress?(fraction)
         }
+        frameioLogger.info(
+            "uploaded \(filename, privacy: .private(mask: .hash)) to file \(fileID, privacy: .private(mask: .hash))"
+        )
     }
 
-    private func resolveFrameioDestination(using service: FrameioService) async throws
+    private func resolveFrameioDestination(using service: FrameioClient) async throws
         -> FrameioDestination
     {
         if let saved = FrameioDestination.loaded { return saved }
