@@ -380,14 +380,14 @@ struct CapturePickerPanel: View {
                     CaptureLists.whiteBalanceModeLabels(
                         offersLock: awbLocked || model.session.canLockAutoWhiteBalance),
                     selected: CaptureLists.whiteBalanceModeSelection(
-                        model.session.status.whiteBalance, awbLocked: awbLocked)
+                        model.session.whiteBalanceDisplayStatus.whiteBalance, awbLocked: awbLocked)
                 ) { label in
                     if label == CaptureLists.awbLock {
                         model.session.lockAutoWhiteBalance()
                     } else if label == WhiteBalanceMode.auto.label {
-                        model.session.setWhiteBalanceAuto()
+                        model.session.control.setWhiteBalanceAuto()
                     } else {
-                        model.session.setWhiteBalanceCustom(
+                        model.session.control.setWhiteBalanceCustom(
                             kelvin: currentKelvin, tint: currentTint)
                     }
                 }
@@ -537,9 +537,11 @@ struct CapturePickerPanel: View {
                     applyTint(tint)
                 })
         )
-        .onAppear { tintDraft = model.session.status.whiteBalanceTint.map(Double.init) }
-        .onChange(of: model.session.status.whiteBalanceTint) { _, _ in
-            tintDraft = model.session.status.whiteBalanceTint.map(Double.init)
+        .onAppear {
+            tintDraft = model.session.whiteBalanceDisplayStatus.whiteBalanceTint.map(Double.init)
+        }
+        .onChange(of: model.session.whiteBalanceDisplayStatus.whiteBalanceTint) { _, tint in
+            tintDraft = tint.map(Double.init)
         }
     }
 
@@ -679,12 +681,12 @@ struct CapturePickerPanel: View {
     }
 
     private var currentKelvin: Int {
-        let k = model.session.status.whiteBalanceKelvin
+        let k = model.session.whiteBalanceDisplayStatus.whiteBalanceKelvin
         return (2_000...10_000).contains(k) ? k : 5_600
     }
 
     private var currentTint: Int {
-        min(max(model.session.status.whiteBalanceTint ?? 0, -100), 100)
+        min(max(model.session.whiteBalanceDisplayStatus.whiteBalanceTint ?? 0, -100), 100)
     }
 
     private func seed() {
@@ -705,16 +707,16 @@ struct CapturePickerPanel: View {
             }
             reseatShutterOrEv()
         case .wb:
-            let mode = model.session.status.whiteBalance?.mode
+            let wb = model.session.whiteBalanceDisplayStatus
+            let mode = wb.whiteBalance?.mode
             // AWB Lock is a Mode choice, not an active Kelvin.
             let modeTab =
                 mode == nil || mode == .auto || model.session.autoWhiteBalanceLock != nil
             selectedMode = modeTab ? 0 : 1
             let k = "\(currentKelvin)K"
-            drumSelection =
-                (2_000...10_000).contains(model.session.status.whiteBalanceKelvin) ? k : ""
+            drumSelection = (2_000...10_000).contains(wb.whiteBalanceKelvin) ? k : ""
             lastApplied = drumSelection
-            tintDraft = model.session.status.whiteBalanceTint.map(Double.init)
+            tintDraft = wb.whiteBalanceTint.map(Double.init)
         case .audio:
             selectedMode = 0
             if preview == nil { Task { await model.session.refreshAudioState() } }
@@ -744,7 +746,7 @@ struct CapturePickerPanel: View {
         switch sheet {
         case .iso where offersIsoAuto:
             if index == 0 {
-                model.session.setISO(.auto)
+                model.session.control.setISO(.auto)
                 reseatIsoAutoDrum()
             } else {
                 reseatIsoDiscrete()
@@ -757,14 +759,14 @@ struct CapturePickerPanel: View {
                 if let idx = IsoIndex.allCases.first(where: { $0.label == drumSelection }),
                     isoIndices.contains(idx)
                 {
-                    model.session.setISO(idx)
+                    model.session.control.setISO(idx)
                 }
             }
         case .shutter:
             OperatorPrefs.shutterUsesAngle = index == 1
             reseatShutter()
         case .wb:
-            if index == 0, model.session.status.whiteBalance?.mode != .auto {
+            if index == 0, model.session.whiteBalanceDisplayStatus.whiteBalance?.mode != .auto {
                 // Mode tab only; write happens on row tap.
             }
         case .resolution:
@@ -807,7 +809,7 @@ struct CapturePickerPanel: View {
             guard let idx = IsoIndex.allCases.first(where: { $0.label == value }),
                 isoIndices.contains(idx)
             else { return }
-            enqueueDrumSend(value) { model.session.setISO(idx) }
+            enqueueDrumSend(value) { model.session.control.setISO(idx) }
         case .shutter:
             if isEvSheet {
                 guard !model.facePriorityExposureEnabled else { return }
@@ -828,7 +830,7 @@ struct CapturePickerPanel: View {
             enqueueDrumSend(value) { model.session.setShutterDenom(denom) }
         case .wb:
             guard selectedMode == 1, let kelvin = CaptureLists.kelvin(from: value) else { return }
-            model.session.setWhiteBalanceCustom(kelvin: kelvin, tint: currentTint)
+            model.session.control.setWhiteBalanceCustom(kelvin: kelvin, tint: currentTint)
         case .resolution:
             guard let rate = VideoFrameRate(drumLabel: value),
                 formatRates.contains(rate)
@@ -950,10 +952,10 @@ struct CapturePickerPanel: View {
     /// Auto SET keeps tint (Mimo). Tint pad must not kick Auto into Custom.
     private func applyTint(_ tint: Int) {
         guard canApplyDrum else { return }
-        if model.session.status.whiteBalance?.mode == .custom {
-            model.session.setWhiteBalanceCustom(kelvin: currentKelvin, tint: tint)
+        if model.session.whiteBalanceDisplayStatus.whiteBalance?.mode == .custom {
+            model.session.control.setWhiteBalanceCustom(kelvin: currentKelvin, tint: tint)
         } else {
-            model.session.setWhiteBalanceAuto(tint: tint)
+            model.session.control.setWhiteBalanceAuto(tint: tint)
         }
     }
 

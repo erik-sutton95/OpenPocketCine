@@ -15,6 +15,10 @@ packages:
     exactVersion: 9.24.0
   OpenPocketViewCore:
     path: ..
+  # Candidate shared contracts (OpenCine plan CORE-02), a sibling checkout of OpenCineCore.
+  # Swap to the published URL + exact version when the package has a remote.
+  OpenCineCore:
+    path: ../../OpenCineCore
 
 targets:
   OpenPocketCine:
@@ -35,6 +39,8 @@ targets:
         product: MonitorUI
       - package: OpenPocketViewCore
         product: MonitorPresentation
+      - package: OpenCineCore
+        product: OpenCineCore
       - target: OpenPocketCineWatch
         embed: true
         codeSign: true
@@ -107,6 +113,8 @@ targets:
       - target: OpenPocketCine
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
+      - package: OpenCineCore
+        product: OpenCineCore
     settings:
       base:
         SWIFT_VERSION: "5.0"

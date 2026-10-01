@@ -87,8 +87,11 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     }
 
     @MainActor static func primary(_ sheet: CaptureSheet, model: AppModel) -> Self? {
+        // WB shows the pending request over the reported value; other kinds read the same
+        // reported status (only WB fields differ).
         primary(
-            sheet, status: model.session.status, cameraModel: model.session.connectedCamera?.model,
+            sheet, status: model.session.whiteBalanceDisplayStatus,
+            cameraModel: model.session.connectedCamera?.model,
             supportsFocusMode: model.session.supportsFocusMode,
             facePriorityExposureEnabled: model.facePriorityExposureEnabled,
             shutterUsesAngle: OperatorPrefs.shutterUsesAngle,
@@ -253,13 +256,13 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
         guard enabled, options.contains(value), value != selection, !model.session.isLocked else {
             return
         }
-        let status = model.session.status
+        let status = model.session.whiteBalanceDisplayStatus
         switch kind {
         case .iso:
             if let iso = IsoIndex.allCases.first(where: { $0.label == value }),
                 CaptureLists.isoIndices(from: status).contains(iso)
             {
-                model.session.setISO(iso)
+                model.session.control.setISO(iso)
             }
         case .isoLimit:
             if let limit = CaptureLists.isoLimit(
@@ -285,17 +288,17 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             if value == CaptureLists.awbLock {
                 model.session.lockAutoWhiteBalance()
             } else if value == WhiteBalanceMode.auto.label {
-                model.session.setWhiteBalanceAuto()
+                model.session.control.setWhiteBalanceAuto()
             } else {
                 let kelvin =
                     (2_000...10_000).contains(status.whiteBalanceKelvin)
                     ? status.whiteBalanceKelvin : 5_600
-                model.session.setWhiteBalanceCustom(
+                model.session.control.setWhiteBalanceCustom(
                     kelvin: kelvin, tint: min(100, max(-100, status.whiteBalanceTint ?? 0)))
             }
         case .kelvin:
             if let kelvin = CaptureLists.kelvin(from: value) {
-                model.session.setWhiteBalanceCustom(
+                model.session.control.setWhiteBalanceCustom(
                     kelvin: kelvin, tint: min(100, max(-100, status.whiteBalanceTint ?? 0)))
             }
         case .focus:

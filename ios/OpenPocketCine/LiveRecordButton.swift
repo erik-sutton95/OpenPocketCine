@@ -84,11 +84,12 @@ struct LiveRecordButton: View {
                 state.isRecordingLook ? "Stop" : "Start",
                 role: state.isRecordingLook ? .destructive : nil
             ) {
-                guard pendingRecord == confirmationContext, confirmationContext.canConfirm else {
-                    return
-                }
+                guard let approved = pendingRecord, approved == confirmationContext,
+                    approved.canConfirm
+                else { return }
                 pendingRecord = nil
-                model.session.pressShutter()
+                // The target the operator approved, not a toggle recomputed later.
+                model.session.control.record(start: !approved.recording)
             }
             Button("Cancel", role: .cancel) {}
         }
@@ -112,7 +113,7 @@ struct LiveRecordButton: View {
             pendingRecord = confirmationContext
             confirmRecord = true
         } else {
-            model.session.pressShutter()
+            model.session.control.shutter()
         }
     }
 

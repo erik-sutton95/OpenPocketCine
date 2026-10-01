@@ -160,14 +160,15 @@ struct LiveCameraControlBar: View {
     }
 
     private var wbIcon: OpcIcon? {
-        model.session.status.whiteBalance?.mode == .custom ? nil : .aperture
+        model.session.whiteBalanceDisplayStatus.whiteBalance?.mode == .custom ? nil : .aperture
     }
 
     private var wbValue: String {
         if model.session.autoWhiteBalanceLock != nil { return CaptureLists.awbLockTile }
-        switch model.session.status.whiteBalance?.mode {
+        let wb = model.session.whiteBalanceDisplayStatus
+        switch wb.whiteBalance?.mode {
         case .custom:
-            let k = model.session.status.whiteBalanceKelvin
+            let k = wb.whiteBalanceKelvin
             return k > 0 ? "\(k)K" : "Custom"
         case .auto:
             return "Auto"

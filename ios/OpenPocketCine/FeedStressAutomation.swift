@@ -714,11 +714,11 @@ enum FeedStressAutomation {
             if ProcessInfo.processInfo.environment["OPV_FEED_STRESS_RECORD"] == "1",
                 session.status.isRecording
             {
-                session.pressShutter()
+                session.control.record(start: false)
             }
             session.endGimbalStick(cancelMove: true)
             if let iso = baseline.isoIndex, iso != session.status.isoIndex {
-                session.setISO(iso)
+                session.control.setISO(iso)
             }
             if let limit = baseline.isoLimit, limit != session.status.isoLimit {
                 session.setIsoLimit(limit)
@@ -726,9 +726,9 @@ enum FeedStressAutomation {
             if let wb = baseline.whiteBalance {
                 switch wb.mode {
                 case .auto:
-                    session.setWhiteBalanceAuto(tint: wb.tint)
+                    session.control.setWhiteBalanceAuto(tint: wb.tint)
                 case .custom:
-                    session.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
+                    session.control.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
                 }
             }
             let wanted: [(LiveAssistTool, Bool)] = [

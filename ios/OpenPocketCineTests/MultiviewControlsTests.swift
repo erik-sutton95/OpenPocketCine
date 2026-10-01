@@ -14,13 +14,14 @@ import XCTest
         XCTAssertTrue(first.session.datalink === a.driver)
         XCTAssertTrue(first.session.decoder === a.decoder)
         first.session.setWhiteBalanceCustom(kelvin: 5600, tint: 0)
-        XCTAssertEqual(first.session.status.whiteBalance, .custom(kelvin: 5600, tint: 0))
+        XCTAssertEqual(first.session.pendingWhiteBalance, .custom(kelvin: 5600, tint: 0))
         XCTAssertNil(first.session.controlNote)
         XCTAssertNil(b.controlsModel)
-        // Unrelated camera traffic must not confirm the active editor's optimistic pin.
+        // Unrelated camera traffic must not confirm the active editor's pending request.
         b.updateSettings(wb(.auto))
         a.updateSettings(wb(.auto))
-        XCTAssertEqual(first.session.status.whiteBalance, .custom(kelvin: 5600, tint: 0))
+        XCTAssertEqual(first.session.pendingWhiteBalance, .custom(kelvin: 5600, tint: 0))
+        XCTAssertEqual(first.session.status.whiteBalance, .auto, "Reported stays the camera's")
         a.updateSettings(wb(.custom(kelvin: 5600, tint: 0)))
         a.updateSettings(wb(.auto))
         XCTAssertEqual(first.session.status.whiteBalance, .auto)

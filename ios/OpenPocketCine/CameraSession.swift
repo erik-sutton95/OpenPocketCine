@@ -42,7 +42,10 @@ final class CameraSession {
 
     var phase: ConnectionPhase = .idle {
         didSet {
-            if oldValue != phase { onChromePublished?() }
+            if oldValue != phase {
+                onChromePublished?()
+                controlSeam?.sessionDidChange()
+            }
         }
     }
     /// Watch relay and other chrome observers. Fires after a status publish or phase change.
@@ -59,10 +62,12 @@ final class CameraSession {
             let previous = statusStorage
             statusStorage = newValue
             if let lock = autoExposureLock, !lock.holds(newValue) { autoExposureLock = nil }
-            if let lock = autoWhiteBalanceLock, !lock.holds(newValue) {
+            // A pending AWB Lock is judged once the camera answers its Custom SET.
+            if let lock = autoWhiteBalanceLock, whiteBalancePin == nil, !lock.holds(newValue) {
                 autoWhiteBalanceLock = nil
             }
             guard newValue != previous else { return }
+            controlSeam?.sessionDidChange()
             guard
                 LiveChromeThrottle.shouldNotify(
                     previous: previous, next: newValue,
@@ -180,7 +185,17 @@ final class CameraSession {
     @ObservationIgnored private var statusFlushTask: Task<Void, Never>?
 
     @ObservationIgnored private let ble = BleLink()
-    @ObservationIgnored var datalink: DatalinkDriver?
+    @ObservationIgnored var datalink: DatalinkDriver? {
+        didSet { if oldValue !== datalink { controlSeam?.linkDidChange() } }
+    }
+    /// OpenCineCore seam for ISO, white balance and record (CORE-02). UI controls submit here.
+    var control: DJICameraSessionAdapter {
+        if let controlSeam { return controlSeam }
+        let seam = DJICameraSessionAdapter(session: self)
+        controlSeam = seam
+        return seam
+    }
+    @ObservationIgnored private var controlSeam: DJICameraSessionAdapter?
     @ObservationIgnored private var frameRouter: Task<Void, Never>?
     @ObservationIgnored private var keepaliveLoop: Task<Void, Never>?
     /// Last pid `0x38` GET reply. BLE fallback fires when this goes stale.
@@ -535,6 +550,8 @@ final class CameraSession {
     @ObservationIgnored private var gimbalSpeedPin: CameraValuePin<GimbalSpeed>?
     @ObservationIgnored private var shootingModePin: CameraValuePin<Int>?
     @ObservationIgnored private var whiteBalancePin: CameraValuePin<WhiteBalance>?
+    /// White balance requested but not yet reported by the camera (`whiteBalancePin`).
+    private(set) var pendingWhiteBalance: WhiteBalance?
     @ObservationIgnored private var focusModePin: CameraValuePin<FocusMode>?
     @ObservationIgnored private var focusTrackPin: CameraValuePin<FocusTrackMode>?
     @ObservationIgnored private var isoLimitPin: CameraValuePin<IsoLimit>?
@@ -558,8 +575,13 @@ final class CameraSession {
     var isMultiviewBorrowed = false
     private(set) var isMultiviewControlsOnly = false
     @ObservationIgnored var multiviewControlAdmission: (() -> Bool)?
-    private var admitsMultiviewControl: Bool {
+    var admitsMultiviewControl: Bool {
         !isMultiviewControlsOnly || multiviewControlAdmission?() == true
+    }
+
+    /// A camera SET can go on the wire now (the `fireCamera` admission rule).
+    var controlLinkReady: Bool {
+        admitsMultiviewControl && datalink != nil && datalink?.isRebuilding != true
     }
 
     /// The live-view display layer, for the SwiftUI `VideoView`.
@@ -881,6 +903,7 @@ final class CameraSession {
         gimbalSpeedPin = nil
         shootingModePin = nil
         whiteBalancePin = nil
+        pendingWhiteBalance = nil
         focusModePin = nil
         focusTrackPin = nil
         isoLimitPin = nil
@@ -1716,30 +1739,35 @@ final class CameraSession {
         ShootingMode.fromStatus(status.shootingMode)
     }
 
-    /// Rec lamp: start/stop video, or fire a still in Photo.
-    /// SuperNight / Low-Light is video. Pocket 3 TimeLapse uses `0x02/0x01`.
+    /// Fire a still in Photo. Record lamp, gamepad, Watch and watcher toggles reach this
+    /// through `control.shutter()`, which resolves video to an explicit start or stop.
+    func takePhoto() {
+        let frame = CaptureCommand.frame(
+            mode: currentShootingMode, model: connectedCamera?.model,
+            isRecording: status.isRecording)
+        controlBusy = true
+        fireCamera(
+            frame, name: "Photo", retransmits: false,
+            onSettle: { [weak self] _ in self?.controlBusy = false })
+    }
+
+    /// Explicit start or stop. Callers go through `control`, which checks the reported
+    /// state first. SuperNight / Low-Light is video. Pocket 3 TimeLapse uses `0x02/0x01`.
     /// The rec button stays disabled (`controlBusy`) until the ACK or the
     /// `rec_state` telemetry confirms — record must never lie.
-    func pressShutter() {
+    func setRecording(_ start: Bool, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
         let mode = currentShootingMode
-        let starting = !status.isRecording
         let frame = CaptureCommand.frame(
-            mode: mode, model: connectedCamera?.model, isRecording: status.isRecording)
+            mode: mode, model: connectedCamera?.model, isRecording: !start)
         controlBusy = true
-        if mode?.isPhoto == true {
-            fireCamera(
-                frame, name: "Photo", retransmits: false,
-                onSettle: { [weak self] _ in self?.controlBusy = false })
-            return
-        }
         let name: String
         if connectedCamera?.model.isPocket3 == true, mode?.usesShutterTriggerOnPocket3 == true {
-            name = starting ? "TimeLapse" : "Stop"
+            name = start ? "TimeLapse" : "Stop"
         } else {
-            name = starting ? "Record" : "Stop"
+            name = start ? "Record" : "Stop"
         }
         fireCamera(
-            frame, name: name, expect: .recording(starting),
+            frame, name: name, expect: .recording(start), onStage: onStage,
             onSettle: { [weak self] _ in self?.controlBusy = false }
         )
     }
@@ -2388,13 +2416,9 @@ final class CameraSession {
             }
             incoming.shootingMode = held
         }
-        if let held = CameraValuePin.reconcile(
+        let pendingWB = CameraValuePin.reconcile(
             &whiteBalancePin, reported: reported.whiteBalance, now: now)
-        {
-            incoming.whiteBalance = held
-            incoming.whiteBalanceKelvin = status.whiteBalanceKelvin
-            incoming.whiteBalanceTint = held.tint
-        }
+        if pendingWB != pendingWhiteBalance { pendingWhiteBalance = pendingWB }
         if let held = CameraValuePin.reconcile(
             &focusModePin, reported: reported.focusMode, now: now)
         {
@@ -2573,11 +2597,11 @@ final class CameraSession {
         incoming.colorMode = status.colorMode
     }
 
-    func setISO(_ index: IsoIndex) {
+    func setISO(_ index: IsoIndex, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
         pinExpo(iso: index.isoValue, isoIndex: index)
         fireCamera(
             Commands.setIsoIndex(index), name: "ISO \(index.label)", expect: .iso(index),
-            coalesce: true,
+            coalesce: true, onStage: onStage,
             onFail: { [weak self] in self?.clearExpoPin(iso: true) },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
@@ -2680,40 +2704,53 @@ final class CameraSession {
     func lockAutoWhiteBalance() {
         guard autoWhiteBalanceLock == nil, let wb = WhiteBalance.lockingAuto(status) else { return }
         setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
-        if status.whiteBalance == wb {
+        if pendingWhiteBalance == wb || status.whiteBalance == wb {
             autoWhiteBalanceLock = AutoWhiteBalanceLock(kelvin: wb.kelvin)
         }
     }
 
-    func setWhiteBalanceAuto(tint: Int? = nil) {
-        autoWhiteBalanceLock = nil
-        let next = min(max(tint ?? status.whiteBalanceTint ?? 0, -100), 100)
-        fireWhiteBalance(.auto(tint: next))
+    /// Camera-reported status with the pending white-balance request laid over it, for WB
+    /// controls and for composing the next WB request. `status` itself stays reported.
+    var whiteBalanceDisplayStatus: CameraStatus {
+        var display = status
+        guard let wb = pendingWhiteBalance else { return display }
+        display.whiteBalance = wb
+        if wb.mode == .custom { display.whiteBalanceKelvin = wb.kelvin }
+        display.whiteBalanceTint = wb.tint
+        return display
     }
 
-    func setWhiteBalanceCustom(kelvin: Int, tint: Int) {
+    func setWhiteBalanceAuto(
+        tint: Int? = nil, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil
+    ) {
+        autoWhiteBalanceLock = nil
+        let next = min(max(tint ?? whiteBalanceDisplayStatus.whiteBalanceTint ?? 0, -100), 100)
+        fireWhiteBalance(.auto(tint: next), onStage: onStage)
+    }
+
+    func setWhiteBalanceCustom(
+        kelvin: Int, tint: Int, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil
+    ) {
         let wb = WhiteBalance.custom(
             kelvin: min(max(kelvin, 2_000), 10_000), tint: min(max(tint, -100), 100))
         // Custom from AWB Lock keeps the locked value; the camera is already there.
         if autoWhiteBalanceLock != nil, status.whiteBalance == wb {
             autoWhiteBalanceLock = nil
+            onStage?(.confirmed)
             return
         }
         autoWhiteBalanceLock = nil
-        fireWhiteBalance(wb)
+        fireWhiteBalance(wb, onStage: onStage)
     }
 
-    private func fireWhiteBalance(_ wb: WhiteBalance) {
-        let previous = status.whiteBalance
-        let previousKelvin = status.whiteBalanceKelvin
-        let previousTint = status.whiteBalanceTint
+    /// The request is held as `pendingWhiteBalance` until the camera reports it; `status`
+    /// keeps the camera's own value so confirmation can never be self-fulfilling.
+    private func fireWhiteBalance(
+        _ wb: WhiteBalance, onStage: (@MainActor (ControlWireEvent) -> Void)?
+    ) {
         let pin = CameraValuePin(wb, now: Date.timeIntervalSinceReferenceDate)
         whiteBalancePin = pin
-        status.whiteBalance = wb
-        if wb.mode == .custom {
-            status.whiteBalanceKelvin = wb.kelvin
-        }
-        status.whiteBalanceTint = wb.tint
+        pendingWhiteBalance = wb
         let name =
             wb.mode == .auto
             ? "WB Auto tint \(wb.tint)"
@@ -2724,13 +2761,11 @@ final class CameraSession {
             : Commands.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
         fireCamera(
             frame, name: name, expect: .wb(wb),
-            coalesce: true,
+            coalesce: true, onStage: onStage,
             onFail: { [weak self] in
                 guard let self, self.whiteBalancePin?.id == pin.id else { return }
                 self.whiteBalancePin = nil
-                self.status.whiteBalance = previous
-                self.status.whiteBalanceKelvin = previousKelvin
-                self.status.whiteBalanceTint = previousTint
+                self.pendingWhiteBalance = nil
             },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
@@ -3683,7 +3718,7 @@ final class CameraSession {
         switch action {
         case .record:
             guard !controlBusy else { return }
-            pressShutter()
+            control.shutter()
         case .recenter:
             performGimbalDoubleTap()
         case .flip:
@@ -4134,10 +4169,15 @@ final class CameraSession {
         let coalesce: Bool
         let onFail: (@MainActor () -> Void)?
         let onSettle: (@MainActor (Bool) -> Void)?
+        /// Wire progress for the OpenCineCore seam. Unlike `onSettle`, never reports an
+        /// unconfirmed settle as success.
+        let onStage: (@MainActor (ControlWireEvent) -> Void)?
         var retransmitted = false
         init(
             frame: Duml.Frame, name: String, expect: ControlExpect?, retransmits: Bool,
-            coalesce: Bool, onFail: (@MainActor () -> Void)?, onSettle: (@MainActor (Bool) -> Void)?
+            coalesce: Bool, onFail: (@MainActor () -> Void)?,
+            onSettle: (@MainActor (Bool) -> Void)?,
+            onStage: (@MainActor (ControlWireEvent) -> Void)?
         ) {
             self.frame = frame
             self.name = name
@@ -4147,6 +4187,7 @@ final class CameraSession {
             self.coalesce = coalesce
             self.onFail = onFail
             self.onSettle = onSettle
+            self.onStage = onStage
         }
     }
 
@@ -4162,18 +4203,19 @@ final class CameraSession {
         expect: ControlExpect? = nil,
         retransmits: Bool = true,
         coalesce: Bool = false,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil,
         onFail: (@MainActor () -> Void)? = nil,
         onSettle: (@MainActor (Bool) -> Void)? = nil
     ) {
-        guard !Task.isCancelled, admitsMultiviewControl,
-            datalink != nil, datalink?.isRebuilding != true
-        else {
+        guard !Task.isCancelled, controlLinkReady else {
             controlNote = "not live"
+            onStage?(.notSent)
             onFail?()
             onSettle?(false)
             return
         }
         if isBrowsingMedia, frame.cmdSet == 0x02, frame.cmdId == 0x8E {
+            onStage?(.notSent)
             onSettle?(false)
             return
         }
@@ -4182,10 +4224,12 @@ final class CameraSession {
         pairingHold.removeValue(forKey: key)
         let send = InflightSend(
             frame: frame, name: name, expect: expect, retransmits: retransmits,
-            coalesce: coalesce, onFail: onFail, onSettle: onSettle)
+            coalesce: coalesce, onFail: onFail, onSettle: onSettle, onStage: onStage)
         let now = CFAbsoluteTimeGetCurrent()
         switch setMailbox.offer(key: key, urgent: !coalesce, now: now) {
         case .coalescePending:
+            // Latest wins: the replaced request never reaches the wire.
+            inflightPending[key]?.onStage?(.notSent)
             inflightPending[key] = send
             if inflight[key] == nil, lateWait[key] == nil {
                 scheduleCoalesceLaunch(key)
@@ -4196,7 +4240,7 @@ final class CameraSession {
             if let abandoned = lateWait.removeValue(forKey: key) {
                 abandoned.onSettle?(false)
             }
-            inflightPending.removeValue(forKey: key)
+            inflightPending.removeValue(forKey: key)?.onStage?(.notSent)
             launchInflight(send, key: key)
         }
     }
@@ -4208,6 +4252,7 @@ final class CameraSession {
         setMailbox.beginLaunch(key: key, now: CFAbsoluteTimeGetCurrent())
         inflight[key] = send
         transmit(send, kind: "send")
+        send.onStage?(.sent)
         if send.retransmits {
             watchInflight(send, key: key, after: Self.retransmitAfter) { session, live in
                 guard !live.retransmitted else { return }
@@ -4254,6 +4299,11 @@ final class CameraSession {
         if send.frame.cmdId == 0xA5 { applyTrackingPoll(reply.payload) }
         let ok = finishControlReply(
             reply, name: send.name, opcode: send.opcode, expect: send.expect, late: late)
+        if CameraReply.parse(reply.payload).isSuccess {
+            send.onStage?(.acknowledged)
+        } else {
+            send.onStage?(ok ? .confirmed : .refused)
+        }
         if !ok { send.onFail?() }
         send.onSettle?(ok)
         launchPendingAfterSettle(key)
@@ -4262,6 +4312,9 @@ final class CameraSession {
     private func settleInflightTimeout(_ send: InflightSend, key: UInt16) {
         inflight[key] = nil
         let matched = send.expect?.confirmed(by: status) == true
+        // No ACK in the settle window. `.waitLate` still releases busy UI below, but the
+        // seam hears only what the camera's status actually shows.
+        send.onStage?(matched ? .confirmed : .unconfirmed)
         let result = setMailbox.timeout(key: key, subscribeMatches: matched)
         let videoFresh =
             datalink?.lastVideoPacketAt.map {
@@ -5784,6 +5837,7 @@ final class CameraSession {
         status.meteredEv = nil
         // The new handshake restarts DUML sequence numbering. Old retries,
         // pending sliders, and GET continuations belong to the retired session.
+        controlSeam?.linkDidChange()
         let retired =
             Array(inflight.values) + Array(inflightPending.values) + Array(lateWait.values)
         inflight.removeAll()

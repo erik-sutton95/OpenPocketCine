@@ -572,7 +572,7 @@ final class AppModel {
                 watcherRecordRequest = watcherRecordContext
                 watcherRecordConfirm = true
             } else {
-                session.pressShutter()
+                session.control.shutter()
             }
         case .tapFocus(let x, let y, let w, let h):
             let nx = w > 0 ? Double(x) / Double(w) : 0.5
@@ -580,15 +580,15 @@ final class AppModel {
             session.markFocus(at: CGPoint(x: nx, y: ny))
         case .setISO(let raw):
             if let idx = IsoIndex(rawValue: UInt8(clamping: raw)) {
-                session.setISO(idx)
+                session.control.setISO(idx)
             }
         case .setShutterDenom(let denom):
             session.setShutterDenom(denom)
         case .setWhiteBalance(let mode, let kelvin, let tint):
             if mode == 0 {
-                session.setWhiteBalanceAuto(tint: tint)
+                session.control.setWhiteBalanceAuto(tint: tint)
             } else {
-                session.setWhiteBalanceCustom(kelvin: kelvin, tint: tint)
+                session.control.setWhiteBalanceCustom(kelvin: kelvin, tint: tint)
             }
         case .setColor(let raw):
             if let mode = ColorMode(rawValue: UInt8(clamping: raw)) {
@@ -758,7 +758,13 @@ final class AppModel {
             return WatchCommandResult(
                 accepted: false, isRecording: recording, error: WatchRelayCopy.switchToVideo)
         }
-        session.pressShutter()
+        if photo {
+            session.takePhoto()
+        } else if session.control.shutter()?.didNotAct == true {
+            // Explicit start/stop from a fresh snapshot; unknown record state is refused.
+            return WatchCommandResult(
+                accepted: false, isRecording: recording, error: WatchRelayCopy.busy)
+        }
         publishWatchState()
         return WatchCommandResult(accepted: true, isRecording: recording, error: nil)
     }
@@ -965,11 +971,11 @@ private struct WatcherRecordConfirmation: ViewModifier {
                     model.session.status.isRecording ? "Stop" : "Start",
                     role: model.session.status.isRecording ? .destructive : nil
                 ) {
-                    guard model.watcherRecordRequest == model.watcherRecordContext,
-                        model.watcherRecordContext.canConfirm
+                    guard let approved = model.watcherRecordRequest,
+                        approved == model.watcherRecordContext, approved.canConfirm
                     else { return }
                     model.watcherRecordRequest = nil
-                    model.session.pressShutter()
+                    model.session.control.record(start: !approved.recording)
                 }
                 Button("Cancel", role: .cancel) {}
             }

@@ -62,7 +62,9 @@ final class CameraDialReconciliationTests: XCTestCase {
         session.applyIncomingStatus(
             subscribe("cam_image_effect", [0, 0, 0, 0] + WhiteBalance.auto.setPayload))
         XCTAssertEqual(session.status.focusMode, .continuous)
-        XCTAssertEqual(session.status.whiteBalance, .custom(kelvin: 5600, tint: 0))
+        // The WB request stays pending; reported status keeps what the camera said.
+        XCTAssertEqual(session.pendingWhiteBalance, .custom(kelvin: 5600, tint: 0))
+        XCTAssertEqual(session.status.whiteBalance, .auto)
         session.applyIncomingStatus(subscribe("cam_lens_state", [0xB2]))
         session.applyIncomingStatus(
             subscribe(

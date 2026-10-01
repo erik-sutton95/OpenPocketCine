@@ -71,8 +71,9 @@ final class CapturePreviewTrafficTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertGreaterThan(peer.cameraCommands, baseline)
-        XCTAssertEqual(model.session.status.whiteBalanceKelvin, 5700)
-        XCTAssertEqual(model.session.status.whiteBalanceTint, 17)
+        // The commit is a pending request; reported status waits for the camera.
+        XCTAssertEqual(model.session.pendingWhiteBalance, .custom(kelvin: 5700, tint: 17))
+        XCTAssertEqual(model.session.status.whiteBalanceKelvin, 5600)
     }
 }
 
