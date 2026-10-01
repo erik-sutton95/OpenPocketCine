@@ -12,7 +12,7 @@ against sibling checkouts of the shared packages (see Publish prerequisite).
 | STATE-01 (commands aimed at the shown session) | `opencine/state-01-dji` (branch base) | 6936bb0a |
 | UI-01 + UI-02 (shared UI), pinned checkout script, build identity fix | `opencine/ui` | 9bed87fa |
 | MEDIA-01 (OpenCineMedia) | `opencine/media-01` | 19ce492d |
-| Kotlin scope ceiling per feed (STATE-01 remainder) | this branch | see `git log` |
+| Kotlin scope ceiling per feed (STATE-01 remainder) | this branch | ae3538c4 |
 
 Shared packages, pinned in `opencine-pins.txt` and checked out by
 `scripts/checkout-opencine.sh`:
