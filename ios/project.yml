@@ -48,6 +48,8 @@ targets:
         product: OpenPocketViewCore
       - package: OpenCineCore
         product: OpenCineMedia
+      - package: OpenCineCore
+        product: OpenCineMotion
       - package: OpenCineUI
         product: MonitorUI
       - package: OpenCineUI
@@ -132,6 +134,8 @@ targets:
         product: OpenCineCore
       - package: OpenCineCore
         product: OpenCineMedia
+      - package: OpenCineCore
+        product: OpenCineMotion
       - package: OpenCineDJI
         product: OpenCineDJI
     settings:
