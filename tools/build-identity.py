@@ -15,13 +15,20 @@ def identity(root: Path, platform: str, configuration: str) -> str:
     digest = hashlib.sha256()
     digest.update(("opc-build-v1\0" + platform + "\0" + configuration + "\0").encode())
     add_files(digest, root, paths)
-    # ponytail: the iOS app compiles MonitorUI from the sibling OpenCineUI checkout that
-    # ios/project.yml names by path. Hash it while that path dependency exists; a url +
-    # version pin moves into ios/Package.resolved instead.
-    shared_ui = root.parent / "OpenCineUI"
-    if platform == "ios" and (shared_ui / "Package.swift").is_file():
-        add_files(digest, shared_ui, ["Package.swift", "Sources"], prefix=b"OpenCineUI/")
+    # ponytail: each app build compiles shared packages from sibling checkouts named by
+    # path (ios/project.yml, Apps/Android/settings.gradle.kts). Hash them while those path
+    # dependencies exist; a url + version pin moves into the lockfiles instead.
+    for name, sibling_paths in SIBLING_PACKAGES[platform]:
+        sibling = root.resolve().parent / name
+        if (sibling / ".git").exists():
+            add_files(digest, sibling, sibling_paths, prefix=name.encode() + b"/")
     return platform + "-" + digest.hexdigest()[:32]
+
+
+SIBLING_PACKAGES = {
+    "ios": [("OpenCineUI", ["Package.swift", "Sources"])],
+    "android": [("OpenCineUI", ["Android"])],
+}
 
 
 def add_files(digest, root: Path, paths: list[str], prefix: bytes = b"") -> None:
