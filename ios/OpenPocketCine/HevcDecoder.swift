@@ -3,6 +3,8 @@ import CoreGraphics
 import CoreImage
 import CoreMedia
 import Foundation
+import OpenCineApple
+import OpenCineCore
 import OpenPocketViewCore
 import QuartzCore
 import VideoToolbox
@@ -30,20 +32,26 @@ import os
 /// → rec709 / hdr / dlog / dlog2). Simulator Downloads clip is forced `.dlog2`.
 @MainActor
 final class HevcDecoder {
-    let displayLayer = AVSampleBufferDisplayLayer()
-    private(set) var hasFormat = false
+    /// Codec runtime (OpenCineApple, MEDIA-02): the retained display layer, format, VT session,
+    /// sample buffers, error ledger and the generation fence that stamps decoded-frame leases.
+    /// This class keeps the presentation policy (assists, layer/Metal ownership, IDR holds).
+    private let vt = VideoToolboxDecoder(
+        hooks: .init(
+            shouldRebuildSession: { HevcDecoder.shouldRebuildSession(status: $0) },
+            journal: { ControlLiveLog.line($0) },
+            logSubsystem: "com.opencapture.openpocketcine"))
+    /// Lives as long as this decoder: host views adopt it, they never recreate it.
+    var displayLayer: AVSampleBufferDisplayLayer { vt.displayLayer }
+    var hasFormat: Bool { vt.format != nil }
     private var hasSubmittedRandomAccess = false
     private(set) var nalTypesSeen: Set<Int> = []
-    private(set) var decoderErrors = 0
-    /// Last VT / layer decode failure. `decoderErrors` is cumulative — one bad
+    var decoderErrors: Int { vt.decoderErrors }
+    /// Last VT / layer decode failure. `decoderErrors` is cumulative: one bad
     /// AU an hour ago must not read as `decoderWedged` on the observe line.
-    private(set) var lastDecodeErrorAt: Date?
-    private var lastDecodeErrorUptime: TimeInterval?
-    private(set) var lastDecodeStatus: Int32 = 0
-    private(set) var lastDecodeOrigin = "none"
-    private(set) var lastDecodeFlags: UInt32 = 0
-    private var nativeSessionFailed = false
-    private var lastErrorJournalAt: Date?
+    var lastDecodeErrorAt: Date? { vt.lastDecodeErrorAt }
+    var lastDecodeStatus: Int32 { vt.lastDecodeStatus }
+    var lastDecodeOrigin: String { vt.lastDecodeOrigin }
+    var lastDecodeFlags: UInt32 { vt.lastDecodeFlags }
 
     var nativeOutputAge: TimeInterval? { pipelineMetrics.outputAge }
     var incidentDecodeSnapshot: LiveDecodeMetrics.Snapshot { pipelineMetrics.snapshot }
@@ -57,7 +65,7 @@ final class HevcDecoder {
     /// Last accepted IRAP. Tells the watchdog an enable was already answered.
     private(set) var lastIrapAt: Date?
     var nativeDecodeTotals: (submitted: Int, accepted: Int, output: Int) { pipelineMetrics.totals }
-    var canReleaseIDRHold: Bool { hasSubmittedRandomAccess && !nativeSessionFailed }
+    var canReleaseIDRHold: Bool { hasSubmittedRandomAccess && !vt.sessionFailed }
 
     private(set) var lastKeyframeAt: Date?
     /// Last AU enqueued or VT frame presented. Watchdog stall signal (not keyframe age).
@@ -121,13 +129,14 @@ final class HevcDecoder {
         didSet {
             // The engine measures and ratchets the ceiling of the bus it publishes into.
             if let sampleBus { assistEngine.adopt(exposureCeiling: sampleBus.exposureCeiling) }
-            if shouldStartVT, vtSession == nil, format != nil { rebuildVT() }
+            if shouldStartVT, vt.session == nil, vt.format != nil { rebuildVT() }
         }
     }
     /// Fired on the main actor after a picture is presented (live VT, layer enqueue, or simulator).
     var onPresentedFrame: (() -> Void)?
-    /// VT source buffer after assist present. Face AF / Vision.
-    var onSourceFrame: ((CVPixelBuffer) -> Void)?
+    /// VT source buffer after assist present. Face AF / Vision. The lease is lent for the call
+    /// and released when it returns; keep `pixelBuffer` to use the pixels later.
+    var onSourceFrame: ((DecodedFrameLease) -> Void)?
     /// Wrist preview. `source` is the VT identity buffer when a cube does not own
     /// the picture (`nil` for LUT replace). `unmanaged` is a cube product.
     var onWatchPreview: ((CIImage, CVPixelBuffer?, Bool) -> Void)?
@@ -170,26 +179,21 @@ final class HevcDecoder {
             fallback: isVerticalPicture ? 9.0 / 16.0 : Double(LiveChromeMetrics.feedAspect))
     }
 
-    private var format: CMVideoFormatDescription?
     /// Latched from the first parameter-set AU. Pocket HEVC / Nano AVC.
     private var liveCodec: LiveVideoCodec?
     var incidentCodec: String { liveCodec.map { $0 == .avc ? "avc" : "hevc" } ?? "unknown" }
     private var vps: [UInt8]?
     private var sps: [UInt8]?
     private var pps: [UInt8]?
-    private var vtSession: VTDecompressionSession?
-    private let decodedFrameGeneration = OSAllocatedUnfairLock(initialState: 0)
     /// Capture before asynchronous decode; returned pixels must retain this token
     /// through assist work and its eventual MainActor completion.
     nonisolated var sourceFrameGeneration: Int {
-        decodedFrameGeneration.withLock { $0 }
+        Int(truncatingIfNeeded: vt.fence.generation.value)
     }
     private var displayReadyCont: CheckedContinuation<Bool, Never>?
-    private var frameIndex: Int64 = 0
     private let assistEngine = LiveAssistEngine()
     nonisolated private let pipelineMetrics = LiveDecodeMetrics()
     private let log = Logger(subsystem: "com.opencapture.openpocketcine", category: "hevc")
-    private let loggedLiveVT = OSAllocatedUnfairLock(initialState: false)
     /// Simulator (and any pixel-buffer-only source) paints identity on `CIFeedView`.
     private var prefersPixelBufferDisplay = false
     /// Fast / Quality / AI must present through Metal. Off keeps the identity HEVC layer.
@@ -244,17 +248,13 @@ final class HevcDecoder {
     private var usesPixelBufferDisplay: Bool { prefersPixelBufferDisplay || shouldStartVT }
     /// Test seam: the live VT session (if any) can decode samples stamped with
     /// the current format description. `adoptFormat` must keep this true.
-    var vtSessionAcceptsCurrentFormat: Bool {
-        guard let vtSession, let format else { return true }
-        return VTDecompressionSessionCanAcceptFormatDescription(
-            vtSession, formatDescription: format)
-    }
+    var vtSessionAcceptsCurrentFormat: Bool { vt.sessionAcceptsCurrentFormat }
 
     /// Decode failed after the last presented picture — VT / layer is not
     /// producing frames right now. Fresh signal for `LinkDiagnoser`.
     var isDecoderWedged: Bool {
         guard let error = lastDecodeErrorAt else { return false }
-        if shouldStartVT, let lastDecodeErrorUptime {
+        if shouldStartVT, let lastDecodeErrorUptime = vt.lastDecodeErrorUptime {
             guard let outputAge = pipelineMetrics.outputAge else { return true }
             return ProcessInfo.processInfo.systemUptime - lastDecodeErrorUptime < outputAge
         }
@@ -312,16 +312,9 @@ final class HevcDecoder {
         return result
     }
     private var lastDecodedTimeNs: Int64 = 0
-    private var decodedImageFormat: CMVideoFormatDescription?
     private var lastPresentHealthLogAt: Date?
-    private var builtVPS: [UInt8]?
-    private var builtSPS: [UInt8]?
-    private var builtPPS: [UInt8]?
-    /// Parameter sets we already tried to open a VT session for. Repeated PPS must not retry.
-    private var vtAttemptedStamp: (vps: [UInt8], sps: [UInt8], pps: [UInt8])?
 
     init() {
-        displayLayer.videoGravity = .resizeAspect
         // OpenZCine: fused-peaking self-check is ~0.5 s. Do it before the first PEAK frame.
         Task.detached(priority: .utility) { _ = LiveMonitorCompositor.fusedPeakingAvailable }
     }
@@ -340,20 +333,17 @@ final class HevcDecoder {
     }
 
     /// Layer is in the view hierarchy with a real size — safe to enqueue the first IDR.
-    var isDisplayReady: Bool {
-        displayLayer.superlayer != nil && displayLayer.bounds.width > 1
-            && displayLayer.bounds.height > 1
-    }
+    var isDisplayReady: Bool { vt.isDisplayReady }
 
     /// True while a VT session is allocated. LUT-off hands HEVC back to the display layer.
-    var videoToolboxActive: Bool { vtSession != nil }
+    var videoToolboxActive: Bool { vt.session != nil }
     /// Successful `VTDecompressionSessionCreate` count. Repeated VPS/SPS/PPS must not bump this.
-    private(set) var vtRebuildCount = 0
+    var vtRebuildCount: Int { vt.sessionCreateCount }
 
     /// Mid-session re-enable gate: display attached, and VT exists when this path needs it.
     var isPresentationReady: Bool {
         guard isDisplayReady else { return false }
-        if shouldStartVT, format != nil { return vtSession != nil }
+        if shouldStartVT, vt.format != nil { return vt.session != nil }
         return true
     }
 
@@ -468,7 +458,8 @@ final class HevcDecoder {
                 hasPicture: !slices.isEmpty, awaitingIDR: awaitingIDR, isIDR: hasIDR
             )
         else { return false }
-        guard let format, let sample = sampleBuffer(slices, format), Self.isPresentable(sample)
+        guard let format = vt.format, let sample = vt.makeCompressedSample(slices, format: format),
+            VideoToolboxDecoder.isPresentable(sample)
         else { return false }
         if hasIDR {
             if awaitingIDR {
@@ -512,7 +503,7 @@ final class HevcDecoder {
         // A compressed frame skipped during the mirror hold left later P-frames
         // without their reference. Decode it, just do not show it.
         let mirrorHold = !commitPictureFlipIfNeeded()
-        if mirrorHold { Self.markDoNotDisplay(sample) }
+        if mirrorHold { VideoToolboxDecoder.markDoNotDisplay(sample) }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         displayLayer.enqueue(sample)
@@ -548,12 +539,30 @@ final class HevcDecoder {
         generation: Int? = nil,
         timeNs: Int64 = 0
     ) {
-        let generation = generation ?? sourceFrameGeneration
-        guard sourceFrameGeneration == generation else { return }
+        let lease = vt.fence.lease(
+            imageBuffer,
+            generation: generation.map { StreamGeneration(UInt64(truncatingIfNeeded: $0)) },
+            timeNs: timeNs)
+        handleDecodedFrame(
+            lease, effects: effects, transfer: transfer, isNewSourceFrame: isNewSourceFrame)
+    }
+
+    /// Lease form of the entry above. A lease from an older generation is released unused.
+    nonisolated func handleDecodedFrame(
+        _ lease: DecodedFrameLease,
+        effects: LiveImageEffects? = nil,
+        transfer: MonitorTransfer? = nil,
+        isNewSourceFrame: Bool = true
+    ) {
+        let generation = lease.generation
+        guard vt.fence.isCurrent(generation), let imageBuffer = lease.pixelBuffer else {
+            lease.release()
+            return
+        }
         let sourceTime = Date()
         let sourceTimeNs =
-            timeNs != 0
-            ? timeNs
+            lease.timeNs != 0
+            ? lease.timeNs
             : (isNewSourceFrame ? Int64(clamping: DispatchTime.now().uptimeNanoseconds) : 0)
         if isNewSourceFrame { onIdentityFrame?(imageBuffer) }
         let assistSubmittedAt = ProcessInfo.processInfo.systemUptime
@@ -565,19 +574,21 @@ final class HevcDecoder {
             [weak self] result in
             let completedAt = ProcessInfo.processInfo.systemUptime
             if isNewSourceFrame, result.shouldPresent,
-                self?.sourceFrameGeneration == generation
+                self?.vt.fence.isCurrent(generation) == true
             {
                 self?.pipelineMetrics.assistOutput(
                     at: completedAt, submittedAt: assistSubmittedAt)
             }
             Task { @MainActor [weak self] in
-                guard let self, self.sourceFrameGeneration == generation else { return }
+                // The source lease ends here: published, or refused as stale.
+                defer { lease.release() }
+                guard let self, self.vt.fence.isCurrent(generation) else { return }
                 if isNewSourceFrame, result.shouldPresent {
                     self.pipelineMetrics.adopted(
                         at: ProcessInfo.processInfo.systemUptime, completedAt: completedAt)
                 }
                 let presented = self.applyAssistResult(
-                    result, isNewSourceFrame: isNewSourceFrame)
+                    result, generation: generation, isNewSourceFrame: isNewSourceFrame)
                 // Cached repaints cannot refresh camera or watcher liveness.
                 if result.shouldPresent && isNewSourceFrame {
                     self.lastSourceFrameAt = sourceTime
@@ -597,23 +608,16 @@ final class HevcDecoder {
         referenceRecoveryNeeded = false
         finishDisplayWait(false)
         stopSimulatorSample()
-        format = nil
+        vt.dropFormat()
         liveCodec = nil
         vps = nil
         sps = nil
         pps = nil
-        hasFormat = false
         nalTypesSeen.removeAll()
         pictureSize = .zero
         isVerticalPicture = false
         onPictureSizeChanged?()
-        decoderErrors = 0
-        lastDecodeErrorAt = nil
-        lastDecodeErrorUptime = nil
-        lastDecodeStatus = 0
-        lastDecodeOrigin = "none"
-        lastDecodeFlags = 0
-        lastErrorJournalAt = nil
+        vt.clearErrors()
         lastKeyframeAt = nil
         lastPresentedAt = nil
         lastSourceFrameAt = nil
@@ -634,13 +638,7 @@ final class HevcDecoder {
         lastPresentHealthLogAt = nil
         presentedPictureFlip = nil
         extraMirrorHold.reset()
-        builtVPS = nil
-        builtSPS = nil
-        builtPPS = nil
-        vtAttemptedStamp = nil
-        vtRebuildCount = 0
-        frameIndex = 0
-        loggedLiveVT.withLock { $0 = false }
+        vt.resetCounters()
         assistEngine.reset()
         pipelineMetrics.reset()
         sampleBus?.reset()
@@ -678,9 +676,9 @@ final class HevcDecoder {
             displayLayer.flush()
         }
         if displayLayer.status == .failed { displayedImageRemoved = true }
-        if format != nil {
+        if vt.format != nil {
             rebuildVT(force: true)
-            if shouldStartVT, vtSession == nil { dropFormatForRecovery() }
+            if shouldStartVT, vt.session == nil { dropFormatForRecovery() }
         } else {
             dropFormatForRecovery()
         }
@@ -719,15 +717,11 @@ final class HevcDecoder {
     }
 
     private func dropFormatForRecovery() {
-        format = nil
+        vt.dropFormat()
         liveCodec = nil
         vps = nil
         sps = nil
         pps = nil
-        hasFormat = false
-        builtVPS = nil
-        builtSPS = nil
-        builtPPS = nil
         pictureSize = .zero
         invalidateVT()
         vtOwnsHardwareDecode = false
@@ -778,23 +772,6 @@ final class HevcDecoder {
         pendingLayerRelease = false
     }
 
-    nonisolated private static func isPresentable(_ sample: CMSampleBuffer) -> Bool {
-        guard CMSampleBufferIsValid(sample), CMSampleBufferGetNumSamples(sample) > 0 else {
-            return false
-        }
-        if let image = CMSampleBufferGetImageBuffer(sample) {
-            return isPresentable(image)
-        }
-        if let block = CMSampleBufferGetDataBuffer(sample) {
-            return CMBlockBufferGetDataLength(block) > 0
-        }
-        return false
-    }
-
-    nonisolated private static func isPresentable(_ imageBuffer: CVPixelBuffer) -> Bool {
-        CVPixelBufferGetWidth(imageBuffer) > 1 && CVPixelBufferGetHeight(imageBuffer) > 1
-    }
-
     /// Simulator-only: loop the D-Log2 Downloads clip through `handleDecodedFrame`.
     func startSimulatorSampleIfNeeded() {
         #if targetEnvironment(simulator)
@@ -839,7 +816,7 @@ final class HevcDecoder {
         // flags look unchanged — tests and LUT-off cover Metal that was left
         // visible. Skip only while we stay on an already-running GPU path
         // (LUT 50/50 is a compositor flag, not a layer/VT tear).
-        if pathUnchanged, needGPU, !(needVT && vtSession == nil && format != nil) {
+        if pathUnchanged, needGPU, !(needVT && vt.session == nil && vt.format != nil) {
             syncAssistPolicy()
             return
         }
@@ -848,8 +825,8 @@ final class HevcDecoder {
         let vtStarting = needVT && !lastNeedsSample
         let releasingAssist = !needsDecodedSample && lastNeedsSample && sessionOwnsVT
         if needVT {
-            if vtSession == nil, format != nil { rebuildVT() }
-            vtOwnsHardwareDecode = vtSession != nil
+            if vt.session == nil, vt.format != nil { rebuildVT() }
+            vtOwnsHardwareDecode = vt.session != nil
         }
         if !needGPU {
             // Opaque CIFeedView covers Rec.709 / HLG even when the layer has a picture.
@@ -985,7 +962,8 @@ final class HevcDecoder {
     }
 
     private func applyAssistResult(
-        _ result: LiveAssistEngine.Result, isNewSourceFrame: Bool = true
+        _ result: LiveAssistEngine.Result, generation: StreamGeneration,
+        isNewSourceFrame: Bool = true
     ) -> Bool {
         // The inspector borrows raw main-feed pixels even when no scope is
         // enabled. Retaining the buffer performs no copy or scope calculation;
@@ -998,7 +976,12 @@ final class HevcDecoder {
         if result.shouldPresent {
             lastDecodedBuffer = result.source
             lastDecodedTimeNs = result.timeNs
-            onSourceFrame?(result.source)
+            if let onSourceFrame {
+                let lease = vt.fence.lease(
+                    result.source, generation: generation, timeNs: result.timeNs)
+                vt.fence.publish(lease, to: onSourceFrame)
+                lease.release()
+            }
             NotificationCenter.default.post(name: .monitorBackdropSourceAdvanced, object: nil)
         }
         if !result.shouldPresent { return false }
@@ -1082,68 +1065,38 @@ final class HevcDecoder {
             return
         }
         guard let vps, let sps, let pps else { return }
-        if format != nil, vps == builtVPS, sps == builtSPS, pps == builtPPS {
-            if shouldStartVT, vtSession == nil { rebuildVT() }
+        if vt.format != nil, vps == vt.builtVPS, sps == vt.builtSPS, pps == vt.builtPPS {
+            if shouldStartVT, vt.session == nil { rebuildVT() }
             return
         }
         let changing = EncoderPresentPath.parameterSetsChanged(
-            hadFormat: format != nil,
-            previousVPS: builtVPS, previousSPS: builtSPS, previousPPS: builtPPS,
+            hadFormat: vt.format != nil,
+            previousVPS: vt.builtVPS, previousSPS: vt.builtSPS, previousPPS: vt.builtPPS,
             nextVPS: vps, nextSPS: sps, nextPPS: pps)
-        vps.withUnsafeBufferPointer { v in
-            sps.withUnsafeBufferPointer { s in
-                pps.withUnsafeBufferPointer { p in
-                    let ptrs: [UnsafePointer<UInt8>] = [
-                        v.baseAddress!, s.baseAddress!, p.baseAddress!,
-                    ]
-                    let sizes = [vps.count, sps.count, pps.count]
-                    var fmt: CMFormatDescription?
-                    let status = CMVideoFormatDescriptionCreateFromHEVCParameterSets(
-                        allocator: kCFAllocatorDefault, parameterSetCount: 3,
-                        parameterSetPointers: ptrs, parameterSetSizes: sizes,
-                        nalUnitHeaderLength: 4, extensions: nil, formatDescriptionOut: &fmt)
-                    if status == noErr, let fmt {
-                        adoptFormat(fmt, vps: vps, sps: sps, pps: pps, changing: changing)
-                    }
-                }
-            }
+        if let fmt = VideoToolboxDecoder.makeHEVCFormat(vps: vps, sps: sps, pps: pps) {
+            adoptFormat(fmt, vps: vps, sps: sps, pps: pps, changing: changing)
         }
     }
 
     private func buildAvcFormatIfReady() {
         guard let sps, let pps else { return }
-        if format != nil, sps == builtSPS, pps == builtPPS {
-            if shouldStartVT, vtSession == nil { rebuildVT() }
+        if vt.format != nil, sps == vt.builtSPS, pps == vt.builtPPS {
+            if shouldStartVT, vt.session == nil { rebuildVT() }
             return
         }
         let changing = EncoderPresentPath.parameterSetsChanged(
-            hadFormat: format != nil,
-            previousVPS: nil, previousSPS: builtSPS, previousPPS: builtPPS,
+            hadFormat: vt.format != nil,
+            previousVPS: nil, previousSPS: vt.builtSPS, previousPPS: vt.builtPPS,
             nextVPS: nil, nextSPS: sps, nextPPS: pps)
-        sps.withUnsafeBufferPointer { s in
-            pps.withUnsafeBufferPointer { p in
-                let ptrs: [UnsafePointer<UInt8>] = [s.baseAddress!, p.baseAddress!]
-                let sizes = [sps.count, pps.count]
-                var fmt: CMFormatDescription?
-                let status = CMVideoFormatDescriptionCreateFromH264ParameterSets(
-                    allocator: kCFAllocatorDefault, parameterSetCount: 2,
-                    parameterSetPointers: ptrs, parameterSetSizes: sizes,
-                    nalUnitHeaderLength: 4, formatDescriptionOut: &fmt)
-                if status == noErr, let fmt {
-                    adoptFormat(fmt, vps: nil, sps: sps, pps: pps, changing: changing)
-                }
-            }
+        if let fmt = VideoToolboxDecoder.makeAVCFormat(sps: sps, pps: pps) {
+            adoptFormat(fmt, vps: nil, sps: sps, pps: pps, changing: changing)
         }
     }
 
     private func adoptFormat(
         _ fmt: CMFormatDescription, vps: [UInt8]?, sps: [UInt8], pps: [UInt8], changing: Bool
     ) {
-        format = fmt
-        hasFormat = true
-        builtVPS = vps
-        builtSPS = sps
-        builtPPS = pps
+        vt.adoptFormat(fmt, vps: vps, sps: sps, pps: pps)
         let previousSize = pictureSize
         let dims = CMVideoFormatDescriptionGetDimensions(fmt)
         let next = CGSize(width: CGFloat(dims.width), height: CGFloat(dims.height))
@@ -1171,11 +1124,10 @@ final class HevcDecoder {
         }
         // Same raster, new sets: VT decides. Keeping a session that refuses the
         // new SPS fails every frame with no log — frozen well, live HUD.
-        if let vtSession,
+        if vt.session != nil,
             EncoderPresentPath.shouldRebuildDecoderForRejectedFormat(
                 parameterSetsChanged: changing,
-                sessionAcceptsFormat: VTDecompressionSessionCanAcceptFormatDescription(
-                    vtSession, formatDescription: fmt))
+                sessionAcceptsFormat: vt.sessionAccepts(fmt))
         {
             log.info("feed: VT refused new parameter sets — rebuild VT, keep picture")
             ControlLiveLog.line("feed: VT refused new parameter sets — rebuild VT, keep picture")
@@ -1204,7 +1156,6 @@ final class HevcDecoder {
             displayLayer.flush()
         }
         invalidateVT()
-        vtAttemptedStamp = nil
         if EncoderPresentPath.shouldBeginIDRHoldAfterParameterChange(
             pictureSizeChanged: true, accessUnitHasIDR: false)
         {
@@ -1213,164 +1164,19 @@ final class HevcDecoder {
         pendingParameterChangeEnable = true
     }
 
-    private func sampleBuffer(_ nals: [[UInt8]], _ format: CMVideoFormatDescription)
-        -> CMSampleBuffer?
-    {
-        var avcc = [UInt8]()
-        for nal in nals {
-            var len = UInt32(nal.count).bigEndian
-            withUnsafeBytes(of: &len) { avcc.append(contentsOf: $0) }
-            avcc.append(contentsOf: nal)
-        }
-
-        var block: CMBlockBuffer?
-        guard
-            CMBlockBufferCreateWithMemoryBlock(
-                allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: avcc.count,
-                blockAllocator: kCFAllocatorDefault, customBlockSource: nil,
-                offsetToData: 0, dataLength: avcc.count, flags: 0, blockBufferOut: &block)
-                == kCMBlockBufferNoErr, let block
-        else { return nil }
-        let ok = avcc.withUnsafeBytes { raw in
-            CMBlockBufferReplaceDataBytes(
-                with: raw.baseAddress!, blockBuffer: block,
-                offsetIntoDestination: 0, dataLength: avcc.count)
-        }
-        guard ok == kCMBlockBufferNoErr else { return nil }
-
-        frameIndex += 1
-        var timing = LiveViewPresentTiming.sampleTiming(frameIndex: frameIndex)
-        var sample: CMSampleBuffer?
-        var sizes = [avcc.count]
-        guard
-            CMSampleBufferCreateReady(
-                allocator: kCFAllocatorDefault, dataBuffer: block, formatDescription: format,
-                sampleCount: 1, sampleTimingEntryCount: 1, sampleTimingArray: &timing,
-                sampleSizeEntryCount: 1, sampleSizeArray: &sizes, sampleBufferOut: &sample)
-                == noErr, let sample
-        else { return nil }
-
-        if let attachments = CMSampleBufferGetSampleAttachmentsArray(
-            sample, createIfNecessary: true),
-            CFArrayGetCount(attachments) > 0
-        {
-            let dict = unsafeBitCast(
-                CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
-            CFDictionarySetValue(
-                dict,
-                Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
-                Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
-        }
-        return sample
-    }
-
     private func invalidateVT() {
-        // Fence successful callbacks before teardown can deliver its final output.
-        decodedFrameGeneration.withLock { $0 &+= 1 }
-        if let vtSession { VTDecompressionSessionInvalidate(vtSession) }
-        vtSession = nil
+        // The runtime fences successful callbacks before teardown can deliver its final output.
+        vt.invalidateSession()
         hasSubmittedRandomAccess = false
-        nativeSessionFailed = false
-        vtAttemptedStamp = nil
     }
 
     private func rebuildVT(force: Bool = false) {
-        guard shouldStartVT else { return }
-        if !force, vtSession != nil { return }
-        if !force, let stamp = vtAttemptedStamp,
-            stamp.vps == (builtVPS ?? []), stamp.sps == builtSPS, stamp.pps == builtPPS
-        {
-            return
-        }
+        guard shouldStartVT, vt.needsSession(force: force) else { return }
         invalidateVT()
-        if let sps = builtSPS, let pps = builtPPS {
-            vtAttemptedStamp = (builtVPS ?? [], sps, pps)
+        if vt.openSession() {
+            sessionOwnsVT = true
+            vtOwnsHardwareDecode = true
         }
-        loggedLiveVT.withLock { $0 = false }
-        guard let format else { return }
-        // Face AF / scopes read these buffers; the identity picture is the same
-        // buffer enqueued to `AVSampleBufferDisplayLayer`. OpenZCine never does
-        // that — it presents 8-bit JPEG via Metal. The layer goes black on the
-        // 10-bit `x420` VT first used to hand Pocket (Face AF still works).
-        // 8-bit 420v is what the layer, Vision, and the scope tap all accept.
-        let attempts: [(name: String, attrs: [String: Any]?)] = [
-            (
-                "metal-420v",
-                [
-                    kCVPixelBufferPixelFormatTypeKey as String: Int(
-                        kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
-                    kCVPixelBufferMetalCompatibilityKey as String: true,
-                    kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
-                ]
-            ),
-            (
-                "metal-x420",
-                [
-                    kCVPixelBufferPixelFormatTypeKey as String: Int(
-                        kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange),
-                    kCVPixelBufferMetalCompatibilityKey as String: true,
-                    kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
-                ]
-            ),
-            (
-                "metal-native",
-                [
-                    kCVPixelBufferMetalCompatibilityKey as String: true,
-                    kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
-                ]
-            ),
-            (
-                "metal-bgra",
-                [
-                    kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
-                    kCVPixelBufferMetalCompatibilityKey as String: true,
-                    kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
-                ]
-            ),
-            ("native", nil),
-            (
-                "cpu-bgra",
-                [
-                    kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
-                    kCVPixelBufferCGImageCompatibilityKey as String: true,
-                    kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
-                ]
-            ),
-        ]
-        for attempt in attempts {
-            var session: VTDecompressionSession?
-            let status = VTDecompressionSessionCreate(
-                allocator: kCFAllocatorDefault,
-                formatDescription: format,
-                decoderSpecification: nil,
-                imageBufferAttributes: attempt.attrs.map { $0 as CFDictionary },
-                outputCallback: nil,
-                decompressionSessionOut: &session)
-            if status == noErr, let session {
-                vtSession = session
-                sessionOwnsVT = true
-                vtOwnsHardwareDecode = true
-                vtRebuildCount += 1
-                log.info("VT session \(attempt.name, privacy: .public)")
-                return
-            }
-            noteDecodeError(status: status, origin: "create")
-            log.error("VT create \(attempt.name, privacy: .public) failed \(status)")
-        }
-    }
-
-    private static func markDoNotDisplay(_ sample: CMSampleBuffer) {
-        guard
-            let attachments = CMSampleBufferGetSampleAttachmentsArray(
-                sample, createIfNecessary: true),
-            CFArrayGetCount(attachments) > 0
-        else { return }
-        let dict = unsafeBitCast(
-            CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
-        CFDictionarySetValue(
-            dict,
-            Unmanaged.passUnretained(kCMSampleAttachmentKey_DoNotDisplay).toOpaque(),
-            Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
     }
 
     /// Extra-mirror the host view with the next present. `false` keeps the last picture.
@@ -1398,53 +1204,9 @@ final class HevcDecoder {
         _ imageBuffer: CVPixelBuffer, recoverOnFailure: Bool = true, isNewSourceFrame: Bool = true
     ) -> Bool {
         guard commitPictureFlipIfNeeded() else { return false }
-        guard Self.isPresentable(imageBuffer) else { return false }
-        // VT output keeps one size and color tagging per session; reuse its description.
-        let format: CMVideoFormatDescription
-        if let cached = decodedImageFormat,
-            CMVideoFormatDescriptionMatchesImageBuffer(cached, imageBuffer: imageBuffer)
-        {
-            format = cached
-        } else {
-            var created: CMVideoFormatDescription?
-            guard
-                CMVideoFormatDescriptionCreateForImageBuffer(
-                    allocator: kCFAllocatorDefault,
-                    imageBuffer: imageBuffer,
-                    formatDescriptionOut: &created) == noErr,
-                let created
-            else { return false }
-            decodedImageFormat = created
-            format = created
-        }
-
-        frameIndex += 1
-        var timing = LiveViewPresentTiming.sampleTiming(frameIndex: frameIndex)
-        var sample: CMSampleBuffer?
-        guard
-            CMSampleBufferCreateForImageBuffer(
-                allocator: kCFAllocatorDefault,
-                imageBuffer: imageBuffer,
-                dataReady: true,
-                makeDataReadyCallback: nil,
-                refcon: nil,
-                formatDescription: format,
-                sampleTiming: &timing,
-                sampleBufferOut: &sample) == noErr,
-            let sample
-        else { return false }
-
-        if let attachments = CMSampleBufferGetSampleAttachmentsArray(
-            sample, createIfNecessary: true),
-            CFArrayGetCount(attachments) > 0
-        {
-            let dict = unsafeBitCast(
-                CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
-            CFDictionarySetValue(
-                dict,
-                Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
-                Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
-        }
+        guard VideoToolboxDecoder.isPresentable(imageBuffer) else { return false }
+        // VT output keeps one size and color tagging per session; the runtime reuses its description.
+        guard let sample = vt.makeDecodedSample(imageBuffer) else { return false }
         if displayLayer.requiresFlushToResumeDecoding { displayLayer.flush() }
         guard displayLayer.isReadyForMoreMediaData else { return false }
         releaseLayerDecoderIfNeeded()
@@ -1475,17 +1237,17 @@ final class HevcDecoder {
     /// Decode to a pixel buffer. GPU fx and scopes run on `LiveAssistEngine` (off-main).
     @discardableResult
     private func presentProcessed(_ sample: CMSampleBuffer) -> Bool {
-        if vtSession == nil, format != nil { rebuildVT() }
-        guard let vtSession, !nativeSessionFailed else { return false }
+        if vt.session == nil, vt.format != nil { rebuildVT() }
+        guard vt.session != nil, !vt.sessionFailed else { return false }
         let fx = effects
         let transfer = MonitorTransfer.resolved(
             transferProvider?() ?? incomingTransfer,
             colorMode: incomingColorMode,
             previous: incomingTransfer)
         let flags: VTDecodeFrameFlags = [._EnableAsynchronousDecompression]
-        let gen = sourceFrameGeneration
+        let gen = vt.fence.generation
         let err = decodeFrame(
-            vtSession, sample, flags: flags, generation: gen, effects: fx, transfer: transfer)
+            sample, flags: flags, generation: gen, effects: fx, transfer: transfer)
         if err == noErr { return true }
         noteDecodeError(status: err, origin: "submit")
         return false
@@ -1494,42 +1256,25 @@ final class HevcDecoder {
     func noteDecodeError(
         status: OSStatus = 0, origin: String = "display", flags: UInt32 = 0
     ) {
-        decoderErrors += 1
-        let now = Date()
-        let changed =
-            status != lastDecodeStatus || origin != lastDecodeOrigin || flags != lastDecodeFlags
-        lastDecodeErrorAt = now
-        lastDecodeErrorUptime = ProcessInfo.processInfo.systemUptime
-        lastDecodeStatus = status
-        lastDecodeOrigin = origin
-        lastDecodeFlags = flags
-        if Self.shouldRebuildSession(status: status) {
-            // Every later frame is now rejected until a rebuild. Report it as
-            // known reference loss so the watchdog repairs on its next tick,
-            // not after two seconds of inferred output silence.
-            if origin != "create", !nativeSessionFailed, lastPresentedAt != nil {
-                referenceRecoveryNeeded = true
-            }
-            nativeSessionFailed = true
-        }
-        if changed || lastErrorJournalAt.map({ now.timeIntervalSince($0) >= 1 }) ?? true {
-            lastErrorJournalAt = now
-            ControlLiveLog.line(
-                "decoder: error origin=\(origin) status=\(status) flags=\(flags) generation=\(sourceFrameGeneration) count=\(decoderErrors)"
-            )
+        // A newly failed session rejects every later frame until a rebuild. Report it as
+        // known reference loss so the watchdog repairs on its next tick, not after two
+        // seconds of inferred output silence.
+        if vt.noteError(status: status, origin: origin, flags: flags), origin != "create",
+            lastPresentedAt != nil
+        {
+            referenceRecoveryNeeded = true
         }
     }
 
     /// Called by the existing 1 Hz session publisher, including during silence.
     func takePipelineTimingLine() -> String {
-        pipelineMetrics.takeLine(vtActive: vtSession != nil)
+        pipelineMetrics.takeLine(vtActive: vt.session != nil)
     }
 
     private func decodeFrame(
-        _ session: VTDecompressionSession,
         _ sample: CMSampleBuffer,
         flags: VTDecodeFrameFlags,
-        generation: Int,
+        generation: StreamGeneration,
         effects: LiveImageEffects,
         transfer: MonitorTransfer
     ) -> OSStatus {
@@ -1538,68 +1283,32 @@ final class HevcDecoder {
         #if DEBUG
             FeedStressAutomation.noteDecodeSubmit()
         #endif
-        let result = VTDecompressionSessionDecodeFrame(
-            session, sampleBuffer: sample, flags: flags, infoFlagsOut: nil
-        ) { [weak self] status, infoFlags, imageBuffer, _, _ in
+        let result = vt.decode(sample, flags: flags, generation: generation) {
+            [weak self] output in
             guard let self else { return }
-            if status != noErr {
+            switch output {
+            case .failed(let status, let infoFlags):
                 Task { @MainActor [weak self] in
-                    guard let self, self.sourceFrameGeneration == generation else { return }
+                    guard let self, self.vt.fence.isCurrent(generation) else { return }
                     self.noteDecodeError(
                         status: status, origin: "callback", flags: infoFlags.rawValue)
                 }
-                return
+            case .frame(let lease):
+                #if DEBUG
+                    if FeedStressAutomation.shouldSilenceOutput() {
+                        lease.release()
+                        return
+                    }
+                    FeedStressAutomation.noteDecoded()
+                #endif
+                self.pipelineMetrics.decoded(
+                    at: ProcessInfo.processInfo.systemUptime, submittedAt: submittedAt)
+                if let buffer = lease.pixelBuffer { self.vt.logFirstOutput(buffer) }
+                self.handleDecodedFrame(lease, effects: effects, transfer: transfer)
             }
-            guard self.sourceFrameGeneration == generation else { return }
-            guard let imageBuffer, Self.isPresentable(imageBuffer) else {
-                Task { @MainActor [weak self] in
-                    guard let self, self.sourceFrameGeneration == generation else { return }
-                    self.noteDecodeError(
-                        status: status, origin: "callback", flags: infoFlags.rawValue)
-                }
-                return
-            }
-            #if DEBUG
-                if FeedStressAutomation.shouldSilenceOutput() { return }
-                FeedStressAutomation.noteDecoded()
-            #endif
-            self.pipelineMetrics.decoded(
-                at: ProcessInfo.processInfo.systemUptime, submittedAt: submittedAt)
-            self.logFirstLiveVT(imageBuffer)
-            self.handleDecodedFrame(
-                imageBuffer, effects: effects, transfer: transfer, generation: generation)
         }
         if result == noErr { pipelineMetrics.accepted() }
         return result
-    }
-
-    nonisolated private func logFirstLiveVT(_ buffer: CVPixelBuffer) {
-        let first = loggedLiveVT.withLock { logged -> Bool in
-            if logged { return false }
-            logged = true
-            return true
-        }
-        guard first else { return }
-        CVPixelBufferLockBaseAddress(buffer, .readOnly)
-        let baseNil = CVPixelBufferGetBaseAddress(buffer) == nil
-        let ioSurface = LiveFrameTap.isIOSurfaceBacked(buffer)
-        CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
-        Logger(subsystem: "com.opencapture.openpocketcine", category: "hevc").info(
-            "live VT \(LiveFrameTap.fourCC(buffer), privacy: .public) \(CVPixelBufferGetWidth(buffer))x\(CVPixelBufferGetHeight(buffer)) planes=\(CVPixelBufferGetPlaneCount(buffer)) baseNil=\(baseNil) ioSurface=\(ioSurface)"
-        )
-    }
-}
-
-/// SoftAP live HEVC is encoder-declared 25 fps (VPS/SPS `time_scale=25`). A 30 fps
-/// sample duration would still pace a faster GOP if the camera ever sent one.
-enum LiveViewPresentTiming {
-    static let timescale: Int32 = 60_000
-
-    static func sampleTiming(frameIndex: Int64) -> CMSampleTimingInfo {
-        CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: timescale),
-            presentationTimeStamp: CMTime(value: frameIndex, timescale: timescale),
-            decodeTimeStamp: .invalid)
     }
 }
 

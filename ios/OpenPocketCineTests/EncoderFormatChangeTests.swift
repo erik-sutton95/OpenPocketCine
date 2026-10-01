@@ -1,4 +1,5 @@
 import CoreMedia
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 

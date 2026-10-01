@@ -1,4 +1,5 @@
 import CoreVideo
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
@@ -22,8 +23,9 @@ final class DecoderGenerationTests: XCTestCase {
         let drained = expectation(description: "Current generation reaches processing")
         var identityFrames = 0
         decoder.onIdentityFrame = { _ in identityFrames += 1 }
-        decoder.onSourceFrame = { buffer in
-            XCTAssertTrue(buffer === current, "A late VT success must not reach consumers")
+        decoder.onSourceFrame = { lease in
+            XCTAssertTrue(
+                lease.pixelBuffer === current, "A late VT success must not reach consumers")
             drained.fulfill()
         }
 
@@ -53,6 +55,23 @@ final class DecoderGenerationTests: XCTestCase {
         XCTAssertEqual(bus.decodedFrames, 1)
     }
 
+    func testSourceFrameLeaseIsLentForTheCallbackOnly() async {
+        let decoder = HevcDecoder()
+        let delivered = expectation(description: "Source frame lent")
+        var lent: DecodedFrameLease?
+        decoder.onSourceFrame = { lease in
+            XCTAssertNotNil(lease.pixelBuffer)
+            XCTAssertEqual(Int(lease.generation.value), decoder.sourceFrameGeneration)
+            lent = lease
+            delivered.fulfill()
+        }
+        decoder.handleDecodedFrame(
+            ScopeTestBuffers.makeFlatBuffer(code: 120, width: 16, height: 16))
+        await fulfillment(of: [delivered], timeout: 3)
+        XCTAssertEqual(
+            lent?.isReleased, true, "Consumers keep pixels by taking their own reference")
+    }
+
     private func assertRejectsQueuedResult(_ invalidate: (HevcDecoder) -> Void) async {
         let decoder = HevcDecoder()
         let bus = LiveFrameSampleBus()
@@ -61,9 +80,9 @@ final class DecoderGenerationTests: XCTestCase {
         let sentinel = ScopeTestBuffers.makeFlatBuffer(code: 180, width: 16, height: 16)
         let drained = expectation(description: "Current cached frame drains assist results")
         var oldFrames = 0
-        decoder.onSourceFrame = { buffer in
-            if buffer === old { oldFrames += 1 }
-            if buffer === sentinel { drained.fulfill() }
+        decoder.onSourceFrame = { lease in
+            if lease.pixelBuffer === old { oldFrames += 1 }
+            if lease.pixelBuffer === sentinel { drained.fulfill() }
         }
 
         // No actor yield between source submission and invalidation: an old

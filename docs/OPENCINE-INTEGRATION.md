@@ -18,6 +18,7 @@ against sibling checkouts of the shared packages (see Publish prerequisite).
 | OPTIONAL-01 (Frame.io client from OpenCineFrameIO) | `opencine/frameio` | f569e4f5 |
 | OPTIONAL-02 (gimbal motion from OpenCineMotion) | `opencine/motion` | 63187113 |
 | OPTIONAL-02 (watcher relay wire from OpenCineRelay) | `opencine/relay` | 0ad71861 |
+| MEDIA-02 step 4 (VideoToolbox runtime and decoded-frame leases from OpenCineApple), stacked on this branch | `opencine/apple` | see `git log` |
 
 ### Merged branches
 
@@ -36,8 +37,8 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
 
 - OpenCineUI `54bcbb31283f6cf028268b382cb82eb6c156ac94` (MonitorUI, MonitorPresentation,
   Android `monitor-ui`).
-- OpenCineCore `6f578ce4984aa5d01c3b9629bd20ce38b1eb862f` (OpenCineCore, OpenCineMedia,
-  OpenCineFrameIO, OpenCineMotion, OpenCineRelay, Android `core` and `media`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
+- OpenCineCore `929c7297db1c439c8acbac43ca9422b3d5837d6c` (branch `apple`, not yet on Core main: OpenCineCore,
+  OpenCineMedia, OpenCineFrameIO, OpenCineMotion, OpenCineRelay, OpenCineApple, Android `core` and `media`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
   (`../../OpenCineCore`) name the same directory, so Xcode sees one package.
 - OpenCineDJI `225215ed812bf7f0436e2b9dcb22408f3d97d7da`: DUML, datalink,
   camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints,
@@ -72,6 +73,10 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
   a batch reports "Cancelled." instead of counting failed clips. Keychain namespace unchanged.
 - Gimbal motion and watcher relay (OPTIONAL-02): no change intended; the relay wire bytes are
   unchanged (golden v1 tests).
+- Live decoder (MEDIA-02 step 4, iPhone): no change intended. The VideoToolbox session, format,
+  sample buffers and display layer moved into OpenCineApple's `VideoToolboxDecoder`; `HevcDecoder`
+  keeps the presentation policy. Face AF now receives a decoded-frame lease (released when the
+  callback returns) instead of a bare pixel buffer.
 
 ## Physical device checklist
 
@@ -125,6 +130,13 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
 13. OPTIONAL-02: gimbal programs (A·B·C), head tracking and joystick moves behave as on `main`;
     watcher relay between an old (`main`) and a new build in both directions on two iPhones,
     plus a version-mismatch denial.
+14. MEDIA-02 step 4 (iPhone, Pocket 3 and Pocket 4, Nano for AVC): first connect shows a picture;
+    LUT, WAVE/HISTO/PEAK, zebra, false colour, HDR panel and upscaler toggles never black the
+    well or reconnect; screen flip / vertical mode recovers; Control Center and background
+    return keep the picture; Face AF tracks; Multiview stage/secondary swaps and rotation never
+    restart a feed. Measure against `opencine/integration` without this branch: glass-to-glass
+    latency, memory over 30 min live with LUT + WAVE, thermal state after 20 min, two and four
+    feeds in Multiview.
 
 ## Publish prerequisite
 

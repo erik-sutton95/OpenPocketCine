@@ -66,6 +66,10 @@ targets:
       # callback scheme, client ID and its keychain namespace (Frameio/FrameioCredentials.swift).
       - package: OpenCineCore
         product: OpenCineFrameIO
+      # Apple media runtime (OpenCine plan MEDIA-02): the VideoToolbox decoder runtime under
+      # HevcDecoder and decoded-frame leases. iOS app only; the watch never decodes live video.
+      - package: OpenCineCore
+        product: OpenCineApple
       - package: OpenCineDJI
         product: OpenCineDJI
       - package: OpenCineMulticam
@@ -152,6 +156,8 @@ targets:
         product: OpenCineMotion
       - package: OpenCineCore
         product: OpenCineRelay
+      - package: OpenCineCore
+        product: OpenCineApple
       - package: OpenCineDJI
         product: OpenCineDJI
       - package: OpenCineMulticam

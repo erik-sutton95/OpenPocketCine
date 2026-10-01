@@ -602,14 +602,16 @@ final class CameraSession {
         syncGimbalPose()
         if sharedDecoder != nil {
             isMultiviewBorrowed = true
-            self.decoder.onSourceFrame = { [weak self] buffer in self?.considerFaceAF(buffer) }
+            self.decoder.onSourceFrame = { [weak self] lease in
+                if let buffer = lease.pixelBuffer { self?.considerFaceAF(buffer) }
+            }
             return
         }
         self.decoder.onPresentedFrame = { [weak self] in
             self?.noteLiveFrame()
         }
-        decoder.onSourceFrame = { [weak self] buffer in
-            self?.considerFaceAF(buffer)
+        decoder.onSourceFrame = { [weak self] lease in
+            if let buffer = lease.pixelBuffer { self?.considerFaceAF(buffer) }
         }
         // Look/scope toggles change which decoder owns HEVC; neither side can
         // start mid-GOP, so one 0x09/0xa8 forces the IDR. 1 s floor: rapid A/B

@@ -1,4 +1,5 @@
 import CoreVideo
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
@@ -147,7 +148,7 @@ import XCTest
             CVPixelBufferCreate(
                 kCFAllocatorDefault, 2, 2, kCVPixelFormatType_32BGRA,
                 nil, &buffer), kCVReturnSuccess)
-        tile.decoder.onSourceFrame?(buffer!)
+        tile.decoder.onSourceFrame?(DecodedFrameFence().lease(buffer!))
         XCTAssertEqual(sourceCallbacks, 1)
         XCTAssertNotNil(tile.driver)
     }
