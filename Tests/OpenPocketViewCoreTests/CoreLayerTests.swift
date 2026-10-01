@@ -292,12 +292,13 @@ import Testing
         p[9] = 0x08  // storage total/free (plausible MiB)
         p[57] = 0x01  // Video
         var s = CameraStatus()
+        #expect(!s.recordingReported, "Recording is unknown until the camera reports it")
         #expect(
             CameraStatusDecoder.apply(
                 .init(
                     sender: 0, receiver: 0, seq: 0, flags: 0, cmdSet: 0x02, cmdId: 0x80, payload: p),
                 to: &s))
-        #expect(!s.isRecording)
+        #expect(!s.isRecording && s.recordingReported)
         #expect(s.shootingMode == 0x01 && s.shootingModeLabel == "Video")
         #expect(s.recordElapsedSec == 0)
 

@@ -18,6 +18,9 @@ public struct CameraStatus: Equatable, Sendable {
     public var firmware: String?
     /// `0x02/0x80` byte0 bit7 (Osmosis recording bit). Idle live1 is `0x01`.
     public var isRecording = false
+    /// True once a `0x02/0x80` push carried the recording bit. Until then `isRecording`
+    /// is a default, not a camera report: unknown recording is not idle.
+    public var recordingReported = false
     /// `0x02/0x80` `@57` — Osmosis `0x02/0xE1` shooting-mode enum. `-1` = not present.
     public var shootingMode: Int = -1
     /// `0x02/0x80` `@29` elapsed seconds while recording (0 when idle).
@@ -179,6 +182,7 @@ public enum CameraStatusDecoder {
             let flags = u32(p, 0)
             status.inPlayback = (flags & 0x4000_0000) != 0
             status.isRecording = (flags & 0x0000_0080) != 0
+            status.recordingReported = true
             let total = Int(u32(p, 5))
             let free = Int(u32(p, 9))
             if (1...50_000_000).contains(total) { status.storageTotalMb = total }
