@@ -30,6 +30,10 @@ packages:
   # Xcode links a re-exported package product only into targets that name it.
   OpenCineDJI:
     path: ../../OpenCineDJI
+  # Manufacturer-independent multicam engine (OpenCine plan MULTI-02): Multiview's group record
+  # plan and settings-editor leases. A sibling checkout; swap to url + exactVersion when published.
+  OpenCineMulticam:
+    path: ../../OpenCineMulticam
 
 targets:
   OpenPocketCine:
@@ -56,6 +60,8 @@ targets:
         product: OpenCineCore
       - package: OpenCineDJI
         product: OpenCineDJI
+      - package: OpenCineMulticam
+        product: OpenCineMulticam
       - target: OpenPocketCineWatch
         embed: true
         codeSign: true
@@ -134,6 +140,8 @@ targets:
         product: OpenCineMedia
       - package: OpenCineDJI
         product: OpenCineDJI
+      - package: OpenCineMulticam
+        product: OpenCineMulticam
     settings:
       base:
         SWIFT_VERSION: "5.0"

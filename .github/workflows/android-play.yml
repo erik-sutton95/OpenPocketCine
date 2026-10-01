@@ -77,8 +77,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
-      # OpenCine candidate wiring (UI-02, CORE-02, MEDIA-01, VENDOR-01). Apps/Android/settings.gradle.kts
-      # includes ../../../OpenCineUI/Android and ../../../OpenCineCore/Android, and the Swift
+      # OpenCine candidate wiring (UI-02, CORE-02, MEDIA-01, VENDOR-01, MULTI-02). Apps/Android/settings.gradle.kts
+      # includes ../../../OpenCineUI/Android, ../../../OpenCineCore/Android and
+      # ../../../OpenCineMulticam/Android, and the Swift
       # Android core links OpenCineMedia from ../OpenCineCore and OpenCineDJI from ../OpenCineDJI:
       # sibling checkouts pinned by SHA in
       # opencine-pins.txt. Works only once those remotes exist (owner/URL not final).
