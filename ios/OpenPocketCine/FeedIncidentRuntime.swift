@@ -29,6 +29,13 @@ struct FeedIncidentSessionSummary: Equatable, Codable {
     var buildIdentity: String? = nil
 }
 
+/// Diagnostics only (STATE-01 decision): one feed-incident journal per app run, attributed to
+/// the single owned connection. Only an owned `CameraSession` reaches `beginSession` (connect),
+/// `endSession` (a borrowed Multiview session returns from `disconnect()` first) and the socket
+/// generation (`wireDatalink` runs on owned connect and repair paths only). Nothing here feeds a
+/// camera command, a control decision or another session's state, so it stays process-wide.
+/// Decoder breadcrumbs (`HevcDecoder.applyEffectsChange`) may come from a Multiview tile and are
+/// context only. Key it by `CameraSessionID` if a second owned live session ever exists.
 enum FeedIncidentRuntime {
     private static let queue = DispatchQueue(label: "opv.feed-incident", qos: .utility)
     private static let gate = NSLock()

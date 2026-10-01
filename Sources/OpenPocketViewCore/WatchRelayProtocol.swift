@@ -39,6 +39,8 @@ public enum WatchRelayCopy: Sendable {
     public static let switchToVideo = "Switch to video first."
     public static let switchToPhoto = "Switch to photo first."
     public static let busy = "Camera is busy."
+    /// The phone now holds another camera session or link than the watch last showed.
+    public static let cameraChanged = "Camera changed. Try again."
 }
 
 /// `WCSession.updateApplicationContext` key. Plist-safe so rec/tally still

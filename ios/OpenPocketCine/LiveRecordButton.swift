@@ -20,6 +20,8 @@ struct RecordConfirmationContext: Equatable {
     let locked: Bool
     let busy: Bool
     let phase: ConnectionPhase
+    /// The session and link the prompt was raised for; another one dismisses it (STATE-01).
+    var target: ControlTarget? = nil
 
     var canConfirm: Bool {
         !locked && !busy && phase == .live && ShootingMode.fromStatus(mode)?.isPhoto != true
@@ -48,7 +50,8 @@ struct LiveRecordButton: View {
             mode: model.session.status.shootingMode,
             recording: model.session.status.isRecording,
             locked: locked || model.session.isLocked,
-            busy: model.session.controlBusy, phase: model.session.phase)
+            busy: model.session.controlBusy, phase: model.session.phase,
+            target: model.session.control.target)
     }
 
     var body: some View {
@@ -89,7 +92,7 @@ struct LiveRecordButton: View {
                 else { return }
                 pendingRecord = nil
                 // The target the operator approved, not a toggle recomputed later.
-                model.session.control.record(start: !approved.recording)
+                model.session.control.record(start: !approved.recording, aimedAt: approved.target)
             }
             Button("Cancel", role: .cancel) {}
         }

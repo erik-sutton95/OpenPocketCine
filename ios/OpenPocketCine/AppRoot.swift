@@ -16,6 +16,12 @@ final class AppModel {
     }
     @ObservationIgnored let watchRelay = WatchRelay()
     @ObservationIgnored private var watchRelayActivated = false
+    /// The camera session and link the watch last showed. Watch presses are aimed at it, never
+    /// at whatever `session` holds when the press lands (STATE-01).
+    @ObservationIgnored private(set) var watchTarget: ControlTarget?
+    /// The camera session this host shares with watchers; their commands are refused once the
+    /// app holds another session. Link repairs of the same session keep it.
+    @ObservationIgnored private(set) var relayTarget: ControlTarget?
     var multiviewExit: (() -> Void)?
     /// Live view-space X flip: TT180 extra-mirror XOR MIRROR assist.
     var livePictureViewFlip: Bool {
@@ -242,7 +248,8 @@ final class AppModel {
     var watcherRecordContext: RecordConfirmationContext {
         RecordConfirmationContext(
             mode: session.status.shootingMode, recording: session.status.isRecording,
-            locked: session.isLocked, busy: session.controlBusy, phase: session.phase)
+            locked: session.isLocked, busy: session.controlBusy, phase: session.phase,
+            target: session.control.target)
     }
     var internetHopActive = false
     @ObservationIgnored private var internetHopSSID: String?
@@ -484,6 +491,7 @@ final class AppModel {
             session.controlNote = "Sharing could not start"
             return
         }
+        relayTarget = session.control.target
         session.decoder.onIdentityOrientation = relayHost.orientationSink()
         session.decoder.onIdentityOrientation?(session.decoder.presentedPictureFlip ?? false)
         session.decoder.onIdentityFrame = relayHost.frameSink()
@@ -565,6 +573,10 @@ final class AppModel {
 
     func handleWatcherRelayCommand(_ command: WatcherRelayCommand, from watcherID: String?) {
         guard let allowed = relayHost.applyCommand(command, from: watcherID) else { return }
+        // Watchers command the camera this host shares, not a session swapped in since.
+        guard let relayTarget, session.control.target.isSameSession(as: relayTarget) else {
+            return
+        }
         switch allowed {
         case .toggleRecording:
             guard !session.isLocked, !session.controlBusy else { return }
@@ -629,6 +641,7 @@ final class AppModel {
         relayStateTask?.cancel()
         relayStateTask = nil
         relayHost.stop()
+        relayTarget = nil
         session.decoder.onIdentityFrame = nil
         session.decoder.onIdentityOrientation = nil
         watcherRecordConfirm = false
@@ -723,6 +736,7 @@ final class AppModel {
     }
 
     func publishWatchState() {
+        watchTarget = session.control.target
         watchRelay.ingestState(
             WatchRelayState.snapshot(
                 status: session.status,
@@ -758,12 +772,18 @@ final class AppModel {
             return WatchCommandResult(
                 accepted: false, isRecording: recording, error: WatchRelayCopy.switchToVideo)
         }
-        if photo {
-            session.takePhoto()
-        } else if session.control.shutter()?.didNotAct == true {
-            // Explicit start/stop from a fresh snapshot; unknown record state is refused.
+        // Aimed at what the watch showed: another session or link is refused, not commanded.
+        guard let target = watchTarget else {
+            publishWatchState()
             return WatchCommandResult(
-                accepted: false, isRecording: recording, error: WatchRelayCopy.busy)
+                accepted: false, isRecording: recording, error: WatchRelayCopy.cameraChanged)
+        }
+        if let receipt = session.control.shutter(aimedAt: target), receipt.didNotAct {
+            // Explicit start/stop; unknown record state is refused.
+            publishWatchState()
+            return WatchCommandResult(
+                accepted: false, isRecording: recording,
+                error: receipt.targetChanged ? WatchRelayCopy.cameraChanged : WatchRelayCopy.busy)
         }
         publishWatchState()
         return WatchCommandResult(accepted: true, isRecording: recording, error: nil)
@@ -975,7 +995,8 @@ private struct WatcherRecordConfirmation: ViewModifier {
                         approved == model.watcherRecordContext, approved.canConfirm
                     else { return }
                     model.watcherRecordRequest = nil
-                    model.session.control.record(start: !approved.recording)
+                    model.session.control.record(
+                        start: !approved.recording, aimedAt: approved.target)
                 }
                 Button("Cancel", role: .cancel) {}
             }

@@ -542,6 +542,54 @@ extension DJICameraSessionAdapter {
     }
 }
 
+/// The camera control a remote surface (Apple Watch, watcher relay, a record confirmation) was
+/// showing: one adapter's session and control epoch (STATE-01). A command aimed at a target is
+/// refused (`.wrongSession` / `.staleEpoch`) once the app holds another camera session or another
+/// link, instead of acting on whatever `AppModel.session` holds at that moment.
+struct ControlTarget: Hashable {
+    fileprivate let session: CameraSessionID
+    fileprivate let epoch: ControlEpoch
+
+    /// Same camera session, any link: what a long-lived relay is bound to.
+    func isSameSession(as other: ControlTarget) -> Bool { session == other.session }
+}
+
+extension DJICameraSessionAdapter {
+    var target: ControlTarget { ControlTarget(session: id, epoch: epoch) }
+
+    /// `request` with the preconditions of what `target` showed, not of a fresh snapshot.
+    @discardableResult
+    func request(_ intent: CameraCommandIntent, aimedAt target: ControlTarget) -> CommandReceipt {
+        let snapshot = current
+        return send(
+            CameraCommand(
+                intent,
+                preconditions: CommandPreconditions(
+                    session: target.session, epoch: target.epoch,
+                    capabilityRevision: snapshot.capabilities.revision,
+                    lease: snapshot.authority.leaseID)))
+    }
+
+    /// `shutter()` aimed at `target`. A still fires only while `target` holds; otherwise the
+    /// record request is refused at admission and nothing reaches the camera.
+    @discardableResult
+    func shutter(aimedAt target: ControlTarget) -> CommandReceipt? {
+        if session.currentShootingMode?.isPhoto == true, self.target == target {
+            session.takePhoto()
+            return nil
+        }
+        let recording = current.recording.value == .recording
+        return request(recording ? .stopRecording : .startRecording, aimedAt: target)
+    }
+
+    /// A confirmed start or stop, refused if the approval was given for another session or link.
+    @discardableResult
+    func record(start: Bool, aimedAt target: ControlTarget?) -> CommandReceipt {
+        guard let target else { return record(start: start) }
+        return request(start ? .startRecording : .stopRecording, aimedAt: target)
+    }
+}
+
 extension CommandReceipt {
     /// Finished without the camera acting: refused at admission or by the camera, or not sent.
     var didNotAct: Bool {
@@ -549,5 +597,10 @@ extension CommandReceipt {
         case .rejected, .failed: true
         default: false
         }
+    }
+
+    /// Refused because the command was aimed at another session or an older link.
+    var targetChanged: Bool {
+        stage == .rejected(.wrongSession) || stage == .rejected(.staleEpoch)
     }
 }

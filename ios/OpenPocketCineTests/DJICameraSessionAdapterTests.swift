@@ -393,3 +393,89 @@ private final class AckingCamera: @unchecked Sendable {
         }
     }
 }
+
+/// STATE-01: remote surfaces (Apple Watch, watcher relay, record confirmations) command the
+/// session and link they showed, never whichever session the app holds when the press lands.
+extension DJICameraSessionAdapterTests {
+    func testAimedCommandActsWhileItsTargetHolds() {
+        let session = linked()
+        defer { session.disconnect() }
+        session.applyIncomingStatus(Self.recordPush(recording: false))
+        let receipt = session.control.shutter(aimedAt: session.control.target)
+        XCTAssertEqual(receipt?.intent, .startRecording)
+        XCTAssertEqual(receipt?.stage, .sent)
+    }
+
+    func testAimedCommandRefusesAnotherCameraSession() {
+        let shown = linked()
+        let swapped = linked()
+        defer {
+            shown.disconnect()
+            swapped.disconnect()
+        }
+        shown.applyIncomingStatus(Self.recordPush(recording: false))
+        swapped.applyIncomingStatus(Self.recordPush(recording: false))
+        let target = shown.control.target
+
+        let receipt = swapped.control.shutter(aimedAt: target)
+        XCTAssertEqual(receipt?.stage, .rejected(.wrongSession))
+        XCTAssertEqual(receipt?.targetChanged, true)
+        XCTAssertFalse(swapped.controlBusy, "Nothing reached the other camera")
+        XCTAssertFalse(target.isSameSession(as: swapped.control.target))
+        let confirmed = swapped.control.record(start: true, aimedAt: target)
+        XCTAssertEqual(confirmed.stage, .rejected(.wrongSession))
+    }
+
+    func testAimedCommandRefusesAReplacedLinkButKeepsTheSession() {
+        let session = linked()
+        defer { session.disconnect() }
+        session.applyIncomingStatus(Self.recordPush(recording: false))
+        let target = session.control.target
+        session.datalink = DatalinkDriver(port: 9006, tcpPoke: false, pairingToken: "")
+        session.applyIncomingStatus(Self.recordPush(recording: false))
+
+        let receipt = session.control.shutter(aimedAt: target)
+        XCTAssertEqual(receipt?.stage, .rejected(.staleEpoch))
+        XCTAssertEqual(receipt?.targetChanged, true)
+        XCTAssertFalse(session.controlBusy)
+        XCTAssertTrue(target.isSameSession(as: session.control.target), "Relay binding survives")
+    }
+
+    func testWatchPressAfterASessionSwapIsRefusedWithAReason() {
+        let model = AppModel(session: linked())
+        let shown = model.session
+        let swapped = linked()
+        defer {
+            shown.disconnect()
+            swapped.disconnect()
+        }
+        for session in [shown, swapped] {
+            session.phase = .live
+            session.applyIncomingStatus(Self.recordPush(recording: false))
+        }
+        model.publishWatchState()
+        model.session = swapped
+
+        let result = model.watchToggleRecord()
+        XCTAssertFalse(result.accepted)
+        XCTAssertEqual(result.error, WatchRelayCopy.cameraChanged)
+        XCTAssertFalse(swapped.controlBusy, "The swapped-in camera was not commanded")
+        XCTAssertFalse(shown.controlBusy)
+        // The refusal republished, so the next press is aimed at what the watch now shows.
+        XCTAssertEqual(model.watchTarget, swapped.control.target)
+        XCTAssertTrue(model.watchToggleRecord().accepted)
+    }
+
+    func testWatcherRecordConfirmationIsBoundToItsSessionAndLink() {
+        let model = AppModel(session: linked())
+        defer { model.session.disconnect() }
+        model.session.phase = .live
+        model.session.applyIncomingStatus(Self.recordPush(recording: false))
+        let approved = model.watcherRecordContext
+        model.session.datalink = DatalinkDriver(port: 9007, tcpPoke: false, pairingToken: "")
+        model.session.applyIncomingStatus(Self.recordPush(recording: false))
+        XCTAssertNotEqual(approved, model.watcherRecordContext, "A new link dismisses the prompt")
+        let receipt = model.session.control.record(start: true, aimedAt: approved.target)
+        XCTAssertEqual(receipt.stage, .rejected(.staleEpoch))
+    }
+}
