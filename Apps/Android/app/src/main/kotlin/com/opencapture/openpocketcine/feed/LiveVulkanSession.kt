@@ -33,6 +33,12 @@ internal class LiveVulkanSession(
     private val onFramePresented: (Long) -> Unit = {},
     private val backdrop: MonitorBackdropFeed? = null,
 ) {
+    /**
+     * This feed's clip ceiling; never shared with another feed or playback. The Vulkan path does
+     * not observe the tap max, so it stays at table values (it no longer borrows another feed's).
+     */
+    private val scopeCeiling = ScopeExposureCeiling()
+
     private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
     private val imageThread = HandlerThread("opc.vk.img").apply { start() }
@@ -276,7 +282,7 @@ internal class LiveVulkanSession(
         uploadCube(1, plan.falseColorPaint, lastPaint) { lastPaint = it }
         uploadCube(2, plan.falseColorWeight, lastWeight) { lastWeight = it }
         val transfer = MonitorTransfer.fromColorMode(plan.scopeTap.colorMode)
-        val ire = WaveformIre.levelTable(transfer, plan.scopeTap.iso)
+        val ire = WaveformIre.levelTable(transfer, plan.scopeTap.iso, scopeCeiling)
         val luma = LiveColorScience.lumaWeights(transfer)
         OpcVulkan.nativeSetIre(
             native,
@@ -598,6 +604,7 @@ internal class LiveVulkanSession(
                             includeVectorPoints = includeVectorPoints,
                             look = look,
                             previous = previous,
+                            ceiling = scopeCeiling,
                             iso = iso,
                         )
                     } else {
@@ -617,6 +624,7 @@ internal class LiveVulkanSession(
                                     blue = bb,
                                     transfer = transfer,
                                     luma = y,
+                                    ceiling = scopeCeiling,
                                 ),
                             histogramDisplay =
                                 PocketScopeSampler.histogramDisplay(
@@ -624,9 +632,11 @@ internal class LiveVulkanSession(
                                     previous.histogramDisplay,
                                     transfer,
                                     iso,
+                                    scopeCeiling,
                                 ),
                             transfer = transfer,
                             iso = iso,
+                            ceiling = scopeCeiling,
                         )
                     }
                 main.post {

@@ -513,12 +513,17 @@ object FalseColorBands {
         fun contains(value: Double): Boolean = value >= lowerBound && value < upperBound
     }
 
-    fun bands(scale: FalseColorScale, transfer: MonitorTransfer, rec709: Boolean = false): List<Band> =
+    fun bands(
+        scale: FalseColorScale,
+        transfer: MonitorTransfer,
+        rec709: Boolean = false,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+    ): List<Band> =
         when (scale) {
-            FalseColorScale.SCENE_STOPS -> sceneStopBands(clipStops(transfer, rec709))
+            FalseColorScale.SCENE_STOPS -> sceneStopBands(clipStops(transfer, rec709, ceiling))
             FalseColorScale.STOPS -> cineStopBands()
             FalseColorScale.IRE -> ireBands()
-            FalseColorScale.LIMITS -> limitBands(limitShelfIRE(transfer, rec709))
+            FalseColorScale.LIMITS -> limitBands(limitShelfIRE(transfer, rec709, ceiling))
         }
 
     /** iOS `LiveColorScience.cineStopBands`: the Video scale, Video Mode IRE with grayscale gaps. */
@@ -565,10 +570,10 @@ object FalseColorBands {
     }
 
     /** iOS `falseColorClip` for Limits: the clip shelf in WAVE IRE, on Rec.709 when 709 reads the look. */
-    fun limitShelfIRE(transfer: MonitorTransfer, rec709: Boolean = false): Double {
+    fun limitShelfIRE(transfer: MonitorTransfer, rec709: Boolean = false, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Double {
         val t = if (readsThroughLook(transfer, rec709)) MonitorTransfer.REC709 else transfer
-        val shelf = maxOf(0.0, ScopeExposureCeiling.clipEncoded(t) - ScopeExposureCeiling.CLIP_SHELF_CODES / 255.0)
-        return ScopeDisplayScale.monitorPercent(shelf, t)
+        val shelf = maxOf(0.0, ceiling.clipEncoded(t) - ScopeExposureCeiling.CLIP_SHELF_CODES / 255.0)
+        return ScopeDisplayScale.monitorPercent(shelf, t, ceiling = ceiling)
     }
 
     /** iOS `LiveColorScience.sceneStopDefaultClip`: clip starts at +11 when the ceiling is unknown. */
@@ -587,10 +592,10 @@ object FalseColorBands {
         rec709 && transfer in LOOK_SATURATION
 
     /** Scene stops at this curve's clip shelf; the CineStop clip band starts here. At 709 the look's clip. */
-    fun clipStops(transfer: MonitorTransfer, rec709: Boolean = false): Double {
+    fun clipStops(transfer: MonitorTransfer, rec709: Boolean = false, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Double {
         val ceiling =
             if (readsThroughLook(transfer, rec709)) LOOK_SATURATION.getValue(transfer)
-            else ScopeExposureCeiling.clipEncoded(transfer)
+            else ceiling.clipEncoded(transfer)
         val shelf = ceiling - ScopeExposureCeiling.CLIP_SHELF_CODES / 255.0
         val stops = LiveColorScience.stops(maxOf(0.0, shelf), transfer)
         return if (stops.isFinite()) stops else SCENE_STOP_DEFAULT_CLIP
@@ -638,18 +643,18 @@ object AssistLongPress {
 
 /** iOS `ZebraAssist.Options.displayValue` / `ire(fromDisplay:)`. Thresholds stay 0–100 IRE. */
 object ZebraEditor {
-    fun displayValue(ire: Double, unit: ZebraUnit, transfer: MonitorTransfer): Int =
+    fun displayValue(ire: Double, unit: ZebraUnit, transfer: MonitorTransfer, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Int =
         when (unit) {
             ZebraUnit.IRE -> ire.roundToInt()
             ZebraUnit.NATIVE ->
-                (ScopeDisplayScale.signalNative(ire, transfer) * 255.0).roundToInt()
+                (ScopeDisplayScale.signalNative(ire, transfer, ceiling = ceiling) * 255.0).roundToInt()
         }
 
-    fun ireFromDisplay(value: Int, unit: ZebraUnit, transfer: MonitorTransfer): Double =
+    fun ireFromDisplay(value: Int, unit: ZebraUnit, transfer: MonitorTransfer, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Double =
         when (unit) {
             ZebraUnit.IRE -> value.toDouble().coerceIn(0.0, 100.0)
             ZebraUnit.NATIVE ->
-                ScopeDisplayScale.monitorPercent(value.coerceIn(0, 255) / 255.0, transfer)
+                ScopeDisplayScale.monitorPercent(value.coerceIn(0, 255) / 255.0, transfer, ceiling = ceiling)
         }
 
     fun editorMaximum(unit: ZebraUnit): Int = if (unit == ZebraUnit.NATIVE) 255 else 100
@@ -666,8 +671,11 @@ object FalseColorReference {
     data class AxisMarker(val label: String, val fraction: Double)
 
     /** iOS `FalseColorReference.sceneStopDomain`: crush to one stop past this curve's clip. */
-    private fun sceneStopDomain(transfer: MonitorTransfer, rec709: Boolean): ClosedRange<Double> =
-        -8.5..(maxOf(2.5, FalseColorBands.clipStops(transfer, rec709)) + 1)
+    private fun sceneStopDomain(
+        transfer: MonitorTransfer,
+        rec709: Boolean,
+        ceiling: ScopeExposureCeiling,
+    ): ClosedRange<Double> = -8.5..(maxOf(2.5, FalseColorBands.clipStops(transfer, rec709, ceiling)) + 1)
 
     fun curveKeyLabel(colorMode: Int, rec709: Boolean = false): String =
         if (FalseColorBands.readsThroughLook(MonitorTransfer.fromColorMode(colorMode), rec709)) "709"
@@ -686,18 +694,27 @@ object FalseColorReference {
             FalseColorScale.LIMITS -> listOf("crushed", "midtones untouched", "clipped")
         }
 
-    fun segments(scale: FalseColorScale, transfer: MonitorTransfer, rec709: Boolean = false): List<Segment> =
-        FalseColorBands.bands(scale, transfer, rec709).map { band ->
+    fun segments(
+        scale: FalseColorScale,
+        transfer: MonitorTransfer,
+        rec709: Boolean = false,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+    ): List<Segment> =
+        FalseColorBands.bands(scale, transfer, rec709, ceiling).map { band ->
             Segment(
-                lowerFraction = fraction(band.lowerBound, scale, transfer, rec709, infiniteFallback = 0.0),
-                upperFraction = fraction(band.upperBound, scale, transfer, rec709, infiniteFallback = 1.0),
+                lowerFraction = fraction(band.lowerBound, scale, transfer, rec709, ceiling, infiniteFallback = 0.0),
+                upperFraction = fraction(band.upperBound, scale, transfer, rec709, ceiling, infiniteFallback = 1.0),
                 band = band,
             )
         }
 
     /** iOS `FalseColorReference.sceneStopMarkers`: every second stop, 1½ stops clear of clip. */
-    fun sceneStopMarkers(transfer: MonitorTransfer, rec709: Boolean = false): List<AxisMarker> {
-        val clip = FalseColorBands.clipStops(transfer, rec709)
+    fun sceneStopMarkers(
+        transfer: MonitorTransfer,
+        rec709: Boolean = false,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+    ): List<AxisMarker> {
+        val clip = FalseColorBands.clipStops(transfer, rec709, ceiling)
         val marks =
             generateSequence(-6) { it + 2 }.takeWhile { it < clip - 1.5 }
                 .map { stop ->
@@ -705,7 +722,7 @@ object FalseColorReference {
                     label to stop.toDouble()
                 }.toList() + ("clip" to clip)
         return marks.map { (label, stop) ->
-            AxisMarker(label, fraction(stop, FalseColorScale.SCENE_STOPS, transfer, rec709, infiniteFallback = 1.0))
+            AxisMarker(label, fraction(stop, FalseColorScale.SCENE_STOPS, transfer, rec709, ceiling, infiniteFallback = 1.0))
         }
     }
 
@@ -714,11 +731,12 @@ object FalseColorReference {
         scale: FalseColorScale,
         transfer: MonitorTransfer,
         rec709: Boolean,
+        ceiling: ScopeExposureCeiling,
         infiniteFallback: Double,
     ): Double {
         if (!value.isFinite()) return infiniteFallback
         if (!scale.usesSceneStops) return (value / 100.0).coerceIn(0.0, 1.0)
-        val domain = sceneStopDomain(transfer, rec709)
+        val domain = sceneStopDomain(transfer, rec709, ceiling)
         return ((value - domain.start) / (domain.endInclusive - domain.start)).coerceIn(0.0, 1.0)
     }
 }

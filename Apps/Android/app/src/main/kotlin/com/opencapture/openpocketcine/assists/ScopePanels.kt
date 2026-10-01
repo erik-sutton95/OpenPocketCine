@@ -314,7 +314,7 @@ internal fun WaveformPanel(state: LiveAssistState, colorMode: Int, modifier: Mod
     val measurer = rememberTextMeasurer()
     val bundle = previewBundle ?: state.scopeBundle
     val transfer = bundle.resolvedTransfer(colorMode)
-    val table = remember(transfer, bundle.iso) { WaveformIre.levelTable(transfer, bundle.iso) }
+    val table = remember(transfer, bundle.iso, bundle.ceiling) { WaveformIre.levelTable(transfer, bundle.iso, bundle.ceiling) }
     val intensity = WaveformAssist.intensity(state.waveBrightness)
     var trace by remember { mutableStateOf<ImageBitmap?>(null) }
     val layers = remember { ScopeTraceRaster.TraceLayers() }
@@ -342,7 +342,7 @@ internal fun ParadePanel(state: LiveAssistState, colorMode: Int, modifier: Modif
     val measurer = rememberTextMeasurer()
     val bundle = previewBundle ?: state.scopeBundle
     val transfer = bundle.resolvedTransfer(colorMode)
-    val table = remember(transfer, bundle.iso) { WaveformIre.levelTable(transfer, bundle.iso) }
+    val table = remember(transfer, bundle.iso, bundle.ceiling) { WaveformIre.levelTable(transfer, bundle.iso, bundle.ceiling) }
     val intensity = ParadeAssist.intensity(state.paradeBrightness)
     var trace by remember { mutableStateOf<ImageBitmap?>(null) }
     val layers = remember { ScopeTraceRaster.TraceLayers() }

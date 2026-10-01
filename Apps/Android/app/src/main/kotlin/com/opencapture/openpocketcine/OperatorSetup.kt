@@ -968,7 +968,7 @@ private fun FalseColorAssistCard(assist: LiveAssistState, colorMode: Int) {
             }
         }
         SettingsInlineRow(title = "Reference key", stacked = true) {
-            SettingsFalseColorKey(assist.falseColorScale, colorMode)
+            SettingsFalseColorKey(assist.falseColorScale, colorMode, assist.scopeCeiling)
         }
         SettingsSwitchInlineRow(
             title = "Reference Display",
@@ -1040,13 +1040,13 @@ private fun ZebraAssistCard(assist: LiveAssistState, colorMode: Int) {
             title = "Highlight",
             help = SettingsHelpCopy.ZEBRA_HIGHLIGHT,
             enabled = assist.zebraHighlight,
-            value = ZebraEditor.displayValue(assist.zebraHighlightIRE, assist.zebraUnit, transfer),
+            value = ZebraEditor.displayValue(assist.zebraHighlightIRE, assist.zebraUnit, transfer, assist.scopeCeiling),
             maximum = maximum,
             selectedColor = assist.zebraHighlightColor.label,
             palette = SettingsPalette.highlight,
             onEnabled = { assist.setZebraHighlight(enabled = !assist.zebraHighlight) },
             onValue = {
-                assist.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer))
+                assist.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer, assist.scopeCeiling))
             },
             onColor = { assist.setZebraHighlight(color = ZebraPaint.fromPersisted(it)) },
         )
@@ -1054,13 +1054,13 @@ private fun ZebraAssistCard(assist: LiveAssistState, colorMode: Int) {
             title = "Midtone",
             help = SettingsHelpCopy.ZEBRA_MIDTONE,
             enabled = assist.zebraMidtone,
-            value = ZebraEditor.displayValue(assist.zebraMidtoneIRE, assist.zebraUnit, transfer),
+            value = ZebraEditor.displayValue(assist.zebraMidtoneIRE, assist.zebraUnit, transfer, assist.scopeCeiling),
             maximum = maximum,
             selectedColor = assist.zebraMidtoneColor.label,
             palette = SettingsPalette.midtone,
             onEnabled = { assist.setZebraMidtone(enabled = !assist.zebraMidtone) },
             onValue = {
-                assist.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer))
+                assist.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer, assist.scopeCeiling))
             },
             onColor = { assist.setZebraMidtone(color = ZebraPaint.fromPersisted(it)) },
         )

@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.opencapture.openpocketcine.assists.FalseColorReference
 import com.opencapture.openpocketcine.assists.FalseColorScale
 import com.opencapture.openpocketcine.feed.MonitorTransfer
+import com.opencapture.openpocketcine.feed.ScopeExposureCeiling
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -1023,9 +1024,13 @@ fun PanelCloseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 
 /** Compact settings key; uses the same transfer-aware bands as the live reference. */
 @Composable
-fun SettingsFalseColorKey(scale: FalseColorScale, colorMode: Int) {
+fun SettingsFalseColorKey(
+    scale: FalseColorScale,
+    colorMode: Int,
+    ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+) {
     val transfer = MonitorTransfer.fromColorMode(colorMode)
-    val segments = FalseColorReference.segments(scale, transfer)
+    val segments = FalseColorReference.segments(scale, transfer, ceiling = ceiling)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Canvas(Modifier.fillMaxWidth().height(11.dp)) {
             drawRect(Color.White.copy(alpha = 0.5f))
@@ -1042,7 +1047,7 @@ fun SettingsFalseColorKey(scale: FalseColorScale, colorMode: Int) {
         if (scale.usesSceneStops) {
             BoxWithConstraints(Modifier.fillMaxWidth().height(12.dp)) {
                 val rulerWidth = maxWidth
-                FalseColorReference.sceneStopMarkers(transfer).forEach { marker ->
+                FalseColorReference.sceneStopMarkers(transfer, ceiling = ceiling).forEach { marker ->
                     Text(marker.label, style = LiveType.mono(7f), color = LiveDesign.muted,
                         modifier = Modifier.offset(x = (rulerWidth * marker.fraction.toFloat() - 8.dp)
                             .coerceIn(0.dp, (rulerWidth - 16.dp).coerceAtLeast(0.dp))))

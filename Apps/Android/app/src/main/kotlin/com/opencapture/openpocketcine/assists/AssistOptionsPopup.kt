@@ -343,7 +343,7 @@ private fun ZebraOptions(state: LiveAssistState, colorMode: Int) {
         title = "Highlight",
         help = "High zebra warns when bright detail approaches clipping after the active log curve is compensated.",
         enabled = state.zebraHighlight,
-        value = ZebraEditor.displayValue(state.zebraHighlightIRE, state.zebraUnit, transfer),
+        value = ZebraEditor.displayValue(state.zebraHighlightIRE, state.zebraUnit, transfer, state.scopeCeiling),
         maximum = maximum,
         selected = state.zebraHighlightColor.label,
         palette = SettingsPalette.highlight,
@@ -352,7 +352,7 @@ private fun ZebraOptions(state: LiveAssistState, colorMode: Int) {
             state.setZebraHighlight(enabled = !state.zebraHighlight)
         },
         onValue = {
-            state.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, state.zebraUnit, transfer))
+            state.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, state.zebraUnit, transfer, state.scopeCeiling))
         },
         onColor = {
             haptics.selection()
@@ -363,7 +363,7 @@ private fun ZebraOptions(state: LiveAssistState, colorMode: Int) {
         title = "Midtone",
         help = "Midtone zebra gives a curve-compensated reference band for faces or key subject exposure.",
         enabled = state.zebraMidtone,
-        value = ZebraEditor.displayValue(state.zebraMidtoneIRE, state.zebraUnit, transfer),
+        value = ZebraEditor.displayValue(state.zebraMidtoneIRE, state.zebraUnit, transfer, state.scopeCeiling),
         maximum = maximum,
         selected = state.zebraMidtoneColor.label,
         palette = SettingsPalette.midtone,
@@ -372,7 +372,7 @@ private fun ZebraOptions(state: LiveAssistState, colorMode: Int) {
             state.setZebraMidtone(enabled = !state.zebraMidtone)
         },
         onValue = {
-            state.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, state.zebraUnit, transfer))
+            state.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, state.zebraUnit, transfer, state.scopeCeiling))
         },
         onColor = {
             haptics.selection()

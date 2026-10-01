@@ -53,7 +53,8 @@ enum class MonitorTransfer {
     val middleGrayPaperIRE: Double
         get() = LiveColorScience.paperIRE(middleGrayEncoded)
 
-    fun scopeAnchors(iso: Int? = null): ScopeAnchors = ScopeAnchors.make(this, iso)
+    fun scopeAnchors(iso: Int? = null, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): ScopeAnchors =
+        ScopeAnchors.make(this, iso, ceiling)
 
     companion object {
         fun fromColorMode(code: Int): MonitorTransfer =
@@ -77,17 +78,27 @@ enum class MonitorTransfer {
     }
 }
 
-/** Preview clip model. WAVE 100 / traffic clip sit on this ceiling, not code 255. */
-object ScopeExposureCeiling {
-    const val REFERENCE_EI = 1600
-    const val DLOG_REFERENCE_EI = 400
-    const val DLOG2_LIVE_TAP_BYTE_AT_1600 = 247
-    const val DLOG2_LIVE_TAP_BYTE_AT_1600_HIGH = 248
-    const val DLOG_LIVE_TAP_BYTE_AT_NATIVE = 223
-    const val DLOG_LIVE_TAP_BYTE_AT_NATIVE_HIGH = 224
+/**
+ * Preview clip model. WAVE 100 / traffic clip sit on this ceiling, not code 255. One per scope
+ * source (live feed session, Vulkan session, playback glass), carried on its [ScopeAssistBundle],
+ * so two feeds at different ISO or curves never share a ceiling.
+ */
+class ScopeExposureCeiling {
+    companion object {
+        const val REFERENCE_EI = 1600
+        const val DLOG_REFERENCE_EI = 400
+        const val DLOG2_LIVE_TAP_BYTE_AT_1600 = 247
+        const val DLOG2_LIVE_TAP_BYTE_AT_1600_HIGH = 248
+        const val DLOG_LIVE_TAP_BYTE_AT_NATIVE = 223
+        const val DLOG_LIVE_TAP_BYTE_AT_NATIVE_HIGH = 224
 
-    /** iOS `ScopeExposureCeiling.clipShelfCodes`: clipped detail reads 242–247 (D-Log2), 219–223 (D-Log). */
-    const val CLIP_SHELF_CODES = 7
+        /** iOS `ScopeExposureCeiling.clipShelfCodes`: clipped detail reads 242–247 (D-Log2), 219–223 (D-Log). */
+        const val CLIP_SHELF_CODES = 7
+
+        /** Table values for readers with no scope source yet. */
+        // ponytail: shared and never written; a source that observes the tap owns its own instance.
+        val UNOBSERVED = ScopeExposureCeiling()
+    }
 
     @Volatile private var iso: Int = REFERENCE_EI
     @Volatile private var refined1600: Int = DLOG2_LIVE_TAP_BYTE_AT_1600
@@ -104,15 +115,6 @@ object ScopeExposureCeiling {
     }
 
     fun resolvedISO(): Int = iso
-
-    fun reset() {
-        synchronized(lock) {
-            iso = REFERENCE_EI
-            refined1600 = DLOG2_LIVE_TAP_BYTE_AT_1600
-            refinedDlog = DLOG_LIVE_TAP_BYTE_AT_NATIVE
-            observedByEI.clear()
-        }
-    }
 
     fun clipEncoded(transfer: MonitorTransfer, iso: Int? = null): Double =
         clipByte(transfer, iso) / 255.0
@@ -195,15 +197,15 @@ data class ScopeAnchors(
     val crushEdgeByte: Int,
 ) {
     companion object {
-        fun make(transfer: MonitorTransfer, iso: Int? = null): ScopeAnchors {
+        fun make(transfer: MonitorTransfer, iso: Int? = null, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): ScopeAnchors {
             val black = if (transfer == MonitorTransfer.DLOGM) 0.0 else LiveColorScience.encode(0.0, transfer)
             val mid = LiveColorScience.encode(0.18, transfer)
-            val clip = ScopeExposureCeiling.clipEncoded(transfer, iso)
+            val clip = ceiling.clipEncoded(transfer, iso)
             val midLevel =
                 ScopeDisplayScale.CRUSH_LEVEL +
                     LiveColorScience.paperIRE(mid) / 100.0 *
                         (ScopeDisplayScale.CLIP_LEVEL - ScopeDisplayScale.CRUSH_LEVEL)
-            val clipEdge = ScopeExposureCeiling.clipByte(transfer, iso)
+            val clipEdge = ceiling.clipByte(transfer, iso)
             val span = maxOf(0.0, clip - black) * 255
             val crushFloor = floor(black * 255).toInt()
             val crushEdge = ceil(black * 255 + 0.02 * span).toInt()
@@ -231,8 +233,8 @@ object ScopeDisplayScale {
     const val CRUSH_LEVEL = 0.05
     const val CLIP_LEVEL = 0.95
 
-    fun waveformLevel(c: Double, transfer: MonitorTransfer, iso: Int? = null): Double {
-        val a = ScopeAnchors.make(transfer, iso)
+    fun waveformLevel(c: Double, transfer: MonitorTransfer, iso: Int? = null, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Double {
+        val a = ScopeAnchors.make(transfer, iso, ceiling)
         val v = minOf(1.0, maxOf(0.0, c))
         if (v < a.black) {
             return if (a.black <= 0) CRUSH_LEVEL else v / a.black * CRUSH_LEVEL
@@ -255,14 +257,24 @@ object ScopeDisplayScale {
 
     fun level(scaleIRE: Double): Double = CRUSH_LEVEL + scaleIRE / 100.0 * (CLIP_LEVEL - CRUSH_LEVEL)
 
-    fun monitorPercent(c: Double, transfer: MonitorTransfer, iso: Int? = null): Double {
-        val level = waveformLevel(c, transfer, iso)
+    fun monitorPercent(
+        c: Double,
+        transfer: MonitorTransfer,
+        iso: Int? = null,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+    ): Double {
+        val level = waveformLevel(c, transfer, iso, ceiling)
         return minOf(100.0, maxOf(0.0, (level - CRUSH_LEVEL) / (CLIP_LEVEL - CRUSH_LEVEL) * 100))
     }
 
     /** Normalized tap code whose [monitorPercent] equals `percent`. iOS `ScopeDisplayScale.signalNative`. */
-    fun signalNative(monitorPercent: Double, transfer: MonitorTransfer, iso: Int? = null): Double {
-        val a = ScopeAnchors.make(transfer, iso)
+    fun signalNative(
+        monitorPercent: Double,
+        transfer: MonitorTransfer,
+        iso: Int? = null,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+    ): Double {
+        val a = ScopeAnchors.make(transfer, iso, ceiling)
         val p = minOf(100.0, maxOf(0.0, monitorPercent))
         if (p <= 0.0) return a.black
         if (p >= 100.0) return a.clip
@@ -290,8 +302,8 @@ object ScopeDisplayScale {
  * Native-code histogram remap lands paper black on bucket 0 and clip on 255.
  */
 object WaveformIre {
-    fun ire(encoded: Double, transfer: MonitorTransfer, iso: Int? = null): Double {
-        val a = ScopeAnchors.make(transfer, iso)
+    fun ire(encoded: Double, transfer: MonitorTransfer, iso: Int? = null, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Double {
+        val a = ScopeAnchors.make(transfer, iso, ceiling)
         val blackByte = round(a.black * 255)
         if (!encoded.isFinite() || encoded * 255 <= blackByte) return 0.0
         if (encoded >= a.clip) return 100.0
@@ -305,9 +317,14 @@ object WaveformIre {
         return midIRE + (encoded - a.mid) / (a.clip - a.mid) * (100 - midIRE)
     }
 
-    fun remapHistogram(bins: IntArray, transfer: MonitorTransfer, iso: Int? = null): IntArray {
+    fun remapHistogram(
+        bins: IntArray,
+        transfer: MonitorTransfer,
+        iso: Int? = null,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+    ): IntArray {
         val out = IntArray(256)
-        val table = levelTable(transfer, iso)
+        val table = levelTable(transfer, iso, ceiling)
         val limit = minOf(bins.size, 256)
         for (code in 0 until limit) {
             val count = bins[code]
@@ -318,9 +335,9 @@ object WaveformIre {
         return out
     }
 
-    fun levelTable(transfer: MonitorTransfer, iso: Int? = null): FloatArray {
-        val ei = iso ?: ScopeExposureCeiling.resolvedISO()
-        return FloatArray(256) { ire(it / 255.0, transfer, ei).toFloat() }
+    fun levelTable(transfer: MonitorTransfer, iso: Int? = null, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): FloatArray {
+        val ei = iso ?: ceiling.resolvedISO()
+        return FloatArray(256) { ire(it / 255.0, transfer, ei, ceiling).toFloat() }
     }
 
     fun middleGrayIRE(transfer: MonitorTransfer): Double = transfer.middleGrayPaperIRE
@@ -367,8 +384,9 @@ object ScopeTrafficLights {
         threshold: Double = DEFAULT_THRESHOLD,
         previous: ScopeTrafficLightsReading? = null,
         luma: IntArray? = null,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
     ): ScopeTrafficLightsReading {
-        val a = transfer.scopeAnchors()
+        val a = transfer.scopeAnchors(ceiling = ceiling)
         val redClip = edgeEnergy(red, a.clipFloorByte, 255)
         val greenClip = edgeEnergy(green, a.clipFloorByte, 255)
         val blueClip = edgeEnergy(blue, a.clipFloorByte, 255)
@@ -377,9 +395,9 @@ object ScopeTrafficLights {
             lumaClip > threshold || redClip > threshold || greenClip > threshold || blueClip > threshold
         val pictureEnergy = maxOf(lumaClip, redClip, greenClip, blueClip)
         return ScopeTrafficLightsReading(
-            channel(red, transfer, threshold, redClip, pictureEnergy, pictureClip, previous?.red),
-            channel(green, transfer, threshold, greenClip, pictureEnergy, pictureClip, previous?.green),
-            channel(blue, transfer, threshold, blueClip, pictureEnergy, pictureClip, previous?.blue),
+            channel(red, transfer, threshold, redClip, pictureEnergy, pictureClip, previous?.red, ceiling),
+            channel(green, transfer, threshold, greenClip, pictureEnergy, pictureClip, previous?.green, ceiling),
+            channel(blue, transfer, threshold, blueClip, pictureEnergy, pictureClip, previous?.blue, ceiling),
         )
     }
 
@@ -391,8 +409,9 @@ object ScopeTrafficLights {
         pictureEnergy: Double,
         pictureClip: Boolean,
         previous: ScopeChannelLight?,
+        ceiling: ScopeExposureCeiling,
     ): ScopeChannelLight {
-        val a = transfer.scopeAnchors()
+        val a = transfer.scopeAnchors(ceiling = ceiling)
         if (bins.size < 256) return ScopeChannelLight(false, false, 0.5)
         var total = 0
         for (count in bins) total += count
@@ -418,7 +437,7 @@ object ScopeTrafficLights {
         val crush = latched(crushEnergy > threshold, previous?.crush == true, crushEnergy, threshold)
         val level =
             balance(
-                ScopeDisplayScale.waveformLevel(median / 255.0, transfer),
+                ScopeDisplayScale.waveformLevel(median / 255.0, transfer, ceiling = ceiling),
                 a.midLevel,
             )
         return ScopeChannelLight(clip, crush, level)

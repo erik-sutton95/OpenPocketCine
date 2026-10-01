@@ -3,10 +3,10 @@ package com.opencapture.openpocketcine.feed
 import com.opencapture.openpocketcine.assists.CrushClipCompensation
 import com.opencapture.openpocketcine.session.CameraCommands
 import kotlin.math.abs
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class FeedUpscaleTest {
@@ -18,7 +18,7 @@ class FeedUpscaleTest {
                 val signal = byte / 255.0
                 assertEquals(signal * 100, ScopeDisplayScale.monitorPercent(signal, transfer, iso), 1e-8)
             }
-            assertEquals(255, ScopeExposureCeiling.clipByte(transfer, iso))
+            assertEquals(255, ScopeExposureCeiling().clipByte(transfer, iso))
         }
         assertEquals(0.40000007, LiveColorScience.encode(0.18, transfer), 1e-7)
         assertEquals(0.698565282656276, LiveColorScience.encode(0.72, transfer), 1e-6)
@@ -42,9 +42,30 @@ class FeedUpscaleTest {
 class LiveColorScienceTest {
     private val transfers = MonitorTransfer.entries
 
-    @BeforeTest
-    fun resetCeiling() {
-        ScopeExposureCeiling.reset()
+    @Test
+    fun twoFeedsKeepTheirOwnClipCeiling() {
+        // Two feeds (live, Multiview tile or playback) at different ISO: one's ISO and tap max
+        // never move the other's ceiling, and each bundle carries its own source's ceiling.
+        val a = ScopeExposureCeiling()
+        val b = ScopeExposureCeiling()
+        a.syncISO(800)
+        b.syncISO(1600)
+        b.observeTapMax(248, MonitorTransfer.DLOG2)
+        assertEquals(800, a.resolvedISO())
+        assertEquals(231, a.clipByte(MonitorTransfer.DLOG2))
+        assertEquals(247, a.clipByte(MonitorTransfer.DLOG2, 1600))
+        assertEquals(248, b.clipByte(MonitorTransfer.DLOG2))
+        assertEquals(247, ScopeExposureCeiling.UNOBSERVED.clipByte(MonitorTransfer.DLOG2))
+        val pixels = ByteArray(4 * 4 * 4) { 120 }
+        val bundleA = PocketScopeSampler.sample(pixels, 4, 4, 16, MonitorTransfer.DLOG2, includePoints = false, ceiling = a)
+        val bundleB = PocketScopeSampler.sample(pixels, 4, 4, 16, MonitorTransfer.DLOG2, includePoints = false, ceiling = b)
+        assertEquals(800, bundleA.iso)
+        assertSame(a, bundleA.ceiling)
+        assertEquals(1600, bundleB.iso)
+        assertSame(b, bundleB.ceiling)
+        assertEquals(100.0, WaveformIre.ire(231 / 255.0, MonitorTransfer.DLOG2, ceiling = a), 1e-9)
+        assertEquals(100.0, WaveformIre.ire(248 / 255.0, MonitorTransfer.DLOG2, ceiling = b), 1e-9)
+        assertTrue(WaveformIre.ire(247 / 255.0, MonitorTransfer.DLOG2, ceiling = b) < 100.0)
     }
 
     @Test
@@ -82,12 +103,12 @@ class LiveColorScienceTest {
 
     @Test
     fun liveTapCeilingUsesMeasuredPreviewMax() {
-        assertEquals(247, ScopeExposureCeiling.clipByte(MonitorTransfer.DLOG2, 1600))
-        assertEquals(223, ScopeExposureCeiling.clipByte(MonitorTransfer.DLOG, 1600))
-        assertEquals(223, ScopeExposureCeiling.clipByte(MonitorTransfer.DLOG, 400))
-        assertEquals(255, ScopeExposureCeiling.clipByte(MonitorTransfer.REC709, 1600))
-        assertEquals(231, ScopeExposureCeiling.clipByte(MonitorTransfer.DLOG2, 800))
-        assertEquals(247, ScopeExposureCeiling.clipByte(MonitorTransfer.DLOG2, 3200))
+        assertEquals(247, ScopeExposureCeiling().clipByte(MonitorTransfer.DLOG2, 1600))
+        assertEquals(223, ScopeExposureCeiling().clipByte(MonitorTransfer.DLOG, 1600))
+        assertEquals(223, ScopeExposureCeiling().clipByte(MonitorTransfer.DLOG, 400))
+        assertEquals(255, ScopeExposureCeiling().clipByte(MonitorTransfer.REC709, 1600))
+        assertEquals(231, ScopeExposureCeiling().clipByte(MonitorTransfer.DLOG2, 800))
+        assertEquals(247, ScopeExposureCeiling().clipByte(MonitorTransfer.DLOG2, 3200))
         assertEquals(
             ScopeDisplayScale.CLIP_LEVEL,
             ScopeDisplayScale.waveformLevel(247.0 / 255, MonitorTransfer.DLOG2, 1600),
@@ -102,7 +123,7 @@ class LiveColorScienceTest {
             ScopeDisplayScale.waveformLevel(188.0 / 255, MonitorTransfer.DLOG2, 1600) <
                 ScopeDisplayScale.CLIP_LEVEL - 0.05,
         )
-        val ignored = ScopeExposureCeiling.observeTapMax(255, MonitorTransfer.DLOG2)
+        val ignored = ScopeExposureCeiling().observeTapMax(255, MonitorTransfer.DLOG2)
         assertEquals(247, ignored.first)
     }
 

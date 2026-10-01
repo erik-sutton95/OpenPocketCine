@@ -97,6 +97,7 @@ internal fun PlaybackFrameSample(
         val source = LiveScopeSampleBus.openSource()
         try {
             var previousBundle = ScopeAssistBundle.EMPTY
+            val ceiling = ScopeExposureCeiling()
             val buf = arrayOfNulls<Bitmap>(2)
             var slot = 0
             while (isActive) {
@@ -113,7 +114,7 @@ internal fun PlaybackFrameSample(
                     buf[slot]?.takeIf { it.width == dw && it.height == dh && it.isMutable }
                         ?: createBitmap(dw, dh, Bitmap.Config.ARGB_8888).also { buf[slot] = it }
                 textureView.getBitmap(dst)
-                previousBundle = publishPlaybackScopeTap(dst, colorMode, iso, plan, previousBundle, source)
+                previousBundle = publishPlaybackScopeTap(dst, colorMode, iso, plan, previousBundle, source, ceiling)
                 slot = 1 - slot
             }
         } finally { LiveScopeSampleBus.closeSource(source) }
@@ -220,6 +221,7 @@ private fun publishPlaybackScopeTap(
     plan: FeedEffectsRenderPlan,
     previous: ScopeAssistBundle,
     source: LiveScopeSampleBus.Source,
+    ceiling: ScopeExposureCeiling,
 ): ScopeAssistBundle {
     val tapW = src.width
     val tapH = src.height
@@ -227,10 +229,10 @@ private fun publishPlaybackScopeTap(
     src.getPixels(pixels, 0, tapW, 0, 0, tapW, tapH)
     val packed = argb8888ToRgba(pixels)
     var transfer = MonitorTransfer.fromColorMode(colorMode)
-    ScopeExposureCeiling.syncISO(iso)
+    ceiling.syncISO(iso)
     val (minC, maxC) = PocketScopeSampler.minMaxRGB(packed)
     transfer = MonitorTransfer.inferred(minC, maxC, transfer)
-    ScopeExposureCeiling.observeTapMax(maxC, transfer)
+    ceiling.observeTapMax(maxC, transfer)
     val bundle =
         PocketScopeSampler.sample(
             bytes = packed,
@@ -242,7 +244,7 @@ private fun publishPlaybackScopeTap(
             includeVectorPoints = true,
             look = plan.scopeTap.vectorLut ?: plan.lutCube,
             previous = previous,
-            iso = ScopeExposureCeiling.resolvedISO(),
+            ceiling = ceiling,
         )
     LiveScopeSampleBus.publish(source, bundle)
     return bundle

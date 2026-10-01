@@ -1,16 +1,10 @@
 package com.opencapture.openpocketcine.feed
 
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PocketScopeSamplerTest {
-    @BeforeTest
-    fun resetCeiling() {
-        ScopeExposureCeiling.reset()
-    }
-
     @Test
     fun tapSizeMatchesIosNearestNeighbour() {
         val (w, h) = PocketScopeSampler.tapSize(1280, 720)

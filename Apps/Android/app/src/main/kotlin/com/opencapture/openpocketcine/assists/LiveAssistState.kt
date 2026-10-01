@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
 import android.content.Context
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -9,6 +10,7 @@ import androidx.compose.runtime.setValue
 import com.opencapture.openpocketcine.NDFilterNotation
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.feed.ScopeAssistBundle
+import com.opencapture.openpocketcine.feed.ScopeExposureCeiling
 import com.opencapture.openpocketcine.lut.LutExposureCompensation
 import org.json.JSONArray
 import org.json.JSONObject
@@ -228,6 +230,9 @@ class LiveAssistState(
 
     /** Latest GLES tap. WAVE / PARADE / HISTO / VECTOR / LIGHTS read this. */
     var scopeBundle by mutableStateOf(ScopeAssistBundle.EMPTY)
+
+    /** Clip ceiling of the shown scope source; changes only when the source does, not per tap. */
+    val scopeCeiling: ScopeExposureCeiling by derivedStateOf { scopeBundle.ceiling }
 
     fun acceptScopeBundle(bundle: ScopeAssistBundle) {
         scopeBundle = bundle

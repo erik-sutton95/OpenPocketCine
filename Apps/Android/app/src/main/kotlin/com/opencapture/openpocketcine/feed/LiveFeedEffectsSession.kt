@@ -51,6 +51,9 @@ internal class LiveFeedEffectsSession(
     private val playback: Boolean = false,
     private val backdrop: MonitorBackdropFeed? = null,
 ) {
+    /** This feed's clip ceiling; never shared with another feed or playback. */
+    private val scopeCeiling = ScopeExposureCeiling()
+
     @Volatile private var stretchToRect = false
 
     /** Only the final presentation changes; the OES source and grading raster stay native. */
@@ -257,12 +260,12 @@ internal class LiveFeedEffectsSession(
                     if (!scopeDue || !previewSource.isCurrent(sourceEpoch) ||
                         !LiveScopeSampleBus.isCurrent(scopeOwner)) return@execute
                     var transfer = MonitorTransfer.fromColorMode(policy.colorMode)
-                    ScopeExposureCeiling.syncISO(policy.iso)
+                    scopeCeiling.syncISO(policy.iso)
                     val (minC, maxC) = PocketScopeSampler.minMaxRGB(packed)
                     if (policy.allowsTransferInference) {
                         transfer = MonitorTransfer.inferred(minC, maxC, transfer)
                     }
-                    ScopeExposureCeiling.observeTapMax(maxC, transfer)
+                    scopeCeiling.observeTapMax(maxC, transfer)
                     val sampled =
                         PocketScopeSampler.sample(
                             bytes = packed,
@@ -275,7 +278,7 @@ internal class LiveFeedEffectsSession(
                             look = if (policy.includeVectorPoints) look else null,
                             trafficThreshold = policy.trafficThreshold,
                             previous = previous,
-                            iso = ScopeExposureCeiling.resolvedISO(),
+                            ceiling = scopeCeiling,
                         )
                     mainHandler.post {
                         if (previewSource.isCurrent(sourceEpoch) && LiveScopeSampleBus.publish(scopeOwner, sampled)) {

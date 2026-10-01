@@ -63,6 +63,8 @@ data class ScopeAssistBundle(
     val histogramDisplay: ScopeHistogramDisplay = ScopeHistogramDisplay.EMPTY,
     val transfer: MonitorTransfer = MonitorTransfer.REC709,
     val iso: Int = ScopeExposureCeiling.REFERENCE_EI,
+    /** The clip ceiling of the source that sampled this bundle. */
+    val ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
 ) {
     val isEmpty: Boolean
         get() = revision == 0L && samples.points.isEmpty() && samples.histogramLuma.all { it == 0 }
@@ -150,7 +152,8 @@ object PocketScopeSampler {
         look: FeedEffectsCube? = null,
         trafficThreshold: Double = ScopeTrafficLights.DEFAULT_THRESHOLD,
         previous: ScopeAssistBundle = ScopeAssistBundle.EMPTY,
-        iso: Int = ScopeExposureCeiling.resolvedISO(),
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+        iso: Int = ceiling.resolvedISO(),
     ): ScopeAssistBundle {
         val histY = IntArray(256)
         val histR = IntArray(256)
@@ -224,10 +227,12 @@ object PocketScopeSampler {
                     threshold = trafficThreshold,
                     previous = previous.traffic,
                     luma = histY,
+                    ceiling = ceiling,
                 ),
-            histogramDisplay = histogramDisplay(samples, previous.histogramDisplay, transfer, iso),
+            histogramDisplay = histogramDisplay(samples, previous.histogramDisplay, transfer, iso, ceiling),
             transfer = transfer,
             iso = iso,
+            ceiling = ceiling,
         )
     }
 
@@ -260,12 +265,13 @@ object PocketScopeSampler {
         previous: ScopeHistogramDisplay,
         transfer: MonitorTransfer,
         iso: Int? = null,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
     ): ScopeHistogramDisplay =
         ScopeHistogramDisplay(
-            luma = displayChannel(samples.histogramLuma, previous.luma, transfer, iso),
-            red = displayChannel(samples.histogramRed, previous.red, transfer, iso),
-            green = displayChannel(samples.histogramGreen, previous.green, transfer, iso),
-            blue = displayChannel(samples.histogramBlue, previous.blue, transfer, iso),
+            luma = displayChannel(samples.histogramLuma, previous.luma, transfer, iso, ceiling),
+            red = displayChannel(samples.histogramRed, previous.red, transfer, iso, ceiling),
+            green = displayChannel(samples.histogramGreen, previous.green, transfer, iso, ceiling),
+            blue = displayChannel(samples.histogramBlue, previous.blue, transfer, iso, ceiling),
         )
 
     fun displayChannel(
@@ -273,8 +279,9 @@ object PocketScopeSampler {
         previous: FloatArray,
         transfer: MonitorTransfer,
         iso: Int? = null,
+        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
     ): FloatArray {
-        val remapped = WaveformIre.remapHistogram(native, transfer, iso)
+        val remapped = WaveformIre.remapHistogram(native, transfer, iso, ceiling)
         val blended = FloatArray(256)
         val hasPrevious = previous.size == 256
         for (i in 0 until 256) {
