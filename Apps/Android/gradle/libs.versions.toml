@@ -38,6 +38,7 @@ kyant-backdrop = { module = "io.github.kyant0:backdrop", version.ref = "kyantBac
 kyant-shapes = { module = "io.github.kyant0:shapes", version.ref = "kyantShapes" }
 mlkit-face-detection = { module = "com.google.mlkit:face-detection", version.ref = "mlkitFaceDetection" }
 sentry-android = { module = "io.sentry:sentry-android", version.ref = "sentry" }
+opencine-monitor-ui = { module = "com.opencapture.opencine:monitor-ui", version = "0.1.0-SNAPSHOT" }
 
 [plugins]
 android-library = { id = "com.android.library", version.ref = "agp" }

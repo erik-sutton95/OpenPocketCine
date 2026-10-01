@@ -38,7 +38,9 @@ More: [iOS app](../../apps/ios/).
 ## Android
 
 Needs Android Studio / JDK 17+ and the Swift Android SDK pin in `ANDROID.md`
-(Swift 6.3.3). From the repo root:
+(Swift 6.3.3), plus an OpenCineUI checkout next to this repository
+(`../OpenCineUI`): the Android build includes its shared Compose UI. From the
+repo root:
 
 ```bash
 just android-core     # cross-compile OpenPocketViewCore → jniLibs

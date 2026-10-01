@@ -6,7 +6,7 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 | --- | --- | --- |
 | **Monitor presentation policy** | `Sources/MonitorPresentation/` | Foundation-only viewport geometry, capability gates and camera/media presentation values. No camera protocol or platform I/O. |
 | **Shared native monitor UI** | `Sources/MonitorUI/` | SwiftUI pages, controls, navigation, camera home/pairing and media catalog presentation; bundled Sora resources. Camera state and actions are injected. iOS-only implementation, separate from the portable core. |
-| **Shared native Android UI** | `Apps/Android/monitor-ui/` | Compose pages, controls, typography and icon assets. Camera state and actions are injected; no JNI or camera ownership. |
+| **Shared native Android UI** | OpenCineUI `Android/monitor-ui/` (sibling checkout, Gradle included build) | Compose pages, controls, typography and icon assets. Camera state and actions are injected; no JNI or camera ownership. |
 | **Shared core** | `Sources/OpenPocketViewCore/` | DUML, commands, status, LUTs, layout policy. **Portable** Foundation. |
 | **iOS app** | `ios/OpenPocketCine/` | SwiftUI **shell**, CoreBluetooth, NEHotspotConfiguration, sockets, VideoToolbox/Metal. Teardown: [live-session](live-session.md). |
 | **Watch companion** | `ios/OpenPocketCineWatch/` | watchOS SwiftUI remote. WatchConnectivity only — never SoftAP. Embedded in the iPhone app. |
@@ -53,7 +53,7 @@ and forwards actions. Neither package imports
 An app injects identity and a backend's actual capabilities; missing hardware
 controls disappear rather than selecting a different brand's screen. Sora font
 resources and registration travel with `MonitorUI`. Android uses the same boundary
-through the local `:monitor-ui` Gradle library and its Osmo presentation adapter.
+through the shared `monitor-ui` library (OpenCineUI included build) and its Osmo presentation adapter.
 
 Each iOS app mounts `observeMonitorWindowGeometry()` around its root once.
 The shared observer samples its containing window after UIKit lifecycle/layout
