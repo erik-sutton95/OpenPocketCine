@@ -24,6 +24,7 @@ import java.nio.ByteOrder
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import com.opencapture.opencine.media.FeedPresentPolicy
 
 private const val TAG = "OpcFeedFx"
 private const val DEFAULT_SOURCE_WIDTH = 1280

@@ -11,7 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.bridge.SwiftCore
-import com.opencapture.openpocketcine.session.LivePipelineCadence
+import com.opencapture.opencine.media.LivePipelineCadence
 import com.opencapture.openpocketcine.session.SessionRecoveryUi
 import java.io.File
 import java.util.UUID

@@ -96,7 +96,7 @@ import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
-import com.opencapture.openpocketcine.feed.FeedPresentPolicy
+import com.opencapture.opencine.media.FeedPresentPolicy
 import com.opencapture.openpocketcine.feed.GpuOverlayBus
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 import com.opencapture.openpocketcine.feed.LiveVulkanSession

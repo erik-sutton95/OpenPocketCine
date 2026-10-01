@@ -20,6 +20,9 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
+import com.opencapture.opencine.media.AccessUnitDiscontinuity
+import com.opencapture.opencine.media.CompressedAccessUnitAdmission
+import com.opencapture.opencine.media.LivePipelineCadence
 
 internal fun isForwardReliableCursor(current: Int, candidate: Int): Boolean {
     val delta = (candidate - current) and 0xFFFF

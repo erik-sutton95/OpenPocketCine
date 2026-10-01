@@ -23,6 +23,7 @@ includeBuild("../../../OpenCineCore/Android") {
     name = "opencinecore"
     dependencySubstitution {
         substitute(module("com.opencapture.opencine:core")).using(project(":core"))
+        substitute(module("com.opencapture.opencine:media")).using(project(":media"))
     }
 }
 

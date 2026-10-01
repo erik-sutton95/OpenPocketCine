@@ -15,7 +15,7 @@ import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.core.CameraSession as CameraSessionSeam
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FacePriorityExposure
-import com.opencapture.openpocketcine.feed.SerialSessionGate
+import com.opencapture.opencine.media.SerialSessionGate
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.FeedDecoderErrorOrigin
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentAges
@@ -77,6 +77,10 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import java.util.Locale
 import org.json.JSONObject
+import com.opencapture.opencine.media.DecoderErrorOrigin
+import com.opencapture.opencine.media.DecoderInputOwnership
+import com.opencapture.opencine.media.EncoderPresentPath
+import com.opencapture.opencine.media.LivePipelineCadence
 
 /** Main-thread admission closes before negotiation is dispatched to the IO worker. */
 internal class EndpointCommandAdmission {

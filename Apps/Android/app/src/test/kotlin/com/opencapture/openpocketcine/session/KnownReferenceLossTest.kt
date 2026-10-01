@@ -7,6 +7,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.opencapture.opencine.media.CompressedAccessUnitAdmission
+import com.opencapture.opencine.media.DecoderInputOwnership
+import com.opencapture.opencine.media.DecoderRandomAccessHold
 
 class KnownReferenceLossTest {
     @Test

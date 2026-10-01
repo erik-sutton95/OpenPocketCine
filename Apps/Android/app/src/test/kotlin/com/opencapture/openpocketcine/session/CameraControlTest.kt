@@ -2,8 +2,8 @@ package com.opencapture.openpocketcine.session
 
 import com.opencapture.openpocketcine.ShutterAngle
 import com.opencapture.openpocketcine.bridge.SwiftCore
-import com.opencapture.openpocketcine.feed.ExtraMirrorHold
-import com.opencapture.openpocketcine.feed.FeedPresentPolicy
+import com.opencapture.opencine.media.ExtraMirrorHold
+import com.opencapture.opencine.media.FeedPresentPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
