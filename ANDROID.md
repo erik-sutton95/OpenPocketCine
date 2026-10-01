@@ -28,8 +28,8 @@ iOS links the core via Swift Package Manager. Android does **not** consume that 
 
 ### Android SDK
 
-The app and `:monitor-ui` use the shared `androidCompileSdk` version in
-`Apps/Android/gradle/libs.versions.toml` (API 37). Install the stable SDK platform
+The app and the shared `monitor-ui` library use the same `androidCompileSdk`
+version in their `gradle/libs.versions.toml` catalogs (API 37). Install the stable SDK platform
 with `sdkmanager "platforms;android-37.0"`, or let Gradle install it after accepting
 the Android SDK licenses. `minSdk` remains 29 and the app's `targetSdk` remains 36.
 The newer compile SDK satisfies the Compose dependencies' declared requirements;
@@ -38,6 +38,15 @@ it does not opt the app into Android 17 target-SDK behavior changes.
 AAR metadata checks stay enabled in both Android modules. The library's AAR
 packaging task consumes their output, so disabling them can fail on a clean
 checkout even when an incremental build passes with old outputs present.
+
+### Shared Compose UI (OpenCineUI)
+
+`monitor-ui` lives in the OpenCineUI repository (`Android/`, its own Gradle
+build). Clone it next to this repository (`../OpenCineUI`).
+`Apps/Android/settings.gradle.kts` includes `../../../OpenCineUI/Android` and
+substitutes `com.opencapture.opencine:monitor-ui` with that project. CI clones
+it into the same sibling path. `just android-check` also runs the library's
+unit tests and lint (`:Android:monitor-ui:testDebugUnitTest`, `:Android:monitor-ui:lint`).
 
 ## Pocket mapping
 

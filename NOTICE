@@ -6,12 +6,12 @@ Third-party software distributed with this product is listed in THIRD-PARTY-NOTI
 The portable .cube parser (`CubeLUT`) is adapted from OpenZCine (Apache 2.0).
 
 Bundled UI typefaces (SIL Open Font License 1.1; copies in
-OpenCineUI `Sources/MonitorUI/Resources/Fonts/` and `Apps/Android/monitor-ui/src/main/assets/`):
+OpenCineUI `Sources/MonitorUI/Resources/Fonts/` and `Android/monitor-ui/src/main/assets/`):
 - Sora, Copyright 2019 The Sora Project Authors (https://github.com/sora-xor/sora-font)
 
 Bundled HUD icons from Lucide (ISC; Feather-derived glyphs also MIT; copies in
 OpenCineUI Sources/MonitorUI/Resources/Icons/lucide/ and
-Apps/Android/monitor-ui/src/main/assets/icons/lucide/):
+OpenCineUI Android/monitor-ui/src/main/assets/icons/lucide/):
 - Lucide, Copyright 2026 Lucide Icons and Contributors
   (https://github.com/lucide-icons/lucide)
 
