@@ -77,13 +77,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
       # OpenCineUI candidate wiring (UI-02). Apps/Android/settings.gradle.kts
-      # includes ../../../OpenCineUI/Android, a sibling of this checkout.
-      # Works only once the OpenCineUI remote exists (owner/URL not final).
-      # ponytail: tracks OpenCineUI main; pin a tag once it publishes releases.
-      - name: Check out OpenCineUI as a sibling
-        env:
-          OPENCINEUI_REF: main
-        run: git clone --depth 1 --branch "$OPENCINEUI_REF" https://github.com/erik-sutton95/OpenCineUI.git "$GITHUB_WORKSPACE/../OpenCineUI"
+      # includes ../../../OpenCineUI/Android, a sibling checkout pinned by SHA in
+      # opencine-pins.txt. Works only once the OpenCineUI remote exists (owner/URL not final).
+      - name: Check out pinned OpenCine packages next to the repository
+        run: scripts/checkout-opencine.sh
 
       - name: Set up Android NDK 27
         uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
