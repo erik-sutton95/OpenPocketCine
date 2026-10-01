@@ -70,6 +70,8 @@ import XCTest
             modelId: 0x19)
         tile.recordingObservation = (recording, Date())
         tile.recordingAvailable = available
+        tile.driver = DatalinkDriver(port: 9030, tcpPoke: false, pairingToken: "")
+        tile.controlHost = "192.0.2.30"
     }
     func testUnavailableRecordingCameraKeepsStopIntentAndBlocksGroupCommand() {
         let session = MultiviewSession()

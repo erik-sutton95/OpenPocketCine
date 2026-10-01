@@ -268,6 +268,7 @@ dependencies {
     implementation(libs.opencine.monitor.ui)
     implementation("com.opencapture.opencine:core:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:media:0.1.0-SNAPSHOT")
+    implementation("com.opencapture.opencine:multicam:0.1.0-SNAPSHOT")
 
     implementation(platform(libs.compose.bom))
     implementation(libs.androidx.activity.compose)

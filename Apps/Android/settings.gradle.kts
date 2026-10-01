@@ -27,6 +27,16 @@ includeBuild("../../../OpenCineCore/Android") {
     }
 }
 
+// Manufacturer-independent multicam engine (OpenCine plan MULTI-02), the sibling checkout
+// ../OpenCineMulticam. Its own build includes OpenCineCore under the same name, so one Core
+// build serves both. Replace with the published Maven coordinate when it has a remote.
+includeBuild("../../../OpenCineMulticam/Android") {
+    name = "opencinemulticam"
+    dependencySubstitution {
+        substitute(module("com.opencapture.opencine:multicam")).using(project(":multicam"))
+    }
+}
+
 include(":app")
 include(":core-api")
 

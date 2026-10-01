@@ -79,6 +79,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.opencapture.monitorui.MonitorAssistIcon
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorRecordLamp
+import com.opencapture.opencine.multicam.RecordDirection
+import com.opencapture.opencine.multicam.RecordPlan
 import com.opencapture.monitorui.MonitorRect
 import com.opencapture.monitorui.MultiviewPresentationLayout
 import com.opencapture.monitorui.MultiviewSafeArea
@@ -246,8 +248,8 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
                 )
             }
             DisplayButton(clean, Modifier.rect(layout.display)) { clean = !clean }
-            RecordAllButton(session, model.recordConfirmationEnabled, layout.record.width, Modifier.rect(layout.record)) {
-                scope.launch { session.toggleAllRecording() }
+            RecordAllButton(session, model.recordConfirmationEnabled, layout.record.width, Modifier.rect(layout.record)) { plan ->
+                scope.launch { session.record(plan, together = true) }
             }
         }
         if (cameraSettings) {
@@ -490,23 +492,29 @@ private fun DisplayButton(clean: Boolean, modifier: Modifier, onClick: () -> Uni
 
 @Composable
 private fun RecordAllButton(
-    session: MultiviewSession, confirm: Boolean, diameter: Float, modifier: Modifier, onClick: () -> Unit,
+    session: MultiviewSession, confirm: Boolean, diameter: Float, modifier: Modifier, onRecord: (RecordPlan) -> Unit,
 ) {
-    var pending by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(session.anyRecording, session.canRecordTogether) { pending = null }
-    pending?.let { stopping ->
-        MultiviewRecordConfirmation(stopping, "All connected cameras", onDismiss = { pending = null }) {
+    // The dialog holds the plan the operator saw (iOS `MultiviewRecordContext`): a changed camera,
+    // link, mode, availability or reported recording dismisses it; routine telemetry does not.
+    val plan = session.recordPlan()
+    val enabled = !session.busy && !session.groupRecordingBusy && plan.isExecutable
+    var pending by remember { mutableStateOf<RecordPlan?>(null) }
+    LaunchedEffect(plan, enabled) { pending = null }
+    pending?.let { approved ->
+        MultiviewRecordConfirmation(approved.direction == RecordDirection.STOP, "All connected cameras", onDismiss = { pending = null }) {
             pending = null
-            if (session.canRecordTogether && session.anyRecording == stopping) onClick()
+            if (session.canRecordTogether && approved == session.recordPlan()) onRecord(approved)
         }
     }
+    val refusal = recordRefusal(plan)
     Box(
-        modifier.alpha(if (session.canRecordTogether || session.groupRecordingBusy) 1f else 0.4f)
-            .chromeClickable(enabled = session.canRecordTogether) {
-                if (confirm) pending = session.anyRecording else onClick()
+        modifier.alpha(if (enabled || session.groupRecordingBusy) 1f else 0.4f)
+            .chromeClickable(enabled = enabled) {
+                if (confirm) pending = plan else onRecord(plan)
             }
             .semantics {
                 contentDescription = if (session.anyRecording) "Stop all recording" else "Record all"
+                if (refusal != null) stateDescription = refusal
                 role = Role.Button
             }, contentAlignment = Alignment.Center,
     ) {
@@ -558,9 +566,10 @@ private fun TileView(
     val camera = tile.camera
     val focused = index == session.focusedIndex && camera != null
     var optionsOpen by remember { mutableStateOf(false) }
-    var confirmRecord by remember { mutableStateOf<Boolean?>(null) }
+    var confirmRecord by remember { mutableStateOf<RecordPlan?>(null) }
+    val recordPlan = if (camera != null) session.recordPlan(tile) else null
     LaunchedEffect(clean, enabled, camera) { if (clean || !enabled || camera == null) optionsOpen = false }
-    LaunchedEffect(camera, tile.recordingObservation?.first, tile.recordingAvailable, session.closing) { confirmRecord = null }
+    LaunchedEffect(recordPlan, session.closing) { confirmRecord = null }
     Box(Modifier.fillMaxSize().background(LiveDesign.surface, TileShape)) {
         if (camera != null) {
             val readouts = multiviewTileReadouts(
@@ -605,16 +614,16 @@ private fun TileView(
                         recording = tile.recordingObservation?.first == true,
                         lutEnabled = tile.lutEnabled,
                         canOpen = tile.controlHost != null && !tile.connecting,
-                        canRecord = tile.recordingAvailable && !tile.recordingBusy && !session.groupRecordingBusy && !session.closing,
+                        canRecord = recordPlan?.isExecutable == true && !session.groupRecordingBusy && !session.closing,
                         canReconnect = !session.busy && !tile.connecting && !tile.recovering,
                         canRemove = !session.busy && !tile.connecting && !session.groupRecordingBusy && !tile.recordingBusy && !session.closing,
                         onAction = { action ->
                             optionsOpen = false
                             when (action) {
                                 MultiviewCameraAction.LIVE_VIEW -> onOpenLive()
-                                MultiviewCameraAction.RECORD -> {
-                                    if (confirmRecording) confirmRecord = tile.recordingObservation?.first == true
-                                    else scope.launch { session.toggleRecording(tile) }
+                                MultiviewCameraAction.RECORD -> recordPlan?.let { plan ->
+                                    if (confirmRecording) confirmRecord = plan
+                                    else scope.launch { session.record(plan, together = false) }
                                 }
                                 MultiviewCameraAction.LUT -> { tile.toggleLUT(); session.persistStage() }
                                 MultiviewCameraAction.RECONNECT -> scope.launch { session.reconnect(tile) }
@@ -658,11 +667,11 @@ private fun TileView(
             }, TileShape,
         ))
     }
-    confirmRecord?.let { stopping ->
-        MultiviewRecordConfirmation(stopping, camera?.name.orEmpty(), onDismiss = { confirmRecord = null }) {
+    confirmRecord?.let { approved ->
+        MultiviewRecordConfirmation(approved.direction == RecordDirection.STOP, camera?.name.orEmpty(), onDismiss = { confirmRecord = null }) {
             confirmRecord = null
-            if (tile.recordingAvailable && tile.recordingObservation?.first == stopping && !session.closing) {
-                scope.launch { session.toggleRecording(tile) }
+            if (approved == session.recordPlan(tile) && !session.closing) {
+                scope.launch { session.record(approved, together = false) }
             }
         }
     }

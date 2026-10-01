@@ -43,9 +43,9 @@ install_xcodegen() {
 if ! command -v xcodegen >/dev/null 2>&1; then
   install_xcodegen
 fi
-# Candidate (OpenCine UI-01, CORE-02, MEDIA-01, VENDOR-01): Package.swift and ios/project.yml take
-# OpenCineUI, OpenCineCore (incl. OpenCineMedia) and OpenCineDJI from ../OpenCineUI,
-# ../OpenCineCore and ../OpenCineDJI, pinned
+# Candidate (OpenCine UI-01, CORE-02, MEDIA-01, VENDOR-01, MULTI-02): Package.swift and
+# ios/project.yml take OpenCineUI, OpenCineCore (incl. OpenCineMedia), OpenCineDJI and
+# OpenCineMulticam from ../OpenCineUI, ../OpenCineCore, ../OpenCineDJI and ../OpenCineMulticam, pinned
 # by SHA in opencine-pins.txt. Works only once those repositories are published and Xcode Cloud
 # may read them. Delete when the app pins them by url + version.
 step "check out pinned OpenCine packages next to the repository"

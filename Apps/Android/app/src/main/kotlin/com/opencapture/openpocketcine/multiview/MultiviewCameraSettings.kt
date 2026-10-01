@@ -105,7 +105,7 @@ internal fun MultiviewCameraSettings(
     val endpoint = tile?.driver
     val recording = tile?.settings?.isRecording
     DisposableEffect(tile, cameraIdentity, endpoint, available, recording) {
-        val controls = if (tile != null && available) tile.openControls { session.controlsAvailable(tile) } else null
+        val controls = if (tile != null && available) session.openControls(tile) else null
         onDispose {
             if (tile?.controlsModel === controls) tile?.closeControls() else controls?.close()
         }
