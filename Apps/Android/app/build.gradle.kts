@@ -234,9 +234,10 @@ val stageSwiftCore =
             fileTree(repositoryRoot) {
                 include("Package.swift", "Package.resolved", "Sources/**")
             },
-            // OpenCineMedia: the root Package.swift takes it from the sibling OpenCineCore checkout.
+            // OpenCineMedia (and OpenCineCore, which it depends on): the root Package.swift takes
+            // them from the sibling OpenCineCore checkout.
             fileTree(repositoryRoot.resolve("../OpenCineCore")) {
-                include("Package.swift", "Sources/OpenCineMedia/**")
+                include("Package.swift", "Sources/OpenCineMedia/**", "Sources/OpenCineCore/**")
             },
             stageSwiftCoreScript,
         )
