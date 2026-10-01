@@ -1924,25 +1924,6 @@ public enum GimbalStick {
         return luma > chromeGoDarkAbove
     }
 
-    /// Stick ∩ feed in feed-normalised top-left 0…1. `nil` when the stick
-    /// sits on the canvas, not the picture.
-    public static func chromeSampleRegion(
-        stick: MonitorLayoutRegion, feed: MonitorLayoutRegion
-    ) -> MonitorLayoutRegion? {
-        guard feed.width > 1, feed.height > 1 else { return nil }
-        let x = Swift.max(stick.x, feed.x)
-        let y = Swift.max(stick.y, feed.y)
-        let maxX = Swift.min(stick.maxX, feed.maxX)
-        let maxY = Swift.min(stick.maxY, feed.maxY)
-        let width = maxX - x
-        let height = maxY - y
-        guard width > 4, height > 4 else { return nil }
-        return MonitorLayoutRegion(
-            x: (x - feed.x) / feed.width,
-            y: (y - feed.y) / feed.height,
-            width: width / feed.width,
-            height: height / feed.height)
-    }
     public static func isTap(normalizedMagnitude: Double) -> Bool {
         normalizedMagnitude < tapSlop
     }
