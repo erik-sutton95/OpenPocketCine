@@ -327,6 +327,8 @@ final class PlaybackFeedSession: NSObject {
         self.effects = effects
         self.transfer = transfer
         self.sampleBus = sampleBus
+        // Clips publish into the monitor's bus and share its ceiling (one per monitored source).
+        assistEngine.adopt(exposureCeiling: sampleBus.exposureCeiling)
         if !sampleBus.usesPlaybackSource { sampleBus.clearPlaybackSource() }
         sampleBus.usesPlaybackSource = true
         if changed {
@@ -335,7 +337,9 @@ final class PlaybackFeedSession: NSObject {
             if effects.falseColor {
                 PocketFalseColorMap.warm(
                     scale: effects.falseColorScale,
-                    mode: effects.colorMode,
+                    mode: effects.colorMode, rec709: effects.falseColorRec709,
+                    clipByte: sampleBus.exposureCeiling.clipByte(
+                        transfer: MonitorTransfer(effects.colorMode)),
                     hasLUT: effects.lutDimension >= 2)
             }
             lastOverlayOnly = effects.needsOverlayFeed

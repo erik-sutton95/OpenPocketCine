@@ -17,18 +17,6 @@ public enum EncoderPresentPath {
         return previousVPS != nextVPS || previousSPS != nextSPS || previousPPS != nextPPS
     }
 
-    /// Aspect for the feed well. Unknown / degenerate rasters keep landscape 16:9.
-    public static func feedAspect(width: Int, height: Int, fallback: Double = 16.0 / 9.0) -> Double
-    {
-        guard width > 1, height > 1 else { return fallback }
-        return Double(width) / Double(height)
-    }
-
-    /// Pocket screen flip: the raster is taller than it is wide.
-    public static func isVertical(width: Int, height: Int) -> Bool {
-        width > 1 && height > 1 && height > width
-    }
-
     /// New VPS/SPS/PPS already means the camera cut a GOP. A second
     /// `0x09/0xa8` on an AU that carries the IDR cuts it again and can
     /// leave the hold waiting through an AF-C hunt.

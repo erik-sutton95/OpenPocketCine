@@ -1,5 +1,11 @@
 import Foundation
 
+// DJI integration side of the color science. Curve math, the scope axis, traffic lights
+// and the false-colour scales live in OpenCineMedia (re-exported by this module). This file
+// keeps what only the DJI integration knows: raw `ColorMode` → curve, the live-tap
+// fingerprint, the measured live-tap ceilings (one ``ScopeExposureCeiling`` per picture
+// source), the D-Gamut matrices and the official Rec.709 look curves.
+
 /// Transfer the Pocket live HEVC *picture* is carrying.
 ///
 /// `ColorMode` (`cam_image_effect` `@2`, body-mapped on Pocket 3) selects
@@ -9,46 +15,11 @@ import Foundation
 /// everything downstream speaks **curve fractions** (`byte/255` = the papers'
 /// own encoded axis).
 ///
-/// Shared IRE mapping for HISTO / PARADE / ZEBRA / FALSE / LIGHTS / WAVE
-/// (``ScopeDisplayScale``). WAVE draws 0 / 100 on the plot edges and
-/// keeps 18% gray at paper IRE (not remapped to 50):
-/// * 0 line = paper / legal black (`encode(0)`)
-/// * 18% grey = published paper IRE (`encode(0.18) × 100`; D-Log2 = 30.50)
-/// * 100 line = **live-tap EI ceiling**, not code 255 and not the 10-bit
-///   recording top. SoftAP x420 at ISO 1600 measures D-Log2 `max=247`
-///   (typical 243–247) and D-Log `max=223` (typical 219–223). 255 is a
-///   full-range leak and is ignored. An earlier 188 calibration sat ~50
-///   codes below that shelf, so zebra / traffic-clip / FALSE Maximum
-///   fired while the LUT-off log still had highlight detail. Below each
-///   curve's native EI the DJI paper scales the code; at/above native an
-///   S-curve holds the preview at the measured ceiling (D-Log2 native
-///   1600, D-Log native 400). Rec.709 / HLG use encoded 1.0. D-Log M
-///   scopes use the unchanged 0…1 signal axis; its endpoints are not measured
-///   sensor limits. Scene-stop estimates use an empirical Pocket 3 fit.
-public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
-    /// `ColorMode.normal` `0x3F`. ITU-R BT.709-6 inverse OETF.
-    case rec709
-    /// `ColorMode.hdr` `0x3C`. Pocket HDR is HLG (ITU-R BT.2100 / BT.2408), not PQ.
-    case hdr
-    /// `ColorMode.dLog` `0x17`. DJI D-Log (2017 Cinema Color System white paper).
-    case dlog
-    /// `ColorMode.dLog2` `0x41`. DJI D-Log2 (Gamut white paper Rev 1.0, 2026-06-30).
-    case dlog2
-    /// D-Log M: signal-native scopes; scene-stop math is an empirical Pocket 3 estimate.
-    case dlogm
-
-    public var id: String { rawValue }
-
-    public var label: String {
-        switch self {
-        case .rec709: "Rec.709"
-        case .hdr: "HLG"
-        case .dlog: "D-Log"
-        case .dlog2: "D-Log2"
-        case .dlogm: "D-Log M"
-        }
-    }
-
+/// WAVE 100 is the **live-tap EI ceiling** of the source (``ScopeExposureCeiling``),
+/// not code 255 and not the 10-bit recording top. Rec.709 / HLG use encoded 1.0.
+/// D-Log M scopes use the unchanged 0…1 signal axis; its endpoints are not measured
+/// sensor limits. Scene-stop estimates use an empirical Pocket 3 fit.
+extension MonitorTransfer {
     public init(_ colorMode: ColorMode) {
         switch colorMode {
         case .normal, .normal10: self = .rec709
@@ -57,40 +28,6 @@ public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
         case .dLogM: self = .dlogm
         case .dLog2: self = .dlog2
         }
-    }
-
-    /// Scene reflectance at encoded 1.0 (D-Log M is an empirical estimate). D-Log white paper: 4200% = 42. D-Log2 paper: 47500% = 475.
-    public var peakLinear: Double {
-        switch self {
-        case .rec709: 1
-        case .hdr: HLG.decode(1)
-        case .dlog: DLog.peakLinear
-        case .dlog2: DLog2.peakLinear
-        case .dlogm: DLogM.decode(1)
-        }
-    }
-
-    /// Anchor codes on the tap's byte axis at the current live-tap ISO.
-    public var scopeAnchors: ScopeAnchors {
-        ScopeAnchors.make(transfer: self)
-    }
-
-    /// Encoded curve fraction of 18% grey (D-Log2 0.304985, D-Log 0.398765, …).
-    public var middleGrayEncoded: Double {
-        scopeAnchors.mid
-    }
-
-    /// Published paper IRE of 18% grey (`encoded × 100`). D-Log2 = 30.50.
-    public var middleGrayPaperIRE: Double {
-        LiveColorScience.paperIRE(middleGrayEncoded)
-    }
-
-    public func encodeLinear(_ linear: Double) -> Double {
-        LiveColorScience.encode(linear, transfer: self)
-    }
-
-    public func linearize(_ encoded: Double) -> Double {
-        LiveColorScience.linearize(encoded, transfer: self)
     }
 
     /// Fingerprint the live tap when ColorMode `@2` has not arrived.
@@ -109,12 +46,21 @@ public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
         if (20...30).contains(minByte), (160...240).contains(maxByte) { return .dlog }
         return fallback
     }
+
+    /// Curve for LUT exposure compensation and export bakes. D-Log M keeps the D-Log
+    /// curve while its exposure model is uncalibrated, so the empirical scope estimate
+    /// never silently changes baked images.
+    public var lutExposureTransfer: MonitorTransfer {
+        self == .dlogm ? .dlog : self
+    }
 }
 
 // MARK: - Live-tap EI ceiling (not recording 1023, not code 255)
 
-/// Preview clip model. WAVE 100 / zebra highlight / false-colour Maximum /
-/// traffic clip all sit on this ceiling.
+/// Preview clip model of **one** picture source. WAVE 100 / zebra highlight /
+/// false-colour Maximum / traffic clip all sit on this ceiling. Each sample bus / feed
+/// effects session owns its own instance, so two cameras (or a camera and a clip) never
+/// share an ISO or a ratchet. Thread-safe.
 ///
 /// Device evidence (SoftAP x420 1280×720 tap, `scope max:` journal):
 /// D-Log2 ISO 1600 measures `max=247` (typical 243–247); D-Log measures
@@ -123,99 +69,121 @@ public enum MonitorTransfer: String, CaseIterable, Sendable, Identifiable {
 /// early. DJI papers: below native EI the output cannot reach saturation;
 /// at/above native an S-curve holds the code. D-Log2 native = 1600; D-Log
 /// native = 400.
-public enum ScopeExposureCeiling: Sendable {
+public final class ScopeExposureCeiling: @unchecked Sendable {
     public static let referenceEI = 1600
     /// Pocket D-Log native / base ISO. Hold the live-tap ceiling from here up.
     public static let dlogReferenceEI = 400
     /// Measured live-tap max at ISO 1600. Do not replace with recording ~847/1023.
     public static let dlog2LiveTapByteAt1600: UInt8 = 247
-    /// Same blast also logged 248 — treat as the same ceiling, not a new curve.
+    /// Same blast also logged 248: treat as the same ceiling, not a new curve.
     public static let dlog2LiveTapByteAt1600High: UInt8 = 248
     /// Measured D-Log live-tap max (ISO 400–6400 hold). Independent of D-Log2.
     public static let dlogLiveTapByteAtNative: UInt8 = 223
-    /// Same blast also logged 224 — treat as the same ceiling, not a new curve.
+    /// Same blast also logged 224: treat as the same ceiling, not a new curve.
     public static let dlogLiveTapByteAtNativeHigh: UInt8 = 224
-
-    private static let store = ExposureCeilingStore()
-
-    /// Last `cam_expo_param` ISO. Unknown / 0 keeps the measured 1600 point.
-    public static func setISO(_ iso: Int) {
-        guard (50...102_400).contains(iso) else { return }
-        store.withLock { $0.iso = iso }
-    }
-
-    /// No-op when the session has not published an ISO yet.
-    public static func syncISO(_ iso: Int) {
-        if iso > 0 { setISO(iso) }
-    }
-
-    public static func resolvedISO() -> Int {
-        store.withLock { $0.iso }
-    }
-
-    public static func reset() {
-        store.withLock { $0 = ExposureCeilingStore.State() }
-    }
 
     /// Clipped detail sits on a shelf under the ceiling, not on the ceiling byte
     /// itself, and white balance moves it: device journals show 242–247 on clipped
     /// highlights at D-Log2 ISO 1600 (a blown window read 242–244 on 2026-09-29) and
-    /// 219–223 on D-Log. Every clip tool (Traffic Lights, HISTO lamps, zebra 100%,
-    /// CineStop red) keys this shelf so they agree. The live stream is 8-bit HEVC
-    /// (`scope tap format: 420v`), so near clip and clipped sit only a few codes apart
-    /// at the D-Log2 top; a blown window measured 242–244 on 2026-09-29. 7 codes
-    /// (about ⅓ stop at the D-Log2 top) catches that reliably, so the tools read
-    /// "clipped or within about ⅓ stop of it".
-    public static let clipShelfCodes = 7
+    /// 219–223 on D-Log. See ``ScopeAnchors/clipShelfCodes``.
+    public static let clipShelfCodes = ScopeAnchors.clipShelfCodes
+
+    private struct State {
+        var iso = ScopeExposureCeiling.referenceEI
+        var refined1600 = ScopeExposureCeiling.dlog2LiveTapByteAt1600
+        var refinedDlog = ScopeExposureCeiling.dlogLiveTapByteAtNative
+        var observedByEI: [Key: UInt8] = [:]
+        var lastLoggedMax: UInt8 = 0
+    }
+
+    private struct Key: Hashable {
+        var transfer: MonitorTransfer
+        var ei: Int
+    }
+
+    private var state = State()
+    private let lock = NSLock()
+
+    public init() {}
+
+    private func withLock<T>(_ body: (inout State) -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body(&state)
+    }
+
+    /// Last `cam_expo_param` ISO. Unknown / 0 keeps the measured 1600 point.
+    public func setISO(_ iso: Int) {
+        guard (50...102_400).contains(iso) else { return }
+        withLock { $0.iso = iso }
+    }
+
+    /// No-op when the session has not published an ISO yet.
+    public func syncISO(_ iso: Int) {
+        if iso > 0 { setISO(iso) }
+    }
+
+    public func resolvedISO() -> Int {
+        withLock { $0.iso }
+    }
+
+    public func reset() {
+        withLock { $0 = State() }
+    }
 
     /// First byte of the clip shelf (D-Log2 ISO 1600 → 240).
-    public static func clipShelfByte(transfer: MonitorTransfer, iso: Int? = nil) -> Int {
-        max(1, clipByte(transfer: transfer, iso: iso) - clipShelfCodes)
+    public func clipShelfByte(transfer: MonitorTransfer, iso: Int? = nil) -> Int {
+        ScopeAnchors.clipShelfByte(clipByte: clipByte(transfer: transfer, iso: iso))
     }
 
     /// Encoded curve fraction of the live-tap clip (D-Log2 → 247/255, D-Log → 223/255).
-    public static func clipEncoded(transfer: MonitorTransfer, iso: Int? = nil) -> Double {
+    public func clipEncoded(transfer: MonitorTransfer, iso: Int? = nil) -> Double {
         Double(clipByte(transfer: transfer, iso: iso)) / 255.0
     }
 
-    public static func clipByte(transfer: MonitorTransfer, iso: Int? = nil) -> Int {
-        store.withLock { s in
+    public func clipByte(transfer: MonitorTransfer, iso: Int? = nil) -> Int {
+        withLock { s in
             let ei = iso ?? s.iso
-            let table = tableByte(
+            let table = Self.tableByte(
                 transfer: transfer, iso: ei,
                 refined1600: s.refined1600, refinedDlog: s.refinedDlog)
-            let seen = s.observedByEI[ExposureCeilingStore.Key(transfer: transfer, ei: ei)] ?? 0
+            let seen = s.observedByEI[Key(transfer: transfer, ei: ei)] ?? 0
             return Int(max(UInt8(table), seen))
         }
+    }
+
+    /// Scope anchors of `transfer` on this source's ceiling.
+    public func anchors(transfer: MonitorTransfer, iso: Int? = nil) -> ScopeAnchors {
+        ScopeAnchors.make(transfer: transfer, clipByte: clipByte(transfer: transfer, iso: iso))
     }
 
     /// Ratchet the live-tap ceiling from a scope-tap `max=`. Ignores 0 and 255
     /// (do not stretch a full-range leak onto the 100 line). Returns the clip
     /// byte now in force, and whether the rolling max rose (for the control log).
     @discardableResult
-    public static func observeTapMax(
+    public func observeTapMax(
         _ byte: UInt8, transfer: MonitorTransfer
     ) -> (clip: UInt8, maxRose: Bool) {
         guard transfer == .dlog || transfer == .dlog2, byte > 0, byte < 255 else {
             return (UInt8(clipByte(transfer: transfer)), false)
         }
-        return store.withLock { s in
-            if transfer == .dlog2, s.iso == referenceEI, byte > s.refined1600,
-                byte <= dlog2LiveTapByteAt1600High
+        return withLock { s in
+            if transfer == .dlog2, s.iso == Self.referenceEI, byte > s.refined1600,
+                byte <= Self.dlog2LiveTapByteAt1600High
             {
                 s.refined1600 = byte
             }
             if transfer == .dlog,
-                s.iso == 0 || s.iso >= dlogReferenceEI,
+                s.iso == 0 || s.iso >= Self.dlogReferenceEI,
                 byte > s.refinedDlog,
-                byte <= dlogLiveTapByteAtNativeHigh
+                byte <= Self.dlogLiveTapByteAtNativeHigh
             {
                 s.refinedDlog = byte
             }
             let ei = s.iso
-            let key = ExposureCeilingStore.Key(transfer: transfer, ei: ei)
+            let key = Key(transfer: transfer, ei: ei)
             let table = UInt8(
-                tableByte(
+                Self.tableByte(
                     transfer: transfer, iso: ei,
                     refined1600: s.refined1600, refinedDlog: s.refinedDlog))
             let previous = s.observedByEI[key] ?? 0
@@ -229,6 +197,14 @@ public enum ScopeExposureCeiling: Sendable {
         }
     }
 
+    /// Ceiling of a source with no ISO or tap history yet (reference EI, measured bytes).
+    /// For values that were never stamped by a source, for example a default effects value.
+    public static func referenceClipByte(transfer: MonitorTransfer) -> Int {
+        tableByte(
+            transfer: transfer, iso: referenceEI,
+            refined1600: dlog2LiveTapByteAt1600, refinedDlog: dlogLiveTapByteAtNative)
+    }
+
     /// Scene-linear live-tap ceiling at D-Log2 EI 1600. Rec.709 / HLG do not
     /// use this. D-Log has its own code-space ceiling (``dlogLiveTapByteAtNative``).
     public static var linearCeilingAt1600: Double {
@@ -236,11 +212,11 @@ public enum ScopeExposureCeiling: Sendable {
             Double(dlog2LiveTapByteAt1600) / 255.0, transfer: .dlog2)
     }
 
-    fileprivate static func tableByte(
+    private static func tableByte(
         transfer: MonitorTransfer, iso: Int, refined1600: UInt8, refinedDlog: UInt8
     ) -> Int {
         switch transfer {
-        case .rec709, .hdr, .dlogm:
+        case .rec709, .hdr, .dlogm, .ilog:
             return 255
         case .dlog2:
             let ei = iso > 0 ? iso : referenceEI
@@ -248,7 +224,7 @@ public enum ScopeExposureCeiling: Sendable {
                 Double(refined1600) / 255.0, transfer: .dlog2)
             // Paper: below 1600 the code cannot reach saturation (scale linear
             // by EI/1600). At/above 1600 the S-curve holds the preview at the
-            // measured live-tap saturation — not encoded 1.0.
+            // measured live-tap saturation, not encoded 1.0.
             let linear =
                 ei >= referenceEI
                 ? refLinear
@@ -271,765 +247,11 @@ public enum ScopeExposureCeiling: Sendable {
     }
 }
 
-private final class ExposureCeilingStore: @unchecked Sendable {
-    struct State {
-        var iso = ScopeExposureCeiling.referenceEI
-        var refined1600 = ScopeExposureCeiling.dlog2LiveTapByteAt1600
-        var refinedDlog = ScopeExposureCeiling.dlogLiveTapByteAtNative
-        var observedByEI: [Key: UInt8] = [:]
-        var lastLoggedMax: UInt8 = 0
-    }
-
-    struct Key: Hashable {
-        var transfer: MonitorTransfer
-        var ei: Int
-    }
-
-    private var value = State()
-    private let lock = NSLock()
-
-    func withLock<T>(_ body: (inout State) -> T) -> T {
-        lock.lock()
-        defer { lock.unlock() }
-        return body(&value)
-    }
-}
-
-// MARK: - Anchored scope axis
-
-/// Per-transfer anchors on the tap's curve-fraction axis (`byte / 255`).
-///
-/// `black = encode(0)`, `mid = encode(0.18)`, `clip` = live-tap EI ceiling
-/// (D-Log2 → 247/255, D-Log → 223/255), **not** the curve top.
-public struct ScopeAnchors: Equatable, Sendable {
-    /// Encode-of-zero-light (D-Log2 0.062561 → byte ≈ 16, D-Log 0.0929 → ≈ 24, others 0).
-    public let black: Double
-    /// Encode-of-18%-grey (D-Log2 0.304985 → byte ≈ 78).
-    public let mid: Double
-    /// Live-tap EI ceiling (D-Log2 → 247/255, D-Log → 223/255). Rec.709 / HLG → 1.0.
-    public let clip: Double
-    /// Plot level of 18% grey, pinned at paper IRE (`encoded × 100`).
-    public let midLevel: Double
-
-    /// Traffic-light band edges on the 0…255 byte axis.
-    /// `clipFloorByte…255` is the clip shelf (``ScopeExposureCeiling/clipShelfCodes``
-    /// under the ceiling), the same clip every tool uses. `clipEdgeByte` is the
-    /// 100-line ceiling.
-    public let clipEdgeByte: Int
-    public let clipFloorByte: Int
-    public let crushFloorByte: Int
-    public let crushEdgeByte: Int
-
-    public static func make(
-        transfer: MonitorTransfer, iso: Int? = nil, clipByte: Int? = nil
-    ) -> ScopeAnchors {
-        let black = transfer == .dlogm ? 0 : LiveColorScience.encode(0, transfer: transfer)
-        let mid = LiveColorScience.encode(0.18, transfer: transfer)
-        let clipEdge = clipByte ?? ScopeExposureCeiling.clipByte(transfer: transfer, iso: iso)
-        let clip = Double(clipEdge) / 255.0
-        let midLevel =
-            ScopeDisplayScale.crushLevel
-            + LiveColorScience.paperIRE(mid) / 100.0
-            * (ScopeDisplayScale.clipLevel - ScopeDisplayScale.crushLevel)
-        let span = max(0, clip - black) * 255
-        let crushFloor = Int((black * 255).rounded(.down))
-        let crushEdge = Int((black * 255 + 0.02 * span).rounded(.up))
-        let clipFloor = max(0, clipEdge - ScopeExposureCeiling.clipShelfCodes)
-        return ScopeAnchors(
-            black: black, mid: mid, clip: clip, midLevel: midLevel,
-            clipEdgeByte: clipEdge,
-            clipFloorByte: clipFloor,
-            crushFloorByte: crushFloor,
-            crushEdgeByte: crushEdge)
-    }
-
-    fileprivate init(
-        black: Double, mid: Double, clip: Double, midLevel: Double,
-        clipEdgeByte: Int, clipFloorByte: Int,
-        crushFloorByte: Int, crushEdgeByte: Int
-    ) {
-        self.black = black
-        self.mid = mid
-        self.clip = clip
-        self.midLevel = midLevel
-        self.clipEdgeByte = clipEdgeByte
-        self.clipFloorByte = clipFloorByte
-        self.crushFloorByte = crushFloorByte
-        self.crushEdgeByte = crushEdgeByte
-    }
-}
-
-/// HISTO / PARADE / ZEBRA / FALSE / LIGHTS axis. WAVE uses the same IRE
-/// numbers on a full-height plot (0 / 100 on the edges, gray at paper IRE).
-///
-/// 0 and 100 scale lines sit at 5% / 95% of plot height. Paper black lands on
-/// the 0 line, the live-tap EI ceiling on the 100 line, 18% grey is pinned at
-/// its published paper IRE. Sub-black noise and codes above the EI ceiling
-/// (including 255) draw in the margins — 255 is **not** stretched onto 100.
-public enum ScopeDisplayScale {
-    public static let crushLevel = 0.05
-    public static let clipLevel = 0.95
-
-    /// Plot level (0…1 of plot height) of a normalized tap byte.
-    public static func waveformLevel(
-        _ c: Double, transfer: MonitorTransfer, iso: Int? = nil
-    ) -> Double {
-        waveformLevel(c, anchors: ScopeAnchors.make(transfer: transfer, iso: iso))
-    }
-
-    /// Immutable exposure anchors for an asynchronous color-map build.
-    public static func waveformLevel(_ c: Double, anchors a: ScopeAnchors) -> Double {
-        let v = min(1, max(0, c))
-        if v < a.black {
-            return a.black <= 0 ? crushLevel : v / a.black * crushLevel
-        }
-        if a.clip <= a.mid || a.mid <= a.black {
-            if v <= a.clip {
-                return crushLevel
-                    + (v - a.black) / max(a.clip - a.black, 1e-9)
-                    * (clipLevel - crushLevel)
-            }
-            return overshoot(v, clip: a.clip)
-        }
-        if v <= a.mid {
-            return crushLevel + (v - a.black) / (a.mid - a.black) * (a.midLevel - crushLevel)
-        }
-        if v <= a.clip {
-            return a.midLevel + (v - a.mid) / (a.clip - a.mid) * (clipLevel - a.midLevel)
-        }
-        return overshoot(v, clip: a.clip)
-    }
-
-    /// Level of a 0…100 scale value (0 → crush line, 100 → clip line).
-    public static func level(scaleIRE: Double) -> Double {
-        crushLevel + scaleIRE / 100.0 * (clipLevel - crushLevel)
-    }
-
-    /// WAVE IRE: 0 = paper black, 18% grey = paper IRE (D-Log2 30.50,
-    /// D-Log 39.88), 100 = live-tap EI ceiling. Codes above the ceiling
-    /// clamp to 100 (zebra / FALSE clip).
-    public static func monitorPercent(
-        _ c: Double, transfer: MonitorTransfer, iso: Int? = nil
-    ) -> Double {
-        let level = waveformLevel(c, transfer: transfer, iso: iso)
-        return min(100, max(0, (level - crushLevel) / (clipLevel - crushLevel) * 100))
-    }
-
-    /// Normalized tap code whose ``monitorPercent(_:transfer:iso:)`` equals `percent`.
-    public static func signalNative(
-        monitorPercent percent: Double, transfer: MonitorTransfer, iso: Int? = nil
-    ) -> Double {
-        let a = ScopeAnchors.make(transfer: transfer, iso: iso)
-        let p = min(100, max(0, percent))
-        if p <= 0 { return a.black }
-        if p >= 100 { return a.clip }
-        let target = crushLevel + p / 100.0 * (clipLevel - crushLevel)
-        if a.clip <= a.mid || a.mid <= a.black {
-            return a.black + p / 100.0 * (a.clip - a.black)
-        }
-        if target <= a.midLevel {
-            let t = (target - crushLevel) / max(a.midLevel - crushLevel, 1e-9)
-            return a.black + t * (a.mid - a.black)
-        }
-        let t = (target - a.midLevel) / max(clipLevel - a.midLevel, 1e-9)
-        return a.mid + t * (a.clip - a.mid)
-    }
-
-    /// Zebra highlight threshold: the monitor percentage, but never above the clip
-    /// shelf, so 100% paints clipped detail (which sits a few codes under the ceiling).
-    public static func zebraHighlightNative(
-        monitorPercent percent: Double, transfer: MonitorTransfer, iso: Int? = nil
-    ) -> Double {
-        min(
-            signalNative(monitorPercent: percent, transfer: transfer, iso: iso),
-            Double(ScopeExposureCeiling.clipShelfByte(transfer: transfer, iso: iso)) / 255)
-    }
-
-    /// 256-entry `waveformLevel` lookup for the hot sampling/vertex paths.
-    public static func levelTable(for transfer: MonitorTransfer, iso: Int? = nil) -> [Float] {
-        let ei = iso ?? ScopeExposureCeiling.resolvedISO()
-        let clip = ScopeExposureCeiling.clipByte(transfer: transfer, iso: ei)
-        return tables.withLock { cache in
-            let key = ScopeLevelTableKey(transfer: transfer, clipByte: clip)
-            if let hit = cache[key] { return hit }
-            let built = (0...255).map {
-                Float(waveformLevel(Double($0) / 255.0, transfer: transfer, iso: ei))
-            }
-            cache[key] = built
-            return built
-        }
-    }
-
-    /// Move native-code histogram counts into display buckets on the waveform
-    /// axis (`round(level × 255)`), so histogram x and waveform y agree
-    /// column-for-column. Conserves total count.
-    public static func remapHistogram(_ bins: [Int], transfer: MonitorTransfer) -> [Int] {
-        var out = [Int](repeating: 0, count: 256)
-        let table = levelTable(for: transfer)
-        for code in 0..<min(bins.count, 256) where bins[code] != 0 {
-            let bucket = Int((table[code] * 255).rounded())
-            out[min(255, max(0, bucket))] += bins[code]
-        }
-        return out
-    }
-
-    private static func overshoot(_ v: Double, clip: Double) -> Double {
-        let headroom = 1.0 - clip
-        guard headroom > 0 else { return clipLevel }
-        return clipLevel + (v - clip) / headroom * (1.0 - clipLevel)
-    }
-
-    private static let tables = TableCache()
-}
-
-private struct ScopeLevelTableKey: Hashable {
-    var transfer: MonitorTransfer
-    var clipByte: Int
-}
-
-private final class TableCache: @unchecked Sendable {
-    private var cache: [ScopeLevelTableKey: [Float]] = [:]
-    private let lock = NSLock()
-    func withLock<T>(_ body: (inout [ScopeLevelTableKey: [Float]]) -> T) -> T {
-        lock.lock()
-        defer { lock.unlock() }
-        return body(&cache)
-    }
-}
-
-// MARK: - Traffic lights (OpenZCine ScopeSampler / TrafficLightsMeter port)
-
-/// One channel of the goal-post meter. `level` is the histogram median on the
-/// waveform axis, re-centred so 18% grey reads exactly 0.5.
-public struct ScopeChannelLight: Equatable, Sendable {
-    public var clip: Bool
-    public var crush: Bool
-    public var level: Double
-
-    public init(clip: Bool, crush: Bool, level: Double) {
-        self.clip = clip
-        self.crush = crush
-        self.level = level
-    }
-
-    /// Within ±0.03 of centre the bar reads neutral (OpenZCine balanceDeadZone).
-    public var isNeutral: Bool { abs(level - 0.5) <= 0.03 }
-}
-
-public struct ScopeTrafficLightsReading: Equatable, Sendable {
-    public var red: ScopeChannelLight
-    public var green: ScopeChannelLight
-    public var blue: ScopeChannelLight
-
-    public init(red: ScopeChannelLight, green: ScopeChannelLight, blue: ScopeChannelLight) {
-        self.red = red
-        self.green = green
-        self.blue = blue
-    }
-
-    public static let none = ScopeTrafficLightsReading(
-        red: ScopeChannelLight(clip: false, crush: false, level: 0.5),
-        green: ScopeChannelLight(clip: false, crush: false, level: 0.5),
-        blue: ScopeChannelLight(clip: false, crush: false, level: 0.5))
-
-    public var anyClip: Bool { red.clip || green.clip || blue.clip }
-    public var anyCrush: Bool { red.crush || green.crush || blue.crush }
-}
-
-public enum ScopeTrafficLights {
-    /// Default pixel-fraction threshold = 0 stop compensation (stops / 10).
-    public static let defaultThreshold = 0.0
-    /// Stay lit until energy falls to half the fire threshold (stops blink).
-    public static let holdRatio = 0.5
-
-    /// Meter from the 256-bin native histograms — never from the point array.
-    public static func reading(
-        red: [Int], green: [Int], blue: [Int],
-        transfer: MonitorTransfer,
-        threshold: Double = defaultThreshold,
-        previous: ScopeTrafficLightsReading? = nil
-    ) -> ScopeTrafficLightsReading {
-        reading(
-            red: red, green: green, blue: blue, luma: nil,
-            transfer: transfer, threshold: threshold, previous: previous)
-    }
-
-    public static func reading(
-        red: [Int], green: [Int], blue: [Int],
-        luma: [Int]? = nil,
-        transfer: MonitorTransfer,
-        threshold: Double = defaultThreshold,
-        previous: ScopeTrafficLightsReading? = nil
-    ) -> ScopeTrafficLightsReading {
-        let a = transfer.scopeAnchors
-        let redClip = edgeEnergy(red, from: a.clipFloorByte, to: 255)
-        let greenClip = edgeEnergy(green, from: a.clipFloorByte, to: 255)
-        let blueClip = edgeEnergy(blue, from: a.clipFloorByte, to: 255)
-        let lumaClip = luma.map { edgeEnergy($0, from: a.clipFloorByte, to: 255) } ?? 0
-        // Zebra is luma. A blown door can clip Y while reconstructed R/B sit
-        // a few codes lower — and the frame median is still the subject, not
-        // the door. If luma (or any channel) is clipped, light every lamp.
-        let pictureClip =
-            lumaClip > threshold || redClip > threshold
-            || greenClip > threshold || blueClip > threshold
-        let pictureEnergy = max(lumaClip, redClip, greenClip, blueClip)
-        return ScopeTrafficLightsReading(
-            red: channel(
-                red, transfer: transfer, threshold: threshold,
-                ownClipEnergy: redClip, pictureEnergy: pictureEnergy,
-                pictureClip: pictureClip, previous: previous?.red),
-            green: channel(
-                green, transfer: transfer, threshold: threshold,
-                ownClipEnergy: greenClip, pictureEnergy: pictureEnergy,
-                pictureClip: pictureClip, previous: previous?.green),
-            blue: channel(
-                blue, transfer: transfer, threshold: threshold,
-                ownClipEnergy: blueClip, pictureEnergy: pictureEnergy,
-                pictureClip: pictureClip, previous: previous?.blue))
-    }
-
-    private static func channel(
-        _ bins: [Int], transfer: MonitorTransfer, threshold: Double,
-        ownClipEnergy: Double, pictureEnergy: Double,
-        pictureClip: Bool,
-        previous: ScopeChannelLight?
-    ) -> ScopeChannelLight {
-        let a = transfer.scopeAnchors
-        guard bins.count >= 256 else {
-            return ScopeChannelLight(clip: false, crush: false, level: 0.5)
-        }
-        var total = 0
-        for count in bins { total += count }
-        guard total > 0 else {
-            return ScopeChannelLight(clip: false, crush: false, level: 0.5)
-        }
-
-        var crushed = 0
-        for code in a.crushFloorByte...a.crushEdgeByte { crushed += bins[code] }
-        let crushEnergy = Double(crushed) / Double(total)
-
-        var seen = 0
-        var median = 0
-        let half = (total + 1) / 2
-        for code in 0..<256 {
-            seen += bins[code]
-            if seen >= half {
-                median = code
-                break
-            }
-        }
-        let rawClip = ownClipEnergy > threshold || pictureClip
-        let clip = latched(
-            now: rawClip, was: previous?.clip ?? false,
-            energy: max(ownClipEnergy, pictureEnergy), threshold: threshold)
-        let crush = latched(
-            now: crushEnergy > threshold, was: previous?.crush ?? false,
-            energy: crushEnergy, threshold: threshold)
-        let level = balance(
-            ScopeDisplayScale.waveformLevel(Double(median) / 255.0, transfer: transfer),
-            midLevel: a.midLevel)
-        return ScopeChannelLight(clip: clip, crush: crush, level: level)
-    }
-
-    /// Fraction of counts in `from...to`, or 0 if the histogram is unusable.
-    static func edgeEnergy(_ bins: [Int], from: Int, to: Int) -> Double {
-        guard bins.count >= 256, from <= to, from >= 0, to <= 255 else { return 0 }
-        var total = 0
-        var band = 0
-        for code in 0..<256 {
-            total += bins[code]
-            if code >= from, code <= to { band += bins[code] }
-        }
-        guard total > 0 else { return 0 }
-        return Double(band) / Double(total)
-    }
-
-    static func latched(
-        now: Bool, was: Bool, energy: Double, threshold: Double
-    ) -> Bool {
-        if now { return true }
-        guard was else { return false }
-        return energy > threshold * holdRatio
-    }
-
-    /// Re-centre the anchored level so the transfer's grey lands at exactly 0.5.
-    static func balance(_ level: Double, midLevel: Double) -> Double {
-        if level <= midLevel {
-            guard midLevel > 0 else { return 0.5 }
-            return 0.5 * level / midLevel
-        }
-        let span = 1.0 - midLevel
-        guard span > 0 else { return 0.5 }
-        return 0.5 + 0.5 * (level - midLevel) / span
-    }
-}
-
-// MARK: - Zebra / false colour supporting types
-
-/// False-colour / limits zone. Bounds are stops or WAVE IRE depending on the scale.
-public struct LiveFalseColorBand: Equatable, Sendable {
-    public var lowerBound: Double
-    public var upperBound: Double
-    public var red: Double
-    public var green: Double
-    public var blue: Double
-    public var label: String
-
-    public init(
-        lowerBound: Double, upperBound: Double,
-        red: Double, green: Double, blue: Double,
-        label: String
-    ) {
-        self.lowerBound = lowerBound
-        self.upperBound = upperBound
-        self.red = red
-        self.green = green
-        self.blue = blue
-        self.label = label
-    }
-
-    public func contains(_ value: Double) -> Bool {
-        value >= lowerBound && value < upperBound
-    }
-}
-
-/// False-colour scale names. Video (`stops`) / IRE / Limits key WAVE IRE;
-/// CineStop (`sceneStops`) keys scene stops around 18% grey.
-public enum LiveFalseColorScale: String, CaseIterable, Sendable {
-    case stops = "Stops"
-    case ire = "IRE"
-    case limits = "Limits"
-    case sceneStops = "SceneStops"
-
-    public var usesSceneStops: Bool { self == .sceneStops }
-
-    /// Half-width of the soft band edge in the cube bakes: half an IRE on the WAVE
-    /// axis, a twentieth of a stop on CineStop.
-    public var edgeSoftness: Double { usesSceneStops ? 0.05 : 0.5 }
-}
-
-/// Operator choice for how false colour reads log curves: the signal like WAVE
-/// (LOG, default) or the camera's official Rec.709 look (709). Shells set it from settings;
-/// the iOS cube keys include it so a change rebakes.
-public enum FalseColorLogReading {
-    private static let lock = NSLock()
-    // Protected by lock.
-    nonisolated(unsafe) private static var readsRec709 = false
-
-    public static var rec709: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return readsRec709
-    }
-
-    public static func set(rec709: Bool) {
-        lock.lock()
-        readsRec709 = rec709
-        lock.unlock()
-    }
-}
-
-/// Zebra defaults on the ``ScopeDisplayScale/monitorPercent(_:transfer:)`` axis.
-/// Midtone 55 is OpenZCine's (`AssistConfiguration.Zebra`). Highlight is **99**,
-/// not OpenZCine's 100: 100 is the live-tap ceiling byte itself (D-Log2 247),
-/// and the ceiling ratchets to the frame max, so at 100 only that one code
-/// paints. A typical SoftAP D-Log2 shelf is 243–247 (245 ≈ IRE 99.2), so 99
-/// reads "approaching clip" (#136). Operators who saved 100 keep 100.
-public enum LiveZebra {
-    public static let highlightIRE = 99.0
-    public static let midtoneIRE = 55.0
-    /// Half-width of the midtone stripe, in monitor IRE.
-    public static let midtoneHalfWidthIRE = 5.0
-}
-
-// MARK: - Color science entry points
-
-/// Linearize Pocket live codes and map them for the display-referred assists
-/// (false colour, zebra, LUT generation). Scopes do NOT linearize pixel data —
-/// they ride ``ScopeDisplayScale`` on encoded codes.
-public enum LiveColorScience {
-    /// Scene-linear reflectance from a normalized encoded channel (`0…1`).
-    /// Values below a log toe clamp to 0 so downstream math never sees NaN / negatives.
-    public static func linearize(_ encoded: Double, transfer: MonitorTransfer) -> Double {
-        let code = clamp01(encoded)
-        let linear = decode(code, transfer: transfer)
-        guard linear.isFinite else { return 0 }
-        return max(0, linear)
-    }
-
-    /// Normalized encoded code from scene-linear reflectance. Clamped to `0…1`.
-    public static func encode(_ linear: Double, transfer: MonitorTransfer) -> Double {
-        let y = max(0, linear)
-        let encoded = encodeRaw(y, transfer: transfer)
-        guard encoded.isFinite else { return 0 }
-        return clamp01(encoded)
-    }
-
-    /// Linearize one encoded RGB pixel (normalized `0…1`).
-    public static func linearizeRGB(
-        red: Double, green: Double, blue: Double, transfer: MonitorTransfer
-    ) -> (red: Double, green: Double, blue: Double) {
-        (
-            linearize(red, transfer: transfer),
-            linearize(green, transfer: transfer),
-            linearize(blue, transfer: transfer)
-        )
-    }
-
-    /// Scene-linear luminance. Channels are decoded first, then weighted.
-    /// Rec.709 / D-Log use BT.709 Y; HDR (HLG) and D-Log2 use BT.2020 Y (BT.2100).
-    public static func linearLuminance(
-        red: Double, green: Double, blue: Double, transfer: MonitorTransfer
-    ) -> Double {
-        let rgb = linearizeRGB(red: red, green: green, blue: blue, transfer: transfer)
-        let w = lumaWeights(transfer)
-        return w.red * rgb.red + w.green * rgb.green + w.blue * rgb.blue
-    }
-
-    /// Encoded-domain luma weights for the scope sampler (same per-transfer choice).
-    public static func lumaWeights(_ transfer: MonitorTransfer) -> (
-        red: Double, green: Double, blue: Double
-    ) {
-        switch transfer {
-        case .rec709, .dlog, .dlogm:
-            (0.2126, 0.7152, 0.0722)
-        case .hdr, .dlog2:
-            (0.2627, 0.6780, 0.0593)
-        }
-    }
-
-    /// Published paper IRE: encoded curve fraction × 100.
-    /// D-Log2 18% = 30.4985; D-Log 18% = 39.88; Rec.709 18% ≈ 40.9.
-    public static func paperIRE(_ encoded: Double) -> Double {
-        encoded * 100
-    }
-
-    /// Stops relative to 18% grey. Zero light is `−∞`, never NaN.
-    public static func stops(linear: Double) -> Double {
-        let y = max(0, linear)
-        guard y > 0, y.isFinite else { return -.infinity }
-        return log2(y / 0.18)
-    }
-
-    public static func stops(encoded: Double, transfer: MonitorTransfer) -> Double {
-        stops(linear: linearize(encoded, transfer: transfer))
-    }
-
-    /// Video / IRE / Limits ride the WAVE axis. CineStop rides scene stops.
-    /// `clipEncoded` is the camera ceiling: Limits and CineStop start their clip
-    /// band on its clip shelf. Cube bakes pass `latticeSize` so the shelf snaps to
-    /// the lattice point below it, or trilinear sampling would blend a blown
-    /// highlight between the clip colour and the band under it.
-    public static func falseColorBands(
-        _ scale: LiveFalseColorScale, transfer: MonitorTransfer, clipEncoded: Double? = nil,
-        latticeSize: Int? = nil
-    ) -> [LiveFalseColorBand] {
-        let shelf = clipEncoded.map { clipShelf(ceiling: $0, latticeSize: latticeSize) }
-        // On a lattice the shelf point itself must be fully clip, not a 50/50 soft edge.
-        let soften = latticeSize == nil ? 0 : scale.edgeSoftness
-        switch scale {
-        case .stops: return cineStopBands
-        case .ire: return ireBands
-        case .limits:
-            return limitBands(
-                shelfIRE: shelf.map {
-                    ScopeDisplayScale.monitorPercent($0, transfer: transfer) - soften
-                })
-        case .sceneStops:
-            return sceneStopBands(
-                clipStops: shelf.map { stops(encoded: $0, transfer: transfer) - soften })
-        }
-    }
-
-    /// Limits with its clip band starting on the clip shelf (never above 99 IRE).
-    fileprivate static func limitBands(shelfIRE: Double?) -> [LiveFalseColorBand] {
-        guard let edge = shelfIRE, edge < 99, edge > limitBands[2].lowerBound else {
-            return limitBands
-        }
-        var bands = limitBands
-        bands[2].upperBound = edge
-        bands[3].lowerBound = edge
-        return bands
-    }
-
-    public static func falseColorBand(
-        value: Double, scale: LiveFalseColorScale, transfer: MonitorTransfer,
-        clipEncoded: Double? = nil
-    ) -> LiveFalseColorBand? {
-        let candidate = scale.usesSceneStops ? value : clamp(value, 0, 100)
-        return falseColorBands(scale, transfer: transfer, clipEncoded: clipEncoded)
-            .first { $0.contains(candidate) }
-    }
-
-    // MARK: - Private transfers
-
-    private static func decode(_ encoded: Double, transfer: MonitorTransfer) -> Double {
-        switch transfer {
-        case .rec709: Rec709.decode(encoded)
-        case .hdr: HLG.decode(encoded)
-        case .dlog: DLog.decode(encoded)
-        case .dlog2: DLog2.decode(encoded)
-        case .dlogm: DLogM.decode(encoded)
-        }
-    }
-
-    private static func encodeRaw(_ linear: Double, transfer: MonitorTransfer) -> Double {
-        switch transfer {
-        case .rec709: Rec709.encode(linear)
-        case .hdr: HLG.encode(linear)
-        case .dlog: DLog.encode(linear)
-        case .dlog2: DLog2.encode(linear)
-        case .dlogm: DLogM.encode(linear)
-        }
-    }
-
-    private static func clamp01(_ x: Double) -> Double { clamp(x, 0, 1) }
-
-    private static func clamp(_ x: Double, _ lo: Double, _ hi: Double) -> Double {
-        min(hi, max(lo, x))
-    }
-}
-
-// MARK: - BT.709 (ITU-R BT.709-6)
-
-/// ITU-R BT.709-6 §1.2 inverse OETF / OETF. Live Normal is Rec.709-looking on the wire.
-private enum Rec709 {
-    static func decode(_ encoded: Double) -> Double {
-        let e = encoded
-        return e < 0.081 ? e / 4.5 : pow((e + 0.099) / 1.099, 1 / 0.45)
-    }
-
-    static func encode(_ linear: Double) -> Double {
-        let l = min(1, linear)
-        return l < 0.018 ? 4.5 * l : 1.099 * pow(l, 0.45) - 0.099
-    }
-}
-
-// MARK: - HLG (ITU-R BT.2100 / BT.2408)
-
-/// ITU-R BT.2100 HLG OETF (ARIB STD-B67). `linear` is scene reflectance with
-/// 1.0 = diffuse white, scaled per BT.2408 (75% signal).
-private enum HLG {
-    private static let a = 0.178_832_77
-    private static let b = 0.284_668_92
-    private static let c = 0.559_910_73
-    /// Inverse OETF of the BT.2408 75% reference-white signal.
-    private static let diffuseWhite = inverseOETF(0.75)
-
-    static func decode(_ encoded: Double) -> Double {
-        inverseOETF(min(1, max(0, encoded))) / diffuseWhite
-    }
-
-    static func encode(_ linear: Double) -> Double {
-        oetf(min(1, max(0, linear * diffuseWhite)))
-    }
-
-    private static func oetf(_ scene: Double) -> Double {
-        scene <= 1.0 / 12.0 ? sqrt(3 * scene) : a * log(12 * scene - b) + c
-    }
-
-    private static func inverseOETF(_ e: Double) -> Double {
-        e <= 0.5 ? e * e / 3 : (exp((e - c) / a) + b) / 12
-    }
-}
-
-// MARK: - D-Log (DJI 2017 white paper)
-
-/// DJI, *White Paper on D-Log and D-Gamut of DJI Cinema Color System* (2017-09-29),
-/// https://dl.djicdn.com/downloads/zenmuse+x7/20171010/D-Log_D-Gamut_Whitepaper.pdf
-///
-/// Curve fractions: 0% → 95/1023 (0.0929); 18% → 408/1023; 90% → 586/1023;
-/// peak 4200% (7.8 stops above 18% grey) → 1.0. On the Pocket wire these ride
-/// the legal-range container (0% → 10-bit ≈ 145, measured floor 142).
-private enum DLog {
-    static let peakLinear = 42.0
-
-    static func decode(_ encoded: Double) -> Double {
-        if encoded <= 0.14 {
-            return (encoded - 0.0929) / 6.025
-        }
-        return (pow(10, 3.89616 * encoded - 2.27752) - 0.0108) / 0.9892
-    }
-
-    static func encode(_ linear: Double) -> Double {
-        if linear <= 0.0078 {
-            return 6.025 * linear + 0.0929
-        }
-        return log10(linear * 0.9892 + 0.0108) * 0.256663 + 0.584555
-    }
-}
-
-// MARK: - D-Log M (empirical Pocket 3 reference)
-
-/// Neutral-channel fit from Thatcher Freeman's Pocket 3 DCTL, revision
-/// 22f2134e5b2f62a8508ebe02f77f2691d4794d8a. See docs/pocket3-dlogm-curve.md.
-/// This is an estimate for scene-stop tools, not a DJI specification or a
-/// sensor saturation/noise model. Scopes use unmodified signal percentages.
-private enum DLogM {
-    static func decode(_ encoded: Double) -> Double {
-        let t = pow(2, encoded * 5.612990379333496 + 0.9327186346054077)
-            - 2.428226947784424
-        let value = t < 0.6034245491027832
-            ? t * 1.0151796340942383 + 0.5178895592689514
-            : t * 1.8734303712844849
-        return value * (0.18 / 12.4054)
-    }
-
-    static func encode(_ linear: Double) -> Double {
-        let value = linear / (0.18 / 12.4054)
-        let t = value < 0.6034245491027832 * 1.8734303712844849
-            ? (value - 0.5178895592689514) / 1.0151796340942383
-            : value / 1.8734303712844849
-        return (log2(t + 2.428226947784424) - 0.9327186346054077)
-            / 5.612990379333496
-    }
-}
-
-// MARK: - D-Log2 (Gamut unofficial white paper, Rev 1.0, 2026-06-30)
-
-/// D-Log2 transfer from *White Paper on D-Log2 and D-Gamut2 of DJI Cinema Color
-/// System* (Gamut, Revision 1.0, June 30, 2026). Constants match that paper
-/// bit-for-bit (and the Pocket 4P DCTL). Peak 475 linear, +11.37 EV above 18%.
-///
-/// Curve fractions: 0 → 0.062561; 18% → 0.304985; 1.0 → 0.454539; 475 → 1.0.
-/// On the Pocket wire these ride the legal-range container
-/// (0 → 10-bit ≈ 118.8, measured floor 112; 475 → 940).
-private enum DLog2 {
-    static let peakLinear = 475.0
-    private static let a = 16.285_770_761_945_304
-    private static let k1 = 0.059_439_938_321_493
-    private static let b1 = 0.304_985_337_243_402
-    private static let k2 = 2.960_935_245_492_250
-    private static let b2 = 0.148_314_799_066_323
-    private static let inLimit1 = 0.18
-    private static let inLimit2 = 0.028_961_695_254_132
-
-    static func decode(_ encoded: Double) -> Double {
-        if encoded >= b1 {
-            return (peakLinear / (pow(2, a) - 1)) * (pow(2, a * encoded) - 1)
-        }
-        if encoded >= b2 {
-            return pow(2, (encoded - b1) / k1 + log2(inLimit1))
-        }
-        return (encoded - b2) / k2 + inLimit2
-    }
-
-    static func encode(_ linear: Double) -> Double {
-        if linear >= inLimit1 {
-            return (1 / a) * log2(linear * (pow(2, a) - 1) / peakLinear + 1)
-        }
-        if linear >= inLimit2 {
-            return k1 * (log2(max(linear, 1e-15)) - log2(inLimit1)) + b1
-        }
-        return k2 * (linear - inLimit2) + b2
-    }
-}
-
 // MARK: - D-Gamut2 (Gamut unofficial white paper, Rev 1.0, 2026-06-30)
 
 /// Scene-linear D-Gamut2 interchange. Decode D-Log2 **before** applying these.
 /// Display rendering, contrast, highlight roll-off, and gamut mapping stay
-/// downstream. Scopes do **not** call this — they plot encoded codes.
+/// downstream. Scopes do **not** call this: they plot encoded codes.
 public enum DGamut2 {
     /// Linear D-Gamut2 RGB → ITU-R BT.709 RGB.
     public static let rgbToRec709 = ColorMatrix3(
@@ -1062,90 +284,13 @@ public enum DGamut {
         0.0292, 0.1604, 0.8104)
 }
 
-/// Row-major 3×3 for paper D-Gamut / D-Gamut2 / Rec.709 / DWG interchange.
-public struct ColorMatrix3: Equatable, Sendable {
-    public var m00: Double, m01: Double, m02: Double
-    public var m10: Double, m11: Double, m12: Double
-    public var m20: Double, m21: Double, m22: Double
-
-    public init(
-        _ m00: Double, _ m01: Double, _ m02: Double,
-        _ m10: Double, _ m11: Double, _ m12: Double,
-        _ m20: Double, _ m21: Double, _ m22: Double
-    ) {
-        self.m00 = m00
-        self.m01 = m01
-        self.m02 = m02
-        self.m10 = m10
-        self.m11 = m11
-        self.m12 = m12
-        self.m20 = m20
-        self.m21 = m21
-        self.m22 = m22
-    }
-
-    public func apply(r: Double, g: Double, b: Double) -> (r: Double, g: Double, b: Double) {
-        (
-            m00 * r + m01 * g + m02 * b,
-            m10 * r + m11 * g + m12 * b,
-            m20 * r + m21 * g + m22 * b
-        )
-    }
-}
-
-// MARK: - False-colour tables (WAVE IRE / EI-relative stops)
+// MARK: - Official Rec.709 looks (DJI cubes) for the 709 false-colour reading
 
 extension LiveColorScience {
-    /// Video (formerly CineStop): published Video Mode IRE on the WAVE axis. Gaps are grayscale.
-    /// Rec.709 18% (~41) hits 41–48 green; D-Log2 18% (30.50) is a gap.
-    fileprivate static let cineStopBands: [LiveFalseColorBand] = [
-        ire(0, 5, 0.44, 0.22, 0.76, "0–4"),
-        ire(5, 6, 0.28, 0.37, 0.85, "5"),
-        ire(10, 13, 0.18, 0.58, 0.64, "10–12"),
-        ire(41, 49, 0.38, 0.63, 0.35, "41–48"),
-        ire(61, 71, 0.83, 0.53, 0.71, "61–70"),
-        ire(92, 94, 0.83, 0.77, 0.45, "92–93"),
-        ire(94, 96, 0.89, 0.72, 0.29, "94–95"),
-        ire(96, 99, 0.85, 0.55, 0.22, "96–98"),
-        ire(99, .infinity, 0.78, 0.28, 0.18, "99–100"),
-    ]
-
-    /// IRE — six video-level zones on the WAVE axis. Gaps are grayscale.
-    /// Rec.709 18% (~41) hits 18%MG green; D-Log2 18% (30.50) is a gap.
-    /// Palette sampled from the published six-chip IRE chart (BDL / NBDL /
-    /// 18%MG / MG+1 / 80%WC / 95%WC).
-    fileprivate static let ireBands: [LiveFalseColorBand] = [
-        band(0, 2.5, 115, 33, 120, "BDL"),
-        band(2.5, 10, 29, 2, 221, "NBDL"),
-        band(38, 42, 123, 207, 87, "18%MG"),
-        band(52, 56, 241, 190, 198, "MG+1"),
-        band(80, 95, 255, 255, 88, "80%WC"),
-        band(95, .infinity, 220, 51, 33, "95%WC"),
-    ]
-
-    fileprivate static let limitBands: [LiveFalseColorBand] = [
-        ire(0, 5, 0.44, 0.22, 0.76, "0–4"),
-        ire(5, 10, 0.28, 0.37, 0.85, "5–9"),
-        ire(94, 99, 0.89, 0.72, 0.29, "94–98"),
-        ire(99, .infinity, 0.78, 0.28, 0.18, "99–100"),
-    ]
-
-    /// Video level (0…100 IRE) of an encoded neutral code through the camera's official
-    /// Rec.709 look. Video / IRE use it when the operator picks the 709 reading
-    /// (``FalseColorLogReading``). The official cubes are neutral on their grey axis,
-    /// so their tone curve is the whole story for luma. Curves without an official
-    /// look (Rec.709, HLG, future brands) return `nil` and stay on the signal.
-    public static func rec709LookIRE(encoded: Double, transfer: MonitorTransfer) -> Double? {
-        guard let curve = rec709LookCurve(transfer) else { return nil }
-        let position = clamp01(encoded) * Double(curve.count - 1)
-        let index = min(Int(position), curve.count - 2)
-        let fraction = position - Double(index)
-        return (curve[index] + (curve[index + 1] - curve[index]) * fraction) * 100
-    }
-
     /// Luma of the grey axis (33 points) of DJI's official Rec.709 cubes: Pocket 4P D-Log2
-    /// and D-Log, Nano D-Log M. Regenerate from the cubes if DJI updates them.
-    private static func rec709LookCurve(_ transfer: MonitorTransfer) -> [Double]? {
+    /// and D-Log, Nano D-Log M. Regenerate from the cubes if DJI updates them. Curves
+    /// without an official look (Rec.709, HLG) return `nil` and stay on the signal.
+    public static func rec709LookCurve(_ transfer: MonitorTransfer) -> [Double]? {
         switch transfer {
         case .dlog2:
             [
@@ -1168,105 +313,39 @@ extension LiveColorScience {
                 0.6299, 0.6685, 0.7057, 0.7404, 0.7743, 0.8073, 0.8402, 0.8727, 0.9040, 0.9332,
                 0.9604, 0.9832, 1.0000,
             ]
-        case .rec709, .hdr:
+        case .rec709, .hdr, .ilog:
             nil
         }
     }
 
-    /// True when the 709 reading applies: the operator picked 709 and this curve has an
-    /// official Rec.709 look. Every false colour scale then reads the look as Rec.709.
-    public static func readsThroughLook(transfer: MonitorTransfer, rec709: Bool) -> Bool {
-        rec709 && rec709LookCurve(transfer) != nil
+    /// Video level (0…100 IRE) of an encoded neutral code through the official look.
+    public static func rec709LookIRE(encoded: Double, transfer: MonitorTransfer) -> Double? {
+        rec709LookIRE(encoded: encoded, lookCurve: rec709LookCurve(transfer))
     }
 
-    /// The code and curve a false colour scale evaluates: the camera signal (LOG), or with
-    /// the 709 reading the official look's Rec.709 code, as if the camera sent Rec.709.
-    /// CineStop always reads real scene stops; 709 only moves its clip (see
-    /// ``falseColorClip(scale:transfer:rec709:)``).
+    /// True when the 709 reading applies: the operator picked 709 and this curve has an
+    /// official Rec.709 look.
+    public static func readsThroughLook(transfer: MonitorTransfer, rec709: Bool) -> Bool {
+        readsThroughLook(lookCurve: rec709LookCurve(transfer), rec709: rec709)
+    }
+
+    /// ``falseColorReading(encoded:transfer:rec709:lookCurve:scale:)`` through the official look.
     public static func falseColorReading(
         encoded: Double, transfer: MonitorTransfer, rec709: Bool,
         scale: LiveFalseColorScale = .ire
     ) -> (encoded: Double, transfer: MonitorTransfer) {
-        guard rec709, !scale.usesSceneStops,
-            let look = rec709LookIRE(encoded: encoded, transfer: transfer)
-        else { return (encoded, transfer) }
-        return (look / 100, .rec709)
+        falseColorReading(
+            encoded: encoded, transfer: transfer, rec709: rec709,
+            lookCurve: rec709LookCurve(transfer), scale: scale)
     }
 
-    /// The curve a scale's bands are built on and the ceiling its clip band keys: the
-    /// camera's live-tap ceiling (LOG), the Rec.709 top (709, video-level scales), or
-    /// for CineStop at 709 the log code where the official look saturates.
+    /// ``falseColorClip(scale:transfer:rec709:lookCurve:clipEncoded:)`` for a source whose
+    /// live ceiling for `transfer` is `clipByte` (see ``ScopeExposureCeiling``).
     public static func falseColorClip(
-        scale: LiveFalseColorScale, transfer: MonitorTransfer, rec709: Bool
+        scale: LiveFalseColorScale, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> (transfer: MonitorTransfer, ceiling: Double) {
-        guard readsThroughLook(transfer: transfer, rec709: rec709),
-            let curve = rec709LookCurve(transfer)
-        else { return (transfer, ScopeExposureCeiling.clipEncoded(transfer: transfer)) }
-        guard scale.usesSceneStops else {
-            return (.rec709, ScopeExposureCeiling.clipEncoded(transfer: .rec709))
-        }
-        let top = curve.firstIndex { $0 >= 0.9999 } ?? (curve.count - 1)
-        return (transfer, Double(top) / Double(curve.count - 1))
-    }
-
-    /// Encoded clip shelf under a ceiling (``ScopeExposureCeiling/clipShelfCodes``),
-    /// snapped down to a cube lattice point when `latticeSize` is given.
-    public static func clipShelf(ceiling: Double, latticeSize: Int? = nil) -> Double {
-        let shelf = max(0, ceiling - Double(ScopeExposureCeiling.clipShelfCodes) / 255)
-        guard let size = latticeSize, size > 1 else { return shelf }
-        return (shelf * Double(size - 1)).rounded(.down) / Double(size - 1)
-    }
-
-    /// Scene stops where clip starts when the camera ceiling is unknown (+11).
-    public static let sceneStopDefaultClip = 10.5
-
-    /// CineStop: five whole-stop zones around 18% grey, identical on every camera:
-    /// −2 dark green, −1 yellow-green, 0 grey, +1 light pink (skin anchor), +2 soft
-    /// yellow (upper skin limit). Violet is crushed (−7 and below) and red is
-    /// clipped from the camera ceiling. Other shadows are one flat dark grey and
-    /// other highlights one flat light grey, so scene texture never distracts.
-    /// Zones past the ceiling never paint.
-    fileprivate static func sceneStopBands(clipStops: Double?) -> [LiveFalseColorBand] {
-        let clip = clipStops.flatMap { $0.isFinite ? $0 : nil } ?? sceneStopDefaultClip
-        let zones = [
-            band(-2.5, -1.5, 39, 76, 0, "−2"),
-            band(-1.5, -0.5, 155, 196, 56, "−1"),
-            band(-0.5, 0.5, 127, 127, 127, "18%"),
-            band(0.5, 1.5, 221, 174, 180, "+1"),
-            band(1.5, 2.5, 252, 232, 96, "+2"),
-        ]
-        var bands = [
-            band(-.infinity, -6.5, 75, 8, 165, "crush"),
-            band(-6.5, -2.5, 102, 102, 102, "shadows"),
-        ]
-        for var zone in zones where zone.lowerBound < clip {
-            zone.upperBound = min(zone.upperBound, clip)
-            bands.append(zone)
-        }
-        if clip > 2.5 { bands.append(band(2.5, clip, 179, 178, 178, "highlights")) }
-        bands.append(band(clip, .infinity, 245, 39, 0, "clip"))
-        return bands
-    }
-
-    private static func band(
-        _ lo: Double, _ hi: Double,
-        _ r: Double, _ g: Double, _ b: Double,
-        _ label: String
-    ) -> LiveFalseColorBand {
-        LiveFalseColorBand(
-            lowerBound: lo, upperBound: hi,
-            red: r / 255, green: g / 255, blue: b / 255,
-            label: label)
-    }
-
-    private static func ire(
-        _ lo: Double, _ hi: Double,
-        _ r: Double, _ g: Double, _ b: Double,
-        _ label: String
-    ) -> LiveFalseColorBand {
-        LiveFalseColorBand(
-            lowerBound: lo, upperBound: hi,
-            red: r, green: g, blue: b,
-            label: label)
+        falseColorClip(
+            scale: scale, transfer: transfer, rec709: rec709,
+            lookCurve: rec709LookCurve(transfer), clipEncoded: Double(clipByte) / 255)
     }
 }

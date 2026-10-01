@@ -92,7 +92,7 @@ public enum LogColorTransform: String, Equatable, Sendable, CaseIterable, Identi
         switch source {
         case .dlog: DGamut.rgbToRec709.apply(r: r, g: g, b: b)
         case .dlog2: DGamut2.rgbToRec709.apply(r: r, g: g, b: b)
-        case .rec709, .hdr, .dlogm: (r, g, b)
+        case .rec709, .hdr, .dlogm, .ilog: (r, g, b)
         }
     }
 
@@ -102,7 +102,7 @@ public enum LogColorTransform: String, Equatable, Sendable, CaseIterable, Identi
         switch destination {
         case .dlog: DGamut.rec709ToRGB.apply(r: r, g: g, b: b)
         case .dlog2: DGamut2.rec709ToRGB.apply(r: r, g: g, b: b)
-        case .rec709, .hdr, .dlogm: (r, g, b)
+        case .rec709, .hdr, .dlogm, .ilog: (r, g, b)
         }
     }
 }

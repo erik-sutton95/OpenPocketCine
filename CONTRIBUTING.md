@@ -8,7 +8,9 @@ engineering. By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT
 1. Install [`just`](https://github.com/casey/just), Xcode, and the Swift toolchain. Android
   contributors will also need Android Studio/Gradle.
 2. Install the meta-check tools: `just setup` (macOS / Homebrew).
-3. Run `just check` to confirm a green baseline.
+3. Check out the shared OpenCine packages next to this repository at the pinned commits:
+   `scripts/checkout-opencine.sh` (OpenCineMedia comes from `../OpenCineCore`).
+4. Run `just check` to confirm a green baseline.
 
 No vendor SDK is included or required — the camera protocol is reverse-engineered from public
 behavior. Public docs (protocol, apps, setup):

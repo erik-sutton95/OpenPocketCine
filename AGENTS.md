@@ -13,6 +13,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 | Path | What |
 | --- | --- |
 | `Sources/OpenPocketViewCore/` | Portable Swift core |
+| `../OpenCineCore` (sibling) | `OpenCineMedia`: LUT, curve, scope and false-colour math, shutter angle, frame timing, framing. Re-exported by `OpenPocketViewCore`; pinned in `opencine-pins.txt` (`scripts/checkout-opencine.sh`) |
 | `Tests/OpenPocketViewCoreTests/` | Core tests |
 | `ios/OpenPocketCine/` | SwiftUI shell |
 | `Apps/Android/` | Compose shell and adapters |

@@ -9,6 +9,8 @@ import XCTest
 
 @MainActor
 final class MonitorBackdropLifecycleTests: XCTestCase {
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
     private let step = MonitorBackdropPolicy.minimumIntervalNanoseconds
     func testUnchangedInputSkipsNativeWorkAndPublicationWithoutResettingCadence() async throws {
         let clock = InspectorPreviewTestClock()
@@ -254,9 +256,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
     }
 
     func testZebraReusesAHeldSourceUntilItsExposureCeilingChanges() async throws {
-        ScopeExposureCeiling.reset()
-        defer { ScopeExposureCeiling.reset() }
-        ScopeExposureCeiling.setISO(1600)
+        ceiling.setISO(1600)
         let clock = InspectorPreviewTestClock()
         let calls = BackdropTestCounter()
         let snapshot = try makeSnapshot()
@@ -264,7 +264,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         var zebra = try makeSource()
         zebra.effects.zebra = true
         zebra.effects.colorMode = .dLog2
-        let source = zebra
+        let zebraSource = zebra
         let renderer = MonitorVideoBackdropRenderer(
             clock: { clock.now },
             operation: { _, _ in
@@ -275,6 +275,9 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         renderer.activate(owner)
         func render() async throws -> MonitorVideoBackdropRenderer.Result {
             clock.now += step
+            // Like `HevcDecoder.backdropEffects`: each frame carries its source's own ceiling.
+            var source = zebraSource
+            source.effects.clipByte = ceiling.clipByte(transfer: .dlog2)
             let result = await renderer.render(owner: owner, canvasSize: snapshot.canvasSize) {
                 [stable, source]
             }
@@ -282,7 +285,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         }
         let first = try await render()
         let held = try await render()
-        ScopeExposureCeiling.setISO(400)
+        ceiling.setISO(400)
         let moved = try await render()
         let settled = try await render()
         XCTAssertFalse(first.isUnchanged)

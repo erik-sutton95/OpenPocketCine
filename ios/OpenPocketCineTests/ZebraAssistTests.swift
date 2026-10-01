@@ -8,13 +8,14 @@ import XCTest
 /// (OperatorPreferences.swift, MonitorPanels.swift, MonitorControls.swift,
 /// ImageEffectsCompositor.swift).
 final class ZebraAssistTests: XCTestCase {
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
     private let assistKey = "OpenPocketCine.Assist.v1"
     private var savedAssist: Data?
     private var savedUnit: String?
 
     override func setUp() {
         super.setUp()
-        ScopeExposureCeiling.reset()
         savedAssist = UserDefaults.standard.data(forKey: assistKey)
         savedUnit = UserDefaults.standard.string(forKey: ZebraAssist.unitDefaultsKey)
         UserDefaults.standard.removeObject(forKey: assistKey)
@@ -45,15 +46,23 @@ final class ZebraAssistTests: XCTestCase {
     func testIREDisplayIsIdentity() {
         var options = ZebraAssist.Options.default
         options.unit = .ire
-        XCTAssertEqual(options.displayValue(for: 100, transfer: .dlog2), 100)
-        XCTAssertEqual(options.displayValue(for: 55, transfer: .dlog2), 55)
-        options.setHighlight(fromDisplay: 88, transfer: .dlog2)
+        XCTAssertEqual(
+            options.displayValue(
+                for: 100, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 100)
+        XCTAssertEqual(
+            options.displayValue(
+                for: 55, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 55)
+        options.setHighlight(
+            fromDisplay: 88, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         XCTAssertEqual(options.highlightIRE, 88)
-        options.setMidtone(fromDisplay: 42, transfer: .rec709)
+        options.setMidtone(
+            fromDisplay: 42, transfer: .rec709, clipByte: ceiling.clipByte(transfer: .rec709))
         XCTAssertEqual(options.midtoneIRE, 42)
-        options.setHighlight(fromDisplay: 150, transfer: .dlog2)
+        options.setHighlight(
+            fromDisplay: 150, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         XCTAssertEqual(options.highlightIRE, 100)
-        options.setMidtone(fromDisplay: -4, transfer: .dlog2)
+        options.setMidtone(
+            fromDisplay: -4, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         XCTAssertEqual(options.midtoneIRE, 0)
     }
 
@@ -62,21 +71,36 @@ final class ZebraAssistTests: XCTestCase {
         var options = ZebraAssist.Options.default
         options.unit = .native
         XCTAssertEqual(options.editorMaximum, 255)
-        XCTAssertEqual(options.displayValue(for: 100, transfer: .dlog2), 247)
-        XCTAssertEqual(options.displayValue(for: 0, transfer: .dlog2), 16)
+        XCTAssertEqual(
+            options.displayValue(
+                for: 100, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 247)
+        XCTAssertEqual(
+            options.displayValue(
+                for: 0, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 16)
         let midNative = Int(
-            (ScopeDisplayScale.signalNative(monitorPercent: 55, transfer: .dlog2) * 255)
+            (ScopeDisplayScale.signalNative(
+                monitorPercent: 55, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
+                * 255)
                 .rounded())
-        XCTAssertEqual(options.displayValue(for: 55, transfer: .dlog2), midNative)
+        XCTAssertEqual(
+            options.displayValue(
+                for: 55, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), midNative)
 
-        options.setHighlight(fromDisplay: 247, transfer: .dlog2)
+        options.setHighlight(
+            fromDisplay: 247, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         XCTAssertEqual(options.highlightIRE, 100, accuracy: 0.01)
-        options.setMidtone(fromDisplay: midNative, transfer: .dlog2)
+        options.setMidtone(
+            fromDisplay: midNative, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         XCTAssertEqual(options.midtoneIRE, 55, accuracy: 0.25)
 
-        XCTAssertEqual(options.displayValue(for: 100, transfer: .dlog), 223)
-        XCTAssertEqual(options.displayValue(for: 0, transfer: .dlog), 24)
-        options.setHighlight(fromDisplay: 223, transfer: .dlog)
+        XCTAssertEqual(
+            options.displayValue(
+                for: 100, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog)), 223)
+        XCTAssertEqual(
+            options.displayValue(
+                for: 0, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog)), 24)
+        options.setHighlight(
+            fromDisplay: 223, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog))
         XCTAssertEqual(options.highlightIRE, 100, accuracy: 0.01)
     }
 

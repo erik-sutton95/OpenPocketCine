@@ -662,7 +662,9 @@ struct MediaPlayerView: View {
             let rect = DesqueezeAssist.presentationRect(
                 sourceSize: videoDisplaySize, in: CGRect(origin: .zero, size: size),
                 effects: model.assist.playbackEffects)
-            let effects = model.assist.playbackEffects
+            var effects = model.assist.playbackEffects
+            effects.clipByte = model.frameSamples.exposureCeiling.clipByte(
+                transfer: MonitorTransfer(effects.colorMode))
             return [
                 MonitorVideoBackdropSource(
                     buffer: buffer, effects: effects,
@@ -1206,11 +1208,13 @@ struct MediaPlayerView: View {
                 onConfigure: { presentPlaybackAssistOptions(.audioMeters) })
         }
         if model.assist.isPlaybackVisible(.falseColor), model.assist.falseColorReference {
+            let transfer =
+                model.monitorTransfer ?? MonitorTransfer(model.assist.monitorColorMode ?? .normal)
             FalseColorReferenceOverlay(
                 scale: model.assist.falseColorScale,
-                transfer: model.monitorTransfer
-                    ?? MonitorTransfer(model.assist.monitorColorMode ?? .normal),
+                transfer: transfer,
                 rec709: model.assist.falseColorRec709,
+                clipByte: model.frameSamples.exposureCeiling.clipByte(transfer: transfer),
                 bounds: canvas, chromeClearance: clearance, hapticsEnabled: model.hapticsEnabled,
                 onConfigure: { presentPlaybackAssistOptions(.falseColor) })
         }

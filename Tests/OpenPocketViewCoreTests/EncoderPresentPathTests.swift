@@ -19,18 +19,6 @@ import Testing
                 nextVPS: [1], nextSPS: nextSPS, nextPPS: [3]) == changed)
     }
 
-    @Test func feedAspectUsesRasterAndFallsBack() {
-        #expect(abs(EncoderPresentPath.feedAspect(width: 1920, height: 1080) - 16.0 / 9.0) < 0.001)
-        #expect(abs(EncoderPresentPath.feedAspect(width: 1080, height: 1920) - 9.0 / 16.0) < 0.001)
-        #expect(EncoderPresentPath.feedAspect(width: 0, height: 1080) == 16.0 / 9.0)
-    }
-
-    @Test func verticalRasterIsThePocketScreenFlip() {
-        #expect(EncoderPresentPath.isVertical(width: 1080, height: 1920))
-        #expect(!EncoderPresentPath.isVertical(width: 1920, height: 1080))
-        #expect(!EncoderPresentPath.isVertical(width: 0, height: 1920))
-    }
-
     @Test func parameterChangeDoesNotReEnableWhenAUAlreadyHasIDR() {
         #expect(
             EncoderPresentPath.shouldRequestEnableAfterParameterChange(accessUnitHasIDR: false),

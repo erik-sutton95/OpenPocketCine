@@ -15,6 +15,11 @@ packages:
     exactVersion: 9.24.0
   OpenPocketViewCore:
     path: ..
+  # Portable media math (OpenCineMedia, re-exported by OpenPocketViewCore). Candidate: a
+  # sibling checkout of OpenCineCore. Switch to url + exactVersion once it is published.
+  # The app and tests call it directly, so they link the product themselves.
+  OpenCineCore:
+    path: ../../OpenCineCore
 
 targets:
   OpenPocketCine:
@@ -31,6 +36,8 @@ targets:
         product: Sentry
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
+      - package: OpenCineCore
+        product: OpenCineMedia
       - package: OpenPocketViewCore
         product: MonitorUI
       - package: OpenPocketViewCore
@@ -107,6 +114,8 @@ targets:
       - target: OpenPocketCine
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
+      - package: OpenCineCore
+        product: OpenCineMedia
     settings:
       base:
         SWIFT_VERSION: "5.0"

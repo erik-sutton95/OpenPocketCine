@@ -1,0 +1,5 @@
+# Exact revisions of shared OpenCine packages this candidate builds against.
+# CI and Xcode Cloud check out these commits as siblings (scripts/checkout-opencine.sh)
+# and verify the SHA, so a moved branch upstream cannot change what ships.
+# Temporary: replaced by SwiftPM url + version and Maven coordinates once published.
+OpenCineCore 4d001e4af69c1754e101e5daa7f6ca7231628bf3

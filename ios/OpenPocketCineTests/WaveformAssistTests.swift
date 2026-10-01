@@ -5,31 +5,51 @@ import XCTest
 @testable import OpenPocketCine
 
 final class WaveformAssistTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        ScopeExposureCeiling.reset()
-    }
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
 
     func testWaveAxisMatchesTrafficLightIRE() {
         let black = LiveColorScience.encode(0, transfer: .dlog2)
         let grey = LiveColorScience.encode(0.18, transfer: .dlog2)
-        XCTAssertEqual(WaveformAxis.unit(black, transfer: .dlog2), 0, accuracy: 1e-9)
         XCTAssertEqual(
-            WaveformAxis.unit(grey, transfer: .dlog2), 0.305, accuracy: 0.005,
+            WaveformAxis.unit(
+                black, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 0,
+            accuracy: 1e-9)
+        XCTAssertEqual(
+            WaveformAxis.unit(grey, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)),
+            0.305, accuracy: 0.005,
             "D-Log2 18% gray stays at paper IRE 30.50, not remapped to 50")
-        XCTAssertEqual(WaveformAxis.unit(247.0 / 255, transfer: .dlog2), 1, accuracy: 1e-4)
-        XCTAssertEqual(WaveformAxis.unit(223.0 / 255, transfer: .dlog), 1, accuracy: 1e-4)
-        XCTAssertLessThan(WaveformAxis.unit(188.0 / 255, transfer: .dlog2), 0.90)
-        XCTAssertEqual(WaveformAxis.unit(1, transfer: .dlog2), 1, accuracy: 1e-9)
-        XCTAssertEqual(WaveformAxis.unit(0, transfer: .dlog2), 0, accuracy: 1e-9)
+        XCTAssertEqual(
+            WaveformAxis.unit(
+                247.0 / 255, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 1,
+            accuracy: 1e-4)
+        XCTAssertEqual(
+            WaveformAxis.unit(
+                223.0 / 255, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog)), 1,
+            accuracy: 1e-4)
+        XCTAssertLessThan(
+            WaveformAxis.unit(
+                188.0 / 255, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 0.90)
+        XCTAssertEqual(
+            WaveformAxis.unit(1, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 1,
+            accuracy: 1e-9)
+        XCTAssertEqual(
+            WaveformAxis.unit(0, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 0,
+            accuracy: 1e-9)
         XCTAssertEqual(
             WaveformAxis.middleGrayIRE(transfer: .dlog2), 30.50, accuracy: 0.05)
         XCTAssertEqual(
             WaveformAxis.middleGrayIRE(transfer: .dlog), 39.88, accuracy: 0.05)
         let dlogBlack = LiveColorScience.encode(0, transfer: .dlog)
         let dlogGrey = LiveColorScience.encode(0.18, transfer: .dlog)
-        XCTAssertEqual(WaveformAxis.unit(dlogBlack, transfer: .dlog), 0, accuracy: 1e-9)
-        XCTAssertEqual(WaveformAxis.unit(dlogGrey, transfer: .dlog), 0.3988, accuracy: 0.005)
+        XCTAssertEqual(
+            WaveformAxis.unit(
+                dlogBlack, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog)), 0,
+            accuracy: 1e-9)
+        XCTAssertEqual(
+            WaveformAxis.unit(
+                dlogGrey, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog)), 0.3988,
+            accuracy: 0.005)
     }
 
     func testHoldWithoutDragOpensOptions() {
@@ -81,9 +101,12 @@ final class WaveformAssistTests: XCTestCase {
         let blackByte = WaveformAxis.legalBlackByte(transfer: .dlog2)
         XCTAssertEqual(blackByte, 16, "D-Log2 paper black is tap byte 16")
         XCTAssertEqual(
-            WaveformAxis.levelTable(for: .dlog2)[Int(blackByte)], 0, accuracy: 0.002)
+            WaveformAxis.levelTable(for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))[
+                Int(blackByte)], 0, accuracy: 0.002)
         XCTAssertEqual(
-            WaveformAxis.traceY(blackByte, transfer: .dlog2, plot), line0, accuracy: 0.1,
+            WaveformAxis.traceY(
+                blackByte, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot),
+            line0, accuracy: 0.1,
             "crushed paper black sits on the drawn 0 line")
         let leftoverParade0 = scopeLevelY(ScopeDisplayScale.crushLevel, shared)
         XCTAssertGreaterThan(
@@ -92,17 +115,24 @@ final class WaveformAssistTests: XCTestCase {
 
         let grey = UInt8((LiveColorScience.encode(0.18, transfer: .dlog2) * 255).rounded())
         XCTAssertEqual(
-            WaveformAxis.traceY(grey, transfer: .dlog2, plot), lineGray, accuracy: 0.5,
+            WaveformAxis.traceY(
+                grey, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot),
+            lineGray, accuracy: 0.5,
             "18% gray sits on the paper-IRE guide, not 50")
         XCTAssertEqual(
-            WaveformAxis.traceY(247, transfer: .dlog2, plot), line100, accuracy: 0.01)
+            WaveformAxis.traceY(
+                247, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot), line100,
+            accuracy: 0.01)
         XCTAssertEqual(
-            WaveformAxis.traceY(223, transfer: .dlog, plot), line100, accuracy: 0.01)
+            WaveformAxis.traceY(
+                223, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog), plot), line100,
+            accuracy: 0.01)
         XCTAssertEqual(
             WaveformAxis.legalBlackByte(transfer: .dlog), 24,
             "D-Log paper black is tap byte 24")
 
-        let table = WaveformAxis.levelTable(for: .dlog2)
+        let table = WaveformAxis.levelTable(
+            for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         let black = ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: blackByte, green: blackByte, blue: blackByte,
             luma: blackByte)
@@ -155,15 +185,26 @@ final class WaveformAssistTests: XCTestCase {
     func testISOMovesClipOnly() {
         let grey = LiveColorScience.encode(0.18, transfer: .dlog2)
         let black = LiveColorScience.encode(0, transfer: .dlog2)
-        let at1600 = WaveformAxis.unit(grey, transfer: .dlog2, iso: 1600)
-        let at400 = WaveformAxis.unit(grey, transfer: .dlog2, iso: 400)
+        let at1600 = WaveformAxis.unit(
+            grey, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 1600))
+        let at400 = WaveformAxis.unit(
+            grey, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 400))
         XCTAssertEqual(at1600, 0.305, accuracy: 0.005)
         XCTAssertEqual(at400, 0.305, accuracy: 0.005)
-        XCTAssertEqual(WaveformAxis.unit(black, transfer: .dlog2, iso: 400), 0, accuracy: 1e-9)
-        let clip1600 = ScopeExposureCeiling.clipEncoded(transfer: .dlog2, iso: 1600)
-        let clip400 = ScopeExposureCeiling.clipEncoded(transfer: .dlog2, iso: 400)
-        XCTAssertEqual(WaveformAxis.unit(clip1600, transfer: .dlog2, iso: 1600), 1, accuracy: 1e-9)
-        XCTAssertEqual(WaveformAxis.unit(clip400, transfer: .dlog2, iso: 400), 1, accuracy: 1e-9)
+        XCTAssertEqual(
+            WaveformAxis.unit(
+                black, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 400)), 0,
+            accuracy: 1e-9)
+        let clip1600 = ceiling.clipEncoded(transfer: .dlog2, iso: 1600)
+        let clip400 = ceiling.clipEncoded(transfer: .dlog2, iso: 400)
+        XCTAssertEqual(
+            WaveformAxis.unit(
+                clip1600, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 1600)),
+            1, accuracy: 1e-9)
+        XCTAssertEqual(
+            WaveformAxis.unit(
+                clip400, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 400)),
+            1, accuracy: 1e-9)
         XCTAssertLessThan(clip400, clip1600, "lower EI pulls 100 down; gray stays at paper IRE")
     }
 

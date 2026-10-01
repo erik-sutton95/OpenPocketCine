@@ -7,6 +7,9 @@ import XCTest
 
 @MainActor
 final class AssistInspectorPreviewTests: XCTestCase {
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
+
     func testInspectorRequestsSamplingWithoutEnablingPictureEffects() {
         let original = LiveImageEffects()
         let image = original.withInspectorDemand(.peaking)
@@ -84,7 +87,7 @@ final class AssistInspectorPreviewTests: XCTestCase {
         assist.falseColor = false
         assist.zebra = true
         let preview = AssistInspectorPreviewPolicy.imageEffects(
-            assist: assist, tool: .peaking, transfer: .dlog2)
+            assist: assist, tool: .peaking, transfer: .dlog2, ceiling: ceiling)
         XCTAssertTrue(preview.peaking)
         XCTAssertFalse(preview.zebra)
         XCTAssertFalse(preview.falseColor)
@@ -110,20 +113,20 @@ final class AssistInspectorPreviewTests: XCTestCase {
         assist.lutEnabled = false
         assist.splitComparison = false
         let beforeSplit = AssistInspectorPreviewPolicy.imageOptions(
-            assist: assist, tool: .lut, transfer: .rec709)
+            assist: assist, tool: .lut, transfer: .rec709, ceiling: ceiling)
         assist.splitComparison = true
         let afterSplit = AssistInspectorPreviewPolicy.imageOptions(
-            assist: assist, tool: .lut, transfer: .rec709)
+            assist: assist, tool: .lut, transfer: .rec709, ceiling: ceiling)
         XCTAssertNotEqual(beforeSplit, afterSplit)
         XCTAssertTrue(afterSplit.splitComparison)
         XCTAssertEqual(afterSplit.lutDimension, 0, "Observation must not prepare a preview LUT")
 
         assist.desqueezeFactor = 1.33
         let beforeStretch = AssistInspectorPreviewPolicy.imageOptions(
-            assist: assist, tool: .desqueeze, transfer: .rec709)
+            assist: assist, tool: .desqueeze, transfer: .rec709, ceiling: ceiling)
         assist.desqueezeFactor = 2
         let afterStretch = AssistInspectorPreviewPolicy.imageOptions(
-            assist: assist, tool: .desqueeze, transfer: .rec709)
+            assist: assist, tool: .desqueeze, transfer: .rec709, ceiling: ceiling)
         XCTAssertNotEqual(beforeStretch, afterStretch)
         XCTAssertEqual(afterStretch.desqueezeFactor, 2)
     }
@@ -136,7 +139,7 @@ final class AssistInspectorPreviewTests: XCTestCase {
         assist.configureTool = .lut
         XCTAssertEqual(assist.effects.lutDimension, 0)
         let preview = AssistInspectorPreviewPolicy.imageEffects(
-            assist: assist, tool: .lut, transfer: .rec709)
+            assist: assist, tool: .lut, transfer: .rec709, ceiling: ceiling)
         XCTAssertGreaterThan(preview.lutDimension, 1)
         XCTAssertFalse(preview.lutRGBA.isEmpty)
         XCTAssertFalse(assist.lutEnabled)

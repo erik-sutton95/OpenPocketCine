@@ -7,6 +7,9 @@ import XCTest
 /// Pins OpenZCine Traffic Lights — popup rows, RGB goal-post chrome, crush/clip
 /// lamps, and labels — onto PocketCine. IRE / histogram science stays in core.
 final class TrafficLightsAssistTests: XCTestCase {
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
+
     func testColumnWidthLandscapeAndFillsWidth() {
         XCTAssertEqual(
             TrafficLightsAssist.columnWidth(fillsWidth: false, panelWidth: 74, uiScale: 1), 11)
@@ -80,7 +83,8 @@ final class TrafficLightsAssistTests: XCTestCase {
                 bins[16] = crushPixels  // in the D-Log2 crush band [15…21]
                 bins[128] = 100 - crushPixels
                 return ScopeTrafficLights.reading(
-                    red: bins, green: bins, blue: bins, transfer: .dlog2, threshold: threshold
+                    red: bins, green: bins, blue: bins, transfer: .dlog2,
+                    clipByte: ceiling.clipByte(transfer: .dlog2), threshold: threshold
                 ).red
             }
             XCTAssertTrue(red(3, row.thresholds[0]).crush, row.name)

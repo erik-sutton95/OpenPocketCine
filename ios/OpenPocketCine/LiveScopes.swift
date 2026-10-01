@@ -118,17 +118,18 @@ enum WaveformAxis {
 
     /// 0 = paper black, 1 = live-tap clip. Never goes through
     /// ``ScopeDisplayScale.crushLevel`` (that 0.05 is the leftover 5% shelf).
+    /// `clipByte` is the source's live-tap ceiling for `transfer` (the bundle's, on screen).
     static func unit(
-        _ encoded: Double, transfer: MonitorTransfer, iso: Int? = nil
+        _ encoded: Double, transfer: MonitorTransfer, clipByte: Int
     ) -> Double {
-        ire(encoded, transfer: transfer, iso: iso) / 100.0
+        ire(encoded, transfer: transfer, clipByte: clipByte) / 100.0
     }
 
     /// IRE 0…100. Paper black is 0, clip is 100, 18% gray is paper IRE.
     static func ire(
-        _ encoded: Double, transfer: MonitorTransfer, iso: Int? = nil
+        _ encoded: Double, transfer: MonitorTransfer, clipByte: Int
     ) -> Double {
-        let a = ScopeAnchors.make(transfer: transfer, iso: iso)
+        let a = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
         // Byte-round paper black (D-Log2 15.95 → 16) must sit on 0, not 0.02 IRE.
         let blackByte = (a.black * 255).rounded()
         if !encoded.isFinite || encoded * 255 <= blackByte { return 0 }
@@ -161,10 +162,10 @@ enum WaveformAxis {
     /// Native-code histogram counts onto the WAVE IRE axis. Paper black is
     /// bucket 0, live-tap clip is bucket 255. Conserves total count.
     static func remapHistogram(
-        _ bins: [Int], transfer: MonitorTransfer, iso: Int? = nil
+        _ bins: [Int], transfer: MonitorTransfer, clipByte: Int
     ) -> [Int] {
         var out = [Int](repeating: 0, count: 256)
-        let table = levelTable(for: transfer, iso: iso)
+        let table = levelTable(for: transfer, clipByte: clipByte)
         for code in 0..<min(bins.count, 256) where bins[code] != 0 {
             let bucket = Int((Double(table[code]) / 100.0 * 255).rounded())
             out[min(255, max(0, bucket))] += bins[code]
@@ -177,9 +178,9 @@ enum WaveformAxis {
     }
 
     static func traceY(
-        _ byte: UInt8, transfer: MonitorTransfer, iso: Int? = nil, _ rect: CGRect
+        _ byte: UInt8, transfer: MonitorTransfer, clipByte: Int, _ rect: CGRect
     ) -> CGFloat {
-        plotY(ire(Double(byte) / 255.0, transfer: transfer, iso: iso), rect)
+        plotY(ire(Double(byte) / 255.0, transfer: transfer, clipByte: clipByte), rect)
     }
 
     static func middleGrayIRE(transfer: MonitorTransfer) -> Double {
@@ -197,15 +198,15 @@ enum WaveformAxis {
         vertexPositionY(ire: ire, pointSize: pointSize, rect: rect) + pointSize * 0.5
     }
 
-    /// Paper / legal-black code this transfer's tap emits (`encode(0)`).
+    /// Paper / legal-black code this transfer's tap emits (`encode(0)`). Black does not
+    /// depend on the ceiling.
     static func legalBlackByte(transfer: MonitorTransfer) -> UInt8 {
-        UInt8((ScopeAnchors.make(transfer: transfer).black * 255).rounded())
+        UInt8((ScopeAnchors.make(transfer: transfer, clipByte: 255).black * 255).rounded())
     }
 
     /// 256 IRE values (0…100). Paper black is 0, not 0.05.
-    static func levelTable(for transfer: MonitorTransfer, iso: Int? = nil) -> [Float] {
-        let ei = iso ?? ScopeExposureCeiling.resolvedISO()
-        return (0...255).map { Float(ire(Double($0) / 255.0, transfer: transfer, iso: ei)) }
+    static func levelTable(for transfer: MonitorTransfer, clipByte: Int) -> [Float] {
+        (0...255).map { Float(ire(Double($0) / 255.0, transfer: transfer, clipByte: clipByte)) }
     }
 
     struct GuideStroke: Equatable {
@@ -251,11 +252,14 @@ func scopeScaleLineY(_ scaleIRE: Double, _ rect: CGRect) -> CGFloat {
 }
 
 /// WAVE / PARADE tick Y for one native tap byte (`byte/255` = encoded curve
-/// fraction) — placed through the transfer's anchored level table. Hot loops
-/// hoist `ScopeDisplayScale.levelTable(for:)` once and call ``scopeLevelY``.
-func scopeTraceLevelY(_ byte: UInt8, transfer: MonitorTransfer = .rec709, _ rect: CGRect) -> CGFloat
-{
-    scopeLevelY(Double(ScopeDisplayScale.levelTable(for: transfer)[Int(byte)]), rect)
+/// fraction), placed through the transfer's anchored level table on the source's
+/// `clipByte`. Hot loops hoist `ScopeDisplayScale.levelTable(for:clipByte:)` once and
+/// call ``scopeLevelY``.
+func scopeTraceLevelY(
+    _ byte: UInt8, transfer: MonitorTransfer = .rec709, clipByte: Int, _ rect: CGRect
+) -> CGFloat {
+    scopeLevelY(
+        Double(ScopeDisplayScale.levelTable(for: transfer, clipByte: clipByte)[Int(byte)]), rect)
 }
 
 func scopePlotRect(_ size: CGSize, top: CGFloat) -> CGRect {
@@ -285,6 +289,7 @@ extension MonitorTransfer {
         case .dlog: "DLOG"
         case .dlogm: "DLM ≈"
         case .dlog2: "DL2"
+        case .ilog: "ILOG"
         }
     }
 }
@@ -389,6 +394,7 @@ struct WaveformOverlay: View {
                         ScopeTraceMetalView(
                             samples: assist.samples, trail: assist.trailSamples,
                             mode: .waveform(options.mode), transfer: transfer,
+                            clipByte: assist.clipByte,
                             revision: assist.revision, opacity: intensity,
                             layoutSize: plot.size
                         )
@@ -397,7 +403,8 @@ struct WaveformOverlay: View {
                     } else {
                         WaveformScopePlot(
                             samples: assist.samples, trail: assist.trailSamples,
-                            mode: options.mode, transfer: transfer, opacity: intensity
+                            mode: options.mode, transfer: transfer,
+                            clipByte: assist.clipByte, opacity: intensity
                         )
                         .frame(width: size.width, height: size.height)
                     }
@@ -427,12 +434,13 @@ private struct WaveformScopePlot: View, Equatable {
     var trail: ScopeSamples = .empty
     var mode: WaveformAssist.Mode = .rgb
     var transfer: MonitorTransfer = .rec709
+    var clipByte: Int
     var opacity: Double = 1
 
     var body: some View {
         Canvas { context, size in
             let rect = WaveformAxis.plotRect(in: size)
-            let table = WaveformAxis.levelTable(for: transfer)
+            let table = WaveformAxis.levelTable(for: transfer, clipByte: clipByte)
             var traces = context
             traces.clip(to: Path(scopeTraceClipRect(rect)))
             drawTrace(
@@ -552,6 +560,7 @@ struct ParadeOverlay: View {
                         ScopeTraceMetalView(
                             samples: assist.samples, trail: assist.trailSamples,
                             mode: .parade(options.mode), transfer: transfer,
+                            clipByte: assist.clipByte,
                             revision: assist.revision, opacity: intensity,
                             layoutSize: plotRect.size
                         )
@@ -560,7 +569,8 @@ struct ParadeOverlay: View {
                     } else {
                         ParadeScopePlot(
                             samples: assist.samples, trail: assist.trailSamples,
-                            mode: options.mode, transfer: transfer, opacity: intensity
+                            mode: options.mode, transfer: transfer,
+                            clipByte: assist.clipByte, opacity: intensity
                         )
                         .frame(width: size.width, height: size.height)
                     }
@@ -590,12 +600,13 @@ private struct ParadeScopePlot: View, Equatable {
     var trail: ScopeSamples = .empty
     var mode: ParadeAssist.Mode = .rgb
     var transfer: MonitorTransfer = .rec709
+    var clipByte: Int
     var opacity: Double = 1
 
     var body: some View {
         Canvas { context, size in
             let rect = WaveformAxis.plotRect(in: size)
-            let table = WaveformAxis.levelTable(for: transfer)
+            let table = WaveformAxis.levelTable(for: transfer, clipByte: clipByte)
             var traces = context
             traces.clip(to: Path(scopeTraceClipRect(rect)))
             drawLanes(

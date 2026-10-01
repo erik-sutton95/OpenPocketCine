@@ -9,7 +9,8 @@ import PackageDescription
 // (`just android-core`) — keep this module UI-free and platform-agnostic.
 let package = Package(
     name: "OpenPocketViewCore",
-    platforms: [.iOS(.v17), .macOS(.v12), .watchOS(.v10)],
+    // macOS 13: OpenCineCore's minimum (host `swift test` only; no macOS app ships).
+    platforms: [.iOS(.v17), .macOS(.v13), .watchOS(.v10)],
     products: [
         .library(name: "MonitorPresentation", targets: ["MonitorPresentation"]),
         .library(name: "MonitorUI", targets: ["MonitorUI"]),
@@ -20,6 +21,10 @@ let package = Package(
         .library(
             name: "OpenPocketCineAndroid", type: .dynamic, targets: ["OpenPocketCineAndroidFacade"]),
     ],
+    dependencies: [
+        // Portable media math (OpenCineMedia). Sibling checkout until OpenCineCore is published.
+        .package(path: "../OpenCineCore")
+    ],
     targets: [
         // Brand-neutral presentation policy and native screens. Neither target
         // depends on the Osmo protocol core or a camera session implementation.
@@ -29,7 +34,10 @@ let package = Package(
             resources: [.process("Resources/Fonts"), .copy("Resources/Icons")]
         ),
         .testTarget(name: "MonitorPresentationTests", dependencies: ["MonitorPresentation"]),
-        .target(name: "OpenPocketViewCore"),
+        .target(
+            name: "OpenPocketViewCore",
+            dependencies: [.product(name: "OpenCineMedia", package: "OpenCineCore")]
+        ),
         .testTarget(
             name: "OpenPocketViewCoreTests",
             dependencies: ["OpenPocketViewCore"],

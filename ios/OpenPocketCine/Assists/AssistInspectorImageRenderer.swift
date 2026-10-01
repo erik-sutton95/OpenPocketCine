@@ -136,6 +136,7 @@ final class AssistInspectorImageRenderer: @unchecked Sendable {
         if effects.falseColor {
             PocketFalseColorMap.warm(
                 scale: effects.falseColorScale, mode: effects.colorMode,
+                rec709: effects.falseColorRec709, clipByte: effects.resolvedClipByte,
                 hasLUT: effects.lutDimension >= 2)
         }
         let product = LiveMonitorCompositor.applyProduct(

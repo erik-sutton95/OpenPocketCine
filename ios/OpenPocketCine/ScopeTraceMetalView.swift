@@ -161,6 +161,8 @@ struct ScopeTraceMetalView: UIViewRepresentable {
     var trail: ScopeSamples = .empty
     let mode: ScopeTraceMetal.Mode
     var transfer: MonitorTransfer = .rec709
+    /// The bundle's live-tap ceiling for `transfer` (``ScopeAssistBundle/clipByte``).
+    let clipByte: Int
     var revision: UInt64 = 0
     /// OpenZCine folds `waveformParadeBrightnessMultiplier` into vertex colour.
     var opacity: Double = 1
@@ -195,7 +197,7 @@ struct ScopeTraceMetalView: UIViewRepresentable {
         LiveHDRDisplay.configure(view)
         let explicit = layoutSize.width > 1 && layoutSize.height > 1
         renderer.update(
-            samples: samples, trail: trail, mode: mode, transfer: transfer,
+            samples: samples, trail: trail, mode: mode, transfer: transfer, clipByte: clipByte,
             revision: revision, opacity: opacity,
             bounds: explicit ? layoutSize : view.bounds.size,
             lockLayout: explicit, view: view)
@@ -212,6 +214,8 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
         var revision: UInt64 = 0
         var mode: ScopeTraceMetal.Mode = .waveform(.rgb)
         var transfer: MonitorTransfer = .rec709
+        /// The bundle's live-tap ceiling: the level table (and so every vertex) depends on it.
+        var clipByte = 255
         var bounds: CGSize = .zero
         var pointCount = 0
         var opacity: Double = 1
@@ -307,13 +311,13 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
 
     func update(
         samples: ScopeSamples, trail: ScopeSamples, mode: ScopeTraceMetal.Mode,
-        transfer: MonitorTransfer, revision: UInt64, opacity: Double = 1,
+        transfer: MonitorTransfer, clipByte: Int, revision: UInt64, opacity: Double = 1,
         bounds: CGSize, lockLayout: Bool = false, view: MTKView
     ) {
         layoutLocked = lockLayout
         let settled = bounds.width > 1 ? bounds : view.bounds.size
         let next = BuildInputs(
-            revision: revision, mode: mode, transfer: transfer, bounds: settled,
+            revision: revision, mode: mode, transfer: transfer, clipByte: clipByte, bounds: settled,
             pointCount: samples.points.count + trail.points.count, opacity: opacity)
         // Identical bundles (same revision) never rebuild.
         guard next != inputs else { return }
@@ -380,7 +384,7 @@ final class ScopeTraceRenderer: NSObject, MTKViewDelegate {
         let table: [Float]
         switch inputs.mode {
         case .waveform, .parade:
-            table = WaveformAxis.levelTable(for: inputs.transfer)
+            table = WaveformAxis.levelTable(for: inputs.transfer, clipByte: inputs.clipByte)
         }
         // Array == short-circuits on shared storage: the trail is usually the
         // exact array the previous build drew as current.
