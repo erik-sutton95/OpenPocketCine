@@ -14,6 +14,7 @@ against sibling checkouts of the shared packages (see Publish prerequisite).
 | MEDIA-01 (OpenCineMedia) | `opencine/media-01` | 19ce492d |
 | Kotlin scope ceiling per feed (STATE-01 remainder) | this branch | ae3538c4 |
 | VENDOR-01 (DJI Swift code in OpenCineDJI), stacked on this branch | `opencine/vendor-01-dji` | see `git log` |
+| MULTI-02 (Multiview on OpenCineMulticam), stacked on this branch | `opencine/multi-02` | see `git log` |
 
 Shared packages, pinned in `opencine-pins.txt` and checked out by
 `scripts/checkout-opencine.sh`:
@@ -27,6 +28,9 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
   camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints,
   DJI colour data and `DJICameraSessionAdapter`. `OpenPocketViewCore` re-exports it; the app
   and unit tests also name the product in `ios/project.yml` so Xcode links it.
+- OpenCineMulticam (MULTI-02 branch only): Multiview's group and tile record plans and the
+  settings-editor leases. iOS links the package; Android includes `OpenCineMulticam/Android` as
+  the named build `opencinemulticam` (one OpenCineCore build serves both).
 
 ## What changes for users
 
@@ -41,6 +45,12 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
   a link change the watch says "Camera changed. Try again." instead of acting on another camera.
 - Android scopes, zebra and false colour read the clip ceiling of the feed they show. Two feeds
   (Multiview tile, playback) no longer share one ceiling.
+- Multiview (MULTI-02): Record all and a tile's record send an explicit start or stop per
+  camera, after the plan the operator confirmed is checked again; each tile shows its own result
+  and nothing is stopped because another camera failed. A camera in Photo mode now disables Record all
+  and its own record action (strict policy) instead of receiving a record frame. The confirmation also closes when a camera's
+  link is replaced or its capabilities change. On Android it now closes on the same changes as on
+  iPhone (before: only the recording flag and availability).
 
 ## Physical device checklist
 
@@ -68,6 +78,26 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
 10. VENDOR-01 (no behavior change intended): BLE pairing, Wi-Fi join, live view, ISO, white
    balance, record, media browse, Multi View station join and gimbal moves on iPhone and
    Android behave as on this branch without VENDOR-01.
+11. MULTI-02 Multiview, 2 to 4 Pocket cameras on one shared network, iPhone and Android:
+    1. Record all start and stop, with and without record confirmation: every tile starts or
+       stops once, each tile note reads "Recording" / "Recording stopped", the group note
+       "Recording on N cameras" / "Recording stopped".
+    2. Tile menu record on one camera: only that camera changes.
+    3. Power off or walk one camera out of range, then Record all: the button is disabled (the
+       stale camera blocks it, as before); remove that tile and Record all works for the rest.
+    4. Open the record confirmation, then trigger a reconnect on one tile (Reconnect, or a Wi-Fi
+       drop and repair): the dialog closes; confirming again records on the new link.
+    5. With the confirmation open for 10 s or more (battery and timecode ticking), it stays
+       open and confirming works.
+    6. Partial result: block one camera's control (for example cover its antenna mid-command) so
+       its start goes unconfirmed: the others keep recording, its tile says "No confirmation ·
+       check camera", the group note says "N of M confirmed".
+    7. Settings panel: change ISO on camera A, switch to camera B and change ISO there: only B
+       changes; a reconnect on B while its panel is open makes the panel refuse until reopened.
+    8. Rotate the phone and change the selected stage camera repeatedly while all feeds play:
+       no feed restarts, no reconnect, no doubled pictures (as on this branch without MULTI-02).
+    9. Record acknowledgement to the tile's record state: confirmed within the 8 s window on
+       Pocket 3 and Pocket 4.
 
 ## Publish prerequisite
 
