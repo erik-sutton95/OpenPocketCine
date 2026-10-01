@@ -2940,6 +2940,7 @@ class PocketCameraSession(
             isoChoices = CaptureLists.isoIndices(status).filter { it != 0 || CaptureLists.offersIsoAuto(status) },
             isoIndex = reportedIsoIndex,
             whiteBalance = reportedWhiteBalance,
+            pendingWhiteBalance = whiteBalancePin?.let { ReportedWhiteBalance(it.wbMode, it.wbKelvin, it.wbTint) },
             recording = reportedRecording,
             batteryPercent = status.batteryPercent.takeIf { it in 0..100 },
             storageFreeMb = status.storageFreeMb.takeIf { status.storageTotalMb > 0 },

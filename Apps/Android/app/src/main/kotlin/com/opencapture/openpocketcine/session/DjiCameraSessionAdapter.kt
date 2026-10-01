@@ -20,7 +20,7 @@ import com.opencapture.opencine.core.ControlEpoch
 import com.opencapture.opencine.core.ISOValue
 import com.opencapture.opencine.core.IntegrationID
 import com.opencapture.opencine.core.MonotonicInstant
-import com.opencapture.opencine.core.Observation
+import com.opencapture.opencine.core.ObservedValue
 import com.opencapture.opencine.core.ObservationOrigin
 import com.opencapture.opencine.core.ObservationPrecision
 import com.opencapture.opencine.core.OperationID
@@ -88,6 +88,12 @@ data class PocketControlState(
     val isoChoices: List<Int> = emptyList(),
     val isoIndex: Int? = null,
     val whiteBalance: ReportedWhiteBalance? = null,
+    /**
+     * The white balance request in flight (iOS `pendingWhiteBalance`). DJI sends white balance
+     * and tint in one frame, so the next white balance or tint frame is composed on it. It never
+     * confirms anything.
+     */
+    val pendingWhiteBalance: ReportedWhiteBalance? = null,
     val recording: Boolean? = null,
     val batteryPercent: Int? = null,
     val storageFreeMb: Int? = null,
@@ -157,23 +163,28 @@ class DjiCameraSessionAdapter(
     fun request(intent: CameraCommandIntent): CommandReceipt =
         send(CameraCommand(intent, CommandPreconditions(current)))
 
-    /** White balance with the DJI tint; Core has no tint vocabulary yet. */
-    fun setWhiteBalance(value: WhiteBalanceValue, tint: Int): CommandReceipt =
-        send(CameraCommand(CameraCommandIntent.Set(SettingValue.WhiteBalance(value)), CommandPreconditions(current)), tint)
-
     fun setIsoIndex(index: Int): CommandReceipt =
         request(CameraCommandIntent.Set(SettingValue.Iso(iso(index))))
 
-    fun setWhiteBalanceAuto(tint: Int? = null): CommandReceipt =
-        if (tint == null) {
-            request(CameraCommandIntent.Set(SettingValue.WhiteBalance(WhiteBalanceValue.Auto)))
-        } else {
-            setWhiteBalance(WhiteBalanceValue.Auto, tint)
-        }
+    /** `null` keeps the current (or pending) tint, as the Auto row always has. */
+    fun setWhiteBalanceAuto(tint: Int? = null): CommandReceipt = setWhiteBalance(WhiteBalanceValue.Auto, tint)
 
     /** Kelvin snaps to the 100 K steps the camera stores (`K/100` on the wire). */
     fun setWhiteBalanceCustom(kelvin: Int, tint: Int): CommandReceipt =
         setWhiteBalance(WhiteBalanceValue.Kelvin((kelvin.coerceIn(2_000, 10_000) + 50) / 100 * 100), tint)
+
+    /**
+     * One Core write per setting that changes: white balance (keeping the pending tint), then tint
+     * (on the pending white balance). Returns the last receipt.
+     */
+    private fun setWhiteBalance(value: WhiteBalanceValue, tint: Int?): CommandReceipt {
+        val state = port.controlState()
+        val pending = state.pendingWhiteBalance ?: state.whiteBalance
+        val t = tint?.coerceIn(-100, 100)
+        if (t == null || t == pending?.tint) return request(CameraCommandIntent.Set(SettingValue.WhiteBalance(value)))
+        if (pending?.let { whiteBalance(it) } != value) request(CameraCommandIntent.Set(SettingValue.WhiteBalance(value)))
+        return request(CameraCommandIntent.Set(SettingValue.WhiteBalanceTint(t.toDouble())))
+    }
 
     /**
      * Rec lamp: Photo fires a still; video resolves to an explicit start or stop from a fresh
@@ -188,7 +199,7 @@ class DjiCameraSessionAdapter(
         return request(if (recording) CameraCommandIntent.StopRecording else CameraCommandIntent.StartRecording)
     }
 
-    fun receipt(operation: OperationID): CommandReceipt? = receipts[operation]
+    override fun receipt(operation: OperationID): CommandReceipt? = receipts[operation]
 
     // ---- session hooks ----
 
@@ -223,8 +234,10 @@ class DjiCameraSessionAdapter(
         return waiters.getOrPut(operation) { CompletableDeferred() }.await()
     }
 
+    override suspend fun close(reason: SessionCloseReason): Unit = closeNow(reason)
+
     /** Ends this seam only. Never sends a camera command and never stops a recording. */
-    override suspend fun close(reason: SessionCloseReason) {
+    override fun closeNow(reason: SessionCloseReason) {
         if (closed) return
         for (operation in open.keys.toList()) abandon(operation)
         closed = true
@@ -239,7 +252,7 @@ class DjiCameraSessionAdapter(
 
     // ---- commands ----
 
-    fun send(command: CameraCommand, tint: Int? = null): CommandReceipt {
+    fun send(command: CameraCommand): CommandReceipt {
         val operation = command.operation
         receipts[operation]?.let { return it }
         val snapshot = current
@@ -256,7 +269,7 @@ class DjiCameraSessionAdapter(
         }
         advance(operation, CommandStage.Admitted)
         if (alreadyReported(command.intent, snapshot)) return advance(operation, CommandStage.Confirmed)
-        val plan = wirePlan(command.intent, tint)
+        val plan = wirePlan(command.intent)
             ?: return advance(operation, CommandStage.Rejected(CommandRejection.Unsupported))
         open[operation] = Expectation(clock() + wireTimeout, plan.shows)
         expire(wireTimeout)
@@ -269,32 +282,27 @@ class DjiCameraSessionAdapter(
         val fire: ((ControlWireEvent) -> Unit) -> Unit,
     )
 
-    /** Common intent to the DUML call that carries it, plus what the camera must report after. */
-    private fun wirePlan(intent: CameraCommandIntent, tint: Int?): WirePlan? =
+    /**
+     * Common intent to the DUML call that carries it, plus what the camera must report after. DJI
+     * sends white balance and tint in one frame, so each write fills the other half from the
+     * pending (else reported) white balance.
+     */
+    private fun wirePlan(intent: CameraCommandIntent): WirePlan? =
         when (intent) {
             is CameraCommandIntent.Set ->
                 when (val value = intent.value) {
                     is SettingValue.Iso -> isoIndex(value.value)?.let { index ->
                         WirePlan({ it.isoIndex == index }) { onStage -> port.setIsoIndex(index, onStage) }
                     }
-                    is SettingValue.WhiteBalance -> {
-                        val t = (tint ?: port.controlState().whiteBalance?.tint ?: 0).coerceIn(-100, 100)
-                        when (val wb = value.value) {
-                            WhiteBalanceValue.Auto -> {
-                                val target = ReportedWhiteBalance(CameraCommands.WB_AUTO, 0, t)
-                                WirePlan({ it.whiteBalance == target }) { onStage ->
-                                    port.setWhiteBalanceAuto(t, onStage)
-                                }
-                            }
-                            is WhiteBalanceValue.Kelvin -> {
-                                val k = wb.kelvin.coerceIn(2_000, 10_000)
-                                val target = ReportedWhiteBalance(CameraCommands.WB_CUSTOM, k, t)
-                                WirePlan({ it.whiteBalance == target }) { onStage ->
-                                    port.setWhiteBalance(k, t, onStage)
-                                }
-                            }
-                            is WhiteBalanceValue.Preset -> null
+                    is SettingValue.WhiteBalanceTint -> {
+                        val state = port.controlState()
+                        (state.pendingWhiteBalance ?: state.whiteBalance)?.let {
+                            whiteBalancePlan(whiteBalance(it), value.tint.toInt())
                         }
+                    }
+                    is SettingValue.WhiteBalance -> {
+                        val state = port.controlState()
+                        whiteBalancePlan(value.value, (state.pendingWhiteBalance ?: state.whiteBalance)?.tint ?: 0)
                     }
                     else -> null
                 }
@@ -304,6 +312,26 @@ class DjiCameraSessionAdapter(
             }
             is CameraCommandIntent.FocusPoint -> null
         }
+
+    private fun whiteBalancePlan(value: WhiteBalanceValue, tint: Int): WirePlan? {
+        val t = tint.coerceIn(-100, 100)
+        return when (val wb = value) {
+            WhiteBalanceValue.Auto -> {
+                val target = ReportedWhiteBalance(CameraCommands.WB_AUTO, 0, t)
+                WirePlan({ it.whiteBalance == target }) { onStage ->
+                    port.setWhiteBalanceAuto(t, onStage)
+                }
+            }
+            is WhiteBalanceValue.Kelvin -> {
+                val k = wb.kelvin.coerceIn(2_000, 10_000)
+                val target = ReportedWhiteBalance(CameraCommands.WB_CUSTOM, k, t)
+                WirePlan({ it.whiteBalance == target }) { onStage ->
+                    port.setWhiteBalance(k, t, onStage)
+                }
+            }
+            is WhiteBalanceValue.Preset -> null
+        }
+    }
 
     private fun handle(event: ControlWireEvent, operation: OperationID) {
         // A finished receipt is final: a late ACK never rewrites an outcome.
@@ -410,20 +438,20 @@ class DjiCameraSessionAdapter(
                 mode = mode(state.shootingMode),
                 settings = settings(state),
                 recording = state.recording?.let {
-                    Observation(if (it) RecordingState.RECORDING else RecordingState.IDLE, ObservationOrigin.CAMERA_REPORTED, null)
-                } ?: Observation.unknown,
+                    ObservedValue(if (it) RecordingState.RECORDING else RecordingState.IDLE, ObservationOrigin.CAMERA_REPORTED, null)
+                } ?: ObservedValue.unknown,
                 power = state.batteryPercent?.let {
                     PowerStatus(
-                        battery = Observation(
+                        battery = ObservedValue(
                             it / 100.0, ObservationOrigin.CAMERA_REPORTED, null,
                             precision = ObservationPrecision.Quantized(0.01),
                         ),
                     )
                 } ?: PowerStatus.unknown,
                 storage = state.storageFreeMb?.let {
-                    val free = Observation(it.toLong() * 1_048_576L, ObservationOrigin.CAMERA_REPORTED, null)
-                    Observation(listOf(StorageVolume("active", freeBytes = free)), ObservationOrigin.CAMERA_REPORTED, null)
-                } ?: Observation.unknown,
+                    val free = ObservedValue(it.toLong() * 1_048_576L, ObservationOrigin.CAMERA_REPORTED, null)
+                    ObservedValue(listOf(StorageVolume("active", freeBytes = free)), ObservationOrigin.CAMERA_REPORTED, null)
+                } ?: ObservedValue.unknown,
             )
         if (next == last) return
         _snapshots.value = next.copy(revision = last.revision.next())
@@ -465,19 +493,31 @@ class DjiCameraSessionAdapter(
                     step = 100.0,
                 ),
             ),
+            // Tint rides on the white balance frame, so it needs a known white balance.
+            SettingDescriptor(
+                SettingKey.WHITE_BALANCE_TINT,
+                domain = SettingDomain(range = -100.0..100.0, step = 1.0),
+                availability = if (state.whiteBalance == null) {
+                    Availability.Unavailable(UnavailableReason.OtherSetting(SettingKey.WHITE_BALANCE))
+                } else {
+                    Availability.Available
+                },
+            ),
             SettingDescriptor(SettingKey.RECORDING, availability = recording),
         )
     }
 
-    private fun settings(state: PocketControlState): Map<SettingKey, Observation<SettingValue>> =
+    private fun settings(state: PocketControlState): Map<SettingKey, ObservedValue<SettingValue>> =
         buildMap {
             state.isoIndex?.let {
-                put(SettingKey.ISO, Observation(SettingValue.Iso(iso(it)), ObservationOrigin.CAMERA_REPORTED, null))
+                put(SettingKey.ISO, ObservedValue(SettingValue.Iso(iso(it)), ObservationOrigin.CAMERA_REPORTED, null))
             }
             state.whiteBalance?.let {
-                val value =
-                    if (it.mode == CameraCommands.WB_CUSTOM) WhiteBalanceValue.Kelvin(it.kelvin) else WhiteBalanceValue.Auto
-                put(SettingKey.WHITE_BALANCE, Observation(SettingValue.WhiteBalance(value), ObservationOrigin.CAMERA_REPORTED, null))
+                put(SettingKey.WHITE_BALANCE, ObservedValue(SettingValue.WhiteBalance(whiteBalance(it)), ObservationOrigin.CAMERA_REPORTED, null))
+                put(
+                    SettingKey.WHITE_BALANCE_TINT,
+                    ObservedValue(SettingValue.WhiteBalanceTint(it.tint.toDouble()), ObservationOrigin.CAMERA_REPORTED, null),
+                )
             }
         }
 
@@ -488,6 +528,9 @@ class DjiCameraSessionAdapter(
 
         fun systemNow(): MonotonicInstant = MonotonicInstant((System.nanoTime() - reference).nanoseconds)
 
+        fun whiteBalance(wb: ReportedWhiteBalance): WhiteBalanceValue =
+            if (wb.mode == CameraCommands.WB_CUSTOM) WhiteBalanceValue.Kelvin(wb.kelvin) else WhiteBalanceValue.Auto
+
         fun iso(index: Int): ISOValue = CameraCommands.isoValue(index)?.let { ISOValue.Manual(it) } ?: ISOValue.Auto
 
         fun isoIndex(value: ISOValue): Int? =
@@ -497,10 +540,10 @@ class DjiCameraSessionAdapter(
                 is ISOValue.AutoLimited -> null
             }
 
-        private fun mode(raw: Int): Observation<CaptureMode> {
-            if (raw < 0) return Observation.unknown
+        private fun mode(raw: Int): ObservedValue<CaptureMode> {
+            if (raw < 0) return ObservedValue.unknown
             val role = if (CameraCommands.isPhotoMode(raw)) CaptureMode.Role.PHOTO else CaptureMode.Role.VIDEO
-            return Observation(
+            return ObservedValue(
                 CaptureMode(role, "${INTEGRATION.rawValue}.mode.$raw", "Mode $raw"),
                 ObservationOrigin.CAMERA_REPORTED, null,
             )

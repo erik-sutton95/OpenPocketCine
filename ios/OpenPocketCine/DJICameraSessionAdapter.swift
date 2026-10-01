@@ -81,15 +81,6 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
         send(CameraCommand(intent, preconditions: CommandPreconditions(current)))
     }
 
-    /// White balance with the DJI tint. Core has no tint vocabulary yet; `request` keeps the
-    /// current (or pending) tint.
-    @discardableResult
-    func setWhiteBalance(_ value: WhiteBalanceValue, tint: Int) -> CommandReceipt {
-        send(
-            CameraCommand(.set(.whiteBalance(value)), preconditions: CommandPreconditions(current)),
-            tint: tint)
-    }
-
     /// Record lamp, gamepad, Watch and watcher toggles. Photo fires a still; video resolves to
     /// an explicit start or stop from a fresh snapshot, never a blind toggle (plan 5.4).
     @discardableResult
@@ -139,7 +130,6 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
 
     func submit(_ command: CameraCommand) -> CommandReceipt { send(command) }
 
-    /// The receipt at its current stage, without waiting.
     func receipt(of operation: OperationID) -> CommandReceipt? { receipts[operation] }
 
     func outcome(of operation: OperationID) async -> CommandReceipt? {
@@ -173,7 +163,7 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
     // MARK: Commands
 
     @discardableResult
-    func send(_ command: CameraCommand, tint: Int? = nil) -> CommandReceipt {
+    func send(_ command: CameraCommand) -> CommandReceipt {
         let operation = command.operation
         if let known = receipts[operation] { return known }
         let snapshot = current
@@ -191,7 +181,7 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
         if Self.alreadyReported(command.intent, snapshot) {
             return advance(operation, .confirmed)
         }
-        guard let plan = wirePlan(command.intent, tint: tint) else {
+        guard let plan = wirePlan(command.intent) else {
             return advance(operation, .rejected(.unsupported))
         }
         open[operation] = Expectation(deadline: Self.now() + wireTimeout, shows: plan.shows)
@@ -206,39 +196,49 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
     }
 
     /// Common intent to the DUML call that carries it, plus what the camera's own status must
-    /// show afterwards. Admission already checked the value against the declared domain.
-    private func wirePlan(_ intent: CameraCommandIntent, tint: Int?) -> WirePlan? {
+    /// show afterwards. Admission already checked the value against the declared domain. DJI
+    /// sends white balance and tint in one frame, so each write fills the other half from the
+    /// current (or pending) white balance.
+    private func wirePlan(_ intent: CameraCommandIntent) -> WirePlan? {
         let session = session
+        let display = session.whiteBalanceDisplayStatus
         switch intent {
         case .set(.iso(let value)):
             guard let index = Self.isoIndex(value) else { return nil }
             return WirePlan(
                 shows: { $0.isoIndex == index },
                 fire: { session.setISO(index, onStage: $0) })
+        case .set(.whiteBalanceTint(let tint)):
+            guard let wb = display.whiteBalance else { return nil }
+            return whiteBalancePlan(Self.whiteBalance(wb), tint: Int(tint))
         case .set(.whiteBalance(let value)):
-            let display = session.whiteBalanceDisplayStatus
-            let t = min(max(tint ?? display.whiteBalanceTint ?? 0, -100), 100)
-            switch value {
-            case .auto:
-                let wb = WhiteBalance.auto(tint: t)
-                return WirePlan(
-                    shows: { $0.whiteBalance == wb },
-                    fire: { session.setWhiteBalanceAuto(tint: t, onStage: $0) })
-            case .kelvin(let kelvin):
-                let wb = WhiteBalance.custom(kelvin: min(max(kelvin, 2_000), 10_000), tint: t)
-                return WirePlan(
-                    shows: { $0.whiteBalance == wb },
-                    fire: { session.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: t, onStage: $0) }
-                )
-            case .preset:
-                return nil
-            }
+            return whiteBalancePlan(value, tint: display.whiteBalanceTint ?? 0)
         case .startRecording, .stopRecording:
             let start = intent == .startRecording
             return WirePlan(
                 shows: { $0.recordingReported && $0.isRecording == start },
                 fire: { session.setRecording(start, onStage: $0) })
         case .set, .focusPoint:
+            return nil
+        }
+    }
+
+    private func whiteBalancePlan(_ value: WhiteBalanceValue, tint: Int) -> WirePlan? {
+        let session = session
+        let t = min(max(tint, -100), 100)
+        switch value {
+        case .auto:
+            let wb = WhiteBalance.auto(tint: t)
+            return WirePlan(
+                shows: { $0.whiteBalance == wb },
+                fire: { session.setWhiteBalanceAuto(tint: t, onStage: $0) })
+        case .kelvin(let kelvin):
+            let wb = WhiteBalance.custom(kelvin: min(max(kelvin, 2_000), 10_000), tint: t)
+            return WirePlan(
+                shows: { $0.whiteBalance == wb },
+                fire: { session.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: t, onStage: $0) }
+            )
+        case .preset:
             return nil
         }
     }
@@ -373,7 +373,7 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
         next.settings = Self.settings(status)
         next.recording =
             status.recordingReported
-            ? Observation(status.isRecording ? .recording : .idle, origin: .cameraReported, at: nil)
+            ? ObservedValue(status.isRecording ? .recording : .idle, origin: .cameraReported, at: nil)
             : .unknown
         next.power = Self.power(status)
         next.storage = Self.storage(status)
@@ -434,6 +434,11 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
                 .whiteBalance,
                 domain: SettingDomain(
                     choices: [.whiteBalance(.auto)], range: 2_000...10_000, step: 100)),
+            // Tint rides on the white balance frame, so it needs a known white balance.
+            SettingDescriptor(
+                .whiteBalanceTint, domain: SettingDomain(range: -100...100, step: 1),
+                availability: status.whiteBalance == nil
+                    ? .unavailable(.otherSetting(.whiteBalance)) : .available),
             SettingDescriptor(.recording, availability: recording),
         ]
     }
@@ -454,25 +459,27 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
         wb.mode == .auto ? .auto : .kelvin(wb.kelvin)
     }
 
-    private static func mode(_ status: CameraStatus) -> Observation<CaptureMode> {
+    private static func mode(_ status: CameraStatus) -> ObservedValue<CaptureMode> {
         guard status.shootingMode >= 0 else { return .unknown }
         let raw = status.shootingMode
         let known = ShootingMode.fromStatus(raw)
         let mode = CaptureMode(
             role: known.map { $0.isPhoto ? .photo : .video } ?? .other,
             id: "\(integration.rawValue).mode.\(raw)", title: known?.label ?? "Mode \(raw)")
-        return Observation(mode, origin: .cameraReported, at: nil)
+        return ObservedValue(mode, origin: .cameraReported, at: nil)
     }
 
-    private static func settings(_ status: CameraStatus) -> [SettingKey: Observation<SettingValue>]
+    private static func settings(_ status: CameraStatus) -> [SettingKey: ObservedValue<SettingValue>]
     {
-        var settings: [SettingKey: Observation<SettingValue>] = [:]
+        var settings: [SettingKey: ObservedValue<SettingValue>] = [:]
         if let index = status.isoIndex {
-            settings[.iso] = Observation(.iso(iso(index)), origin: .cameraReported, at: nil)
+            settings[.iso] = ObservedValue(.iso(iso(index)), origin: .cameraReported, at: nil)
         }
         if let wb = status.whiteBalance {
-            settings[.whiteBalance] = Observation(
+            settings[.whiteBalance] = ObservedValue(
                 .whiteBalance(whiteBalance(wb)), origin: .cameraReported, at: nil)
+            settings[.whiteBalanceTint] = ObservedValue(
+                .whiteBalanceTint(Double(wb.tint)), origin: .cameraReported, at: nil)
         }
         return settings
     }
@@ -480,7 +487,7 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
     private static func power(_ status: CameraStatus) -> PowerStatus {
         var power = PowerStatus.unknown
         if (0...100).contains(status.batteryPercent) {
-            power.battery = Observation(
+            power.battery = ObservedValue(
                 Double(status.batteryPercent) / 100, origin: .cameraReported, at: nil,
                 precision: .quantized(step: 0.01))
         }
@@ -489,9 +496,9 @@ final class DJICameraSessionAdapter: OpenCineCore.CameraSession {
 
     private static func storage(_ status: CameraStatus) -> StorageStatus {
         guard status.storageTotalMb > 0 else { return .unknown }
-        let free = Observation(
+        let free = ObservedValue(
             UInt64(status.storageFreeMb) * 1_048_576, origin: .cameraReported, at: nil)
-        return Observation(
+        return ObservedValue(
             [StorageVolume(id: "active", freeBytes: free)], origin: .cameraReported, at: nil)
     }
 }
@@ -507,8 +514,7 @@ extension DJICameraSessionAdapter {
     /// `nil` keeps the current (or pending) tint, as the Auto row always has.
     @discardableResult
     func setWhiteBalanceAuto(tint: Int? = nil) -> CommandReceipt {
-        guard let tint else { return request(.set(.whiteBalance(.auto))) }
-        return setWhiteBalance(.auto, tint: tint)
+        setWhiteBalance(.auto, tint: tint)
     }
 
     /// Kelvin snaps to the 100 K drum the camera stores (`K/100` on the wire).
@@ -516,6 +522,17 @@ extension DJICameraSessionAdapter {
     func setWhiteBalanceCustom(kelvin: Int, tint: Int) -> CommandReceipt {
         setWhiteBalance(
             .kelvin(WhiteBalance.snappedKelvin(min(max(kelvin, 2_000), 10_000))), tint: tint)
+    }
+
+    /// One Core write per setting that changes: white balance (keeping the pending tint), then
+    /// tint (on the pending white balance). Returns the last receipt.
+    private func setWhiteBalance(_ value: WhiteBalanceValue, tint: Int?) -> CommandReceipt {
+        let pending = session.whiteBalanceDisplayStatus.whiteBalance
+        guard let tint = tint.map({ min(max($0, -100), 100) }), tint != pending?.tint else {
+            return request(.set(.whiteBalance(value)))
+        }
+        if pending.map(Self.whiteBalance) != value { request(.set(.whiteBalance(value))) }
+        return request(.set(.whiteBalanceTint(Double(tint))))
     }
 
     /// A confirmed start or stop: the target the operator approved, not a recomputed toggle.

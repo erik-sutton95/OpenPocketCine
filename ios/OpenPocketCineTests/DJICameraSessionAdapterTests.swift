@@ -17,7 +17,7 @@ final class DJICameraSessionAdapterTests: XCTestCase {
         let probe = linked()
         defer { probe.disconnect() }
         let keys = probe.control.current.capabilities.descriptors.keys
-        XCTAssertEqual(Set(keys), [.iso, .whiteBalance, .recording])
+        XCTAssertEqual(Set(keys), [.iso, .whiteBalance, .whiteBalanceTint, .recording])
         for key in keys {
             // A fresh session per key: a record send makes recording busy for the rest.
             let session = linked()
@@ -73,6 +73,25 @@ final class DJICameraSessionAdapterTests: XCTestCase {
         XCTAssertEqual(
             session.control.current.value(of: .whiteBalance).value,
             .whiteBalance(.kelvin(5_600)))
+    }
+
+    func testTintIsItsOwnSettingAndKeepsThePendingWhiteBalance() {
+        let session = linked()
+        defer { session.disconnect() }
+        session.applyIncomingStatus(Self.whiteBalancePush(.custom(kelvin: 5_600, tint: 0)))
+        XCTAssertEqual(
+            session.control.current.value(of: .whiteBalanceTint).value, .whiteBalanceTint(0))
+
+        // Only the tint changed: one tint write, carried on the current Kelvin.
+        let tint = session.control.setWhiteBalanceCustom(kelvin: 5_600, tint: 12)
+        XCTAssertEqual(tint.intent, .set(.whiteBalanceTint(12)))
+        XCTAssertEqual(session.pendingWhiteBalance, .custom(kelvin: 5_600, tint: 12))
+
+        // A Kelvin drum step keeps the pending tint (it coalesces behind the tint frame).
+        session.control.request(.set(.whiteBalance(.kelvin(4_300))))
+        XCTAssertEqual(session.pendingWhiteBalance, .custom(kelvin: 4_300, tint: 12))
+        XCTAssertEqual(
+            session.control.request(.set(.whiteBalanceTint(150))).stage, .rejected(.outOfDomain))
     }
 
     func testISOIsConfirmedOnlyByItsOwnReadback() async throws {
@@ -254,6 +273,8 @@ final class DJICameraSessionAdapterTests: XCTestCase {
             }
         case .whiteBalance:
             return .set(.whiteBalance(.kelvin(4_300)))
+        case .whiteBalanceTint:
+            return .set(.whiteBalanceTint(12))
         default:
             // A newly declared key needs a test value here, or this test cannot vouch for it.
             return nil

@@ -315,7 +315,11 @@ record start/stop go through `OpenCineCore.CameraSession` adapters, `session.con
 watcher and Watch resolve to explicit start or stop from the reported state; a start while
 recording sends nothing, and unknown record state is refused. On iOS `status` is camera-reported
 for these controls and a pending WB request is `pendingWhiteBalance`; Android keeps its
-optimistic HUD values and the seam reads separate camera-reported values. Hardware-unqualified.
+optimistic HUD values and the seam reads separate camera-reported values. White balance tint is
+its own Core setting (`whiteBalanceTint`, -100...100); DJI sends white balance and tint in one
+frame, so each write is composed on the pending (else reported) white balance, and a sheet that
+changes both submits two operations. Built against OpenCineCore 28a0196 (CORE-01b).
+Hardware-unqualified.
 
 ### Phase 5 — Thin brand apps
 

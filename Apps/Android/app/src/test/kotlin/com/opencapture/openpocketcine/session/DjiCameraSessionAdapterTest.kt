@@ -9,7 +9,7 @@ import com.opencapture.opencine.core.CommandStage
 import com.opencapture.opencine.core.ConnectionState
 import com.opencapture.opencine.core.ISOValue
 import com.opencapture.opencine.core.MonotonicInstant
-import com.opencapture.opencine.core.Observation
+import com.opencapture.opencine.core.ObservedValue
 import com.opencapture.opencine.core.PowerStatus
 import com.opencapture.opencine.core.Rational
 import com.opencapture.opencine.core.RecordingState
@@ -38,7 +38,10 @@ class DjiCameraSessionAdapterTest {
     @Test
     fun everyDeclaredCapabilityReachesTheWire() = runTest {
         val keys = adapter(FakePort()).current.capabilities.descriptors.keys
-        assertEquals(setOf(SettingKey.ISO, SettingKey.WHITE_BALANCE, SettingKey.RECORDING), keys)
+        assertEquals(
+            setOf(SettingKey.ISO, SettingKey.WHITE_BALANCE, SettingKey.WHITE_BALANCE_TINT, SettingKey.RECORDING),
+            keys,
+        )
         for (key in keys) {
             val port = FakePort()
             val seam = adapter(port)
@@ -78,6 +81,28 @@ class DjiCameraSessionAdapterTest {
         assertEquals(
             SettingValue.WhiteBalance(WhiteBalanceValue.Kelvin(5_600)),
             seam.current.value(SettingKey.WHITE_BALANCE).value,
+        )
+    }
+
+    @Test
+    fun tintIsItsOwnSettingAndKeepsThePendingWhiteBalance() = runTest {
+        val port = FakePort()
+        port.state = port.state.copy(whiteBalance = ReportedWhiteBalance(CameraCommands.WB_CUSTOM, 5_600, 0))
+        val seam = adapter(port)
+        assertEquals(SettingValue.WhiteBalanceTint(0.0), seam.current.value(SettingKey.WHITE_BALANCE_TINT).value)
+
+        // Only the tint changed: one tint write, carried on the current Kelvin.
+        val tint = seam.setWhiteBalanceCustom(5_600, 12)
+        assertEquals(CameraCommandIntent.Set(SettingValue.WhiteBalanceTint(12.0)), tint.intent)
+        assertEquals(listOf("wb 5600 12"), port.fired)
+
+        // A Kelvin step keeps the pending tint, and tint is never confirmed by Kelvin alone.
+        port.state = port.state.copy(pendingWhiteBalance = ReportedWhiteBalance(CameraCommands.WB_CUSTOM, 5_600, 12))
+        seam.request(CameraCommandIntent.Set(SettingValue.WhiteBalance(WhiteBalanceValue.Kelvin(4_300))))
+        assertEquals("wb 4300 12", port.fired.last())
+        assertEquals(
+            CommandStage.Rejected(CommandRejection.OutOfDomain),
+            seam.request(CameraCommandIntent.Set(SettingValue.WhiteBalanceTint(150.0))).stage,
         )
     }
 
@@ -201,9 +226,9 @@ class DjiCameraSessionAdapterTest {
         port.state = PocketControlState()
         val snapshot = adapter(port).current
         assertEquals(ConnectionState.Discovered, snapshot.connection)
-        assertEquals(Observation.unknown, snapshot.recording)
+        assertEquals(ObservedValue.unknown, snapshot.recording)
         assertEquals(PowerStatus.unknown, snapshot.power)
-        assertEquals(Observation.unknown, snapshot.storage)
+        assertEquals(ObservedValue.unknown, snapshot.storage)
         assertTrue(snapshot.settings.isEmpty())
         assertEquals(
             CommandStage.Rejected(CommandRejection.NotConnected),
@@ -238,6 +263,7 @@ class DjiCameraSessionAdapterTest {
                 }
             }
             SettingKey.WHITE_BALANCE -> CameraCommandIntent.Set(SettingValue.WhiteBalance(WhiteBalanceValue.Kelvin(4_300)))
+            SettingKey.WHITE_BALANCE_TINT -> CameraCommandIntent.Set(SettingValue.WhiteBalanceTint(12.0))
             // A newly declared key needs a test value here, or this test cannot vouch for it.
             else -> null
         }
