@@ -13,6 +13,7 @@ against sibling checkouts of the shared packages (see Publish prerequisite).
 | UI-01 + UI-02 (shared UI), pinned checkout script, build identity fix | `opencine/ui` | 9bed87fa |
 | MEDIA-01 (OpenCineMedia) | `opencine/media-01` | 19ce492d |
 | Kotlin scope ceiling per feed (STATE-01 remainder) | this branch | ae3538c4 |
+| VENDOR-01 (DJI Swift code in OpenCineDJI), stacked on this branch | `opencine/vendor-01-dji` | see `git log` |
 
 Shared packages, pinned in `opencine-pins.txt` and checked out by
 `scripts/checkout-opencine.sh`:
@@ -22,6 +23,10 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
 - OpenCineCore `28a0196b7763795a553e3f1a55dc354e05a3c5c3` (OpenCineCore, OpenCineMedia,
   Android `core`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
   (`../../OpenCineCore`) name the same directory, so Xcode sees one package.
+- OpenCineDJI `225215ed812bf7f0436e2b9dcb22408f3d97d7da` (VENDOR-01 branch only): DUML, datalink,
+  camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints,
+  DJI colour data and `DJICameraSessionAdapter`. `OpenPocketViewCore` re-exports it; the app
+  and unit tests also name the product in `ios/project.yml` so Xcode links it.
 
 ## What changes for users
 
@@ -60,6 +65,9 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
    D-Log M and HLG match `main` on the same scene.
 9. Android: two Multiview tiles at different ISO, and playback scopes while live, keep their
    own WAVE 100 and false-colour clip.
+10. VENDOR-01 (no behavior change intended): BLE pairing, Wi-Fi join, live view, ISO, white
+   balance, record, media browse, Multi View station join and gimbal moves on iPhone and
+   Android behave as on this branch without VENDOR-01.
 
 ## Publish prerequisite
 
