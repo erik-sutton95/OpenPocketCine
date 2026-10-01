@@ -239,6 +239,10 @@ val stageSwiftCore =
             fileTree(repositoryRoot.resolve("../OpenCineCore")) {
                 include("Package.swift", "Sources/OpenCineMedia/**", "Sources/OpenCineCore/**")
             },
+            // OpenCineDJI (DJI protocol, wire and session code), re-exported by OpenPocketViewCore.
+            fileTree(repositoryRoot.resolve("../OpenCineDJI")) {
+                include("Package.swift", "Sources/**")
+            },
             stageSwiftCoreScript,
         )
         inputs.property("swiftExecutable", providers.environmentVariable("SWIFT_EXECUTABLE").orElse("auto"))
