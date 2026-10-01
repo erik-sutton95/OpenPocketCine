@@ -441,6 +441,22 @@ extension DJICameraSessionAdapterTests {
         XCTAssertTrue(target.isSameSession(as: session.control.target), "Relay binding survives")
     }
 
+    func testStreamOnlyReconfigurationKeepsControlValid() {
+        let session = linked()
+        defer { session.disconnect() }
+        session.applyIncomingStatus(Self.recordPush(recording: false))
+        let target = session.control.target
+        let iso = session.control.setISO(.iso800)
+        XCTAssertEqual(iso.stage, .sent)
+        let generation = session.decoder.sourceFrameGeneration
+        session.decoder.reset()
+        XCTAssertNotEqual(session.decoder.sourceFrameGeneration, generation, "Stream reconfigured")
+
+        XCTAssertEqual(session.control.target, target, "A picture change is not a control change")
+        XCTAssertEqual(session.control.receipt(of: iso.operation)?.stage, .sent)
+        XCTAssertEqual(session.control.shutter(aimedAt: target)?.stage, .sent)
+    }
+
     func testWatchPressAfterASessionSwapIsRefusedWithAReason() {
         let model = AppModel(session: linked())
         let shown = model.session
