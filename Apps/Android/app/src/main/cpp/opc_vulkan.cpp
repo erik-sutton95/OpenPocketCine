@@ -1784,9 +1784,17 @@ static bool renderFrame(OpcVk* r) {
     vkCmdBindPipeline(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyPipe);
     vkCmdBindDescriptorSets(r->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->copyLayout, 0, 1, &r->copySet, 0, nullptr);
     vkCmdPushConstants(r->cmd, r->copyLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, copyPc);
-    if (ahbW != (float)kSourceW || ahbH != (float)kSourceH) {
+    // A vertical raster (camera held upright) is squeezed into the landscape bake
+    // and unsqueezed at present. Cover here kept only its middle 16:9 strip, which
+    // the portrait present then cropped again: a heavily zoomed picture.
+    // ponytail: bake stays 1280x720, so upright pictures get 720 vertical samples;
+    // allocate a 720x1280 bake chain if that softness shows.
+    const bool verticalRaster = ahbH > ahbW;
+    if (!verticalRaster && (ahbW != (float)kSourceW || ahbH != (float)kSourceH)) {
         setCoverViewport(r->cmd, ahbW, ahbH, (float)kSourceW, (float)kSourceH);
     }
+    const float presentW = verticalRaster ? ahbW : (float)kSourceW;
+    const float presentH = verticalRaster ? ahbH : (float)kSourceH;
     vkCmdDraw(r->cmd, 3, 1, 0, 0);
     vkCmdEndRenderPass(r->cmd);
     releaseAhb(r);
@@ -1814,7 +1822,7 @@ static bool renderFrame(OpcVk* r) {
                          &bakeBarrier, 0, nullptr, 0, nullptr);
 
     if (!grade && !tap) {
-        blitBakeToSwap(r->blitSets[5], (float)kSourceW, (float)kSourceH);
+        blitBakeToSwap(r->blitSets[5], presentW, presentH);
         recordCpuTaps(r);
         const bool ok = submitAndPresentFrame(r, idx, r->needFace != 0);
         if (ok && firstPicture) LOGI("first picture identity blit (LUT bake follows)");
@@ -1981,7 +1989,7 @@ static bool renderFrame(OpcVk* r) {
     vkCmdPushConstants(r->cmd, r->blitLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, blitPc);
     if (r->stretchFeedToRect) setCoverViewportAt(r->cmd, destW, destH, destX, destY, destW, destH,
                                               r->swapExtent.width, r->swapExtent.height);
-    else setCoverViewportAt(r->cmd, (float)kSourceW, (float)kSourceH, destX, destY, destW, destH,
+    else setCoverViewportAt(r->cmd, presentW, presentH, destX, destY, destW, destH,
                             r->swapExtent.width, r->swapExtent.height);
     vkCmdDraw(r->cmd, 3, 1, 0, 0);
 
