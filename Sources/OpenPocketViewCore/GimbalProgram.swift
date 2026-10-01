@@ -999,3 +999,18 @@ public enum GimbalWaypointOverlay {
         }
     }
 }
+
+// The waypoint overload needs GimbalWaypoint (motion math), so it lives with it and not
+// in the DJI command builders.
+extension Commands {
+    /// Validate physical display tilt before encoding the distinct native pitch.
+    public static func gimbalTimedTarget(
+        waypoint: GimbalWaypoint, duration: TimeInterval, seq: UInt16 = 0
+    ) -> Duml.Frame? {
+        guard waypoint.pitchDeg.isFinite,
+            (HeadTrack.Reach.tiltMinDeg...HeadTrack.Reach.tiltMaxDeg).contains(waypoint.pitchDeg),
+            let nativePitch = waypoint.nativePitchDeg else { return nil }
+        return gimbalTimedTarget(yawDeg: waypoint.yawDeg, nativePitchDeg: nativePitch,
+            duration: duration, seq: seq)
+    }
+}

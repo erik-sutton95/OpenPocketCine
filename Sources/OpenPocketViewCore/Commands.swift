@@ -550,7 +550,7 @@ public enum Commands {
         yawDeg: Double, nativePitchDeg: Double, duration: TimeInterval, seq: UInt16 = 0
     ) -> Duml.Frame? {
         guard yawDeg.isFinite, nativePitchDeg.isFinite, duration.isFinite,
-            (HeadTrack.Reach.panMinDeg...HeadTrack.Reach.panMaxDeg).contains(yawDeg),
+            (GimbalReach.panMinDeg...GimbalReach.panMaxDeg).contains(yawDeg),
             (-180...180).contains(nativePitchDeg),
             duration >= 0.1, duration <= 25.5,
             abs(duration * 10 - (duration * 10).rounded()) < 1e-6
@@ -558,17 +558,6 @@ public enum Commands {
         let payload = le16(Int((yawDeg * 10).rounded())) + [0, 0]
             + le16(Int((nativePitchDeg * 10).rounded())) + [0x05, UInt8((duration * 10).rounded())]
         return gimbal(0x14, payload, seq: seq, flags: Duml.flagNotify)
-    }
-
-    /// Validate physical display tilt before encoding the distinct native pitch.
-    public static func gimbalTimedTarget(
-        waypoint: GimbalWaypoint, duration: TimeInterval, seq: UInt16 = 0
-    ) -> Duml.Frame? {
-        guard waypoint.pitchDeg.isFinite,
-            (HeadTrack.Reach.tiltMinDeg...HeadTrack.Reach.tiltMaxDeg).contains(waypoint.pitchDeg),
-            let nativePitch = waypoint.nativePitchDeg else { return nil }
-        return gimbalTimedTarget(yawDeg: waypoint.yawDeg, nativePitchDeg: nativePitch,
-            duration: duration, seq: seq)
     }
 
     /// Relative zero yaw/pitch over 100 ms replaces the current timed move.
