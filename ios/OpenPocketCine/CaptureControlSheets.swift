@@ -1162,7 +1162,7 @@ enum CaptureLists {
 
     /// Photo must not reuse leftover Video color for Auto ISO / fallback wheels.
     static func isoPresentationColor(from status: CameraStatus) -> ColorMode {
-        status.isPhoto ? .normal : (status.colorMode ?? .normal)
+        status.isoPresentationColor
     }
 
     static func shutterDenoms(from status: CameraStatus) -> [Int] {
@@ -1175,10 +1175,7 @@ enum CaptureLists {
     }
 
     static func isoIndices(from status: CameraStatus) -> [IsoIndex] {
-        CamCapIso.wheelIndices(
-            available: status.availableIsoIndices,
-            fallback: isoPresentationColor(from: status).isoIndices
-        )
+        status.isoWheelIndices
     }
 
     static func isoDrumLabels(from status: CameraStatus) -> [String] {
