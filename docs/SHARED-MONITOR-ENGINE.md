@@ -306,6 +306,17 @@ OpenCaptureMonitor/   # working title for the monorepo — rename when the umbre
 - Wrap existing Nikon session as `NikonAdapter`.
 - Brand apps construct adapter at launch; no protocol code in UI views.
 
+Candidate (OpenCine plan CORE-02, local branch `opencine/core-02-dji`): ISO, white balance and
+record start/stop go through `OpenCineCore.CameraSession` adapters, `session.control`
+(`ios/OpenPocketCine/DJICameraSessionAdapter.swift`, Android
+`session/DjiCameraSessionAdapter.kt`). Receipts follow the Core lifecycle: an ACK is
+`accepted`, only the camera's own status confirms, a settle without ACK or matching status is
+`timedOut` (never success), a NACK is `rejected(cameraRefused)`. The record lamp, gamepad,
+watcher and Watch resolve to explicit start or stop from the reported state; a start while
+recording sends nothing, and unknown record state is refused. On iOS `status` is camera-reported
+for these controls and a pending WB request is `pendingWhiteBalance`; Android keeps its
+optimistic HUD values and the seam reads separate camera-reported values. Hardware-unqualified.
+
 ### Phase 5 — Thin brand apps
 
 - Strip duplicated SwiftUI/Compose screens that are now shared.
