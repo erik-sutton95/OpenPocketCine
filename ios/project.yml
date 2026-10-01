@@ -54,6 +54,10 @@ targets:
         product: MonitorPresentation
       - package: OpenCineCore
         product: OpenCineCore
+      # Optional Frame.io delivery (OpenCine plan OPTIONAL-01). Pocket keeps OAuth UI, the
+      # callback scheme, client ID and its keychain namespace (Frameio/FrameioCredentials.swift).
+      - package: OpenCineCore
+        product: OpenCineFrameIO
       - package: OpenCineDJI
         product: OpenCineDJI
       - target: OpenPocketCineWatch
@@ -132,6 +136,8 @@ targets:
         product: OpenCineCore
       - package: OpenCineCore
         product: OpenCineMedia
+      - package: OpenCineCore
+        product: OpenCineFrameIO
       - package: OpenCineDJI
         product: OpenCineDJI
     settings:
