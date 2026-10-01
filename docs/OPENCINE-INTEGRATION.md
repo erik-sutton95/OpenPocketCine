@@ -14,21 +14,36 @@ against sibling checkouts of the shared packages (see Publish prerequisite).
 | MEDIA-01 (OpenCineMedia) | `opencine/media-01` | 19ce492d |
 | Kotlin scope ceiling per feed (STATE-01 remainder) | this branch | ae3538c4 |
 | VENDOR-01 (DJI Swift code in OpenCineDJI), stacked on this branch | `opencine/vendor-01-dji` | see `git log` |
-| MULTI-02 (Multiview on OpenCineMulticam), stacked on this branch | `opencine/multi-02` | see `git log` |
+| MULTI-02 (Multiview on OpenCineMulticam), stacked on this branch | `opencine/multi-02` | 590b4fa1 |
+| OPTIONAL-01 (Frame.io client from OpenCineFrameIO) | `opencine/frameio` | f569e4f5 |
+| OPTIONAL-02 (gimbal motion from OpenCineMotion) | `opencine/motion` | 63187113 |
+| OPTIONAL-02 (watcher relay wire from OpenCineRelay) | `opencine/relay` | 0ad71861 |
+
+### Merged branches
+
+Merged into `opencine/integration` with `--no-ff` on 2026-10-02, in this order:
+
+- `opencine/frameio` f569e4f5 (merge 6183d949)
+- `opencine/multi-02` 590b4fa1 (merge 5aafb4a5)
+- `opencine/motion` 63187113 (merge 7ec916f2; pins and `ios/project.yml` products merged as a union)
+- `opencine/relay` 0ad71861 (merge 44e7d10e; `AGENTS.md`, `Package.swift`, the Android Swift
+  staging inputs, `ios/project.yml` and pins merged as a union)
+
+Not merged: `opencine/core-api-shared` (still in progress).
 
 Shared packages, pinned in `opencine-pins.txt` and checked out by
 `scripts/checkout-opencine.sh`:
 
 - OpenCineUI `54bcbb31283f6cf028268b382cb82eb6c156ac94` (MonitorUI, MonitorPresentation,
   Android `monitor-ui`).
-- OpenCineCore `28a0196b7763795a553e3f1a55dc354e05a3c5c3` (OpenCineCore, OpenCineMedia,
-  Android `core`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
+- OpenCineCore `6f578ce4984aa5d01c3b9629bd20ce38b1eb862f` (OpenCineCore, OpenCineMedia,
+  OpenCineFrameIO, OpenCineMotion, OpenCineRelay, Android `core` and `media`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
   (`../../OpenCineCore`) name the same directory, so Xcode sees one package.
-- OpenCineDJI `225215ed812bf7f0436e2b9dcb22408f3d97d7da` (VENDOR-01 branch only): DUML, datalink,
+- OpenCineDJI `225215ed812bf7f0436e2b9dcb22408f3d97d7da`: DUML, datalink,
   camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints,
   DJI colour data and `DJICameraSessionAdapter`. `OpenPocketViewCore` re-exports it; the app
   and unit tests also name the product in `ios/project.yml` so Xcode links it.
-- OpenCineMulticam (MULTI-02 branch only): Multiview's group and tile record plans and the
+- OpenCineMulticam `bf8f520423880137722c5fa3b36d227fa0810ec7`: Multiview's group and tile record plans and the
   settings-editor leases. iOS links the package; Android includes `OpenCineMulticam/Android` as
   the named build `opencinemulticam` (one OpenCineCore build serves both).
 
@@ -51,6 +66,12 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
   and its own record action (strict policy) instead of receiving a record frame. The confirmation also closes when a camera's
   link is replaced or its capabilities change. On Android it now closes on the same changes as on
   iPhone (before: only the recording flag and availability).
+- Frame.io (OPTIONAL-01, iPhone only): an account, folder or file id containing `/`, `?`, `#`,
+  `\`, whitespace or control characters is rejected before any request; a token refresh that
+  omits the refresh token keeps the previous one (was: forced sign-in at next expiry); cancelling
+  a batch reports "Cancelled." instead of counting failed clips. Keychain namespace unchanged.
+- Gimbal motion and watcher relay (OPTIONAL-02): no change intended; the relay wire bytes are
+  unchanged (golden v1 tests).
 
 ## Physical device checklist
 
@@ -98,6 +119,12 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
        no feed restarts, no reconnect, no doubled pictures (as on this branch without MULTI-02).
     9. Record acknowledgement to the tile's record state: confirmed within the 8 s window on
        Pocket 3 and Pocket 4.
+
+12. OPTIONAL-01 Frame.io on iPhone: a sign-in saved by `main` survives the update; sign in,
+    upload one clip, cancel a batch (reads "Cancelled.").
+13. OPTIONAL-02: gimbal programs (A·B·C), head tracking and joystick moves behave as on `main`;
+    watcher relay between an old (`main`) and a new build in both directions on two iPhones,
+    plus a version-mismatch denial.
 
 ## Publish prerequisite
 
