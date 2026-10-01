@@ -6,6 +6,15 @@ import Testing
 @Suite struct HeadTrackNativeTests {
     private let origin = GimbalWaypoint(yawDeg: -20, pitchDeg: -10, zoom: 1, nativePitchDeg: -171)
 
+    /// OpenCineMotion takes the reach as a parameter; the Pocket core binds the DJI reach.
+    @Test func sharedMotionUsesTheDeclaredPocketReach() {
+        #expect(HeadTrackNative().bounds == MotionCapabilities.pocketGimbal.bounds)
+        #expect(GimbalReach.bounds.gapMidDeg == GimbalReach.gapMidDeg)
+        #expect(MotionCapabilities.pocketGimbal.target(origin) != nil)
+        #expect(MotionCapabilities.pocketGimbal.target(
+            GimbalWaypoint(yawDeg: 0, pitchDeg: GimbalReach.tiltMaxDeg + 0.1, zoom: 1)) == nil)
+    }
+
     @Test func capturedForwardMapsHeadAnglesWithoutRateCalibration() {
         var track = HeadTrackNative()
         #expect(track.center(pose: origin) == .centered)

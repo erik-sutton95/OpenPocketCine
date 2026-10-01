@@ -3,6 +3,6 @@
 # and verify the SHA, so a moved branch upstream cannot change what ships.
 # Temporary: replaced by SwiftPM url + version and Maven coordinates once published.
 OpenCineUI 54bcbb31283f6cf028268b382cb82eb6c156ac94
-OpenCineCore f9939425ce3c30a3a5628927b20079910b6a7a77
+OpenCineCore 6f578ce4984aa5d01c3b9629bd20ce38b1eb862f
 OpenCineDJI 225215ed812bf7f0436e2b9dcb22408f3d97d7da
 OpenCineMulticam bf8f520423880137722c5fa3b36d227fa0810ec7

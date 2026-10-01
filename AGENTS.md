@@ -15,7 +15,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 | Path | What |
 | --- | --- |
 | `Sources/OpenPocketViewCore/` | Portable Swift core |
-| `../OpenCineCore` (sibling) | `OpenCineMedia`: LUT, curve, scope and false-colour math, shutter angle, frame timing, framing. Re-exported by `OpenPocketViewCore`; pinned in `opencine-pins.txt` (`scripts/checkout-opencine.sh`) |
+| `../OpenCineCore` (sibling) | `OpenCineMedia`: LUT, curve, scope and false-colour math, shutter angle, frame timing, framing. `OpenCineMotion`: gimbal waypoints, A·B·C programs and curve, head-look math, bounded head tracking, `MotionCapabilities` (the Pocket declaration `MotionCapabilities.pocketGimbal` and the DJI reach binding live in `Sources/OpenPocketViewCore/OpenCineMotion.swift`). Re-exported by `OpenPocketViewCore`; pinned in `opencine-pins.txt` (`scripts/checkout-opencine.sh`) |
 | `../OpenCineDJI` (sibling) | DJI protocol, wire and session code (DUML, datalink, camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints, DJI colour data) and its tests. Re-exported by `OpenPocketViewCore`; pinned in `opencine-pins.txt`. Change DJI wire code there, then bump the pin |
 | `Tests/OpenPocketViewCoreTests/` | Core tests |
 | `ios/OpenPocketCine/` | SwiftUI shell |

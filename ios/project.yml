@@ -52,6 +52,8 @@ targets:
         product: OpenPocketViewCore
       - package: OpenCineCore
         product: OpenCineMedia
+      - package: OpenCineCore
+        product: OpenCineMotion
       - package: OpenCineUI
         product: MonitorUI
       - package: OpenCineUI
@@ -144,6 +146,8 @@ targets:
         product: OpenCineMedia
       - package: OpenCineCore
         product: OpenCineFrameIO
+      - package: OpenCineCore
+        product: OpenCineMotion
       - package: OpenCineDJI
         product: OpenCineDJI
       - package: OpenCineMulticam

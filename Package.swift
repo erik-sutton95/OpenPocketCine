@@ -23,7 +23,8 @@ let package = Package(
             name: "OpenPocketCineAndroid", type: .dynamic, targets: ["OpenPocketCineAndroidFacade"]),
     ],
     dependencies: [
-        // Portable media math (OpenCineMedia). Sibling checkout until OpenCineCore is published.
+        // Portable media math (OpenCineMedia) and shared gimbal motion (OpenCineMotion).
+        // Sibling checkout until OpenCineCore is published.
         .package(path: "../OpenCineCore"),
         // DJI protocol, wire and session code. Sibling checkout until OpenCineDJI is published.
         .package(path: "../OpenCineDJI"),
@@ -33,6 +34,7 @@ let package = Package(
             name: "OpenPocketViewCore",
             dependencies: [
                 .product(name: "OpenCineMedia", package: "OpenCineCore"),
+                .product(name: "OpenCineMotion", package: "OpenCineCore"),
                 .product(name: "OpenCineDJI", package: "OpenCineDJI"),
             ]
         ),
