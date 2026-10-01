@@ -102,6 +102,9 @@ class MultiviewMulticamTest {
         assertEquals(approved, plan(tiles))
         assertTrue(approved.isCurrent(view(tiles).group, view(tiles).state))
         assertEquals(entries, view(tiles).group.entries, "Entry and session IDs are the tiles' own")
+        // A one-tile plan (built over that tile only) is the plan the full view revalidates.
+        val single = MultiviewMulticam(listOf(tiles[0].multicam())).plan(listOf(tiles[0].id), stop = false)
+        assertTrue(single.isCurrent(view(tiles).group, view(tiles).state))
         // An operation-relevant change does invalidate: a camera reports recording.
         tiles[2].state = tiles[2].state.copy(observation = true to testScheduler.currentTime + 600)
         assertNotEquals(approved, plan(tiles))

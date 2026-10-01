@@ -42,14 +42,16 @@ struct MultiviewRecordAction<Label: View>: View {
     @State private var pending: MultiviewRecordContext?
 
     private var context: MultiviewRecordContext { .init(session: session, tile: tile) }
-    private var title: String {
+    private func title(_ context: MultiviewRecordContext) -> String {
         tile == nil
             ? (context.stopping ? "Stop recording on all cameras?" : "Record on all cameras?")
             : (context.stopping ? "Stop recording?" : "Start recording?")
     }
 
     var body: some View {
-        Button {
+        // One plan per render for the modifiers; the tap and the confirmation re-read it fresh.
+        let now = context
+        return Button {
             guard context.canConfirm else { return }
             if confirmationEnabled {
                 pending = context
@@ -60,11 +62,12 @@ struct MultiviewRecordAction<Label: View>: View {
         } label: {
             label()
         }
-        .disabled(!context.canConfirm)
-        .accessibilityHint(context.refusal ?? "")
-        .confirmationDialog(title, isPresented: $showingConfirmation, titleVisibility: .visible) {
-            Button(context.stopping ? "Stop" : "Start", role: context.stopping ? .destructive : nil)
-            {
+        .disabled(!now.canConfirm)
+        .accessibilityHint(now.refusal ?? "")
+        .confirmationDialog(
+            title(now), isPresented: $showingConfirmation, titleVisibility: .visible
+        ) {
+            Button(now.stopping ? "Stop" : "Start", role: now.stopping ? .destructive : nil) {
                 guard let pending else { return }
                 self.pending = nil
                 perform(pending)
@@ -75,7 +78,7 @@ struct MultiviewRecordAction<Label: View>: View {
                 tile?.camera?.name
                     ?? "Each camera confirms independently; recording is not synchronized.")
         }
-        .onChange(of: context) { _, _ in
+        .onChange(of: now) { _, _ in
             pending = nil
             showingConfirmation = false
         }

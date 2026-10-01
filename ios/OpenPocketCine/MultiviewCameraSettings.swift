@@ -24,11 +24,13 @@ extension MultiviewSession {
         tile.previewDemand = true
         // The engine's editor lease names this tile's session and control epoch: a replaced
         // link or camera, a lost authority or the next editor retires it (plan 7.5).
-        let lease = try? editorLeases.open(tile.entryID, in: multicamGroup, at: multicamSnapshot())
+        let lease = try? editorLeases.open(
+            tile.entryID, in: multicamGroup(of: [tile]), at: multicamSnapshot(of: [tile]))
         editor.multiviewControlAdmission = { [weak self, weak tile, weak editor] in
             guard let self, let tile, let editor, let lease else { return false }
             return tile.controlsModel?.session === editor
-                && editorLeases.refusal(for: lease, in: multicamGroup, at: multicamSnapshot())
+                && editorLeases.refusal(
+                    for: lease, in: multicamGroup(of: [tile]), at: multicamSnapshot(of: [tile]))
                     == nil
                 && controlsAvailable(for: tile)
         }

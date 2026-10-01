@@ -611,12 +611,14 @@ struct MultiviewView: View {
         MultiviewRecordAction(
             session: session, confirmationEnabled: model.recordConfirmationEnabled
         ) {
+            // Read inside the action's label so plan-building (every tile's camera state)
+            // re-renders only this button, not the whole Multiview screen.
             RecordLamp(
                 diameter: diameter, recording: session.anyRecording
             )
             .overlay { if session.groupRecordingBusy { ProgressView().tint(.white) } }
-        }.buttonStyle(.zcTapTarget).disabled(!session.canRecordTogether)
             .opacity(session.canRecordTogether || session.groupRecordingBusy ? 1 : 0.4)
+        }.buttonStyle(.zcTapTarget)
             .accessibilityLabel(session.anyRecording ? "Stop all recording" : "Record all")
             .accessibilityIdentifier("multiview.recordAll")
     }

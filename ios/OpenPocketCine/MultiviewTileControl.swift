@@ -138,14 +138,21 @@ extension MultiviewSession {
     private static let clockReference = ContinuousClock.now
 
     /// Tiles with a camera, in slot order.
-    var multicamGroup: MulticamGroup {
+    var multicamGroup: MulticamGroup { multicamGroup(of: recordingTiles) }
+
+    func multicamSnapshot() -> MulticamSnapshot { multicamSnapshot(of: recordingTiles) }
+
+    /// The engine's view of only `tiles` (those with a camera). A one-tile plan or lease check
+    /// reads only that tile, so a SwiftUI view showing it re-renders only for that camera; plans
+    /// built this way equal plans built over every tile (non-requested entries never matter).
+    func multicamGroup(of tiles: [Tile]) -> MulticamGroup {
         var group = MulticamGroup()
-        for tile in recordingTiles { try? group.add(tile.entry) }
+        for tile in tiles where tile.camera != nil { try? group.add(tile.entry) }
         return group
     }
 
-    func multicamSnapshot() -> MulticamSnapshot {
-        let members = recordingTiles
+    func multicamSnapshot(of tiles: [Tile]) -> MulticamSnapshot {
+        let members = tiles.filter { $0.camera != nil }
         return MulticamSnapshot(
             cameras: members.map { $0.control.current },
             pictures: Dictionary(
@@ -170,7 +177,7 @@ extension MultiviewSession {
         let stop = requested.contains { $0.recordingActive == true }
         return RecordPlan.make(
             stop ? .stop : .start, policy: Self.recordPolicy, entries: requested.map(\.entryID),
-            in: multicamGroup, at: multicamSnapshot())
+            in: multicamGroup(of: requested), at: multicamSnapshot(of: requested))
     }
 
     /// Sends an approved plan: one explicit start or stop per camera, revalidated first, each

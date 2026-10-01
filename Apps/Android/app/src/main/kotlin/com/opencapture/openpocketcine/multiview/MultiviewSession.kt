@@ -384,8 +384,13 @@ class MultiviewSession(
     /** Settings-editor leases (OpenCineMulticam): one open editor, asked before every SET. */
     private val editorLeases = EditorLeases()
 
-    /** The engine's view of the tiles with a camera, now. */
-    internal fun multicam() = MultiviewMulticam(recordingTiles.map { it.multicam() })
+    /**
+     * The engine's view of [of] (those with a camera), now. A one-tile plan or lease check reads
+     * only that tile, so its composable recomposes only for that camera; such plans equal plans
+     * built over every tile (non-requested entries never matter).
+     */
+    internal fun multicam(of: List<Tile> = recordingTiles) =
+        MultiviewMulticam(of.filter { it.camera != null }.map { it.multicam() })
 
     /**
      * The operator's record button as an explicit strict plan: stop when any requested camera
@@ -395,7 +400,7 @@ class MultiviewSession(
      */
     fun recordPlan(tile: Tile? = null): RecordPlan {
         val requested = tile?.let { listOf(it) } ?: recordingTiles
-        return multicam().plan(requested.map { it.entryId }, stop = requested.any { it.recordingObservation?.first == true })
+        return multicam(requested).plan(requested.map { it.entryId }, stop = requested.any { it.recordingObservation?.first == true })
     }
 
     var networkConfigured by mutableStateOf(false)
@@ -438,14 +443,14 @@ class MultiviewSession(
      */
     fun openControls(tile: Tile): AppModel? {
         editorLeases.closeAll()
-        val view = multicam()
+        val view = multicam(listOf(tile))
         val lease = try {
             editorLeases.open(tile.entryId, view.group, view.state)
         } catch (_: EditorLeaseException) {
             return null
         }
         return tile.openControls {
-            val now = multicam()
+            val now = multicam(listOf(tile))
             editorLeases.refusal(lease, now.group, now.state) == null && controlsAvailable(tile)
         }
     }
