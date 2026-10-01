@@ -54,6 +54,8 @@ targets:
         product: OpenCineMedia
       - package: OpenCineCore
         product: OpenCineMotion
+      - package: OpenCineCore
+        product: OpenCineRelay
       - package: OpenCineUI
         product: MonitorUI
       - package: OpenCineUI
@@ -148,6 +150,8 @@ targets:
         product: OpenCineFrameIO
       - package: OpenCineCore
         product: OpenCineMotion
+      - package: OpenCineCore
+        product: OpenCineRelay
       - package: OpenCineDJI
         product: OpenCineDJI
       - package: OpenCineMulticam

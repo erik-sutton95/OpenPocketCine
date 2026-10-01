@@ -80,6 +80,7 @@ import Testing
         switch WatcherRelayJoin.hostAccepts(hello: hello, requiredPasscode: "") {
         case .failure(let denied):
             #expect(!denied.passcodeRequired)
+            #expect(denied.reason == "This OpenPocketCine build cannot watch that feed.")
         case .success:
             Issue.record("expected denial")
         }
