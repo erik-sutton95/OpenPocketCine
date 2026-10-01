@@ -7,6 +7,8 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 
 - **Swift Package Manager / Swift** — portable protocol core (`Sources/OpenPocketViewCore/`).
 - **SwiftUI** — iOS/iPadOS shell (`ios/OpenPocketCine/`, XcodeGen).
+- **OpenCineUI**: shared SwiftUI design system (`MonitorUI`, `MonitorPresentation`), a sibling
+  checkout at `../OpenCineUI` referenced by path from `ios/project.yml` (candidate dependency).
 - **Jetpack Compose / Kotlin** — Android shell (`Apps/Android/`).
 - **just** — every repo task. Run `just` to list recipes. `just setup` on macOS.
 

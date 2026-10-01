@@ -14,7 +14,7 @@ references that are **not** distributed.
 
 - **Homepage:** <https://github.com/sora-xor/sora-font>
 - **Used for:** shared native iOS and Android UI type
-- **License:** SIL Open Font License 1.1 (full text in `Sources/MonitorUI/Resources/Fonts/OFL-Sora.txt`)
+- **License:** SIL Open Font License 1.1 (full text in OpenCineUI `Sources/MonitorUI/Resources/Fonts/OFL-Sora.txt`)
 - **Copyright:** 2019 The Sora Project Authors
 
 ## IBM Plex Sans
@@ -40,7 +40,7 @@ project (see [NOTICE](NOTICE), the
 
 - **Homepage:** <https://github.com/lucide-icons/lucide>
 - **Used for:** HUD and chrome glyphs on iOS and Android (`OpcIcon`). Vendored SVGs live in
-  `Sources/MonitorUI/Resources/Icons/lucide/` and
+  OpenCineUI `Sources/MonitorUI/Resources/Icons/lucide/` and
   `Apps/Android/monitor-ui/src/main/assets/icons/lucide/`; Android also ships VectorDrawables under
   `Apps/Android/monitor-ui/src/main/res/drawable/opc_lucide_*.xml`.
 - **License:** ISC (full text in those `LICENSE.txt` files). Some glyphs in this set are derived
@@ -101,6 +101,6 @@ Unofficial copies and vivid variants are not committed.
   design, including Tabler-derived path artwork.
 - **Homepage:** <https://github.com/tabler/tabler-icons>
 - **License:** MIT. The full license accompanies the SVGs in
-  `Sources/MonitorUI/Resources/Icons/assist/LICENSE-Tabler.txt` and
+  OpenCineUI `Sources/MonitorUI/Resources/Icons/assist/LICENSE-Tabler.txt` and
   `Apps/Android/monitor-ui/src/main/assets/icons/assist/LICENSE-Tabler.txt`.
 - **Copyright:** 2020-2026 Paweł Kuna.

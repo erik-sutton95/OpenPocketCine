@@ -10,8 +10,8 @@ live in the shells.
 | Layer | Path | Role |
 | --- | --- | --- |
 | Shared core | `Sources/OpenPocketViewCore/` | DUML, commands, status, LUTs, layout policy. Foundation only — **portable**. |
-| Presentation | `Sources/MonitorPresentation/` | Foundation-only capability values, native layout and selection policies. No camera I/O. |
-| Shared iOS UI | `Sources/MonitorUI/` | Sora/theme, canvas, pages, catalog, controls and inspectors with injected values/actions/native rendering slots. |
+| Presentation | OpenCineUI `MonitorPresentation` | Foundation-only capability values, native layout and selection policies. No camera I/O. |
+| Shared iOS UI | OpenCineUI `MonitorUI` | Sora/theme, canvas, pages, catalog, controls and inspectors with injected values/actions/native rendering slots. |
 | Shared Android UI | `Apps/Android/monitor-ui/` | Compose design language, capability values, layout policy and page scaffolds. |
 | iOS app | `ios/OpenPocketCine/` | SwiftUI shell, CoreBluetooth, Hotspot Configuration, VideoToolbox/Metal. |
 | Watch companion | `ios/OpenPocketCineWatch/` | watchOS remote over WatchConnectivity. Phone stays the radio. |

@@ -61,6 +61,22 @@ class BuildIdentityTests(unittest.TestCase):
         (self.root / "Sources/Core.swift").unlink()
         self.assertNotEqual(before, self.identity())
 
+    def test_sibling_shared_ui_package_changes_ios_identity_only(self):
+        shared_ui = self.root / "OpenCineUI"
+        nested = self.root / "app"
+        subprocess.run(["git", "init", "--quiet", str(nested)], check=True)
+        (nested / "Sources").mkdir()
+        (nested / "Sources/Core.swift").write_text("let value = 1\n")
+        subprocess.run(["git", "init", "--quiet", str(shared_ui)], check=True)
+        (shared_ui / "Package.swift").write_text("// package\n")
+        (shared_ui / "Sources/MonitorUI").mkdir(parents=True)
+        (shared_ui / "Sources/MonitorUI/Theme.swift").write_text("let accent = 1\n")
+        ios = module.identity(nested, "ios", "Debug")
+        android = module.identity(nested, "android", "Debug")
+        (shared_ui / "Sources/MonitorUI/Theme.swift").write_text("let accent = 2\n")
+        self.assertNotEqual(ios, module.identity(nested, "ios", "Debug"))
+        self.assertEqual(android, module.identity(nested, "android", "Debug"))
+
     def test_ios_version_configuration_changes_identity(self):
         self.write("ios/Config/Version.xcconfig", "CURRENT_PROJECT_VERSION = 1\n")
         before = self.identity()

@@ -15,6 +15,10 @@ packages:
     exactVersion: 9.24.0
   OpenPocketViewCore:
     path: ..
+  # Shared UI 2.0 (MonitorUI, MonitorPresentation). Candidate: a sibling checkout of
+  # OpenCineUI next to this repository. Switch to url + exactVersion once it is published.
+  OpenCineUI:
+    path: ../../OpenCineUI
 
 targets:
   OpenPocketCine:
@@ -31,9 +35,9 @@ targets:
         product: Sentry
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
-      - package: OpenPocketViewCore
+      - package: OpenCineUI
         product: MonitorUI
-      - package: OpenPocketViewCore
+      - package: OpenCineUI
         product: MonitorPresentation
       - target: OpenPocketCineWatch
         embed: true

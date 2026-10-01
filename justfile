@@ -68,10 +68,6 @@ swift-format:
 swift-lint:
     swift-format lint --strict --recursive Package.swift Sources Tests ios/OpenPocketCine ios/OpenPocketCineTests ios/OpenPocketCineUITests ios/OpenPocketCineWatch
 
-# Refresh the pinned Lucide catalogs in both shared native UI modules.
-icons-vendor:
-    python3 scripts/vendor-lucide-icons.py
-
 # Run shared Swift core tests.
 swift-test *args:
     swift test {{args}}

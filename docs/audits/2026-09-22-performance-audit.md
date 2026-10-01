@@ -237,7 +237,7 @@ lines 160/280 has a useful held-frame cache, but correctly bypasses it for
 FALSE/ZEBRA and mutable working buffers. Removing that safeguard would cache stale
 pixels. [AssistInspectorImageRenderer](../../ios/OpenPocketCine/Assists/AssistInspectorImageRenderer.swift)
 lines 109/164 makes a ≤320 px look image, then
-[MonitorBackdropRenderer](../../Sources/MonitorUI/MonitorBackdropRenderer.swift)
+`MonitorBackdropRenderer` (OpenCineUI `Sources/MonitorUI/MonitorBackdropRenderer.swift`)
 lines 70–112 makes four distinct blur/saturation products for seven surface roles.
 That is five image-production calls per uncached single-source job, not five
 full-resolution captures. `createCGImage` alone does not prove CPU readback.

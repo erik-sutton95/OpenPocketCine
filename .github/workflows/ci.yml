@@ -218,6 +218,11 @@ jobs:
           xcode-version: latest-stable
       - name: Install native tooling
         run: brew install just swift-format xcodegen || true
+      # Candidate (OpenCineUI UI-01): ios/project.yml takes MonitorUI and MonitorPresentation
+      # from a sibling checkout at ../OpenCineUI. This works only once that repository is
+      # published at this URL. Delete this step when the app pins OpenCineUI by url + version.
+      - name: Check out OpenCineUI next to the repository
+        run: git clone --depth 1 https://github.com/erik-sutton95/OpenCineUI.git "$GITHUB_WORKSPACE/../OpenCineUI"
       - name: Run native checks
         run: just native-check
 

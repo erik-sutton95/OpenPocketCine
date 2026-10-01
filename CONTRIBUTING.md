@@ -29,6 +29,9 @@ Generate and open the iOS app (needs [`xcodegen`](https://github.com/yonaskolov/
 cd ios && xcodegen generate && open OpenPocketCine.xcodeproj
 ```
 
+The iOS app also needs the shared UI package OpenCineUI (`MonitorUI`, `MonitorPresentation`)
+checked out next to this repository, at `../OpenCineUI`; `ios/project.yml` references it by path.
+
 Remote Swift packages are locked in `ios/Package.resolved` (required by Xcode Cloud).
 After changing `packages:` in `ios/project.yml`, run `just ios-resolve` and commit
 the lockfile.
