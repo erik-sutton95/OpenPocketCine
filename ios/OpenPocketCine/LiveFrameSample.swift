@@ -14,6 +14,8 @@ extension MonitorTransfer {
         case .dlog: .dLog
         case .dlogm: .dLogM
         case .dlog2: .dLog2
+        // ponytail: no DJI wire mode carries I-Log; Pocket never selects it.
+        case .ilog: .normal
         }
     }
 
@@ -87,6 +89,9 @@ struct ScopeAssistBundle: Equatable, Sendable {
     var traffic = ScopeTrafficLightsReading.none
     var histogramDisplay = ScopeHistogramDisplay.empty
     var transfer: MonitorTransfer = .rec709
+    /// The source's live-tap clip byte for `transfer` once this tap was measured. WAVE /
+    /// PARADE place the points on it, so a bundle carries its own ceiling (STATE-01).
+    var clipByte = 255
 
     static let empty = ScopeAssistBundle()
 }
@@ -132,7 +137,8 @@ enum PocketScopeSampler {
     /// The one walk. 200-wide tap × stride 2 ≈ 5,600 pixels per tick.
     static func sample(
         bytes: [UInt8], width: Int, height: Int, bytesPerRow: Int,
-        transfer: MonitorTransfer, includePoints: Bool, includeVectorPoints: Bool = false,
+        transfer: MonitorTransfer, clipByte: Int, includePoints: Bool,
+        includeVectorPoints: Bool = false,
         look: CubeLUT?,
         trafficThreshold: Double = ScopeTrafficLights.defaultThreshold,
         previous: ScopeAssistBundle
@@ -193,11 +199,13 @@ enum PocketScopeSampler {
             trailVectorscopePoints: previous.vectorscopePoints,
             traffic: ScopeTrafficLights.reading(
                 red: histR, green: histG, blue: histB, luma: histY,
-                transfer: transfer, threshold: trafficThreshold,
+                transfer: transfer, clipByte: clipByte, threshold: trafficThreshold,
                 previous: previous.traffic),
             histogramDisplay: histogramDisplay(
-                samples: samples, previous: previous.histogramDisplay, transfer: transfer),
-            transfer: transfer)
+                samples: samples, previous: previous.histogramDisplay, transfer: transfer,
+                clipByte: clipByte),
+            transfer: transfer,
+            clipByte: clipByte)
     }
 
     /// VECTOR input: sampled points through the display look (operator LUT if
@@ -231,7 +239,7 @@ enum PocketScopeSampler {
         switch transfer {
         case .dlog: return BundledOfficialDJILUT.cube(.pocketDLog)
         case .dlog2: return BundledOfficialDJILUT.cube(.pocketDLog2)
-        case .rec709, .hdr, .dlogm: return nil
+        case .rec709, .hdr, .dlogm, .ilog: return nil
         }
     }
 
@@ -242,22 +250,24 @@ enum PocketScopeSampler {
     // MARK: - Histogram display pipeline (off-main, once per tick)
 
     static func histogramDisplay(
-        samples: ScopeSamples, previous: ScopeHistogramDisplay, transfer: MonitorTransfer
+        samples: ScopeSamples, previous: ScopeHistogramDisplay, transfer: MonitorTransfer,
+        clipByte: Int
     ) -> ScopeHistogramDisplay {
-        ScopeHistogramDisplay(
-            luma: displayChannel(
-                samples.histogramLuma, previous: previous.luma, transfer: transfer),
-            red: displayChannel(samples.histogramRed, previous: previous.red, transfer: transfer),
-            green: displayChannel(
-                samples.histogramGreen, previous: previous.green, transfer: transfer),
-            blue: displayChannel(samples.histogramBlue, previous: previous.blue, transfer: transfer)
+        func channel(_ native: [Int], _ previous: [Float]) -> [Float] {
+            displayChannel(native, previous: previous, transfer: transfer, clipByte: clipByte)
+        }
+        return ScopeHistogramDisplay(
+            luma: channel(samples.histogramLuma, previous.luma),
+            red: channel(samples.histogramRed, previous.red),
+            green: channel(samples.histogramGreen, previous.green),
+            blue: channel(samples.histogramBlue, previous.blue)
         )
     }
 
     static func displayChannel(
-        _ native: [Int], previous: [Float], transfer: MonitorTransfer
+        _ native: [Int], previous: [Float], transfer: MonitorTransfer, clipByte: Int
     ) -> [Float] {
-        let remapped = WaveformAxis.remapHistogram(native, transfer: transfer)
+        let remapped = WaveformAxis.remapHistogram(native, transfer: transfer, clipByte: clipByte)
         var blended = [Float](repeating: 0, count: 256)
         let hasPrevious = previous.count == 256
         for i in 0..<256 {
@@ -321,6 +331,9 @@ final class LiveFrameSampleBus {
     private(set) var inspectorSourceEpoch: UInt64 = 0
     var transfer: MonitorTransfer = .rec709
     var colorMode: ColorMode?
+    /// This monitored source's live-tap ceiling (ISO + tap ratchet). Its engines measure it;
+    /// its views read it. Never shared with another camera's bus (STATE-01).
+    let exposureCeiling = ScopeExposureCeiling()
     /// Bumps when a new scope bundle lands (≤25 Hz). Present is not gated on this.
     private(set) var generation = 0
     /// Incremented for every decoded pixel buffer that enters the assist pipeline.
@@ -413,6 +426,8 @@ final class LiveAssistEngine: @unchecked Sendable {
     private var ceilingLogMax: UInt8 = 0
     private var nextCeilingLogAt: CFAbsoluteTime = 0
     private var previousBundle = ScopeAssistBundle.empty
+    /// The source's ceiling (its bus's, via ``adopt(exposureCeiling:)``). Queue-confined.
+    private var exposureCeiling = ScopeExposureCeiling()
     private var loggedTap = false
     private var tapWindowStart: CFAbsoluteTime = 0
     private var tapsInWindow = 0
@@ -421,15 +436,21 @@ final class LiveAssistEngine: @unchecked Sendable {
 
     init() {}
 
+    /// Measure and ratchet `ceiling` from now on (the bus this engine publishes into).
+    func adopt(exposureCeiling ceiling: ScopeExposureCeiling) {
+        queue.async { [self] in exposureCeiling = ceiling }
+    }
+
     func updatePolicy(effects: LiveImageEffects, transfer: MonitorTransfer) {
         queue.async { [self] in
             var fx = effects
-            fx.colorMode = transfer.colorMode
+            fx.stamp(transfer: transfer, ceiling: exposureCeiling)
             pendingEffects = fx
             pendingTransfer = transfer
             if fx.falseColor {
                 PocketFalseColorMap.warm(
                     scale: fx.falseColorScale, mode: fx.colorMode,
+                    rec709: fx.falseColorRec709, clipByte: fx.resolvedClipByte,
                     hasLUT: fx.lutDimension >= 2)
             }
         }
@@ -465,7 +486,7 @@ final class LiveAssistEngine: @unchecked Sendable {
             tapsInWindow = 0
             ceilingLogMax = 0
             nextCeilingLogAt = 0
-            ScopeExposureCeiling.reset()
+            exposureCeiling.reset()
         }
     }
 
@@ -502,7 +523,7 @@ final class LiveAssistEngine: @unchecked Sendable {
         var fx = pendingEffects
         var transfer = pendingTransfer
         let timeNs = pendingTimeNs
-        fx.colorMode = transfer.colorMode
+        fx.stamp(transfer: transfer, ceiling: exposureCeiling)
         busy = true
 
         // Copy CPU planes before Core Image attaches. WAVE/HISTO read the source
@@ -581,22 +602,25 @@ final class LiveAssistEngine: @unchecked Sendable {
             if inferred != transfer {
                 transfer = inferred
                 pendingTransfer = inferred
-                fx.colorMode = inferred.colorMode
+                fx.stamp(transfer: inferred, ceiling: exposureCeiling)
                 ControlLiveLog.line(
                     "scope transfer: inferred \(inferred.rawValue) min=\(tapMin) max=\(tapMax)"
                 )
             }
-            let sampled = PocketScopeSampler.sample(
+            var sampled = PocketScopeSampler.sample(
                 bytes: packed.bytes, width: packed.width, height: packed.height,
                 bytesPerRow: packed.bytesPerRow, transfer: transfer,
+                clipByte: exposureCeiling.clipByte(transfer: transfer),
                 includePoints: fx.waveform || fx.parade,
                 includeVectorPoints: fx.vectorscope,
                 look: fx.vectorscope
                     ? PocketScopeSampler.monitorCube(for: transfer, effects: fx) : nil,
                 trafficThreshold: fx.trafficThreshold,
                 previous: previousBundle)
+            let observed = exposureCeiling.observeTapMax(tapMax, transfer: transfer)
+            // Views draw this bundle on the ceiling now in force (after this tap's ratchet).
+            sampled.clipByte = Int(observed.clip)
             previousBundle = sampled
-            let observed = ScopeExposureCeiling.observeTapMax(tapMax, transfer: transfer)
             logTapOnce(buffer: buffer, packed: packed, points: sampled.samples.points.count)
             let tapNow = CFAbsoluteTimeGetCurrent()
             let interval = PocketScopeSampler.minInterval(activeScopeCount: fx.activeScopeCount)
@@ -622,7 +646,7 @@ final class LiveAssistEngine: @unchecked Sendable {
             if now >= nextCeilingLogAt {
                 nextCeilingLogAt = now + 10
                 ControlLiveLog.line(
-                    "scope max: byte=\(ceilingLogMax) clip=\(observed.clip) transfer=\(transfer.rawValue) ei=\(ScopeExposureCeiling.resolvedISO())"
+                    "scope max: byte=\(ceilingLogMax) clip=\(observed.clip) transfer=\(transfer.rawValue) ei=\(exposureCeiling.resolvedISO())"
                 )
                 ceilingLogMax = 0
             }

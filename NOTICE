@@ -3,7 +3,8 @@ Copyright 2026 Erik Sutton and OpenPocketCine contributors
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 Third-party software distributed with this product is listed in THIRD-PARTY-NOTICES.md.
-The portable .cube parser (`CubeLUT`) is adapted from OpenZCine (Apache 2.0).
+The portable .cube parser (`CubeLUT`, now in OpenCineCore's OpenCineMedia) is adapted from
+OpenZCine (Apache 2.0).
 
 Bundled UI typefaces (SIL Open Font License 1.1; copies in
 OpenCineUI `Sources/MonitorUI/Resources/Fonts/` and `Android/monitor-ui/src/main/assets/`):

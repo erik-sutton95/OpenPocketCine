@@ -5,10 +5,8 @@ import XCTest
 @testable import OpenPocketCine
 
 final class ParadeAssistTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        ScopeExposureCeiling.reset()
-    }
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
 
     func testLaneXMatchesOpenZCineSplit() {
         let plot = WaveformAxis.plotRect(in: CGSize(width: 250, height: 153))
@@ -32,7 +30,8 @@ final class ParadeAssistTests: XCTestCase {
 
     func testParadeYUsesWaveGeometryWithNoShelf() {
         let plot = WaveformAxis.plotRect(in: CGSize(width: 250, height: 153))
-        let table = WaveformAxis.levelTable(for: .dlog2)
+        let table = WaveformAxis.levelTable(
+            for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         let black = WaveformAxis.legalBlackByte(transfer: .dlog2)
         let grey = UInt8((LiveColorScience.encode(0.18, transfer: .dlog2) * 255).rounded())
         let bytes: [UInt8] = [black, grey, 247]

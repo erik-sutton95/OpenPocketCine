@@ -25,9 +25,11 @@ def identity(root: Path, platform: str, configuration: str) -> str:
     return platform + "-" + digest.hexdigest()[:32]
 
 
+# OpenCineCore: the app links OpenCineCore + OpenCineMedia, and the Swift Android core compiles
+# OpenCineMedia through the root Package.swift, so Android hashes its Swift sources too.
 SIBLING_PACKAGES = {
-    "ios": [("OpenCineUI", ["Package.swift", "Sources"])],
-    "android": [("OpenCineUI", ["Android"])],
+    "ios": [("OpenCineUI", ["Package.swift", "Sources"]), ("OpenCineCore", ["Package.swift", "Sources"])],
+    "android": [("OpenCineUI", ["Android"]), ("OpenCineCore", ["Package.swift", "Sources", "Android"])],
 }
 
 

@@ -60,11 +60,11 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
             let maps =
                 effects.falseColor
                 ? PocketFalseColorMap.overlayPairData(
-                    scale: effects.falseColorScale, mode: effects.colorMode)?.clipByte ?? -1
+                    scale: effects.falseColorScale, mode: effects.colorMode,
+                    rec709: effects.falseColorRec709, clipByte: effects.resolvedClipByte)?
+                    .clipByte ?? -1
                 : 0
-            return [
-                ScopeExposureCeiling.clipByte(transfer: MonitorTransfer(effects.colorMode)), maps,
-            ]
+            return [effects.resolvedClipByte, maps]
         }
     }
 

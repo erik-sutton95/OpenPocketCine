@@ -6,6 +6,9 @@ import XCTest
 
 /// Pins OpenZCine histogram rows + `MovablePanel` ("histo") onto PocketCine.
 final class HistogramAssistTests: XCTestCase {
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
+
     func testHistogramPlotUsesWaveIREAxis() {
         let size = ScopePanelSize.histogram
         let plot = HistogramAssist.plotRect(in: size)
@@ -79,15 +82,21 @@ final class HistogramAssistTests: XCTestCase {
         bins[188] = 25
         bins[247] = 20
         bins[255] = 10
-        let out = WaveformAxis.remapHistogram(bins, transfer: .dlog2)
+        let out = WaveformAxis.remapHistogram(
+            bins, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         XCTAssertEqual(out.reduce(0, +), 203)
         XCTAssertEqual(out[0], 108, "sub-black and paper black clamp onto IRE 0")
         XCTAssertEqual(out[255], 30, "live-tap 247 and overshoot 255 clamp onto IRE 100")
-        let greyBucket = Int((WaveformAxis.ire(78.0 / 255, transfer: .dlog2) / 100 * 255).rounded())
+        let greyBucket = Int(
+            (WaveformAxis.ire(
+                78.0 / 255, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)) / 100
+                * 255).rounded())
         XCTAssertEqual(out[greyBucket], 40)
         XCTAssertEqual(greyBucket, 78)
         let earlyBucket = Int(
-            (WaveformAxis.ire(188.0 / 255, transfer: .dlog2) / 100 * 255).rounded())
+            (WaveformAxis.ire(
+                188.0 / 255, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)) / 100
+                * 255).rounded())
         XCTAssertEqual(out[earlyBucket], 25)
         XCTAssertLessThan(earlyBucket, 230, "188 is recoverable highlight, not the 100 line")
     }

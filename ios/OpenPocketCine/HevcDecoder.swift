@@ -119,6 +119,8 @@ final class HevcDecoder {
     }
     weak var sampleBus: LiveFrameSampleBus? {
         didSet {
+            // The engine measures and ratchets the ceiling of the bus it publishes into.
+            if let sampleBus { assistEngine.adopt(exposureCeiling: sampleBus.exposureCeiling) }
             if shouldStartVT, vtSession == nil, format != nil { rebuildVT() }
         }
     }
@@ -163,7 +165,7 @@ final class HevcDecoder {
     /// Survives encoder rebuilds (screen flip zeros `pictureSize` until the new SPS).
     private(set) var isVerticalPicture = false
     var pictureAspect: CGFloat {
-        EncoderPresentPath.feedAspect(
+        FeedRaster.aspect(
             width: Int(pictureSize.width), height: Int(pictureSize.height),
             fallback: isVerticalPicture ? 9.0 / 16.0 : Double(LiveChromeMetrics.feedAspect))
     }
@@ -294,6 +296,9 @@ final class HevcDecoder {
 
     var backdropEffects: LiveImageEffects {
         var result = effects
+        // FALSE / ZEBRA thresholds follow this source's own ceiling.
+        result.clipByte = sampleBus?.exposureCeiling.clipByte(
+            transfer: MonitorTransfer(result.colorMode))
         result.mirror = presentedPictureFlip ?? pictureFlip
         // Until the current Metal product owns the picture, use identity.
         if result.needsGPUFeed, processedFeed?.hasPresentedFrame != true {
@@ -1144,7 +1149,7 @@ final class HevcDecoder {
         let next = CGSize(width: CGFloat(dims.width), height: CGFloat(dims.height))
         if next.width > 1, next.height > 1 {
             pictureSize = next
-            isVerticalPicture = EncoderPresentPath.isVertical(
+            isVerticalPicture = FeedRaster.isVertical(
                 width: Int(next.width), height: Int(next.height))
             if next != previousSize {
                 // Raster changes are rare (format / screen flip); the size decides layout.

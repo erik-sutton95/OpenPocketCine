@@ -24,7 +24,8 @@ public enum LUTLibraryWire {
     ) -> [UInt8]? {
         guard utf8.count <= maximumSourceBytes, let cube = cube(from: utf8) else { return nil }
         let transfer = FeedEffectsWire.monitorTransfer(colorModeCode: colorModeCode)
-        let graded = cube.colorCube.compensatingExposure(stops: exposureStops, transfer: transfer)
+        let graded = cube.colorCube.compensatingExposure(
+            stops: exposureStops, transfer: transfer.lutExposureTransfer)
         return packedRGBA(cube: graded)
     }
 
@@ -35,7 +36,7 @@ public enum LUTLibraryWire {
         guard let look = BuiltInLook(rawValue: title) else { return nil }
         let transfer = FeedEffectsWire.monitorTransfer(colorModeCode: colorModeCode)
         let cube = look.cube().colorCube.compensatingExposure(
-            stops: exposureStops, transfer: transfer)
+            stops: exposureStops, transfer: transfer.lutExposureTransfer)
         return packedRGBA(cube: cube)
     }
 

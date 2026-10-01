@@ -95,6 +95,37 @@ class BuildIdentityTests(unittest.TestCase):
         relative = Path(os.path.relpath(nested))
         self.assertEqual(module.identity(nested, "android", "Debug"), module.identity(relative, "android", "Debug"))
 
+    def test_sibling_media_package_changes_both_identities(self):
+        core = self.root / "OpenCineCore"
+        nested = self.root / "app"
+        subprocess.run(["git", "init", "--quiet", str(nested)], check=True)
+        (nested / "Sources").mkdir()
+        (nested / "Sources/Core.swift").write_text("let value = 1\n")
+        subprocess.run(["git", "init", "--quiet", str(core)], check=True)
+        (core / "Package.swift").write_text("// package\n")
+        (core / "Sources/OpenCineMedia").mkdir(parents=True)
+        (core / "Sources/OpenCineMedia/Curve.swift").write_text("let grey = 1\n")
+        ios = module.identity(nested, "ios", "Debug")
+        android = module.identity(nested, "android", "Debug")
+        (core / "Sources/OpenCineMedia/Curve.swift").write_text("let grey = 2\n")
+        self.assertNotEqual(ios, module.identity(nested, "ios", "Debug"))
+        self.assertNotEqual(android, module.identity(nested, "android", "Debug"))
+
+    def test_sibling_core_android_changes_android_identity_only(self):
+        core = self.root / "OpenCineCore"
+        nested = self.root / "app"
+        subprocess.run(["git", "init", "--quiet", str(nested)], check=True)
+        (nested / "Sources").mkdir()
+        (nested / "Sources/Core.swift").write_text("let value = 1\n")
+        subprocess.run(["git", "init", "--quiet", str(core)], check=True)
+        (core / "Android/core").mkdir(parents=True)
+        (core / "Android/core/Session.kt").write_text("val epoch = 1\n")
+        ios = module.identity(nested, "ios", "Debug")
+        android = module.identity(nested, "android", "Debug")
+        (core / "Android/core/Session.kt").write_text("val epoch = 2\n")
+        self.assertEqual(ios, module.identity(nested, "ios", "Debug"))
+        self.assertNotEqual(android, module.identity(nested, "android", "Debug"))
+
     def test_ios_version_configuration_changes_identity(self):
         self.write("ios/Config/Version.xcconfig", "CURRENT_PROJECT_VERSION = 1\n")
         before = self.identity()

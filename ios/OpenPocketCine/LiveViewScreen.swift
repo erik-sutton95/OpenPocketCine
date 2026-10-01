@@ -1256,11 +1256,13 @@ private struct LiveScopeOverlays: View {
             LiveAudioMeterOverlay(bounds: canvas, chromeClearance: clearance)
         }
         if model.assist.isVisible(.falseColor), model.assist.falseColorReference {
+            let transfer =
+                model.monitorTransfer ?? MonitorTransfer(model.monitorColorMode ?? .normal)
             FalseColorReferenceOverlay(
                 scale: model.assist.falseColorScale,
-                transfer: model.monitorTransfer
-                    ?? MonitorTransfer(model.monitorColorMode ?? .normal),
+                transfer: transfer,
                 rec709: model.assist.falseColorRec709,
+                clipByte: model.monitorSamples.exposureCeiling.clipByte(transfer: transfer),
                 bounds: canvas, chromeClearance: clearance, hapticsEnabled: model.hapticsEnabled,
                 onConfigure: { model.assist.configureTool = .falseColor })
         }

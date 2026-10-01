@@ -118,34 +118,41 @@ enum ZebraAssist {
         }
 
         /// Operator-facing threshold, honouring ``unit`` (OpenZCine `Zebra.displayValue`).
-        func displayValue(for ire: Double, transfer: MonitorTransfer) -> Int {
+        /// `clipByte` is the monitored source's live ceiling for `transfer`.
+        func displayValue(for ire: Double, transfer: MonitorTransfer, clipByte: Int) -> Int {
             switch unit {
             case .ire: Int(ire.rounded())
             case .native:
                 Int(
-                    (ScopeDisplayScale.signalNative(monitorPercent: ire, transfer: transfer) * 255)
+                    (ScopeDisplayScale.signalNative(
+                        monitorPercent: ire, transfer: transfer, clipByte: clipByte) * 255)
                         .rounded())
             }
         }
 
-        mutating func setHighlight(fromDisplay value: Int, transfer: MonitorTransfer) {
-            highlightIRE = Self.ire(fromDisplay: value, unit: unit, transfer: transfer)
+        mutating func setHighlight(fromDisplay value: Int, transfer: MonitorTransfer, clipByte: Int)
+        {
+            highlightIRE = Self.ire(
+                fromDisplay: value, unit: unit, transfer: transfer, clipByte: clipByte)
         }
 
-        mutating func setMidtone(fromDisplay value: Int, transfer: MonitorTransfer) {
-            midtoneIRE = Self.ire(fromDisplay: value, unit: unit, transfer: transfer)
+        mutating func setMidtone(fromDisplay value: Int, transfer: MonitorTransfer, clipByte: Int) {
+            midtoneIRE = Self.ire(
+                fromDisplay: value, unit: unit, transfer: transfer, clipByte: clipByte)
         }
 
         var editorMaximum: Int { unit == .native ? 255 : 100 }
 
-        static func ire(fromDisplay value: Int, unit: Unit, transfer: MonitorTransfer) -> Double {
+        static func ire(
+            fromDisplay value: Int, unit: Unit, transfer: MonitorTransfer, clipByte: Int
+        ) -> Double {
             switch unit {
             case .ire:
                 min(100, max(0, Double(value)))
             case .native:
                 ScopeDisplayScale.monitorPercent(
                     Double(min(max(value, 0), 255)) / 255,
-                    transfer: transfer)
+                    transfer: transfer, clipByte: clipByte)
             }
         }
     }
@@ -284,6 +291,11 @@ struct ZebraLongPressMenu: View {
             ?? .rec709
     }
 
+    /// The monitored source's own live ceiling (STATE-01: never a process-wide one).
+    private var clipByte: Int {
+        model.monitorSamples.exposureCeiling.clipByte(transfer: transfer)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsInlineRow(
@@ -358,10 +370,12 @@ struct ZebraLongPressMenu: View {
                             .frame(minWidth: 76, idealWidth: 110, maxWidth: 140)
                             .tint(MonitorTheme.accent)
                             .accessibilityLabel("\(title) threshold")
-                        Text("\(options.displayValue(for: value.wrappedValue, transfer: transfer))")
-                            .font(MonitorTheme.font(12, weight: .medium)).monospacedDigit()
-                            .foregroundStyle(MonitorTheme.secondary)
-                            .frame(width: 34, alignment: .trailing)
+                        Text(
+                            "\(options.displayValue(for: value.wrappedValue, transfer: transfer, clipByte: clipByte))"
+                        )
+                        .font(MonitorTheme.font(12, weight: .medium)).monospacedDigit()
+                        .foregroundStyle(MonitorTheme.secondary)
+                        .frame(width: 34, alignment: .trailing)
                     }
                 }
                 SettingsInlineRow(title: "Colour") {

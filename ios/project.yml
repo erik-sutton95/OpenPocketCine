@@ -19,8 +19,10 @@ packages:
   # OpenCineUI next to this repository. Switch to url + exactVersion once it is published.
   OpenCineUI:
     path: ../../OpenCineUI
-  # Candidate shared contracts (OpenCine plan CORE-02), a sibling checkout of OpenCineCore.
-  # Swap to the published URL + exact version when the package has a remote.
+  # Candidate shared contracts (OpenCine plan CORE-02) and portable media math (OpenCineMedia,
+  # re-exported by OpenPocketViewCore), a sibling checkout of OpenCineCore. One package identity:
+  # Package.swift's ../OpenCineCore is the same directory. Swap to the published URL + exact
+  # version when the package has a remote. The app and tests call both products directly.
   OpenCineCore:
     path: ../../OpenCineCore
 
@@ -39,6 +41,8 @@ targets:
         product: Sentry
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
+      - package: OpenCineCore
+        product: OpenCineMedia
       - package: OpenCineUI
         product: MonitorUI
       - package: OpenCineUI
@@ -119,6 +123,8 @@ targets:
         product: OpenPocketViewCore
       - package: OpenCineCore
         product: OpenCineCore
+      - package: OpenCineCore
+        product: OpenCineMedia
     settings:
       base:
         SWIFT_VERSION: "5.0"

@@ -6448,7 +6448,8 @@ final class CameraSession {
         noteZoomIfChanged(s)
         // Scope clip ceiling follows the camera's EI; feeding it here keeps the
         // scope view bodies free of session-status reads (5 Hz re-render trap).
-        ScopeExposureCeiling.syncISO(s.iso)
+        // Only this camera's source: its decoder's bus owns the ceiling (STATE-01).
+        decoder.sampleBus?.exposureCeiling.syncISO(s.iso)
         let flipChanged = s.selfieFlip != status.selfieFlip
         if wasRecording && !s.isRecording {
             cancelProgrammedMove()

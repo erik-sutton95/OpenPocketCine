@@ -1,9 +1,12 @@
 import CoreImage
+import OpenPocketViewCore
 import XCTest
 
 @testable import OpenPocketCine
 
 final class DesqueezeAssistTests: XCTestCase {
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
     private let keys = [
         "OpenPocketCine.Assist.v1", "OpenPocketCine.PlaybackAssists.v1",
         "OpenPocketCine.CleanViewPins.v1",
@@ -196,15 +199,15 @@ final class DesqueezeAssistTests: XCTestCase {
         assist.desqueezeFactor = 2
         assist.gradesClip = true
         var preview = AssistInspectorPreviewPolicy.imageOptions(
-            assist: assist, tool: .grid, transfer: .rec709)
+            assist: assist, tool: .grid, transfer: .rec709, ceiling: ceiling)
         XCTAssertEqual(preview.desqueezeFactor, 1)
         assist.togglePlayback(.desqueeze)
         preview = AssistInspectorPreviewPolicy.imageOptions(
-            assist: assist, tool: .grid, transfer: .rec709)
+            assist: assist, tool: .grid, transfer: .rec709, ceiling: ceiling)
         XCTAssertEqual(preview.desqueezeFactor, 2)
         assist.togglePlayback(.desqueeze)
         preview = AssistInspectorPreviewPolicy.imageOptions(
-            assist: assist, tool: .desqueeze, transfer: .rec709)
+            assist: assist, tool: .desqueeze, transfer: .rec709, ceiling: ceiling)
         XCTAssertEqual(
             preview.desqueezeFactor, 2, "The selected inspector previews an inactive tool")
         XCTAssertFalse(assist.isPlaybackVisible(.desqueeze))

@@ -234,6 +234,10 @@ val stageSwiftCore =
             fileTree(repositoryRoot) {
                 include("Package.swift", "Package.resolved", "Sources/**")
             },
+            // OpenCineMedia: the root Package.swift takes it from the sibling OpenCineCore checkout.
+            fileTree(repositoryRoot.resolve("../OpenCineCore")) {
+                include("Package.swift", "Sources/OpenCineMedia/**")
+            },
             stageSwiftCoreScript,
         )
         inputs.property("swiftExecutable", providers.environmentVariable("SWIFT_EXECUTABLE").orElse("auto"))

@@ -35,6 +35,10 @@ struct LiveImageEffects: Equatable, Sendable {
     var zebraMidtoneColor: ZebraPaint = .amber
     /// Sibling / session stamps the camera color mode so D-Log2 IRE does not treat mid-grey as clip.
     var colorMode: ColorMode = .normal
+    /// Live-tap clip byte of this source for `colorMode`'s curve, stamped next to it from the
+    /// source's own ``ScopeExposureCeiling`` (never a process-wide one). Zebra and FALSE key it.
+    /// `nil` until a source stamps it: the curve's reference ceiling (EI 1600, no ratchet).
+    var clipByte: Int?
     /// Photo has an authoritative Rec.709 source; scene brightness cannot identify log.
     var allowsTransferInference = true
     var splitComparison = false
@@ -82,6 +86,17 @@ struct LiveImageEffects: Equatable, Sendable {
     /// Transparent stripe / peaking overlay on top of the identity layer.
     var needsOverlayFeed: Bool {
         needsGPUFeed && !replacesIdentityFeed
+    }
+
+    /// Clip byte zebra and FALSE use for `colorMode`.
+    var resolvedClipByte: Int {
+        clipByte ?? ScopeExposureCeiling.referenceClipByte(transfer: MonitorTransfer(colorMode))
+    }
+
+    /// Stamp the source's curve and its live ceiling together.
+    mutating func stamp(transfer: MonitorTransfer, ceiling: ScopeExposureCeiling) {
+        colorMode = transfer.colorMode
+        clipByte = ceiling.clipByte(transfer: MonitorTransfer(colorMode))
     }
 
     /// WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND share the source tap.
@@ -264,7 +279,7 @@ enum LiveMonitorCompositor {
             output = applyZebra(
                 over: output, source: input, extent: extent,
                 zebra: ZebraAssist.overlay(from: effects),
-                colorMode: effects.colorMode)
+                colorMode: effects.colorMode, clipByte: effects.resolvedClipByte)
         }
         if effects.desqueezeFactor > 1.001 {
             output = desqueeze(
@@ -301,7 +316,7 @@ enum LiveMonitorCompositor {
             output = applyZebra(
                 over: output, source: input, extent: extent,
                 zebra: ZebraAssist.overlay(from: effects),
-                colorMode: effects.colorMode)
+                colorMode: effects.colorMode, clipByte: effects.resolvedClipByte)
         }
         return output
     }
@@ -340,10 +355,10 @@ enum LiveMonitorCompositor {
     private static func applyFalseColor(
         over base: CIImage, codes: CIImage, extent: CGRect, effects: LiveImageEffects
     ) -> CIImage {
-        FalseColorLogReading.set(rec709: effects.falseColorRec709)
         guard
             let maps = PocketFalseColorMap.overlayPairData(
-                scale: effects.falseColorScale, mode: effects.colorMode),
+                scale: effects.falseColorScale, mode: effects.colorMode,
+                rec709: effects.falseColorRec709, clipByte: effects.resolvedClipByte),
             let paint = applyColorCube(
                 to: codes, dimension: maps.dimension, rgba: maps.paint),
             let weight = applyColorCube(
@@ -704,7 +719,7 @@ enum LiveMonitorCompositor {
 
     static func applyZebra(
         over base: CIImage, source: CIImage, extent: CGRect,
-        zebra: ZebraAssist.OverlaySpec, colorMode: ColorMode
+        zebra: ZebraAssist.OverlaySpec, colorMode: ColorMode, clipByte: Int
     ) -> CIImage {
         // Measure **source** encoded luma; monitor-percent thresholds map to curve
         // codes (0 = paper black, 100 = live-tap EI ceiling). The old
@@ -730,7 +745,7 @@ enum LiveMonitorCompositor {
         if zebra.highlightEnabled {
             let rgb = zebra.highlightColor.rgb
             let threshold = ScopeDisplayScale.zebraHighlightNative(
-                monitorPercent: zebra.highlightIRE, transfer: transfer)
+                monitorPercent: zebra.highlightIRE, transfer: transfer, clipByte: clipByte)
             output = blendStripedZebra(
                 over: output, mask: thresholdMask(hot, above: threshold),
                 color: CIColor(red: rgb.0, green: rgb.1, blue: rgb.2), extent: extent)
@@ -739,9 +754,9 @@ enum LiveMonitorCompositor {
             let rgb = zebra.midtoneColor.rgb
             let half = LiveZebra.midtoneHalfWidthIRE
             let lo = ScopeDisplayScale.signalNative(
-                monitorPercent: zebra.midtoneIRE - half, transfer: transfer)
+                monitorPercent: zebra.midtoneIRE - half, transfer: transfer, clipByte: clipByte)
             let hi = ScopeDisplayScale.signalNative(
-                monitorPercent: zebra.midtoneIRE + half, transfer: transfer)
+                monitorPercent: zebra.midtoneIRE + half, transfer: transfer, clipByte: clipByte)
             let mid = bandMask(luma, centre: (lo + hi) * 0.5, halfWidth: abs(hi - lo) * 0.5)
             output = blendStripedZebra(
                 over: output, mask: mid,

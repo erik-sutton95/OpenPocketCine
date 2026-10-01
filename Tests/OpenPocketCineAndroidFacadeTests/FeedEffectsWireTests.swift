@@ -7,7 +7,6 @@ import Testing
 struct FeedEffectsWireTests {
     @Test
     func assistScalarsMapDLog2HighlightToTheClipShelf() {
-        ScopeExposureCeiling.reset()
         let scalars = FeedEffectsWire.assistScalars(
             colorModeCode: Int(ColorMode.dLog2.rawValue),
             iso: 1600,
@@ -18,6 +17,22 @@ struct FeedEffectsWireTests {
             Int(ScopeExposureCeiling.dlog2LiveTapByteAt1600) - ScopeExposureCeiling.clipShelfCodes)
         #expect(abs(scalars[0] - shelf / 255) < 0.002, "zebra 100% fires on the clip shelf")
         #expect(scalars[3] == 1)
+    }
+
+    /// STATE-01: each call carries its own session's ISO. One session at ISO 800 must not
+    /// move another session's (or a later unknown-ISO call's) zebra threshold.
+    @Test
+    func assistScalarsForOneSessionDoNotMoveAnother() {
+        let code = Int(ColorMode.dLog2.rawValue)
+        func highlight(iso: Int) -> Float {
+            FeedEffectsWire.assistScalars(
+                colorModeCode: code, iso: iso, highlightIRE: 100, midtoneIRE: 55)[0]
+        }
+        let reference = highlight(iso: 1600)
+        let dim = highlight(iso: 800)
+        #expect(dim < reference, "ISO 800 lowers that session's D-Log2 ceiling")
+        #expect(highlight(iso: 1600) == reference)
+        #expect(highlight(iso: 0) == reference, "unknown ISO reads the reference EI")
     }
 
     @Test
@@ -34,7 +49,6 @@ struct FeedEffectsWireTests {
 
     @Test
     func packedCineStopPaintsEveryStopFlat() throws {
-        ScopeExposureCeiling.reset()
         let packed = try #require(
             FeedEffectsWire.packedFalseColorPaint(
                 scaleOrdinal: 3,
@@ -63,7 +77,6 @@ struct FeedEffectsWireTests {
 
     @Test
     func packedCineStopPaintsTheWholeClipShelfFullyRed() throws {
-        ScopeExposureCeiling.reset()
         let packed = try #require(
             FeedEffectsWire.packedFalseColorPaint(
                 scaleOrdinal: 3,
@@ -76,7 +89,7 @@ struct FeedEffectsWireTests {
         }
         // The GPU blends neighbouring lattice points: both points around the shelf byte
         // must already be clip red, or a blown window paints a pink blend.
-        let shelf = Double(ScopeExposureCeiling.clipShelfByte(transfer: .dlog2))
+        let shelf = Double(ScopeExposureCeiling().clipShelfByte(transfer: .dlog2))
         let below = Int((shelf / 255 * Double(size - 1)).rounded(.down))
         for i in [below, below + 1] {
             let (r, g, b) = rgb(i)
@@ -88,14 +101,13 @@ struct FeedEffectsWireTests {
 
     @Test
     func packedLimitsPaintsTheWholeClipShelf() throws {
-        ScopeExposureCeiling.reset()
         let code = Int(ColorMode.dLog2.rawValue)
         let paint = try #require(
             FeedEffectsWire.packedFalseColorPaint(scaleOrdinal: 2, colorModeCode: code, iso: 1600))
         let weight = try #require(
             FeedEffectsWire.packedFalseColorWeight(scaleOrdinal: 2, colorModeCode: code, iso: 1600))
         let size = FeedEffectsWire.falseColorCubeSize
-        let shelf = Double(ScopeExposureCeiling.clipShelfByte(transfer: .dlog2))
+        let shelf = Double(ScopeExposureCeiling().clipShelfByte(transfer: .dlog2))
         let below = Int((shelf / 255 * Double(size - 1)).rounded(.down))
         for i in [below, below + 1] {
             let dst = (i * size * size + i * size + i) * 4
@@ -108,7 +120,6 @@ struct FeedEffectsWireTests {
 
     @Test
     func packedIREOrdinalFiveReadsDLog2GreyThroughTheRec709Look() throws {
-        ScopeExposureCeiling.reset()
         #expect(FeedEffectsWire.falseColorScale(5) == .ire)
         #expect(FeedEffectsWire.readsRec709Look(5) && !FeedEffectsWire.readsRec709Look(1))
         let size = FeedEffectsWire.falseColorCubeSize

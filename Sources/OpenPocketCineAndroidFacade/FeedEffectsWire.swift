@@ -36,11 +36,16 @@ public enum FeedEffectsWire {
         scaleOrdinal: Int, colorModeCode: Int, iso: Int
     ) -> [UInt8]? {
         guard let scale = falseColorScale(scaleOrdinal) else { return nil }
-        let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
-        let key = cacheKey(readsRec709Look(scaleOrdinal) ? "paint709" : "paint", scale: scale, transfer: transfer)
+        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso)
+        let key = cacheKey(
+            readsRec709Look(scaleOrdinal) ? "paint709" : "paint", scale: scale, transfer: transfer,
+            ceiling: ceiling)
         return cached(key) {
             LUTLibraryWire.packedRGBA(
-                cube: overlayCube(scale: scale, transfer: transfer, rec709: readsRec709Look(scaleOrdinal)) {
+                cube: overlayCube(
+                    scale: scale, transfer: transfer, ceiling: ceiling,
+                    rec709: readsRec709Look(scaleOrdinal)
+                ) {
                     ($0.red, $0.green, $0.blue)
                 })
         }
@@ -51,11 +56,17 @@ public enum FeedEffectsWire {
         scaleOrdinal: Int, colorModeCode: Int, iso: Int
     ) -> [UInt8]? {
         guard let scale = falseColorScale(scaleOrdinal) else { return nil }
-        let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
-        let key = cacheKey(readsRec709Look(scaleOrdinal) ? "weight709" : "weight", scale: scale, transfer: transfer)
+        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso)
+        let key = cacheKey(
+            readsRec709Look(scaleOrdinal) ? "weight709" : "weight", scale: scale,
+            transfer: transfer,
+            ceiling: ceiling)
         return cached(key) {
             LUTLibraryWire.packedRGBA(
-                cube: overlayCube(scale: scale, transfer: transfer, rec709: readsRec709Look(scaleOrdinal)) {
+                cube: overlayCube(
+                    scale: scale, transfer: transfer, ceiling: ceiling,
+                    rec709: readsRec709Look(scaleOrdinal)
+                ) {
                     ($0.weight, $0.weight, $0.weight)
                 })
         }
@@ -65,14 +76,15 @@ public enum FeedEffectsWire {
     public static func assistScalars(
         colorModeCode: Int, iso: Int, highlightIRE: Double, midtoneIRE: Double
     ) -> [Float] {
-        let transfer = preparedTransfer(colorModeCode: colorModeCode, iso: iso)
+        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso)
+        let clipByte = ceiling.clipByte(transfer: transfer, iso: iso)
         let highlight = ScopeDisplayScale.zebraHighlightNative(
-            monitorPercent: highlightIRE, transfer: transfer, iso: iso)
+            monitorPercent: highlightIRE, transfer: transfer, clipByte: clipByte)
         let half = LiveZebra.midtoneHalfWidthIRE
         let lo = ScopeDisplayScale.signalNative(
-            monitorPercent: midtoneIRE - half, transfer: transfer, iso: iso)
+            monitorPercent: midtoneIRE - half, transfer: transfer, clipByte: clipByte)
         let hi = ScopeDisplayScale.signalNative(
-            monitorPercent: midtoneIRE + half, transfer: transfer, iso: iso)
+            monitorPercent: midtoneIRE + half, transfer: transfer, clipByte: clipByte)
         return [
             Float(highlight),
             Float((lo + hi) * 0.5),
@@ -87,21 +99,27 @@ public enum FeedEffectsWire {
         case .rec709, .hdr:
             let gradient = 1.57
             return gradient * gradient
-        case .dlog, .dlog2, .dlogm:
+        case .dlog, .dlog2, .dlogm, .ilog:
             return 1
         }
     }
 
-    private static func preparedTransfer(colorModeCode: Int, iso: Int) -> MonitorTransfer {
-        if (50...102_400).contains(iso) {
-            ScopeExposureCeiling.setISO(iso)
-        }
-        return monitorTransfer(colorModeCode: colorModeCode)
+    /// Each JNI call carries its session's ISO, so the facade builds that source's ceiling
+    /// per call instead of sharing one process-wide ratchet. Kotlin ratchets its own tap
+    /// ceiling per feed session; the facade never observed tap maxima. An ISO outside
+    /// 50…102400 reads as unknown: the reference EI 1600.
+    private static func prepared(
+        colorModeCode: Int, iso: Int
+    ) -> (transfer: MonitorTransfer, ceiling: ScopeExposureCeiling) {
+        let ceiling = ScopeExposureCeiling()
+        ceiling.setISO(iso)
+        return (monitorTransfer(colorModeCode: colorModeCode), ceiling)
     }
 
     private static func overlayCube(
         scale: LiveFalseColorScale,
         transfer: MonitorTransfer,
+        ceiling: ScopeExposureCeiling,
         rec709: Bool,
         component: ((red: Double, green: Double, blue: Double, weight: Double)) -> (
             Double, Double, Double
@@ -110,7 +128,9 @@ public enum FeedEffectsWire {
         let size = falseColorCubeSize
         let denom = Double(size - 1)
         // 709 reading: every scale evaluates the official look as a Rec.709 feed.
-        let clip = LiveColorScience.falseColorClip(scale: scale, transfer: transfer, rec709: rec709)
+        let clip = LiveColorScience.falseColorClip(
+            scale: scale, transfer: transfer, rec709: rec709,
+            clipByte: ceiling.clipByte(transfer: transfer))
         let bandList = LiveColorScience.falseColorBands(
             scale, transfer: clip.transfer, clipEncoded: clip.ceiling, latticeSize: size)
         var rgb = [Float]()
@@ -124,7 +144,9 @@ public enum FeedEffectsWire {
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let read = LiveColorScience.falseColorReading(
                         encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale)
-                    let ire = ScopeDisplayScale.monitorPercent(read.encoded, transfer: read.transfer)
+                    let ire = ScopeDisplayScale.monitorPercent(
+                        read.encoded, transfer: read.transfer,
+                        clipByte: ceiling.clipByte(transfer: read.transfer))
                     let value =
                         scale.usesSceneStops
                         ? LiveColorScience.stops(encoded: read.encoded, transfer: read.transfer) : ire
@@ -262,9 +284,10 @@ public enum FeedEffectsWire {
     nonisolated(unsafe) private static var cubeCache: [String: [UInt8]] = [:]
 
     private static func cacheKey(
-        _ kind: String, scale: LiveFalseColorScale, transfer: MonitorTransfer
+        _ kind: String, scale: LiveFalseColorScale, transfer: MonitorTransfer,
+        ceiling: ScopeExposureCeiling
     ) -> String {
-        let clip = ScopeExposureCeiling.clipByte(transfer: transfer)
+        let clip = ceiling.clipByte(transfer: transfer)
         return "\(kind):\(scale.rawValue):\(transfer.rawValue):\(clip)"
     }
 

@@ -53,9 +53,10 @@ enum AssistInspectorPreviewPolicy {
     /// Other pixel warnings are omitted so the operator can assess this tool.
     @MainActor
     static func imageEffects(
-        assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer
+        assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer,
+        ceiling: ScopeExposureCeiling
     ) -> LiveImageEffects {
-        var result = imageOptions(assist: assist, tool: tool, transfer: transfer)
+        var result = imageOptions(assist: assist, tool: tool, transfer: transfer, ceiling: ceiling)
         if tool == .lut {
             let lut = assist.inspectorLUT(transfer: transfer)
             result.lutDimension = lut.dimension
@@ -68,7 +69,8 @@ enum AssistInspectorPreviewPolicy {
     /// main picture. This must not resolve or prepare a preview-only LUT.
     @MainActor
     static func imageOptions(
-        assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer
+        assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer,
+        ceiling: ScopeExposureCeiling
     ) -> LiveImageEffects {
         var result = assist.gradesClip ? assist.playbackEffects : assist.effects
         result.peaking = tool == .peaking
@@ -82,7 +84,7 @@ enum AssistInspectorPreviewPolicy {
         result.ndMeter = false
         result.faceAF = false
         result.inspectorSample = false
-        result.colorMode = transfer.colorMode
+        result.stamp(transfer: transfer, ceiling: ceiling)
         result.mirror = (tool == .mirror && assist.mirrorHorizontal) || result.mirror
         result.mirrorVertical = (tool == .mirror && assist.mirrorVertical) || result.mirrorVertical
         if tool == .lut {
@@ -139,7 +141,8 @@ struct AssistInspectorPreview: View {
             playback: samples.usesPlaybackSource, tool: tool,
             effects: pictureEffects
                 ?? AssistInspectorPreviewPolicy.imageOptions(
-                    assist: model.assist, tool: tool, transfer: source.transfer),
+                    assist: model.assist, tool: tool, transfer: source.transfer,
+                    ceiling: samples.exposureCeiling),
             transfer: source.transfer,
             lutSelection: model.assist.lutSelection,
             lutExposureStops: model.assist.lutExposureStops,
@@ -309,7 +312,8 @@ struct AssistInspectorPreview: View {
                 ) {
                     pictureEffects
                         ?? AssistInspectorPreviewPolicy.imageEffects(
-                            assist: model.assist, tool: tool, transfer: source.transfer)
+                            assist: model.assist, tool: tool, transfer: source.transfer,
+                            ceiling: model.monitorSamples.exposureCeiling)
                 }
                 guard !Task.isCancelled else { return }
                 if let rendered, renderer.isCurrent(rendered),

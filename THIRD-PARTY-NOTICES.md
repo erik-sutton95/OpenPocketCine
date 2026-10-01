@@ -7,7 +7,8 @@ references that are **not** distributed.
 ## CubeLUT parser
 
 - **Source:** adapted from [OpenZCine](https://github.com/erik-sutton95/OpenZCine)
-- **Used for:** portable `.cube` LUT parsing in `Sources/OpenPocketViewCore/CubeLUT.swift`
+- **Used for:** portable `.cube` LUT parsing, now in the OpenCineMedia product of the
+  OpenCineCore package (`Sources/OpenCineMedia/CubeLUT.swift` there)
 - **License:** Apache License 2.0 (same as this project)
 
 ## Sora

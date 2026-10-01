@@ -9,10 +9,9 @@ import XCTest
 /// Curve/axis math is core-tested; this file pins the app-side drawing seams
 /// and the end-to-end legal-scaled contract.
 final class LiveScopesTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
-        ScopeExposureCeiling.reset()
-    }
+    /// This test's monitored source (XCTest makes a fresh one per test).
+    private let ceiling = ScopeExposureCeiling()
+
     // MARK: - Plot geometry
 
     func testTraceClipCoversAnchoredBandAndScissorFits() {
@@ -44,9 +43,10 @@ final class LiveScopesTests: XCTestCase {
     func testGreyMarkerSitsAtTheTransferMidLevel() {
         let plot = scopePlotRect(CGSize(width: 250, height: 153), top: 26)
         for transfer in MonitorTransfer.allCases {
-            let marker = scopeLevelY(transfer.scopeAnchors.midLevel, plot)
+            let marker = scopeLevelY(ceiling.anchors(transfer: transfer).midLevel, plot)
             let greyTick = scopeTraceLevelY(
-                UInt8((transfer.scopeAnchors.mid * 255).rounded()), transfer: transfer, plot)
+                UInt8((ceiling.anchors(transfer: transfer).mid * 255).rounded()),
+                transfer: transfer, clipByte: ceiling.clipByte(transfer: transfer), plot)
             XCTAssertEqual(
                 Double(marker), Double(greyTick), accuracy: 1.0,
                 "\(transfer) grey trace must land on the grey guide line")
@@ -67,9 +67,11 @@ final class LiveScopesTests: XCTestCase {
         let bundle = PocketScopeSampler.sample(
             bytes: packed.bytes, width: packed.width, height: packed.height,
             bytesPerRow: packed.bytesPerRow, transfer: .dlog2,
+            clipByte: ceiling.clipByte(transfer: .dlog2),
             includePoints: true, look: nil, previous: .empty)
         XCTAssertFalse(bundle.samples.points.isEmpty)
-        let table = ScopeDisplayScale.levelTable(for: .dlog2)
+        let table = ScopeDisplayScale.levelTable(
+            for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         let levels = bundle.samples.points.map { Double(table[Int($0.luma)]) }
         let minLevel = try XCTUnwrap(levels.min())
         let maxLevel = try XCTUnwrap(levels.max())
@@ -88,10 +90,11 @@ final class LiveScopesTests: XCTestCase {
         let greyBundle = PocketScopeSampler.sample(
             bytes: greyPacked.bytes, width: greyPacked.width, height: greyPacked.height,
             bytesPerRow: greyPacked.bytesPerRow, transfer: .dlog2,
+            clipByte: ceiling.clipByte(transfer: .dlog2),
             includePoints: true, look: nil, previous: .empty)
         let greyLevel = Double(table[Int(greyBundle.samples.points.first?.luma ?? 0)])
         XCTAssertEqual(
-            greyLevel, MonitorTransfer.dlog2.scopeAnchors.midLevel, accuracy: 0.02,
+            greyLevel, ceiling.anchors(transfer: MonitorTransfer.dlog2).midLevel, accuracy: 0.02,
             "18% grey pinned at paper IRE 30.50")
     }
 
@@ -115,6 +118,7 @@ final class LiveScopesTests: XCTestCase {
         let bundle = PocketScopeSampler.sample(
             bytes: packed.bytes, width: packed.width, height: packed.height,
             bytesPerRow: packed.bytesPerRow, transfer: .dlog2,
+            clipByte: ceiling.clipByte(transfer: .dlog2),
             includePoints: true, look: nil, previous: .empty)
         let point = try XCTUnwrap(bundle.samples.points.first)
         XCTAssertEqual(point.red, 16)
@@ -126,7 +130,8 @@ final class LiveScopesTests: XCTestCase {
         let line0 = WaveformAxis.scaleLineY(0, plot)
         let leftover = scopeLevelY(
             ScopeDisplayScale.crushLevel, scopePlotRect(CGSize(width: 250, height: 153), top: 26))
-        let table = WaveformAxis.levelTable(for: .dlog2)
+        let table = WaveformAxis.levelTable(
+            for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         var vertices = [ScopeTraceMetal.Vertex](
             repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
             count: ScopeTraceMetal.maxVertexCount(points: 1, mode: .waveform(.rgb)))
@@ -162,7 +167,8 @@ final class LiveScopesTests: XCTestCase {
         let line0 = WaveformAxis.scaleLineY(0, plot)
         let line5 = WaveformAxis.scaleLineY(5, plot)
         let leftover = WaveformAxis.plotY(ScopeDisplayScale.crushLevel, plot)
-        let y = WaveformAxis.traceY(0, transfer: .dlog2, plot)
+        let y = WaveformAxis.traceY(
+            0, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot)
         XCTAssertGreaterThanOrEqual(y, line0 - 0.2, "container legal black is at or below WAVE 0")
         XCTAssertEqual(leftover, line0, accuracy: 0.5, "0.05 is 0.05 IRE, not 5% of the plot")
         XCTAssertGreaterThan(line0 - line5, 4, "the 5 IRE buffer is above 0")
@@ -186,6 +192,7 @@ final class LiveScopesTests: XCTestCase {
         let bundle = PocketScopeSampler.sample(
             bytes: packed.bytes, width: packed.width, height: packed.height,
             bytesPerRow: packed.bytesPerRow, transfer: .dlog2,
+            clipByte: ceiling.clipByte(transfer: .dlog2),
             includePoints: true, look: nil, previous: .empty)
         XCTAssertEqual(
             bundle.samples.histogramLuma[16],
@@ -195,7 +202,8 @@ final class LiveScopesTests: XCTestCase {
         // And it draws on the 0 line.
         let plot = CGRect(x: 0, y: 0, width: 100, height: 100)
         XCTAssertEqual(
-            scopeTraceLevelY(16, transfer: .dlog2, plot),
+            scopeTraceLevelY(
+                16, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot),
             scopeLevelY(ScopeDisplayScale.crushLevel, plot),
             accuracy: 0.5,
             "legal black sits on the drawn 0 line")
@@ -206,7 +214,8 @@ final class LiveScopesTests: XCTestCase {
         // prediction. Those dips must stay visible in the sub-black margin and
         // must not light the crush lamp (they are noise, not crushed picture).
         let plot = CGRect(x: 0, y: 0, width: 100, height: 100)
-        let noise = scopeTraceLevelY(10, transfer: .dlog2, plot)
+        let noise = scopeTraceLevelY(
+            10, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot)
         let zero = scopeLevelY(ScopeDisplayScale.crushLevel, plot)
         XCTAssertGreaterThan(noise, zero, "sub-black draws in the margin below the 0 line")
         XCTAssertLessThanOrEqual(noise, scopeLevelY(0, plot) + 0.01, "but inside the clip band")
@@ -217,7 +226,8 @@ final class LiveScopesTests: XCTestCase {
         }
         let bundle = PocketScopeSampler.sample(
             bytes: bytes, width: 32, height: 1, bytesPerRow: 128,
-            transfer: .dlog2, includePoints: false, look: nil, previous: .empty)
+            transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), includePoints: false,
+            look: nil, previous: .empty)
         XCTAssertFalse(bundle.traffic.anyCrush, "sub-black noise is below the crush floor")
     }
 
@@ -241,10 +251,15 @@ final class LiveScopesTests: XCTestCase {
         let plot = CGRect(x: 0, y: 0, width: 100, height: 100)
         let zeroLine = scopeLevelY(ScopeDisplayScale.crushLevel, plot)
         XCTAssertGreaterThan(
-            scopeTraceLevelY(5, transfer: .dlog2, plot), zeroLine + 1,
+            scopeTraceLevelY(
+                5, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot),
+            zeroLine + 1,
             "container-80 noise draws strictly below the 0 line, not crushed onto it")
         XCTAssertEqual(
-            Double(scopeTraceLevelY(16, transfer: .dlog2, plot)), Double(zeroLine),
+            Double(
+                scopeTraceLevelY(
+                    16, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot)),
+            Double(zeroLine),
             accuracy: 0.5, "container-119 true black sits on the 0 line")
 
         // A noise-only frame meters clean: below the crush band, no lights.
@@ -254,6 +269,7 @@ final class LiveScopesTests: XCTestCase {
         let bundle = PocketScopeSampler.sample(
             bytes: noisePacked.bytes, width: noisePacked.width, height: noisePacked.height,
             bytesPerRow: noisePacked.bytesPerRow, transfer: .dlog2,
+            clipByte: ceiling.clipByte(transfer: .dlog2),
             includePoints: false, look: nil, previous: .empty)
         XCTAssertFalse(bundle.traffic.anyCrush, "sub-black noise is noise, not crushed picture")
         XCTAssertFalse(bundle.traffic.anyClip)
