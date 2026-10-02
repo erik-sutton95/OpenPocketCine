@@ -93,7 +93,9 @@ checked out next to this repository as `../OpenCine` by `scripts/checkout-openci
   `libOpenPocketCineAndroid.so` the 30 DJI wire natives are exported for OpenCine's `DjiNative`
   class instead of `SwiftCore` (41 exports before and after; the 11 app natives keep their names).
   `PocketCameraSession`, diagnostics, preferences and UI stay in the app. The CamFov golden
-  vectors moved to OpenCine with both test halves.
+  vectors moved to OpenCine with both test halves. The Swift side of those 30 natives now comes
+  from OpenCine's OpenCineDJIAndroid product, linked into the same `.so` (no change intended; the
+  41 exports are identical).
 
 ## Physical device checklist
 
