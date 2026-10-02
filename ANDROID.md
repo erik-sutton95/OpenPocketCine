@@ -21,7 +21,7 @@ Source: the public [OpenZCine](https://github.com/erik-sutton95/OpenZCine) repos
 1. **Portable Swift core** — `Sources/OpenPocketViewCore/` never imports SwiftUI, UIKit, or Android.
 2. **Android JNI facade** — `Sources/OpenPocketCineAndroidFacade/` owns the session that talks to the camera on Android, plus hand-written `@_cdecl` JNI shims (`SwiftCoreJNI.swift`). A header-only `CJNI` target exposes NDK `<jni.h>` on Android only.
 3. **Cross-compile, don’t SPM-link** — Gradle task `:app:stageSwiftCore` (`just android-core`, `scripts/android-stage-swift-core.sh`) builds `aarch64-unknown-linux-android29` and stages `libOpenPocketCineAndroid.so` plus the Swift runtime `.so` closure into generated jniLibs. **arm64-v8a only.** Toolchain pin: Swift **6.3.3** + `swift-6.3.3-RELEASE_android`.
-4. **Kotlin seam** — `Apps/Android/core-api` defines `CameraSession` / `CameraIdentity` interfaces. The Compose app implements them with `SwiftCoreCameraSession` over JNI. Kotlin does not pack protocol bytes.
+4. **Kotlin seam:** `PocketCameraSession` drives the camera over JNI and exposes OpenCineCore `CameraSession` through `DjiCameraSessionAdapter`. `Apps/Android/core-api` holds only `ConnectionPhase`, the DJI connection stage the shell shows (it moves to OpenCineDJI with the Kotlin DJI session). Kotlin does not pack protocol bytes.
 5. **Same applicationId as iOS bundle** (`com.opencapture.openpocketcine`). Design tokens are duplicated as floats in `Theme.kt` / `pairing/StartupDesign.kt` so connection screens match.
 
 iOS links the core via Swift Package Manager. Android does **not** consume that SPM product at runtime — only the cross-compiled `.so`.
@@ -54,7 +54,7 @@ unit tests and lint (`:Android:monitor-ui:testDebugUnitTest`, `:Android:monitor-
 | --- | --- |
 | Portable Swift core | `OpenPocketViewCore` (DUML, HEVC depacketizer, saved-camera records, connection phase) |
 | JNI facade | `OpenPocketCineAndroidFacade`: BLE/Wi-Fi/UDP session that calls the core, JNI surface for scan/connect/live-frame callbacks |
-| `core-api` | Kotlin `CameraSession` wrapping the facade |
+| `core-api` | `ConnectionPhase`, the DJI connection stage (BLE, Wi-Fi, datalink) |
 | Compose shell | Splash + saved cameras + Osmo connection wizard using the same `StartupColors` / `BrandColors` floats as iOS |
 | Saved cameras | `SharedPreferences` file `openpocketcine.saved-cameras`, key `records-json`. Wi-Fi passwords stay out of prefs (re-read over BLE, same as iOS) |
 | applicationId | `com.opencapture.openpocketcine` on iOS and Android |
