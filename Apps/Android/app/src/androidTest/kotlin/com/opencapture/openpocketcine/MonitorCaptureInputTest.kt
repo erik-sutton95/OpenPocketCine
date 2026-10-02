@@ -41,6 +41,7 @@ import com.opencapture.monitorui.MonitorQuickPreview
 import com.opencapture.monitorui.MonitorReadoutDismissBackdrop
 import com.opencapture.monitorui.MonitorReadoutRegions
 import com.opencapture.monitorui.monitorReadoutGesture
+import com.opencapture.monitorui.monitorPickerPassthrough
 import com.opencapture.opencine.dji.CameraStatus
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -407,11 +408,11 @@ private fun NavigationFixture(model: AppModel, probe: NavigationProbe, layoutPro
                         // its quick-edit gesture still hides it in the production composition.
                         capturePresented = true, navigationHidden = false, interactive = probe.navigationEnabled,
                         lock = { enabled -> LockButton(false, enabled = enabled, onClick = {}) },
-                        settings = { enabled -> AuxCircleButton(enabled = enabled,
+                        settings = { enabled -> AuxCircleButton(Modifier.monitorPickerPassthrough(enabled), enabled = enabled,
                             onClick = { model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.SETTINGS) }) {
                             OpcIcon(OpcIcon.SETTINGS, "Settings", Modifier.fillMaxSize(), it)
                         } },
-                        media = { enabled -> AuxCircleButton(enabled = enabled,
+                        media = { enabled -> AuxCircleButton(Modifier.monitorPickerPassthrough(enabled), enabled = enabled,
                             onClick = { model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.MEDIA) }) {
                             OpcIcon(OpcIcon.FILM, "Media", Modifier.fillMaxSize(), it)
                         } },
