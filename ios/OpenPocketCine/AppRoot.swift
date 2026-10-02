@@ -1029,7 +1029,9 @@ struct LinkExperience: View {
                         }
                     },
                     onReportProblem: { showProblemReport = true },
-                    onWatchFeed: { model.openWatcherBrowse() })
+                    onWatchFeed: { model.openWatcherBrowse() },
+                    onPrivacy: { model.homePanel = .privacy },
+                    onTerms: { model.homePanel = .terms })
             } else {
                 CamerasScreen(
                     model: model.cameras, brandName: "OpenPocketCine", safeArea: safeArea,
@@ -1040,7 +1042,9 @@ struct LinkExperience: View {
                         model.openMultiview()
                         showMultiview = true
                     } : nil,
-                    onWatchFeed: { if model.cameras.attempts.isEmpty { model.openWatcherBrowse() } })
+                    onWatchFeed: { if model.cameras.attempts.isEmpty { model.openWatcherBrowse() } },
+                    onPrivacy: { model.homePanel = .privacy },
+                    onTerms: { model.homePanel = .terms })
             }
         }
         .ignoresSafeArea()

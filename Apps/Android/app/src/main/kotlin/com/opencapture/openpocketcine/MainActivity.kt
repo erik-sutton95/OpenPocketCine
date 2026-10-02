@@ -342,6 +342,8 @@ private fun LinkExperience(
                         onDone = { model.pairing = false },
                         onDiagnostics = { DiagnosticCenter.shareReport(context, model.session) },
                         onReportProblem = { showProblemReport = true },
+                        onPrivacy = { model.homePanel = AppPanel.PRIVACY },
+                        onTerms = { model.homePanel = AppPanel.TERMS },
                     )
                 } else {
                     CamerasScreen(
@@ -351,6 +353,8 @@ private fun LinkExperience(
                         onMedia = { model.homePanel = AppPanel.MEDIA },
                         onSettings = { model.homePanel = AppPanel.SETTINGS },
                         onMultiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null,
+                        onPrivacy = { model.homePanel = AppPanel.PRIVACY },
+                        onTerms = { model.homePanel = AppPanel.TERMS },
                     )
                 }
             }

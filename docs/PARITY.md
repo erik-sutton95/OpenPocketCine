@@ -16,6 +16,11 @@ Forgetting a camera now removes its Android Wi-Fi credentials too, matching iOS.
 Saved IDs and media favorites stay unchanged; the new document mirrors legacy
 records and merges edits made by an older build after a downgrade.
 
+Long-press any saved setup, including a camera's only setup, to rename it.
+Saving a blank name restores its default title. Privacy and Terms are available
+on both the cameras and empty pairing pages and open the existing app documents.
+These actions preserve saved route IDs, credentials and pairing progress.
+
 The iOS Personal Hotspot confirmation is still platform-specific. Cancelling or
 replacing an attempt retires that prompt before a later response can reconnect.
 Simulator and emulator checks cover presentation and installed-build migration;
