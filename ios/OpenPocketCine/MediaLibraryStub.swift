@@ -995,24 +995,8 @@ struct AppPanelHost: View {
 
     var body: some View {
         switch model.homePanel {
-        case .settings:
-            GeometryReader { proxy in
-                SettingsRootView(
-                    safeArea: OperatorPanelMetrics.standalonePanelSafeArea(
-                        from: OperatorPanelMetrics.resolvedDeviceSafeArea(
-                            proxy.safeAreaInsets, window: windowGeometry.safeArea)
-                    )
-                )
-            }
-        case .media:
-            GeometryReader { proxy in
-                MediaLibraryView(
-                    safeArea: OperatorPanelMetrics.standalonePanelSafeArea(
-                        from: OperatorPanelMetrics.resolvedDeviceSafeArea(
-                            proxy.safeAreaInsets, window: windowGeometry.safeArea)
-                    )
-                )
-            }
+        case .settings: ShellCoverPage(cover: .settings)
+        case .media: ShellCoverPage(cover: .media)
         case .privacy: LegalDocumentView(kind: .privacy)
         case .terms: LegalDocumentView(kind: .terms)
         case .licenses: LegalDocumentView(kind: .licenses)

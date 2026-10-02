@@ -74,8 +74,10 @@ import com.opencapture.openpocketcine.multiview.MultiviewQualificationPolicy
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.opencapture.opencine.appkit.CamerasScreen
-import com.opencapture.opencine.appkit.PairScreen
+import com.opencapture.opencine.appkit.AppShell
+import com.opencapture.opencine.appkit.ShellBrand
+import com.opencapture.opencine.appkit.ShellActions
+import com.opencapture.opencine.appkit.ShellModel
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
 import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
 import com.opencapture.openpocketcine.pairing.LocalPairingCallouts
@@ -142,7 +144,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        if (::model.isInitialized) model.session.noteSceneBecameInactive()
+        if (::model.isInitialized) model.shell.setSceneActive(false)
         ManualProblemReport.setForeground(false)
         super.onPause()
     }
@@ -151,7 +153,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         ManualProblemReport.setForeground(true)
         if (::model.isInitialized) {
-            model.session.noteSceneBecameActive()
+            model.shell.setSceneActive(true)
             model.gimbalGamepad.ensureListening(this, model)
         }
     }
@@ -214,9 +216,8 @@ private fun OpenPocketCineApp(model: AppModel) {
         model.showsLaunchSplash = false
     }
 
-    val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
-    // The live session is over: discovery resumes on the cameras page.
-    LaunchedEffect(showLive) { if (!showLive) model.cameras.sessionEnded() }
+    val shell by model.shell.state.collectAsState()
+    val showLive = shell.monitor != null
     LaunchedEffect(model.hdrDisplay, model.screenCaptured, activity) {
         HdrDisplay.apply(activity, enabled = model.hdrDisplayActive)
     }
@@ -247,8 +248,6 @@ private fun OpenPocketCineApp(model: AppModel) {
     Box(Modifier.fillMaxSize().startupBackdrop()) {
         if (model.showsMultiview && !showLive) {
             com.opencapture.openpocketcine.multiview.MultiviewScreen(model, onClose = model::closeMultiview)
-        } else if (showLive) {
-            LiveViewScreen(model)
         } else {
             LinkExperience(
                 model = model,
@@ -257,7 +256,7 @@ private fun OpenPocketCineApp(model: AppModel) {
             )
         }
         LaunchSplashOverlay(visible = launchSplashVisible)
-        if (model.homePanel != null && !showLive && !model.showsMultiview) {
+        if (model.showsLegalPanel && !model.showsMultiview) {
             AppPanelHost(model)
         }
         var showAutomaticPrompt by remember {
@@ -311,55 +310,39 @@ private fun LinkExperience(
             landscape = true, safeLeading = leading.value, safeTrailing = trailing.value,
         ).first.dp
     }
-    Column(
-        Modifier
-            .fillMaxSize()
-            // Cameras landscape mirrors the larger cutout onto both sides so the list stays
-            // centered; pairing and live chrome keep their own edges.
-            .then(
-                if (!pairing && landscapeHome) {
-                    Modifier
-                        .padding(start = homeSide, end = homeSide)
+    AppShell(model.shell, ShellBrand("OpenPocketCine"),
+        ShellActions(
+            diagnostics = { DiagnosticCenter.shareReport(context, model.session) },
+            reportProblem = { showProblemReport = true },
+            multiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null,
+            privacy = { model.homePanel = AppPanel.PRIVACY },
+            terms = { model.homePanel = AppPanel.TERMS }),
+        monitor = { LiveViewScreen(model) },
+        page = { ShellCoverPage(model, it) },
+        pageFrame = { route, content ->
+            val pair = route == ShellModel.Route.PAIR
+            Column(Modifier.fillMaxSize().then(
+                if (!pair && landscapeHome) {
+                    Modifier.padding(start = homeSide, end = homeSide)
                         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))
-                } else {
-                    Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
-                },
-            )
-            .padding(vertical = 16.dp),
-    ) {
-        Box(Modifier.weight(1f).padding(
-            start = if (pairing) 14.dp else 18.dp,
-            end = if (pairing) 14.dp else 18.dp,
-            top = if (pairing) 0.dp else 8.dp,
-        )) {
-            CompositionLocalProvider(LocalPairingCallouts provides { PairingCallouts(model, discovery, onEnableBluetooth) }) {
-                if (pairing) {
-                    BackHandler(enabled = state.attempts.isNotEmpty() || state.saved.isNotEmpty()) {
-                        if (state.attempts.isNotEmpty()) model.cameras.cancelAll() else model.pairing = false
+                } else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+            ).padding(vertical = 16.dp)) {
+                Box(Modifier.weight(1f).padding(start = if (pair) 14.dp else 18.dp,
+                    end = if (pair) 14.dp else 18.dp, top = if (pair) 0.dp else 8.dp)) {
+                    CompositionLocalProvider(LocalPairingCallouts provides {
+                        PairingCallouts(model, discovery, onEnableBluetooth)
+                    }) {
+                        if (pair) {
+                            BackHandler(enabled = state.attempts.isNotEmpty() || state.saved.isNotEmpty()) {
+                                if (state.attempts.isNotEmpty()) model.cameras.cancelAll()
+                                else model.shell.endPairing()
+                            }
+                        }
+                        content()
                     }
-                    PairScreen(
-                        model.cameras,
-                        onDone = { model.pairing = false },
-                        onDiagnostics = { DiagnosticCenter.shareReport(context, model.session) },
-                        onReportProblem = { showProblemReport = true },
-                        onPrivacy = { model.homePanel = AppPanel.PRIVACY },
-                        onTerms = { model.homePanel = AppPanel.TERMS },
-                    )
-                } else {
-                    CamerasScreen(
-                        model.cameras,
-                        brandName = "OPENPOCKETCINE",
-                        onPair = { model.pairing = true },
-                        onMedia = { model.homePanel = AppPanel.MEDIA },
-                        onSettings = { model.homePanel = AppPanel.SETTINGS },
-                        onMultiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null,
-                        onPrivacy = { model.homePanel = AppPanel.PRIVACY },
-                        onTerms = { model.homePanel = AppPanel.TERMS },
-                    )
                 }
             }
-        }
-    }
+        })
     if (showProblemReport) {
         ManualProblemReportDialog(model = model, onClose = { showProblemReport = false }, onPrivacy = { showReportingPrivacy = true })
     }

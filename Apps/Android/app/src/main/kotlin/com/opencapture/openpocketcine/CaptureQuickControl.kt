@@ -17,6 +17,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.monitorui.MonitorQuickControl
+import com.opencapture.opencine.appkit.MonitorCaptureField
+import com.opencapture.opencine.appkit.captureField
+import com.opencapture.opencine.appkit.commit
+import com.opencapture.opencine.appkit.quickControl
+import com.opencapture.opencine.core.SettingKey
 import com.opencapture.opencine.dji.ApertureStrategy
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CameraModel
@@ -29,7 +34,10 @@ internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: 
     val body = model.session.connectedCamera?.model?.name.orEmpty()
     fun chrome(control: MonitorQuickControl) = control.copy(identity = CaptureQuickSource(
         model.session, model.session.connectedCamera?.id, model.session.phase, lifetime, lifetime?.epoch ?: 0L,
+        control.identity as? MonitorCaptureField ?: if (sheet == LiveSheet.FOCUS) model.control.captureField(SettingKey.FOCUS_MODE) else null,
     ))
+    commonCaptureField(sheet, status, model)?.let { return chrome(it.quickControl().copy(
+        enabled = it.isEditable && (sheet != LiveSheet.SHUTTER || status.expoMode != CameraCommands.EXPO_AUTO || !model.facePriorityExposureEnabled))) }
     return when (sheet) {
         LiveSheet.ISO -> {
             val seat = IsoSheetLogic.reseat(status, body)
@@ -75,6 +83,37 @@ internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: 
         }
     }
 }
+
+/** Compound automatic limits, angle preference and AWB lock remain explicit integration adapters. */
+internal fun commonCaptureField(sheet: LiveSheet, status: CameraStatus, model: AppModel): MonitorCaptureField? {
+    val key = when (sheet) {
+        LiveSheet.ISO -> if (CaptureLists.shouldGetIsoLimit(status)) null else SettingKey.ISO
+        LiveSheet.SHUTTER -> if (status.expoMode == CameraCommands.EXPO_AUTO) SettingKey.EXPOSURE_COMPENSATION
+            else if (model.shutterUsesAngle && !CameraCommands.isPhotoMode(status.shootingMode)) null else SettingKey.SHUTTER
+        LiveSheet.WB -> if (status.wbMode == CameraCommands.WB_CUSTOM && model.session.awbLockKelvin.value == null)
+            SettingKey.WHITE_BALANCE else null
+        else -> null
+    } ?: return null
+    return model.control.captureField(key) ?: MonitorCaptureField(key,
+        com.opencapture.opencine.appkit.MonitorCapturePresentation.title(key).orEmpty(), null, emptyList(), null)
+}
+
+internal fun captureReadoutLabel(sheet: LiveSheet, status: CameraStatus, model: AppModel?, nativeLabel: String): String {
+    val field = model?.let { commonCaptureField(sheet, status, it) } ?: return nativeLabel
+    return field.label ?: "--"
+}
+
+internal fun capturePanelSettingKey(sheet: LiveSheet, expoMode: Int): SettingKey? = when (sheet) {
+    LiveSheet.ISO -> SettingKey.ISO
+    LiveSheet.SHUTTER -> if (expoMode == CameraCommands.EXPO_AUTO) SettingKey.EXPOSURE_COMPENSATION else SettingKey.SHUTTER
+    LiveSheet.WB -> SettingKey.WHITE_BALANCE
+    LiveSheet.FOCUS -> SettingKey.FOCUS_MODE
+    else -> null
+}
+
+/** A panel keeps its captured approval; a mode change cannot reinterpret it as another setting. */
+internal fun retainedCapturePanelField(captured: MonitorCaptureField?, sheet: LiveSheet, expoMode: Int): MonitorCaptureField? =
+    captured?.takeIf { it.key == capturePanelSettingKey(sheet, expoMode) }
 
 /** Same primary drum the persistent FORMAT / COLOR / MODE pickers use. */
 internal fun recordingCategoryQuickControl(
@@ -249,7 +288,7 @@ internal class CaptureQuickLifetime {
 
 private data class CaptureQuickSource(
     val session: Any, val cameraID: String?, val phase: ConnectionPhase,
-    val lifetime: CaptureQuickLifetime?, val epoch: Long,
+    val lifetime: CaptureQuickLifetime?, val epoch: Long, val commonField: MonitorCaptureField? = null,
 )
 
 @Composable
@@ -282,6 +321,16 @@ internal fun releaseCaptureQuickControl(sheet: LiveSheet, expected: MonitorQuick
     val current = captureQuickControl(sheet, currentStatus, model, context, lifetime)
     commitCaptureQuickControl(expected, current, value,
         enabled && lifetime.active && model.session.phase == ConnectionPhase.LIVE && !model.session.controlBusy.value) {
+        val field = (expected.identity as? CaptureQuickSource)?.commonField
+        if (field != null) {
+            val editor = field.editor ?: return@commitCaptureQuickControl
+            if (!model.control.isCurrent(editor)) return@commitCaptureQuickControl
+            val choice = field.choices.firstOrNull { it.label == value &&
+                (sheet != LiveSheet.FOCUS || it.value == commonFocusValue(value,
+                    com.opencapture.opencine.dji.FocusTrackMode.fromRaw(currentStatus.focusTrack))) }
+            if (choice != null) { model.control.commit(choice, field); return@commitCaptureQuickControl }
+            if (sheet != LiveSheet.FOCUS) return@commitCaptureQuickControl
+        }
         applyCaptureQuickControl(sheet, value, currentStatus, model, context)
     }
 }

@@ -29,6 +29,7 @@ final class CapturePanelRenderComparisonTests: XCTestCase {
                 id: UUID(), name: "OsmoPocket4P-Test",
                 model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
             driver: nil, status: status)
+        model.control.bind(model.session.control)
         let size = CGSize(width: 874, height: 402)
         let host = UIHostingController(
             rootView: CaptureComparisonCanvas(model: model, held: false, size: size))

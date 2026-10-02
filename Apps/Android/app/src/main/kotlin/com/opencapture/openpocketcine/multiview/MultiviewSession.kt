@@ -452,21 +452,24 @@ class MultiviewSession(
         model.session.updateMultiview(camera, tile.driver, tile.latestSettings)
         model.session.adoptMultiviewPose(tile.pose)
         model.setBorrowedLut(tile.lutEnabled)
+        model.borrowMonitor(camera) { releaseLiveView(tile) }
         tile.liveModel = model
     }
 
+    private fun releaseLiveView(tile: Tile) {
+        val model = tile.liveModel ?: return
+        tile.liveModel = null
+        tile.lutEnabled = model.borrowedLutEnabled()
+        tile.pose = model.session.multiviewPose
+        model.session.releaseMultiview()
+        model.multiviewExit = null
+        model.close()
+        tile.poseViewFlip = tile.pose.poseViewFlip
+        tile.updateLUT()
+    }
+
     fun closeLiveView() {
-        for (tile in tiles) {
-            val model = tile.liveModel ?: continue
-            tile.lutEnabled = model.borrowedLutEnabled()
-            tile.pose = model.session.multiviewPose
-            model.session.releaseMultiview()
-            model.multiviewExit = null
-            model.close()
-            tile.liveModel = null
-            tile.poseViewFlip = tile.pose.poseViewFlip
-            tile.updateLUT()
-        }
+        for (tile in tiles) releaseLiveView(tile)
         // Every tile feed remounts with a fresh surface. A fresh codec takes the IRAP this
         // enable requests, rather than waiting for the watchdog to find a frozen picture.
         for (tile in tiles) {

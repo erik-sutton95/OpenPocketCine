@@ -1,4 +1,5 @@
 import OpenPocketViewCore
+import OpenCineCore
 import XCTest
 
 @testable import OpenPocketCine
@@ -14,6 +15,7 @@ final class ChromeEditorReturnTests: XCTestCase {
         model.chromeEditorMode = .live
         model.chromeEditorReturnMode = .live
 
+        present(model)
         model.noteBecameLive()
 
         XCTAssertNil(model.homePanel)
@@ -26,9 +28,11 @@ final class ChromeEditorReturnTests: XCTestCase {
     @MainActor
     func testLeavingLiveDismissesOperatorSetup() {
         let model = AppModel()
+        present(model)
         model.liveOperatorPanel = .settings
         model.chromeEditorMode = .clean
 
+        model.shell.close()
         model.noteLeftLive()
 
         XCTAssertNil(model.liveOperatorPanel)
@@ -39,6 +43,7 @@ final class ChromeEditorReturnTests: XCTestCase {
     @MainActor
     func testOpeningTheEditorLeavesSettingsAndSwitchesMode() {
         let model = AppModel()
+        present(model)
         model.liveOperatorPanel = .settings
         model.assist.clean = false
 
@@ -53,6 +58,7 @@ final class ChromeEditorReturnTests: XCTestCase {
     @MainActor
     func testDoneReturnsToDisplaySettingsOnEditedSection() {
         let model = AppModel()
+        present(model)
         model.beginChromeEditing(.clean)
 
         model.endChromeEditing()
@@ -116,6 +122,12 @@ final class ChromeEditorReturnTests: XCTestCase {
         model.assist.clean = false
 
         XCTAssertTrue(model.chromeSectionMounts(.railSettings))
+    }
+
+    @MainActor private func present(_ model: AppModel) {
+        model.shell.present(ConnectedCamera(saved: OpenCineCore.SavedCamera(
+            id: "simulated-chrome", integration: DJICameraSessionAdapter.integration,
+            advertisedName: "SIMULATED chrome", model: "SIMULATED"), session: model.session.control))
     }
 
     func testBadgeFramesSitOnTopBarAndAvoidOverlap() throws {

@@ -17,7 +17,12 @@ final class AppModel {
     /// Saved cameras, nearby sightings, pairing and connect attempts (SHELL-02): the shared flow
     /// over the DJI integration, which connects through `session`.
     let cameras: CamerasModel
+    let control = MonitorControlModel()
+    let shell: ShellModel
     @ObservationIgnored let integration: DJIIntegration
+    #if DEBUG && targetEnvironment(simulator)
+        @ObservationIgnored var simulatedControlReview: MonitorReviewControlPort?
+    #endif
     /// A saved hotspot connect waiting for the operator to turn Personal Hotspot on.
     var hotspotQuestion: HotspotQuestion?
 
@@ -43,13 +48,20 @@ final class AppModel {
                             addRoute: { camera, done in AnyView(AddSetupView(camera: camera, done: done)) }))
                 ] : [],
             store: Self.camerasStore(defaults))
+        shell = ShellModel(cameras: cameras, control: control)
         // The save rules a DJI record follows: another camera's network is never saved with
         // this one, and a setup that moves the camera is remembered before it moves it.
         integration.savedCameras = { [weak self] in self?.cameras.saved ?? [] }
         integration.saveRecord = { [weak self] in self?.cameras.upsert($0) }
         session.savedCameras = { [weak self] in self?.cameras.saved ?? [] }
         session.confirmHotspot = { [weak self] network in await self?.askHotspot(network) ?? false }
-        cameras.onConnected = { [weak self] _ in self?.isPairingNewCamera = false }
+        shell.onSceneActivity = { [weak self] active in
+            guard let self else { return }
+            assist.inspectorSceneActive = active
+            if active { self.session.noteSceneBecameActive() }
+            else { self.session.noteSceneBecameInactive() }
+        }
+        control.onNote = { [weak self] in self?.session.controlNote = $0 }
     }
 
     /// The saved cameras: the shared document `OpenPocketCine.Cameras`, merged on every launch
@@ -107,7 +119,10 @@ final class AppModel {
             assistMirror: assist.mirrorsHorizontally)
     }
     /// Operator tapped “Pair new camera” from the saved list.
-    var isPairingNewCamera = false
+    var isPairingNewCamera: Bool {
+        get { shell.pairing }
+        set { if newValue { shell.beginPairing() } else { shell.endPairing() } }
+    }
     var showsLaunchSplash = true
     /// Long-press on the tap-focus box locks it: feed taps no longer move focus.
     var focusBoxLocked = false
@@ -145,7 +160,24 @@ final class AppModel {
         session.decoder.incomingColorMode = LiveMonitorColorScience.colorMode(
             isPhoto: photo, colorMode: raw)
     }
-    var homePanel: AppPanel?
+    /// Legal documents are app-owned. Settings and media have one shared cover state.
+    private var legalPanel: AppPanel?
+    var homePanel: AppPanel? {
+        get {
+            if let legalPanel { return legalPanel }
+            guard shell.monitor == nil else { return nil }
+            return shell.cover.map { $0 == .settings ? .settings : .media }
+        }
+        set {
+            switch newValue {
+            case .settings: legalPanel = nil; shell.open(.settings)
+            case .media: legalPanel = nil; shell.open(.media)
+            case nil: legalPanel = nil; shell.dismissCover()
+            default: legalPanel = newValue
+            }
+        }
+    }
+    var showsLegalPanel: Bool { legalPanel != nil }
     var captureSheet: CaptureSheet?
     var captureDrum: CaptureDrumPresentation?
     var keepScreenAwake: Bool = OperatorPrefs.keepScreenAwake {
@@ -262,8 +294,17 @@ final class AppModel {
         didSet { OperatorPrefs.dispClean = dispClean }
     }
     var operatorSettingsTab: OperatorSettingsTab = .link
-    /// Live-monitor Media / Settings overlay. Distinct from `homePanel` (startup cover).
-    var liveOperatorPanel: LiveOperatorPanel?
+    /// Compatibility for native panels while their contents migrate: the shell owns the cover.
+    var liveOperatorPanel: LiveOperatorPanel? {
+        get {
+            guard shell.monitor != nil else { return nil }
+            return shell.cover.map { $0 == .settings ? .settings : .media }
+        }
+        set {
+            if let newValue { shell.open(newValue == .settings ? .settings : .media) }
+            else { shell.dismissCover() }
+        }
+    }
     /// DISP mode whose chrome the operator is editing on the monitor, or `nil` when live.
     var chromeEditorMode: PocketDispMode?
     /// Section Display settings should reopen on after Done.
@@ -415,23 +456,9 @@ final class AppModel {
     }
 
     /// The pair page: no saved camera yet, or the operator chose Pair.
-    var shouldShowWizard: Bool { cameras.saved.isEmpty || isPairingNewCamera }
+    var shouldShowWizard: Bool { shell.route == .pair }
 
-    var isLive: Bool {
-        #if targetEnvironment(simulator)
-            if let screen = MonitorUIReview.screen {
-                return screen != "cameras" && screen != "pair"
-            }
-        #endif
-        if session.holdsMonitor { return true }
-        if case .live = session.phase { return true }
-        #if targetEnvironment(simulator)
-            // No Pocket in Simulator — LiveViewScreen plays the D-Log2 Downloads clip.
-            return true
-        #else
-            return false
-        #endif
-    }
+    var isLive: Bool { shell.monitor != nil }
 
     func prepareStartup() {
         #if targetEnvironment(simulator)
@@ -439,6 +466,7 @@ final class AppModel {
                 MonitorUIReview.prepare(self)
                 return
             }
+            presentSimulatorPreview()
         #endif
         LiveHDRDisplay.setEnabled(hdrDisplay)
     }
@@ -463,7 +491,7 @@ final class AppModel {
     /// stage closes (`closeMultiview`).
     func openMultiview() {
         guard cameras.attempts.isEmpty else { return }
-        session.disconnect()
+        disconnect()
     }
 
     func closeMultiview() {
@@ -624,8 +652,7 @@ final class AppModel {
     }
 
     func noteBecameLive() {
-        homePanel = nil
-        liveOperatorPanel = nil
+        legalPanel = nil
         chromeEditorMode = nil
         chromeEditorReturnMode = nil
         captureSheet = nil
@@ -645,7 +672,6 @@ final class AppModel {
         liveChromeArmTask?.cancel()
         liveChromeArmTask = nil
         liveChromeInteractive = true
-        liveOperatorPanel = nil
         chromeEditorMode = nil
         chromeEditorReturnMode = nil
         captureSheet = nil
@@ -656,8 +682,6 @@ final class AppModel {
         session.decoder.onIdentityFrame = nil
         session.decoder.onIdentityOrientation = nil
         watcherRecordConfirm = false
-        // The live session is over: discovery resumes on the cameras page.
-        cameras.sessionEnded()
     }
 
     func beginMediaBrowse() { session.beginMediaBrowse() }
@@ -666,7 +690,8 @@ final class AppModel {
 
     func disconnect() {
         focusBoxLocked = false
-        session.disconnect()
+        if shell.monitor != nil { shell.close() }
+        else { session.disconnect() }
         frameSamples.reset()
     }
 
@@ -787,10 +812,6 @@ struct AppRoot: View {
             WatcherLiveView()
                 .environment(model)
                 .transition(.opacity)
-        } else if model.isLive {
-            LiveViewScreen()
-                .environment(model)
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
         } else {
             LinkExperience()
                 .environment(model)
@@ -817,7 +838,7 @@ struct AppRoot: View {
                     .zIndex(100)
             }
 
-            if model.homePanel != nil, !model.isLive, !model.isWatchingFeed {
+            if model.showsLegalPanel, !model.isWatchingFeed {
                 AppPanelHost()
                     .environment(model)
                     .transition(.opacity)
@@ -901,8 +922,8 @@ struct AppRoot: View {
         .onChange(of: model.gimbalAnalogHeld) { _, held in
             if held { model.relayHost.reclaimControl() }
         }
-        .onChange(of: model.isLive) { _, live in
-            if live {
+        .onChange(of: model.shell.monitor?.id) { _, id in
+            if id != nil {
                 model.noteBecameLive()
             } else {
                 model.noteLeftLive()
@@ -927,32 +948,22 @@ struct AppRoot: View {
             Button("Grant") { model.relayHost.grantControl() }
             Button("Deny", role: .cancel) { model.relayHost.denyControl() }
         }
-        .onAppear { model.assist.inspectorSceneActive = scenePhase == .active }
+        .onAppear { model.shell.setSceneActive(scenePhase == .active) }
         .onChange(of: scenePhase) { _, phase in
             ProblemReporting.shared.tick()
-            model.assist.inspectorSceneActive = phase == .active
-            switch phase {
-            case .active:
-                model.session.noteSceneBecameActive()
-            case .inactive, .background:
-                model.session.noteSceneBecameInactive()
-            @unknown default:
-                break
-            }
+            model.shell.setSceneActive(phase == .active)
         }
         // scenePhase can miss a Control Center / app-switcher bounce.
         // UIKit notifications are the same signals OpenZCine uses.
         .onReceive(
             NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
         ) { _ in
-            model.assist.inspectorSceneActive = false
-            model.session.noteSceneBecameInactive()
+            model.shell.setSceneActive(false)
         }
         .onReceive(
             NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
         ) { _ in
-            model.assist.inspectorSceneActive = true
-            model.session.noteSceneBecameActive()
+            model.shell.setSceneActive(true)
         }
     }
 }
@@ -1015,37 +1026,31 @@ struct LinkExperience: View {
     @State private var reviewAddSetup: SavedCamera?
 
     var body: some View {
-        GeometryReader { proxy in
-            let safeArea = Self.pageSafeArea(
-                proxy.safeAreaInsets, window: windowGeometry.safeArea,
-                portrait: proxy.size.height > proxy.size.width, orientation: orientation.orientation)
-            if model.shouldShowWizard {
-                PairScreen(
-                    model: model.cameras, safeArea: safeArea,
-                    onDone: { model.isPairingNewCamera = false },
-                    onDiagnostics: {
-                        if let url = DiagnosticCenter.shared.beginShare(session: model.session) {
-                            diagnostics = DiagnosticSharePayload(url: url)
-                        }
-                    },
-                    onReportProblem: { showProblemReport = true },
-                    onWatchFeed: { model.openWatcherBrowse() },
-                    onPrivacy: { model.homePanel = .privacy },
-                    onTerms: { model.homePanel = .terms })
-            } else {
-                CamerasScreen(
-                    model: model.cameras, brandName: "OpenPocketCine", safeArea: safeArea,
-                    onPair: { model.isPairingNewCamera = true },
-                    onMedia: { model.homePanel = .media }, onSettings: { model.homePanel = .settings },
-                    onMultiview: MultiviewQualificationPolicy.tileCount > 1 ? {
-                        guard model.cameras.attempts.isEmpty else { return }
-                        model.openMultiview()
-                        showMultiview = true
-                    } : nil,
-                    onWatchFeed: { if model.cameras.attempts.isEmpty { model.openWatcherBrowse() } },
-                    onPrivacy: { model.homePanel = .privacy },
-                    onTerms: { model.homePanel = .terms })
+        AppShell(
+            model: model.shell, brand: ShellBrand(name: "OpenPocketCine"),
+            actions: ShellActions(
+                diagnostics: {
+                    if let url = DiagnosticCenter.shared.beginShare(session: model.session) {
+                        diagnostics = DiagnosticSharePayload(url: url)
+                    }
+                }, reportProblem: { showProblemReport = true },
+                watchFeed: {
+                    if model.cameras.attempts.isEmpty { model.openWatcherBrowse() }
+                },
+                multiview: MultiviewQualificationPolicy.tileCount > 1 ? {
+                    guard model.cameras.attempts.isEmpty else { return }
+                    model.openMultiview()
+                    showMultiview = true
+                } : nil,
+                privacy: { model.homePanel = .privacy }, terms: { model.homePanel = .terms }),
+            safeArea: { proxy in
+                Self.pageSafeArea(proxy.safeAreaInsets, window: windowGeometry.safeArea,
+                    portrait: proxy.size.height > proxy.size.width, orientation: orientation.orientation)
             }
+        ) { _ in
+            LiveViewScreen()
+        } page: { cover in
+            ShellCoverPage(cover: cover)
         }
         .ignoresSafeArea()
         .background(StartupColors.background.ignoresSafeArea())

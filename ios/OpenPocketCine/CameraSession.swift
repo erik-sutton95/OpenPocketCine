@@ -199,6 +199,7 @@ final class CameraSession {
     @ObservationIgnored private var foregroundCheckTask: Task<Void, Never>?
     @ObservationIgnored private var foregroundGeneration = 0
     @ObservationIgnored private var statusStorage = CameraStatus()
+    @ObservationIgnored private(set) var cameraReportedCapture = CameraStatus()
     @ObservationIgnored private var lastStatusMutation: CFAbsoluteTime = 0
     @ObservationIgnored private var statusFlushTask: Task<Void, Never>?
 
@@ -208,12 +209,10 @@ final class CameraSession {
     }
     /// OpenCineCore seam for ISO, white balance and record (CORE-02). UI controls submit here.
     var control: DJICameraSessionAdapter {
-        if let controlSeam { return controlSeam }
-        let seam = DJICameraSessionAdapter(session: self)
-        controlSeam = seam
-        return seam
+        controlBinding.session
     }
-    @ObservationIgnored private var controlSeam: DJICameraSessionAdapter?
+    @ObservationIgnored private lazy var controlBinding = makeControlSessionBinding()
+    private var controlSeam: DJICameraSessionAdapter? { controlBinding.cached }
     @ObservationIgnored private var frameRouter: Task<Void, Never>?
     @ObservationIgnored private var keepaliveLoop: Task<Void, Never>?
     /// Last pid `0x38` GET reply. BLE fallback fires when this goes stale.
@@ -542,6 +541,7 @@ final class CameraSession {
     @ObservationIgnored private var zoomColorHopUntil: Date?
     @ObservationIgnored private var zoomColorHopGeneration: UInt64 = 0
     @ObservationIgnored private var pendingZoomAfterHop: Double?
+    @ObservationIgnored private var pendingZoomAfterHopStage: (@MainActor (ControlWireEvent) -> Void)?
     @ObservationIgnored private var zoomStopTouched = false
 
     @ObservationIgnored private var zoomPinchAnchor = 1.0
@@ -678,9 +678,16 @@ final class CameraSession {
     /// Borrow the tile's transport and decoder; Multiview remains the sole repair owner.
     func updateMultiview(camera: FoundCamera, driver: DatalinkDriver?, status: CameraStatus) {
         guard isMultiviewBorrowed else { return }
+        if connectedCamera?.id != camera.id {
+            controlBinding.beginConnection()
+            cameraReportedCapture = CameraStatus()
+        }
         connectedCamera = camera
         datalink = driver
+        // Tile settings are decoded reports; editor pins live only in this borrowed session.
+        cameraReportedCapture = status
         self.status = status
+        controlSeam?.sessionDidChange()
         phase = .live
         hasVideoFormat = decoder.hasFormat
         isFeedWarming = decoder.lastPresentedAt == nil
@@ -706,6 +713,8 @@ final class CameraSession {
     }
     func releaseMultiview() {
         guard isMultiviewBorrowed else { return }
+        controlBinding.retire(.requested)
+        cameraReportedCapture = CameraStatus()
         formatPin = nil
         if isMultiviewControlsOnly {
             // Detach only this editor's commands. The tile keeps its transport,
@@ -743,6 +752,10 @@ final class CameraSession {
     /// (saved-camera reconnect). Does not stop the scan before GATT connect — iOS needs the
     /// next advertisement to finish the link.
     func startScan(reconnect id: UUID?) {
+        if id != nil, !holdsMonitor {
+            controlBinding.beginConnection()
+            cameraReportedCapture = CameraStatus()
+        }
         connectGeneration += 1
         abortInFlightRun()
         reconnectTarget = id
@@ -822,6 +835,10 @@ final class CameraSession {
         if case .live = phase, connectedCamera?.id == camera.id, !sessionRecovery.isRecovering {
             return
         }
+        if !preserveMonitor {
+            controlBinding.beginConnection()
+            cameraReportedCapture = CameraStatus()
+        }
         // One `run` at a time. A second tap (or Cancel→tap) used to leave the old
         // unstructured Task sending 0x07/45 while the new one started GetSSID.
         ReliabilityReporting.setCameraSessionActive(true)
@@ -867,6 +884,8 @@ final class CameraSession {
             releaseMultiview()
             return
         }
+        controlBinding.retire(.requested)
+        cameraReportedCapture = CameraStatus()
         // Before the link closes: do not leave the camera on Fast for the next session.
         restoreGimbalPrep(gimbalPrep.restoreNow())
         ReliabilityReporting.setCameraSessionActive(false)
@@ -913,7 +932,7 @@ final class CameraSession {
         zoomColorHopPending = false
         zoomColorHopUntil = nil
         zoomColorHopGeneration += 1
-        pendingZoomAfterHop = nil
+        discardZoomAfterHop()
         zoomStop = 1
         zoomStopTouched = false
         zoomPinchPreview = nil
@@ -1875,13 +1894,13 @@ final class CameraSession {
         ControlLiveLog.line("ev: face-priority off → \(restore.label)")
     }
 
-    func setEv(_ ev: EvComp) {
+    func setEv(_ ev: EvComp, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
         let previous = status.evComp
         pinExpo(ev: ev)
         status.evComp = ev
         fireCamera(
             Commands.setEv(ev), name: "EV \(ev.label)", expect: .ev(ev),
-            coalesce: true,
+            coalesce: true, onStage: onStage,
             onFail: { [weak self] in
                 self?.clearExpoPin(ev: true)
                 self?.status.evComp = previous
@@ -2040,11 +2059,11 @@ final class CameraSession {
         if CamFov.holdZoomWrite(
             factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
         {
-            pendingZoomAfterHop = factor
+            queueZoomAfterHop(factor, onStage: nil)
             zoomPinchPreview = factor
             return
         }
-        pendingZoomAfterHop = nil
+        discardZoomAfterHop()
         let first = zoomPinchPreview == nil
         zoomPinchPreview = factor
         let lens = CamFov.pinchLens(for: factor)
@@ -2056,7 +2075,7 @@ final class CameraSession {
 
     func endZoomPinch() {
         zoomPinchSlew = nil
-        pendingZoomAfterHop = nil
+        discardZoomAfterHop()
         if let preview = zoomPinchPreview {
             markZoomStop(preview)
             restoreDLog2IfNeeded(afterZoom: preview)
@@ -2065,8 +2084,11 @@ final class CameraSession {
     }
 
     /// Cycle button. Body stops are sliders (Pro 217 / 651 / 1302 / 2604).
-    func setZoom(_ factor: Double) {
-        guard supportsZoom else { return }
+    func setZoom(_ factor: Double, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        guard supportsZoom else {
+            onStage?(.notSent)
+            return
+        }
         if gimbalMoveRunning { cancelProgrammedMove() }
         let from = CamFov.displayLabel(factor: zoomReadout)
         let to = CamFov.displayLabel(factor: factor)
@@ -2074,31 +2096,36 @@ final class CameraSession {
             "zoom: setZoom \(from) → \(to) locked=\(isLocked) live=\(datalink != nil)")
         guard !isLocked else {
             controlNote = "Zoom locked"
+            onStage?(.notSent)
             return
         }
         guard let write = CamFov.chipWrite(forJump: factor) else {
-            controlNote = "Zoom \(to) — no command"
-            ControlLiveLog.line("zoom: tap ignored — no write for \(to)")
+            controlNote = "Zoom \(to): no command"
+            ControlLiveLog.line("zoom: tap ignored, no write for \(to)")
+            onStage?(.notSent)
             return
         }
-        if blockZoomColorHopIfRecording(for: factor) { return }
+        if blockZoomColorHopIfRecording(for: factor) {
+            onStage?(.notSent)
+            return
+        }
         zoomPinchPreview = nil
         zoomPinchSlew = nil
         dropDLog2ForZoom(factor)
         if CamFov.holdZoomWrite(
             factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
         {
-            pendingZoomAfterHop = factor
+            queueZoomAfterHop(factor, onStage: onStage)
             return
         }
         zoomPin = CameraValuePin(factor, now: Date.timeIntervalSinceReferenceDate)
         markZoomStop(factor)
         controlNote = "Zoom \(to)"
-        fireZoom(write, target: factor, announce: true)
+        fireZoom(write, target: factor, announce: true, onStage: onStage)
     }
 
     /// Pinch hybrid: `0A 4E` + unquantized lens. Coalesces to the newest tick.
-    func setZoomSlider(_ factor: Double) {
+    func setZoomSlider(_ factor: Double, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
         if gimbalMoveRunning { cancelProgrammedMove() }
         let position = CamFov.pinchLens(for: factor)
         let tenths = CamFov.displayTenths(factor)
@@ -2110,18 +2137,22 @@ final class CameraSession {
         }
         guard !isLocked else {
             controlNote = "Zoom locked"
+            onStage?(.notSent)
             return
         }
-        if blockZoomColorHopIfRecording(for: factor) { return }
+        if blockZoomColorHopIfRecording(for: factor) {
+            onStage?(.notSent)
+            return
+        }
         dropDLog2ForZoom(factor)
         if CamFov.holdZoomWrite(
             factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
         {
-            pendingZoomAfterHop = factor
+            queueZoomAfterHop(factor, onStage: onStage)
             return
         }
         zoomPinchSlew = nil
-        fireZoom(.lens(position), target: tenths, announce: false)
+        fireZoom(.lens(position), target: tenths, announce: false, onStage: onStage)
     }
 
     /// Directional slew. 100 toward 12×; 300 from 12× to the 9.15× detent.
@@ -2169,8 +2200,14 @@ final class CameraSession {
 
     /// Chip tap is urgent. Slider / pinch pipelines at 20 Hz without waiting
     /// for ACK (Mimo). D-Log2→D-Log must be on the body before this SET.
-    private func fireZoom(_ write: CamFov.ChipWrite, target: Double?, announce: Bool) {
-        guard supportsZoom else { return }
+    private func fireZoom(
+        _ write: CamFov.ChipWrite, target: Double?, announce: Bool,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil
+    ) {
+        guard supportsZoom else {
+            onStage?(.notSent)
+            return
+        }
         let frame: Duml.Frame
         let name: String
         switch write {
@@ -2190,6 +2227,7 @@ final class CameraSession {
             expect: announce ? target.map { .zoom($0) } : nil,
             retransmits: announce,
             coalesce: !announce,
+            onStage: onStage,
             onSettle: { [weak self] ok in
                 guard let self else { return }
                 if ok, announce { self.controlNote = name }
@@ -2300,16 +2338,32 @@ final class CameraSession {
     /// Color hop landed — send the zoom SET that was waiting, if any.
     private func flushZoomAfterColorHop() {
         guard let factor = pendingZoomAfterHop else { return }
-        pendingZoomAfterHop = nil
         if CamFov.holdZoomWrite(
             factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
         {
-            pendingZoomAfterHop = factor
             return
         }
+        let onStage = pendingZoomAfterHopStage
+        pendingZoomAfterHop = nil
+        pendingZoomAfterHopStage = nil
         zoomPinchPreview = factor
         markZoomStop(factor)
-        applyPinchWrite(preview: factor)
+        setZoomSlider(factor, onStage: onStage)
+    }
+
+    private func queueZoomAfterHop(
+        _ factor: Double, onStage: (@MainActor (ControlWireEvent) -> Void)?
+    ) {
+        pendingZoomAfterHopStage?(.notSent)
+        pendingZoomAfterHop = factor
+        pendingZoomAfterHopStage = onStage
+    }
+
+    private func discardZoomAfterHop() {
+        let callback = pendingZoomAfterHopStage
+        pendingZoomAfterHop = nil
+        pendingZoomAfterHopStage = nil
+        callback?(.notSent)
     }
 
     private func restoreDLog2IfNeeded(afterZoom factor: Double) {
@@ -2637,10 +2691,13 @@ final class CameraSession {
     /// Pass `Int` into `Commands.setShutter(denom:)` — `UInt8` cannot encode 1/256 and above.
     /// Manual-expo rides the same socket right before the shutter SET (Mimo never
     /// round-trips between them; the camera applies datagrams in arrival order).
-    func setShutterDenom(_ denom: Int) {
+    func setShutterDenom(
+        _ denom: Int, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil,
+        ensureManual: Bool = true
+    ) {
         // A direct speed choice supersedes an angle waiting for FORMAT.
         formatPin?.shutterAngle = nil
-        if status.expoMode != .manual {
+        if ensureManual, status.expoMode != .manual {
             pinExpo(mode: .manual)
             fireCamera(
                 Commands.setExpoMode(.manual), name: "Manual expo", expect: .expo(.manual),
@@ -2649,7 +2706,7 @@ final class CameraSession {
         pinExpo(shutter: denom)
         fireCamera(
             Commands.setShutter(denom: denom), name: "1/\(denom)", expect: .shutter(denom),
-            coalesce: true,
+            coalesce: true, onStage: onStage,
             onFail: { [weak self] in self?.clearExpoPin(shutter: true) },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
@@ -2815,14 +2872,20 @@ final class CameraSession {
             })
     }
 
-    func setFocusMode(_ mode: FocusMode) {
-        guard supportsFocusMode else { return }
+    func setFocusMode(
+        _ mode: FocusMode, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil
+    ) {
+        guard supportsFocusMode else {
+            onStage?(.notSent)
+            return
+        }
         let previous = status.focusMode
         let pin = CameraValuePin(mode, now: Date.timeIntervalSinceReferenceDate)
         focusModePin = pin
         status.focusMode = mode
         fireCamera(
             Commands.setFocusMode(mode), name: "Focus \(mode.label)", expect: .focus(mode),
+            onStage: onStage,
             onFail: { [weak self] in
                 guard let self, self.focusModePin?.id == pin.id else { return }
                 self.focusModePin = nil
@@ -3468,7 +3531,7 @@ final class CameraSession {
             setMailbox.cancel(key)
             zoomPinchPreview = nil
             zoomPinchSlew = nil
-            pendingZoomAfterHop = nil
+            discardZoomAfterHop()
             restoreDLog2OnWide = false
             zoomPin = nil
         }
@@ -4474,6 +4537,8 @@ final class CameraSession {
         _ reply: Duml.Frame, name: String, opcode: String, expect: ControlExpect?,
         late: Bool = false, announce: Bool = true
     ) -> Bool {
+        _ = CameraStatusDecoder.apply(reply, to: &cameraReportedCapture, model: connectedCamera?.model)
+        controlSeam?.sessionDidChange()
         var next = status
         _ = CameraStatusDecoder.apply(reply, to: &next, model: connectedCamera?.model)
         var reported = CameraStatus()
@@ -6358,6 +6423,8 @@ final class CameraSession {
         if !isMultiviewControlsOnly, frame.cmdSet == 0x02, frame.cmdId == 0x89 {
             applyLiveTrackingPush(frame.payload)
         }
+        _ = CameraStatusDecoder.apply(frame, to: &cameraReportedCapture, model: connectedCamera?.model)
+        controlSeam?.sessionDidChange()
         var s = status
         let priorMode = s.shootingMode
         let applied = CameraStatusDecoder.apply(frame, to: &s, model: connectedCamera?.model)

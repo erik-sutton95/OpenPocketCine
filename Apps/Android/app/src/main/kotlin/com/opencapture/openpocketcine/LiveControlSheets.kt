@@ -38,6 +38,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.opencapture.opencine.appkit.captureField
+import com.opencapture.opencine.appkit.commit
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.MonitorQuickPreview
@@ -247,10 +249,30 @@ private fun LiveControlSheetContent(
     showsHeader: Boolean = true,
 ) {
     val context = LocalContext.current
+    val commonField = remember(sheet, model.control) {
+        val key = capturePanelSettingKey(sheet, status.expoMode)
+        key?.let { model.control.captureField(it) }
+    }
     val preview = LocalCapturePreview.current
     val effects = CapturePanelEffects(preview != null)
     val enabled = !locked && preview == null
     val isEvSheet = CaptureLists.isEvSheet(sheet, status.expoMode)
+    @Composable fun commonDrum() {
+        val field = retainedCapturePanelField(commonField, sheet, status.expoMode)
+        if (field == null) {
+            Text("Setting not available", color = LiveDesign.muted)
+        } else {
+            val choices = field.choices.filter { choice -> when (val value = choice.value) {
+                is com.opencapture.opencine.core.SettingValue.Iso -> value.value is com.opencapture.opencine.core.ISOValue.Manual
+                is com.opencapture.opencine.core.SettingValue.Shutter -> value.value is com.opencapture.opencine.core.ShutterValue.Duration
+                is com.opencapture.opencine.core.SettingValue.WhiteBalance -> value.value is com.opencapture.opencine.core.WhiteBalanceValue.Kelvin
+                is com.opencapture.opencine.core.SettingValue.ExposureCompensation -> true
+                else -> false
+            } }
+            com.opencapture.opencine.appkit.MonitorCaptureDrum(model.control, field,
+                enabled = enabled && (!isEvSheet || !model.facePriorityExposureEnabled), choices = choices)
+        }
+    }
     val offersIsoAuto = CaptureLists.offersIsoAuto(status)
     var selectedMode by remember(sheet) {
         mutableIntStateOf(initialSelectedMode(sheet, status, model, isEvSheet))
@@ -601,17 +623,7 @@ private fun LiveControlSheetContent(
                                     },
                                 )
                             } else {
-                                CaptureDrumWheel(
-                                    options = CaptureLists.isoDrumLabels(status),
-                                    selection = drumSelection,
-                                    markedValues = CaptureLists.isoMarkedLabels(status),
-                                    interactive = enabled,
-
-                                    onSelect = {
-                                        drumSelection = it
-                                        applyDrum(it)
-                                    },
-                                )
+                                commonDrum()
                             }
                         }
                         PrefToggle(
@@ -630,16 +642,7 @@ private fun LiveControlSheetContent(
                     ) {
                         Box(Modifier.fillMaxWidth()) {
                             if (isEvSheet) {
-                                CaptureDrumWheel(
-                                    options = CaptureLists.evLabels,
-                                    selection = drumSelection,
-                                    interactive = enabled && !model.facePriorityExposureEnabled,
-
-                                    onSelect = {
-                                        drumSelection = it
-                                        applyDrum(it)
-                                    },
-                                )
+                                commonDrum()
                             } else if (isAngleSheet) {
                                 CaptureDrumWheel(
                                     options = ShutterAngle.labels,
@@ -652,16 +655,7 @@ private fun LiveControlSheetContent(
                                     },
                                 )
                             } else {
-                                CaptureDrumWheel(
-                                    options = CaptureLists.shutterLabels(status),
-                                    selection = drumSelection,
-                                    interactive = enabled,
-
-                                    onSelect = {
-                                        drumSelection = it
-                                        applyDrum(it)
-                                    },
-                                )
+                                commonDrum()
                             }
                         }
                         if (isEvSheet) {
@@ -697,16 +691,7 @@ private fun LiveControlSheetContent(
                         }
                         1 ->
                             Box(Modifier.wrapContentHeight().fillMaxWidth()) {
-                                CaptureDrumWheel(
-                                    options = CaptureLists.kelvinLabels,
-                                    selection = drumSelection,
-                                    interactive = enabled,
-
-                                    onSelect = {
-                                        drumSelection = it
-                                        applyDrum(it)
-                                    },
-                                )
+                                commonDrum()
                             }
                         else -> {
                             CaptureDrumWheel(
@@ -727,7 +712,16 @@ private fun LiveControlSheetContent(
                         FocusBody(
                             status = status,
                             enabled = enabled,
-                            onSelect = { applyCaptureFocusChoice(it, status, model) },
+                            onSelect = { label ->
+                                val field = commonField
+                                val editor = field?.editor
+                                if (editor != null && model.control.isCurrent(editor) && enabled) {
+                                    val value = commonFocusValue(label,
+                                        com.opencapture.opencine.dji.FocusTrackMode.fromRaw(status.focusTrack))
+                                    if (value != null) model.control.commit(value, editor, "FOCUS $label")
+                                    else applyCaptureFocusChoice(label, status, model)
+                                }
+                            },
                         )
                     }
                 }

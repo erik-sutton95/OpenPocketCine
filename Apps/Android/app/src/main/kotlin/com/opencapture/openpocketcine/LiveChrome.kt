@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
@@ -895,6 +896,7 @@ data class LiveMonitorLayout(
     val usesFieldMonitor: Boolean = false,
     /** Operator joystick diameter at chrome scale 1 (Small / Medium / Large). */
     val stickSide: Float = com.opencapture.monitorui.MonitorLayoutPolicy.STICK_SIDE,
+    val field: com.opencapture.monitorui.MonitorFieldLayout? = null,
 ) {
     val onFeed: ChromeRect
         get() = if (picture.width > 1f) picture else feed
@@ -1151,6 +1153,7 @@ data class LiveMonitorLayout(
                 safeBottom = safeBottom,
                 usesFieldMonitor = true,
                 stickSide = joystick.side,
+                field = p,
             )
         }
 
@@ -1421,11 +1424,11 @@ internal fun MonitorChromeButton(
 }
 
 @Composable
-fun LockButton(locked: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun LockButton(locked: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     MonitorChromeButton(
         OpcIcon.LOCK, if (locked) "Unlock monitor controls" else "Lock monitor controls",
         modifier.semantics { toggleableState = ToggleableState(locked) },
-        selected = locked, buttonRole = Role.Switch, onClick = onClick,
+        selected = locked, enabled = enabled, buttonRole = Role.Switch, onClick = onClick,
     )
 }
 
@@ -1505,6 +1508,18 @@ fun AuxCircleButton(modifier: Modifier = Modifier, enabled: Boolean = true, onCl
             .semantics { role = Role.Button },
         glyph = glyph,
     )
+}
+
+/** Common video control; native still capture and shooting-mode editing are explicit slots. */
+@Composable
+internal fun LiveCaptureButton(model: AppModel, enabled: Boolean, diameter: Float,
+    modifier: Modifier = Modifier, openMode: () -> Unit) {
+    val status by model.session.status.collectAsState()
+    val photo = CaptureShutterPolicy.isStillCapture(status.shootingMode)
+    com.opencapture.opencine.appkit.MonitorCaptureButton(model.control, diameter,
+        enabled = enabled && (!photo || model.session.phase == com.opencapture.opencine.dji.ConnectionPhase.LIVE),
+        modifier = modifier, photo = photo, confirm = model.recordConfirmationEnabled,
+        takePhoto = model::pressShutter, openMode = openMode)
 }
 
 @Composable

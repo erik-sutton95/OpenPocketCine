@@ -1,5 +1,6 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineAppKit
 import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
@@ -61,7 +62,11 @@ struct LiveCameraControlBar: View {
         MonitorControlGrid(
             columns: gridColumns, spacing: columns == 3 ? 8 : 12, equalColumns: columns == 3
         ) {
-            tile(.iso, label: "ISO", value: isoValue, widest: "25600")
+            if model.session.status.isoIndex == .auto {
+                tile(.iso, label: "ISO", value: isoValue, widest: "25600")
+            } else {
+                commonTile(.iso, key: .iso)
+            }
             if model.session.status.expoMode == .auto {
                 tile(
                     .shutter,
@@ -70,14 +75,21 @@ struct LiveCameraControlBar: View {
                     value: evValue, widest: "+3.0",
                     badgeIcon: model.facePriorityExposureEnabled
                         ? CaptureLists.facePriorityBadgeIcon : nil)
-            } else {
+            } else if OperatorPrefs.shutterUsesAngle && !model.session.status.isPhoto {
                 tile(
                     .shutter, label: "SHUTTER", value: shutterValue,
                     widest: OperatorPrefs.shutterUsesAngle
                         && !model.session.status.isPhoto ? "346°" : "1/16000")
+            } else {
+                commonTile(.shutter, key: .shutter)
             }
             tile(.exposure, label: "EXPOSURE", value: expoValue, widest: "Manual")
-            tile(.wb, label: "WB", value: wbValue, widest: "10000K", valueIcon: wbIcon)
+            if model.session.status.whiteBalance?.mode == .custom,
+                model.session.autoWhiteBalanceLock == nil {
+                commonTile(.wb, key: .whiteBalance)
+            } else {
+                tile(.wb, label: "WB", value: wbValue, widest: "10000K", valueIcon: wbIcon)
+            }
             if layout.focus {
                 tile(.focus, label: "FOCUS", value: focusValue, widest: "Showcase")
             }
@@ -93,6 +105,41 @@ struct LiveCameraControlBar: View {
         .onTapGesture {}
         .opacity(tilesLocked ? 0.4 : 1)
         .allowsHitTesting(!tilesLocked)
+    }
+
+    @ViewBuilder private func commonTile(_ sheet: CaptureSheet, key: SettingKey) -> some View {
+        if let field = model.control.captureField(key) {
+            MonitorCaptureReadout(control: model.control, field: field,
+                enabled: !tilesLocked && (model.captureDrum == nil || model.captureDrum?.sheet == sheet),
+                active: model.captureSheet == sheet || model.captureDrum?.sheet == sheet,
+                ownership: $readoutOwnership, presentationOwner: { model.captureDrum?.id },
+                admission: { !tilesLocked && model.shell.cover == nil && model.captureSheet == nil }
+            ) { event in
+                switch event {
+                case .open: open(sheet)
+                case .preview(let preview):
+                    guard !tilesLocked, model.shell.cover == nil,
+                        readoutOwnership.owns(preview.id) else { return }
+                    model.captureSheet = nil
+                    model.captureDrum = CaptureDrumPresentation(id: preview.id, sheet: sheet,
+                        snapshot: .common(preview.sourceIdentity), position: preview.position)
+                case .commit(let release, _):
+                    if model.captureDrum?.id == release.id { model.captureDrum = nil }
+                case .cancel(let id):
+                    if model.captureDrum?.id == id { model.captureDrum = nil }
+                }
+            }
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: LiveCaptureTileFramesKey.self,
+                        value: [sheet: proxy.frame(in: .named(LiveCanvasSpace.name))])
+                }
+            }
+            .accessibilityIdentifier("monitor.capture.\(sheet.rawValue)")
+        } else {
+            MonitorReadout(MonitorCapturePresentation.title(key) ?? "") { Text("--") }
+                .accessibilityValue("Not set")
+        }
     }
 
     private func tile(

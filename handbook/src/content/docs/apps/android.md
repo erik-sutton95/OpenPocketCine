@@ -67,6 +67,9 @@ saved Wi-Fi credential as well as its saved card.
 The camera battery gauge shows the percentage reported by your Osmo, or a dash
 when unavailable. Top capture settings, STBY and timecode align in one row;
 Lock matches the Settings and Media button size.
+Settings and Media cover the current monitor while its camera and picture host
+remain active. Returning keeps the same connection. A Multiview member returns
+to its grid without ending that member's camera connection.
 The live signal indicator uses the Link Health colors from Settings: red for
 Poor (0–1 bars), orange for Watch (2–3), and green for Stable (4).
 

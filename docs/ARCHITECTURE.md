@@ -27,6 +27,39 @@ target is `OpenPocketCineWatch` in `ios/project.yml` — do not hand-edit the
 xcodeproj. Wrist protocol: `WatchRelayProtocol` in the core; `WCSession` lives
 in `WatchRelay` (iPhone) and `WatchSessionController` (watch).
 
+## Common-control connection lifetime
+
+`CameraSession.control` is bound to one native connection through OpenCine's
+`DJIControlSessionBinding`. A new operator connection gets a fresh common session;
+datalink recovery keeps its session identity and advances its control epoch.
+Saved-camera scanning retires the old binding before changing the native target,
+so a late close cannot cancel the next camera's connection attempt.
+
+Closing the current owned common session invokes the existing native disconnect
+teardown once. Native teardown retires the common binding before resetting the
+transport; this prevents reentrant cleanup. Returning a borrowed Multiview view
+retires only its controls and leaves the tile's transport/decoder owner alive.
+Settings and Media coverage retain the connection. The common binding sends no
+camera commands and never stops recording; gimbal/motion cleanup remains the
+existing native disconnect behavior.
+
+Both app roots now compose `AppShell` over that connection with one
+`MonitorControlModel`. `ShellModel` owns pairing, the active monitor, scene
+activity and Settings/Media coverage; the compatibility panel properties
+project its one cover value. `MonitorScreen` holds the existing native picture
+host and common status, capture and system positions. Native gimbal, tracking,
+assist, settings, media and recovery content fill bounded slots. Covers retain
+the picture and camera; a borrowed Multiview monitor returns its loan once.
+The watch relay keeps its existing remote-source experience.
+
+ISO, manual shutter duration, Kelvin and EV use typed common capture choices
+and the editor captured when the gesture or panel opened. Common AF-S/AF-C and
+zoom cycle commands use capability admission. DJI focus-tracking strategy,
+Auto ISO limits, AWB/AE lock, operator shutter angle, exposure mode, iris
+strategy and continuous zoom completion retain their typed native adapters.
+In particular, native pinch/dial completion still owns DJI color restoration;
+moving that gesture lifecycle belongs to the later native-runtime increment.
+
 ## Shared monitor presentation
 
 The multi-brand direction is [Shared Monitor Engine](SHARED-MONITOR-ENGINE.md).

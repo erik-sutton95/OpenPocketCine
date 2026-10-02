@@ -1,5 +1,7 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineAppKit
+import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
 
@@ -18,6 +20,14 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     var marked: Set<String> = []
     var context = ""
     var enabled = true
+    var commonField: MonitorCaptureField? = nil
+    var nativeEditor: MonitorControlModel.Editor? = nil
+
+    static func common(_ field: MonitorCaptureField) -> Self {
+        Self(kind: field.key == .iso ? .iso : field.key == .shutter ? .shutter : field.key == .exposureCompensation ? .ev : .kelvin,
+            title: field.title, options: field.choices.map(\.label), selection: field.label ?? "",
+            enabled: field.isEditable, commonField: field)
+    }
 
     var index: Int {
         if let exact = options.firstIndex(of: selection) { return exact }
@@ -40,7 +50,7 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     var sourceIdentity: SourceIdentity {
         SourceIdentity(
             kind: kind, title: title, options: options, marked: marked, context: context,
-            enabled: enabled)
+            enabled: enabled, nativeEditor: nativeEditor)
     }
 
     struct SourceIdentity: Hashable, Sendable {
@@ -50,6 +60,7 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
         var marked: Set<String>
         var context: String
         var enabled: Bool
+        var nativeEditor: MonitorControlModel.Editor? = nil
     }
 
     var display: MonitorReadoutSnapshot {
@@ -94,7 +105,7 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
         }
         // WB shows the pending request over the reported value; other kinds read the same
         // reported status (only WB fields differ).
-        return primary(
+        var result = primary(
             sheet, status: model.session.whiteBalanceDisplayStatus,
             cameraModel: model.session.connectedCamera?.model,
             supportsFocusMode: layout.focus,
@@ -104,6 +115,13 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
             aeLocked: model.session.autoExposureLock != nil,
             awbLocked: model.session.autoWhiteBalanceLock != nil,
             offersAwbLock: model.session.canLockAutoWhiteBalance)
+        if sheet == .shutter, model.session.status.expoMode == .auto,
+            let field = model.control.captureField(.exposureCompensation) {
+            result = .common(field)
+            result?.enabled = field.isEditable && !model.facePriorityExposureEnabled
+        }
+        if sheet == .focus { result?.nativeEditor = model.control.edit(.focusMode) }
+        return result
     }
 
     static func primary(
@@ -260,6 +278,19 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     @MainActor func apply(_ value: String, model: AppModel) {
         guard enabled, options.contains(value), value != selection, !model.session.isLocked else {
             return
+        }
+        if let commonField {
+            guard let choice = commonField.choices.first(where: { $0.label == value }) else { return }
+            model.control.commit(choice, from: commonField)
+            return
+        }
+        if kind == .focus {
+            guard let nativeEditor, model.control.isCurrent(nativeEditor) else { return }
+            if let commonValue = CaptureFocusAdmission.commonValue(value, track: model.session.status.focusTrack) {
+                model.control.commit(commonValue,
+                    from: nativeEditor, label: "FOCUS \(value)")
+                return
+            }
         }
         let status = model.session.whiteBalanceDisplayStatus
         switch kind {

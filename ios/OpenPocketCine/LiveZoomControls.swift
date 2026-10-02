@@ -220,6 +220,7 @@ struct LiveZoomPinchModifier: ViewModifier {
         MagnifyGesture()
             .onChanged { value in
                 guard enabled else { return }
+                if !pinchUsed { model.control.cancelEdit(.zoom) }
                 pinchUsed = true
                 cancelTrackHold()
                 draftStart = nil
@@ -376,11 +377,15 @@ struct LiveZoomChip: View {
     @State private var heldFactor: Double?
     @State private var snapTick = 0
 
-    private var factor: Double { model.session.zoomReadout }
+    private var factor: Double {
+        if case .zoom(let pending)? = model.control.pending[.zoom] { return pending }
+        return model.session.zoomReadout
+    }
     private var displayFactor: Double { heldFactor ?? factor }
     /// Unsnapped live / preview so 2.89× (shown 2.9×, still wide) cycles to 3×, not 12×.
     private var cycleFrom: Double {
-        model.session.zoomPinchPreview
+        if case .zoom(let pending)? = model.control.pending[.zoom] { return pending }
+        return model.session.zoomPinchPreview
             ?? model.session.zoomOptimistic
             ?? model.session.status.zoomFactor
             ?? model.session.zoomStop
@@ -419,7 +424,7 @@ struct LiveZoomChip: View {
             return
         }
         snapTick += 1
-        model.session.setZoom(next)
+        model.commitZoomCycle(next)
     }
 
     var body: some View {

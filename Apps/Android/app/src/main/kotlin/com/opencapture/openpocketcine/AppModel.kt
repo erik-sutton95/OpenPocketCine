@@ -11,6 +11,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.opencine.appkit.AppIntegration
+import com.opencapture.opencine.appkit.MonitorControlModel
+import com.opencapture.opencine.appkit.ShellModel
+import com.opencapture.opencine.core.ConnectedCamera
+import com.opencapture.opencine.core.SessionCloseReason
 import com.opencapture.opencine.appkit.BodyRecordsV0
 import com.opencapture.opencine.appkit.CamerasModel
 import com.opencapture.opencine.appkit.IntegrationSlots
@@ -98,12 +102,20 @@ class AppModel(
         ),
         scope,
     ).also { model ->
-        model.onConnected = { pairing = false }
         // The save rules a DJI record follows (iOS parity, D9): another camera's network is never
         // saved with this one, and a setup that moves the camera is remembered before it moves it.
         integration.savedCameras = { model.state.value.saved }
         integration.saveRecord = model::upsert
     }
+
+    val control = MonitorControlModel(scope)
+    val shell = ShellModel(cameras, control).also { shell ->
+        shell.onSceneActivity = { active ->
+            if (active) session.noteSceneBecameActive() else session.noteSceneBecameInactive()
+        }
+    }
+    private var shellState by mutableStateOf(shell.state.value)
+    init { scope.launch { shell.state.collect { shellState = it } } }
 
     /** Saved cameras, most recently connected first. */
     val savedCameras: List<SavedCamera> get() = cameras.state.value.saved.sortedByDescending { it.lastConnected ?: 0L }
@@ -112,15 +124,37 @@ class AppModel(
     val assist = LiveAssistState.from(appContext)
 
     /** The operator opened the pair page from the cameras page. */
-    var pairing by mutableStateOf(false)
+    var pairing: Boolean
+        get() = shellState.pairing
+        set(value) { if (value) shell.beginPairing() else shell.endPairing() }
     var showsLaunchSplash by mutableStateOf(true)
     /** Long-press on the tap-focus box locks it: feed taps no longer move focus. */
     var focusBoxLocked by mutableStateOf(false)
     var coreVersion by mutableStateOf<String?>(null)
-    var homePanel by mutableStateOf<AppPanel?>(null)
+    private var legalPanel by mutableStateOf<AppPanel?>(null)
+    val showsLegalPanel: Boolean get() = legalPanel != null
+    var homePanel: AppPanel?
+        get() = legalPanel ?: if (shellState.monitor == null) shellState.cover?.let {
+            if (it == ShellModel.Cover.SETTINGS) AppPanel.SETTINGS else AppPanel.MEDIA
+        } else null
+        set(value) {
+            when (value) {
+                AppPanel.SETTINGS -> { legalPanel = null; shell.open(ShellModel.Cover.SETTINGS) }
+                AppPanel.MEDIA -> { legalPanel = null; shell.open(ShellModel.Cover.MEDIA) }
+                null -> { legalPanel = null; shell.dismissCover() }
+                else -> legalPanel = value
+            }
+        }
     /** The Multiview stage covers the camera home until it closes. */
     var showsMultiview by mutableStateOf(false)
-    var liveOperatorPanel by mutableStateOf<LiveOperatorPanel?>(null)
+    var liveOperatorPanel: LiveOperatorPanel?
+        get() = if (shellState.monitor != null) shellState.cover?.let {
+            if (it == ShellModel.Cover.SETTINGS) LiveOperatorPanel.SETTINGS else LiveOperatorPanel.MEDIA
+        } else null
+        set(value) {
+            if (value == null) shell.dismissCover()
+            else shell.open(if (value == LiveOperatorPanel.SETTINGS) ShellModel.Cover.SETTINGS else ShellModel.Cover.MEDIA)
+        }
     var operatorSettingsTab by mutableStateOf(OperatorSettingsTab.LINK)
     var chromeEditorMode by mutableStateOf<PocketDispMode?>(null)
     var chromeEditorReturnMode by mutableStateOf<PocketDispMode?>(null)
@@ -258,8 +292,7 @@ class AppModel(
     }
 
     fun noteBecameLive() {
-        homePanel = null
-        liveOperatorPanel = null
+        legalPanel = null
         chromeEditorMode = null
         liveChromeInteractive = false
         scope.launch {
@@ -493,7 +526,7 @@ class AppModel(
     fun endGimbalStick() = session.endGimbalStick()
 
     val isLive: Boolean
-        get() = session.phaseFlow.value == ConnectionPhase.LIVE || session.holdsMonitor
+        get() = shellState.monitor != null
 
     fun canDriveGimbalPad(): Boolean =
         isLive &&
@@ -506,7 +539,13 @@ class AppModel(
         coreVersion =
             if (SwiftCore.isAvailable) runCatching { SwiftCore.coreVersion() }.getOrNull() else null
         scope.launch {
-            session.phaseFlow.collect { phase -> if (phase == ConnectionPhase.LIVE) noteBecameLive() }
+            var monitor: String? = null
+            shell.state.collect { state ->
+                if (state.monitor?.id != monitor) {
+                    monitor = state.monitor?.id
+                    if (monitor != null) noteBecameLive()
+                }
+            }
         }
     }
 
@@ -541,7 +580,7 @@ class AppModel(
     /** iOS `SavedCamerasView.onMultiview`: the single-camera session hands the radio to the stage. */
     fun openMultiview() {
         if (session.phaseFlow.value.isBusy() || session.isReconnecting.value) return
-        session.disconnect()
+        disconnect()
         session.ble.stopScan()
         showsMultiview = true
     }
@@ -553,12 +592,20 @@ class AppModel(
 
     fun disconnect() {
         focusBoxLocked = false
-        session.disconnect()
-        cameras.sessionEnded()
+        if (shell.state.value.monitor != null) shell.close() else session.disconnect()
+    }
+
+    fun borrowMonitor(camera: com.opencapture.opencine.dji.FoundCamera, release: () -> Unit) {
+        shell.borrow(ConnectedCamera(SavedCamera(camera.id, DjiCameraSessionAdapter.INTEGRATION,
+            advertisedName = camera.name, model = camera.model.name), session.control), release)
     }
 
     fun close() {
         gimbalGamepad.stopListening()
+        control.unbind()
+        val monitor = shell.state.value.monitor
+        if (monitor?.isBorrowed == true) shell.close()
+        else monitor?.session?.closeNow(SessionCloseReason.REQUESTED)
         scope.cancel()
         session.close()
     }
