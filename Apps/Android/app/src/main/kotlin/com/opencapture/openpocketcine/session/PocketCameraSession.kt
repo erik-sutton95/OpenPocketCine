@@ -15,6 +15,7 @@ import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FacePriorityExposure
 import com.opencapture.opencine.media.SerialSessionGate
+import com.opencapture.opencine.decoder.HevcDecoder
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.FeedDecoderErrorOrigin
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentAges
@@ -188,7 +189,7 @@ class PocketCameraSession(
      */
     val isMultiviewBorrowed = borrowing != null
     private var borrowedSurface: Surface? = null
-    val decoder = borrowing ?: HevcDecoder(cadence).also { dec ->
+    val decoder = borrowing ?: HevcDecoder(cadence, errorJournal = DiagnosticCenter::logDecoderError).also { dec ->
         dec.onParameterSetsChanged = {
             scope.launch {
                 val now = SystemClock.elapsedRealtime()

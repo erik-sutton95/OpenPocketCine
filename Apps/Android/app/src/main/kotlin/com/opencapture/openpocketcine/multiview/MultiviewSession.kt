@@ -28,7 +28,7 @@ import com.opencapture.openpocketcine.session.DjiCameraSessionAdapter
 import com.opencapture.openpocketcine.session.DumlFrame
 import com.opencapture.openpocketcine.session.FoundCamera
 import com.opencapture.openpocketcine.session.GimbalStickMapping
-import com.opencapture.openpocketcine.session.HevcDecoder
+import com.opencapture.opencine.decoder.HevcDecoder
 import com.opencapture.openpocketcine.session.LiveViewEnablePolicy
 import com.opencapture.openpocketcine.session.MultiviewControlLease
 import com.opencapture.openpocketcine.session.StatusExtras
@@ -133,7 +133,7 @@ class MultiviewSession(
         val entryId = MonitorEntryID(UUID.fromString(id))
         /** The tile's picture stream, named for the multicam engine. */
         val stream = StreamID()
-        val decoder = HevcDecoder()
+        val decoder = HevcDecoder(errorJournal = DiagnosticCenter::logDecoderError)
         /** Record-only control port on this tile's own link (MULTI-02); see [MultiviewTileControl]. */
         internal val controlPort = MultiviewTileControl(
             state = ::recordState,

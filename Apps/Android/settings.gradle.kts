@@ -24,6 +24,7 @@ includeBuild("../../../OpenCine/Android") {
     dependencySubstitution {
         substitute(module("com.opencapture.opencine:core")).using(project(":core"))
         substitute(module("com.opencapture.opencine:media")).using(project(":media"))
+        substitute(module("com.opencapture.opencine:decoder")).using(project(":decoder"))
         substitute(module("com.opencapture.opencine:vulkan")).using(project(":vulkan"))
         substitute(module("com.opencapture.opencine:multicam")).using(project(":multicam"))
         substitute(module("com.opencapture.opencine:monitor-ui")).using(project(":monitor-ui"))

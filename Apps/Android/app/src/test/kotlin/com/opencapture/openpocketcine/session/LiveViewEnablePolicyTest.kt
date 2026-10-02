@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import com.opencapture.opencine.decoder.HevcDecoder
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals

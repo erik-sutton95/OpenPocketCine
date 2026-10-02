@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
 /** [borrowing] builds a Live View model over a Multiview tile's decoder (iOS `CameraSession(borrowing:)`). */
 class AppModel(
     context: Context,
-    borrowing: com.opencapture.openpocketcine.session.HevcDecoder? = null,
+    borrowing: com.opencapture.opencine.decoder.HevcDecoder? = null,
     controlLease: com.opencapture.openpocketcine.session.MultiviewControlLease? = null,
 ) {
     private val appContext = context.applicationContext

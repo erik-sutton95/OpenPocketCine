@@ -11,6 +11,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import com.opencapture.opencine.media.DecoderErrorRecord
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.media.MediaShare
 import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
@@ -100,6 +101,10 @@ object DiagnosticCenter {
         if (level != "debug") journal.append(line)
         if (level == "error" || level == "fault") exceptionJournal.append(line)
     }
+
+    /** Journal line for a decoder error the shared `HevcDecoder` reports. */
+    fun logDecoderError(record: DecoderErrorRecord) =
+        log("warning", "decoder", record.origin.wire, record.journalLine())
 
     fun recordFault(code: String, stack: String) {
         log("fault", "diagnostics", code, PrivacyRedactor.redact(stack.take(4000)))

@@ -30,8 +30,8 @@ def identity(root: Path, platform: str, configuration: str) -> str:
 # iOS links MonitorUI + MonitorPresentation, OpenCineCore and its products (Media, FrameIO,
 # Motion, Relay, Apple), OpenCineDJI and OpenCineMulticam. Android compiles the Swift core
 # (OpenCineMedia, Motion, Relay, DJI and Core, through the root Package.swift) and includes the
-# Gradle build (its root files plus :core, :media, :vulkan with the native renderer, :multicam
-# and :monitor-ui). Insta360 and Nikon sources are not inputs.
+# Gradle build (its root files plus :core, :media, :decoder, :vulkan with the native renderer,
+# :multicam and :monitor-ui). Insta360 and Nikon sources are not inputs.
 SWIFT_ANDROID_CORE = [
     "Sources/OpenCineCore", "Sources/OpenCineMedia", "Sources/OpenCineMotion",
     "Sources/OpenCineRelay", "Sources/OpenCineDJI",
@@ -46,7 +46,7 @@ SIBLING_PACKAGES = {
         ("OpenCine", ["Package.swift", *SWIFT_ANDROID_CORE,
                       "Android/settings.gradle.kts", "Android/build.gradle.kts",
                       "Android/gradle.properties", "Android/gradle",
-                      "Android/core", "Android/media", "Android/vulkan", "Android/multicam",
+                      "Android/core", "Android/media", "Android/decoder", "Android/vulkan", "Android/multicam",
                       "Android/monitor-ui"]),
     ],
 }

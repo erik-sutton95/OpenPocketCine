@@ -260,6 +260,8 @@ dependencies {
     implementation(libs.opencine.monitor.ui)
     implementation("com.opencapture.opencine:core:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:media:0.1.0-SNAPSHOT")
+    // Live-view MediaCodec decoder (HevcDecoder), shared with OpenInstaCine.
+    implementation("com.opencapture.opencine:decoder:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:multicam:0.1.0-SNAPSHOT")
     // libopc_vulkan.so and its JNI facade (feed.OpcVulkan), built by OpenCineCore's `:vulkan` module.
     implementation("com.opencapture.opencine:vulkan:0.1.0-SNAPSHOT")
