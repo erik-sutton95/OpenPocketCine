@@ -118,6 +118,23 @@ final class DJIControlLifetimeTests: XCTestCase {
         XCTAssertEqual(signals, [false, true])
     }
 
+    func testUnknownCameraCannotApproveZoomCycleOrCapture() {
+        let model = AppModel()
+        defer { model.session.disconnect() }
+        XCTAssertFalse(model.commitZoomCycle(2))
+        XCTAssertFalse(model.commitZoomCycle(.nan))
+        XCTAssertNil(model.control.recordEditor())
+        XCTAssertTrue(model.control.pending.isEmpty)
+    }
+
+    func testCommonFocusKeepsUnknownAndTrackedAfCOnTheNativeStrategyPath() {
+        XCTAssertEqual(CaptureFocusAdmission.commonValue("AF-S", track: nil), .focusMode(.single))
+        XCTAssertEqual(CaptureFocusAdmission.commonValue("AF-C", track: .default), .focusMode(.continuous))
+        XCTAssertNil(CaptureFocusAdmission.commonValue("AF-C", track: nil))
+        XCTAssertNil(CaptureFocusAdmission.commonValue("AF-C", track: .productShowcase))
+        XCTAssertNil(CaptureFocusAdmission.commonValue("Showcase", track: .default))
+    }
+
     private func camera(_ session: DJICameraSessionAdapter) -> ConnectedCamera {
         ConnectedCamera(
             saved: OpenCineCore.SavedCamera(

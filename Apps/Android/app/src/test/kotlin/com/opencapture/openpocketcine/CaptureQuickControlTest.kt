@@ -12,9 +12,20 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CaptureQuickControlTest {
+    @Test fun commonFocusKeepsUnknownAndTrackedAfCOnTheNativeStrategyPath() {
+        assertEquals(com.opencapture.opencine.core.SettingValue.FocusMode(com.opencapture.opencine.core.FocusMode.SINGLE),
+            commonFocusValue("AF-S", null))
+        assertEquals(com.opencapture.opencine.core.SettingValue.FocusMode(com.opencapture.opencine.core.FocusMode.CONTINUOUS),
+            commonFocusValue("AF-C", com.opencapture.opencine.dji.FocusTrackMode.DEFAULT))
+        assertNull(commonFocusValue("AF-C", null))
+        assertNull(commonFocusValue("AF-C", com.opencapture.opencine.dji.FocusTrackMode.PRODUCT_SHOWCASE))
+        assertNull(commonFocusValue("Showcase", com.opencapture.opencine.dji.FocusTrackMode.DEFAULT))
+    }
+
     @Test fun shootingModeRejectsRecordingAtAdmissionAndAtTheSetterBoundary() {
         val stopped = CameraStatus(shootingMode = CameraCommands.SHOOT_VIDEO)
         val recording = stopped.copy(isRecording = true)

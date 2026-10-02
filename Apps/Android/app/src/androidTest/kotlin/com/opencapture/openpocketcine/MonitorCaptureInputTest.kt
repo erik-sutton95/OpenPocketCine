@@ -93,7 +93,7 @@ class MonitorCaptureInputTest {
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             var model: AppModel? = null
             try {
-                scenario.onActivity { model = AppModel(it) }
+                scenario.onActivity { model = AppModel(it).also(::presentSimulatedNativeMonitor) }
                 for (tablet in listOf(false, true)) {
                     val probe = NavigationProbe()
                     val layoutProbe = InputProbe()
@@ -199,7 +199,7 @@ class MonitorCaptureInputTest {
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             var model: AppModel? = null
             try {
-                scenario.onActivity { model = AppModel(it) }
+                scenario.onActivity { model = AppModel(it).also(::presentSimulatedNativeMonitor) }
                 for (portrait in listOf(false, true)) {
                     for (sheet in listOf(LiveSheet.FORMAT, LiveSheet.COLOR, LiveSheet.MODE, LiveSheet.ISO)) {
                         var height = 0f
@@ -394,14 +394,28 @@ private fun NavigationFixture(model: AppModel, probe: NavigationProbe, layoutPro
             val floor = height - 100f
             // Production portrait controls and production picker host in their original sibling order.
             Box(Modifier.fillMaxSize()) {
-                Box(Modifier.offset(y = floor.dp).size(width.dp, 100.dp).onGloballyPositioned {
+                Box(Modifier.fillMaxSize().onGloballyPositioned {
                     layoutProbe.top = it.boundsInWindow()
                     layoutProbe.lower = it.boundsInWindow()
                 }) {
-                    LivePortraitSystemBar(model, model.assist, CameraStatus(), uiLocked = false,
-                        onLock = {}, chromeInteractive = probe.navigationEnabled, showsLock = true,
-                        showsRecord = true, showsMedia = probe.showsNavigation,
-                        showsSettings = probe.showsNavigation, controlBusy = false)
+                    val field = com.opencapture.monitorui.MonitorLayoutPolicy.fieldMonitor(
+                        width, height, 0f, 0f, 0f, 0f, 16f / 9f, false, true)
+                    com.opencapture.monitorui.MonitorSystemControls(field,
+                        com.opencapture.monitorui.MonitorSystemControlsVisibility(
+                            lock = true, settings = probe.showsNavigation, media = probe.showsNavigation, record = true),
+                        capturePresented = true, interactive = probe.navigationEnabled,
+                        lock = { enabled -> LockButton(false, enabled = enabled, onClick = {}) },
+                        settings = { enabled -> AuxCircleButton(enabled = enabled,
+                            onClick = { model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.SETTINGS) }) {
+                            OpcIcon(OpcIcon.SETTINGS, "Settings", Modifier.fillMaxSize(), it)
+                        } },
+                        media = { enabled -> AuxCircleButton(enabled = enabled,
+                            onClick = { model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.MEDIA) }) {
+                            OpcIcon(OpcIcon.FILM, "Media", Modifier.fillMaxSize(), it)
+                        } },
+                        record = { enabled -> LiveCaptureButton(model, enabled, field.record.width, openMode = {}) },
+                        display = { enabled -> com.opencapture.monitorui.MonitorDisplayButton(false,
+                            field.display.width, field.display.height, enabled = enabled, onClick = {}) })
                 }
             }
             Box(Modifier.offset(2.dp, maxHeight - 6.dp).size(4.dp)

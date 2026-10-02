@@ -369,11 +369,7 @@ struct CapturePickerPanel: View {
         case .shutter:
             if isEvSheet {
                 VStack(alignment: .leading, spacing: 12) {
-                    CaptureDrumWheel(
-                        options: evLabels, selection: $drumSelection,
-                        isInteractive: !model.facePriorityExposureEnabled
-                    )
-                    .id(evLabels)
+                    commonDrum(.exposureCompensation, editingAllowed: !model.facePriorityExposureEnabled)
                 }
             } else if isAngleSheet {
                 CaptureDrumWheel(options: shutterAngleLabels, selection: $drumSelection)
@@ -478,7 +474,13 @@ struct CapturePickerPanel: View {
                 guard let option = FocusOption.allCases.first(where: { $0.chip == value }) else {
                     return
                 }
-                model.session.setFocusOption(option)
+                guard let field = commonField, let editor = field.editor,
+                    model.control.isCurrent(editor), canApplyDrum else { return }
+                if let commonValue = CaptureFocusAdmission.commonValue(value, track: model.session.status.focusTrack) {
+                    model.control.commit(commonValue, from: editor, label: "FOCUS \(value)")
+                } else {
+                    model.session.setFocusOption(option)
+                }
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(CaptureLists.focusTitle(selected))
@@ -798,22 +800,23 @@ struct CapturePickerPanel: View {
     private func captureCommonField() {
         let key: SettingKey? = switch sheet {
         case .iso: .iso
-        case .shutter: .shutter
+        case .shutter: isEvSheet ? .exposureCompensation : .shutter
         case .wb: .whiteBalance
+        case .focus: .focusMode
         default: nil
         }
         commonField = key.flatMap { model.control.captureField($0) }
     }
 
-    @ViewBuilder private func commonDrum(_ key: SettingKey, marked: Set<String> = []) -> some View {
+    @ViewBuilder private func commonDrum(_ key: SettingKey, marked: Set<String> = [], editingAllowed: Bool = true) -> some View {
         if let field = commonField, field.key == key {
             let choices = field.choices.filter { choice in
                 switch choice.value {
-                case .iso(.manual), .shutter(.duration), .shutter(.angle), .whiteBalance(.kelvin): return true
+                case .iso(.manual), .shutter(.duration), .shutter(.angle), .whiteBalance(.kelvin), .exposureCompensation: return true
                 default: return false
                 }
             }
-            MonitorCaptureDrum(control: model.control, field: field, enabled: canApplyDrum,
+            MonitorCaptureDrum(control: model.control, field: field, enabled: canApplyDrum && editingAllowed,
                 haptics: model.hapticsEnabled, choices: choices, marked: marked)
         } else {
             Text("Setting not available").foregroundStyle(MonitorTheme.muted)

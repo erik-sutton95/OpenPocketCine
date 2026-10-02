@@ -692,6 +692,7 @@ struct LiveViewScreen: View {
                 label: { CamFov.displayLabel(factor: $0) },
                 onEditing: { editing in
                     if editing {
+                        model.control.cancelEdit(.zoom)
                         zoomGestureAnchor =
                             model.session.status.zoomFactor ?? model.session.zoomOptimistic
                             ?? model.session.zoomStop

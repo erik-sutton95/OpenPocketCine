@@ -83,6 +83,10 @@ timecode and REC SETUP sit in a separate row below the notch or status area.
 View Assist, FIT/FILL and the joystick cluster stay above the camera values in
 fixed positions when switching FIT/FILL.
 
+Settings and Media cover the current monitor while its camera and picture host
+remain active. Returning to the monitor keeps the same connection. A Multiview
+member returns to its grid without ending that member's camera connection.
+
 The camera battery gauge shows the percentage reported by your Osmo, or a dash
 when unavailable. Top capture settings, STBY and timecode align in one row;
 Lock matches the Settings and Media button size.

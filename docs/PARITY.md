@@ -1656,3 +1656,25 @@ The iOS private-simulator tests exercise the real Pocket session with unopened
 SIMULATED datalinks through owned and borrowed shared-shell paths. Physical
 camera/device qualification remains untested on both platforms. This foundation
 does not complete the root/monitor/settings/media migration.
+
+## Common Pocket monitor composition candidate
+
+Both shells compose the actual connected or explicitly borrowed DJI session
+through `AppShell`, `MonitorScreen`, common recording/timecode status and common
+system-control positions. Settings and Media use the shell's one cover state
+and retain the monitor. Return from a borrowed Multiview monitor releases its
+view once while the tile keeps its transport and decoder. Watch relay keeps its
+existing remote-source experience.
+
+ISO, manual shutter speed, Kelvin and EV capture fields retain typed values
+and the editor opened with the gesture or drum. Unknown recording/mode cannot
+approve video capture. Basic focus mode and zoom cycle taps use the common
+admission path; DJI tracking strategy, angle preference, Auto ISO limits,
+exposure mode, locks and iris strategy remain bounded native actions.
+Continuous zoom pinch/dial completion preserves its existing color-restoration
+ordering. Native Settings/Media contents and transport ownership remain the
+later P-1/P-2/P-3 work.
+
+Automated checks and SIMULATED native fixtures are recorded in the execution
+handoff. Physical iPhone/Android camera qualification for this composition is
+untested; earlier hardware evidence does not qualify the new shared root.

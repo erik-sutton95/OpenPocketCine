@@ -38,6 +38,8 @@ fun MonitorTelemetry(
     cameraPercent: Int,
     horizontal: Boolean,
     modifier: Modifier = Modifier,
+    showsLink: Boolean = true,
+    showsPower: Boolean = true,
 ) {
     val bars = signalBars.coerceIn(0, 4)
     // Signal / fps stay in the accent; the bar count carries the health.
@@ -45,15 +47,17 @@ fun MonitorTelemetry(
     // One link pill: tap swaps signal bars and feed fps.
     var showsFps by rememberSaveable { mutableStateOf(false) }
     val gauges: @Composable () -> Unit = {
-        TelemetryGauge(if (showsFps) OpcIcon.GAUGE else OpcIcon.SIGNAL, linkColor, bars / 4f,
+        if (showsLink) TelemetryGauge(if (showsFps) OpcIcon.GAUGE else OpcIcon.SIGNAL, linkColor, bars / 4f,
             "Live link $signalBars of 4 delivery bars, feed $fps frames per second", horizontal,
             // Whole frames with a unit; RECOV / LINK / — pass through.
             if (showsFps) fps.toDoubleOrNull()?.let { "${Math.round(it)} fps" } ?: fps else null,
             onClick = { showsFps = !showsFps })
+        if (showsPower) {
         TelemetryGauge(OpcIcon.SMARTPHONE, batteryTint(phonePercent), phonePercent / 100f,
             if (phonePercent >= 0) "Phone battery $phonePercent percent" else "Phone battery unavailable",
             horizontal, phonePercent.takeIf { it in 0..100 }?.let { "$it%" } ?: "—")
         MonitorCameraBatteryGauge(cameraPercent, stacked = horizontal)
+        }
     }
     if (horizontal) Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) { gauges() }
     else Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) { gauges() }

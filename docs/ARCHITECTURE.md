@@ -41,8 +41,24 @@ transport; this prevents reentrant cleanup. Returning a borrowed Multiview view
 retires only its controls and leaves the tile's transport/decoder owner alive.
 Settings and Media coverage retain the connection. The common binding sends no
 camera commands and never stops recording; gimbal/motion cleanup remains the
-existing native disconnect behavior. This foundation does not itself migrate
-the app's root, monitor tools, settings or media workflow into the shared shell.
+existing native disconnect behavior.
+
+Both app roots now compose `AppShell` over that connection with one
+`MonitorControlModel`. `ShellModel` owns pairing, the active monitor, scene
+activity and Settings/Media coverage; the compatibility panel properties
+project its one cover value. `MonitorScreen` holds the existing native picture
+host and common status, capture and system positions. Native gimbal, tracking,
+assist, settings, media and recovery content fill bounded slots. Covers retain
+the picture and camera; a borrowed Multiview monitor returns its loan once.
+The watch relay keeps its existing remote-source experience.
+
+ISO, manual shutter duration, Kelvin and EV use typed common capture choices
+and the editor captured when the gesture or panel opened. Common AF-S/AF-C and
+zoom cycle commands use capability admission. DJI focus-tracking strategy,
+Auto ISO limits, AWB/AE lock, operator shutter angle, exposure mode, iris
+strategy and continuous zoom completion retain their typed native adapters.
+In particular, native pinch/dial completion still owns DJI color restoration;
+moving that gesture lifecycle belongs to the later native-runtime increment.
 
 ## Shared monitor presentation
 

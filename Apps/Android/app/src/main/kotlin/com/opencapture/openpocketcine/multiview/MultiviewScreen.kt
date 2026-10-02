@@ -160,7 +160,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
     val borrowed = liveTile?.liveModel
     if (liveTile != null && borrowed != null) {
         DisposableEffect(borrowed) {
-            borrowed.multiviewExit = { liveTile = null }
+            borrowed.multiviewExit = { borrowed.shell.close(); liveTile = null }
             onDispose { session.closeLiveView() }
         }
         BackHandler { liveTile = null }
