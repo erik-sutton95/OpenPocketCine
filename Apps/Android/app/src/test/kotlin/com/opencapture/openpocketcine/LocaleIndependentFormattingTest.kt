@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.openpocketcine.lut.LutExposureCompensation
 import com.opencapture.openpocketcine.media.MediaLibraryQuery
-import com.opencapture.openpocketcine.session.CamFov
+import com.opencapture.opencine.dji.CamFov
 import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals

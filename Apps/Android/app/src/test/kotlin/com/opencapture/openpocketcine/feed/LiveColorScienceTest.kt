@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.feed
 
 import com.opencapture.openpocketcine.assists.CrushClipCompensation
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.opencine.dji.CameraCommands
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals

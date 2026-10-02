@@ -31,10 +31,10 @@ import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LivePopupAction
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.VideoResolution
-import com.opencapture.openpocketcine.session.timecodeClock
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.VideoResolution
+import com.opencapture.opencine.dji.timecodeClock
 import com.opencapture.openpocketcine.monitor.MonitorCameraBatteryGauge
 
 /** Display values come from the existing throttled tile status; no telemetry polling. */

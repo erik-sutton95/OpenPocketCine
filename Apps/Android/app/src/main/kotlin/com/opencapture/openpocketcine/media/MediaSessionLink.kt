@@ -1,9 +1,9 @@
 package com.opencapture.openpocketcine.media
 
-import com.opencapture.openpocketcine.bridge.SwiftCore
-import com.opencapture.openpocketcine.core.ConnectionPhase
-import com.opencapture.openpocketcine.session.DatalinkDriver
-import com.opencapture.openpocketcine.session.DumlFrame
+import com.opencapture.opencine.dji.DjiNative
+import com.opencapture.opencine.dji.ConnectionPhase
+import com.opencapture.opencine.dji.DatalinkDriver
+import com.opencapture.opencine.dji.DumlFrame
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -122,8 +122,8 @@ internal object FrameFanout {
 }
 
 fun MediaSessionLink.sendEnterPlayback() {
-    if (SwiftCore.isAvailable) {
-        sendCommand(SwiftCore.CMD_ENTER_PLAYBACK)
+    if (DjiNative.isAvailable) {
+        sendCommand(DjiNative.CMD_ENTER_PLAYBACK)
     } else {
         sendDuml(MediaCommands.SET_CAMERA, MediaCommands.CMD_PLAYBACK, MediaCommands.enterPlaybackPayload())
     }

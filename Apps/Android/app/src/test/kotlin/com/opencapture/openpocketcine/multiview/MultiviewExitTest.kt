@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
-import com.opencapture.openpocketcine.session.DumlFrame
+import com.opencapture.opencine.dji.DumlFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*

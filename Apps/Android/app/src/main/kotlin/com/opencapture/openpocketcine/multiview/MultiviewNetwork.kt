@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.dji.DjiNative
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ConnectivityManager
@@ -10,12 +11,11 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Handler
 import android.os.Looper
-import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
-import com.opencapture.openpocketcine.session.BleLink
-import com.opencapture.openpocketcine.session.CameraNetworkPath
-import com.opencapture.openpocketcine.session.DumlFrame
-import com.opencapture.openpocketcine.session.FoundCamera
+import com.opencapture.opencine.dji.BleLink
+import com.opencapture.opencine.dji.CameraNetworkPath
+import com.opencapture.opencine.dji.DumlFrame
+import com.opencapture.opencine.dji.FoundCamera
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.InetSocketAddress
@@ -206,7 +206,7 @@ class MultiviewDiscovery(private val path: SharedWiFi) {
         val mask = path.netmask() ?: throw UnsupportedSubnet()
         val request = JSONObject().put("address", address).put("mask", mask)
             .put("excluding", excluding.joinToString(",")).toString()
-        val reply = SwiftCore.multicamDecision("discoveryHosts", request)
+        val reply = DjiNative.multicamDecision("discoveryHosts", request)
         if (reply == null || reply == "unsupported") throw UnsupportedSubnet()
         val hosts = reply.split(",").filter { it.isNotEmpty() }
         val found = mutableListOf<String>()
@@ -264,14 +264,14 @@ class MultiviewProvisioner(context: Context) {
 
     fun send(kind: Int, extra: String? = null): Int {
         val seq = next()
-        if (!closed) ble.send(SwiftCore.command(kind, seq, extra))
+        if (!closed) ble.send(DjiNative.command(kind, seq, extra))
         return seq
     }
 
     suspend fun exchange(kind: Int, extra: String? = null, timeoutMs: Long = 12_000): DumlFrame {
         if (closed) throw kotlinx.coroutines.CancellationException("provisioner closed")
         val seq = next()
-        val bytes = SwiftCore.command(kind, seq, extra)
+        val bytes = DjiNative.command(kind, seq, extra)
         require(bytes.size > 10) { "command not encoded" }
         val cmdSet = bytes[9].toInt() and 0xFF
         val cmdId = bytes[10].toInt() and 0xFF
@@ -317,12 +317,12 @@ class MultiviewProvisioner(context: Context) {
                         "seq=${frame.seq} flags=${"%02x".format(frame.flags)} bytes=${frame.payload.size}",
                 )
                 if (frame.cmdSet == 0x07 && frame.cmdId == 0xAC && frame.sender == 0x07) {
-                    val names = SwiftCore.multicamDecision(
+                    val names = DjiNative.multicamDecision(
                         "wifiScanNames", JSONObject().put("payload", hex(frame.payload)).toString())
                     onWiFiScan?.invoke(names.orEmpty().split('\u001f').filter { it.isNotEmpty() })
                 }
                 if (frame.cmdSet == 0x07 && frame.cmdId == 0x46 && (frame.flags and 0x80) == 0) {
-                    ble.send(SwiftCore.command(SwiftCore.CMD_PAIR_APPROVAL_ACK, frame.seq))
+                    ble.send(DjiNative.command(DjiNative.CMD_PAIR_APPROVAL_ACK, frame.seq))
                     approved = true
                 } else if ((frame.flags and 0x80) != 0) {
                     if (replies.size > 128) replies.clear()
@@ -330,8 +330,8 @@ class MultiviewProvisioner(context: Context) {
                 }
             }
         }
-        send(SwiftCore.CMD_SESSION_WAKE)
-        val pair = send(SwiftCore.CMD_SET_PAIRING_PIN, camera.model.pairingToken)
+        send(DjiNative.CMD_SESSION_WAKE)
+        val pair = send(DjiNative.CMD_SET_PAIRING_PIN, camera.model.pairingToken)
         val deadline = System.currentTimeMillis() + pairingTimeoutMs
         while (!approved && System.currentTimeMillis() < deadline) {
             if (closed) throw kotlinx.coroutines.CancellationException("provisioner closed")
@@ -343,7 +343,7 @@ class MultiviewProvisioner(context: Context) {
         if (!approved) throw MultiviewFailure.Timeout()
         keepalive = scope.launch {
             while (!closed) {
-                send(SwiftCore.CMD_SESSION_KEEPALIVE)
+                send(DjiNative.CMD_SESSION_KEEPALIVE)
                 delay(1_000)
             }
         }
@@ -361,15 +361,15 @@ class MultiviewProvisioner(context: Context) {
         var restoreNeeded = false
         try {
             connect(camera, pairingTimeoutMs = 30_000)
-            if (camera.model.family == "nano") exchange(SwiftCore.CMD_SESSION_5310)
+            if (camera.model.family == "nano") exchange(DjiNative.CMD_SESSION_5310)
             beforeStationChange()
             restoreNeeded = true
-            val role = exchange(SwiftCore.CMD_MULTICAM_STATION_MODE, "1")
+            val role = exchange(DjiNative.CMD_MULTICAM_STATION_MODE, "1")
             if (role.payload.firstOrNull()?.toInt() != 0) throw MultiviewFailure.Rejected()
             delay(10_000)
             repeat(4) {
                 try {
-                    exchange(SwiftCore.CMD_MULTICAM_WIFI_SCAN, timeoutMs = 8_000)
+                    exchange(DjiNative.CMD_MULTICAM_WIFI_SCAN, timeoutMs = 8_000)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: MultiviewFailure.Timeout) {
@@ -380,7 +380,7 @@ class MultiviewProvisioner(context: Context) {
         } finally {
             withContext(NonCancellable) {
                 val restored = restoreNeeded && runCatching {
-                    val reply = exchange(SwiftCore.CMD_MULTICAM_STATION_MODE, "0").payload
+                    val reply = exchange(DjiNative.CMD_MULTICAM_STATION_MODE, "0").payload
                     reply.contentEquals(byteArrayOf(0)) || reply.contentEquals(byteArrayOf(0, 0))
                 }.getOrDefault(false)
                 close()

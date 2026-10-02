@@ -7,9 +7,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.lut.ClipColorProfile
-import com.opencapture.openpocketcine.session.DumlFrame
+import com.opencapture.opencine.dji.DumlFrame
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -524,7 +524,7 @@ class MediaLibraryController(
         try {
             val resumeAt = SystemClock.elapsedRealtime()
             val result = MediaLiveResumeRunner.run(
-                timeoutMs = com.opencapture.openpocketcine.session.LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS,
+                timeoutMs = com.opencapture.opencine.dji.LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS,
                 nowMs = SystemClock::elapsedRealtime,
                 isCurrent = { token == resumeGeneration && !browsing && session.ownsMediaLiveResume(pictureOwner) },
                 inPlayback = { link.inPlayback },

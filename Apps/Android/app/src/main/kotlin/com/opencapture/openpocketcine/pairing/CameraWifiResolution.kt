@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.dji.FoundCameraIdentity
+
 /** Cached SoftAP creds vs a live BLE name. Lockstep with Swift `CameraWifiResolution`. */
 object CameraWifiResolution {
     data class Result(

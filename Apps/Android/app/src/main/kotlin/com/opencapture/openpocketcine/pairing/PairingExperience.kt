@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.dji.FoundCameraIdentity
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -46,11 +47,11 @@ import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LegalDocumentScreen
 import com.opencapture.openpocketcine.LegalKind
-import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
-import com.opencapture.openpocketcine.session.FoundCamera
-import com.opencapture.openpocketcine.session.LocalVPNFilter
+import com.opencapture.opencine.dji.FoundCamera
+import com.opencapture.opencine.dji.LocalVPNFilter
 import kotlinx.coroutines.delay
 
 private val pairingSteps = listOf(

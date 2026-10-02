@@ -111,7 +111,7 @@ import com.opencapture.openpocketcine.assists.scopePanelChrome
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.lut.PlaybackLutColor
-import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.opencine.dji.CameraStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

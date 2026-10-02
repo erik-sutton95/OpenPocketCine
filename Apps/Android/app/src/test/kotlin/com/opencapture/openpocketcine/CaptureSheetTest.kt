@@ -1,13 +1,13 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraModel
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.FocusOption
-import com.opencapture.openpocketcine.session.FocusTrackMode
-import com.opencapture.openpocketcine.session.VideoFormat
-import com.opencapture.openpocketcine.session.VideoFrameRate
-import com.opencapture.openpocketcine.session.VideoResolution
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraModel
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.FocusOption
+import com.opencapture.opencine.dji.FocusTrackMode
+import com.opencapture.opencine.dji.VideoFormat
+import com.opencapture.opencine.dji.VideoFrameRate
+import com.opencapture.opencine.dji.VideoResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -1290,17 +1290,17 @@ class CaptureSheetTest {
     fun fpsChipLabelIsLiveViewHealthNotRecordFps() {
         data class Chip(
             val why: String,
-            val connection: com.opencapture.openpocketcine.core.ConnectionPhase,
+            val connection: com.opencapture.opencine.dji.ConnectionPhase,
             val recovering: Boolean,
             val measured: Double,
             val expected: String,
         )
-        val live = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE
+        val live = com.opencapture.opencine.dji.ConnectionPhase.LIVE
         val cases = listOf(
-            Chip("idle hides fps", com.opencapture.openpocketcine.core.ConnectionPhase.IDLE, false, 0.0, "\u2014"),
+            Chip("idle hides fps", com.opencapture.opencine.dji.ConnectionPhase.IDLE, false, 0.0, "\u2014"),
             Chip("live without frames", live, false, 0.0, "LINK"),
             Chip("recovering", live, true, 12.0, "RECOV"),
-            Chip("failed", com.opencapture.openpocketcine.core.ConnectionPhase.FAILED, false, 25.0, "FAIL"),
+            Chip("failed", com.opencapture.opencine.dji.ConnectionPhase.FAILED, false, 25.0, "FAIL"),
             Chip("live with frames", live, false, 25.0, "25.00"),
         )
         for (case in cases) {

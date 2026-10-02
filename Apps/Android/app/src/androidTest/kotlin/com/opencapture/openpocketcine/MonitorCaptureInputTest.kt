@@ -41,7 +41,7 @@ import com.opencapture.monitorui.MonitorQuickPreview
 import com.opencapture.monitorui.MonitorReadoutDismissBackdrop
 import com.opencapture.monitorui.MonitorReadoutRegions
 import com.opencapture.monitorui.monitorReadoutGesture
-import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.opencine.dji.CameraStatus
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue

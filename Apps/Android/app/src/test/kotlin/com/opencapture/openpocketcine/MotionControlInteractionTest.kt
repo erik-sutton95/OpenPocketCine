@@ -1,11 +1,11 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.GimbalMoveEngine
-import com.opencapture.openpocketcine.session.GimbalProgram
-import com.opencapture.openpocketcine.session.GimbalProgramCurve
-import com.opencapture.openpocketcine.session.GimbalStickMapping
-import com.opencapture.openpocketcine.session.GimbalWaypoint
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.GimbalMoveEngine
+import com.opencapture.opencine.dji.GimbalProgram
+import com.opencapture.opencine.dji.GimbalProgramCurve
+import com.opencapture.opencine.dji.GimbalStickMapping
+import com.opencapture.opencine.dji.GimbalWaypoint
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

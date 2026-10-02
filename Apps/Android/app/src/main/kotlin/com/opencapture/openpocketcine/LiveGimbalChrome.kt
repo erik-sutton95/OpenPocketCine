@@ -82,16 +82,16 @@ import com.opencapture.monitorui.MonitorOptionGroup
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorSwitchGraphic
 import com.opencapture.monitorui.MonitorValueDrum
-import com.opencapture.openpocketcine.core.ConnectionPhase
-import com.opencapture.openpocketcine.session.GimbalHudCopy
-import com.opencapture.openpocketcine.session.GimbalMode
-import com.opencapture.openpocketcine.session.GimbalMoveEngine
-import com.opencapture.openpocketcine.session.GimbalProgramCurve
-import com.opencapture.openpocketcine.session.GimbalProgram
-import com.opencapture.openpocketcine.session.GimbalDoubleTap
-import com.opencapture.openpocketcine.session.GimbalRamp
-import com.opencapture.openpocketcine.session.GimbalSpeed
-import com.opencapture.openpocketcine.session.GimbalWaypointSlot
+import com.opencapture.opencine.dji.ConnectionPhase
+import com.opencapture.opencine.dji.GimbalHudCopy
+import com.opencapture.opencine.dji.GimbalMode
+import com.opencapture.opencine.dji.GimbalMoveEngine
+import com.opencapture.opencine.dji.GimbalProgramCurve
+import com.opencapture.opencine.dji.GimbalProgram
+import com.opencapture.opencine.dji.GimbalDoubleTap
+import com.opencapture.opencine.dji.GimbalRamp
+import com.opencapture.opencine.dji.GimbalSpeed
+import com.opencapture.opencine.dji.GimbalWaypointSlot
 import kotlin.math.max
 import kotlin.math.min
 

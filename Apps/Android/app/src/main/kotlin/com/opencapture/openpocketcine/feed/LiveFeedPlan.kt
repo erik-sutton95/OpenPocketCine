@@ -10,7 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.lut.PlaybackLutColor
-import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.opencine.dji.CameraStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

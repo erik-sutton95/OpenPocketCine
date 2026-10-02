@@ -8,7 +8,7 @@ import com.opencapture.monitorui.MonitorAudioMeter
 import com.opencapture.monitorui.MonitorAudioMetrics
 import com.opencapture.monitorui.MonitorAudioOrientation
 import com.opencapture.openpocketcine.ChromeRect
-import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.opencine.dji.CameraStatus
 
 /** Floor telemetry still draws; missing packets use the status fields as silent readouts. */
 internal fun audioOverlayChannels(status: CameraStatus): Pair<AudioMeterReading, AudioMeterReading> {

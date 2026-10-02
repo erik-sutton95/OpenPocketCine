@@ -82,7 +82,7 @@ import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.assists.LiveZebra
 import com.opencapture.openpocketcine.assists.ParadeMode
 import com.opencapture.openpocketcine.assists.PeakingColor
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.openpocketcine.assists.PeakingSense
 import com.opencapture.openpocketcine.assists.ScopeGuides
 import com.opencapture.openpocketcine.assists.VectorscopeZoom
@@ -90,7 +90,7 @@ import com.opencapture.openpocketcine.assists.WaveformMode
 import com.opencapture.openpocketcine.assists.ZebraEditor
 import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
-import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReport
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog

@@ -3,7 +3,7 @@ package com.opencapture.openpocketcine.pairing
 import com.opencapture.monitorui.MonitorConnectFailure
 import com.opencapture.monitorui.MonitorConnectStep
 import com.opencapture.monitorui.MonitorSetupChip
-import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.opencine.dji.ConnectionPhase
 
 /** Saved-camera card values for the Wi-Fi and Hotspot setups (iOS `OsmoCameraPageAdapter`, #406). */
 object SavedCameraSetupPresentation {

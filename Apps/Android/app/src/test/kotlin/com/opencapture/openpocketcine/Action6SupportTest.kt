@@ -1,11 +1,11 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.openpocketcine.session.ApertureStrategy
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraModel
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.DatalinkDriver
-import com.opencapture.openpocketcine.session.StatusExtras
+import com.opencapture.opencine.dji.ApertureStrategy
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraModel
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.DatalinkDriver
+import com.opencapture.opencine.dji.StatusExtras
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

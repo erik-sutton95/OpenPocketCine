@@ -2,9 +2,9 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.StatusExtras
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.StatusExtras
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

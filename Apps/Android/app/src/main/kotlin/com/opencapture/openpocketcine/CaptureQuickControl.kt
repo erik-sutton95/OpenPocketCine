@@ -12,13 +12,13 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.monitorui.MonitorQuickControl
-import com.opencapture.openpocketcine.session.ApertureStrategy
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraModel
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.VideoFormat
+import com.opencapture.opencine.dji.ApertureStrategy
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraModel
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.VideoFormat
 
 /** Reuses the persistent picker's production choices and typed action methods. */
 internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: AppModel,
@@ -202,7 +202,7 @@ internal fun captureQuickFocusControl(status: CameraStatus) = MonitorQuickContro
 
 /** One native option list for the persistent picker and the readout preview. */
 internal object CaptureFocusChoices {
-    val labels = com.opencapture.openpocketcine.session.FocusOption.entries.map { it.chip }
+    val labels = com.opencapture.opencine.dji.FocusOption.entries.map { it.chip }
     fun selection(status: CameraStatus): String = when (status.focusMode) {
         CameraCommands.FOCUS_SINGLE -> "AF-S"
         CameraCommands.FOCUS_CONTINUOUS -> labels.getOrNull(status.focusTrack + 1)

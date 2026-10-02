@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.monitorui.MonitorCapabilities
-import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.opencine.dji.CameraStatus
 
 /** The existing adapter remains the only authority for body-specific features. */
 internal fun AppModel.monitorCapabilities(status: CameraStatus): MonitorCapabilities {

@@ -35,8 +35,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.opencapture.monitorui.MonitorCapabilities
 import com.opencapture.openpocketcine.assists.MonitorAssistInspector
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraStatus
 
 /**
  * Debug-only, deterministic visual review of production chrome. This activity

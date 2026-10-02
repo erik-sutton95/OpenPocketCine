@@ -11,7 +11,7 @@ import com.opencapture.opencine.multicam.ExclusionReason
 import com.opencapture.opencine.multicam.RecordDirection
 import com.opencapture.opencine.multicam.TargetOutcome
 import com.opencapture.opencine.multicam.TargetPolicy
-import com.opencapture.openpocketcine.session.DjiCameraSessionAdapter
+import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async

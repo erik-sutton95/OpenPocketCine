@@ -8,7 +8,7 @@ import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.lut.LutCatalog
 import com.opencapture.openpocketcine.lut.LutExposureCompensation
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.opencine.dji.CameraCommands
 import java.io.File
 import java.util.LinkedHashMap
 

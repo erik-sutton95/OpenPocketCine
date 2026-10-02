@@ -11,11 +11,12 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import com.opencapture.opencine.dji.DjiLog
 import com.opencapture.opencine.media.DecoderErrorRecord
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.media.MediaShare
 import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
-import com.opencapture.openpocketcine.session.LocalVPNFilter
+import com.opencapture.opencine.dji.LocalVPNFilter
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import java.io.File
 import java.text.SimpleDateFormat
@@ -57,6 +58,7 @@ object DiagnosticCenter {
             persistBatch(exceptionFile(), batch, EXCEPTION_CAP, exceptionWritten, exceptionJournal)
         }
         filesDir()?.let { FeedIncidentRuntime.install(it) }
+        DjiLog.sink = ::log
         ReliabilityReporting.install(context.applicationContext)
         ManualProblemReport.install(context.applicationContext)
         log("notice", "diagnostics", "boot", "diagnostics installed")

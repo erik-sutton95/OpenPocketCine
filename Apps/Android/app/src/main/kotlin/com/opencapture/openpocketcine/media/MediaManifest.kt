@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine.media
 
-import com.opencapture.openpocketcine.session.DumlFrame
+import com.opencapture.opencine.dji.DumlFrame
 import java.nio.charset.Charset
 import java.util.Locale
 import kotlin.math.roundToInt

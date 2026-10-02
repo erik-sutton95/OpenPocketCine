@@ -19,8 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.opencapture.openpocketcine.session.SessionRecoveryCopy
-import com.opencapture.openpocketcine.session.SessionRecoveryUi
+import com.opencapture.opencine.dji.SessionRecoveryCopy
+import com.opencapture.opencine.dji.SessionRecoveryUi
 
 @Composable
 fun MonitorRecoveryOverlay(

@@ -82,7 +82,7 @@ import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.LutLookResolver
 import com.opencapture.openpocketcine.pairing.StartupColors
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.opencine.dji.CameraCommands
 import java.io.File
 import kotlin.math.abs
 

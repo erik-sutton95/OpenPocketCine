@@ -67,10 +67,10 @@ import com.opencapture.openpocketcine.assists.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
-import com.opencapture.openpocketcine.session.ApertureStrategy
-import com.opencapture.openpocketcine.session.CamFov
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.opencine.dji.ApertureStrategy
+import com.opencapture.opencine.dji.CamFov
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraStatus
 import kotlin.math.max
 import kotlin.math.min
 

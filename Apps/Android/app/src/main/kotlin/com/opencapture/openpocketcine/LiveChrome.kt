@@ -60,8 +60,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
-import com.opencapture.openpocketcine.core.ConnectionPhase
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.opencine.dji.ConnectionPhase
+import com.opencapture.opencine.dji.CameraCommands
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -1518,7 +1518,7 @@ internal fun RecordButton(
         recording = recording,
         locked = !enabled,
         busy = !enabled,
-        phase = com.opencapture.openpocketcine.core.ConnectionPhase.LIVE,
+        phase = com.opencapture.opencine.dji.ConnectionPhase.LIVE,
     ),
     onClick: () -> Unit,
 ) {
@@ -1738,7 +1738,7 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
     val config = LocalConfiguration.current
     val tablet = min(config.screenWidthDp, config.screenHeightDp) >= 600
     val incoming = timecode?.takeIf { it.isNotBlank() }
-    val clock = com.opencapture.openpocketcine.session.timecodeClock(incoming)
+    val clock = com.opencapture.opencine.dji.timecodeClock(incoming)
         ?: if (portrait) "00:00:00" else "--:--:--"
     val raw = clock
     val colon = raw.lastIndexOf(':')

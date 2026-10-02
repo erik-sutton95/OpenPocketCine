@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.dji.DjiNative
+import com.opencapture.opencine.dji.StationJoin
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -17,22 +19,21 @@ import com.opencapture.opencine.multicam.EditorLeases
 import com.opencapture.opencine.multicam.RecordDirection
 import com.opencapture.opencine.multicam.RecordPlan
 import com.opencapture.openpocketcine.AppModel
-import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlanFactory
-import com.opencapture.openpocketcine.session.BleLink
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.DatalinkDriver
-import com.opencapture.openpocketcine.session.DjiCameraSessionAdapter
-import com.opencapture.openpocketcine.session.DumlFrame
-import com.opencapture.openpocketcine.session.FoundCamera
-import com.opencapture.openpocketcine.session.GimbalStickMapping
+import com.opencapture.opencine.dji.BleLink
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.DatalinkDriver
+import com.opencapture.opencine.dji.DjiCameraSessionAdapter
+import com.opencapture.opencine.dji.DumlFrame
+import com.opencapture.opencine.dji.FoundCamera
+import com.opencapture.opencine.dji.GimbalStickMapping
 import com.opencapture.opencine.decoder.HevcDecoder
-import com.opencapture.openpocketcine.session.LiveViewEnablePolicy
-import com.opencapture.openpocketcine.session.MultiviewControlLease
-import com.opencapture.openpocketcine.session.StatusExtras
-import com.opencapture.openpocketcine.session.interruptibleDatalinkOpen
+import com.opencapture.opencine.dji.LiveViewEnablePolicy
+import com.opencapture.opencine.dji.MultiviewControlLease
+import com.opencapture.opencine.dji.StatusExtras
+import com.opencapture.opencine.dji.interruptibleDatalinkOpen
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -67,7 +68,7 @@ fun FoundCamera.multicamSupport(): MulticamSupportInfo {
     synchronized(supportCache) { supportCache[key]?.let { return it } }
     val request = JSONObject().put("name", model.name.ifEmpty { name })
     modelId?.let { request.put("modelId", it) }
-    val raw = if (SwiftCore.isAvailable) SwiftCore.multicamDecision("support", request.toString()) else null
+    val raw = if (DjiNative.isAvailable) DjiNative.multicamDecision("support", request.toString()) else null
     val json = raw?.let { runCatching { JSONObject(it) }.getOrNull() }
     val info = MulticamSupportInfo(
         appears = json?.optBoolean("appears") ?: false,
@@ -96,15 +97,15 @@ enum class MultiviewLayout(val raw: String) {
 
 /** Each tile owns one bounded repair ladder (core `MultiviewRecovery`). A healthy take resets its budget. */
 class MultiviewRecoveryLadder {
-    private var handle = if (SwiftCore.isAvailable) SwiftCore.multiviewRecoveryCreate() else 0L
+    private var handle = if (DjiNative.isAvailable) DjiNative.multiviewRecoveryCreate() else 0L
     fun action(snapshotJSON: String): String =
-        if (handle == 0L) "none" else SwiftCore.multiviewRecoveryCall(handle, "action", snapshotJSON) ?: "none"
-    fun beginRejoin(): Boolean = handle != 0L && SwiftCore.multiviewRecoveryCall(handle, "beginRejoin", "{}") == "true"
-    fun fail() { if (handle != 0L) SwiftCore.multiviewRecoveryCall(handle, "fail", "{}") }
-    val failed: Boolean get() = handle != 0L && SwiftCore.multiviewRecoveryCall(handle, "failed", "{}") == "true"
-    fun reset() { if (handle != 0L) SwiftCore.multiviewRecoveryCall(handle, "reset", "{}") }
+        if (handle == 0L) "none" else DjiNative.multiviewRecoveryCall(handle, "action", snapshotJSON) ?: "none"
+    fun beginRejoin(): Boolean = handle != 0L && DjiNative.multiviewRecoveryCall(handle, "beginRejoin", "{}") == "true"
+    fun fail() { if (handle != 0L) DjiNative.multiviewRecoveryCall(handle, "fail", "{}") }
+    val failed: Boolean get() = handle != 0L && DjiNative.multiviewRecoveryCall(handle, "failed", "{}") == "true"
+    fun reset() { if (handle != 0L) DjiNative.multiviewRecoveryCall(handle, "reset", "{}") }
     fun close() {
-        if (handle != 0L) SwiftCore.multiviewRecoveryDestroy(handle)
+        if (handle != 0L) DjiNative.multiviewRecoveryDestroy(handle)
         handle = 0L
     }
 }
@@ -144,7 +145,7 @@ class MultiviewSession(
                 } else {
                     lastCommandAt = SystemClock.elapsedRealtime()
                     withContext(Dispatchers.IO) {
-                        endpoint.sendCommand(if (start) SwiftCore.CMD_RECORD_START else SwiftCore.CMD_RECORD_STOP)
+                        endpoint.sendCommand(if (start) DjiNative.CMD_RECORD_START else DjiNative.CMD_RECORD_STOP)
                     }
                     true
                 }
@@ -263,7 +264,7 @@ class MultiviewSession(
         fun updateSettings(frame: DumlFrame) {
             val cam = camera ?: return
             val prev = latestSettings
-            val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prev.toJson())
+            val json = DjiNative.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prev.toJson())
             var next = if (json != null) CameraStatus.fromJson(json) else prev
             if (json == null || !next.hasHudFields) next = next.preservingExtras(prev)
             next = StatusExtras.apply(frame, next, cam.model.name, cam.model.family)
@@ -738,7 +739,7 @@ class MultiviewSession(
             client.connect(camera)
             if (camera.model.family == "nano") {
                 tile.status = "Waking camera Wi-Fi"
-                val wake = client.exchange(SwiftCore.CMD_SESSION_5310).payload.map { it.toInt() and 0xFF }
+                val wake = client.exchange(DjiNative.CMD_SESSION_5310).payload.map { it.toInt() and 0xFF }
                 if (wake != listOf(1, 0, 0, 0)) {
                     throw MultiviewFailure.Message(
                         "The Nano did not confirm its Wi-Fi wake. Keep it powered on and try again.")
@@ -816,15 +817,15 @@ class MultiviewSession(
      */
     private suspend fun readIdentity(client: MultiviewProvisioner): ByteArray =
         try {
-            client.exchange(SwiftCore.CMD_GET_WIFI_SSID).payload
+            client.exchange(DjiNative.CMD_GET_WIFI_SSID).payload
         } catch (_: MultiviewFailure.Timeout) {
             log("multiview: identity reply missing; sending Wi-Fi wake once")
             try {
-                client.exchange(SwiftCore.CMD_SESSION_5310, timeoutMs = 2_000)
+                client.exchange(DjiNative.CMD_SESSION_5310, timeoutMs = 2_000)
             } catch (_: MultiviewFailure) {
             }
             delay(600)
-            client.exchange(SwiftCore.CMD_GET_WIFI_SSID).payload
+            client.exchange(DjiNative.CMD_GET_WIFI_SSID).payload
         }
 
     suspend fun reconnect(tile: Tile) {
@@ -966,7 +967,7 @@ class MultiviewSession(
                         tile.liveModel?.session?.receiveMultiview(frame)
                         tile.controlsModel?.session?.receiveMultiview(frame)
                         if (frame.cmdSet == 0x02 && frame.cmdId == 0x80 && frame.payload.size >= 13) {
-                            val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, CameraStatus().toJson())
+                            val json = DjiNative.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, CameraStatus().toJson())
                             val recording = json?.let { CameraStatus.fromJson(it).isRecording } ?: false
                             tile.recordingObservation = recording to SystemClock.elapsedRealtime()
                         }
@@ -975,7 +976,7 @@ class MultiviewSession(
             }
             withTimeout(STATION_OPEN_MS) { interruptibleDatalinkOpen { driver.open(identityOnly = true) } }
             val sent = SystemClock.elapsedRealtime()
-            driver.sendCommand(SwiftCore.CMD_GET_WIFI_SSID)
+            driver.sendCommand(DjiNative.CMD_GET_WIFI_SSID)
             val deadline = sent + 8_000
             var reply: DumlFrame? = null
             while (SystemClock.elapsedRealtime() < deadline) {
@@ -1026,7 +1027,7 @@ class MultiviewSession(
                 val nanoGate = camera.model.usesNanoLiveViewGate
                 if (nanoGate) driver.sendNanoGate(start = true)
                 if (camera.model.sendsLiveViewPrepare) {
-                    driver.sendCommand(SwiftCore.CMD_TAP_FOCUS_HINT)
+                    driver.sendCommand(DjiNative.CMD_TAP_FOCUS_HINT)
                 }
                 driver.startLiveView(camera.model.liveViewEnableReceiver)
             }
@@ -1319,7 +1320,7 @@ class MultiviewSession(
         val client = MultiviewProvisioner(app)
         return try {
             client.connect(restoredCamera(saved), pairingTimeoutMs = 12_000)
-            val reply = client.exchange(SwiftCore.CMD_MULTICAM_STATION_MODE, "0").payload.hexString()
+            val reply = client.exchange(DjiNative.CMD_MULTICAM_STATION_MODE, "0").payload.hexString()
             val accepted = reply == "00" || reply == "0000"
             log("multiview: return camera Wi-Fi accepted=$accepted")
             accepted
@@ -1334,8 +1335,8 @@ class MultiviewSession(
     }
 
     private fun restoredCamera(saved: MultiviewStageStore.Camera): FoundCamera {
-        val model = com.opencapture.openpocketcine.session.CameraModel.fromJson(
-            SwiftCore.resolveCameraModel(saved.modelId ?: -1, saved.name, saved.bleAddress, true))
+        val model = com.opencapture.opencine.dji.CameraModel.fromJson(
+            DjiNative.resolveCameraModel(saved.modelId ?: -1, saved.name, saved.bleAddress, true))
         return FoundCamera(saved.id, saved.bleAddress, saved.name, model, saved.modelId)
     }
 

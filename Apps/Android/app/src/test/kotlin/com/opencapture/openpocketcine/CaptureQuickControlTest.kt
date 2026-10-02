@@ -1,11 +1,11 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.monitorui.MonitorQuickControl
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.VideoFormat
-import com.opencapture.openpocketcine.session.VideoFrameRate
-import com.opencapture.openpocketcine.session.VideoResolution
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.VideoFormat
+import com.opencapture.opencine.dji.VideoFrameRate
+import com.opencapture.opencine.dji.VideoResolution
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals

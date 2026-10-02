@@ -5,6 +5,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.multiview.MultiviewSession
 import com.opencapture.openpocketcine.session.*
+import com.opencapture.opencine.dji.*
 import java.net.DatagramSocket
 import java.net.Socket
 import kotlin.test.assertEquals
@@ -22,12 +23,12 @@ class ShutterAngleControlSessionTest {
     @Test fun frameRateChangesKeep180AndDeferOneCorrectShutterUntilFormatConfirmation() = fixture { session ->
         session.setVideoFormat(VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS60))
         assertEquals(1, session.pendingCameraSetCount)
-        assertNull(session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+        assertNull(session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
         assertEquals(120, session.status.value.shutterDenom)
         session.receiveMultiview(exposure(48))
         assertEquals(120, session.status.value.shutterDenom)
         session.receiveMultiview(format(VideoFrameRate.FPS60))
-        assertEquals("120", session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+        assertEquals("120", session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
         assertEquals(180.0, OperatorPrefs.shutterAngleDegrees(instrumentation.targetContext))
     }
 
@@ -36,7 +37,7 @@ class ShutterAngleControlSessionTest {
         session.receiveMultiview(exposure(120))
         session.receiveMultiview(exposure(48))
         assertEquals(120, session.status.value.shutterDenom)
-        assertNull(session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+        assertNull(session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
     }
 
     @Test fun staleAutoReportRespectsTheNewerManualChoice() = fixture { session ->
@@ -47,7 +48,7 @@ class ShutterAngleControlSessionTest {
         assertEquals(CameraCommands.EXPO_MANUAL, session.status.value.expoMode)
         assertEquals(120, session.status.value.shutterDenom)
         session.receiveMultiview(format(VideoFrameRate.FPS60))
-        assertEquals("120", session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+        assertEquals("120", session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
     }
 
     @Test fun delayedFormatConfirmationKeepsTheLatestAngleBeyondOptimisticWindow() = fixture { session ->
@@ -56,17 +57,17 @@ class ShutterAngleControlSessionTest {
         // rather than an unrelated timeout callback, resolves this request.
         Thread.sleep(2_150)
         session.setShutterAngle(90.0)
-        assertNull(session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+        assertNull(session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
         session.receiveMultiview(format(VideoFrameRate.FPS60))
-        assertEquals("240", session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+        assertEquals("240", session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
     }
 
     @Test fun newestAngleWinsWhileFormatIsPending() = fixture { session ->
         session.setVideoFormat(VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS60))
         session.setShutterAngle(90.0)
-        assertNull(session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+        assertNull(session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
         session.receiveMultiview(format(VideoFrameRate.FPS60))
-        assertEquals("240", session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+        assertEquals("240", session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
         assertEquals(90.0, OperatorPrefs.shutterAngleDegrees(instrumentation.targetContext))
     }
 
@@ -75,7 +76,7 @@ class ShutterAngleControlSessionTest {
             session.setVideoFormat(VideoFormat(VideoResolution.P4K, VideoFrameRate.FPS60))
             if (retire) session.releaseMultiview() else session.setExpoMode(CameraCommands.EXPO_AUTO)
             session.receiveMultiview(format(VideoFrameRate.FPS60))
-            assertNull(session.pendingCameraSetExtra(SwiftCore.CMD_SET_SHUTTER))
+            assertNull(session.pendingCameraSetExtra(DjiNative.CMD_SET_SHUTTER))
         }
     }
 

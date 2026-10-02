@@ -11,9 +11,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
-import com.opencapture.openpocketcine.session.LocalVPNFilter
-import com.opencapture.openpocketcine.session.CallbackOperationOwner
-import com.opencapture.openpocketcine.session.CameraNetworkPath
+import com.opencapture.opencine.dji.LocalVPNFilter
+import com.opencapture.opencine.dji.CallbackOperationOwner
+import com.opencapture.opencine.dji.CameraNetworkPath
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.Socket

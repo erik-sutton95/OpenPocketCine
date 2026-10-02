@@ -573,7 +573,7 @@ import Testing
     }
 
     /// Chip writes, clamps and empty-cycle edges. Stop tables, jumps and
-    /// ceiling notes live in `Tests/Fixtures/camfov-vectors.tsv`.
+    /// ceiling notes live in OpenCine's `Fixtures/camfov-vectors.tsv`.
     @Test func zoomChipEdgesOutsideTheSharedVectors() {
         #expect(CamFov.chipWrite(forJump: 2) == .lens(CamFov.lensPosition(for: 2)))
         #expect(CamFov.chipWrite(forJump: 4) == .lens(CamFov.lensPosition(for: 4)))

@@ -107,8 +107,8 @@ jobs:
           # has no operator-visible work to describe. `src/debug/` is exempt on the
           # same grounds: the Play artifact is the release variant, which never
           # merges that source set. Matched per module rather than per name, so
-          # core-api and any module added later are exempt on the same terms as
-          # app instead of silently demanding notes.
+          # any module added later is exempt on the same terms as app instead of
+          # silently demanding notes.
           production_files="$(grep -E '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Sources/CJNI/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/android-release-notes|Apps/Android/[^/]+/src/(test|androidTest|debug)/)' || true)"
           if [[ -n "$production_files" ]]; then
             if ! grep -Fxq 'Apps/Android/Play/WhatToTest.en-US.txt' <<< "$changed_files"; then

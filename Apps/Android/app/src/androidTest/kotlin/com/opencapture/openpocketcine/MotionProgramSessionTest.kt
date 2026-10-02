@@ -22,8 +22,8 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.opencapture.openpocketcine.session.GimbalProgram
-import com.opencapture.openpocketcine.session.GimbalWaypoint
+import com.opencapture.opencine.dji.GimbalProgram
+import com.opencapture.opencine.dji.GimbalWaypoint
 import com.opencapture.openpocketcine.session.PocketCameraSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.assertEquals

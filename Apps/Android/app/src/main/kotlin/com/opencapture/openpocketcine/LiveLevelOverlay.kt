@@ -22,9 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.opencapture.openpocketcine.session.LevelMode
-import com.opencapture.openpocketcine.session.LevelReading
-import com.opencapture.openpocketcine.session.WorldLevelSnap
+import com.opencapture.opencine.dji.LevelMode
+import com.opencapture.opencine.dji.LevelReading
+import com.opencapture.opencine.dji.WorldLevelSnap
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.sqrt

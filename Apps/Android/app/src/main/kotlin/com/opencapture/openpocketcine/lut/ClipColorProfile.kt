@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.lut
 
 import com.opencapture.openpocketcine.media.MediaHTTP
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.opencine.dji.CameraCommands
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer

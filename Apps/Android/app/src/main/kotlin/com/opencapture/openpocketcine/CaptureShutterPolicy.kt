@@ -1,10 +1,10 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.openpocketcine.core.ConnectionPhase
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraModel
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.VideoFormat
+import com.opencapture.opencine.dji.ConnectionPhase
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraModel
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.VideoFormat
 
 /** Snapshot of the rec lamp when confirmation opened. Any field change dismisses it. */
 internal data class RecordConfirmationRequest(

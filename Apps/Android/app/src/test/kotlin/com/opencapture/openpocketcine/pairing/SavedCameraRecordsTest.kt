@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.dji.FoundCameraIdentity
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

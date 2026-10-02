@@ -12,9 +12,9 @@ import android.os.Vibrator
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CamFov
-import com.opencapture.openpocketcine.session.GimbalLimitContact
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CamFov
+import com.opencapture.opencine.dji.GimbalLimitContact
 import kotlin.math.abs
 import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope

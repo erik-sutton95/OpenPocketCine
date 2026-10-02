@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.session
 
+import com.opencapture.opencine.dji.*
 import com.opencapture.openpocketcine.ShutterAngle
-import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.opencine.media.ExtraMirrorHold
 import com.opencapture.opencine.media.FeedPresentPolicy
 import kotlin.test.Test
@@ -789,7 +789,7 @@ class CameraControlTest {
 
     @Test
     fun expoModeWireExtraAndWaitKeyMatchIos() {
-        assertEquals(0x021E, SwiftCore.waitKey(SwiftCore.CMD_SET_EXPO_MODE))
+        assertEquals(0x021E, DjiNative.waitKey(DjiNative.CMD_SET_EXPO_MODE))
         assertEquals("auto", CameraCommands.expoWireExtra(CameraCommands.EXPO_AUTO))
         assertEquals("manual", CameraCommands.expoWireExtra(CameraCommands.EXPO_MANUAL))
         assertEquals(null, CameraCommands.expoWireExtra(-1))
@@ -898,7 +898,7 @@ class CameraControlTest {
         for ((mode, body, wire) in cases) {
             assertEquals(wire, CameraCommands.wireColorMode(mode, body), "mode $mode on '$body'")
         }
-        assertEquals(0x0242, SwiftCore.waitKey(SwiftCore.CMD_SET_COLOR_MODE))
+        assertEquals(0x0242, DjiNative.waitKey(DjiNative.CMD_SET_COLOR_MODE))
     }
 
     @Test
@@ -1223,25 +1223,25 @@ class CameraControlTest {
 
     @Test
     fun waitKeyCoversNewCommands() {
-        assertEquals(0x0201, SwiftCore.waitKey(SwiftCore.CMD_SHOOT_PHOTO))
-        assertEquals(0x02E1, SwiftCore.waitKey(SwiftCore.CMD_SET_SHOOTING_MODE))
-        assertEquals(0x022E, SwiftCore.waitKey(SwiftCore.CMD_SET_EV))
-        assertEquals(0x02B8, SwiftCore.waitKey(SwiftCore.CMD_SET_ZOOM_LENS))
-        assertEquals(0x02A6, SwiftCore.waitKey(SwiftCore.CMD_SET_TRACKING_BOX))
-        assertEquals(0x02A5, SwiftCore.waitKey(SwiftCore.CMD_POLL_TRACKING))
-        assertEquals(0x044C, SwiftCore.waitKey(SwiftCore.CMD_GIMBAL_RECENTER))
-        assertEquals(0x044C, SwiftCore.waitKey(SwiftCore.CMD_GIMBAL_FLIP))
-        assertEquals(0x020C, SwiftCore.waitKey(SwiftCore.CMD_EXIT_PLAYBACK))
-        assertEquals(0x0026, SwiftCore.waitKey(SwiftCore.CMD_MEDIA_LIST))
-        assertEquals(0x0028, SwiftCore.waitKey(SwiftCore.CMD_DELETE_MEDIA))
-        assertEquals(0x02BF, SwiftCore.waitKey(SwiftCore.CMD_SET_MEDIA_FAVORITE))
-        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_ISO_LIMIT))
-        assertEquals(0, SwiftCore.waitKey(SwiftCore.CMD_GET_SELFIE_FLIP))
-        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_ISO_LIMIT))
-        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_SET_FOCUS_TRACK))
-        assertEquals(0x028E, SwiftCore.waitKey(SwiftCore.CMD_GET_FOCUS_TRACK))
-        assertEquals(0x0209, SwiftCore.waitKey(SwiftCore.CMD_NANO_LIVE_VIEW_GATE))
-        assertEquals(0, SwiftCore.waitKey(SwiftCore.CMD_GIMBAL_STICK))
+        assertEquals(0x0201, DjiNative.waitKey(DjiNative.CMD_SHOOT_PHOTO))
+        assertEquals(0x02E1, DjiNative.waitKey(DjiNative.CMD_SET_SHOOTING_MODE))
+        assertEquals(0x022E, DjiNative.waitKey(DjiNative.CMD_SET_EV))
+        assertEquals(0x02B8, DjiNative.waitKey(DjiNative.CMD_SET_ZOOM_LENS))
+        assertEquals(0x02A6, DjiNative.waitKey(DjiNative.CMD_SET_TRACKING_BOX))
+        assertEquals(0x02A5, DjiNative.waitKey(DjiNative.CMD_POLL_TRACKING))
+        assertEquals(0x044C, DjiNative.waitKey(DjiNative.CMD_GIMBAL_RECENTER))
+        assertEquals(0x044C, DjiNative.waitKey(DjiNative.CMD_GIMBAL_FLIP))
+        assertEquals(0x020C, DjiNative.waitKey(DjiNative.CMD_EXIT_PLAYBACK))
+        assertEquals(0x0026, DjiNative.waitKey(DjiNative.CMD_MEDIA_LIST))
+        assertEquals(0x0028, DjiNative.waitKey(DjiNative.CMD_DELETE_MEDIA))
+        assertEquals(0x02BF, DjiNative.waitKey(DjiNative.CMD_SET_MEDIA_FAVORITE))
+        assertEquals(0x028E, DjiNative.waitKey(DjiNative.CMD_GET_ISO_LIMIT))
+        assertEquals(0, DjiNative.waitKey(DjiNative.CMD_GET_SELFIE_FLIP))
+        assertEquals(0x028E, DjiNative.waitKey(DjiNative.CMD_SET_ISO_LIMIT))
+        assertEquals(0x028E, DjiNative.waitKey(DjiNative.CMD_SET_FOCUS_TRACK))
+        assertEquals(0x028E, DjiNative.waitKey(DjiNative.CMD_GET_FOCUS_TRACK))
+        assertEquals(0x0209, DjiNative.waitKey(DjiNative.CMD_NANO_LIVE_VIEW_GATE))
+        assertEquals(0, DjiNative.waitKey(DjiNative.CMD_GIMBAL_STICK))
     }
 
     companion object {

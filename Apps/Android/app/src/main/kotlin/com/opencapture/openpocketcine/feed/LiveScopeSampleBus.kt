@@ -89,7 +89,7 @@ internal data class ScopeTapPolicy(
     val trafficLights: Boolean = false,
     val ndMeter: Boolean = false,
     val trafficThreshold: Double = 0.0,
-    val colorMode: Int = com.opencapture.openpocketcine.session.CameraCommands.COLOR_NORMAL,
+    val colorMode: Int = com.opencapture.opencine.dji.CameraCommands.COLOR_NORMAL,
     val iso: Int = ScopeExposureCeiling.REFERENCE_EI,
     val vectorLut: FeedEffectsCube? = null,
     val allowsTransferInference: Boolean = true,

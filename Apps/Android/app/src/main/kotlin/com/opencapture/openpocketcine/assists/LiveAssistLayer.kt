@@ -39,7 +39,7 @@ import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.feed.GpuOverlayBus
 import com.opencapture.openpocketcine.feed.LiveScopeSampleBus
 import com.opencapture.openpocketcine.feed.MonitorTransfer
-import com.opencapture.openpocketcine.session.CameraStatus
+import com.opencapture.opencine.dji.CameraStatus
 import kotlin.math.roundToInt
 
 /**
@@ -82,8 +82,8 @@ fun LiveAssistLayer(
     modifier: Modifier = Modifier,
     locked: Boolean = false,
     playback: Boolean = false,
-    tracking: com.opencapture.openpocketcine.session.TrackingHud =
-        com.opencapture.openpocketcine.session.TrackingHud(),
+    tracking: com.opencapture.opencine.dji.TrackingHud =
+        com.opencapture.opencine.dji.TrackingHud(),
     showTapFocusBox: Boolean = true,
     /** AE lock: the focus box turns yellow with an `AE-L` tag. */
     aeLocked: Boolean = false,

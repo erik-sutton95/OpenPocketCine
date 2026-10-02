@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.openpocketcine.session.LevelMode
+import com.opencapture.opencine.dji.LevelMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

@@ -1,8 +1,11 @@
 // JNI facade over OpenPocketViewCore for the Android app.
 //
-// Hand-written `@_cdecl` shims matching the `external fun` declarations in
-// Apps/Android/app/.../bridge/SwiftCore.kt. Coarse boundary: strings, byte
-// arrays, and primitives only.
+// Hand-written `@_cdecl` shims matching `external fun` declarations in two Kotlin
+// classes: the DJI wire natives belong to OpenCine's `com.opencapture.opencine.dji.DjiNative`
+// (Android/dji in the OpenCine repository; that class name is part of every symbol below
+// named `Java_com_opencapture_opencine_dji_DjiNative_*`), the app's own natives to
+// Apps/Android/app/.../bridge/SwiftCore.kt. Coarse boundary: strings, byte arrays, and
+// primitives only.
 //
 // This file compiles empty on Darwin so `swift test` is unaffected.
 #if os(Android)
@@ -80,7 +83,7 @@
         javaString(env, AndroidSessionWire.coreVersion)
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_encodeDuml")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_encodeDuml")
     public func swiftCoreEncodeDuml(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         sender: jint, receiver: jint, seq: jint, flags: jint,
@@ -98,7 +101,7 @@
         return javaByteArray(env, Duml.encode(frame))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_scanDuml")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_scanDuml")
     public func swiftCoreScanDuml(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, data: jbyteArray?
     ) -> jbyteArray? {
@@ -106,14 +109,14 @@
         return javaByteArray(env, AndroidSessionWire.packFrames(DumlTransport.scanFrames(bytes)))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_unpackStatusString")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_unpackStatusString")
     public func swiftCoreUnpackStatusString(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, payload: jbyteArray?
     ) -> jstring? {
         javaString(env, Duml.unpackStatusString(swiftBytes(env, payload) ?? []))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_encodeCommand")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_encodeCommand")
     public func swiftCoreEncodeCommand(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         kind: jint, seq: jint, extra: jstring?
@@ -129,7 +132,7 @@
         return javaByteArray(env, Duml.encode(frame))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_bleAdvertModelId")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_bleAdvertModelId")
     public func swiftCoreBleAdvertModelId(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, payload: jbyteArray?
     ) -> jint {
@@ -139,7 +142,7 @@
         return jint(id)
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_resolveCameraModel")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_resolveCameraModel")
     public func swiftCoreResolveCameraModel(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         modelId: jint, name: jstring?, address: jstring?, djiCid: jboolean
@@ -152,7 +155,7 @@
                 address: swiftString(env, address), djiCid: djiCid != 0))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_transportHeader")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_transportHeader")
     public func swiftCoreTransportHeader(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         pktType: jint, payloadLen: jint, sessionId: jint, seq: jint
@@ -168,7 +171,7 @@
         )
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_routingHeader")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_routingHeader")
     public func swiftCoreRoutingHeader(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         seq: jint, cmdCounter: jint, drone: jboolean
@@ -183,7 +186,7 @@
         )
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_handshakePayload")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_handshakePayload")
     public func swiftCoreHandshakePayload(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, baseSeq: jint
     ) -> jbyteArray? {
@@ -191,7 +194,7 @@
             env, DumlTransport.handshakePayload(baseSeq: UInt16(truncatingIfNeeded: baseSeq)))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_ackPayload")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_ackPayload")
     public func swiftCoreAckPayload(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         peerCursor: jint, ackedDataCursor: jint, extraCursor: jint
@@ -206,7 +209,7 @@
         )
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_transportSeq")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_transportSeq")
     public func swiftCoreTransportSeq(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, datagram: jbyteArray?
     ) -> jint {
@@ -216,7 +219,7 @@
         return jint(seq)
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_applyStatus")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_applyStatus")
     public func swiftCoreApplyStatus(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         cmdSet: jint, cmdId: jint, payload: jbyteArray?, previousJSON: jstring?
@@ -269,7 +272,7 @@
         return keyframe ? 1 : 0
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_depacketizerCreate")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_depacketizerCreate")
     public func swiftCoreDepacketizerCreate(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?
     ) -> jlong {
@@ -281,7 +284,7 @@
         return handle
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_depacketizerFeed")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_depacketizerFeed")
     public func swiftCoreDepacketizerFeed(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         handle: jlong, payload: jbyteArray?
@@ -298,7 +301,7 @@
         return javaByteArray(env, completed)
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_depacketizerDropped")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_depacketizerDropped")
     public func swiftCoreDepacketizerDropped(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
     ) -> jint {
@@ -307,7 +310,7 @@
         return jint(depacketizerStore.boxes[handle]?.depacketizer.droppedIncomplete ?? 0)
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_depacketizerReset")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_depacketizerReset")
     public func swiftCoreDepacketizerReset(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
     ) {
@@ -316,7 +319,7 @@
         depacketizerStore.lock.unlock()
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_depacketizerDestroy")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_depacketizerDestroy")
     public func swiftCoreDepacketizerDestroy(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
     ) {
@@ -325,7 +328,7 @@
         depacketizerStore.lock.unlock()
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_gimbalStickEncode")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_gimbalStickEncode")
     public func swiftCoreGimbalStickEncode(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         x: jdouble, y: jdouble, invertPan: jboolean, sensitivity: jint
@@ -337,14 +340,14 @@
                 sensitivity: Int(sensitivity)))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_camFovChipWrite")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_camFovChipWrite")
     public func swiftCoreCamFovChipWrite(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, currentFactor: jdouble
     ) -> jstring? {
         javaString(env, AndroidSessionWire.camFovChipWrite(currentFactor: Double(currentFactor)))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogAction")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_feedWatchdogAction")
     public func swiftCoreFeedWatchdogAction(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, snapshotJSON: jstring?
     ) -> jstring? {
@@ -354,14 +357,14 @@
                 snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogCreate")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_feedWatchdogCreate")
     public func swiftCoreFeedWatchdogCreate(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?
     ) -> jlong {
         jlong(AndroidSessionWire.feedWatchdogCreate())
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogTick")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_feedWatchdogTick")
     public func swiftCoreFeedWatchdogTick(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         handle: jlong, snapshotJSON: jstring?
@@ -373,21 +376,21 @@
                 snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogReset")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_feedWatchdogReset")
     public func swiftCoreFeedWatchdogReset(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
     ) {
         AndroidSessionWire.feedWatchdogReset(handle: Int64(handle))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_feedWatchdogDestroy")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_feedWatchdogDestroy")
     public func swiftCoreFeedWatchdogDestroy(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
     ) {
         AndroidSessionWire.feedWatchdogDestroy(handle: Int64(handle))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_cameraSoftAPDecision")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_cameraSoftAPDecision")
     public func swiftCoreCameraSoftAPDecision(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         kind: jstring?, requestJSON: jstring?
@@ -399,7 +402,7 @@
                 requestJSON: swiftString(env, requestJSON) ?? "{}"))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_exposureLockDecision")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_exposureLockDecision")
     public func swiftCoreExposureLockDecision(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         kind: jstring?, requestJSON: jstring?
@@ -411,7 +414,7 @@
                 requestJSON: swiftString(env, requestJSON) ?? "{}"))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multicamDecision")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_multicamDecision")
     public func swiftCoreMulticamDecision(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         kind: jstring?, requestJSON: jstring?
@@ -423,14 +426,14 @@
                 requestJSON: swiftString(env, requestJSON) ?? "{}"))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multiviewRecoveryCreate")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_multiviewRecoveryCreate")
     public func swiftCoreMultiviewRecoveryCreate(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?
     ) -> jlong {
         jlong(AndroidSessionWire.multiviewRecoveryCreate())
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multiviewRecoveryCall")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_multiviewRecoveryCall")
     public func swiftCoreMultiviewRecoveryCall(
         env: UnsafeMutablePointer<JNIEnv?>, this _: jobject?,
         handle: jlong, op: jstring?, snapshotJSON: jstring?
@@ -442,7 +445,7 @@
                 snapshotJSON: swiftString(env, snapshotJSON) ?? "{}"))
     }
 
-    @_cdecl("Java_com_opencapture_openpocketcine_bridge_SwiftCore_multiviewRecoveryDestroy")
+    @_cdecl("Java_com_opencapture_opencine_dji_DjiNative_multiviewRecoveryDestroy")
     public func swiftCoreMultiviewRecoveryDestroy(
         env _: UnsafeMutablePointer<JNIEnv?>, this _: jobject?, handle: jlong
     ) {

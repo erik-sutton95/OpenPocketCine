@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine.feed
 
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.opencine.dji.CameraCommands
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.exp

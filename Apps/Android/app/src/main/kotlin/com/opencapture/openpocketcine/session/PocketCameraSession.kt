@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import com.opencapture.opencine.dji.*
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -11,8 +12,6 @@ import com.opencapture.openpocketcine.GamepadOperatorAction
 import com.opencapture.openpocketcine.GamepadShutterSync
 import com.opencapture.openpocketcine.EvComp
 import com.opencapture.openpocketcine.OperatorPrefs
-import com.opencapture.openpocketcine.bridge.SwiftCore
-import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FacePriorityExposure
 import com.opencapture.opencine.media.SerialSessionGate
 import com.opencapture.opencine.decoder.HevcDecoder
@@ -42,7 +41,6 @@ import java.util.UUID
 import com.opencapture.openpocketcine.multiview.MultiviewDiscovery
 import com.opencapture.openpocketcine.multiview.MultiviewNetworkStore
 import com.opencapture.openpocketcine.multiview.SharedWiFi
-import com.opencapture.openpocketcine.multiview.StationJoin
 import com.opencapture.openpocketcine.multiview.multicamSupport
 import com.opencapture.openpocketcine.multiview.hasMultiviewPreview
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
@@ -180,8 +178,8 @@ class PocketCameraSession(
     internal var debugCameraSetResult: ((Int, Boolean) -> Unit)? = null
     internal val pendingCameraSetCount: Int get() = inflight.size + inflightPending.size
     internal fun pendingCameraSetExtra(kind: Int): String? =
-        inflight[SwiftCore.waitKey(kind)]?.extra
-            ?: inflightPending[SwiftCore.waitKey(kind)]?.extra
+        inflight[DjiNative.waitKey(kind)]?.extra
+            ?: inflightPending[DjiNative.waitKey(kind)]?.extra
     private val videoHistory = LiveSessionVideoHistory()
     /**
      * Multiview lends a tile's decoder and verified transport to Live View.
@@ -843,7 +841,7 @@ class PocketCameraSession(
         lastBleNotifyAt = null
         needsForegroundRecover = false
         feedWatchdog.reset()
-        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+        if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
         ble.startScan()
     }
 
@@ -855,7 +853,7 @@ class PocketCameraSession(
     }
 
     private suspend fun run(camera: FoundCamera) {
-        if (!SwiftCore.isAvailable) error("Swift core is not loaded — run just android-core")
+        if (!DjiNative.isAvailable) error("Swift core is not loaded — run just android-core")
         // A new transport needs a fresh exposure report, even when reconnecting the same camera.
         _status.value = _status.value.copy(meteredEv = -1)
         connectedCamera = camera
@@ -872,7 +870,7 @@ class PocketCameraSession(
         feedSessionId = UUID.randomUUID().toString()
         socketGeneration = 0
         feedWatchdog.reset()
-        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+        if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
         if (!holdsMonitor) {
             decoder.reset()
             videoHistory.reset()
@@ -885,8 +883,8 @@ class PocketCameraSession(
         inflight.clear()
         inflightPending.clear()
         publishPhase(ConnectionPhase.PAIRING)
-        ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_WAKE, 0x802B))
-        ble.send(SwiftCore.command(SwiftCore.CMD_SET_PAIRING_PIN, 0x8092, camera.model.pairingToken))
+        ble.send(DjiNative.command(DjiNative.CMD_SESSION_WAKE, 0x802B))
+        ble.send(DjiNative.command(DjiNative.CMD_SET_PAIRING_PIN, 0x8092, camera.model.pairingToken))
         publishPhase(ConnectionPhase.AWAITING_APPROVAL)
         try {
             completePairing()
@@ -906,7 +904,7 @@ class PocketCameraSession(
         val credsFromCache = wifiCache.load(camera.id) != null
         val skipApSettle = !restored && joiner.isProcessBound() && credsFromCache
         if (!skipApSettle) delay(200)
-        ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_5310, 0x8053))
+        ble.send(DjiNative.command(DjiNative.CMD_SESSION_5310, 0x8053))
         runCatching { waitFrame(0x53, 0x10, 2_000) }
         if (!skipApSettle) delay(600)
         val (ssid, pass) = wifiCredsAfterPairing(camera)
@@ -982,11 +980,11 @@ class PocketCameraSession(
         }
         val ssid =
             readWifiString("GetSSID", 0x07, 0x07) {
-                ble.send(SwiftCore.command(SwiftCore.CMD_GET_WIFI_SSID, 0x8007))
+                ble.send(DjiNative.command(DjiNative.CMD_GET_WIFI_SSID, 0x8007))
             }
         val pass =
             readWifiString("GetPassword", 0x07, 0x0E) {
-                ble.send(SwiftCore.command(SwiftCore.CMD_GET_WIFI_PASSWORD, 0x800E))
+                ble.send(DjiNative.command(DjiNative.CMD_GET_WIFI_PASSWORD, 0x800E))
             }
         return ssid to pass
     }
@@ -1104,7 +1102,7 @@ class PocketCameraSession(
     /** BLE request on the session link; the reply is matched by opcode like every other wait. */
     private suspend fun exchangeBle(kind: Int, extra: String? = null, timeoutMs: Long = 12_000): ByteArray {
         stationSeq = (stationSeq + 1) and 0xFFFF
-        val bytes = SwiftCore.command(kind, stationSeq, extra)
+        val bytes = DjiNative.command(kind, stationSeq, extra)
         require(bytes.size > 10) { "command not encoded" }
         val key = ((bytes[9].toInt() and 0xFF) shl 8) or (bytes[10].toInt() and 0xFF)
         pairingHold.remove(key)
@@ -1118,7 +1116,7 @@ class PocketCameraSession(
      * point already up still serves the normal join.
      */
     private suspend fun restoreCameraAccessPoint() {
-        val reply = runCatching { exchangeBle(SwiftCore.CMD_MULTICAM_STATION_MODE, "0") }
+        val reply = runCatching { exchangeBle(DjiNative.CMD_MULTICAM_STATION_MODE, "0") }
             .onFailure { if (it is kotlinx.coroutines.CancellationException && it !is TimeoutCancellationException) throw it }
             .getOrNull()
         val accepted = reply?.contentEquals(byteArrayOf(0)) == true || reply?.contentEquals(byteArrayOf(0, 0)) == true
@@ -1127,7 +1125,7 @@ class PocketCameraSession(
         // 0.2 to 2.4 s on a Pocket 4 Pro.
         val started = SystemClock.elapsedRealtime()
         for (poll in 0 until 15) {
-            val role = runCatching { exchangeBle(SwiftCore.CMD_MULTICAM_WIFI_WORK_MODE, timeoutMs = 4_000) }
+            val role = runCatching { exchangeBle(DjiNative.CMD_MULTICAM_WIFI_WORK_MODE, timeoutMs = 4_000) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException && it !is TimeoutCancellationException) throw it }
                 .getOrNull()
             DiagnosticCenter.log("info", "session", "wifi",
@@ -1162,7 +1160,7 @@ class PocketCameraSession(
             }
             if (camera.model.family == "nano") {
                 _setupProgress.value = "Waking camera Wi-Fi"
-                val wake = exchangeBle(SwiftCore.CMD_SESSION_5310)
+                val wake = exchangeBle(DjiNative.CMD_SESSION_5310)
                 if (!wake.contentEquals(byteArrayOf(1, 0, 0, 0))) {
                     error("the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again")
                 }
@@ -1182,7 +1180,7 @@ class PocketCameraSession(
                 exchange = { kind, extra, timeoutMs -> exchangeBle(kind, extra, timeoutMs) },
                 send = { kind ->
                     stationSeq = (stationSeq + 1) and 0xFFFF
-                    ble.send(SwiftCore.command(kind, stationSeq))
+                    ble.send(DjiNative.command(kind, stationSeq))
                 },
                 status = { _setupProgress.value = it },
                 hotspotReady = { station.address(true) != null },
@@ -1213,15 +1211,15 @@ class PocketCameraSession(
      */
     private suspend fun readStationIdentity(): ByteArray =
         try {
-            exchangeBle(SwiftCore.CMD_GET_WIFI_SSID)
+            exchangeBle(DjiNative.CMD_GET_WIFI_SSID)
         } catch (_: TimeoutCancellationException) {
             stationLog("identity reply missing; sending Wi-Fi wake once")
             try {
-                exchangeBle(SwiftCore.CMD_SESSION_5310, timeoutMs = 2_000)
+                exchangeBle(DjiNative.CMD_SESSION_5310, timeoutMs = 2_000)
             } catch (_: TimeoutCancellationException) {
             }
             delay(600)
-            exchangeBle(SwiftCore.CMD_GET_WIFI_SSID)
+            exchangeBle(DjiNative.CMD_GET_WIFI_SSID)
         }
 
     /** Sweep the setup's subnet until the camera answers with [identity] or [patienceMs] runs out. */
@@ -1269,7 +1267,7 @@ class PocketCameraSession(
                     interruptibleDatalinkOpen { dl.open(identityOnly = true) }
                 }
                 pairingHold.remove(IDENTITY_KEY)
-                dl.sendCommand(SwiftCore.CMD_GET_WIFI_SSID)
+                dl.sendCommand(DjiNative.CMD_GET_WIFI_SSID)
                 val reply = waitFrame(listOf(IDENTITY_KEY), 8_000)
                 if (!reply.payload.contentEquals(identity) || datalink !== dl) {
                     stationLog("an answering device is another camera")
@@ -1308,7 +1306,8 @@ class PocketCameraSession(
             cadence,
             videoHistory,
             camera.model,
-            debugVideoPacketAdmission = { debugVideoPacketAdmission?.invoke() ?: true },
+            debugVideoPacketAdmission =
+                if (BuildConfig.DEBUG) { { debugVideoPacketAdmission?.invoke() ?: true } } else null,
             host = host ?: DatalinkDriver.CAMERA_HOST,
         ).also { created ->
             val inputOwner = decoder.claimInputOwner()
@@ -1343,8 +1342,8 @@ class PocketCameraSession(
             scope.launch {
                 ble.frames.collect { frame ->
                     lastBleNotifyAt = SystemClock.elapsedRealtime()
-                    if (frame.cmdSet == 0x07 && frame.cmdId == 0x46 && frame.flags == SwiftCore.FLAG_REQUEST) {
-                        ble.send(SwiftCore.command(SwiftCore.CMD_PAIR_APPROVAL_ACK, frame.seq))
+                    if (frame.cmdSet == 0x07 && frame.cmdId == 0x46 && frame.flags == DjiNative.FLAG_REQUEST) {
+                        ble.send(DjiNative.command(DjiNative.CMD_PAIR_APPROVAL_ACK, frame.seq))
                     }
                     // Pid 0x38 GET is untracked. Completing the shared 0x8E waiter
                     // here stole Flip replies as audio/glamour ACKs.
@@ -1397,7 +1396,7 @@ class PocketCameraSession(
         keepaliveJob =
             scope.launch {
                 while (true) {
-                    ble.send(SwiftCore.command(SwiftCore.CMD_SESSION_KEEPALIVE, 0x802B))
+                    ble.send(DjiNative.command(DjiNative.CMD_SESSION_KEEPALIVE, 0x802B))
                     val live = _phase.value == ConnectionPhase.LIVE && datalink != null
                     if (ssid != null && !holdsMonitor && !isBrowsingMedia && !mediaReturnPending &&
                         shouldStartUDPRebuild
@@ -1438,7 +1437,7 @@ class PocketCameraSession(
                                 SystemClock.elapsedRealtime() - it
                             }
                         if (rxAge == null || rxAge >= 2_000L) {
-                            ble.send(SwiftCore.command(SwiftCore.CMD_GET_SELFIE_FLIP))
+                            ble.send(DjiNative.command(DjiNative.CMD_GET_SELFIE_FLIP))
                         }
                     }
                     delay(1_000)
@@ -1855,8 +1854,8 @@ class PocketCameraSession(
                 lastIrapAt = decoder.lastIrapAt,
                 repairReady = decoder.isPresentationReady,
             )
-        if (coreWatchdog == 0L && SwiftCore.isAvailable) {
-            coreWatchdog = SwiftCore.feedWatchdogCreate()
+        if (coreWatchdog == 0L && DjiNative.isAvailable) {
+            coreWatchdog = DjiNative.feedWatchdogCreate()
         }
         if (coreWatchdog != 0L) {
             val nowSec = now / 1000.0
@@ -1896,13 +1895,13 @@ class PocketCameraSession(
                     append(",\"repairReady\":${decoder.isPresentationReady}")
                     append("}")
                 }
-            when (SwiftCore.feedWatchdogTick(coreWatchdog, json)) {
+            when (DjiNative.feedWatchdogTick(coreWatchdog, json)) {
                 "resendLiveViewEnable" -> {
                     endGimbalStick()
                     logRecovery(RecoveryAction.ENABLE, RecoveryEffect.REQUESTED, RecoveryReason.WATCHDOG)
                     datalink?.reRegister()
                     if (!sendRecoverEnable(force = true, reason = "watchdog")) {
-                        SwiftCore.feedWatchdogTick(coreWatchdog, "{\"rollbackLastAction\":true}")
+                        DjiNative.feedWatchdogTick(coreWatchdog, "{\"rollbackLastAction\":true}")
                     }
                 }
                 "rebuildVTSession" -> {
@@ -1912,7 +1911,7 @@ class PocketCameraSession(
                         if (!ownsLivePicture(pictureOwner) || datalink !== repairLink) return@startFeedRecovery
                         rebuildDecoderKeepingPicture(snap.referenceRecoveryNeeded, decoderInput) {
                             if (coreWatchdog == watchdogHandle) {
-                                SwiftCore.feedWatchdogTick(watchdogHandle, "{\"rollbackLastAction\":true}")
+                                DjiNative.feedWatchdogTick(watchdogHandle, "{\"rollbackLastAction\":true}")
                             }
                         }
                     }
@@ -2200,7 +2199,7 @@ class PocketCameraSession(
         if (!ownsPicture()) return
         if (restored) {
             logRecovery(RecoveryAction.DECODER, RecoveryEffect.FRESH_PICTURE, RecoveryReason.OUTPUT_RESUMED)
-            if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+            if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
             feedWatchdog.reset()
             return
         }
@@ -2210,7 +2209,7 @@ class PocketCameraSession(
         ) {
             DiagnosticCenter.log("notice", "recovery", "decoder",
                 "recovery: action=decoder effect=blocked reason=presentationOnly")
-            if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+            if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
             feedWatchdog.reset()
             return
         }
@@ -2266,7 +2265,7 @@ class PocketCameraSession(
             _status.value = _status.value.copy(meteredEv = -1)
             startedAt = decoder.beginPresentationProbe()
             sendCapturedLiveView(reason)
-            if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+            if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
             feedWatchdog.reset()
         }
     }
@@ -2394,7 +2393,7 @@ class PocketCameraSession(
         DiagnosticCenter.log("notice", "recovery", "session",
             "feed: keep BLE, video still arriving; watchdog owns the stall cycle=$sessionHoldCycles")
         logRecovery(RecoveryAction.SESSION, RecoveryEffect.BLOCKED, RecoveryReason.VIDEO_LIVE)
-        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+        if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
         feedWatchdog.reset()
         return true
     }
@@ -2434,7 +2433,7 @@ class PocketCameraSession(
             }
             if (!ownsLivePicture(owner) || datalink !== repairedLink) return
             // New session and new picture: the old stall ladder is over.
-            if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+            if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
             feedWatchdog.reset()
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException && e !is TimeoutCancellationException) throw e
@@ -2475,7 +2474,7 @@ class PocketCameraSession(
             if (nanoGate) datalink?.sendNanoGate(start = true)
             val prepare = camera?.model?.sendsLiveViewPrepare != false &&
                 LiveViewEnablePolicy.shouldSendLiveViewPrepare(nanoGate)
-            if (prepare) datalink?.sendCommand(SwiftCore.CMD_TAP_FOCUS_HINT)
+            if (prepare) datalink?.sendCommand(DjiNative.CMD_TAP_FOCUS_HINT)
             datalink?.startLiveView(receiver)
             val now = SystemClock.elapsedRealtime()
             lastIdrRequest = now
@@ -2592,7 +2591,7 @@ class PocketCameraSession(
         lastCameraSetAt = null
         needsForegroundRecover = false
         feedWatchdog.reset()
-        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+        if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
     }
 
     fun retrySessionRecovery() {
@@ -2762,7 +2761,7 @@ class PocketCameraSession(
         val prev = _status.value
         val prevJson = statusJson?.takeIf { it.first === prev }?.second
             ?: prev.toJson().also { statusJson = prev to it }
-        val json = SwiftCore.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prevJson)
+        val json = DjiNative.applyStatus(frame.cmdSet, frame.cmdId, frame.payload, prevJson)
         var next = if (json != null) CameraStatus.fromJson(json) else prev
         if (json == null || !next.hasHudFields) next = next.preservingExtras(prev)
         next = next.carryingAperture(prev)
@@ -2959,7 +2958,7 @@ class PocketCameraSession(
     override fun takePhoto() {
         _controlBusy.value = true
         fireKind(
-            SwiftCore.CMD_SHOOT_PHOTO,
+            DjiNative.CMD_SHOOT_PHOTO,
             CaptureShutterPolicy.shootPhotoExtra(start = true),
             "Photo",
             retransmits = false,
@@ -2977,7 +2976,7 @@ class PocketCameraSession(
                 CaptureShutterPolicy.CaptureKind.SHUTTER_TRIGGER
         _controlBusy.value = true
         fireKind(
-            if (trigger) SwiftCore.CMD_SHOOT_PHOTO else if (start) SwiftCore.CMD_RECORD_START else SwiftCore.CMD_RECORD_STOP,
+            if (trigger) DjiNative.CMD_SHOOT_PHOTO else if (start) DjiNative.CMD_RECORD_START else DjiNative.CMD_RECORD_STOP,
             if (trigger) CaptureShutterPolicy.shootPhotoExtra(start = start) else null,
             if (trigger) (if (start) "TimeLapse" else "Stop") else if (start) "Record" else "Stop",
             onStage = onStage,
@@ -2992,7 +2991,7 @@ class PocketCameraSession(
         pinExpo(evComp = ev.rawValue)
         _status.value = _status.value.copy(evComp = ev.rawValue)
         fireKind(
-            SwiftCore.CMD_SET_EV,
+            DjiNative.CMD_SET_EV,
             "${ev.rawValue}",
             "EV",
             coalesce = true,
@@ -3032,7 +3031,7 @@ class PocketCameraSession(
         val requestPin = isoLimitPin
         _status.value = _status.value.copy(isoLimit = raw)
         fireKind(
-            SwiftCore.CMD_SET_ISO_LIMIT,
+            DjiNative.CMD_SET_ISO_LIMIT,
             "$raw",
             "ISO limit",
             coalesce = true,
@@ -3053,7 +3052,7 @@ class PocketCameraSession(
         aperturePin = requestPin
         _status.value = _status.value.copy(apertureStrategy = raw)
         fireKind(
-            SwiftCore.CMD_SET_APERTURE_STRATEGY,
+            DjiNative.CMD_SET_APERTURE_STRATEGY,
             "$raw",
             "Aperture",
             coalesce = true,
@@ -3075,7 +3074,7 @@ class PocketCameraSession(
     /** GET only when Auto ISO exists. D-Log2 has no ceiling. */
     suspend fun refreshIsoLimit(): Boolean {
         if (!CameraCommands.shouldGetIsoLimit(_status.value.colorMode)) return false
-        return sendKind(SwiftCore.CMD_GET_ISO_LIMIT, null, "ISO limit GET")
+        return sendKind(DjiNative.CMD_GET_ISO_LIMIT, null, "ISO limit GET")
     }
 
     /** True while a feed recover rebuild is in flight — FPS chip `RECOV`, not session recovery. */
@@ -3101,7 +3100,7 @@ class PocketCameraSession(
                 previous.copy(shootingMode = raw)
             }
         fireKind(
-            SwiftCore.CMD_SET_SHOOTING_MODE,
+            DjiNative.CMD_SET_SHOOTING_MODE,
             "$raw",
             "Mode",
             onFail = {
@@ -3417,7 +3416,7 @@ class PocketCameraSession(
         val extra =
             "$id\u001f${box.centerX}\u001f${box.centerY}\u001f${box.width}\u001f${box.height}"
         fireKind(
-            SwiftCore.CMD_SET_TRACKING_BOX,
+            DjiNative.CMD_SET_TRACKING_BOX,
             extra,
             "Track",
             onSettle = { ok -> if (ok) beginTrackingPoll() },
@@ -3649,7 +3648,7 @@ class PocketCameraSession(
         mediaPictureGeneration += 1
         isBrowsingMedia = browsing
         mediaReturnPending = resumePending && !browsing
-        if (coreWatchdog != 0L && SwiftCore.isAvailable) SwiftCore.feedWatchdogReset(coreWatchdog)
+        if (coreWatchdog != 0L && DjiNative.isAvailable) DjiNative.feedWatchdogReset(coreWatchdog)
         feedWatchdog.reset()
         return mediaPictureGeneration
     }
@@ -3791,7 +3790,7 @@ class PocketCameraSession(
         pinExpo(isoIndex = index)
         _status.value = _status.value.copy(isoIndex = index)
         fireKind(
-            SwiftCore.CMD_SET_ISO_INDEX,
+            DjiNative.CMD_SET_ISO_INDEX,
             "$index",
             "ISO",
             coalesce = true,
@@ -3813,7 +3812,7 @@ class PocketCameraSession(
             pinExpo(expoMode = CameraCommands.EXPO_MANUAL)
             _status.value = _status.value.copy(expoMode = CameraCommands.EXPO_MANUAL)
             fireKind(
-                SwiftCore.CMD_SET_EXPO_MODE,
+                DjiNative.CMD_SET_EXPO_MODE,
                 "manual",
                 "Manual expo",
                 onFail = {
@@ -3828,7 +3827,7 @@ class PocketCameraSession(
         pinExpo(shutterDenom = denom, expoMode = CameraCommands.EXPO_MANUAL)
         _status.value = _status.value.copy(shutterDenom = denom, expoMode = CameraCommands.EXPO_MANUAL)
         fireKind(
-            SwiftCore.CMD_SET_SHUTTER,
+            DjiNative.CMD_SET_SHUTTER,
             "$denom",
             "1/$denom",
             coalesce = true,
@@ -3892,7 +3891,7 @@ class PocketCameraSession(
         pinExpo(expoMode = mode)
         _status.value = _status.value.copy(expoMode = mode)
         fireKind(
-            SwiftCore.CMD_SET_EXPO_MODE,
+            DjiNative.CMD_SET_EXPO_MODE,
             extra,
             "ExpoMode",
             onFail = {
@@ -3905,7 +3904,7 @@ class PocketCameraSession(
     }
 
     private fun exposureLockDecision(kind: String, json: String): String? =
-        if (SwiftCore.isAvailable) SwiftCore.exposureLockDecision(kind, json)?.takeIf { it.isNotEmpty() } else null
+        if (DjiNative.isAvailable) DjiNative.exposureLockDecision(kind, json)?.takeIf { it.isNotEmpty() } else null
 
     val canLockAutoExposure: Boolean
         get() = _aeLock.value == null && exposureLockDecision("aeLock", _status.value.toJson()) != null
@@ -3988,7 +3987,7 @@ class PocketCameraSession(
         val requestPin = whiteBalancePin
         _status.value = _status.value.copy(wbMode = CameraCommands.WB_AUTO, wbTint = next)
         fireKind(
-            SwiftCore.CMD_SET_WB_AUTO,
+            DjiNative.CMD_SET_WB_AUTO,
             "$next",
             "WB Auto tint $next",
             coalesce = true,
@@ -4026,7 +4025,7 @@ class PocketCameraSession(
         val requestPin = whiteBalancePin
         _status.value = _status.value.copy(wbMode = CameraCommands.WB_CUSTOM, wbKelvin = k, wbTint = t)
         fireKind(
-            SwiftCore.CMD_SET_WB_CUSTOM,
+            DjiNative.CMD_SET_WB_CUSTOM,
             "$k\u001f$t",
             "WB ${k}K tint $t",
             coalesce = true,
@@ -4058,7 +4057,7 @@ class PocketCameraSession(
         val requestPin = focusPin
         _status.value = _status.value.copy(focusMode = next)
         fireKind(
-            SwiftCore.CMD_SET_FOCUS_MODE,
+            DjiNative.CMD_SET_FOCUS_MODE,
             if (continuous) "2" else "1",
             "Focus",
             onFail = {
@@ -4085,7 +4084,7 @@ class PocketCameraSession(
         val requestPin = focusPin
         _status.value = _status.value.copy(focusTrack = mode)
         fireKind(
-            SwiftCore.CMD_SET_FOCUS_TRACK,
+            DjiNative.CMD_SET_FOCUS_TRACK,
             "$mode",
             "AF-C ${track.label}",
             onFail = {
@@ -4101,7 +4100,7 @@ class PocketCameraSession(
         if (!supportsFocusMode) return
         if (_controlBusy.value) return
         scope.launch {
-            sendKind(SwiftCore.CMD_GET_FOCUS_TRACK, null, "Focus track GET")
+            sendKind(DjiNative.CMD_GET_FOCUS_TRACK, null, "Focus track GET")
         }
     }
 
@@ -4135,7 +4134,7 @@ class PocketCameraSession(
         }
         pinColor(mode)
         fireKind(
-            SwiftCore.CMD_SET_COLOR_MODE,
+            DjiNative.CMD_SET_COLOR_MODE,
             colorModeExtra(mode),
             CameraCommands.colorLabel(mode, family),
             onFail = { colorPin = null },
@@ -4187,7 +4186,7 @@ class PocketCameraSession(
                 shutterDenom = shutter ?: previous.shutterDenom,
             )
         fireKind(
-            SwiftCore.CMD_SET_VIDEO_FORMAT,
+            DjiNative.CMD_SET_VIDEO_FORMAT,
             format.commandExtra(previous.shootingMode, connectedCamera?.model?.name),
             format.chipLabel,
             onFail = {
@@ -4428,7 +4427,7 @@ class PocketCameraSession(
         colorPin = null
         _controlNote.value = "D-Log — D-Log2 cannot zoom"
         fireKind(
-            SwiftCore.CMD_SET_COLOR_MODE,
+            DjiNative.CMD_SET_COLOR_MODE,
             colorModeExtra(next),
             "D-Log (zoom)",
             onFail = hopFail@{
@@ -4486,7 +4485,7 @@ class PocketCameraSession(
         val from = _status.value.colorMode
         pinColor(CameraCommands.COLOR_DLOG2)
         fireKind(
-            SwiftCore.CMD_SET_COLOR_MODE,
+            DjiNative.CMD_SET_COLOR_MODE,
             colorModeExtra(CameraCommands.COLOR_DLOG2),
             "D-Log2",
             onFail = { colorPin = null },
@@ -4632,7 +4631,7 @@ class PocketCameraSession(
         _status.value = _status.value.copy(audioChannel = value)
         val label = CameraCommands.audioChannelLabel(value) ?: value.toString()
         enqueueAudio {
-            val ok = sendKind(SwiftCore.CMD_SET_AUDIO_CHANNEL, "$value", "Audio $label")
+            val ok = sendKind(DjiNative.CMD_SET_AUDIO_CHANNEL, "$value", "Audio $label")
             if (!ok) {
                 if (_status.value.audioChannel == value) {
                     _status.value = _status.value.copy(audioChannel = previous)
@@ -4649,7 +4648,7 @@ class PocketCameraSession(
         _status.value = _status.value.copy(vocalBoost = boost)
         val label = if (on) "On" else "Off"
         enqueueAudio {
-            val ok = sendKind(SwiftCore.CMD_SET_VOCAL_BOOST, if (on) "1" else "0", "Vocal $label")
+            val ok = sendKind(DjiNative.CMD_SET_VOCAL_BOOST, if (on) "1" else "0", "Vocal $label")
             if (!ok) {
                 if (_status.value.vocalBoost == boost) {
                     _status.value = _status.value.copy(vocalBoost = previous)
@@ -4679,9 +4678,9 @@ class PocketCameraSession(
 
     fun refreshAudio() {
         enqueueAudio {
-            sendKind(SwiftCore.CMD_GET_AUDIO_CHANNEL, null, "Audio ch GET")
-            sendKind(SwiftCore.CMD_GET_VOCAL_BOOST, null, "Vocal GET")
-            sendKind(SwiftCore.CMD_AUDIO_DSP_GET, null, "AudioDSP GET")
+            sendKind(DjiNative.CMD_GET_AUDIO_CHANNEL, null, "Audio ch GET")
+            sendKind(DjiNative.CMD_GET_VOCAL_BOOST, null, "Vocal GET")
+            sendKind(DjiNative.CMD_AUDIO_DSP_GET, null, "AudioDSP GET")
         }
     }
 
@@ -5106,9 +5105,9 @@ class PocketCameraSession(
             if (linear) false
             else CameraCommands.liveInvertPan(gimbalStickMapping.invertPan, lastAssistMirror)
         val applied = if (linear) CameraCommands.VirtualJoystickMapping.DEFAULT else mapping
-        if (applied.isDefault && !linear && SwiftCore.isAvailable) {
+        if (applied.isDefault && !linear && DjiNative.isAvailable) {
             val packed =
-                SwiftCore.gimbalStickEncode(x.toDouble(), y.toDouble(), invertPan, sensitivity)
+                DjiNative.gimbalStickEncode(x.toDouble(), y.toDouble(), invertPan, sensitivity)
             if (packed != null) {
                 val parts = packed.split(',')
                 if (parts.size == 2) {
@@ -5168,10 +5167,10 @@ class PocketCameraSession(
         val xy = "$nx\u001f$ny"
         scope.launch {
             val focused =
-                sendKind(SwiftCore.CMD_TAP_FOCUS_POINT, xy, "Focus region", timeoutMs = 800)
+                sendKind(DjiNative.CMD_TAP_FOCUS_POINT, xy, "Focus region", timeoutMs = 800)
             if (!focused) return@launch
-            sendKind(SwiftCore.CMD_TAP_FOCUS_HINT, null, "AE hint", timeoutMs = 800)
-            sendKind(SwiftCore.CMD_TAP_FOCUS_COMMIT, xy, "Focus", timeoutMs = 800)
+            sendKind(DjiNative.CMD_TAP_FOCUS_HINT, null, "AE hint", timeoutMs = 800)
+            sendKind(DjiNative.CMD_TAP_FOCUS_COMMIT, xy, "Focus", timeoutMs = 800)
         }
     }
 
@@ -5200,7 +5199,7 @@ class PocketCameraSession(
         trackingRequest = null
         refreshTrackingHud()
         if (!sendClear || !had || datalink == null) return
-        fireKind(SwiftCore.CMD_CLEAR_TRACKING_BOX, null, "Track clear")
+        fireKind(DjiNative.CMD_CLEAR_TRACKING_BOX, null, "Track clear")
     }
 
     private fun beginTrackingPoll() {
@@ -5352,7 +5351,7 @@ class PocketCameraSession(
 
     /** GET `0xA0` blob, patch `@2`, SET `0x9F`. Never invent the blob. */
     private suspend fun patchAudioDsp(name: String, patch: (ByteArray) -> ByteArray) {
-        val got = sendKind(SwiftCore.CMD_AUDIO_DSP_GET, null, "AudioDSP GET")
+        val got = sendKind(DjiNative.CMD_AUDIO_DSP_GET, null, "AudioDSP GET")
         val blob = CameraCommands.audioDspBytes(_status.value.audioDspBlob) ?: audioDspBlob
         if (!got || blob == null || blob.size <= 2) {
             _controlNote.value = "$name: no DSP blob"
@@ -5364,7 +5363,7 @@ class PocketCameraSession(
         val previousWind = _status.value.windNr
         val previousDir = _status.value.directionalAudio
         _status.value = _status.value.applyingAudioBlob(next)
-        val ok = sendKind(SwiftCore.CMD_AUDIO_DSP_SET, CameraCommands.audioDspHex(next), name)
+        val ok = sendKind(DjiNative.CMD_AUDIO_DSP_SET, CameraCommands.audioDspHex(next), name)
         if (!ok) {
             _status.value =
                 _status.value.copy(
@@ -5491,11 +5490,11 @@ class PocketCameraSession(
             onStage?.invoke(ControlWireEvent.NOT_SENT)
             onFail?.invoke()
             onSettle?.invoke(false)
-            if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(SwiftCore.waitKey(kind), false)
+            if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(DjiNative.waitKey(kind), false)
             return
         }
         _controlNote.value = null
-        val key = SwiftCore.waitKey(kind)
+        val key = DjiNative.waitKey(kind)
         pairingHold.remove(key)
         val send =
             InflightSend(
@@ -5539,7 +5538,7 @@ class PocketCameraSession(
     private fun transmit(send: InflightSend) {
         if (!controlLeaseAllows()) return
         val dl = datalink ?: return
-        pairingHold.remove(SwiftCore.waitKey(send.kind))
+        pairingHold.remove(DjiNative.waitKey(send.kind))
         try {
             val sentAt = SystemClock.elapsedRealtime()
             lastCameraSetAt = sentAt
@@ -5574,8 +5573,8 @@ class PocketCameraSession(
         if (BuildConfig.DEBUG) debugCameraSetResult?.invoke(key, false)
         // iOS `ControlHud.timeoutNote(announce: false)` — never toast a SET timeout.
         Log.i(TAG, "control: ${send.name} — SET timeout, leave HUD")
-        val zoomKey = SwiftCore.waitKey(SwiftCore.CMD_SET_ZOOM_LENS)
-        val pollKey = SwiftCore.waitKey(SwiftCore.CMD_POLL_TRACKING)
+        val zoomKey = DjiNative.waitKey(DjiNative.CMD_SET_ZOOM_LENS)
+        val pollKey = DjiNative.waitKey(DjiNative.CMD_POLL_TRACKING)
         if (key != zoomKey && key != pollKey) {
             val videoFresh =
                 datalink?.lastVideoPacketAt?.let {
@@ -5679,7 +5678,7 @@ class PocketCameraSession(
             return false
         }
         _controlNote.value = null
-        val key = SwiftCore.waitKey(kind)
+        val key = DjiNative.waitKey(kind)
         pairingHold.remove(key)
         try {
             val reply =
@@ -5722,7 +5721,7 @@ class PocketCameraSession(
             send()
             try {
                 val frame = waitFrame(set, cmd, 6_000)
-                val value = SwiftCore.unpackStatusString(frame.payload).orEmpty()
+                val value = DjiNative.unpackStatusString(frame.payload).orEmpty()
                 if (value.isNotEmpty()) return value
                 last = "$name came back empty — camera AP not up yet"
             } catch (_: Exception) {
@@ -5771,832 +5770,3 @@ class PocketCameraSession(
 }
 
 private fun hexBytes(bytes: ByteArray): String = bytes.joinToString(" ") { "%02x".format(it.toInt() and 0xFF) }
-
-internal fun phaseAllowsReconnect(phase: ConnectionPhase): Boolean =
-    when (phase) {
-        ConnectionPhase.IDLE,
-        ConnectionPhase.SCANNING,
-        ConnectionPhase.FAILED,
-        ConnectionPhase.LIVE,
-        -> true
-        else -> false
-    }
-
-/**
- * Live-feed stall detector. UDP receive age is the stall signal — never 1 Hz `0x09/0xa8`.
- * Mirrors iOS `FeedWatchdog` + `CameraSoftAP` first-picture gates.
- */
-internal object LiveViewEnablePolicy {
-    const val STALL_MS = 2_000L
-    const val ESCALATE_MS = 5_000L
-    const val GOP_GRACE_MS = 8_000L
-    /** Endpoint repair and decoder-rebuild picture deadline. Matches iOS 16 s. */
-    const val ENDPOINT_PICTURE_GRACE_MS = 16_000L
-    /** Core `enableAnswerWindow`: an unanswered encoder-pause enable escalates after this. */
-    const val ENABLE_ANSWER_MS = 1_500L
-    /** Core `keyframeResendInterval` / `keyframeRequestLimit` for the decoder repair. */
-    const val KEYFRAME_RESEND_MS = 2_000L
-    const val KEYFRAME_REQUEST_LIMIT = 2
-    /** Core `maxHeldRepairCycles`: repair deadlines (~60 s) before BLE recovery may run. */
-    const val MAX_HELD_REPAIR_CYCLES = 3
-    const val REBUILD_BACKOFF_MS = 60_000L
-    const val COOLDOWN_MS = 15_000L
-    const val REBUILD_COOLDOWN_MS = 5_000L
-    const val ANALOG_LIFT_STALE_MS = 1_600L
-    const val COMMAND_TIMEOUT_WINDOW_MS = 5_000L
-    const val COMMAND_TIMEOUT_REBUILD_COUNT = 2
-    const val FIRST_PICTURE_RESEND_MS = 2_000L
-    const val FORMAT_POKE_MIN_SETTLE_MS = 800L
-    const val FORMAT_STALL_MS = 2_000L
-    const val HANDSHAKE_RETRY_PAUSE_MS = 500L
-    const val HANDSHAKE_OPEN_RETRY_LIMIT = 6
-    const val HANDSHAKE_REBIND_LIMIT = 3
-    const val HANDSHAKE_SENDS_PER_BIND = 20
-    const val HANDSHAKE_SEND_INTERVAL_MS = 350L
-    /**
-     * One `DatalinkDriver.open` budget: 20×350 ms × (1+3 rebinds) + 500 ms
-     * pauses, plus headroom. iOS has no envelope; 30 s raced the last rebind.
-     */
-    fun handshakeOpenTimeoutMs(): Long =
-        HANDSHAKE_SENDS_PER_BIND * HANDSHAKE_SEND_INTERVAL_MS * (HANDSHAKE_REBIND_LIMIT + 1L) +
-            HANDSHAKE_RETRY_PAUSE_MS * HANDSHAKE_REBIND_LIMIT +
-            5_000L
-    /** After a foreground rebuild, wait this long for an IDR before a full rejoin. */
-    const val FOREGROUND_PICTURE_GRACE_MS = GOP_GRACE_MS
-
-    private fun coreDecision(kind: String, json: String): String? {
-        if (!SwiftCore.isAvailable) return null
-        return SwiftCore.cameraSoftAPDecision(kind, json)?.takeIf { it.isNotEmpty() }
-    }
-
-    private fun coreFlag(kind: String, json: String, fallback: () -> Boolean): Boolean =
-        when (coreDecision(kind, json)) {
-            "true" -> true
-            "false" -> false
-            else -> fallback()
-        }
-
-    private fun secJson(ms: Long?): String = ms?.let { (it / 1000.0).toString() } ?: "null"
-
-    fun shouldGiveUpOpenRetry(attempts: Int): Boolean =
-        coreFlag("shouldGiveUpOpenRetry", "{\"attempts\":$attempts}") {
-            attempts >= HANDSHAKE_OPEN_RETRY_LIMIT
-        }
-
-    fun shouldKickAfterHandshakeTimeout(pathReady: Boolean): Boolean =
-        coreFlag("shouldKickAfterHandshakeTimeout", "{\"pathReady\":$pathReady}") { !pathReady }
-
-    fun canSendHandshake(receiveArmed: Boolean, connectionReady: Boolean): Boolean =
-        coreFlag(
-            "canSendHandshake",
-            "{\"receiveArmed\":$receiveArmed,\"connectionReady\":$connectionReady}",
-        ) { receiveArmed && connectionReady }
-
-    enum class Action { NONE, RESEND_ENABLE, REBUILD_DECODER, REBUILD_UDP, FULL_REJOIN }
-
-    enum class Stage { IDLE, RESEND_ENABLE, REBUILD_DECODER, REBUILD_UDP, FULL_REJOIN, COOLDOWN }
-
-    enum class FirstPictureStep {
-        WAIT,
-        RESEND_ENABLE,
-        POKE_RECORDING_FORMAT,
-        REBUILD_UDP,
-        REJOIN,
-    }
-
-    class State {
-        var stage: Stage = Stage.IDLE
-        var lastActionAt: Long = 0
-        var encoderPauseEnables: Int = 0
-
-        fun reset() {
-            stage = Stage.IDLE
-            lastActionAt = 0
-            encoderPauseEnables = 0
-        }
-
-        fun capture(): State {
-            val copy = State()
-            copy.restore(this)
-            return copy
-        }
-
-        fun restore(other: State) {
-            stage = other.stage
-            lastActionAt = other.lastActionAt
-            encoderPauseEnables = other.encoderPauseEnables
-        }
-    }
-
-    data class Snapshot(
-        val now: Long,
-        val videoPackets: Int,
-        val lastVideoPacketAt: Long?,
-        val lastAccessUnitAt: Long?,
-        val lastStatusAt: Long?,
-        val lastBleNotifyAt: Long?,
-        val lastRebuildAt: Long?,
-        val lastEnableAt: Long,
-        val pathReady: Boolean,
-        val hasFormat: Boolean,
-        val decoderErrors: Int,
-        val live: Boolean,
-        val sawPicture: Boolean,
-        val lastFocusTrackAt: Long? = null,
-        val lastZoomAt: Long? = null,
-        val zoomPinchActive: Boolean = false,
-        val lastGimbalThrowAt: Long? = null,
-        val gimbalStickHeld: Boolean = false,
-        val hadVideo: Boolean? = null,
-        val lastCameraSetAt: Long? = null,
-        val lastDecoderOutputAt: Long? = null,
-        val lastPresentedAt: Long? = null,
-        val decoderOutputExpected: Boolean = false,
-        val referenceRecoveryNeeded: Boolean = false,
-        val lastIrapAt: Long? = null,
-        val repairReady: Boolean = true,
-    )
-
-    fun age(now: Long, at: Long?): Long? = at?.let { now - it }
-
-    fun udpReceiveAlive(snap: Snapshot): Boolean {
-        val video = age(snap.now, snap.lastVideoPacketAt)
-        if (video != null && video < STALL_MS) return true
-        val au = age(snap.now, snap.lastAccessUnitAt)
-        return au != null && au < STALL_MS
-    }
-
-    fun controlReceiveAlive(snap: Snapshot): Boolean {
-        val status = age(snap.now, snap.lastStatusAt) ?: return false
-        return status < STALL_MS
-    }
-
-    fun hadVideo(videoPackets: Int, videoAgeMs: Long?): Boolean =
-        videoPackets > 0 || videoAgeMs != null
-
-    fun shouldHoldForGopReset(sinceEnableMs: Long?, videoAgeMs: Long?): Boolean =
-        coreFlag(
-            "shouldHoldForGOPReset",
-            "{\"secondsSinceLastEnable\":${secJson(sinceEnableMs)},\"lastVideoPacketAge\":${secJson(videoAgeMs)}}",
-        ) {
-            if (sinceEnableMs == null || sinceEnableMs >= GOP_GRACE_MS) return@coreFlag false
-            if (videoAgeMs != null && videoAgeMs > sinceEnableMs + STALL_MS) return@coreFlag false
-            true
-        }
-
-    /** Control Center / a short app-switcher peek still has a live GOP — do not tear UDP. */
-    fun shouldRecoverAfterForeground(
-        secondsSinceLastPresented: Double?,
-        videoFresh: Boolean = false,
-        statusFresh: Boolean = false,
-        stallSec: Double = STALL_MS / 1000.0,
-    ): Boolean =
-        coreFlag(
-            "shouldRecoverAfterForeground",
-            "{\"secondsSinceLastPresented\":${secondsSinceLastPresented ?: "null"},\"videoFresh\":$videoFresh,\"statusFresh\":$statusFresh}",
-        ) {
-            if (videoFresh || statusFresh) return@coreFlag false
-            val age = secondsSinceLastPresented ?: return@coreFlag true
-            age >= stallSec
-        }
-
-    fun shouldEscalateForegroundRecover(
-        secondsSinceLastPresented: Double?,
-        videoFresh: Boolean = false,
-        statusFresh: Boolean = false,
-        graceSec: Double = FOREGROUND_PICTURE_GRACE_MS / 1000.0,
-    ): Boolean =
-        coreFlag(
-            "shouldEscalateForegroundRecover",
-            "{\"secondsSinceLastPresented\":${secondsSinceLastPresented ?: "null"},\"videoFresh\":$videoFresh,\"statusFresh\":$statusFresh}",
-        ) {
-            if (videoFresh || statusFresh) return@coreFlag false
-            val age = secondsSinceLastPresented ?: return@coreFlag true
-            age >= graceSec
-        }
-
-    enum class HandshakeTimeoutStep { KEEP_SOCKET, REBIND_UDP, FAIL }
-
-    fun handshakeTimeoutStep(
-        pathReady: Boolean,
-        rebindsUsed: Int,
-        inboundDatagrams: Int = 0,
-        rebindLimit: Int = HANDSHAKE_REBIND_LIMIT,
-    ): HandshakeTimeoutStep {
-        when (
-            coreDecision(
-                "handshakeTimeoutStep",
-                "{\"pathReady\":$pathReady,\"rebindsUsed\":$rebindsUsed,\"inboundDatagrams\":$inboundDatagrams,\"rebindLimit\":$rebindLimit}",
-            )
-        ) {
-            "keepSocket" -> return HandshakeTimeoutStep.KEEP_SOCKET
-            "rebindUDP" -> return HandshakeTimeoutStep.REBIND_UDP
-            "fail" -> return HandshakeTimeoutStep.FAIL
-        }
-        if (inboundDatagrams > 0) return HandshakeTimeoutStep.KEEP_SOCKET
-        if (!pathReady) return HandshakeTimeoutStep.FAIL
-        if (rebindsUsed < rebindLimit) return HandshakeTimeoutStep.REBIND_UDP
-        return HandshakeTimeoutStep.FAIL
-    }
-
-    fun holdUdpRebuildGopLog(sinceEnableMs: Long?, videoAgeMs: Long?): String =
-        "feed: hold UDP rebuild — GOP-reset grace lastEnable=${ageSec(sinceEnableMs)}s lastVideo=${ageSec(videoAgeMs)}s"
-
-    fun holdUdpRebuildAfcLog(sinceSetMs: Long?, videoAgeMs: Long?): String =
-        "feed: hold UDP rebuild — AF-C grace lastSet=${ageSec(sinceSetMs)}s lastVideo=${ageSec(videoAgeMs)}s"
-
-    fun holdUdpRebuildZoomLog(sinceSetMs: Long?, videoAgeMs: Long?): String =
-        "feed: hold UDP rebuild — zoom grace lastSet=${ageSec(sinceSetMs)}s lastVideo=${ageSec(videoAgeMs)}s"
-
-    private fun ageSec(ageMs: Long?): String {
-        val value = if (ageMs == null) -1.0 else ageMs / 1000.0
-        return String.format(java.util.Locale.US, "%.1f", value)
-    }
-
-    fun shouldHoldBind(pathReady: Boolean, bleAgeMs: Long?): Boolean =
-        pathReady && (bleAgeMs ?: Long.MAX_VALUE) < STALL_MS
-
-    fun shouldHoldRebuildAfterRecentUdp(
-        sinceRebuildMs: Long?,
-        pathReady: Boolean,
-        bleAgeMs: Long?,
-        hadVideo: Boolean,
-    ): Boolean {
-        if (!hadVideo) return false
-        if (!shouldHoldBind(pathReady, bleAgeMs)) return false
-        val since = sinceRebuildMs ?: return false
-        return since < REBUILD_BACKOFF_MS
-    }
-
-    fun enableRestartedVideo(sinceEnableMs: Long?, videoAgeMs: Long?): Boolean {
-        if (sinceEnableMs == null || videoAgeMs == null) return false
-        return videoAgeMs + 50 < sinceEnableMs
-    }
-
-    fun shouldTreatLiveVideoAsStale(
-        lastVideoPacketAgeMs: Long?,
-        hadVideo: Boolean,
-        recovering: Boolean = false,
-    ): Boolean =
-        coreFlag(
-            "shouldTreatLiveVideoAsStale",
-            "{\"lastVideoPacketAge\":${secJson(lastVideoPacketAgeMs)},\"hadVideo\":$hadVideo,\"recovering\":$recovering}",
-        ) {
-            if (recovering) return@coreFlag true
-            val age = lastVideoPacketAgeMs ?: return@coreFlag hadVideo
-            age >= ANALOG_LIFT_STALE_MS
-        }
-
-    fun shouldStartFeedRecovery(rebuildInFlight: Boolean): Boolean =
-        coreFlag("shouldStartFeedRecovery", "{\"rebuildInFlight\":$rebuildInFlight}") {
-            !rebuildInFlight
-        }
-
-    enum class DecoderRepairStep { WAIT, RESEND_KEYFRAME, REBUILD_ENDPOINT, DEADLINE }
-
-    /** Core `FeedWatchdog.decoderRepairStep`: resend until answered, then the endpoint. */
-    fun decoderRepairStep(
-        sinceRepairStartMs: Long,
-        sinceEnableMs: Long,
-        sinceIrapMs: Long?,
-        keyframeRequests: Int,
-    ): DecoderRepairStep {
-        val core =
-            coreDecision(
-                "decoderRepairStep",
-                "{\"secondsSinceRepairStart\":${sinceRepairStartMs / 1000.0}," +
-                    "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}," +
-                    "\"secondsSinceLastIrap\":${secJson(sinceIrapMs)}," +
-                    "\"keyframeRequests\":$keyframeRequests}",
-            )
-        return when (core) {
-            "wait" -> DecoderRepairStep.WAIT
-            "resendKeyframe" -> DecoderRepairStep.RESEND_KEYFRAME
-            "rebuildEndpoint" -> DecoderRepairStep.REBUILD_ENDPOINT
-            "deadline" -> DecoderRepairStep.DEADLINE
-            else -> {
-                if (sinceRepairStartMs >= ENDPOINT_PICTURE_GRACE_MS) return DecoderRepairStep.DEADLINE
-                val answered = sinceIrapMs != null && sinceIrapMs < sinceEnableMs
-                if (answered || sinceEnableMs < KEYFRAME_RESEND_MS) return DecoderRepairStep.WAIT
-                if (keyframeRequests < KEYFRAME_REQUEST_LIMIT) DecoderRepairStep.RESEND_KEYFRAME
-                else DecoderRepairStep.REBUILD_ENDPOINT
-            }
-        }
-    }
-
-    /**
-     * Core `FeedWatchdog.nextSessionHoldCycles`: no BLE teardown while video arrives,
-     * for at most [MAX_HELD_REPAIR_CYCLES] repair deadlines per episode. 0 releases.
-     */
-    fun nextSessionHoldCycles(videoAgeMs: Long?, previousCycles: Int, pictureSinceLastCycle: Boolean): Int {
-        val core =
-            coreDecision(
-                "nextSessionHoldCycles",
-                "{\"lastVideoPacketAge\":${secJson(videoAgeMs)},\"previousCycles\":$previousCycles," +
-                    "\"pictureSinceLastCycle\":$pictureSinceLastCycle}",
-            )?.toIntOrNull()
-        if (core != null) return core
-        val cycles = (if (pictureSinceLastCycle) 0 else maxOf(0, previousCycles)) + 1
-        val videoLive = videoAgeMs != null && videoAgeMs < STALL_MS
-        return if (videoLive && cycles < MAX_HELD_REPAIR_CYCLES) cycles else 0
-    }
-
-    fun shouldRepeatRecoverEnable(
-        sinceEnableMs: Long,
-        @Suppress("UNUSED_PARAMETER") sinceRebuildMs: Long?,
-        @Suppress("UNUSED_PARAMETER") pathReady: Boolean,
-        @Suppress("UNUSED_PARAMETER") bleAgeMs: Long?,
-        hadVideo: Boolean,
-        @Suppress("UNUSED_PARAMETER") holdEnableCount: Int,
-        @Suppress("UNUSED_PARAMETER") videoAgeMs: Long?,
-    ): Boolean =
-        coreFlag(
-            "shouldRepeatRecoverEnable",
-            "{" +
-                "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}," +
-                "\"secondsSinceLastRebuild\":${secJson(sinceRebuildMs)}," +
-                "\"pathReady\":$pathReady," +
-                "\"lastBleNotifyAge\":${secJson(bleAgeMs)}," +
-                "\"hadVideo\":$hadVideo" +
-                "}",
-        ) {
-            // Mid-session extra enable GOP-cuts. FeedWatchdog.tick owns that ladder.
-            if (hadVideo) return@coreFlag false
-            sinceEnableMs >= STALL_MS
-        }
-
-    fun shouldRebuildAfterCommandTimeouts(
-        timeoutsInWindow: Int,
-        downlinkFresh: Boolean,
-        videoFresh: Boolean,
-        rebuildInFlight: Boolean,
-        sinceRebuildMs: Long?,
-        statusFresh: Boolean = false,
-    ): Boolean =
-        coreFlag(
-            "shouldRebuildAfterCommandTimeouts",
-            "{" +
-                "\"timeoutsInWindow\":$timeoutsInWindow," +
-                "\"downlinkFresh\":$downlinkFresh," +
-                "\"videoFresh\":$videoFresh," +
-                "\"rebuildInFlight\":$rebuildInFlight," +
-                "\"secondsSinceLastRebuild\":${secJson(sinceRebuildMs)}," +
-                "\"statusFresh\":$statusFresh" +
-                "}",
-        ) {
-            if (videoFresh) return@coreFlag false
-            if (statusFresh) return@coreFlag false
-            if (timeoutsInWindow < COMMAND_TIMEOUT_REBUILD_COUNT || !downlinkFresh || rebuildInFlight) {
-                return@coreFlag false
-            }
-            if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return@coreFlag false
-            true
-        }
-
-    fun shouldRunFirstPictureRecover(presentedAgeMs: Long?, alreadySettled: Boolean): Boolean =
-        coreFlag(
-            "shouldRunFirstPictureRecover",
-            "{\"secondsSinceLastPresented\":${secJson(presentedAgeMs)},\"alreadySettled\":$alreadySettled}",
-        ) {
-            if (alreadySettled) return@coreFlag false
-            presentedAgeMs == null || presentedAgeMs >= STALL_MS
-        }
-
-    fun shouldDeferRecordingFormatPoke(
-        hasKnownRecordingFormat: Boolean,
-        sinceEnableMs: Long,
-    ): Boolean =
-        coreFlag(
-            "shouldDeferRecordingFormatPoke",
-            "{" +
-                "\"hasKnownRecordingFormat\":$hasKnownRecordingFormat," +
-                "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}" +
-                "}",
-        ) { !hasKnownRecordingFormat && sinceEnableMs < GOP_GRACE_MS }
-
-    fun shouldMarkFirstPictureSettled(presentedAgeMs: Long?, sinceEnableMs: Long): Boolean =
-        coreFlag(
-            "shouldMarkFirstPictureSettled",
-            "{\"secondsSinceLastPresented\":${secJson(presentedAgeMs)},\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}}",
-        ) {
-            val presented = presentedAgeMs ?: return@coreFlag false
-            presented >= 0 && presented < STALL_MS
-        }
-
-    fun shouldBeginIDRHoldOnEnable(hasPresentedPicture: Boolean): Boolean =
-        coreFlag(
-            "shouldBeginIDRHoldOnEnable",
-            "{\"hasPresentedPicture\":$hasPresentedPicture}",
-        ) { !hasPresentedPicture }
-
-    fun shouldReleaseIDRHold(
-        awaitingIDR: Boolean,
-        udpReceiveAlive: Boolean,
-        sinceEnableMs: Long?,
-        hasPresentedPicture: Boolean,
-    ): Boolean =
-        coreFlag(
-            "shouldReleaseIDRHold",
-            "{" +
-                "\"awaitingIDR\":$awaitingIDR," +
-                "\"udpReceiveAlive\":$udpReceiveAlive," +
-                "\"secondsSinceLastEnable\":${secJson(sinceEnableMs)}," +
-                "\"hasPresentedPicture\":$hasPresentedPicture" +
-                "}",
-        ) {
-            if (!awaitingIDR || !udpReceiveAlive || !hasPresentedPicture) return@coreFlag false
-            val since = sinceEnableMs ?: return@coreFlag false
-            since >= GOP_GRACE_MS
-        }
-
-    fun firstPictureStep(
-        videoPackets: Int,
-        enableSends: Int,
-        sinceEnableMs: Long,
-        videoAgeMs: Long?,
-        sinceRebuildMs: Long?,
-        needsRecordingFormatPoke: Boolean = false,
-        alreadyPokedRecordingFormat: Boolean = false,
-        recordingFormatPokeInFlight: Boolean = false,
-        isRecording: Boolean = false,
-        hasPresentedPicture: Boolean = false,
-    ): FirstPictureStep {
-        when (
-            coreDecision(
-                "firstPictureStep",
-                "{" +
-                    "\"videoPackets\":$videoPackets," +
-                    "\"enableSends\":$enableSends," +
-                    "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}," +
-                    "\"secondsSinceLastVideo\":${secJson(videoAgeMs)}," +
-                    "\"secondsSinceLastRebuild\":${secJson(sinceRebuildMs)}," +
-                    "\"needsRecordingFormatPoke\":$needsRecordingFormatPoke," +
-                    "\"alreadyPokedRecordingFormat\":$alreadyPokedRecordingFormat," +
-                    "\"recordingFormatPokeInFlight\":$recordingFormatPokeInFlight," +
-                    "\"isRecording\":$isRecording," +
-                    "\"hasPresentedPicture\":$hasPresentedPicture" +
-                    "}",
-            )
-        ) {
-            "wait" -> return FirstPictureStep.WAIT
-            "resendEnable" -> return FirstPictureStep.RESEND_ENABLE
-            "pokeRecordingFormat" -> return FirstPictureStep.POKE_RECORDING_FORMAT
-            "rebuildUDP" -> return FirstPictureStep.REBUILD_UDP
-            "rejoin" -> return FirstPictureStep.REJOIN
-        }
-        if (hasPresentedPicture) return FirstPictureStep.WAIT
-        if (enableSends < 1) return FirstPictureStep.RESEND_ENABLE
-        if (recordingFormatPokeInFlight) return FirstPictureStep.WAIT
-        if (sinceEnableMs < FIRST_PICTURE_RESEND_MS) return FirstPictureStep.WAIT
-        val had = hadVideo(videoPackets, videoAgeMs)
-        if (shouldPokeRecordingFormat(
-                needsPoke = needsRecordingFormatPoke,
-                alreadyPoked = alreadyPokedRecordingFormat,
-                isRecording = isRecording,
-                hadVideo = had,
-                enableSends = enableSends,
-                sinceEnableMs = sinceEnableMs,
-            )
-        ) {
-            return FirstPictureStep.POKE_RECORDING_FORMAT
-        }
-        val videoFresh = had && (videoAgeMs ?: Long.MAX_VALUE) < STALL_MS
-        if (!had) {
-            if (sinceEnableMs < GOP_GRACE_MS) return FirstPictureStep.WAIT
-            if (enableSends >= 4) return FirstPictureStep.REJOIN
-            if (enableSends >= 2) {
-                if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) {
-                    return FirstPictureStep.WAIT
-                }
-                return FirstPictureStep.REBUILD_UDP
-            }
-            return FirstPictureStep.RESEND_ENABLE
-        }
-        if (sinceEnableMs < GOP_GRACE_MS) {
-            if (videoFresh && enableSends == 1 && sinceEnableMs >= ESCALATE_MS) {
-                return FirstPictureStep.RESEND_ENABLE
-            }
-            return FirstPictureStep.WAIT
-        }
-        if (videoFresh) {
-            if (enableSends == 1) return FirstPictureStep.RESEND_ENABLE
-            // Match CameraSoftAP: fresh P-frames cannot keep a missed first IRAP
-            // waiting forever after the one resend. The rejoin owner is bounded.
-            if (sinceEnableMs >= ENDPOINT_PICTURE_GRACE_MS) return FirstPictureStep.REJOIN
-            return FirstPictureStep.WAIT
-        }
-        if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return FirstPictureStep.WAIT
-        if (enableSends >= 4) return FirstPictureStep.REJOIN
-        if (sinceRebuildMs != null) return FirstPictureStep.REJOIN
-        return FirstPictureStep.REBUILD_UDP
-    }
-
-    /** Pocket 3: SET 1080 then boot 4K before tearing UDP. Not Pocket 4. */
-    fun shouldPokeRecordingFormat(
-        needsPoke: Boolean,
-        alreadyPoked: Boolean,
-        isRecording: Boolean,
-        hadVideo: Boolean,
-        enableSends: Int,
-        sinceEnableMs: Long,
-    ): Boolean =
-        coreFlag(
-            "shouldPokeRecordingFormat",
-            "{" +
-                "\"needsPoke\":$needsPoke," +
-                "\"alreadyPoked\":$alreadyPoked," +
-                "\"isRecording\":$isRecording," +
-                "\"hadVideo\":$hadVideo," +
-                "\"enableSends\":$enableSends," +
-                "\"secondsSinceLastEnable\":${sinceEnableMs / 1000.0}" +
-                "}",
-        ) {
-            if (!needsPoke || alreadyPoked || isRecording || enableSends < 1) return@coreFlag false
-            if (sinceEnableMs < FIRST_PICTURE_RESEND_MS) return@coreFlag false
-            if (!hadVideo) return@coreFlag true
-            sinceEnableMs >= ESCALATE_MS
-        }
-
-    /**
-     * Leftover TRAIL P-frames still arriving: ask for IDR, keep the socket.
-     * [videoPackets] > 0 with a stale [videoAgeMs] is a dead receive — rebuild UDP.
-     * Frozen pkts=375 then three enable resends delayed first picture ~32 s.
-     */
-    fun shouldKeepUdpForLeftoverGop(
-        noPicture: Boolean,
-        videoPackets: Int,
-        videoAgeMs: Long?,
-    ): Boolean {
-        if (!noPicture || videoPackets <= 0) return false
-        val age = videoAgeMs ?: return false
-        return age < STALL_MS
-    }
-
-    fun shouldIngestLiveVideo(ingestArmed: Boolean): Boolean = ingestArmed
-
-    /**
-     * Settings / media covering the monitor is not a leftover-GOP gate.
-     * Dropping `0x02` while UDP stays live blacks the well on return (#177).
-     */
-    fun shouldIngestLiveVideo(
-        ingestArmed: Boolean,
-        browsingMedia: Boolean,
-        operatorOverlayHeld: Boolean,
-    ): Boolean {
-        // browsingMedia / operatorOverlayHeld are lockstep with CameraSoftAP.
-        // Overlay/browse must not drop 0x02. Pocket has no periodic GOP (#177).
-        if (browsingMedia || operatorOverlayHeld) return ingestArmed
-        return ingestArmed
-    }
-
-    /** Pocket: `0x02/0x68` `08` immediately before `0x09/0xa8`. Not Nano. */
-    fun shouldSendLiveViewPrepare(usesNanoLiveViewGate: Boolean): Boolean =
-        coreFlag(
-            "shouldSendLiveViewPrepare",
-            "{\"usesNanoLiveViewGate\":$usesNanoLiveViewGate}",
-        ) { !usesNanoLiveViewGate }
-
-    /** `0x02/0x0c` is gallery enter/exit — not live-start. Matches iOS / handbook. */
-    fun shouldExitPlaybackBeforeLiveEnable(inPlayback: Boolean): Boolean =
-        coreFlag("shouldExitPlaybackBeforeLiveEnable", "{\"inPlayback\":$inPlayback}") { inPlayback }
-
-    fun shouldClearForegroundRecoverWithoutRebuild(holdsMonitor: Boolean): Boolean =
-        coreFlag(
-            "shouldClearForegroundRecoverWithoutRebuild",
-            "{\"holdsMonitor\":$holdsMonitor}",
-        ) { holdsMonitor }
-
-    fun shouldContinueFirstPictureAfterStrayPlayback(hasPicture: Boolean): Boolean =
-        coreFlag(
-            "shouldContinueFirstPictureAfterStrayPlayback",
-            "{\"hasPicture\":$hasPicture}",
-        ) { !hasPicture }
-
-    fun shouldKeepaliveRebuildUDP(
-        flowNeedsRebuild: Boolean,
-        rebuildInFlight: Boolean,
-        sinceRebuildMs: Long?,
-        videoFresh: Boolean = false,
-        sawPicture: Boolean = true,
-        statusFresh: Boolean = false,
-        sinceEnableMs: Long? = null,
-        pathReady: Boolean = true,
-    ): Boolean =
-        coreFlag(
-            "shouldKeepaliveRebuildUDP",
-            "{" +
-                "\"flowNeedsRebuild\":$flowNeedsRebuild," +
-                "\"rebuildInFlight\":$rebuildInFlight," +
-                "\"secondsSinceLastRebuild\":${secJson(sinceRebuildMs)}," +
-                "\"videoFresh\":$videoFresh," +
-                "\"sawPicture\":$sawPicture," +
-                "\"statusFresh\":$statusFresh," +
-                "\"secondsSinceLastEnable\":${secJson(sinceEnableMs)}," +
-                "\"pathReady\":$pathReady" +
-                "}",
-        ) {
-            if (!sawPicture) return@coreFlag false
-            if (!pathReady) return@coreFlag false
-            if (!flowNeedsRebuild || rebuildInFlight || videoFresh) return@coreFlag false
-            if (statusFresh) return@coreFlag false
-            if (shouldHoldForGopReset(sinceEnableMs, null)) return@coreFlag false
-            if (sinceRebuildMs != null && sinceRebuildMs < REBUILD_COOLDOWN_MS) return@coreFlag false
-            true
-        }
-
-    fun shouldForceEnableAfterUDPRebuild(hadVideo: Boolean): Boolean =
-        coreFlag("shouldForceEnableAfterUDPRebuild", "{\"hadVideo\":$hadVideo}") { !hadVideo }
-
-    fun shouldRearmLiveIngestAfterUDPRebuild(wasAccepting: Boolean): Boolean =
-        coreFlag(
-            "shouldRearmLiveIngestAfterUDPRebuild",
-            "{\"wasAccepting\":$wasAccepting}",
-        ) { wasAccepting }
-
-    fun shouldSendRecoverEnable(pathReady: Boolean, decoderReady: Boolean): Boolean =
-        coreFlag(
-            "shouldSendRecoverEnable",
-            "{\"pathReady\":$pathReady,\"decoderReady\":$decoderReady}",
-        ) { pathReady && decoderReady }
-
-    fun shouldCommitLiveHandshake(
-        driverOwned: Boolean,
-        isClosed: Boolean,
-        isCancelled: Boolean,
-    ): Boolean =
-        coreFlag(
-            "shouldCommitLiveHandshake",
-            "{\"driverOwned\":$driverOwned,\"isClosed\":$isClosed,\"isCancelled\":$isCancelled}",
-        ) { driverOwned && !isClosed && !isCancelled }
-
-    fun shouldReuseDatalink(isClosed: Boolean): Boolean =
-        coreFlag("shouldReuseDatalink", "{\"isClosed\":$isClosed}") { !isClosed }
-
-    /** Match the portable watchdog: upstream progress cannot renew a downstream stall. */
-    private fun shouldHoldForControlGrace(snap: Snapshot, stalledStageAge: Long?): Boolean {
-        val stageAgeSec = stalledStageAge?.div(1000.0)
-        fun withinGrace(graceSec: Double): Boolean =
-            stageAgeSec == null || stageAgeSec < STALL_MS / 1000.0 + graceSec
-        return CameraCommands.shouldHoldCameraSetWatchdog(
-            age(snap.now, snap.lastCameraSetAt)?.div(1000.0), stageAgeSec,
-        ) || (withinGrace(FocusTrackMode.VIDEO_GRACE_SEC) &&
-            FocusTrackMode.shouldHoldWatchdog(age(snap.now, snap.lastFocusTrackAt)?.div(1000.0))) ||
-            snap.zoomPinchActive ||
-            (withinGrace(CamFov.VIDEO_GRACE_SEC) &&
-                CamFov.shouldHoldWatchdog(age(snap.now, snap.lastZoomAt)?.div(1000.0))) ||
-            CameraCommands.shouldHoldGimbalWatchdog(
-                age(snap.now, snap.lastGimbalThrowAt)?.div(1000.0), stageAgeSec, snap.gimbalStickHeld,
-            )
-    }
-
-    fun tick(state: State, snap: Snapshot): Action {
-        if (!snap.live) {
-            state.reset()
-            return Action.NONE
-        }
-        if (!snap.pathReady || !snap.repairReady) return Action.NONE
-
-        val outputAt = snap.lastDecoderOutputAt ?: snap.lastPresentedAt
-        val outputAge = age(snap.now, outputAt) ?: 0L
-        val decoderSilent =
-            snap.decoderOutputExpected && snap.sawPicture && outputAge >= STALL_MS
-        val knownReferenceLoss =
-            snap.decoderOutputExpected && snap.sawPicture && snap.referenceRecoveryNeeded
-        val decoderNeedsRepair = decoderSilent || knownReferenceLoss
-        val presentedAge = age(snap.now, snap.lastPresentedAt) ?: 0L
-        val auAge = age(snap.now, snap.lastAccessUnitAt)
-        val assemblyStalled =
-            snap.sawPicture &&
-                udpReceiveAlive(snap) &&
-                auAge != null &&
-                auAge >= STALL_MS &&
-                presentedAge >= STALL_MS &&
-                (!snap.decoderOutputExpected || decoderSilent)
-        // An early loss repair must not accept still-young pre-action output,
-        // or IRAP submission without output, as completion of its deadline.
-        val outputAfterAction = outputAt != null && outputAt > state.lastActionAt
-        if (state.stage == Stage.REBUILD_DECODER && (decoderNeedsRepair || !outputAfterAction)) {
-            if (snap.now - state.lastActionAt >= ENDPOINT_PICTURE_GRACE_MS) {
-                return fire(state, Action.FULL_REJOIN, snap.now)
-            }
-            return Action.NONE
-        }
-
-        val sinceEnable = if (snap.lastEnableAt == 0L) null else snap.now - snap.lastEnableAt
-        val videoAge = age(snap.now, snap.lastVideoPacketAt)
-        if (udpReceiveAlive(snap) && !assemblyStalled) {
-            // Lost parameter sets are restored by this existing repair's enable.
-            // Requiring format here strands an established decoder on inter-frames.
-            if (decoderNeedsRepair &&
-                (auAge ?: Long.MAX_VALUE) < STALL_MS
-            ) {
-                // Twin of FeedWatchdog: cooldown ends, and an IRAP after the last
-                // enable answered it, so a new loss gets its own request.
-                if ((state.stage == Stage.FULL_REJOIN || state.stage == Stage.COOLDOWN) &&
-                    snap.now - state.lastActionAt < COOLDOWN_MS
-                ) {
-                    return Action.NONE
-                }
-                val irapAnsweredEnable =
-                    snap.lastIrapAt != null && snap.lastEnableAt != 0L && snap.lastIrapAt > snap.lastEnableAt
-                if (!irapAnsweredEnable && shouldHoldForGopReset(sinceEnable, videoAge)) return Action.NONE
-                if (shouldHoldForControlGrace(snap, outputAge)) return Action.NONE
-                return fire(state, Action.REBUILD_DECODER, snap.now)
-            }
-            state.reset()
-            return Action.NONE
-        }
-        if (shouldHoldForGopReset(sinceEnable, videoAge)) return Action.NONE
-        if (shouldHoldForControlGrace(snap, if (assemblyStalled) auAge else videoAge)) {
-            return Action.NONE
-        }
-
-        val had = snap.hadVideo ?: hadVideo(snap.videoPackets, videoAge)
-        if (!had) {
-            if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < ESCALATE_MS) {
-                return Action.NONE
-            }
-            return when (state.stage) {
-                Stage.IDLE -> fire(state, Action.RESEND_ENABLE, snap.now)
-                Stage.RESEND_ENABLE -> fire(state, Action.REBUILD_UDP, snap.now)
-                Stage.REBUILD_DECODER, Stage.REBUILD_UDP, Stage.FULL_REJOIN, Stage.COOLDOWN -> {
-                    state.stage = Stage.COOLDOWN
-                    state.lastActionAt = snap.now
-                    Action.NONE
-                }
-            }
-        }
-
-        if (state.stage == Stage.FULL_REJOIN) {
-            state.stage = Stage.COOLDOWN
-            state.lastActionAt = snap.now
-            return Action.NONE
-        }
-
-        if (assemblyStalled || (controlReceiveAlive(snap) && !udpReceiveAlive(snap))) {
-            // Twin of FeedWatchdog: an unanswered enable escalates after ENABLE_ANSWER_MS.
-            val rungWait = if (state.stage == Stage.RESEND_ENABLE) ENABLE_ANSWER_MS else ESCALATE_MS
-            if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < rungWait) {
-                return Action.NONE
-            }
-            if (state.encoderPauseEnables < 1) {
-                state.encoderPauseEnables += 1
-                return fire(state, Action.RESEND_ENABLE, snap.now)
-            }
-            val bleAge = age(snap.now, snap.lastBleNotifyAt)
-            val sinceRebuild = age(snap.now, snap.lastRebuildAt)
-            if (shouldHoldRebuildAfterRecentUdp(sinceRebuild, snap.pathReady, bleAge, had)) {
-                return Action.NONE
-            }
-            if (state.stage == Stage.REBUILD_UDP) {
-                return fire(state, Action.FULL_REJOIN, snap.now)
-            }
-            return fire(state, Action.REBUILD_UDP, snap.now)
-        }
-
-        val bleAge = age(snap.now, snap.lastBleNotifyAt)
-        val sinceRebuild = age(snap.now, snap.lastRebuildAt)
-        if (shouldHoldRebuildAfterRecentUdp(sinceRebuild, snap.pathReady, bleAge, had)) {
-            if (state.stage == Stage.IDLE) {
-                state.stage = Stage.COOLDOWN
-                state.lastActionAt = snap.now
-            }
-            return Action.NONE
-        }
-
-        if (state.stage == Stage.COOLDOWN) {
-            if (shouldHoldBind(snap.pathReady, bleAge)) return Action.NONE
-            if (snap.now - state.lastActionAt >= COOLDOWN_MS) {
-                return fire(state, Action.REBUILD_UDP, snap.now)
-            }
-            return Action.NONE
-        }
-
-        if (state.stage != Stage.IDLE && snap.now - state.lastActionAt < ESCALATE_MS) {
-            return Action.NONE
-        }
-        return when (state.stage) {
-            Stage.IDLE, Stage.RESEND_ENABLE, Stage.REBUILD_DECODER ->
-                fire(state, Action.REBUILD_UDP, snap.now)
-            Stage.REBUILD_UDP -> fire(state, Action.FULL_REJOIN, snap.now)
-            Stage.FULL_REJOIN, Stage.COOLDOWN -> {
-                state.stage = Stage.COOLDOWN
-                state.lastActionAt = snap.now
-                Action.NONE
-            }
-        }
-    }
-
-    private fun fire(state: State, action: Action, now: Long): Action {
-        state.stage =
-            when (action) {
-                Action.RESEND_ENABLE -> Stage.RESEND_ENABLE
-                Action.REBUILD_DECODER -> Stage.REBUILD_DECODER
-                Action.REBUILD_UDP -> Stage.REBUILD_UDP
-                Action.FULL_REJOIN -> Stage.FULL_REJOIN
-                Action.NONE -> state.stage
-            }
-        state.lastActionAt = now
-        return action
-    }
-}

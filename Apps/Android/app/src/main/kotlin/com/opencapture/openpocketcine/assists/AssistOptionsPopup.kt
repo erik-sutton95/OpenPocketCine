@@ -56,7 +56,7 @@ import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.lut.LUTPicker
 import com.opencapture.openpocketcine.lut.LUTSplitComparisonBar
 import com.opencapture.openpocketcine.pickerPanelGlass
-import com.opencapture.openpocketcine.session.CameraCommands
+import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.openpocketcine.settings.SettingsColorDots
 import com.opencapture.openpocketcine.settings.SettingsCrushClipSegmented
 import com.opencapture.openpocketcine.settings.SettingsInlineRow

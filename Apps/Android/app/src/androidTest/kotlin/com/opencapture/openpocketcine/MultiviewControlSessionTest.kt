@@ -1,17 +1,18 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.DjiNative
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.multiview.MultiviewSession
-import com.opencapture.openpocketcine.session.CameraModel
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.CameraNetworkPath
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.DatalinkDriver
-import com.opencapture.openpocketcine.session.DumlFrame
-import com.opencapture.openpocketcine.session.FoundCamera
+import com.opencapture.opencine.dji.CameraModel
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraNetworkPath
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.DatalinkDriver
+import com.opencapture.opencine.dji.DumlFrame
+import com.opencapture.opencine.dji.FoundCamera
 import java.net.DatagramSocket
 import java.net.Socket
 import kotlin.test.assertEquals
@@ -42,7 +43,7 @@ class MultiviewControlSessionTest {
     }, 9004, false, "osmo")
 
     private fun isoAck(): DumlFrame {
-        val key = SwiftCore.waitKey(SwiftCore.CMD_SET_ISO_INDEX)
+        val key = DjiNative.waitKey(DjiNative.CMD_SET_ISO_INDEX)
         return DumlFrame(0x08, 0x02, 1, 0x80, key shr 8, key and 0xff, byteArrayOf(0))
     }
 

@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LiveTypeDesign
-import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.opencine.dji.ConnectionPhase
 
 private fun startupType(size: Float, weight: FontWeight = FontWeight.Normal) =
     LiveType.ui(size, weight, LiveTypeDesign.Rounded)

@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import com.opencapture.opencine.dji.*
 import com.opencapture.openpocketcine.pairing.CameraApJoiner
 import kotlin.test.Test
 import kotlin.test.assertEquals

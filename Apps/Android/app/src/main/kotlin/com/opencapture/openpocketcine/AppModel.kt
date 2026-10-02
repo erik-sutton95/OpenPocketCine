@@ -10,7 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import com.opencapture.openpocketcine.bridge.SwiftCore
-import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.pairing.CameraConnectionSetup
 import com.opencapture.openpocketcine.pairing.SavedCamera
 import com.opencapture.openpocketcine.pairing.SavedCameras
@@ -18,12 +18,12 @@ import com.opencapture.openpocketcine.pairing.SharedPreferencesSavedCameraStore
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
-import com.opencapture.openpocketcine.session.CameraCommands
-import com.opencapture.openpocketcine.session.GimbalDoubleTap
-import com.opencapture.openpocketcine.session.GimbalRamp
-import com.opencapture.openpocketcine.session.FoundCamera
+import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.GimbalDoubleTap
+import com.opencapture.opencine.dji.GimbalRamp
+import com.opencapture.opencine.dji.FoundCamera
 import com.opencapture.openpocketcine.session.PocketCameraSession
-import com.opencapture.openpocketcine.session.VideoFormat
+import com.opencapture.opencine.dji.VideoFormat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,11 +33,14 @@ import kotlinx.coroutines.launch
 class AppModel(
     context: Context,
     borrowing: com.opencapture.opencine.decoder.HevcDecoder? = null,
-    controlLease: com.opencapture.openpocketcine.session.MultiviewControlLease? = null,
+    controlLease: com.opencapture.opencine.dji.MultiviewControlLease? = null,
 ) {
     private val appContext = context.applicationContext
     init {
         DiagnosticCenter.install(appContext)
+        // Load libOpenPocketCineAndroid.so before any session code runs: it implements both
+        // SwiftCore and OpenCine's DjiNative, and DjiNative never loads it by itself.
+        SwiftCore.isAvailable
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = SharedPreferencesSavedCameraStore(context)

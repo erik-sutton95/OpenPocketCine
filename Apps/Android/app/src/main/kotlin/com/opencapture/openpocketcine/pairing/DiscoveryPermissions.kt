@@ -1,13 +1,13 @@
 package com.opencapture.openpocketcine.pairing
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
+import com.opencapture.opencine.dji.BleLink
 import android.provider.Settings
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -42,14 +42,8 @@ import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
  * any level, and nothing here calls an API that needs NEARBY_WIFI_DEVICES.
  */
 object DiscoveryPermissions {
-    /** What the BLE scan and GATT connect need on [sdk]. */
-    @SuppressLint("InlinedApi") // The API 31 names are only returned on API 31+.
-    fun discovery(sdk: Int = Build.VERSION.SDK_INT): List<String> =
-        if (sdk >= 31) {
-            listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            listOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+    /** What the BLE scan and GATT connect need on [sdk] (OpenCine's [BleLink] checks the same list). */
+    fun discovery(sdk: Int = Build.VERSION.SDK_INT): List<String> = BleLink.discoveryPermissions(sdk)
 
     /** Below API 31 a BLE scan returns nothing while Location services are off. */
     fun discoveryNeedsLocationServices(sdk: Int = Build.VERSION.SDK_INT): Boolean = sdk < 31

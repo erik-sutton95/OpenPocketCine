@@ -95,8 +95,8 @@ import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 import com.opencapture.openpocketcine.liveChromeGlass
 import com.opencapture.openpocketcine.monitorGlass
 import com.opencapture.openpocketcine.pickerPanelGlass
-import com.opencapture.openpocketcine.session.CameraStatus
-import com.opencapture.openpocketcine.session.FoundCamera
+import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.FoundCamera
 import kotlinx.coroutines.launch
 
 private val StageCanvas = MonitorPalette.backgroundDeep

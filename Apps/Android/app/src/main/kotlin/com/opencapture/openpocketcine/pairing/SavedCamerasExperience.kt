@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.dji.DjiNative
+import com.opencapture.opencine.dji.FoundCameraIdentity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,12 +47,11 @@ import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.AppPanel
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.core.ConnectionPhase
+import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.monitor.MonitorIconButton
-import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.multiview.SharedWiFi
 import com.opencapture.openpocketcine.multiview.appearsInMultiview
-import com.opencapture.openpocketcine.session.FoundCamera
+import com.opencapture.opencine.dji.FoundCamera
 import androidx.compose.ui.platform.LocalContext
 import com.opencapture.monitorui.MonitorConnectFailure
 import com.opencapture.monitorui.MonitorConnectStep
@@ -201,8 +202,8 @@ private data class AddSetupTarget(val camera: SavedCamera, val page: String = "c
 /** Saved records carry no model id; the advertised model name resolves support when not nearby. */
 private fun appearsInMultiview(camera: SavedCamera, nearby: FoundCamera?): Boolean =
     nearby?.appearsInMultiview ?: runCatching {
-        SwiftCore.isAvailable && JSONObject(
-            SwiftCore.multicamDecision("support", JSONObject().put("name", camera.modelName).toString()) ?: "{}",
+        DjiNative.isAvailable && JSONObject(
+            DjiNative.multicamDecision("support", JSONObject().put("name", camera.modelName).toString()) ?: "{}",
         ).optBoolean("appears")
     }.getOrDefault(false)
 
