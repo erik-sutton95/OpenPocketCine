@@ -64,7 +64,9 @@ struct MultiviewView: View {
                         tile in
                         if let model = tile.liveModel {
                             LiveViewScreen().environment(model)
-                                .onAppear { model.multiviewExit = { liveTile = nil } }
+                                .onAppear {
+                                    model.multiviewExit = { model.shell.close(); liveTile = nil }
+                                }
                         }
                     }
                     .alert(
@@ -613,7 +615,7 @@ struct MultiviewView: View {
         ) {
             // Read inside the action's label so plan-building (every tile's camera state)
             // re-renders only this button, not the whole Multiview screen.
-            RecordLamp(
+            MonitorRecordLamp(
                 diameter: diameter, recording: session.anyRecording
             )
             .overlay { if session.groupRecordingBusy { ProgressView().tint(.white) } }

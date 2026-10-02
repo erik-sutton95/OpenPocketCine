@@ -198,6 +198,7 @@
             default: break
             }
             model.isPairingNewCamera = screen == "pair"
+            if screen != "cameras", screen != "pair" { model.presentSimulatorPreview() }
             if screen == "settings" { model.liveOperatorPanel = .settings }
             if screen == "media" { model.liveOperatorPanel = .media }
         }

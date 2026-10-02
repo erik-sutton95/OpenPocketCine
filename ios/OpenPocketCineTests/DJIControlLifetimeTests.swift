@@ -18,7 +18,8 @@ final class DJIControlLifetimeTests: XCTestCase {
         session.status.isRecording = true
         let common = session.control
         XCTAssertEqual(common.current.recording.value, .recording)
-        let shell = makeShell()
+        let model = AppModel(session: session)
+        let shell = model.shell
         shell.present(camera(common))
         let monitor = shell.monitor?.id
         shell.open(.settings)
@@ -67,7 +68,8 @@ final class DJIControlLifetimeTests: XCTestCase {
         defer { tileDriver.close() }
         view.datalink = tileDriver
         let common = view.control
-        let shell = makeShell()
+        let model = AppModel(session: view)
+        let shell = model.shell
         var releases = 0
         shell.borrow(
             camera(common),
@@ -88,11 +90,32 @@ final class DJIControlLifetimeTests: XCTestCase {
         XCTAssertEqual(common.current.connection, .disconnected(.requested))
     }
 
-    private func makeShell() -> ShellModel {
-        ShellModel(
-            cameras: CamerasModel(
-                integrations: [],
-                store: SavedCamerasStore(document: StoredData(read: { nil }, write: { _ in }))))
+    func testNativePanelCompatibilityUsesOneCoverAndKeepsHostIdentity() {
+        let model = AppModel()
+        defer { model.session.disconnect() }
+        model.shell.present(camera(model.session.control))
+        let monitor = model.shell.monitor?.id
+        model.liveOperatorPanel = .settings
+        XCTAssertEqual(model.shell.cover, .settings)
+        XCTAssertNil(model.homePanel)
+        model.shell.open(.media)
+        XCTAssertEqual(model.liveOperatorPanel, .media)
+        XCTAssertEqual(model.shell.monitor?.id, monitor)
+        model.liveOperatorPanel = nil
+        XCTAssertNil(model.shell.cover)
+        XCTAssertEqual(model.shell.monitor?.id, monitor)
+    }
+
+    func testSceneSignalsAreDeduplicatedThroughActualAppShell() {
+        let model = AppModel()
+        defer { model.session.disconnect() }
+        var signals: [Bool] = []
+        model.shell.onSceneActivity = { signals.append($0) }
+        model.shell.setSceneActive(false)
+        model.shell.setSceneActive(false)
+        model.shell.setSceneActive(true)
+        model.shell.setSceneActive(true)
+        XCTAssertEqual(signals, [false, true])
     }
 
     private func camera(_ session: DJICameraSessionAdapter) -> ConnectedCamera {

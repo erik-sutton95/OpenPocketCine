@@ -396,6 +396,7 @@ final class MultiviewSession {
         model.session.adoptMultiviewPose(tile.pose)
         model.frameSamples = tile.sampleBus
         model.assist.lutEnabled = tile.lutEnabled
+        model.borrowMonitor(camera) { [weak self] in self?.closeLiveView() }
         tile.liveModel = model
     }
     func closeLiveView() {

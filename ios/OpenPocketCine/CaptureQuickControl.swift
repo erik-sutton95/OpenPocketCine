@@ -1,5 +1,7 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineAppKit
+import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
 
@@ -18,6 +20,13 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     var marked: Set<String> = []
     var context = ""
     var enabled = true
+    var commonField: MonitorCaptureField? = nil
+
+    static func common(_ field: MonitorCaptureField) -> Self {
+        Self(kind: field.key == .iso ? .iso : field.key == .shutter ? .shutter : .kelvin,
+            title: field.title, options: field.choices.map(\.label), selection: field.label ?? "",
+            enabled: field.isEditable, commonField: field)
+    }
 
     var index: Int {
         if let exact = options.firstIndex(of: selection) { return exact }
@@ -259,6 +268,11 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     /// preservation, and shutter-angle conversion; there is no protocol mapping here.
     @MainActor func apply(_ value: String, model: AppModel) {
         guard enabled, options.contains(value), value != selection, !model.session.isLocked else {
+            return
+        }
+        if let commonField {
+            guard let choice = commonField.choices.first(where: { $0.label == value }) else { return }
+            model.control.commit(choice, from: commonField)
             return
         }
         let status = model.session.whiteBalanceDisplayStatus

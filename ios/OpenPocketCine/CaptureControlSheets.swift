@@ -1,5 +1,7 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineAppKit
+import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -154,6 +156,7 @@ struct CapturePickerPanel: View {
     @State private var deferredDrum = MonitorDeferredSelection<DrumContext>()
     @State private var appeared = false
     @State private var drumInteractionRevision: UInt64 = 0
+    @State private var commonField: MonitorCaptureField?
 
     private struct DrumContext: Hashable {
         let cameraID: UUID?
@@ -179,9 +182,15 @@ struct CapturePickerPanel: View {
             if let prefixContent { prefixContent }
             Group {
                 if let held = preview {
-                    CaptureDrumWheel(
-                        options: held.snapshot.options, selection: .constant(held.selection),
-                        markedValues: held.snapshot.marked, isInteractive: false)
+                    if let field = held.snapshot.commonField {
+                        MonitorCaptureDrum(control: model.control, field: field, enabled: false,
+                            haptics: model.hapticsEnabled, previewPosition: held.position,
+                            previewSelection: held.selection)
+                    } else {
+                        CaptureDrumWheel(
+                            options: held.snapshot.options, selection: .constant(held.selection),
+                            markedValues: held.snapshot.marked, isInteractive: false)
+                    }
                 } else {
                     content
                     if sheet == .resolution, !isPhoto, formatAspects.count > 1 {
@@ -266,6 +275,7 @@ struct CapturePickerPanel: View {
         .simultaneousGesture(TapGesture().onEnded {})
         .onAppear {
             appeared = true
+            captureCommonField()
             seed()
         }
         .onDisappear {
@@ -285,6 +295,7 @@ struct CapturePickerPanel: View {
         ) { _ in cancelDrumSend(reseat: true) }
         .onChange(of: sheet) { _, _ in
             cancelDrumSend()
+            captureCommonField()
             seed()
         }
         .onChange(of: model.session.status.availableShutterDenoms) { _, _ in
@@ -352,9 +363,7 @@ struct CapturePickerPanel: View {
                     CaptureDrumWheel(options: isoAutoDrumLabels, selection: $drumSelection)
                         .id(isoAutoDrumLabels)
                 } else {
-                    CaptureDrumWheel(
-                        options: isoDrumLabels, selection: $drumSelection,
-                        markedValues: isoMarkedLabels)
+                    commonDrum(.iso, marked: isoMarkedLabels)
                 }
             }
         case .shutter:
@@ -370,8 +379,7 @@ struct CapturePickerPanel: View {
                 CaptureDrumWheel(options: shutterAngleLabels, selection: $drumSelection)
                     .id(shutterAngleLabels)
             } else {
-                CaptureDrumWheel(options: shutterLabels, selection: $drumSelection)
-                    .id(shutterLabels)
+                commonDrum(.shutter)
             }
         case .wb:
             if selectedMode == 0 {
@@ -392,7 +400,7 @@ struct CapturePickerPanel: View {
                     }
                 }
             } else if selectedMode == 1 {
-                CaptureDrumWheel(options: CaptureLists.kelvinLabels, selection: $drumSelection)
+                commonDrum(.whiteBalance)
             } else {
                 tintPad
             }
@@ -784,6 +792,31 @@ struct CapturePickerPanel: View {
             applyVideoFormat(resolution: next.resolution, frameRate: next.frameRate)
         default:
             break
+        }
+    }
+
+    private func captureCommonField() {
+        let key: SettingKey? = switch sheet {
+        case .iso: .iso
+        case .shutter: .shutter
+        case .wb: .whiteBalance
+        default: nil
+        }
+        commonField = key.flatMap { model.control.captureField($0) }
+    }
+
+    @ViewBuilder private func commonDrum(_ key: SettingKey, marked: Set<String> = []) -> some View {
+        if let field = commonField, field.key == key {
+            let choices = field.choices.filter { choice in
+                switch choice.value {
+                case .iso(.manual), .shutter(.duration), .shutter(.angle), .whiteBalance(.kelvin): return true
+                default: return false
+                }
+            }
+            MonitorCaptureDrum(control: model.control, field: field, enabled: canApplyDrum,
+                haptics: model.hapticsEnabled, choices: choices, marked: marked)
+        } else {
+            Text("Setting not available").foregroundStyle(MonitorTheme.muted)
         }
     }
 
