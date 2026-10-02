@@ -20,6 +20,7 @@ against a sibling checkout of the shared OpenCine repository (see Publish prereq
 | OPTIONAL-02 (watcher relay wire from OpenCineRelay) | `opencine/relay` | 0ad71861 |
 | MEDIA-02 step 4 (VideoToolbox runtime and decoded-frame leases from OpenCineApple), stacked on this branch | `opencine/apple` | see `git log` |
 | MEDIA-02 step 3 (Android Vulkan renderer from OpenCineCore `:vulkan`), stacked on this branch | `opencine/vulkan` | see `git log` |
+| SHELL-04 DJI part (Android `HevcDecoder` from OpenCine `:decoder`, DJI Kotlin layer from `:dji`), stacked on this branch | `opencine/shell-04` | see `git log` |
 
 ### Merged branches
 
@@ -42,7 +43,8 @@ checked out next to this repository as `../OpenCine` by `scripts/checkout-openci
   directory, so Xcode sees one package. `OpenPocketViewCore` re-exports OpenCineDJI; the app and
   unit tests also name the product in `ios/project.yml` so Xcode links it.
 - Android: `Apps/Android/settings.gradle.kts` includes `../../../OpenCine/Android` once, as the
-  named build `opencine`, substituting `core`, `media`, `vulkan`, `multicam` and `monitor-ui`.
+  named build `opencine`, substituting `core`, `media`, `decoder`, `dji`, `vulkan`, `multicam`
+  and `monitor-ui`.
 - The per-package pins listed in earlier revisions of this file (OpenCineUI, OpenCineCore,
   OpenCineDJI, OpenCineMulticam) are history: those repositories were merged, with history, into
   OpenCine on 2026-10-02.
@@ -79,6 +81,14 @@ checked out next to this repository as `../OpenCine` by `scripts/checkout-openci
 - Android live picture (MEDIA-02 step 3): no change intended. `libopc_vulkan.so` (C++, shaders,
   JNI facade `feed.OpcVulkan`) is now built by OpenCineCore's `:vulkan` module from the same
   sources; the APK carries one copy with the same 21 JNI exports. `LiveVulkanSession` stays in the app.
+- Android DJI session (SHELL-04): no change intended. The live-view MediaCodec `HevcDecoder` comes
+  from OpenCine's `:decoder` (the same class OpenInstaCine uses); the DJI BLE link, datalink
+  driver, command and status models, gimbal programs, connection and live-view policies,
+  `ConnectionPhase` and `DjiCameraSessionAdapter` come from OpenCine's `:dji`. In
+  `libOpenPocketCineAndroid.so` the 30 DJI wire natives are exported for OpenCine's `DjiNative`
+  class instead of `SwiftCore` (41 exports before and after; the 11 app natives keep their names).
+  `PocketCameraSession`, diagnostics, preferences and UI stay in the app. The CamFov golden
+  vectors moved to OpenCine with both test halves.
 
 ## Physical device checklist
 
@@ -143,6 +153,19 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
     (logcat tag `OpcVulkan`, no "vulkan library missing"); LUT, WAVE/PARADE/VECTOR/HISTO, peaking,
     zebra and glass plates draw; a vertical (portrait) raster stays upright (#482); background and
     return, rotation and surface recreation never crash or black the well.
+16. SHELL-04 (Android, Pocket 3 and Pocket 4 / 4 Pro; a Nano for AVC if available), against
+    `opencine/integration` without this branch:
+    1. Connect: a saved camera reconnects; pairing a new camera finds it in the BLE scan, asks for
+       approval and joins its Wi-Fi; the phone hotspot and shared Wi-Fi setups still join.
+    2. Live feed: the picture appears on first connect, survives background and return, screen
+       flip / vertical mode and a Wi-Fi drop with repair; logcat has no `UnsatisfiedLinkError`
+       and no "did not load".
+    3. Record: start and stop from the record button and the gamepad, the lamp follows the
+       camera; Pocket 3 TimeLapse start and stop.
+    4. Settings on Android: ISO, shutter and shutter angle, white balance and tint, EV, colour mode,
+       format and frame rate, focus, aperture strategy and audio sheets apply and read back;
+       media browse returns to live; a gimbal joystick move and an A·B·C program run.
+    5. Multiview: two cameras join the shared network and both feeds play.
 
 ## Publish prerequisite
 

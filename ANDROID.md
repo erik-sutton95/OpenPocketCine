@@ -19,9 +19,9 @@ This file is the Android build and I/O notes that implement those rows.
 Source: the public [OpenZCine](https://github.com/erik-sutton95/OpenZCine) repository.
 
 1. **Portable Swift core** — `Sources/OpenPocketViewCore/` never imports SwiftUI, UIKit, or Android.
-2. **Android JNI facade** — `Sources/OpenPocketCineAndroidFacade/` owns the session that talks to the camera on Android, plus hand-written `@_cdecl` JNI shims (`SwiftCoreJNI.swift`). A header-only `CJNI` target exposes NDK `<jni.h>` on Android only.
+2. **Android JNI facade:** `Sources/OpenPocketCineAndroidFacade/` owns the session that talks to the camera on Android, plus hand-written `@_cdecl` JNI shims (`SwiftCoreJNI.swift`). The DJI wire natives are exported for OpenCine's `com.opencapture.opencine.dji.DjiNative` (`Java_com_opencapture_opencine_dji_DjiNative_*`), this app's own natives (LUT, feed effects, conform preview, core version) for `bridge/SwiftCore.kt`. A header-only `CJNI` target exposes NDK `<jni.h>` on Android only.
 3. **Cross-compile, don’t SPM-link** — Gradle task `:app:stageSwiftCore` (`just android-core`, `scripts/android-stage-swift-core.sh`) builds `aarch64-unknown-linux-android29` and stages `libOpenPocketCineAndroid.so` plus the Swift runtime `.so` closure into generated jniLibs. **arm64-v8a only.** Toolchain pin: Swift **6.3.3** + `swift-6.3.3-RELEASE_android`.
-4. **Kotlin seam:** `PocketCameraSession` drives the camera over JNI and exposes OpenCineCore `CameraSession` through `DjiCameraSessionAdapter`. `Apps/Android/core-api` holds only `ConnectionPhase`, the DJI connection stage the shell shows (it moves to OpenCineDJI with the Kotlin DJI session). Kotlin does not pack protocol bytes.
+4. **Kotlin seam:** `PocketCameraSession` drives the camera over JNI and exposes OpenCineCore `CameraSession` through `DjiCameraSessionAdapter`. The DJI Kotlin layer it runs on (BLE link, datalink driver, command and status models, gimbal programs, connection and live-view policies, `ConnectionPhase`, the adapter and `DjiNative`) is OpenCine's `dji` module; `AppModel` loads `libOpenPocketCineAndroid.so` (through `SwiftCore.isAvailable`) before any session code runs. Kotlin does not pack protocol bytes.
 5. **Same applicationId as iOS bundle** (`com.opencapture.openpocketcine`). Design tokens are duplicated as floats in `Theme.kt` / `pairing/StartupDesign.kt` so connection screens match.
 
 iOS links the core via Swift Package Manager. Android does **not** consume that SPM product at runtime — only the cross-compiled `.so`.
@@ -41,7 +41,7 @@ checkout even when an incremental build passes with old outputs present.
 
 ### Shared Android modules (OpenCine)
 
-`monitor-ui`, `core`, `media`, `vulkan` and `multicam` live in the OpenCine
+`monitor-ui`, `core`, `media`, `decoder`, `dji`, `vulkan` and `multicam` live in the OpenCine
 platform repository (`Android/`, one Gradle build). Clone it next to this
 repository (`../OpenCine`, at the commit in `opencine-pins.txt`).
 `Apps/Android/settings.gradle.kts` includes `../../../OpenCine/Android` as the
@@ -57,7 +57,7 @@ library's unit tests and lint (`:opencine:monitor-ui:testDebugUnitTest`,
 | --- | --- |
 | Portable Swift core | `OpenPocketViewCore` (DUML, HEVC depacketizer, saved-camera records, connection phase) |
 | JNI facade | `OpenPocketCineAndroidFacade`: BLE/Wi-Fi/UDP session that calls the core, JNI surface for scan/connect/live-frame callbacks |
-| `core-api` | `ConnectionPhase`, the DJI connection stage (BLE, Wi-Fi, datalink) |
+| OpenCine `dji` | DJI BLE link, datalink, wire models, gimbal programs, `ConnectionPhase` (BLE, Wi-Fi, datalink stages), `DjiCameraSessionAdapter`, JNI facade `DjiNative` |
 | Compose shell | Splash + saved cameras + Osmo connection wizard using the same `StartupColors` / `BrandColors` floats as iOS |
 | Saved cameras | `SharedPreferences` file `openpocketcine.saved-cameras`, key `records-json`. Wi-Fi passwords stay out of prefs (re-read over BLE, same as iOS) |
 | applicationId | `com.opencapture.openpocketcine` on iOS and Android |
