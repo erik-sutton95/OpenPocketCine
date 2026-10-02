@@ -1,7 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
 import com.opencapture.opencine.dji.hasMultiviewPreview
-import com.opencapture.opencine.dji.appearsInMultiview
 import com.opencapture.opencine.dji.multicamSupport
 import com.opencapture.opencine.dji.MultiviewDiscovery
 import com.opencapture.opencine.dji.MultiviewFailure
@@ -27,6 +26,8 @@ import com.opencapture.opencine.multicam.EditorLeaseException
 import com.opencapture.opencine.multicam.EditorLeases
 import com.opencapture.opencine.multicam.RecordDirection
 import com.opencapture.opencine.multicam.RecordPlan
+import com.opencapture.opencine.multicam.ResourceAdmission
+import com.opencapture.opencine.multicam.ResourceRequest
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
@@ -353,7 +354,7 @@ class MultiviewSession(
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    val tiles: List<Tile> = List(4) { Tile(it, app, scope) }
+    val tiles: List<Tile> = List(MultiviewQualificationPolicy.tileCount) { Tile(it, app, scope) }
     private val scanner = BleLink(app)
     val found = mutableStateListOf<FoundCamera>()
     var busy by mutableStateOf(false)
@@ -701,7 +702,13 @@ class MultiviewSession(
     }
 
     suspend fun add(camera: FoundCamera, tile: Tile, experimental: Boolean = false) {
-        if (!camera.appearsInMultiview || !(camera.hasMultiviewPreview || experimental)) {
+        val reasons = ResourceAdmission.reasons(
+            ResourceRequest(tile.entryId, device = null, claims = emptyList()),
+            camera.multicamSupport().qualification(experimental),
+            recordingTiles.map { ResourceRequest(it.entryId, device = null, claims = emptyList()) },
+            MultiviewQualificationPolicy.budget,
+        )
+        if (reasons.isNotEmpty()) {
             error = "Multiview preview is not available for this camera model yet."
             return
         }

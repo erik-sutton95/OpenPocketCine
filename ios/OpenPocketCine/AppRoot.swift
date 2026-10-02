@@ -1037,11 +1037,11 @@ struct LinkExperience: View {
                     model: model.cameras, brandName: "OpenPocketCine", safeArea: safeArea,
                     onPair: { model.isPairingNewCamera = true },
                     onMedia: { model.homePanel = .media }, onSettings: { model.homePanel = .settings },
-                    onMultiview: {
+                    onMultiview: MultiviewQualificationPolicy.tileCount > 1 ? {
                         guard model.cameras.attempts.isEmpty else { return }
                         model.openMultiview()
                         showMultiview = true
-                    },
+                    } : nil,
                     onWatchFeed: { if model.cameras.attempts.isEmpty { model.openWatcherBrowse() } },
                     onPrivacy: { model.homePanel = .privacy },
                     onTerms: { model.homePanel = .terms })

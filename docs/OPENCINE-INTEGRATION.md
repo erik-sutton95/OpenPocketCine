@@ -270,6 +270,21 @@ Automated Android native probes cover strings, null/empty arrays, LUT bytes and
 float arrays; exported Java symbol sets are compared with the prior app binary.
 Camera transport and live-picture checks remain in the device checklist.
 
+### Multiview qualification checks (SHELL-01, untested on physical devices)
+
+On iPhone/iPad and Android, add the existing qualified Pocket/Nano bodies to all
+four slots, leave and restore the saved stage, and confirm names, slot order and
+network credentials survive. A fifth body must not replace an occupied slot.
+Models without a captured preview still require the existing explicit experimental
+opt-in; an unlisted body remains unavailable. Selecting, borrowing Live View and
+returning must keep each tile's picture host and command owner. Exit never starts
+or stops recording on a body.
+
+The app's `ResourceBudget(qualifiedEntries: 4)` now supplies the tile and saved-stage
+limit. The integration's typed qualification goes through `ResourceAdmission`
+before any network join or provisioning. This preserves the existing supported
+body and experimental rules; it adds no newly qualified hardware combination.
+
 ## Publish prerequisite
 
 CI, Xcode Cloud and contributors need the shared repository. Publish OpenCine first, then

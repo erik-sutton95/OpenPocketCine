@@ -302,7 +302,7 @@ final class MultiviewSession {
 
         var previewStarted: Date?
     }
-    let tiles = (0..<4).map { _ in Tile() }
+    let tiles = (0..<MultiviewQualificationPolicy.tileCount).map { _ in Tile() }
     var found: [FoundCamera] = []
     var busy = false
     var ready = false
@@ -817,7 +817,13 @@ final class MultiviewSession {
     }
 
     func add(_ camera: FoundCamera, to tile: Tile, experimental: Bool = false) async {
-        guard camera.appearsInMultiview, camera.hasMultiviewPreview || experimental else {
+        let reasons = ResourceAdmission.reasons(
+            admitting: ResourceRequest(entry: MonitorEntryID(tile.id), device: nil, claims: []),
+            qualification: MulticamSupport.qualification(camera.model, experimental: experimental),
+            alongside: recordingTiles.map {
+                ResourceRequest(entry: MonitorEntryID($0.id), device: nil, claims: [])
+            }, budget: MultiviewQualificationPolicy.budget)
+        guard reasons.isEmpty else {
             error = "Multiview preview is not available for this camera model yet."
             return
         }
