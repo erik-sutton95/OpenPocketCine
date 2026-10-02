@@ -2,7 +2,7 @@
 
 Local branch `opencine/integration`: one OpenPocketCine build that combines every OpenCine
 work package done for Pocket, for review and device testing. Not pushed; it builds only
-against sibling checkouts of the shared packages (see Publish prerequisite).
+against a sibling checkout of the shared OpenCine repository (see Publish prerequisite).
 
 ## Combined work packages
 
@@ -33,21 +33,19 @@ Merged into `opencine/integration` with `--no-ff` on 2026-10-02, in this order:
 
 Not merged: `opencine/core-api-shared` (still in progress).
 
-Shared packages, pinned in `opencine-pins.txt` and checked out by
-`scripts/checkout-opencine.sh`:
+Shared code comes from one repository, OpenCine, pinned in `opencine-pins.txt` (one line) and
+checked out next to this repository as `../OpenCine` by `scripts/checkout-opencine.sh`:
 
-- OpenCineUI `54bcbb31283f6cf028268b382cb82eb6c156ac94` (MonitorUI, MonitorPresentation,
-  Android `monitor-ui`).
-- OpenCineCore `7a17350db5a9534514cc3d3c836c205178ea425f` (main: OpenCineCore, OpenCineMedia, OpenCineFrameIO,
-  OpenCineMotion, OpenCineRelay, OpenCineApple, Android `core`, `media` and `vulkan`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
-  (`../../OpenCineCore`) name the same directory, so Xcode sees one package.
-- OpenCineDJI `e254af11f37fdde305dd231cfbd4a61c080d3318`: DUML, datalink,
-  camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints,
-  DJI colour data and `DJICameraSessionAdapter`. `OpenPocketViewCore` re-exports it; the app
-  and unit tests also name the product in `ios/project.yml` so Xcode links it.
-- OpenCineMulticam `0da23d2c8cd72ea788c3fa265ed34257880a0a70`: Multiview's group and tile record plans and the
-  settings-editor leases. iOS links the package; Android includes `OpenCineMulticam/Android` as
-  the named build `opencinemulticam` (one OpenCineCore build serves both).
+- Swift: MonitorUI, MonitorPresentation, OpenCineCore, OpenCineMedia, OpenCineFrameIO,
+  OpenCineMotion, OpenCineRelay, OpenCineApple, OpenCineDJI and OpenCineMulticam. Root
+  `Package.swift` (`../OpenCine`) and `ios/project.yml` (`../../OpenCine`) name the same
+  directory, so Xcode sees one package. `OpenPocketViewCore` re-exports OpenCineDJI; the app and
+  unit tests also name the product in `ios/project.yml` so Xcode links it.
+- Android: `Apps/Android/settings.gradle.kts` includes `../../../OpenCine/Android` once, as the
+  named build `opencine`, substituting `core`, `media`, `vulkan`, `multicam` and `monitor-ui`.
+- The per-package pins listed in earlier revisions of this file (OpenCineUI, OpenCineCore,
+  OpenCineDJI, OpenCineMulticam) are history: those repositories were merged, with history, into
+  OpenCine on 2026-10-02.
 
 ## What changes for users
 
@@ -148,6 +146,5 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
 
 ## Publish prerequisite
 
-CI, Xcode Cloud and contributors need the shared repositories. Publish OpenCineUI and
-OpenCineCore first, then replace the sibling paths with versioned dependencies: follow
-`opencapture-atlas` `docs/PUBLISH.md`.
+CI, Xcode Cloud and contributors need the shared repository. Publish OpenCine first, then
+replace the sibling path with a versioned dependency: follow `OpenCine/atlas/docs/PUBLISH.md`.

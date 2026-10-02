@@ -74,8 +74,7 @@ All notable changes to this project are documented here. The format is based on
   saved sign-in is unchanged.
 - Shared UI, media math, DJI camera control, Multiview record plans, Frame.io,
   gimbal motion, the watcher relay wire and the iOS video decoder now come from
-  the OpenCine packages (OpenCineUI, OpenCineCore, OpenCineDJI,
-  OpenCineMulticam). No visible change intended: screenshots, golden media
+  the shared OpenCine package (one repository). No visible change intended: screenshots, golden media
   numbers and relay wire bytes are unchanged.
 - The previous CineStop false color scale is now called **Video**. Saved
   choices keep the same scale under the new name.

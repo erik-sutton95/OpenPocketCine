@@ -39,14 +39,17 @@ AAR metadata checks stay enabled in both Android modules. The library's AAR
 packaging task consumes their output, so disabling them can fail on a clean
 checkout even when an incremental build passes with old outputs present.
 
-### Shared Compose UI (OpenCineUI)
+### Shared Android modules (OpenCine)
 
-`monitor-ui` lives in the OpenCineUI repository (`Android/`, its own Gradle
-build). Clone it next to this repository (`../OpenCineUI`).
-`Apps/Android/settings.gradle.kts` includes `../../../OpenCineUI/Android` and
-substitutes `com.opencapture.opencine:monitor-ui` with that project. CI clones
-it into the same sibling path. `just android-check` also runs the library's
-unit tests and lint (`:Android:monitor-ui:testDebugUnitTest`, `:Android:monitor-ui:lint`).
+`monitor-ui`, `core`, `media`, `vulkan` and `multicam` live in the OpenCine
+platform repository (`Android/`, one Gradle build). Clone it next to this
+repository (`../OpenCine`, at the commit in `opencine-pins.txt`).
+`Apps/Android/settings.gradle.kts` includes `../../../OpenCine/Android` as the
+build `opencine` and substitutes each `com.opencapture.opencine:*` coordinate
+with its project. CI clones it into the same sibling path
+(`scripts/checkout-opencine.sh`). `just android-check` also runs the UI
+library's unit tests and lint (`:opencine:monitor-ui:testDebugUnitTest`,
+`:opencine:monitor-ui:lint`).
 
 ## Pocket mapping
 
@@ -91,7 +94,7 @@ the production `CameraSoftAP` ladder.
 
 ### Live picture
 
-Vulkan (`libopc_vulkan.so`, built by the sibling OpenCineCore `Android/vulkan` module) when init succeeds: MediaCodec → `ImageReader`
+Vulkan (`libopc_vulkan.so`, built by the sibling OpenCine `Android/vulkan` module) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr convert 1:1 at the 720p HEVC raster (sampling 4:2:0
 at panel size is the Adreno mosaic). The Rec.709 cube is a 3D texture
 (`CIColorCube`); a 2D blue-slice atlas bled across tiles and blotched

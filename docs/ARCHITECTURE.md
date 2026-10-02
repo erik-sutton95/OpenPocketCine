@@ -4,9 +4,9 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 
 | Layer | Path | Purpose |
 | --- | --- | --- |
-| **Monitor presentation policy** | OpenCineUI `MonitorPresentation` (`../OpenCineUI`) | Foundation-only viewport geometry, capability gates and camera/media presentation values. No camera protocol or platform I/O. |
-| **Shared native monitor UI** | OpenCineUI `MonitorUI` (`../OpenCineUI`) | SwiftUI pages, controls, navigation, camera home/pairing and media catalog presentation; bundled Sora resources. Camera state and actions are injected. iOS-only implementation, separate from the portable core. |
-| **Shared native Android UI** | OpenCineUI `Android/monitor-ui/` (sibling checkout, Gradle included build) | Compose pages, controls, typography and icon assets. Camera state and actions are injected; no JNI or camera ownership. |
+| **Monitor presentation policy** | OpenCine `MonitorPresentation` (`../OpenCine`) | Foundation-only viewport geometry, capability gates and camera/media presentation values. No camera protocol or platform I/O. |
+| **Shared native monitor UI** | OpenCine `MonitorUI` (`../OpenCine`) | SwiftUI pages, controls, navigation, camera home/pairing and media catalog presentation; bundled Sora resources. Camera state and actions are injected. iOS-only implementation, separate from the portable core. |
+| **Shared native Android UI** | OpenCine `Android/monitor-ui/` (sibling checkout, Gradle included build `opencine`) | Compose pages, controls, typography and icon assets. Camera state and actions are injected; no JNI or camera ownership. |
 | **Shared core** | `Sources/OpenPocketViewCore/` | DUML, commands, status, LUTs, layout policy. **Portable** Foundation. |
 | **iOS app** | `ios/OpenPocketCine/` | SwiftUI **shell**, CoreBluetooth, NEHotspotConfiguration, sockets, VideoToolbox/Metal. Teardown: [live-session](live-session.md). |
 | **Watch companion** | `ios/OpenPocketCineWatch/` | watchOS SwiftUI remote. WatchConnectivity only — never SoftAP. Embedded in the iPhone app. |
@@ -19,7 +19,7 @@ SVGs extracted from the approved mockup. `OpcIcon` remains a compatibility name
 for the shared catalog; future brand apps import those same assets and renderers.
 The assist catalog preserves the exact prototype paths, including its Tabler-derived
 artwork and license. Regenerate Lucide SVGs and Android VectorDrawables with
-OpenCineUI's `scripts/vendor-lucide-icons.py`. No JS runtime or system-icon
+OpenCine's `scripts/vendor-lucide-icons.py`. No JS runtime or system-icon
 substitutes are required.
 
 The iOS Xcode project is generated: `cd ios && xcodegen generate`. The Watch
@@ -31,8 +31,8 @@ in `WatchRelay` (iPhone) and `WatchSessionController` (watch).
 
 The multi-brand direction is [Shared Monitor Engine](SHARED-MONITOR-ENGINE.md).
 UI 2.0 begins that extraction with two SwiftPM products,
-`MonitorPresentation` and `MonitorUI`, which now live in the OpenCineUI package
-(sibling checkout `../OpenCineUI`, referenced by path from `ios/project.yml`).
+`MonitorPresentation` and `MonitorUI`, which now live in the OpenCine package
+(sibling checkout `../OpenCine`, referenced by path from `ios/project.yml`).
 It does not rename or replace `OpenPocketViewCore`. The [design inventory](UI-2.0-DESIGN.md) distinguishes the
 reference's device screens from its simulated camera controls and preview tools.
 
@@ -55,7 +55,7 @@ and forwards actions. Neither package imports
 An app injects identity and a backend's actual capabilities; missing hardware
 controls disappear rather than selecting a different brand's screen. Sora font
 resources and registration travel with `MonitorUI`. Android uses the same boundary
-through the shared `monitor-ui` library (OpenCineUI included build) and its Osmo presentation adapter.
+through the shared `monitor-ui` library (OpenCine included build) and its Osmo presentation adapter.
 
 Each iOS app mounts `observeMonitorWindowGeometry()` around its root once.
 The shared observer samples its containing window after UIKit lifecycle/layout

@@ -16,35 +16,19 @@ dependencyResolutionManagement {
 
 rootProject.name = "OpenPocketCine"
 
-// Candidate shared contracts (OpenCine plan CORE-02): a sibling checkout of OpenCineCore.
-// Named because OpenCineUI's included build also lives in a directory called `Android`.
-// Replace with the published Maven coordinate when OpenCineCore has a remote.
-includeBuild("../../../OpenCineCore/Android") {
-    name = "opencinecore"
+// The OpenCine platform build (one Gradle build for every shared Android module): a sibling
+// checkout of OpenCine pinned in opencine-pins.txt. Named because its directory is also called
+// `Android`. Replace with the published Maven coordinates when OpenCine has a remote.
+includeBuild("../../../OpenCine/Android") {
+    name = "opencine"
     dependencySubstitution {
         substitute(module("com.opencapture.opencine:core")).using(project(":core"))
         substitute(module("com.opencapture.opencine:media")).using(project(":media"))
         substitute(module("com.opencapture.opencine:vulkan")).using(project(":vulkan"))
-    }
-}
-
-// Manufacturer-independent multicam engine (OpenCine plan MULTI-02), the sibling checkout
-// ../OpenCineMulticam. Its own build includes OpenCineCore under the same name, so one Core
-// build serves both. Replace with the published Maven coordinate when it has a remote.
-includeBuild("../../../OpenCineMulticam/Android") {
-    name = "opencinemulticam"
-    dependencySubstitution {
         substitute(module("com.opencapture.opencine:multicam")).using(project(":multicam"))
+        substitute(module("com.opencapture.opencine:monitor-ui")).using(project(":monitor-ui"))
     }
 }
 
 include(":app")
 include(":core-api")
-
-// Shared Compose UI from the sibling OpenCineUI checkout (candidate wiring
-// until OpenCineUI publishes a release): ~/Work/OpenCineUI next to this repo.
-includeBuild("../../../OpenCineUI/Android") {
-    dependencySubstitution {
-        substitute(module("com.opencapture.opencine:monitor-ui")).using(project(":monitor-ui"))
-    }
-}

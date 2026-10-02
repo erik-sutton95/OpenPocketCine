@@ -62,90 +62,66 @@ class BuildIdentityTests(unittest.TestCase):
         (self.root / "Sources/Core.swift").unlink()
         self.assertNotEqual(before, self.identity())
 
-    def test_sibling_shared_ui_package_changes_ios_identity_only(self):
-        shared_ui = self.root / "OpenCineUI"
+    def opencine_sibling(self, files):
+        """An app checkout next to an OpenCine checkout holding `files` (relative path -> text)."""
+        opencine = self.root / "OpenCine"
         nested = self.root / "app"
         subprocess.run(["git", "init", "--quiet", str(nested)], check=True)
         (nested / "Sources").mkdir()
         (nested / "Sources/Core.swift").write_text("let value = 1\n")
-        subprocess.run(["git", "init", "--quiet", str(shared_ui)], check=True)
-        (shared_ui / "Package.swift").write_text("// package\n")
-        (shared_ui / "Sources/MonitorUI").mkdir(parents=True)
-        (shared_ui / "Sources/MonitorUI/Theme.swift").write_text("let accent = 1\n")
-        ios = module.identity(nested, "ios", "Debug")
-        android = module.identity(nested, "android", "Debug")
-        (shared_ui / "Sources/MonitorUI/Theme.swift").write_text("let accent = 2\n")
-        self.assertNotEqual(ios, module.identity(nested, "ios", "Debug"))
-        self.assertEqual(android, module.identity(nested, "android", "Debug"))
+        subprocess.run(["git", "init", "--quiet", str(opencine)], check=True)
+        (opencine / "Package.swift").write_text("// package\n")
+        for name, text in files.items():
+            (opencine / name).parent.mkdir(parents=True, exist_ok=True)
+            (opencine / name).write_text(text)
+        return opencine, nested
 
-    def test_sibling_shared_android_ui_changes_android_identity_only(self):
-        shared_ui = self.root / "OpenCineUI"
-        nested = self.root / "app"
-        subprocess.run(["git", "init", "--quiet", str(nested)], check=True)
-        (nested / "Sources").mkdir()
-        (nested / "Sources/Core.swift").write_text("let value = 1\n")
-        subprocess.run(["git", "init", "--quiet", str(shared_ui)], check=True)
-        (shared_ui / "Android/monitor-ui").mkdir(parents=True)
-        (shared_ui / "Android/monitor-ui/Theme.kt").write_text("val accent = 1\n")
+    def changes(self, nested, opencine, name, text):
+        """Which platform identities change when OpenCine/<name> is rewritten."""
         ios = module.identity(nested, "ios", "Debug")
         android = module.identity(nested, "android", "Debug")
-        (shared_ui / "Android/monitor-ui/Theme.kt").write_text("val accent = 2\n")
-        self.assertEqual(ios, module.identity(nested, "ios", "Debug"))
-        self.assertNotEqual(android, module.identity(nested, "android", "Debug"))
+        (opencine / name).write_text(text)
+        return (ios != module.identity(nested, "ios", "Debug"),
+                android != module.identity(nested, "android", "Debug"))
+
+    def test_shared_ui_swift_changes_ios_identity_only(self):
+        name = "Sources/MonitorUI/Theme.swift"
+        opencine, nested = self.opencine_sibling({name: "let accent = 1\n"})
+        self.assertEqual((True, False), self.changes(nested, opencine, name, "let accent = 2\n"))
+
+    def test_shared_android_ui_changes_android_identity_only(self):
+        name = "Android/monitor-ui/Theme.kt"
+        opencine, nested = self.opencine_sibling({name: "val accent = 1\n"})
+        self.assertEqual((False, True), self.changes(nested, opencine, name, "val accent = 2\n"))
         relative = Path(os.path.relpath(nested))
         self.assertEqual(module.identity(nested, "android", "Debug"), module.identity(relative, "android", "Debug"))
 
-    def test_sibling_media_package_changes_both_identities(self):
-        core = self.root / "OpenCineCore"
-        nested = self.root / "app"
-        subprocess.run(["git", "init", "--quiet", str(nested)], check=True)
-        (nested / "Sources").mkdir()
-        (nested / "Sources/Core.swift").write_text("let value = 1\n")
-        subprocess.run(["git", "init", "--quiet", str(core)], check=True)
-        (core / "Package.swift").write_text("// package\n")
-        (core / "Sources/OpenCineMedia").mkdir(parents=True)
-        (core / "Sources/OpenCineMedia/Curve.swift").write_text("let grey = 1\n")
-        ios = module.identity(nested, "ios", "Debug")
-        android = module.identity(nested, "android", "Debug")
-        (core / "Sources/OpenCineMedia/Curve.swift").write_text("let grey = 2\n")
-        self.assertNotEqual(ios, module.identity(nested, "ios", "Debug"))
-        self.assertNotEqual(android, module.identity(nested, "android", "Debug"))
+    def test_media_and_dji_swift_change_both_identities(self):
+        for name in ["Sources/OpenCineMedia/Curve.swift", "Sources/OpenCineDJI/Duml.swift"]:
+            with self.subTest(name=name):
+                opencine, nested = self.opencine_sibling({name: "let grey = 1\n"})
+                self.assertEqual((True, True), self.changes(nested, opencine, name, "let grey = 2\n"))
+                subprocess.run(["rm", "-rf", str(opencine), str(nested)], check=True)
 
-    def test_sibling_core_android_changes_android_identity_only(self):
-        core = self.root / "OpenCineCore"
-        nested = self.root / "app"
-        subprocess.run(["git", "init", "--quiet", str(nested)], check=True)
-        (nested / "Sources").mkdir()
-        (nested / "Sources/Core.swift").write_text("let value = 1\n")
-        subprocess.run(["git", "init", "--quiet", str(core)], check=True)
-        (core / "Android/core").mkdir(parents=True)
-        (core / "Android/core/Session.kt").write_text("val epoch = 1\n")
-        ios = module.identity(nested, "ios", "Debug")
-        android = module.identity(nested, "android", "Debug")
-        (core / "Android/core/Session.kt").write_text("val epoch = 2\n")
-        self.assertEqual(ios, module.identity(nested, "ios", "Debug"))
-        self.assertNotEqual(android, module.identity(nested, "android", "Debug"))
+    def test_core_android_and_vulkan_change_android_identity_only(self):
+        for name in ["Android/core/Session.kt", "Android/vulkan/src/main/cpp/opc_vulkan.cpp"]:
+            with self.subTest(name=name):
+                opencine, nested = self.opencine_sibling({name: "1\n"})
+                self.assertEqual((False, True), self.changes(nested, opencine, name, "2\n"))
+                subprocess.run(["rm", "-rf", str(opencine), str(nested)], check=True)
 
-    def test_sibling_multicam_changes_each_platform_by_its_own_sources(self):
-        multicam = self.root / "OpenCineMulticam"
-        nested = self.root / "app"
-        subprocess.run(["git", "init", "--quiet", str(nested)], check=True)
-        (nested / "Sources").mkdir()
-        (nested / "Sources/Core.swift").write_text("let value = 1\n")
-        subprocess.run(["git", "init", "--quiet", str(multicam)], check=True)
-        (multicam / "Sources/OpenCineMulticam").mkdir(parents=True)
-        (multicam / "Android/multicam").mkdir(parents=True)
-        (multicam / "Sources/OpenCineMulticam/Plan.swift").write_text("let policy = 1\n")
-        (multicam / "Android/multicam/Plan.kt").write_text("val policy = 1\n")
-        ios = module.identity(nested, "ios", "Debug")
-        android = module.identity(nested, "android", "Debug")
-        (multicam / "Android/multicam/Plan.kt").write_text("val policy = 2\n")
-        self.assertEqual(ios, module.identity(nested, "ios", "Debug"))
-        self.assertNotEqual(android, module.identity(nested, "android", "Debug"))
-        android = module.identity(nested, "android", "Debug")
-        (multicam / "Sources/OpenCineMulticam/Plan.swift").write_text("let policy = 2\n")
-        self.assertNotEqual(ios, module.identity(nested, "ios", "Debug"))
-        self.assertEqual(android, module.identity(nested, "android", "Debug"))
+    def test_multicam_changes_each_platform_by_its_own_sources(self):
+        swift, kotlin = "Sources/OpenCineMulticam/Plan.swift", "Android/multicam/Plan.kt"
+        opencine, nested = self.opencine_sibling({swift: "let policy = 1\n", kotlin: "val policy = 1\n"})
+        self.assertEqual((False, True), self.changes(nested, opencine, kotlin, "val policy = 2\n"))
+        self.assertEqual((True, False), self.changes(nested, opencine, swift, "let policy = 2\n"))
+
+    def test_other_integrations_change_neither_identity(self):
+        names = ["Sources/OpenCineNikon/Ptp.swift", "Sources/Insta360Apple/Luna.swift",
+                 "Android/insta360-luna/Luna.kt", "atlas/README.md"]
+        opencine, nested = self.opencine_sibling({name: "1\n" for name in names})
+        for name in names:
+            self.assertEqual((False, False), self.changes(nested, opencine, name, "2\n"), name)
 
     def test_ios_version_configuration_changes_identity(self):
         self.write("ios/Config/Version.xcconfig", "CURRENT_PROJECT_VERSION = 1\n")

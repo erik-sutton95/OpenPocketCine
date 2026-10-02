@@ -7,16 +7,18 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 
 - **Swift Package Manager / Swift** — portable protocol core (`Sources/OpenPocketViewCore/`).
 - **SwiftUI** — iOS/iPadOS shell (`ios/OpenPocketCine/`, XcodeGen).
-- **OpenCineUI**: shared SwiftUI design system (`MonitorUI`, `MonitorPresentation`), a sibling
-  checkout at `../OpenCineUI` referenced by path from `ios/project.yml` (candidate dependency).
+- **OpenCine**: the shared platform repository, a sibling checkout at `../OpenCine` pinned in
+  `opencine-pins.txt` and referenced by path from `Package.swift`, `ios/project.yml` and
+  `Apps/Android/settings.gradle.kts` (candidate dependency). It holds the shared SwiftUI design
+  system (`MonitorUI`, `MonitorPresentation`) and Compose `monitor-ui`, plus the packages below.
 - **Jetpack Compose / Kotlin** — Android shell (`Apps/Android/`).
 - **just** — every repo task. Run `just` to list recipes. `just setup` on macOS.
 
 | Path | What |
 | --- | --- |
 | `Sources/OpenPocketViewCore/` | Portable Swift core |
-| `../OpenCineCore` (sibling) | `OpenCineMedia`: LUT, curve, scope and false-colour math, shutter angle, frame timing, framing. `OpenCineMotion`: gimbal waypoints, A·B·C programs and curve, head-look math, bounded head tracking, `MotionCapabilities` (the Pocket declaration `MotionCapabilities.pocketGimbal` and the DJI reach binding live in `Sources/OpenPocketViewCore/OpenCineMotion.swift`). `OpenCineRelay`: second-screen relay wire v1 (framing, messages, version check), control lease, relay pacing; this app's version-mismatch copy is in `Sources/OpenPocketViewCore/OpenCineRelay.swift`. `OpenCineApple` (iOS app only, not re-exported): `VideoToolboxDecoder` under `HevcDecoder` (display layer, format, VT session, generation fence) and `DecodedFrameLease` for `onSourceFrame`; the DJI rebuild predicate, journal and log subsystem are passed in as hooks. Re-exported by `OpenPocketViewCore`; pinned in `opencine-pins.txt` (`scripts/checkout-opencine.sh`) |
-| `../OpenCineDJI` (sibling) | DJI protocol, wire and session code (DUML, datalink, camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints, DJI colour data) and its tests. Re-exported by `OpenPocketViewCore`; pinned in `opencine-pins.txt`. Change DJI wire code there, then bump the pin |
+| `../OpenCine` (sibling) | `OpenCineMedia`: LUT, curve, scope and false-colour math, shutter angle, frame timing, framing. `OpenCineMotion`: gimbal waypoints, A·B·C programs and curve, head-look math, bounded head tracking, `MotionCapabilities` (the Pocket declaration `MotionCapabilities.pocketGimbal` and the DJI reach binding live in `Sources/OpenPocketViewCore/OpenCineMotion.swift`). `OpenCineRelay`: second-screen relay wire v1 (framing, messages, version check), control lease, relay pacing; this app's version-mismatch copy is in `Sources/OpenPocketViewCore/OpenCineRelay.swift`. `OpenCineApple` (iOS app only, not re-exported): `VideoToolboxDecoder` under `HevcDecoder` (display layer, format, VT session, generation fence) and `DecodedFrameLease` for `onSourceFrame`; the DJI rebuild predicate, journal and log subsystem are passed in as hooks. Re-exported by `OpenPocketViewCore`; pinned in `opencine-pins.txt` (`scripts/checkout-opencine.sh`) |
+| `../OpenCine` `Sources/OpenCineDJI` | DJI protocol, wire and session code (DUML, datalink, camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints, DJI colour data) and its tests. Re-exported by `OpenPocketViewCore`; pinned in `opencine-pins.txt`. Change DJI wire code there, then bump the OpenCine pin |
 | `Tests/OpenPocketViewCoreTests/` | Core tests |
 | `ios/OpenPocketCine/` | SwiftUI shell |
 | `Apps/Android/` | Compose shell and adapters |

@@ -13,7 +13,7 @@ _Avoid_: SDK; using engine or shared module as a synonym for this protocol targe
 The multi-brand architecture spanning reusable monitoring presentation, assists,
 media/playback and delivery. It is a direction, not another name for the Osmo
 protocol core. Current extraction: `MonitorPresentation` and `MonitorUI`, now in the
-OpenCineUI package.
+OpenCine package.
 See [Shared Monitor Engine](docs/SHARED-MONITOR-ENGINE.md) and the
 [implemented boundary](docs/ARCHITECTURE.md#shared-monitor-presentation).
 _Avoid_: claiming the full engine migration is complete from shared styling alone

@@ -15,9 +15,10 @@ def identity(root: Path, platform: str, configuration: str) -> str:
     digest = hashlib.sha256()
     digest.update(("opc-build-v1\0" + platform + "\0" + configuration + "\0").encode())
     add_files(digest, root, paths)
-    # ponytail: each app build compiles shared packages from sibling checkouts named by
-    # path (ios/project.yml, Apps/Android/settings.gradle.kts). Hash them while those path
-    # dependencies exist; a url + version pin moves into the lockfiles instead.
+    # ponytail: each app build compiles the shared OpenCine package from a sibling checkout
+    # named by path (ios/project.yml, Package.swift, Apps/Android/settings.gradle.kts). Hash the
+    # parts this app uses while that path dependency exists; a url + version pin moves into the
+    # lockfiles instead.
     for name, sibling_paths in SIBLING_PACKAGES[platform]:
         sibling = root.resolve().parent / name
         if (sibling / ".git").exists():
@@ -25,24 +26,28 @@ def identity(root: Path, platform: str, configuration: str) -> str:
     return platform + "-" + digest.hexdigest()[:32]
 
 
-# OpenCineCore: the app links OpenCineCore + OpenCineMedia + OpenCineApple (all under Sources), and
-# the Swift Android core compiles OpenCineMedia through the root Package.swift, so Android hashes its
-# Swift sources too. Its Android/ build also holds the native Vulkan renderer (`:vulkan`, C++ and
-# shaders), so a renderer edit changes the Android identity.
-# OpenCineDJI: Swift only; the root Package.swift compiles it into the iOS app and the Android core.
-# OpenCineMulticam: the iOS app links the Swift package; the Android app includes its Kotlin build.
+# The one OpenCine checkout, hashed per platform by the parts this app builds:
+# iOS links MonitorUI + MonitorPresentation, OpenCineCore and its products (Media, FrameIO,
+# Motion, Relay, Apple), OpenCineDJI and OpenCineMulticam. Android compiles the Swift core
+# (OpenCineMedia, Motion, Relay, DJI and Core, through the root Package.swift) and includes the
+# Gradle build (its root files plus :core, :media, :vulkan with the native renderer, :multicam
+# and :monitor-ui). Insta360 and Nikon sources are not inputs.
+SWIFT_ANDROID_CORE = [
+    "Sources/OpenCineCore", "Sources/OpenCineMedia", "Sources/OpenCineMotion",
+    "Sources/OpenCineRelay", "Sources/OpenCineDJI",
+]
 SIBLING_PACKAGES = {
     "ios": [
-        ("OpenCineUI", ["Package.swift", "Sources"]),
-        ("OpenCineCore", ["Package.swift", "Sources"]),
-        ("OpenCineDJI", ["Package.swift", "Sources"]),
-        ("OpenCineMulticam", ["Package.swift", "Sources"]),
+        ("OpenCine", ["Package.swift", "Sources/MonitorUI", "Sources/MonitorPresentation",
+                      "Sources/OpenCineFrameIO", "Sources/OpenCineApple", "Sources/OpenCineMulticam",
+                      *SWIFT_ANDROID_CORE]),
     ],
     "android": [
-        ("OpenCineUI", ["Android"]),
-        ("OpenCineCore", ["Package.swift", "Sources", "Android"]),
-        ("OpenCineDJI", ["Package.swift", "Sources"]),
-        ("OpenCineMulticam", ["Android"]),
+        ("OpenCine", ["Package.swift", *SWIFT_ANDROID_CORE,
+                      "Android/settings.gradle.kts", "Android/build.gradle.kts",
+                      "Android/gradle.properties", "Android/gradle",
+                      "Android/core", "Android/media", "Android/vulkan", "Android/multicam",
+                      "Android/monitor-ui"]),
     ],
 }
 

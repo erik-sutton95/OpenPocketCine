@@ -222,20 +222,18 @@ val stageSwiftCore =
             fileTree(repositoryRoot) {
                 include("Package.swift", "Package.resolved", "Sources/**")
             },
-            // OpenCineMedia, OpenCineMotion, OpenCineRelay (and OpenCineCore, which they depend on): the root
-            // Package.swift takes them from the sibling OpenCineCore checkout.
-            fileTree(repositoryRoot.resolve("../OpenCineCore")) {
+            // OpenCineMedia, OpenCineMotion, OpenCineRelay, OpenCineDJI (re-exported by
+            // OpenPocketViewCore) and OpenCineCore, which they depend on: the root Package.swift
+            // takes them from the sibling OpenCine checkout.
+            fileTree(repositoryRoot.resolve("../OpenCine")) {
                 include(
                     "Package.swift",
                     "Sources/OpenCineMedia/**",
                     "Sources/OpenCineMotion/**",
                     "Sources/OpenCineRelay/**",
                     "Sources/OpenCineCore/**",
+                    "Sources/OpenCineDJI/**",
                 )
-            },
-            // OpenCineDJI (DJI protocol, wire and session code), re-exported by OpenPocketViewCore.
-            fileTree(repositoryRoot.resolve("../OpenCineDJI")) {
-                include("Package.swift", "Sources/**")
             },
             stageSwiftCoreScript,
         )

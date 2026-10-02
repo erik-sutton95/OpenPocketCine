@@ -241,11 +241,11 @@ android-test:
 
 # Test production Vulkan submit/present synchronization without a GPU.
 android-vulkan-test:
-    ../OpenCineCore/scripts/android-vulkan-sync-test.sh
+    ../OpenCine/scripts/android-vulkan-sync-test.sh
 
 # Run Android build + native/unit tests + lint.
 android-check: android-vulkan-test
-    cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew assembleDebug test lint :Android:monitor-ui:testDebugUnitTest :Android:monitor-ui:lint
+    cd Apps/Android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew assembleDebug test lint :opencine:monitor-ui:testDebugUnitTest :opencine:monitor-ui:lint
 
 # Run the on-device instrumentation suite: gestures, hit testing, layout.
 # CI has no emulator, so a real device is the only place these run.

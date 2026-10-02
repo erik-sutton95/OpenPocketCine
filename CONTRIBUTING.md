@@ -8,8 +8,8 @@ engineering. By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT
 1. Install [`just`](https://github.com/casey/just), Xcode, and the Swift toolchain. Android
   contributors will also need Android Studio/Gradle.
 2. Install the meta-check tools: `just setup` (macOS / Homebrew).
-3. Check out the shared OpenCine packages next to this repository at the pinned commits:
-   `scripts/checkout-opencine.sh` (OpenCineMedia comes from `../OpenCineCore`).
+3. Check out the shared OpenCine repository next to this repository at the pinned commit:
+   `scripts/checkout-opencine.sh` (`../OpenCine`).
 4. Run `just check` to confirm a green baseline.
 
 No vendor SDK is included or required — the camera protocol is reverse-engineered from public
@@ -31,8 +31,9 @@ Generate and open the iOS app (needs [`xcodegen`](https://github.com/yonaskolov/
 cd ios && xcodegen generate && open OpenPocketCine.xcodeproj
 ```
 
-The iOS app also needs the shared UI package OpenCineUI (`MonitorUI`, `MonitorPresentation`)
-checked out next to this repository, at `../OpenCineUI`; `ios/project.yml` references it by path.
+The iOS app also needs the shared OpenCine package (`MonitorUI`, `MonitorPresentation`,
+OpenCineCore and its products, OpenCineDJI, OpenCineMulticam) checked out next to this repository,
+at `../OpenCine` (`scripts/checkout-opencine.sh`); `ios/project.yml` references it by path.
 
 Remote Swift packages are locked in `ios/Package.resolved` (required by Xcode Cloud).
 After changing `packages:` in `ios/project.yml`, run `just ios-resolve` and commit

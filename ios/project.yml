@@ -15,25 +15,13 @@ packages:
     exactVersion: 9.24.0
   OpenPocketViewCore:
     path: ..
-  # Shared UI 2.0 (MonitorUI, MonitorPresentation). Candidate: a sibling checkout of
-  # OpenCineUI next to this repository. Switch to url + exactVersion once it is published.
-  OpenCineUI:
-    path: ../../OpenCineUI
-  # Candidate shared contracts (OpenCine plan CORE-02) and portable media math (OpenCineMedia,
-  # re-exported by OpenPocketViewCore), a sibling checkout of OpenCineCore. One package identity:
-  # Package.swift's ../OpenCineCore is the same directory. Swap to the published URL + exact
-  # version when the package has a remote. The app and tests call both products directly.
-  OpenCineCore:
-    path: ../../OpenCineCore
-  # DJI protocol, wire and session code (OpenCine plan VENDOR-01), re-exported by
-  # OpenPocketViewCore. Same directory as Package.swift's ../OpenCineDJI. Listed here because
-  # Xcode links a re-exported package product only into targets that name it.
-  OpenCineDJI:
-    path: ../../OpenCineDJI
-  # Manufacturer-independent multicam engine (OpenCine plan MULTI-02): Multiview's group record
-  # plan and settings-editor leases. A sibling checkout; swap to url + exactVersion when published.
-  OpenCineMulticam:
-    path: ../../OpenCineMulticam
+  # The OpenCine platform package (shared UI MonitorUI/MonitorPresentation, OpenCineCore and its
+  # optional products, OpenCineDJI, OpenCineMulticam): a sibling checkout of OpenCine next to this
+  # repository, pinned in opencine-pins.txt. One package identity: Package.swift's ../OpenCine is
+  # the same directory. Listed here because Xcode links a re-exported package product only into
+  # targets that name it. Swap to the published URL + exact version when it has a remote.
+  OpenCine:
+    path: ../../OpenCine
 
 targets:
   OpenPocketCine:
@@ -50,29 +38,29 @@ targets:
         product: Sentry
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineMedia
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineMotion
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineRelay
-      - package: OpenCineUI
+      - package: OpenCine
         product: MonitorUI
-      - package: OpenCineUI
+      - package: OpenCine
         product: MonitorPresentation
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineCore
       # Optional Frame.io delivery (OpenCine plan OPTIONAL-01). Pocket keeps OAuth UI, the
       # callback scheme, client ID and its keychain namespace (Frameio/FrameioCredentials.swift).
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineFrameIO
       # Apple media runtime (OpenCine plan MEDIA-02): the VideoToolbox decoder runtime under
       # HevcDecoder and decoded-frame leases. iOS app only; the watch never decodes live video.
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineApple
-      - package: OpenCineDJI
+      - package: OpenCine
         product: OpenCineDJI
-      - package: OpenCineMulticam
+      - package: OpenCine
         product: OpenCineMulticam
       - target: OpenPocketCineWatch
         embed: true
@@ -146,21 +134,21 @@ targets:
       - target: OpenPocketCine
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineCore
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineMedia
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineFrameIO
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineMotion
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineRelay
-      - package: OpenCineCore
+      - package: OpenCine
         product: OpenCineApple
-      - package: OpenCineDJI
+      - package: OpenCine
         product: OpenCineDJI
-      - package: OpenCineMulticam
+      - package: OpenCine
         product: OpenCineMulticam
     settings:
       base:

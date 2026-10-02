@@ -223,8 +223,9 @@ The iOS Xcode project is generated:
 cd ios && xcodegen generate && open OpenPocketCine.xcodeproj
 ```
 
-The iOS app also needs the shared UI package OpenCineUI (`MonitorUI`, `MonitorPresentation`)
-checked out next to this repository, at `../OpenCineUI`; `ios/project.yml` references it by path.
+The iOS app also needs the shared OpenCine package (`MonitorUI`, `MonitorPresentation`,
+OpenCineCore and its products, OpenCineDJI, OpenCineMulticam) checked out next to this repository,
+at `../OpenCine` (`scripts/checkout-opencine.sh`); `ios/project.yml` references it by path.
 
 > [!TIP]
 > The Simulator and emulators have no Bluetooth or camera Wi-Fi. Pairing and live view need a

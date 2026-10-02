@@ -1,6 +1,6 @@
 #!/bin/sh
-# Check out each shared OpenCine package pinned in opencine-pins.txt next to this
-# repository (../<Name>) at its exact commit, then verify the commit. Never follows a branch.
+# Check out the OpenCine platform repository pinned in opencine-pins.txt next to this
+# repository (../OpenCine) at its exact commit, then verify the commit. Never follows a branch.
 # Usage: scripts/checkout-opencine.sh [base-url]   (default https://github.com/erik-sutton95)
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
