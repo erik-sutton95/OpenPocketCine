@@ -103,6 +103,18 @@ internal fun captureReadoutLabel(sheet: LiveSheet, status: CameraStatus, model: 
     return field.label ?: "--"
 }
 
+internal fun capturePanelSettingKey(sheet: LiveSheet, expoMode: Int): SettingKey? = when (sheet) {
+    LiveSheet.ISO -> SettingKey.ISO
+    LiveSheet.SHUTTER -> if (expoMode == CameraCommands.EXPO_AUTO) SettingKey.EXPOSURE_COMPENSATION else SettingKey.SHUTTER
+    LiveSheet.WB -> SettingKey.WHITE_BALANCE
+    LiveSheet.FOCUS -> SettingKey.FOCUS_MODE
+    else -> null
+}
+
+/** A panel keeps its captured approval; a mode change cannot reinterpret it as another setting. */
+internal fun retainedCapturePanelField(captured: MonitorCaptureField?, sheet: LiveSheet, expoMode: Int): MonitorCaptureField? =
+    captured?.takeIf { it.key == capturePanelSettingKey(sheet, expoMode) }
+
 /** Same primary drum the persistent FORMAT / COLOR / MODE pickers use. */
 internal fun recordingCategoryQuickControl(
     sheet: LiveSheet,

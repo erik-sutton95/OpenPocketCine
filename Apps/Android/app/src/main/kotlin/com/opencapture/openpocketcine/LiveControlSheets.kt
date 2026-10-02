@@ -250,14 +250,7 @@ private fun LiveControlSheetContent(
 ) {
     val context = LocalContext.current
     val commonField = remember(sheet, model.control) {
-        val key = when (sheet) {
-            LiveSheet.ISO -> com.opencapture.opencine.core.SettingKey.ISO
-            LiveSheet.SHUTTER -> if (status.expoMode == CameraCommands.EXPO_AUTO)
-                com.opencapture.opencine.core.SettingKey.EXPOSURE_COMPENSATION else com.opencapture.opencine.core.SettingKey.SHUTTER
-            LiveSheet.WB -> com.opencapture.opencine.core.SettingKey.WHITE_BALANCE
-            LiveSheet.FOCUS -> com.opencapture.opencine.core.SettingKey.FOCUS_MODE
-            else -> null
-        }
+        val key = capturePanelSettingKey(sheet, status.expoMode)
         key?.let { model.control.captureField(it) }
     }
     val preview = LocalCapturePreview.current
@@ -265,7 +258,10 @@ private fun LiveControlSheetContent(
     val enabled = !locked && preview == null
     val isEvSheet = CaptureLists.isEvSheet(sheet, status.expoMode)
     @Composable fun commonDrum() {
-        commonField?.let { field ->
+        val field = retainedCapturePanelField(commonField, sheet, status.expoMode)
+        if (field == null) {
+            Text("Setting not available", color = LiveDesign.muted)
+        } else {
             val choices = field.choices.filter { choice -> when (val value = choice.value) {
                 is com.opencapture.opencine.core.SettingValue.Iso -> value.value is com.opencapture.opencine.core.ISOValue.Manual
                 is com.opencapture.opencine.core.SettingValue.Shutter -> value.value is com.opencapture.opencine.core.ShutterValue.Duration

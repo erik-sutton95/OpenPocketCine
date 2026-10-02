@@ -22,6 +22,19 @@ final class MonitorUIFlowTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
     }
 
+    func testOrdinaryNativePreviewDoesNotApproveUnknownRecording() {
+        app.launchEnvironment["OPV_UI_REVIEW_COMMON_CONTROLS"] = "0"
+        app.launch()
+        let record = app.buttons["monitor.system.record"]
+        XCTAssertTrue(record.waitForExistence(timeout: 10))
+        XCTAssertFalse(record.isEnabled)
+        XCTAssertEqual(record.label, "Recording state unknown")
+        record.press(forDuration: 0.6)
+        XCTAssertFalse(app.staticTexts["Shooting mode"].exists)
+        XCTAssertFalse(app.buttons["Start"].exists)
+        capture("native-preview-recording-unknown")
+    }
+
     func testMonitorControlsAcrossBothLandscapeOrientationsAndPortrait() {
         app.launchEnvironment["OPV_UI_REVIEW_FIT"] = "1"
         app.launch()

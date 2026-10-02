@@ -58,7 +58,7 @@ class MonitorShellCompositionTest {
                     assertEquals(0, model.shell.hostsUnmounted)
                     assertNull(model.control.recordEditor(), "Live presentation cannot create capture approval")
                 }
-                for (cover, nextPortrait) in listOf(
+                for ((cover, nextPortrait) in listOf(
                     ShellModel.Cover.SETTINGS to false,
                     ShellModel.Cover.MEDIA to true,
                 )) {
