@@ -1,5 +1,6 @@
 import Foundation
 import MonitorPresentation
+import OpenCineCore
 import OpenPocketViewCore
 
 /// Capability translation belongs to the Osmo adapter. Native monitor modules
@@ -20,20 +21,18 @@ enum OsmoMonitorPresentation {
         MonitorZoomCaption.label(factor: session.zoomReadout, opticalStops: session.zoomStops)
     }
 
-    static func capabilities(_ session: CameraSession) -> MonitorCapabilities {
-        #if targetEnvironment(simulator)
-            if MonitorUIReview.isActive {
-                let gimbal = ProcessInfo.processInfo.environment["OPV_UI_REVIEW_BODY"] != "nano"
-                return MonitorCapabilities(
-                    gimbal: gimbal, zoom: gimbal, focus: gimbal, audio: true,
-                    headTracking: gimbal, clipDelete: true, clipStar: true,
-                    requiresInternetHop: true, timecode: true)
-            }
-        #endif
-        return MonitorCapabilities(
-            gimbal: session.hasGimbal, zoom: session.supportsZoom,
-            focus: session.supportsFocusMode, iris: session.supportsAperture, audio: true,
-            headTracking: session.hasGimbal, clipDelete: true, clipStar: true,
-            requiresInternetHop: true, timecode: true)
+    /// What the monitor lays out: the DJI integration's projection of the connected body
+    /// (`DJICameraSessionAdapter.layout`). Only clip delete, clip star and the internet hop are
+    /// the app's, until media and connection routes carry them (SHELL-02).
+    static func capabilities(_ session: CameraSession) -> MonitorLayoutCapabilities {
+        session.control.layout(base: appBase)
     }
+
+    private static let appBase: MonitorLayoutCapabilities = {
+        var base = MonitorLayoutCapabilities()
+        base.clipDelete = true
+        base.clipStar = true
+        base.requiresInternetHop = true
+        return base
+    }()
 }

@@ -21,6 +21,7 @@ against a sibling checkout of the shared OpenCine repository (see Publish prereq
 | MEDIA-02 step 4 (VideoToolbox runtime and decoded-frame leases from OpenCineApple), stacked on this branch | `opencine/apple` | see `git log` |
 | MEDIA-02 step 3 (Android Vulkan renderer from OpenCineCore `:vulkan`), stacked on this branch | `opencine/vulkan` | see `git log` |
 | SHELL-04 DJI part (Android `HevcDecoder` from OpenCine `:decoder`, DJI Kotlin layer from `:dji`), stacked on this branch | `opencine/shell-04` | see `git log` |
+| SHELL-01 steps 4-5, iOS (live monitor laid out from the DJI integration's capability projection) | `opencine/shell-01` | see `git log` |
 
 ### Merged branches
 
@@ -56,6 +57,10 @@ checked out next to this repository as `../OpenCine` by `scripts/checkout-openci
 - ISO, white balance and record go through the OpenCineCore camera session. On iOS the HUD
   shows what the camera reported, with a pending state until it answers; the Android HUD is
   unchanged.
+- iOS lays the live monitor out from what the connected body declares through OpenCineDJI
+  (gimbal and head tracking from its motion, zoom, focus, aperture, audio meters and timecode),
+  not from app flags. The one visible difference: a Nano no longer shows a live timecode it
+  never reports (Multi View already hid it).
 - Record is never a blind toggle: the app sends start or stop for the state the camera
   reported, and waits for the first record state after connecting.
 - Apple Watch, watcher relay and confirmed record commands go to the camera they showed. After
@@ -166,6 +171,19 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
        format and frame rate, focus, aperture strategy and audio sheets apply and read back;
        media browse returns to live; a gimbal joystick move and an A·B·C program run.
     5. Multiview: two cameras join the shared network and both feeds play.
+
+17. SHELL-01 (iPhone; Pocket 3 or Pocket 4 / 4 Pro, Action 6 and Nano if available), against
+    `opencine/integration` without this branch:
+    1. Gimbal: on a Pocket, the joystick, gimbal sheet, A·B·C motion overlay and its run pill,
+       head tracking (calibrate button, settings switch, axis dials) and the settings gimbal cards
+       appear and move the head; on Action 6 and Nano none of them appear.
+    2. Audio: on every body in video, the AUDIO tile, the audio assist in the palette and the live
+       meter overlay appear and the meters move with sound; in photo they hide.
+    3. Timecode: Pocket and Action 6 show the live timecode; Nano shows none (live and Multi View).
+    4. Focus, aperture and zoom: FOCUS tile and drum on Pocket, APERTURE on Action 6, neither on
+       Nano; the zoom chip on Pocket only.
+    5. Record: start and stop from the record button with and without confirmation on each body;
+       the lamp follows the camera.
 
 ## Publish prerequisite
 

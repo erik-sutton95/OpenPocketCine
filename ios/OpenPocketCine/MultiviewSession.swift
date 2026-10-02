@@ -130,7 +130,7 @@ final class MultiviewSession {
         }
 
         var timecodeReadout: String? {
-            guard let camera, camera.model.family != .nano,
+            guard camera != nil, control.layout().timecode,
                 let timecode = settings.timecode, !timecode.isEmpty
             else { return nil }
             return settings.timecodeClock

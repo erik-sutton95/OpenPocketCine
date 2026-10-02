@@ -87,12 +87,17 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
     }
 
     @MainActor static func primary(_ sheet: CaptureSheet, model: AppModel) -> Self? {
+        let layout = OsmoMonitorPresentation.capabilities(model.session)
+        switch sheet {
+        case .aperture where !layout.iris, .audio where !layout.audio: return nil
+        default: break
+        }
         // WB shows the pending request over the reported value; other kinds read the same
         // reported status (only WB fields differ).
-        primary(
+        return primary(
             sheet, status: model.session.whiteBalanceDisplayStatus,
             cameraModel: model.session.connectedCamera?.model,
-            supportsFocusMode: model.session.supportsFocusMode,
+            supportsFocusMode: layout.focus,
             facePriorityExposureEnabled: model.facePriorityExposureEnabled,
             shutterUsesAngle: OperatorPrefs.shutterUsesAngle,
             shutterAngleDegrees: OperatorPrefs.shutterAngleDegrees,

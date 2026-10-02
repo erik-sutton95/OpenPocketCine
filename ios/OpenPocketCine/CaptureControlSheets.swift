@@ -397,11 +397,11 @@ struct CapturePickerPanel: View {
                 tintPad
             }
         case .focus:
-            if model.session.supportsFocusMode {
+            if OsmoMonitorPresentation.capabilities(model.session).focus {
                 focusRows
             }
         case .aperture:
-            if model.session.supportsAperture {
+            if OsmoMonitorPresentation.capabilities(model.session).iris {
                 choiceDrum(
                     CaptureLists.apertureStrategies(from: model.session.status).map(\.label),
                     selected: model.session.status.apertureStrategy?.label

@@ -35,6 +35,33 @@ final class DJICameraSessionAdapterTests: XCTestCase {
         }
     }
 
+    // MARK: Layout (SHELL-01)
+
+    /// The monitor lays out the integration's projection of the connected body; the app adds
+    /// only clip delete, clip star and the internet hop. Nano has no live timecode.
+    func testMonitorLayoutIsTheIntegrationProjectionOfTheBody() {
+        for (id, name) in [(0x22, "OsmoPocket4P-Test"), (0x19, "OsmoNano-Test")] {
+            let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
+            defer { session.disconnect() }
+            let model = CameraModel.resolve(modelId: id, name: name)
+            session.updateMultiview(
+                camera: FoundCamera(id: UUID(), name: name, model: model, modelId: id),
+                driver: nil, status: CameraStatus())
+            let layout = OsmoMonitorPresentation.capabilities(session)
+            var expected = session.control.layout()
+            (expected.clipDelete, expected.clipStar, expected.requiresInternetHop) = (true, true, true)
+            XCTAssertEqual(layout, expected, name)
+            XCTAssertEqual(layout.gimbal, model.hasGimbal, name)
+            XCTAssertEqual(layout.headTracking, model.hasGimbal, name)
+            XCTAssertEqual(layout.focus, model.supportsFocusMode, name)
+            XCTAssertEqual(layout.timecode, id != 0x19, name)
+            XCTAssertTrue(layout.audio, name)
+        }
+        let unknown = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
+        XCTAssertFalse(OsmoMonitorPresentation.capabilities(unknown).focus, "no body, no claim")
+        XCTAssertFalse(OsmoMonitorPresentation.capabilities(unknown).timecode)
+    }
+
     func testUndeclaredSettingStaysUnknownInsteadOfPretending() {
         let session = linked()
         defer { session.disconnect() }

@@ -37,7 +37,7 @@ public struct GimbalRampFilter: Equatable, Sendable {
 /// Camera-executed timed positions. The phone sends one native command per
 /// leg and observes completion; it never approximates position with a stick.
 public struct GimbalMoveEngine: Equatable, Sendable {
-    public static let arriveDeg = 0.15
+    public static let arriveDeg = MotionCapabilities.pocketGimbal.arrivalToleranceDeg
     public static let holdSeconds: TimeInterval = 2
 
     public struct Output: Equatable, Sendable {
