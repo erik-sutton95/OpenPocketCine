@@ -1631,3 +1631,19 @@ Bluetooth reconnect, matching both shells' Multiview. Android single-camera
 `completePairing` still accepts `00 06`; that is an open exception until the
 Android shell adopts the same retry. No physical iPhone or Android device was
 used for this change.
+
+### Common-control connection lifetime (2026-10-02 candidate)
+
+The iOS common DJI adapter now has one lifetime per native connection. Operator
+reconnect retires the old controls before replacing the target, including a
+saved-camera scan. Recovery preserves the common session identity and advances
+its link epoch. Owned close invokes existing native teardown once; borrowed
+Multiview return retains the tile's native owner, and Settings/Media coverage
+does not disconnect. No new camera command or stop-record action is added.
+
+The shared binding and semantic scenarios have Swift/Kotlin mirrors; Android
+session composition and verification follow in the coordinated DJI candidate.
+The iOS private-simulator tests exercise the real Pocket session with unopened
+SIMULATED datalinks through owned and borrowed shared-shell paths. Physical
+camera/device qualification remains untested on both platforms. This foundation
+does not complete the root/monitor/settings/media migration.

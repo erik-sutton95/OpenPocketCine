@@ -27,6 +27,23 @@ target is `OpenPocketCineWatch` in `ios/project.yml` — do not hand-edit the
 xcodeproj. Wrist protocol: `WatchRelayProtocol` in the core; `WCSession` lives
 in `WatchRelay` (iPhone) and `WatchSessionController` (watch).
 
+## Common-control connection lifetime
+
+`CameraSession.control` is bound to one native connection through OpenCine's
+`DJIControlSessionBinding`. A new operator connection gets a fresh common session;
+datalink recovery keeps its session identity and advances its control epoch.
+Saved-camera scanning retires the old binding before changing the native target,
+so a late close cannot cancel the next camera's connection attempt.
+
+Closing the current owned common session invokes the existing native disconnect
+teardown once. Native teardown retires the common binding before resetting the
+transport; this prevents reentrant cleanup. Returning a borrowed Multiview view
+retires only its controls and leaves the tile's transport/decoder owner alive.
+Settings and Media coverage retain the connection. The common binding sends no
+camera commands and never stops recording; gimbal/motion cleanup remains the
+existing native disconnect behavior. This foundation does not itself migrate
+the app's root, monitor tools, settings or media workflow into the shared shell.
+
 ## Shared monitor presentation
 
 The multi-brand direction is [Shared Monitor Engine](SHARED-MONITOR-ENGINE.md).
