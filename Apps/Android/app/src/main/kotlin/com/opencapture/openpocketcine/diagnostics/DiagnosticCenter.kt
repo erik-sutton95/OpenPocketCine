@@ -18,7 +18,7 @@ import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.media.MediaShare
 import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
 import com.opencapture.opencine.dji.LocalVPNFilter
-import com.opencapture.opencine.dji.PocketCameraSession
+import com.opencapture.opencine.dji.DjiCameraSession
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,7 +66,7 @@ object DiagnosticCenter {
     }
 
     fun boundedDiagnosticText(
-        session: PocketCameraSession,
+        session: DjiCameraSession,
         maxBytes: Int = ManualProblemReport.ATTACHMENT_MAX_BYTES,
         maxChars: Int = ManualProblemReport.ATTACHMENT_MAX_CHARS,
     ): String {
@@ -113,7 +113,7 @@ object DiagnosticCenter {
         log("fault", "diagnostics", code, PrivacyRedactor.redact(stack.take(4000)))
     }
 
-    fun writeReport(context: Context, session: PocketCameraSession): File? {
+    fun writeReport(context: Context, session: DjiCameraSession): File? {
         val env = environment(session)
         val journal = journalLines()
         val exceptions = exceptionLines()
@@ -121,7 +121,7 @@ object DiagnosticCenter {
             .firstOrNull { it.name == "report.txt" }
     }
 
-    fun shareReport(context: Context, session: PocketCameraSession, emailSupport: Boolean = false, copyForFeedback: Boolean = true) {
+    fun shareReport(context: Context, session: DjiCameraSession, emailSupport: Boolean = false, copyForFeedback: Boolean = true) {
         if (!sharing.compareAndSet(false, true)) {
             android.widget.Toast.makeText(context, "Preparing the report…", android.widget.Toast.LENGTH_SHORT).show()
             return
@@ -246,7 +246,7 @@ object DiagnosticCenter {
     @Volatile var lastCompact: String = ""
         private set
 
-    fun copyCompact(context: Context, session: PocketCameraSession) {
+    fun copyCompact(context: Context, session: DjiCameraSession) {
         val text = compactSummary(environment(session), journalLines())
         lastCompact = text
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -255,7 +255,7 @@ object DiagnosticCenter {
         onCopiedForFeedback?.invoke()
     }
 
-    private fun environment(session: PocketCameraSession): Env {
+    private fun environment(session: DjiCameraSession): Env {
         val family = session.connectedCamera?.model?.family ?: "none"
         val model = session.connectedCamera?.model?.name ?: "none"
         val phase = session.phase.name.lowercase()

@@ -4,7 +4,7 @@ import android.content.Context
 import com.opencapture.opencine.dji.FaceDetectorPort
 import com.opencapture.opencine.dji.FeedIncidentSink
 import com.opencapture.opencine.dji.FeedIncidentTestSource
-import com.opencapture.opencine.dji.PocketSessionHost
+import com.opencapture.opencine.dji.DjiSessionHost
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.diagnostics.FeedIncidentOrigin
@@ -12,7 +12,7 @@ import com.opencapture.openpocketcine.diagnostics.FeedIncidentRuntime
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 
 /** This app's side of OpenCine's DJI session: operator preferences, diagnostics, build identity, ML Kit. */
-class AppSessionHost(context: Context) : PocketSessionHost {
+class AppSessionHost(context: Context) : DjiSessionHost {
     private val appContext = context.applicationContext
 
     override fun shutterUsesAngle(): Boolean = OperatorPrefs.shutterUsesAngle(appContext)

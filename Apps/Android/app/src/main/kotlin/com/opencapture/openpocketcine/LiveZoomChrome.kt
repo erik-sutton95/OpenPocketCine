@@ -45,7 +45,7 @@ import com.opencapture.monitorui.monitorReadoutShadow
 import com.opencapture.opencine.dji.CamFov
 import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.opencine.dji.LiveFeedFocusGesture
-import com.opencapture.opencine.dji.PocketCameraSession
+import com.opencapture.opencine.dji.DjiCameraSession
 import com.opencapture.opencine.dji.TrackingBox
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -62,15 +62,15 @@ object LiveZoom {
     fun nextJump(from: Double, stops: List<Double> = CamFov.JUMPS): Double =
         CamFov.nextJump(from, stops)
 
-    fun setZoom(session: PocketCameraSession, factor: Double) {
+    fun setZoom(session: DjiCameraSession, factor: Double) {
         session.setZoom(factor)
     }
 
-    fun updatePinch(session: PocketCameraSession, magnification: Double) {
+    fun updatePinch(session: DjiCameraSession, magnification: Double) {
         session.updateZoomPinch(magnification)
     }
 
-    fun endPinch(session: PocketCameraSession) {
+    fun endPinch(session: DjiCameraSession) {
         session.endZoomPinch()
     }
 }

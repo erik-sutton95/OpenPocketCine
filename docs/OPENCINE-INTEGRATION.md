@@ -285,6 +285,15 @@ limit. The integration's typed qualification goes through `ResourceAdmission`
 before any network join or provisioning. This preserves the existing supported
 body and experimental rules; it adds no newly qualified hardware combination.
 
+### Integration-level Android session names (SHELL-04)
+
+Pocket composes `DjiCameraSession` with `DjiSessionHost`, the preferred names
+for the shared DJI connection and live-picture owner. They alias the existing
+JVM classes, so private-field instrumentation/media access, constructor calls
+and existing consumers retain the same runtime type. No second session or
+forwarding shell is introduced. JNI exports and saved data stay unchanged.
+The old source names remain until a later minor release.
+
 ## Publish prerequisite
 
 CI, Xcode Cloud and contributors need the shared repository. Publish OpenCine first, then

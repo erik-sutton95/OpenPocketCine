@@ -80,7 +80,7 @@ class ShutterAngleControlSessionTest {
         }
     }
 
-    private fun fixture(test: (PocketCameraSession) -> Unit) {
+    private fun fixture(test: (DjiCameraSession) -> Unit) {
         instrumentation.runOnMainSync {
             assertTrue(SwiftCore.isAvailable)
             val context = instrumentation.targetContext

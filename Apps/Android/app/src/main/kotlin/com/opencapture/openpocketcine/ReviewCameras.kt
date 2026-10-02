@@ -18,7 +18,7 @@ import com.opencapture.opencine.dji.DjiConnectPort
 import com.opencapture.opencine.dji.DjiFailures
 import com.opencapture.opencine.dji.FoundCamera
 import com.opencapture.opencine.dji.MultiviewNetworkStore
-import com.opencapture.opencine.dji.PocketCameraSession
+import com.opencapture.opencine.dji.DjiCameraSession
 import com.opencapture.openpocketcine.pairing.AddSetupSlot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +52,7 @@ internal object ReviewCameras {
         legacy.edit { putString("records-json", records.toString()) }
     }
 
-    fun port(state: String, session: PocketCameraSession): DjiConnectPort = Port(state, session.control)
+    fun port(state: String, session: DjiCameraSession): DjiConnectPort = Port(state, session.control)
 
     /** Starts the attempt the state shows, once the scripted sightings are listed. */
     suspend fun start(state: String?, model: AppModel) {

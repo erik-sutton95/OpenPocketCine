@@ -24,7 +24,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.opencine.dji.GimbalProgram
 import com.opencapture.opencine.dji.GimbalWaypoint
-import com.opencapture.opencine.dji.PocketCameraSession
+import com.opencapture.opencine.dji.DjiCameraSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -99,7 +99,7 @@ class MotionProgramSessionTest {
                     assertTrue(node("motion.loop").isChecked)
                 }
 
-                val token = PocketCameraSession::class.java.getDeclaredField("moveToken").apply { isAccessible = true }
+                val token = DjiCameraSession::class.java.getDeclaredField("moveToken").apply { isAccessible = true }
                 scenario.onActivity { token.set(model!!.session, 42L) }
                 click("motion.restart")
                 scenario.onActivity {
@@ -358,8 +358,8 @@ class MotionProgramSessionTest {
 
     /** Seed camera-owned state in the fixture; no production bypass for stable-pose capture. */
     @Suppress("UNCHECKED_CAST")
-    private fun <T> seed(session: PocketCameraSession, name: String, value: T) {
-        val field = PocketCameraSession::class.java.getDeclaredField(name).apply { isAccessible = true }
+    private fun <T> seed(session: DjiCameraSession, name: String, value: T) {
+        val field = DjiCameraSession::class.java.getDeclaredField(name).apply { isAccessible = true }
         (field.get(session) as MutableStateFlow<T>).value = value
     }
 

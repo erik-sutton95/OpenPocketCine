@@ -4,12 +4,12 @@ import com.opencapture.opencine.dji.DjiNative
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.DumlFrame
-import com.opencapture.opencine.dji.PocketCameraSession
+import com.opencapture.opencine.dji.DjiCameraSession
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Session/datalink surface the media browser needs. Live enable goes through
- * [PocketCameraSession.restartLiveViewAfterMedia], not a raw `0xa8` write.
+ * [DjiCameraSession.restartLiveViewAfterMedia], not a raw `0xa8` write.
  */
 interface MediaSessionLink {
     val isLive: Boolean
@@ -30,7 +30,7 @@ interface MediaSessionLink {
 }
 
 class PocketCameraMediaLink(
-    private val session: PocketCameraSession,
+    private val session: DjiCameraSession,
     private val lastCameraId: () -> String?,
     private val rememberCameraId: (String) -> Unit,
 ) : MediaSessionLink {
@@ -80,7 +80,7 @@ class PocketCameraMediaLink(
     private fun driver(): DatalinkDriver? {
         val field =
             runCatching {
-                PocketCameraSession::class.java.getDeclaredField("datalink").apply { isAccessible = true }
+                DjiCameraSession::class.java.getDeclaredField("datalink").apply { isAccessible = true }
             }.getOrNull() ?: return null
         return runCatching { field.get(session) as? DatalinkDriver }.getOrNull()
     }

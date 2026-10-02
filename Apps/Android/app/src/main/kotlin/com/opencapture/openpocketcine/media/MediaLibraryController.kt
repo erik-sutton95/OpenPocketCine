@@ -12,7 +12,7 @@ import androidx.compose.runtime.setValue
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.lut.ClipColorProfile
 import com.opencapture.opencine.dji.DumlFrame
-import com.opencapture.opencine.dji.PocketCameraSession
+import com.opencapture.opencine.dji.DjiCameraSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,7 +29,7 @@ private data class MediaQueryPage(
 
 class MediaLibraryController(
     context: Context,
-    private val session: PocketCameraSession,
+    private val session: DjiCameraSession,
     link: MediaSessionLink? = null,
 ) {
     private val appContext = context.applicationContext

@@ -33,7 +33,7 @@ import com.opencapture.openpocketcine.session.AppSessionHost
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.GimbalDoubleTap
 import com.opencapture.opencine.dji.GimbalRamp
-import com.opencapture.opencine.dji.PocketCameraSession
+import com.opencapture.opencine.dji.DjiCameraSession
 import com.opencapture.opencine.dji.VideoFormat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,7 +64,7 @@ class AppModel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     /** Wi-Fi and Hotspot passwords, shared with Multiview (iOS `MultiviewNetworkStore`). */
     private val networkStore = com.opencapture.opencine.dji.MultiviewNetworkStore(context)
-    val session = PocketCameraSession(context, AppSessionHost(context), borrowing, controlLease)
+    val session = DjiCameraSession(context, AppSessionHost(context), borrowing, controlLease)
 
     /**
      * Cameras and pairing through the shared OpenCine flow (SHELL-02): the DJI integration over

@@ -1074,7 +1074,7 @@ class MultiviewSession(
             age(tile.lastEnable)?.let { append(",\"secondsSinceLastEnable\":$it") }
             age(tile.lastCommandAt)?.let { append(",\"secondsSinceCameraSet\":$it") }
             // A lost packet leaves the decoder waiting for an IRAP the Pocket only sends
-            // when asked; these let the core watchdog see that (PocketCameraSession parity).
+            // when asked; these let the core watchdog see that (DjiCameraSession parity).
             age(tile.decoder.lastDecoderOutputAt)?.let { append(",\"lastDecoderOutputAge\":$it") }
             append(",\"decoderOutputExpected\":${tile.decoder.decoderOutputExpected}")
             append(",\"referenceRecoveryNeeded\":${tile.decoder.referenceRecoveryNeeded}")
