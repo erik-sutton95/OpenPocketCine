@@ -21,10 +21,13 @@ import com.opencapture.opencine.appkit.ShellBrand
 import com.opencapture.opencine.appkit.ShellModel
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 /** SIMULATED native monitor: actual shared shell and native picture views, no datalink or approval. */
 @RunWith(AndroidJUnit4::class)
@@ -33,8 +36,10 @@ class MonitorShellCompositionTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             lateinit var model: AppModel
+            lateinit var host: BackdropRenderActivity
             var portrait by mutableStateOf(true)
             scenario.onActivity { activity ->
+                host = activity
                 model = AppModel(activity)
                 presentSimulatedNativeMonitor(model)
                 activity.setContent {
@@ -47,12 +52,22 @@ class MonitorShellCompositionTest {
                     }
                 }
             }
+            fun frame() {
+                val rendered = CountDownLatch(1)
+                instrumentation.runOnMainSync {
+                    host.window.decorView.viewTreeObserver.registerFrameCommitCallback { rendered.countDown() }
+                    host.window.decorView.invalidate()
+                }
+                assertTrue(rendered.await(10, TimeUnit.SECONDS), "The actual native frame must commit")
+            }
             try {
-                instrumentation.uiAutomation.waitForIdle(100, 10_000)
+                frame()
                 lateinit var picture: View
                 lateinit var monitor: String
-                scenario.onActivity { activity ->
-                    picture = assertNotNull(findPicture(activity.window.decorView))
+                // ActivityScenario.onActivity waits for a globally idle Looper. Live native
+                // picture/HUD animations keep drawing, so synchronize a committed frame instead.
+                instrumentation.runOnMainSync {
+                    picture = assertNotNull(findPicture(host.window.decorView))
                     monitor = assertNotNull(model.shell.state.value.monitor).id
                     assertEquals(1, model.shell.hostsMounted)
                     assertEquals(0, model.shell.hostsUnmounted)
@@ -62,30 +77,32 @@ class MonitorShellCompositionTest {
                     ShellModel.Cover.SETTINGS to false,
                     ShellModel.Cover.MEDIA to true,
                 )) {
-                    scenario.onActivity { model.shell.open(cover); portrait = nextPortrait }
-                    instrumentation.uiAutomation.waitForIdle(100, 10_000)
-                    scenario.onActivity { activity ->
+                    instrumentation.runOnMainSync { model.shell.open(cover); portrait = nextPortrait }
+                    frame()
+                    instrumentation.runOnMainSync {
                         assertEquals(cover, model.shell.state.value.cover)
                         assertEquals(monitor, model.shell.state.value.monitor?.id)
-                        assertSame(picture, findPicture(activity.window.decorView), "Coverage and layout keep the native surface view")
+                        assertSame(picture, findPicture(host.window.decorView), "Coverage and layout keep the native surface view")
                         assertEquals(1, model.shell.hostsMounted)
                         assertEquals(0, model.shell.hostsUnmounted)
                         model.shell.dismissCover()
                     }
-                    instrumentation.uiAutomation.waitForIdle(100, 10_000)
-                    scenario.onActivity { activity ->
+                    frame()
+                    instrumentation.runOnMainSync {
                         assertNull(model.shell.state.value.cover)
-                        assertSame(picture, findPicture(activity.window.decorView))
+                        assertSame(picture, findPicture(host.window.decorView))
                     }
                 }
-                scenario.onActivity { model.shell.close() }
-                instrumentation.uiAutomation.waitForIdle(100, 10_000)
-                scenario.onActivity {
+                instrumentation.runOnMainSync { model.shell.close() }
+                frame()
+                instrumentation.runOnMainSync {
                     assertEquals(1, model.shell.hostsMounted)
                     assertEquals(1, model.shell.hostsUnmounted)
                     assertNull(model.shell.state.value.monitor)
                 }
-            } finally { scenario.onActivity { model.close() } }
+            } finally {
+                instrumentation.runOnMainSync { model.close(); host.setContent {} }
+            }
         }
     }
 
