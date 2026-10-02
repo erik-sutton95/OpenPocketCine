@@ -70,6 +70,7 @@ import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReport
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReportingConsent
+import com.opencapture.openpocketcine.multiview.MultiviewQualificationPolicy
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -349,7 +350,7 @@ private fun LinkExperience(
                         onPair = { model.pairing = true },
                         onMedia = { model.homePanel = AppPanel.MEDIA },
                         onSettings = { model.homePanel = AppPanel.SETTINGS },
-                        onMultiview = model::openMultiview,
+                        onMultiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null,
                     )
                 }
             }

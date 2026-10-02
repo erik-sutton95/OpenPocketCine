@@ -4,8 +4,15 @@ import com.opencapture.opencine.dji.MultiviewNetworkStore
 import android.content.Context
 import androidx.core.content.edit
 import com.opencapture.opencine.dji.KeystoreSeal
+import com.opencapture.opencine.multicam.ResourceBudget
 import org.json.JSONArray
 import org.json.JSONObject
+
+/** This app's existing four-camera qualification. Stage validation and admission share it. */
+internal object MultiviewQualificationPolicy {
+    val budget = ResourceBudget(qualifiedEntries = 4)
+    val tileCount: Int = requireNotNull(budget.qualifiedEntries) { "Multiview requires a finite app qualification budget" }
+}
 
 /** Device-only stage metadata and camera-Wi-Fi cleanup ledger. Credentials stay in [MultiviewNetworkStore]. */
 object MultiviewStageStore {
@@ -46,12 +53,13 @@ object MultiviewStageStore {
                 val cleanup = pendingReset.orEmpty()
                 val valid = version == 1 &&
                     (ssid.isNotEmpty() || (cameras.isEmpty() && cleanup.isNotEmpty())) &&
-                    cameras.size <= 4 && focusedIndex in 0..3 &&
+                    cameras.size <= MultiviewQualificationPolicy.tileCount &&
+                    focusedIndex in 0 until MultiviewQualificationPolicy.tileCount &&
                     cameras.map { it.slot }.toSet().size == cameras.size &&
                     cameras.map { it.id }.toSet().size == cameras.size &&
                     cleanup.map { it.id }.toSet().size == cleanup.size &&
                     cleanup.all { it.name.isNotEmpty() } &&
-                    cameras.all { it.slot in 0..3 && it.name.isNotEmpty() }
+                    cameras.all { it.slot in 0 until MultiviewQualificationPolicy.tileCount && it.name.isNotEmpty() }
                 return if (valid) this else null
             }
     }

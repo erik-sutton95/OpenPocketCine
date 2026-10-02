@@ -1,5 +1,17 @@
 import Foundation
+import OpenCineMulticam
 import Security
+
+/// This app's existing four-camera qualification. Stage validation and admission share it.
+enum MultiviewQualificationPolicy {
+    static let budget = ResourceBudget(qualifiedEntries: 4)
+    static var tileCount: Int {
+        guard let count = budget.qualifiedEntries else {
+            preconditionFailure("Multiview requires a finite app qualification budget")
+        }
+        return count
+    }
+}
 
 /// Device-only stage metadata. Network credentials stay in MultiviewNetworkStore.
 enum MultiviewStageStore {
@@ -27,13 +39,17 @@ enum MultiviewStageStore {
         var validated: Stage? {
             let cleanup = pendingReset ?? []
             guard version == 1,
-                !ssid.isEmpty || (cameras.isEmpty && !cleanup.isEmpty), cameras.count <= 4,
-                (0..<4).contains(focusedIndex),
+                !ssid.isEmpty || (cameras.isEmpty && !cleanup.isEmpty),
+                cameras.count <= MultiviewQualificationPolicy.tileCount,
+                (0..<MultiviewQualificationPolicy.tileCount).contains(focusedIndex),
                 Set(cameras.map(\.slot)).count == cameras.count,
                 Set(cameras.map(\.id)).count == cameras.count,
                 Set(cleanup.map(\.id)).count == cleanup.count,
                 cleanup.allSatisfy({ !$0.name.isEmpty }),
-                cameras.allSatisfy({ (0..<4).contains($0.slot) && !$0.name.isEmpty })
+                cameras.allSatisfy({
+                    (0..<MultiviewQualificationPolicy.tileCount).contains($0.slot)
+                        && !$0.name.isEmpty
+                })
             else { return nil }
             return self
         }
