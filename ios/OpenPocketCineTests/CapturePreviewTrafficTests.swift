@@ -39,7 +39,12 @@ final class CapturePreviewTrafficTests: XCTestCase {
         status.whiteBalance = .custom(kelvin: 5600, tint: 17)
         status.whiteBalanceKelvin = 5600
         status.whiteBalanceTint = 17
-        model.session.status = status
+        // A body that meters audio: the AUDIO drum comes from its capability projection.
+        model.session.updateMultiview(
+            camera: FoundCamera(
+                id: UUID(), name: "OsmoPocket4P-Test",
+                model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
+            driver: driver, status: status)
 
         for sheet in [CaptureSheet.iso, .audio, .wb] {
             let snapshot = try XCTUnwrap(CaptureQuickSnapshot.primary(sheet, model: model))

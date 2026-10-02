@@ -23,7 +23,12 @@ final class CapturePanelRenderComparisonTests: XCTestCase {
         status.whiteBalanceTint = 0
         status.focusMode = .continuous
         status.focusTrack = .subjectLock
-        model.session.status = status
+        // A body with focus: the FOCUS drum comes from its capability projection.
+        model.session.updateMultiview(
+            camera: FoundCamera(
+                id: UUID(), name: "OsmoPocket4P-Test",
+                model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
+            driver: nil, status: status)
         let size = CGSize(width: 874, height: 402)
         let host = UIHostingController(
             rootView: CaptureComparisonCanvas(model: model, held: false, size: size))

@@ -18,7 +18,7 @@ struct FieldMonitorStatusChrome: View {
         Group {
             if portrait {
                 ZStack {
-                    if model.chromeSectionMounts(.timecode), !model.session.status.isPhoto {
+                    if showsTimecode {
                         MonitorClock(
                             model.session.status.timecodeClock,
                             fontSize: layout.presentation?.tablet == true ? 25 : 23
@@ -74,7 +74,7 @@ struct FieldMonitorStatusChrome: View {
                     Spacer(minLength: 4)
                     HStack(spacing: 10) {
                         tally
-                        if model.chromeSectionMounts(.timecode), !model.session.status.isPhoto {
+                        if showsTimecode {
                             MonitorClock(
                                 model.session.status.timecodeClock,
                                 fontSize: layout.presentation?.tablet == true ? 25 : 23)
@@ -118,6 +118,11 @@ struct FieldMonitorStatusChrome: View {
                 model.assist.configureTool = nil
             }
         }
+    }
+
+    private var showsTimecode: Bool {
+        model.chromeSectionMounts(.timecode) && !model.session.status.isPhoto
+            && OsmoMonitorPresentation.capabilities(model.session).timecode
     }
 
     @ViewBuilder private var tally: some View {
@@ -323,7 +328,8 @@ struct FieldMonitorAssistPalette: View {
     @Binding var expanded: Bool
     var onExpansionActivityChange: (Bool) -> Void = { _ in }
     private var tools: [LiveAssistTool] {
-        if model.session.status.isPhoto {
+        if model.session.status.isPhoto || !OsmoMonitorPresentation.capabilities(model.session).audio
+        {
             return LiveAssistTool.toolbarCases
         }
         return LiveAssistTool.toolbarCases + [.audioMeters]

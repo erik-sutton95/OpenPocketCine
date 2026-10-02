@@ -7,7 +7,13 @@ import OpenPocketViewCore
 /// connect phase onto the port.
 extension CameraSession: DJIControlPort {
     var connectedCameraID: String? { connectedCamera?.id.uuidString }
-    var connectedModel: CameraModel? { connectedCamera?.model }
+    var connectedModel: CameraModel? {
+        #if targetEnvironment(simulator)
+            // The review body goes through the same mapping as a connected camera.
+            if let body = MonitorUIReview.body { return body }
+        #endif
+        return connectedCamera?.model
+    }
 
     var isBusy: Bool { controlBusy || isBrowsingMedia }
 

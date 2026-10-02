@@ -10,6 +10,15 @@
         static var screen: String? { ProcessInfo.processInfo.environment["OPV_UI_REVIEW_SCREEN"] }
         static var isActive: Bool { screen != nil }
 
+        /// The body the review lays out (`OPV_UI_REVIEW_BODY=nano`, else Pocket 4 Pro). It
+        /// reaches the screens only as the DJI integration's capability projection.
+        static var body: CameraModel? {
+            guard isActive else { return nil }
+            return ProcessInfo.processInfo.environment["OPV_UI_REVIEW_BODY"] == "nano"
+                ? .resolve(modelId: 0x19, name: "Osmo Nano")
+                : .resolve(modelId: 0x22, name: "Osmo Pocket 4 Pro")
+        }
+
         #if DEBUG
             static var zoomControls: Bool {
                 screen == "live"

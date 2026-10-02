@@ -1,5 +1,6 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
 
@@ -27,10 +28,10 @@ struct LiveCameraControlBar: View {
                 }
             }
             .onChange(of: columns) { _, _ in model.captureDrum = nil }
-            .onChange(of: model.session.supportsFocusMode) { _, on in
+            .onChange(of: layout.focus) { _, on in
                 if !on, model.captureSheet == .focus { model.captureSheet = nil }
             }
-            .onChange(of: model.session.supportsAperture) { _, on in
+            .onChange(of: layout.iris) { _, on in
                 if !on, model.captureSheet == .aperture { model.captureSheet = nil }
                 if !on, model.captureDrum?.sheet == .aperture { model.captureDrum = nil }
             }
@@ -44,11 +45,14 @@ struct LiveCameraControlBar: View {
         interfaceLocked || model.session.isLocked
     }
 
-    private var showsAudio: Bool { !model.session.status.isPhoto }
+    private var layout: MonitorLayoutCapabilities {
+        OsmoMonitorPresentation.capabilities(model.session)
+    }
+
+    private var showsAudio: Bool { layout.audio && !model.session.status.isPhoto }
 
     private var visibleTileCount: Int {
-        4 + (model.session.supportsFocusMode ? 1 : 0) + (model.session.supportsAperture ? 1 : 0)
-            + (showsAudio ? 1 : 0)
+        4 + (layout.focus ? 1 : 0) + (layout.iris ? 1 : 0) + (showsAudio ? 1 : 0)
     }
 
     private var gridColumns: Int { columns == 3 ? 3 : max(visibleTileCount, 1) }
@@ -74,10 +78,10 @@ struct LiveCameraControlBar: View {
             }
             tile(.exposure, label: "EXPOSURE", value: expoValue, widest: "Manual")
             tile(.wb, label: "WB", value: wbValue, widest: "10000K", valueIcon: wbIcon)
-            if model.session.supportsFocusMode {
+            if layout.focus {
                 tile(.focus, label: "FOCUS", value: focusValue, widest: "Showcase")
             }
-            if model.session.supportsAperture {
+            if layout.iris {
                 tile(.aperture, label: "APERTURE", value: apertureValue, widest: "Starburst f/4")
             }
             if showsAudio {
