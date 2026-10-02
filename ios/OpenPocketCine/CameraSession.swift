@@ -208,12 +208,10 @@ final class CameraSession {
     }
     /// OpenCineCore seam for ISO, white balance and record (CORE-02). UI controls submit here.
     var control: DJICameraSessionAdapter {
-        if let controlSeam { return controlSeam }
-        let seam = DJICameraSessionAdapter(session: self)
-        controlSeam = seam
-        return seam
+        controlBinding.session
     }
-    @ObservationIgnored private var controlSeam: DJICameraSessionAdapter?
+    @ObservationIgnored private lazy var controlBinding = makeControlSessionBinding()
+    private var controlSeam: DJICameraSessionAdapter? { controlBinding.cached }
     @ObservationIgnored private var frameRouter: Task<Void, Never>?
     @ObservationIgnored private var keepaliveLoop: Task<Void, Never>?
     /// Last pid `0x38` GET reply. BLE fallback fires when this goes stale.
@@ -678,6 +676,7 @@ final class CameraSession {
     /// Borrow the tile's transport and decoder; Multiview remains the sole repair owner.
     func updateMultiview(camera: FoundCamera, driver: DatalinkDriver?, status: CameraStatus) {
         guard isMultiviewBorrowed else { return }
+        if connectedCamera?.id != camera.id { controlBinding.beginConnection() }
         connectedCamera = camera
         datalink = driver
         self.status = status
@@ -706,6 +705,7 @@ final class CameraSession {
     }
     func releaseMultiview() {
         guard isMultiviewBorrowed else { return }
+        controlBinding.retire(.requested)
         formatPin = nil
         if isMultiviewControlsOnly {
             // Detach only this editor's commands. The tile keeps its transport,
@@ -743,6 +743,7 @@ final class CameraSession {
     /// (saved-camera reconnect). Does not stop the scan before GATT connect — iOS needs the
     /// next advertisement to finish the link.
     func startScan(reconnect id: UUID?) {
+        if id != nil, !holdsMonitor { controlBinding.beginConnection() }
         connectGeneration += 1
         abortInFlightRun()
         reconnectTarget = id
@@ -822,6 +823,7 @@ final class CameraSession {
         if case .live = phase, connectedCamera?.id == camera.id, !sessionRecovery.isRecovering {
             return
         }
+        if !preserveMonitor { controlBinding.beginConnection() }
         // One `run` at a time. A second tap (or Cancel→tap) used to leave the old
         // unstructured Task sending 0x07/45 while the new one started GetSSID.
         ReliabilityReporting.setCameraSessionActive(true)
@@ -867,6 +869,7 @@ final class CameraSession {
             releaseMultiview()
             return
         }
+        controlBinding.retire(.requested)
         // Before the link closes: do not leave the camera on Fast for the next session.
         restoreGimbalPrep(gimbalPrep.restoreNow())
         ReliabilityReporting.setCameraSessionActive(false)
