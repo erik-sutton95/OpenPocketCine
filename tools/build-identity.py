@@ -27,7 +27,8 @@ def identity(root: Path, platform: str, configuration: str) -> str:
 
 # OpenCineCore: the app links OpenCineCore + OpenCineMedia + OpenCineApple (all under Sources), and
 # the Swift Android core compiles OpenCineMedia through the root Package.swift, so Android hashes its
-# Swift sources too.
+# Swift sources too. Its Android/ build also holds the native Vulkan renderer (`:vulkan`, C++ and
+# shaders), so a renderer edit changes the Android identity.
 # OpenCineDJI: Swift only; the root Package.swift compiles it into the iOS app and the Android core.
 # OpenCineMulticam: the iOS app links the Swift package; the Android app includes its Kotlin build.
 SIBLING_PACKAGES = {

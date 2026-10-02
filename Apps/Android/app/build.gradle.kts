@@ -36,11 +36,6 @@ android {
         ndk {
             abiFilters += supportedAndroidAbi
         }
-        externalNativeBuild {
-            cmake {
-                arguments += "-DANDROID_STL=c++_static"
-            }
-        }
     }
 
     ndkVersion = "28.2.13676358"
@@ -63,13 +58,6 @@ android {
                 "AndroidGradlePluginVersion",
                 "UseTomlInstead",
             )
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
 
     // Play closed testing signs with the upload keystore from the environment.
@@ -275,6 +263,8 @@ dependencies {
     implementation("com.opencapture.opencine:core:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:media:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:multicam:0.1.0-SNAPSHOT")
+    // libopc_vulkan.so and its JNI facade (feed.OpcVulkan), built by OpenCineCore's `:vulkan` module.
+    implementation("com.opencapture.opencine:vulkan:0.1.0-SNAPSHOT")
 
     implementation(platform(libs.compose.bom))
     implementation(libs.androidx.activity.compose)

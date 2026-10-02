@@ -91,7 +91,7 @@ the production `CameraSoftAP` ladder.
 
 ### Live picture
 
-Vulkan (`libopc_vulkan.so`) when init succeeds: MediaCodec → `ImageReader`
+Vulkan (`libopc_vulkan.so`, built by the sibling OpenCineCore `Android/vulkan` module) when init succeeds: MediaCodec → `ImageReader`
 AHardwareBuffer → YCbCr convert 1:1 at the 720p HEVC raster (sampling 4:2:0
 at panel size is the Adreno mosaic). The Rec.709 cube is a 3D texture
 (`CIColorCube`); a 2D blue-slice atlas bled across tiles and blotched

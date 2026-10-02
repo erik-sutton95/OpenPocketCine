@@ -19,6 +19,7 @@ against sibling checkouts of the shared packages (see Publish prerequisite).
 | OPTIONAL-02 (gimbal motion from OpenCineMotion) | `opencine/motion` | 63187113 |
 | OPTIONAL-02 (watcher relay wire from OpenCineRelay) | `opencine/relay` | 0ad71861 |
 | MEDIA-02 step 4 (VideoToolbox runtime and decoded-frame leases from OpenCineApple), stacked on this branch | `opencine/apple` | see `git log` |
+| MEDIA-02 step 3 (Android Vulkan renderer from OpenCineCore `:vulkan`), stacked on this branch | `opencine/vulkan` | see `git log` |
 
 ### Merged branches
 
@@ -37,8 +38,8 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
 
 - OpenCineUI `54bcbb31283f6cf028268b382cb82eb6c156ac94` (MonitorUI, MonitorPresentation,
   Android `monitor-ui`).
-- OpenCineCore `929c7297db1c439c8acbac43ca9422b3d5837d6c` (branch `apple`, not yet on Core main: OpenCineCore,
-  OpenCineMedia, OpenCineFrameIO, OpenCineMotion, OpenCineRelay, OpenCineApple, Android `core` and `media`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
+- OpenCineCore `1c648a633f0179c2ffcf5757026bcfe900481a08` (main: OpenCineCore, OpenCineMedia, OpenCineFrameIO,
+  OpenCineMotion, OpenCineRelay, OpenCineApple, Android `core`, `media` and `vulkan`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
   (`../../OpenCineCore`) name the same directory, so Xcode sees one package.
 - OpenCineDJI `225215ed812bf7f0436e2b9dcb22408f3d97d7da`: DUML, datalink,
   camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints,
@@ -77,6 +78,9 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
   sample buffers and display layer moved into OpenCineApple's `VideoToolboxDecoder`; `HevcDecoder`
   keeps the presentation policy. Face AF now receives a decoded-frame lease (released when the
   callback returns) instead of a bare pixel buffer.
+- Android live picture (MEDIA-02 step 3): no change intended. `libopc_vulkan.so` (C++, shaders,
+  JNI facade `feed.OpcVulkan`) is now built by OpenCineCore's `:vulkan` module from the same
+  sources; the APK carries one copy with the same 21 JNI exports. `LiveVulkanSession` stays in the app.
 
 ## Physical device checklist
 
@@ -137,6 +141,10 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
     restart a feed. Measure against `opencine/integration` without this branch: glass-to-glass
     latency, memory over 30 min live with LUT + WAVE, thermal state after 20 min, two and four
     feeds in Multiview.
+15. MEDIA-02 step 3 (Android, Pocket 3 and Pocket 4): Vulkan live picture appears on first connect
+    (logcat tag `OpcVulkan`, no "vulkan library missing"); LUT, WAVE/PARADE/VECTOR/HISTO, peaking,
+    zebra and glass plates draw; a vertical (portrait) raster stays upright (#482); background and
+    return, rotation and surface recreation never crash or black the well.
 
 ## Publish prerequisite
 

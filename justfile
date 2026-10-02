@@ -241,7 +241,7 @@ android-test:
 
 # Test production Vulkan submit/present synchronization without a GPU.
 android-vulkan-test:
-    ./scripts/android-vulkan-sync-test.sh
+    ../OpenCineCore/scripts/android-vulkan-sync-test.sh
 
 # Run Android build + native/unit tests + lint.
 android-check: android-vulkan-test

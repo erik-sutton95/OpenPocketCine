@@ -24,6 +24,7 @@ includeBuild("../../../OpenCineCore/Android") {
     dependencySubstitution {
         substitute(module("com.opencapture.opencine:core")).using(project(":core"))
         substitute(module("com.opencapture.opencine:media")).using(project(":media"))
+        substitute(module("com.opencapture.opencine:vulkan")).using(project(":vulkan"))
     }
 }
 
