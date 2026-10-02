@@ -264,7 +264,7 @@ enum PocketFalseColorMap {
     static func bands(
         scale: FalseColorScaleKind, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> [LiveFalseColorBand] {
-        let clip = LiveColorScience.falseColorClip(
+        let clip = DJILook.falseColorClip(
             scale: scale.liveScale, transfer: transfer, rec709: rec709, clipByte: clipByte)
         return LiveColorScience.falseColorBands(
             scale.liveScale, transfer: clip.transfer, clipEncoded: clip.ceiling)
@@ -352,9 +352,9 @@ enum PocketFalseColorMap {
         let anchors = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
         // 709 reading: every scale evaluates the official look as a Rec.709 feed.
         let viaLook =
-            LiveColorScience.readsThroughLook(transfer: transfer, rec709: rec709)
+            DJILook.readsThroughLook(transfer: transfer, rec709: rec709)
             && !scale.liveScale.usesSceneStops
-        let clip = LiveColorScience.falseColorClip(
+        let clip = DJILook.falseColorClip(
             scale: scale.liveScale, transfer: transfer, rec709: rec709, clipByte: clipByte)
         let bandList = LiveColorScience.falseColorBands(
             scale.liveScale, transfer: clip.transfer,
@@ -370,7 +370,7 @@ enum PocketFalseColorMap {
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let level = ScopeDisplayScale.waveformLevel(yEnc, anchors: anchors)
-                    let read = LiveColorScience.falseColorReading(
+                    let read = DJILook.falseColorReading(
                         encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale.liveScale)
                     let ire =
                         viaLook
@@ -417,9 +417,9 @@ enum PocketFalseColorMap {
         let anchors = ScopeAnchors.make(transfer: transfer, clipByte: clipByte)
         // 709 reading: every scale evaluates the official look as a Rec.709 feed.
         let viaLook =
-            LiveColorScience.readsThroughLook(transfer: transfer, rec709: rec709)
+            DJILook.readsThroughLook(transfer: transfer, rec709: rec709)
             && !scale.liveScale.usesSceneStops
-        let clip = LiveColorScience.falseColorClip(
+        let clip = DJILook.falseColorClip(
             scale: scale.liveScale, transfer: transfer, rec709: rec709, clipByte: clipByte)
         let bandList = LiveColorScience.falseColorBands(
             scale.liveScale, transfer: clip.transfer,
@@ -435,7 +435,7 @@ enum PocketFalseColorMap {
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
                     let level = ScopeDisplayScale.waveformLevel(yEnc, anchors: anchors)
-                    let read = LiveColorScience.falseColorReading(
+                    let read = DJILook.falseColorReading(
                         encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale.liveScale)
                     let ire =
                         viaLook

@@ -7,6 +7,7 @@ import OpenPocketViewCore
 /// connect phase onto the port.
 extension CameraSession: DJIControlPort {
     var connectedCameraID: String? { connectedCamera?.id.uuidString }
+    var connectedModel: CameraModel? { connectedCamera?.model }
 
     var isBusy: Bool { controlBusy || isBrowsingMedia }
 

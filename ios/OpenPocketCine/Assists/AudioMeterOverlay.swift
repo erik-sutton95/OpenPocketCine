@@ -22,7 +22,9 @@ struct LiveAudioMeterOverlay: View {
 
     var body: some View {
         AudioMeterOverlay(
-            levels: model.session.status.audioMeters,
+            // ponytail: unknown meters draw as the floor, as before; a distinct "no report" look
+            // is a UI change to prove on device first.
+            levels: model.session.status.audioMeters ?? .silent,
             sensitivity: model.session.status.audioChannel?.label,
             bounds: bounds, chromeClearance: chromeClearance,
             hapticsEnabled: model.hapticsEnabled,

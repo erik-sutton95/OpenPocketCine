@@ -128,7 +128,7 @@ public enum FeedEffectsWire {
         let size = falseColorCubeSize
         let denom = Double(size - 1)
         // 709 reading: every scale evaluates the official look as a Rec.709 feed.
-        let clip = LiveColorScience.falseColorClip(
+        let clip = DJILook.falseColorClip(
             scale: scale, transfer: transfer, rec709: rec709,
             clipByte: ceiling.clipByte(transfer: transfer))
         let bandList = LiveColorScience.falseColorBands(
@@ -142,7 +142,7 @@ public enum FeedEffectsWire {
                     let eg = Double(g) / denom
                     let eb = Double(b) / denom
                     let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
-                    let read = LiveColorScience.falseColorReading(
+                    let read = DJILook.falseColorReading(
                         encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale)
                     let ire = ScopeDisplayScale.monitorPercent(
                         read.encoded, transfer: read.transfer,

@@ -260,7 +260,7 @@ struct AssistInspectorPreview: View {
                 audioPreview(levels: levels, sensitivity: nil)
             } else if !model.assist.gradesClip {
                 audioPreview(
-                    levels: model.session.status.audioMeters,
+                    levels: model.session.status.audioMeters ?? .silent,
                     sensitivity: model.session.status.audioChannel?.label)
             }
 

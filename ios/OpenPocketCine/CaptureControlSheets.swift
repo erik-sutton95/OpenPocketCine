@@ -1041,7 +1041,7 @@ struct CapturePickerPanel: View {
                 drumSelection = preferred
                 return
             }
-            let next = ShutterAngle.nearestLabel(denom: liveDenom, fps: fps)
+            let next = ShutterAngle.nearestLabel(denom: liveDenom, fps: fps) ?? ""
             lastApplied = next
             drumSelection = next
             return

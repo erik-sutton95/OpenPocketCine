@@ -248,7 +248,7 @@ struct AndroidSessionWireTests {
         #expect(decoded.iso == 400)
         #expect(decoded.charging)
         #expect(decoded.batteryMilliAmps == -350)
-        #expect(decoded.audioMeters.right.peakDB == -1e-3)
+        #expect(decoded.audioMeters?.right.peakDB == -1e-3)
         // Kotlin JSONObject shape: nulls, escaped slashes, and no audio meter keys.
         let kotlin =
             "{\"batteryPercent\":7,\"firmware\":\"v1\\/2\",\"timecode\":null,\"docked\":true}"

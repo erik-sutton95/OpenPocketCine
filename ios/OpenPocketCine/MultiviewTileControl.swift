@@ -33,6 +33,7 @@ import OpenPocketViewCore
         tile.flatMap { ShootingMode.fromStatus($0.settings.shootingMode) }
     }
     var connectedCameraID: String? { tile?.camera?.id.uuidString }
+    var connectedModel: CameraModel? { tile?.camera?.model }
     /// The tile owns its link; Live View and the settings editor only borrow it.
     var admitsMultiviewControl: Bool { true }
     var isBusy: Bool { tile?.recordingBusy == true }
@@ -135,7 +136,6 @@ extension MultiviewSession.Tile {
 extension MultiviewSession {
     /// Pocket's qualified group record: every camera must be eligible, or nothing is sent.
     static let recordPolicy = TargetPolicy.strict
-    private static let clockReference = ContinuousClock.now
 
     /// Tiles with a camera, in slot order.
     var multicamGroup: MulticamGroup { multicamGroup(of: recordingTiles) }
@@ -160,7 +160,7 @@ extension MultiviewSession {
             busy: Set(
                 members.filter { $0.recordingBusy || $0.connecting || $0.recovering }
                     .map(\.entryID)),
-            now: MonotonicInstant(ContinuousClock.now - Self.clockReference))
+            now: .now())
     }
 
     var cameraSessions: [CameraSessionID: any OpenCineCore.CameraSession] {

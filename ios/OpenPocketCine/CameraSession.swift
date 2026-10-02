@@ -3765,10 +3765,10 @@ final class CameraSession {
         if GamepadShutterSync.shouldPersistPreferredAngle(
             usesAngle: OperatorPrefs.shutterUsesAngle,
             isPhoto: status.isPhoto,
-            expoIsAuto: status.expoMode == .auto)
+            expoIsAuto: status.expoMode == .auto),
+            let angle = GamepadShutterSync.preferredAngle(afterDenom: next, fps: status.fps)
         {
-            OperatorPrefs.shutterAngleDegrees = GamepadShutterSync.preferredAngle(
-                afterDenom: next, fps: status.fps)
+            OperatorPrefs.shutterAngleDegrees = angle
         }
         setShutterDenom(next)
     }

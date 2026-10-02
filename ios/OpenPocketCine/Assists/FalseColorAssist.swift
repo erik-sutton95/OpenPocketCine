@@ -368,7 +368,7 @@ struct FalseColorReference: View {
                         .font(.system(size: 8.5, weight: .bold, design: .monospaced))
                     Spacer()
                     Text(
-                        "\(scale.referenceScaleLabel) · \(Self.curveKeyLabel(LiveColorScience.readsThroughLook(transfer: transfer, rec709: rec709) ? .rec709 : transfer))"
+                        "\(scale.referenceScaleLabel) · \(Self.curveKeyLabel(DJILook.readsThroughLook(transfer: transfer, rec709: rec709) ? .rec709 : transfer))"
                     )
                         .font(.system(size: 7.5, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -431,7 +431,7 @@ struct FalseColorReference: View {
     static func sceneStopClip(
         transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> Double {
-        let clip = LiveColorScience.falseColorClip(
+        let clip = DJILook.falseColorClip(
             scale: .sceneStops, transfer: transfer, rec709: rec709, clipByte: clipByte)
         let ceiling = LiveColorScience.stops(
             encoded: LiveColorScience.clipShelf(ceiling: clip.ceiling), transfer: clip.transfer)

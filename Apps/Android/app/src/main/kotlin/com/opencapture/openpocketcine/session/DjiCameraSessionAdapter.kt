@@ -44,7 +44,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 import com.opencapture.opencine.core.CameraSession as OpenCineCameraSession
 import com.opencapture.opencine.core.ConnectionPhase as CorePhase
@@ -125,7 +124,7 @@ interface PocketControlPort {
 class DjiCameraSessionAdapter(
     private val port: PocketControlPort,
     private val scope: CoroutineScope,
-    private val clock: () -> MonotonicInstant = ::systemNow,
+    private val clock: () -> MonotonicInstant = { MonotonicInstant.now() },
 ) : OpenCineCameraSession {
     override val id: CameraSessionID = CameraSessionID()
 
@@ -523,10 +522,6 @@ class DjiCameraSessionAdapter(
 
     companion object {
         val INTEGRATION: IntegrationID = IntegrationID("org.opencapture.openpocketcine.dji")
-
-        private val reference = System.nanoTime()
-
-        fun systemNow(): MonotonicInstant = MonotonicInstant((System.nanoTime() - reference).nanoseconds)
 
         fun whiteBalance(wb: ReportedWhiteBalance): WhiteBalanceValue =
             if (wb.mode == CameraCommands.WB_CUSTOM) WhiteBalanceValue.Kelvin(wb.kelvin) else WhiteBalanceValue.Auto

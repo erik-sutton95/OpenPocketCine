@@ -34,7 +34,7 @@ import Testing
         #expect(!GamepadGimbalStick.restHeldMotion(from: .left, to: .right, driving: false))
     }
 
-    @Test func shutterHudUsesLiveDenomWhenPreferredDoesNotMap() {
+    @Test func shutterHudUsesLiveDenomWhenPreferredDoesNotMap() throws {
         let available = [24, 48, 50, 60, 120]
         #expect(
             GamepadShutterSync.angleLabel(
@@ -55,8 +55,13 @@ import Testing
         #expect(CamCapShutter.steppedDenom(from: 48, steps: 1, available: speedStops) == 24)
         #expect(CamCapShutter.steppedDenom(from: 48, steps: -1, available: speedStops) == 50)
         let next = CamCapShutter.steppedDenom(from: 48, steps: -1, available: speedStops) ?? 0
-        let synced = GamepadShutterSync.preferredAngle(afterDenom: next, fps: 24)
+        let synced = try #require(GamepadShutterSync.preferredAngle(afterDenom: next, fps: 24))
         #expect(synced == 172)
+        // MULTI-03 F4: an unknown rate persists nothing and the HUD keeps the preferred angle.
+        #expect(GamepadShutterSync.preferredAngle(afterDenom: next, fps: 0) == nil)
+        #expect(
+            GamepadShutterSync.angleLabel(
+                denom: 120, fps: 0, available: available, preferredAngle: 180) == "180°")
         #expect(
             GamepadShutterSync.angleLabel(
                 denom: next, fps: 24, available: speedStops, preferredAngle: synced) == "172°")

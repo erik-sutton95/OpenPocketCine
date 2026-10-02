@@ -140,7 +140,7 @@ struct CaptureQuickSnapshot: Hashable, Sendable {
                         : mapped == status.shutterDenom
                             ? ShutterAngle.label(preferred)
                             : ShutterAngle.nearestLabel(
-                                denom: status.shutterDenom, fps: status.fps),
+                                denom: status.shutterDenom, fps: status.fps) ?? "",
                     context: "\(status.fps):\(CaptureLists.shutterDenoms(from: status))")
             }
             return Self(

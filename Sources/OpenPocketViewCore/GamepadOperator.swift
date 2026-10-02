@@ -110,7 +110,10 @@ public enum GamepadShutterSync: Sendable {
         guard denom > 0 else { return preferred }
         let mapped = ShutterAngle.denom(
             degrees: preferredAngle, fps: fps, available: available)
-        return mapped == denom ? preferred : ShutterAngle.nearestLabel(denom: denom, fps: fps)
+        guard mapped != denom, let live = ShutterAngle.nearestLabel(denom: denom, fps: fps) else {
+            return preferred
+        }
+        return live
     }
 
     public static func shouldPersistPreferredAngle(
@@ -119,8 +122,9 @@ public enum GamepadShutterSync: Sendable {
         usesAngle && !isPhoto && !expoIsAuto
     }
 
-    /// After a legal 1/N step, persist this so fps rematch keeps the displayed angle.
-    public static func preferredAngle(afterDenom denom: Int, fps: Int) -> Double {
-        ShutterAngle.nearestDegrees(ShutterAngle.degrees(denom: denom, fps: fps))
+    /// After a legal 1/N step, persist this so fps rematch keeps the displayed angle. `nil` when
+    /// the frame rate is unknown: nothing is persisted from a guessed angle.
+    public static func preferredAngle(afterDenom denom: Int, fps: Int) -> Double? {
+        ShutterAngle.degrees(denom: denom, fps: fps).map(ShutterAngle.nearestDegrees)
     }
 }

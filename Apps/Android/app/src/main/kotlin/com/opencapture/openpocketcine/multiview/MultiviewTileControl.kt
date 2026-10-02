@@ -187,8 +187,7 @@ internal class MultiviewMulticam(tiles: List<MulticamTile>) {
         tiles.map { it.control.current },
         tiles.associate { it.stream to it.picture },
         tiles.filter { it.busy }.map { it.id }.toSet(),
-        DjiCameraSessionAdapter.systemNow(),
-    )
+    ) // now: the shared host clock (MonotonicInstant.now(), MULTI-03 F1)
     val sessions: Map<CameraSessionID, CameraSession> = tiles.associate { it.control.id to it.control }
 
     fun plan(requested: List<MonitorEntryID>, stop: Boolean, policy: TargetPolicy = RECORD_POLICY): RecordPlan =
