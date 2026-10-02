@@ -34,7 +34,8 @@ def identity(root: Path, platform: str, configuration: str) -> str:
 # renderer, :multicam and :monitor-ui). Insta360 and Nikon sources are not inputs.
 SWIFT_ANDROID_CORE = [
     "Sources/OpenCineCore", "Sources/OpenCineMedia", "Sources/OpenCineMotion",
-    "Sources/OpenCineRelay", "Sources/OpenCineDJI",
+    "Sources/OpenCineRelay", "Sources/OpenCineDJI", "Sources/OpenCineDJIAndroid",
+    "Sources/OpenCineJNI",
 ]
 SIBLING_PACKAGES = {
     "ios": [
