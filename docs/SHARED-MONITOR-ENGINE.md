@@ -318,7 +318,7 @@ for these controls and a pending WB request is `pendingWhiteBalance`; Android ke
 optimistic HUD values and the seam reads separate camera-reported values. White balance tint is
 its own Core setting (`whiteBalanceTint`, -100...100); DJI sends white balance and tint in one
 frame, so each write is composed on the pending (else reported) white balance, and a sheet that
-changes both submits two operations. Built against OpenCineCore 28a0196 (CORE-01b).
+changes both submits two operations. Built against OpenCineCore 8c2415c (CORE-01b).
 Hardware-unqualified.
 
 ### Phase 5 — Thin brand apps

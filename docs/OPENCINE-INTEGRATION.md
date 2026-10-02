@@ -38,14 +38,14 @@ Shared packages, pinned in `opencine-pins.txt` and checked out by
 
 - OpenCineUI `54bcbb31283f6cf028268b382cb82eb6c156ac94` (MonitorUI, MonitorPresentation,
   Android `monitor-ui`).
-- OpenCineCore `1c648a633f0179c2ffcf5757026bcfe900481a08` (main: OpenCineCore, OpenCineMedia, OpenCineFrameIO,
+- OpenCineCore `7a17350db5a9534514cc3d3c836c205178ea425f` (main: OpenCineCore, OpenCineMedia, OpenCineFrameIO,
   OpenCineMotion, OpenCineRelay, OpenCineApple, Android `core`, `media` and `vulkan`). Root `Package.swift` (`../OpenCineCore`) and `ios/project.yml`
   (`../../OpenCineCore`) name the same directory, so Xcode sees one package.
-- OpenCineDJI `225215ed812bf7f0436e2b9dcb22408f3d97d7da`: DUML, datalink,
+- OpenCineDJI `e254af11f37fdde305dd231cfbd4a61c080d3318`: DUML, datalink,
   camera control/status, commands, feed watchdog, SoftAP, multicam discovery, media endpoints,
   DJI colour data and `DJICameraSessionAdapter`. `OpenPocketViewCore` re-exports it; the app
   and unit tests also name the product in `ios/project.yml` so Xcode links it.
-- OpenCineMulticam `bf8f520423880137722c5fa3b36d227fa0810ec7`: Multiview's group and tile record plans and the
+- OpenCineMulticam `0da23d2c8cd72ea788c3fa265ed34257880a0a70`: Multiview's group and tile record plans and the
   settings-editor leases. iOS links the package; Android includes `OpenCineMulticam/Android` as
   the named build `opencinemulticam` (one OpenCineCore build serves both).
 
