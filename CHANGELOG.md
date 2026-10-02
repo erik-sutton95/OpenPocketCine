@@ -50,6 +50,33 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Record is never a blind toggle on iOS and Android: the lamp, record
+  confirmation, gamepad, Apple Watch and watcher relay send an explicit start
+  or stop for the state the camera reported. Right after connecting, a press
+  waits for the camera's first record state ("Waiting for the camera's record
+  state") instead of guessing. ISO, white balance and record go through one
+  camera session per connection; on iOS the HUD shows the value the camera
+  reported, with a pending state until it answers (the Android HUD is
+  unchanged).
+- Apple Watch, the watcher relay and a confirmed record command act only on the
+  camera they showed. After a link change the watch says "Camera changed. Try
+  again." instead of acting on another camera, and with Multiview Live View open
+  a watch press is refused rather than sent to another camera.
+- Multiview **Record all** and a tile's record (iOS and Android) send an
+  explicit start or stop per camera after checking the confirmed plan again.
+  Each tile shows its own result ("No confirmation · check camera", "N of M
+  confirmed") and nothing is stopped or rolled back because another camera
+  failed. A camera in Photo mode disables Record all and its own record action.
+  The record confirmation closes when a camera's link is replaced or its
+  capabilities change; on Android it now closes on the same changes as on iOS.
+- Frame.io on iOS refuses an account, folder or file ID containing `/`, `?`,
+  `#`, `\`, whitespace or control characters before sending any request. The
+  saved sign-in is unchanged.
+- Shared UI, media math, DJI camera control, Multiview record plans, Frame.io,
+  gimbal motion, the watcher relay wire and the iOS video decoder now come from
+  the OpenCine packages (OpenCineUI, OpenCineCore, OpenCineDJI,
+  OpenCineMulticam). No visible change intended: screenshots, golden media
+  numbers and relay wire bytes are unchanged.
 - The previous CineStop false color scale is now called **Video**. Saved
   choices keep the same scale under the new name.
 - False color code cleanup on iOS and Android.
@@ -130,6 +157,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android scopes, zebra and false color read the clip ceiling of the feed they
+  show. A Multiview tile or playback scope no longer moves the live feed's
+  WAVE 100 and false color clip, or the reverse.
+- Frame.io on iOS stays signed in when a token refresh returns no new refresh
+  token (it used to force a sign-in at the next expiry), and cancelling an
+  upload batch reports "Cancelled." instead of counting failed clips.
 - Android Live View shows the whole picture with the camera held upright,
   such as an Osmo Nano turned to portrait. The renderer cropped the vertical
   frame to its middle 16:9 strip before grading and cropped it again for
