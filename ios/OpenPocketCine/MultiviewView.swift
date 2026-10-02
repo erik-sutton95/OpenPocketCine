@@ -135,7 +135,7 @@ struct MultiviewView: View {
     }
 
     private func stageContent(viewport: GeometryProxy) -> some View {
-        let safe = OsmoCameraPageAdapter.safeArea(
+        let safe = LinkExperience.pageSafeArea(
             viewport.safeAreaInsets, window: windowGeometry.safeArea,
             portrait: viewport.size.height > viewport.size.width,
             orientation: orientation.orientation)

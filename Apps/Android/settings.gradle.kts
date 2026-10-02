@@ -29,6 +29,7 @@ includeBuild("../../../OpenCine/Android") {
         substitute(module("com.opencapture.opencine:vulkan")).using(project(":vulkan"))
         substitute(module("com.opencapture.opencine:multicam")).using(project(":multicam"))
         substitute(module("com.opencapture.opencine:monitor-ui")).using(project(":monitor-ui"))
+        substitute(module("com.opencapture.opencine:appkit")).using(project(":appkit"))
     }
 }
 

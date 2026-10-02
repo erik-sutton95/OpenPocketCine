@@ -70,10 +70,10 @@ results; isolate the relevant session/window before comparing builds.
 
 ### P1: incoming video suppresses all watchdog repair of stopped output
 
-[`FeedWatchdog.tick`](../../Sources/OpenPocketViewCore/FeedWatchdog.swift)
+[`FeedWatchdog.tick`](../../../OpenCine/Sources/OpenCineDJI/FeedWatchdog.swift)
 returns `.none` and resets its stage when `udpReceiveAlive` is true. It does not
 use `decoderFailed` to recover the decoder. Meanwhile
-[`LinkDiagnoser.repair`](../../Sources/OpenPocketViewCore/LinkDiagnosis.swift)
+[`LinkDiagnoser.repair`](../../../OpenCine/Sources/OpenCineDJI/LinkDiagnosis.swift)
 explicitly maps `decoderWedged` and `presentStalled` to `.none`.
 The iOS [`applyFeedWatchdog`](../../ios/OpenPocketCine/CameraSession.swift)
 only logs the freeze in this branch. The existing `rebuildVTSession` action is
@@ -102,7 +102,7 @@ the indefinite outage.
 rebuild immediately on invalid-session status. The synchronous path retries the
 same sample; the asynchronous path rebuilds and subsequent AUs continue.
 Neither path establishes that the new decoder has received an IRAP/IDR.
-[`CameraSoftAP.shouldRebuildVTSession`](../../Sources/OpenPocketViewCore/CameraSoftAP.swift)
+[`CameraSoftAP.shouldRebuildVTSession`](../../../OpenCine/Sources/OpenCineDJI/CameraSoftAP.swift)
 only recognizes invalid-session status; other persistent failures just increment
 an error counter. The stream has no periodic GOP guarantee.
 
@@ -128,7 +128,7 @@ discarding some of its dependent chain is not equivalent to retaining a
 decodable sequence. If every queued AU is protected, the loop exits above its
 nominal eight-AU cap.
 
-The shared [`HevcDepacketizer`](../../Sources/OpenPocketViewCore/HevcDepacketizer.swift)
+The shared [`HevcDepacketizer`](../../../OpenCine/Sources/OpenCineDJI/HevcDepacketizer.swift)
 correctly avoids forwarding incomplete sized frames, but the resulting reference
 loss is not communicated to a bounded decoder recovery owner. The report's two
 incomplete drops justify testing this seam; they do not prove that every missing
@@ -142,9 +142,9 @@ latest-wins dropping freely to decoded images, not arbitrary compressed frames.
 
 ### P1: Android can remain in an IDR hold after transport resumes
 
-[`sendCapturedLiveView`](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/session/PocketCameraSession.kt)
+[`sendCapturedLiveView`](../../../OpenCine/Android/dji/src/main/kotlin/com/opencapture/opencine/dji/PocketCameraSession.kt)
 begins an IDR hold when the last picture is stale. Android's
-[`HevcDecoder.decodeLocked`](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/session/HevcDecoder.kt)
+[`HevcDecoder.decodeLocked`](../../../OpenCine/Android/decoder/src/main/kotlin/com/opencapture/opencine/decoder/HevcDecoder.kt)
 then rejects non-IRAP AUs until an IRAP is queued. It has no equivalent of iOS's
 watchdog-driven `endIDRHold` path. If an enable does not produce a new GOP but
 inter-frame traffic resumes, this combines with the watchdog's fresh-video
@@ -184,7 +184,7 @@ making that classifier an acting owner would expand the consequences.
 
 ### P2: FPS can retain a healthy value after frames stop
 
-[`FrameRateSampler`](../../Sources/OpenPocketViewCore/FrameRateSampler.swift)
+[`FrameRateSampler`](../../../OpenCine/Sources/OpenCineMedia/FrameRateSampler.swift)
 updates only when a frame is recorded. The iOS session reads its retained
 `displayFPS` when building the FPS chip; the sampler has no observation-time
 expiry. [`LiveViewLink.fpsChipLabel`](../../Sources/OpenPocketViewCore/CameraLinkHealth.swift)
@@ -246,7 +246,7 @@ been measured as the cause of a field dropout. Move bounded persistence to a
 dedicated writer and amortize rotation. Storage failures must not escape into
 session or recovery logic.
 
-Android's [`logWatchdogHold`](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/session/PocketCameraSession.kt)
+Android's [`logWatchdogHold`](../../../OpenCine/Android/dji/src/main/kotlin/com/opencapture/opencine/dji/PocketCameraSession.kt)
 writes to logcat rather than the shared report, and it lacks the iOS
 `LinkDiagnoser.observeLine` journal path. Its JNI snapshot also uses cumulative
 `decoderErrors > 0`. The current watchdog ignores that field, so this is a stale

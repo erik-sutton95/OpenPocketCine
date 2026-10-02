@@ -23,6 +23,7 @@ against a sibling checkout of the shared OpenCine repository (see Publish prereq
 | SHELL-04 DJI part (Android `HevcDecoder` from OpenCine `:decoder`, DJI Kotlin layer from `:dji`), stacked on this branch | `opencine/shell-04` | see `git log` |
 | SHELL-01 steps 4-5, iOS (live monitor laid out from the DJI integration's capability projection) | `opencine/shell-01` | see `git log` |
 | SHELL-01 steps 4-5, Android (same projection from OpenCine `:dji`) | `opencine/shell-01k` | see `git log` |
+| SHELL-02 step 7 (shared cameras, pairing and saved-camera migration, both platforms) | `opencine/shell-02` | see `git log` |
 
 ### Merged branches
 
@@ -40,18 +41,29 @@ Shared code comes from one repository, OpenCine, pinned in `opencine-pins.txt` (
 checked out next to this repository as `../OpenCine` by `scripts/checkout-opencine.sh`:
 
 - Swift: MonitorUI, MonitorPresentation, OpenCineCore, OpenCineMedia, OpenCineFrameIO,
-  OpenCineMotion, OpenCineRelay, OpenCineApple, OpenCineDJI and OpenCineMulticam. Root
+  OpenCineMotion, OpenCineRelay, OpenCineApple, OpenCineDJI, OpenCineAppKit and OpenCineMulticam. Root
   `Package.swift` (`../OpenCine`) and `ios/project.yml` (`../../OpenCine`) name the same
   directory, so Xcode sees one package. `OpenPocketViewCore` re-exports OpenCineDJI; the app and
   unit tests also name the product in `ios/project.yml` so Xcode links it.
 - Android: `Apps/Android/settings.gradle.kts` includes `../../../OpenCine/Android` once, as the
-  named build `opencine`, substituting `core`, `media`, `decoder`, `dji`, `vulkan`, `multicam`
-  and `monitor-ui`.
+  named build `opencine`, substituting `core`, `media`, `decoder`, `dji`, `vulkan`, `multicam`,
+  `appkit` and `monitor-ui`.
 - The per-package pins listed in earlier revisions of this file (OpenCineUI, OpenCineCore,
   OpenCineDJI, OpenCineMulticam) are history: those repositories were merged, with history, into
   OpenCine on 2026-10-02.
 
 ## What changes for users
+
+- Cameras and pairing now use the shared OpenCine flow on iOS and Android.
+  Select a nearby camera and Continue; approval and Wi-Fi prompts follow the
+  camera's reported progress. Saved-camera cards show their own attempt and
+  typed failure actions, including Open Settings where applicable. Add setup
+  retains the existing Wi-Fi/hotspot wizard, and Multiview keeps its entry.
+- Saved cameras import without changing their IDs, Wi-Fi secrets, media favorites
+  or other preferences. Legacy records stay mirrored for downgrade compatibility;
+  edits made in an older build merge on the next upgrade. A malformed record no
+  longer wipes the readable records. Forget also drops Android camera Wi-Fi
+  credentials, matching iOS. The legacy mirror removal release is undecided.
 
 - Shared UI and media math are meant to be invisible: screenshots matched the pre-move app
   and the moved media tests keep their numbers (golden values unchanged).
@@ -197,6 +209,45 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
        gimbal card on a Pocket only. Audio: AUDIO tile, assist and meter in video on every body,
        meters move with sound. Timecode: live on Pocket and Action 6, none on Nano (live and
        Multi View tile). Record: start and stop with and without confirmation.
+
+18. SHELL-02 first pair and reconnect, iPhone/iPad and Android, on Pocket 3,
+    Pocket 4 / 4 Pro and Nano (plus Action 6/360/Xtra if available):
+    1. With DJI Frame Tap off and DJI Mimo force-quit, Pair new camera, select the
+       intended body, Continue, approve on camera and accept the OS Wi-Fi join.
+       Progress must reach that body's live picture once; the saved card must
+       retain its name and setup after relaunch.
+    2. Reconnect the saved body without a new password prompt. Cancel while
+       scanning, approving and joining; the app must stop the attempt, and the
+       next selected camera alone connects. Bluetooth denied/off must offer a
+       useful Settings action and resume discovery after returning.
+    3. Trigger an approval or video-link timeout and verify the DJI Frame Tap /
+       DJI Mimo tip remains visible. Retry must connect only the selected body.
+    4. Forget and re-pair. Its saved Wi-Fi credential is removed on each platform;
+       unrelated cameras and saved station networks remain available.
+19. SHELL-02 station setups and Multiview, both platforms, qualified Pocket/Nano:
+    1. Add Wi-Fi and phone hotspot setups, connect over each, then Camera Wi-Fi.
+       The camera returns to its access point, and the correct network is saved.
+       Repeat after cancelling a station join or camera-side network scan.
+    2. iOS: with Personal Hotspot off, reconnect its saved hotspot setup, open
+       Settings, return, then Connect. Cancel or replace the attempt while the
+       prompt waits; responding later must never start an obsolete connection.
+    3. Open Multiview, choose its network, add two cameras, borrow Live View and
+       return. Leave Multiview, then reconnect a saved single camera. No duplicate
+       discovery, old-camera command or missing saved-network name is acceptable.
+20. SHELL-02 installed-data preservation, both platforms, using existing data:
+    1. Before updating, note camera names, setup networks and selected setups,
+       save a media favorite, and confirm a credential-backed reconnect.
+    2. Install this integration build over the current TestFlight/Play build,
+       without uninstalling. All cameras, setups, favorites and preferences must
+       remain; each saved setup reconnects without re-entering credentials.
+    3. Where signing/version rules permit, install the older build over this one,
+       rename a camera, add a setup and forget another camera. Reinstall this
+       build. Every old-build edit must appear and the forgotten camera must stay
+       absent. Never erase real app data to make a downgrade possible.
+
+The SHELL-02 simulator/emulator runs use synthetic camera records and credentials.
+They do not prove Bluetooth, camera networking, store signing or physical-device
+upgrade behavior. Items 18-20 remain for the device tester.
 
 ## Publish prerequisite
 

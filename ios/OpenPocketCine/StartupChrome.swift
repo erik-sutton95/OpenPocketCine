@@ -59,31 +59,6 @@ extension View {
 }
 
 enum StartupConnectionCopy {
-    static let shareDiagnostics = "Share Diagnostics"
-
-    static func statusTitle(for phase: ConnectionPhase, isDiscovering: Bool) -> String {
-        switch phase {
-        case .idle:
-            return isDiscovering ? "Looking" : "Ready"
-        case .scanning:
-            return "Looking"
-        case .connectingGatt:
-            return "Connecting"
-        case .pairing, .awaitingApproval:
-            return "Pairing"
-        case .readingWifiCreds:
-            return "Reading"
-        case .joiningWifi:
-            return "Joining"
-        case .openingDatalink:
-            return "Connecting"
-        case .live:
-            return "Connected"
-        case .failed:
-            return "Ready"
-        }
-    }
-
     static let openSettings = "Open Settings"
     static let localNetworkDenied =
         "OpenPocketCine needs Local Network access to reach the camera. Open Settings, turn on Local Network for OpenPocketCine, then try again."
@@ -111,6 +86,9 @@ enum StartupConnectionCopy {
     static let bluetoothEnded =
         "The camera ended the connection. Turn off DJI Frame Tap and force quit DJI Mimo on every phone near the camera, then try again."
 
+    /// Why a Bluetooth scan cannot run (`BleLink.unavailableReason`).
+    static let bluetoothProblems: Set<String> = [bluetoothDenied, bluetoothOff, bluetoothNotReady]
+
     /// Failures the operator can only fix in iOS Settings get an Open Settings action.
     static func opensSettings(_ raw: String) -> Bool {
         raw == localNetworkDenied || raw == bluetoothDenied
@@ -133,387 +111,6 @@ enum StartupConnectionCopy {
             return trimmed
         }
         return trimmed
-    }
-}
-
-struct StartupHeader: View {
-    var title: String = "Connection setup"
-    let statusTitle: String
-    let isBusy: Bool
-    var onPrivacy: (() -> Void)? = nil
-    var onTerms: (() -> Void)? = nil
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 11) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("OPENPOCKETCINE")
-                    .font(LiveType.ui(size: 10, weight: .semibold, design: .rounded))
-                    .tracking(1.3)
-                    .foregroundStyle(StartupColors.muted)
-                HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Text(title)
-                        .font(LiveType.ui(size: 17, weight: .bold, design: .rounded))
-                        .foregroundStyle(StartupColors.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    if let onPrivacy {
-                        Button("Privacy", action: onPrivacy)
-                            .font(LiveType.ui(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(StartupColors.dim)
-                            .buttonStyle(.zcTapTarget)
-                    }
-                    if let onTerms {
-                        Button("Terms", action: onTerms)
-                            .font(LiveType.ui(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(StartupColors.dim)
-                            .buttonStyle(.zcTapTarget)
-                    }
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 7, height: 7)
-                Text(statusTitle)
-                    .font(LiveType.ui(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(statusColor)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(StartupColors.surface.opacity(0.50), in: Capsule())
-            .overlay(Capsule().stroke(statusColor.opacity(0.40), lineWidth: 1))
-        }
-    }
-
-    private var statusColor: Color {
-        if isBusy
-            || [
-                "Looking", "Pairing", "Reconnecting", "Starting", "Reading", "Discovering",
-                "Preparing", "Joining", "Connecting",
-            ]
-            .contains(statusTitle)
-        {
-            return StartupColors.accent
-        }
-        return StartupColors.ready
-    }
-}
-
-struct StartupCardBackground: View {
-    var body: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(StartupColors.card)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(StartupColors.border.opacity(0.08), lineWidth: 1)
-            )
-    }
-}
-
-struct StartupIconSquare: View {
-    let icon: OpcIcon
-    var size: CGFloat = 56
-    var cornerRadius: CGFloat = DesignTokens.cornerRadius
-    var tint: Color = StartupColors.accent
-
-    var body: some View {
-        let glyph = max(16, size * 0.38)
-        RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(StartupColors.tile)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius).stroke(
-                    tint.opacity(0.46), lineWidth: 1)
-            )
-            .overlay {
-                icon
-                    .frame(width: glyph, height: glyph)
-                    .foregroundStyle(tint)
-            }
-            .frame(width: size, height: size)
-    }
-}
-
-struct StartupWizardProgress: View {
-    let currentStep: Int
-    let totalSteps: Int
-    var compact = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 6 : 8) {
-            HStack(spacing: 6) {
-                Text(compact ? "Setup" : "Set up your first camera")
-                    .font(LiveType.ui(size: compact ? 10 : 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(StartupColors.muted)
-                Spacer(minLength: 0)
-                Text("Step \(currentStep) of \(totalSteps)")
-                    .font(LiveType.ui(size: compact ? 10 : 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(StartupColors.dim)
-            }
-            HStack(spacing: compact ? 4 : 8) {
-                ForEach(1...totalSteps, id: \.self) { step in
-                    Capsule()
-                        .fill(
-                            step <= currentStep
-                                ? StartupColors.accent : StartupColors.control.opacity(0.55)
-                        )
-                        .frame(height: compact ? 3 : 4)
-                        .overlay {
-                            if step > currentStep {
-                                Capsule().stroke(
-                                    StartupColors.border.opacity(0.08), lineWidth: 1)
-                            }
-                        }
-                }
-            }
-        }
-    }
-}
-
-struct StartupWizardPrepareCards: View {
-    let steps: [String]
-    var tight: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: tight ? 6 : 10) {
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                HStack(alignment: .top, spacing: tight ? 10 : 12) {
-                    Text("\(index + 1)")
-                        .font(LiveType.ui(size: tight ? 12 : 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(StartupColors.accent)
-                        .frame(width: tight ? 24 : 30, height: tight ? 24 : 30)
-                        .background(
-                            StartupColors.accent.opacity(0.12),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(StartupColors.accent.opacity(0.45), lineWidth: 1)
-                        )
-
-                    Text(step)
-                        .font(LiveType.ui(size: tight ? 12 : 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(StartupColors.ink)
-                        .lineSpacing(1)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, tight ? 12 : 16)
-                .padding(.vertical, tight ? 9 : 15)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    StartupColors.card,
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-                        .stroke(StartupColors.border.opacity(0.10), lineWidth: 1)
-                )
-            }
-        }
-    }
-}
-
-struct StartupWizardDeviceSection: Identifiable {
-    let id: String
-    let title: String
-    let icon: OpcIcon
-    let steps: [String]
-}
-
-struct StartupWizardDeviceInstructionCard: View {
-    let section: StartupWizardDeviceSection
-    var tight: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: tight ? 6 : 8) {
-            HStack(spacing: 8) {
-                section.icon
-                    .frame(width: tight ? 13 : 15, height: tight ? 13 : 15)
-                    .foregroundStyle(StartupColors.accent)
-                Text(section.title)
-                    .font(LiveType.ui(size: tight ? 11 : 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(StartupColors.ink)
-                Spacer(minLength: 0)
-            }
-
-            VStack(alignment: .leading, spacing: tight ? 4 : 6) {
-                ForEach(Array(section.steps.enumerated()), id: \.offset) { index, step in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("\(index + 1)")
-                            .font(LiveType.ui(size: 9, weight: .bold, design: .rounded))
-                            .foregroundStyle(StartupColors.muted)
-                            .frame(width: 14, alignment: .trailing)
-                            .padding(.top, 1)
-                        Text(step)
-                            .font(
-                                LiveType.ui(
-                                    size: tight ? 11 : 13, weight: .medium, design: .rounded)
-                            )
-                            .foregroundStyle(StartupColors.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, tight ? 10 : 14)
-        .padding(.vertical, tight ? 10 : 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            StartupColors.card, in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-                .stroke(StartupColors.border.opacity(0.10), lineWidth: 1)
-        )
-    }
-}
-
-struct StartupWizardInfoBanner: View {
-    let text: String
-    var tight: Bool = false
-
-    var body: some View {
-        HStack(alignment: .top, spacing: tight ? 8 : 10) {
-            OpcIcon.info
-                .frame(width: tight ? 12 : 14, height: tight ? 12 : 14)
-                .foregroundStyle(StartupColors.accent)
-            Text(text)
-                .font(LiveType.ui(size: tight ? 10 : 12, weight: .regular, design: .rounded))
-                .foregroundStyle(StartupColors.muted)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, tight ? 10 : 12)
-        .padding(.vertical, tight ? 8 : 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            StartupColors.surface.opacity(0.72),
-            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-                .stroke(StartupColors.accent.opacity(0.28), lineWidth: 1)
-        )
-    }
-}
-
-struct StartupIndeterminateBar: View {
-    @State private var animating = false
-
-    var body: some View {
-        GeometryReader { geo in
-            let trackWidth = geo.size.width
-            let segmentWidth = max(44, trackWidth * 0.32)
-            Capsule()
-                .fill(StartupColors.accent)
-                .frame(width: segmentWidth, height: 3)
-                .offset(x: animating ? trackWidth - segmentWidth : 0)
-                .animation(
-                    .easeInOut(duration: 0.85).repeatForever(autoreverses: true), value: animating)
-        }
-        .frame(height: 3)
-        .frame(maxWidth: .infinity)
-        .background(StartupColors.control.opacity(0.45), in: Capsule())
-        .onAppear { animating = true }
-    }
-}
-
-struct StartupEmptyDiscoveryCard: View {
-    var title: String = "Looking for cameras"
-    var hint: String = "Turn the camera on — Pocket and Nano both appear over Bluetooth."
-    var compact: Bool = false
-
-    var body: some View {
-        VStack(spacing: compact ? 6 : 10) {
-            OpcIcon.radio
-                .frame(width: compact ? 18 : 24, height: compact ? 18 : 24)
-                .foregroundStyle(StartupColors.accent)
-            Text(title)
-                .font(LiveType.ui(size: compact ? 13 : 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(StartupColors.ink)
-            Text(hint)
-                .font(LiveType.ui(size: compact ? 10 : 12, weight: .regular, design: .rounded))
-                .foregroundStyle(StartupColors.muted)
-                .multilineTextAlignment(.center)
-                .lineLimit(compact ? 3 : nil)
-                .minimumScaleFactor(compact ? 0.85 : 1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, compact ? 12 : 18)
-        .padding(.vertical, compact ? 12 : 24)
-        .background(
-            StartupColors.card, in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.cornerRadius).stroke(
-                StartupColors.border.opacity(0.10), lineWidth: 1))
-    }
-}
-
-struct StartupDiscoveredCameraCard: View {
-    let camera: FoundCamera
-    var compact: Bool = false
-
-    var body: some View {
-        HStack(spacing: compact ? 10 : 14) {
-            StartupIconSquare(icon: .scan, size: compact ? 36 : 48)
-
-            VStack(alignment: .leading, spacing: compact ? 3 : 7) {
-                Text(
-                    FoundCameraIdentity.listTitle(
-                        advertisedName: camera.name, modelName: camera.model.name)
-                )
-                .font(LiveType.ui(size: compact ? 13 : 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(StartupColors.ink)
-                .lineLimit(1)
-                Text(
-                    FoundCameraIdentity.listSubtitle(
-                        advertisedName: camera.name, modelName: camera.model.name)
-                        + (camera.model.verified ? "" : " · unverified")
-                )
-                .font(LiveType.ui(size: compact ? 10 : 12, weight: .regular, design: .rounded))
-                .foregroundStyle(StartupColors.muted)
-                .lineLimit(1)
-            }
-
-            Spacer()
-
-            OpcIcon.signal
-                .frame(width: compact ? 16 : 20, height: compact ? 16 : 20)
-                .foregroundStyle(StartupColors.accent)
-        }
-        .padding(.horizontal, compact ? 12 : 16)
-        .frame(height: compact ? 64 : 84)
-        .background(
-            StartupColors.card, in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-                .stroke(StartupColors.border.opacity(0.10), lineWidth: 1)
-        )
-    }
-}
-
-struct StartupOutlineButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(LiveType.ui(size: 16, weight: .semibold, design: .rounded))
-            .foregroundStyle(StartupColors.ink)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 14)
-            .background(
-                StartupColors.control.opacity(configuration.isPressed ? 0.98 : 0.82),
-                in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.cornerRadius).stroke(
-                    StartupColors.border.opacity(0.12), lineWidth: 1)
-            )
-            .opacity(configuration.isPressed ? 0.78 : 1)
     }
 }
 
@@ -541,108 +138,39 @@ struct StartupFilledButtonStyle: ButtonStyle {
     }
 }
 
-struct StartupWizardFilledButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Label(configuration: configuration)
-    }
-
-    private struct Label: View {
-        let configuration: Configuration
-        @Environment(\.isEnabled) private var isEnabled
-
-        var body: some View {
-            configuration.label
-                .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(isEnabled ? StartupColors.darkText : StartupColors.muted)
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .background(
-                    isEnabled
-                        ? StartupColors.accent.opacity(configuration.isPressed ? 0.80 : 1)
-                        : StartupColors.control.opacity(0.6),
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-                )
-                .opacity(isEnabled ? 1 : 0.55)
-        }
-    }
-}
-
-struct StartupWizardOutlineButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(LiveType.ui(size: 14, weight: .semibold, design: .rounded))
-            .foregroundStyle(StartupColors.ink)
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
-            .background(
-                StartupColors.control.opacity(configuration.isPressed ? 0.98 : 0.82),
-                in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.cornerRadius).stroke(
-                    StartupColors.border.opacity(0.12), lineWidth: 1)
-            )
-            .opacity(configuration.isPressed ? 0.78 : 1)
-    }
-}
-
-struct StartupQuietButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(StartupColors.ink)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                StartupColors.control.opacity(configuration.isPressed ? 0.98 : 0.66),
-                in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.cornerRadius).stroke(
-                    StartupColors.border.opacity(0.08), lineWidth: 1))
-    }
-}
-
-/// Wizard footer so testers stuck on first pair can send a report
-/// without reaching Operator Setup.
-struct StartupShareDiagnosticsButton: View {
+/// The DJI entry's pairing slot (SHELL-02): why Bluetooth discovery is not running (with Open
+/// Settings where only Settings fixes it), the vendor-app check before pairing, or after 20 s
+/// without a camera the still-looking tip, and the VPN banner when a filter may block the link.
+struct PocketPairingTips: View {
     @Environment(AppModel.self) private var model
-    @State private var payload: DiagnosticSharePayload?
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
-        Button {
-            if let url = DiagnosticCenter.shared.beginShare(session: model.session) {
-                payload = DiagnosticSharePayload(url: url)
+        VStack(alignment: .leading, spacing: 8) {
+            if case .failed(let reason) = model.session.phase, StartupConnectionCopy.bluetoothProblems.contains(reason) {
+                tip("Bluetooth", reason, settings: StartupConnectionCopy.opensSettings(reason))
+            } else if model.session.scanLooksEmpty, model.cameras.nearby.isEmpty {
+                tip(StartupConnectionCopy.scanEmptyTitle, StartupConnectionCopy.scanEmptyHint)
+            } else {
+                tip(StartupConnectionCopy.preCheckTitle, StartupConnectionCopy.preCheck)
             }
-        } label: {
-            Text(StartupConnectionCopy.shareDiagnostics)
-        }
-        .buttonStyle(StartupWizardOutlineButtonStyle())
-        .sheet(item: $payload) { item in
-            DiagnosticActivityShareView(items: [item.url])
+            if LocalVPNProbe.isActive() { tip("Check the connection", LocalVPNFilter.wizardBanner) }
         }
     }
-}
 
-/// Wizard-exit affordance matching OpenZCine `yourCamerasButton`.
-struct StartupYourCamerasButton: View {
-    let action: () -> Void
-    var disabled: Bool = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                OpcIcon.chevronLeft
-                    .frame(width: 12, height: 12)
-                OpcIcon.camera
-                    .frame(width: 13, height: 13)
-                Text("Your cameras")
+    /// The shared pair page's instruction card, with an optional Open Settings.
+    private func tip(_ title: String, _ text: String, settings: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title.uppercased()).font(MonitorTheme.font(9, weight: .bold)).tracking(1.4)
+            Text(text).font(MonitorTheme.font(12.5)).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            if settings, let url = URL(string: UIApplication.openSettingsURLString) {
+                Button(StartupConnectionCopy.openSettings) { openURL(url) }
+                    .font(MonitorTheme.font(12.5, weight: .semibold)).foregroundStyle(MonitorTheme.accent)
             }
-            .lineLimit(1)
-            .padding(.horizontal, 14)
         }
-        .buttonStyle(StartupWizardOutlineButtonStyle())
-        .fixedSize()
-        .disabled(disabled)
+        .foregroundStyle(MonitorTheme.secondary).frame(maxWidth: .infinity, alignment: .leading)
+        .padding(13)
+        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 11))
+        .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color.white.opacity(0.06), lineWidth: 1))
     }
 }

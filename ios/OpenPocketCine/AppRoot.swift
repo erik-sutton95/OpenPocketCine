@@ -1,19 +1,95 @@
 import CoreVideo
 import MonitorPresentation
 import Observation
+import OpenCineAppKit
+import OpenCineCore
 import OpenCineFrameIO
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
 /// App-level session object (OpenZCine `NativeAppModel` analogue). Owns the existing
-/// `CameraSession` connection spine and the saved-camera list. Does not rewrite DUML.
+/// `CameraSession` connection spine and the shared cameras model. Does not rewrite DUML.
 @MainActor
 @Observable
 final class AppModel {
     var session: CameraSession
-    init(session: CameraSession? = nil) {
-        self.session = session ?? CameraSession()
+    /// Saved cameras, nearby sightings, pairing and connect attempts (SHELL-02): the shared flow
+    /// over the DJI integration, which connects through `session`.
+    let cameras: CamerasModel
+    @ObservationIgnored let integration: DJIIntegration
+    /// A saved hotspot connect waiting for the operator to turn Personal Hotspot on.
+    var hotspotQuestion: HotspotQuestion?
+
+    /// `connects`: the cameras and pair pages discover and connect through this model (the app's
+    /// one root model). A Multiview tile's live or settings model, previews and tests never do.
+    init(session: CameraSession? = nil, connects: Bool = false) {
+        let session = session ?? CameraSession()
+        self.session = session
+        var port: any DJIConnectPort = session
+        var defaults = UserDefaults.standard
+        #if targetEnvironment(simulator)
+            if MonitorUIReview.isActive { (port, defaults) = MonitorUIReview.cameras() }
+        #endif
+        let integration = DJIIntegration(port: port)
+        self.integration = integration
+        cameras = CamerasModel(
+            integrations: connects
+                ? [
+                    AppIntegration(
+                        integration,
+                        slots: IntegrationSlots(
+                            pairing: { AnyView(PocketPairingTips()) },
+                            addRoute: { camera, done in AnyView(AddSetupView(camera: camera, done: done)) }))
+                ] : [],
+            store: Self.camerasStore(defaults))
+        // The save rules a DJI record follows: another camera's network is never saved with
+        // this one, and a setup that moves the camera is remembered before it moves it.
+        integration.savedCameras = { [weak self] in self?.cameras.saved ?? [] }
+        integration.saveRecord = { [weak self] in self?.cameras.upsert($0) }
+        session.savedCameras = { [weak self] in self?.cameras.saved ?? [] }
+        session.confirmHotspot = { [weak self] network in await self?.askHotspot(network) ?? false }
+        cameras.onConnected = { [weak self] _ in self?.isPairingNewCamera = false }
+    }
+
+    /// The saved cameras: the shared document `OpenPocketCine.Cameras`, merged on every launch
+    /// with the records older builds read and write (`OpenPocketCine.SavedCameras`), which it
+    /// keeps mirrored. Wi-Fi passwords stay in the Keychain, untouched.
+    static func camerasStore(_ defaults: UserDefaults = .standard) -> SavedCamerasStore {
+        SavedCamerasStore(
+            document: .userDefaults(defaults, key: "OpenPocketCine.Cameras"),
+            legacy: .init(
+                data: .userDefaults(defaults, key: "OpenPocketCine.SavedCameras"),
+                codec: BodyRecordsV0(integration: DJICameraSessionAdapter.integration, dates: .secondsSince2001),
+                source: "OpenPocketCine.SavedCameras"))
+    }
+
+    /// Saved cameras, most recently connected first.
+    var savedCameras: [SavedCamera] {
+        cameras.saved.sorted { ($0.lastConnected ?? .distantPast) > ($1.lastConnected ?? .distantPast) }
+    }
+
+    /// Asks before a saved hotspot connect (`CameraSession.confirmHotspot`); `false` cancels it.
+    func askHotspot(_ network: String) async -> Bool {
+        guard !Task.isCancelled else { return false }
+        answerHotspot(false)
+        let id = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                hotspotQuestion = HotspotQuestion(id: id, network: network, continuation: continuation)
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                guard self?.hotspotQuestion?.id == id else { return }
+                self?.answerHotspot(false)
+            }
+        }
+    }
+
+    func answerHotspot(_ connect: Bool) {
+        let question = hotspotQuestion
+        hotspotQuestion = nil
+        question?.answer(connect)
     }
     @ObservationIgnored let watchRelay = WatchRelay()
     @ObservationIgnored private var watchRelayActivated = false
@@ -30,7 +106,6 @@ final class AppModel {
             poseViewFlip: session.gimbalPoseViewFlip,
             assistMirror: assist.mirrorsHorizontally)
     }
-    var savedCameras: [SavedCamera] = SavedCameraStore.load()
     /// Operator tapped “Pair new camera” from the saved list.
     var isPairingNewCamera = false
     var showsLaunchSplash = true
@@ -339,10 +414,8 @@ final class AppModel {
         liveOperatorPanel = .settings
     }
 
-    var shouldShowWizard: Bool {
-        CameraStartupPolicy.launchDestination(savedCameras: savedCameras) == .addCamera
-            || isPairingNewCamera
-    }
+    /// The pair page: no saved camera yet, or the operator chose Pair.
+    var shouldShowWizard: Bool { cameras.saved.isEmpty || isPairingNewCamera }
 
     var isLive: Bool {
         #if targetEnvironment(simulator)
@@ -360,17 +433,6 @@ final class AppModel {
         #endif
     }
 
-    var isBusy: Bool {
-        switch session.phase {
-        case .idle, .scanning, .failed, .live: false
-        default: true
-        }
-    }
-
-    var isScanning: Bool {
-        if case .scanning = session.phase { true } else { false }
-    }
-
     func prepareStartup() {
         #if targetEnvironment(simulator)
             if MonitorUIReview.isActive {
@@ -379,84 +441,33 @@ final class AppModel {
             }
         #endif
         LiveHDRDisplay.setEnabled(hdrDisplay)
-        savedCameras = SavedCameraStore.load()
-        switch CameraStartupPolicy.launchDestination(savedCameras: savedCameras) {
-        case .addCamera:
-            isPairingNewCamera = true
-            session.startScan()
-        case .savedCameras:
-            isPairingNewCamera = false
-            session.startScan()
+    }
+
+    /// Connects a saved camera over its preferred setup (debug and stress drivers).
+    func reconnect(_ camera: SavedCamera) { cameras.connect(camera) }
+
+    /// Add setup's camera scan, or `nil` when the camera is not nearby. Stamped first: the scan
+    /// moves the camera to station role, so a lost reset is repaired by the next Camera Wi-Fi
+    /// connect.
+    func networkScan(_ camera: SavedCamera) -> ((@escaping @MainActor (String) -> Void) async throws -> Void)? {
+        guard let found = session.found.first(where: { $0.id.uuidString == camera.id }) else { return nil }
+        return { [weak self] onFound in
+            if let self, let current = self.cameras.saved.first(where: { $0.id == camera.id }) {
+                self.cameras.upsert(DJIIntegration.stamping(current, movingTo: .infrastructureNetwork))
+            }
+            try await MultiviewProvisioner.scanNetworks(found, onFound: onFound)
         }
     }
 
-    func pairNewCamera() {
-        isPairingNewCamera = true
-        session.startScan()
-    }
-
-    func cancelPairing() {
+    /// The Multiview stage takes the radio: the single-camera session lets go of it until the
+    /// stage closes (`closeMultiview`).
+    func openMultiview() {
+        guard cameras.attempts.isEmpty else { return }
         session.disconnect()
-        isPairingNewCamera = false
-        session.startScan()
     }
 
-    func reconnect(_ camera: SavedCamera) {
-        reconnect(camera, setup: camera.preferredSetup)
-    }
-
-    func reconnect(_ camera: SavedCamera, setup: CameraConnectionSetup) {
-        // Switching setups is a new connection, never a live-session no-op.
-        if session.connectedCamera?.id == camera.id, session.connectionSetup != setup {
-            session.disconnect()
-        }
-        savedCameras = SavedCameras.startingStation(setup, for: camera.id, in: savedCameras)
-        SavedCameraStore.save(savedCameras)
-        session.connectionSetup = setup
-        session.reconnect(to: camera.id)
-    }
-
-    /// Password goes to the Keychain entries Multiview also reads; the name stays per camera.
-    func addSetup(
-        _ setup: CameraConnectionSetup, ssid: String, password: String, to camera: SavedCamera
-    ) {
-        guard setup.movesCamera else { return }
-        MultiviewNetworkStore.save(ssid: ssid, password: password, hotspot: setup == .phoneHotspot)
-        savedCameras = SavedCameras.setting(setup, ssid: ssid, for: camera.id, in: savedCameras)
-        SavedCameraStore.save(savedCameras)
-        guard let updated = savedCameras.first(where: { $0.id == camera.id }) else { return }
-        reconnect(updated, setup: setup)
-    }
-
-    func forgetSetup(_ setup: CameraConnectionSetup, of camera: SavedCamera) {
-        savedCameras = SavedCameras.setting(setup, ssid: nil, for: camera.id, in: savedCameras)
-        SavedCameraStore.save(savedCameras)
-    }
-
-    /// "Scan with the camera" in Add setup. Stamped first: the scan moves the camera to
-    /// station role, so a lost reset is repaired by the next Camera Wi-Fi connect.
-    func scanNetworks(
-        with camera: SavedCamera, onFound: @escaping @MainActor (String) -> Void
-    ) async throws {
-        guard let found = session.found.first(where: { $0.id == camera.id }) else { return }
-        savedCameras = SavedCameras.startingStation(.wifi, for: camera.id, in: savedCameras)
-        SavedCameraStore.save(savedCameras)
-        try await MultiviewProvisioner.scanNetworks(found, onFound: onFound)
-    }
-
-    func forget(_ camera: SavedCamera) {
-        session.forgetWifiCreds(for: camera)
-        savedCameras = SavedCameras.removing(camera.id, from: savedCameras)
-        SavedCameraStore.save(savedCameras)
-        if savedCameras.isEmpty {
-            isPairingNewCamera = true
-            session.startScan()
-        }
-    }
-
-    func rename(_ camera: SavedCamera, to name: String?) {
-        savedCameras = SavedCameras.renaming(camera.id, to: name, in: savedCameras)
-        SavedCameraStore.save(savedCameras)
+    func closeMultiview() {
+        if cameras.connected == nil { session.startScan() }
     }
 
     /// Connect shows the monitor — never leftover Operator Setup, Media, or Edit view.
@@ -625,7 +636,6 @@ final class AppModel {
             guard !Task.isCancelled else { return }
             self?.liveChromeInteractive = true
         }
-        persistConnectedCameraIfNeeded()
         if shareThisFeed { startRelayHost() }
         relayBrowser.stop()
     }
@@ -646,34 +656,8 @@ final class AppModel {
         session.decoder.onIdentityFrame = nil
         session.decoder.onIdentityOrientation = nil
         watcherRecordConfirm = false
-    }
-
-    func persistConnectedCameraIfNeeded() {
-        guard case .live = session.phase, let found = session.connectedCamera else { return }
-        if let ssid = session.joinedSSID {
-            if CameraWifiResolution.isSSIDOwnedByAnotherCamera(
-                ssid, cameraId: found.id, saved: savedCameras)
-            {
-                return
-            }
-            if CameraBodyFamily.ssidConflictsWithBody(
-                ssid: ssid, modelId: found.modelId, advertisedName: found.name)
-            {
-                return
-            }
-        }
-        var record = SavedCamera(
-            id: found.id,
-            advertisedName: found.name,
-            modelName: found.model.name,
-            lastSSID: session.joinedSSID,
-            lastConnectedAt: Date(),
-            modelId: found.modelId
-        )
-        record.lastSetup = session.connectionSetup
-        savedCameras = SavedCameras.upserting(record, into: savedCameras)
-        SavedCameraStore.save(savedCameras)
-        isPairingNewCamera = false
+        // The live session is over: discovery resumes on the cameras page.
+        cameras.sessionEnded()
     }
 
     func beginMediaBrowse() { session.beginMediaBrowse() }
@@ -684,9 +668,6 @@ final class AppModel {
         focusBoxLocked = false
         session.disconnect()
         frameSamples.reset()
-        if CameraStartupPolicy.launchDestination(savedCameras: savedCameras) == .savedCameras {
-            session.startScan()
-        }
     }
 
     /// Recovery card: leave the held frame for the saved-camera list.
@@ -797,7 +778,7 @@ enum LiveOperatorPanel: Equatable {
 }
 
 struct AppRoot: View {
-    @State private var model = AppModel()
+    @State private var model = AppModel(connects: true)
     @State private var showReliabilityPrompt = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -1008,18 +989,124 @@ private struct WatcherRecordConfirmation: ViewModifier {
     }
 }
 
-/// Connection home: first-pair wizard, or saved cameras. Mirrors OpenZCine `LinkExperience`.
+/// A saved hotspot connect waiting on the operator (Personal Hotspot is not reported on).
+struct HotspotQuestion {
+    let id: UUID
+    let network: String
+    fileprivate let continuation: CheckedContinuation<Bool, Never>
+    /// The operator went to Settings: ask again when the app is back.
+    var reaskOnReturn = false
+
+    func answer(_ connect: Bool) { continuation.resume(returning: connect) }
+}
+
+/// Connection home on the shared OpenCine screens (SHELL-02): the pair page while no camera is
+/// saved or the operator chose Pair, else the cameras page with the Multiview entry. Mirrors
+/// OpenZCine `LinkExperience`.
 struct LinkExperience: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.monitorWindowGeometry) private var windowGeometry
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @State private var orientation = InterfaceOrientationObserver()
+    @State private var diagnostics: DiagnosticSharePayload?
+    @State private var showProblemReport = false
+    @State private var showMultiview = false
+    @State private var reviewAddSetup: SavedCamera?
+
     var body: some View {
         GeometryReader { proxy in
+            let safeArea = Self.pageSafeArea(
+                proxy.safeAreaInsets, window: windowGeometry.safeArea,
+                portrait: proxy.size.height > proxy.size.width, orientation: orientation.orientation)
             if model.shouldShowWizard {
-                ConnectionSetupView(compact: proxy.size.width < 640)
+                PairScreen(
+                    model: model.cameras, safeArea: safeArea,
+                    onDone: { model.isPairingNewCamera = false },
+                    onDiagnostics: {
+                        if let url = DiagnosticCenter.shared.beginShare(session: model.session) {
+                            diagnostics = DiagnosticSharePayload(url: url)
+                        }
+                    },
+                    onReportProblem: { showProblemReport = true },
+                    onWatchFeed: { model.openWatcherBrowse() })
             } else {
-                SavedCamerasView(compact: proxy.size.width < 640)
+                CamerasScreen(
+                    model: model.cameras, brandName: "OpenPocketCine", safeArea: safeArea,
+                    onPair: { model.isPairingNewCamera = true },
+                    onMedia: { model.homePanel = .media }, onSettings: { model.homePanel = .settings },
+                    onMultiview: {
+                        guard model.cameras.attempts.isEmpty else { return }
+                        model.openMultiview()
+                        showMultiview = true
+                    },
+                    onWatchFeed: { if model.cameras.attempts.isEmpty { model.openWatcherBrowse() } })
             }
         }
+        .ignoresSafeArea()
         .background(StartupColors.background.ignoresSafeArea())
         .foregroundStyle(StartupColors.ink)
+        .onAppear {
+            orientation.start()
+            #if targetEnvironment(simulator)
+                switch MonitorUIReview.state {
+                case "add-setup": reviewAddSetup = model.savedCameras.first
+                case "multiview": showMultiview = true
+                default: break
+                }
+            #endif
+        }
+        .onDisappear { orientation.stop() }
+        .sheet(item: $diagnostics) { payload in DiagnosticActivityShareView(items: [payload.url]) }
+        .sheet(isPresented: $showProblemReport) { ProblemReportView().environment(model) }
+        // Simulator review only: the add-route slot as the cameras page presents it.
+        .sheet(item: $reviewAddSetup) { camera in AddSetupView(camera: camera) { _ in reviewAddSetup = nil } }
+        .fullScreenCover(
+            isPresented: $showMultiview, onDismiss: { model.closeMultiview() }, content: { MultiviewView() })
+        .alert(
+            "Turn on Personal Hotspot",
+            isPresented: Binding(
+                get: { model.hotspotQuestion.map { !$0.reaskOnReturn } ?? false },
+                set: { if !$0, model.hotspotQuestion?.reaskOnReturn == false { model.answerHotspot(false) } }),
+            presenting: model.hotspotQuestion
+        ) { _ in
+            Button("Open Settings") {
+                model.hotspotQuestion?.reaskOnReturn = true
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            Button("Connect") { model.answerHotspot(true) }
+            Button("Cancel", role: .cancel) { model.answerHotspot(false) }
+        } message: { question in
+            Text(
+                "The camera joins this iPhone’s hotspot “\(question.network)”. Turn on Personal Hotspot and Allow Others to Join (Settings or Control Center), then tap Connect."
+            )
+        }
+        .onChange(of: model.session.phase) { _, phase in
+            if phase == .openingDatalink { LocalVPNProbe.noteIfActive() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            // Back from Settings: offer Connect again rather than guessing the hotspot is on.
+            model.hotspotQuestion?.reaskOnReturn = false
+            #if targetEnvironment(simulator)
+                if MonitorUIReview.isActive { return }
+            #endif
+            // Back from Settings after Bluetooth was off or not allowed: look again.
+            if case .failed = model.session.phase, model.cameras.attempts.isEmpty, model.cameras.connected == nil {
+                model.session.startScan()
+            }
+        }
+    }
+
+    /// The camera pages' safe area: landscape mirrors the larger cutout so the list stays centered.
+    static func pageSafeArea(
+        _ proposed: EdgeInsets, window: EdgeInsets, portrait: Bool, orientation: MonitorDeviceOrientation
+    ) -> EdgeInsets {
+        let raw = LiveMonitorLayout.resolvedSafeArea(proposed, scene: window)
+        guard !portrait else { return raw }
+        return OperatorPanelMetrics.fullScreenPanelSafeArea(
+            from: raw, isPortrait: false,
+            mirrored: LiveMonitorLayout.shouldMirror(
+                leading: raw.leading, trailing: raw.trailing, orientation: orientation))
     }
 }

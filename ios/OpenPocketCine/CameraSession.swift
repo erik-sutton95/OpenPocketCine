@@ -45,6 +45,7 @@ final class CameraSession {
             if oldValue != phase {
                 onChromePublished?()
                 controlSeam?.sessionDidChange()
+                connectPhaseChanged()
             }
         }
     }
@@ -80,9 +81,22 @@ final class CameraSession {
             publishStatusNow()
         }
     }
-    var found: [FoundCamera] = []
-    /// A scan has run 20 s without a camera. The wizard then lists what to check.
+    var found: [FoundCamera] = [] {
+        didSet { onSightings?(found.map(Self.sighting)) }
+    }
+    /// A scan has run 20 s without a camera. The pair page then lists what to check.
     var scanLooksEmpty = false
+    /// The shared connection flow's port (`DJIIntegration`, SHELL-02) listens here.
+    @ObservationIgnored var onSightings: (([DJISighting]) -> Void)?
+    @ObservationIgnored var onStage: ((DJIConnectionStage, String?) -> Void)?
+    /// The app's saved cameras (the shared document): Wi-Fi credentials, the other-camera SSID
+    /// guard and the station role a setup may have left.
+    @ObservationIgnored var savedCameras: () -> [SavedCamera] = { [] }
+    /// Asks the operator to turn Personal Hotspot on before a hotspot connect; `false` cancels.
+    @ObservationIgnored var confirmHotspot: ((String) async -> Bool)?
+    /// Why the last connect failed, for the port's typed failure.
+    @ObservationIgnored var lastConnectError: Error?
+    @ObservationIgnored var phaseWaiters: [CheckedContinuation<Void, Never>] = []
     /// The body this session is connecting / connected to. Used to persist a saved camera.
     private(set) var connectedCamera: FoundCamera?
     /// Camera-AP SSID after a successful join. Re-read over BLE on the next connect.
@@ -93,8 +107,12 @@ final class CameraSession {
     private(set) var stationHost: String?
     /// Network a Wi-Fi or Hotspot setup moved the camera onto.
     private(set) var stationSSID: String?
-    /// Hotspot provisioning step; the camera home shows it over the phase label.
-    private(set) var setupProgress: String?
+    /// Network of the Wi-Fi or Hotspot setup the next connect moves the camera onto.
+    @ObservationIgnored var stationNetwork: String?
+    /// Hotspot provisioning step; the camera card shows it as the step's live text.
+    private(set) var setupProgress: String? {
+        didSet { if setupProgress != oldValue { connectPhaseChanged() } }
+    }
     @ObservationIgnored private var stationSeq: UInt16 = 1200
 
     /// Only used by the host's explicit Show Wi-Fi code sheet. Never advertised or logged.
@@ -751,8 +769,7 @@ final class CameraSession {
             }
             for await camera in ble.scan() {
                 if Task.isCancelled { break }
-                let saved = SavedCameraStore.load().first { $0.id == camera.id }
-                let seen = camera.enriched(from: saved)
+                let seen = camera.enriched(from: saved(camera.id))
                 if let idx = found.firstIndex(where: { $0.id == seen.id }) {
                     if FoundCameraIdentity.shouldReplace(
                         existingName: found[idx].name, existingModelId: found[idx].modelId,
@@ -773,6 +790,16 @@ final class CameraSession {
         }
     }
 
+    /// Discovery stops only while nothing connects: a scan that finds the camera to connect keeps
+    /// running, and a connect in flight is never touched.
+    func stopScan() {
+        guard runTask == nil, reconnectTarget == nil, phase == .scanning || phase == .idle else { return }
+        scanTask?.cancel()
+        scanHintTask?.cancel()
+        ble.stopScan()
+        if phase == .scanning { phase = .idle }
+    }
+
     /// Reuse the existing `connect(_:)` path once the saved peripheral is seen (or immediately
     /// if this scan already listed it).
     func reconnect(to id: UUID) {
@@ -791,8 +818,7 @@ final class CameraSession {
     }
 
     private func connect(_ camera: FoundCamera, preserveMonitor: Bool) {
-        let camera = camera.enriched(
-            from: SavedCameraStore.load().first { $0.id == camera.id })
+        let camera = camera.enriched(from: saved(camera.id))
         if case .live = phase, connectedCamera?.id == camera.id, !sessionRecovery.isRecovering {
             return
         }
@@ -827,6 +853,7 @@ final class CameraSession {
                     )
                     return
                 }
+                lastConnectError = error
                 let why = (error as? LocalizedError)?.errorDescription ?? "\(error)"
                 ControlLiveLog.line("session: connect failed at \(phase.label) — \(why)")
                 phase = .failed(why)
@@ -856,6 +883,7 @@ final class CameraSession {
         abortInFlightRun()
         connectedCamera = nil
         connectionSetup = .cameraWiFi
+        stationNetwork = nil
         stationHost = nil
         stationSSID = nil
         phase = .idle
@@ -961,8 +989,13 @@ final class CameraSession {
     }
 
     func forgetWifiCreds(for camera: SavedCamera) {
-        forgetWifiCreds(
-            cameraId: camera.id, advertisedName: camera.advertisedName, ssid: camera.lastSSID)
+        guard let id = UUID(uuidString: camera.id) else { return }
+        forgetWifiCreds(cameraId: id, advertisedName: camera.advertisedName, ssid: camera.lastSSID)
+    }
+
+    /// The saved camera of a peripheral, from the shared document.
+    func saved(_ id: UUID) -> SavedCamera? {
+        savedCameras().first { $0.id == id.uuidString }
     }
 
     private func forgetWifiCreds(cameraId: UUID, advertisedName: String?, ssid: String?) {
@@ -1103,7 +1136,7 @@ final class CameraSession {
         // pairing used to. Warm path (SoftAP still up + cached creds) skips the
         // settle sleeps; 0x53/0x10 still goes out.
         startKeepalive(ssid: nil)
-        let saved = SavedCameraStore.load().first { $0.id == camera.id }
+        let saved = saved(camera.id)
         if connectionSetup.movesCamera {
             let ssid = try await runStation(camera, saved: saved)
             timeline.mark("hs", now: ProcessInfo.processInfo.systemUptime)
@@ -1113,7 +1146,7 @@ final class CameraSession {
             return
         }
         phase = .readingWifiCreds
-        let restoreAP = saved?.lastSetup?.movesCamera == true
+        let restoreAP = saved?.mayBeInStationRole == true
         if restoreAP { await restoreCameraAccessPoint() }
         let credsFromCache = resolvedWifiCreds(for: camera).skipBle
         let skipAPSettle = !restoreAP && cameraPathReady() && credsFromCache
@@ -1140,7 +1173,7 @@ final class CameraSession {
             "creds: SSID \(ssid) (\(pass.count) char password, \(credsFromCache ? "cached" : "from BLE")) body=\(camera.model.name)"
         )
         let persistHotspot = CameraSoftAP.shouldPersistHotspot(
-            isSavedCamera: SavedCameraStore.load().contains { $0.id == camera.id }
+            isSavedCamera: saved != nil
                 || cachedWifiCameraId == camera.id)
 
         phase = .joiningWifi
@@ -1248,16 +1281,6 @@ final class CameraSession {
 
     /// Camera path for the active setup: the SoftAP subnet, the operator's Wi-Fi, or this
     /// phone's hotspot bridge.
-    #if targetEnvironment(simulator)
-        /// UI review only: a connecting card without a camera.
-        func reviewConnecting(_ id: UUID, setup: CameraConnectionSetup, progress: String) {
-            connectionTargetID = id
-            connectionSetup = setup
-            setupProgress = progress
-            phase = .joiningWifi
-        }
-    #endif
-
     private func cameraPathReady() -> Bool {
         connectionSetup.movesCamera
             ? SharedWiFiPath.address(hotspot: usesHotspot) != nil
@@ -1328,7 +1351,7 @@ final class CameraSession {
     /// Moves the camera onto the operator's Wi-Fi or this phone's Personal Hotspot with the
     /// captured Multiview sequence, then goes live on the address that proves this body.
     private func runStation(_ camera: FoundCamera, saved: SavedCamera?) async throws -> String {
-        guard let ssid = saved?.ssid(for: connectionSetup),
+        guard let ssid = stationNetwork ?? saved?.ssid(for: connectionSetup),
             let network = MultiviewNetworkStore.load(ssid: ssid, hotspot: usesHotspot)
         else { throw Fail.setupNotSaved }
         phase = .joiningWifi
@@ -5995,7 +6018,7 @@ final class CameraSession {
         if recoveryDeviceName.isEmpty {
             recoveryDeviceName =
                 connectedCamera?.name
-                ?? SavedCameraStore.load().first { $0.id == cameraID }?.displayName
+                ?? saved(cameraID)?.displayName
                 ?? ""
         }
         holdsMonitor = true
@@ -6216,8 +6239,7 @@ final class CameraSession {
                 guard let self else { return nil }
                 for await camera in self.ble.scan() {
                     if Task.isCancelled { return nil }
-                    let saved = SavedCameraStore.load().first { $0.id == camera.id }
-                    let seen = camera.enriched(from: saved)
+                    let seen = camera.enriched(from: self.saved(camera.id))
                     if seen.id == id { return seen }
                 }
                 return nil
@@ -6673,7 +6695,7 @@ final class CameraSession {
     /// A live BLE name that differs from the cached SSID is a renamed SoftAP —
     /// join that name with the cached password (GetSSID after Mimo is often 0xE4).
     private func resolvedWifiCreds(for camera: FoundCamera) -> KnownWifi {
-        let saved = SavedCameraStore.load().first { $0.id == camera.id }
+        let saved = saved(camera.id)
         let advertised =
             CameraWifiResolution.liveAdvertisedSSID(camera.name)
             ?? CameraWifiResolution.liveAdvertisedSSID(saved?.advertisedName)
@@ -6724,7 +6746,7 @@ final class CameraSession {
 
     private func ssidBelongsToAnotherBody(_ ssid: String, camera: FoundCamera) -> Bool {
         if CameraWifiResolution.isSSIDOwnedByAnotherCamera(
-            ssid, cameraId: camera.id, saved: SavedCameraStore.load())
+            ssid, cameraId: camera.id.uuidString, saved: savedCameras())
         {
             return true
         }
@@ -6757,7 +6779,7 @@ final class CameraSession {
         var names = Set<String>()
         if let joined = joinedSSID { names.insert(joined) }
         if let cached = cachedSSID { names.insert(cached) }
-        for camera in SavedCameraStore.load() {
+        for camera in savedCameras() {
             if let other = camera.lastSSID { names.insert(other) }
         }
         names.remove(ssid)
@@ -6797,7 +6819,7 @@ final class CameraSession {
             } catch {
                 if let fallback = ssidFallback {
                     if CameraWifiResolution.isSSIDOwnedByAnotherCamera(
-                        fallback, cameraId: camera.id, saved: SavedCameraStore.load())
+                        fallback, cameraId: camera.id.uuidString, saved: savedCameras())
                     {
                         log.info(
                             "creds: GetSSID fallback \(fallback, privacy: .public) belongs to another camera"

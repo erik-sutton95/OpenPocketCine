@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.openpocketcine.pairing.lastSSID
+
 import com.opencapture.opencine.dji.hasMultiviewPreview
 import com.opencapture.opencine.dji.appearsInMultiview
 import com.opencapture.opencine.dji.MultiviewNetworkStore

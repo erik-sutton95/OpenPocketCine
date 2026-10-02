@@ -5,6 +5,23 @@ unless a row lists an exception. GPU backends, Bluetooth stacks, and OS APIs may
 diverge. Shipping a one-platform operator-visible change without a row here is
 incomplete.
 
+## Shared cameras and pairing (SHELL-02)
+
+Both shells use OpenCine's cameras model and camera/pair pages. Nearby selection
+requires Continue; connection cards and the pair rail show the integration's
+reported progress, approval prompt, failure and recovery actions. The station
+wizard remains an app slot, and Multiview keeps its existing entry. Android
+retains its current appearance; the optional iOS-style switch is unchanged.
+Forgetting a camera now removes its Android Wi-Fi credentials too, matching iOS.
+Saved IDs and media favorites stay unchanged; the new document mirrors legacy
+records and merges edits made by an older build after a downgrade.
+
+The iOS Personal Hotspot confirmation is still platform-specific. Cancelling or
+replacing an attempt retires that prompt before a later response can reconnect.
+Simulator and emulator checks cover presentation and installed-build migration;
+physical pairing, station networking and live recovery remain pending under
+items 18-20 in [the integration checklist](OPENCINE-INTEGRATION.md).
+
 ## Connection regression follow-up
 
 The [connection stress matrix](connection-stress-testing.md) is shared maintainer

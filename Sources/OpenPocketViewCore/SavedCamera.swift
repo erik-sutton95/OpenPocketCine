@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineCore
 
 /// How a saved body is reached (#406). Every record has camera Wi-Fi. Wi-Fi (a router)
 /// and Hotspot (this phone's) are OpenZCine-style extra setups that move the camera off
@@ -18,74 +19,6 @@ public enum CameraConnectionSetup: String, Codable, CaseIterable, Sendable {
 
     /// The camera leaves its access point (station role) for this setup.
     public var movesCamera: Bool { self != .cameraWiFi }
-}
-
-/// One Pocket we’ve already connected to. One record per body; its setups are chips on
-/// the saved-camera row.
-public struct SavedCamera: Codable, Equatable, Identifiable, Sendable {
-    /// CoreBluetooth peripheral identifier (iOS hides the BLE MAC).
-    public var id: UUID
-    /// Advertised BLE local name at last connect (e.g. `OsmoPocket4P-AAAA`).
-    public var advertisedName: String
-    /// Resolved model display name (e.g. `Osmo Pocket 4 Pro`).
-    public var modelName: String
-    /// BLE model id when the advert carried one (`0x22` Pocket 4 Pro, `0x19` Nano).
-    public var modelId: Int?
-    /// Last camera-AP SSID, if we successfully read/joined it.
-    public var lastSSID: String?
-    public var lastConnectedAt: Date
-    /// Operator-chosen name. The advertised name stays on `advertisedName`.
-    public var customName: String?
-    /// Network names for the Wi-Fi and Hotspot setups; nil means that setup is not added.
-    /// Passwords stay in this device's Keychain.
-    public var wifiSSID: String?
-    public var hotspotSSID: String?
-    /// Last setup a connect started with. A setup that moves the camera also means it may
-    /// still be in station role, so the next camera Wi-Fi connect restores its access point.
-    public var lastSetup: CameraConnectionSetup?
-
-    public init(
-        id: UUID,
-        advertisedName: String,
-        modelName: String,
-        lastSSID: String? = nil,
-        lastConnectedAt: Date,
-        customName: String? = nil,
-        modelId: Int? = nil
-    ) {
-        self.id = id
-        self.advertisedName = advertisedName
-        self.modelName = modelName
-        self.lastSSID = lastSSID
-        self.lastConnectedAt = lastConnectedAt
-        self.customName = customName
-        self.modelId = modelId
-    }
-
-    public var displayName: String {
-        if let customName, !customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return customName
-        }
-        return advertisedName.isEmpty ? modelName : advertisedName
-    }
-
-    public func ssid(for setup: CameraConnectionSetup) -> String? {
-        switch setup {
-        case .cameraWiFi: lastSSID
-        case .wifi: wifiSSID
-        case .phoneHotspot: hotspotSSID
-        }
-    }
-
-    public var setups: [CameraConnectionSetup] {
-        CameraConnectionSetup.allCases.filter { $0 == .cameraWiFi || ssid(for: $0) != nil }
-    }
-
-    /// The row's main Connect: the last setup used, when it still exists.
-    public var preferredSetup: CameraConnectionSetup {
-        guard let lastSetup, setups.contains(lastSetup) else { return .cameraWiFi }
-        return lastSetup
-    }
 }
 
 /// SoftAP creds are per body. A session-global last-SSID would join the
@@ -160,21 +93,20 @@ public enum CameraWifiResolution {
         return Result(ssid: ssid, password: password, source: source, skipBle: skipBle)
     }
 
-    /// GetSSID fallback / SoftAP join must not use another saved body's SSID.
+    /// GetSSID fallback / SoftAP join must not use another saved body's SSID: its camera Wi-Fi
+    /// network or its advertised name.
     public static func isSSIDOwnedByAnotherCamera(
-        _ ssid: String, cameraId: UUID, saved: [SavedCamera]
+        _ ssid: String, cameraId: String, saved: [SavedCamera]
     ) -> Bool {
         let needle = ssid.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return false }
+        func same(_ value: String?) -> Bool {
+            value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == needle
+        }
         return saved.contains { other in
-            guard other.id != cameraId else { return false }
-            if other.lastSSID?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                == needle
-            {
-                return true
-            }
-            return other.advertisedName.trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased() == needle
+            other.id != cameraId
+                && (same(other.advertisedName)
+                    || same(other.routes.first { $0.kind == .cameraAccessPoint }?.network))
         }
     }
 }
@@ -246,116 +178,5 @@ public enum BlePeerPolicy {
     public static func acceptsGATT(from peripheral: UUID, selected: UUID?) -> Bool {
         guard let selected else { return false }
         return peripheral == selected
-    }
-}
-
-/// Canonicalization and list edits for saved Pocket records. Persistence stays in the shell
-/// (UserDefaults on iOS, SharedPreferences later on Android) so the core stays I/O-free.
-public enum SavedCameras {
-    /// Newest-first, one row per peripheral id. Keeps a prior custom name when a reconnect
-    /// upserts the same body.
-    public static func upserting(_ camera: SavedCamera, into records: [SavedCamera])
-        -> [SavedCamera]
-    {
-        var merged = camera
-        if let existing = records.first(where: { $0.id == camera.id }) {
-            if merged.customName == nil { merged.customName = existing.customName }
-            if merged.lastSSID == nil { merged.lastSSID = existing.lastSSID }
-            if merged.advertisedName.isEmpty { merged.advertisedName = existing.advertisedName }
-            if merged.modelId == nil { merged.modelId = existing.modelId }
-            if merged.wifiSSID == nil { merged.wifiSSID = existing.wifiSSID }
-            if merged.hotspotSSID == nil { merged.hotspotSSID = existing.hotspotSSID }
-            if merged.lastSetup == nil { merged.lastSetup = existing.lastSetup }
-        }
-        let others = records.filter { $0.id != camera.id }
-        return canonicalized([merged] + others)
-    }
-
-    public static func removing(_ id: UUID, from records: [SavedCamera]) -> [SavedCamera] {
-        canonicalized(records.filter { $0.id != id })
-    }
-
-    public static func renaming(_ id: UUID, to name: String?, in records: [SavedCamera])
-        -> [SavedCamera]
-    {
-        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let custom = (trimmed?.isEmpty == false) ? trimmed : nil
-        return canonicalized(
-            records.map { record in
-                guard record.id == id else { return record }
-                var updated = record
-                updated.customName = custom
-                return updated
-            })
-    }
-
-    /// Add, change or forget (nil/blank) a Wi-Fi or Hotspot setup. `lastSetup` is kept: a
-    /// camera left in station role still needs its access point restored.
-    public static func setting(
-        _ setup: CameraConnectionSetup, ssid: String?, for id: UUID, in records: [SavedCamera]
-    ) -> [SavedCamera] {
-        let trimmed = ssid?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let value = (trimmed?.isEmpty == false) ? trimmed : nil
-        return canonicalized(
-            records.map { record in
-                guard record.id == id else { return record }
-                var updated = record
-                switch setup {
-                case .cameraWiFi: break
-                case .wifi: updated.wifiSSID = value
-                case .phoneHotspot: updated.hotspotSSID = value
-                }
-                return updated
-            })
-    }
-
-    /// Stamp a setup that moves the camera before it can change the station role (a lost
-    /// setter reply can still mean the role changed). Camera Wi-Fi is stamped only once
-    /// live, so a failed restore is retried on the next connect.
-    public static func startingStation(
-        _ setup: CameraConnectionSetup, for id: UUID, in records: [SavedCamera]
-    ) -> [SavedCamera] {
-        guard setup.movesCamera else { return records }
-        return records.map { record in
-            guard record.id == id else { return record }
-            var updated = record
-            updated.lastSetup = setup
-            return updated
-        }
-    }
-
-    public static func canonicalized(_ records: [SavedCamera]) -> [SavedCamera] {
-        var seen = Set<UUID>()
-        var unique: [SavedCamera] = []
-        for record in records {
-            guard seen.insert(record.id).inserted else { continue }
-            unique.append(record)
-        }
-        return unique.sorted { $0.lastConnectedAt > $1.lastConnectedAt }
-    }
-}
-
-/// Empty store → first-pair wizard; otherwise the saved-camera home. Matches OpenZCine’s
-/// `CameraStartupPolicy.launchDestination`.
-public enum CameraStartupDestination: Equatable, Sendable {
-    case addCamera
-    case savedCameras
-}
-
-public enum CameraStartupPolicy {
-    public static func launchDestination(savedCameras: [SavedCamera]) -> CameraStartupDestination {
-        SavedCameras.canonicalized(savedCameras).isEmpty ? .addCamera : .savedCameras
-    }
-}
-
-extension ConnectionPhase {
-    /// Pocket first-pair wizard step (1...4): BLE scan → approve → join Wi-Fi → datalink.
-    public var pocketWizardStep: Int {
-        switch self {
-        case .idle, .scanning, .failed: 1
-        case .connectingGatt, .pairing, .awaitingApproval: 2
-        case .readingWifiCreds, .joiningWifi: 3
-        case .openingDatalink, .live: 4
-        }
     }
 }

@@ -70,19 +70,25 @@ import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReport
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 import com.opencapture.openpocketcine.diagnostics.ReliabilityReportingConsent
-import com.opencapture.openpocketcine.pairing.PairingExperience
-import com.opencapture.openpocketcine.pairing.SavedCamerasExperience
-import com.opencapture.openpocketcine.pairing.StartupColors
-import com.opencapture.openpocketcine.pairing.StartupConnectionCopy
-import com.opencapture.openpocketcine.pairing.isBusy
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.opencapture.opencine.appkit.CamerasScreen
+import com.opencapture.opencine.appkit.PairScreen
+import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
 import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
+import com.opencapture.openpocketcine.pairing.LocalPairingCallouts
+import com.opencapture.openpocketcine.pairing.PairingCallouts
 import com.opencapture.openpocketcine.pairing.PermissionGate
 import com.opencapture.openpocketcine.pairing.rememberPermissionGate
 import com.opencapture.openpocketcine.pairing.startupBackdrop
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private var reviewState: String? = null
     private val composeFirstFrameDrawn = AtomicBoolean(false)
     internal lateinit var model: AppModel
         private set
@@ -97,7 +103,13 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         splashScreen.setKeepOnScreenCondition { !composeFirstFrameDrawn.get() }
         super.onCreate(savedInstanceState)
-        model = AppModel(applicationContext)
+        // Debug review only: a scripted connection state of the cameras and pair pages.
+        val review = if (BuildConfig.DEBUG) intent?.getStringExtra("opv_review_state") else null
+        model = AppModel(applicationContext, discovers = true, review = review)
+        if (review == "multiview") model.showsMultiview = true
+        if (review?.startsWith("pair-") == true) model.pairing = true
+        if (review != null) lifecycleScope.launch { ReviewCameras.start(review, model) }
+        reviewState = review
         model.gimbalGamepad.ensureListening(this, model)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -116,6 +128,7 @@ class MainActivity : ComponentActivity() {
                 val haptics = rememberOperatorHaptics { model.hapticsEnabled }
                 CompositionLocalProvider(LocalOperatorHaptics provides haptics) {
                     OpenPocketCineApp(model)
+                    ReviewCameras.AddSetup(reviewState, model)
                 }
             }
         }
@@ -201,6 +214,8 @@ private fun OpenPocketCineApp(model: AppModel) {
     }
 
     val showLive = phase == ConnectionPhase.LIVE || model.session.holdsMonitor
+    // The live session is over: discovery resumes on the cameras page.
+    LaunchedEffect(showLive) { if (!showLive) model.cameras.sessionEnded() }
     LaunchedEffect(model.hdrDisplay, model.screenCaptured, activity) {
         HdrDisplay.apply(activity, enabled = model.hdrDisplayActive)
     }
@@ -265,8 +280,10 @@ private fun OpenPocketCineApp(model: AppModel) {
     }
 }
 
+/** Permission granted or Bluetooth on: look again, unless a camera is connecting or live. */
 private fun beginDiscovery(model: AppModel, onBluetoothOff: () -> Unit = {}) {
-    model.session.startScan()
+    val state = model.cameras.state.value
+    if (state.attempts.isEmpty() && state.connected == null && !model.isLive) model.session.startScan()
     if (!model.session.radioOn.value) onBluetoothOff()
 }
 
@@ -279,7 +296,12 @@ private fun LinkExperience(
     val density = LocalDensity.current
     val layoutDir = LocalLayoutDirection.current
     val configuration = LocalConfiguration.current
-    val camerasHome = !model.shouldShowWizard
+    val context = LocalContext.current
+    val state by model.cameras.state.collectAsState()
+    // No saved camera opens the pair page, as at first launch.
+    val pairing = state.saved.isEmpty() || model.pairing
+    var showProblemReport by remember { mutableStateOf(false) }
+    var showReportingPrivacy by remember { mutableStateOf(false) }
     val landscapeHome = configuration.screenWidthDp > configuration.screenHeightDp
     val homeSide = with(density) {
         val leading = WindowInsets.safeDrawing.getLeft(this, layoutDir).toDp()
@@ -294,7 +316,7 @@ private fun LinkExperience(
             // Cameras landscape mirrors the larger cutout onto both sides so the list stays
             // centered; pairing and live chrome keep their own edges.
             .then(
-                if (camerasHome && landscapeHome) {
+                if (!pairing && landscapeHome) {
                     Modifier
                         .padding(start = homeSide, end = homeSide)
                         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))
@@ -305,15 +327,40 @@ private fun LinkExperience(
             .padding(vertical = 16.dp),
     ) {
         Box(Modifier.weight(1f).padding(
-            start = if (model.shouldShowWizard) 14.dp else 18.dp,
-            end = if (model.shouldShowWizard) 14.dp else 18.dp,
-            top = if (model.shouldShowWizard) 0.dp else 8.dp,
+            start = if (pairing) 14.dp else 18.dp,
+            end = if (pairing) 14.dp else 18.dp,
+            top = if (pairing) 0.dp else 8.dp,
         )) {
-            if (model.shouldShowWizard) {
-                PairingExperience(model, discovery, onEnableBluetooth)
-            } else {
-                SavedCamerasExperience(model)
+            CompositionLocalProvider(LocalPairingCallouts provides { PairingCallouts(model, discovery, onEnableBluetooth) }) {
+                if (pairing) {
+                    BackHandler(enabled = state.attempts.isNotEmpty() || state.saved.isNotEmpty()) {
+                        if (state.attempts.isNotEmpty()) model.cameras.cancelAll() else model.pairing = false
+                    }
+                    PairScreen(
+                        model.cameras,
+                        onDone = { model.pairing = false },
+                        onDiagnostics = { DiagnosticCenter.shareReport(context, model.session) },
+                        onReportProblem = { showProblemReport = true },
+                    )
+                } else {
+                    CamerasScreen(
+                        model.cameras,
+                        brandName = "OPENPOCKETCINE",
+                        onPair = { model.pairing = true },
+                        onMedia = { model.homePanel = AppPanel.MEDIA },
+                        onSettings = { model.homePanel = AppPanel.SETTINGS },
+                        onMultiview = model::openMultiview,
+                    )
+                }
             }
+        }
+    }
+    if (showProblemReport) {
+        ManualProblemReportDialog(model = model, onClose = { showProblemReport = false }, onPrivacy = { showReportingPrivacy = true })
+    }
+    if (showReportingPrivacy) {
+        Dialog(onDismissRequest = { showReportingPrivacy = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            LegalDocumentScreen(kind = LegalKind.PRIVACY, onClose = { showReportingPrivacy = false })
         }
     }
 }

@@ -101,7 +101,6 @@ final class OperatorFacingCopyTests: XCTestCase {
             NDAssist.notationHelp,
             SettingsHelpCopy.themeHelp,
             SettingsHelpCopy.shareDiagnostics,
-            StartupConnectionCopy.shareDiagnostics,
             SettingsHelpCopy.sourceHelp,
             SettingsHelpCopy.linkHealth,
             SettingsHelpCopy.feedUpscaler,

@@ -390,8 +390,7 @@ final class MultiviewSession {
     func openLiveView(_ tile: Tile) {
         closeCameraSettings()
         guard let camera = tile.camera, tile.controlHost != nil, !tile.recovering else { return }
-        let model = AppModel()
-        model.session = CameraSession(borrowing: tile.decoder)
+        let model = AppModel(session: CameraSession(borrowing: tile.decoder))
         model.session.updateMultiview(
             camera: camera, driver: tile.driver, status: tile.latestSettings)
         model.session.adoptMultiviewPose(tile.pose)

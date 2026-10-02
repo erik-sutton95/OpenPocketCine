@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.openpocketcine.pairing.lastSSID
+import com.opencapture.openpocketcine.pairing.modelName
+
 import com.opencapture.opencine.dji.GamepadGimbalStick
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorScrollFade

@@ -76,13 +76,22 @@ Native resizing lets the same presentation layouts use the actual window bounds
 and UIKit's control exclusions. See Apple's [migration guidance](https://developer.apple.com/documentation/technotes/tn3192-migrating-your-app-from-the-deprecated-uirequiresfullscreen-key).
 
 The Osmo shell keeps `AppModel` and `CameraSession` as its integration owners.
-`OsmoMonitorPresentation` and `OsmoCameraPageAdapter` translate their observed
-state for shared presentation. Camera home and pairing forward the existing
-connect/reconnect/cancel/rename/remove actions. Pairing stages advance from the
-reported connection phase; a design-demo button cannot declare Wi-Fi or picture
-ready. Unknown disconnected telemetry stays absent. Media catalog cells and
-navigation accept shared descriptors while catalog, cache, playback and delivery
-operations remain with their existing owners.
+`OsmoMonitorPresentation` translates live state for shared presentation. Camera
+home and pairing use OpenCineAppKit's `CamerasModel`, `CamerasScreen` and
+`PairScreen` on both platforms. `DJIIntegration` connects through the iOS
+`DJIConnectPort` over `CameraSession`; Android `DjiIntegration` connects through
+the shared DJI session. The app supplies pairing callouts and the existing
+station-network wizard as typed slots. Pairing stages advance from the reported
+connection phase. Unknown disconnected telemetry stays absent. Media catalog
+cells and navigation accept shared descriptors while catalog, cache, playback
+and delivery operations remain with their existing owners.
+
+`SavedCamerasStore` owns a versioned saved-camera document in each app's existing
+preference namespace. `BodyRecordsV0` imports the legacy records and mirrors
+edits back so older builds remain usable. A three-way merge keeps edits made
+after a downgrade and preserves document-only route identities. Saved camera
+IDs, Keychain/Keystore entries, media favorites and preference keys do not move.
+One malformed legacy record is retained without erasing the readable cameras.
 
 Small option collections use `MonitorSnapshotRows`: bindings and label callbacks
 are evaluated on the main actor into immutable row values. SwiftUI may later
@@ -135,7 +144,7 @@ source choice, current/saved/nearby networks, credentials and scan-to-connect
 handoff. Fixed section headers align the columns through scan state changes;
 Connect and manual network entry stay in the bottom safe/keyboard-adjusted footer. The entry points inject their connection owners. Android Multiview
 uses the equivalent shell form, `StationNetworkSetup`, with injected scan and
-connect actions; its saved-camera setup chips remain a parity exception.
+connect actions. Saved-camera setup chips and Add setup use the shared flow on both platforms.
 `MultiviewProvisioner` owns a bounded camera scan and returns the camera to its
 access point on the same BLE link, including cancellation. Multiview journals a
 cleanup obligation immediately before the station setter, removes it only on a

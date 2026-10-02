@@ -69,7 +69,7 @@ lines 490–522 invokes `syncAssists` from a Compose `LaunchedEffect`; overlay
 dismissal also calls `redrawLast` at line 851.
 [LiveVulkanSession](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/LiveVulkanSession.kt)
 lines 170–179 and 224–288 call JNI directly, ending in `nativeRedraw`.
-[opc_vulkan.cpp](../../Apps/Android/app/src/main/cpp/opc_vulkan.cpp) lines 2344–2362
+[opc_vulkan.cpp](../../../OpenCine/Android/vulkan/src/main/cpp/opc_vulkan.cpp) lines 2344–2362
 shares the frame-submit mutex; `renderFrame` at 1733–1759 waits on fences, can
 prepare pipelines and acquires a swapchain image. The timeout is one second;
 this is **not** an observed one-second UI stall. The present gate accounts for
@@ -119,7 +119,7 @@ lines 313–317 falls back to an original when a proxy is absent.
 lines 453/489 and [PlaybackFeedView](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/media/PlaybackFeedView.kt)
 line 70 propagate actual dimensions. `LiveFeedEffectsSession` lines 116,
 328–329 and 356–363 allocate source and grade targets at those dimensions.
-[FeedPresentPolicy.MAX_WORKING_WIDTH](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/FeedPresentPolicy.kt)
+[FeedPresentPolicy.MAX_WORKING_WIDTH](../../../OpenCine/Android/media/src/main/kotlin/com/opencapture/opencine/media/FeedPresentPolicy.kt)
 is 1440 but has no production consumer. iOS already prepares a bounded working raster.
 
 A nominal RGBA8 target is 31.6 MiB at 3840×2160 versus 4.45 MiB at 1440×810;
@@ -133,7 +133,7 @@ cannot establish that production honors the cap.
 
 ### R4: Android status bridge and HUD publication
 
-[PocketCameraSession](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/session/PocketCameraSession.kt)
+[PocketCameraSession](../../../OpenCine/Android/dji/src/main/kotlin/com/opencapture/opencine/dji/PocketCameraSession.kt)
 lines 2208–2214 reconstructs full status through JSON for each handled DUML frame,
 including frames the shared decoder does not recognize. Changed state is assigned
 directly at 2325–2330; `LiveViewScreen` collects it at line 126. StateFlow equality
@@ -319,7 +319,7 @@ Transport inspection also found existing limits worth preserving:
 - Both datalink owners stop the 25 ms ACK pump on close/rebind. Flip GET,
   gimbal emission and low-rate diagnostics share that pump; keep all three ACK
   windows, including command replies. See [iOS driver](../../ios/OpenPocketCine/DatalinkDriver.swift)
-  lines 801–843/1054–1093 and [Android driver](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/session/DatalinkDriver.kt)
+  lines 801–843/1054–1093 and [Android driver](../../../OpenCine/Android/dji/src/main/kotlin/com/opencapture/opencine/dji/DatalinkDriver.kt)
   lines 714–768/981–989.
 - BLE presence and UDP keepalive are about 1 Hz during a session; gimbal readback
   is receipt-driven at at most 1 Hz. Active tracking's 500 ms poll has explicit

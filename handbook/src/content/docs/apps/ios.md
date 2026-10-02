@@ -7,6 +7,21 @@ The production iOS app is a universal iPhone and iPad SwiftUI shell in
 `ios/OpenPocketCine/`. It is the operator-proven datalink. Generate the Xcode
 project with XcodeGen — see [Setup](../../guides/setup/).
 
+## Cameras and pairing
+
+The cameras page and pairing flow use the shared OpenCine shell. Select a nearby
+camera, tap **Continue**, approve on the camera if asked, and accept the Wi-Fi
+join prompt. Keep DJI Frame Tap off and force quit DJI Mimo before pairing.
+Saved-camera cards retain Camera Wi-Fi, Wi-Fi and Hotspot setups; **Add setup**
+opens the existing network wizard. A connection failure offers the relevant
+retry, setup-edit or Settings action. Multiview stays available from the cameras
+page.
+
+Updates keep saved camera identities, network credentials, media favorites and
+preferences. The saved-camera document mirrors the legacy records so a later
+upgrade can merge edits made in an older build. **Forget** removes the camera's
+saved Wi-Fi credential as well as its saved card.
+
 ## Field Monitor interface
 
 The native UI uses Sora typography, cyan controls and dark panels. Portrait

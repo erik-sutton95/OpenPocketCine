@@ -9,6 +9,42 @@
     enum MonitorUIReview {
         static var screen: String? { ProcessInfo.processInfo.environment["OPV_UI_REVIEW_SCREEN"] }
         static var isActive: Bool { screen != nil }
+        /// The connection state the cameras and pair pages show: `empty`, `saved-nearby`,
+        /// `connecting`, `failure`, `add-setup`, `multiview`, `pair-choose`, `pair-approve`,
+        /// `pair-join`, `pair-video`, `pair-failure`, `pair-bluetooth`; none is the two saved
+        /// cameras, idle.
+        static var state: String {
+            let environment = ProcessInfo.processInfo.environment
+            return environment["OPV_UI_REVIEW_STATE"]
+                ?? (environment["OPV_UI_REVIEW_CONNECTING"] == "1" ? "connecting" : "")
+        }
+        static let studioID = "00000000-0000-0000-0000-000000000001"
+        static let newID = "00000000-0000-0000-0000-000000000003"
+
+        /// The shared cameras model's inputs for a review: a scripted DJI pipeline and a private
+        /// defaults domain holding the two saved cameras as the shipping app stored them.
+        static func cameras() -> (any DJIConnectPort, UserDefaults) {
+            // Installed-build migration checks render the real persisted records without BLE.
+            if state == "stored" { return (ReviewDJIPort(state: "empty"), .standard) }
+            let name = "opc.monitor.presentation.review.cameras"
+            let defaults = UserDefaults(suiteName: name)!
+            defaults.removePersistentDomain(forName: name)
+            if state != "empty" {
+                let past = Date.distantPast.timeIntervalSinceReferenceDate
+                let records: [[String: Any]] = [
+                    [
+                        "id": studioID, "advertisedName": "Studio camera", "modelName": "Osmo Pocket 4 Pro",
+                        "modelId": 0x22, "lastConnectedAt": past, "wifiSSID": "Studio-5G", "hotspotSSID": "Rig iPhone",
+                    ],
+                    [
+                        "id": "00000000-0000-0000-0000-000000000002", "advertisedName": "Travel camera",
+                        "modelName": "Osmo Nano", "modelId": 0x19, "lastConnectedAt": past,
+                    ],
+                ]
+                defaults.set(try? JSONSerialization.data(withJSONObject: records), forKey: "OpenPocketCine.SavedCameras")
+            }
+            return (ReviewDJIPort(state: state), defaults)
+        }
 
         /// The body the review lays out (`OPV_UI_REVIEW_BODY=nano`, else Pocket 4 Pro). It
         /// reaches the screens only as the DJI integration's capability projection.
@@ -28,6 +64,11 @@
         #endif
 
         static func prepare(_ model: AppModel) {
+            if state == "stored" {
+                model.showsLaunchSplash = false
+                model.isPairingNewCamera = false
+                return
+            }
             // Presentation reviews do not send reports or inherit first-run consent.
             // Keep the operator's real choice and explicit consent reviews separate.
             if ProcessInfo.processInfo.environment["OPV_CONSENT_REVIEW_ID"] == nil,
@@ -135,26 +176,73 @@
             }
             model.session.liveSignalBars = 4
             model.session.liveFPS = "25.00"
-            var studio = SavedCamera(
-                id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-                advertisedName: "Studio camera", modelName: "Osmo Pocket 4 Pro",
-                lastConnectedAt: .distantPast, modelId: 0x22)
-            studio.wifiSSID = "Studio-5G"
-            studio.hotspotSSID = "Rig iPhone"
-            model.savedCameras = [
-                studio,
-                SavedCamera(
-                    id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
-                    advertisedName: "Travel camera", modelName: "Osmo Nano",
-                    lastConnectedAt: .distantPast, modelId: 0x19),
-            ]
-            if ProcessInfo.processInfo.environment["OPV_UI_REVIEW_CONNECTING"] == "1" {
-                model.session.reviewConnecting(
-                    studio.id, setup: .wifi, progress: "Joining Wi-Fi · attempt 1 of 3")
+            let cameras = model.cameras
+            switch state {
+            case "connecting":
+                if let studio = cameras.saved.first(where: { $0.id == studioID }) {
+                    cameras.connect(studio, route: studio.routes.first { $0.kind == .infrastructureNetwork }?.id)
+                }
+            case "failure":
+                if let studio = cameras.saved.first(where: { $0.id == studioID }) { cameras.connect(studio) }
+            case "pair-approve", "pair-join", "pair-video", "pair-failure":
+                Task {
+                    // The scripted camera appears once discovery starts.
+                    while !cameras.nearby.contains(where: { $0.id == newID }) {
+                        try? await Task.sleep(for: .milliseconds(20))
+                    }
+                    cameras.selection = newID
+                    if let sighting = cameras.nearby.first(where: { $0.id == newID }) { cameras.connect(sighting) }
+                }
+            case "pair-bluetooth":
+                model.session.phase = .failed(StartupConnectionCopy.bluetoothDenied)
+            default: break
             }
             model.isPairingNewCamera = screen == "pair"
             if screen == "settings" { model.liveOperatorPanel = .settings }
             if screen == "media" { model.liveOperatorPanel = .media }
         }
+    }
+
+    /// Simulator review only: a scripted DJI pipeline, so the shared pages show each connection
+    /// state without a camera. Never connects, never stores anything.
+    @MainActor
+    final class ReviewDJIPort: DJIConnectPort {
+        var onSightings: (([DJISighting]) -> Void)?
+        var onStage: ((DJIConnectionStage, String?) -> Void)?
+        private let state: String
+
+        init(state: String) { self.state = state }
+
+        func startScan() {
+            guard state != "empty", state != "connecting", state != "pair-bluetooth" else { return }
+            let studio = DJISighting(
+                id: MonitorUIReview.studioID, name: "Studio camera",
+                model: .resolve(modelId: 0x22, name: "Osmo Pocket 4 Pro"), modelId: 0x22)
+            let fresh = DJISighting(
+                id: MonitorUIReview.newID, name: "OsmoPocket3-4D5E",
+                model: .resolve(modelId: 0x20, name: "OsmoPocket3-4D5E"), modelId: 0x20)
+            onSightings?(state.hasPrefix("pair-") && state != "pair-choose" ? [fresh] : [studio, fresh])
+        }
+
+        func stopScan() {}
+
+        func connect(cameraID: String, setup: DJISetup, restoreAccessPoint: Bool) async throws -> DJIConnection {
+            switch state {
+            case "connecting": onStage?(.joiningWiFi, "Joining Studio-5G on this iPhone")
+            case "pair-approve": onStage?(.awaitingApproval, nil)
+            case "pair-join": onStage?(.joiningWiFi, "Joining camera Wi-Fi…")
+            case "pair-video": onStage?(.openingDatalink, nil)
+            case "failure", "pair-failure":
+                onStage?(.openingDatalink, nil)
+                throw CameraSession.failure(
+                    .timedOut, "datalink.silent", StartupConnectionCopy.friendly("datalink handshake timed out"))
+            default: break
+            }
+            try await Task.sleep(for: .seconds(3600))
+            throw CancellationError()
+        }
+
+        func disconnect() {}
+        func forget(cameraID: String) {}
     }
 #endif

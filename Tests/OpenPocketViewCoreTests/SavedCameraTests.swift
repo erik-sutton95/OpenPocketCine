@@ -1,77 +1,21 @@
 import Foundation
+import OpenCineCore
 import Testing
 
 @testable import OpenPocketViewCore
 
 @Suite struct SavedCameraTests {
+    /// A saved camera as the shared document holds it (SHELL-02): camera Wi-Fi is its first route.
     private func camera(
         id: UUID = UUID(),
         name: String = "OsmoPocket4P-AAAA",
         model: String = "Osmo Pocket 4 Pro",
-        ssid: String? = "OsmoPocket4P-AAAA",
-        at: Date = Date(),
-        custom: String? = nil
+        ssid: String? = "OsmoPocket4P-AAAA"
     ) -> SavedCamera {
         SavedCamera(
-            id: id,
-            advertisedName: name,
-            modelName: model,
-            lastSSID: ssid,
-            lastConnectedAt: at,
-            customName: custom
-        )
-    }
-
-    @Test func upsertKeepsNewestFirstAndPreservesCustomName() {
-        let id = UUID()
-        let older = camera(id: id, ssid: nil, at: Date(timeIntervalSince1970: 1), custom: "A-cam")
-        let newer = camera(id: id, ssid: "OsmoPocket4P-AAAA", at: Date(timeIntervalSince1970: 9))
-        let other = camera(
-            name: "OsmoPocket3-AAAA", model: "Osmo Pocket 3", at: Date(timeIntervalSince1970: 5))
-
-        let result = SavedCameras.upserting(newer, into: [older, other])
-        #expect(result.count == 2)
-        #expect(result[0].id == id)
-        #expect(result[0].customName == "A-cam")
-        #expect(result[0].lastSSID == "OsmoPocket4P-AAAA")
-        #expect(result[1].id == other.id)
-    }
-
-    @Test func upsertKeepsSavedModelIdWhenReconnectAdvertOmitsIt() {
-        let id = UUID()
-        let first = camera(id: id, model: "Osmo Nano")
-        var stored = first
-        stored.modelId = 0x19
-        let reconnect = camera(
-            id: id, name: "DJI camera", model: "DJI Osmo camera", ssid: "OsmoNano-ABCD")
-        let result = SavedCameras.upserting(reconnect, into: [stored])
-        #expect(result[0].modelId == 0x19)
-    }
-
-    @Test func canonicalizedDropsDuplicateIds() {
-        let id = UUID()
-        let a = camera(id: id, at: Date(timeIntervalSince1970: 2))
-        let b = camera(id: id, at: Date(timeIntervalSince1970: 1))
-        let result = SavedCameras.canonicalized([a, b])
-        #expect(result.count == 1)
-        #expect(result[0].lastConnectedAt == a.lastConnectedAt)
-    }
-
-    @Test func renameAndRemove() {
-        let id = UUID()
-        let stored = [camera(id: id)]
-        let renamed = SavedCameras.renaming(id, to: "  Van  ", in: stored)
-        #expect(renamed[0].customName == "Van")
-        #expect(renamed[0].displayName == "Van")
-        let cleared = SavedCameras.renaming(id, to: "   ", in: renamed)
-        #expect(cleared[0].customName == nil)
-        #expect(cleared[0].displayName == "OsmoPocket4P-AAAA")
-        #expect(SavedCameras.removing(id, from: stored).isEmpty)
-    }
-
-    @Test func launchDestinationMatchesOpenZCinePolicy() {
-        #expect(CameraStartupPolicy.launchDestination(savedCameras: []) == .addCamera)
-        #expect(CameraStartupPolicy.launchDestination(savedCameras: [camera()]) == .savedCameras)
+            id: id.uuidString, integration: DJICameraSessionAdapter.integration,
+            advertisedName: name, model: model,
+            routes: [SavedRoute(key: "ap", kind: .cameraAccessPoint, network: ssid, bluetooth: true)])
     }
 
     @Test func wifiCredsDoNotCrossBodies() {
@@ -123,13 +67,17 @@ import Testing
         ]
         #expect(
             CameraWifiResolution.isSSIDOwnedByAnotherCamera(
-                "OsmoPocket4P-AAAA", cameraId: nano, saved: saved))
+                "OsmoPocket4P-AAAA", cameraId: nano.uuidString, saved: saved))
         #expect(
             !CameraWifiResolution.isSSIDOwnedByAnotherCamera(
-                "OsmoNano-ABCD", cameraId: nano, saved: saved))
+                "OsmoNano-ABCD", cameraId: nano.uuidString, saved: saved))
         #expect(
             !CameraWifiResolution.isSSIDOwnedByAnotherCamera(
-                "OsmoPocket4P-AAAA", cameraId: pocket, saved: saved))
+                "OsmoPocket4P-AAAA", cameraId: pocket.uuidString, saved: saved))
+        #expect(
+            CameraWifiResolution.isSSIDOwnedByAnotherCamera(
+                " osmonano-abcd ", cameraId: pocket.uuidString, saved: saved),
+            "an advertised name owns its network too")
     }
 
     @Test func foundCameraUpgradesNamelessFirstAdvert() {
@@ -247,49 +195,4 @@ import Testing
         #expect(!BlePeerPolicy.acceptsGATT(from: pocket, selected: nil))
     }
 
-    @Test func wizardStepsFollowConnectionPhase() {
-        #expect(ConnectionPhase.scanning.pocketWizardStep == 1)
-        #expect(ConnectionPhase.awaitingApproval.pocketWizardStep == 2)
-        #expect(ConnectionPhase.joiningWifi.pocketWizardStep == 3)
-        #expect(ConnectionPhase.openingDatalink.pocketWizardStep == 4)
-        #expect(ConnectionPhase.failed("x").pocketWizardStep == 1)
-    }
-
-    @Test func stationSetupsArePerCameraAndSurviveReconnect() throws {
-        let id = UUID()
-        let other = camera(name: "OsmoAction6-BBBB")
-        var records = SavedCameras.setting(
-            .phoneHotspot, ssid: "  Rig Phone ", for: id, in: [camera(id: id), other])
-        records = SavedCameras.setting(.wifi, ssid: "Studio-5G", for: id, in: records)
-        let rig = try #require(records.first { $0.id == id })
-        #expect(rig.hotspotSSID == "Rig Phone")
-        #expect(rig.setups == [.cameraWiFi, .wifi, .phoneHotspot])
-        #expect(records.first { $0.id == other.id }?.setups == [.cameraWiFi])
-        // Connect prefers camera Wi-Fi until a station connect is stamped.
-        #expect(rig.preferredSetup == .cameraWiFi)
-        #expect(SavedCameras.startingStation(.cameraWiFi, for: id, in: records) == records)
-        records = SavedCameras.startingStation(.wifi, for: id, in: records)
-        #expect(records.first { $0.id == id }?.preferredSetup == .wifi)
-        // A live reconnect record carries none of the setup fields; merge keeps them.
-        records = SavedCameras.upserting(camera(id: id, ssid: nil), into: records)
-        #expect(records.first { $0.id == id }?.wifiSSID == "Studio-5G")
-        #expect(records.first { $0.id == id }?.hotspotSSID == "Rig Phone")
-        #expect(records.first { $0.id == id }?.lastSetup == .wifi)
-        // Forget keeps lastSetup: the camera may still need its access point restored.
-        records = SavedCameras.setting(.wifi, ssid: " ", for: id, in: records)
-        let forgotten = try #require(records.first { $0.id == id })
-        #expect(forgotten.setups == [.cameraWiFi, .phoneHotspot])
-        #expect(forgotten.lastSetup == .wifi)
-        #expect(forgotten.preferredSetup == .cameraWiFi)
-    }
-
-    @Test func recordsSavedBeforeSetupsStillDecode() throws {
-        let legacy = """
-            [{"id":"\(UUID().uuidString)","advertisedName":"OsmoPocket4P-AAAA",
-            "modelName":"Osmo Pocket 4 Pro","lastConnectedAt":0}]
-            """
-        let decoded = try JSONDecoder().decode([SavedCamera].self, from: Data(legacy.utf8))
-        #expect(decoded[0].setups == [.cameraWiFi])
-        #expect(decoded[0].preferredSetup == .cameraWiFi)
-    }
 }

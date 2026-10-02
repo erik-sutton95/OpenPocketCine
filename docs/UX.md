@@ -22,10 +22,10 @@ to do next.
 
 ## FTUE
 
-First pair is the wizard in `ConnectionSetupView` (Android matches):
+First pair uses the shared OpenCine `PairScreen` on both platforms:
 
 1. **FIRST RUN** — “Pair your camera.” Copy promises about a minute.
-2. BLE scan → tap a row.
+2. BLE scan: select a row, then Continue.
 3. Approve on the Pocket if asked.
 4. Join camera Wi-Fi (OS prompt — do not hide it). On 5.8 GHz the camera AP
    can take about a minute to appear; both shells keep trying (#235).

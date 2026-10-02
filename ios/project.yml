@@ -62,6 +62,10 @@ targets:
         product: OpenCineDJI
       - package: OpenCine
         product: OpenCineMulticam
+      # The shared app shell (SHELL-02): saved-camera store, cameras model and the cameras and
+      # pair screens over the DJI integration.
+      - package: OpenCine
+        product: OpenCineAppKit
       - target: OpenPocketCineWatch
         embed: true
         codeSign: true
@@ -131,6 +135,8 @@ targets:
     sources:
       - OpenPocketCineTests
     dependencies:
+      # OpenCineAppKit comes from the host app: linking it here too would make it a framework
+      # with a second MonitorUI (a second theme accent) inside.
       - target: OpenPocketCine
       - package: OpenPocketViewCore
         product: OpenPocketViewCore

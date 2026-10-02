@@ -260,6 +260,8 @@ tasks.named("preBuild").configure {
 
 dependencies {
     implementation(libs.opencine.monitor.ui)
+    // Cameras and pairing pages, the connection model and the saved-camera store (SHELL-02).
+    implementation(libs.opencine.appkit)
     implementation("com.opencapture.opencine:core:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:media:0.1.0-SNAPSHOT")
     // Live-view MediaCodec decoder (HevcDecoder), shared with OpenInstaCine.

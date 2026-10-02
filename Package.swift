@@ -37,6 +37,8 @@ let package = Package(
                 .product(name: "OpenCineMotion", package: "OpenCine"),
                 .product(name: "OpenCineRelay", package: "OpenCine"),
                 .product(name: "OpenCineDJI", package: "OpenCine"),
+                // Saved-camera values (`SavedCamera`) the Wi-Fi guards read (SHELL-02).
+                .product(name: "OpenCineCore", package: "OpenCine"),
             ]
         ),
         .testTarget(

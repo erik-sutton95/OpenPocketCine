@@ -34,6 +34,10 @@ trim_trailing_whitespace = false
 [*.{yml,yaml,json,jsonc}]
 indent_size = 2
 
+# Golden records retain the exact bytes emitted by the shipping JSON encoder.
+[Apps/Android/app/src/test/resources/saved-cameras/*.json]
+insert_final_newline = false
+
 # Runtime binaries and LUT tables — not text.
 [*.{cube,ttf,bin,png,jpg,jpeg,webp}]
 charset = unset

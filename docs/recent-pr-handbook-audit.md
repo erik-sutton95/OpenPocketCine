@@ -182,9 +182,9 @@ matrix as device-tested support. At this audit baseline, PR #316 explicitly left
 2.7K selection, recording and reconnect unverified. An overnight UI visit alone
 does not establish the recorded file's dimensions, frame rate or bit depth.
 
-Implementation evidence: [Swift picker policy](../Sources/OpenPocketViewCore/CamCap.swift),
+Implementation evidence: [Swift picker policy](../../OpenCine/Sources/OpenCineDJI/CamCap.swift),
 [iOS picker](../ios/OpenPocketCine/CaptureControlSheets.swift),
-[Android picker policy](../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/session/VideoFormat.kt).
+[Android picker policy](../../OpenCine/Android/dji/src/main/kotlin/com/opencapture/opencine/dji/VideoFormat.kt).
 PRs: [#277](https://github.com/erik-sutton95/OpenPocketCine/pull/277),
 [#316](https://github.com/erik-sutton95/OpenPocketCine/pull/316).
 
@@ -206,14 +206,14 @@ signal value does not identify sensor clipping.
 
 Sources: [curve investigation](pocket3-dlogm-curve.md),
 [ND recommendation](../Sources/OpenPocketViewCore/NDFilterRecommendation.swift),
-[transfer implementation](../Sources/OpenPocketViewCore/LiveColorScience.swift),
-[Android Face Priority exposure](../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/FacePriorityExposure.kt),
+[transfer implementation](../../OpenCine/Sources/OpenCineDJI/LiveColorScience.swift),
+[Android Face Priority exposure](../../OpenCine/Android/dji/src/main/kotlin/com/opencapture/opencine/dji/FacePriorityExposure.kt),
 [PR #316](https://github.com/erik-sutton95/OpenPocketCine/pull/316).
 
 ### 5. Publish a Pocket 3 evidence index, not a universal mode dictionary
 
 Priority: medium. The command catalog's shooting-mode row says only “sparse enum.”
-The [source enum](../Sources/OpenPocketViewCore/CameraControl.swift) names modes,
+The [source enum](../../OpenCine/Sources/OpenCineDJI/CameraControl.swift) names modes,
 but its comments already distinguish Pocket 4 photo from Nano photo and omit
 unconfirmed panorama values. That does not prove Pocket 3's mode mapping.
 
@@ -225,7 +225,7 @@ Pocket 3 guide. Confirm mode-specific audio, exposure/color options, zoom and
 recording duration using both UI and files where available. Keep unknown values
 unknown; do not infer Pocket 3 bytes from another body's enum.
 
-Sources: [shooting mode source](../Sources/OpenPocketViewCore/CameraControl.swift),
+Sources: [shooting mode source](../../OpenCine/Sources/OpenCineDJI/CameraControl.swift),
 [format investigation](osmo-recording-formats.md),
 [capture guide](capture-guide.md). No claim of newly observed hardware behavior
 is made by this audit.
@@ -261,7 +261,7 @@ obsolete facts in future implementations.
 | --- | --- | --- |
 | [Recording formats](osmo-recording-formats.md), “Capability table” and “What the FORMAT sheet does today” | Says unknown codes are dropped, only 1080/4K exist, tests prohibit 2.7K, and Nano's extra choices never reach the picker | Replace with #277's preserving/labelling behavior and #316's Pocket 3 normal-Video fallback. Its later “App work” section partly describes the newer implementation, so editing only one paragraph is insufficient. |
 | [Recording formats](osmo-recording-formats.md), opening sentence | Calls all Pocket previews HEVC | Qualify Pocket 3's observed AVC separately. |
-| [Recording formats](osmo-recording-formats.md), Pocket 3 zoom / “App work” | Says 2.7K zoom is 3× per the cited specification, while the source clamps only `.p4K` and otherwise exposes 4× | Capture the Mimo 2.7K limit and camera confirmation; then reconcile [CameraModel](../Sources/OpenPocketViewCore/CameraModel.swift), both shells and handbook. This audit establishes the inconsistency, not a newly verified 3× wire limit. |
+| [Recording formats](osmo-recording-formats.md), Pocket 3 zoom / “App work” | Says 2.7K zoom is 3× per the cited specification, while the source clamps only `.p4K` and otherwise exposes 4× | Capture the Mimo 2.7K limit and camera confirmation; then reconcile [CameraModel](../../OpenCine/Sources/OpenCineDJI/CameraModel.swift), both shells and handbook. This audit establishes the inconsistency, not a newly verified 3× wire limit. |
 | [Live session](live-session.md), first-picture section | Older “repeated joins remain in progress” survives beside five successful joins later | Consolidate the existing evidence while preserving unresolved cold-boot and broader model qualification. |
 | [Protocol notes](protocol-notes.md), “Phone relay and dual-interface” | Says “If a watcher exists later” after describing implemented Sharing above | Describe the implemented shared-camera-Wi-Fi relay and leave alternate-interface research separately qualified. |
 
