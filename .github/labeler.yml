@@ -80,5 +80,4 @@
       - any-glob-to-any-file:
           - "Apps/Android/**/*"
           - "Sources/OpenPocketCineAndroidFacade/**/*"
-          - "Sources/CJNI/**/*"
           - "scripts/android-*.sh"

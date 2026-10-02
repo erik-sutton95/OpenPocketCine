@@ -19,7 +19,7 @@ This file is the Android build and I/O notes that implement those rows.
 Source: the public [OpenZCine](https://github.com/erik-sutton95/OpenZCine) repository.
 
 1. **Portable Swift core** — `Sources/OpenPocketViewCore/` never imports SwiftUI, UIKit, or Android.
-2. **Android JNI facade:** `Sources/OpenPocketCineAndroidFacade/` owns the session that talks to the camera on Android, plus hand-written `@_cdecl` JNI shims (`SwiftCoreJNI.swift`). The DJI wire natives are exported for OpenCine's `com.opencapture.opencine.dji.DjiNative` (`Java_com_opencapture_opencine_dji_DjiNative_*`), this app's own natives (LUT, feed effects, conform preview, core version) for `bridge/SwiftCore.kt`. A header-only `CJNI` target exposes NDK `<jni.h>` on Android only.
+2. **Android JNI facade:** `Sources/OpenPocketCineAndroidFacade/` owns the session that talks to the camera on Android, plus hand-written `@_cdecl` JNI shims (`SwiftCoreJNI.swift`). The DJI wire natives are exported for OpenCine's `com.opencapture.opencine.dji.DjiNative` (`Java_com_opencapture_opencine_dji_DjiNative_*`), this app's own natives (LUT, feed effects, conform preview, core version) for `bridge/SwiftCore.kt`. OpenCineJNISupport provides the shared JNI helpers and re-exports OpenCineJNI's NDK `<jni.h>` types on Android.
 3. **Cross-compile, don’t SPM-link** — Gradle task `:app:stageSwiftCore` (`just android-core`, `scripts/android-stage-swift-core.sh`) builds `aarch64-unknown-linux-android29` and stages `libOpenPocketCineAndroid.so` plus the Swift runtime `.so` closure into generated jniLibs. **arm64-v8a only.** Toolchain pin: Swift **6.3.3** + `swift-6.3.3-RELEASE_android`.
 4. **Kotlin seam:** OpenCine's `dji` module holds the DJI session (`PocketCameraSession`, which drives the camera over JNI and exposes OpenCineCore `CameraSession` through `DjiCameraSessionAdapter`) and everything it runs on: BLE link, Wi-Fi joining, datalink driver, command and status models, gimbal programs, connection and live-view policies, `ConnectionPhase`, `DjiNative`. This app supplies `session/AppSessionHost.kt` (operator preferences, feed incident recorder, reliability reporting, build identity, ML Kit face detection) and keeps all UI; `AppModel` loads `libOpenPocketCineAndroid.so` (through `SwiftCore.isAvailable`) before any session code runs. Kotlin does not pack protocol bytes.
 5. **Same applicationId as iOS bundle** (`com.opencapture.openpocketcine`). Design tokens are duplicated as floats in `Theme.kt` / `pairing/StartupDesign.kt` so connection screens match.
@@ -71,7 +71,7 @@ Nikon PTP-IP, AccessorySetupKit / `NIKON_ZR_*` SSIDs, multi-setup path chips, OC
 Done in-tree (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)):
 
 1. Same Swift Android SDK pin OpenZCine uses (6.3.3).
-2. `OpenPocketCineAndroidFacade` + `CJNI` in `Package.swift` (`#if os(Android)` JNI).
+2. `OpenPocketCineAndroidFacade` + OpenCineJNISupport in `Package.swift` (`#if os(Android)` JNI).
 3. Gradle `:app:stageSwiftCore` stages `libOpenPocketCineAndroid.so`.
 4. Compose splash → empty-store wizard / saved list → live HEVC (MediaCodec) using enable-once + ACK pump.
 

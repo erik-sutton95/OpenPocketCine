@@ -45,12 +45,11 @@ let package = Package(
             name: "OpenPocketViewCoreTests",
             dependencies: ["OpenPocketViewCore"]
         ),
-        // Header-only shim exposing the NDK's <jni.h> to Swift; empty on Darwin.
-        .target(name: "CJNI"),
         .target(
             name: "OpenPocketCineAndroidFacade",
             dependencies: [
-                "OpenPocketViewCore", "CJNI",
+                "OpenPocketViewCore",
+                .product(name: "OpenCineJNISupport", package: "OpenCine"),
                 // The DJI wire natives behind OpenCine's Kotlin DjiNative (linked into this .so).
                 .product(name: "OpenCineDJIAndroid", package: "OpenCine"),
             ]

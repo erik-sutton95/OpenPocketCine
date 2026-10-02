@@ -9,61 +9,9 @@
 // This file compiles empty on Darwin so `swift test` is unaffected.
 #if os(Android)
 
-    import CJNI
+    import OpenCineJNISupport
     import Foundation
     import OpenPocketViewCore
-
-    // MARK: - JNI plumbing
-
-    private func table(_ env: UnsafeMutablePointer<JNIEnv?>) -> JNINativeInterface {
-        env.pointee!.pointee
-    }
-
-    private func javaString(
-        _ env: UnsafeMutablePointer<JNIEnv?>, _ value: String
-    ) -> jstring? {
-        value.withCString { table(env).NewStringUTF!(env, $0) }
-    }
-
-    private func swiftString(
-        _ env: UnsafeMutablePointer<JNIEnv?>, _ value: jstring?
-    ) -> String? {
-        guard let value,
-            let chars = table(env).GetStringUTFChars!(env, value, nil)
-        else { return nil }
-        defer { table(env).ReleaseStringUTFChars!(env, value, chars) }
-        return String(cString: chars)
-    }
-
-    private func swiftBytes(
-        _ env: UnsafeMutablePointer<JNIEnv?>, _ value: jbyteArray?
-    ) -> [UInt8]? {
-        guard let value else { return nil }
-        let fns = table(env)
-        let length = Int(fns.GetArrayLength!(env, value))
-        guard length >= 0 else { return nil }
-        guard length > 0 else { return [] }
-        var out = [UInt8](repeating: 0, count: length)
-        out.withUnsafeMutableBytes { raw in
-            fns.GetByteArrayRegion!(
-                env, value, 0, jsize(length),
-                raw.baseAddress?.assumingMemoryBound(to: jbyte.self))
-        }
-        return out
-    }
-
-    private func javaByteArray(
-        _ env: UnsafeMutablePointer<JNIEnv?>, _ bytes: [UInt8]
-    ) -> jbyteArray? {
-        let fns = table(env)
-        guard let array = fns.NewByteArray!(env, jsize(bytes.count)) else { return nil }
-        bytes.withUnsafeBytes { raw in
-            guard let base = raw.baseAddress else { return }
-            fns.SetByteArrayRegion!(
-                env, array, 0, jsize(bytes.count), base.assumingMemoryBound(to: jbyte.self))
-        }
-        return array
-    }
 
     // MARK: - Info
 

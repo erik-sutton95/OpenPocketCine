@@ -258,6 +258,18 @@ The SHELL-02 simulator/emulator runs use synthetic camera records and credential
 They do not prove Bluetooth, camera networking, store signing or physical-device
 upgrade behavior. Items 18-21 remain for the device tester.
 
+### Shared native bridge helpers (SHELL-04)
+
+The Android Swift facade now imports OpenCineJNISupport for JNI strings, arrays
+and method lookup. The app-local CJNI header target is removed. Native class
+names, exported methods and runtime-library packaging stay compatible. Native
+staging and build identity include the helper sources, so a shared helper edit
+rebuilds the app library. This changes no saved data or credential namespace.
+
+Automated Android native probes cover strings, null/empty arrays, LUT bytes and
+float arrays; exported Java symbol sets are compared with the prior app binary.
+Camera transport and live-picture checks remain in the device checklist.
+
 ## Publish prerequisite
 
 CI, Xcode Cloud and contributors need the shared repository. Publish OpenCine first, then

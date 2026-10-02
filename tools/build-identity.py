@@ -35,7 +35,7 @@ def identity(root: Path, platform: str, configuration: str) -> str:
 SWIFT_ANDROID_CORE = [
     "Sources/OpenCineCore", "Sources/OpenCineMedia", "Sources/OpenCineMotion",
     "Sources/OpenCineRelay", "Sources/OpenCineDJI", "Sources/OpenCineDJIAndroid",
-    "Sources/OpenCineJNI",
+    "Sources/OpenCineJNI", "Sources/OpenCineJNISupport",
 ]
 SIBLING_PACKAGES = {
     "ios": [

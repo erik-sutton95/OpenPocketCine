@@ -41,7 +41,6 @@ on:
       - "Apps/Android/**"
       - "Sources/OpenPocketViewCore/**"
       - "Sources/OpenPocketCineAndroidFacade/**"
-      - "Sources/CJNI/**"
       - "Package.swift"
       - "opencine-pins.txt"
       - "scripts/android-*.sh"
