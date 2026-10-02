@@ -489,7 +489,7 @@ private fun LiveControlSheetContent(
     // Effects also guard reseating so a future caller cannot accidentally persist an angle.
     if (preview == null) {
         LaunchedEffect(sheet) {
-            effects.mount(sheet, status, CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model),
+            effects.mount(sheet, status, model.monitorLayout().focus,
                 model::refreshAudio, model::refreshFocusTrack, { model.refreshIsoLimitNow() }, ::seed, ::reseatIso)
         }
         // Match iOS CaptureControlSheets onChange keys. Do not reseat ISO/shutter drums
@@ -723,7 +723,7 @@ private fun LiveControlSheetContent(
                     }
                 }
                 LiveSheet.FOCUS -> {
-                    if (CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model)) {
+                    if (model.monitorLayout().focus) {
                         FocusBody(
                             status = status,
                             enabled = enabled,
@@ -732,12 +732,14 @@ private fun LiveControlSheetContent(
                     }
                 }
                 LiveSheet.APERTURE -> {
-                    CheckedRows(
-                        options = CaptureLists.apertureLabels(status),
-                        selected = ApertureStrategy.label(status.apertureStrategy),
-                        enabled = enabled,
-                    ) { label ->
-                        CaptureLists.apertureFromLabel(label)?.let(model::setApertureStrategy)
+                    if (model.monitorLayout().iris) {
+                        CheckedRows(
+                            options = CaptureLists.apertureLabels(status),
+                            selected = ApertureStrategy.label(status.apertureStrategy),
+                            enabled = enabled,
+                        ) { label ->
+                            CaptureLists.apertureFromLabel(label)?.let(model::setApertureStrategy)
+                        }
                     }
                 }
                 LiveSheet.EXPO -> {
@@ -1963,25 +1965,6 @@ object CaptureLists {
 
     const val FOCUS_TAB_SINGLE = "AF-S"
     const val FOCUS_TAB_CONTINUOUS = "AF-C"
-
-    /**
-     * Nano / Atto have no AF-S / AF-C. Unknown camera defaults to Pocket (supported),
-     * matching iOS `CameraSession.supportsFocusMode`.
-     */
-    fun supportsFocusMode(modelName: String?, family: String? = null, flag: Boolean? = null): Boolean {
-        if (flag == false) return false
-        if (family.equals("nano", ignoreCase = true)) return false
-        val n = (modelName ?: "").lowercase().replace(" ", "")
-        if (n.isEmpty()) return true
-        return !n.contains("nano") && !n.contains("atto")
-    }
-
-    /** iOS `connectedCamera?.model.supportsFocusMode ?? true` when [model] is present. */
-    fun supportsFocusMode(model: CameraModel): Boolean =
-        supportsFocusMode(model.name, model.family, model.supportsFocusMode)
-
-    fun supportsFocusModeOrDefault(model: CameraModel?): Boolean =
-        supportsFocusMode(model?.name, model?.family, model?.supportsFocusMode)
 
     /** Action 6 APERTURE choices: the camera's capability, else the captured fallback. */
     fun apertureLabels(status: CameraStatus): List<String> =

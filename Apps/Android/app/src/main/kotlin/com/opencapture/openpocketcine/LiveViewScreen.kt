@@ -185,27 +185,17 @@ fun LiveViewScreen(model: AppModel) {
     }
     LaunchedEffect(status.shootingMode) {
         sheet = CaptureShutterPolicy.retainedSheet(sheet, status.shootingMode)
-        if (!CaptureShutterPolicy.showsAudioControls(status.shootingMode) &&
+        if (!model.showsAudio(status) &&
             assist.configureTool == LiveAssistTool.AUDIO
         ) {
             assist.configureTool = null
         }
     }
-    LaunchedEffect(
-        sheet,
-        model.session.connectedCamera?.model?.supportsFocusMode,
-        model.session.connectedCamera?.model?.supportsAperture,
-        model.session.connectedCamera?.model?.family,
-        model.session.connectedCamera?.model?.name,
-    ) {
-        if (sheet == LiveSheet.FOCUS &&
-            !CaptureLists.supportsFocusModeOrDefault(model.session.connectedCamera?.model)
-        ) {
-            sheet = null
-        }
-        if (sheet == LiveSheet.APERTURE && model.session.connectedCamera?.model?.supportsAperture != true) {
-            sheet = null
-        }
+    val layoutFocus = model.monitorLayout().focus
+    val layoutIris = model.monitorLayout().iris
+    LaunchedEffect(sheet, layoutFocus, layoutIris) {
+        if (sheet == LiveSheet.FOCUS && !layoutFocus) sheet = null
+        if (sheet == LiveSheet.APERTURE && !layoutIris) sheet = null
     }
     LaunchedEffect(chromeNote) {
         val note = chromeNote ?: return@LaunchedEffect
@@ -460,7 +450,7 @@ fun LiveViewScreen(model: AppModel) {
             else if (fillCrop) portraitFillCropContent(layout.feed) else layout.onFeed
         var assistPaletteBounds by remember(vw, vh) { mutableStateOf<ChromeRect?>(null) }
         val showGimbalButton =
-            model.monitorCapabilities(status).gimbal &&
+            model.monitorLayout().gimbal &&
                 model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
         val cluster = layout.gimbalCluster(showGimbalButton)
         val zoom = cluster.zoom
@@ -673,7 +663,7 @@ fun LiveViewScreen(model: AppModel) {
                         width = maxOf(0f, scopePlacement.maxX - layout.safeLeading)),
                     pictureMirrored = liveViewFlip,
                     pictureFlippedVertically = flipV,
-                    showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    showsAudio = model.showsAudio(status),
                     onOpenOptions = { tool, frame ->
                         assist.longPressAnchor = frame
                         assist.configureTool = tool
@@ -1355,7 +1345,7 @@ internal fun LandscapeChrome(
     zoomDialReadout: Double = zoomReadout,
     onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
     onStatusChipFrame: (PocketDispSection, ChromeRect) -> Unit = { _, _ -> },
-    capabilities: com.opencapture.monitorui.MonitorCapabilities = model.monitorCapabilities(status),
+    capabilities: com.opencapture.opencine.core.MonitorLayoutCapabilities = model.monitorLayout(),
     onAssistBoundsChanged: (ChromeRect?) -> Unit = {},
 ) {
     var stripQuick by remember { mutableStateOf(false) }
@@ -1558,7 +1548,7 @@ internal fun LandscapeChrome(
                 com.opencapture.openpocketcine.assists.MonitorAssistCluster(
                     portrait = false, locked = uiLocked || !hits,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
-                    showsAudio = CaptureShutterPolicy.showsAudioControls(status.shootingMode),
+                    showsAudio = capabilities.audio && CaptureShutterPolicy.showsAudioControls(status.shootingMode),
                     onBoundsChanged = onAssistBoundsChanged,
                 )
             }
@@ -1576,6 +1566,7 @@ internal fun LandscapeChrome(
                     quickBottomClearanceDp = layout.safeBottom,
                     showFocus = capabilities.focus,
                     showAperture = capabilities.iris,
+                    showAudio = capabilities.audio,
                     facePriority = model.facePriorityExposureEnabled, shutterUsesAngle = model.shutterUsesAngle,
                     onOpen = {
                         val next = CaptureShutterPolicy.opening(it, status.shootingMode)

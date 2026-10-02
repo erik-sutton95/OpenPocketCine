@@ -241,8 +241,7 @@ class MultiviewSession(
 
         val timecodeReadout: String?
             get() {
-                val cam = camera ?: return null
-                if (cam.model.family == "nano") return null
+                if (camera == null || !control.layout().timecode) return null
                 return settings.timecodeClock
             }
 
@@ -304,6 +303,7 @@ class MultiviewSession(
             batteryPercent = settings.batteryPercent,
             storageFreeMb = settings.storageFreeMb,
             storageTotalMb = settings.storageTotalMb,
+            model = camera?.model,
         )
 
         internal fun multicam() = MulticamTile(

@@ -34,7 +34,6 @@ class Action6SupportTest {
         )
         assertEquals(0x41, wire.liveViewEnableReceiver)
         assertFalse(wire.supportsFocusMode)
-        assertFalse(CaptureLists.supportsFocusModeOrDefault(wire))
     }
 
     @Test fun colorUsesTheNanoWireBytesWithoutEightBit() {

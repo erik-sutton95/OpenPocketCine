@@ -18,6 +18,7 @@ import com.opencapture.opencine.multicam.RecordResult
 import com.opencapture.opencine.multicam.RecordSubmissionException
 import com.opencapture.opencine.multicam.TargetOutcome
 import com.opencapture.opencine.multicam.TargetPolicy
+import com.opencapture.opencine.dji.CameraModel
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.ControlWireEvent
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
@@ -45,6 +46,8 @@ internal data class TileRecordState(
     val batteryPercent: Int = -1,
     val storageFreeMb: Int = 0,
     val storageTotalMb: Int = 0,
+    /** The tile's body, so the adapter declares what it reports (timecode). */
+    val model: CameraModel? = null,
 )
 
 /**
@@ -81,6 +84,7 @@ internal class MultiviewTileControl(
             recording = tile.observation?.first?.takeIf { tile.recordingAvailable },
             batteryPercent = tile.batteryPercent.takeIf { it in 0..100 },
             storageFreeMb = tile.storageFreeMb.takeIf { tile.storageTotalMb > 0 },
+            model = tile.model,
         )
     }
 

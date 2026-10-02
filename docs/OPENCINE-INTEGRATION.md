@@ -22,6 +22,7 @@ against a sibling checkout of the shared OpenCine repository (see Publish prereq
 | MEDIA-02 step 3 (Android Vulkan renderer from OpenCineCore `:vulkan`), stacked on this branch | `opencine/vulkan` | see `git log` |
 | SHELL-04 DJI part (Android `HevcDecoder` from OpenCine `:decoder`, DJI Kotlin layer from `:dji`), stacked on this branch | `opencine/shell-04` | see `git log` |
 | SHELL-01 steps 4-5, iOS (live monitor laid out from the DJI integration's capability projection) | `opencine/shell-01` | see `git log` |
+| SHELL-01 steps 4-5, Android (same projection from OpenCine `:dji`) | `opencine/shell-01k` | see `git log` |
 
 ### Merged branches
 
@@ -57,10 +58,12 @@ checked out next to this repository as `../OpenCine` by `scripts/checkout-openci
 - ISO, white balance and record go through the OpenCineCore camera session. On iOS the HUD
   shows what the camera reported, with a pending state until it answers; the Android HUD is
   unchanged.
-- iOS lays the live monitor out from what the connected body declares through OpenCineDJI
-  (gimbal and head tracking from its motion, zoom, focus, aperture, audio meters and timecode),
-  not from app flags. The one visible difference: a Nano no longer shows a live timecode it
-  never reports (Multi View already hid it).
+- iOS and Android lay the live monitor out from what the connected body declares through
+  OpenCineDJI (gimbal and head tracking from its motion, zoom, focus, aperture, audio meters and
+  timecode), not from app flags. The one visible difference: a Nano no longer shows a live
+  timecode it never reports (Multi View already hid it). On Android the APERTURE sheet and
+  drum now appear only on Action 6, and FOCUS follows the body's declaration instead of a
+  product-name check.
 - Record is never a blind toggle: the app sends start or stop for the state the camera
   reported, and waits for the first record state after connecting.
 - Apple Watch, watcher relay and confirmed record commands go to the camera they showed. After
@@ -189,6 +192,11 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
        Nano; the zoom chip on Pocket only.
     5. Record: start and stop from the record button with and without confirmation on each body;
        the lamp follows the camera.
+    6. Android (same bodies, against `opencine/integration` without `opencine/shell-01k`): repeat
+       1 to 5 on an Android phone. Gimbal: joystick, gimbal sheet, motion overlay and settings
+       gimbal card on a Pocket only. Audio: AUDIO tile, assist and meter in video on every body,
+       meters move with sound. Timecode: live on Pocket and Action 6, none on Nano (live and
+       Multi View tile). Record: start and stop with and without confirmation.
 
 ## Publish prerequisite
 

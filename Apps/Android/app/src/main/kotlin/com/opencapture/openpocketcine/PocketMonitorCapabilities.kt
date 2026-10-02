@@ -1,24 +1,21 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.monitorui.MonitorCapabilities
+import com.opencapture.opencine.core.MonitorLayoutCapabilities
 import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.CaptureShutterPolicy
 
-/** The existing adapter remains the only authority for body-specific features. */
-internal fun AppModel.monitorCapabilities(status: CameraStatus): MonitorCapabilities {
-    val body = session.connectedCamera?.model
-    return MonitorCapabilities(
-        gimbal = session.hasGimbal,
-        zoom = session.supportsZoom,
-        focus = body?.supportsFocusMode == true,
-        iris = body?.supportsAperture == true,
-        audio = true,
-        headTracking = session.hasGimbal,
-        clipDelete = true,
-        clipStar = true,
-        requiresInternetHop = true,
-        timecode = true,
-    )
-}
+/**
+ * The app's part of the layout: clip delete, clip star and the internet hop, until media and
+ * connection routes carry them (SHELL-02). Everything else is what the camera declares.
+ */
+internal val appLayoutBase = MonitorLayoutCapabilities(clipDelete = true, clipStar = true, requiresInternetHop = true)
+
+/** What the monitor lays out: the DJI integration's projection of the connected body (iOS `OsmoMonitorPresentation.capabilities`). */
+internal fun AppModel.monitorLayout(): MonitorLayoutCapabilities = session.control.layout(appLayoutBase)
+
+/** AUDIO tile, assist, live meter and drum: a body that reports audio levels, in a video mode. */
+internal fun AppModel.showsAudio(status: CameraStatus): Boolean =
+    monitorLayout().audio && CaptureShutterPolicy.showsAudioControls(status.shootingMode)
 
 /** The camera profile, including current recording mode limits, owns shortcut availability. */
 internal fun AppModel.monitorZoomStops(): com.opencapture.monitorui.MonitorZoomTapStops {

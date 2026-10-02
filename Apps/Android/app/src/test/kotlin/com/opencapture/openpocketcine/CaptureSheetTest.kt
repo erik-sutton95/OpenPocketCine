@@ -3,7 +3,6 @@ package com.opencapture.openpocketcine
 import com.opencapture.opencine.dji.EvComp
 import com.opencapture.opencine.dji.ShutterAngle
 import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraModel
 import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.opencine.dji.FocusOption
 import com.opencapture.opencine.dji.FocusTrackMode
@@ -575,46 +574,6 @@ class CaptureSheetTest {
         assertTrue(CaptureLists.shouldRefreshFocusTrack(afc, supportsFocus = true))
         assertTrue(!CaptureLists.shouldRefreshFocusTrack(lock, supportsFocus = true))
         assertTrue(!CaptureLists.shouldRefreshFocusTrack(afc, supportsFocus = false))
-    }
-
-    @Test
-    fun nanoHasNoFocusMode() {
-        assertTrue(!CaptureLists.supportsFocusMode("Osmo Nano"))
-        assertTrue(!CaptureLists.supportsFocusMode("OsmoNano-ABCD"))
-        assertTrue(CaptureLists.supportsFocusMode("Osmo Pocket 4 Pro"))
-        assertTrue(CaptureLists.supportsFocusMode(null))
-        assertTrue(
-            !CaptureLists.supportsFocusMode(
-                CameraModel(name = "Osmo Nano", family = "nano", supportsFocusMode = false),
-            ),
-        )
-        assertTrue(
-            !CaptureLists.supportsFocusMode(
-                CameraModel(name = "Osmo", family = "nano", supportsFocusMode = true),
-            ),
-        )
-        assertTrue(
-            !CaptureLists.supportsFocusMode(
-                CameraModel(name = "Osmo Nano", family = "pocket", supportsFocusMode = true),
-            ),
-        )
-        assertTrue(
-            CaptureLists.supportsFocusMode(
-                CameraModel(name = "Osmo Pocket 4 Pro", family = "pocket", supportsFocusMode = true),
-            ),
-        )
-        assertTrue(CaptureLists.supportsFocusModeOrDefault(null))
-        assertTrue(
-            !CaptureLists.supportsFocusModeOrDefault(
-                CameraModel(name = "Osmo Nano", family = "nano", supportsFocusMode = false),
-            ),
-        )
-        assertTrue(
-            !CaptureLists.shouldRefreshFocusTrack(
-                CameraStatus(focusTrack = -1),
-                supportsFocus = CaptureLists.supportsFocusMode("Osmo Nano"),
-            ),
-        )
     }
 
     @Test

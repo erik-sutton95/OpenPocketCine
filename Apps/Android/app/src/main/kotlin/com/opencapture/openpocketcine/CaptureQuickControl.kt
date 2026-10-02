@@ -57,16 +57,16 @@ internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: 
                     CaptureLists.wbModeRowSelected(status, awbLocked),
                     context = "${status.wbMode}:${CaptureLists.currentKelvin(status)}:${CaptureLists.currentTint(status)}"))
         }
-        LiveSheet.FOCUS -> chrome(captureQuickFocusControl(status))
-        LiveSheet.APERTURE -> chrome(MonitorQuickControl(CaptureLists.apertureLabels(status),
-            ApertureStrategy.label(status.apertureStrategy).orEmpty()))
+        LiveSheet.FOCUS -> if (!model.monitorLayout().focus) null else chrome(captureQuickFocusControl(status))
+        LiveSheet.APERTURE -> if (!model.monitorLayout().iris) null else chrome(MonitorQuickControl(
+            CaptureLists.apertureLabels(status), ApertureStrategy.label(status.apertureStrategy).orEmpty()))
         LiveSheet.EXPO -> {
             val aeLocked = model.session.aeLock.value != null
             chrome(MonitorQuickControl(CaptureLists.expoLabels(aeLocked),
                 CaptureLists.expoSelectedLabel(status.expoMode, aeLocked) ?: CaptureLists.expoLabel(status.expoMode)))
         }
         LiveSheet.AUDIO -> {
-            if (CameraCommands.isPhotoMode(status.shootingMode)) null
+            if (!model.showsAudio(status)) null
             else chrome(MonitorQuickControl(CaptureLists.audioChannelLabels, CaptureLists.audioChannelLabel(status.audioChannel).orEmpty()))
         }
         LiveSheet.FORMAT, LiveSheet.COLOR, LiveSheet.MODE -> {

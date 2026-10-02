@@ -33,15 +33,22 @@ import androidx.core.graphics.scale
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.opencapture.monitorui.MonitorCapabilities
 import com.opencapture.openpocketcine.assists.MonitorAssistInspector
+import com.opencapture.opencine.core.MonitorLayoutCapabilities
 import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CameraModel
 import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.dji.ControlWireEvent
+import com.opencapture.opencine.dji.DjiCameraSessionAdapter
+import com.opencapture.opencine.dji.PocketControlPort
+import com.opencapture.opencine.dji.PocketControlState
+import kotlinx.coroutines.MainScope
 
 /**
  * Debug-only, deterministic visual review of production chrome. This activity
  * never starts discovery, connects a camera, starts a decoder, or fabricates a
- * connected session. Intents choose the fixture capabilities and source aspect.
+ * connected session. Intents choose the review body (`--es body nano`, else Pocket 4 Pro) and
+ * source aspect; the body reaches the chrome only as the DJI integration's projection.
  */
 class MonitorPreviewActivity : ComponentActivity() {
     private lateinit var model: AppModel
@@ -65,12 +72,7 @@ class MonitorPreviewActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         model = AppModel(applicationContext)
-        val capabilities = MonitorCapabilities(
-            gimbal = intent.getBooleanExtra("gimbal", true),
-            zoom = intent.getBooleanExtra("zoom", true),
-            focus = intent.getBooleanExtra("focus", true),
-            timecode = intent.getBooleanExtra("timecode", true),
-        )
+        val capabilities = reviewLayout(intent.getStringExtra("body"))
         val sourceAspect = intent.getFloatExtra("aspect", 16f / 9f).takeIf { it > 0f } ?: 16f / 9f
         setContent {
             OpenPocketCineTheme {
@@ -101,7 +103,7 @@ class MonitorPreviewActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, sourceAspect: Float,
+private fun ReviewMonitor(model: AppModel, capabilities: MonitorLayoutCapabilities, sourceAspect: Float,
     safeTop: Float, safeBottom: Float, patterned: Boolean = false) {
     val status = remember(capabilities) {
         CameraStatus(batteryPercent = 80, storageTotalMb = 131072, storageFreeMb = 109568,
@@ -173,6 +175,28 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorCapabilities, so
         }
     }
     }
+}
+
+/**
+ * The review body's layout through the same mapping as a connected camera: a DJI seam over a port
+ * that only names the body (flags as the Swift facade sends them) and never sends anything.
+ */
+private fun reviewLayout(body: String?): MonitorLayoutCapabilities {
+    val nano = body == "nano"
+    val model = CameraModel(
+        name = if (nano) "Osmo Nano" else "Osmo Pocket 4 Pro", family = if (nano) "nano" else "pocket",
+        hasGimbal = !nano, supportsZoom = !nano, supportsFocusMode = !nano, supportsTapFocus = !nano,
+    )
+    val port = object : PocketControlPort {
+        override fun controlState() = PocketControlState(model = model)
+        override fun setIsoIndex(index: Int, onStage: ((ControlWireEvent) -> Unit)?) = Unit
+        override fun setWhiteBalanceAuto(tint: Int?, onStage: ((ControlWireEvent) -> Unit)?) = Unit
+        override fun setWhiteBalance(kelvin: Int, tint: Int, onStage: ((ControlWireEvent) -> Unit)?) = Unit
+        override fun setRecording(start: Boolean, onStage: ((ControlWireEvent) -> Unit)?) = Unit
+        override fun takePhoto() = Unit
+        override fun noteControlRejection(note: String) = Unit
+    }
+    return DjiCameraSessionAdapter(port, MainScope()).layout(appLayoutBase)
 }
 
 /** Real shared card layouts with identical data and different optional actions. */

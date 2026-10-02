@@ -1247,6 +1247,7 @@ private fun ControlsRows(model: AppModel) {
     val view = LocalView.current
     val context = LocalContext.current
     val status by model.session.chromeStatus.collectAsState()
+    val layout = remember(status) { model.monitorLayout() }
     var gimbalGamepadStick by remember {
         mutableStateOf(OperatorPrefs.gimbalGamepadStick(context))
     }
@@ -1278,7 +1279,7 @@ private fun ControlsRows(model: AppModel) {
             model.updateKeepScreenAwake(!model.keepScreenAwake)
         }
     }
-    if (model.monitorCapabilities(status).gimbal) {
+    if (layout.gimbal) {
         SettingsRowCard(title = "Gimbal") {
             SettingsInlineRow(
                 title = "Joystick sensitivity",
@@ -1507,7 +1508,8 @@ private val dispToggleSpecs =
 private fun DispToggles(model: AppModel, mode: PocketDispMode, view: View) {
     val chrome = model.chrome(mode)
     val status by model.session.chromeStatus.collectAsState()
-    val capabilities = model.monitorCapabilities(status)
+    // The body's declarations change with what the session reports.
+    val capabilities = remember(status) { model.monitorLayout() }
     dispToggleSpecs.filter {
         when (it.section) {
             PocketDispSection.GIMBAL_STICK -> capabilities.gimbal

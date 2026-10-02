@@ -68,7 +68,7 @@ import com.opencapture.opencine.dji.CameraStatus
 
 internal fun multiviewSettingsCategories(camera: CameraModel, status: CameraStatus): List<LiveSheet> = buildList {
     addAll(listOf(LiveSheet.ISO, LiveSheet.SHUTTER, LiveSheet.EXPO, LiveSheet.WB))
-    if (CaptureLists.supportsFocusMode(camera)) add(LiveSheet.FOCUS)
+    if (camera.supportsFocusMode) add(LiveSheet.FOCUS)
     if (camera.supportsAperture) add(LiveSheet.APERTURE)
     if (!CameraCommands.isPhotoMode(status.shootingMode)) addAll(listOf(LiveSheet.FORMAT, LiveSheet.COLOR))
     add(LiveSheet.MODE)
