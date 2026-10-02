@@ -12,7 +12,6 @@ import com.opencapture.openpocketcine.GamepadShutterSync
 import com.opencapture.openpocketcine.EvComp
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.bridge.SwiftCore
-import com.opencapture.openpocketcine.core.CameraSession as CameraSessionSeam
 import com.opencapture.openpocketcine.core.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FacePriorityExposure
 import com.opencapture.opencine.media.SerialSessionGate
@@ -162,7 +161,7 @@ internal suspend fun ensureEndpointCommandCurrent(currentGeneration: Long) {
 class PocketCameraSession(
     context: Context, borrowing: HevcDecoder? = null,
     private val controlLease: MultiviewControlLease? = null,
-) : CameraSessionSeam, PocketControlPort {
+) : PocketControlPort {
     init { require(controlLease == null || borrowing != null) }
     internal val isMultiviewControlOnly: Boolean get() = controlLease != null
     private fun controlLeaseAllows(): Boolean = controlLease?.allows() != false
@@ -223,7 +222,7 @@ class PocketCameraSession(
     private var lastSessionHoldAt: Long? = null
 
     private val _phase = MutableStateFlow(ConnectionPhase.IDLE)
-    override val phase: ConnectionPhase get() = _phase.value
+    val phase: ConnectionPhase get() = _phase.value
     val phaseFlow: StateFlow<ConnectionPhase> = _phase.asStateFlow()
 
     private val _failure = MutableStateFlow<String?>(null)
@@ -586,7 +585,7 @@ class PocketCameraSession(
         }
     }
 
-    override fun startScan() {
+    fun startScan() {
         startScan(reconnect = null)
     }
 
@@ -728,7 +727,7 @@ class PocketCameraSession(
         }
     }
 
-    override fun disconnect() {
+    fun disconnect() {
         if (isMultiviewBorrowed) {
             releaseMultiview()
             return
