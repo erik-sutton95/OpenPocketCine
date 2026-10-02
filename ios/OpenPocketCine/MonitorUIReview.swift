@@ -198,7 +198,19 @@
             default: break
             }
             model.isPairingNewCamera = screen == "pair"
-            if screen != "cameras", screen != "pair" { model.presentSimulatorPreview() }
+            if screen != "cameras", screen != "pair" {
+                #if DEBUG
+                    if ProcessInfo.processInfo.environment["OPV_UI_REVIEW_COMMON_CONTROLS"] == "1",
+                        let body
+                    {
+                        model.presentSimulatedControls(status: status, body: body)
+                    } else {
+                        model.presentSimulatorPreview()
+                    }
+                #else
+                    model.presentSimulatorPreview()
+                #endif
+            }
             if screen == "settings" { model.liveOperatorPanel = .settings }
             if screen == "media" { model.liveOperatorPanel = .media }
         }

@@ -20,6 +20,9 @@ final class AppModel {
     let control = MonitorControlModel()
     let shell: ShellModel
     @ObservationIgnored let integration: DJIIntegration
+    #if DEBUG && targetEnvironment(simulator)
+        @ObservationIgnored var simulatedControlReview: MonitorReviewControlPort?
+    #endif
     /// A saved hotspot connect waiting for the operator to turn Personal Hotspot on.
     var hotspotQuestion: HotspotQuestion?
 

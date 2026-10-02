@@ -11,6 +11,7 @@ final class MonitorUIFlowTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
         app = XCUIApplication()
         app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
+        app.launchEnvironment["OPV_UI_REVIEW_COMMON_CONTROLS"] = "1"
         if let clip = ProcessInfo.processInfo.environment["OPV_SIM_FEED_CLIP"] {
             app.launchEnvironment["OPV_SIM_FEED_CLIP"] = clip
         }

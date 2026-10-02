@@ -135,6 +135,38 @@ final class DJIControlLifetimeTests: XCTestCase {
         XCTAssertNil(CaptureFocusAdmission.commonValue("Showcase", track: .default))
     }
 
+    #if DEBUG && targetEnvironment(simulator)
+        func testExplicitSimulatedReviewWritesNeverReachNativeSession() async throws {
+            let model = AppModel()
+            defer { model.session.disconnect() }
+            var declared = CameraStatus()
+            declared.shootingMode = 1
+            declared.isoIndex = .iso100
+            declared.iso = 100
+            declared.whiteBalance = .custom(kelvin: 5600, tint: 0)
+            let body = CameraModel.resolve(modelId: 0x22, name: "SIMULATED Pocket")
+            model.presentSimulatedControls(status: declared, body: body)
+            let fixture = try XCTUnwrap(model.simulatedControlReview)
+            let common = fixture.control
+            XCTAssertEqual(common.current.connection, .ready)
+            XCTAssertEqual(common.current.recording.value, .idle)
+            let receipt = common.request(.set(.iso(.manual(800))))
+            XCTAssertEqual(receipt.stage, .confirmed)
+            XCTAssertEqual(fixture.writes, ["SIMULATED ISO"])
+            XCTAssertEqual(common.current.value(of: .iso).value, .iso(.manual(800)))
+            XCTAssertNil(model.session.datalink)
+            XCTAssertNil(model.session.connectedCamera)
+            XCTAssertNotEqual(model.session.control.current.connection, .ready)
+            XCTAssertNil(model.session.control.current.recording.value)
+            XCTAssertNotEqual(model.session.captureControlState?.reported.iso, 800,
+                "Rendering a simulated report cannot approve or report native camera state")
+            model.shell.close()
+            for _ in 0..<200 where common.current.connection == .ready { await Task.yield() }
+            XCTAssertEqual(common.current.connection, .disconnected(.requested))
+            XCTAssertNil(model.session.datalink)
+        }
+    #endif
+
     private func camera(_ session: DJICameraSessionAdapter) -> ConnectedCamera {
         ConnectedCamera(
             saved: OpenCineCore.SavedCamera(
