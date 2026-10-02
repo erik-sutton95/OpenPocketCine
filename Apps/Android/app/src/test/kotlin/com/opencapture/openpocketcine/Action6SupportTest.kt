@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.CaptureShutterPolicy
 import com.opencapture.opencine.dji.ApertureStrategy
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CameraModel

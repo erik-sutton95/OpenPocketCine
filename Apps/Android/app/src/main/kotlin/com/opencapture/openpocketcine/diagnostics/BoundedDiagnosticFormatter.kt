@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.PrivacyRedactor
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

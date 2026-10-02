@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.session
 
 import com.opencapture.opencine.dji.*
-import com.opencapture.openpocketcine.ShutterAngle
+import com.opencapture.opencine.dji.ShutterAngle
 import com.opencapture.opencine.media.ExtraMirrorHold
 import com.opencapture.opencine.media.FeedPresentPolicy
 import kotlin.test.Test

@@ -1,5 +1,15 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.FeedIncidentSink
+import com.opencapture.opencine.dji.FeedIncidentBreadcrumb
+import com.opencapture.opencine.dji.FeedIncidentBundle
+import com.opencapture.opencine.dji.FeedIncidentPersistenceJob
+import com.opencapture.opencine.dji.FeedIncidentSessionContext
+import com.opencapture.opencine.dji.FeedIncidentSessionSummary
+import com.opencapture.opencine.dji.FeedIncidentSnapshot
+import com.opencapture.opencine.dji.FeedIncidentTestSource
+import com.opencapture.opencine.dji.FeedRepairRecord
+import com.opencapture.opencine.dji.PrivacyRedactor
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -9,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * type writes on a dedicated utility thread. Never call persist from receive,
  * decode, display, or fatal-signal handlers.
  */
-internal object FeedIncidentRuntime {
+internal object FeedIncidentRuntime : FeedIncidentSink {
     private val writer =
         Executors.newSingleThreadExecutor { thread ->
             Thread(thread, "opc.feed-incident").apply { isDaemon = true }
@@ -42,7 +52,7 @@ internal object FeedIncidentRuntime {
         }
     }
 
-    fun beginSession(context: FeedIncidentSessionContext) {
+    override fun beginSession(context: FeedIncidentSessionContext) {
         writer.execute {
             persist(recorder.beginSession(context))
             sessionContext = context
@@ -51,7 +61,7 @@ internal object FeedIncidentRuntime {
         }
     }
 
-    fun endSession(nowSeconds: Double) {
+    override fun endSession(nowSeconds: Double) {
         writer.execute {
             persist(recorder.endSession(nowSeconds))
             persistSessionSummary(summaryOutcome(recorder.incidentCount, recorder.healthyExposure))
@@ -60,21 +70,21 @@ internal object FeedIncidentRuntime {
         }
     }
 
-    fun ingestSnapshot(snapshot: FeedIncidentSnapshot) {
+    override fun ingestSnapshot(snapshot: FeedIncidentSnapshot) {
         latestSnapshot = snapshot
         if (snapshotScheduled.compareAndSet(false, true)) {
             writer.execute { drainSnapshot() }
         }
     }
 
-    fun recordBreadcrumb(breadcrumb: FeedIncidentBreadcrumb) {
+    override fun recordBreadcrumb(breadcrumb: FeedIncidentBreadcrumb) {
         writer.execute {
             recorder.recordBreadcrumb(breadcrumb)
             ReliabilityReporting.noteBreadcrumb(breadcrumb)
         }
     }
 
-    fun recordRepair(repair: FeedRepairRecord) {
+    override fun recordRepair(repair: FeedRepairRecord) {
         writer.execute {
             persist(recorder.recordRepair(repair))
             ReliabilityReporting.noteRepair(repair)
@@ -91,19 +101,19 @@ internal object FeedIncidentRuntime {
         }
     }
 
-    fun noteDecoderGeneration(generation: Int) {
+    override fun noteDecoderGeneration(generation: Int) {
         writer.execute { recorder.noteDecoderGeneration(generation) }
     }
 
-    fun noteSocketGeneration(generation: Int) {
+    override fun noteSocketGeneration(generation: Int) {
         writer.execute { recorder.noteSocketGeneration(generation) }
     }
 
-    fun noteExhausted(nowSeconds: Double) {
+    override fun noteExhausted(nowSeconds: Double) {
         writer.execute { persist(recorder.noteExhausted(nowSeconds)) }
     }
 
-    fun noteUnexpectedDisconnect(nowSeconds: Double) {
+    override fun noteUnexpectedDisconnect(nowSeconds: Double) {
         writer.execute { persist(recorder.noteUnexpectedDisconnect(nowSeconds)) }
     }
 

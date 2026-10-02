@@ -10,7 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.opencapture.openpocketcine.multiview.MultiviewNetworkStore
+import com.opencapture.opencine.dji.MultiviewNetworkStore
 import com.opencapture.openpocketcine.pairing.StationNetworkSetup
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CompletableDeferred

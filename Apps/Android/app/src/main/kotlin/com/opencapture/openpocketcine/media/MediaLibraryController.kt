@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.opencine.dji.MediaBrowsePolicy
+import com.opencapture.opencine.dji.MediaLiveResumeRunner
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -10,7 +12,7 @@ import androidx.compose.runtime.setValue
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.lut.ClipColorProfile
 import com.opencapture.opencine.dji.DumlFrame
-import com.opencapture.openpocketcine.session.PocketCameraSession
+import com.opencapture.opencine.dji.PocketCameraSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

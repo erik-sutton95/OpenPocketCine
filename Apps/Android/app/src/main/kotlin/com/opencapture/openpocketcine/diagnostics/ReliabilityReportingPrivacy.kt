@@ -1,5 +1,11 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.FeedIncidentBundle
+import com.opencapture.opencine.dji.FeedIncidentExport
+import com.opencapture.opencine.dji.FeedIncidentFailingStage
+import com.opencapture.opencine.dji.FeedIncidentNativeBreadcrumb
+import com.opencapture.opencine.dji.FeedIncidentVendorEnvelope
+import com.opencapture.opencine.dji.PrivacyRedactor
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import io.sentry.SentryEvent

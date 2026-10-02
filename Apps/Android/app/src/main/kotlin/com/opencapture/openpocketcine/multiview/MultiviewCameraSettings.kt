@@ -54,7 +54,7 @@ import com.opencapture.monitorui.MonitorInspector
 import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.openpocketcine.CaptureLists
-import com.opencapture.openpocketcine.CaptureShutterPolicy
+import com.opencapture.opencine.dji.CaptureShutterPolicy
 import com.opencapture.openpocketcine.LiveControlSheet
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveSheet

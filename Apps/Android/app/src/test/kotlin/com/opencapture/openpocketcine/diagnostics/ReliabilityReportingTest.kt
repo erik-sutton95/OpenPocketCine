@@ -1,5 +1,16 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.FeedIncidentAges
+import com.opencapture.opencine.dji.FeedIncidentBundle
+import com.opencapture.opencine.dji.FeedIncidentExport
+import com.opencapture.opencine.dji.FeedIncidentFailingStage
+import com.opencapture.opencine.dji.FeedIncidentKind
+import com.opencapture.opencine.dji.FeedIncidentLifecycle
+import com.opencapture.opencine.dji.FeedIncidentOutcome
+import com.opencapture.opencine.dji.FeedIncidentRates
+import com.opencapture.opencine.dji.FeedIncidentSessionContext
+import com.opencapture.opencine.dji.FeedIncidentSnapshot
+import com.opencapture.opencine.dji.FeedIncidentTestSource
 import io.sentry.Breadcrumb
 import io.sentry.SentryEvent
 import io.sentry.SentryLevel

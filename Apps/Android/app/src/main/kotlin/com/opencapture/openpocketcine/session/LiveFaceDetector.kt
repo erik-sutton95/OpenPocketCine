@@ -31,9 +31,11 @@ import java.util.concurrent.Executors
  * next frame; the watchdog never recycles — only the completion listener
  * does.
  */
-class LiveFaceDetector {
+class LiveFaceDetector : FaceDetectorPort {
     /** One detector input; [release] runs once ML Kit is done reading it. */
-    class Frame(val image: InputImage, val width: Int, val height: Int, val release: () -> Unit = {}) {
+    class Frame(val image: InputImage, val width: Int, val height: Int, private val onRelease: () -> Unit = {}) : FaceFrame {
+        override fun release() = onRelease()
+
         companion object {
             fun of(bitmap: Bitmap) = Frame(InputImage.fromBitmap(bitmap, 0), bitmap.width, bitmap.height, bitmap::recycle)
 
@@ -66,10 +68,13 @@ class LiveFaceDetector {
     private var pendingDone: ((List<TrackingBox>) -> Unit)? = null
 
     /** Whether a frame offered now would be detected; skip the readback otherwise. */
-    fun wantsFrame(): Boolean =
+    override fun wantsFrame(): Boolean =
         synchronized(lock) {
             !closed && wantsFrame(emptyRuns, SystemClock.elapsedRealtime() - lastRun)
         }
+
+    /** Frames come from this app's [Frame] factories only. */
+    override fun consider(frame: FaceFrame, done: (List<TrackingBox>) -> Unit) = consider(frame as Frame, done)
 
     fun consider(src: Frame, done: (List<TrackingBox>) -> Unit) {
         synchronized(lock) {
@@ -87,7 +92,7 @@ class LiveFaceDetector {
         }
     }
 
-    fun shutdown() {
+    override fun shutdown() {
         main.removeCallbacksAndMessages(null)
         val abandoned: Frame?
         val stopNow: Boolean

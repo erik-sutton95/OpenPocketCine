@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.FeedIncidentBuildIdentity
+import com.opencapture.opencine.dji.FeedIncidentTestSource
 import com.opencapture.openpocketcine.BuildConfig
 
 /** Current-run origin only. Cached incidents keep the values persisted with them. */

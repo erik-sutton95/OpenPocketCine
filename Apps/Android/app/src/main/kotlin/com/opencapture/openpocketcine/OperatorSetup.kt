@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.GamepadGimbalStick
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.monitorui.monitorTabStrip

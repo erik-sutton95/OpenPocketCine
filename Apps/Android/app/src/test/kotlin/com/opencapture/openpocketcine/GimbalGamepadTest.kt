@@ -1,5 +1,10 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.GamepadDpad
+import com.opencapture.opencine.dji.GamepadGimbalStick
+import com.opencapture.opencine.dji.GamepadOperatorAction
+import com.opencapture.opencine.dji.GamepadShutterSync
+import com.opencapture.opencine.dji.ShutterAngle
 import android.view.KeyEvent
 import com.opencapture.opencine.dji.CameraCommands
 import kotlin.test.Test

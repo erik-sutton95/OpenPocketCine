@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.EvComp
+import com.opencapture.opencine.dji.ShutterAngle
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CameraModel
 import com.opencapture.opencine.dji.CameraStatus

@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
 import com.opencapture.opencine.dji.BleLink
+import com.opencapture.opencine.dji.CameraApJoiner
 import android.provider.Settings
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -78,8 +79,8 @@ object DiscoveryPermissions {
     fun locationServicesOn(context: Context): Boolean =
         context.getSystemService(LocationManager::class.java)?.isLocationEnabled == true
 
-    fun canReadWifiScans(context: Context): Boolean =
-        wifiName.all { granted(context, it) } && locationServicesOn(context)
+    /** Same rule OpenCine's [CameraApJoiner] applies before it scans for the camera network. */
+    fun canReadWifiScans(context: Context): Boolean = CameraApJoiner.canReadWifiScans(context)
 
     fun appSettings(context: Context): Intent =
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri())

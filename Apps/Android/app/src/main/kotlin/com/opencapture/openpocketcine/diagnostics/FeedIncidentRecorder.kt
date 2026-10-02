@@ -1,5 +1,25 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.FeedIncidentBounds
+import com.opencapture.opencine.dji.FeedIncidentBreadcrumb
+import com.opencapture.opencine.dji.FeedIncidentBreadcrumbKind
+import com.opencapture.opencine.dji.FeedIncidentBundle
+import com.opencapture.opencine.dji.FeedIncidentClassifier
+import com.opencapture.opencine.dji.FeedIncidentErrorCount
+import com.opencapture.opencine.dji.FeedIncidentFailingStage
+import com.opencapture.opencine.dji.FeedIncidentHeader
+import com.opencapture.opencine.dji.FeedIncidentKind
+import com.opencapture.opencine.dji.FeedIncidentLifecycle
+import com.opencapture.opencine.dji.FeedIncidentOutcome
+import com.opencapture.opencine.dji.FeedIncidentPersistenceJob
+import com.opencapture.opencine.dji.FeedIncidentPrivacy
+import com.opencapture.opencine.dji.FeedIncidentSampling
+import com.opencapture.opencine.dji.FeedIncidentSessionContext
+import com.opencapture.opencine.dji.FeedIncidentSnapshot
+import com.opencapture.opencine.dji.FeedIncidentSuppression
+import com.opencapture.opencine.dji.FeedIncidentTestSource
+import com.opencapture.opencine.dji.FeedIncidentVerdict
+import com.opencapture.opencine.dji.FeedRepairRecord
 import java.util.UUID
 
 /**
@@ -214,7 +234,7 @@ internal class FeedIncidentRecorder(
                 current.header.failingStage = stage
             }
             if (verdict.kind == FeedIncidentKind.DECODER_ERROR && current.header.errorClass == null) {
-                current.header.kind = verdict.kind
+                current.header.kind = FeedIncidentKind.DECODER_ERROR
                 current.header.errorClass = snapshot.decoder.errorClass
             }
         }

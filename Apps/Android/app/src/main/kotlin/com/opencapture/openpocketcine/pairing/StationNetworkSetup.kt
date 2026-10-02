@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.dji.CameraConnectionSetup
 import android.content.Intent
 import android.content.res.Configuration
 import android.provider.Settings
@@ -85,7 +86,7 @@ import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.multiview.MultiviewNetworkStore
+import com.opencapture.opencine.dji.MultiviewNetworkStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job

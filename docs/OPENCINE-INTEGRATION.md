@@ -95,7 +95,10 @@ checked out next to this repository as `../OpenCine` by `scripts/checkout-openci
   `PocketCameraSession`, diagnostics, preferences and UI stay in the app. The CamFov golden
   vectors moved to OpenCine with both test halves. The Swift side of those 30 natives now comes
   from OpenCine's OpenCineDJIAndroid product, linked into the same `.so` (no change intended; the
-  41 exports are identical).
+  41 exports are identical). `PocketCameraSession` itself, with the Wi-Fi joining and credential
+  stores, feed incident models and capture value lists it uses, now lives in OpenCine `:dji` too; the
+  app supplies preferences, diagnostics, build identity and ML Kit face detection through
+  `AppSessionHost` (no change intended).
 
 ## Physical device checklist
 

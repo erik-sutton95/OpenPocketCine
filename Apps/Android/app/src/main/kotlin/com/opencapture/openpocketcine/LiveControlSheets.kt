@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.CaptureShutterPolicy
+import com.opencapture.opencine.dji.EvComp
+import com.opencapture.opencine.dji.ShutterAngle
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -81,6 +84,7 @@ import com.opencapture.openpocketcine.glass.LiquidSlider
 import com.opencapture.openpocketcine.assists.AssistLongPress
 import com.opencapture.opencine.dji.ApertureStrategy
 import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.dji.CaptureWheels
 import com.opencapture.opencine.dji.CameraModel
 import com.opencapture.openpocketcine.settings.SettingsHelpBadge
 import com.opencapture.opencine.dji.CameraStatus
@@ -1128,110 +1132,6 @@ val LiveSheet.subtitle: String
             LiveSheet.MODE -> "Shooting mode"
         }
 
-/** Operator shutter-angle ladder. Body only accepts 1/N; convert locally. */
-object ShutterAngle {
-    val degrees: List<Double> =
-        listOf(5.6, 11.2, 22.5, 45.0, 72.0, 86.4, 90.0, 108.0, 144.0, 172.0, 180.0, 216.0, 288.0, 346.0, 360.0)
-    const val DEFAULT_DEGREES = 180.0
-    val labels: List<String> = degrees.map { label(it) }
-
-    fun effectiveFps(fps: Int): Int = if (fps in 8..240) fps else 24
-
-    fun rematchesFormat(
-        usesAngle: Boolean, manual: Boolean, isPhoto: Boolean,
-        previousFps: Int, nextFps: Int, alreadyPending: Boolean = false,
-    ): Boolean = usesAngle && manual && !isPhoto && previousFps > 0 && nextFps > 0 &&
-        (previousFps != nextFps || alreadyPending)
-
-    fun label(value: Double): String {
-        val rounded = round(value)
-        return if (abs(value - rounded) < 0.05) {
-            "${rounded.toInt()}°"
-        } else {
-            String.format(Locale.US, "%.1f°", value)
-        }
-    }
-
-    fun parse(label: String): Double? {
-        val trimmed = label.replace("°", "").trim()
-        val value = trimmed.toDoubleOrNull() ?: return null
-        if (value <= 0.0 || value > 360.0) return null
-        return value
-    }
-
-    fun denom(degrees: Double, fps: Int): Int {
-        val angle = degrees.coerceAtLeast(0.1)
-        val rate = effectiveFps(fps).toDouble()
-        val raw = round(360.0 * rate / angle).toInt()
-        return raw.coerceIn(1, 16_000)
-    }
-
-    fun denom(degrees: Double, fps: Int, available: List<Int>): Int {
-        val ideal = denom(degrees, fps)
-        return CaptureLists.nearestDenom(ideal, available) ?: ideal
-    }
-
-    fun degrees(denom: Int, fps: Int): Double {
-        if (denom <= 0) return DEFAULT_DEGREES
-        return 360.0 * effectiveFps(fps).toDouble() / denom.toDouble()
-    }
-
-    fun nearestDegrees(value: Double): Double =
-        degrees.minByOrNull { abs(it - value) } ?: DEFAULT_DEGREES
-
-    fun nearestLabel(denom: Int, fps: Int): String = label(nearestDegrees(degrees(denom, fps)))
-}
-
-data class EvComp(val thirds: Int) {
-    val rawValue: Int get() = 0x10 + thirds
-
-    val label: String
-        get() {
-            if (thirds == 0) return "0.0"
-            val sign = if (thirds > 0) "+" else MINUS
-            val absThirds = abs(thirds)
-            val frac = listOf(".0", ".3", ".7")[absThirds % 3]
-            return "$sign${absThirds / 3}$frac"
-        }
-
-    companion object {
-        const val MINUS = "\u2212"
-        const val MIN_THIRDS = -9
-        const val MAX_THIRDS = 9
-        val ZERO = EvComp(0)
-        val allCases: List<EvComp> = (MIN_THIRDS..MAX_THIRDS).map { EvComp(it) }
-
-        fun fromThirds(thirds: Int): EvComp = EvComp(thirds.coerceIn(MIN_THIRDS, MAX_THIRDS))
-
-        fun fromRaw(raw: Int): EvComp? {
-            val t = raw - 0x10
-            return if (t in MIN_THIRDS..MAX_THIRDS) EvComp(t) else null
-        }
-
-        fun fromLabel(label: String): EvComp? {
-            if (label == "0.0") return EvComp(0)
-            val negative = label.startsWith(MINUS) || label.startsWith("-")
-            val positive = label.startsWith("+")
-            if (!negative && !positive) return null
-            val body = label.drop(1)
-            val parts = body.split('.', limit = 2)
-            if (parts.size != 2) return null
-            val whole = parts[0].toIntOrNull() ?: return null
-            val frac = parts[1].toIntOrNull() ?: return null
-            val fracThirds =
-                when (frac) {
-                    0 -> 0
-                    3 -> 1
-                    7 -> 2
-                    else -> return null
-                }
-            val t = whole * 3 + fracThirds
-            if (t !in 0..9) return null
-            return EvComp(if (negative) -t else t)
-        }
-    }
-}
-
 enum class IsoLimit(val rawValue: Int) {
     Max200(0x02),
     Max400(0x03),
@@ -1633,8 +1533,7 @@ object CaptureLists {
 
     fun denomFromLabel(label: String): Int? = label.removePrefix("1/").toIntOrNull()
 
-    fun nearestDenom(current: Int, denoms: List<Int>): Int? =
-        denoms.minByOrNull { abs(it - current) }
+    fun nearestDenom(current: Int, denoms: List<Int>): Int? = CaptureWheels.nearestDenom(current, denoms)
 
     fun nearestShutterLabel(label: String, status: CameraStatus): String {
         val denoms = shutterDenoms(status)
@@ -1792,16 +1691,12 @@ object CaptureLists {
         return denom.takeIf { it != currentDenom }
     }
 
-    fun isoFallback(colorMode: Int): List<Int> = CameraCommands.isoChoices(colorMode).map { it.first }
+    fun isoFallback(colorMode: Int): List<Int> = CaptureWheels.isoFallback(colorMode)
 
     /** Photo must not reuse leftover Video color for Auto ISO / fallback wheels. */
-    fun isoPresentationColor(status: CameraStatus): Int = status.monitorColorMode
+    fun isoPresentationColor(status: CameraStatus): Int = CaptureWheels.isoPresentationColor(status)
 
-    fun isoIndices(status: CameraStatus): List<Int> =
-        CameraCommands.isoWheelIndices(
-            status.availableIsoIndices,
-            isoFallback(isoPresentationColor(status)),
-        )
+    fun isoIndices(status: CameraStatus): List<Int> = CaptureWheels.isoIndices(status)
 
     fun isoDrumLabels(status: CameraStatus): List<String> =
         isoIndices(status)
@@ -1812,8 +1707,7 @@ object CaptureLists {
     fun isoIndexFromLabel(label: String): Int? =
         CameraCommands.ISO_INDEX_BYTES.firstOrNull { CameraCommands.isoLabel(it) == label }
 
-    fun offersIsoAuto(status: CameraStatus): Boolean =
-        CameraCommands.offersIsoAuto(isoPresentationColor(status))
+    fun offersIsoAuto(status: CameraStatus): Boolean = CaptureWheels.offersIsoAuto(status)
 
     /** GET `0x8E` pid `0x000F` only when Auto ISO exists. Unknown color = Normal. */
     fun shouldGetIsoLimit(status: CameraStatus): Boolean =
@@ -1943,22 +1837,14 @@ object CaptureLists {
         return denom.takeIf { it != currentDenom }
     }
 
-    fun colorWheelOrder(name: String, family: String): List<Pair<Int, String>> {
-        val codes = CameraModel.colorModesFor(name, family)
-        return codes.map { it to CameraCommands.colorLabel(it, family) }
-    }
+    fun colorWheelOrder(name: String, family: String): List<Pair<Int, String>> =
+        CaptureWheels.colorWheelOrder(name, family)
 
     fun colorWheel(
         family: String,
         available: List<Int> = emptyList(),
         name: String = "",
-    ): List<Pair<Int, String>> {
-        val order = colorWheelOrder(name, family)
-        if (available.isEmpty()) return order
-        val have = available.toSet()
-        val ranked = order.filter { it.first in have }
-        return ranked.ifEmpty { order }
-    }
+    ): List<Pair<Int, String>> = CaptureWheels.colorWheel(family, available, name)
 
     fun shootingModeLabels(name: String?, shootingMode: Int = -1): List<String> {
         val labels =

@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.dji.SharedWiFi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

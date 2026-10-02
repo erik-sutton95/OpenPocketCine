@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.PrivacyRedactor
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -17,7 +18,7 @@ import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.media.MediaShare
 import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
 import com.opencapture.opencine.dji.LocalVPNFilter
-import com.opencapture.openpocketcine.session.PocketCameraSession
+import com.opencapture.opencine.dji.PocketCameraSession
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date

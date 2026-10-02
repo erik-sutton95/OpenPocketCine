@@ -1,27 +1,10 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.dji.CameraConnectionSetup
 import android.content.Context
 import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
-
-/**
- * How a saved body is reached (iOS `CameraConnectionSetup`, #406). Every record has camera
- * Wi-Fi. Wi-Fi (a router) and Hotspot (this phone's) are OpenZCine-style extra setups that
- * move the camera off its own access point onto that network. [raw] matches iOS.
- */
-enum class CameraConnectionSetup(val raw: String, val title: String) {
-    CAMERA_WIFI("cameraWiFi", "Camera Wi-Fi"),
-    WIFI("wifi", "Wi-Fi"),
-    PHONE_HOTSPOT("phoneHotspot", "Hotspot");
-
-    /** The camera leaves its access point (station role) for this setup. */
-    val movesCamera: Boolean get() = this != CAMERA_WIFI
-
-    companion object {
-        fun fromRaw(raw: String?): CameraConnectionSetup? = entries.firstOrNull { it.raw == raw }
-    }
-}
 
 /**
  * One Pocket body; its setups are chips on the saved-camera row.
@@ -34,7 +17,7 @@ data class SavedCamera(
     val lastSSID: String?,
     val lastConnectedAt: Long,
     val customName: String? = null,
-    /** Network names for the Wi-Fi and Hotspot setups; null means not added. Passwords stay in [com.opencapture.openpocketcine.multiview.MultiviewNetworkStore]. */
+    /** Network names for the Wi-Fi and Hotspot setups; null means not added. Passwords stay in [com.opencapture.opencine.dji.MultiviewNetworkStore]. */
     val wifiSSID: String? = null,
     val hotspotSSID: String? = null,
     /**

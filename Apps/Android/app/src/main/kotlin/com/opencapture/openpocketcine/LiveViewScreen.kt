@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.CaptureShutterPolicy
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Rect

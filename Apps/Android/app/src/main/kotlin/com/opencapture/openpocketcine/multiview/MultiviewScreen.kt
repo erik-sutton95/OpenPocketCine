@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.dji.hasMultiviewPreview
+import com.opencapture.opencine.dji.appearsInMultiview
+import com.opencapture.opencine.dji.MultiviewNetworkStore
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.TextureView

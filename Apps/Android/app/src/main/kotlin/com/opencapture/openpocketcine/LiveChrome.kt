@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.CaptureShutterPolicy
+import com.opencapture.opencine.dji.RecordConfirmationRequest
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.snap

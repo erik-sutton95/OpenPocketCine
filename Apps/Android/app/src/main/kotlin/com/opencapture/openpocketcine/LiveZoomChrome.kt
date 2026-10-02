@@ -45,7 +45,7 @@ import com.opencapture.monitorui.monitorReadoutShadow
 import com.opencapture.opencine.dji.CamFov
 import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.opencine.dji.LiveFeedFocusGesture
-import com.opencapture.openpocketcine.session.PocketCameraSession
+import com.opencapture.opencine.dji.PocketCameraSession
 import com.opencapture.opencine.dji.TrackingBox
 import kotlin.math.abs
 import kotlin.math.hypot

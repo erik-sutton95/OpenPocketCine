@@ -1,5 +1,14 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.dji.hasMultiviewPreview
+import com.opencapture.opencine.dji.appearsInMultiview
+import com.opencapture.opencine.dji.multicamSupport
+import com.opencapture.opencine.dji.MultiviewDiscovery
+import com.opencapture.opencine.dji.MultiviewFailure
+import com.opencapture.opencine.dji.MultiviewNetworkStore
+import com.opencapture.opencine.dji.MultiviewProvisioner
+import com.opencapture.opencine.dji.SharedWiFi
+import com.opencapture.opencine.dji.restoreCameraWiFiWithRetry
 import com.opencapture.opencine.dji.DjiNative
 import com.opencapture.opencine.dji.StationJoin
 import android.content.Context
@@ -57,30 +66,6 @@ import org.json.JSONObject
 import kotlin.time.Duration.Companion.seconds
 
 private const val TAG = "Multiview"
-
-/** Model support from the shared core (`MulticamSupport`). Cached per model identity. */
-data class MulticamSupportInfo(val appears: Boolean, val preview: Boolean, val missingRoleQueryE0: Boolean)
-
-private val supportCache = HashMap<String, MulticamSupportInfo>()
-
-fun FoundCamera.multicamSupport(): MulticamSupportInfo {
-    val key = "${modelId ?: -1}|$name|${model.name}"
-    synchronized(supportCache) { supportCache[key]?.let { return it } }
-    val request = JSONObject().put("name", model.name.ifEmpty { name })
-    modelId?.let { request.put("modelId", it) }
-    val raw = if (DjiNative.isAvailable) DjiNative.multicamDecision("support", request.toString()) else null
-    val json = raw?.let { runCatching { JSONObject(it) }.getOrNull() }
-    val info = MulticamSupportInfo(
-        appears = json?.optBoolean("appears") ?: false,
-        preview = json?.optBoolean("preview") ?: false,
-        missingRoleQueryE0 = json?.optBoolean("missingRoleQueryE0") ?: false,
-    )
-    synchronized(supportCache) { supportCache[key] = info }
-    return info
-}
-
-val FoundCamera.appearsInMultiview: Boolean get() = multicamSupport().appears
-val FoundCamera.hasMultiviewPreview: Boolean get() = multicamSupport().preview
 
 /** iOS `MultiviewLayout` raw values; persisted in the stage. */
 enum class MultiviewLayout(val raw: String) {

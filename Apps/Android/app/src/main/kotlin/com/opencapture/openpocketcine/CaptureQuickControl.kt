@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.EvComp
+import com.opencapture.opencine.dji.GamepadShutterSync
+import com.opencapture.opencine.dji.ShutterAngle
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect

@@ -1,5 +1,18 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.FeedIncidentAges
+import com.opencapture.opencine.dji.FeedIncidentBounds
+import com.opencapture.opencine.dji.FeedIncidentClassifier
+import com.opencapture.opencine.dji.FeedIncidentKind
+import com.opencapture.opencine.dji.FeedIncidentLifecycle
+import com.opencapture.opencine.dji.FeedIncidentOutcome
+import com.opencapture.opencine.dji.FeedIncidentPersistenceJob
+import com.opencapture.opencine.dji.FeedIncidentRates
+import com.opencapture.opencine.dji.FeedIncidentSessionContext
+import com.opencapture.opencine.dji.FeedIncidentSnapshot
+import com.opencapture.opencine.dji.FeedIncidentTestSource
+import com.opencapture.opencine.dji.FeedRepairPhase
+import com.opencapture.opencine.dji.FeedRepairRecord
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

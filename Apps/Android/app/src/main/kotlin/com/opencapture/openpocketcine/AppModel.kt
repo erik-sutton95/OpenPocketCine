@@ -11,18 +11,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.opencine.dji.ConnectionPhase
-import com.opencapture.openpocketcine.pairing.CameraConnectionSetup
+import com.opencapture.opencine.dji.CameraConnectionSetup
 import com.opencapture.openpocketcine.pairing.SavedCamera
 import com.opencapture.openpocketcine.pairing.SavedCameras
 import com.opencapture.openpocketcine.pairing.SharedPreferencesSavedCameraStore
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
+import com.opencapture.openpocketcine.session.AppSessionHost
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.GimbalDoubleTap
 import com.opencapture.opencine.dji.GimbalRamp
 import com.opencapture.opencine.dji.FoundCamera
-import com.opencapture.openpocketcine.session.PocketCameraSession
+import com.opencapture.opencine.dji.PocketCameraSession
 import com.opencapture.opencine.dji.VideoFormat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,8 +46,8 @@ class AppModel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = SharedPreferencesSavedCameraStore(context)
     /** Wi-Fi and Hotspot passwords, shared with Multiview (iOS `MultiviewNetworkStore`). */
-    private val networkStore = com.opencapture.openpocketcine.multiview.MultiviewNetworkStore(context)
-    val session = PocketCameraSession(context, borrowing, controlLease)
+    private val networkStore = com.opencapture.opencine.dji.MultiviewNetworkStore(context)
+    val session = PocketCameraSession(context, AppSessionHost(context), borrowing, controlLease)
     /** Set while this Live View borrows a Multiview tile; replaces the lock button. */
     var multiviewExit by mutableStateOf<(() -> Unit)?>(null)
     val assist = LiveAssistState.from(appContext)
@@ -516,7 +517,7 @@ class AppModel(
         val found = session.found.value.firstOrNull { it.id == camera.id } ?: return null
         if (session.connectedCamera?.id == camera.id) return null
         return { onFound ->
-            com.opencapture.openpocketcine.multiview.MultiviewProvisioner(appContext).scanNetworks(
+            com.opencapture.opencine.dji.MultiviewProvisioner(appContext).scanNetworks(
                 found,
                 // Stamped first: the scan moves the camera to station role, so a lost reset
                 // is repaired by the next Camera Wi-Fi connect.
@@ -530,7 +531,7 @@ class AppModel(
         }
     }
 
-    fun savedNetworks(): List<com.opencapture.openpocketcine.multiview.MultiviewNetworkStore.Network> =
+    fun savedNetworks(): List<com.opencapture.opencine.dji.MultiviewNetworkStore.Network> =
         networkStore.savedNetworks()
 
     fun forget(camera: SavedCamera) {

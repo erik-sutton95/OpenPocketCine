@@ -1,5 +1,14 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.dji.FeedIncidentBreadcrumb
+import com.opencapture.opencine.dji.FeedIncidentBuildIdentity
+import com.opencapture.opencine.dji.FeedIncidentBundle
+import com.opencapture.opencine.dji.FeedIncidentNativeBreadcrumb
+import com.opencapture.opencine.dji.FeedIncidentOutcome
+import com.opencapture.opencine.dji.FeedIncidentSessionSummary
+import com.opencapture.opencine.dji.FeedIncidentTestSource
+import com.opencapture.opencine.dji.FeedIncidentVendorEnvelope
+import com.opencapture.opencine.dji.FeedRepairRecord
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network

@@ -4,7 +4,7 @@ import com.opencapture.opencine.dji.DjiNative
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.DumlFrame
-import com.opencapture.openpocketcine.session.PocketCameraSession
+import com.opencapture.opencine.dji.PocketCameraSession
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**

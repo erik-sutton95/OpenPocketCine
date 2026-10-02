@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.dji.CameraConnectionSetup
 import com.opencapture.monitorui.MonitorConnectFailure
 import com.opencapture.monitorui.MonitorConnectStep
 import com.opencapture.monitorui.MonitorSetupChip

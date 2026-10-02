@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.GamepadGimbalStick
+import com.opencapture.opencine.dji.ShutterAngle
 import android.content.Context
 import androidx.core.content.edit
 import com.opencapture.monitorui.MonitorJoystickSize

@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.dji.CameraConnectionSetup
 import com.opencapture.opencine.dji.DjiNative
 import com.opencapture.opencine.dji.FoundCameraIdentity
 import androidx.compose.foundation.background
@@ -49,8 +50,8 @@ import com.opencapture.openpocketcine.AppPanel
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.monitor.MonitorIconButton
-import com.opencapture.openpocketcine.multiview.SharedWiFi
-import com.opencapture.openpocketcine.multiview.appearsInMultiview
+import com.opencapture.opencine.dji.SharedWiFi
+import com.opencapture.opencine.dji.appearsInMultiview
 import com.opencapture.opencine.dji.FoundCamera
 import androidx.compose.ui.platform.LocalContext
 import com.opencapture.monitorui.MonitorConnectFailure

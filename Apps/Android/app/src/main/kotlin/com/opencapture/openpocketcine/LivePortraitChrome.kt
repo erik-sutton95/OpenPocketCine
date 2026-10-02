@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.CaptureShutterPolicy
+import com.opencapture.opencine.dji.EvComp
 import com.opencapture.monitorui.MonitorExposureReadout
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
