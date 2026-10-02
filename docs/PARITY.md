@@ -29,6 +29,15 @@ items 18-20 in [the integration checklist](OPENCINE-INTEGRATION.md).
 
 ## Connection regression follow-up
 
+The shared DJI capture port now publishes actual shutter, EV, focus and zoom reports
+separately from pending HUD pins on both platforms. Common duration edits require
+reported Manual exposure and the camera's shutter choices; explicit legacy
+Speed/Angle mode selection keeps its existing policy. Common zoom uses the same
+colour-hop and latest-value command pipeline. Measured iris is read-only, while
+Auto/Starburst remains an integration panel. New native regressions prove report
+versus pin, mode admission and unsent colour-hop target replacement. Physical
+Pocket 3/4/4 Pro format/zoom and Action 6 iris checks remain untested.
+
 The [connection stress matrix](connection-stress-testing.md) is shared maintainer
 tooling for both platforms, with the same evidence and teardown contract. It
 ships a script interface and local agent mailbox. Separate native feed runners
