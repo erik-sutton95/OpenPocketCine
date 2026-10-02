@@ -403,7 +403,9 @@ private fun NavigationFixture(model: AppModel, probe: NavigationProbe, layoutPro
                     com.opencapture.monitorui.MonitorSystemControls(field,
                         com.opencapture.monitorui.MonitorSystemControlsVisibility(
                             lock = true, settings = probe.showsNavigation, media = probe.showsNavigation, record = true),
-                        capturePresented = true, interactive = probe.navigationEnabled,
+                        // Pocket keeps portrait navigation visible for a persistent picker;
+                        // its quick-edit gesture still hides it in the production composition.
+                        capturePresented = true, navigationHidden = false, interactive = probe.navigationEnabled,
                         lock = { enabled -> LockButton(false, enabled = enabled, onClick = {}) },
                         settings = { enabled -> AuxCircleButton(enabled = enabled,
                             onClick = { model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.SETTINGS) }) {
