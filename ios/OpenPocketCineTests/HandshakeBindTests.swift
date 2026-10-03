@@ -7,6 +7,23 @@ import XCTest
 
 @MainActor
 final class HandshakeBindTests: XCTestCase {
+    private func performEndpointRepair(
+        _ session: CameraSession, reason: String,
+        pictureDeadline: Duration = .seconds(2 * CameraSoftAP.foregroundPictureGrace)
+    ) async {
+        await withCheckedContinuation { continuation in
+            let admitted = session.startFeedRecovery { attempt in
+                await session.repairDatalink(
+                    reason: reason, pictureDeadline: pictureDeadline, attempt: attempt)
+                continuation.resume()
+            }
+            if !admitted {
+                XCTFail("Native endpoint regression must cross an admitted shared attempt")
+                continuation.resume()
+            }
+        }
+    }
+
     func testShortHandshakeAckCannotRegisterUntilTheInitialCommandWindowArrives() async throws {
         let peer = try EndpointPinnedCamera(holdInitialWindow: true)
         let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
@@ -57,7 +74,7 @@ final class HandshakeBindTests: XCTestCase {
         let queuedRefresh = Task { await session.refreshAudioState() }
         for _ in 0..<10 { await Task.yield() }
         peer.rejectNewHandshakes()
-        let repair = Task { await session.repairDatalink(reason: "audio ownership regression") }
+        let repair = Task { await performEndpointRepair(session, reason: "audio ownership regression") }
         try await Task.sleep(for: .milliseconds(350))
         XCTAssertEqual(peer.snapshot.unnegotiatedCommands, 0)
         XCTAssertTrue(refreshFinished, "Retired audio work must not install another request waiter")
@@ -94,7 +111,7 @@ final class HandshakeBindTests: XCTestCase {
         }
         while !waiterInstalled { await Task.yield() }
         peer.rejectNewHandshakes()
-        let repair = Task { await session.repairDatalink(reason: "command ownership regression") }
+        let repair = Task { await performEndpointRepair(session, reason: "command ownership regression") }
         let deadline = ContinuousClock.now.advanced(by: .seconds(2))
         while peer.snapshot.handshakes < 2, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
@@ -135,7 +152,7 @@ final class HandshakeBindTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertEqual(peer.snapshot.enables, 1)
-        await session.repairDatalink(
+        await performEndpointRepair(session,
             reason: "picture regression", pictureDeadline: .milliseconds(40))
         XCTAssertTrue(session.holdsMonitor, "Handshake alone cannot release recovery ownership")
         XCTAssertTrue(session.sessionRecovery.isRecovering)

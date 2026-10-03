@@ -39,7 +39,7 @@ final class GimbalModeSelectionTests: XCTestCase {
                 session.noteMultiviewFrame()
             case "held": session.holdsMonitor = true
             case "repair":
-                session.startFeedRecovery { try? await Task.sleep(for: .seconds(1)) }
+                session.startFeedRecovery { _ in try? await Task.sleep(for: .seconds(1)) }
             default: session.noteSceneBecameInactive()
             }
             model.headTrackingEnabled = true

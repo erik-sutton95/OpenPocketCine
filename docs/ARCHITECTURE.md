@@ -77,6 +77,24 @@ and recovery decisions from presentation state. Initial command admission and na
 teardown keep their existing ordering. Closing a local exchange sends no camera command
 and leaves transport ownership with the caller, including a borrowed Multiview tile.
 
+## Apple negotiated-picture recovery
+
+`OpenCineDJIApple.DjiApplePictureRecovery` owns the single repair task/generation,
+negotiated endpoint workflow, bounded genuine-picture wait and held-cycle history.
+Current media return claims the same slot, including a full-rejoin gap with no driver.
+The app supplies one authority aggregate and four native actions: ordered preparation,
+initial enable, bounded first-picture inspection and actual source/presentation freshness.
+Its native decoder repair and full rejoin use the same owner-issued attempt. Retiring
+picture intent preserves negotiation; a genuine current-transport failure still escalates.
+
+The app retains gimbal/control/native preparation, FeedWatchdog decisions and camera grace,
+gallery resume, full connection/recovery episode, saved credentials and journal. The shared
+owner imports no UI/native monitor runtime. The 100ms polling, 16s default picture deadline
+and existing held-cycle history remain unchanged; reset cancels local work without resetting
+that history or sending a camera command. This is an Apple-only ownership move; Kotlin
+continues to use its existing integration scheduler and portable policies. Full P2 and
+physical camera qualification remain unfinished.
+
 ## Apple picture ownership
 
 `HevcDecoder` configures `OpenCineApple.MonitorLiveVideoRuntime` with the existing DJI

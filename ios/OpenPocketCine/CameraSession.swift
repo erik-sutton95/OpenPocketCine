@@ -8,31 +8,6 @@ import OpenPocketViewCore
 import UIKit
 import os
 
-/// Endpoint I/O must finish even if media changes the desired picture while
-/// negotiation is suspended. Only its obsolete enable/picture work is retired;
-/// a real negotiation failure still transfers to the session recovery owner.
-@MainActor
-func runNegotiatedPictureRepair(
-    negotiate: () async throws -> Void,
-    driverIsCurrent: () -> Bool,
-    ownsPicture: () -> Bool,
-    enable: () -> Void,
-    waitForPicture: () async -> Void,
-    failed: (Error) -> Void
-) async {
-    do {
-        try await negotiate()
-        guard !Task.isCancelled, driverIsCurrent(), ownsPicture() else { return }
-        enable()
-        await waitForPicture()
-    } catch is CancellationError {
-        return
-    } catch {
-        guard !Task.isCancelled, driverIsCurrent() else { return }
-        failed(error)
-    }
-}
-
 /// Orchestrates the whole Phase-0 spine: scan -> GATT -> pair -> read Wi-Fi creds -> join AP ->
 /// datalink -> live status. Owns the single consumer of the BLE frame stream and routes replies to
 /// whoever is awaiting them. Drives `phase` and `status` for the UI.
@@ -190,12 +165,8 @@ final class CameraSession {
     }
     @ObservationIgnored private var feedWatchdog = FeedWatchdog()
     @ObservationIgnored private var lastFeedFreezeLogAt: Date?
-    @ObservationIgnored private var feedRecoveryTask: Task<Void, Never>?
-    @ObservationIgnored private var feedRecoveryGeneration = 0
-    /// Repair picture deadlines held off Bluetooth recovery in this stall
-    /// episode (core `nextSessionHoldCycles`), and when the last one was.
-    @ObservationIgnored private var sessionHoldCycles = 0
-    @ObservationIgnored private var lastSessionHoldAt: Date?
+    @ObservationIgnored lazy var pictureRecovery = makePictureRecovery()
+    @ObservationIgnored private let pictureRecoveryTiming: DjiApplePictureRecoveryTiming
     @ObservationIgnored private var foregroundCheckTask: Task<Void, Never>?
     @ObservationIgnored private var foregroundGeneration = 0
     @ObservationIgnored private var statusStorage = CameraStatus()
@@ -441,7 +412,7 @@ final class CameraSession {
     /// HEVC silent, a repair in flight, or clocks wiped after a live GOP.
     var isLiveVideoStale: Bool {
         let recovering =
-            feedRecovering || feedRecoveryTask != nil || datalink?.isRebuilding == true
+            feedRecovering || pictureRecovery.isBusy || datalink?.isRebuilding == true
         let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
         let had = FeedWatchdog.hadVideo(
             videoPackets: datalink?.videoPackets ?? 0, lastVideoPacketAge: videoAge)
@@ -602,9 +573,11 @@ final class CameraSession {
 
     init(
         borrowing sharedDecoder: HevcDecoder? = nil, cameraMedia: CameraMedia? = nil,
-        controlsOnly: Bool = false, heartbeatTiming: DjiAppleHeartbeatTiming? = nil
+        controlsOnly: Bool = false, heartbeatTiming: DjiAppleHeartbeatTiming? = nil,
+        pictureRecoveryTiming: DjiApplePictureRecoveryTiming? = nil
     ) {
         self.heartbeatTiming = heartbeatTiming ?? .continuous
+        self.pictureRecoveryTiming = pictureRecoveryTiming ?? .continuous
         self.cameraMedia = cameraMedia ?? CameraMedia()
         self.decoder = sharedDecoder ?? HevcDecoder()
         gimbalStickMapping = GimbalStickMapping()
@@ -4216,7 +4189,7 @@ final class CameraSession {
                     holdsMonitor: self.holdsMonitor, browsingMedia: self.isBrowsingMedia,
                     sessionRecovering: self.sessionRecovery.isRecovering,
                     foregroundChecking: self.foregroundCheckTask != nil,
-                    feedRepairing: self.feedRecoveryTask != nil,
+                    feedRepairing: self.pictureRecovery.isBusy,
                     formatPoking: self.firstPictureFormatPokeTask != nil)
             }, event: { [weak self] event in
                 guard let self else { return }
@@ -4231,8 +4204,8 @@ final class CameraSession {
                 case .liveMonitorMaintenance:
                     if !self.isBrowsingMedia, self.shouldStartUDPRebuild {
                         self.endGimbalStick(cancelMove: true)
-                        self.startFeedRecovery { [weak self] in
-                            await self?.repairDatalink(reason: "keepalive")
+                        self.startFeedRecovery { [weak self] attempt in
+                            await self?.repairDatalink(reason: "keepalive", attempt: attempt)
                         }
                     }
                     self.publishPipelineStats()
@@ -4516,7 +4489,7 @@ final class CameraSession {
                 timeoutsInWindow: commandTimeoutsAt.count,
                 downlinkFresh: downlinkFresh,
                 videoFresh: videoFresh,
-                rebuildInFlight: datalink?.isRebuilding == true || feedRecoveryTask != nil,
+                rebuildInFlight: datalink?.isRebuilding == true || pictureRecovery.isBusy,
                 secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
                 statusFresh: statusFresh
             )
@@ -4557,8 +4530,8 @@ final class CameraSession {
         log.info("control: SET timeouts with video stale — rebuild UDP")
         ControlLiveLog.line("control: SET timeouts, video stale — rebuilding UDP")
         endGimbalStick(cancelMove: true)
-        startFeedRecovery { [weak self] in
-            await self?.repairDatalink(reason: "command timeouts")
+        startFeedRecovery { [weak self] attempt in
+            await self?.repairDatalink(reason: "command timeouts", attempt: attempt)
         }
     }
 
@@ -4604,7 +4577,7 @@ final class CameraSession {
             } == true
         return CameraSoftAP.shouldKeepaliveRebuildUDP(
             flowNeedsRebuild: datalink?.needsRebuild == true,
-            rebuildInFlight: datalink?.isRebuilding == true || feedRecoveryTask != nil,
+            rebuildInFlight: datalink?.isRebuilding == true || pictureRecovery.isBusy,
             secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
             videoFresh: videoFresh,
             sawPicture: hasStableLivePicture,
@@ -4642,7 +4615,7 @@ final class CameraSession {
         // Media opens on the next UI pass; exit and repairs must not fight it.
         if cameraGalleryOpen { return }
         if needsForegroundRecover { return }
-        if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
+        if datalink?.isRebuilding == true || pictureRecovery.isBusy { return }
         guard cameraPathReady() else { return }
         if MediaLiveResume.strayPlaybackAction(
             browsing: isBrowsingMedia, inPlayback: status.inPlayback) != nil
@@ -4790,7 +4763,7 @@ final class CameraSession {
         allowTransportRecovery: Bool = true, currentRepairOwnsFirstPicture: Bool = false
     ) {
         if datalink?.isRebuilding == true
-            || (feedRecoveryTask != nil && !currentRepairOwnsFirstPicture)
+            || (pictureRecovery.isBusy && !currentRepairOwnsFirstPicture)
         {
             return
         }
@@ -4854,15 +4827,15 @@ final class CameraSession {
             log.info(
                 "live: first-picture rebuild UDP (receive died pkts=\(packets, privacy: .public) lastVideo=\(videoAge ?? -1, format: .fixed(precision: 1), privacy: .public)s)"
             )
-            startFeedRecovery { [weak self] in
-                await self?.repairDatalink(reason: "first picture")
+            startFeedRecovery { [weak self] attempt in
+                await self?.repairDatalink(reason: "first picture", attempt: attempt)
             }
             return
         case .rejoin:
             guard allowTransportRecovery else { return }
             log.info("live: first-picture full rejoin (SoftAP bind kept)")
-            startFeedRecovery { [weak self] in
-                await self?.rejoinDatalinkKeepingLive()
+            startFeedRecovery { [weak self] attempt in
+                await self?.rejoinDatalinkKeepingLive(attempt: attempt)
             }
             return
         }
@@ -4870,7 +4843,7 @@ final class CameraSession {
 
     private func applyFeedWatchdog() {
         if needsForegroundRecover { return }
-        if datalink?.isRebuilding == true || feedRecoveryTask != nil { return }
+        if datalink?.isRebuilding == true || pictureRecovery.isBusy { return }
         let now = Date()
         let live: Bool
         if case .live = phase { live = true } else { live = false }
@@ -4910,7 +4883,7 @@ final class CameraSession {
         )
         let watchdogBeforeTick = feedWatchdog
         let action = feedWatchdog.tick(snap)
-        let recovering = feedWatchdog.isRecovering || feedRecoveryTask != nil
+        let recovering = feedWatchdog.isRecovering || pictureRecovery.isBusy
         if recovering != feedRecovering { feedRecovering = recovering }
         switch action {
         case .none:
@@ -5006,7 +4979,7 @@ final class CameraSession {
             ControlLiveLog.line("recovery: action=decoder effect=requested reason=\(reason)")
             logFeedObserve(snap: snap, watchdog: action)
             let pictureOwner = cameraMedia.resumeID
-            startFeedRecovery { [weak self] in
+            startFeedRecovery { [weak self] attempt in
                 guard let self, !Task.isCancelled,
                     self.isLivePictureRepairCurrent(pictureOwner)
                 else { return }
@@ -5079,7 +5052,7 @@ final class CameraSession {
                         ControlLiveLog.line(
                             "recovery: action=endpoint effect=requested reason=keyframeUnanswered requests=\(keyframeRequests)"
                         )
-                        await self.repairDatalink(reason: "keyframe unanswered")
+                        await self.repairDatalink(reason: "keyframe unanswered", attempt: attempt)
                         return
                     case .deadline:
                         break repair
@@ -5110,7 +5083,7 @@ final class CameraSession {
                     ControlLiveLog.line(
                         "recovery: action=decoder effect=exhausted reason=pictureDeadline")
                     self.recordFeedRepair("rejoin", phase: .requested, reason: "pictureDeadline")
-                    await self.rejoinDatalinkKeepingLive()
+                    await self.rejoinDatalinkKeepingLive(attempt: attempt)
                 }
             }
         case .reopenDatalink:
@@ -5131,8 +5104,8 @@ final class CameraSession {
             logFeedObserve(snap: snap, watchdog: action)
             ControlLiveLog.line("feed: watchdog full datalink rejoin")
             recordFeedRepair("rejoin", phase: .requested, reason: "watchdog")
-            startFeedRecovery { [weak self] in
-                await self?.rejoinDatalinkKeepingLive()
+            startFeedRecovery { [weak self] attempt in
+                await self?.rejoinDatalinkKeepingLive(attempt: attempt)
             }
         }
     }
@@ -5195,11 +5168,9 @@ final class CameraSession {
     }
 
     func resetFeedWatchdog() {
-        feedRecoveryGeneration += 1
         feedRecovering = false
         feedWatchdog = FeedWatchdog()
-        feedRecoveryTask?.cancel()
-        feedRecoveryTask = nil
+        pictureRecovery.cancel()
         lastFeedFreezeLogAt = nil
         liveEnableGate.end()
     }
@@ -5311,7 +5282,7 @@ final class CameraSession {
             hasPresentedPicture: decoder.lastPresentedAt != nil,
             measuredFPS: frameRate.displayFPS,
             rollingIntervals: frameRate.intervalCount,
-            recovering: feedRecovering || feedRecoveryTask != nil,
+            recovering: feedRecovering || pictureRecovery.isBusy,
             secondsSinceLastPresented: decoder.lastPresentedAt.map {
                 Date().timeIntervalSince($0)
             }
@@ -5433,7 +5404,7 @@ final class CameraSession {
         }
         // A watchdog repair that started before the scene event retains ownership.
         // The next keepalive tick can escalate it after this check releases the slot.
-        guard feedRecoveryTask == nil, datalink?.isRebuilding != true else { return }
+        guard !pictureRecovery.isBusy, datalink?.isRebuilding != true else { return }
         var videoResumed = videoFresh
         let resumeDeadline = now.addingTimeInterval(FeedWatchdog.stallThreshold)
         while !videoResumed, Date() < resumeDeadline {
@@ -5451,8 +5422,8 @@ final class CameraSession {
             // it with BLE and the picture kept; its failure escalates to the
             // full session spine.
             ControlLiveLog.line("session: foreground video stale, renegotiating endpoint")
-            startFeedRecovery { [weak self] in
-                await self?.repairDatalink(reason: "foreground")
+            startFeedRecovery { [weak self] attempt in
+                await self?.repairDatalink(reason: "foreground", attempt: attempt)
             }
             return
         }
@@ -5479,43 +5450,75 @@ final class CameraSession {
 
     /// A replacement endpoint needs a handshake; retain the held picture and SoftAP.
     private func rebuildUDPKeepingVT() {
-        startFeedRecovery { [weak self] in
-            await self?.repairDatalink(reason: "feed watchdog")
+        startFeedRecovery { [weak self] attempt in
+            await self?.repairDatalink(reason: "feed watchdog", attempt: attempt)
         }
     }
 
-    /// One shell owner around endpoint negotiation, one initial enable, and a
-    /// fresh picture. Socket readiness alone cannot complete a live repair.
+    /// Native preparation stays app-owned; the shared attempt owns negotiation and picture wait.
     func repairDatalink(
         reason: String,
-        pictureDeadline: Duration = .seconds(2 * CameraSoftAP.foregroundPictureGrace)
+        pictureDeadline: Duration = .seconds(2 * CameraSoftAP.foregroundPictureGrace),
+        attempt: DjiApplePictureRecovery.Attempt
     ) async {
         guard let driver = datalink else { return }
-        let pictureOwner = cameraMedia.resumeID
-        endGimbalStick(cancelMove: true)
-        let started = prepareForDatalinkRecovery()
-        await runNegotiatedPictureRepair(
-            negotiate: { try await driver.rebuildUDP(reason: reason) },
-            driverIsCurrent: { self.datalink === driver },
-            ownsPicture: {
-                self.shouldCommitLiveHandshake(driver)
-                    && self.isLivePictureRepairCurrent(pictureOwner)
-            },
-            enable: {
-                self.sendInitialLiveViewEnable(
-                    displayAttached: self.decoder.isDisplayReady, pathProven: true)
+        _ = await attempt.repairEndpoint(.init(datalink: driver), reason: reason,
+            pictureIntent: cameraMedia.resumeID, timeout: pictureDeadline)
+    }
+
+    private func makePictureRecovery() -> DjiApplePictureRecovery {
+        DjiApplePictureRecovery(context: { [weak self] in
+            guard let self else { return .init() }
+            return .init(rebuilding: self.datalink?.isRebuilding == true,
+                endpointIdentity: self.datalink.map { ObjectIdentifier($0) },
+                pictureIntent: self.cameraMedia.resumeID, browsingMedia: self.isBrowsingMedia,
+                holdsMonitor: self.holdsMonitor, sessionRecovering: self.sessionRecovery.isRecovering)
+        }, native: .init(prepare: { [weak self] in
+            guard let self else { return Date.timeIntervalSinceReferenceDate }
+            self.endGimbalStick(cancelMove: true)
+            return self.prepareForDatalinkRecovery().timeIntervalSinceReferenceDate
+        }, enable: { [weak self] in
+            guard let self else { return }
+            self.sendInitialLiveViewEnable(
+                displayAttached: self.decoder.isDisplayReady, pathProven: true)
+            self.feedWatchdog = FeedWatchdog()
+        }, probe: { [weak self] in
+            self?.recoverFirstPictureIfNeeded(
+                allowTransportRecovery: false, currentRepairOwnsFirstPicture: true)
+        }, picture: { [weak self] since, now in
+            guard let self else { return .init() }
+            return .init(fresh: self.hasFreshRecoveryPicture(
+                since: Date(timeIntervalSinceReferenceDate: since),
+                now: Date(timeIntervalSinceReferenceDate: now)),
+                lastPresentedAt: self.decoder.lastPresentedAt?.timeIntervalSinceReferenceDate)
+        }), timing: pictureRecoveryTiming, event: { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .admitted:
+                self.status.meteredEv = nil
+                self.feedRecovering = true
+                self.refreshFeedWarmup()
+            case .released:
+                if !self.feedWatchdog.isRecovering { self.feedRecovering = false }
+                self.refreshFeedWarmup()
+            case .restored:
+                ControlLiveLog.line("feed: endpoint recovery has fresh picture")
+            case .holdForWatchdog(let cycles):
+                ControlLiveLog.line("feed: endpoint recovery picture deadline expired")
+                ControlLiveLog.line(
+                    "feed: keep BLE, video still arriving; watchdog owns the stall cycle=\(cycles)")
+                self.recordFeedRepair("session", phase: .blocked, reason: "videoLive")
                 self.feedWatchdog = FeedWatchdog()
-            },
-            waitForPicture: {
-                _ = await self.finishDatalinkRecoveryPicture(
-                    driver: driver, since: started, timeout: pictureDeadline,
-                    pictureOwner: pictureOwner)
-            },
-            failed: { _ in
+            case .escalateSession:
+                ControlLiveLog.line("feed: endpoint recovery picture deadline expired")
+                self.beginSessionRecovery(
+                    reason: "endpoint recovery has no fresh picture", trigger: .datalinkLost)
+            case .negotiationFailed(let reason):
                 ControlLiveLog.line("feed: endpoint negotiation failed (\(reason))")
                 self.beginSessionRecovery(
                     reason: "endpoint negotiation failed", trigger: .datalinkLost)
-            })
+            }
+        })
     }
 
     private func prepareForDatalinkRecovery() -> Date {
@@ -5543,58 +5546,6 @@ final class CameraSession {
         return Date()
     }
 
-    enum PictureRepairResult: Equatable { case restored, superseded, exhausted }
-
-    @discardableResult
-    func finishDatalinkRecoveryPicture(
-        driver: DatalinkDriver, since started: Date,
-        timeout: Duration = .seconds(2 * CameraSoftAP.foregroundPictureGrace),
-        pictureOwner: Int
-    ) async -> PictureRepairResult {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while !Task.isCancelled, datalink === driver, !driver.isClosed,
-            isLivePictureRepairCurrent(pictureOwner)
-        {
-            if hasFreshRecoveryPicture(since: started) {
-                ControlLiveLog.line("feed: endpoint recovery has fresh picture")
-                return .restored
-            }
-            guard ContinuousClock.now < deadline else { break }
-            // This task owns the transport. Let the existing first-picture
-            // policy request its bounded PLI/poke, without another socket repair.
-            recoverFirstPictureIfNeeded(
-                allowTransportRecovery: false, currentRepairOwnsFirstPicture: true)
-            do { try await Task.sleep(for: .milliseconds(100)) } catch { return .superseded }
-        }
-        guard !Task.isCancelled, datalink === driver, !driver.isClosed,
-            isLivePictureRepairCurrent(pictureOwner)
-        else { return .superseded }
-        ControlLiveLog.line("feed: endpoint recovery picture deadline expired")
-        let now = Date()
-        let pictureSinceLastHold =
-            lastSessionHoldAt.map { held in
-                decoder.lastPresentedAt.map { $0 > held } ?? false
-            } ?? false
-        sessionHoldCycles = FeedWatchdog.nextSessionHoldCycles(
-            lastVideoPacketAge: driver.lastVideoPacketAt.map { now.timeIntervalSince($0) },
-            previousCycles: sessionHoldCycles, pictureSinceLastCycle: pictureSinceLastHold)
-        lastSessionHoldAt = now
-        if sessionHoldCycles > 0 {
-            // Video still arrives on this socket: a keyframe/decoder stall, not
-            // a lost camera. Keep BLE; the watchdog ladder owns it again, for at
-            // most maxHeldRepairCycles deadlines in this episode.
-            ControlLiveLog.line(
-                "feed: keep BLE, video still arriving; watchdog owns the stall cycle=\(sessionHoldCycles)"
-            )
-            recordFeedRepair("session", phase: .blocked, reason: "videoLive")
-            feedWatchdog = FeedWatchdog()
-            return .exhausted
-        }
-        beginSessionRecovery(
-            reason: "endpoint recovery has no fresh picture", trigger: .datalinkLost)
-        return .exhausted
-    }
-
     func isLivePictureRepairCurrent(_ generation: Int) -> Bool {
         MediaLiveResume.isCurrentPictureOwner(
             generation: generation, currentGeneration: cameraMedia.resumeID,
@@ -5609,39 +5560,20 @@ final class CameraSession {
     }
 
     var hasFeedRecoveryInFlight: Bool {
-        feedRecoveryTask != nil || datalink?.isRebuilding == true
+        pictureRecovery.isBusy || datalink?.isRebuilding == true
     }
 
     func claimMediaLiveRecovery(
         token: Int, work: @escaping @MainActor () async -> Void
     ) async {
-        while !Task.isCancelled, isLivePictureRepairCurrent(token),
-            !holdsMonitor, !sessionRecovery.isRecovering,
-            hasFeedRecoveryInFlight
-        {
-            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
-        }
-        guard !Task.isCancelled, isLivePictureRepairCurrent(token),
-            !holdsMonitor, !sessionRecovery.isRecovering
-        else { return }
-        startFeedRecovery(work)
+        await pictureRecovery.claim(pictureIntent: token) { _ in await work() }
     }
 
-    func startFeedRecovery(_ work: @escaping @MainActor () async -> Void) {
-        let inFlight = datalink?.isRebuilding == true || feedRecoveryTask != nil
-        guard FeedWatchdog.shouldStartFeedRecovery(rebuildInFlight: inFlight) else { return }
-        status.meteredEv = nil
-        feedRecoveryGeneration += 1
-        let generation = feedRecoveryGeneration
-        feedRecovering = true
-        feedRecoveryTask = Task { @MainActor in
-            await work()
-            guard self.feedRecoveryGeneration == generation else { return }
-            self.feedRecoveryTask = nil
-            if !self.feedWatchdog.isRecovering { self.feedRecovering = false }
-            self.refreshFeedWarmup()
-        }
-        refreshFeedWarmup()
+    @discardableResult
+    func startFeedRecovery(
+        _ work: @escaping @MainActor (DjiApplePictureRecovery.Attempt) async -> Void
+    ) -> Bool {
+        pictureRecovery.start(work)
     }
 
     // MARK: - Session recovery (camera power cycle)
@@ -5672,7 +5604,7 @@ final class CameraSession {
         holdsMonitor = true
         abortInFlightRun(
             preserveDecoder: true, preserveSoftAP: cameraPathReady())
-        feedRecoveryTask?.cancel()
+        pictureRecovery.cancel()
         feedRecovering = false
         sessionRecoveryGeneration += 1
         let generation = sessionRecoveryGeneration
@@ -5907,7 +5839,7 @@ final class CameraSession {
 
     /// Stage 4: new UDP handshake + register + subscribe on SoftAP. BLE and
     /// `phase == .live` stay so the operator is not dumped to a black home screen.
-    private func rejoinDatalinkKeepingLive() async {
+    private func rejoinDatalinkKeepingLive(attempt: DjiApplePictureRecovery.Attempt) async {
         guard let camera = connectedCamera else { return }
         let pictureOwner = cameraMedia.resumeID
         log.info("feed: full datalink rejoin (SoftAP bind kept)")
@@ -5937,8 +5869,9 @@ final class CameraSession {
             // the new driver until a rolling picture; then a fresh watchdog.
             feedWatchdog = FeedWatchdog()
             startKeepalive(ssid: joinedSSID)
-            await finishDatalinkRecoveryPicture(
-                driver: dl, since: started, pictureOwner: pictureOwner)
+            _ = await attempt.waitForPicture(.init(datalink: dl),
+                since: started.timeIntervalSinceReferenceDate, pictureIntent: pictureOwner,
+                timeout: .seconds(2 * CameraSoftAP.foregroundPictureGrace))
         } catch is CancellationError {
             return
         } catch {

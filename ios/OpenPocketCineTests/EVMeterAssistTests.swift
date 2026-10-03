@@ -12,7 +12,7 @@ final class EVMeterAssistTests: XCTestCase {
         let session = CameraSession()
         session.status.evComp = EvComp(thirds: 3)
         session.status.meteredEv = EvComp(thirds: -4)
-        session.startFeedRecovery {}
+        session.startFeedRecovery { _ in }
         XCTAssertNil(session.status.meteredEv)
         XCTAssertEqual(session.status.evComp?.thirds, 3)
         await Task.yield()
