@@ -1099,6 +1099,7 @@ final class CameraSession {
     private func prepareConnectionSource(_ camera: FoundCamera, attempt: DjiAppleConnectionRun.Attempt) {
         guard attempt.isCurrent, !isMultiviewBorrowed else { return }
         connectedCamera = camera
+        guard attempt.isCurrent else { return }
         status.meteredEv = nil
         guard attempt.isCurrent else { return }
         rawAccessUnits = 0
@@ -1151,7 +1152,11 @@ final class CameraSession {
             setupProgress = text
         case .progress(let text): setupProgress = text
         case .path(let path):
-            joinedSSID = path.joinedSSID; stationSSID = path.stationSSID; stationHost = path.stationHost
+            joinedSSID = path.joinedSSID
+            guard connectionRun.currentRunID == runID else { return }
+            stationSSID = path.stationSSID
+            guard connectionRun.currentRunID == runID else { return }
+            stationHost = path.stationHost
         case .finished(let result, let preservingSource):
             setupProgress = nil
             guard connectionRun.currentRunID == runID else { return }

@@ -1,4 +1,5 @@
 import OpenPocketViewCore
+import Observation
 import QuartzCore
 import VideoToolbox
 import XCTest
@@ -557,7 +558,7 @@ private func hex(_ s: String) -> [UInt8] {
     return out
 }
 
-/// SIMULATED native OS dependencies exercise CameraSession's donor loop before extraction.
+/// SIMULATED native OS dependencies replay captured CameraSession donor traces through its current owner.
 @MainActor
 final class ConnectionRunDonorTraceTests: XCTestCase {
     func testColdAccessPointDonorCommandAndRegistrationOrder() async {
@@ -693,6 +694,85 @@ final class ConnectionRunDonorTraceTests: XCTestCase {
         XCTAssertFalse(peer.trace.contains("enable"))
     }
 
+    func testConnectedCameraObserverReplacementPreservesSuccessorMeterUntilItsPreparation() async {
+        let peer = ConnectionDonorPeer(cached: true)
+        let session = peer.session()
+        let sentinel = ConnectionObservationSentinel()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        withObservationTracking { _ = session.connectedCamera } onChange: {
+            MainActor.assumeIsolated {
+                guard !sentinel.replaced else { return }
+                sentinel.replaced = true
+                session.disconnect()
+                session.connect(peer.camera)
+                session.status.meteredEv = EvComp(thirds: 7)
+                withObservationTracking { _ = session.connectedCamera } onChange: {
+                    MainActor.assumeIsolated {
+                        sentinel.successorPreparing = true
+                        sentinel.meterAtSuccessorPreparation = session.status.meteredEv
+                    }
+                }
+            }
+        }
+        await finish(session)
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertTrue(sentinel.successorPreparing)
+        XCTAssertEqual(sentinel.meterAtSuccessorPreparation, EvComp(thirds: 7),
+            "Retired A must preserve B's +7/3 meter until B's own preparation")
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 1)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+    }
+
+    func testJoinedSSIDObserverReplacementCannotPublishRetiredStationFacts() async {
+        let peer = ConnectionDonorPeer(cached: true, station: true)
+        let session = peer.session()
+        let sentinel = ConnectionObservationSentinel()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        await finish(session)
+        XCTAssertEqual(session.stationSSID, peer.network)
+        XCTAssertEqual(session.stationHost, "198.51.100.7")
+        // An AP run retains the prior station path until new connection facts arrive.
+        let another = FoundCamera(id: UUID(uuidString: "FC064E5E-2B01-4F6B-94D2-663C03C8F002")!,
+            name: peer.camera.name, model: peer.camera.model, modelId: peer.camera.modelId)
+        session.connectionSetup = .cameraWiFi
+        session.connect(another)
+        withObservationTracking { _ = session.joinedSSID } onChange: {
+            MainActor.assumeIsolated {
+                guard !sentinel.replaced else { return }
+                sentinel.replaced = true
+                session.disconnect()
+                session.connect(peer.camera)
+                // B is a camera-AP successor; its station facts are unknown after teardown.
+                XCTAssertNil(session.stationSSID)
+                XCTAssertNil(session.stationHost)
+                withObservationTracking { _ = session.connectedCamera } onChange: {
+                    MainActor.assumeIsolated { sentinel.successorPreparing = true }
+                }
+                withObservationTracking { _ = session.stationSSID } onChange: {
+                    MainActor.assumeIsolated {
+                        if !sentinel.successorPreparing { sentinel.staleWrites += 1 }
+                    }
+                }
+                withObservationTracking { _ = session.stationHost } onChange: {
+                    MainActor.assumeIsolated {
+                        if !sentinel.successorPreparing { sentinel.staleWrites += 1 }
+                    }
+                }
+            }
+        }
+        await finish(session)
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertTrue(sentinel.successorPreparing)
+        XCTAssertEqual(sentinel.staleWrites, 0,
+            "Retired A must not publish its remaining station fields into B")
+        XCTAssertNil(session.stationSSID)
+        XCTAssertNil(session.stationHost)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 2,
+            "Initial station connection and B each enable once; retired AP attempt A never enables")
+    }
+
     func testBorrowedConnectDoesNotPrepareSharedDecoderOrSendCommands() async {
         let peer = ConnectionDonorPeer(cached: true)
         let decoder = HevcDecoder()
@@ -729,6 +809,14 @@ final class ConnectionRunDonorTraceTests: XCTestCase {
         }
         XCTFail("SIMULATED donor did not reach the registered boundary")
     }
+}
+
+@MainActor
+private final class ConnectionObservationSentinel {
+    var replaced = false
+    var successorPreparing = false
+    var staleWrites = 0
+    var meterAtSuccessorPreparation: EvComp?
 }
 
 @MainActor
