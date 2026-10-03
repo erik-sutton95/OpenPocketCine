@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineCore
 
 /// Jittered exponential backoff for reconnect retries. OpenZCine `ReconnectBackoff`.
 public struct ReconnectBackoff: Sendable, Equatable {
@@ -20,11 +21,9 @@ public struct ReconnectBackoff: Sendable, Equatable {
     }
 
     public func delaySeconds(forAttempt attempt: Int, jitter: Double) -> Double {
-        let exponent = Double(max(0, attempt))
-        let capped = min(maxSeconds, baseSeconds * pow(multiplier, exponent))
-        let clampedJitter = min(1, max(0, jitter))
-        let signedSpread = (clampedJitter * 2 - 1) * jitterFraction
-        let jittered = capped * (1 + signedSpread)
-        return min(maxSeconds, max(0, jittered))
+        RetryBackoff(
+            initialDelay: baseSeconds, maximumDelay: maxSeconds,
+            multiplier: multiplier, jitterFraction: jitterFraction
+        ).delay(forAttempt: attempt, jitter: jitter)
     }
 }

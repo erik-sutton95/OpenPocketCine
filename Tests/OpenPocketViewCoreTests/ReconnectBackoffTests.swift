@@ -25,4 +25,19 @@ struct ReconnectBackoffTests {
             backoff.delaySeconds(forAttempt: 0, jitter: 2)
                 == backoff.delaySeconds(forAttempt: 0, jitter: 1))
     }
+
+    @Test func legacyStandaloneAndMonitorDefaultsRemainCompatible() {
+        var backoff = ReconnectBackoff()
+        #expect(backoff.maxSeconds == 30)
+        #expect(backoff.delaySeconds(forAttempt: 20, jitter: 0.5) == 30)
+        #expect(SessionRecoveryPolicy.monitor.backoff.maxSeconds == 8)
+        #expect(
+            SessionRecoveryPolicy.monitor.decision(afterFailedAttempts: 7, jitter: 1)
+                == .retry(afterSeconds: 8))
+        backoff.baseSeconds = 2
+        backoff.maxSeconds = 20
+        backoff.multiplier = 3
+        backoff.jitterFraction = 0
+        #expect(backoff.delaySeconds(forAttempt: 1, jitter: 1) == 6)
+    }
 }
