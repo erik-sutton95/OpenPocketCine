@@ -1572,7 +1572,6 @@ struct MediaPlayerView: View {
         audioMeterController.stopPolling()
         audioMeterController.detach(from: player.currentItem)
         playbackFeed.shutdown()
-        model.frameSamples.playbackBundle = nil
         model.assist.configureTool = nil
         teardownPlayer()
         MediaPlaybackAudioSession.deactivateAfterPlayback()

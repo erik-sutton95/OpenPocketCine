@@ -14,6 +14,7 @@ Wi-Fi and datalink adapters. Apps compose those owners with native rendering and
 | Shared iOS UI | OpenCine `MonitorUI` | Sora/theme, canvas, pages, catalog, controls and inspectors with injected values/actions/native rendering slots. |
 | Shared Android UI | OpenCine `Android/monitor-ui/` | Compose design language, capability values, layout policy and page scaffolds. |
 | DJI Apple transport | OpenCine `OpenCineDJIApple` | Bluetooth/network delivery and control transactions; injected host policy and diagnostics, no UI or storage ownership. |
+| Apple picture runtime | OpenCine `OpenCineApple` | Decoder, native assists, source publications and retained picture presentation with configured source calibration and diagnostics. |
 | iOS app | `ios/OpenPocketCine/` | SwiftUI composition, credential/permission policy and native picture adapters. |
 | Watch companion | `ios/OpenPocketCineWatch/` | watchOS remote over WatchConnectivity. Phone stays the radio. |
 | Android app | `Apps/Android/app/` | Jetpack Compose shell, Vulkan/GLES live picture, MediaCodec. |
@@ -32,7 +33,11 @@ Brand adapters translate the current camera into presentation values and capabil
 Opening pages, changing display mode, and rotating the device retain the native
 feed host. The Apple control exchange owns reply and SET lifetime while the app retains
 presentation pins and session recovery decisions. Common receipt confirmation requires
-camera reports. Remaining native/session extraction is described in the
+camera reports. Live decoder and playback publications own separate source leases:
+closing an old source cannot clear its successor or calibrate a covered clip.
+The app supplies the measured DJI profile and actual camera reports; the shared
+native owner retains decode and presentation lifetime. Connection/recovery and
+continuous DJI gesture migration remain unfinished. Remaining native/session extraction is described in the
 [shared monitor engine plan](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/SHARED-MONITOR-ENGINE.md).
 
 Operator-visible behavior must match across iOS and Android unless

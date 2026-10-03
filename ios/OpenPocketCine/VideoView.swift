@@ -1,4 +1,5 @@
 import AVFoundation
+import OpenCineApple
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -97,7 +98,7 @@ struct VideoDisplayRepresentable: UIViewRepresentable {
     }
 
     private func wire(_ decoder: HevcDecoder) {
-        decoder.sampleBus = sampleBus
+        decoder.bindSourcePublication(sampleBus)
         decoder.effects = effects
         decoder.feedUpscaler = feedUpscaler
         decoder.hdrDisplayEnabled = hdrDisplay
@@ -106,90 +107,17 @@ struct VideoDisplayRepresentable: UIViewRepresentable {
     }
 }
 
-final class DisplayLayerView: UIView {
-    private let displayLayer: AVSampleBufferDisplayLayer
-    private let pictureHost = UIView()
-    private var pictureMirrored = false
-    private var pictureFlippedVertically = false
-    let ciFeed = CIFeedView()
-    var onReady: (() -> Void)?
-
-    /// A replacement host can adopt the session's layer before this view retires.
-    /// Late updates and layout from the old host must not change the live owner.
-    var ownsDisplayLayer: Bool { displayLayer.superlayer === pictureHost.layer }
-
+final class DisplayLayerView: OpenCineApple.MonitorVideoPictureContainer {
+    let ciFeed: CIFeedView
     init(_ layer: AVSampleBufferDisplayLayer) {
-        displayLayer = layer
-        super.init(frame: .zero)
-        backgroundColor = .black
-        isUserInteractionEnabled = false
-        layer.videoGravity = .resizeAspect
-        addSubview(pictureHost)
-        pictureHost.isUserInteractionEnabled = false
-        pictureHost.backgroundColor = .black
-        pictureHost.layer.addSublayer(layer)
-        pictureHost.addSubview(ciFeed)
-        ciFeed.isUserInteractionEnabled = false
+        let feed = CIFeedView()
+        self.ciFeed = feed
+        super.init(layer, processedPicture: feed)
     }
-
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    func setPictureMirrored(_ mirrored: Bool) {
-        pictureMirrored = mirrored
-        applyPictureTransform()
-    }
-
-    func setPictureFlippedVertically(_ flipped: Bool) {
-        guard flipped != pictureFlippedVertically else { return }
-        pictureFlippedVertically = flipped
-        applyPictureTransform()
-    }
-
     func applyHDRDisplay(_ enabled: Bool) {
         LiveHDRDisplay.setEnabled(enabled, screen: window?.screen)
         LiveHDRDisplay.configure(displayLayer, screen: window?.screen)
         ciFeed.syncHDRDisplay()
-    }
-
-    private func applyPictureTransform() {
-        let scale = MirrorAssist.feedScale(
-            mirrored: pictureMirrored, flippedVertically: pictureFlippedVertically)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        pictureHost.transform = CGAffineTransform(scaleX: scale.width, y: scale.height)
-        CATransaction.commit()
-    }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        ciFeed.isEnabled = ownsDisplayLayer && window != nil
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard ownsDisplayLayer else {
-            ciFeed.isEnabled = false
-            return
-        }
-        // UIKit can resize the overlay immediately while the standalone video
-        // layer implicitly interpolates its bounds. Commit both as one geometry
-        // update; any enclosing rotation animation then moves the complete picture.
-        UIView.performWithoutAnimation {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            for layer in [pictureHost.layer, displayLayer, ciFeed.layer] {
-                layer.removeAnimation(forKey: "bounds")
-                layer.removeAnimation(forKey: "position")
-            }
-            pictureHost.bounds = CGRect(origin: .zero, size: bounds.size)
-            pictureHost.center = CGPoint(x: bounds.midX, y: bounds.midY)
-            displayLayer.frame = pictureHost.bounds
-            ciFeed.frame = pictureHost.bounds
-            ciFeed.layoutIfNeeded()
-            applyPictureTransform()
-            CATransaction.commit()
-        }
-        ciFeed.isEnabled = window != nil && bounds.width > 1 && bounds.height > 1
-        if bounds.width > 1, bounds.height > 1 { onReady?() }
     }
 }

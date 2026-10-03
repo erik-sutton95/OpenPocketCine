@@ -6,7 +6,8 @@ import XCTest
 
 final class DesqueezeAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    private let ceiling = OpenCineMedia.ScopeExposureCeiling(
+        profile: PocketMonitorCalibration.clipProfile)
     private let keys = [
         "OpenPocketCine.Assist.v1", "OpenPocketCine.PlaybackAssists.v1",
         "OpenPocketCine.CleanViewPins.v1",

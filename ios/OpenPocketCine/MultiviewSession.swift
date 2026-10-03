@@ -76,6 +76,7 @@ final class MultiviewSession {
             controlsModel?.session.receiveMultiview(frame)
             let previousFlip = latestSettings.selfieFlip
             CameraStatusDecoder.apply(frame, to: &latestSettings, model: camera.model)
+            decoder.refreshSourceCalibration()
             if frame.cmdSet == 4, frame.cmdId == 5 { pose.applyAttitude(frame.payload) }
             if frame.cmdSet == 4, frame.cmdId == 0x27 {
                 _ = pose.noteBodyFace(latestSettings.gimbalFace)
@@ -206,6 +207,10 @@ final class MultiviewSession {
             control.wireTimeout = .seconds(9)
             control.readbackTimeout = .seconds(9)
             decoder.feedUpscaler = .off
+            decoder.sourceCalibrationProvider = { [weak self] in
+                guard let self, self.latestSettings.iso > 0 else { return nil }
+                return self.latestSettings.iso
+            }
             decoder.onPresentedFrame = { [weak self] in
                 self?.liveModel?.session.noteMultiviewFrame()
             }
@@ -891,7 +896,8 @@ final class MultiviewSession {
             tile.driver?.close()
             tile.driver = nil
             tile.status = "Could not connect"
-            tile.failureMessage = djiConnectionFailureDescription(error, fallback: error.localizedDescription)
+            tile.failureMessage = djiConnectionFailureDescription(
+                error, fallback: error.localizedDescription)
             ControlLiveLog.line(
                 "multiview: add failed stage=\(stage) error=\((error as NSError).domain)/\((error as NSError).code)"
             )

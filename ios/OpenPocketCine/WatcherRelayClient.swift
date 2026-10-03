@@ -73,7 +73,7 @@ final class WatcherRelayClient {
         status = .connecting
         // VideoView owns the local raster effects; an identity provider would undo
         // the operator's selection on every incoming access unit.
-        decoder.sampleBus = samples
+        decoder.bindSourcePublication(samples)
         decoder.effectsProvider = nil
         decoder.transferProvider = { [weak self] in self?.transfer }
         decoder.onPresentedFrame = { [weak self] in
