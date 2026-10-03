@@ -1045,7 +1045,8 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         defer {
             session.disconnect(); clock.cancelAll(); successorDriver.close(); session.decoder.close()
         }
-        withObservationTracking { _ = session.setupProgress } onChange: {
+        session.gimbalMovePaused = true
+        withObservationTracking { _ = session.gimbalMovePaused } onChange: {
             MainActor.assumeIsolated {
                 guard !sentinel.replaced else { return }
                 sentinel.replaced = true
