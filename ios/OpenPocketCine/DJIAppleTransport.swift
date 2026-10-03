@@ -13,6 +13,7 @@ extension DjiAppleTransportHost {
     /// Each connection receives its own value; logging retains Pocket's existing redaction/storage.
     static var pocket: Self {
         var host = Self(logSubsystem: "com.opencapture.openpocketcine", journal: { ControlLiveLog.line($0) },
+            bluetoothGattJournal: persistPocketBluetoothGatt,
             localNetworkEvidence: { evidence, source in
                 LocalNetworkAccess.note(evidence == .allowed ? .allowed : .denied, source: source)
             }, bluetoothDenied: StartupConnectionCopy.bluetoothDenied,
@@ -25,6 +26,26 @@ extension DjiAppleTransportHost {
                 shouldDropPacket: { FeedStressAutomation.shouldDropPacket(seq: $0) })
         #endif
         return host
+    }
+}
+
+/// Preserve the existing raw GATT file separately from the app's redacted control journal.
+private func persistPocketBluetoothGatt(_ text: String) {
+    DispatchQueue.global(qos: .utility).async {
+        guard
+            let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+                .first?.appendingPathComponent("ble-gatt.log")
+        else { return }
+        let row = Data("\(ISO8601DateFormatter().string(from: Date())) \(text)\n".utf8)
+        if FileManager.default.fileExists(atPath: url.path) {
+            if let handle = try? FileHandle(forWritingTo: url) {
+                defer { try? handle.close() }
+                _ = try? handle.seekToEnd()
+                try? handle.write(contentsOf: row)
+            }
+        } else {
+            try? row.write(to: url)
+        }
     }
 }
 
