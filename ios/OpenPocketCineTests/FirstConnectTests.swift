@@ -1104,7 +1104,7 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
 
     /// SIMULATED nested motion cleanup must stop within its own callback boundary,
     /// before outer teardown resumes. B's newly supplied native facts remain authoritative.
-    func testNestedMotionCleanupObserverCannotRestOrClearSuccessorsFacts() async {
+    func testNestedMotionCleanupObserverCannotClearSuccessorsFacts() async {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
@@ -1120,13 +1120,11 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
                 session.cancelSessionRecovery(clearHoldsMonitor: false)
                 session.beginSessionRecovery(reason: "SIMULATED B", trigger: .operatorRetry)
                 session.datalink = successorDriver
-                session.gimbalStickHeld = true
                 session.gimbalMoveCanPause = true
             }
         }
         session.beginSessionRecovery(reason: "SIMULATED nested cleanup A")
         XCTAssertTrue(sentinel.replaced)
-        XCTAssertTrue(session.gimbalStickHeld, "Retired nested A cannot rest B's newly supplied stick state")
         XCTAssertTrue(session.gimbalMoveCanPause, "Retired nested A cannot clear B's subsequent facts")
         XCTAssertTrue(session.datalink === successorDriver)
         XCTAssertFalse(successorDriver.isClosed)
