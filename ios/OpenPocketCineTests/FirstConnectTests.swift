@@ -818,25 +818,22 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
         peer.handshakeMisses = 6
-        let session = peer.recoverySession(clock: clock)
         peer.onRegistered = {
             clock.schedule(.milliseconds(1)) { peer.recoveryPicture = clock.freshPicture }
         }
         defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
-        session.connectedCamera = peer.camera
-        session.phase = .live
         session.beginSessionRecovery(reason: "SIMULATED native drop")
         let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
         XCTAssertTrue(finished)
         XCTAssertEqual(peer.trace.filter { $0 == "scan" }.count, 2)
         XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 2)
         XCTAssertEqual(peer.trace.filter { $0 == "open AP" }.count, 7)
-        XCTAssertEqual(peer.trace.filter { $0 == "close" }.count, 1)
-        let close = peer.trace.firstIndex(of: "close")
+        let closes = peer.trace.indices.filter { peer.trace[$0] == "close" }
+        XCTAssertEqual(closes.count, 2, "Initial dropped endpoint, then failed-attempt endpoint")
         let scans = peer.trace.indices.filter { peer.trace[$0] == "scan" }
-        XCTAssertNotNil(close)
-        if let close, scans.count == 2 { XCTAssertLessThan(close, scans[1]) }
+        if closes.count == 2, scans.count == 2 { XCTAssertLessThan(closes[1], scans[1]) }
         XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
         XCTAssertEqual(clock.recoveryBackoffs, [0.5])
         XCTAssertFalse(session.sessionRecoveryCardGraceElapsed)
@@ -847,11 +844,9 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
         peer.gattMisses = 8
-        let session = peer.recoverySession(clock: clock)
         defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
-        session.connectedCamera = peer.camera
-        session.phase = .live
         session.beginSessionRecovery(reason: "SIMULATED eight misses")
         let finished = await clock.drive {
             session.sessionRecovery == .waitingForOperator(attemptsMade: 8)
@@ -870,18 +865,17 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
         peer.advertisesRecoveryCamera = false
-        let session = peer.recoverySession(clock: clock)
         defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
-        session.connectedCamera = peer.camera
-        session.phase = .live
+        let began = clock.time
         session.beginSessionRecovery(reason: "SIMULATED missing camera")
         let finished = await clock.drive {
             if case .waitingForOperator = session.sessionRecovery { return true }
             return false
         }
         XCTAssertTrue(finished)
-        XCTAssertEqual(clock.time, 180, accuracy: 1e-9)
+        XCTAssertEqual(clock.time - began, 180, accuracy: 1e-9)
         XCTAssertFalse(peer.trace.contains("GATT"))
         XCTAssertFalse(peer.trace.contains("enable"))
         XCTAssertTrue(session.holdsMonitor)
@@ -894,10 +888,8 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
-        let session = peer.recoverySession(clock: clock)
+        let session = await peer.establishedRecoverySession(clock: clock)
         defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
-        session.connectedCamera = peer.camera
-        session.phase = .live
         // Both values are held from before this attempt, even when presentation repaints.
         peer.recoveryPicture = .init(
             sourceAt: Date(timeIntervalSinceReferenceDate: -1),
@@ -929,13 +921,11 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
-        let session = peer.recoverySession(clock: clock)
+        let session = await peer.establishedRecoverySession(clock: clock)
         peer.onRegistered = {
             clock.schedule(.milliseconds(1)) { peer.recoveryPicture = clock.freshPicture }
         }
         defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
-        session.connectedCamera = peer.camera
-        session.phase = .live
         for drop in 1...2 {
             peer.recoveryPicture = .init()
             session.beginSessionRecovery(reason: "SIMULATED drop \(drop)")
@@ -973,9 +963,7 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
             tileDriver.close()
             decoder.close()
         }
-        session.datalink = tileDriver
-        session.connectedCamera = peer.camera
-        session.phase = .live
+        session.updateMultiview(camera: peer.camera, driver: tileDriver, status: CameraStatus())
         XCTAssertFalse(tileDriver.isClosed)
         session.beginSessionRecovery(reason: "SIMULATED borrowed view", trigger: .bleDropped)
         await clock.settle()
@@ -990,10 +978,8 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
-        let session = peer.recoverySession(clock: clock)
+        let session = await peer.establishedRecoverySession(clock: clock)
         defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
-        session.connectedCamera = peer.camera
-        session.phase = .live
         let sentinel = ConnectionObservationSentinel()
         withObservationTracking {
             _ = session.sessionRecovery
@@ -1241,6 +1227,20 @@ private final class ConnectionDonorPeer {
                 return ConnectionDonorEndpoint(peer: self)
             }, localNetworkDenied: { _ in false })
     }
+    func establishedRecoverySession(clock: SessionRecoveryDonorClock) async -> CameraSession {
+        let session = recoverySession(clock: clock)
+        session.connect(camera)
+        let established = await clock.drive { session.phase == .live && trace.contains("open returned") }
+        XCTAssertTrue(established, "SIMULATED baseline must complete the actual public connection spine")
+        await clock.settle()
+        print("SIMULATED OLD RECOVERY established base: \(trace)")
+        trace.removeAll()
+        writes.removeAll()
+        clock.pauses.removeAll()
+        recoveryPicture = clock.freshPicture
+        return session
+    }
+
     func recoverySession(clock: SessionRecoveryDonorClock, borrowing decoder: HevcDecoder? = nil) -> CameraSession {
         let session = session(borrowing: decoder)
         session.sessionRecoveryNativePeers = .init(
