@@ -53,3 +53,10 @@ The iOS DJI integration also owns each connection's registration heartbeat and c
 grace. The app composes picture, gallery and motion maintenance without duplicating the
 timer; inactive scenes and covered monitors keep registration. This extraction retains
 the existing recovery timing and does not complete the remaining session migration.
+
+Negotiated-picture recovery also uses one per-session DJI Apple owner. It serializes
+endpoint repair and current media return, keeps the existing picture deadline and
+rejects stale completions after a replacement. A media transition retires picture intent
+without canceling admitted endpoint negotiation. Native picture actions and the full
+connection/recovery policy remain app adapters; no camera command or portable policy
+changes in this Apple-only ownership move. Physical camera qualification remains pending.

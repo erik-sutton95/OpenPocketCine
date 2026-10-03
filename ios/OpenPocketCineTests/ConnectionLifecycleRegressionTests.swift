@@ -32,7 +32,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
         )
         XCTAssertEqual(model.session.liveFPS, "—", "Idle test session must lose its cached FPS")
         model.session.phase = .live
-        model.session.startFeedRecovery { try? await Task.sleep(for: .seconds(30)) }
+        model.session.startFeedRecovery { _ in try? await Task.sleep(for: .seconds(30)) }
         model.session.refreshLinkHealth(at: Date.timeIntervalSinceReferenceDate + 3)
         XCTAssertEqual(
             model.session.liveFPS, "RECOV", "Recovery must remain visible in its own chrome")

@@ -98,16 +98,16 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
         let session = CameraSession(borrowing: HevcDecoder())
         var first: CheckedContinuation<Void, Never>?
         var second: CheckedContinuation<Void, Never>?
-        session.startFeedRecovery { await withCheckedContinuation { first = $0 } }
+        session.startFeedRecovery { _ in await withCheckedContinuation { first = $0 } }
         while first == nil { await Task.yield() }
         session.resetFeedWatchdog()
-        session.startFeedRecovery { await withCheckedContinuation { second = $0 } }
+        session.startFeedRecovery { _ in await withCheckedContinuation { second = $0 } }
         while second == nil { await Task.yield() }
 
         first?.resume()
         for _ in 0..<20 { await Task.yield() }
         var thirdStarted = false
-        session.startFeedRecovery { thirdStarted = true }
+        session.startFeedRecovery { _ in thirdStarted = true }
         for _ in 0..<20 { await Task.yield() }
         XCTAssertFalse(thirdStarted, "Old completion must not admit a competing repair")
         XCTAssertTrue(session.feedRecovering, "The second repair is still running")

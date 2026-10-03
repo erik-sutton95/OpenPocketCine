@@ -37,6 +37,19 @@ legacy busy-state settlement and recovery policy stay unchanged. Manual timing a
 SIMULATED actual UDP peer exercise cancellation and transport lifetime. Physical Bluetooth,
 camera Wi-Fi, recording/control and recovery checks remain untested for this increment.
 
+## Apple picture-recovery ownership (P2)
+
+The iOS serialized repair and negotiated-picture deadline now live in OpenCineDJIApple.
+Media changes picture intent without canceling admitted endpoint negotiation; a genuine
+current-transport failure still hands off to existing bounded session recovery. The same
+owner queues media return through a nil-driver gap and fences retired attempts from a
+successor. Polling remains 100ms, default picture deadline 16s, and existing held-cycle
+history survives local reset. Native picture/watchdog/gimbal actions and full connect,
+credential, journal and gallery policy remain app adapters. Kotlin retains its existing
+integration scheduler; no portable contract or camera command changes in this Apple-only
+increment. SIMULATED/manual timing and native consumer checks do not qualify physical
+BLE/Wi-Fi/recording/recovery behavior, which remains untested for this increment.
+
 ## Connection regression follow-up
 
 The shared DJI capture port now publishes actual shutter, EV, focus and zoom reports

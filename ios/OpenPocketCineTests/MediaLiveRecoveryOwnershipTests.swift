@@ -1,3 +1,4 @@
+import OpenCineDJIApple
 import OpenPocketViewCore
 import XCTest
 
@@ -65,15 +66,32 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
 
     func testActualEndpointPictureWaitRetiresOnMediaEntryAndQuickReturn() async {
         for returnToLive in [false, true] {
-            let session = CameraSession(borrowing: HevcDecoder())
+            let now = Date.timeIntervalSinceReferenceDate
+            var waits: [CheckedContinuation<Void, Never>] = []
+            let session = CameraSession(borrowing: HevcDecoder(), pictureRecoveryTiming: .init(
+                wallNow: { now }, monotonicNow: { now }, wait: { delay in
+                    XCTAssertEqual(delay, .milliseconds(100))
+                    await withCheckedContinuation { waits.append($0) }
+                }))
             let driver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
             session.datalink = driver
             let token = session.cameraMedia.resumeID
             var entered = false
             let waiting = Task {
-                entered = true
-                return await session.finishDatalinkRecoveryPicture(
-                    driver: driver, since: Date(), timeout: .seconds(2), pictureOwner: token)
+                await withCheckedContinuation { continuation in
+                    let admitted = session.startFeedRecovery { attempt in
+                        entered = true
+                        let result = await attempt.waitForPicture(.init(datalink: driver),
+                            since: now, pictureIntent: token,
+                            timeout: .seconds(2))
+                        continuation.resume(returning: result)
+                    }
+                    if !admitted {
+                        XCTFail("The actual picture-repair owner must admit this empty slot")
+                        entered = true
+                        continuation.resume(returning: DjiApplePictureRecovery.Result.superseded)
+                    }
+                }
             }
             while !entered { await Task.yield() }
             session.beginMediaBrowse()
@@ -83,6 +101,8 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
                 // changed the generation and queued its replacement owner.
                 session.cameraMedia.resumeLiveTask?.cancel()
             }
+            XCTAssertEqual(waits.count, 1, "The actual native adapter reaches the shared manual wait")
+            waits.forEach { $0.resume() }
             let result = await waiting.value
             XCTAssertEqual(result, .superseded)
             XCTAssertFalse(driver.isClosed, "Media transition must preserve negotiated transport")
@@ -93,83 +113,12 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
         }
     }
 
-    func testMediaRoundTripDuringRealNegotiationSeamRetiresOnlyPictureWork() async {
-        let session = CameraSession(borrowing: HevcDecoder())
-        let token = session.cameraMedia.resumeID
-        var negotiation: CheckedContinuation<Void, Never>?
-        var negotiated = false
-        var enables = 0
-        var pictureWaits = 0
-        var failures = 0
-        let owner = Task {
-            await runNegotiatedPictureRepair(
-                negotiate: {
-                    await withCheckedContinuation { negotiation = $0 }
-                    negotiated = true
-                },
-                driverIsCurrent: { true },
-                ownsPicture: { session.isLivePictureRepairCurrent(token) },
-                enable: { enables += 1 },
-                waitForPicture: { pictureWaits += 1 },
-                failed: { _ in failures += 1 })
-        }
-        while negotiation == nil { await Task.yield() }
-        session.beginMediaBrowse()
-        session.endMediaBrowse()
-        negotiation?.resume()
-        await owner.value
-        XCTAssertTrue(negotiated)
-        XCTAssertEqual(enables, 0)
-        XCTAssertEqual(pictureWaits, 0)
-        XCTAssertEqual(failures, 0)
-    }
-
-    func testFailedNegotiationDuringMediaStillHandsOffAndReleasesTheRepairSlot() async {
-        enum Failure: Error { case handshake }
-        let session = CameraSession(borrowing: HevcDecoder())
-        let token = session.cameraMedia.resumeID
-        var negotiation: CheckedContinuation<Void, Never>?
-        var failed = false
-        session.startFeedRecovery {
-            await runNegotiatedPictureRepair(
-                negotiate: {
-                    await withCheckedContinuation { negotiation = $0 }
-                    throw Failure.handshake
-                },
-                driverIsCurrent: { true },
-                ownsPicture: { session.isLivePictureRepairCurrent(token) },
-                enable: { XCTFail("A failed negotiation cannot enable") },
-                waitForPicture: { XCTFail("A failed negotiation cannot wait for picture") },
-                failed: { _ in
-                    failed = true
-                    // A genuine failed endpoint transfers to the full-session
-                    // owner; the queued media return must yield to that owner.
-                    session.holdsMonitor = true
-                })
-        }
-        while negotiation == nil { await Task.yield() }
-        session.beginMediaBrowse()
-        session.endMediaBrowse()
-        negotiation?.resume()
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
-        while session.cameraMedia.resumeLiveTask != nil, ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertTrue(failed, "Media only retires picture demand, not a genuine endpoint failure")
-        XCTAssertNil(
-            session.cameraMedia.resumeLiveTask, "Queued media return must yield to session recovery"
-        )
-        XCTAssertFalse(
-            session.hasFeedRecoveryInFlight, "The retired picture owner cannot stay latched")
-        session.disconnect()
-    }
-
     func testMediaReturnDuringNilDriverNegotiationQueuesTheReplacementPictureOwner() async {
         let session = CameraSession(borrowing: HevcDecoder())
         let originalGeneration = session.cameraMedia.resumeID
         var negotiation: CheckedContinuation<Void, Never>?
         var finishedNegotiation = false
-        session.startFeedRecovery {
+        session.startFeedRecovery { _ in
             await withCheckedContinuation { negotiation = $0 }
             finishedNegotiation = true
         }
