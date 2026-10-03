@@ -810,11 +810,11 @@ final class ConnectionRunDonorTraceTests: XCTestCase {
         XCTFail("SIMULATED donor did not reach the registered boundary")
     }
 }
-/// SIMULATED scanner, native peers and source facts exercise the actual old recovery loop,
-/// its connect wrapper, real ConnectionRun and Exchange. No camera radio or stores are used.
+/// SIMULATED scanner, native peers and source facts exercise the actual shared recovery owner,
+/// its native adapter, real ConnectionRun and Exchange. No camera radio or stores are used.
 @MainActor
 final class SessionRecoveryDonorTraceTests: XCTestCase {
-    func testOldEpisodeRetriesOnlyAfterFailedEndpointCleanupThenFreshPicture() async {
+    func testEpisodeRetriesOnlyAfterFailedEndpointCleanupThenFreshPicture() async {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
@@ -837,10 +837,10 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
         XCTAssertEqual(clock.recoveryBackoffs, [0.5])
         XCTAssertFalse(session.sessionRecoveryCardGraceElapsed)
-        print("SIMULATED OLD RECOVERY cleanup/fresh: \(peer.trace)")
+        print("SIMULATED RECOVERY cleanup/fresh: \(peer.trace)")
     }
 
-    func testOldEpisodeStopsAfterEightAttemptsWithOriginalBackoff() async {
+    func testEpisodeStopsAfterEightAttemptsWithOriginalBackoff() async {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
@@ -858,10 +858,10 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         XCTAssertFalse(peer.trace.contains("enable"))
         XCTAssertTrue(session.holdsMonitor)
         XCTAssertTrue(session.sessionRecoveryCardGraceElapsed)
-        print("SIMULATED OLD RECOVERY attempts: \(peer.trace)")
+        print("SIMULATED RECOVERY attempts: \(peer.trace)")
     }
 
-    func testOldEpisodeBudgetIncludesAbsentAdvertisementAndKeepsHeldWarning() async {
+    func testEpisodeBudgetIncludesAbsentAdvertisementAndKeepsHeldWarning() async {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
@@ -881,10 +881,10 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         XCTAssertTrue(session.holdsMonitor)
         XCTAssertTrue(session.sessionRecoveryCardGraceElapsed)
         XCTAssertGreaterThan(peer.trace.filter { $0 == "stop scan" }.count, 0)
-        print("SIMULATED OLD RECOVERY budget: \(peer.trace)")
+        print("SIMULATED RECOVERY budget: \(peer.trace)")
     }
 
-    func testOldEpisodeRequiresFreshSourceAndPresentationAfterRegisteredBoundary() async {
+    func testEpisodeRequiresFreshSourceAndPresentationAfterRegisteredBoundary() async {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
@@ -914,10 +914,10 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
         XCTAssertTrue(finished)
         XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
-        print("SIMULATED OLD RECOVERY source proof: \(peer.trace)")
+        print("SIMULATED RECOVERY source proof: \(peer.trace)")
     }
 
-    func testOldEpisodeDropStormPersistsAcrossSuccessAndOnlyOperatorRetryResetsIt() async {
+    func testEpisodeDropStormPersistsAcrossSuccessAndOnlyOperatorRetryResetsIt() async {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
@@ -943,13 +943,13 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let retried = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
         XCTAssertTrue(retried)
         XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 3)
-        print("SIMULATED OLD RECOVERY storm/retry: \(peer.trace)")
+        print("SIMULATED RECOVERY storm/retry: \(peer.trace)")
     }
 
-    /// Expected contract assertion is deliberately retained as a donor red until root review.
+    /// Executed old-loop donor red is retained outside source; this exercises its approved correction.
     /// Decoder borrowing is separate from transport ownership; an actual native driver proves
     /// the borrowed entrypoint must not close the tile or start its recovery scanner.
-    func testBorrowedOldEpisodeCannotCloseTileOrStartOwnedDiscovery() async {
+    func testBorrowedEpisodeCannotCloseTileOrStartOwnedDiscovery() async {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
@@ -974,7 +974,7 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
 
     /// A synchronous observation can cancel at the public begin boundary before its Task
     /// is installed. Keep any donor violation separate from the preserved timing goldens.
-    func testCanceledOldEpisodeCannotStartDiscoveryAfterObservableBegin() async {
+    func testCanceledEpisodeCannotStartDiscoveryAfterObservableBegin() async {
         let clock = SessionRecoveryDonorClock()
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
@@ -999,10 +999,187 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         XCTAssertFalse(peer.trace.contains("scan"))
         XCTAssertFalse(peer.trace.contains("GATT"))
     }
+
+    /// SIMULATED same-camera B is admitted synchronously during A's retry notification.
+    /// Actual grouped storage precedes the callback, so no outer A setter overwrites B.
+    func testRecoveryObserverSuccessorKeepsItsPresentationAndOnlyItsNativeRun() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
+        defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        let sentinel = ConnectionObservationSentinel()
+        withObservationTracking { _ = session.sessionRecovery } onChange: {
+            MainActor.assumeIsolated {
+                guard !sentinel.replaced else { return }
+                sentinel.replaced = true
+                session.cancelSessionRecovery(clearHoldsMonitor: false)
+                session.beginSessionRecovery(reason: "SIMULATED B", trigger: .operatorRetry)
+                XCTAssertEqual(session.sessionRecovery, .retrying(attempt: 1, maxAttempts: 8))
+                XCTAssertTrue(session.holdsMonitor)
+                XCTAssertFalse(session.sessionRecoveryCardGraceElapsed)
+            }
+        }
+        peer.onRegistered = { clock.schedule(.milliseconds(1)) { peer.recoveryPicture = clock.freshPicture } }
+        session.beginSessionRecovery(reason: "SIMULATED A")
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertEqual(session.sessionRecovery, .retrying(attempt: 1, maxAttempts: 8))
+        XCTAssertTrue(session.holdsMonitor)
+        XCTAssertFalse(session.sessionRecoveryCardGraceElapsed)
+        XCTAssertEqual(session.recoveryDeviceName, peer.camera.name)
+        let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 1)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+    }
+
+    /// SIMULATED a native-teardown observable creates B before A's captured run retirement.
+    /// The real unopened driver and B's meter must survive A's remaining cleanup.
+    func testNativeCleanupObserverCannotCloseSameCameraSuccessorsDriver() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
+        let successorDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let sentinel = ConnectionObservationSentinel()
+        defer {
+            session.disconnect(); clock.cancelAll(); successorDriver.close(); session.decoder.close()
+        }
+        withObservationTracking { _ = session.setupProgress } onChange: {
+            MainActor.assumeIsolated {
+                guard !sentinel.replaced else { return }
+                sentinel.replaced = true
+                session.cancelSessionRecovery(clearHoldsMonitor: false)
+                session.beginSessionRecovery(reason: "SIMULATED B", trigger: .operatorRetry)
+                session.datalink = successorDriver
+                session.status.meteredEv = EvComp(thirds: 7)
+            }
+        }
+        session.beginSessionRecovery(reason: "SIMULATED A")
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertFalse(successorDriver.isClosed, "A cannot dispose B after the synchronous replacement")
+        XCTAssertTrue(session.datalink === successorDriver)
+        XCTAssertEqual(session.status.meteredEv, EvComp(thirds: 7))
+        XCTAssertEqual(session.sessionRecovery, .retrying(attempt: 1, maxAttempts: 8))
+        XCTAssertTrue(session.holdsMonitor)
+        XCTAssertFalse(peer.trace.contains("GATT"), "Neither independent task runs before this callback returns")
+    }
+
+    /// SIMULATED nested motion cleanup must stop within its own callback boundary,
+    /// before outer teardown resumes. B's newly supplied native facts remain authoritative.
+    func testNestedMotionCleanupObserverCannotRestOrClearSuccessorsFacts() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
+        let successorDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let sentinel = ConnectionObservationSentinel()
+        defer { session.disconnect(); clock.cancelAll(); successorDriver.close(); session.decoder.close() }
+        session.gimbalMoveRunning = true
+        withObservationTracking { _ = session.gimbalMoveRunning } onChange: {
+            MainActor.assumeIsolated {
+                guard !sentinel.replaced else { return }
+                sentinel.replaced = true
+                session.cancelSessionRecovery(clearHoldsMonitor: false)
+                session.beginSessionRecovery(reason: "SIMULATED B", trigger: .operatorRetry)
+                session.datalink = successorDriver
+                session.gimbalStickHeld = true
+                session.gimbalMoveCanPause = true
+            }
+        }
+        session.beginSessionRecovery(reason: "SIMULATED nested cleanup A")
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertTrue(session.gimbalStickHeld, "Retired nested A cannot rest B's newly supplied stick state")
+        XCTAssertTrue(session.gimbalMoveCanPause, "Retired nested A cannot clear B's subsequent facts")
+        XCTAssertTrue(session.datalink === successorDriver)
+        XCTAssertFalse(successorDriver.isClosed)
+        XCTAssertEqual(session.sessionRecovery, .retrying(attempt: 1, maxAttempts: 8))
+    }
+
+    /// SIMULATED saved-policy callback at the second admission sample replaces A.
+    /// The public app adopter passes B to the actual run and cannot prepare A afterward.
+    func testSecondSavedIdentityObserverCannotPrepareRetiredSameCameraAttempt() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
+        let sentinel = ConnectionObservationSentinel()
+        var samples = 0
+        session.savedCameras = {
+            if session.phase == .scanning {
+                samples += 1
+                if samples == 2 {
+                    sentinel.replaced = true
+                    session.cancelSessionRecovery(clearHoldsMonitor: false)
+                    session.beginSessionRecovery(reason: "SIMULATED B", trigger: .operatorRetry)
+                }
+            }
+            return []
+        }
+        defer { session.savedCameras = { [] }; session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        peer.onRegistered = { clock.schedule(.milliseconds(1)) { peer.recoveryPicture = clock.freshPicture } }
+        session.beginSessionRecovery(reason: "SIMULATED A saved sampling")
+        let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
+        XCTAssertTrue(finished)
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertGreaterThanOrEqual(samples, 4, "A and B each sample discovery and connect admission")
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 1)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+    }
+
+    /// SIMULATED cancellation-ignoring native power/GATT/open returns after same-camera B
+    /// has completed. A cannot restart discovery, native preparation or held presentation.
+    func testLateNativeRecoveryWaitCannotReviveOrOverwriteCompletedSuccessor() async {
+        for boundary in ["power", "GATT", "open"] {
+            let clock = SessionRecoveryDonorClock()
+            let peer = ConnectionDonorPeer(cached: true)
+            peer.recoveryClock = clock
+            let session = await peer.establishedRecoverySession(clock: clock)
+            let gate = RecoveryNativeGate()
+            defer { gate.resume(); session.disconnect(); clock.cancelAll(); session.decoder.close() }
+            var block = true
+            let wait = {
+                if block { block = false; await gate.wait() }
+            }
+            switch boundary {
+            case "power": peer.onRecoveryPower = { await wait(); return true }
+            case "GATT": peer.onGatt = { await wait() }
+            default: peer.onOpen = { await wait() }
+            }
+            session.beginSessionRecovery(reason: "SIMULATED late A")
+            let waiting = await clock.drive { gate.isWaiting }
+            XCTAssertTrue(waiting, "Actual native \(boundary) must be suspended before cancellation")
+            session.cancelSessionRecovery(clearHoldsMonitor: false)
+            peer.onRegistered = { clock.schedule(.milliseconds(1)) { peer.recoveryPicture = clock.freshPicture } }
+            session.beginSessionRecovery(reason: "SIMULATED B", trigger: .operatorRetry)
+            let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
+            XCTAssertTrue(finished)
+            let acceptedTrace = peer.trace
+            let acceptedDriver = peer.current
+            gate.resume()
+            await clock.settle()
+            let completionTrace = boundary == "open" ? acceptedTrace + ["open returned"] : acceptedTrace
+            XCTAssertEqual(peer.trace, completionTrace,
+                "Only the deliberately late native completion may return; no old owner action follows it")
+            XCTAssertTrue(peer.current === acceptedDriver)
+            XCTAssertEqual(session.sessionRecovery, .idle)
+            XCTAssertFalse(session.holdsMonitor)
+            XCTAssertFalse(session.sessionRecoveryCardGraceElapsed)
+            XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+        }
+    }
+
+    @MainActor private final class RecoveryNativeGate {
+        var continuation: CheckedContinuation<Void, Never>?
+        var isWaiting: Bool { continuation != nil }
+        func wait() async { await withCheckedContinuation { continuation = $0 } }
+        func resume() { let old = continuation; continuation = nil; old?.resume() }
+    }
+
 }
 
 @MainActor
-private final class SessionRecoveryDonorClock {
+final class SessionRecoveryDonorClock {
     private struct Sleeper {
         let id: UUID
         let at: TimeInterval
@@ -1094,7 +1271,7 @@ private final class ConnectionObservationSentinel {
 }
 
 @MainActor
-private final class ConnectionDonorPeer {
+final class ConnectionDonorPeer {
     var time: TimeInterval = 0
     var trace: [String] = []
     var writes: [Duml.Frame] = []
@@ -1117,6 +1294,10 @@ private final class ConnectionDonorPeer {
     var advertisesRecoveryCamera = true
     var recoveryPicture = SessionRecoveryNativePeers.Picture()
     var onRegistered: (() -> Void)?
+    var onRecoveryPower: (() async -> Bool)?
+    var onRecoveryScan: (() -> Void)?
+    var onGatt: (() async throws -> Void)?
+    var onOpen: (() async throws -> Void)?
     enum Failure: LocalizedError {
         case handshake, gatt
         var errorDescription: String? {
@@ -1208,6 +1389,7 @@ private final class ConnectionDonorPeer {
     var transport: DjiAppleConnectionTransport {
         .init(bluetooth: .init(connect: { [unowned self] _ in
             trace.append("GATT"); if let app { stages.append(app.phase) }
+            try await onGatt?()
             if gattMisses > 0 { gattMisses -= 1; throw Failure.gatt }
         }, frames: { [unowned self] in
             let pair = AsyncStream.makeStream(of: Duml.Frame.self)
@@ -1233,7 +1415,7 @@ private final class ConnectionDonorPeer {
         let established = await clock.drive { session.phase == .live && trace.contains("open returned") }
         XCTAssertTrue(established, "SIMULATED baseline must complete the actual public connection spine")
         await clock.settle()
-        print("SIMULATED OLD RECOVERY established base: \(trace)")
+        print("SIMULATED RECOVERY established base: \(trace)")
         trace.removeAll()
         writes.removeAll()
         clock.pauses.removeAll()
@@ -1246,9 +1428,12 @@ private final class ConnectionDonorPeer {
         session.sessionRecoveryNativePeers = .init(
             now: { clock.instant }, wallNow: { clock.date }, uptime: { clock.time },
             sleep: { try await clock.pause($0) }, jitter: { 0.5 },
-            waitUntilPoweredOn: { [unowned self] in trace.append("radio ready"); return true },
+            waitUntilPoweredOn: { [unowned self] in
+                trace.append("radio ready"); return await onRecoveryPower?() ?? true
+            },
             scan: { [unowned self] in
                 trace.append("scan")
+                onRecoveryScan?()
                 let pair = AsyncStream.makeStream(of: FoundCamera.self)
                 recoveryAdvertisement = pair.continuation
                 if advertisesRecoveryCamera { pair.continuation.yield(camera) }
@@ -1292,6 +1477,7 @@ private final class ConnectionDonorEndpoint: DjiAppleConnectionEndpoint {
     init(peer: ConnectionDonorPeer) { self.peer = peer }
     func open(identityOnly: Bool, afterHandshake: (@MainActor () async -> Void)?) async throws {
         peer.trace.append(identityOnly ? "open identity" : "open AP")
+        try await peer.onOpen?()
         if peer.handshakeMisses > 0 {
             peer.handshakeMisses -= 1; throw ConnectionDonorPeer.Failure.handshake
         }

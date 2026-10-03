@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 
-/// Opt-in SIMULATED dependencies for tracing the existing recovery episode before retirement.
+/// Opt-in SIMULATED dependencies for tracing the actual recovery owner.
 /// This supplies clocks, actual discovery/native boundaries and synthetic source facts, never
 /// the recovery/connect workflow. Ordinary app composition continues to use its real owners.
 @MainActor

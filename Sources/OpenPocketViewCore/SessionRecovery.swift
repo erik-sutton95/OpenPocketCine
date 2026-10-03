@@ -27,7 +27,7 @@ public enum SessionRecoveryCopy {
             return ""
         case .retrying(let attempt, let maxAttempts):
             return
-                "\(camera) dropped off. Holding the last frame — attempt \(attempt) of \(maxAttempts)."
+                "\(camera) dropped off. Holding the last frame \u{2014} attempt \(attempt) of \(maxAttempts)."
         case .waitingForOperator(let attemptsMade):
             let tries = attemptsMade == 1 ? "1 try" : "\(attemptsMade) tries"
             return "\(camera) didn't come back after \(tries). The frame below is held, not live."

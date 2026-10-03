@@ -1399,9 +1399,11 @@ extension CameraSession {
         cameraMedia.persistCatalog(mediaFiles, cameraID: mediaCameraID)
     }
 
-    func loadCachedCatalogIfNeeded() {
+    func loadCachedCatalogIfNeeded(ifCurrent: () -> Bool = { true }) {
+        guard ifCurrent() else { return }
         if mediaFiles.isEmpty {
             mediaFiles = cameraMedia.loadCatalog(cameraID: mediaCameraID)
+            guard ifCurrent() else { return }
         }
         mediaFetchListedCount = mediaFiles.count
     }

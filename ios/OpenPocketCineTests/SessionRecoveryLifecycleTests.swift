@@ -201,51 +201,70 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
             MonitorRecoveryOverlay.progressDetail(.joiningWifi), "Rejoining camera Wi-Fi…")
     }
 
+    /// SIMULATED actual owned session, discovery and the original total180s deadline.
     func testRecoveryEpisodeDeadlineKeepsHeldFrameAndOffersOperatorRetry() async {
-        let session = CameraSession(borrowing: HevcDecoder())
-        session.holdsMonitor = true
-        await session.runSessionRecovery(budget: .milliseconds(20))
-        guard case .waitingForOperator = session.sessionRecovery else {
-            return XCTFail("Episode must stop even while an attempt backoff is waiting")
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
+        defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        peer.advertisesRecoveryCamera = false
+        let started = clock.time
+        session.beginSessionRecovery(reason: "SIMULATED native episode deadline")
+        let finished = await clock.drive {
+            if case .waitingForOperator = session.sessionRecovery { return true }; return false
         }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(clock.time - started, 180, accuracy: 1e-9)
         XCTAssertTrue(session.holdsMonitor)
         XCTAssertTrue(session.sessionRecoveryCardGraceElapsed)
+        XCTAssertFalse(peer.trace.contains("GATT"))
     }
 
+    /// SIMULATED real ConnectionRun misses preserve an actual native decoded image;
+    /// the real unopened failed driver must close before the second advertisement scan.
     func testFailedAttemptReleasesTransportBeforeNextScanWhileHoldingPicture() async throws {
-        let decoder = HevcDecoder()
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
+        let decoder = session.decoder
+        let failedDriver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        defer { session.disconnect(); clock.cancelAll(); failedDriver.close(); decoder.close() }
         decoder.effects.histogram = true
         decoder.unlockHardwareDecoder()
-        let session = CameraSession(borrowing: decoder)
+        let presented = expectation(description: "Actual native held picture")
+        let originalPresented = decoder.onPresentedFrame
+        decoder.onPresentedFrame = { originalPresented?(); presented.fulfill() }
         decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer())
-        let deadline = Date().addingTimeInterval(2)
-        while decoder.lastPresentedAt == nil, Date() < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await fulfillment(of: [presented], timeout: 2)
+        decoder.onPresentedFrame = originalPresented
         let heldPicture = try XCTUnwrap(decoder.lastPresentedAt)
-        let failedDriver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
-        session.holdsMonitor = true
-        var attempts = 0
-        await session.runSessionRecoveryAttempts {
-            attempts += 1
-            if attempts == 1 {
+        peer.handshakeMisses = 6
+        var installedDriver = false
+        peer.onOpen = {
+            if !installedDriver {
+                installedDriver = true
                 session.datalink = failedDriver
-                session.phase = .openingDatalink
-                return false
             }
-            XCTAssertTrue(
-                failedDriver.isClosed,
-                "Close the failed attempt before looking for another advertisement")
-            XCTAssertNil(
-                session.datalink, "The next attempt cannot inherit a half-connected transport")
-            XCTAssertTrue(session.holdsMonitor)
-            XCTAssertEqual(decoder.lastPresentedAt, heldPicture)
-            XCTAssertFalse(decoder.displayedImageRemoved)
-            return true
         }
-        XCTAssertEqual(attempts, 2)
-        failedDriver.close()
-        decoder.reset()
+        var scans = 0
+        peer.onRecoveryScan = {
+            scans += 1
+            if scans == 2 {
+                XCTAssertTrue(failedDriver.isClosed, "Failed attempt closes before its next scan")
+                XCTAssertNil(session.datalink)
+                XCTAssertTrue(session.holdsMonitor)
+                XCTAssertEqual(decoder.lastPresentedAt, heldPicture)
+                XCTAssertFalse(decoder.displayedImageRemoved)
+            }
+        }
+        peer.onRegistered = { clock.schedule(.milliseconds(1)) { peer.recoveryPicture = clock.freshPicture } }
+        session.beginSessionRecovery(reason: "SIMULATED failed endpoint with native held picture")
+        let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
+        XCTAssertTrue(finished)
+        XCTAssertTrue(installedDriver)
+        XCTAssertEqual(scans, 2)
     }
 
 }

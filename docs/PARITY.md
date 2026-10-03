@@ -1741,3 +1741,30 @@ retirement and borrowed ownership. Android already owns its native registration 
 shared DJI layer and receives no timer or command change. Its actual native-staged consumer
 gate remains required for the coherent shared candidate. Physical camera qualification is
 untested. Full P2 and the pre-existing optical UI automation limitation remain unfinished.
+
+## Apple recovery-episode ownership candidate
+
+iOS now composes OpenCineDJIApple.DjiAppleRecoveryEpisode over the actual
+ConnectionRun. The old app task, generation, retry loop, discovery race and
+storm ledger are deleted. The app retains saved-identity enrichment at both
+donor sampling points, permissions, secure storage, native teardown, picture
+observations, motion and media policy. Complete recovery snapshots precede
+observable notification, and captured attempts fence native cleanup and
+synchronous same-camera replacement. Explicit transport ownership is required
+before admission; borrowing a decoder does not grant connection authority.
+
+The original eight attempts, 30s discovery, 180s total/attempt budget, 2.5s card
+grace, stage deadlines and command pacing remain. The original task-group join
+behavior also remains: a cancellation-ignoring OS wait may delay outer timeout
+completion, while its late continuation cannot act against a successor.
+Android retains its existing DJI scheduler and platform cadence; this is an
+Apple-only execution-owner extraction, with neutral backoff mirrored separately.
+The operator detail string uses a Swift Unicode escape for its original glyph;
+runtime text is equivalent.
+
+The five executed old-loop goldens and two demonstrated donor defects are
+preserved in the execution proof. Shared affected manual-clock checks pass;
+actual adopter compilation/native/full consumer qualification is pending.
+SIMULATED registered/enable labels establish synchronous host order, not
+physical wire qualification. Physical camera recovery, full P2 and the prior
+optical UI automation limitation remain unfinished.

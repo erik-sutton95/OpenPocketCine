@@ -215,27 +215,55 @@ final class CameraSession {
         return .continuous
     }
     @ObservationIgnored private var reconnectTarget: UUID?
-    @ObservationIgnored private var sessionRecoveryTask: Task<Void, Never>?
-    @ObservationIgnored private var sessionRecoveryGeneration = 0
-    @ObservationIgnored private var recoveryCardGraceTask: Task<Void, Never>?
-    @ObservationIgnored private var sessionDropStormGuard = SessionDropStormGuard()
-    @ObservationIgnored private var recoveryCameraID: UUID?
-    private static let recoveryCardGrace: Duration = .seconds(2.5)
-    private static let recoveryScanDeadline: Duration = .seconds(30)
-    private static let recoveryAttemptDeadline: Duration = .seconds(180)
-    /// True while a saved-camera tap is waiting for that peripheral to advertise.
-    /// Observable so the header pill can read **Reconnecting** (OpenZCine parity).
-    private(set) var isReconnecting = false
+    @ObservationIgnored private lazy var recoveryEpisode = makeRecoveryEpisode()
+    @ObservationIgnored private var recoverySnapshotStorage = DjiAppleRecoveryEpisode.Snapshot()
+    @ObservationIgnored private var recoveryDeviceNameStorage = ""
+    /// Also used by saved-camera discovery outside an automatic episode.
+    private(set) var isReconnecting: Bool {
+        get { access(keyPath: \.isReconnecting); return recoverySnapshotStorage.reconnecting }
+        set {
+            guard recoverySnapshotStorage.reconnecting != newValue else { return }
+            recoverySnapshotStorage.reconnecting = newValue
+            withMutation(keyPath: \.isReconnecting) {}
+        }
+    }
     /// Saved-list row that owns the current connection attempt, including discovery.
     private(set) var connectionTargetID: UUID?
-    /// Established session dropped — keep the last frame and retry automatically.
-    var sessionRecovery: SessionRecoveryState = .idle
-    /// Keeps `LiveViewScreen` mounted while `phase` leaves `.live` during recovery.
-    var holdsMonitor = false
-    /// Attempt-1 card waits this out so a 1-second blip does not flash the overlay.
-    var sessionRecoveryCardGraceElapsed = false
-    /// Name shown on the recovery card (captured at drop, before `connectedCamera` is cleared).
-    var recoveryDeviceName = ""
+    /// Compatibility projections publish after authoritative storage, so synchronous
+    /// observation cannot let canceled A overwrite a successor B's recovery presentation.
+    var sessionRecovery: SessionRecoveryState {
+        get { access(keyPath: \.sessionRecovery); return recoverySnapshotStorage.state }
+        set {
+            guard recoverySnapshotStorage.state != newValue else { return }
+            recoverySnapshotStorage.state = newValue
+            withMutation(keyPath: \.sessionRecovery) {}
+        }
+    }
+    var holdsMonitor: Bool {
+        get { access(keyPath: \.holdsMonitor); return recoverySnapshotStorage.holdsPicture }
+        set {
+            guard recoverySnapshotStorage.holdsPicture != newValue else { return }
+            recoverySnapshotStorage.holdsPicture = newValue
+            withMutation(keyPath: \.holdsMonitor) {}
+        }
+    }
+    var sessionRecoveryCardGraceElapsed: Bool {
+        get { access(keyPath: \.sessionRecoveryCardGraceElapsed); return recoverySnapshotStorage.cardGraceElapsed }
+        set {
+            guard recoverySnapshotStorage.cardGraceElapsed != newValue else { return }
+            recoverySnapshotStorage.cardGraceElapsed = newValue
+            withMutation(keyPath: \.sessionRecoveryCardGraceElapsed) {}
+        }
+    }
+    /// App content, captured at drop before the connected identity is cleared.
+    var recoveryDeviceName: String {
+        get { access(keyPath: \.recoveryDeviceName); return recoveryDeviceNameStorage }
+        set {
+            guard recoveryDeviceNameStorage != newValue else { return }
+            recoveryDeviceNameStorage = newValue
+            withMutation(keyPath: \.recoveryDeviceName) {}
+        }
+    }
     /// Watchdog is running a staged feed recover (enable → VT → UDP → rejoin).
     private(set) var feedRecovering = false
     /// Cover the feed well until a rolling picture exists (not a frozen first IDR).
@@ -814,32 +842,47 @@ final class CameraSession {
         if case .live = phase, connectedCamera?.id == camera.id, !sessionRecovery.isRecovering {
             return
         }
+        guard let route = prepareConnectionNative(camera, preserveMonitor: preserveMonitor) else { return }
+        connectionRun.replace(target: recoverySighting(camera), route: route, preservingSource: preserveMonitor)
+    }
+
+    /// Permissions, saved app identity and native source lifetime remain host policy.
+    /// An episode supplies captured authority; ordinary explicit connect preserves its path.
+    private func prepareConnectionNative(_ camera: FoundCamera, preserveMonitor: Bool,
+        recoveryAttempt: DjiAppleRecoveryEpisode.Attempt? = nil) -> DJIConnectionRoute? {
+        let isCurrent = { recoveryAttempt?.isCurrent ?? true }
+        guard isCurrent(), !isMultiviewBorrowed else { return nil }
         if !preserveMonitor {
             controlBinding.beginConnection()
+            guard isCurrent() else { return nil }
             cameraReportedCapture = CameraStatus()
         }
-        // One `run` at a time. A second tap (or Cancel→tap) used to leave the old
-        // unstructured Task sending 0x07/45 while the new one started GetSSID.
         ReliabilityReporting.setCameraSessionActive(true)
+        guard isCurrent() else { return nil }
         LocalVPNProbe.noteIfActive()
-        // Local Network prompt now, while Bluetooth pairs, not during the datalink.
+        guard isCurrent() else { return nil }
         LocalNetworkAccess.requestEarly()
+        guard isCurrent() else { return nil }
         scanTask?.cancel()
         scanHintTask?.cancel()
-        abortInFlightRun(preserveDecoder: preserveMonitor)
+        abortInFlightRun(preserveDecoder: preserveMonitor, recoveryAttempt: recoveryAttempt)
+        guard isCurrent() else { return nil }
         reconnectTarget = nil
         isReconnecting = preserveMonitor
+        guard isCurrent() else { return nil }
         connectedCamera = camera
+        guard isCurrent() else { return nil }
         if !incidentSessionActive { beginFeedIncidentSession(cameraFamily: camera.model.name) }
+        guard isCurrent() else { return nil }
         connectionTargetID = camera.id
+        guard isCurrent() else { return nil }
         phase = .connectingGatt
-        let route: DJIConnectionRoute = switch connectionSetup {
+        guard isCurrent() else { return nil }
+        return switch connectionSetup {
         case .cameraWiFi: .cameraAccessPoint
         case .wifi: .infrastructureNetwork
         case .phoneHotspot: .phoneHotspot
         }
-        connectionRun.replace(target: DJISighting(id: camera.id.uuidString, name: camera.name,
-            model: camera.model, modelId: camera.modelId), route: route, preservingSource: preserveMonitor)
     }
 
     func disconnect() {
@@ -989,28 +1032,45 @@ final class CameraSession {
 
     /// Tear down an in-flight `run` without resetting UI phase. BLE disconnect
     /// resumes a pending `ble.connect` so the old Task cannot keep writing 0x07/45.
-    private func abortInFlightRun(preserveDecoder: Bool = false, preserveSoftAP: Bool = false) {
+    private func abortInFlightRun(preserveDecoder: Bool = false, preserveSoftAP: Bool = false,
+        recoveryAttempt: DjiAppleRecoveryEpisode.Attempt? = nil) {
+        let isCurrent = { recoveryAttempt?.isCurrent ?? true }
+        guard isCurrent() else { return }
         sessionHeartbeat.resetPathGrace()
+        guard isCurrent() else { return }
         setupProgress = nil
+        guard isCurrent() else { return }
         foregroundGeneration += 1
         foregroundCheckTask?.cancel()
         foregroundCheckTask = nil
-        cancelProgrammedMove()
-        connectionRun.retire()
+        cancelProgrammedMove(ifCurrent: isCurrent)
+        guard isCurrent() else { return }
+        if let recoveryAttempt {
+            guard recoveryAttempt.retireCapturedConnectionRun() else { return }
+        } else {
+            connectionRun.retire()
+        }
         sessionHeartbeat.stop()
+        guard isCurrent() else { return }
         lastSelfieFlipReplyAt = nil
         controlExchange.stopBLEDrain()
+        guard isCurrent() else { return }
         controlExchange.retire(Fail.disconnected)
+        guard isCurrent() else { return }
         commandTimeoutsAt.removeAll()
         datalink?.restGimbalStick()
+        guard isCurrent() else { return }
         pendingGimbalAxes = nil
         gimbalStickHeld = false
+        guard isCurrent() else { return }
         lastGimbalStickAt = nil
         lastGimbalThrowAt = nil
         lastGimbalCommand = (0, 0)
         gimbalLimitWatch.reset()
-        disposeDatalink()
+        disposeDatalink(ifCurrent: isCurrent)
+        guard isCurrent() else { return }
         ble.disconnect()
+        guard isCurrent() else { return }
         liveViewEnableSent = false
         liveViewEnableSends = 0
         resetFirstPictureFormatPoke()
@@ -1023,15 +1083,19 @@ final class CameraSession {
         faceAFArmed = false
         firstPictureSettled = false
         needsForegroundRecover = false
-        resetFeedWatchdog()
-        resetMediaSession()
+        resetFeedWatchdog(ifCurrent: isCurrent)
+        guard isCurrent() else { return }
+        resetMediaSession(ifCurrent: isCurrent)
+        guard isCurrent() else { return }
         if preserveDecoder {
             decoder.flushForRecovery()
         } else {
             decoder.reset()
         }
+        guard isCurrent() else { return }
         if !preserveSoftAP, let ssid = joinedSSID {
             WiFiJoiner.leave(ssid: ssid)
+            guard isCurrent() else { return }
             joinedSSID = nil
         }
     }
@@ -1118,9 +1182,9 @@ final class CameraSession {
         faceAFArmed = false
         firstPictureSettled = false
         needsForegroundRecover = false
-        resetLinkHealthMeasurements()
+        resetLinkHealthMeasurements(ifCurrent: { attempt.isCurrent })
         guard attempt.isCurrent else { return }
-        resetFeedWatchdog()
+        resetFeedWatchdog(ifCurrent: { attempt.isCurrent })
         guard attempt.isCurrent else { return }
         // Session recovery holds the last frame (Android parity). `reset()` is
         // `flushAndRemoveImage` — abortInFlightRun already flushed for recovery.
@@ -2966,7 +3030,8 @@ final class CameraSession {
         restGimbalStickWire()
     }
 
-    private func restGimbalStickWire() {
+    private func restGimbalStickWire(ifCurrent: () -> Bool = { true }) {
+        guard ifCurrent() else { return }
         gimbalRampFilter.reset()
         pendingGimbalAxes = nil
         lastGimbalCommand = (0, 0)
@@ -2974,6 +3039,7 @@ final class CameraSession {
         if gimbalStickHeld { lastGimbalStickAt = Date() }
         guard gimbalStickHeld else { return }
         gimbalStickHeld = false
+        guard ifCurrent() else { return }
         ControlLiveLog.line("control: gimbal stick rest")
         datalink?.restGimbalStick()
     }
@@ -3211,23 +3277,34 @@ final class CameraSession {
         _ = datalink?.cancelNativeProgram(token: token)
     }
 
-    func cancelProgrammedMove() {
+    func cancelProgrammedMove() { cancelProgrammedMove(ifCurrent: { true }) }
+
+    private func cancelProgrammedMove(ifCurrent: () -> Bool) {
+        guard ifCurrent() else { return }
         cancelNativeHeadTrack()
+        guard ifCurrent() else { return }
         let hadStream = nativeMoveToken != nil
         endNativeMoveTargets()
+        guard ifCurrent() else { return }
         moveGeneration &+= 1
         moveTask?.cancel()
         moveTask = nil
         moveEngine.cancel()
         let was = gimbalMoveRunning
         gimbalStartCountdown = nil
+        guard ifCurrent() else { return }
         gimbalMoveRunning = false
+        guard ifCurrent() else { return }
         gimbalMovePaused = false
+        guard ifCurrent() else { return }
         gimbalMoveCanPause = false
+        guard ifCurrent() else { return }
         moveDriving = false
         if was {
             if !hadStream { _ = datalink?.sendUntracked(Commands.gimbalTimedStop()) }
-            restGimbalStickWire()
+            guard ifCurrent() else { return }
+            restGimbalStickWire(ifCurrent: ifCurrent)
+            guard ifCurrent() else { return }
         }
         if let live = liveGimbalWaypoint {
             logMotionProgress(live: live, force: true)
@@ -4939,15 +5016,21 @@ final class CameraSession {
         return true
     }
 
-    func resetFeedWatchdog() {
+    func resetFeedWatchdog() { resetFeedWatchdog(ifCurrent: { true }) }
+
+    private func resetFeedWatchdog(ifCurrent: () -> Bool) {
+        guard ifCurrent() else { return }
         feedRecovering = false
+        guard ifCurrent() else { return }
         feedWatchdog = FeedWatchdog()
         pictureRecovery.cancel()
+        guard ifCurrent() else { return }
         lastFeedFreezeLogAt = nil
         liveEnableGate.end()
     }
 
-    private func resetLinkHealthMeasurements() {
+    private func resetLinkHealthMeasurements(ifCurrent: () -> Bool = { true }) {
+        guard ifCurrent() else { return }
         frameRate = FrameRateSampler()
         signalBarsFilter = LinkSignalBars()
         lastGoodFrameAt = nil
@@ -4955,8 +5038,10 @@ final class CameraSession {
         lastDecoderErrorCount = 0
         lastReceiveErrorCount = 0
         recentKeepaliveFailures = 0
-        liveFPS = "—"
+        liveFPS = "\u{2014}"
+        guard ifCurrent() else { return }
         liveSignalBars = 0
+        guard ifCurrent() else { return }
         isFeedWarming = true
     }
 
@@ -5019,11 +5104,13 @@ final class CameraSession {
         applyLinkPresentation()
     }
 
-    private func applyLinkPresentation() {
+    private func applyLinkPresentation(ifCurrent: () -> Bool = { true }) {
+        guard ifCurrent() else { return }
         if sessionRecovery.isRecovering {
             if liveFPS != SessionRecoveryCopy.heldFrameBadge {
                 liveFPS = SessionRecoveryCopy.heldFrameBadge
             }
+            guard ifCurrent() else { return }
             refreshFeedWarmup()
             return
         }
@@ -5035,9 +5122,11 @@ final class CameraSession {
             measuredFPS: measured
         )
         if label != liveFPS { liveFPS = label }
+        guard ifCurrent() else { return }
         let snapshot = CameraLinkHealthScorer.score(currentLinkHealthInputs())
         let bars = signalBarsFilter.update(score: snapshot.linkHealthScore)
         if bars != liveSignalBars { liveSignalBars = bars }
+        guard ifCurrent() else { return }
         refreshFeedWarmup()
     }
 
@@ -5348,292 +5437,181 @@ final class CameraSession {
         pictureRecovery.start(work)
     }
 
-    // DEBUG donor dependencies vary only time, discovery and native facts. The actual old
-    // episode remains below until its traces pass and its replacement is reviewed.
-    private var recoveryNow: ContinuousClock.Instant {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers { return peers.now() }
-        #endif
-        return ContinuousClock().now
-    }
-
-    private var recoveryWallNow: Date {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers { return peers.wallNow() }
-        #endif
-        return Date()
-    }
-
-    private var recoveryUptime: TimeInterval {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers { return peers.uptime() }
-        #endif
-        return ProcessInfo.processInfo.systemUptime
-    }
-
-    private var recoveryPause: @Sendable (Duration) async throws -> Void {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers { return peers.sleep }
-        #endif
-        return { try await Task.sleep(for: $0) }
-    }
-
-    private var recoveryJitter: Double {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers { return peers.jitter() }
-        #endif
-        return .random(in: 0...1)
-    }
-
-    private func recoveryRadioReady() async -> Bool {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers { return await peers.waitUntilPoweredOn() }
-        #endif
-        return await ble.waitUntilPoweredOn()
-    }
-
-    private func recoveryAdvertisements() -> AsyncStream<FoundCamera> {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers { return peers.scan() }
-        #endif
-        return ble.scan()
-    }
-
-    private func stopRecoveryScan() {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers { peers.stopScan(); return }
-        #endif
-        ble.stopScan()
-    }
-
-    private func recoveryEpisodePictureIsFresh(since started: Date) -> Bool {
-        #if DEBUG
-            if let peers = sessionRecoveryNativePeers {
-                let picture = peers.picture()
-                return SessionRecoveryPolicy.hasFreshPicture(
-                    attemptStartedAt: started.timeIntervalSinceReferenceDate,
-                    now: peers.wallNow().timeIntervalSinceReferenceDate,
-                    lastSourceFrameAt: picture.sourceAt?.timeIntervalSinceReferenceDate,
-                    lastPresentedAt: picture.presentedAt?.timeIntervalSinceReferenceDate)
-            }
-        #endif
-        return hasFreshRecoveryPicture(since: started)
-    }
-
     // MARK: - Session recovery (camera power cycle)
 
-    /// Recovers an established live session that dropped — camera power-off, BLE gone —
-    /// without leaving the last frame. Bounded automatic attempts, then the operator chooses.
-    func beginSessionRecovery(
-        reason: String, trigger: SessionRecoveryTrigger = .bleDropped
-    ) {
-        guard SessionRecoveryPolicy.shouldBegin(trigger) else { return }
-        if case .pausedAfterRepeatedDrops = sessionRecovery { return }
-        if case .waitingForOperator = sessionRecovery { return }
-        if sessionRecoveryTask != nil { return }
-        let cameraID = connectedCamera?.id ?? recoveryCameraID ?? reconnectTarget
-        guard let cameraID else {
-            log.info("session: drop (\(reason, privacy: .public)) — no camera to recover")
-            return
-        }
-        FeedIncidentRuntime.noteUnexpectedDisconnect(now: ProcessInfo.processInfo.systemUptime)
-        recordFeedRepair("session", phase: .requested, reason: String(describing: trigger))
-        recoveryCameraID = cameraID
-        if recoveryDeviceName.isEmpty {
-            recoveryDeviceName =
-                connectedCamera?.name
-                ?? saved(cameraID)?.displayName
-                ?? ""
-        }
-        holdsMonitor = true
-        abortInFlightRun(
-            preserveDecoder: true, preserveSoftAP: cameraPathReady())
-        pictureRecovery.cancel()
-        feedRecovering = false
-        sessionRecoveryGeneration += 1
-        let generation = sessionRecoveryGeneration
-        if sessionDropStormGuard.noteDrop(now: recoveryUptime) {
-            log.info(
-                "session: drop (\(reason, privacy: .public)) → storm pause after \(self.sessionDropStormGuard.dropsInWindow) drops"
-            )
-            abortInFlightRun(preserveDecoder: true)
-            sessionRecovery = .pausedAfterRepeatedDrops(drops: sessionDropStormGuard.dropsInWindow)
-            sessionRecoveryCardGraceElapsed = true
-            applyLinkPresentation()
-            return
-        }
-        ControlLiveLog.line("session: drop (\(reason)) → bounded recovery")
-        sessionRecovery = SessionRecoveryPolicy.monitor.state(afterFailedAttempts: 0)
-        sessionRecoveryCardGraceElapsed = false
-        recoveryCardGraceTask?.cancel()
-        let gracePause = recoveryPause
-        recoveryCardGraceTask = Task { [weak self] in
-            try? await gracePause(Self.recoveryCardGrace)
-            guard let self, !Task.isCancelled else { return }
-            guard self.sessionRecoveryGeneration == generation else { return }
-            self.sessionRecoveryCardGraceElapsed = true
-        }
-        sessionRecoveryTask = Task { [weak self] in
-            await self?.runSessionRecovery()
-            guard let self, self.sessionRecoveryGeneration == generation else { return }
-            self.sessionRecoveryTask = nil
-        }
-        applyLinkPresentation()
+    private func makeRecoveryEpisode() -> DjiAppleRecoveryEpisode {
+        let timing: DjiAppleRecoveryTiming
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers {
+                timing = .init(monotonicNow: peers.now, uptime: peers.uptime,
+                    wallNow: { peers.wallNow().timeIntervalSinceReferenceDate },
+                    sleep: peers.sleep, jitter: peers.jitter)
+            } else { timing = .continuous }
+        #else
+            timing = .continuous
+        #endif
+        return DjiAppleRecoveryEpisode(connectionRun: connectionRun,
+            discovery: .init(waitUntilPoweredOn: { [weak self] in
+                guard let self else { return false }
+                #if DEBUG
+                    if let peers = self.sessionRecoveryNativePeers { return await peers.waitUntilPoweredOn() }
+                #endif
+                return await self.ble.waitUntilPoweredOn()
+            }, scan: { [weak self] in
+                guard let self else { return AsyncStream { $0.finish() } }
+                let cameras: AsyncStream<FoundCamera>
+                #if DEBUG
+                    if let peers = self.sessionRecoveryNativePeers { cameras = peers.scan() }
+                    else { cameras = self.ble.scan() }
+                #else
+                    cameras = self.ble.scan()
+                #endif
+                return AsyncStream { continuation in
+                    let task = Task { @MainActor in
+                        for await camera in cameras {
+                            guard !Task.isCancelled else { break }
+                            continuation.yield(self.recoverySighting(camera))
+                        }
+                        continuation.finish()
+                    }
+                    continuation.onTermination = { _ in task.cancel() }
+                }
+            }, stopScan: { [weak self] in
+                guard let self else { return }
+                #if DEBUG
+                    if let peers = self.sessionRecoveryNativePeers { peers.stopScan(); return }
+                #endif
+                self.ble.stopScan()
+            }, enrich: { [weak self] sighting in
+                guard let self, let camera = self.connectionCamera(sighting) else { return sighting }
+                return self.recoverySighting(camera.enriched(from: self.saved(camera.id)))
+            }), native: .init(observe: { [weak self] in
+                guard let self else { return .init() }
+                var source = self.decoder.lastSourceFrameAt
+                var presented = self.decoder.monitorPresentedAt
+                #if DEBUG
+                    if let peers = self.sessionRecoveryNativePeers {
+                        let picture = peers.picture(); source = picture.sourceAt; presented = picture.presentedAt
+                    }
+                #endif
+                return .init(ownsConnection: !self.isMultiviewBorrowed,
+                    stage: Self.recoveryStage(self.phase), sourceAt: source?.timeIntervalSinceReferenceDate,
+                    presentedAt: presented?.timeIntervalSinceReferenceDate)
+            }, cleanup: { [weak self] kind, attempt in
+                self?.cleanupRecoveryNative(kind, attempt: attempt)
+            }, scanning: { [weak self] attempt in
+                guard let self, attempt.isCurrent else { return }
+                self.phase = .scanning
+                guard attempt.isCurrent else { return }
+                ControlLiveLog.line("session: recovery scanning for saved camera")
+            }, prepare: { [weak self] sighting, attempt in
+                guard let self, attempt.isCurrent, let camera = self.connectionCamera(sighting) else { return nil }
+                return self.prepareConnectionNative(camera, preserveMonitor: true, recoveryAttempt: attempt)
+            }), timing: timing, changed: { [weak self] value, id in
+                self?.publishRecovery(value, episodeID: id)
+            })
     }
 
-    func retrySessionRecovery() {
-        sessionDropStormGuard.reset()
-        cancelSessionRecovery(clearHoldsMonitor: false)
-        beginSessionRecovery(reason: "operator retry", trigger: .operatorRetry)
+    private func recoverySighting(_ camera: FoundCamera) -> DJISighting {
+        .init(id: camera.id.uuidString, name: camera.name, model: camera.model, modelId: camera.modelId)
     }
+
+    private static func recoveryStage(_ phase: ConnectionPhase) -> DjiAppleRecoveryEpisode.Stage {
+        switch phase {
+        case .joiningWifi: .joiningWiFi
+        case .openingDatalink: .openingDatalink
+        case .live: .live
+        default: .other
+        }
+    }
+
+    private func cleanupRecoveryNative(_ kind: DjiAppleRecoveryEpisode.Cleanup,
+        attempt: DjiAppleRecoveryEpisode.Attempt) {
+        guard attempt.isCurrent, !isMultiviewBorrowed else { return }
+        if case .initialDrop = kind {
+            FeedIncidentRuntime.noteUnexpectedDisconnect(now: ProcessInfo.processInfo.systemUptime)
+            guard attempt.isCurrent else { return }
+            recordFeedRepair("session", phase: .requested, reason: String(describing: attempt.trigger))
+            guard attempt.isCurrent else { return }
+            let preserveSoftAP = cameraPathReady()
+            guard attempt.isCurrent else { return }
+            abortInFlightRun(preserveDecoder: true, preserveSoftAP: preserveSoftAP, recoveryAttempt: attempt)
+            guard attempt.isCurrent else { return }
+            pictureRecovery.cancel()
+            guard attempt.isCurrent else { return }
+            feedRecovering = false
+            guard attempt.isCurrent else { return }
+            ControlLiveLog.line("session: drop (\(attempt.reason)) → bounded recovery")
+        } else {
+            if case .failedAttempt = kind {
+                if case .retrying(let count, _) = sessionRecovery {
+                    ControlLiveLog.line("session: recovery attempt failed attempt=\(count) phase=\(phase)")
+                }
+            }
+            abortInFlightRun(preserveDecoder: true, recoveryAttempt: attempt)
+        }
+    }
+
+    /// Install the complete snapshot before any observable notification. If a callback
+    /// cancels A and admits B, every remaining A notification/presentation action retires.
+    private func publishRecovery(_ value: DjiAppleRecoveryEpisode.Snapshot, episodeID: UUID?) {
+        let isCurrent = {
+            self.recoveryEpisode.currentEpisodeID == episodeID && self.recoveryEpisode.snapshot == value
+                && self.recoverySnapshotStorage == value
+        }
+        guard recoveryEpisode.currentEpisodeID == episodeID, recoveryEpisode.snapshot == value else { return }
+        let previous = recoverySnapshotStorage
+        let previousName = recoveryDeviceNameStorage
+        recoverySnapshotStorage = value
+        if value.holdsPicture, recoveryDeviceNameStorage.isEmpty, let target = value.targetID,
+            let id = UUID(uuidString: target) {
+            let name = connectedCamera?.name ?? saved(id)?.displayName ?? ""
+            guard isCurrent() else { return }
+            recoveryDeviceNameStorage = name
+        } else if value.targetID == nil { recoveryDeviceNameStorage = "" }
+        guard isCurrent() else { return }
+        if previous.state != value.state { withMutation(keyPath: \.sessionRecovery) {} }
+        guard isCurrent() else { return }
+        if previous.holdsPicture != value.holdsPicture { withMutation(keyPath: \.holdsMonitor) {} }
+        guard isCurrent() else { return }
+        if previous.cardGraceElapsed != value.cardGraceElapsed { withMutation(keyPath: \.sessionRecoveryCardGraceElapsed) {} }
+        guard isCurrent() else { return }
+        if previous.reconnecting != value.reconnecting { withMutation(keyPath: \.isReconnecting) {} }
+        guard isCurrent() else { return }
+        if previousName != recoveryDeviceNameStorage { withMutation(keyPath: \.recoveryDeviceName) {} }
+        guard isCurrent() else { return }
+        if previous.state != value.state {
+            switch value.state {
+            case .idle:
+                if case .retrying(let count, _) = previous.state, !value.holdsPicture {
+                    ControlLiveLog.line("session: recovered after \(count - 1) failed attempt(s)")
+                }
+            case .waitingForOperator(let count):
+                ControlLiveLog.line("session: recovery exhausted after \(count) attempts")
+            case .pausedAfterRepeatedDrops(let drops):
+                log.info("session: storm pause after \(drops) drops")
+            case .retrying: break
+            }
+        }
+        if previous.state != value.state,
+            episodeID != nil || (!value.holdsPicture && value.targetID != nil) {
+            applyLinkPresentation(ifCurrent: isCurrent)
+        }
+    }
+
+    func beginSessionRecovery(reason: String, trigger: SessionRecoveryTrigger = .bleDropped) {
+        let target = connectedCamera?.id.uuidString ?? recoverySnapshotStorage.targetID ?? reconnectTarget?.uuidString
+        recoveryEpisode.begin(targetID: target, trigger: trigger, reason: reason)
+    }
+
+    func retrySessionRecovery() { recoveryEpisode.retry() }
 
     func cancelSessionRecovery(clearHoldsMonitor: Bool = true) {
-        sessionRecoveryGeneration += 1
-        sessionRecoveryTask?.cancel()
-        sessionRecoveryTask = nil
-        recoveryCardGraceTask?.cancel()
-        recoveryCardGraceTask = nil
-        sessionRecoveryCardGraceElapsed = false
-        sessionRecovery = .idle
-        isReconnecting = false
-        if clearHoldsMonitor {
-            holdsMonitor = false
-            recoveryCameraID = nil
-            recoveryDeviceName = ""
-        }
+        recoveryEpisode.cancel(clearHold: clearHoldsMonitor)
     }
 
-    func runSessionRecovery(
-        budget: Duration = .seconds(SessionRecoveryPolicy.automaticRecoveryBudgetSeconds)
-    ) async {
-        let generation = sessionRecoveryGeneration
-        let budgetPause = recoveryPause
-        let timedOut = await withTaskGroup(of: Bool.self) { group in
-            group.addTask { @MainActor [weak self] in
-                await self?.runSessionRecoveryAttempts()
-                return false
-            }
-            group.addTask {
-                do {
-                    try await budgetPause(budget)
-                } catch { return false }
-                return true
-            }
-            let timedOut = await group.next() ?? false
-            group.cancelAll()
-            return timedOut
-        }
-        guard timedOut, !Task.isCancelled, sessionRecoveryGeneration == generation else { return }
-        let attempts: Int
-        if case .retrying(let attempt, _) = sessionRecovery {
-            attempts = attempt
-        } else {
-            attempts = 0
-        }
-        abortInFlightRun(preserveDecoder: true)
-        stopRecoveryScan()
-        sessionRecovery = .waitingForOperator(attemptsMade: attempts)
-        sessionRecoveryCardGraceElapsed = true
-        ControlLiveLog.line(
-            "session: recovery episode exhausted after \(SessionRecoveryPolicy.automaticRecoveryBudgetSeconds)s attempts=\(attempts)"
-        )
-        applyLinkPresentation()
-    }
-
-    func runSessionRecoveryAttempts(
-        connectAttempt: (@MainActor () async -> Bool)? = nil
-    ) async {
-        let policy = SessionRecoveryPolicy.monitor
-        var failures = 0
-        while !Task.isCancelled {
-            let state = policy.state(afterFailedAttempts: failures)
-            sessionRecovery = state
-            applyLinkPresentation()
-            guard case .retrying = state else { return }
-            let recovered: Bool
-            if let connectAttempt {
-                recovered = await connectAttempt()
-            } else {
-                recovered = await attemptRecoveryConnect()
-            }
-            if Task.isCancelled { return }
-            if recovered {
-                sessionRecovery = .idle
-                holdsMonitor = false
-                isReconnecting = false
-                sessionRecoveryCardGraceElapsed = false
-                ControlLiveLog.line("session: recovered after \(failures) failed attempt(s)")
-                applyLinkPresentation()
-                return
-            }
-            failures += 1
-            ControlLiveLog.line(
-                "session: recovery attempt failed attempt=\(failures) phase=\(phase)")
-            // A failed run may still own GATT after Wi-Fi/handshake failed.
-            // Release it before scanning again so the body can advertise; keep
-            // the last image and saved recovery identity for the next attempt.
-            abortInFlightRun(preserveDecoder: true)
-            stopRecoveryScan()
-            guard
-                case .retry(let wait) = policy.decision(
-                    afterFailedAttempts: failures, jitter: recoveryJitter)
-            else {
-                sessionRecovery = policy.state(afterFailedAttempts: failures)
-                ControlLiveLog.line("session: recovery exhausted after \(failures) attempts")
-                applyLinkPresentation()
-                return
-            }
-            try? await recoveryPause(.seconds(wait))
-        }
-    }
-
-    /// Recovery starts only after the watchdog's warm rung failed, BLE dropped,
-    /// the camera network changed, or the operator requested it. Reopen the full
-    /// spine: the previous warm path had disconnected BLE and never restored it.
-    private func attemptRecoveryConnect() async -> Bool {
-        guard let id = recoveryCameraID else { return false }
-        isReconnecting = true
-        phase = .scanning
-        ControlLiveLog.line("session: recovery scanning for saved camera")
-        let foundCamera = await waitForRecoveryAdvertisement(
-            id: id, timeout: Self.recoveryScanDeadline)
-        guard let foundCamera, !Task.isCancelled else {
-            if !Task.isCancelled {
-                ControlLiveLog.line("session: recovery scan timed out or Bluetooth unavailable")
-            }
-            return false
-        }
-        let started = recoveryWallNow
-        let deadline = recoveryNow.advanced(by: Self.recoveryAttemptDeadline)
-        connect(foundCamera, preserveMonitor: true)
-        var previousPhase = phase
-        var stageDeadline = recoveryNow.advanced(by: Self.recoveryDeadline(for: phase))
-        while !Task.isCancelled {
-            if phase != previousPhase {
-                previousPhase = phase
-                stageDeadline = recoveryNow.advanced(by: Self.recoveryDeadline(for: phase))
-                ControlLiveLog.line("session: recovery stage=\(phase)")
-            }
-            guard recoveryNow < deadline, recoveryNow < stageDeadline else { break }
-            if recoveryEpisodePictureIsFresh(since: started), phase == .live { return true }
-            if !connectionRun.isRunning, phase != .live { return false }
-            do { try await recoveryPause(.milliseconds(100)) } catch { return false }
-        }
-        guard !Task.isCancelled else { return false }
-        ControlLiveLog.line("session: recovery deadline phase=\(phase) freshPicture=0")
-        return false
-    }
-
-    /// Leave enough time for the underlying finite join/handshake ladders.
-    /// Overall attempt time is capped independently so changing phases cannot
-    /// keep a broken attempt alive forever.
     static func recoveryDeadline(for phase: ConnectionPhase) -> Duration {
-        switch phase {
-        case .joiningWifi: .seconds(CameraSoftAPSwitch.joinDeadlineSeconds + 15)
-        case .openingDatalink: .seconds(50)
-        case .live: .seconds(2 * CameraSoftAP.foregroundPictureGrace)
-        default: .seconds(30)
-        }
+        DjiAppleRecoveryEpisode.deadline(for: recoveryStage(phase))
     }
 
     func hasFreshRecoveryPicture(since started: Date, now: Date = Date()) -> Bool {
@@ -5655,34 +5633,6 @@ final class CameraSession {
         }
         return false
     }
-
-    private func waitForRecoveryAdvertisement(id: UUID, timeout: Duration) async -> FoundCamera? {
-        guard await recoveryRadioReady(), !Task.isCancelled else { return nil }
-        let generation = sessionRecoveryGeneration
-        let scanPause = recoveryPause
-        let foundCamera = await withTaskGroup(of: FoundCamera?.self) { group in
-            group.addTask { @MainActor [weak self] in
-                guard let self else { return nil }
-                for await camera in self.recoveryAdvertisements() {
-                    if Task.isCancelled { return nil }
-                    let seen = camera.enriched(from: self.saved(camera.id))
-                    if seen.id == id { return seen }
-                }
-                return nil
-            }
-            group.addTask {
-                try? await scanPause(timeout)
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
-        // GATT connect needs the next advertisement: keep scanning when found.
-        if foundCamera == nil, generation == sessionRecoveryGeneration { stopRecoveryScan() }
-        return foundCamera
-    }
-
     /// Stage 4: new UDP handshake + register + subscribe on SoftAP. BLE and
     /// `phase == .live` stay so the operator is not dumped to a black home screen.
     private func rejoinDatalinkKeepingLive(attempt: DjiApplePictureRecovery.Attempt) async {
@@ -6044,14 +5994,24 @@ final class CameraSession {
         return true
     }
 
-    func resetMediaSession() {
+    func resetMediaSession() { resetMediaSession(ifCurrent: { true }) }
+
+    private func resetMediaSession(ifCurrent: () -> Bool) {
+        guard ifCurrent() else { return }
         persistMediaCatalog()
+        guard ifCurrent() else { return }
         cameraMedia.resetSession()
+        guard ifCurrent() else { return }
         isBrowsingMedia = false
+        guard ifCurrent() else { return }
         mediaFetchInProgress = false
+        guard ifCurrent() else { return }
         mediaNote = nil
+        guard ifCurrent() else { return }
         mediaDownloadProgress = [:]
-        loadCachedCatalogIfNeeded()
+        guard ifCurrent() else { return }
+        loadCachedCatalogIfNeeded(ifCurrent: ifCurrent)
+        guard ifCurrent() else { return }
         loadMediaFavorites()
     }
 
