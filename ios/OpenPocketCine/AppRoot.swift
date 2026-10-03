@@ -45,7 +45,9 @@ final class AppModel {
                         integration,
                         slots: IntegrationSlots(
                             pairing: { AnyView(PocketPairingTips()) },
-                            addRoute: { camera, done in AnyView(AddSetupView(camera: camera, done: done)) }))
+                            addRoute: { camera, done in
+                                AnyView(AddSetupView(camera: camera, done: done))
+                            }))
                 ] : [],
             store: Self.camerasStore(defaults))
         shell = ShellModel(cameras: cameras, control: control)
@@ -58,8 +60,11 @@ final class AppModel {
         shell.onSceneActivity = { [weak self] active in
             guard let self else { return }
             assist.inspectorSceneActive = active
-            if active { self.session.noteSceneBecameActive() }
-            else { self.session.noteSceneBecameInactive() }
+            if active {
+                self.session.noteSceneBecameActive()
+            } else {
+                self.session.noteSceneBecameInactive()
+            }
         }
         control.onNote = { [weak self] in self?.session.controlNote = $0 }
     }
@@ -72,13 +77,16 @@ final class AppModel {
             document: .userDefaults(defaults, key: "OpenPocketCine.Cameras"),
             legacy: .init(
                 data: .userDefaults(defaults, key: "OpenPocketCine.SavedCameras"),
-                codec: BodyRecordsV0(integration: DJICameraSessionAdapter.integration, dates: .secondsSince2001),
+                codec: BodyRecordsV0(
+                    integration: DJICameraSessionAdapter.integration, dates: .secondsSince2001),
                 source: "OpenPocketCine.SavedCameras"))
     }
 
     /// Saved cameras, most recently connected first.
     var savedCameras: [SavedCamera] {
-        cameras.saved.sorted { ($0.lastConnected ?? .distantPast) > ($1.lastConnected ?? .distantPast) }
+        cameras.saved.sorted {
+            ($0.lastConnected ?? .distantPast) > ($1.lastConnected ?? .distantPast)
+        }
     }
 
     /// Asks before a saved hotspot connect (`CameraSession.confirmHotspot`); `false` cancels it.
@@ -88,7 +96,8 @@ final class AppModel {
         let id = UUID()
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
-                hotspotQuestion = HotspotQuestion(id: id, network: network, continuation: continuation)
+                hotspotQuestion = HotspotQuestion(
+                    id: id, network: network, continuation: continuation)
             }
         } onCancel: {
             Task { @MainActor [weak self] in
@@ -170,9 +179,15 @@ final class AppModel {
         }
         set {
             switch newValue {
-            case .settings: legalPanel = nil; shell.open(.settings)
-            case .media: legalPanel = nil; shell.open(.media)
-            case nil: legalPanel = nil; shell.dismissCover()
+            case .settings:
+                legalPanel = nil
+                shell.open(.settings)
+            case .media:
+                legalPanel = nil
+                shell.open(.media)
+            case nil:
+                legalPanel = nil
+                shell.dismissCover()
             default: legalPanel = newValue
             }
         }
@@ -301,8 +316,11 @@ final class AppModel {
             return shell.cover.map { $0 == .settings ? .settings : .media }
         }
         set {
-            if let newValue { shell.open(newValue == .settings ? .settings : .media) }
-            else { shell.dismissCover() }
+            if let newValue {
+                shell.open(newValue == .settings ? .settings : .media)
+            } else {
+                shell.dismissCover()
+            }
         }
     }
     /// DISP mode whose chrome the operator is editing on the monitor, or `nil` when live.
@@ -477,11 +495,16 @@ final class AppModel {
     /// Add setup's camera scan, or `nil` when the camera is not nearby. Stamped first: the scan
     /// moves the camera to station role, so a lost reset is repaired by the next Camera Wi-Fi
     /// connect.
-    func networkScan(_ camera: SavedCamera) -> ((@escaping @MainActor (String) -> Void) async throws -> Void)? {
-        guard let found = session.found.first(where: { $0.id.uuidString == camera.id }) else { return nil }
+    func networkScan(_ camera: SavedCamera) -> (
+        (@escaping @MainActor (String) -> Void) async throws -> Void
+    )? {
+        guard let found = session.found.first(where: { $0.id.uuidString == camera.id }) else {
+            return nil
+        }
         return { [weak self] onFound in
             if let self, let current = self.cameras.saved.first(where: { $0.id == camera.id }) {
-                self.cameras.upsert(DJIIntegration.stamping(current, movingTo: .infrastructureNetwork))
+                self.cameras.upsert(
+                    DJIIntegration.stamping(current, movingTo: .infrastructureNetwork))
             }
             try await MultiviewProvisioner.scanNetworks(found, onFound: onFound)
         }
@@ -690,9 +713,7 @@ final class AppModel {
 
     func disconnect() {
         focusBoxLocked = false
-        if shell.monitor != nil { shell.close() }
-        else { session.disconnect() }
-        frameSamples.reset()
+        if shell.monitor != nil { shell.close() } else { session.disconnect() }
     }
 
     /// Recovery card: leave the held frame for the saved-camera list.
@@ -1037,15 +1058,18 @@ struct LinkExperience: View {
                 watchFeed: {
                     if model.cameras.attempts.isEmpty { model.openWatcherBrowse() }
                 },
-                multiview: MultiviewQualificationPolicy.tileCount > 1 ? {
-                    guard model.cameras.attempts.isEmpty else { return }
-                    model.openMultiview()
-                    showMultiview = true
-                } : nil,
+                multiview: MultiviewQualificationPolicy.tileCount > 1
+                    ? {
+                        guard model.cameras.attempts.isEmpty else { return }
+                        model.openMultiview()
+                        showMultiview = true
+                    } : nil,
                 privacy: { model.homePanel = .privacy }, terms: { model.homePanel = .terms }),
             safeArea: { proxy in
-                Self.pageSafeArea(proxy.safeAreaInsets, window: windowGeometry.safeArea,
-                    portrait: proxy.size.height > proxy.size.width, orientation: orientation.orientation)
+                Self.pageSafeArea(
+                    proxy.safeAreaInsets, window: windowGeometry.safeArea,
+                    portrait: proxy.size.height > proxy.size.width,
+                    orientation: orientation.orientation)
             }
         ) { _ in
             LiveViewScreen()
@@ -1069,14 +1093,22 @@ struct LinkExperience: View {
         .sheet(item: $diagnostics) { payload in DiagnosticActivityShareView(items: [payload.url]) }
         .sheet(isPresented: $showProblemReport) { ProblemReportView().environment(model) }
         // Simulator review only: the add-route slot as the cameras page presents it.
-        .sheet(item: $reviewAddSetup) { camera in AddSetupView(camera: camera) { _ in reviewAddSetup = nil } }
+        .sheet(item: $reviewAddSetup) { camera in
+            AddSetupView(camera: camera) { _ in reviewAddSetup = nil }
+        }
         .fullScreenCover(
-            isPresented: $showMultiview, onDismiss: { model.closeMultiview() }, content: { MultiviewView() })
+            isPresented: $showMultiview, onDismiss: { model.closeMultiview() },
+            content: { MultiviewView() }
+        )
         .alert(
             "Turn on Personal Hotspot",
             isPresented: Binding(
                 get: { model.hotspotQuestion.map { !$0.reaskOnReturn } ?? false },
-                set: { if !$0, model.hotspotQuestion?.reaskOnReturn == false { model.answerHotspot(false) } }),
+                set: {
+                    if !$0, model.hotspotQuestion?.reaskOnReturn == false {
+                        model.answerHotspot(false)
+                    }
+                }),
             presenting: model.hotspotQuestion
         ) { _ in
             Button("Open Settings") {
@@ -1101,7 +1133,9 @@ struct LinkExperience: View {
                 if MonitorUIReview.isActive { return }
             #endif
             // Back from Settings after Bluetooth was off or not allowed: look again.
-            if case .failed = model.session.phase, model.cameras.attempts.isEmpty, model.cameras.connected == nil {
+            if case .failed = model.session.phase, model.cameras.attempts.isEmpty,
+                model.cameras.connected == nil
+            {
                 model.session.startScan()
             }
         }
@@ -1109,7 +1143,8 @@ struct LinkExperience: View {
 
     /// The camera pages' safe area: landscape mirrors the larger cutout so the list stays centered.
     static func pageSafeArea(
-        _ proposed: EdgeInsets, window: EdgeInsets, portrait: Bool, orientation: MonitorDeviceOrientation
+        _ proposed: EdgeInsets, window: EdgeInsets, portrait: Bool,
+        orientation: MonitorDeviceOrientation
     ) -> EdgeInsets {
         let raw = LiveMonitorLayout.resolvedSafeArea(proposed, scene: window)
         guard !portrait else { return raw }

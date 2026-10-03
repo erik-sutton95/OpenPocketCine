@@ -52,8 +52,11 @@ final class AssistInspectorLifecycleTests: XCTestCase {
                 kCFAllocatorDefault, 8, 8, kCVPixelFormatType_32BGRA,
                 [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &source),
             kCVReturnSuccess)
+        let publicationSource = model.monitorSamples.openSource(.live)
         model.monitorSamples.publish(
-            source: try XCTUnwrap(source), transfer: .rec709, colorMode: .normal, bundle: nil)
+            publicationSource,
+            source: try XCTUnwrap(source), transfer: .rec709, reportedTransfer: .rec709, bundle: nil
+        )
         let size = CGSize(width: 874, height: 402)
         let probe = InspectorLifecycleProbe()
         let host = UIHostingController(
@@ -66,7 +69,7 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         defer {
             release.signal()
             model.assist.configureTool = nil
-            model.monitorSamples.reset()
+            model.monitorSamples.closeSource(publicationSource)
             window.isHidden = true
             window.rootViewController = nil
         }
@@ -131,13 +134,16 @@ final class AssistInspectorLifecycleTests: XCTestCase {
             memset(base, 128, CVPixelBufferGetBytesPerRow(buffer) * 180)
         }
         CVPixelBufferUnlockBaseAddress(buffer, [])
+        let publicationSource = model.monitorSamples.openSource(.live)
         model.monitorSamples.publish(
-            source: buffer, transfer: .rec709, colorMode: .normal, bundle: nil)
+            publicationSource,
+            source: buffer, transfer: .rec709, reportedTransfer: .rec709, bundle: nil)
         var publicationCount = 0
         let publication = Task { @MainActor in
             while !Task.isCancelled {
                 model.monitorSamples.publish(
-                    source: buffer, transfer: .rec709, colorMode: .normal, bundle: nil)
+                    publicationSource,
+                    source: buffer, transfer: .rec709, reportedTransfer: .rec709, bundle: nil)
                 publicationCount += 1
                 do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
             }
@@ -151,7 +157,7 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         defer {
             publication.cancel()
             model.assist.configureTool = nil
-            model.monitorSamples.reset()
+            model.monitorSamples.closeSource(publicationSource)
             window.isHidden = true
             window.rootViewController = nil
         }

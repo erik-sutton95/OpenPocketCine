@@ -10,7 +10,8 @@ import XCTest
 @MainActor
 final class MonitorBackdropLifecycleTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    private let ceiling = OpenCineMedia.ScopeExposureCeiling(
+        profile: PocketMonitorCalibration.clipProfile)
     private let step = MonitorBackdropPolicy.minimumIntervalNanoseconds
     func testUnchangedInputSkipsNativeWorkAndPublicationWithoutResettingCadence() async throws {
         let clock = InspectorPreviewTestClock()

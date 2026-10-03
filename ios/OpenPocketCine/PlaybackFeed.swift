@@ -166,6 +166,7 @@ final class PlaybackFeedSession: NSObject {
     private weak var player: AVPlayer?
     private weak var host: PlaybackFeedHostView?
     private weak var sampleBus: LiveFrameSampleBus?
+    private var sampleSource: LiveFrameSampleBus.Source?
     private var effects = LiveImageEffects()
     private var transfer = MonitorTransfer.rec709
     /// pullQueue-owned. Main must not read or write it, and must not wait on pullQueue.
@@ -255,8 +256,12 @@ final class PlaybackFeedSession: NSObject {
             self?.pendingKick = false
         }
         lastBackdropBuffer = nil
-        sampleBus?.clearPlaybackSource()
+        if let sampleBus, sampleBus.isCurrent(sampleSource) {
+            sampleBus.closeSource(sampleSource)
+            sampleSource = sampleBus.openSource(.playback)
+        }
         assistEngine.reset()
+        if let sampleSource { assistEngine.adopt(exposureCeiling: sampleSource.exposureCeiling) }
     }
 
     func reserveHostGeneration() -> Int {
@@ -326,11 +331,13 @@ final class PlaybackFeedSession: NSObject {
         let changed = self.effects != effects || self.transfer != transfer
         self.effects = effects
         self.transfer = transfer
-        self.sampleBus = sampleBus
-        // Clips publish into the monitor's bus and share its ceiling (one per monitored source).
-        assistEngine.adopt(exposureCeiling: sampleBus.exposureCeiling)
-        if !sampleBus.usesPlaybackSource { sampleBus.clearPlaybackSource() }
-        sampleBus.usesPlaybackSource = true
+        if self.sampleBus !== sampleBus || sampleSource == nil {
+            self.sampleBus?.closeSource(sampleSource)
+            self.sampleBus = sampleBus
+            sampleSource = sampleBus.openSource(.playback)
+        }
+        guard sampleBus.isCurrent(sampleSource), let sampleSource else { return }
+        assistEngine.adopt(exposureCeiling: sampleSource.exposureCeiling)
         if changed {
             host?.ciFeed.resetPresentDedup()
             assistEngine.updatePolicy(effects: effects, transfer: transfer)
@@ -364,8 +371,7 @@ final class PlaybackFeedSession: NSObject {
             }
         } else if changed {
             stopLink()
-            sampleBus.playbackBundle = nil
-            sampleBus.clearPlaybackSource()
+            sampleBus.clearPlaybackSource(sampleSource)
         }
     }
 
@@ -376,9 +382,8 @@ final class PlaybackFeedSession: NSObject {
         boundItem = nil
         pullQueue.async { [weak self] in self?.lastBuffer = nil }
         lastBackdropBuffer = nil
-        sampleBus?.playbackBundle = nil
-        sampleBus?.clearPlaybackSource()
-        sampleBus?.usesPlaybackSource = false
+        sampleBus?.closeSource(sampleSource)
+        sampleSource = nil
         assistEngine.reset()
         host?.onDrawableReady = nil
         host?.ciFeed.onPresented = nil
@@ -506,12 +511,15 @@ final class PlaybackFeedSession: NSObject {
         return boundItem?.currentTime() ?? player?.currentTime() ?? .zero
     }
 
-    private func submit(_ buffer: CVPixelBuffer, timeNs: Int64, sourceEpoch: UInt64? = nil) {
+    /// Admit decoded clip input under the item epoch and publication lease captured here.
+    func submit(_ buffer: CVPixelBuffer, timeNs: Int64, sourceEpoch: UInt64? = nil) {
         let sourceEpoch = sourceEpoch ?? itemEpoch
+        let publicationSource = sampleSource
         assistEngine.submit(buffer, effects: effects, transfer: transfer, timeNs: timeNs) {
             [weak self] result in
             Task { @MainActor [weak self] in
-                self?.present(result, sourceEpoch: sourceEpoch)
+                self?.present(
+                    result, sourceEpoch: sourceEpoch, publicationSource: publicationSource)
             }
         }
     }
@@ -524,14 +532,17 @@ final class PlaybackFeedSession: NSObject {
     }
 
     @MainActor
-    private func present(_ result: LiveAssistEngine.Result, sourceEpoch: UInt64) {
-        guard boundItem != nil, sourceEpoch == itemEpoch else { return }
-        if let bundle = result.bundle {
-            sampleBus?.playbackBundle = bundle
-        }
+    private func present(
+        _ result: LiveAssistEngine.Result, sourceEpoch: UInt64,
+        publicationSource: LiveFrameSampleBus.Source?
+    ) {
+        guard boundItem != nil, sourceEpoch == itemEpoch,
+            sampleSource === publicationSource, let sampleBus,
+            sampleBus.publish(
+                publicationSource, source: result.source,
+                transfer: result.transfer, reportedTransfer: result.transfer, bundle: result.bundle)
+        else { return }
         guard result.shouldPresent else { return }
-        sampleBus?.playbackSourcePixelBuffer = result.source
-        sampleBus?.playbackSourceTransfer = result.transfer
         lastOverlayOnly = result.overlayOnly
         lastUnmanagedBake = result.unmanagedBake
         guard let host else {

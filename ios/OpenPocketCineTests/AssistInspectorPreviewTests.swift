@@ -8,7 +8,8 @@ import XCTest
 @MainActor
 final class AssistInspectorPreviewTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    private let ceiling = OpenCineMedia.ScopeExposureCeiling(
+        profile: PocketMonitorCalibration.clipProfile)
 
     func testInspectorRequestsSamplingWithoutEnablingPictureEffects() {
         let original = LiveImageEffects()
@@ -295,18 +296,20 @@ final class AssistInspectorPreviewTests: XCTestCase {
         let bus = LiveFrameSampleBus()
         let camera = try Self.buffer(width: 8, height: 8)
         let clip = try Self.buffer(width: 16, height: 8)
-        bus.publish(source: camera, transfer: .rec709, colorMode: .normal, bundle: nil)
-        bus.usesPlaybackSource = true
+        let cameraSource = bus.openSource(.live)
+        bus.publish(
+            cameraSource, source: camera, transfer: .rec709, reportedTransfer: .rec709, bundle: nil)
+        let clipSource = bus.openSource(.playback)
         XCTAssertNil(bus.inspectorSource)
-        bus.playbackSourcePixelBuffer = clip
-        bus.playbackSourceTransfer = .dlog2
+        bus.publish(
+            clipSource, source: clip, transfer: .dlog2, reportedTransfer: .dlog2, bundle: nil)
         XCTAssertTrue(bus.inspectorSource?.buffer === clip)
         XCTAssertEqual(bus.inspectorSource?.transfer, .dlog2)
-        bus.clearPlaybackSource()
+        bus.clearPlaybackSource(clipSource)
         XCTAssertNil(bus.inspectorSource)
-        bus.usesPlaybackSource = false
+        bus.closeSource(clipSource)
         XCTAssertTrue(bus.inspectorSource?.buffer === camera)
-        bus.reset()
+        bus.closeSource(cameraSource)
         XCTAssertNil(bus.inspectorSource)
     }
 

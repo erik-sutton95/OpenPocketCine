@@ -65,7 +65,10 @@ struct MultiviewView: View {
                         if let model = tile.liveModel {
                             LiveViewScreen().environment(model)
                                 .onAppear {
-                                    model.multiviewExit = { model.shell.close(); liveTile = nil }
+                                    model.multiviewExit = {
+                                        model.shell.close()
+                                        liveTile = nil
+                                    }
                                 }
                         }
                     }
@@ -347,7 +350,9 @@ struct MultiviewView: View {
                 } label: {
                     stageToolIcon(tool.id)
                         .frame(width: iconSide, height: iconSide)
-                        .foregroundStyle(tool.enabled ? MonitorTheme.accent : MonitorTheme.secondary)
+                        .foregroundStyle(
+                            tool.enabled ? MonitorTheme.accent : MonitorTheme.secondary
+                        )
                         .frame(maxWidth: .infinity, minHeight: 44, maxHeight: .infinity)
                         .contentShape(Rectangle())
                 }
@@ -356,7 +361,8 @@ struct MultiviewView: View {
                 .opacity(tool.available ? 1 : 0.4)
                 .accessibilityLabel(tool.accessibilityLabel ?? tool.title)
                 .accessibilityValue(tool.accessibilityValue ?? (tool.enabled ? "On" : "Off"))
-                .accessibilityIdentifier(tool.accessibilityIdentifier ?? "multiview.tool.\(tool.id)")
+                .accessibilityIdentifier(
+                    tool.accessibilityIdentifier ?? "multiview.tool.\(tool.id)")
             }
         }
         .padding(4)
@@ -731,7 +737,7 @@ struct MultiviewVideoLayer: UIViewRepresentable {
         tile.decoder.assistMirror = false
         tile.decoder.poseViewFlip = tile.pose.poseViewFlip
         tile.decoder.processedFeed = view.ciFeed
-        tile.decoder.sampleBus = tile.sampleBus
+        tile.decoder.bindSourcePublication(tile.sampleBus)
         tile.decoder.hdrDisplayEnabled = hdrDisplay
         view.applyHDRDisplay(hdrDisplay)
         if tile.decoder.effects != tile.effects { tile.decoder.effects = tile.effects }

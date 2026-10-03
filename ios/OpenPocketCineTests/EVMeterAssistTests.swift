@@ -1,4 +1,5 @@
 import AVFoundation
+import Observation
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -92,14 +93,21 @@ final class EVMeterAssistTests: XCTestCase {
             "A fully covered left edge hides the meter until the palette closes")
     }
 
-    func testChangingPlaybackItemsRetiresThePreviousScopeSamplesBeforeLoading() {
+    func testChangingPlaybackItemsRetiresThePreviousScopeSamplesBeforeLoading() async {
         let samples = LiveFrameSampleBus()
         let session = PlaybackFeedSession()
         session.setEffects(LiveImageEffects(histogram: true), transfer: .rec709, sampleBus: samples)
         let first = AVPlayerItem(asset: AVMutableComposition())
         session.prepare(first)
-        samples.playbackBundle = OpenPocketCine.ScopeAssistBundle()
-        samples.playbackBundle?.samples.histogramLuma[180] = 100
+        let delivered = expectation(description: "first clip scope bundle published")
+        withObservationTracking {
+            _ = samples.playbackBundle
+        } onChange: {
+            delivered.fulfill()
+        }
+        session.submit(ScopeTestBuffers.makeFlatBuffer(code: 180), timeNs: 1)
+        await fulfillment(of: [delivered], timeout: 2)
+        XCTAssertGreaterThan(samples.playbackBundle?.samples.histogramLuma[180] ?? 0, 0)
         session.beginSourceChange()
         XCTAssertNil(samples.playbackBundle)
         XCTAssertFalse(first.outputs.contains(where: { $0 === session.output }))

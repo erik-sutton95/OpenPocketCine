@@ -8,7 +8,9 @@ OpenPocketCine is a shared Swift business/protocol core with native platform she
 | **Shared native monitor UI** | OpenCine `MonitorUI` (`../OpenCine`) | SwiftUI pages, controls, navigation, camera home/pairing and media catalog presentation; bundled Sora resources. Camera state and actions are injected. iOS-only implementation, separate from the portable core. |
 | **Shared native Android UI** | OpenCine `Android/monitor-ui/` (sibling checkout, Gradle included build `opencine`) | Compose pages, controls, typography and icon assets. Camera state and actions are injected; no JNI or camera ownership. |
 | **Shared core** | `Sources/OpenPocketViewCore/` | DUML, commands, status, LUTs, layout policy. **Portable** Foundation. |
-| **iOS app** | `ios/OpenPocketCine/` | SwiftUI **shell**, CoreBluetooth, NEHotspotConfiguration, sockets, VideoToolbox/Metal. Teardown: [live-session](live-session.md). |
+| **DJI Apple integration** | OpenCine `OpenCineDJIApple` | Bluetooth/network transport and control exchange with injected host policy. No UI, storage or monitor-runtime import. |
+| **Apple picture runtime** | OpenCine `OpenCineApple` | Decoder, native assist work, source publications and retained picture presentation. Source interpretation is configured by the app. |
+| **iOS app** | `ios/OpenPocketCine/` | SwiftUI composition, credential/permission policy, source calibration and remaining session/recovery orchestration. Teardown: [live-session](live-session.md). |
 | **Watch companion** | `ios/OpenPocketCineWatch/` | watchOS SwiftUI remote. WatchConnectivity only — never SoftAP. Embedded in the iPhone app. |
 | **Android app** | `Apps/Android/app/` | Compose **shell**. Live picture and HUD I/O: [`ANDROID.md`](../ANDROID.md). Operator-visible behavior: [parity](PARITY.md). Teardown: [live-session](live-session.md). |
 | **Android facade** | `Sources/OpenPocketCineAndroidFacade/` | Swift session and JNI boundary |
@@ -74,6 +76,30 @@ report presence. The separate `legacySettlement` context preserves existing busy
 and recovery decisions from presentation state. Initial command admission and native
 teardown keep their existing ordering. Closing a local exchange sends no camera command
 and leaves transport ownership with the caller, including a borrowed Multiview tile.
+
+## Apple picture ownership
+
+`HevcDecoder` configures `OpenCineApple.MonitorLiveVideoRuntime` with the existing DJI
+source calibration, official look data, transfer inference and diagnostic hooks. The
+shared owner holds VideoToolbox format/session lifetime, encoded and decoded demand,
+assist work, frame baking, native picture presentation and metrics. `CIFeedView`,
+the display container, scaler and upscaler use those same native owners. DJI transport
+supplies encoded input and recovery signals; `CameraSession` still decides when the
+existing watchdog sends a camera command. The integration imports no picture runtime.
+
+A source lease fences publication and calibration. Camera reports update only the
+runtime's current live lease, even while a clip owns the display projection. A weak
+provider installed by the actual camera or tile owner seeds a newly attached or
+reopened source from decoded reports. Unknown stays absent, and presentation pins
+never supply calibration. The measured reference EI in the calibration profile is
+the table's origin, not a claim about the camera's current ISO.
+
+Playback owns a separate publication lease and carries it with the item epoch through
+asynchronous assist work. An old decoder or playback session cannot clear its
+successor's publication. Settings/Media coverage and borrowed Multiview return retain
+the actual source. Runtime reset supports reuse; terminal close retires that owner.
+The picture view does not close the decoder. Connection, recovery, keepalive and
+continuous DJI gesture ownership remain app-side work in the later P2 increments.
 
 ## Shared monitor presentation
 
@@ -303,6 +329,21 @@ cross-repository package adoption follow the documented engine phases. Do not
 claim the thin-brand-app end state until another backend inherits the same
 screens and workflows without copying them.
 
+## Apple session heartbeat
+
+`DjiAppleSessionHeartbeat` owns the actual iOS registration timer and camera-path grace.
+The app supplies one lifecycle/repair context and consumes bounded maintenance/path-loss
+events. Native picture/watchdog decisions, gallery, journal and gimbal cleanup retain their
+app adapters. Registration runs through inactive scenes, covers and held picture, with BLE
+before datalink registration/ACK and the unchanged Selfie Flip fallback. Run and endpoint
+identity reject old wakes after disconnect or replacement. Borrowed Multiview views do not
+start a second heartbeat and cannot retire the tile's owner.
+
+The app no longer owns this loop or `CameraPathRecovery` history. It retains connection,
+foreground, negotiated picture repair and bounded session-recovery orchestration, which
+remain later P2 increments. The shared integration imports no UI or neutral native monitor.
+Physical iPhone/camera qualification remains untested.
+
 ## Connection spine
 
 1. BLE scan and pair (GATT FFF0).
@@ -326,7 +367,7 @@ SDK). Both apps must call the same state machines:
 | SoftAP addressing, path-ready, handshake rebind, first-picture, foreground recover | `CameraSoftAP` | iOS `WiFiJoiner` / `NEHotspotConfiguration`; Android `CameraApJoiner` / `WifiNetworkSpecifier`. Handshake / first-picture / enable-once gates: Android JNI `cameraSoftAPDecision` (Kotlin `LiveViewEnablePolicy` is a JVM-test fallback only). |
 | Cached SoftAP creds vs live BLE name | `CameraWifiResolution` | iOS Keychain; Android Keystore. Kotlin lockstep. A renamed SoftAP joins the live advertised name with the cached password (#257). |
 | Stall, GOP-reset grace, AF-C grace, zoom grace, enable-once, rebuild ladder | `FeedWatchdog` | iOS `CameraSession.applyFeedWatchdog`; Android JNI `feedWatchdogCreate/Tick` — not a second Kotlin clone. `LinkDiagnoser` is observe-only (`feed: observe`) until [`connection-reliability.md`](connection-reliability.md) classifies #148. |
-| Present hygiene (skip-dup, freeze ≠ flush, drawable gate, one enable) | `FeedPresentPolicy` | iOS `CIFeedView` / `PlaybackFeedSession`; Android `LiveFeedEffectsSession` (Kotlin lockstep + tests) |
+| Present hygiene (skip-dup, freeze ≠ flush, drawable gate, one enable) | `FeedPresentPolicy` | iOS OpenCineApple picture runtime plus `PlaybackFeedSession` player composition; Android `LiveFeedEffectsSession` (Kotlin lockstep + tests) |
 | Clip shot color (`ColorGammaSxS`) | `ClipColorProfile` | iOS `ClipColorProfileIO`; Android `ClipColorProfile.kt` (Kotlin lockstep). Original take only — LRF/XRF is Rec.709 even for log. Shells read the `moov` tail (2 MiB Range when the 4K file is not cached) and store it in the media cache `color.json`. |
 | Media HTTP storage, browse after enter-playback | `MediaHTTP.resolvedStorage`, `MediaBrowsePolicy` | iOS `CameraMedia`; Android `MediaLibraryController` (Kotlin lockstep). Pocket 3 `/v2` is storage 0. Newest `0x00/0x26` page lists without playback. |
 | Gimbal cluster (stick + zoom + controls button) | `GimbalCluster` | iOS `LiveMonitorLayout` / portrait chrome; Android `GimbalCluster.kt` lockstep. |

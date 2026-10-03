@@ -383,9 +383,11 @@ final class LiveFrameSampleTests: XCTestCase {
     func testTwoSourcesKeepIndependentExposureCeilings() async {
         var fx = LiveImageEffects()
         fx.waveform = true
-        func feed(_ bus: LiveFrameSampleBus, max: UInt8) -> HevcDecoder {
+        func feed(_ bus: LiveFrameSampleBus, max: UInt8, iso: Int?) -> HevcDecoder {
             let decoder = HevcDecoder()
             decoder.attach(sampleBus: bus, effects: { fx }, transfer: { .dlog2 })
+            XCTAssertEqual(
+                decoder.updateSourceCalibration(iso: iso, source: decoder.sourceToken), iso != nil)
             decoder.effects = fx
             decoder.incomingTransfer = .dlog2
             decoder.handleDecodedFrame(
@@ -395,15 +397,15 @@ final class LiveFrameSampleTests: XCTestCase {
         }
         let a = LiveFrameSampleBus()
         let b = LiveFrameSampleBus()
-        a.exposureCeiling.setISO(800)
-        let decoders = [feed(a, max: 233), feed(b, max: 160)]
+        let decoders = [feed(a, max: 233, iso: 800), feed(b, max: 160, iso: nil)]
         let deadline = Date().addingTimeInterval(2)
         while Date() < deadline, a.publishedScopes < 1 || b.publishedScopes < 1 {
             try? await Task.sleep(for: .milliseconds(20))
         }
         XCTAssertEqual(a.bundle.clipByte, 233, "camera A ratchets its own ISO 800 ceiling")
         XCTAssertEqual(b.bundle.clipByte, 247, "camera B keeps the reference ceiling")
-        XCTAssertEqual(b.exposureCeiling.resolvedISO(), OpenCineDJI.ScopeExposureCeiling.referenceEI)
+        XCTAssertEqual(
+            b.exposureCeiling.resolvedISO(), OpenCineDJI.ScopeExposureCeiling.referenceEI)
         XCTAssertEqual(a.exposureCeiling.clipByte(transfer: .dlog2), 233)
         XCTAssertEqual(decoders.count, 2)
     }
@@ -527,7 +529,8 @@ final class LiveFrameSampleTests: XCTestCase {
                 for: transfer, clipByte: ceiling.clipByte(transfer: transfer))
             let bytes: [UInt8] = [0, 16, 78, 128, 200, 255]
             let points = bytes.map {
-                OpenPocketCine.ScopePoint(xRatio: 0.5, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
+                OpenPocketCine.ScopePoint(
+                    xRatio: 0.5, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
             }
             let capacity = ScopeTraceMetal.maxVertexCount(
                 points: points.count, mode: .waveform(.rgb))

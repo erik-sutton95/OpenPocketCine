@@ -3,8 +3,8 @@ import CoreBluetooth
 import CoreGraphics
 import Foundation
 import Observation
-import OpenPocketViewCore
 import OpenCineDJIApple
+import OpenPocketViewCore
 import UIKit
 import os
 
@@ -189,7 +189,6 @@ final class CameraSession {
         lastGimbalThrowAt.map { Date().timeIntervalSince($0) }
     }
     @ObservationIgnored private var feedWatchdog = FeedWatchdog()
-    @ObservationIgnored private var cameraPathRecovery = CameraPathRecovery()
     @ObservationIgnored private var lastFeedFreezeLogAt: Date?
     @ObservationIgnored private var feedRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var feedRecoveryGeneration = 0
@@ -209,6 +208,7 @@ final class CameraSession {
         didSet {
             if oldValue !== datalink {
                 controlExchange.endpoint = .init(bluetooth: ble, datalink: datalink)
+                sessionHeartbeat.endpoint = .init(bluetooth: ble, datalink: datalink)
                 controlSeam?.linkDidChange()
             }
         }
@@ -220,7 +220,8 @@ final class CameraSession {
     @ObservationIgnored private lazy var controlBinding = makeControlSessionBinding()
     private var controlSeam: DJICameraSessionAdapter? { controlBinding.cached }
     @ObservationIgnored private lazy var controlExchange = makeControlExchange()
-    @ObservationIgnored private var keepaliveLoop: Task<Void, Never>?
+    @ObservationIgnored lazy var sessionHeartbeat = makeSessionHeartbeat()
+    @ObservationIgnored private let heartbeatTiming: DjiAppleHeartbeatTiming
     /// Last pid `0x38` GET reply. BLE fallback fires when this goes stale.
     @ObservationIgnored private var lastSelfieFlipReplyAt: Date?
     @ObservationIgnored private let log = Logger(
@@ -534,7 +535,8 @@ final class CameraSession {
     @ObservationIgnored private var zoomColorHopUntil: Date?
     @ObservationIgnored private var zoomColorHopGeneration: UInt64 = 0
     @ObservationIgnored private var pendingZoomAfterHop: Double?
-    @ObservationIgnored private var pendingZoomAfterHopStage: (@MainActor (ControlWireEvent) -> Void)?
+    @ObservationIgnored private var pendingZoomAfterHopStage:
+        (@MainActor (ControlWireEvent) -> Void)?
     @ObservationIgnored private var zoomStopTouched = false
 
     @ObservationIgnored private var zoomPinchAnchor = 1.0
@@ -600,8 +602,9 @@ final class CameraSession {
 
     init(
         borrowing sharedDecoder: HevcDecoder? = nil, cameraMedia: CameraMedia? = nil,
-        controlsOnly: Bool = false
+        controlsOnly: Bool = false, heartbeatTiming: DjiAppleHeartbeatTiming? = nil
     ) {
+        self.heartbeatTiming = heartbeatTiming ?? .continuous
         self.cameraMedia = cameraMedia ?? CameraMedia()
         self.decoder = sharedDecoder ?? HevcDecoder()
         gimbalStickMapping = GimbalStickMapping()
@@ -617,6 +620,10 @@ final class CameraSession {
                 if let buffer = lease.pixelBuffer { self?.considerFaceAF(buffer) }
             }
             return
+        }
+        decoder.sourceCalibrationProvider = { [weak self] in
+            guard let self, self.cameraReportedCapture.iso > 0 else { return nil }
+            return self.cameraReportedCapture.iso
         }
         self.decoder.onPresentedFrame = { [weak self] in
             self?.noteLiveFrame()
@@ -790,7 +797,9 @@ final class CameraSession {
     /// Discovery stops only while nothing connects: a scan that finds the camera to connect keeps
     /// running, and a connect in flight is never touched.
     func stopScan() {
-        guard runTask == nil, reconnectTarget == nil, phase == .scanning || phase == .idle else { return }
+        guard runTask == nil, reconnectTarget == nil, phase == .scanning || phase == .idle else {
+            return
+        }
         scanTask?.cancel()
         scanHintTask?.cancel()
         ble.stopScan()
@@ -1009,7 +1018,7 @@ final class CameraSession {
     /// Tear down an in-flight `run` without resetting UI phase. BLE disconnect
     /// resumes a pending `ble.connect` so the old Task cannot keep writing 0x07/45.
     private func abortInFlightRun(preserveDecoder: Bool = false, preserveSoftAP: Bool = false) {
-        cameraPathRecovery.reset()
+        sessionHeartbeat.resetPathGrace()
         setupProgress = nil
         foregroundGeneration += 1
         foregroundCheckTask?.cancel()
@@ -1017,7 +1026,7 @@ final class CameraSession {
         cancelProgrammedMove()
         runTask?.cancel()
         runTask = nil
-        keepaliveLoop?.cancel()
+        sessionHeartbeat.stop()
         lastSelfieFlipReplyAt = nil
         controlExchange.stopBLEDrain()
         controlExchange.retire(Fail.disconnected)
@@ -1484,13 +1493,16 @@ final class CameraSession {
 
     /// Packet workflows live in the shared owner; host policy and presentation stay here.
     private func makeControlExchange() -> DjiAppleControlExchange {
-        DjiAppleControlExchange(endpoint: .init(bluetooth: ble, datalink: datalink),
+        DjiAppleControlExchange(
+            endpoint: .init(bluetooth: ble, datalink: datalink),
             context: { [weak self] in
                 guard let self else { return .init() }
-                return .init(canTransmit: self.admitsMultiviewControl,
+                return .init(
+                    canTransmit: self.admitsMultiviewControl,
                     browsingMedia: self.isBrowsingMedia, controlsOnly: self.isMultiviewControlsOnly,
                     reported: self.cameraReportedCapture, legacySettlement: self.status)
-            }, event: { [weak self] event in
+            },
+            event: { [weak self] event in
                 guard let self else { return }
                 switch event {
                 case .bleActivity:
@@ -1509,7 +1521,8 @@ final class CameraSession {
                     self.commandTimeoutsAt.removeAll()
                 case .reply(let frame, let request, let late):
                     if frame.cmdId == 0xa5 { self.applyTrackingPoll(frame.payload) }
-                    _ = self.finishControlReply(frame, name: request.name,
+                    _ = self.finishControlReply(
+                        frame, name: request.name,
                         opcode: String(format: "0x%02X/0x%02X", frame.cmdSet, frame.cmdId),
                         expect: request.expectation, late: late)
                 case .refused(let name, let message):
@@ -1518,16 +1531,23 @@ final class CameraSession {
                     self.controlNote = nil
                 case .timeoutEvidence(let request, _):
                     guard !self.isMultiviewBorrowed else { return }
-                    let videoFresh = self.datalink?.lastVideoPacketAt.map {
-                        Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
-                    } == true
-                    let opcode = String(format: "0x%02X/0x%02X", request.frame.cmdSet, request.frame.cmdId)
+                    let videoFresh =
+                        self.datalink?.lastVideoPacketAt.map {
+                            Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
+                        } == true
+                    let opcode = String(
+                        format: "0x%02X/0x%02X", request.frame.cmdSet, request.frame.cmdId)
                     if videoFresh {
                         self.log.info("control: SET timeout with video flowing \u{2014} leave UDP")
-                        ControlLiveLog.line("control: \(request.name) \(opcode) \u{2014} SET timeout, video flowing, leave UDP")
+                        ControlLiveLog.line(
+                            "control: \(request.name) \(opcode) \u{2014} SET timeout, video flowing, leave UDP"
+                        )
                     } else if self.datalink?.lastWriteLanded == false {
-                        self.log.info("control: SET timeout after skipped UDP write \u{2014} leave UDP")
-                        ControlLiveLog.line("control: \(request.name) \(opcode) \u{2014} SET timeout, write skipped, leave UDP")
+                        self.log.info(
+                            "control: SET timeout after skipped UDP write \u{2014} leave UDP")
+                        ControlLiveLog.line(
+                            "control: \(request.name) \(opcode) \u{2014} SET timeout, write skipped, leave UDP"
+                        )
                     } else {
                         self.noteCommandTimeout()
                     }
@@ -1632,9 +1652,9 @@ final class CameraSession {
     ) async throws -> Duml.Frame {
         let request = controlExchange.request(
             matching: cmds, timeout: timeout, consumeHold: consumeHold, send: send)
-        do { return try await request.value() }
-        catch DjiAppleControlExchange.Error.timeout { throw Fail.timeout }
-        catch DjiAppleControlExchange.Error.disconnected { throw Fail.disconnected }
+        do { return try await request.value() } catch DjiAppleControlExchange.Error.timeout {
+            throw Fail.timeout
+        } catch DjiAppleControlExchange.Error.disconnected { throw Fail.disconnected }
     }
 
     // ---- Camera control (Osmosis §10–14) ---------------------------------------------------------
@@ -2898,10 +2918,11 @@ final class CameraSession {
         let previousRes = status.videoResolution
         let previousFps = status.fps
         let previousShutter = status.shutterDenom
-        let angle = ShutterAngle.rematchesFormat(
-            usesAngle: OperatorPrefs.shutterUsesAngle, manual: status.expoMode == .manual,
-            isPhoto: status.isPhoto, previousFps: previousFps, nextFps: format.frameRate.fps,
-            alreadyPending: formatPin?.shutterAngle != nil)
+        let angle =
+            ShutterAngle.rematchesFormat(
+                usesAngle: OperatorPrefs.shutterUsesAngle, manual: status.expoMode == .manual,
+                isPhoto: status.isPhoto, previousFps: previousFps, nextFps: format.frameRate.fps,
+                alreadyPending: formatPin?.shutterAngle != nil)
             ? formatPin?.shutterAngle ?? OperatorPrefs.shutterAngleDegrees : nil
         formatRequestGeneration &+= 1
         let requestGeneration = formatRequestGeneration
@@ -4067,15 +4088,22 @@ final class CameraSession {
     ) {
         guard !Task.isCancelled, controlLinkReady else {
             controlNote = "not live"
-            onStage?(.notSent); onFail?(); onSettle?(false)
+            onStage?(.notSent)
+            onFail?()
+            onSettle?(false)
             return
         }
         if isBrowsingMedia, frame.cmdSet == 2, frame.cmdId == 0x8e {
-            onStage?(.notSent); onSettle?(false); return
+            onStage?(.notSent)
+            onSettle?(false)
+            return
         }
         controlNote = nil
-        controlExchange.submit(.init(frame, name: name, expectation: expect,
-            retransmits: retransmits, coalesce: coalesce)) { event in
+        controlExchange.submit(
+            .init(
+                frame, name: name, expectation: expect,
+                retransmits: retransmits, coalesce: coalesce)
+        ) { event in
             switch event {
             case .stage(let stage): onStage?(stage)
             case .failed: onFail?()
@@ -4138,7 +4166,8 @@ final class CameraSession {
         _ reply: Duml.Frame, name: String, opcode: String, expect: ControlExpect?,
         late: Bool = false, announce: Bool = true
     ) -> Bool {
-        _ = CameraStatusDecoder.apply(reply, to: &cameraReportedCapture, model: connectedCamera?.model)
+        _ = CameraStatusDecoder.apply(
+            reply, to: &cameraReportedCapture, model: connectedCamera?.model)
         controlSeam?.sessionDidChange()
         var next = status
         _ = CameraStatusDecoder.apply(reply, to: &next, model: connectedCamera?.model)
@@ -4175,58 +4204,47 @@ final class CameraSession {
 
     // ---- keepalive -------------------------------------------------------------------------------
 
-    private func startKeepalive(ssid: String?) {
-        cameraPathRecovery.reset()
-        keepaliveLoop?.cancel()
-        keepaliveLoop = Task {
-            while !Task.isCancelled {
-                if recoverLostCameraPathIfNeeded() { return }
-                ble.send(Commands.sessionKeepalive())
-                // The camera stops video ~10 s after the last app registration
-                // while telemetry continues, and an enable does not restart it
-                // (Pocket 4 Pro, 2026-09-22 RVI). Scene, sheet and repair state
-                // must never gate this; an inactive scene (Control Center, a
-                // system alert) used to drop the picture after 10 s.
-                datalink?.keepalive()
-                if ssid != nil, holdsMonitor {
-                    publishPipelineStats()
-                    if phase == .live, gimbalControlSceneActive, !isBrowsingMedia {
-                        recoverFirstPictureIfNeeded(allowTransportRecovery: false)
+    private func makeSessionHeartbeat() -> DjiAppleSessionHeartbeat {
+        DjiAppleSessionHeartbeat(
+            endpoint: .init(bluetooth: ble, datalink: datalink), timing: heartbeatTiming,
+            context: { [weak self] in
+                guard let self else { return .init() }
+                return .init(
+                    live: self.phase == .live,
+                    ownedConnection: !self.isMultiviewBorrowed && self.connectedCamera != nil,
+                    pathReady: self.cameraPathReady(), sceneActive: self.gimbalControlSceneActive,
+                    holdsMonitor: self.holdsMonitor, browsingMedia: self.isBrowsingMedia,
+                    sessionRecovering: self.sessionRecovery.isRecovering,
+                    foregroundChecking: self.foregroundCheckTask != nil,
+                    feedRepairing: self.feedRecoveryTask != nil,
+                    formatPoking: self.firstPictureFormatPokeTask != nil)
+            }, event: { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .cameraPathLost:
+                    self.beginSessionRecovery(reason: "camera Wi-Fi lost", trigger: .softAPLost)
+                case .heldMonitorMaintenance:
+                    self.publishPipelineStats()
+                    if self.phase == .live, self.gimbalControlSceneActive, !self.isBrowsingMedia {
+                        self.recoverFirstPictureIfNeeded(allowTransportRecovery: false)
                     }
-                }
-                if ssid != nil, !holdsMonitor, gimbalControlSceneActive, foregroundCheckTask == nil
-                {
-                    if !isBrowsingMedia, shouldStartUDPRebuild {
-                        endGimbalStick(cancelMove: true)
-                        startFeedRecovery { [weak self] in
+                case .liveMonitorMaintenance:
+                    if !self.isBrowsingMedia, self.shouldStartUDPRebuild {
+                        self.endGimbalStick(cancelMove: true)
+                        self.startFeedRecovery { [weak self] in
                             await self?.repairDatalink(reason: "keepalive")
                         }
                     }
-                    publishPipelineStats()
-                    followCameraGallery()
-                    if !isBrowsingMedia {
-                        recoverLiveViewIfNeeded()
-                    }
-                    let rxAge = datalink?.lastSelfieFlipReplyAt.map {
-                        Date().timeIntervalSince($0)
-                    }
-                    let txAge = datalink?.lastSelfieFlipSendAt.map {
-                        Date().timeIntervalSince($0)
-                    }
-                    let rx = rxAge.map { String(format: "%.1f", $0) } ?? "—"
-                    let tx = txAge.map { String(format: "%.1f", $0) } ?? "—"
-                    if !isBrowsingMedia, rxAge == nil || rxAge! >= 2 {
-                        ControlLiveLog.line(
-                            "flip: beat tx=\(tx)s rx=\(rx)s ble-fallback=1"
-                        )
-                        ble.send(Commands.getSelfieFlip())
-                    } else {
-                        ControlLiveLog.line("flip: beat tx=\(tx)s rx=\(rx)s ble-fallback=0")
-                    }
+                    self.publishPipelineStats()
+                    self.followCameraGallery()
+                    if !self.isBrowsingMedia { self.recoverLiveViewIfNeeded() }
                 }
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
+            }, journal: { ControlLiveLog.line($0) })
+    }
+
+    func startKeepalive(ssid: String?) {
+        guard !isMultiviewBorrowed else { return }
+        sessionHeartbeat.start(monitorMaintenanceEnabled: ssid != nil)
     }
 
     private func beginFeedIncidentSession(cameraFamily: String) {
@@ -4329,29 +4347,6 @@ final class CameraSession {
                     outputObservable: decoder.videoToolboxActive,
                     presentationExpected: !incidentSettingsCovered),
                 watchdogAction: feedWatchdog.stage.rawValue))
-    }
-
-    /// Interface loss while BLE remains up needs its own session handoff.
-    /// Sample at 1 Hz and allow the same reassociation grace as Android; an
-    /// address-list flicker with fresh video must not tear down a live socket.
-    private func recoverLostCameraPathIfNeeded() -> Bool {
-        let now = Date()
-        let videoFresh =
-            datalink?.lastVideoPacketAt.map {
-                now.timeIntervalSince($0) < FeedWatchdog.stallThreshold
-            } == true
-        let shouldRecover = cameraPathRecovery.tick(
-            now: ProcessInfo.processInfo.systemUptime,
-            pathReady: cameraPathReady(), videoFresh: videoFresh,
-            sessionActive: phase == .live && gimbalControlSceneActive
-                && !holdsMonitor && !sessionRecovery.isRecovering && !isMultiviewBorrowed
-                && connectedCamera != nil,
-            repairInFlight: feedRecoveryTask != nil || datalink?.isRebuilding == true
-                || foregroundCheckTask != nil || firstPictureFormatPokeTask != nil)
-        guard shouldRecover else { return false }
-        ControlLiveLog.line("session: camera network absent after reassociation grace; video stale")
-        beginSessionRecovery(reason: "camera Wi-Fi lost", trigger: .softAPLost)
-        return true
     }
 
     private func publishPipelineStats() {
@@ -5366,7 +5361,7 @@ final class CameraSession {
     }
 
     func noteSceneBecameInactive() {
-        cameraPathRecovery.reset()
+        sessionHeartbeat.resetPathGrace()
         recordFeedBreadcrumb(.sceneActivity, detail: "inactive")
         gimbalControlSceneActive = false
         cancelProgrammedMove()
@@ -6011,7 +6006,8 @@ final class CameraSession {
         if !isMultiviewControlsOnly, frame.cmdSet == 0x02, frame.cmdId == 0x89 {
             applyLiveTrackingPush(frame.payload)
         }
-        _ = CameraStatusDecoder.apply(frame, to: &cameraReportedCapture, model: connectedCamera?.model)
+        _ = CameraStatusDecoder.apply(
+            frame, to: &cameraReportedCapture, model: connectedCamera?.model)
         controlSeam?.sessionDidChange()
         var s = status
         let priorMode = s.shootingMode
@@ -6127,8 +6123,9 @@ final class CameraSession {
         noteZoomIfChanged(s)
         // Scope clip ceiling follows the camera's EI; feeding it here keeps the
         // scope view bodies free of session-status reads (5 Hz re-render trap).
-        // Only this camera's source: its decoder's bus owns the ceiling (STATE-01).
-        decoder.sampleBus?.exposureCeiling.syncISO(s.iso)
+        // The actual live lease stays separate from a covered clip's display projection.
+        // Presentation pins cannot calibrate the source.
+        decoder.refreshSourceCalibration()
         let flipChanged = s.selfieFlip != status.selfieFlip
         if wasRecording && !s.isRecording {
             cancelProgrammedMove()
@@ -6506,7 +6503,8 @@ final class CameraSession {
             // Stale 0x07/07 often lands during 0x53/0x10 — do not treat it as this write's reply.
             log.info("creds: \(name, privacy: .public) attempt \(attempt)")
             do {
-                let frame = try await waitFrame(set, cmd, timeout: .seconds(4),
+                let frame = try await waitFrame(
+                    set, cmd, timeout: .seconds(4),
                     consumeHold: false, send: send)
                 let status = frame.payload.first ?? 0xFF
                 let value = Duml.unpackStatusString(frame.payload)

@@ -1688,3 +1688,32 @@ later P-1/P-2/P-3 work.
 Automated checks and SIMULATED native fixtures are recorded in the execution
 handoff. Physical iPhone/Android camera qualification for this composition is
 untested; earlier hardware evidence does not qualify the new shared root.
+
+## Apple native picture adoption candidate
+
+The iOS Pocket adapter now uses the shared OpenCineApple decoder, assist engine,
+source bus, compositor, frame baker, picture host, scaler and upscaler. The app
+supplies the existing measured DJI profile and official look data. Native pixel,
+format and presentation tests retain their existing numerical expectations.
+
+Live camera calibration uses actual decoded reports on the runtime's current
+source lease. A covered clip keeps a separate ceiling and tap history. Initial
+attachment and recovery reset seed from the actual source owner; unknown reports
+stay absent. Retiring an old runtime or clip cannot erase its successor. Covers
+and borrowed Multiview return retain the tile's source and picture ownership.
+
+This increment changes iOS native ownership. Android retains its existing native
+decoder/rendering ownership and its actual consumer checks are recorded in the
+handoff. Physical iPhone camera, assists and recovery qualification for the new
+Apple ownership is untested. Remaining session/recovery/keepalive orchestration
+and continuous DJI gesture migration leave full P2 unfinished.
+
+## Apple heartbeat ownership candidate
+
+iOS moves the actual registration loop, path-loss grace and Selfie Flip fallback into
+OpenCineDJIApple. The app retains native picture/watchdog/gallery and motion policy.
+Timing, command bytes and order stay unchanged; manual-clock/native endpoint checks cover
+retirement and borrowed ownership. Android already owns its native registration in the
+shared DJI layer and receives no timer or command change. Its actual native-staged consumer
+gate remains required for the coherent shared candidate. Physical camera qualification is
+untested. Full P2 and the pre-existing optical UI automation limitation remain unfinished.
