@@ -329,6 +329,21 @@ cross-repository package adoption follow the documented engine phases. Do not
 claim the thin-brand-app end state until another backend inherits the same
 screens and workflows without copying them.
 
+## Apple session heartbeat
+
+`DjiAppleSessionHeartbeat` owns the actual iOS registration timer and camera-path grace.
+The app supplies one lifecycle/repair context and consumes bounded maintenance/path-loss
+events. Native picture/watchdog decisions, gallery, journal and gimbal cleanup retain their
+app adapters. Registration runs through inactive scenes, covers and held picture, with BLE
+before datalink registration/ACK and the unchanged Selfie Flip fallback. Run and endpoint
+identity reject old wakes after disconnect or replacement. Borrowed Multiview views do not
+start a second heartbeat and cannot retire the tile's owner.
+
+The app no longer owns this loop or `CameraPathRecovery` history. It retains connection,
+foreground, negotiated picture repair and bounded session-recovery orchestration, which
+remain later P2 increments. The shared integration imports no UI or neutral native monitor.
+Physical iPhone/camera qualification remains untested.
+
 ## Connection spine
 
 1. BLE scan and pair (GATT FFF0).

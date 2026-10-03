@@ -48,3 +48,8 @@ The full seam table:
 [`docs/ARCHITECTURE.md`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/ARCHITECTURE.md).
 
 Wire format is in [Protocol](../../protocol/connection/).
+
+The iOS DJI integration also owns each connection's registration heartbeat and camera-path
+grace. The app composes picture, gallery and motion maintenance without duplicating the
+timer; inactive scenes and covered monitors keep registration. This extraction retains
+the existing recovery timing and does not complete the remaining session migration.

@@ -1707,3 +1707,13 @@ decoder/rendering ownership and its actual consumer checks are recorded in the
 handoff. Physical iPhone camera, assists and recovery qualification for the new
 Apple ownership is untested. Remaining session/recovery/keepalive orchestration
 and continuous DJI gesture migration leave full P2 unfinished.
+
+## Apple heartbeat ownership candidate
+
+iOS moves the actual registration loop, path-loss grace and Selfie Flip fallback into
+OpenCineDJIApple. The app retains native picture/watchdog/gallery and motion policy.
+Timing, command bytes and order stay unchanged; manual-clock/native endpoint checks cover
+retirement and borrowed ownership. Android already owns its native registration in the
+shared DJI layer and receives no timer or command change. Its actual native-staged consumer
+gate remains required for the coherent shared candidate. Physical camera qualification is
+untested. Full P2 and the pre-existing optical UI automation limitation remain unfinished.

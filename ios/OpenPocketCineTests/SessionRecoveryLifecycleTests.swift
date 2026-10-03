@@ -1,3 +1,4 @@
+import OpenCineDJIApple
 import OpenPocketViewCore
 import XCTest
 
@@ -5,6 +6,94 @@ import XCTest
 
 @MainActor
 final class SessionRecoveryLifecycleTests: XCTestCase {
+    /// SIMULATED clock/transport cross the actual app-owned heartbeat and common close.
+    func testOwnedCommonCloseRetiresHeartbeatAndLateWakeWithoutStoppingRecording() {
+        let clock = HeartbeatClock()
+        let session = CameraSession(heartbeatTiming: clock.timing)
+        session.sessionHeartbeat.endpoint = clock.endpoint
+        session.applyIncomingStatus(.init(sender: 1, receiver: 2, seq: 0,
+            flags: Duml.flagResponse, cmdSet: 2, cmdId: 0x80,
+            payload: [0x81] + Array(repeating: 0, count: 12)))
+        XCTAssertTrue(session.cameraReportedCapture.recordingReported)
+        XCTAssertTrue(session.cameraReportedCapture.isRecording)
+        session.startKeepalive(ssid: nil)
+        clock.advance(to: 0)
+        XCTAssertEqual(clock.frames.map(\.cmdId), [0x2b])
+        XCTAssertEqual(clock.registrations, 1)
+        session.noteSceneBecameInactive()
+        clock.advance(to: 1)
+        XCTAssertEqual(clock.registrations, 2, "Scene inactivity must keep app registration")
+        let oldWake = clock.wakes.first?.1
+        session.control.close(.requested)
+        oldWake?()
+        clock.advance(to: 20)
+        XCTAssertEqual(clock.frames.map(\.cmdId), [0x2b, 0x2b])
+        XCTAssertEqual(clock.registrations, 2)
+        XCTAssertEqual(session.phase, .idle)
+        XCTAssertFalse(clock.frames.contains { $0.cmdSet == 2 && $0.cmdId == 2 },
+            "Closing while recording does not send a recording command")
+    }
+
+    func testBorrowedViewCannotStartConnectionHeartbeatOrRetireTileHeartbeat() {
+        let clock = HeartbeatClock()
+        let tileHeartbeat = DjiAppleSessionHeartbeat(endpoint: clock.endpoint, timing: clock.timing,
+            context: { .init() }, event: { _ in XCTFail("No maintenance in this tile fixture") })
+        tileHeartbeat.start(monitorMaintenanceEnabled: false)
+        let decoder = HevcDecoder()
+        let borrowed = CameraSession(borrowing: decoder, heartbeatTiming: clock.timing)
+        borrowed.sessionHeartbeat.endpoint = .init(
+            writeBLE: { _ in XCTFail("Borrowed view cannot register over BLE") },
+            registerDatalink: { XCTFail("Borrowed view cannot register over UDP") },
+            transport: { .init() })
+        borrowed.startKeepalive(ssid: "SIMULATED")
+        clock.advance(to: 0)
+        borrowed.disconnect()
+        clock.advance(to: 1)
+        XCTAssertEqual(clock.registrations, 2, "Multiview tile remains the sole registration owner")
+        XCTAssertEqual(clock.frames.map(\.cmdId), [0x2b, 0x2b])
+        tileHeartbeat.stop()
+        decoder.close()
+    }
+
+    func testActualNativeEndpointReportsUnknownTimesAndDoesNotReopenClosedDatalink() {
+        let driver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let endpoint = DjiAppleHeartbeatEndpoint(datalink: driver)
+        let observed = endpoint.transport()
+        XCTAssertNil(observed.lastVideoAt)
+        XCTAssertNil(observed.lastSelfieFlipReplyAt)
+        XCTAssertNil(observed.lastSelfieFlipSendAt)
+        driver.close()
+        endpoint.registerDatalink()
+        XCTAssertTrue(driver.isClosed)
+        XCTAssertNil(endpoint.transport().lastSelfieFlipSendAt)
+    }
+
+    @MainActor private final class HeartbeatClock {
+        var time: TimeInterval = 0
+        var wakes: [(TimeInterval, @MainActor @Sendable () -> Void)] = []
+        var frames: [Duml.Frame] = []
+        var registrations = 0
+        var timing: DjiAppleHeartbeatTiming {
+            .init(wallNow: { [unowned self] in time }, uptime: { [unowned self] in time },
+                schedule: { [unowned self] delay, wake in
+                    let c = delay.components
+                    wakes.append((time + Double(c.seconds) + Double(c.attoseconds) / 1e18, wake))
+                })
+        }
+        var endpoint: DjiAppleHeartbeatEndpoint {
+            .init(writeBLE: { [unowned self] in frames.append($0) },
+                registerDatalink: { [unowned self] in registrations += 1 },
+                transport: { .init() })
+        }
+        func advance(to deadline: TimeInterval) {
+            while let next = wakes.enumerated().filter({ $0.element.0 <= deadline + 1e-12 })
+                .min(by: { $0.element.0 < $1.element.0 }) {
+                time = next.element.0; wakes.remove(at: next.offset); next.element.1()
+            }
+            time = deadline
+        }
+    }
+
     func testCanceledRepairCannotReleaseNewRepairOwnership() async {
         let session = CameraSession(borrowing: HevcDecoder())
         var first: CheckedContinuation<Void, Never>?
