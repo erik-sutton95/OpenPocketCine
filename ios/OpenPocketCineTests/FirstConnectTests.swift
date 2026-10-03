@@ -1065,6 +1065,43 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         XCTAssertFalse(peer.trace.contains("GATT"), "Neither independent task runs before this callback returns")
     }
 
+    /// SIMULATED replacement inside the actual native-dispose callback must retire
+    /// the captured A driver locally while keeping B's distinct driver and meter intact.
+    func testRetiredNativeDisposeCallbackClosesOnlyCapturedOldDriver() async throws {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = await peer.establishedRecoverySession(clock: clock)
+        let retiredDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let successorDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let sentinel = ConnectionObservationSentinel()
+        let originalDispose = try XCTUnwrap(session.sessionRecoveryNativePeers?.disposeEndpoint)
+        defer {
+            session.sessionRecoveryNativePeers?.disposeEndpoint = originalDispose
+            session.disconnect(); clock.cancelAll()
+            retiredDriver.close(); successorDriver.close(); session.decoder.close()
+        }
+        session.datalink = retiredDriver
+        session.sessionRecoveryNativePeers?.disposeEndpoint = {
+            originalDispose()
+            guard !sentinel.replaced else { return }
+            sentinel.replaced = true
+            session.cancelSessionRecovery(clearHoldsMonitor: false)
+            session.beginSessionRecovery(reason: "SIMULATED B during local disposal", trigger: .operatorRetry)
+            session.datalink = successorDriver
+            session.status.meteredEv = EvComp(thirds: 7)
+        }
+        session.beginSessionRecovery(reason: "SIMULATED A native disposal")
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertTrue(retiredDriver.isClosed, "A's captured retired link still needs local closure")
+        XCTAssertFalse(successorDriver.isClosed, "Local A cleanup cannot close B")
+        XCTAssertTrue(session.datalink === successorDriver)
+        XCTAssertEqual(session.status.meteredEv, EvComp(thirds: 7))
+        XCTAssertEqual(session.sessionRecovery, .retrying(attempt: 1, maxAttempts: 8))
+        XCTAssertTrue(session.holdsMonitor)
+        XCTAssertFalse(peer.trace.contains("GATT"))
+    }
+
     /// SIMULATED nested motion cleanup must stop within its own callback boundary,
     /// before outer teardown resumes. B's newly supplied native facts remain authoritative.
     func testNestedMotionCleanupObserverCannotRestOrClearSuccessorsFacts() async {
