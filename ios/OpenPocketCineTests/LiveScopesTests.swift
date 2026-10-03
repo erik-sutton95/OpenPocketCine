@@ -10,7 +10,7 @@ import XCTest
 /// and the end-to-end legal-scaled contract.
 final class LiveScopesTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = ScopeExposureCeiling()
+    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
 
     // MARK: - Plot geometry
 

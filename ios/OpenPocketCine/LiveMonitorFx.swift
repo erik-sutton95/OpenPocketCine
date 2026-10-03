@@ -90,11 +90,11 @@ struct LiveImageEffects: Equatable, Sendable {
 
     /// Clip byte zebra and FALSE use for `colorMode`.
     var resolvedClipByte: Int {
-        clipByte ?? ScopeExposureCeiling.referenceClipByte(transfer: MonitorTransfer(colorMode))
+        clipByte ?? OpenCineDJI.ScopeExposureCeiling.referenceClipByte(transfer: MonitorTransfer(colorMode))
     }
 
     /// Stamp the source's curve and its live ceiling together.
-    mutating func stamp(transfer: MonitorTransfer, ceiling: ScopeExposureCeiling) {
+    mutating func stamp(transfer: MonitorTransfer, ceiling: OpenCineDJI.ScopeExposureCeiling) {
         colorMode = transfer.colorMode
         clipByte = ceiling.clipByte(transfer: MonitorTransfer(colorMode))
     }

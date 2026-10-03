@@ -8,7 +8,7 @@ import XCTest
 /// lamps, and labels — onto PocketCine. IRE / histogram science stays in core.
 final class TrafficLightsAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = ScopeExposureCeiling()
+    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
 
     func testColumnWidthLandscapeAndFillsWidth() {
         XCTAssertEqual(

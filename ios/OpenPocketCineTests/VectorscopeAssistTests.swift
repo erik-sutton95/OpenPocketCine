@@ -82,7 +82,7 @@ final class VectorscopeAssistTests: XCTestCase {
     }
 
     func testTraceZoomExpandsChromaBins() throws {
-        let point = ScopePoint(
+        let point = OpenPocketCine.ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: 160, green: 80, blue: 80, luma: 100)
         let unity = try XCTUnwrap(VectorscopeRaster.pixels(from: [point], gain: 1, intensity: 1))
         let zoomed = try XCTUnwrap(VectorscopeRaster.pixels(from: [point], gain: 2, intensity: 1))
@@ -109,7 +109,7 @@ final class VectorscopeAssistTests: XCTestCase {
         XCTAssertEqual(tint.red, 1, accuracy: 1e-9)
         XCTAssertEqual(tint.green, 1, accuracy: 1e-9)
         XCTAssertEqual(tint.blue, 1, accuracy: 1e-9)
-        let grey = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 32, green: 32, blue: 32, luma: 32)
+        let grey = OpenPocketCine.ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 32, green: 32, blue: 32, luma: 32)
         let pixels = try XCTUnwrap(VectorscopeRaster.pixels(from: [grey], gain: 1, intensity: 1))
         let n = VectorscopeRaster.bins
         var found = false
@@ -130,7 +130,7 @@ final class VectorscopeAssistTests: XCTestCase {
     }
 
     func testBrightnessScalesDensityAlpha() throws {
-        let red = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 191, green: 0, blue: 0, luma: 40)
+        let red = OpenPocketCine.ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 191, green: 0, blue: 0, luma: 40)
         let full = try XCTUnwrap(VectorscopeRaster.pixels(from: [red], gain: 1, intensity: 1))
         let half = try XCTUnwrap(VectorscopeRaster.pixels(from: [red], gain: 1, intensity: 0.5))
         func peakAlpha(_ pixels: [UInt8]) -> UInt8 {

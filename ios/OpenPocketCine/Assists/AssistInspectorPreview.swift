@@ -54,7 +54,7 @@ enum AssistInspectorPreviewPolicy {
     @MainActor
     static func imageEffects(
         assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer,
-        ceiling: ScopeExposureCeiling
+        ceiling: OpenCineDJI.ScopeExposureCeiling
     ) -> LiveImageEffects {
         var result = imageOptions(assist: assist, tool: tool, transfer: transfer, ceiling: ceiling)
         if tool == .lut {
@@ -70,7 +70,7 @@ enum AssistInspectorPreviewPolicy {
     @MainActor
     static func imageOptions(
         assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer,
-        ceiling: ScopeExposureCeiling
+        ceiling: OpenCineDJI.ScopeExposureCeiling
     ) -> LiveImageEffects {
         var result = assist.gradesClip ? assist.playbackEffects : assist.effects
         result.peaking = tool == .peaking

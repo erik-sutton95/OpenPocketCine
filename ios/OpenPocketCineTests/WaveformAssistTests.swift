@@ -6,7 +6,7 @@ import XCTest
 
 final class WaveformAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = ScopeExposureCeiling()
+    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
 
     func testWaveAxisMatchesTrafficLightIRE() {
         let black = LiveColorScience.encode(0, transfer: .dlog2)
@@ -133,12 +133,12 @@ final class WaveformAssistTests: XCTestCase {
 
         let table = WaveformAxis.levelTable(
             for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
-        let black = ScopePoint(
+        let black = OpenPocketCine.ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: blackByte, green: blackByte, blue: blackByte,
             luma: blackByte)
-        let mid = ScopePoint(
+        let mid = OpenPocketCine.ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: grey, green: grey, blue: grey, luma: grey)
-        let clip = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 247, green: 247, blue: 247, luma: 247)
+        let clip = OpenPocketCine.ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 247, green: 247, blue: 247, luma: 247)
         var vertices = [ScopeTraceMetal.Vertex](
             repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
             count: ScopeTraceMetal.maxVertexCount(points: 3, mode: .waveform(.rgb)))

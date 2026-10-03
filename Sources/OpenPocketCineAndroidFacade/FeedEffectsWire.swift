@@ -110,8 +110,8 @@ public enum FeedEffectsWire {
     /// 50…102400 reads as unknown: the reference EI 1600.
     private static func prepared(
         colorModeCode: Int, iso: Int
-    ) -> (transfer: MonitorTransfer, ceiling: ScopeExposureCeiling) {
-        let ceiling = ScopeExposureCeiling()
+    ) -> (transfer: MonitorTransfer, ceiling: OpenCineDJI.ScopeExposureCeiling) {
+        let ceiling = OpenCineDJI.ScopeExposureCeiling()
         ceiling.setISO(iso)
         return (monitorTransfer(colorModeCode: colorModeCode), ceiling)
     }
@@ -119,7 +119,7 @@ public enum FeedEffectsWire {
     private static func overlayCube(
         scale: LiveFalseColorScale,
         transfer: MonitorTransfer,
-        ceiling: ScopeExposureCeiling,
+        ceiling: OpenCineDJI.ScopeExposureCeiling,
         rec709: Bool,
         component: ((red: Double, green: Double, blue: Double, weight: Double)) -> (
             Double, Double, Double
@@ -285,7 +285,7 @@ public enum FeedEffectsWire {
 
     private static func cacheKey(
         _ kind: String, scale: LiveFalseColorScale, transfer: MonitorTransfer,
-        ceiling: ScopeExposureCeiling
+        ceiling: OpenCineDJI.ScopeExposureCeiling
     ) -> String {
         let clip = ceiling.clipByte(transfer: transfer)
         return "\(kind):\(scale.rawValue):\(transfer.rawValue):\(clip)"

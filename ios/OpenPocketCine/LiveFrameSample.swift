@@ -333,7 +333,7 @@ final class LiveFrameSampleBus {
     var colorMode: ColorMode?
     /// This monitored source's live-tap ceiling (ISO + tap ratchet). Its engines measure it;
     /// its views read it. Never shared with another camera's bus (STATE-01).
-    let exposureCeiling = ScopeExposureCeiling()
+    let exposureCeiling = OpenCineDJI.ScopeExposureCeiling()
     /// Bumps when a new scope bundle lands (≤25 Hz). Present is not gated on this.
     private(set) var generation = 0
     /// Incremented for every decoded pixel buffer that enters the assist pipeline.
@@ -427,7 +427,7 @@ final class LiveAssistEngine: @unchecked Sendable {
     private var nextCeilingLogAt: CFAbsoluteTime = 0
     private var previousBundle = ScopeAssistBundle.empty
     /// The source's ceiling (its bus's, via ``adopt(exposureCeiling:)``). Queue-confined.
-    private var exposureCeiling = ScopeExposureCeiling()
+    private var exposureCeiling = OpenCineDJI.ScopeExposureCeiling()
     private var loggedTap = false
     private var tapWindowStart: CFAbsoluteTime = 0
     private var tapsInWindow = 0
@@ -437,7 +437,7 @@ final class LiveAssistEngine: @unchecked Sendable {
     init() {}
 
     /// Measure and ratchet `ceiling` from now on (the bus this engine publishes into).
-    func adopt(exposureCeiling ceiling: ScopeExposureCeiling) {
+    func adopt(exposureCeiling ceiling: OpenCineDJI.ScopeExposureCeiling) {
         queue.async { [self] in exposureCeiling = ceiling }
     }
 

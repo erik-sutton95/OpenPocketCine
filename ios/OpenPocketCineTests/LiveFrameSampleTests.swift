@@ -12,7 +12,7 @@ import XCTest
 @MainActor
 final class LiveFrameSampleTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = ScopeExposureCeiling()
+    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
 
     func testVideoFallbackStillInfersLogFromTap() async {
         let engine = LiveAssistEngine()
@@ -403,7 +403,7 @@ final class LiveFrameSampleTests: XCTestCase {
         }
         XCTAssertEqual(a.bundle.clipByte, 233, "camera A ratchets its own ISO 800 ceiling")
         XCTAssertEqual(b.bundle.clipByte, 247, "camera B keeps the reference ceiling")
-        XCTAssertEqual(b.exposureCeiling.resolvedISO(), ScopeExposureCeiling.referenceEI)
+        XCTAssertEqual(b.exposureCeiling.resolvedISO(), OpenCineDJI.ScopeExposureCeiling.referenceEI)
         XCTAssertEqual(a.exposureCeiling.clipByte(transfer: .dlog2), 233)
         XCTAssertEqual(decoders.count, 2)
     }
@@ -527,7 +527,7 @@ final class LiveFrameSampleTests: XCTestCase {
                 for: transfer, clipByte: ceiling.clipByte(transfer: transfer))
             let bytes: [UInt8] = [0, 16, 78, 128, 200, 255]
             let points = bytes.map {
-                ScopePoint(xRatio: 0.5, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
+                OpenPocketCine.ScopePoint(xRatio: 0.5, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
             }
             let capacity = ScopeTraceMetal.maxVertexCount(
                 points: points.count, mode: .waveform(.rgb))

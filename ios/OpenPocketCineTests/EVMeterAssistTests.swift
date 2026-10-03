@@ -98,7 +98,7 @@ final class EVMeterAssistTests: XCTestCase {
         session.setEffects(LiveImageEffects(histogram: true), transfer: .rec709, sampleBus: samples)
         let first = AVPlayerItem(asset: AVMutableComposition())
         session.prepare(first)
-        samples.playbackBundle = ScopeAssistBundle()
+        samples.playbackBundle = OpenPocketCine.ScopeAssistBundle()
         samples.playbackBundle?.samples.histogramLuma[180] = 100
         session.beginSourceChange()
         XCTAssertNil(samples.playbackBundle)

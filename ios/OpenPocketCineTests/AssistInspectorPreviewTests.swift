@@ -8,7 +8,7 @@ import XCTest
 @MainActor
 final class AssistInspectorPreviewTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = ScopeExposureCeiling()
+    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
 
     func testInspectorRequestsSamplingWithoutEnablingPictureEffects() {
         let original = LiveImageEffects()

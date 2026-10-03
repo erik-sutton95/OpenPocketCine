@@ -6,7 +6,7 @@ import XCTest
 
 final class ParadeAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = ScopeExposureCeiling()
+    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
 
     func testLaneXMatchesOpenZCineSplit() {
         let plot = WaveformAxis.plotRect(in: CGSize(width: 250, height: 153))
@@ -36,7 +36,7 @@ final class ParadeAssistTests: XCTestCase {
         let grey = UInt8((LiveColorScience.encode(0.18, transfer: .dlog2) * 255).rounded())
         let bytes: [UInt8] = [black, grey, 247]
         let points = bytes.map {
-            ScopePoint(xRatio: 0.25, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
+            OpenPocketCine.ScopePoint(xRatio: 0.25, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
         }
         let rgbCapacity = ScopeTraceMetal.maxVertexCount(points: points.count, mode: .parade(.rgb))
         let yrgbCapacity = ScopeTraceMetal.maxVertexCount(
