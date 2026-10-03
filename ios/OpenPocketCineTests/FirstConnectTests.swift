@@ -810,6 +810,294 @@ final class ConnectionRunDonorTraceTests: XCTestCase {
         XCTFail("SIMULATED donor did not reach the registered boundary")
     }
 }
+/// SIMULATED scanner, native peers and source facts exercise the actual old recovery loop,
+/// its connect wrapper, real ConnectionRun and Exchange. No camera radio or stores are used.
+@MainActor
+final class SessionRecoveryDonorTraceTests: XCTestCase {
+    func testOldEpisodeRetriesOnlyAfterFailedEndpointCleanupThenFreshPicture() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        peer.handshakeMisses = 6
+        let session = peer.recoverySession(clock: clock)
+        peer.onRegistered = {
+            clock.schedule(.milliseconds(1)) { peer.recoveryPicture = clock.freshPicture }
+        }
+        defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        session.connectedCamera = peer.camera
+        session.phase = .live
+        session.beginSessionRecovery(reason: "SIMULATED native drop")
+        let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(peer.trace.filter { $0 == "scan" }.count, 2)
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 2)
+        XCTAssertEqual(peer.trace.filter { $0 == "open AP" }.count, 7)
+        XCTAssertEqual(peer.trace.filter { $0 == "close" }.count, 1)
+        let close = peer.trace.firstIndex(of: "close")
+        let scans = peer.trace.indices.filter { peer.trace[$0] == "scan" }
+        XCTAssertNotNil(close)
+        if let close, scans.count == 2 { XCTAssertLessThan(close, scans[1]) }
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+        XCTAssertEqual(clock.recoveryBackoffs, [0.5])
+        XCTAssertFalse(session.sessionRecoveryCardGraceElapsed)
+        print("SIMULATED OLD RECOVERY cleanup/fresh: \(peer.trace)")
+    }
+
+    func testOldEpisodeStopsAfterEightAttemptsWithOriginalBackoff() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        peer.gattMisses = 8
+        let session = peer.recoverySession(clock: clock)
+        defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        session.connectedCamera = peer.camera
+        session.phase = .live
+        session.beginSessionRecovery(reason: "SIMULATED eight misses")
+        let finished = await clock.drive {
+            session.sessionRecovery == .waitingForOperator(attemptsMade: 8)
+        }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(peer.trace.filter { $0 == "scan" }.count, 8)
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 8)
+        XCTAssertEqual(clock.recoveryBackoffs, [0.5, 1, 2, 4, 8, 8, 8])
+        XCTAssertFalse(peer.trace.contains("enable"))
+        XCTAssertTrue(session.holdsMonitor)
+        XCTAssertTrue(session.sessionRecoveryCardGraceElapsed)
+        print("SIMULATED OLD RECOVERY attempts: \(peer.trace)")
+    }
+
+    func testOldEpisodeBudgetIncludesAbsentAdvertisementAndKeepsHeldWarning() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        peer.advertisesRecoveryCamera = false
+        let session = peer.recoverySession(clock: clock)
+        defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        session.connectedCamera = peer.camera
+        session.phase = .live
+        session.beginSessionRecovery(reason: "SIMULATED missing camera")
+        let finished = await clock.drive {
+            if case .waitingForOperator = session.sessionRecovery { return true }
+            return false
+        }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(clock.time, 180, accuracy: 1e-9)
+        XCTAssertFalse(peer.trace.contains("GATT"))
+        XCTAssertFalse(peer.trace.contains("enable"))
+        XCTAssertTrue(session.holdsMonitor)
+        XCTAssertTrue(session.sessionRecoveryCardGraceElapsed)
+        XCTAssertGreaterThan(peer.trace.filter { $0 == "stop scan" }.count, 0)
+        print("SIMULATED OLD RECOVERY budget: \(peer.trace)")
+    }
+
+    func testOldEpisodeRequiresFreshSourceAndPresentationAfterRegisteredBoundary() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = peer.recoverySession(clock: clock)
+        defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        session.connectedCamera = peer.camera
+        session.phase = .live
+        // Both values are held from before this attempt, even when presentation repaints.
+        peer.recoveryPicture = .init(
+            sourceAt: Date(timeIntervalSinceReferenceDate: -1),
+            presentedAt: Date(timeIntervalSinceReferenceDate: -1))
+        session.beginSessionRecovery(reason: "SIMULATED held frame")
+        let registered = await clock.drive { peer.trace.contains("enable") }
+        XCTAssertTrue(registered)
+        XCTAssertTrue(session.holdsMonitor)
+        clock.advance(to: clock.time + 0.2)
+        await clock.settle()
+        XCTAssertTrue(session.sessionRecovery.isRecovering)
+        peer.recoveryPicture = .init(sourceAt: nil, presentedAt: clock.date)
+        clock.advance(to: clock.time + 0.2)
+        await clock.settle()
+        XCTAssertTrue(session.holdsMonitor, "Unknown source is not fresh")
+        peer.recoveryPicture = .init(
+            sourceAt: Date(timeIntervalSinceReferenceDate: -1), presentedAt: clock.date)
+        clock.advance(to: clock.time + 0.2)
+        await clock.settle()
+        XCTAssertTrue(session.holdsMonitor, "Cached repaint is not a recovered source")
+        peer.recoveryPicture = clock.freshPicture
+        let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+        print("SIMULATED OLD RECOVERY source proof: \(peer.trace)")
+    }
+
+    func testOldEpisodeDropStormPersistsAcrossSuccessAndOnlyOperatorRetryResetsIt() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = peer.recoverySession(clock: clock)
+        peer.onRegistered = {
+            clock.schedule(.milliseconds(1)) { peer.recoveryPicture = clock.freshPicture }
+        }
+        defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        session.connectedCamera = peer.camera
+        session.phase = .live
+        for drop in 1...2 {
+            peer.recoveryPicture = .init()
+            session.beginSessionRecovery(reason: "SIMULATED drop \(drop)")
+            let finished = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
+            XCTAssertTrue(finished)
+            await clock.settle()
+        }
+        session.beginSessionRecovery(reason: "SIMULATED third drop")
+        XCTAssertEqual(session.sessionRecovery, .pausedAfterRepeatedDrops(drops: 3))
+        XCTAssertTrue(session.holdsMonitor)
+        XCTAssertTrue(session.sessionRecoveryCardGraceElapsed)
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 2)
+        peer.recoveryPicture = .init()
+        session.retrySessionRecovery()
+        let retried = await clock.drive { session.sessionRecovery == .idle && !session.holdsMonitor }
+        XCTAssertTrue(retried)
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 3)
+        print("SIMULATED OLD RECOVERY storm/retry: \(peer.trace)")
+    }
+
+    /// Expected contract assertion is deliberately retained as a donor red until root review.
+    /// Decoder borrowing is separate from transport ownership; an actual native driver proves
+    /// the borrowed entrypoint must not close the tile or start its recovery scanner.
+    func testBorrowedOldEpisodeCannotCloseTileOrStartOwnedDiscovery() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let decoder = HevcDecoder()
+        let session = peer.recoverySession(clock: clock, borrowing: decoder)
+        let tileDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        defer {
+            session.cancelSessionRecovery()
+            session.disconnect()
+            clock.cancelAll()
+            tileDriver.close()
+            decoder.close()
+        }
+        session.datalink = tileDriver
+        session.connectedCamera = peer.camera
+        session.phase = .live
+        XCTAssertFalse(tileDriver.isClosed)
+        session.beginSessionRecovery(reason: "SIMULATED borrowed view", trigger: .bleDropped)
+        await clock.settle()
+        XCTAssertFalse(tileDriver.isClosed, "A borrowed view cannot close the tile's native driver")
+        XCTAssertFalse(peer.trace.contains("scan"), "A borrowed view cannot start owned discovery")
+        XCTAssertEqual(session.sessionRecovery, .idle)
+    }
+
+    /// A synchronous observation can cancel at the public begin boundary before its Task
+    /// is installed. Keep any donor violation separate from the preserved timing goldens.
+    func testCanceledOldEpisodeCannotStartDiscoveryAfterObservableBegin() async {
+        let clock = SessionRecoveryDonorClock()
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.recoveryClock = clock
+        let session = peer.recoverySession(clock: clock)
+        defer { session.disconnect(); clock.cancelAll(); session.decoder.close() }
+        session.connectedCamera = peer.camera
+        session.phase = .live
+        let sentinel = ConnectionObservationSentinel()
+        withObservationTracking {
+            _ = session.sessionRecovery
+        } onChange: {
+            MainActor.assumeIsolated {
+                guard !sentinel.replaced else { return }
+                sentinel.replaced = true
+                session.cancelSessionRecovery()
+            }
+        }
+        session.beginSessionRecovery(reason: "SIMULATED synchronous cancellation")
+        await clock.settle()
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertEqual(session.sessionRecovery, .idle)
+        XCTAssertFalse(session.holdsMonitor)
+        XCTAssertFalse(peer.trace.contains("radio ready"))
+        XCTAssertFalse(peer.trace.contains("scan"))
+        XCTAssertFalse(peer.trace.contains("GATT"))
+    }
+}
+
+@MainActor
+private final class SessionRecoveryDonorClock {
+    private struct Sleeper {
+        let id: UUID
+        let at: TimeInterval
+        let continuation: CheckedContinuation<Void, Error>
+    }
+    private struct Wake {
+        let at: TimeInterval
+        let action: @MainActor @Sendable () -> Void
+    }
+    private let origin = ContinuousClock().now
+    var time: TimeInterval = 0
+    var pauses: [(seconds: Double, connection: Bool)] = []
+    private var sleepers: [Sleeper] = []
+    private var wakes: [Wake] = []
+    var instant: ContinuousClock.Instant { origin.advanced(by: .seconds(time)) }
+    var date: Date { Date(timeIntervalSinceReferenceDate: time) }
+    var freshPicture: SessionRecoveryNativePeers.Picture { .init(sourceAt: date, presentedAt: date) }
+    var recoveryBackoffs: [Double] {
+        pauses.filter { !$0.connection && [0.5, 1, 2, 4, 8].contains($0.seconds) }.map(\.seconds)
+    }
+
+    func schedule(_ duration: Duration, _ wake: @escaping @MainActor @Sendable () -> Void) {
+        wakes.append(.init(at: time + seconds(duration), action: wake))
+    }
+
+    func pause(_ duration: Duration, connection: Bool = false) async throws {
+        try Task.checkCancellation()
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                pauses.append((seconds(duration), connection))
+                sleepers.append(.init(id: id, at: time + seconds(duration), continuation: continuation))
+            }
+        } onCancel: {
+            Task { @MainActor in self.cancel(id) }
+        }
+    }
+
+    private func cancel(_ id: UUID) {
+        guard let index = sleepers.firstIndex(where: { $0.id == id }) else { return }
+        sleepers.remove(at: index).continuation.resume(throwing: CancellationError())
+    }
+
+    func cancelAll() {
+        let pending = sleepers
+        sleepers.removeAll()
+        wakes.removeAll()
+        for sleeper in pending { sleeper.continuation.resume(throwing: CancellationError()) }
+    }
+
+    func advance(to end: TimeInterval) {
+        while let next = (sleepers.map(\.at) + wakes.map(\.at)).filter({ $0 <= end + 1e-12 }).min() {
+            time = next
+            let readySleepers = sleepers.filter { $0.at <= next + 1e-12 }
+            sleepers.removeAll { $0.at <= next + 1e-12 }
+            let readyWakes = wakes.filter { $0.at <= next + 1e-12 }
+            wakes.removeAll { $0.at <= next + 1e-12 }
+            for sleeper in readySleepers { sleeper.continuation.resume() }
+            for wake in readyWakes { wake.action() }
+        }
+        time = end
+    }
+
+    func settle() async {
+        for _ in 0..<64 { await Task.yield() }
+    }
+
+    func drive(until done: @MainActor () -> Bool) async -> Bool {
+        for _ in 0..<5000 {
+            await settle()
+            if done() { return true }
+            if let next = (sleepers.map(\.at) + wakes.map(\.at)).min() { advance(to: next) }
+        }
+        return done()
+    }
+
+    private func seconds(_ duration: Duration) -> Double {
+        let c = duration.components
+        return Double(c.seconds) + Double(c.attoseconds) / 1e18
+    }
+}
 
 @MainActor
 private final class ConnectionObservationSentinel {
@@ -837,9 +1125,20 @@ private final class ConnectionDonorPeer {
     let hotspot: Bool
     var stationSwitched = false
     var handshakeMisses = 0
+    var gattMisses = 0
+    var recoveryClock: SessionRecoveryDonorClock?
+    var recoveryAdvertisement: AsyncStream<FoundCamera>.Continuation?
+    var advertisesRecoveryCamera = true
+    var recoveryPicture = SessionRecoveryNativePeers.Picture()
+    var onRegistered: (() -> Void)?
     enum Failure: LocalizedError {
-        case handshake
-        var errorDescription: String? { "SIMULATED handshake miss" }
+        case handshake, gatt
+        var errorDescription: String? {
+            switch self {
+            case .handshake: "SIMULATED handshake miss"
+            case .gatt: "SIMULATED GATT miss"
+            }
+        }
     }
     let camera = FoundCamera(id: UUID(uuidString: "FC064E5E-2B01-4F6B-94D2-663C03C8F001")!,
         name: "OsmoPocket4-SIMULATED", model: CameraModel.resolve(modelId: 0x0021, name: "OsmoPocket4-SIMULATED", brand: .dji), modelId: 0x0021)
@@ -848,7 +1147,15 @@ private final class ConnectionDonorPeer {
         self.cached = cached; self.deferred = deferred; self.station = station; self.hotspot = hotspot
     }
     var timing: DjiAppleConnectionTiming {
-        .init(wallNow: { [unowned self] in time }, uptime: { [unowned self] in time },
+        if let clock = recoveryClock {
+            return .init(wallNow: { clock.time }, uptime: { clock.time },
+                sleep: { [unowned self] duration in
+                    let c = duration.components
+                    trace.append(String(format: "sleep %.1f", Double(c.seconds) + Double(c.attoseconds) / 1e18))
+                    try await clock.pause(duration, connection: true)
+                })
+        }
+        return .init(wallNow: { [unowned self] in time }, uptime: { [unowned self] in time },
             sleep: { [unowned self] duration in
                 let c = duration.components
                 let seconds = Double(c.seconds) + Double(c.attoseconds) / 1e18
@@ -857,13 +1164,20 @@ private final class ConnectionDonorPeer {
             })
     }
     var exchangeTiming: DjiAppleExchangeTiming {
-        .init(now: { [unowned self] in time }, schedule: { [unowned self] duration, wake in
+        if let clock = recoveryClock {
+            return .init(now: { clock.time }, schedule: { clock.schedule($0, $1) })
+        }
+        return .init(now: { [unowned self] in time }, schedule: { [unowned self] duration, wake in
             let c = duration.components
             wakes.append((time + Double(c.seconds) + Double(c.attoseconds) / 1e18, wake))
         })
     }
     var heartbeatTiming: DjiAppleHeartbeatTiming {
-        .init(wallNow: { [unowned self] in time }, uptime: { [unowned self] in time },
+        if let clock = recoveryClock {
+            return .init(wallNow: { clock.time }, uptime: { clock.time },
+                schedule: { clock.schedule($0, $1) })
+        }
+        return .init(wallNow: { [unowned self] in time }, uptime: { [unowned self] in time },
             schedule: { [unowned self] duration, wake in
                 trace.append("heartbeat scheduled")
                 let c = duration.components
@@ -908,6 +1222,7 @@ private final class ConnectionDonorPeer {
     var transport: DjiAppleConnectionTransport {
         .init(bluetooth: .init(connect: { [unowned self] _ in
             trace.append("GATT"); if let app { stages.append(app.phase) }
+            if gattMisses > 0 { gattMisses -= 1; throw Failure.gatt }
         }, frames: { [unowned self] in
             let pair = AsyncStream.makeStream(of: Duml.Frame.self)
             continuation = pair.continuation; return pair.stream
@@ -926,6 +1241,24 @@ private final class ConnectionDonorPeer {
                 return ConnectionDonorEndpoint(peer: self)
             }, localNetworkDenied: { _ in false })
     }
+    func recoverySession(clock: SessionRecoveryDonorClock, borrowing decoder: HevcDecoder? = nil) -> CameraSession {
+        let session = session(borrowing: decoder)
+        session.sessionRecoveryNativePeers = .init(
+            now: { clock.instant }, wallNow: { clock.date }, uptime: { clock.time },
+            sleep: { try await clock.pause($0) }, jitter: { 0.5 },
+            waitUntilPoweredOn: { [unowned self] in trace.append("radio ready"); return true },
+            scan: { [unowned self] in
+                trace.append("scan")
+                let pair = AsyncStream.makeStream(of: FoundCamera.self)
+                recoveryAdvertisement = pair.continuation
+                if advertisesRecoveryCamera { pair.continuation.yield(camera) }
+                return pair.stream
+            }, stopScan: { [unowned self] in trace.append("stop scan"); recoveryAdvertisement?.finish() },
+            picture: { [unowned self] in recoveryPicture },
+            disposeEndpoint: { [unowned self] in current?.close(); current = nil })
+        return session
+    }
+
     func session(borrowing decoder: HevcDecoder? = nil) -> CameraSession {
         let session = CameraSession(borrowing: decoder, heartbeatTiming: heartbeatTiming)
         app = session
@@ -942,6 +1275,7 @@ private final class ConnectionDonorPeer {
             }, registered: { [unowned self, weak session] _, attempt in
                 trace.append("registered"); session?.phase = .live
                 guard attempt.isCurrent else { return }; trace.append("enable")
+                onRegistered?()
             }, ssid: cached ? network : nil, password: cached ? "SIMULATED-PASSWORD" : nil,
             stationNetwork: station ? .init(ssid: network, password: "SIMULATED-PASSWORD", hotspot: hotspot) : nil, persist: { [unowned self] _, _ in trace.append("persist") },
             forget: { [unowned self] in trace.append("forget") })

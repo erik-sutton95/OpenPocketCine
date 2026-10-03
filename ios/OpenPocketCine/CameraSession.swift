@@ -200,6 +200,7 @@ final class CameraSession {
     @ObservationIgnored private lazy var connectionRun = makeConnectionRun()
     #if DEBUG
         @ObservationIgnored var connectionNativePeers: ConnectionNativePeers?
+        @ObservationIgnored var sessionRecoveryNativePeers: SessionRecoveryNativePeers?
     #endif
     private var connectionTransport: DjiAppleConnectionTransport {
         #if DEBUG
@@ -5347,6 +5348,78 @@ final class CameraSession {
         pictureRecovery.start(work)
     }
 
+    // DEBUG donor dependencies vary only time, discovery and native facts. The actual old
+    // episode remains below until its traces pass and its replacement is reviewed.
+    private var recoveryNow: ContinuousClock.Instant {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers { return peers.now() }
+        #endif
+        return ContinuousClock().now
+    }
+
+    private var recoveryWallNow: Date {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers { return peers.wallNow() }
+        #endif
+        return Date()
+    }
+
+    private var recoveryUptime: TimeInterval {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers { return peers.uptime() }
+        #endif
+        return ProcessInfo.processInfo.systemUptime
+    }
+
+    private var recoveryPause: @Sendable (Duration) async throws -> Void {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers { return peers.sleep }
+        #endif
+        return { try await Task.sleep(for: $0) }
+    }
+
+    private var recoveryJitter: Double {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers { return peers.jitter() }
+        #endif
+        return .random(in: 0...1)
+    }
+
+    private func recoveryRadioReady() async -> Bool {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers { return await peers.waitUntilPoweredOn() }
+        #endif
+        return await ble.waitUntilPoweredOn()
+    }
+
+    private func recoveryAdvertisements() -> AsyncStream<FoundCamera> {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers { return peers.scan() }
+        #endif
+        return ble.scan()
+    }
+
+    private func stopRecoveryScan() {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers { peers.stopScan(); return }
+        #endif
+        ble.stopScan()
+    }
+
+    private func recoveryEpisodePictureIsFresh(since started: Date) -> Bool {
+        #if DEBUG
+            if let peers = sessionRecoveryNativePeers {
+                let picture = peers.picture()
+                return SessionRecoveryPolicy.hasFreshPicture(
+                    attemptStartedAt: started.timeIntervalSinceReferenceDate,
+                    now: peers.wallNow().timeIntervalSinceReferenceDate,
+                    lastSourceFrameAt: picture.sourceAt?.timeIntervalSinceReferenceDate,
+                    lastPresentedAt: picture.presentedAt?.timeIntervalSinceReferenceDate)
+            }
+        #endif
+        return hasFreshRecoveryPicture(since: started)
+    }
+
     // MARK: - Session recovery (camera power cycle)
 
     /// Recovers an established live session that dropped — camera power-off, BLE gone —
@@ -5379,7 +5452,7 @@ final class CameraSession {
         feedRecovering = false
         sessionRecoveryGeneration += 1
         let generation = sessionRecoveryGeneration
-        if sessionDropStormGuard.noteDrop(now: ProcessInfo.processInfo.systemUptime) {
+        if sessionDropStormGuard.noteDrop(now: recoveryUptime) {
             log.info(
                 "session: drop (\(reason, privacy: .public)) → storm pause after \(self.sessionDropStormGuard.dropsInWindow) drops"
             )
@@ -5393,8 +5466,9 @@ final class CameraSession {
         sessionRecovery = SessionRecoveryPolicy.monitor.state(afterFailedAttempts: 0)
         sessionRecoveryCardGraceElapsed = false
         recoveryCardGraceTask?.cancel()
+        let gracePause = recoveryPause
         recoveryCardGraceTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.recoveryCardGrace)
+            try? await gracePause(Self.recoveryCardGrace)
             guard let self, !Task.isCancelled else { return }
             guard self.sessionRecoveryGeneration == generation else { return }
             self.sessionRecoveryCardGraceElapsed = true
@@ -5433,6 +5507,7 @@ final class CameraSession {
         budget: Duration = .seconds(SessionRecoveryPolicy.automaticRecoveryBudgetSeconds)
     ) async {
         let generation = sessionRecoveryGeneration
+        let budgetPause = recoveryPause
         let timedOut = await withTaskGroup(of: Bool.self) { group in
             group.addTask { @MainActor [weak self] in
                 await self?.runSessionRecoveryAttempts()
@@ -5440,7 +5515,7 @@ final class CameraSession {
             }
             group.addTask {
                 do {
-                    try await Task.sleep(for: budget)
+                    try await budgetPause(budget)
                 } catch { return false }
                 return true
             }
@@ -5456,7 +5531,7 @@ final class CameraSession {
             attempts = 0
         }
         abortInFlightRun(preserveDecoder: true)
-        ble.stopScan()
+        stopRecoveryScan()
         sessionRecovery = .waitingForOperator(attemptsMade: attempts)
         sessionRecoveryCardGraceElapsed = true
         ControlLiveLog.line(
@@ -5498,17 +5573,17 @@ final class CameraSession {
             // Release it before scanning again so the body can advertise; keep
             // the last image and saved recovery identity for the next attempt.
             abortInFlightRun(preserveDecoder: true)
-            ble.stopScan()
+            stopRecoveryScan()
             guard
                 case .retry(let wait) = policy.decision(
-                    afterFailedAttempts: failures, jitter: .random(in: 0...1))
+                    afterFailedAttempts: failures, jitter: recoveryJitter)
             else {
                 sessionRecovery = policy.state(afterFailedAttempts: failures)
                 ControlLiveLog.line("session: recovery exhausted after \(failures) attempts")
                 applyLinkPresentation()
                 return
             }
-            try? await Task.sleep(for: .seconds(wait))
+            try? await recoveryPause(.seconds(wait))
         }
     }
 
@@ -5528,22 +5603,21 @@ final class CameraSession {
             }
             return false
         }
-        let started = Date()
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: Self.recoveryAttemptDeadline)
+        let started = recoveryWallNow
+        let deadline = recoveryNow.advanced(by: Self.recoveryAttemptDeadline)
         connect(foundCamera, preserveMonitor: true)
         var previousPhase = phase
-        var stageDeadline = clock.now.advanced(by: Self.recoveryDeadline(for: phase))
+        var stageDeadline = recoveryNow.advanced(by: Self.recoveryDeadline(for: phase))
         while !Task.isCancelled {
             if phase != previousPhase {
                 previousPhase = phase
-                stageDeadline = clock.now.advanced(by: Self.recoveryDeadline(for: phase))
+                stageDeadline = recoveryNow.advanced(by: Self.recoveryDeadline(for: phase))
                 ControlLiveLog.line("session: recovery stage=\(phase)")
             }
-            guard clock.now < deadline, clock.now < stageDeadline else { break }
-            if hasFreshRecoveryPicture(since: started), phase == .live { return true }
+            guard recoveryNow < deadline, recoveryNow < stageDeadline else { break }
+            if recoveryEpisodePictureIsFresh(since: started), phase == .live { return true }
             if !connectionRun.isRunning, phase != .live { return false }
-            do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
+            do { try await recoveryPause(.milliseconds(100)) } catch { return false }
         }
         guard !Task.isCancelled else { return false }
         ControlLiveLog.line("session: recovery deadline phase=\(phase) freshPicture=0")
@@ -5583,12 +5657,13 @@ final class CameraSession {
     }
 
     private func waitForRecoveryAdvertisement(id: UUID, timeout: Duration) async -> FoundCamera? {
-        guard await ble.waitUntilPoweredOn(), !Task.isCancelled else { return nil }
+        guard await recoveryRadioReady(), !Task.isCancelled else { return nil }
         let generation = sessionRecoveryGeneration
+        let scanPause = recoveryPause
         let foundCamera = await withTaskGroup(of: FoundCamera?.self) { group in
             group.addTask { @MainActor [weak self] in
                 guard let self else { return nil }
-                for await camera in self.ble.scan() {
+                for await camera in self.recoveryAdvertisements() {
                     if Task.isCancelled { return nil }
                     let seen = camera.enriched(from: self.saved(camera.id))
                     if seen.id == id { return seen }
@@ -5596,7 +5671,7 @@ final class CameraSession {
                 return nil
             }
             group.addTask {
-                try? await Task.sleep(for: timeout)
+                try? await scanPause(timeout)
                 return nil
             }
             let first = await group.next() ?? nil
@@ -5604,7 +5679,7 @@ final class CameraSession {
             return first
         }
         // GATT connect needs the next advertisement: keep scanning when found.
-        if foundCamera == nil, generation == sessionRecoveryGeneration { ble.stopScan() }
+        if foundCamera == nil, generation == sessionRecoveryGeneration { stopRecoveryScan() }
         return foundCamera
     }
 
@@ -5666,6 +5741,10 @@ final class CameraSession {
         let link = datalink
         datalink = nil
         guard ifCurrent() else { return }
+        #if DEBUG
+            sessionRecoveryNativePeers?.disposeEndpoint()
+            guard ifCurrent() else { return }
+        #endif
         guard let link else { return }
         link.onAccessUnit = nil
         link.onVideoDiscontinuity = nil
