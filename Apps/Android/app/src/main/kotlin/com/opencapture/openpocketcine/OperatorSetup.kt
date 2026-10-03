@@ -133,7 +133,7 @@ object SettingsHelpCopy {
     const val CAMERA_WIFI =
         "SSID joined for this session. The password stays in the Android Keystore on this phone."
     const val SAVED_CAMERAS =
-        "Pair from the home list. Settings does not start a new pair — that stays on Your cameras."
+        "Pair from the home list. Settings does not start a new pair \u2014 that stays on Your cameras."
     const val EDIT_VIEW = "Opens the monitor with an eye on each element you can show or hide."
     const val FRAME_IO =
         "Sign in to upload clips from the share popup. Frame.io needs the internet, so the phone hops off the camera Wi‑Fi for the upload."
@@ -144,7 +144,7 @@ object SettingsHelpCopy {
     const val HAPTICS =
         "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
     const val JOYSTICK_SENSITIVITY =
-        "How far a stick throw moves the gimbal — on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
+        "How far a stick throw moves the gimbal \u2014 on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
     const val VIRTUAL_JOYSTICK_SIZE =
         "How large the on-screen stick is. Medium is the default. Large is easier to grab; Small keeps more of the picture clear."
     const val VIRTUAL_JOYSTICK_INVERT_PAN =
@@ -162,7 +162,7 @@ object SettingsHelpCopy {
     const val KEEP_SCREEN_AWAKE =
         "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. Android may still dim when the device overheats."
     const val HDR_DISPLAY =
-        "Outdoor panel brightness, not a grade. WAVE, HISTO, PARADE, VECTOR, zebras and false color still read the decoded camera signal — judge exposure there, not from how bright the picture looks. Screen recording drops back to a normal SDR picture so the file is not HDR-boosted. This is not the camera's HDR/HLG color mode. Off by default."
+        "Outdoor panel brightness, not a grade. WAVE, HISTO, PARADE, VECTOR, zebras and false color still read the decoded camera signal \u2014 judge exposure there, not from how bright the picture looks. Screen recording drops back to a normal SDR picture so the file is not HDR-boosted. This is not the camera's HDR/HLG color mode. Off by default."
     const val THEME = "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
     const val SUPPORT = "Connection, live view, controls, and troubleshooting."
     const val REPORT = "Opens a public issue form on GitHub for this project."
@@ -175,7 +175,7 @@ object SettingsHelpCopy {
     const val FEATURE = "Start an idea in this project's feature-request discussion."
     const val SOURCE =
         "View the OpenPocketCine project on GitHub. Opening this may leave the camera Wi-Fi if that is the only network."
-    const val LINK_HEALTH = "How healthy the camera link is right now — delivery, not radio RSSI."
+    const val LINK_HEALTH = "How healthy the camera link is right now \u2014 delivery, not radio RSSI."
     const val CLEAR_CACHE =
         "Removes downloaded clip files from this phone. The clip list stays so you can cache them again from the camera."
     const val LUT_LOOK = "Looks apply on this phone. The file on the camera is unchanged."
@@ -184,9 +184,9 @@ object SettingsHelpCopy {
     const val APP_VERSION = "Current OpenPocketCine build from the native project metadata."
     const val LOCAL_CACHE = "Originals and playback proxies downloaded from the camera."
     const val CACHE_FULL_RESOLUTION =
-        "Download the original camera file when you open a clip. Off keeps only the 720p proxy to save space. Share needs the original — connect the camera if it is not cached."
+        "Download the original camera file when you open a clip. Off keeps only the 720p proxy to save space. Share needs the original \u2014 connect the camera if it is not cached."
     const val FEED_UPSCALER =
-        "How the live-view frame is enlarged to fill the panel. The camera sends far fewer pixels than the panel has, so something always does this. Off is a plain sample, Fast is a fixed sharpening kernel, and Quality is the OS spatial upscaler.\n\nAI is different in kind: it is a machine-learning model that INFERS detail the camera never captured. It gives the sharpest-looking picture, but the fine texture it adds is invented — plausible rather than real — so it can suggest crispness the lens did not record. Judge critical focus on Quality or Fast, and treat AI as a viewing aid rather than evidence.\n\nOnly the options this device supports are shown."
+        "How the live-view frame is enlarged to fill the panel. The camera sends far fewer pixels than the panel has, so something always does this. Off is a plain sample, Fast is a fixed sharpening kernel, and Quality is the OS spatial upscaler.\n\nAI is different in kind: it is a machine-learning model that INFERS detail the camera never captured. It gives the sharpest-looking picture, but the fine texture it adds is invented \u2014 plausible rather than real \u2014 so it can suggest crispness the lens did not record. Judge critical focus on Quality or Fast, and treat AI as a viewing aid rather than evidence.\n\nOnly the options this device supports are shown."
     const val FALSE_COLOR_SCALE =
         "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
             "CineStop paints five stops around 18% gray, read through the " +
@@ -270,7 +270,7 @@ internal object OperatorLinkHealth {
 
     fun compactFps(incoming: String): String {
         val compact = if (incoming.endsWith(".00")) incoming.dropLast(3) else incoming
-        return compact.ifEmpty { "—" }
+        return compact.ifEmpty { "\u2014" }
     }
 
     fun formatMeasuredFps(fps: Double): String {
@@ -292,7 +292,7 @@ internal object OperatorLinkHealth {
         if (phase == ConnectionPhase.FAILED) return "FAIL"
         if (recovering) return "RECOV"
         if (measuredFps > 0.0) return compactFps(formatMeasuredFps(measuredFps))
-        return if (!isLive && phase == ConnectionPhase.IDLE) "—" else "LINK"
+        return if (!isLive && phase == ConnectionPhase.IDLE) "\u2014" else "LINK"
     }
 
     fun liveTileDetail(
@@ -1430,7 +1430,9 @@ private fun DisplayRows(
             },
         ) {
             Text(
-                mode.settingsCaption,
+                if (mode == PocketDispMode.CLEAN) {
+                    "A stripped-back image. Same elements as DISP 1 \u2014 status, tool and capture bars start off. Pin which view assists stay on."
+                } else mode.settingsCaption,
                 style = LiveType.ui(10.5f),
                 color = LiveDesign.muted,
                 modifier = Modifier.padding(vertical = 5.dp),

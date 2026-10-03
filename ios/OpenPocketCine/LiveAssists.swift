@@ -1,5 +1,6 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -55,7 +56,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
 
     static var toolbarCases: [LiveAssistTool] { toolbarGroups.flatMap { $0 } }
 
-    /// View Assist settings list — same cinema set as the bar, plus AUDIO.
+    /// View Assist settings list \u{2014} same cinema set as the bar, plus AUDIO.
     static var settingsCases: [LiveAssistTool] {
         toolbarCases + [.audioMeters]
     }
@@ -248,9 +249,9 @@ final class LiveAssistState {
     var lutExposureStops: Double = 0
     /// DISP 2. Chrome follows `PocketDispChrome`; assists follow `cleanViewPinnedTools`.
     var clean = false
-    /// View-assist tools that stay on the picture in DISP 2. Filter only — never mutates `isOn`.
+    /// View-assist tools that stay on the picture in DISP 2. Filter only \u{2014} never mutates `isOn`.
     var cleanViewPinnedTools: Set<LiveAssistTool> = LiveAssistState.cleanViewDefaultPinnedTools
-    /// OpenZCine `playbackVisibleAssistTools` — independent of the live toolbar.
+    /// OpenZCine `playbackVisibleAssistTools` \u{2014} independent of the live toolbar.
     var playbackVisibleTools: Set<LiveAssistTool> = []
     var showLUTPicker = false
     var configureTool: LiveAssistTool? {
@@ -258,18 +259,18 @@ final class LiveAssistState {
     }
     /// Icon (or toolbar) frame in `LiveCanvasSpace` for the long-press options popup.
     var longPressAnchor: CGRect = .zero
-    /// OpenZCine `scopes.crushClipCompensation` — shared by HISTO edge lights and LIGHTS.
+    /// OpenZCine `scopes.crushClipCompensation` \u{2014} shared by HISTO edge lights and LIGHTS.
     var crushClipCompensation = TrafficLightsAssist.defaultCompensation
     var trafficLightsScale = TrafficLightsAssist.defaultScale
     var trafficLightsPosition: TrafficLightsAssist.StoredCenter?
-    /// First-launch default is on — DJI Auto applies the matching official cube.
+    /// First-launch default is on \u{2014} DJI Auto applies the matching official cube.
     var lutEnabled = true
     var lutSelection: LUTSelection = .djiAuto
     var monitorColorMode: ColorMode?
     var monitorFamily: CameraBodyFamily = .pocket
     var monitorCameraName: String?
     /// Media player is grading a clip (connected or not). LUT sheet must not
-    /// restamp Auto from the live SET — disconnected has no `inPlayback` flag.
+    /// restamp Auto from the live SET \u{2014} disconnected has no `inPlayback` flag.
     var gradesClip = false
     /// Live Photo / Photo. Not persisted. Playback clears this so clip color wins.
     var liveIsPhoto = false
@@ -319,7 +320,7 @@ final class LiveAssistState {
     }
 
     /// WAVE / PARADE / VECTOR / LIGHTS share one source-frame sample in `HevcDecoder`.
-    /// Flags are what the monitor *shows* — DISP 2 applies the pin filter here.
+    /// Flags are what the monitor *shows* \u{2014} DISP 2 applies the pin filter here.
     var effects: LiveImageEffects {
         LiveImageEffects(
             peaking: isVisible(.peaking),
@@ -564,7 +565,7 @@ final class LiveAssistState {
         refreshLUTCube()
     }
 
-    /// LUT sheet appear. Live SET must not replace the clip's Auto cube —
+    /// LUT sheet appear. Live SET must not replace the clip's Auto cube \u{2014}
     /// including disconnected library playback (`gradesClip`, no camera SET).
     /// Watcher isolation: do not restamp from the camera session.
     func bindLUTPicker(
@@ -753,6 +754,9 @@ final class LiveAssistState {
 }
 
 enum OperatorPrefs {
+    private static let display = MonitorDisplayPreferences(
+        storage: .standard,
+        keys: .init(live: "OpenPocketCine.DispChrome.Live", clean: "OpenPocketCine.DispChrome.Clean"))
     private static let awakeKey = "OpenPocketCine.KeepScreenAwake"
     private static let hdrDisplayKey = "OpenPocketCine.HDRDisplay"
     private static let lutKey = "OpenPocketCine.LastLUT"
@@ -777,8 +781,6 @@ enum OperatorPrefs {
     private static let virtualJoystickSizeKey = "OpenPocketCine.VirtualJoystickSize"
     private static let gimbalRampKey = "OpenPocketCine.GimbalRamp"
     private static let gimbalDoubleTapKey = "OpenPocketCine.GimbalDoubleTap"
-    private static let dispLiveKey = "OpenPocketCine.DispChrome.Live"
-    private static let dispCleanKey = "OpenPocketCine.DispChrome.Clean"
     private static let cleanPinsKey = "OpenPocketCine.CleanViewPins.v1"
     private static let playbackAssistsKey = "OpenPocketCine.PlaybackAssists.v1"
     private static let lastMonitorColorModeKey = "OpenPocketCine.LastMonitorColorMode"
@@ -957,13 +959,13 @@ enum OperatorPrefs {
     }
 
     static var dispLive: PocketDispChrome {
-        get { loadChrome(key: dispLiveKey) ?? .liveDefaults }
-        set { saveChrome(newValue, key: dispLiveKey) }
+        get { display.live }
+        set { display.live = newValue }
     }
 
     static var dispClean: PocketDispChrome {
-        get { loadChrome(key: dispCleanKey) ?? .cleanDefaults }
-        set { saveChrome(newValue, key: dispCleanKey) }
+        get { display.clean }
+        set { display.clean = newValue }
     }
 
     static var shutterUsesAngle: Bool {
@@ -1050,17 +1052,6 @@ enum OperatorPrefs {
             let ordered = LiveAssistTool.cleanPinCases.filter { newValue.contains($0) }.map(
                 \.rawValue)
             UserDefaults.standard.set(ordered, forKey: cleanPinsKey)
-        }
-    }
-
-    private static func loadChrome(key: String) -> PocketDispChrome? {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(PocketDispChrome.self, from: data)
-    }
-
-    private static func saveChrome(_ value: PocketDispChrome, key: String) {
-        if let data = try? JSONEncoder().encode(value) {
-            UserDefaults.standard.set(data, forKey: key)
         }
     }
 
@@ -1165,7 +1156,7 @@ enum OperatorPrefs {
         UserDefaults.standard.set(data, forKey: assistKey)
     }
 
-    /// OpenZCine `operatorPreferences.v1` / `assistConfiguration.v1` analogue — one blob.
+    /// OpenZCine `operatorPreferences.v1` / `assistConfiguration.v1` analogue \u{2014} one blob.
     struct Snapshot: Codable {
         var tools: [String]
         var guideAspect: String
@@ -1308,7 +1299,7 @@ struct FeedAlignedAssists: View {
     /// Long-press lock on the tap-focus box: a lock tag at its lower corner.
     var focusLocked = false
     /// When set (letterboxed clip playback), framing overlays align to this rect
-    /// instead of the full geometry — OpenZCine `FeedAlignedAssists(feed:)`.
+    /// instead of the full geometry \u{2014} OpenZCine `FeedAlignedAssists(feed:)`.
     var feed: CGRect? = nil
     /// Decoded raster aspect before the optical correction.
     var sourceAspect: CGFloat? = nil
@@ -1402,7 +1393,7 @@ struct FeedAlignedAssists: View {
 
 }
 
-/// OpenZCine `desqueezedRect` — framing aids sit on the visible (shrunk) picture, not the full frame.
+/// OpenZCine `desqueezedRect` \u{2014} framing aids sit on the visible (shrunk) picture, not the full frame.
 func overlayFeedRect(
     _ full: CGRect, _ assist: LiveAssistState, pictureAspect: CGFloat?,
     sourceAspect: CGFloat? = nil

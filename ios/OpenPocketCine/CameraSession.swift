@@ -8,9 +8,8 @@ import OpenPocketViewCore
 import UIKit
 import os
 
-/// Orchestrates the whole Phase-0 spine: scan -> GATT -> pair -> read Wi-Fi creds -> join AP ->
-/// datalink -> live status. Owns the single consumer of the BLE frame stream and routes replies to
-/// whoever is awaiting them. Drives `phase` and `status` for the UI.
+/// Composes the DJI Apple connection/exchange/heartbeat owners with native picture, saved
+/// credentials and operator policy. Drives the app's phase/status and remaining recovery policy.
 @MainActor
 @Observable
 final class CameraSession {
@@ -89,7 +88,6 @@ final class CameraSession {
     private(set) var setupProgress: String? {
         didSet { if setupProgress != oldValue { connectPhaseChanged() } }
     }
-    @ObservationIgnored private var stationSeq: UInt16 = 1200
 
     /// Only used by the host's explicit Show Wi-Fi code sheet. Never advertised or logged.
     var watcherWiFiJoinCode: String? {
@@ -199,8 +197,22 @@ final class CameraSession {
         subsystem: "com.opencapture.openpocketcine", category: "session")
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored private var scanHintTask: Task<Void, Never>?
-    @ObservationIgnored private var runTask: Task<Void, Never>?
-    @ObservationIgnored private var connectGeneration = 0
+    @ObservationIgnored private lazy var connectionRun = makeConnectionRun()
+    #if DEBUG
+        @ObservationIgnored var connectionNativePeers: ConnectionNativePeers?
+    #endif
+    private var connectionTransport: DjiAppleConnectionTransport {
+        #if DEBUG
+            if let trace = connectionNativePeers { return trace.transport }
+        #endif
+        return .init(bluetooth: ble, host: .pocket)
+    }
+    private var connectionTiming: DjiAppleConnectionTiming {
+        #if DEBUG
+            if let trace = connectionNativePeers { return trace.timing }
+        #endif
+        return .continuous
+    }
     @ObservationIgnored private var reconnectTarget: UUID?
     @ObservationIgnored private var sessionRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var sessionRecoveryGeneration = 0
@@ -720,7 +732,6 @@ final class CameraSession {
             controlBinding.beginConnection()
             cameraReportedCapture = CameraStatus()
         }
-        connectGeneration += 1
         abortInFlightRun()
         reconnectTarget = id
         connectionTargetID = id
@@ -770,7 +781,7 @@ final class CameraSession {
     /// Discovery stops only while nothing connects: a scan that finds the camera to connect keeps
     /// running, and a connect in flight is never touched.
     func stopScan() {
-        guard runTask == nil, reconnectTarget == nil, phase == .scanning || phase == .idle else {
+        guard !connectionRun.isRunning, reconnectTarget == nil, phase == .scanning || phase == .idle else {
             return
         }
         scanTask?.cancel()
@@ -797,6 +808,7 @@ final class CameraSession {
     }
 
     private func connect(_ camera: FoundCamera, preserveMonitor: Bool) {
+        guard !isMultiviewBorrowed else { return }
         let camera = camera.enriched(from: saved(camera.id))
         if case .live = phase, connectedCamera?.id == camera.id, !sessionRecovery.isRecovering {
             return
@@ -808,8 +820,6 @@ final class CameraSession {
         // One `run` at a time. A second tap (or Cancel→tap) used to leave the old
         // unstructured Task sending 0x07/45 while the new one started GetSSID.
         ReliabilityReporting.setCameraSessionActive(true)
-        connectGeneration += 1
-        let generation = connectGeneration
         LocalVPNProbe.noteIfActive()
         // Local Network prompt now, while Bluetooth pairs, not during the datalink.
         LocalNetworkAccess.requestEarly()
@@ -822,27 +832,13 @@ final class CameraSession {
         if !incidentSessionActive { beginFeedIncidentSession(cameraFamily: camera.model.name) }
         connectionTargetID = camera.id
         phase = .connectingGatt
-        runTask = Task {
-            defer {
-                if generation == connectGeneration { runTask = nil }
-            }
-            do { try await run(camera) } catch is CancellationError { return } catch {
-                guard generation == connectGeneration else { return }
-                if Task.isCancelled { return }
-                if case .idle = phase { return }  // user already hit Disconnect
-                if preserveMonitor {
-                    ControlLiveLog.line(
-                        "session: recovery attempt failed phase=\(phase) \(error.localizedDescription)"
-                    )
-                    return
-                }
-                lastConnectError = error
-                let why = djiConnectionFailureDescription(error)
-                ControlLiveLog.line("session: connect failed at \(phase.label) — \(why)")
-                phase = .failed(why)
-                applyLinkPresentation()
-            }
+        let route: DJIConnectionRoute = switch connectionSetup {
+        case .cameraWiFi: .cameraAccessPoint
+        case .wifi: .infrastructureNetwork
+        case .phoneHotspot: .phoneHotspot
         }
+        connectionRun.replace(target: DJISighting(id: camera.id.uuidString, name: camera.name,
+            model: camera.model, modelId: camera.modelId), route: route, preservingSource: preserveMonitor)
     }
 
     func disconnect() {
@@ -858,7 +854,6 @@ final class CameraSession {
         FeedIncidentRuntime.endSession(now: ProcessInfo.processInfo.systemUptime)
         incidentSessionActive = false
         incidentPrevious = nil
-        connectGeneration += 1
         reconnectTarget = nil
         connectionTargetID = nil
         isReconnecting = false
@@ -979,6 +974,9 @@ final class CameraSession {
     }
 
     private func forgetWifiCreds(cameraId: UUID, advertisedName: String?, ssid: String?) {
+        #if DEBUG
+            if let trace = connectionNativePeers { trace.forget(); return }
+        #endif
         CameraWifiKeychain.delete(
             cameraId: cameraId, advertisedName: advertisedName, lastSSID: ssid)
         if connectedCamera?.id == cameraId || cachedWifiCameraId == cameraId {
@@ -997,8 +995,7 @@ final class CameraSession {
         foregroundCheckTask?.cancel()
         foregroundCheckTask = nil
         cancelProgrammedMove()
-        runTask?.cancel()
-        runTask = nil
+        connectionRun.retire()
         sessionHeartbeat.stop()
         lastSelfieFlipReplyAt = nil
         controlExchange.stopBLEDrain()
@@ -1040,10 +1037,71 @@ final class CameraSession {
 
     // ---- the flow --------------------------------------------------------------------------------
 
-    private func run(_ camera: FoundCamera) async throws {
-        var timeline = ConnectTimeline(now: ProcessInfo.processInfo.systemUptime)
+    private func makeConnectionRun() -> DjiAppleConnectionRun {
+        DjiAppleConnectionRun(transport: connectionTransport, exchange: controlExchange,
+            heartbeat: sessionHeartbeat, credentials: .init(
+                savedPath: { [weak self] target, route in
+                    guard let self, let camera = self.connectionCamera(target) else { return .init() }
+                    let saved = self.saved(camera.id)
+                    let setup: CameraConnectionSetup = route == .phoneHotspot ? .phoneHotspot
+                        : route == .infrastructureNetwork ? .wifi : .cameraWiFi
+                    let networkSSID = setup.movesCamera ? self.stationNetwork ?? saved?.ssid(for: setup) : nil
+                    let network = networkSSID.flatMap { self.connectionRunStationNetwork(ssid: $0) }
+                    return .init(isSaved: saved != nil, mayBeInStationRole: saved?.mayBeInStationRole == true,
+                        station: network.map { .init(ssid: $0.ssid, password: $0.password) })
+                }, resolveWiFi: { [weak self] target in
+                    guard let self, let camera = self.connectionCamera(target) else { return .init() }
+                    let known = self.resolvedWifiCreds(for: camera)
+                    return .init(ssid: known.ssid, password: known.password,
+                        source: known.source, skipBLE: known.skipBle)
+                }, joinPolicy: { [weak self] target, ssid, isSaved in
+                    guard let self, let id = UUID(uuidString: target.id) else { return .init() }
+                    return .init(persist: CameraSoftAP.shouldPersistHotspot(
+                        isSavedCamera: isSaved || self.cachedWifiCameraId == id),
+                        otherSSIDs: self.leftoverSoftAPSSIDs(besides: ssid))
+                }, validateSSID: { [weak self] target, ssid, use in
+                    guard let self, let camera = self.connectionCamera(target) else { throw CancellationError() }
+                    switch use {
+                    case .fallback:
+                        if CameraWifiResolution.isSSIDOwnedByAnotherCamera(
+                            ssid, cameraId: target.id, saved: self.savedCameras()) { throw Fail.wrongCamera }
+                    case .join: try self.assertSSIDBelongs(to: camera, ssid: ssid)
+                    }
+                }, persist: { [weak self] target, ssid, password in
+                    guard let self, let camera = self.connectionCamera(target) else { return }
+                    self.persistWifiCreds(camera: camera, ssid: ssid, password: password)
+                }, rejectCached: { [weak self] target, ssid in
+                    guard let self, let id = UUID(uuidString: target.id) else { return }
+                    self.forgetWifiCreds(cameraId: id, advertisedName: target.name, ssid: ssid)
+                }), native: .init(observe: { [weak self] in
+                    guard let self else { return .init() }
+                    return .init(ownsConnection: !self.isMultiviewBorrowed, endpoint: self.connectionRunEndpoint,
+                        path: .init(joinedSSID: self.joinedSSID, stationSSID: self.stationSSID,
+                            stationHost: self.stationHost), initialLiveViewEnableSent: self.liveViewEnableSent)
+                }, prepare: { [weak self] target, _, attempt in
+                    guard let self, let camera = self.connectionCamera(target), attempt.isCurrent else { return }
+                    self.prepareConnectionSource(camera, attempt: attempt)
+                }, attach: { [weak self] endpoint, _, attempt in
+                    self?.attachConnectionEndpoint(endpoint, attempt: attempt)
+                }, registered: { [weak self] endpoint, _, attempt in
+                    self?.registerConnectionEndpoint(endpoint, attempt: attempt)
+                }), timing: connectionTiming, event: { [weak self] event in
+                    self?.connectionRunEvent(event)
+                }, journal: { ControlLiveLog.line($0) },
+            info: { [weak self] line in self?.log.info("\(line, privacy: .public)") })
+    }
+
+    private func connectionCamera(_ target: DJISighting) -> FoundCamera? {
+        guard let id = UUID(uuidString: target.id) else { return nil }
+        return FoundCamera(id: id, name: target.name, model: target.model, modelId: target.modelId)
+    }
+
+    private func prepareConnectionSource(_ camera: FoundCamera, attempt: DjiAppleConnectionRun.Attempt) {
+        guard attempt.isCurrent, !isMultiviewBorrowed else { return }
         connectedCamera = camera
+        guard attempt.isCurrent else { return }
         status.meteredEv = nil
+        guard attempt.isCurrent else { return }
         rawAccessUnits = 0
         rawFramesEnqueued = 0
         lastIdrRequest = Date.distantPast
@@ -1060,195 +1118,104 @@ final class CameraSession {
         firstPictureSettled = false
         needsForegroundRecover = false
         resetLinkHealthMeasurements()
+        guard attempt.isCurrent else { return }
         resetFeedWatchdog()
+        guard attempt.isCurrent else { return }
         // Session recovery holds the last frame (Android parity). `reset()` is
         // `flushAndRemoveImage` — abortInFlightRun already flushed for recovery.
         if !holdsMonitor { decoder.reset() }
+        guard attempt.isCurrent else { return }
         resetGimbalPoseForNewStream()
+        guard attempt.isCurrent else { return }
         // Camera is still pushing the last GOP. Hold before UDP opens so
         // leftover P-frames cannot set lastPresentedAt and skip first-picture.
         decoder.beginIDRHold()
-        // `0x07/0x45 [00 06]` is a deferred pairing (the camera is still closing a
-        // previous session), not approval. Like Multiview: drop the link, wait, retry.
-        for attempt in 1...3 {
-            phase = .connectingGatt
-            try await connectBleRetryingDrop(camera)
-            if attempt == 1 {
-                timeline.mark("gatt", now: ProcessInfo.processInfo.systemUptime)
-            }
-            try Task.checkCancellation()
-            startFrameRouter()
-
-            // Pair. Wake first (like Mimo), then SetPairingPIN.
-            // First-time pairing shows Approve on the camera and may hold the 0x45 reply
-            // until the user taps; an 8 s wait dies on "Pairing…" as "stopped responding"
-            // while the camera is still waiting. 0x46 can also arrive before 0x45.
-            phase = .pairing
-            ble.send(Commands.sessionWake())
-            ble.send(Commands.setPairingPin(pin: camera.model.pairingToken))
-            phase = .awaitingApproval
-            do {
-                try await completePairing()
-                break
-            } catch Fail.timeout {
-                throw Fail.pairingTimeout
-            } catch Fail.pairingDeferred where attempt < 3 {
-                ControlLiveLog.line("pair: camera deferred pairing (00 06), retry \(attempt) of 2")
-                controlExchange.stopBLEDrain()
-                await ble.disconnectAndWait()
-                try await Task.sleep(for: .seconds(3))
-            }
-        }
-        timeline.mark("pair", now: ProcessInfo.processInfo.systemUptime)
-
-        // After pairing the camera is still dismissing Approve / bringing the AP up.
-        // Mimo waits ~100 ms then 0x53/0x10, then ~800 ms more before GetSSID.
-        // Asking immediately races the 0x46 ACK and comes back empty or silent.
-        // Keepalive must start now — an idle paired link dies in ~5–6 s, and the
-        // old 8 s one-shot wait died as "stopped responding" for the same reason
-        // pairing used to. Warm path (SoftAP still up + cached creds) skips the
-        // settle sleeps; 0x53/0x10 still goes out.
-        startKeepalive(ssid: nil)
-        let saved = saved(camera.id)
-        if connectionSetup.movesCamera {
-            let ssid = try await runStation(camera, saved: saved)
-            timeline.mark("hs", now: ProcessInfo.processInfo.systemUptime)
-            log.info("\(timeline.line(), privacy: .public)")
-            try Task.checkCancellation()
-            startKeepalive(ssid: ssid)
-            return
-        }
-        phase = .readingWifiCreds
-        let restoreAP = saved?.mayBeInStationRole == true
-        if restoreAP { await restoreCameraAccessPoint() }
-        let credsFromCache = resolvedWifiCreds(for: camera).skipBle
-        let skipAPSettle = !restoreAP && cameraPathReady() && credsFromCache
-        if !skipAPSettle {
-            try await Task.sleep(for: .milliseconds(200))
-        }
-        ControlLiveLog.line("creds: sending 0x53/0x10 (wake AP)")
-        ble.send(Commands.session5310())
-        do {
-            _ = try await waitFrame(0x53, 0x10, timeout: .seconds(2))  // Pocket 3 may answer e0
-        } catch Fail.timeout {
-            ControlLiveLog.line(
-                "creds: 0x53/0x10 no reply — continuing (Pocket 3 often answers e0/silent)")
-        } catch Fail.disconnected {
-            throw Fail.disconnectedDuring("0x53/0x10")
-        }
-        if !skipAPSettle {
-            try await Task.sleep(for: .milliseconds(600))
-        }
-        try Task.checkCancellation()
-        let (ssid, pass) = try await wifiCredsAfterPairing(camera)
-        try assertSSIDBelongs(to: camera, ssid: ssid)
-        ControlLiveLog.line(
-            "creds: SSID \(ssid) (\(pass.count) char password, \(credsFromCache ? "cached" : "from BLE")) body=\(camera.model.name)"
-        )
-        let persistHotspot = CameraSoftAP.shouldPersistHotspot(
-            isSavedCamera: saved != nil
-                || cachedWifiCameraId == camera.id)
-
-        phase = .joiningWifi
-        // Both SoftAPs are 192.168.2.1. Do not wait for that subnet to vanish —
-        // iOS stays associated until we apply the Nano (or Pocket) hotspot.
-        let otherSSIDs = leftoverSoftAPSSIDs(besides: ssid)
-        ControlLiveLog.line(
-            "wifi: switch to \(ssid) kicking \(otherSSIDs.joined(separator: ","))")
-        do {
-            try await WiFiJoiner.joinCameraAP(
-                ssid: ssid, passphrase: pass, wpa3: camera.model.wpa3,
-                knownOtherSSIDs: otherSSIDs, persist: persistHotspot, host: .pocket)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            // A Pocket "Reset Wi-Fi" regenerates the passphrase. Cached creds
-            // used to be kept through every failed join (Keychain survives
-            // reinstall, and the wizard has no Forget), so the tester in #235
-            // could never join again. Drop them; the next tap re-reads over BLE.
-            // A missing camera address (Personal Hotspot, slow DHCP) is not a rejected
-            // password; keep the creds for the next tap.
-            if credsFromCache, WiFiJoiner.JoinError.rejectsCredentials(error) {
-                ControlLiveLog.line("creds: join failed with cached creds — dropping cache")
-                forgetWifiCreds(cameraId: camera.id, advertisedName: camera.name, ssid: ssid)
-            } else if credsFromCache {
-                ControlLiveLog.line("creds: join missed the camera address, keeping cache")
-            }
-            throw error
-        }
-        try Task.checkCancellation()
-        // Known good only once the join worked.
-        persistWifiCreds(camera: camera, ssid: ssid, password: pass)
-        joinedSSID = ssid
-        timeline.mark("path", now: ProcessInfo.processInfo.systemUptime)
-
-        phase = .openingDatalink
-        let existing = datalink
-        let dl: DatalinkDriver
-        if let existing, CameraSoftAP.shouldReuseDatalink(isClosed: existing.isClosed) {
-            dl = existing
-        } else {
-            dl = makeDatalink(camera)
-            wireDatalink(dl)
-            datalink = dl
-        }
-        // Handshake first (yesterday's working order). Mounting LiveView
-        // before `open()` starved the UDP reader / ACK latch.
-        try await openDatalinkKeepingLive(dl)
-        timeline.mark("hs", now: ProcessInfo.processInfo.systemUptime)
-        if liveViewEnableSent {
-            timeline.mark("enable", now: ProcessInfo.processInfo.systemUptime)
-        }
-        log.info("\(timeline.line(), privacy: .public)")
-        try Task.checkCancellation()
-        startKeepalive(ssid: ssid)
+        guard attempt.isCurrent else { return }
     }
 
-    /// SoftAP still `192.168.2.x` after a handshake miss: rebind UDP and try
-    /// again. Do not set `.failed` — that pops the operator back to pairing.
-    private func openDatalinkKeepingLive(_ dl: DatalinkDriver) async throws {
-        if !CameraSoftAP.shouldReuseDatalink(isClosed: dl.isClosed) {
-            throw CancellationError()
-        }
-        var attempt = 0
-        while true {
-            try Task.checkCancellation()
-            do {
-                try await dl.open { [self] in
-                    guard shouldCommitLiveHandshake(dl) else { return }
-                    phase = .live
-                    applyLinkPresentation()
-                    beginIDRHoldIfNeeded()
-                    // Do not wait for the layer. First boot spends ~2 s here
-                    // while P-frames pile up; 0x09/0xa8 must follow subscribe
-                    // immediately so the IDR lands. Handshake is path proof —
-                    // do not re-check getifaddrs (that flicker skipped enable).
-                    sendInitialLiveViewEnable(
-                        displayAttached: decoder.isDisplayReady, pathProven: true)
-                }
+    private func connectionRunEvent(_ event: DjiAppleConnectionRun.Event) {
+        guard let runID = connectionRun.currentRunID else { return }
+        switch event {
+        case .stage(let stage, let text):
+            let next: ConnectionPhase = switch stage {
+            case .scanning: .scanning
+            case .connectingBluetooth: .connectingGatt
+            case .pairing: .pairing
+            case .awaitingApproval: .awaitingApproval
+            case .readingWiFi: .readingWifiCreds
+            case .joiningWiFi, .findingCamera: .joiningWifi
+            case .openingDatalink: .openingDatalink
+            }
+            phase = next
+            // Phase observers may synchronously disconnect or replace this run.
+            guard connectionRun.currentRunID == runID else { return }
+            setupProgress = text
+        case .progress(let text): setupProgress = text
+        case .path(let path):
+            joinedSSID = path.joinedSSID
+            guard connectionRun.currentRunID == runID else { return }
+            stationSSID = path.stationSSID
+            guard connectionRun.currentRunID == runID else { return }
+            stationHost = path.stationHost
+        case .finished(let result, let preservingSource):
+            setupProgress = nil
+            guard connectionRun.currentRunID == runID else { return }
+            guard case .failure(let error) = result, !(error is CancellationError) else { return }
+            let failure = Self.legacyConnectionRunError(error)
+            if failure is CancellationError { return }
+            if case .idle = phase { return }
+            if preservingSource {
+                ControlLiveLog.line("session: recovery attempt failed phase=\(phase) \(failure.localizedDescription)")
                 return
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch DatalinkDriver.DatalinkError.localNetworkDenied {
-                throw DatalinkDriver.DatalinkError.localNetworkDenied
-            } catch {
-                let pathReady = cameraPathReady()
-                if CameraSoftAP.shouldKickAfterHandshakeTimeout(pathReady: pathReady) {
-                    throw error
-                }
-                attempt += 1
-                if CameraSoftAP.shouldGiveUpOpenRetry(attempts: attempt) {
-                    log.info("session: handshake give-up after \(attempt) opens")
-                    throw error
-                }
-                log.info("session: handshake miss #\(attempt) — SoftAP up, retry (no kick)")
-                try? await Task.sleep(
-                    for: .milliseconds(CameraSoftAP.handshakeRetryPauseMilliseconds))
             }
+            lastConnectError = failure
+            let why = djiConnectionFailureDescription(failure)
+            ControlLiveLog.line("session: connect failed at \(phase.label) \u{2014} \(why)")
+            phase = .failed(why)
+            guard connectionRun.currentRunID == runID else { return }
+            applyLinkPresentation()
         }
     }
 
-    // ---- Wi-Fi and Hotspot setups (#406) ----------------------------------------------------------
+    private var connectionRunEndpoint: (any DjiAppleConnectionEndpoint)? {
+        #if DEBUG
+            if let peers = connectionNativePeers { return peers.currentEndpoint() }
+        #endif
+        return datalink
+    }
+    private func attachConnectionEndpoint(_ endpoint: (any DjiAppleConnectionEndpoint)?,
+        attempt: DjiAppleConnectionRun.Attempt) {
+        guard attempt.isCurrent, !isMultiviewBorrowed else { return }
+        #if DEBUG
+            if let peers = connectionNativePeers { peers.attach(endpoint); return }
+        #endif
+        guard let endpoint else { disposeDatalink(ifCurrent: { attempt.isCurrent }); return }
+        guard let driver = endpoint as? DatalinkDriver else { return }
+        wireDatalink(driver)
+        guard attempt.isCurrent else { return }
+        datalink = driver
+    }
+    private func registerConnectionEndpoint(_ endpoint: any DjiAppleConnectionEndpoint,
+        attempt: DjiAppleConnectionRun.Attempt) {
+        guard attempt.isCurrent, !isMultiviewBorrowed, connectionRunEndpoint === endpoint else { return }
+        #if DEBUG
+            if let peers = connectionNativePeers { peers.registered(endpoint, attempt); return }
+        #endif
+        phase = .live
+        guard attempt.isCurrent, datalink === endpoint else { return }
+        applyLinkPresentation()
+        guard attempt.isCurrent, datalink === endpoint else { return }
+        beginIDRHoldIfNeeded()
+        guard attempt.isCurrent, datalink === endpoint else { return }
+        // Registered/subscribed boundary remains synchronous before one initial enable.
+        sendInitialLiveViewEnable(displayAttached: decoder.isDisplayReady, pathProven: true)
+    }
+    private func connectionRunStationNetwork(ssid: String) -> MultiviewNetworkStore.Network? {
+        #if DEBUG
+            if let peers = connectionNativePeers { return peers.stationNetwork }
+        #endif
+        return MultiviewNetworkStore.load(ssid: ssid, hotspot: usesHotspot)
+    }
 
     private var usesHotspot: Bool { connectionSetup == .phoneHotspot }
 
@@ -1256,8 +1223,8 @@ final class CameraSession {
     /// phone's hotspot bridge.
     private func cameraPathReady() -> Bool {
         connectionSetup.movesCamera
-            ? SharedWiFiPath.address(hotspot: usesHotspot) != nil
-            : WiFiJoiner.isCameraPathReady()
+            ? connectionTransport.network.stationPathReady(usesHotspot)
+            : connectionTransport.network.cameraPathReady()
     }
 
     private func makeDatalink(_ camera: FoundCamera, host: String? = nil) -> DatalinkDriver {
@@ -1269,204 +1236,18 @@ final class CameraSession {
             subscriptionKeys: Commands.subscriptionKeys(for: camera.model), host: .pocket)
     }
 
-    /// The camera drops a new link for a few seconds after a Wi-Fi role change: seen on a
-    /// Pocket 4 Pro right after Add setup's scan returned it to its access point
-    /// (CBError 7 twice, a manual retry 12 s later connected). Bounded retries.
-    private func connectBleRetryingDrop(_ camera: FoundCamera) async throws {
-        for attempt in 1...3 {
-            do {
-                try await ble.connect(camera)
-                return
-            } catch let error as CBError where error.code == .peripheralDisconnected && attempt < 3
-            {
-                ControlLiveLog.line("ble: camera dropped the new link; retry \(attempt) of 2")
-                try await Task.sleep(for: .seconds(3))
-            }
-        }
-    }
-
-    private func nextStationSeq() -> UInt16 {
-        stationSeq &+= 1
-        return stationSeq
-    }
-
-    private func exchangeBle(_ frame: Duml.Frame, timeout: TimeInterval) async throws
-        -> Duml.Frame
-    {
-        try await waitFrame(
-            frame.cmdSet, frame.cmdId, timeout: .seconds(timeout), consumeHold: false
-        ) { [ble] in ble.send(frame) }
-    }
-
-    /// A camera last sent to the phone hotspot may still be in station role with its own
-    /// access point down. `07/48 00` is the reset Multiview sends on close. A missing or
-    /// refused reply is not fatal: an AP already up still serves the normal join.
-    private func restoreCameraAccessPoint() async {
-        let reply = try? await exchangeBle(
-            MulticamCommands.stationMode(false, seq: nextStationSeq()), timeout: 12)
-        let accepted = reply?.payload == [0] || reply?.payload == [0, 0]
-        ControlLiveLog.line("wifi: restore camera access point accepted=\(accepted)")
-        // Join only once `07/39` reports 00 00 (access point; 00 01 is station). A Pocket 4
-        // Pro confirmed within 0.2 to 2.4 s on hardware; the log keeps the timing.
-        let started = Date()
-        for _ in 0..<15 {
-            let role = try? await exchangeBle(
-                MulticamCommands.wifiWorkMode(seq: nextStationSeq()), timeout: 4)
-            let hex = role?.payload.map { String(format: "%02x", $0) }.joined(separator: " ")
-            ControlLiveLog.line(
-                "wifi: camera role after restore \(hex ?? "no reply") at \(String(format: "%.1f", Date().timeIntervalSince(started))) s"
-            )
-            if role?.payload == [0, 0] { break }
-            try? await Task.sleep(for: .seconds(1))
-        }
-    }
-
-    /// Moves the camera onto the operator's Wi-Fi or this phone's Personal Hotspot with the
-    /// captured Multiview sequence, then goes live on the address that proves this body.
-    private func runStation(_ camera: FoundCamera, saved: SavedCamera?) async throws -> String {
-        guard let ssid = stationNetwork ?? saved?.ssid(for: connectionSetup),
-            let network = MultiviewNetworkStore.load(ssid: ssid, hotspot: usesHotspot)
-        else { throw Fail.setupNotSaved }
-        phase = .joiningWifi
-        stationSSID = ssid
-        defer { setupProgress = nil }
-        // Neither setup keeps the phone on a camera access point.
-        if let joined = joinedSSID {
-            WiFiJoiner.leave(ssid: joined)
-            joinedSSID = nil
-        }
-        // Wi-Fi: this phone joins first. Hotspot: the phone hosts it and joins nothing.
-        if !usesHotspot {
-            setupProgress = "Joining \(ssid) on this iPhone"
-            guard try await SharedWiFiPath.joinHost(ssid: ssid, password: network.password) != nil
-            else { throw Fail.hostWiFi(ssid) }
-        }
-        if camera.model.family == .nano {
-            setupProgress = "Waking camera Wi-Fi"
-            let wake = try await exchangeBle(
-                Commands.session5310(id: nextStationSeq()), timeout: 12)
-            guard wake.payload == [1, 0, 0, 0] else { throw Fail.nanoWake }
-            try await Task.sleep(for: .seconds(1))
-        }
-        let identity = try await exchangeBle(
-            Commands.getWifiSsid(id: nextStationSeq()), timeout: 12
-        ).payload
-        var join = StationJoin(
-            model: camera.model, ssid: ssid, password: network.password, hotspot: usesHotspot)
-        join.probeExistingStation = true
-        // Bodies without a captured preview profile (Action, 360) take Multiview's bounded
-        // experimental path: no Pocket video-mode route, missing role getter allowed.
-        join.experimental = !MulticamSupport.hasPreview(camera.model)
-        let outcome = try await join.run(
-            identity: identity, exchange: { try await self.exchangeBle($0, timeout: $1) },
-            send: { self.ble.send($0) }, next: nextStationSeq,
-            status: { self.setupProgress = $0 },
-            hotspotReady: { SharedWiFiPath.address(hotspot: true) != nil },
-            verifyOnNetwork: {
-                try await self.openStationDatalink(camera, identity: identity, within: 0)
-            },
-            log: { ControlLiveLog.line("station: \($0)") })
-        if outcome == .joined {
-            setupProgress = "Finding the camera on \(ssid)"
-            // A router hands the camera an address, then its services start: about 40 s
-            // after the join on a Pocket 4 Pro on a home /24 (2026-09-24 device run).
-            guard try await openStationDatalink(camera, identity: identity, within: 60) else {
-                throw Fail.stationCameraMissing(ssid)
-            }
-        }
-        return ssid
-    }
-
-    /// An address counts only when its datalink answers `07/07` with the identity read over
-    /// BLE: other cameras can share the network. Then register and send the one enable.
-    /// `within` seconds: keep sweeping the subnet until the camera answers or time runs out.
-    private func openStationDatalink(
-        _ camera: FoundCamera, identity: [UInt8], within patience: TimeInterval
-    ) async throws -> Bool {
-        let deadline = Date().addingTimeInterval(patience)
-        var sweep = 0
-        repeat {
-            sweep += 1
-            if try await openStationDatalinkOnce(camera, identity: identity, sweep: sweep) {
-                return true
-            }
-            guard Date() < deadline else { break }
-            try await Task.sleep(for: .seconds(2))
-        } while Date() < deadline
-        return false
-    }
-
-    private func openStationDatalinkOnce(_ camera: FoundCamera, identity: [UInt8], sweep: Int)
-        async throws -> Bool
-    {
-        guard cameraPathReady() else {
-            ControlLiveLog.line(
-                "station: sweep \(sweep) no \(usesHotspot ? "hotspot" : "Wi-Fi") address")
-            return false
-        }
-        let known = stationHost.map { [$0] } ?? []
-        // Whether the phone is on the setup's network, never the name: diagnostics are shared.
-        let current = await WiFiJoiner.currentSSID()
-        let phoneNetwork = current == nil ? "unnamed" : current == stationSSID ? "same" : "other"
-        let started = Date()
-        let found: [String]
-        do {
-            found = try await MultiviewDiscovery().candidates(excluding: [], hotspot: usesHotspot)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            ControlLiveLog.line(
-                "station: sweep \(sweep) cannot scan this subnet (\(error.localizedDescription))")
-            found = []
-        }
-        let subnet =
-            SharedWiFiPath.address(hotspot: usesHotspot).flatMap { address in
-                SharedWiFiPath.netmask(hotspot: usesHotspot).flatMap {
-                    MulticamDiscovery.hosts(address: address, mask: $0)?.count
-                }
-            } ?? 0
-        ControlLiveLog.line(
-            "station: sweep \(sweep) phone=\(usesHotspot ? "hotspot" : phoneNetwork) hosts=\(subnet) answering=\(found.count) known=\(known.count) in \(String(format: "%.1f", Date().timeIntervalSince(started))) s"
-        )
-        for host in known + found.filter({ !known.contains($0) }) {
-            try Task.checkCancellation()
-            disposeDatalink()
-            let dl = makeDatalink(camera, host: host)
-            wireDatalink(dl)
-            datalink = dl
-            do {
-                try await dl.open(identityOnly: true)
-                let reply = try await waitFrame(
-                    0x07, 0x07, timeout: .seconds(8), consumeHold: false
-                ) { _ = dl.send(Commands.getWifiSsid(id: 0)) }
-                guard reply.payload == identity, shouldCommitLiveHandshake(dl) else {
-                    ControlLiveLog.line("station: an answering device is another camera")
-                    continue
-                }
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                ControlLiveLog.line("station: an answering device did not open the datalink")
-                continue
-            }
-            ControlLiveLog.line("station: camera identity verified on the network")
-            stationHost = host
-            dl.completeRegistration()
-            phase = .live
-            applyLinkPresentation()
-            beginIDRHoldIfNeeded()
-            sendInitialLiveViewEnable(displayAttached: decoder.isDisplayReady, pathProven: true)
-            return true
-        }
-        disposeDatalink()
-        return false
-    }
-
     // ---- BLE frame routing -----------------------------------------------------------------------
 
     /// Packet workflows live in the shared owner; host policy and presentation stay here.
     private func makeControlExchange() -> DjiAppleControlExchange {
-        DjiAppleControlExchange(
+        #if DEBUG
+            if let trace = connectionNativePeers {
+                return DjiAppleControlExchange(endpoint: .init(writeBLE: { trace.transport.bluetooth.send($0) },
+                    writeDatalink: { _ in .skipped }), timing: trace.exchangeTiming,
+                    context: { .init() })
+            }
+        #endif
+        return DjiAppleControlExchange(
             endpoint: .init(bluetooth: ble, datalink: datalink),
             context: { [weak self] in
                 guard let self else { return .init() }
@@ -1529,7 +1310,7 @@ final class CameraSession {
     }
 
     private func startFrameRouter() {
-        controlExchange.startBLEDrain(ble.frames)
+        controlExchange.startBLEDrain(connectionTransport.bluetooth.frames())
     }
 
     private func liveVideoIsFresh() -> Bool {
@@ -1598,16 +1379,6 @@ final class CameraSession {
     /// Success is `0x07/0x45` `[00 01]` (already paired) or a `0x07/0x46` approval
     /// request (ACKed in `route()`). `[00 02]` means keep waiting for `0x46`;
     /// `[00 06]` is deferred (Android Multiview `PairingDeferred`), never success.
-    private func completePairing() async throws {
-        let frame = try await waitFrame(
-            matching: [(0x07, 0x45), (0x07, 0x46)], timeout: .seconds(90))
-        guard frame.cmdSet == 0x07, frame.cmdId == 0x45, frame.payload.count >= 2 else { return }
-        switch frame.payload[1] {
-        case 0x02: _ = try await waitFrame(0x07, 0x46, timeout: .seconds(90))
-        case 0x06: throw Fail.pairingDeferred
-        default: break
-        }
-    }
 
     func waitFrame(
         _ set: UInt8, _ cmd: UInt8,
@@ -5771,7 +5542,7 @@ final class CameraSession {
             }
             guard clock.now < deadline, clock.now < stageDeadline else { break }
             if hasFreshRecoveryPicture(since: started), phase == .live { return true }
-            if runTask == nil, phase != .live { return false }
+            if !connectionRun.isRunning, phase != .live { return false }
             do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
         }
         guard !Task.isCancelled else { return false }
@@ -5889,10 +5660,12 @@ final class CameraSession {
     }
 
     /// Drop the live UDP session so the next connect cannot inherit a half-closed driver.
-    private func disposeDatalink() {
+    private func disposeDatalink(ifCurrent: () -> Bool = { true }) {
         status.meteredEv = nil
+        guard ifCurrent() else { return }
         let link = datalink
         datalink = nil
+        guard ifCurrent() else { return }
         guard let link else { return }
         link.onAccessUnit = nil
         link.onVideoDiscontinuity = nil
@@ -6263,6 +6036,12 @@ final class CameraSession {
     /// A live BLE name that differs from the cached SSID is a renamed SoftAP —
     /// join that name with the cached password (GetSSID after Mimo is often 0xE4).
     private func resolvedWifiCreds(for camera: FoundCamera) -> KnownWifi {
+        #if DEBUG
+            if let trace = connectionNativePeers {
+                return KnownWifi(ssid: trace.ssid, password: trace.password,
+                    source: trace.password == nil ? "none" : "SIMULATED", skipBle: trace.password != nil)
+            }
+        #endif
         let saved = saved(camera.id)
         let advertised =
             CameraWifiResolution.liveAdvertisedSSID(camera.name)
@@ -6332,6 +6111,9 @@ final class CameraSession {
     }
 
     private func persistWifiCreds(camera: FoundCamera, ssid: String, password: String) {
+        #if DEBUG
+            if let trace = connectionNativePeers { trace.persist(ssid, password); return }
+        #endif
         cachedSSID = ssid
         cachedPassword = password
         cachedWifiCameraId = camera.id
@@ -6352,133 +6134,6 @@ final class CameraSession {
         }
         names.remove(ssid)
         return names.filter { !$0.isEmpty }
-    }
-
-    /// After pairing + 0x53/0x10: skip BLE when we already have both creds; otherwise
-    /// GetSSID/GetPassword with stale-hold cleared and 1-byte / 0xE0–0xEF fail-fast.
-    private func wifiCredsAfterPairing(_ camera: FoundCamera) async throws -> (String, String) {
-        let known = resolvedWifiCreds(for: camera)
-        if known.skipBle, let ssid = known.ssid, let pass = known.password {
-            ControlLiveLog.line(
-                "creds: skipping BLE GetSSID/GetPassword — \(known.source) SSID \(ssid)")
-            return (ssid, pass)
-        }
-
-        let advertised = camera.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let ssidFallback = [known.ssid, advertised.isEmpty ? nil : advertised]
-            .compactMap { $0 }
-            .first { !$0.isEmpty }
-
-        let ssid: String
-        if let stored = known.ssid, !stored.isEmpty, known.password == nil {
-            log.info(
-                "creds: skipping GetSSID — using \(known.source, privacy: .public) SSID \(stored, privacy: .public)"
-            )
-            ssid = stored
-        } else {
-            do {
-                ssid = try await readWifiString(
-                    name: "GetSSID", set: 0x07, cmd: 0x07, cached: known.ssid
-                ) { self.ble.send(Commands.getWifiSsid()) }
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch let error as Fail where isDisconnect(error) {
-                throw Fail.disconnectedDuring("GetSSID")
-            } catch {
-                if let fallback = ssidFallback {
-                    if CameraWifiResolution.isSSIDOwnedByAnotherCamera(
-                        fallback, cameraId: camera.id.uuidString, saved: savedCameras())
-                    {
-                        log.info(
-                            "creds: GetSSID fallback \(fallback, privacy: .public) belongs to another camera"
-                        )
-                        throw Fail.wrongCamera
-                    }
-                    log.info("creds: GetSSID refused — using SSID \(fallback, privacy: .public)")
-                    ssid = fallback
-                } else {
-                    throw Fail.mimoSession
-                }
-            }
-        }
-
-        do {
-            let pass = try await readWifiString(
-                name: "GetPassword", set: 0x07, cmd: 0x0E, cached: known.password
-            ) { self.ble.send(Commands.getWifiPassword()) }
-            return (ssid, pass)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as Fail where isDisconnect(error) {
-            throw Fail.disconnectedDuring("GetPassword")
-        } catch {
-            if let pass = known.password, !pass.isEmpty {
-                log.info(
-                    "creds: GetPassword refused — using \(known.source, privacy: .public) password")
-                return (ssid, pass)
-            }
-            throw Fail.mimoSession
-        }
-    }
-
-    /// Ask until the camera returns a non-empty Wi-Fi string. First-time pairing leaves the
-    /// AP down for a few seconds; a single 8 s wait mapped that to a vague Fail.
-    /// 1-byte / `0xE0…0xEF` is a refuse (Mimo still holding the AP) — use cache or fail now.
-    private func readWifiString(
-        name: String, set: UInt8, cmd: UInt8, cached: String?,
-        send: @escaping () -> Void
-    ) async throws -> String {
-        let deadline = Date().addingTimeInterval(12)
-        var last: Error = Fail.commandTimeout(name)
-        var attempt = 0
-        while Date() < deadline {
-            attempt += 1
-            // Stale 0x07/07 often lands during 0x53/0x10 — do not treat it as this write's reply.
-            log.info("creds: \(name, privacy: .public) attempt \(attempt)")
-            do {
-                let frame = try await waitFrame(
-                    set, cmd, timeout: .seconds(4),
-                    consumeHold: false, send: send)
-                let status = frame.payload.first ?? 0xFF
-                let value = Duml.unpackStatusString(frame.payload)
-                if !value.isEmpty {
-                    ControlLiveLog.line("creds: \(name) ok (\(value.count) chars)")
-                    return value
-                }
-                // 1-byte or 0xE0–0xEF: camera refused. Retrying the same GET will not help.
-                if frame.payload.count <= 1 || (0xE0...0xEF).contains(status) {
-                    if let cached, !cached.isEmpty {
-                        ControlLiveLog.line(
-                            "creds: \(name) status=\(status) (\(frame.payload.count)B) — using cached value"
-                        )
-                        return cached
-                    }
-                    throw Fail.credsRefused(name, status)
-                }
-                ControlLiveLog.line("creds: \(name) empty reply (status=\(status))")
-                last = Fail.credsEmpty(name)
-            } catch Fail.timeout {
-                ControlLiveLog.line("creds: \(name) attempt \(attempt) timed out")
-                last = Fail.commandTimeout(name)
-            } catch Fail.disconnected {
-                throw Fail.disconnectedDuring(name)
-            } catch is CancellationError {
-                throw CancellationError()
-            }
-            try await Task.sleep(for: .milliseconds(400))
-        }
-        if let cached, !cached.isEmpty {
-            ControlLiveLog.line("creds: \(name) giving up — using cached value")
-            return cached
-        }
-        throw last
-    }
-
-    private func isDisconnect(_ error: Fail) -> Bool {
-        switch error {
-        case .disconnected, .disconnectedDuring: true
-        default: false
-        }
     }
 
     enum Fail: LocalizedError {

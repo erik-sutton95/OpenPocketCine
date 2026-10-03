@@ -11,171 +11,11 @@ import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.lut.LutCatalog
 import org.json.JSONObject
 
-enum class PocketDispMode(val title: String, val settingsTitle: String, val settingsCaption: String) {
-    LIVE(
-        "Live",
-        "DISP 1 · Live",
-        "The full monitor. Set what it shows in Edit view.",
-    ),
-    CLEAN(
-        "Clean",
-        "DISP 2 · Clean",
-        "A stripped-back image. Same elements as DISP 1 — status, tool and capture bars start off. Pin which view assists stay on.",
-    ),
-}
+import com.opencapture.opencine.appkit.MonitorDisplayPreferences
 
-enum class PocketDispSection(val key: String, val title: String) {
-    STATUS_BAR("statusBar", "Status Bar"),
-    TOOL_BAR("toolBar", "Tool Bar"),
-    CAMERA_VALUES("cameraValues", "Camera Values"),
-    LOCK_BUTTON("lockButton", "Lock Button"),
-    BATTERIES("batteries", "Batteries"),
-    RAIL_RECORD("railRecord", "Record"),
-    RAIL_MEDIA("railMedia", "Media"),
-    RAIL_SETTINGS("railSettings", "Settings"),
-    ZOOM_CHIP("zoomChip", "Zoom Chip"),
-    GIMBAL_STICK("gimbalStick", "Gimbal Stick"),
-    FOCUS_BOX("focusBox", "Face Box"),
-    REC_READOUT("recReadout", "REC"),
-    TIMECODE("timecode", "Timecode"),
-    FORMAT("format", "Format"),
-    COLOR("color", "Color"),
-    STORAGE("storage", "Storage"),
-    FPS("fps", "FPS"),
-}
-
-data class PocketDispChrome(
-    val statusBar: Boolean = true,
-    val toolBar: Boolean = true,
-    val cameraValues: Boolean = true,
-    val lockButton: Boolean = true,
-    val batteries: Boolean = true,
-    val recReadout: Boolean = true,
-    val timecode: Boolean = true,
-    val format: Boolean = true,
-    val color: Boolean = true,
-    val storage: Boolean = true,
-    val fps: Boolean = true,
-    val railRecord: Boolean = true,
-    val railMedia: Boolean = true,
-    val railSettings: Boolean = true,
-    val zoomChip: Boolean = true,
-    val gimbalStick: Boolean = true,
-    val focusBox: Boolean = true,
-) {
-    fun isVisible(section: PocketDispSection): Boolean =
-        when (section) {
-            PocketDispSection.STATUS_BAR -> statusBar
-            PocketDispSection.TOOL_BAR -> toolBar
-            PocketDispSection.CAMERA_VALUES -> cameraValues
-            PocketDispSection.LOCK_BUTTON -> lockButton
-            PocketDispSection.BATTERIES -> batteries
-            PocketDispSection.RAIL_RECORD -> railRecord
-            PocketDispSection.RAIL_MEDIA -> railMedia
-            PocketDispSection.RAIL_SETTINGS -> railSettings
-            PocketDispSection.ZOOM_CHIP -> zoomChip
-            PocketDispSection.GIMBAL_STICK -> gimbalStick
-            PocketDispSection.FOCUS_BOX -> focusBox
-            PocketDispSection.REC_READOUT -> recReadout
-            PocketDispSection.TIMECODE -> timecode
-            PocketDispSection.FORMAT -> format
-            PocketDispSection.COLOR -> color
-            PocketDispSection.STORAGE -> storage
-            PocketDispSection.FPS -> fps
-        }
-
-    fun toggling(section: PocketDispSection): PocketDispChrome =
-        when (section) {
-            PocketDispSection.STATUS_BAR -> copy(statusBar = !statusBar)
-            PocketDispSection.TOOL_BAR -> copy(toolBar = !toolBar)
-            PocketDispSection.CAMERA_VALUES -> copy(cameraValues = !cameraValues)
-            PocketDispSection.LOCK_BUTTON -> copy(lockButton = !lockButton)
-            PocketDispSection.BATTERIES -> copy(batteries = !batteries)
-            PocketDispSection.RAIL_RECORD -> copy(railRecord = !railRecord)
-            PocketDispSection.RAIL_MEDIA -> copy(railMedia = !railMedia)
-            PocketDispSection.RAIL_SETTINGS -> copy(railSettings = !railSettings)
-            PocketDispSection.ZOOM_CHIP -> copy(zoomChip = !zoomChip)
-            PocketDispSection.GIMBAL_STICK -> copy(gimbalStick = !gimbalStick)
-            PocketDispSection.FOCUS_BOX -> copy(focusBox = !focusBox)
-            PocketDispSection.REC_READOUT -> copy(recReadout = !recReadout)
-            PocketDispSection.TIMECODE -> copy(timecode = !timecode)
-            PocketDispSection.FORMAT -> copy(format = !format)
-            PocketDispSection.COLOR -> copy(color = !color)
-            PocketDispSection.STORAGE -> copy(storage = !storage)
-            PocketDispSection.FPS -> copy(fps = !fps)
-        }
-
-    fun toJson(): String =
-        JSONObject()
-            .put("statusBar", statusBar)
-            .put("toolBar", toolBar)
-            .put("cameraValues", cameraValues)
-            .put("lockButton", lockButton)
-            .put("batteries", batteries)
-            .put("recReadout", recReadout)
-            .put("timecode", timecode)
-            .put("format", format)
-            .put("color", color)
-            .put("storage", storage)
-            .put("fps", fps)
-            .put("railRecord", railRecord)
-            .put("railMedia", railMedia)
-            .put("railSettings", railSettings)
-            .put("zoomChip", zoomChip)
-            .put("gimbalStick", gimbalStick)
-            .put("focusBox", focusBox)
-            .toString()
-
-    companion object {
-        val liveDefaults = PocketDispChrome()
-        val cleanDefaults =
-            PocketDispChrome(
-                statusBar = false,
-                toolBar = false,
-                cameraValues = false,
-                lockButton = false,
-                batteries = true,
-                recReadout = true,
-                timecode = true,
-                format = true,
-                color = true,
-                storage = true,
-                fps = true,
-                railRecord = true,
-                railMedia = true,
-                railSettings = true,
-                zoomChip = true,
-                gimbalStick = true,
-                focusBox = true,
-            )
-
-        fun fromJson(raw: String?, fallback: PocketDispChrome): PocketDispChrome {
-            if (raw.isNullOrBlank()) return fallback
-            return runCatching {
-                val obj = JSONObject(raw)
-                PocketDispChrome(
-                    statusBar = obj.optBoolean("statusBar", fallback.statusBar),
-                    toolBar = obj.optBoolean("toolBar", fallback.toolBar),
-                    cameraValues = obj.optBoolean("cameraValues", fallback.cameraValues),
-                    lockButton = obj.optBoolean("lockButton", fallback.lockButton),
-                    batteries = obj.optBoolean("batteries", fallback.batteries),
-                    recReadout = obj.optBoolean("recReadout", fallback.recReadout),
-                    timecode = obj.optBoolean("timecode", fallback.timecode),
-                    format = obj.optBoolean("format", fallback.format),
-                    color = obj.optBoolean("color", fallback.color),
-                    storage = obj.optBoolean("storage", fallback.storage),
-                    fps = obj.optBoolean("fps", fallback.fps),
-                    railRecord = obj.optBoolean("railRecord", fallback.railRecord),
-                    railMedia = obj.optBoolean("railMedia", fallback.railMedia),
-                    railSettings = obj.optBoolean("railSettings", fallback.railSettings),
-                    zoomChip = obj.optBoolean("zoomChip", fallback.zoomChip),
-                    gimbalStick = obj.optBoolean("gimbalStick", fallback.gimbalStick),
-                    focusBox = obj.optBoolean("focusBox", fallback.focusBox),
-                )
-            }.getOrElse { fallback }
-        }
-    }
-}
+typealias PocketDispMode = com.opencapture.opencine.appkit.MonitorDisplayMode
+typealias PocketDispSection = com.opencapture.opencine.appkit.MonitorDisplaySection
+typealias PocketDispChrome = com.opencapture.opencine.appkit.MonitorDisplayChrome
 
 enum class PortraitFeedAspect(val raw: String) {
     FIT_16X9("fit16x9"),
@@ -361,18 +201,21 @@ object OperatorPrefs {
         prefs(context).edit { putInt(GIMBAL_DOUBLE_TAP, value.raw) }
     }
 
-    fun dispLive(context: Context): PocketDispChrome =
-        PocketDispChrome.fromJson(prefs(context).getString(DISP_LIVE, null), PocketDispChrome.liveDefaults)
+    private fun display(context: Context) = MonitorDisplayPreferences(
+        prefs(context), MonitorDisplayPreferences.Keys(DISP_LIVE, DISP_CLEAN),
+    )
+
+    fun dispLive(context: Context): PocketDispChrome = display(context).live
 
     fun setDispLive(context: Context, value: PocketDispChrome) {
-        prefs(context).edit { putString(DISP_LIVE, value.toJson()) }
+        display(context).live = value
     }
 
     fun dispClean(context: Context): PocketDispChrome =
-        PocketDispChrome.fromJson(prefs(context).getString(DISP_CLEAN, null), PocketDispChrome.cleanDefaults)
+        display(context).clean
 
     fun setDispClean(context: Context, value: PocketDispChrome) {
-        prefs(context).edit { putString(DISP_CLEAN, value.toJson()) }
+        display(context).clean = value
     }
 
     fun cleanViewPinnedTools(context: Context): Set<String> {

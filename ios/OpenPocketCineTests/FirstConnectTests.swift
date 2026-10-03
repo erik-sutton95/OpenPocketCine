@@ -1,7 +1,9 @@
 import OpenPocketViewCore
+import Observation
 import QuartzCore
 import VideoToolbox
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -554,4 +556,416 @@ private func hex(_ s: String) -> [UInt8] {
         i = j
     }
     return out
+}
+
+/// SIMULATED native OS dependencies replay captured CameraSession donor traces through its current owner.
+@MainActor
+final class ConnectionRunDonorTraceTests: XCTestCase {
+    func testColdAccessPointDonorCommandAndRegistrationOrder() async {
+        let peer = ConnectionDonorPeer()
+        let session = peer.session()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        await finish(session)
+        XCTAssertEqual(peer.trace.filter { !$0.hasPrefix("heartbeat") && $0 != "BLE keepalive" }, [
+            "GATT", "BLE wake", "BLE pair", "sleep 0.2", "BLE AP-wake", "sleep 0.6",
+            "BLE SSID", "BLE password", "join AP", "persist", "make AP", "attach",
+            "open AP", "registered", "enable", "open returned",
+        ])
+        XCTAssertEqual(peer.join?.ssid, peer.network)
+        XCTAssertEqual(peer.join?.password, "SIMULATED-PASSWORD")
+        XCTAssertFalse(peer.join?.persist ?? true)
+        XCTAssertEqual(peer.writes.filter { $0.cmdId == 0x45 }.count, 1)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+        XCTAssertEqual(peer.stages, [.connectingGatt, .pairing, .pairing, .readingWifiCreds,
+            .readingWifiCreds, .readingWifiCreds, .joiningWifi, .openingDatalink])
+        print("SIMULATED CONNECTION DONOR cold: \(peer.trace)")
+    }
+
+    func testWarmAccessPointDonorSkipsOnlySettlesAndCredentialReads() async {
+        let peer = ConnectionDonorPeer(cached: true)
+        let session = peer.session()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        await finish(session)
+        XCTAssertEqual(peer.trace.filter { !$0.hasPrefix("heartbeat") && $0 != "BLE keepalive" }, [
+            "GATT", "BLE wake", "BLE pair", "BLE AP-wake", "join AP", "persist",
+            "make AP", "attach", "open AP", "registered", "enable", "open returned",
+        ])
+        XCTAssertFalse(peer.writes.contains { $0.cmdSet == 7 && [7, 0x0e].contains($0.cmdId) })
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+        print("SIMULATED CONNECTION DONOR warm: \(peer.trace)")
+    }
+
+    func testDeferredPairDonorDropsDrainBeforeThreeSecondRetry() async {
+        let peer = ConnectionDonorPeer(cached: true, deferred: true)
+        let session = peer.session()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        await finish(session)
+        XCTAssertEqual(peer.trace.filter { !$0.hasPrefix("heartbeat") && $0 != "BLE keepalive" }, [
+            "GATT", "BLE wake", "BLE pair", "disconnect BLE", "sleep 3.0", "GATT",
+            "BLE wake", "BLE pair", "BLE AP-wake", "join AP", "persist", "make AP",
+            "attach", "open AP", "registered", "enable", "open returned",
+        ])
+        XCTAssertEqual(peer.writes.filter { $0.cmdId == 0x45 }.count, 2)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+        print("SIMULATED CONNECTION DONOR deferred: \(peer.trace)")
+    }
+
+    func testWiFiStationDonorJoinsPhoneBeforeCapturedStationCommands() async {
+        await station(hotspot: false)
+    }
+
+    func testHotspotStationDonorNeverJoinsPhoneAndRequiresIdentityBeforeRegistration() async {
+        await station(hotspot: true)
+    }
+
+    private func station(hotspot: Bool) async {
+        let peer = ConnectionDonorPeer(station: true, hotspot: hotspot)
+        let session = peer.session()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        await finish(session)
+        var expected = ["GATT", "BLE wake", "BLE pair"]
+        if !hotspot { expected.append("join host") }
+        expected += ["BLE SSID", "BLE 02/e1", "sleep 2.0", "BLE 07/39", "BLE 07/48",
+            "BLE 07/39", "sleep 10.0", "BLE 07/47", "discover", "dispose", "make station",
+            "attach", "open identity", "open returned", "UDP identity", "complete registration",
+            "registered", "enable"]
+        XCTAssertEqual(peer.trace.filter { !$0.hasPrefix("heartbeat") && $0 != "BLE keepalive" }, expected)
+        XCTAssertEqual(session.stationHost, "198.51.100.7")
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+        XCTAssertFalse(peer.trace.contains("persist"), "Station does not persist camera-AP credentials")
+        print("SIMULATED CONNECTION DONOR station hotspot=\(hotspot): \(peer.trace)")
+    }
+
+    func testSoftAPDonorStopsAfterSixHandshakeMissesWithFiveHalfSecondPauses() async {
+        let peer = ConnectionDonorPeer(cached: true)
+        peer.handshakeMisses = 6
+        let session = peer.session()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        await finish(session, expectsFailure: true)
+        XCTAssertEqual(peer.trace.filter { $0 == "open AP" }.count, 6)
+        XCTAssertEqual(peer.trace.filter { $0 == "sleep 0.5" }.count, 5)
+        XCTAssertFalse(peer.trace.contains("registered"))
+        XCTAssertFalse(peer.trace.contains("enable"))
+        XCTAssertEqual(peer.trace.filter { $0 == "make AP" }.count, 1, "Retry retains its actual endpoint")
+        print("SIMULATED CONNECTION DONOR retry budget: \(peer.trace)")
+    }
+
+    func testApprovalObserverReplacementKeepsOnlySuccessorCommitAndEnable() async {
+        let peer = ConnectionDonorPeer(cached: true)
+        let session = peer.session()
+        defer { session.disconnect(); session.decoder.close() }
+        var replaced = false
+        session.onChromePublished = { [weak session] in
+            guard let session, !replaced, session.phase == .awaitingApproval else { return }
+            replaced = true
+            session.disconnect()
+            session.connect(peer.camera)
+        }
+        session.connect(peer.camera)
+        await finish(session)
+        XCTAssertTrue(replaced)
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 2)
+        XCTAssertEqual(peer.trace.filter { $0 == "persist" }.count, 1)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+        XCTAssertNil(session.lastConnectError)
+        XCTAssertEqual(session.connectedCamera?.id, peer.camera.id)
+    }
+
+    func testLiveObserverDisconnectRetiresBeforeInitialEnable() async {
+        let peer = ConnectionDonorPeer(cached: true)
+        let session = peer.session()
+        defer { session.disconnect(); session.decoder.close() }
+        var disconnected = false
+        session.onChromePublished = { [weak session] in
+            guard let session, !disconnected, session.phase == .live else { return }
+            disconnected = true; session.disconnect()
+        }
+        session.connect(peer.camera)
+        for _ in 0..<1000 { if disconnected { break }; await Task.yield() }
+        for _ in 0..<10 { await Task.yield() }
+        XCTAssertTrue(disconnected)
+        XCTAssertEqual(session.phase, .idle)
+        XCTAssertNil(session.lastConnectError)
+        XCTAssertFalse(peer.trace.contains("enable"))
+    }
+
+    func testConnectedCameraObserverReplacementPreservesSuccessorMeterUntilItsPreparation() async {
+        let peer = ConnectionDonorPeer(cached: true)
+        let session = peer.session()
+        let sentinel = ConnectionObservationSentinel()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        withObservationTracking { _ = session.connectedCamera } onChange: {
+            MainActor.assumeIsolated {
+                guard !sentinel.replaced else { return }
+                sentinel.replaced = true
+                session.disconnect()
+                session.connect(peer.camera)
+                session.status.meteredEv = EvComp(thirds: 7)
+                withObservationTracking { _ = session.connectedCamera } onChange: {
+                    MainActor.assumeIsolated {
+                        sentinel.successorPreparing = true
+                        sentinel.meterAtSuccessorPreparation = session.status.meteredEv
+                    }
+                }
+            }
+        }
+        await finish(session)
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertTrue(sentinel.successorPreparing)
+        XCTAssertEqual(sentinel.meterAtSuccessorPreparation, EvComp(thirds: 7),
+            "Retired A must preserve B's +7/3 meter until B's own preparation")
+        XCTAssertEqual(peer.trace.filter { $0 == "GATT" }.count, 1)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 1)
+    }
+
+    func testJoinedSSIDObserverReplacementCannotPublishRetiredStationFacts() async {
+        let peer = ConnectionDonorPeer(cached: true, station: true)
+        let session = peer.session()
+        let sentinel = ConnectionObservationSentinel()
+        defer { session.disconnect(); session.decoder.close() }
+        session.connect(peer.camera)
+        await finish(session)
+        XCTAssertEqual(session.stationSSID, peer.network)
+        XCTAssertEqual(session.stationHost, "198.51.100.7")
+        // An AP run retains the prior station path until new connection facts arrive.
+        let another = FoundCamera(id: UUID(uuidString: "FC064E5E-2B01-4F6B-94D2-663C03C8F002")!,
+            name: peer.camera.name, model: peer.camera.model, modelId: peer.camera.modelId)
+        session.connectionSetup = .cameraWiFi
+        session.connect(another)
+        withObservationTracking { _ = session.joinedSSID } onChange: {
+            MainActor.assumeIsolated {
+                guard !sentinel.replaced else { return }
+                sentinel.replaced = true
+                session.disconnect()
+                session.connect(peer.camera)
+                // B is a camera-AP successor; its station facts are unknown after teardown.
+                XCTAssertNil(session.stationSSID)
+                XCTAssertNil(session.stationHost)
+                withObservationTracking { _ = session.connectedCamera } onChange: {
+                    MainActor.assumeIsolated { sentinel.successorPreparing = true }
+                }
+                withObservationTracking { _ = session.stationSSID } onChange: {
+                    MainActor.assumeIsolated {
+                        if !sentinel.successorPreparing { sentinel.staleWrites += 1 }
+                    }
+                }
+                withObservationTracking { _ = session.stationHost } onChange: {
+                    MainActor.assumeIsolated {
+                        if !sentinel.successorPreparing { sentinel.staleWrites += 1 }
+                    }
+                }
+            }
+        }
+        await finish(session)
+        XCTAssertTrue(sentinel.replaced)
+        XCTAssertTrue(sentinel.successorPreparing)
+        XCTAssertEqual(sentinel.staleWrites, 0,
+            "Retired A must not publish its remaining station fields into B")
+        XCTAssertNil(session.stationSSID)
+        XCTAssertNil(session.stationHost)
+        XCTAssertEqual(peer.trace.filter { $0 == "enable" }.count, 2,
+            "Initial station connection and B each enable once; retired AP attempt A never enables")
+    }
+
+    func testBorrowedConnectDoesNotPrepareSharedDecoderOrSendCommands() async {
+        let peer = ConnectionDonorPeer(cached: true)
+        let decoder = HevcDecoder()
+        let session = peer.session(borrowing: decoder)
+        defer { session.disconnect(); decoder.close() }
+        session.status.isRecording = true
+        session.connect(peer.camera)
+        for _ in 0..<10 { await Task.yield() }
+        XCTAssertEqual(session.phase, .idle)
+        XCTAssertTrue(session.status.isRecording)
+        XCTAssertTrue(peer.trace.isEmpty)
+        XCTAssertTrue(peer.writes.isEmpty)
+    }
+
+    func testConnectionCloseWhileRecordingNeverSendsStopRecord() async {
+        let peer = ConnectionDonorPeer(cached: true)
+        let session = peer.session()
+        defer { session.decoder.close() }
+        session.status.isRecording = true
+        session.connect(peer.camera)
+        await finish(session)
+        session.disconnect()
+        let stop = Commands.recordStop()
+        XCTAssertFalse(peer.writes.contains {
+            $0.cmdSet == stop.cmdSet && $0.cmdId == stop.cmdId && $0.payload == stop.payload
+        })
+    }
+
+    private func finish(_ session: CameraSession, expectsFailure: Bool = false) async {
+        for _ in 0..<1000 {
+            if session.phase == .live { await Task.yield(); return }
+            if case .failed(let reason) = session.phase { if !expectsFailure { XCTFail(reason) }; return }
+            await Task.yield()
+        }
+        XCTFail("SIMULATED donor did not reach the registered boundary")
+    }
+}
+
+@MainActor
+private final class ConnectionObservationSentinel {
+    var replaced = false
+    var successorPreparing = false
+    var staleWrites = 0
+    var meterAtSuccessorPreparation: EvComp?
+}
+
+@MainActor
+private final class ConnectionDonorPeer {
+    var time: TimeInterval = 0
+    var trace: [String] = []
+    var writes: [Duml.Frame] = []
+    var stages: [OpenPocketViewCore.ConnectionPhase] = []
+    var wakes: [(TimeInterval, @MainActor @Sendable () -> Void)] = []
+    var continuation: AsyncStream<Duml.Frame>.Continuation?
+    var current: (any DjiAppleConnectionEndpoint)?
+    var join: DjiAppleConnectionTransport.AccessPointJoin?
+    weak var app: CameraSession?
+    let network = "OsmoPocket4-SIMULATED"
+    let cached: Bool
+    var deferred: Bool
+    let station: Bool
+    let hotspot: Bool
+    var stationSwitched = false
+    var handshakeMisses = 0
+    enum Failure: LocalizedError {
+        case handshake
+        var errorDescription: String? { "SIMULATED handshake miss" }
+    }
+    let camera = FoundCamera(id: UUID(uuidString: "FC064E5E-2B01-4F6B-94D2-663C03C8F001")!,
+        name: "OsmoPocket4-SIMULATED", model: CameraModel.resolve(modelId: 0x0021, name: "OsmoPocket4-SIMULATED", brand: .dji), modelId: 0x0021)
+
+    init(cached: Bool = false, deferred: Bool = false, station: Bool = false, hotspot: Bool = false) {
+        self.cached = cached; self.deferred = deferred; self.station = station; self.hotspot = hotspot
+    }
+    var timing: DjiAppleConnectionTiming {
+        .init(wallNow: { [unowned self] in time }, uptime: { [unowned self] in time },
+            sleep: { [unowned self] duration in
+                let c = duration.components
+                let seconds = Double(c.seconds) + Double(c.attoseconds) / 1e18
+                trace.append(String(format: "sleep %.1f", seconds))
+                advance(to: time + seconds)
+            })
+    }
+    var exchangeTiming: DjiAppleExchangeTiming {
+        .init(now: { [unowned self] in time }, schedule: { [unowned self] duration, wake in
+            let c = duration.components
+            wakes.append((time + Double(c.seconds) + Double(c.attoseconds) / 1e18, wake))
+        })
+    }
+    var heartbeatTiming: DjiAppleHeartbeatTiming {
+        .init(wallNow: { [unowned self] in time }, uptime: { [unowned self] in time },
+            schedule: { [unowned self] duration, wake in
+                trace.append("heartbeat scheduled")
+                let c = duration.components
+                wakes.append((time + Double(c.seconds) + Double(c.attoseconds) / 1e18, wake))
+            })
+    }
+    func advance(to end: TimeInterval) {
+        while let next = wakes.enumerated().filter({ $0.element.0 <= end })
+            .min(by: { $0.element.0 < $1.element.0 }) {
+            time = next.element.0; wakes.remove(at: next.offset); next.element.1()
+        }
+        time = end
+    }
+    func send(_ frame: Duml.Frame, viaUDP: Bool = false) {
+        writes.append(frame)
+        let label: String
+        switch (frame.cmdSet, frame.cmdId) {
+        case (0, 0x2b): label = frame.payload == [4, 0] ? "wake" : "keepalive"
+        case (7, 0x45): label = "pair"
+        case (0x53, 0x10): label = "AP-wake"
+        case (7, 7): label = "SSID"
+        case (7, 0x0e): label = "password"
+        default: label = String(format: "%02x/%02x", frame.cmdSet, frame.cmdId)
+        }
+        trace.append(viaUDP ? "UDP identity" : "BLE \(label)")
+        if label != "keepalive", let app { stages.append(app.phase) }
+        let payload: [UInt8]
+        switch (frame.cmdSet, frame.cmdId) {
+        case (7, 0x45):
+            payload = deferred ? [0, 6] : [0, 1]; deferred = false
+        case (0x53, 0x10): payload = [1, 0, 0, 0]
+        case (7, 7): payload = [0] + Duml.packString(network)
+        case (7, 0x0e): payload = [0] + Duml.packString("SIMULATED-PASSWORD")
+        case (7, 0x39): payload = [0, stationSwitched ? 1 : 0]
+        case (7, 0x48): stationSwitched = true; payload = [0, 0]
+        case (7, 0x47): payload = [0, 0]
+        default: return
+        }
+        continuation?.yield(.init(sender: frame.receiver, receiver: frame.sender, seq: frame.seq,
+            flags: Duml.flagResponse, cmdSet: frame.cmdSet, cmdId: frame.cmdId, payload: payload))
+    }
+    var transport: DjiAppleConnectionTransport {
+        .init(bluetooth: .init(connect: { [unowned self] _ in
+            trace.append("GATT"); if let app { stages.append(app.phase) }
+        }, frames: { [unowned self] in
+            let pair = AsyncStream.makeStream(of: Duml.Frame.self)
+            continuation = pair.continuation; return pair.stream
+        }, send: { [unowned self] in send($0) }, disconnectAndWait: { [unowned self] in
+            trace.append("disconnect BLE"); continuation?.finish()
+        }, retryableDrop: { _ in false }), network: .init(cameraPathReady: { true },
+            stationPathReady: { _ in true }, joinAccessPoint: { [unowned self] request in
+                trace.append("join AP"); join = request; if let app { stages.append(app.phase) }
+            }, rejectsCredentials: { _ in false }, joinHost: { [unowned self] _, _ in
+                trace.append("join host"); return "192.0.2.2"
+            }, leave: { _ in }, currentSSID: { nil }, candidates: { [unowned self] _ in
+                trace.append("discover"); return station ? ["198.51.100.7"] : []
+            }, subnetSize: { _ in nil }),
+            makeEndpoint: { [unowned self] _, host, _ in
+                trace.append(host == nil ? "make AP" : "make station")
+                return ConnectionDonorEndpoint(peer: self)
+            }, localNetworkDenied: { _ in false })
+    }
+    func session(borrowing decoder: HevcDecoder? = nil) -> CameraSession {
+        let session = CameraSession(borrowing: decoder, heartbeatTiming: heartbeatTiming)
+        app = session
+        if station {
+            session.connectionSetup = hotspot ? .phoneHotspot : .wifi
+            session.stationNetwork = network
+        }
+        session.connectionNativePeers = .init(transport: transport, timing: timing,
+            exchangeTiming: exchangeTiming, currentEndpoint: { [unowned self] in current },
+            attach: { [unowned self] endpoint in
+                trace.append(endpoint == nil ? "dispose" : "attach")
+                if endpoint == nil { current?.close() }
+                current = endpoint
+            }, registered: { [unowned self, weak session] _, attempt in
+                trace.append("registered"); session?.phase = .live
+                guard attempt.isCurrent else { return }; trace.append("enable")
+            }, ssid: cached ? network : nil, password: cached ? "SIMULATED-PASSWORD" : nil,
+            stationNetwork: station ? .init(ssid: network, password: "SIMULATED-PASSWORD", hotspot: hotspot) : nil, persist: { [unowned self] _, _ in trace.append("persist") },
+            forget: { [unowned self] in trace.append("forget") })
+        session.sessionHeartbeat.endpoint = .init(writeBLE: { [unowned self] in send($0) },
+            registerDatalink: {}, transport: { .init() })
+        return session
+    }
+}
+
+@MainActor
+private final class ConnectionDonorEndpoint: DjiAppleConnectionEndpoint {
+    unowned let peer: ConnectionDonorPeer
+    var isClosed = false
+    init(peer: ConnectionDonorPeer) { self.peer = peer }
+    func open(identityOnly: Bool, afterHandshake: (@MainActor () async -> Void)?) async throws {
+        peer.trace.append(identityOnly ? "open identity" : "open AP")
+        if peer.handshakeMisses > 0 {
+            peer.handshakeMisses -= 1; throw ConnectionDonorPeer.Failure.handshake
+        }
+        if let app = peer.app { peer.stages.append(app.phase) }
+        await afterHandshake?()
+        peer.trace.append("open returned")
+    }
+    func send(_ frame: Duml.Frame) -> UInt16 { peer.send(frame, viaUDP: true); return frame.seq }
+    func completeRegistration() { peer.trace.append("complete registration") }
+    func close() { isClosed = true; peer.trace.append("close") }
 }
