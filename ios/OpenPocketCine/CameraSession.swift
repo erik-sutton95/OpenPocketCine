@@ -1081,6 +1081,7 @@ final class CameraSession {
         faceAFArmTask?.cancel()
         faceAFArmTask = nil
         faceAFArmed = false
+        guard isCurrent() else { return }
         firstPictureSettled = false
         needsForegroundRecover = false
         resetFeedWatchdog(ifCurrent: isCurrent)
@@ -1180,6 +1181,7 @@ final class CameraSession {
         faceAFArmTask?.cancel()
         faceAFArmTask = nil
         faceAFArmed = false
+        guard attempt.isCurrent else { return }
         firstPictureSettled = false
         needsForegroundRecover = false
         resetLinkHealthMeasurements(ifCurrent: { attempt.isCurrent })
@@ -5689,17 +5691,20 @@ final class CameraSession {
         status.meteredEv = nil
         guard ifCurrent() else { return }
         let link = datalink
+        defer {
+            if let link {
+                link.onAccessUnit = nil
+                link.onVideoDiscontinuity = nil
+                link.onStatusFrame = nil
+                link.close()
+            }
+        }
         datalink = nil
         guard ifCurrent() else { return }
         #if DEBUG
             sessionRecoveryNativePeers?.disposeEndpoint()
             guard ifCurrent() else { return }
         #endif
-        guard let link else { return }
-        link.onAccessUnit = nil
-        link.onVideoDiscontinuity = nil
-        link.onStatusFrame = nil
-        link.close()
     }
 
     private func shouldCommitLiveHandshake(_ dl: DatalinkDriver) -> Bool {
