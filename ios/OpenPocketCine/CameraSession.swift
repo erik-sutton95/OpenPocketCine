@@ -203,7 +203,7 @@ final class CameraSession {
     @ObservationIgnored private var lastStatusMutation: CFAbsoluteTime = 0
     @ObservationIgnored private var statusFlushTask: Task<Void, Never>?
 
-    @ObservationIgnored private let ble = BleLink()
+    @ObservationIgnored private let ble = BleLink(host: .pocket)
     @ObservationIgnored var datalink: DatalinkDriver? {
         didSet { if oldValue !== datalink { controlSeam?.linkDidChange() } }
     }
@@ -871,7 +871,7 @@ final class CameraSession {
                     return
                 }
                 lastConnectError = error
-                let why = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+                let why = djiConnectionFailureDescription(error)
                 ControlLiveLog.line("session: connect failed at \(phase.label) — \(why)")
                 phase = .failed(why)
                 applyLinkPresentation()
@@ -1204,7 +1204,7 @@ final class CameraSession {
         do {
             try await WiFiJoiner.joinCameraAP(
                 ssid: ssid, passphrase: pass, wpa3: camera.model.wpa3,
-                knownOtherSSIDs: otherSSIDs, persist: persistHotspot)
+                knownOtherSSIDs: otherSSIDs, persist: persistHotspot, host: .pocket)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -1312,7 +1312,7 @@ final class CameraSession {
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken, stationHost: host,
             stationHotspot: host != nil && usesHotspot,
-            subscriptionKeys: Commands.subscriptionKeys(for: camera.model))
+            subscriptionKeys: Commands.subscriptionKeys(for: camera.model), host: .pocket)
     }
 
     /// The camera drops a new link for a few seconds after a Wi-Fi role change: seen on a
@@ -4696,7 +4696,7 @@ final class CameraSession {
                     uplinkReplyAge: datalink?.lastSelfieFlipReplyAt.map {
                         wall.timeIntervalSince($0)
                     }),
-                queue: datalink?.incidentQueue ?? FeedIncidentQueue(),
+                queue: datalink.map { FeedIncidentQueue($0.incidentQueue) } ?? FeedIncidentQueue(),
                 decoder: FeedIncidentDecoder(
                     generation: decoder.sourceFrameGeneration,
                     formatGeneration: decoder.vtRebuildCount,
@@ -6335,7 +6335,7 @@ final class CameraSession {
             try Task.checkCancellation()
             // Station drivers check the hotspot path themselves in open().
             if connectionSetup == .cameraWiFi {
-                try await WiFiJoiner.waitUntilCameraPathReady(timeout: 8)
+                try await WiFiJoiner.waitUntilCameraPathReady(timeout: 8, host: .pocket)
             }
             try Task.checkCancellation()
             let dl = makeDatalink(camera)
@@ -6648,8 +6648,8 @@ final class CameraSession {
             let pass = cachedPassword
         else { return }
         let wpa3 = connectedCamera?.model.wpa3 ?? true
-        try? await WiFiJoiner.join(ssid: ssid, passphrase: pass, wpa3: wpa3)
-        try? await WiFiJoiner.waitUntilCameraPathReady(timeout: 20)
+        try? await WiFiJoiner.join(ssid: ssid, passphrase: pass, wpa3: wpa3, host: .pocket)
+        try? await WiFiJoiner.waitUntilCameraPathReady(timeout: 20, host: .pocket)
     }
 
     func sendEnterPlayback() { datalink?.enterPlayback() }

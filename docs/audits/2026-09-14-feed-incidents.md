@@ -121,7 +121,7 @@ memory cost and complete reference continuity are proven.
 
 ### P1: compressed backlog eviction can break reference continuity
 
-The iOS [`DatalinkVideoAssembler`](../../ios/OpenPocketCine/DatalinkDriver.swift)
+The iOS [`DatalinkVideoAssembler`](../../../OpenCine/Sources/OpenCineDJIApple/SoftAPVideoAssembler.swift)
 caps pending work by removing non-keyframe AUs from the middle of a GOP.
 Inter frames can be references for later frames. Keeping a keyframe while
 discarding some of its dependent chain is not equivalent to retaining a

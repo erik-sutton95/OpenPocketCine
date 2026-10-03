@@ -27,7 +27,7 @@ At inspection, `DatalinkDriver.wifiUDP()` passes default `NWParameters.udp` thro
 endpoint reuse, and excludes cellular. It does not assign `serviceClass`. The
 receive dispatch queue also has no explicit execution QoS. Network traffic
 service class and dispatch execution QoS are different settings; neither absence
-establishes the cause of a stutter. [DatalinkDriver](../ios/OpenPocketCine/DatalinkDriver.swift).
+establishes the cause of a stutter. [DatalinkDriver](../../OpenCine/Sources/OpenCineDJIApple/DjiAppleDatalink.swift).
 
 TCP `noDelay` disables Nagle's algorithm for TCP. It cannot directly change UDP
 video delivery or the UDP ACK loop. [Apple TCP options](https://developer.apple.com/documentation/network/nwprotocoltcp/options).

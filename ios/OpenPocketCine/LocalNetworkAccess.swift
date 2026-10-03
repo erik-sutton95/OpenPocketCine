@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import OpenCineDJIApple
 import OpenPocketViewCore
 
 /// iOS Local Network privacy (TN3179). There is no API to read or request it: the
@@ -15,12 +16,10 @@ enum LocalNetworkAccess {
     private static var probe: NWBrowser?
 
     /// `kDNSServiceErr_PolicyDenied`.
-    nonisolated static let policyDenied: Int32 = -65570
+    nonisolated static let policyDenied = DjiAppleLocalNetwork.policyDenied
 
     nonisolated static func isDenied(_ error: NWError?, path: NWPath? = nil) -> Bool {
-        if path?.unsatisfiedReason == .localNetworkDenied { return true }
-        if case .dns(let code) = error, code == policyDenied { return true }
-        return false
+        DjiAppleLocalNetwork.isDenied(error, path: path)
     }
 
     /// Browse our own Bonjour type (listed in `NSBonjourServices`) while pairing, so the

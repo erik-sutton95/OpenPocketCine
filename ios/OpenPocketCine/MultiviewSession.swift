@@ -343,7 +343,7 @@ final class MultiviewSession {
     private let saveStage: (MultiviewStageStore.Stage?) -> Bool
     private let loadNetwork: (String, Bool) -> MultiviewNetworkStore.Network?
     private var cleanupJournalWritten = false
-    private let ble = BleLink(allowsConcurrentCameras: true)
+    private let ble = BleLink(allowsConcurrentCameras: true, host: .pocket)
     private var scanTask: Task<Void, Never>?
     private var networkScanTask: Task<Void, Error>?
     private var discovering = false
@@ -891,7 +891,7 @@ final class MultiviewSession {
             tile.driver?.close()
             tile.driver = nil
             tile.status = "Could not connect"
-            tile.failureMessage = error.localizedDescription
+            tile.failureMessage = djiConnectionFailureDescription(error, fallback: error.localizedDescription)
             ControlLiveLog.line(
                 "multiview: add failed stage=\(stage) error=\((error as NSError).domain)/\((error as NSError).code)"
             )
@@ -998,7 +998,7 @@ final class MultiviewSession {
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken,
             stationHost: tile.cameraAddress, stationHotspot: usePhoneHotspot,
-            subscriptionKeys: Commands.subscriptionKeys(for: camera.model))
+            subscriptionKeys: Commands.subscriptionKeys(for: camera.model), host: .pocket)
         tile.driver = driver
         driver.onStatusFrame = { [weak tile, weak driver] frame in
             guard let tile, let driver, tile.driver === driver else { return }

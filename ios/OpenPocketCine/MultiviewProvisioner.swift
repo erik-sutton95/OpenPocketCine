@@ -3,7 +3,7 @@ import OpenPocketViewCore
 
 /// One camera owns one BLE link, sequence space, reply router and keepalive.
 @MainActor final class MultiviewProvisioner {
-    private let ble = BleLink(allowsConcurrentCameras: true)
+    private let ble = BleLink(allowsConcurrentCameras: true, host: .pocket)
     private var router: Task<Void, Never>?
     private var keepalive: Task<Void, Never>?
     private var replies: [UInt16: Duml.Frame] = [:]

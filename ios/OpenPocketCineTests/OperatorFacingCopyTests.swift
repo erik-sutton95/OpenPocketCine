@@ -1,4 +1,5 @@
 import OpenPocketViewCore
+import OpenCineDJIApple
 import XCTest
 
 @testable import OpenPocketCine
@@ -6,6 +7,28 @@ import XCTest
 /// Operator-facing copy must never name a sister app, another camera brand,
 /// or Adobe's integrator-program name.
 final class OperatorFacingCopyTests: XCTestCase {
+    func testSharedTransportFailureRetainsAppCopyAndCallerFallback() {
+        let denied = DatalinkDriver.DatalinkError.localNetworkDenied
+        XCTAssertEqual(djiConnectionFailureDescription(denied), StartupConnectionCopy.localNetworkDenied)
+        XCTAssertEqual(djiConnectionFailureDescription(denied, fallback: "generic"),
+            StartupConnectionCopy.localNetworkDenied)
+        let network = NSError(domain: "SIMULATED transport", code: 7,
+            userInfo: [NSLocalizedDescriptionKey: "Existing network detail"])
+        XCTAssertEqual(djiConnectionFailureDescription(network, fallback: network.localizedDescription),
+            "Existing network detail")
+        XCTAssertEqual(djiConnectionFailureDescription(network), "\(network)")
+    }
+
+    func testUnknownNativeQueueAgeMapsOnlyAtLegacyIncidentBoundary() {
+        let unknown = DjiAppleQueueObservation()
+        XCTAssertNil(unknown.ageMilliseconds)
+        let legacy = FeedIncidentQueue(unknown)
+        XCTAssertEqual(legacy.ageMilliseconds, 0)
+        XCTAssertEqual(legacy.count, 0)
+        XCTAssertEqual(FeedIncidentQueue(DjiAppleQueueObservation(bytes: 12, count: 1,
+            ageMilliseconds: 18)).ageMilliseconds, 18)
+    }
+
     func testHelpCopyDoesNotNameSisterApps() {
         let facing = Self.operatorFacingCopy
         XCTAssertFalse(facing.isEmpty)

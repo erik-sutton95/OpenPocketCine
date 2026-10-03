@@ -3,6 +3,7 @@ import UIKit
 import XCTest
 
 @testable import OpenPocketCine
+@testable import OpenCineDJIApple
 
 @MainActor final class MultiviewRecoveryTests: XCTestCase {
     func testDelayedEnableGetsTheFullPictureDeadlineAfterReadinessReturns() {

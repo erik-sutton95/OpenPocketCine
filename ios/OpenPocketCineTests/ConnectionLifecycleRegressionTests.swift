@@ -3,6 +3,7 @@ import SwiftUI
 import XCTest
 
 @testable import OpenPocketCine
+@testable import OpenCineDJIApple
 
 /// Exercise the actual single-camera screen, including its warmup opacity,
 /// panel coverage and UIViewRepresentable updates. Generic canvas identity

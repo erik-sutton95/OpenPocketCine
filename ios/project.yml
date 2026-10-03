@@ -61,6 +61,8 @@ targets:
       - package: OpenCine
         product: OpenCineDJI
       - package: OpenCine
+        product: OpenCineDJIApple
+      - package: OpenCine
         product: OpenCineMulticam
       # The shared app shell (SHELL-02): saved-camera store, cameras model and the cameras and
       # pair screens over the DJI integration.
@@ -154,6 +156,8 @@ targets:
         product: OpenCineApple
       - package: OpenCine
         product: OpenCineDJI
+      - package: OpenCine
+        product: OpenCineDJIApple
       - package: OpenCine
         product: OpenCineMulticam
     settings:

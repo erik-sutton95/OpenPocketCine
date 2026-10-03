@@ -282,7 +282,7 @@ storage layouts or claiming an FPS gain.
 [MultiviewSession](../../ios/OpenPocketCine/MultiviewSession.swift) lines 250–298
 starts discovery and lines 447/468 restart it after network setup. The scanner
 can remain active with a populated stage; application-state changes at 563–581
-do not stop it. [BleLink](../../ios/OpenPocketCine/BleLink.swift) lines 118–128
+do not stop it. [BleLink](../../../OpenCine/Sources/OpenCineDJIApple/DjiAppleBluetoothLink.swift) lines 118–128
 requests duplicate advertisements and lines 346–357 yields matching advertisements
 before Multiview deduplicates them. Explicit session stop correctly ends scanning.
 RF callback rate and energy cost were not measured.
@@ -318,7 +318,7 @@ Transport inspection also found existing limits worth preserving:
 
 - Both datalink owners stop the 25 ms ACK pump on close/rebind. Flip GET,
   gimbal emission and low-rate diagnostics share that pump; keep all three ACK
-  windows, including command replies. See [iOS driver](../../ios/OpenPocketCine/DatalinkDriver.swift)
+  windows, including command replies. See [iOS driver](../../../OpenCine/Sources/OpenCineDJIApple/DjiAppleDatalink.swift)
   lines 801–843/1054–1093 and [Android driver](../../../OpenCine/Android/dji/src/main/kotlin/com/opencapture/opencine/dji/DatalinkDriver.kt)
   lines 714–768/981–989.
 - BLE presence and UDP keepalive are about 1 Hz during a session; gimbal readback
