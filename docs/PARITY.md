@@ -1721,6 +1721,17 @@ handoff. Physical iPhone camera, assists and recovery qualification for the new
 Apple ownership is untested. Remaining session/recovery/keepalive orchestration
 and continuous DJI gesture migration leave full P2 unfinished.
 
+## Apple connection-run ownership candidate
+
+The actual iOS pairing, credentials, AP/station join, identity and registration
+workflow now belongs to OpenCineDJIApple.DjiAppleConnectionRun. The app retains
+saved-storage namespaces, permissions, native picture/watchdog, gimbal teardown
+and full recovery policy. Captured attempts fence delayed and synchronous callbacks;
+registration stays synchronous before initial enable, with original command pacing.
+Android keeps its existing connection owner and platform-specific station/subscribe
+cadence. SIMULATED traces prove workflow parity; physical qualification is untested.
+Full P2 and the prior optical automation limitation remain unfinished.
+
 ## Apple heartbeat ownership candidate
 
 iOS moves the actual registration loop, path-loss grace and Selfie Flip fallback into

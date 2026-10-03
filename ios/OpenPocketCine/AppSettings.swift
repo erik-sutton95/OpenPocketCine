@@ -1,183 +1,12 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
-/// DISP 1 Live / DISP 2 Clean. Command (DISP 3) is not in this build.
-enum PocketDispMode: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
-    case live
-    case clean
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .live: "Live"
-        case .clean: "Clean"
-        }
-    }
-
-    var settingsTitle: String {
-        switch self {
-        case .live: "DISP 1 · Live"
-        case .clean: "DISP 2 · Clean"
-        }
-    }
-
-    var settingsCaption: String {
-        switch self {
-        case .live:
-            "The full monitor. Set what it shows in Edit view."
-        case .clean:
-            "A stripped-back image. Same elements as DISP 1 — status, tool and capture bars start off. Pin which view assists stay on."
-        }
-    }
-}
-
-/// Per-DISP chrome map for Pocket live / clean.
-struct PocketDispChrome: Equatable, Codable, Sendable {
-    /// Containers first, then rail / on-feed chrome, then status-bar cells last so
-    /// Edit-view badges keep the big boxes' preferred corners.
-    enum Section: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
-        case statusBar
-        case toolBar
-        case cameraValues
-        case lockButton
-        case batteries
-        case railRecord
-        case railMedia
-        case railSettings
-        case zoomChip
-        case gimbalStick
-        case focusBox
-        case recReadout
-        case timecode
-        case format
-        case color
-        case storage
-        case fps
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .statusBar: "Status Bar"
-            case .toolBar: "Tool Bar"
-            case .cameraValues: "Camera Values"
-            case .lockButton: "Lock Button"
-            case .batteries: "Batteries"
-            case .railRecord: "Record"
-            case .railMedia: "Media"
-            case .railSettings: "Settings"
-            case .zoomChip: "Zoom Chip"
-            case .gimbalStick: "Gimbal Stick"
-            case .focusBox: "Face Box"
-            case .recReadout: "REC"
-            case .timecode: "Timecode"
-            case .format: "Format"
-            case .color: "Color"
-            case .storage: "Storage"
-            case .fps: "FPS"
-            }
-        }
-    }
-
-    var statusBar = true
-    var toolBar = true
-    var cameraValues = true
-    var lockButton = true
-    var batteries = true
-    var recReadout = true
-    var timecode = true
-    var format = true
-    var color = true
-    var storage = true
-    var fps = true
-    var railRecord = true
-    var railMedia = true
-    var railSettings = true
-    var zoomChip = true
-    var gimbalStick = true
-    var focusBox = true
-
-    static let liveDefaults = PocketDispChrome()
-
-    static let cleanDefaults = PocketDispChrome(
-        statusBar: false,
-        toolBar: false,
-        cameraValues: false,
-        lockButton: false,
-        batteries: true,
-        recReadout: true,
-        timecode: true,
-        format: true,
-        color: true,
-        storage: true,
-        fps: true,
-        railRecord: true,
-        railMedia: true,
-        railSettings: true,
-        zoomChip: true,
-        gimbalStick: true,
-        focusBox: true
-    )
-
-    func isVisible(_ section: Section) -> Bool {
-        switch section {
-        case .statusBar: statusBar
-        case .toolBar: toolBar
-        case .cameraValues: cameraValues
-        case .lockButton: lockButton
-        case .batteries: batteries
-        case .railRecord: railRecord
-        case .railMedia: railMedia
-        case .railSettings: railSettings
-        case .zoomChip: zoomChip
-        case .gimbalStick: gimbalStick
-        case .focusBox: focusBox
-        case .recReadout: recReadout
-        case .timecode: timecode
-        case .format: format
-        case .color: color
-        case .storage: storage
-        case .fps: fps
-        }
-    }
-
-    mutating func toggle(_ section: Section) {
-        switch section {
-        case .statusBar: statusBar.toggle()
-        case .toolBar: toolBar.toggle()
-        case .cameraValues: cameraValues.toggle()
-        case .lockButton: lockButton.toggle()
-        case .batteries: batteries.toggle()
-        case .railRecord: railRecord.toggle()
-        case .railMedia: railMedia.toggle()
-        case .railSettings: railSettings.toggle()
-        case .zoomChip: zoomChip.toggle()
-        case .gimbalStick: gimbalStick.toggle()
-        case .focusBox: focusBox.toggle()
-        case .recReadout: recReadout.toggle()
-        case .timecode: timecode.toggle()
-        case .format: format.toggle()
-        case .color: color.toggle()
-        case .storage: storage.toggle()
-        case .fps: fps.toggle()
-        }
-    }
-
-    /// Live and clean offer the same list — clean is DISP 1 with different defaults.
-    static func isConfigurable(_ section: Section, in mode: PocketDispMode) -> Bool {
-        _ = section
-        _ = mode
-        return true
-    }
-
-    static func configurableSections(in mode: PocketDispMode) -> [Section] {
-        Section.allCases.filter { isConfigurable($0, in: mode) }
-    }
-}
+typealias PocketDispMode = MonitorDisplayMode
+typealias PocketDispChrome = MonitorDisplayChrome
 
 enum AppPanel: String, Identifiable {
     case settings, media, privacy, terms, licenses, notice
@@ -199,7 +28,7 @@ enum OpenPocketCineLinks {
 
 /// Live chrome and home both present this. `onClose` lets a cover dismiss without `homePanel`.
 struct AppSettingsView: View {
-    /// OpenZCine `OperatorSettingsPanel.safeArea` — processed landscape insets from the host.
+    /// OpenZCine `OperatorSettingsPanel.safeArea` \u{2014} processed landscape insets from the host.
     var safeArea: EdgeInsets = EdgeInsets()
     var onClose: (() -> Void)? = nil
 
@@ -505,7 +334,7 @@ struct SettingsSwitchGraphic: View {
     }
 }
 
-/// OpenZCine `DisplayToggleItem` — compact switch tile for the DISP 2 assist pin grid.
+/// OpenZCine `DisplayToggleItem` \u{2014} compact switch tile for the DISP 2 assist pin grid.
 struct DisplayToggleItem: View {
     let title: String
     let isOn: Bool
@@ -909,7 +738,7 @@ struct SettingsLinkHealthCard: View {
 
 struct SettingsLiveTile: View {
     @Environment(AppModel.self) private var model
-    @State private var displayedFPS = "—"
+    @State private var displayedFPS = "\u{2014}"
     @State private var lastFPSCommit: CFAbsoluteTime = 0
 
     private var isLinked: Bool { model.isLive }
@@ -935,7 +764,7 @@ struct SettingsLiveTile: View {
             model.session.connectedCamera?.name
             ?? model.savedCameras.first?.displayName
             ?? "Pocket"
-        let transport = isLinked ? "BLE + Wi-Fi" : "—"
+        let transport = isLinked ? "BLE + Wi-Fi" : "\u{2014}"
         return "\(name) · \(transport) · \(displayedFPS) FPS"
     }
 
@@ -993,12 +822,12 @@ struct SettingsLiveTile: View {
             || compact != displayedFPS
                 && (Double(compact) == nil || Double(displayedFPS) == nil)
         {
-            displayedFPS = compact.isEmpty ? "—" : compact
+            displayedFPS = compact.isEmpty ? "\u{2014}" : compact
             lastFPSCommit = now
             return
         }
         guard now - lastFPSCommit >= 0.5 else { return }
-        displayedFPS = compact.isEmpty ? "—" : compact
+        displayedFPS = compact.isEmpty ? "\u{2014}" : compact
         lastFPSCommit = now
     }
 }
