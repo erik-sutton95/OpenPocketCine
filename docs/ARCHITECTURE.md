@@ -60,6 +60,21 @@ strategy and continuous zoom completion retain their typed native adapters.
 In particular, native pinch/dial completion still owns DJI color restoration;
 moving that gesture lifecycle belongs to the later native-runtime increment.
 
+## Apple control exchange
+
+The iOS app composes `DjiAppleControlExchange` from `OpenCineDJIApple` with its Bluetooth
+link and datalink. The exchange owns the sole BLE drain, reply requests, held pairing
+replies and SET mailbox lifetime, including cancellation, retransmission and coalescing.
+App adapters retain status decoding and presentation pins, operator authority, incident
+storage, credential policy and the decision to repair a session. The integration imports
+no UI or neutral native monitor runtime.
+
+Common receipt confirmation uses `cameraReportedCapture`, including explicit recording
+report presence. The separate `legacySettlement` context preserves existing busy-release
+and recovery decisions from presentation state. Initial command admission and native
+teardown keep their existing ordering. Closing a local exchange sends no camera command
+and leaves transport ownership with the caller, including a borrowed Multiview tile.
+
 ## Shared monitor presentation
 
 The multi-brand direction is [Shared Monitor Engine](SHARED-MONITOR-ENGINE.md).

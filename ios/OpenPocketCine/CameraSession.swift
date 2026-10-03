@@ -4,6 +4,7 @@ import CoreGraphics
 import Foundation
 import Observation
 import OpenPocketViewCore
+import OpenCineDJIApple
 import UIKit
 import os
 
@@ -205,7 +206,12 @@ final class CameraSession {
 
     @ObservationIgnored private let ble = BleLink(host: .pocket)
     @ObservationIgnored var datalink: DatalinkDriver? {
-        didSet { if oldValue !== datalink { controlSeam?.linkDidChange() } }
+        didSet {
+            if oldValue !== datalink {
+                controlExchange.endpoint = .init(bluetooth: ble, datalink: datalink)
+                controlSeam?.linkDidChange()
+            }
+        }
     }
     /// OpenCineCore seam for ISO, white balance and record (CORE-02). UI controls submit here.
     var control: DJICameraSessionAdapter {
@@ -213,13 +219,10 @@ final class CameraSession {
     }
     @ObservationIgnored private lazy var controlBinding = makeControlSessionBinding()
     private var controlSeam: DJICameraSessionAdapter? { controlBinding.cached }
-    @ObservationIgnored private var frameRouter: Task<Void, Never>?
+    @ObservationIgnored private lazy var controlExchange = makeControlExchange()
     @ObservationIgnored private var keepaliveLoop: Task<Void, Never>?
     /// Last pid `0x38` GET reply. BLE fallback fires when this goes stale.
     @ObservationIgnored private var lastSelfieFlipReplyAt: Date?
-    @ObservationIgnored private var waiters: [UInt16: FrameWaiter] = [:]
-    /// Handshake replies can land in the same notification before the next waiter is registered.
-    @ObservationIgnored private var pairingHold: [UInt16: Duml.Frame] = [:]
     @ObservationIgnored private let log = Logger(
         subsystem: "com.opencapture.openpocketcine", category: "session")
     @ObservationIgnored private var scanTask: Task<Void, Never>?
@@ -518,17 +521,7 @@ final class CameraSession {
     /// Hard SET settle-timeouts (no ACK, no push) inside `CameraSoftAP.commandTimeoutWindow`.
     /// Counted only for the latest mailbox generation while video is not flowing.
     @ObservationIgnored private var commandTimeoutsAt: [Date] = []
-    /// Mimo model: fire-and-forget SETs, latest-wins pending. Zoom (`0xB8`)
-    /// pipelines at 20 Hz without waiting for ACK. Other opcodes stay
-    /// one-in-flight. Commands to different opcodes never queue behind each other.
-    @ObservationIgnored private var inflight: [UInt16: InflightSend] = [:]
-    @ObservationIgnored private var inflightPending: [UInt16: InflightSend] = [:]
-    /// One coalesce timer per opcode so a 60 Hz pinch does not spawn 60 sleeps.
-    @ObservationIgnored private var coalesceScheduled: Set<UInt16> = []
-    @ObservationIgnored private var controlGeneration = 0
-    /// Timed-out SET still eligible for a late BLE ACK (matching seq).
-    @ObservationIgnored private var lateWait: [UInt16: InflightSend] = [:]
-    @ObservationIgnored private var setMailbox = CameraSetMailbox()
+    private var controlGeneration: Int { controlExchange.generation }
     /// Audio GET→patch→SET round trips ride their own chain, off the SET path.
     @ObservationIgnored private var audioTail: Task<Void, Never>?
     @ObservationIgnored private var tapFocusTask: Task<Void, Never>?
@@ -722,25 +715,16 @@ final class CameraSession {
             datalink = nil
             multiviewControlAdmission = nil
             phase = .idle
-            inflight.removeAll()
-            inflightPending.removeAll()
-            lateWait.removeAll()
-            coalesceScheduled.removeAll()
-            setMailbox.reset()
-            pairingHold.removeAll()
             audioTail?.cancel()
             audioTail = nil
-            failAllWaiters(CancellationError())
+            controlExchange.retire(CancellationError())
             return
         }
         endGimbalStick(cancelMove: true)
         stopTrackingPoll()
         tapFocusTask?.cancel()
         faceAFArmTask?.cancel()
-        inflight.removeAll()
-        inflightPending.removeAll()
-        lateWait.removeAll()
-        failAllWaiters(CancellationError())
+        controlExchange.retire(CancellationError())
         datalink = nil
     }
 
@@ -915,11 +899,6 @@ final class CameraSession {
         lastZoomLogAt = .distantPast
         lastFirstPictureLogAt = .distantPast
         lastFirstPictureSignature = ""
-        inflight.removeAll()
-        inflightPending.removeAll()
-        coalesceScheduled.removeAll()
-        lateWait.removeAll()
-        setMailbox.reset()
         audioTail = nil
         tapFocusTask?.cancel()
         tapFocusTask = nil
@@ -1040,14 +1019,8 @@ final class CameraSession {
         runTask = nil
         keepaliveLoop?.cancel()
         lastSelfieFlipReplyAt = nil
-        frameRouter?.cancel()
-        failAllWaiters(Fail.disconnected)
-        pairingHold.removeAll()
-        inflight.removeAll()
-        inflightPending.removeAll()
-        coalesceScheduled.removeAll()
-        lateWait.removeAll()
-        setMailbox.reset()
+        controlExchange.stopBLEDrain()
+        controlExchange.retire(Fail.disconnected)
         commandTimeoutsAt.removeAll()
         datalink?.restGimbalStick()
         pendingGimbalAxes = nil
@@ -1128,7 +1101,6 @@ final class CameraSession {
             // First-time pairing shows Approve on the camera and may hold the 0x45 reply
             // until the user taps; an 8 s wait dies on "Pairing…" as "stopped responding"
             // while the camera is still waiting. 0x46 can also arrive before 0x45.
-            pairingHold.removeAll()
             phase = .pairing
             ble.send(Commands.sessionWake())
             ble.send(Commands.setPairingPin(pin: camera.model.pairingToken))
@@ -1140,7 +1112,7 @@ final class CameraSession {
                 throw Fail.pairingTimeout
             } catch Fail.pairingDeferred where attempt < 3 {
                 ControlLiveLog.line("pair: camera deferred pairing (00 06), retry \(attempt) of 2")
-                frameRouter?.cancel()
+                controlExchange.stopBLEDrain()
                 await ble.disconnectAndWait()
                 try await Task.sleep(for: .seconds(3))
             }
@@ -1510,23 +1482,61 @@ final class CameraSession {
 
     // ---- BLE frame routing -----------------------------------------------------------------------
 
-    private func startFrameRouter() {
-        frameRouter?.cancel()
-        frameRouter = Task {
-            for await frame in ble.frames {
-                lastBleNotifyAt = Date()
-                route(frame)
-            }
-            guard !Task.isCancelled else { return }
-            failAllWaiters(Fail.disconnected)  // BLE dropped; don't sit on a command timeout
-            if case .live = phase {
-                if liveVideoIsFresh(), let camera = connectedCamera {
-                    reconnectBleKeepingLive(camera)
-                } else {
-                    beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
+    /// Packet workflows live in the shared owner; host policy and presentation stay here.
+    private func makeControlExchange() -> DjiAppleControlExchange {
+        DjiAppleControlExchange(endpoint: .init(bluetooth: ble, datalink: datalink),
+            context: { [weak self] in
+                guard let self else { return .init() }
+                return .init(canTransmit: self.admitsMultiviewControl,
+                    browsingMedia: self.isBrowsingMedia, controlsOnly: self.isMultiviewControlsOnly,
+                    reported: self.cameraReportedCapture, legacySettlement: self.status)
+            }, event: { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .bleActivity:
+                    self.lastBleNotifyAt = Date()
+                case .bleEnded:
+                    if case .live = self.phase {
+                        if self.liveVideoIsFresh(), let camera = self.connectedCamera {
+                            self.reconnectBleKeepingLive(camera)
+                        } else {
+                            self.beginSessionRecovery(reason: "BLE dropped", trigger: .bleDropped)
+                        }
+                    }
+                case .selfieFlip(let frame):
+                    _ = self.applySelfieFlipReply(frame)
+                case .replyReceived:
+                    self.commandTimeoutsAt.removeAll()
+                case .reply(let frame, let request, let late):
+                    if frame.cmdId == 0xa5 { self.applyTrackingPoll(frame.payload) }
+                    _ = self.finishControlReply(frame, name: request.name,
+                        opcode: String(format: "0x%02X/0x%02X", frame.cmdSet, frame.cmdId),
+                        expect: request.expectation, late: late)
+                case .refused(let name, let message):
+                    self.controlNote = "\(name): \(message)"
+                case .legacySettlementMatched:
+                    self.controlNote = nil
+                case .timeoutEvidence(let request, _):
+                    guard !self.isMultiviewBorrowed else { return }
+                    let videoFresh = self.datalink?.lastVideoPacketAt.map {
+                        Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
+                    } == true
+                    let opcode = String(format: "0x%02X/0x%02X", request.frame.cmdSet, request.frame.cmdId)
+                    if videoFresh {
+                        self.log.info("control: SET timeout with video flowing \u{2014} leave UDP")
+                        ControlLiveLog.line("control: \(request.name) \(opcode) \u{2014} SET timeout, video flowing, leave UDP")
+                    } else if self.datalink?.lastWriteLanded == false {
+                        self.log.info("control: SET timeout after skipped UDP write \u{2014} leave UDP")
+                        ControlLiveLog.line("control: \(request.name) \(opcode) \u{2014} SET timeout, write skipped, leave UDP")
+                    } else {
+                        self.noteCommandTimeout()
+                    }
                 }
-            }
-        }
+            }, journal: { ControlLiveLog.line($0) })
+    }
+
+    private func startFrameRouter() {
+        controlExchange.startBLEDrain(ble.frames)
     }
 
     private func liveVideoIsFresh() -> Bool {
@@ -1561,50 +1571,7 @@ final class CameraSession {
     }
 
     private func route(_ frame: Duml.Frame) {
-        if isMultiviewControlsOnly,
-            CameraParam.isSelfieFlipGetReply(
-                set: frame.cmdSet, cmd: frame.cmdId, payload: frame.payload)
-        {
-            return
-        }
-        // First-time pairing approval arrives as a request; answer it or the camera drops the link.
-        if !isMultiviewControlsOnly, frame.cmdSet == 0x07, frame.cmdId == 0x46,
-            frame.flags == Duml.flagRequest
-        {
-            ble.send(Commands.pairApprovalAck(seq: frame.seq))
-        }
-        // Pid 0x38 GET is untracked. Completing the shared 0x8E waiter here
-        // stole Flip replies as audio/glamour ACKs after first picture.
-        // Apply here so BLE replies still land (UDP-only apply went stale).
-        if applySelfieFlipReply(frame) {
-            return
-        }
-        if frame.cmdSet == 0x02, frame.cmdId == 0x8E {
-            ControlLiveLog.line(
-                "flip: route 0x8E miss seq=\(frame.seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload))"
-            )
-        }
-        let key = Duml.opcodeKey(set: frame.cmdSet, cmd: frame.cmdId)
-        // Mailbox seq match first. A 0x8E GET waiter used to steal FOV/ISO-limit
-        // SET ACKs; the SET then waitLate-counted as a dead uplink.
-        if isLiveControlOpcode(frame), setMailbox.isOpenSeq(key, seq: frame.seq) {
-            routeLiveControlAck(frame, key: key)
-            return
-        }
-        if let waiter = waiters[key] {
-            noteControlAck(frame, decision: "match")
-            for k in waiter.keys { waiters.removeValue(forKey: k) }
-            waiter.resume(returning: frame)
-            return
-        }
-        if isLiveControlOpcode(frame) {
-            routeLiveControlAck(frame, key: key)
-            return
-        }
-        if shouldHold(frame) {
-            pairingHold[key] = frame
-            return
-        }
+        controlExchange.receive(frame)
     }
 
     /// UDP ACK-pump GET and BLE fallback both land here. Do not complete 0x8E waiters.
@@ -1635,43 +1602,6 @@ final class CameraSession {
         return true
     }
 
-    /// Late BLE ACKs for the open seq are success. Superseded / flood seqs drop.
-    /// Live-control replies are never parked in `pairingHold` (no chip replay).
-    private func routeLiveControlAck(_ frame: Duml.Frame, key: UInt16) {
-        switch setMailbox.decideAck(key: key, seq: frame.seq) {
-        case .accept:
-            commandTimeoutsAt.removeAll()  // an ACK landed — the uplink works
-            noteControlAck(frame, decision: "inflight")
-            if let send = inflight.removeValue(forKey: key) {
-                finishInflight(send, key: key, reply: frame, late: false)
-            } else if let send = lateWait.removeValue(forKey: key) {
-                finishInflight(send, key: key, reply: frame, late: true)
-            }
-        case .acceptLate:
-            commandTimeoutsAt.removeAll()  // late, but it landed — uplink works
-            noteControlAck(frame, decision: "late")
-            inflight[key] = nil
-            if let send = lateWait.removeValue(forKey: key) {
-                finishInflight(send, key: key, reply: frame, late: true)
-            }
-        case .dropSuperseded:
-            noteControlAck(frame, decision: "superseded")
-        case .dropUnknown:
-            noteControlAck(frame, decision: "drop")
-        }
-    }
-
-    private func isLiveControlOpcode(_ frame: Duml.Frame) -> Bool {
-        Duml.isLiveCameraControl(set: frame.cmdSet, cmd: frame.cmdId)
-    }
-
-    private func noteControlAck(_ frame: Duml.Frame, decision: String) {
-        let opcode = String(format: "0x%02X/0x%02X", frame.cmdSet, frame.cmdId)
-        ControlLiveLog.line(
-            "control: ack \(opcode) seq=\(frame.seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) decision=\(decision) reply=\(Duml.isCommandReply(frame.flags))"
-        )
-    }
-
     /// Success is `0x07/0x45` `[00 01]` (already paired) or a `0x07/0x46` approval
     /// request (ACKed in `route()`). `[00 02]` means keep waiting for `0x46`;
     /// `[00 06]` is deferred (Android Multiview `PairingDeferred`), never success.
@@ -1697,84 +1627,14 @@ final class CameraSession {
     }
 
     private func waitFrame(
-        matching cmds: [(UInt8, UInt8)],
-        timeout: Duration,
-        consumeHold: Bool = true,
-        send: (() -> Void)? = nil
+        matching cmds: [(UInt8, UInt8)], timeout: Duration,
+        consumeHold: Bool = true, send: (() -> Void)? = nil
     ) async throws -> Duml.Frame {
-        let keys = Set(cmds.map { Duml.opcodeKey(set: $0.0, cmd: $0.1) })
-        let generation = controlGeneration
-        if consumeHold {
-            for (set, cmd) in cmds {
-                let key = Duml.opcodeKey(set: set, cmd: cmd)
-                if let held = pairingHold.removeValue(forKey: key) { return held }
-            }
-        } else {
-            // A stale ACK from a previous write must not satisfy this SET.
-            for key in keys { pairingHold.removeValue(forKey: key) }
-        }
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { cont in
-                for key in keys {
-                    if let old = waiters.removeValue(forKey: key) {
-                        for k in old.keys { waiters.removeValue(forKey: k) }
-                        old.resume(throwing: Fail.timeout)
-                    }
-                }
-                let waiter = FrameWaiter(keys: keys, continuation: cont)
-                for key in keys { waiters[key] = waiter }
-                // Register first, then write — `async let` on MainActor sent before the waiter existed.
-                send?()
-                // Detached so a MainActor flood cannot delay the timeout clock
-                // (Audio GET then wedged Record / zoom).
-                Task.detached { [weak self] in
-                    try? await Task.sleep(for: timeout)
-                    await MainActor.run { [weak self] in
-                        guard let self else { return }
-                        guard let stuck = keys.lazy.compactMap({ self.waiters[$0] }).first,
-                            stuck === waiter
-                        else { return }
-                        for k in stuck.keys { self.waiters.removeValue(forKey: k) }
-                        stuck.resume(throwing: Fail.timeout)
-                    }
-                }
-            }
-        } onCancel: { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self, self.controlGeneration == generation else { return }
-                guard let stuck = keys.lazy.compactMap({ self.waiters[$0] }).first else { return }
-                for k in stuck.keys { self.waiters.removeValue(forKey: k) }
-                stuck.resume(throwing: CancellationError())
-            }
-        }
-    }
-
-    private func failAllWaiters(_ error: Error) {
-        controlGeneration += 1
-        let pending = waiters
-        waiters.removeAll()
-        var seen = Set<ObjectIdentifier>()
-        for waiter in pending.values {
-            guard seen.insert(ObjectIdentifier(waiter)).inserted else { continue }
-            waiter.resume(throwing: error)
-        }
-    }
-
-    private final class FrameWaiter {
-        let keys: Set<UInt16>
-        private var continuation: CheckedContinuation<Duml.Frame, Error>?
-        init(keys: Set<UInt16>, continuation: CheckedContinuation<Duml.Frame, Error>) {
-            self.keys = keys
-            self.continuation = continuation
-        }
-        func resume(returning frame: Duml.Frame) {
-            continuation?.resume(returning: frame)
-            continuation = nil
-        }
-        func resume(throwing error: Error) {
-            continuation?.resume(throwing: error)
-            continuation = nil
-        }
+        let request = controlExchange.request(
+            matching: cmds, timeout: timeout, consumeHold: consumeHold, send: send)
+        do { return try await request.value() }
+        catch DjiAppleControlExchange.Error.timeout { throw Fail.timeout }
+        catch DjiAppleControlExchange.Error.disconnected { throw Fail.disconnected }
     }
 
     // ---- Camera control (Osmosis §10–14) ---------------------------------------------------------
@@ -2403,52 +2263,7 @@ final class CameraSession {
         var deadline: Date
     }
 
-    private enum ControlExpect {
-        case iso(IsoIndex)
-        case shutter(Int)
-        case ev(EvComp)
-        case expo(ExpoMode)
-        case focus(FocusMode)
-        case wb(WhiteBalance)
-        case format(VideoFormat)
-        case color(ColorMode)
-        case zoom(Double)
-        /// Record telemetry lags the ACK by ~1 s; the settle window covers it.
-        case recording(Bool)
-
-        func confirmed(by status: CameraStatus) -> Bool {
-            switch self {
-            case .recording(let active):
-                return status.isRecording == active
-            case .iso(let idx):
-                if status.isoIndex == idx { return true }
-                if let value = idx.isoValue, status.iso == value { return true }
-                return false
-            case .shutter(let denom):
-                return status.shutterDenom == denom
-            case .ev(let ev):
-                return status.evComp == ev
-            case .expo(let mode):
-                return status.expoMode == mode
-            case .focus(let mode):
-                return status.focusMode == mode
-            case .wb(let wb):
-                guard status.whiteBalance?.mode == wb.mode else { return false }
-                if wb.mode == .auto { return true }
-                return status.whiteBalanceKelvin == wb.kelvin
-                    && status.whiteBalanceTint == wb.tint
-            case .format(let format):
-                if status.videoFormat == format { return true }
-                return status.videoResolution == format.resolution
-                    && status.fps == format.frameRate.fps
-            case .color(let mode):
-                return status.colorMode == mode
-            case .zoom(let factor):
-                guard let live = status.zoomFactor else { return false }
-                return CamFov.matches(live, factor)
-            }
-        }
-    }
+    private typealias ControlExpect = DjiAppleControlExpectation
 
     private func pinAudio(
         channel: AudioChannel? = nil,
@@ -3525,10 +3340,7 @@ final class CameraSession {
         if take.changesZoom {
             // Retire manual requests and any delayed wide-angle color restoration.
             let key = CameraSetMailbox.zoomOpcodeKey
-            inflight[key] = nil
-            inflightPending[key] = nil
-            lateWait[key] = nil
-            setMailbox.cancel(key)
+            controlExchange.cancelSet(key)
             zoomPinchPreview = nil
             zoomPinchSlew = nil
             discardZoomAfterHop()
@@ -4246,239 +4058,28 @@ final class CameraSession {
     }
 
     /// One fire-and-forget SET. Latest-wins pending while the same opcode is in flight.
-    private final class InflightSend {
-        let frame: Duml.Frame
-        let name: String
-        let opcode: String
-        let expect: ControlExpect?
-        /// One-shot commands (Photo) must not fire twice on a slow ACK.
-        let retransmits: Bool
-        /// Slider / wheel: rate-limit and latest-wins. Chip taps are urgent.
-        let coalesce: Bool
-        let onFail: (@MainActor () -> Void)?
-        let onSettle: (@MainActor (Bool) -> Void)?
-        /// Wire progress for the OpenCineCore seam. Unlike `onSettle`, never reports an
-        /// unconfirmed settle as success.
-        let onStage: (@MainActor (ControlWireEvent) -> Void)?
-        var retransmitted = false
-        init(
-            frame: Duml.Frame, name: String, expect: ControlExpect?, retransmits: Bool,
-            coalesce: Bool, onFail: (@MainActor () -> Void)?,
-            onSettle: (@MainActor (Bool) -> Void)?,
-            onStage: (@MainActor (ControlWireEvent) -> Void)?
-        ) {
-            self.frame = frame
-            self.name = name
-            self.opcode = String(format: "0x%02X/0x%02X", frame.cmdSet, frame.cmdId)
-            self.expect = expect
-            self.retransmits = retransmits
-            self.coalesce = coalesce
-            self.onFail = onFail
-            self.onSettle = onSettle
-            self.onStage = onStage
-        }
-    }
-
-    /// Retransmit after this much ACK silence (Mimo retransmits before ACK too).
-    private static let retransmitAfter: Duration = .milliseconds(300)
-    /// Give up the waiter and accept a late BLE ACK for the same seq.
-    private static let settleAfter: Duration = .seconds(2)
-
-    /// Latest-wins mailbox. Status chips stay on last ACK / subscribe push.
-    /// Late BLE ACKs for the open seq are success; superseded seqs drop.
     private func fireCamera(
-        _ frame: Duml.Frame, name: String,
-        expect: ControlExpect? = nil,
-        retransmits: Bool = true,
-        coalesce: Bool = false,
+        _ frame: Duml.Frame, name: String, expect: ControlExpect? = nil,
+        retransmits: Bool = true, coalesce: Bool = false,
         onStage: (@MainActor (ControlWireEvent) -> Void)? = nil,
         onFail: (@MainActor () -> Void)? = nil,
         onSettle: (@MainActor (Bool) -> Void)? = nil
     ) {
         guard !Task.isCancelled, controlLinkReady else {
             controlNote = "not live"
-            onStage?(.notSent)
-            onFail?()
-            onSettle?(false)
+            onStage?(.notSent); onFail?(); onSettle?(false)
             return
         }
-        if isBrowsingMedia, frame.cmdSet == 0x02, frame.cmdId == 0x8E {
-            onStage?(.notSent)
-            onSettle?(false)
-            return
+        if isBrowsingMedia, frame.cmdSet == 2, frame.cmdId == 0x8e {
+            onStage?(.notSent); onSettle?(false); return
         }
         controlNote = nil
-        let key = Duml.opcodeKey(set: frame.cmdSet, cmd: frame.cmdId)
-        pairingHold.removeValue(forKey: key)
-        let send = InflightSend(
-            frame: frame, name: name, expect: expect, retransmits: retransmits,
-            coalesce: coalesce, onFail: onFail, onSettle: onSettle, onStage: onStage)
-        let now = CFAbsoluteTimeGetCurrent()
-        switch setMailbox.offer(key: key, urgent: !coalesce, now: now) {
-        case .coalescePending:
-            // Latest wins: the replaced request never reaches the wire.
-            inflightPending[key]?.onStage?(.notSent)
-            inflightPending[key] = send
-            if inflight[key] == nil, lateWait[key] == nil {
-                scheduleCoalesceLaunch(key)
-            } else if CameraSetMailbox.pipelinesWhileOpen(key) {
-                scheduleCoalesceLaunch(key)
-            }
-        case .launch:
-            if let abandoned = lateWait.removeValue(forKey: key) {
-                abandoned.onSettle?(false)
-            }
-            inflightPending.removeValue(forKey: key)?.onStage?(.notSent)
-            launchInflight(send, key: key)
-        }
-    }
-
-    private func launchInflight(_ send: InflightSend, key: UInt16) {
-        // Pipelined zoom replaces the open send. Do not journal ack=failed —
-        // the camera already has a newer slider on the wire.
-        inflight[key] = nil
-        setMailbox.beginLaunch(key: key, now: CFAbsoluteTimeGetCurrent())
-        inflight[key] = send
-        transmit(send, kind: "send")
-        send.onStage?(.sent)
-        if send.retransmits {
-            watchInflight(send, key: key, after: Self.retransmitAfter) { session, live in
-                guard !live.retransmitted else { return }
-                live.retransmitted = true
-                session.transmit(live, kind: "retransmit")
-            }
-        }
-        watchInflight(send, key: key, after: Self.settleAfter) { session, live in
-            session.settleInflightTimeout(live, key: key)
-        }
-    }
-
-    private func transmit(_ send: InflightSend, kind: String) {
-        guard admitsMultiviewControl else { return }
-        let seq = datalink?.send(send.frame) ?? 0
-        let key = Duml.opcodeKey(set: send.frame.cmdSet, cmd: send.frame.cmdId)
-        // A skipped UDP write returns seq 0 and lastWriteLanded=false — do
-        // not journal that seq as on the wire (timeout then looked like death).
-        if datalink?.lastWriteLanded != false {
-            setMailbox.noteTransmit(key: key, seq: seq)
-        }
-        ControlLiveLog.line(
-            "control: \(kind) \(send.name) \(send.opcode) seq=\(seq) flags=0x\(String(send.frame.flags, radix: 16)) payload=\(Duml.hex(send.frame.payload)) via=datalink"
-        )
-    }
-
-    /// Detached so a MainActor flood cannot delay the clock; identity-checked on arrival.
-    private func watchInflight(
-        _ send: InflightSend, key: UInt16, after delay: Duration,
-        _ body: @escaping @MainActor (CameraSession, InflightSend) -> Void
-    ) {
-        Task.detached { [weak self] in
-            try? await Task.sleep(for: delay)
-            await MainActor.run { [weak self] in
-                guard let self, let live = self.inflight[key], live === send else { return }
-                body(self, live)
-            }
-        }
-    }
-
-    private func finishInflight(_ send: InflightSend, key: UInt16, reply: Duml.Frame, late: Bool) {
-        inflight[key] = nil
-        lateWait[key] = nil
-        if send.frame.cmdId == 0xA5 { applyTrackingPoll(reply.payload) }
-        let ok = finishControlReply(
-            reply, name: send.name, opcode: send.opcode, expect: send.expect, late: late)
-        if CameraReply.parse(reply.payload).isSuccess {
-            send.onStage?(.acknowledged)
-        } else {
-            send.onStage?(ok ? .confirmed : .refused)
-        }
-        if !ok { send.onFail?() }
-        send.onSettle?(ok)
-        launchPendingAfterSettle(key)
-    }
-
-    private func settleInflightTimeout(_ send: InflightSend, key: UInt16) {
-        inflight[key] = nil
-        let matched = send.expect?.confirmed(by: status) == true
-        // No ACK in the settle window. `.waitLate` still releases busy UI below, but the
-        // seam hears only what the camera's status actually shows.
-        send.onStage?(matched ? .confirmed : .unconfirmed)
-        let result = setMailbox.timeout(key: key, subscribeMatches: matched)
-        let videoFresh =
-            datalink?.lastVideoPacketAt.map {
-                Date().timeIntervalSince($0) < FeedWatchdog.stallThreshold
-            } == true
-        let writeSkipped = datalink?.lastWriteLanded == false
-        if !isMultiviewBorrowed, CameraSetMailbox.timeoutImpliesUplinkFailure(result, key: key) {
-            if videoFresh {
-                log.info("control: SET timeout with video flowing — leave UDP")
-                ControlLiveLog.line(
-                    "control: \(send.name) \(send.opcode) — SET timeout, video flowing, leave UDP")
-            } else if writeSkipped {
-                log.info("control: SET timeout after skipped UDP write — leave UDP")
-                ControlLiveLog.line(
-                    "control: \(send.name) \(send.opcode) — SET timeout, write skipped, leave UDP")
-            } else {
-                noteCommandTimeout()
-            }
-        }
-        switch result {
-        case .subscribeMatches:
-            controlNote = nil
-            ControlLiveLog.line("control: \(send.name) \(send.opcode) — subscribe already matches")
-            send.onSettle?(true)
-            launchPendingAfterSettle(key)
-        case .waitLate:
-            lateWait[key] = send
-            ControlLiveLog.line("control: \(send.name) \(send.opcode) — awaiting late ACK")
-            // Rec-lamp / Photo busy must not stick until a late ACK. HUD stays.
-            send.onSettle?(true)
-        case .launchPending:
-            send.onSettle?(false)
-            launchPendingAfterSettle(key)
-        case .idle:
-            break
-        }
-    }
-
-    private func launchPendingAfterSettle(_ key: UInt16) {
-        switch setMailbox.pendingLaunch(key: key, now: CFAbsoluteTimeGetCurrent()) {
-        case .none:
-            return
-        case .immediate:
-            guard let next = inflightPending.removeValue(forKey: key) else { return }
-            launchInflight(next, key: key)
-        case .afterHold:
-            scheduleCoalesceLaunch(key)
-        }
-    }
-
-    private func scheduleCoalesceLaunch(_ key: UInt16) {
-        guard coalesceScheduled.insert(key).inserted else { return }
-        let generation = controlGeneration
-        let remain = setMailbox.holdRemaining(key: key, now: CFAbsoluteTimeGetCurrent())
-        let delay: Duration =
-            remain > 0
-            ? .milliseconds(Int((remain * 1_000).rounded(.up)))
-            : .milliseconds(1)
-        Task.detached { [weak self] in
-            try? await Task.sleep(for: delay)
-            await MainActor.run { [weak self] in
-                guard let self, self.controlGeneration == generation else { return }
-                self.coalesceScheduled.remove(key)
-                let blocked =
-                    self.inflight[key] != nil
-                    && !CameraSetMailbox.pipelinesWhileOpen(key)
-                guard !blocked else { return }
-                switch self.setMailbox.pendingLaunch(key: key, now: CFAbsoluteTimeGetCurrent()) {
-                case .immediate:
-                    guard let next = self.inflightPending.removeValue(forKey: key) else { return }
-                    self.launchInflight(next, key: key)
-                case .afterHold:
-                    self.scheduleCoalesceLaunch(key)
-                case .none:
-                    break
-                }
+        controlExchange.submit(.init(frame, name: name, expectation: expect,
+            retransmits: retransmits, coalesce: coalesce)) { event in
+            switch event {
+            case .stage(let stage): onStage?(stage)
+            case .failed: onFail?()
+            case .settled(let success): onSettle?(success)
             }
         }
     }
@@ -4561,7 +4162,7 @@ final class CameraSession {
             log.info("control: \(name, privacy: .public) ok")
             return true
         }
-        if expect?.confirmed(by: status) == true {
+        if expect?.matchesLegacySettlement(by: status) == true {
             controlNote = nil
             ControlLiveLog.line(
                 "control: \(name) \(opcode) subscribe already matches after \(parsed.message)")
@@ -5928,26 +5529,13 @@ final class CameraSession {
         // The new handshake restarts DUML sequence numbering. Old retries,
         // pending sliders, and GET continuations belong to the retired session.
         controlSeam?.linkDidChange()
-        let retired =
-            Array(inflight.values) + Array(inflightPending.values) + Array(lateWait.values)
-        inflight.removeAll()
-        inflightPending.removeAll()
-        coalesceScheduled.removeAll()
-        lateWait.removeAll()
-        setMailbox.reset()
-        pairingHold.removeAll()
         commandTimeoutsAt.removeAll()
         audioTail?.cancel()
         audioTail = nil
         tapFocusTask?.cancel()
         tapFocusTask = nil
         stopTrackingPoll()
-        failAllWaiters(CancellationError())
-        var seen = Set<ObjectIdentifier>()
-        for send in retired where seen.insert(ObjectIdentifier(send)).inserted {
-            send.onFail?()
-            send.onSettle?(false)
-        }
+        controlExchange.retire(CancellationError(), notifySets: true)
         decoder.flushForRecovery()
         liveViewEnableSent = false
         liveViewEnableSends = 0
@@ -6692,18 +6280,8 @@ final class CameraSession {
         try await cameraMedia.clearCache(cameraID: mediaCameraID, preservingCatalog: true)
     }
 
-    /// Subscribe already matches a timed-out SET — treat as success, do not wait
-    /// for a hold-replay ACK that would thrash the chips.
     private func settleLateFromSubscribe() {
-        let hits = lateWait.filter { $0.value.expect?.confirmed(by: status) == true }
-        for (key, send) in hits {
-            lateWait[key] = nil
-            if setMailbox.isAwaitingLate(key) {
-                _ = setMailbox.timeout(key: key, subscribeMatches: true)
-            }
-            controlNote = nil
-            send.onSettle?(true)
-        }
+        controlExchange.settleFromReport()
     }
 
     private func ingestAccessUnit(_ accessUnit: [UInt8]) {
@@ -6743,13 +6321,6 @@ final class CameraSession {
     }
 
     // ---- helpers ---------------------------------------------------------------------------------
-
-    /// Hold pairing + Wi-Fi + camera-control replies that can arrive before the waiter is registered.
-    /// 1-byte 0x07/07 and 0x07/0E are refusals, not success — `readWifiString` still needs
-    /// them after the matching write so it can fail fast, but it drops any hold *before* send.
-    private func shouldHold(_ frame: Duml.Frame) -> Bool {
-        Duml.shouldHoldReply(set: frame.cmdSet, cmd: frame.cmdId)
-    }
 
     private struct KnownWifi {
         var ssid: String?
@@ -6878,7 +6449,7 @@ final class CameraSession {
             do {
                 ssid = try await readWifiString(
                     name: "GetSSID", set: 0x07, cmd: 0x07, cached: known.ssid
-                ) { ble.send(Commands.getWifiSsid()) }
+                ) { self.ble.send(Commands.getWifiSsid()) }
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as Fail where isDisconnect(error) {
@@ -6904,7 +6475,7 @@ final class CameraSession {
         do {
             let pass = try await readWifiString(
                 name: "GetPassword", set: 0x07, cmd: 0x0E, cached: known.password
-            ) { ble.send(Commands.getWifiPassword()) }
+            ) { self.ble.send(Commands.getWifiPassword()) }
             return (ssid, pass)
         } catch is CancellationError {
             throw CancellationError()
@@ -6925,20 +6496,18 @@ final class CameraSession {
     /// 1-byte / `0xE0…0xEF` is a refuse (Mimo still holding the AP) — use cache or fail now.
     private func readWifiString(
         name: String, set: UInt8, cmd: UInt8, cached: String?,
-        send: () -> Void
+        send: @escaping () -> Void
     ) async throws -> String {
-        let holdKey = UInt16(set) << 8 | UInt16(cmd)
         let deadline = Date().addingTimeInterval(12)
         var last: Error = Fail.commandTimeout(name)
         var attempt = 0
         while Date() < deadline {
             attempt += 1
             // Stale 0x07/07 often lands during 0x53/0x10 — do not treat it as this write's reply.
-            pairingHold.removeValue(forKey: holdKey)
             log.info("creds: \(name, privacy: .public) attempt \(attempt)")
-            send()
             do {
-                let frame = try await waitFrame(set, cmd, timeout: .seconds(4))
+                let frame = try await waitFrame(set, cmd, timeout: .seconds(4),
+                    consumeHold: false, send: send)
                 let status = frame.payload.first ?? 0xFF
                 let value = Duml.unpackStatusString(frame.payload)
                 if !value.isEmpty {

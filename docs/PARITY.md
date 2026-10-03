@@ -27,6 +27,16 @@ Simulator and emulator checks cover presentation and installed-build migration;
 physical pairing, station networking and live recovery remain pending under
 items 18-20 in [the integration checklist](OPENCINE-INTEGRATION.md).
 
+## Apple transaction ownership (P2)
+
+The iOS control exchange now lives in OpenCineDJIApple. This Apple OS workflow keeps the
+existing reply routing, pairing/Wi-Fi order, 300ms retransmit, 2s settlement and ordinary/zoom
+coalescing cadence. Kotlin retains its existing integration owner and portable DJI contract.
+New iOS receipt regressions reject presentation-pin confirmation and unknown recording idle;
+legacy busy-state settlement and recovery policy stay unchanged. Manual timing and a
+SIMULATED actual UDP peer exercise cancellation and transport lifetime. Physical Bluetooth,
+camera Wi-Fi, recording/control and recovery checks remain untested for this increment.
+
 ## Connection regression follow-up
 
 The shared DJI capture port now publishes actual shutter, EV, focus and zoom reports
