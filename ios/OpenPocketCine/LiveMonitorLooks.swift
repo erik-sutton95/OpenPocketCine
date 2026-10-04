@@ -583,15 +583,6 @@ enum PocketFalseColorMap {
 }
 
 extension FalseColorScaleKind {
-    var liveScale: LiveFalseColorScale {
-        switch self {
-        case .sceneStops: .sceneStops
-        case .stops: .stops
-        case .ire: .ire
-        case .limits: .limits
-        }
-    }
-
     var transitionWidth: Double { liveScale.edgeSoftness }
 
     /// OpenZCine `FalseColorReference.scaleLabel`.

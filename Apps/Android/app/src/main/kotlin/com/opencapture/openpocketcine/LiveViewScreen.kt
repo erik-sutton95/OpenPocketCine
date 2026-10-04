@@ -245,7 +245,7 @@ fun LiveViewScreen(model: AppModel) {
         model.chromeSectionMounts(PocketDispSection.TOOL_BAR) ||
             model.chromeSectionMounts(PocketDispSection.CAMERA_VALUES)
     val statusChipFrames = remember { mutableStateMapOf<PocketDispSection, ChromeRect>() }
-    var fpsLabel by remember { mutableStateOf("—") }
+    var fpsLabel by remember { mutableStateOf("\u2014") }
     var bars by remember { mutableIntStateOf(0) }
     val fpsSampler = remember { FrameRateSampler() }
     val signalBars = remember { LinkSignalBars() }
@@ -261,6 +261,8 @@ fun LiveViewScreen(model: AppModel) {
             if (OpcVulkan.isAvailable && !VulkanCrashGuard.isTripped(context)) {
                 LiveVulkanSession(
                     context = context,
+                    scopeBus = model.scopeBus,
+                    preview = model.inspectorPreview,
                     backdrop = backdrop,
                     onDecoderSurface = { model.session.attachSurface(it) },
                     onFirstFrame = { model.session.noteLiveFrame() },
@@ -286,7 +288,7 @@ fun LiveViewScreen(model: AppModel) {
     LaunchedEffect(model.session, useVulkan, vulkanSession) {
         var lastCount = 0
         var lastAt = 0L
-        var held = "—"
+        var held = "\u2014"
         while (true) {
             val now = SystemClock.elapsedRealtime()
             val count =
@@ -532,15 +534,8 @@ fun LiveViewScreen(model: AppModel) {
                 stretchToRect = desqueezeVisible,
             )
             session.setPlates(GpuOverlayBus.plateSnapshot())
-            session.syncAssists(
-                assist = assist,
+            session.updateEffects(
                 plan = effectsPlan,
-                canvasOriginX = canvasOrigin.x,
-                canvasOriginY = canvasOrigin.y,
-                wave = GpuOverlayBus.wave,
-                parade = GpuOverlayBus.parade,
-                histoRect = GpuOverlayBus.histo,
-                vector = GpuOverlayBus.vector,
                 uiScale = density.density,
                 pictureMirrored = liveViewFlip,
                 pictureFlippedVertically = flipV,
@@ -585,6 +580,8 @@ fun LiveViewScreen(model: AppModel) {
                     .clipToBounds(),
             ) {
                 LiveFeedPresenter(
+                    scopeBus = model.scopeBus,
+                    preview = model.inspectorPreview,
                     mirrored = liveViewFlip,
                     flippedVertically = flipV,
                     stretchToRect = desqueezeVisible,
@@ -697,6 +694,7 @@ fun LiveViewScreen(model: AppModel) {
             Box(Modifier.fillMaxSize().zIndex(1f)) {
                 LiveAssistLayer(
                     state = assist,
+                    scopeBus = model.scopeBus,
                     status = status,
                     focus = if (model.chromeSectionMounts(PocketDispSection.FOCUS_BOX)) focusPoint else null,
                     tracking = trackingHud,
@@ -717,7 +715,7 @@ fun LiveViewScreen(model: AppModel) {
                     pictureFlippedVertically = flipV,
                     showsAudio = model.showsAudio(status),
                     onOpenOptions = { tool, frame ->
-                        assist.longPressAnchor = frame
+                        assist.longPressAnchor = com.opencapture.monitorui.MonitorRect(frame.x, frame.y, frame.width, frame.height)
                         assist.configureTool = tool
                     },
                 )
@@ -1074,7 +1072,7 @@ private fun LiveFaceFramePump(
             delay(LiveFaceDetector.INTERVAL_MS)
             // Vulkan: identity 720p RGB, same space as iOS Vision / 0xA6.
             // PixelCopy of the swapchain is already mirrored when TT180/MIRROR
-            // is on, and the overlay mirrors again — box on the opposite side.
+            // is on, and the overlay mirrors again - box on the opposite side.
             val session = vulkan
             if (session != null) {
                 // Take a fresh readback first, then ask for the next only when the
@@ -1151,7 +1149,7 @@ private fun VulkanLivePresenter(
                 isFocusable = false
                 setZOrderMediaOverlay(false)
                 // API 34+ default destroys this surface when Settings / Media
-                // cover it. Pocket has no periodic GOP — keep the surface while
+                // cover it. Pocket has no periodic GOP - keep the surface while
                 // the view stays attached (#248).
                 if (Build.VERSION.SDK_INT >= 34) {
                     setSurfaceLifecycle(SurfaceView.SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT)
@@ -1202,7 +1200,7 @@ private fun VulkanLivePresenter(
     )
 }
 
-/** Keep both pinch fingers on one view — Android otherwise splits pointer 2 onto SurfaceView. */
+/** Keep both pinch fingers on one view - Android otherwise splits pointer 2 onto SurfaceView. */
 private fun View.unsplitMotionEvents() {
     var walk: View? = this
     while (walk != null) {
@@ -1214,6 +1212,8 @@ private fun View.unsplitMotionEvents() {
 /** GLES fallback; the same bounded raw tap supplies chrome after the native present. */
 @Composable
 private fun LiveFeedPresenter(
+    scopeBus: com.opencapture.opencine.runtime.ScopeSampleBus,
+    preview: com.opencapture.opencine.runtime.InspectorPreviewPipeline,
     mirrored: Boolean,
     flippedVertically: Boolean,
     stretchToRect: Boolean,
@@ -1238,6 +1238,8 @@ private fun LiveFeedPresenter(
         remember {
             LiveFeedEffectsSession(
                 context = context,
+                scopeBus = scopeBus,
+                preview = preview,
                 backdrop = backdrop,
                 onDecoderSurface = { attach.value(it) },
                 onGpuFailed = { gpuFailed = true },
@@ -1247,7 +1249,7 @@ private fun LiveFeedPresenter(
         }
     DisposableEffect(session) {
         onDispose {
-            session.detachDisplay()
+            session.close()
             textureViewOut.value(null)
         }
     }
@@ -1589,7 +1591,7 @@ private fun LiveTopDeck(
                 modifier = chipMod(PocketDispSection.COLOR, LiveSheet.COLOR).topCapture(LiveSheet.COLOR))
         }
         if (model.chromeSectionMounts(PocketDispSection.FORMAT)) {
-            Text(CameraCommands.shootingModeLabel(status.shootingMode, model.session.connectedCamera?.model?.name) ?: "—",
+            Text(CameraCommands.shootingModeLabel(status.shootingMode, model.session.connectedCamera?.model?.name) ?: "\u2014",
                 color = LiveDesign.accent, style = LiveType.ui(topFont, FontWeight.Medium), maxLines = 1,
                 modifier = Modifier.reportChromeFrame { onPickerFrame(LiveSheet.MODE, it) }.topCapture(LiveSheet.MODE))
         }

@@ -63,7 +63,7 @@ fun LiveAssistBar(
         onClick = { state.toggle(it) },
         onLongPress = { tool ->
             if (tool.hasConfiguration) {
-                frames[tool]?.let { state.longPressAnchor = it }
+                frames[tool]?.let { state.longPressAnchor = com.opencapture.monitorui.MonitorRect(it.x, it.y, it.width, it.height) }
                 state.configureTool = tool
                 onLongPress(tool)
             }

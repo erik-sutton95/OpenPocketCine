@@ -44,12 +44,12 @@ internal fun AssistInspectorImagePreview(tool: LiveAssistTool, state: LiveAssist
         fun update() {
             val resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
             if (resumed && !active) {
-                InspectorPreviewPipeline.open(owner, playback, context, latestPlan) { image = it }
+                model.inspectorPreview.open(owner, playback, context, latestPlan) { image = it }
                 state.inspectorScopeDemand = InspectorScopeDemand(owner, tool, playback)
                 active = true
             } else if (!resumed && active) {
                 if (state.inspectorScopeDemand?.owner === owner) state.inspectorScopeDemand = null
-                InspectorPreviewPipeline.close(owner)
+                model.inspectorPreview.close(owner)
                 image = null
                 active = false
             }
@@ -60,10 +60,10 @@ internal fun AssistInspectorImagePreview(tool: LiveAssistTool, state: LiveAssist
         onDispose {
             lifecycle.removeObserver(observer)
             if (state.inspectorScopeDemand?.owner === owner) state.inspectorScopeDemand = null
-            InspectorPreviewPipeline.close(owner)
+            model.inspectorPreview.close(owner)
         }
     }
-    SideEffect { InspectorPreviewPipeline.update(owner, plan) }
+    SideEffect { model.inspectorPreview.update(owner, plan) }
     val sourceAspect = image?.let { it.width.toFloat() / it.height } ?: (16f / 9f)
     com.opencapture.monitorui.MonitorImagePreview(image?.asImageBitmap(), "${tool.title} image preview",
         aspectRatio = if (tool == LiveAssistTool.DESQ) state.presentedAspect(sourceAspect, preview = true) else null)

@@ -37,6 +37,7 @@ final class MirrorAssistTests: XCTestCase {
         XCTAssertEqual(box.y, 0.75, accuracy: 1e-9)
     }
 
+    @MainActor
     func testMirrorAxesPersistAndOnlyApplyWhileToolIsOn() {
         let state = LiveAssistState()
         state.mirror = false

@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.openpocketcine.feed.inferred
+
 import android.app.ActivityManager
 import android.graphics.Bitmap
 import android.os.Build
@@ -82,19 +85,20 @@ fun BoxScope.PlaybackDarkenedBars(
 
 /**
  * WAVE / HISTO tap. LUT / PEAK / FALSE / ZEBRA grade inside ExoPlayer at the
- * clip raster — this is display-size, scopes only.
+ * clip raster - this is display-size, scopes only.
  */
 @Composable
 internal fun PlaybackFrameSample(
     textureView: TextureView,
+    scopeBus: LiveScopeSampleBus,
     enabled: Boolean,
     plan: FeedEffectsRenderPlan,
     colorMode: Int,
     iso: Int,
 ) {
-    LaunchedEffect(textureView, enabled, plan, colorMode, iso) {
+    LaunchedEffect(textureView, scopeBus, enabled, plan, colorMode, iso) {
         if (!enabled) return@LaunchedEffect
-        val source = LiveScopeSampleBus.openSource()
+        val source = scopeBus.openSource(com.opencapture.opencine.runtime.ScopeSampleBus.Role.PLAYBACK)
         try {
             var previousBundle = ScopeAssistBundle.EMPTY
             val ceiling = ScopeExposureCeiling()
@@ -114,10 +118,10 @@ internal fun PlaybackFrameSample(
                     buf[slot]?.takeIf { it.width == dw && it.height == dh && it.isMutable }
                         ?: createBitmap(dw, dh, Bitmap.Config.ARGB_8888).also { buf[slot] = it }
                 textureView.getBitmap(dst)
-                previousBundle = publishPlaybackScopeTap(dst, colorMode, iso, plan, previousBundle, source, ceiling)
+                previousBundle = publishPlaybackScopeTap(dst, colorMode, iso, plan, previousBundle, source, ceiling, scopeBus)
                 slot = 1 - slot
             }
-        } finally { LiveScopeSampleBus.closeSource(source) }
+        } finally { scopeBus.closeSource(source) }
     }
 }
 
@@ -220,8 +224,9 @@ private fun publishPlaybackScopeTap(
     iso: Int,
     plan: FeedEffectsRenderPlan,
     previous: ScopeAssistBundle,
-    source: LiveScopeSampleBus.Source,
+    source: com.opencapture.opencine.runtime.ScopeSampleBus.Source,
     ceiling: ScopeExposureCeiling,
+    scopeBus: LiveScopeSampleBus,
 ): ScopeAssistBundle {
     val tapW = src.width
     val tapH = src.height
@@ -246,7 +251,7 @@ private fun publishPlaybackScopeTap(
             previous = previous,
             ceiling = ceiling,
         )
-    LiveScopeSampleBus.publish(source, bundle)
+    scopeBus.publish(source, bundle)
     return bundle
 }
 

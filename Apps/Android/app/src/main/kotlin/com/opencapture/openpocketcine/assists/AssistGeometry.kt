@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.openpocketcine.feed.fromColorMode
+
 import com.opencapture.openpocketcine.feed.LiveColorScience
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.feed.ScopeDisplayScale
@@ -12,141 +14,20 @@ import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-data class AssistPoint(val x: Float, val y: Float)
+typealias AssistPoint = com.opencapture.monitorui.MonitorScopePoint
+typealias AssistSize = com.opencapture.monitorui.MonitorScopeSize
+typealias AssistRect = com.opencapture.monitorui.MonitorScopeRect
+typealias StoredCenter = com.opencapture.monitorui.MonitorScopeStoredCenter
+typealias ScopeGuides = com.opencapture.monitorui.MonitorScopeGuides
+typealias ScopePanelSize = com.opencapture.monitorui.MonitorScopePanelSize
 
-data class AssistSize(val width: Float, val height: Float)
+typealias GridSegment = com.opencapture.monitorui.MonitorGridSegment
 
-data class AssistRect(val x: Float, val y: Float, val width: Float, val height: Float) {
-    val minX: Float
-        get() = x
-    val minY: Float
-        get() = y
-    val maxX: Float
-        get() = x + width
-    val maxY: Float
-        get() = y + height
-    val midX: Float
-        get() = x + width / 2f
-    val midY: Float
-        get() = y + height / 2f
+typealias GridAssist = com.opencapture.monitorui.MonitorGridGeometry
 
-    fun contains(px: Float, py: Float): Boolean = px in minX..maxX && py in minY..maxY
+typealias GuidesAssist = com.opencapture.monitorui.MonitorGuideGeometry
 
-    /** Aspect-fit a picture of `aspect` (width/height) inside this rect. */
-    fun fittedContent(aspect: Float): AssistRect {
-        val ratio = if (aspect.isFinite() && aspect > 0f) aspect else 16f / 9f
-        if (height <= 0f) return this
-        return if (width / height > ratio) {
-            val w = height * ratio
-            AssistRect(x + (width - w) / 2f, y, w, height)
-        } else {
-            val h = width / ratio
-            AssistRect(x, y + (height - h) / 2f, width, h)
-        }
-    }
-}
-
-data class GridSegment(val from: AssistPoint, val to: AssistPoint)
-
-data class StoredCenter(val xFraction: Double, val yFraction: Double) {
-    constructor(center: AssistPoint, bounds: AssistRect) : this(
-        ((center.x - bounds.minX) / maxOf(bounds.width, 1f)).toDouble(),
-        ((center.y - bounds.minY) / maxOf(bounds.height, 1f)).toDouble(),
-    )
-
-    fun center(bounds: AssistRect): AssistPoint =
-        AssistPoint(
-            bounds.minX + xFraction.toFloat() * bounds.width,
-            bounds.minY + yFraction.toFloat() * bounds.height,
-        )
-}
-
-data class ScopeGuides(
-    val clip: Boolean = true,
-    val crush: Boolean = true,
-    val middle: Boolean = true,
-)
-
-object ScopePanelSize {
-    val waveform = AssistSize(250f, 153f)
-    val parade = AssistSize(250f, 153f)
-    val histogram = AssistSize(250f, 77f)
-    val vectorscope = AssistSize(190f, 190f)
-    val trafficLights = AssistSize(74f, 168f)
-    val ndMeter = AssistSize(84f, 30f)
-    val audio = AssistSize(28f, 168f)
-    val falseColorReference = AssistSize(264f, 52f)
-}
-
-object GridAssist {
-    val thirdsFractions = floatArrayOf(1f / 3f, 2f / 3f)
-    val phiFractions = floatArrayOf(0.382f, 0.618f)
-    const val STROKE_OPACITY = 0.22f
-    const val STROKE_WIDTH_DP = 1f
-    val optionLabels = listOf("Thirds", "Phi Grid", "Diagonal")
-
-    fun segments(
-        feed: AssistRect,
-        thirds: Boolean,
-        phi: Boolean,
-        diagonal: Boolean,
-    ): List<GridSegment> {
-        val lines = ArrayList<GridSegment>(12)
-        if (thirds) appendFractions(feed, thirdsFractions, lines)
-        if (phi) appendFractions(feed, phiFractions, lines)
-        if (diagonal) {
-            lines +=
-                GridSegment(
-                    AssistPoint(feed.minX, feed.minY),
-                    AssistPoint(feed.maxX, feed.maxY),
-                )
-            lines +=
-                GridSegment(
-                    AssistPoint(feed.maxX, feed.minY),
-                    AssistPoint(feed.minX, feed.maxY),
-                )
-        }
-        return lines
-    }
-
-    private fun appendFractions(feed: AssistRect, fractions: FloatArray, lines: MutableList<GridSegment>) {
-        for (fraction in fractions) {
-            val x = feed.minX + feed.width * fraction
-            val y = feed.minY + feed.height * fraction
-            lines += GridSegment(AssistPoint(x, feed.minY), AssistPoint(x, feed.maxY))
-            lines += GridSegment(AssistPoint(feed.minX, y), AssistPoint(feed.maxX, y))
-        }
-    }
-}
-
-object GuidesAssist {
-    /** Letterbox when the guide is wider than the feed, pillarbox when narrower. */
-    fun rectForRatio(feed: AssistRect, ratio: Float): AssistRect {
-        val width: Float
-        val height: Float
-        if (feed.height <= 0f || ratio <= 0f) return feed
-        if (feed.width / feed.height > ratio) {
-            height = feed.height
-            width = feed.height * ratio
-        } else {
-            width = feed.width
-            height = feed.width / ratio
-        }
-        return AssistRect(
-            feed.minX + (feed.width - width) / 2f,
-            feed.minY + (feed.height - height) / 2f,
-            width,
-            height,
-        )
-    }
-}
-
-object CrosshairAssist {
-    const val ARM_LENGTH_DP = 40f
-    const val STROKE_WIDTH_DP = 1.4f
-    const val OPACITY = 0.65f
-    const val HELP = "Tap the toolbar button to show or hide the centre crosshair."
-}
+typealias CrosshairAssist = com.opencapture.monitorui.MonitorCrosshairGeometry
 
 object MirrorAssist {
     const val EXPLANATION =
@@ -276,7 +157,7 @@ object HistogramAssist {
 }
 
 object WaveformAssist {
-    /** OpenZCine `waveformParadeBrightnessMultiplier` — 100% = former 25%. */
+    /** OpenZCine `waveformParadeBrightnessMultiplier` - 100% = former 25%. */
     fun intensity(brightness: Int): Double = brightness.coerceIn(0, 200) / 400.0
 }
 
@@ -411,7 +292,7 @@ object MovablePanelMath {
     const val SCALE_MAX = 1.6
     /** Thumb well for the L-corner. Larger than iOS 56 so the grip is easy to hit. */
     const val GRIP_HIT_DP = 90f
-    /** iOS `WaveformAssist.gripVisualSize` — L-bracket stroke size. */
+    /** iOS `WaveformAssist.gripVisualSize` - L-bracket stroke size. */
     const val GRIP_VISUAL_DP = 14f
     /** How far the L drawing sits past the clip (iOS `gripExteriorGap`). */
     const val GRIP_EXTERIOR_GAP_DP = 2f
@@ -517,7 +398,7 @@ object FalseColorBands {
         scale: FalseColorScale,
         transfer: MonitorTransfer,
         rec709: Boolean = false,
-        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+        ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED,
     ): List<Band> =
         when (scale) {
             FalseColorScale.SCENE_STOPS -> sceneStopBands(clipStops(transfer, rec709, ceiling))
@@ -570,7 +451,7 @@ object FalseColorBands {
     }
 
     /** iOS `falseColorClip` for Limits: the clip shelf in WAVE IRE, on Rec.709 when 709 reads the look. */
-    fun limitShelfIRE(transfer: MonitorTransfer, rec709: Boolean = false, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Double {
+    fun limitShelfIRE(transfer: MonitorTransfer, rec709: Boolean = false, ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED): Double {
         val t = if (readsThroughLook(transfer, rec709)) MonitorTransfer.REC709 else transfer
         val shelf = maxOf(0.0, ceiling.clipEncoded(t) - ScopeExposureCeiling.CLIP_SHELF_CODES / 255.0)
         return ScopeDisplayScale.monitorPercent(shelf, t, ceiling = ceiling)
@@ -592,7 +473,7 @@ object FalseColorBands {
         rec709 && transfer in LOOK_SATURATION
 
     /** Scene stops at this curve's clip shelf; the CineStop clip band starts here. At 709 the look's clip. */
-    fun clipStops(transfer: MonitorTransfer, rec709: Boolean = false, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Double {
+    fun clipStops(transfer: MonitorTransfer, rec709: Boolean = false, ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED): Double {
         val ceiling =
             if (readsThroughLook(transfer, rec709)) LOOK_SATURATION.getValue(transfer)
             else ceiling.clipEncoded(transfer)
@@ -643,14 +524,14 @@ object AssistLongPress {
 
 /** iOS `ZebraAssist.Options.displayValue` / `ire(fromDisplay:)`. Thresholds stay 0–100 IRE. */
 object ZebraEditor {
-    fun displayValue(ire: Double, unit: ZebraUnit, transfer: MonitorTransfer, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Int =
+    fun displayValue(ire: Double, unit: ZebraUnit, transfer: MonitorTransfer, ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED): Int =
         when (unit) {
             ZebraUnit.IRE -> ire.roundToInt()
             ZebraUnit.NATIVE ->
                 (ScopeDisplayScale.signalNative(ire, transfer, ceiling = ceiling) * 255.0).roundToInt()
         }
 
-    fun ireFromDisplay(value: Int, unit: ZebraUnit, transfer: MonitorTransfer, ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED): Double =
+    fun ireFromDisplay(value: Int, unit: ZebraUnit, transfer: MonitorTransfer, ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED): Double =
         when (unit) {
             ZebraUnit.IRE -> value.toDouble().coerceIn(0.0, 100.0)
             ZebraUnit.NATIVE ->
@@ -660,7 +541,7 @@ object ZebraEditor {
     fun editorMaximum(unit: ZebraUnit): Int = if (unit == ZebraUnit.NATIVE) 255 else 100
 }
 
-/** iOS `FalseColorReference` — 264×52 glass ruler with proportional zone chips. */
+/** iOS `FalseColorReference` - 264×52 glass ruler with proportional zone chips. */
 object FalseColorReference {
     data class Segment(
         val lowerFraction: Double,
@@ -674,7 +555,7 @@ object FalseColorReference {
     private fun sceneStopDomain(
         transfer: MonitorTransfer,
         rec709: Boolean,
-        ceiling: ScopeExposureCeiling,
+        ceiling: com.opencapture.opencine.media.ScopeClipSource,
     ): ClosedRange<Double> = -8.5..(maxOf(2.5, FalseColorBands.clipStops(transfer, rec709, ceiling)) + 1)
 
     fun curveKeyLabel(colorMode: Int, rec709: Boolean = false): String =
@@ -698,7 +579,7 @@ object FalseColorReference {
         scale: FalseColorScale,
         transfer: MonitorTransfer,
         rec709: Boolean = false,
-        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+        ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED,
     ): List<Segment> =
         FalseColorBands.bands(scale, transfer, rec709, ceiling).map { band ->
             Segment(
@@ -712,7 +593,7 @@ object FalseColorReference {
     fun sceneStopMarkers(
         transfer: MonitorTransfer,
         rec709: Boolean = false,
-        ceiling: ScopeExposureCeiling = ScopeExposureCeiling.UNOBSERVED,
+        ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED,
     ): List<AxisMarker> {
         val clip = FalseColorBands.clipStops(transfer, rec709, ceiling)
         val marks =
@@ -731,7 +612,7 @@ object FalseColorReference {
         scale: FalseColorScale,
         transfer: MonitorTransfer,
         rec709: Boolean,
-        ceiling: ScopeExposureCeiling,
+        ceiling: com.opencapture.opencine.media.ScopeClipSource,
         infiniteFallback: Double,
     ): Double {
         if (!value.isFinite()) return infiniteFallback

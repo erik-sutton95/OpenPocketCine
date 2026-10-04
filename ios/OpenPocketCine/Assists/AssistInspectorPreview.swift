@@ -4,49 +4,16 @@ import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
-/// Sampling demand is independent of whether an assist is enabled on the main
-/// picture. The existing decoder and scope tap remain the only producers.
-extension LiveImageEffects {
-    func withInspectorDemand(_ tool: LiveAssistTool?) -> LiveImageEffects {
-        guard let tool else { return self }
-        var next = self
-        switch tool {
-        case .waveform: next.waveform = true
-        case .parade: next.parade = true
-        case .histogram: next.histogram = true
-        case .vectorscope: next.vectorscope = true
-        case .trafficLights: next.trafficLights = true
-        case .ndMeter: next.ndMeter = true
-        case .evMeter: break
-        default: next.inspectorSample = AssistInspectorPreviewPolicy.isImage(tool)
-        }
-        return next
-    }
-}
-
 enum AssistInspectorPreviewPolicy {
-    static let maximumImageDimension: CGFloat = 320
+    static let maximumImageDimension = CGFloat(MonitorInspectorImageSizing.maximumDimension)
     static let refreshInterval: Duration = .nanoseconds(
         Int64(MonitorPreviewAdmission.minimumIntervalNanoseconds))
 
     static func height(width: CGFloat, tool: LiveAssistTool) -> CGFloat {
-        let ratio: CGFloat
-        switch tool {
-        case .waveform, .parade: ratio = 0.612
-        case .histogram: ratio = 0.42
-        case .vectorscope: ratio = 0.9
-        case .trafficLights: ratio = 0.62
-        default: ratio = 0.5625
-        }
-        return min(196, max(56, width * ratio))
+        CGFloat(MonitorInspectorPreviewPolicy.height(width: Double(width), tool: tool))
     }
-
     static func isImage(_ tool: LiveAssistTool) -> Bool {
-        switch tool {
-        case .lut, .peaking, .falseColor, .zebra, .guides, .grid, .crosshair, .mirror, .desqueeze:
-            true
-        default: false
-        }
+        MonitorInspectorPreviewPolicy.isImage(tool)
     }
 
     /// The inspector forces its selected image tool on in this local copy only.
@@ -56,13 +23,9 @@ enum AssistInspectorPreviewPolicy {
         assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer,
         ceiling: OpenCineMedia.ScopeExposureCeiling
     ) -> LiveImageEffects {
-        var result = imageOptions(assist: assist, tool: tool, transfer: transfer, ceiling: ceiling)
-        if tool == .lut {
-            let lut = assist.inspectorLUT(transfer: transfer)
-            result.lutDimension = lut.dimension
-            result.lutRGBA = lut.rgba
-        }
-        return result
+        assist.inspectorImageEffects(
+            tool: tool, transfer: transfer,
+            clipByte: ceiling.clipByte(transfer: transfer))
     }
 
     /// Cheap option snapshot, including settings of a tool that is off on the
@@ -72,26 +35,9 @@ enum AssistInspectorPreviewPolicy {
         assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer,
         ceiling: OpenCineMedia.ScopeExposureCeiling
     ) -> LiveImageEffects {
-        var result = assist.gradesClip ? assist.playbackEffects : assist.effects
-        result.peaking = tool == .peaking
-        result.falseColor = tool == .falseColor
-        result.zebra = tool == .zebra
-        result.histogram = false
-        result.waveform = false
-        result.parade = false
-        result.vectorscope = false
-        result.trafficLights = false
-        result.ndMeter = false
-        result.faceAF = false
-        result.inspectorSample = false
-        result.stamp(transfer: transfer, ceiling: ceiling)
-        result.mirror = (tool == .mirror && assist.mirrorHorizontal) || result.mirror
-        result.mirrorVertical = (tool == .mirror && assist.mirrorVertical) || result.mirrorVertical
-        if tool == .lut {
-            result.splitComparison = assist.splitComparison
-        }
-        if tool == .desqueeze { result.desqueezeFactor = assist.desqueezeFactor }
-        return result
+        assist.inspectorImageOptions(
+            tool: tool, transfer: transfer,
+            clipByte: ceiling.clipByte(transfer: transfer))
     }
 }
 
@@ -305,10 +251,10 @@ struct AssistInspectorPreview: View {
         }
         while !Task.isCancelled {
             if let configuration = imageConfiguration,
-                let source = model.monitorSamples.inspectorSource
+                let source = model.monitorSamples.inspectorFrame
             {
                 let rendered = await renderer.render(
-                    owner: identity, source: source.buffer
+                    owner: identity, source: source
                 ) {
                     pictureEffects
                         ?? AssistInspectorPreviewPolicy.imageEffects(

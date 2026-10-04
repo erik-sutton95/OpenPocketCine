@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineAppKit
 import OpenCineDJIApple
 import OpenCineMedia
 import OpenPocketViewCore
@@ -28,6 +29,14 @@ enum MediaOperatorCopy {
 final class CameraMedia {
     private let fileManager: FileManager
     private let httpConfiguration: URLSessionConfiguration
+    // One declared canonical root shared by gallery, cache actions and retained native IO.
+    private lazy var cacheOwner = MonitorMediaCacheRoot(
+        root: applicationSupport.appendingPathComponent("OpenPocketCine/media", isDirectory: true),
+        fileManager: fileManager, accountLegacyUnpreparedRoots: true)
+    #if DEBUG && targetEnvironment(simulator)
+        private lazy var reviewDirectory = MonitorMediaCacheDirectory(
+            root: MonitorMediaReview.cacheRoot, fileManager: fileManager, accountLegacyUnpreparedRoots: true)
+    #endif
 
     private lazy var applicationSupport = fileManager.urls(
         for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -42,18 +51,16 @@ final class CameraMedia {
 
     var mediaPort: PocketMediaPort?
     var mediaService: DjiAppleMediaService?
-    var mediaBrowse: (any CameraMediaBrowse)?
-    var browseTask: Task<Void, Never>?
+    var serviceTask: Task<Void, Never>?
+    var serviceRequest = UUID()
     var resumeLiveTask: Task<Void, Never>?
-    var browseID = 0
     var resumeID = 0
     var actionCounter: UInt32 = 1
     var storageWinner: [String: Int] = [:]
-    var favorites: Set<String> = []
-    var favoritesCameraID: String?
-    var thumbInFlight: Set<String> = []
-    var downloadInFlight: Set<String> = []
-    private var colorMapCache: (cameraID: String, map: [String: Int])?
+    var thumbInFlight: [String: UUID] = [:]
+    var downloadInFlight: [String: UUID] = [:]
+    private var colorMapCache: (cameraID: String, generation: UInt64, map: [String: Int])?
+    var progressOwner: [String: UUID] = [:]
 
     private let pump = MediaDownloadPump()
     private lazy var http: URLSession = {
@@ -73,11 +80,6 @@ final class CameraMedia {
         return URLSession(configuration: cfg, delegate: pump, delegateQueue: nil)
     }()
 
-    func nextBrowseID() -> Int {
-        browseID += 1
-        return browseID
-    }
-
     func nextResumeID() -> Int {
         resumeID += 1
         return resumeID
@@ -96,40 +98,50 @@ final class CameraMedia {
         return value
     }
 
-    func loadFavorites(cameraID: String) -> Set<String> {
-        if favoritesCameraID == cameraID { return favorites }
-        favoritesCameraID = cameraID
-        favorites = Set(
-            UserDefaults.standard.stringArray(forKey: Self.favoritesKey(cameraID)) ?? [])
-        return favorites
-    }
-
-    func persistFavorites() {
-        guard let cameraID = favoritesCameraID else { return }
-        UserDefaults.standard.set(Array(favorites).sorted(), forKey: Self.favoritesKey(cameraID))
-    }
-
     func resetSession() {
-        browseTask?.cancel()
-        browseTask = nil
+        serviceRequest = UUID()
+        let old = serviceTask; serviceTask = nil; old?.cancel()
         cancelResumeLive()
         mediaService?.retire()
         mediaService = nil
         mediaPort = nil
-        mediaBrowse = nil
         storageWinner.removeAll()
         thumbInFlight.removeAll()
         downloadInFlight.removeAll()
+        progressOwner.removeAll()
         pump.cancelAll()
     }
 
-    func cacheRoot(cameraID: String) -> URL {
-        #if DEBUG && targetEnvironment(simulator)
-            if MonitorMediaReview.isActive { return MonitorMediaReview.cacheRoot }
-        #endif
-        return applicationSupport.appendingPathComponent(
-            "OpenPocketCine/media/\(cameraID)", isDirectory: true)
+    func sharedCache(cameraID: String, sourceOwnsFavorites: @escaping () -> Bool = { false },
+        persistEmptyCatalog: Bool = false)
+        -> (MonitorMediaCache<MediaFile>, PocketMediaCatalogCodec) {
+        let directory = cacheDirectory(cameraID: cameraID)
+        let codec = PocketMediaCatalogCodec(source: { [weak self] in self?.mediaService },
+            sourceOwnsFavorites: sourceOwnsFavorites, shotColor: { [weak self] file in
+                self?.shotColor(for: file.path, cameraID: cameraID)?.rawValue
+            })
+        return (MonitorMediaCache(directory: directory, codec: codec,
+            eligibility: .minimumFraction(numerator: 9, denominator: 10), catalogAddress: "index.json",
+            preservedMetadata: ["index.json", "color.json"], persistEmptyCatalog: persistEmptyCatalog), codec)
     }
+
+    func cacheDirectory(cameraID: String) -> MonitorMediaCacheDirectory {
+        #if DEBUG && targetEnvironment(simulator)
+            if MonitorMediaReview.isActive { return reviewDirectory }
+        #endif
+        if let directory = try? cacheOwner.directory(namespace: cameraID) { return directory }
+        // The factory performs only namespace validation. This fixed legacy fallback is valid,
+        // so the second lookup returns the same shared directory without IO or another owner.
+        return cacheDirectory(cameraID: "unknown")
+    }
+
+    /// Valid flat legacy namespaces keep their exact spelling. Invalid saved routing never grants
+    /// source readiness and uses the existing unknown bucket without rewriting the saved value.
+    func cacheNamespace(cameraID: String) -> String {
+        (try? cacheOwner.directory(namespace: cameraID)) == nil ? "unknown" : cameraID
+    }
+
+    func cacheRoot(cameraID: String) -> URL { cacheDirectory(cameraID: cameraID).root }
 
     func thumbnailCacheURL(cameraID: String, file: MediaFile) -> URL {
         cacheRoot(cameraID: cameraID)
@@ -245,7 +257,8 @@ final class CameraMedia {
     }
 
     private func loadColorMap(cameraID: String) -> [String: Int] {
-        if let cached = colorMapCache, cached.cameraID == cameraID { return cached.map }
+        let generation = cacheDirectory(cameraID: cameraID).generation
+        if let cached = colorMapCache, cached.cameraID == cameraID, cached.generation == generation { return cached.map }
         let url = colorStoreURL(cameraID: cameraID)
         let map: [String: Int]
         if let data = try? Data(contentsOf: url),
@@ -255,18 +268,15 @@ final class CameraMedia {
         } else {
             map = [:]
         }
-        colorMapCache = (cameraID, map)
+        colorMapCache = (cameraID, cacheDirectory(cameraID: cameraID).generation, map)
         return map
     }
 
     private func persistColorMap(_ map: [String: Int], cameraID: String) {
-        colorMapCache = (cameraID, map)
-        let url = colorStoreURL(cameraID: cameraID)
+        colorMapCache = (cameraID, cacheDirectory(cameraID: cameraID).generation, map)
         do {
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(map)
-            try data.write(to: url, options: .atomic)
+            try cacheDirectory(cameraID: cameraID).write(data, at: "color.json")
         } catch {
             ControlLiveLog.line("media: color store write failed \(error.localizedDescription)")
         }
@@ -286,174 +296,57 @@ final class CameraMedia {
     }
 
     func persistCatalog(_ files: [MediaFile], cameraID: String) {
-        let url = catalogURL(cameraID: cameraID)
-        do {
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            try encoder.encode(files).write(to: url, options: .atomic)
-        } catch {
-            ControlLiveLog.line("media: catalog write failed \(error.localizedDescription)")
-        }
+        let (cache, codec) = sharedCache(cameraID: cameraID, persistEmptyCatalog: true)
+        do { try cache.save(files.map { codec.record($0, includeDisplayFacts: false) }) }
+        catch { ControlLiveLog.line("media: catalog write failed \(error.localizedDescription)") }
     }
 
     func loadCatalog(cameraID: String) -> [MediaFile] {
-        let url = catalogURL(cameraID: cameraID)
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([MediaFile].self, from: data)) ?? []
+        sharedCache(cameraID: cameraID).0.load().map(\.payload)
     }
 
     /// Snapshot disk state once per catalog/cache revision, away from SwiftUI body evaluation.
+    /// Compatibility entry point for the original native goldens and retained actual HTTP IO.
+    /// Immutable source facts and paths are captured here; all file stats run in the shared worker.
     func cacheEntries(cameraID: String, files: [MediaFile]) async -> [String: MediaCacheEntry] {
-        let root = cacheRoot(cameraID: cameraID)
-        let manager = fileManager
-        let scan = Task.detached(priority: .utility) {
-            var entries: [String: MediaCacheEntry] = [:]
-            for file in files {
-                if Task.isCancelled { break }
-                let original = root.appendingPathComponent("files")
-                    .appendingPathComponent(Self.cacheName(file.path))
-                let attributes = try? manager.attributesOfItem(atPath: original.path)
-                let bytes = (attributes?[.size] as? NSNumber)?.uint64Value ?? 0
-                let isFile = attributes?[.type] as? FileAttributeType == .typeRegular
-                let hasOriginal =
-                    isFile && bytes > 0
-                    && (file.sizeBytes == 0 || bytes >= file.sizeBytes * 9 / 10)
-                let hasProxy = MediaHTTP.proxyPaths(file).contains { path in
-                    let url = root.appendingPathComponent("play")
-                        .appendingPathComponent(MediaHTTP.playbackCacheFileName(path))
-                    return Self.existingFile(url, fileManager: manager) != nil
-                }
-                let thumb = root.appendingPathComponent("thumbs")
-                    .appendingPathComponent(Self.cacheName(file.thumbPath) + ".jpg")
-                entries[file.path] = MediaCacheEntry(
-                    grade: .resolve(hasOriginal: hasOriginal, hasProxy: hasProxy),
-                    originalURL: hasOriginal ? original : nil,
-                    thumbnailURL: Self.existingFile(thumb, fileManager: manager))
-            }
-            return entries
-        }
-        return await withTaskCancellationHandler {
-            await scan.value
-        } onCancel: {
-            scan.cancel()
-        }
+        let (cache, codec) = sharedCache(cameraID: cameraID)
+        let records = files.map { codec.record($0, includeDisplayFacts: false) }
+        guard let snapshot = try? await cache.snapshot(records) else { return [:] }
+        return Dictionary(records.map { record in
+            let entry = snapshot.entries[record.asset.id]
+            return (record.payload.path, MediaCacheEntry(
+                grade: .resolve(hasOriginal: entry?.originalURL != nil, hasProxy: entry?.proxyURL != nil),
+                originalURL: entry?.originalURL, thumbnailURL: entry?.thumbnailURL))
+        }, uniquingKeysWith: { _, newer in newer })
     }
 
     func cacheByteCount(cameraID: String) async -> UInt64 {
-        let root = cacheRoot(cameraID: cameraID)
-        let manager = fileManager
-        let scan = Task.detached(priority: .utility) {
-            Self.cacheByteCount(at: root, fileManager: manager)
-        }
-        return await withTaskCancellationHandler {
-            await scan.value
-        } onCancel: {
-            scan.cancel()
-        }
-    }
-
-    private nonisolated static func retiredCaches(
-        at root: URL, fileManager: FileManager, includeUnprepared: Bool = false
-    ) -> [URL] {
-        let siblings =
-            (try? fileManager.contentsOfDirectory(
-                at: root.deletingLastPathComponent(), includingPropertiesForKeys: nil)) ?? []
-        return siblings.filter {
-            $0.lastPathComponent.hasPrefix(".clearing-" + root.lastPathComponent + "-")
-                || (includeUnprepared
-                    && $0.lastPathComponent.hasPrefix(".retiring-" + root.lastPathComponent + "-"))
-        }
-    }
-
-    private nonisolated static func cacheByteCount(at root: URL, fileManager: FileManager) -> UInt64
-    {
-        var total: UInt64 = 0
-        // Failed deletions still occupy storage and must stay visible/retryable.
-        for directory in [root]
-            + retiredCaches(at: root, fileManager: fileManager, includeUnprepared: true)
-        {
-            guard
-                let enumerator = fileManager.enumerator(
-                    at: directory, includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey])
-            else { continue }
-            for case let url as URL in enumerator {
-                if Task.isCancelled { return total }
-                let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
-                if values?.isDirectory == true { continue }
-                total += UInt64(max(0, values?.fileSize ?? 0))
-            }
-        }
-        return total
+        await sharedCache(cameraID: cameraID).0.directory.totalByteCount()
     }
 
     func clearCache(cameraID: String, preservingCatalog: Bool) async throws {
         pump.cancelAll()
-        let root = cacheRoot(cameraID: cameraID)
-        if fileManager.fileExists(atPath: root.path) {
-            // Retire the directory before yielding. Recursive deletion must never
-            // target the live path, where a later download can create new files.
-            let suffix = root.lastPathComponent + "-" + UUID().uuidString
-            let retired = root.deletingLastPathComponent().appendingPathComponent(
-                ".retiring-" + suffix, isDirectory: true)
-            let ready = root.deletingLastPathComponent().appendingPathComponent(
-                ".clearing-" + suffix, isDirectory: true)
-            try fileManager.moveItem(at: root, to: retired)
-            var preserved: [String] = []
-            do {
-                if preservingCatalog {
-                    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-                    for name in ["index.json", "color.json"] {
-                        let source = retired.appendingPathComponent(name)
-                        if fileManager.fileExists(atPath: source.path) {
-                            try fileManager.moveItem(
-                                at: source, to: root.appendingPathComponent(name))
-                            preserved.append(name)
-                        }
-                    }
-                }
-                // Only a fully prepared tree is eligible for a deletion sweep.
-                // Another Clear may already be deleting its own retired files.
-                try fileManager.moveItem(at: retired, to: ready)
-            } catch {
-                // Restore metadata and the original directory if preparation
-                // fails. If rollback itself fails, keep both trees for inspection.
-                try? restoreRetiredCache(retired, to: root, preserved: preserved)
-                throw error
-            }
-        }
-        let manager = fileManager
-        try await Task.detached(priority: .utility) {
-            for retired in Self.retiredCaches(at: root, fileManager: manager) {
-                try manager.removeItem(at: retired)
-            }
-        }.value
-    }
-
-    private func restoreRetiredCache(_ retired: URL, to root: URL, preserved: [String]) throws {
-        for name in preserved.reversed() {
-            try fileManager.moveItem(
-                at: root.appendingPathComponent(name), to: retired.appendingPathComponent(name))
-        }
-        if fileManager.fileExists(atPath: root.path) {
-            // Never recursively delete files a transfer may have created.
-            guard try fileManager.contentsOfDirectory(atPath: root.path).isEmpty else { return }
-            try fileManager.removeItem(at: root)
-        }
-        try fileManager.moveItem(at: retired, to: root)
+        let directory = sharedCache(cameraID: cameraID).0.directory
+        try await directory.clear(preserving: preservingCatalog ? ["index.json", "color.json"] : [])
     }
 
     func writeAtomically(_ data: Data, to dest: URL) throws {
-        try FileManager.default.createDirectory(
-            at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let tmp = dest.deletingLastPathComponent()
-            .appendingPathComponent(UUID().uuidString + ".part")
-        try data.write(to: tmp, options: .atomic)
-        if FileManager.default.fileExists(atPath: dest.path) {
-            try FileManager.default.removeItem(at: dest)
-        }
-        try FileManager.default.moveItem(at: tmp, to: dest)
+        // Retained compatibility/native IO accepts only one of the actual composed cache roots.
+        #if DEBUG && targetEnvironment(simulator)
+            if MonitorMediaReview.isActive {
+                let prefix = reviewDirectory.root.path + "/"
+                guard dest.path.hasPrefix(prefix) else { throw MonitorMediaCacheError.invalidAddress }
+                try reviewDirectory.write(data, at: String(dest.path.dropFirst(prefix.count)))
+                return
+            }
+        #endif
+        let root = cacheOwner.root.path + "/"
+        guard dest.path.hasPrefix(root) else { throw MonitorMediaCacheError.invalidAddress }
+        let relative = String(dest.path.dropFirst(root.count))
+        guard let boundary = relative.firstIndex(of: "/") else { throw MonitorMediaCacheError.invalidAddress }
+        let namespace = String(relative[..<boundary])
+        let address = String(relative[relative.index(after: boundary)...])
+        try cacheOwner.directory(namespace: namespace).write(data, at: address)
     }
 
     nonisolated static func existingFile(
@@ -470,10 +363,6 @@ final class CameraMedia {
             return nil
         }
         return url
-    }
-
-    private static func favoritesKey(_ cameraID: String) -> String {
-        "opc.media.fav.\(cameraID)"
     }
 
     private nonisolated static func cacheName(_ path: String) -> String {
@@ -726,39 +615,31 @@ final class MediaDownloadPump: NSObject, URLSessionDataDelegate, @unchecked Send
 
 extension CameraSession {
     func beginMediaBrowse() {
+        let library = mediaLibrary
+        guard !library.browsing else { return }
         cameraMedia.cancelResumeLive()
         retireLivePictureRecoveryForMedia()
-        cameraMedia.browseTask?.cancel()
-        cameraMedia.browseTask = nil
-        cameraMedia.mediaService?.retire()
-        cameraMedia.mediaBrowse = nil
-        loadMediaFavorites()
-        loadCachedCatalogIfNeeded()
+        mediaOperationNote = nil
+        library.bind(nil)
+        library.visibility = isLivePhase ? .allRecords : .cachedOnly
+        library.begin()
         guard hasMediaDatalink, isLivePhase else {
             datalink?.setMediaBrowsing(false)
-            isBrowsingMedia = true
-            mediaFetchInProgress = false
-            mediaNote = mediaFiles.isEmpty ? MediaOperatorCopy.notConnected : nil
+            mediaOperationNote = library.records.isEmpty ? MediaOperatorCopy.notConnected : nil
             return
         }
-        datalink?.setMediaBrowsing(true)
-        if cameraGalleryOpen {
-            // The camera owns playback (#273). DJI Mimo sends no enter-playback or
-            // listing here; ours showed "Playback in progress" on the body and took
-            // its gallery away. Show the cached catalog; closing still exits playback.
-            isBrowsingMedia = true
-            mediaFetchInProgress = false
-            mediaNote = MediaOperatorCopy.browsingOnCamera
-            ControlLiveLog.line("media: opened for camera gallery — no enter playback")
-            return
-        }
-        isBrowsingMedia = true
-        mediaFetchInProgress = true
-        mediaFetchListedCount = mediaFiles.count
-        mediaNote = MediaOperatorCopy.listing
-        let id = cameraMedia.nextBrowseID()
-        cameraMedia.browseTask = Task { [weak self] in
-            await self?.runMediaBrowse(id: id)
+        let request = UUID(), lifetime = library.lifetimeToken
+        cameraMedia.serviceRequest = request
+        let old = cameraMedia.serviceTask; cameraMedia.serviceTask = nil; old?.cancel()
+        guard cameraMedia.serviceRequest == request, library.lifetimeToken == lifetime else { return }
+        cameraMedia.serviceTask = Task { [weak self] in
+            guard let self else { return }
+            let producer = await self.connectedMediaService()
+            guard !Task.isCancelled, self.cameraMedia.serviceRequest == request,
+                self.mediaLibraryOwner === library, library.lifetimeToken == lifetime, library.browsing else { return }
+            self.cameraMedia.serviceTask = nil
+            guard let producer else { self.mediaOperationNote = MediaOperatorCopy.notConnected; return }
+            library.bind(producer)
         }
     }
 
@@ -766,14 +647,16 @@ extension CameraSession {
 
     /// The integration provides the loop; this host claims the existing genuine recovery slot.
     func endMediaBrowse(returning: (@MainActor (Int) async -> Void)?) {
-        cameraMedia.browseTask?.cancel()
-        cameraMedia.browseTask = nil
-        cameraMedia.browseID += 1
-        mediaFetchInProgress = false
-        if returning == nil { cameraMedia.mediaService?.retire() }
-        cameraMedia.mediaBrowse = nil
-        isBrowsingMedia = false
-        mediaNote = nil
+        if returning == nil {
+            cameraMedia.serviceRequest = UUID()
+            let old = cameraMedia.serviceTask; cameraMedia.serviceTask = nil; old?.cancel()
+            let hadBrowse = mediaLibraryOwner?.binding != nil
+            mediaLibraryOwner?.close()
+            mediaOperationNote = nil
+            // The actual browse owns its same-session return. An offline/nil-driver opening
+            // has no browse, so preserve the existing genuine recovery slot below.
+            if hadBrowse { return }
+        }
         cameraMedia.resumeLiveTask?.cancel()
         cameraMedia.resumeLiveTask = nil
         let token = cameraMedia.nextResumeID()
@@ -851,86 +734,78 @@ extension CameraSession {
         authority.completed(result)
     }
 
-    func refreshMedia() {
-        Task { await self.refreshMedia() }
-    }
-
+    func refreshMedia() { Task { await self.refreshMedia() } }
     func refreshMedia() async {
-        loadMediaFavorites()
         guard hasMediaDatalink, isLivePhase else {
-            mediaNote = MediaOperatorCopy.notConnected
-            return
+            mediaOperationNote = MediaOperatorCopy.notConnected; return
         }
-        if !isBrowsingMedia {
-            beginMediaBrowse()
-            return
+        if !isBrowsingMedia { beginMediaBrowse(); return }
+        if !mediaLibrary.canRefresh, cameraMedia.serviceTask == nil {
+            mediaLibrary.close(); beginMediaBrowse(); return
         }
-        if mediaFetchInProgress { return }
-        mediaFetchInProgress = true
-        mediaNote = MediaOperatorCopy.listing
-        let id = cameraMedia.nextBrowseID()
-        await listAllMediaPages(id: id)
+        guard !mediaLibrary.fetching else { return }
+        mediaOperationNote = nil
+        mediaLibrary.refresh()
     }
 
     func ensureThumbnail(for file: MediaFile) async {
-        guard canReachCameraMedia else { return }
-        guard thumbnailURL(for: file) == nil else { return }
-        guard cameraMedia.thumbInFlight.insert(file.path).inserted else { return }
-        defer { cameraMedia.thumbInFlight.remove(file.path) }
+        guard canReachCameraMedia, thumbnailURL(for: file) == nil else { return }
+        let operation = PocketMediaLibraryOperation(session: self, file: file)
+        guard operation.isCurrent, cameraMedia.thumbInFlight[file.path] == nil else { return }
+        cameraMedia.thumbInFlight[file.path] = operation.id
+        defer { if cameraMedia.thumbInFlight[file.path] == operation.id { cameraMedia.thumbInFlight[file.path] = nil } }
         do {
-            let data = try await fetchMediaBytes(file: file, path: MediaHTTP.thumbnailPath(file))
+            let data = try await fetchMediaBytes(file: file, path: MediaHTTP.thumbnailPath(file), operation: operation)
+            try operation.requireCurrent()
             guard !data.isEmpty else { throw MediaTransferError.badResponse }
-            try cameraMedia.writeAtomically(data, to: mediaThumbDest(file))
-            mediaCacheRevision &+= 1
+            try cameraMedia.writeAtomically(data, to: cameraMedia.thumbnailCacheURL(cameraID: operation.cameraID, file: file))
+            guard operation.isCurrent else { return }
+            mediaIOCacheRevision &+= 1; mediaLibraryOwner?.refreshLocalCache()
         } catch {
-            if mediaNote == nil {
-                mediaNote = MediaOperatorCopy.thumbFailed
-            }
+            if operation.isCurrent, mediaNote == nil { mediaNote = MediaOperatorCopy.thumbFailed }
         }
     }
 
     func download(file: MediaFile) async {
-        if isDownloaded(file) {
-            finishDownloadProgress(file.path)
-            return
-        }
-        guard canReachCameraMedia else {
-            mediaNote = MediaOperatorCopy.clipNotCached
-            return
-        }
-        guard cameraMedia.downloadInFlight.insert(file.path).inserted else { return }
-        defer {
-            cameraMedia.downloadInFlight.remove(file.path)
-        }
+        let operation = PocketMediaLibraryOperation(session: self, file: file)
+        guard operation.isCurrent else { return }
+        if isDownloaded(file) { finishDownloadProgress(file.path, operation: operation); return }
+        guard canReachCameraMedia else { mediaNote = MediaOperatorCopy.clipNotCached; return }
+        guard cameraMedia.downloadInFlight[file.path] == nil else { return }
+        cameraMedia.downloadInFlight[file.path] = operation.id
+        defer { if cameraMedia.downloadInFlight[file.path] == operation.id { cameraMedia.downloadInFlight[file.path] = nil } }
+        cameraMedia.progressOwner[file.path] = operation.id
         mediaDownloadProgress[file.path] = 0
-        let dest = mediaFileDest(file)
+        let dest = cameraMedia.fileCacheURL(cameraID: operation.cameraID, file: file)
         do {
-            try await fetchMediaFile(file: file, path: MediaHTTP.deliveryPath(file), to: dest)
-            guard CameraMedia.existingFile(dest) != nil else {
-                throw MediaTransferError.badResponse
+            _ = try await commitMediaDownload(file: file, path: MediaHTTP.deliveryPath(file), destination: dest,
+                operation: operation) { incoming in
+                try await self.fetchMediaFile(file: file, path: MediaHTTP.deliveryPath(file), to: incoming, operation: operation)
             }
+            try operation.requireCurrent()
             if let mode = ClipColorProfileIO.shotColor(at: dest, path: file.path) {
-                rememberShotColor(mode, for: file)
+                rememberShotColor(mode, for: file, operation: operation)
             }
-            finishDownloadProgress(file.path)
+            finishDownloadProgress(file.path, operation: operation)
         } catch {
+            guard operation.isCurrent, cameraMedia.progressOwner[file.path] == operation.id else { return }
             mediaDownloadProgress[file.path] = nil
             mediaNote = MediaOperatorCopy.downloadFailed
-            ControlLiveLog.line(
-                "media: download failed \(file.filename) \(error.localizedDescription)")
+            ControlLiveLog.line("media: download failed \(file.filename) \(error.localizedDescription)")
         }
     }
 
-    /// Progress `1` is "done", not in-flight. Clear it so the library header does
-    /// not sit on CACHING 100% forever.
-    private func finishDownloadProgress(_ path: String) {
-        mediaCacheRevision &+= 1
+    /// A completion timer owns its exact progress operation, even when a successor reuses a path.
+    private func finishDownloadProgress(_ path: String, operation: PocketMediaLibraryOperation) {
+        guard operation.isCurrent else { return }
+        cameraMedia.progressOwner[path] = operation.id
+        mediaIOCacheRevision &+= 1; mediaLibraryOwner?.refreshLocalCache()
+        guard operation.isCurrent, cameraMedia.progressOwner[path] == operation.id else { return }
         mediaDownloadProgress[path] = 1
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(450))
-            if mediaDownloadProgress[path] == 1 {
-                mediaDownloadProgress[path] = nil
-            }
+            guard operation.isCurrent, cameraMedia.progressOwner[path] == operation.id else { return }
+            if mediaDownloadProgress[path] == 1 { mediaDownloadProgress[path] = nil }
         }
     }
 
@@ -940,10 +815,12 @@ extension CameraSession {
 
     /// Shot color for Auto LUT. Never the LRF/XRF sidecar (Rec.709 even on D-Log2).
     func fetchOriginalShotColor(for file: MediaFile) async -> ColorMode? {
+        let operation = PocketMediaLibraryOperation(session: self, file: file)
+        guard operation.isCurrent else { return nil }
         if let url = localURL(for: file),
             let mode = ClipColorProfileIO.shotColor(at: url, path: file.path)
         {
-            rememberShotColor(mode, for: file)
+            rememberShotColor(mode, for: file, operation: operation)
             return mode
         }
         if let cached = shotColor(for: file) { return cached }
@@ -955,7 +832,9 @@ extension CameraSession {
         for storage in [first, second] {
             guard let url = MediaHTTP.pathURL(storage: storage, path: file.path) else { continue }
             do {
+                try operation.requireCurrent()
                 let (data, response) = try await cameraMedia.getRange(url: url, range: range)
+                try operation.requireCurrent()
                 guard (200...299).contains(response.statusCode) else { continue }
                 if data.count > cap {
                     ControlLiveLog.line(
@@ -964,7 +843,7 @@ extension CameraSession {
                 }
                 if let mode = ClipColorProfile.colorMode(fromMP4: data) {
                     cameraMedia.rememberStorage(storage, for: file.path)
-                    rememberShotColor(mode, for: file)
+                    rememberShotColor(mode, for: file, operation: operation)
                     return mode
                 }
             } catch {
@@ -979,7 +858,19 @@ extension CameraSession {
     }
 
     func rememberShotColor(_ color: ColorMode, for file: MediaFile) {
-        cameraMedia.rememberShotColor(color, path: file.path, cameraID: mediaCameraID)
+        rememberShotColor(color, for: file, operation: .init(session: self, file: file))
+    }
+
+    func rememberShotColor(_ color: ColorMode, for file: MediaFile, operation: PocketMediaLibraryOperation) {
+        guard operation.isCurrent else { return }
+        cameraMedia.rememberShotColor(color, path: file.path, cameraID: operation.cameraID)
+        guard operation.isCurrent, let owner = mediaLibraryOwner,
+            let record = mediaRecord(for: file) else { return }
+        let previous = record.facts
+        let facts = MonitorMediaFilterFacts(format: previous.format, resolution: previous.resolution,
+            dateKey: previous.dateKey, orderKey: previous.orderKey, color: String(color.rawValue),
+            presentationKind: previous.presentationKind)
+        try? owner.updateLocalFacts([record.asset.id: facts], token: owner.actionToken)
     }
 
     func cacheGrade(for file: MediaFile) -> MediaCacheGrade {
@@ -1084,26 +975,91 @@ extension CameraSession {
     }
 
     func cachePlaybackFile(file: MediaFile, path: String) async throws -> URL {
-        let dest = mediaPlaybackDest(file, path: path)
+        let operation = PocketMediaLibraryOperation(session: self, file: file)
+        try operation.requireCurrent()
+        let dest = cameraMedia.playbackCacheURL(cameraID: operation.cameraID, file: file, path: path)
         if let existing = CameraMedia.existingFile(dest) { return existing }
         guard canReachCameraMedia else { throw MediaTransferError.timeout }
+        cameraMedia.progressOwner[file.path] = operation.id
         mediaDownloadProgress[file.path] = 0
         do {
-            // Proxies can be full-length movies. Stream them like originals,
-            // without retaining and disposing their entire HTTP body on MainActor.
-            try await fetchMediaFile(file: file, path: path, to: dest)
-            if path == file.path {
-                finishDownloadProgress(file.path)
-            } else {
-                mediaCacheRevision &+= 1
-                mediaDownloadProgress[file.path] = nil
+            let result = try await commitMediaDownload(file: file, path: path, destination: dest,
+                operation: operation) { incoming in
+                try await self.fetchMediaFile(file: file, path: path, to: incoming, operation: operation)
             }
-            return dest
+            try operation.requireCurrent()
+            if path == file.path {
+                finishDownloadProgress(file.path, operation: operation)
+            } else {
+                mediaIOCacheRevision &+= 1; mediaLibraryOwner?.refreshLocalCache()
+                if operation.isCurrent, cameraMedia.progressOwner[file.path] == operation.id { mediaDownloadProgress[file.path] = nil }
+            }
+            return result
         } catch {
-            mediaDownloadProgress[file.path] = nil
+            if operation.isCurrent, cameraMedia.progressOwner[file.path] == operation.id { mediaDownloadProgress[file.path] = nil }
             throw error
         }
     }
+
+    /// The one existing HTTP/storage recipe supplies bytes; the shared player owns the
+    /// canonical write and item readiness. Its private incoming file never becomes a cache row.
+    func transferPlaybackFile(
+        file: MediaFile, path: String, authority: PocketPlaybackAuthority,
+        into sink: any MediaByteSink
+    ) async throws -> MediaTransferReceipt {
+        let operation = authority.operation
+        try operation.requireCurrent()
+        guard authority.admission.isCurrent(), canReachCameraMedia else {
+            throw MediaTransferError.timeout
+        }
+        let incoming = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opc-player-" + operation.id.uuidString)
+        defer { try? FileManager.default.removeItem(at: incoming) }
+        cameraMedia.progressOwner[file.path] = operation.id
+        mediaDownloadProgress[file.path] = 0
+        do {
+            try await fetchMediaFile(file: file, path: path, to: incoming, operation: operation)
+            try operation.requireCurrent()
+            guard authority.admission.isCurrent() else { throw MonitorPlaybackError.retired }
+            let copy = Task.detached { try await PocketPlaybackStaging.copy(incoming, into: sink) }
+            let count = try await withTaskCancellationHandler {
+                try await copy.value
+            } onCancel: {
+                copy.cancel()
+            }
+            try Task.checkCancellation()
+            try operation.requireCurrent()
+            guard authority.admission.isCurrent() else { throw MonitorPlaybackError.retired }
+            return .init(
+                byteCount: count,
+                expectedByteCount: path == file.path && file.sizeBytes > 0 ? file.sizeBytes : nil)
+        } catch {
+            if operation.isCurrent, cameraMedia.progressOwner[file.path] == operation.id {
+                mediaDownloadProgress[file.path] = nil
+            }
+            throw error
+        }
+    }
+
+    /// Invoked only after this shared cache writer commits under the captured content/root.
+    func playbackTransferCommitted(
+        file: MediaFile, path: String, authority: PocketPlaybackAuthority
+    ) {
+        let operation = authority.operation
+        guard operation.isCurrent, authority.admission.isCurrent(),
+            cameraMedia.progressOwner[file.path] == operation.id
+        else { return }
+        if path == file.path {
+            finishDownloadProgress(file.path, operation: operation)
+        } else {
+            mediaIOCacheRevision &+= 1
+            mediaLibraryOwner?.refreshLocalCache()
+            if operation.isCurrent, cameraMedia.progressOwner[file.path] == operation.id {
+                mediaDownloadProgress[file.path] = nil
+            }
+        }
+    }
+
 
     private func mediaPlaybackDest(_ file: MediaFile, path: String) -> URL {
         cameraMedia.playbackCacheURL(cameraID: mediaCameraID, file: file, path: path)
@@ -1114,6 +1070,9 @@ extension CameraSession {
     }
 
     func deleteMedia(_ file: MediaFile) async {
+        let operation = PocketMediaLibraryOperation(session: self, file: file)
+        guard operation.canWriteWire else { return }
+        let library = mediaLibrary, token = mediaLibrary.actionToken
         guard file.isDeletable else {
             mediaNote = MediaOperatorCopy.notDeletable
             return
@@ -1130,7 +1089,7 @@ extension CameraSession {
         var acked = false
         do {
             let reply = try await awaitMediaOpcode(0x00, 0x28, timeout: .seconds(2)) {
-                self.sendMediaFrame(frame)
+                if operation.canWriteWire { self.sendMediaFrame(frame) }
             }
             acked =
                 CameraReply.parse(reply.payload).isSuccess
@@ -1138,39 +1097,56 @@ extension CameraSession {
         } catch {
             acked = false
         }
+        guard operation.canWriteWire, library.isCurrent(token), !Task.isCancelled else { return }
         if !acked {
-            await listNewestMediaPage()
+            await listNewestMediaPage(token: token)
+            guard operation.canRetireDeletedContent, library.isCurrent(token), !Task.isCancelled else { return }
             if mediaFiles.contains(where: { $0.path == file.path }) {
                 mediaNote = MediaOperatorCopy.deleteFailed
                 return
             }
         }
-        dropMediaFile(path: file.path)
+        let ids = Set(library.records.filter { $0.payload.path == file.path }.map(\.asset.id))
+        try? library.applyLocalRemoval(ids, token: token)
+        if library.isCurrent(token) { mediaDownloadProgress[file.path] = nil }
     }
 
     func toggleMediaFavorite(_ file: MediaFile) {
-        let on = !isMediaFavorite(file)
-        applyLocalFavorite(path: file.path, on: on)
-        if let idx = mediaFiles.firstIndex(where: { $0.path == file.path }) {
-            mediaFiles[idx].isStarred = on
+        let operation = PocketMediaLibraryOperation(session: self, file: file)
+        guard operation.isCurrent else { return }
+        let library = mediaLibrary, token = library.actionToken
+        guard let current = mediaRecord(for: file) else { return }
+        let on = !current.favorite
+        var local = PocketMediaFavoritesStore(cameraID: operation.cameraID).favorites()
+        if on { local.insert(file.path) } else { local.remove(file.path) }
+        // The original Apple action changes the first actual path row only, writes the local
+        // preferences immediately, and leaves index.json persistence to the next real listing.
+        var amendments: [MonitorMediaRecord<MediaFile>] = []
+        if let first = library.records.first(where: { $0.payload.path == file.path }) {
+            var changed = first.payload; changed.isStarred = on
+            amendments = [cameraMedia.sharedCache(cameraID: operation.cameraID,
+                sourceOwnsFavorites: { self.mediaFavoritesAreSourceOwned }).1.record(changed)]
         }
+        do { try library.applyLocalRecords(.init(resetLibrary: false, upserts: [],
+            amendments: amendments, sourceFavoriteKeys: local), token: token, persist: false) }
+        catch { return }
+        guard operation.canWriteWire else { return }
         let handle = file.favoriteHandle
         guard handle != 0, hasMediaDatalink, isBrowsingMedia else { return }
         let counter = cameraMedia.nextActionCounter()
         let frame = Commands.setMediaFavorite(
             handle: handle, on: on, counter: counter, model: connectedCamera?.model)
-        ControlLiveLog.line(
-            "media: favorite handle=\(String(format: "0x%08X", handle)) on=\(on ? 1 : 0)")
+        ControlLiveLog.line("media: favorite handle=\(String(format: "0x%08X", handle)) on=\(on ? 1 : 0)")
         Task {
+            guard operation.canWriteWire, library.isCurrent(token) else { return }
             _ = try? await self.awaitMediaOpcode(0x02, 0xBF, timeout: .milliseconds(900)) {
-                self.sendMediaFrame(frame)
+                if operation.canWriteWire { self.sendMediaFrame(frame) }
             }
         }
     }
 
     func isMediaFavorite(_ file: MediaFile) -> Bool {
-        if isNanoBody { return file.isStarred }
-        return file.isStarred || mediaLocalFavorites.contains(file.path)
+        mediaRecord(for: file)?.favorite ?? file.isStarred
     }
 
     func isFavorite(_ file: MediaFile) -> Bool { isMediaFavorite(file) }
@@ -1183,155 +1159,13 @@ extension CameraSession {
         }
     }
 
-    // MARK: - Browse
-
-    private func runMediaBrowse(id: Int) async {
-        guard id == cameraMedia.browseID else { return }
-        guard let producer = await connectedMediaService() else {
-            if id == cameraMedia.browseID {
-                mediaFetchInProgress = false
-                mediaNote = MediaOperatorCopy.notConnected
-            }
-            return
-        }
-        do {
-            let browse = try await producer.openBrowse()
-            // Begin/end synchronously retire the service before this continuation can publish.
-            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
-            cameraMedia.mediaBrowse = browse
-            await listAllMediaPages(id: id)
-        } catch {
-            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
-            mediaFetchInProgress = false
-            mediaNote = MediaOperatorCopy.listFailed
-        }
-    }
-
-    /// Native records preserve storage/path/favorite/cache facts; cursor/query policy is shared.
-    private func listAllMediaPages(id: Int) async {
-        defer {
-            if id == cameraMedia.browseID { mediaFetchInProgress = false }
-        }
-        guard let browse = cameraMedia.mediaBrowse, let producer = cameraMedia.mediaService else {
-            mediaNote = MediaOperatorCopy.listFailed
-            return
-        }
-        do {
-            let cursor = try await browse.catalog()
-            defer { cursor.close() }
-            var collected: [MediaFile] = []
-            while let delta = try await cursor.next() {
-                guard !Task.isCancelled, id == cameraMedia.browseID else { return }
-                if delta.reset { collected.removeAll() }
-                for asset in delta.upserts {
-                    guard let record = producer.mediaCatalogRecord(asset.id, binding: browse.binding)
-                    else { throw MediaServiceError.retired }
-                    collected.append(applyFavoriteOverlay(record.file))
-                }
-                publishMediaFiles(collected)
-                if delta.complete { break }
-            }
-            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
-            mediaNote = collected.isEmpty ? MediaOperatorCopy.noClips : nil
-        } catch {
-            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
-            mediaNote = MediaOperatorCopy.listFailed
-        }
-    }
-
-    private func listNewestMediaPage() async {
-        guard let browse = cameraMedia.mediaBrowse, let producer = cameraMedia.mediaService else {
-            return
-        }
-        let id = cameraMedia.browseID
-        do {
-            let cursor = try producer.newestCatalog(binding: browse.binding)
-            defer { cursor.close() }
-            guard let page = try await cursor.next(),
-                !Task.isCancelled, id == cameraMedia.browseID else { return }
-            var seen = Set<String>()
-            var collected: [MediaFile] = []
-            for asset in page.upserts {
-                guard let record = producer.mediaCatalogRecord(asset.id, binding: browse.binding)
-                else { throw MediaServiceError.retired }
-                if seen.insert(MediaListCommand.pageKey(record.file)).inserted {
-                    collected.append(applyFavoriteOverlay(record.file))
-                }
-            }
-            for file in mediaFiles where seen.insert(MediaListCommand.pageKey(file)).inserted {
-                collected.append(file)
-            }
-            publishMediaFiles(collected)
-        } catch {
-            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
-            mediaNote = MediaOperatorCopy.listFailed
-        }
-    }
-
-    private func publishMediaFiles(_ files: [MediaFile]) {
-        var next = files
-        if isNanoBody {
-            syncNanoFavorites(&next)
-        }
-        mediaFiles = next
-        mediaFetchListedCount = next.count
-        persistMediaCatalog()
-    }
-
-    func persistMediaCatalog() {
-        guard !mediaFiles.isEmpty else { return }
-        cameraMedia.persistCatalog(mediaFiles, cameraID: mediaCameraID)
-    }
-
-    func loadCachedCatalogIfNeeded(ifCurrent: () -> Bool = { true }) {
-        guard ifCurrent() else { return }
-        if mediaFiles.isEmpty {
-            mediaFiles = cameraMedia.loadCatalog(cameraID: mediaCameraID)
-            guard ifCurrent() else { return }
-        }
-        mediaFetchListedCount = mediaFiles.count
-    }
-
-    private func applyFavoriteOverlay(_ file: MediaFile) -> MediaFile {
-        var next = file
-        if !isNanoBody, mediaLocalFavorites.contains(file.path) {
-            next.isStarred = true
-        }
-        return next
-    }
-
-    private func syncNanoFavorites(_ files: inout [MediaFile]) {
-        var next = Set<String>()
-        for file in files where file.isStarred {
-            next.insert(file.path)
-        }
-        cameraMedia.favorites = next
-        mediaLocalFavorites = next
-        cameraMedia.persistFavorites()
-    }
-
-    private func dropMediaFile(path: String) {
-        mediaFiles.removeAll { $0.path == path }
-        mediaFetchListedCount = mediaFiles.count
-        mediaDownloadProgress[path] = nil
-        cameraMedia.favorites.remove(path)
-        mediaLocalFavorites = cameraMedia.favorites
-        cameraMedia.persistFavorites()
-    }
-
-    private func applyLocalFavorite(path: String, on: Bool) {
-        if on {
-            cameraMedia.favorites.insert(path)
-        } else {
-            cameraMedia.favorites.remove(path)
-        }
-        mediaLocalFavorites = cameraMedia.favorites
-        cameraMedia.persistFavorites()
-    }
-
-    func loadMediaFavorites() {
-        let id = mediaCameraID
-        mediaLocalFavorites = cameraMedia.loadFavorites(cameraID: id)
+    // Actual newest cursor is collected by the same gallery owner and captured browse lease.
+    private func listNewestMediaPage(token: MonitorMediaLibraryActionToken) async {
+        guard let binding = token.binding, let producer = cameraMedia.mediaService,
+            mediaLibrary.isCurrent(token) else { return }
+        do { try await mediaLibrary.reconcileCatalog(producer.newestCatalog(binding: binding),
+            binding: binding, token: token) }
+        catch { if mediaLibrary.isCurrent(token) { mediaOperationNote = MediaOperatorCopy.listFailed } }
     }
 
     private static let lastMediaCameraKey = "opc.media.lastCameraID"
@@ -1345,8 +1179,11 @@ extension CameraSession {
             }
             return id
         }
-        return UserDefaults.standard.string(forKey: Self.lastMediaCameraKey) ?? "unknown"
+        return cameraMedia.cacheNamespace(
+            cameraID: UserDefaults.standard.string(forKey: Self.lastMediaCameraKey) ?? "unknown")
     }
+
+    var mediaFavoritesAreSourceOwned: Bool { isNanoBody }
 
     private var isNanoBody: Bool {
         connectedCamera?.model.family == .nano
@@ -1374,24 +1211,27 @@ extension CameraSession {
         cameraMedia.fileCacheURL(cameraID: mediaCameraID, file: file)
     }
 
-    private func fetchMediaBytes(file: MediaFile, path: String) async throws -> Data {
-        let (data, _) = try await performMediaGET(file: file, path: path)
+    private func fetchMediaBytes(file: MediaFile, path: String, operation: PocketMediaLibraryOperation) async throws -> Data {
+        let (data, _) = try await performMediaGET(file: file, path: path, operation: operation)
         return data
     }
 
-    private func fetchMediaFile(file: MediaFile, path: String, to dest: URL) async throws {
+    private func fetchMediaFile(file: MediaFile, path: String, to dest: URL, operation: PocketMediaLibraryOperation) async throws {
         let first = cameraMedia.resolvedStorage(for: file, singleSd: usesSingleSdStorage)
         let urls = storageURLs(path: path, first: first)
         var lastError: Error = MediaTransferError.badResponse
         for (storage, url) in urls {
             try Task.checkCancellation()
+            try operation.requireCurrent()
             do {
                 try await cameraMedia.downloadFile(
                     from: url, to: dest, path: file.path,
                     expectedSize: path == file.path ? file.sizeBytes : 0
                 ) { [weak self] progress in
-                    self?.mediaDownloadProgress[file.path] = progress
+                    guard let self, operation.isCurrent, self.cameraMedia.progressOwner[file.path] == operation.id else { return }
+                    self.mediaDownloadProgress[file.path] = progress
                 }
+                try operation.requireCurrent()
                 cameraMedia.rememberStorage(storage, for: file.path)
                 return
             } catch MediaTransferError.httpStatus(404) {
@@ -1415,13 +1255,15 @@ extension CameraSession {
         throw lastError
     }
 
-    private func performMediaGET(file: MediaFile, path: String) async throws -> (Data, Int) {
+    private func performMediaGET(file: MediaFile, path: String, operation: PocketMediaLibraryOperation) async throws -> (Data, Int) {
         let first = cameraMedia.resolvedStorage(for: file, singleSd: usesSingleSdStorage)
         let urls = storageURLs(path: path, first: first)
         var lastError: Error = MediaTransferError.badResponse
         for (storage, url) in urls {
             do {
+                try operation.requireCurrent()
                 let (data, response) = try await cameraMedia.getData(url: url)
+                try operation.requireCurrent()
                 if (200...299).contains(response.statusCode) {
                     cameraMedia.rememberStorage(storage, for: file.path)
                     return (data, storage)

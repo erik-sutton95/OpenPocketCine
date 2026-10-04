@@ -28,6 +28,7 @@ enum AssistLongPressChrome {
         case .desqueeze: DesqueezeAssist.longPressMenu(assist: assist)
         case .level, .instantReview, .magnification, .evMeter:
             EmptyView()
+        default: EmptyView()
         }
     }
 
@@ -69,7 +70,9 @@ struct AssistLongPressOverlay: View {
 
     private var portrait: Bool { viewport.height > viewport.width }
     private var tools: [LiveAssistTool] {
-        LiveAssistTool.settingsCases.filter(\.hasConfiguration)
+        LiveAssistTool.settingsCases.filter {
+            $0.hasConfiguration && ($0 != .audioMeters || assist.cameraHasAudio)
+        }
     }
 
     var body: some View {

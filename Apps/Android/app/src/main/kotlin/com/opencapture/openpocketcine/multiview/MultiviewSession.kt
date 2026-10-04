@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.openpocketcine.feed.Media3GlBackend
+
 import com.opencapture.opencine.dji.hasMultiviewPreview
 import com.opencapture.opencine.dji.multicamSupport
 import com.opencapture.opencine.dji.MultiviewDiscovery
@@ -121,6 +123,9 @@ class MultiviewSession(
         /** The tile's picture stream, named for the multicam engine. */
         val stream = StreamID()
         val decoder = HevcDecoder(errorJournal = DiagnosticCenter::logDecoderError)
+        val scopeBus = com.opencapture.opencine.runtime.ScopeSampleBus()
+        val inspectorPreview = com.opencapture.opencine.runtime.InspectorPreviewPipeline(
+            scopeBus, ::Media3GlBackend, "OpcTileInspector")
         /** Record-only control port on this tile's own link (MULTI-02); see [MultiviewTileControl]. */
         internal val controlPort = MultiviewTileControl(
             state = ::recordState,
@@ -565,7 +570,7 @@ class MultiviewSession(
         stop()
         path.release()
         scanner.close()
-        tiles.forEach { it.recovery.close() }
+        tiles.forEach { it.inspectorPreview.close(); it.recovery.close() }
         scope.cancel()
     }
 

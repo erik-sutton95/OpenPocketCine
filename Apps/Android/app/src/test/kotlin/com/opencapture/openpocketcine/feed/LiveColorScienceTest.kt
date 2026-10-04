@@ -6,7 +6,6 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class FeedUpscaleTest {
@@ -60,12 +59,20 @@ class LiveColorScienceTest {
         val bundleA = PocketScopeSampler.sample(pixels, 4, 4, 16, MonitorTransfer.DLOG2, includePoints = false, ceiling = a)
         val bundleB = PocketScopeSampler.sample(pixels, 4, 4, 16, MonitorTransfer.DLOG2, includePoints = false, ceiling = b)
         assertEquals(800, bundleA.iso)
-        assertSame(a, bundleA.ceiling)
+        assertEquals(231, bundleA.ceiling.clipByte(MonitorTransfer.DLOG2))
         assertEquals(1600, bundleB.iso)
-        assertSame(b, bundleB.ceiling)
+        assertEquals(248, bundleB.ceiling.clipByte(MonitorTransfer.DLOG2))
         assertEquals(100.0, WaveformIre.ire(231 / 255.0, MonitorTransfer.DLOG2, ceiling = a), 1e-9)
         assertEquals(100.0, WaveformIre.ire(248 / 255.0, MonitorTransfer.DLOG2, ceiling = b), 1e-9)
         assertTrue(WaveformIre.ire(247 / 255.0, MonitorTransfer.DLOG2, ceiling = b) < 100.0)
+        a.syncISO(1600)
+        b.syncISO(800)
+        assertEquals(800, bundleA.iso)
+        assertEquals(1600, bundleB.iso)
+        assertEquals(231, bundleA.ceiling.clipByte(MonitorTransfer.DLOG2))
+        assertEquals(248, bundleB.ceiling.clipByte(MonitorTransfer.DLOG2))
+        assertEquals(247, a.clipByte(MonitorTransfer.DLOG2))
+        assertEquals(232, b.clipByte(MonitorTransfer.DLOG2))
     }
 
     @Test
@@ -197,7 +204,7 @@ class LiveColorScienceTest {
                 SpikeCase("recoverable D-Log2 highlight does not clip", MonitorTransfer.DLOG2, 188, crush = false, clip = false),
             ) +
                 transfers.map {
-                    SpikeCase("toe pile-up crushes", it, it.scopeAnchors(1600).crushFloorByte + 1, crush = true, clip = false)
+                    SpikeCase("toe pile-up crushes", it, it.scopeAnchors(1600, ceiling = ScopeExposureCeiling.UNOBSERVED).crushFloorByte + 1, crush = true, clip = false)
                 } +
                 transfers.map { SpikeCase("curve top clips", it, 255, crush = false, clip = true) }
         for (case in cases) {

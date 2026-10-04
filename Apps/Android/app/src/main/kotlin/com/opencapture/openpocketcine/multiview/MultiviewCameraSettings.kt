@@ -223,12 +223,12 @@ private fun MultiviewSettingsPreview(tile: MultiviewSession.Tile, modifier: Modi
         fun update() {
             val resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
             if (resumed && !active) {
-                InspectorPreviewPipeline.open(owner, false, context, plan) { image = it }
+                tile.inspectorPreview.open(owner, false, context, plan) { image = it }
                 tile.previewOwner = owner
                 active = true
             } else if (!resumed && active) {
                 if (tile.previewOwner === owner) tile.previewOwner = null
-                InspectorPreviewPipeline.close(owner)
+                tile.inspectorPreview.close(owner)
                 image = null
                 active = false
             }
@@ -239,9 +239,9 @@ private fun MultiviewSettingsPreview(tile: MultiviewSession.Tile, modifier: Modi
         onDispose {
             lifecycle.removeObserver(observer)
             if (tile.previewOwner === owner) tile.previewOwner = null
-            InspectorPreviewPipeline.close(owner)
+            tile.inspectorPreview.close(owner)
         }
     }
-    SideEffect { InspectorPreviewPipeline.update(owner, tile.plan) }
+    SideEffect { tile.inspectorPreview.update(owner, tile.plan) }
     MonitorImagePreview(image?.asImageBitmap(), "${tile.camera?.name ?: "Camera"} preview", modifier)
 }

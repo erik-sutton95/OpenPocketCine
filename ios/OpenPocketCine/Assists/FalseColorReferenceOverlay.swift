@@ -1,62 +1,12 @@
+import OpenCineAppKit
+import MonitorPresentation
 import OpenPocketViewCore
 import SwiftUI
 
 /// Reference placement is a presentation preference, separate from color math.
-struct FalseColorReferencePositions: Codable, Equatable {
-    struct Center: Codable, Equatable {
-        let x: Double
-        let y: Double
+typealias FalseColorReferencePositions = MonitorFalseColorReferencePositions
 
-        init(_ point: CGPoint, in bounds: CGRect) {
-            x = (point.x - bounds.minX) / max(1, bounds.width)
-            y = (point.y - bounds.minY) / max(1, bounds.height)
-        }
-
-        func point(in bounds: CGRect) -> CGPoint {
-            CGPoint(
-                x: bounds.minX + (x.isFinite ? x : 0.5) * bounds.width,
-                y: bounds.minY + (y.isFinite ? y : 0.5) * bounds.height)
-        }
-    }
-
-    var landscape: Center?
-    var portrait: Center?
-
-    func center(in bounds: CGRect, size: CGSize, movement: CGRect) -> CGPoint {
-        let stored = ScopeCanvasSlot.pick(landscape, portrait, in: bounds)
-        return ScopePanelPlacement.clamp(
-            stored?.point(in: bounds) ?? CGPoint(x: bounds.midX, y: bounds.midY),
-            size: size, in: movement)
-    }
-}
-
-@MainActor
-@Observable
-final class FalseColorReferencePositionStore {
-    static let shared = FalseColorReferencePositionStore()
-    private let defaults: UserDefaults
-    private let key = "OpenPocketCine.Assist.falseColorReference.positions.v1"
-    var positions: FalseColorReferencePositions
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        positions =
-            defaults.data(forKey: key)
-            .flatMap { try? JSONDecoder().decode(FalseColorReferencePositions.self, from: $0) }
-            ?? FalseColorReferencePositions()
-    }
-
-    func setCenter(_ center: CGPoint, in bounds: CGRect) {
-        let stored = FalseColorReferencePositions.Center(center, in: bounds)
-        if bounds.height > bounds.width {
-            positions.portrait = stored
-        } else {
-            positions.landscape = stored
-        }
-        guard let data = try? JSONEncoder().encode(positions) else { return }
-        defaults.set(data, forKey: key)
-    }
-}
+typealias FalseColorReferencePositionStore = MonitorFalseColorReferencePositionStore
 
 /// Reuses the existing reference drawing; this owner only moves its hit surface.
 struct FalseColorReferenceOverlay: View {

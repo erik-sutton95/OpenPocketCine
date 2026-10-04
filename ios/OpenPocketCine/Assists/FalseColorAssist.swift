@@ -7,7 +7,7 @@ import UIKit
 ///
 /// Long-press options:
 /// * Scale: CineStop / Video / IRE / Limits
-/// * Reference Display — compact color key over live view; turning it on arms False Color
+/// * Reference Display - compact color key over live view; turning it on arms False Color
 enum FalseColorAssist {
     /// OpenZCine Scale help, Pocket curves in the first sentence.
     static let scaleHelp =
@@ -111,11 +111,30 @@ enum FalseColorAssist {
         FalseColorAssistMenuHost(assist: assist, compact: compact)
     }
 
+    @MainActor
+    static func commonMenu(
+        assist: LiveAssistState, compact: Bool = false,
+        transfer: MonitorTransfer, clipByte: Int
+    ) -> MonitorFalseColorMenu<FalseColorScaleKind> {
+        longPressMenu(
+            options: Binding(
+                get: { assist.falseColorOptions },
+                set: {
+                    assist.falseColorOptions = $0; assist.persist()
+                }), compact: compact, transfer: transfer, clipByte: clipByte,
+            rec709: Binding(
+                get: { assist.falseColorRec709 },
+                set: {
+                    assist.falseColorRec709 = $0; assist.persist()
+                }), onReferenceEnabled: { assist.falseColor = true }
+        ).commonMenu
+    }
+
     static func longPressMenu(_ assist: LiveAssistState) -> some View {
         longPressMenu(assist: assist)
     }
 
-    /// OpenZCine `FalseColorReference` — 264×52 glass ruler with sparse zone chips.
+    /// OpenZCine `FalseColorReference` - 264×52 glass ruler with sparse zone chips.
     static func referenceDisplay(
         scale: FalseColorScaleKind, colorMode: ColorMode = .normal, rec709: Bool, clipByte: Int
     ) -> FalseColorReference {
@@ -178,26 +197,9 @@ private struct FalseColorAssistMenuHost: View {
     var body: some View {
         let transfer =
             model.monitorTransfer ?? model.monitorColorMode.map(MonitorTransfer.init) ?? .rec709
-        FalseColorAssist.longPressMenu(
-            options: Binding(
-                get: { assist.falseColorOptions },
-                set: {
-                    assist.falseColorOptions = $0
-                    assist.persist()
-                }
-            ),
-            compact: compact,
-            transfer: transfer,
-            clipByte: model.monitorSamples.exposureCeiling.clipByte(transfer: transfer),
-            rec709: Binding(
-                get: { assist.falseColorRec709 },
-                set: {
-                    assist.falseColorRec709 = $0
-                    assist.persist()
-                }
-            ),
-            onReferenceEnabled: { assist.falseColor = true }
-        )
+        FalseColorAssist.commonMenu(
+            assist: assist, compact: compact, transfer: transfer,
+            clipByte: model.monitorSamples.exposureCeiling.clipByte(transfer: transfer))
     }
 }
 
@@ -210,61 +212,26 @@ struct FalseColorLongPressMenu: View {
     var rec709: Binding<Bool>? = nil
     var onReferenceEnabled: (() -> Void)? = nil
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsInlineRow(
-                title: "Scale",
-                help: FalseColorAssist.scaleHelp,
-                showTopDivider: false,
-                stacked: true
-            ) {
-                SettingsSegmented(
-                    options: FalseColorAssist.scaleOptions,
-                    selected: FalseColorAssist.menuLabel(for: options.scale),
-                    compact: compact,
-                    stacked: true
-                ) { label in
-                    let scale = FalseColorAssist.scale(forMenuLabel: label)
-                    guard scale != options.scale else { return }
-                    options.scale = scale
-                }
-            }
+    var body: some View { commonMenu }
 
-            if let rec709 {
-                SettingsInlineRow(title: "Read", help: FalseColorAssist.readHelp, stacked: true) {
-                    SettingsSegmented(
-                        options: FalseColorAssist.readOptions,
-                        selected: rec709.wrappedValue ? "709" : "LOG",
-                        compact: compact,
-                        stacked: true
-                    ) { label in
-                        FalseColorAssistHaptics.selection()
-                        rec709.wrappedValue = label == "709"
-                    }
-                }
-            }
-
-            SettingsInlineRow(title: "Reference key", stacked: true) {
-                FalseColorReference(
-                    scale: options.scale, transfer: transfer, inspector: true,
-                    rec709: rec709?.wrappedValue ?? false, clipByte: clipByte
-                )
-                .accessibilityLabel("False color reference key")
-            }
-
-            SettingsSwitchInlineRow(
-                title: "Reference Display",
-                help: FalseColorAssist.referenceHelp,
-                stacked: compact,
-                isOn: options.referenceEnabled
-            ) {
-                FalseColorAssistHaptics.selection()
-                options.referenceEnabled.toggle()
-                if options.referenceEnabled {
-                    onReferenceEnabled?()
-                }
-            }
-        }
+    var commonMenu: MonitorFalseColorMenu<FalseColorScaleKind> {
+        MonitorFalseColorMenu(
+            scales: FalseColorAssist.scaleOptions.map(FalseColorAssist.scale(forMenuLabel:)),
+            scale: $options.scale, referenceEnabled: $options.referenceEnabled, read709: rec709,
+            reference: FalseColorReference(
+                scale: options.scale, transfer: transfer, inspector: true,
+                rec709: rec709?.wrappedValue ?? false, clipByte: clipByte
+            ).displayValues,
+            title: FalseColorAssist.menuLabel(for:), scaleHelp: FalseColorAssist.scaleHelp,
+            readHelp: FalseColorAssist.readHelp, referenceHelp: FalseColorAssist.referenceHelp,
+            compact: compact,
+            selectionFeedback: { FalseColorAssistHaptics.selection() },
+            readFeedback: {
+                FalseColorAssistHaptics.selection(); FalseColorAssistHaptics.selection()
+            },
+            referenceFeedback: {
+                FalseColorAssistHaptics.selection(); FalseColorAssistHaptics.selection()
+            }, onReferenceEnabled: { onReferenceEnabled?() })
     }
 }
 
@@ -277,7 +244,7 @@ private enum FalseColorAssistHaptics {
 
 // MARK: - On-feed reference ruler (OpenZCine `FalseColorReference`)
 
-/// OpenZCine `FalseColorReference` — 264×52 glass ruler with proportional zone chips.
+/// OpenZCine `FalseColorReference` - 264×52 glass ruler with proportional zone chips.
 struct FalseColorReference: View {
     struct Segment: Equatable, Identifiable {
         let id: Int
@@ -292,7 +259,7 @@ struct FalseColorReference: View {
         let fraction: Double
     }
 
-    static let panelSize = CGSize(width: 264, height: 52)
+    static let panelSize = MonitorFalseColorReference.panelSize
 
     var scale: FalseColorScaleKind
     var transfer: MonitorTransfer
@@ -319,7 +286,7 @@ struct FalseColorReference: View {
         self.clipByte = clipByte
     }
 
-    /// OpenZCine `FalseColorReference.curveKeyLabel` — Pocket transfers, compact keys.
+    /// OpenZCine `FalseColorReference.curveKeyLabel` - Pocket transfers, compact keys.
     static func curveKeyLabel(_ transfer: MonitorTransfer) -> String {
         switch transfer {
         case .rec709: "709"
@@ -343,76 +310,37 @@ struct FalseColorReference: View {
     var inspector = false
 
     var body: some View {
-        Group {
-            if inspector {
-                referenceContent.frame(height: 26)
-            } else {
-                referenceContent
-                    .padding(7)
-                    .frame(
-                        width: Self.panelSize.width, height: Self.panelSize.height,
-                        alignment: .topLeading
-                    )
-                    .liveChromeGlass(
-                        in: RoundedRectangle(
-                            cornerRadius: LiveDesign.cornerRadius, style: .continuous))
-            }
-        }
+        MonitorFalseColorReference(values: displayValues, inspector: inspector)
     }
 
-    private var referenceContent: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            if !inspector {
-                HStack {
-                    Text("False Color")
-                        .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                    Spacer()
-                    Text(
-                        "\(scale.referenceScaleLabel) · \(Self.curveKeyLabel(DJILook.readsThroughLook(transfer: transfer, rec709: rec709) ? .rec709 : transfer))"
-                    )
-                        .font(.system(size: 7.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    LinearGradient(
-                        colors: neutralGradientColors,
-                        startPoint: .leading,
-                        endPoint: .trailing)
-                    MonitorSnapshotRows(
-                        Self.segments(
-                            scale: scale, transfer: transfer, rec709: rec709, clipByte: clipByte)
-                    ) {
-                        segment in
-                        Rectangle()
-                            .fill(
-                                Color(
-                                    red: segment.band.red,
-                                    green: segment.band.green,
-                                    blue: segment.band.blue)
-                            )
-                            .frame(
-                                width: max(
-                                    1,
-                                    geometry.size.width
-                                        * (segment.upperFraction - segment.lowerFraction))
-                            )
-                            .offset(x: geometry.size.width * segment.lowerFraction)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
-            }
-            .frame(height: inspector ? 14 : 8)
-            axisView
-        }
+    var displayValues: MonitorFalseColorReferenceValues {
+        MonitorFalseColorReferenceValues(
+            subtitle:
+                "\(scale.referenceScaleLabel) · \(Self.curveKeyLabel(DJILook.readsThroughLook(transfer: transfer, rec709: rec709) ? .rec709 : transfer))",
+            segments: Self.segments(
+                scale: scale, transfer: transfer, rec709: rec709, clipByte: clipByte
+            ).map {
+                MonitorFalseColorReferenceSegment(
+                    id: $0.id, lowerFraction: $0.lowerFraction,
+                    upperFraction: $0.upperFraction, red: $0.band.red, green: $0.band.green,
+                    blue: $0.band.blue)
+            },
+            markers: scale.liveScale.usesSceneStops
+                ? Self.sceneStopMarkers(transfer: transfer, rec709: rec709, clipByte: clipByte).map
+                {
+                    MonitorFalseColorReferenceMarker(
+                        id: $0.id, label: $0.label, fraction: $0.fraction)
+                } : [],
+            axisLabels: Self.axisLabels(scale: scale))
     }
 
     static func segments(
         scale: FalseColorScaleKind, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> [Segment] {
-        PocketFalseColorMap.bands(
-            scale: scale, transfer: transfer, rec709: rec709, clipByte: clipByte
+        let clip = DJILook.falseColorClip(
+            scale: scale.liveScale, transfer: transfer, rec709: rec709, clipByte: clipByte)
+        return LiveColorScience.falseColorBands(
+            scale.liveScale, transfer: clip.transfer, clipEncoded: clip.ceiling
         ).enumerated().map {
             index, band in
             Segment(
@@ -482,54 +410,4 @@ struct FalseColorReference: View {
             1, max(0, (value - domain.lowerBound) / (domain.upperBound - domain.lowerBound)))
     }
 
-    @ViewBuilder private var axisView: some View {
-        if scale.liveScale.usesSceneStops {
-            GeometryReader { geometry in
-                MonitorSnapshotRows(
-                    Self.sceneStopMarkers(transfer: transfer, rec709: rec709, clipByte: clipByte)
-                ) {
-                    marker in
-                    Text(marker.label)
-                        .font(
-                            inspector
-                                ? MonitorTheme.font(7, weight: .medium)
-                                : .system(size: 5.5, weight: .medium, design: .monospaced)
-                        )
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                        .position(
-                            x: min(
-                                geometry.size.width - 8,
-                                max(8, geometry.size.width * marker.fraction)),
-                            y: inspector ? 4.5 : 3.5)
-                }
-            }
-            .frame(height: inspector ? 9 : 7)
-        } else {
-            waveAxisView
-        }
-    }
-
-    private var waveAxisView: some View {
-        HStack(spacing: 4) {
-            MonitorSnapshotRows(Array(Self.axisLabels(scale: scale).enumerated()), id: \.offset)
-            {
-                index, label in
-                if index > 0 { Spacer(minLength: 0) }
-                Text(label)
-                    .font(
-                        inspector
-                            ? MonitorTheme.font(7, weight: .medium)
-                            : .system(size: 5.5, weight: .medium, design: .monospaced)
-                    )
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-        }
-    }
-
-    private var neutralGradientColors: [Color] {
-        [Color(white: 0.54), Color(white: 0.75)]
-    }
 }

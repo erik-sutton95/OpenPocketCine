@@ -1,11 +1,12 @@
+import MonitorUI
 import SwiftUI
 
-/// OpenZCine centre crosshair — tap toggles; long-press has no style / color / centre-mark
+/// OpenZCine centre crosshair - tap toggles; long-press has no style / color / centre-mark
 /// controls (`AssistPanel` `.crosshair`, Android `AssistTool.CROSS`).
 ///
 /// Overlay is OpenZCine `FeedCrosshairView` / Android `drawCentreCrosshair`: a 40pt cross,
 /// 1.4pt stroke, white at 65% opacity, centred on the feed. The iOS comment about a 46pt
-/// ring plus 34pt cross is leftover prototype copy — neither platform draws a ring or a
+/// ring plus 34pt cross is leftover prototype copy - neither platform draws a ring or a
 /// centre mark, and `AssistConfiguration` has no crosshair fields.
 enum CrosshairAssist {
     /// OpenZCine `AssistPanel` / Android `OptionCopy` for CROSS.
@@ -16,7 +17,7 @@ enum CrosshairAssist {
     static let strokeWidth: CGFloat = 1.4
     static let opacity: Double = 0.65
 
-    /// OpenZCine `AssistPanel` `.crosshair` body — help copy only.
+    /// OpenZCine `AssistPanel` `.crosshair` body - help copy only.
     static func longPressMenu(
         assist _: LiveAssistState,
         compact: Bool = false
@@ -28,32 +29,14 @@ enum CrosshairAssist {
         Overlay(feed: feed)
     }
 
-    /// OpenZCine `FeedCrosshairView` — two 40×1.4 rectangles, white 65%, feed centre.
-    struct Overlay: View {
-        let feed: CGRect
-
-        var body: some View {
-            ZStack {
-                Rectangle()
-                    .fill(Color.white.opacity(CrosshairAssist.opacity))
-                    .frame(width: CrosshairAssist.strokeWidth, height: CrosshairAssist.armLength)
-                Rectangle()
-                    .fill(Color.white.opacity(CrosshairAssist.opacity))
-                    .frame(width: CrosshairAssist.armLength, height: CrosshairAssist.strokeWidth)
-            }
-            .position(x: feed.midX, y: feed.midY)
-        }
-    }
+    /// OpenZCine `FeedCrosshairView` - two 40×1.4 rectangles, white 65%, feed centre.
+    typealias Overlay = MonitorFeedCrosshair
 }
 
 /// OpenZCine `AssistPanel` CROSS copy: 13pt muted. Android `OptionCopy` is 11pt in the
-/// compact settings strip — `compact` follows that.
+/// compact settings strip - `compact` follows that.
 struct CrosshairLongPressMenu: View {
     var compact: Bool = false
 
-    var body: some View {
-        Text(CrosshairAssist.helpCopy)
-            .font(LiveType.ui(size: compact ? 11 : 13))
-            .foregroundStyle(LiveDesign.muted)
-    }
+    var body: some View { MonitorAssistHelp(CrosshairAssist.helpCopy, compact: compact) }
 }

@@ -1863,3 +1863,56 @@ Physical camera behavior remains untested. The browse owner is Apple-specific;
 Android retains its existing owner. This is a producer prerequisite, with app
 production growing by 34 lines after explicit authority/registration bindings.
 Whole library/cache/player ownership and full P2 remain unfinished. No pin move.
+
+## Assist owner source proposal, 2026-10-04
+
+Candidate only: the Apple shell composes shared assist state/snapshot, option and placement
+owners, scope plots and retained native inspector work. DJI look catalog, color mapping,
+measured 247/223 preview profile, warm-up bodies and camera-specific focus/attitude chrome
+remain explicit app/integration inputs. Existing preference keys and numeric fixtures remain
+preserved. The optional shared toggle side effect is nil by default; Pocket warms false
+color before live persistence and after playback persistence, matching its original order.
+Direct property changes do not trigger that hook. The actual inspector uses its source lease.
+
+Temporary Android implementation exception: existing Android assist state/sample owners
+remain in place pending a separate prerequisite proposal for shared immutable sampling-time
+clip facts, per-model scope/inspector ownership and actual feed/playback lease composition.
+The shared hook proposal is mirrored in Kotlin with a nil Pocket Android callback, preserving
+its original absence of native warm side effects. Both candidates await reviewed application
+and automated qualification. Physical iOS/Android and operator behavior remain untested.
+
+Source review correction: Swift assist warm-up reads hasPreparedLUT from the actual cached
+state owner, independent of clean/unpinned visibility; the app retains lutEnabled as the
+other original condition. Querying availability does not resolve a look. Kotlin state
+never owns LUT preparation, so no unused mirrored cache API/storage is added there; its
+actual Media render plan/native owner already carries the prepared cube fact. Callback
+API remains mirrored and nil by default. The admitted Apple inspector render now captures
+inspectorFrame, the actual retained publication lease; inspectorSource remains the cheap
+configuration tuple. These source corrections and the resolver-count scenario are unrun.
+
+The app look provider starts not ready and returns nil before any catalog/native lookup.
+After original preference/custom-file migration and last-color restoration, the factory
+marks that provider ready and performs its original enabled-only final refresh. Shared
+initializer defaults stay unchanged. A proposed shared readiness scenario records the
+first native look request only after the restored selection/transfer are available.
+
+The scope correction removes the old app ScopeTraceRenderer, vectorscope renderer and
+texture pool. Shipping plots use shared MonitorUI Metal owners. ScopeTraceMetal is now
+a typealias, so unchanged waveform/parade/scissor numeric assertions exercise that actual
+shared geometry. The app display adapter keeps original LiveHDRDisplay configure,
+effective HDR and present gain, including screen-capture SDR policy. Three proposed
+SIMULATED native tests host the actual shared wave/parade/vector views and exercise
+make/update display configuration, pixel format, layer EDR/colorspace and delegate owner.
+They do not claim physical HDR brightness or rendered-pixel qualification.
+
+### Applied Apple assist and combined delivery candidate
+
+The reviewed Apple assist owner proposal is applied locally beside the seven-file
+shared delivery adapter. Original app native fixtures remain unchanged. Added shared
+state scenarios preserve every original test body; narrow formatting touches changed
+code only. Shared delivery and DJI source are integrated locally in the owned checkout.
+Combined app portable, strict, repository, both-architecture iOS and bounded native
+qualification are pending. Prior settings/DJI results qualify their earlier sources,
+not this uncompiled combined candidate. Android assist adoption remains a separate
+source proposal, with the current Android implementation retained. Physical behavior
+and full thin-app exit remain untested/incomplete. No pins or remote refs move.

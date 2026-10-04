@@ -1,49 +1,27 @@
+import OpenCineAppKit
+import MonitorPresentation
 import OpenPocketViewCore
+import MonitorUI
 import SwiftUI
 
 /// Presentation preferences only. Meter values and peak hold remain the camera's.
 extension AudioAssist {
-    enum Orientation: String, Codable, CaseIterable, Sendable {
-        case vertical = "Vertical"
-        case horizontal = "Horizontal"
-    }
+    typealias Orientation = MonitorAudioOrientation
 
-    struct StoredCenter: Codable, Equatable {
-        var x: Double
-        var y: Double
+    typealias StoredCenter = MonitorAudioStoredCenter
 
-        init(_ center: CGPoint, in bounds: CGRect) {
-            x = (center.x - bounds.minX) / max(1, bounds.width)
-            y = (center.y - bounds.minY) / max(1, bounds.height)
-        }
-
-        func point(in bounds: CGRect) -> CGPoint {
-            CGPoint(
-                x: bounds.minX + (x.isFinite ? x : 0.5) * bounds.width,
-                y: bounds.minY + (y.isFinite ? y : 0.5) * bounds.height)
-        }
-    }
-
-    struct Options: Codable, Equatable {
-        var orientation: Orientation = .vertical
-        var showsDB = false
-        var landscapeCenter: StoredCenter?
-        var portraitCenter: StoredCenter?
-    }
+    typealias Options = MonitorAudioOptions
 
     static func panelSize(orientation: Orientation) -> CGSize {
-        orientation == .vertical
-            ? panelSize : CGSize(width: panelSize.height, height: panelSize.width)
+        MonitorAudioMetrics.panelSize(orientation: orientation)
     }
 
     static func levelFraction(_ db: Double) -> Double {
-        guard db.isFinite else { return 0 }
-        return min(1, max(0, (db - AudioMeterBallistics.floorDB) / -AudioMeterBallistics.floorDB))
+        MonitorAudioReadout.fraction(db)
     }
 
     static func dbText(_ db: Double) -> String {
-        guard db.isFinite, db > AudioMeterBallistics.floorDB + 0.5 else { return "−∞" }
-        return String(format: "%.0f", min(0, db))
+        MonitorAudioReadout.label(db)
     }
 
     static func center(
@@ -61,39 +39,98 @@ extension AudioAssist {
     @MainActor static var store: AudioAssistStore { AudioAssistStore.shared }
 }
 
-@MainActor
-@Observable
-final class AudioAssistStore {
-    static let shared = AudioAssistStore()
-    private let defaults: UserDefaults
-    private let key: String
-    var options: AudioAssist.Options
+typealias AudioAssistStore = MonitorAudioPreferenceStore
 
-    init(defaults: UserDefaults = .standard, key: String = "OpenPocketCine.Assist.audio.v1") {
-        self.defaults = defaults
-        self.key = key
-        options =
-            defaults.data(forKey: key)
-            .flatMap { try? JSONDecoder().decode(AudioAssist.Options.self, from: $0) }
-            ?? AudioAssist.Options()
+// The app selects its storage domain and keeps each pre-existing namespace.
+@MainActor private enum PocketAssistStores {
+    static let waveform = MonitorScopePanelStore<MonitorWaveformOptions>(
+        storage: .standard, key: "OpenPocketCine.WaveformAssist.v1")
+    static let parade = MonitorScopePanelStore<MonitorParadeOptions>(
+        storage: .standard, key: "OpenPocketCine.ParadeAssist.v1")
+    static let vectorscope = MonitorScopePanelStore<MonitorVectorscopeOptions>(
+        storage: .standard, key: "OpenPocketCine.VectorscopeAssist.v1")
+    static let histogram = MonitorScopePanelStore<MonitorHistogramOptions>(
+        storage: .standard, key: "OpenPocketCine.HistogramAssist.v1")
+    static let audio = MonitorAudioPreferenceStore(
+        storage: .standard, key: "OpenPocketCine.Assist.audio.v1")
+    static let reference = MonitorFalseColorReferencePositionStore(
+        storage: .standard, key: "OpenPocketCine.Assist.falseColorReference.positions.v1")
+    static let nd = MonitorNDPreferenceStore(
+        storage: .standard, key: "OpenPocketCine.Assist.ndMeter.v1")
+    static let lights = MonitorTrafficLightsPreferenceStore(
+        storage: .standard,
+        key: "OpenPocketCine.Assist.trafficLights.v1", histogram: histogram)
+}
+
+extension MonitorScopePanelStore where Options == MonitorWaveformOptions {
+    static var shared: MonitorScopePanelStore<MonitorWaveformOptions> {
+        PocketAssistStores.waveform
     }
-
-    func storedCenter(in bounds: CGRect) -> AudioAssist.StoredCenter? {
-        ScopeCanvasSlot.pick(options.landscapeCenter, options.portraitCenter, in: bounds)
+    convenience init(options: MonitorWaveformOptions = .default) {
+        self.init(options: options, storage: .standard, key: "OpenPocketCine.WaveformAssist.v1")
     }
-
-    func setCenter(_ center: CGPoint, in bounds: CGRect) {
-        let stored = AudioAssist.StoredCenter(center, in: bounds)
-        if bounds.height > bounds.width {
-            options.portraitCenter = stored
-        } else {
-            options.landscapeCenter = stored
-        }
-        persist()
+    static func load() -> MonitorWaveformOptions {
+        load(storage: .standard, key: "OpenPocketCine.WaveformAssist.v1")
     }
+}
 
-    func persist() {
-        guard let data = try? JSONEncoder().encode(options) else { return }
-        defaults.set(data, forKey: key)
+extension MonitorScopePanelStore where Options == MonitorParadeOptions {
+    static var shared: MonitorScopePanelStore<MonitorParadeOptions> { PocketAssistStores.parade }
+    convenience init(options: MonitorParadeOptions = .default) {
+        self.init(options: options, storage: .standard, key: "OpenPocketCine.ParadeAssist.v1")
+    }
+    static func load() -> MonitorParadeOptions {
+        load(storage: .standard, key: "OpenPocketCine.ParadeAssist.v1")
+    }
+}
+
+extension MonitorScopePanelStore where Options == MonitorVectorscopeOptions {
+    static var shared: MonitorScopePanelStore<MonitorVectorscopeOptions> {
+        PocketAssistStores.vectorscope
+    }
+    convenience init(options: MonitorVectorscopeOptions = .default) {
+        self.init(options: options, storage: .standard, key: "OpenPocketCine.VectorscopeAssist.v1")
+    }
+    static func load() -> MonitorVectorscopeOptions {
+        load(storage: .standard, key: "OpenPocketCine.VectorscopeAssist.v1")
+    }
+}
+
+extension MonitorScopePanelStore where Options == MonitorHistogramOptions {
+    static var shared: MonitorScopePanelStore<MonitorHistogramOptions> {
+        PocketAssistStores.histogram
+    }
+    convenience init(options: MonitorHistogramOptions = .default) {
+        self.init(options: options, storage: .standard, key: "OpenPocketCine.HistogramAssist.v1")
+    }
+    static func load() -> MonitorHistogramOptions {
+        load(storage: .standard, key: "OpenPocketCine.HistogramAssist.v1")
+    }
+}
+
+extension MonitorAudioPreferenceStore {
+    static var shared: MonitorAudioPreferenceStore { PocketAssistStores.audio }
+    convenience init(
+        defaults: UserDefaults = .standard, key: String = "OpenPocketCine.Assist.audio.v1"
+    ) {
+        self.init(storage: defaults, key: key)
+    }
+}
+extension MonitorFalseColorReferencePositionStore {
+    static var shared: MonitorFalseColorReferencePositionStore { PocketAssistStores.reference }
+    convenience init(defaults: UserDefaults = .standard) {
+        self.init(storage: defaults, key: "OpenPocketCine.Assist.falseColorReference.positions.v1")
+    }
+}
+extension MonitorNDPreferenceStore {
+    static var shared: MonitorNDPreferenceStore { PocketAssistStores.nd }
+    convenience init() { self.init(storage: .standard, key: "OpenPocketCine.Assist.ndMeter.v1") }
+}
+extension MonitorTrafficLightsPreferenceStore {
+    static var shared: MonitorTrafficLightsPreferenceStore { PocketAssistStores.lights }
+    convenience init() {
+        self.init(
+            storage: .standard, key: "OpenPocketCine.Assist.trafficLights.v1",
+            histogram: HistogramAssist.store)
     }
 }

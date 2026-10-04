@@ -5,11 +5,11 @@ import UIKit
 
 /// OpenZCine `AssistConfiguration.Zebra` + long-press rows (`AssistQuickSettingsContent.zebraRows`).
 ///
-/// OpenZCine exposes exactly these operator controls — there is no fill-vs-stripe / pattern picker
+/// OpenZCine exposes exactly these operator controls - there is no fill-vs-stripe / pattern picker
 /// (stripes always paint the zone colour) and no extra bands beyond dual zebra:
-/// * Units — 0-255 / IRE (`Zebra.Unit`; stored thresholds stay on the 0–100 monitoring axis)
-/// * Highlight — enable, threshold, fill colour White / Amber / Red
-/// * Midtone — enable, threshold, fill colour Amber / Cyan / Green
+/// * Units - 0-255 / IRE (`Zebra.Unit`; stored thresholds stay on the 0–100 monitoring axis)
+/// * Highlight - enable, threshold, fill colour White / Amber / Red
+/// * Midtone - enable, threshold, fill colour Amber / Cyan / Green
 ///
 /// Defaults follow `AssistConfiguration.Zebra` (IRE, white / amber, midtone 55) except highlight:
 /// 99, one IRE under the live-tap ceiling so the typical D-Log2 243–247 shelf paints (#136).
@@ -29,7 +29,7 @@ enum ZebraAssist {
     static let midtoneHelp =
         "Midtone zebra gives a curve-compensated reference band for faces or key subject exposure."
 
-    /// OpenZCine `ImageEffectsCompositor.blendStripedZebra` — `CIStripesGenerator`.
+    /// OpenZCine `ImageEffectsCompositor.blendStripedZebra` - `CIStripesGenerator`.
     enum StripeLook {
         static let width: CGFloat = 5
         static let sharpness: CGFloat = 1
@@ -61,7 +61,7 @@ enum ZebraAssist {
         }
     }
 
-    /// OpenZCine `AssistConfiguration.Zebra.StripeColor` — GPU fill lives on ``ZebraPaint``.
+    /// OpenZCine `AssistConfiguration.Zebra.StripeColor` - GPU fill lives on ``ZebraPaint``.
     typealias StripeColor = ZebraPaint
 
     /// OpenZCine `SettingsPalette.highlight`.
@@ -158,7 +158,7 @@ enum ZebraAssist {
     }
 
     /// Zone flags + IRE + stripe fill the GPU zebra pass reads (OpenZCine `ZebraSettings` minus unit).
-    /// Unit is editor-only — stored thresholds stay on the 0–100 monitoring axis.
+    /// Unit is editor-only - stored thresholds stay on the 0–100 monitoring axis.
     struct OverlaySpec: Equatable, Sendable {
         var highlightEnabled: Bool
         var highlightIRE: Double
@@ -190,7 +190,7 @@ enum ZebraAssist {
     }
 
     /// Binds ``LiveAssistState`` dual-zebra options and persists on change.
-    static func longPressMenu(
+    @MainActor static func longPressMenu(
         assist: LiveAssistState,
         compact: Bool = false
     ) -> ZebraLongPressMenu {
@@ -206,21 +206,19 @@ enum ZebraAssist {
         )
     }
 
-    static func longPressMenu(_ assist: LiveAssistState) -> ZebraLongPressMenu {
+    @MainActor static func longPressMenu(_ assist: LiveAssistState) -> ZebraLongPressMenu {
         longPressMenu(assist: assist)
     }
 }
 
-extension ZebraPaint: Identifiable {
-    var id: String { rawValue }
-
+extension ZebraPaint {
     /// OpenZCine `SettingsPalette` token (not overlay RGB).
     var swatch: Color {
         switch self {
         case .white: LiveDesign.text
         case .amber: LiveDesign.amber
         case .red: LiveDesign.rec
-        case .cyan: LiveDesign.info
+        case .cyan: LiveHDRDisplay.chromeColor(red: 0, green: 0.85, blue: 0.9)
         case .green: LiveDesign.good
         }
     }
@@ -296,137 +294,43 @@ struct ZebraLongPressMenu: View {
         model.monitorSamples.exposureCeiling.clipByte(transfer: transfer)
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsInlineRow(
-                title: ZebraAssist.unitsTitle,
-                help: ZebraAssist.unitsHelp,
-                showTopDivider: false,
-                stacked: compact
-            ) {
-                SettingsSegmented(
-                    options: ZebraAssist.unitOptions,
-                    selected: options.unit.editorLabel,
-                    compact: compact,
-                    stacked: compact
-                ) {
-                    let unit = ZebraAssist.Unit.fromEditorLabel($0)
-                    guard unit != options.unit else { return }
-                    options.unit = unit
-                }
-            }
-            zebraZoneRow(
-                title: ZebraAssist.highlightTitle,
-                help: ZebraAssist.highlightHelp,
-                enabled: options.highlightEnabled,
-                onEnabledToggle: {
-                    ZebraAssistHaptics.selection()
-                    options.highlightEnabled.toggle()
-                },
-                value: Binding(
-                    get: { options.highlightIRE },
-                    set: { options.highlightIRE = min(100, max(0, $0)) }),
-                colors: ZebraAssist.highlightPalette,
-                selectedColor: options.highlightColor
-            ) { color in
-                options.highlightColor = color
-            }
-            zebraZoneRow(
-                title: ZebraAssist.midtoneTitle,
-                help: ZebraAssist.midtoneHelp,
-                enabled: options.midtoneEnabled,
-                onEnabledToggle: {
-                    ZebraAssistHaptics.selection()
-                    options.midtoneEnabled.toggle()
-                },
-                value: Binding(
-                    get: { options.midtoneIRE },
-                    set: { options.midtoneIRE = min(100, max(0, $0)) }),
-                colors: ZebraAssist.midtonePalette,
-                selectedColor: options.midtoneColor
-            ) { color in
-                options.midtoneColor = color
-            }
-        }
+    var body: some View { assistMenu(transfer: transfer, clipByte: clipByte) }
+
+    func assistMenu(transfer: MonitorTransfer, clipByte: Int) -> MonitorZebraMenu<
+        ZebraAssist.Unit, ZebraAssist.StripeColor
+    > {
+        MonitorZebraMenu(
+            units: ZebraAssist.Unit.allCases, unit: $options.unit, title: { $0.editorLabel },
+            unitsTitle: ZebraAssist.unitsTitle, unitsHelp: ZebraAssist.unitsHelp,
+            highlightHelp: ZebraAssist.highlightHelp, midtoneHelp: ZebraAssist.midtoneHelp,
+            highlight: zone(
+                enabled: $options.highlightEnabled, threshold: $options.highlightIRE,
+                colors: ZebraAssist.highlightPalette, paint: $options.highlightColor,
+                transfer: transfer, clipByte: clipByte),
+            midtone: zone(
+                enabled: $options.midtoneEnabled, threshold: $options.midtoneIRE,
+                colors: ZebraAssist.midtonePalette, paint: $options.midtoneColor,
+                transfer: transfer, clipByte: clipByte), compact: compact,
+            selectionFeedback: { ZebraAssistHaptics.selection() },
+            toggleFeedback: {
+                ZebraAssistHaptics.selection(); ZebraAssistHaptics.selection()
+            })
     }
-
-    private func zebraZoneRow(
-        title: String,
-        help: String,
-        enabled: Bool,
-        onEnabledToggle: @escaping () -> Void,
-        value: Binding<Double>,
-        colors: [ZebraAssist.StripeColor],
-        selectedColor: ZebraAssist.StripeColor,
-        onColor: @escaping (ZebraAssist.StripeColor) -> Void
-    ) -> some View {
-        VStack(spacing: 0) {
-            SettingsSwitchInlineRow(
-                title: title, help: help, isOn: enabled, action: onEnabledToggle)
-            VStack(alignment: .leading, spacing: 0) {
-                SettingsInlineRow(title: "Threshold") {
-                    HStack(spacing: 9) {
-                        Slider(value: value, in: 0...100, step: 1)
-                            .frame(minWidth: 76, idealWidth: 110, maxWidth: 140)
-                            .tint(MonitorTheme.accent)
-                            .accessibilityLabel("\(title) threshold")
-                        Text(
-                            "\(options.displayValue(for: value.wrappedValue, transfer: transfer, clipByte: clipByte))"
-                        )
-                        .font(MonitorTheme.font(12, weight: .medium)).monospacedDigit()
-                        .foregroundStyle(MonitorTheme.secondary)
-                        .frame(width: 34, alignment: .trailing)
-                    }
-                }
-                SettingsInlineRow(title: "Colour") {
-                    ZebraColorDots(
-                        colors: colors, selected: selectedColor, compact: compact, onSelect: onColor
-                    )
-                }
-            }
-            .padding(.leading, 14)
-            .opacity(enabled ? 1 : 0.4)
-            .disabled(!enabled)
-        }
-    }
-
-}
-
-/// OpenZCine `SettingsColorDots` + highlight / midtone palettes (token swatches, not overlay RGB).
-private struct ZebraColorDots: View {
-    let colors: [ZebraAssist.StripeColor]
-    let selected: ZebraAssist.StripeColor
-    var compact: Bool = false
-    let onSelect: (ZebraAssist.StripeColor) -> Void
-
-    private var dotDiameter: CGFloat { compact ? 15 : 13 }
-    private var hitTarget: CGFloat { 44 }
-
-    var body: some View {
-        HStack(spacing: compact ? 4 : 6) {
-            MonitorSnapshotRows(colors) { color in
-                Button {
-                    guard color != selected else { return }
-                    ZebraAssistHaptics.selection()
-                    onSelect(color)
-                } label: {
-                    Circle()
-                        .fill(color.swatch)
-                        .frame(width: dotDiameter, height: dotDiameter)
-                        .frame(width: 36, height: 36)
-                        .background(LiveDesign.background.opacity(0.5), in: Circle())
-                        .overlay(
-                            Circle().stroke(
-                                color == selected ? color.swatch : LiveDesign.hairline,
-                                lineWidth: color == selected ? 2 : 1)
-                        )
-                        .frame(width: hitTarget, height: hitTarget)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.zcTapTarget)
-                .accessibilityLabel(color.rawValue)
-            }
-        }
+    private func zone(
+        enabled: Binding<Bool>, threshold: Binding<Double>, colors: [ZebraAssist.StripeColor],
+        paint: Binding<ZebraAssist.StripeColor>, transfer: MonitorTransfer, clipByte: Int
+    ) -> MonitorZebraZone<ZebraAssist.StripeColor> {
+        MonitorZebraZone(
+            enabled: enabled,
+            threshold: Binding(
+                get: { threshold.wrappedValue },
+                set: {
+                    threshold.wrappedValue = min(100, max(0, $0))
+                }),
+            displayValue: options.displayValue(
+                for: threshold.wrappedValue, transfer: transfer, clipByte: clipByte),
+            colors: colors.map { .init(value: $0, title: $0.rawValue, color: $0.swatch) },
+            paint: paint)
     }
 }
 

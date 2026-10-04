@@ -1,15 +1,11 @@
 package com.opencapture.openpocketcine.assists
 
-import com.opencapture.monitorui.MonitorTab
-import com.opencapture.monitorui.monitorTabStrip
+import com.opencapture.openpocketcine.feed.fromColorMode
+
 import com.opencapture.monitorui.monitorScrollFade
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,46 +27,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.NDFilterNotation
 import com.opencapture.openpocketcine.LivePopupCloseButton
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.OperatorPrefs
-import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.lut.LUTPicker
 import com.opencapture.openpocketcine.lut.LUTSplitComparisonBar
 import com.opencapture.openpocketcine.pickerPanelGlass
 import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.openpocketcine.settings.SettingsColorDots
-import com.opencapture.openpocketcine.settings.SettingsCrushClipSegmented
-import com.opencapture.openpocketcine.settings.SettingsInlineRow
-import com.opencapture.openpocketcine.settings.SettingsNumberField
 import com.opencapture.openpocketcine.settings.SettingsPalette
-import com.opencapture.openpocketcine.settings.SettingsPercentSlider
-import com.opencapture.openpocketcine.settings.SettingsSegmented as SettingsSegmentedBase
-import com.opencapture.openpocketcine.settings.SettingsSwitchGraphic
-import com.opencapture.openpocketcine.settings.SettingsSwitchInlineRow
 
 private val CardShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
-@Composable
-private fun Modifier.assistClick(onClick: () -> Unit): Modifier = chromeClickable(onClick = onClick)
 
 /**
  * OpenZCine / iOS long-press tray. Overlay glass, not the feed-layer pill.
@@ -218,57 +193,29 @@ private fun AssistOptionsBody(tool: LiveAssistTool, state: LiveAssistState, colo
         LiveAssistTool.DESQ -> DesqueezeOptions(state)
         LiveAssistTool.GUIDES -> GuidesOptions(state)
         LiveAssistTool.GRID -> GridOptions(state)
-        LiveAssistTool.CROSS -> OptionCopy(CrosshairAssist.HELP)
+        LiveAssistTool.CROSS -> com.opencapture.monitorui.MonitorAssistHelp(CrosshairAssist.HELP)
         LiveAssistTool.MIRROR -> MirrorOptions(state)
-        LiveAssistTool.AUDIO -> {
-            SettingsInlineRow("Orientation", help = AudioAssist.HELP, showTopDivider = false, stacked = true) {
-                SettingsSegmented(com.opencapture.monitorui.MonitorAudioOrientation.entries.map { it.label },
-                    state.audioOrientation.label) { label ->
-                    com.opencapture.monitorui.MonitorAudioOrientation.entries.firstOrNull { it.label == label }
-                        ?.let(state::updateAudioOrientation)
-                }
-            }
-            SettingsSwitchInlineRow("Show dB values", isOn = state.audioShowDB, stacked = false) {
-                state.updateAudioShowDB(!state.audioShowDB)
-            }
-        }
+        LiveAssistTool.AUDIO -> com.opencapture.monitorui.MonitorAudioMenu(state.audioOrientation,
+            state::updateAudioOrientation, state.audioShowDB, state::updateAudioShowDB, AudioAssist.HELP)
     }
 }
 
-@Composable
-private fun SettingsSegmented(options: List<String>, selected: String, compact: Boolean = true,
-    onSelect: (String) -> Unit) = SettingsSegmentedBase(options, selected, compact,
-        accentSelection = true, onSelect = onSelect)
 
 @Composable
 private fun PeakingOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    SettingsInlineRow("Sensitivity", help = "Higher sensitivity catches finer edges but can get noisy on detailed scenes.", showTopDivider = false, stacked = true) {
-        SettingsSegmented(
-            options = PeakingSense.entries.map { it.label },
-            selected = state.peakingSensitivity.label,
-        ) { label ->
-            haptics.selection()
-            state.setPeaking(sense = PeakingSense.fromPersisted(label))
-        }
-    }
-    SettingsInlineRow("Color", help = "Choose the edge color that stays readable over your typical scene.", stacked = true) {
-        SettingsColorDots(
-            dots = SettingsPalette.peaking,
-            selectedName = state.peakingColor.label,
-        ) { label ->
-            haptics.selection()
-            state.setPeaking(color = PeakingColor.fromPersisted(label))
-        }
-    }
+    com.opencapture.monitorui.MonitorPeakingMenu(state.peakingSensitivity, state.peakingColor,
+        SettingsPalette.peaking.map { com.opencapture.monitorui.settings.MonitorSettingsColorDot(it.name, it.color) },
+        "Higher sensitivity catches finer edges but can get noisy on detailed scenes.",
+        "Choose the edge color that stays readable over your typical scene.",
+        onSensitivity = { haptics.selection(); state.setPeaking(sense = it) },
+        onColor = { haptics.selection(); state.setPeaking(color = it) })
 }
 
 @Composable
 private fun FalseColorOptions(state: LiveAssistState, colorMode: Int) {
     val haptics = LocalOperatorHaptics.current
-    SettingsInlineRow(
-        "Scale",
-        help =
+    val scaleHelp =
             "The camera color mode selects D-Log, D-Log2, D-Log M, Rec.709, or HLG automatically. " +
                 "CineStop paints five stops around 18% gray: dark green −2, yellow-green −1, gray, " +
                 "pink +1 skin, yellow +2 upper skin, red clip, violet crush, flat gray elsewhere. " +
@@ -277,47 +224,19 @@ private fun FalseColorOptions(state: LiveAssistState, colorMode: Int) {
                 "six video-level zones over luminance grayscale. Limits " +
                 "paints only shadow and highlight warnings." +
                 " D-Log M uses a direct 0–100 signal scale. Its gray guide and CineStop stops are " +
-                "Pocket 3 estimates, not calibrated sensor limits. Use IRE on other D-Log M cameras.",
-        showTopDivider = false,
-        stacked = true,
-    ) {
-        SettingsSegmented(
-            options = listOf("CineStop", "Video", "IRE", "Limits"),
-            selected = state.falseColorScale.menuLabel,
-        ) { label ->
-            haptics.selection()
-            state.setFalseColor(scale = FalseColorScale.fromMenuLabel(label))
-        }
-    }
-    SettingsInlineRow(
-        "Read",
-        help =
+                "Pocket 3 estimates, not calibrated sensor limits. Use IRE on other D-Log M cameras."
+    val readHelp =
             "How false color reads log footage. 709 reads the camera's official Rec.709 look, " +
                 "the way RED, ARRI and most monitors apply false color, so clip means clipped in " +
                 "the Rec.709 image. LOG reads the raw signal like WAVE, with the full highlight " +
-                "range and the camera's own clip.",
-        stacked = true,
-    ) {
-        SettingsSegmented(
-            options = listOf("LOG", "709"),
-            selected = if (state.falseColorRec709) "709" else "LOG",
-        ) { label ->
-            haptics.selection()
-            state.setFalseColorRead(label == "709")
-        }
-    }
-    Text("REFERENCE KEY", style = LiveType.ui(8f, FontWeight.Medium).copy(letterSpacing = 1.sp),
-        color = LiveDesign.faint, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
-    FalseColorReferenceRuler(state, colorMode, Modifier.fillMaxWidth().height(52.dp))
-    SettingsSwitchInlineRow(
-        title = "Reference Display",
-        isOn = state.falseColorReference,
-        help = "Show a compact color key over live view while False Color is active.",
-        stacked = false,
-    ) {
-        haptics.selection()
-        state.setFalseColor(reference = !state.falseColorReference)
-    }
+                "range and the camera's own clip."
+    com.opencapture.monitorui.MonitorFalseColorMenu(
+        listOf("CineStop", "Video", "IRE", "Limits").map(FalseColorScale::fromMenuLabel),
+        state.falseColorScale, { haptics.selection(); state.setFalseColor(scale = it) }, { it.menuLabel },
+        state.falseColorRec709, { haptics.selection(); state.setFalseColorRead(it) },
+        falseColorReferenceValues(state, colorMode), state.falseColorReference,
+        { haptics.selection(); state.setFalseColor(reference = it) }, scaleHelp, readHelp,
+        "Show a compact color key over live view while False Color is active.")
 }
 
 @Composable
@@ -325,99 +244,32 @@ private fun ZebraOptions(state: LiveAssistState, colorMode: Int) {
     val haptics = LocalOperatorHaptics.current
     val transfer = MonitorTransfer.fromColorMode(colorMode)
     val maximum = ZebraEditor.editorMaximum(state.zebraUnit)
-    SettingsInlineRow(
-        "Units",
-        help = "Switch between native 0-255 encoded codes and a 0-100 monitoring IRE scale.",
-        showTopDivider = false,
-        stacked = true,
-    ) {
-        SettingsSegmented(
-            options = listOf("0-255", "IRE"),
-            selected = state.zebraUnit.editorLabel,
-        ) { label ->
-            haptics.selection()
-            state.updateZebraUnit(ZebraUnit.fromEditorLabel(label))
-        }
-    }
-    ZebraZoneRow(
-        title = "Highlight",
-        help = "High zebra warns when bright detail approaches clipping after the active log curve is compensated.",
-        enabled = state.zebraHighlight,
-        value = ZebraEditor.displayValue(state.zebraHighlightIRE, state.zebraUnit, transfer, state.scopeCeiling),
-        maximum = maximum,
-        selected = state.zebraHighlightColor.label,
-        palette = SettingsPalette.highlight,
-        onEnabled = {
-            haptics.selection()
-            state.setZebraHighlight(enabled = !state.zebraHighlight)
-        },
-        onValue = {
-            state.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, state.zebraUnit, transfer, state.scopeCeiling))
-        },
-        onColor = {
-            haptics.selection()
-            state.setZebraHighlight(color = ZebraPaint.fromPersisted(it))
-        },
-    )
-    ZebraZoneRow(
-        title = "Midtone",
-        help = "Midtone zebra gives a curve-compensated reference band for faces or key subject exposure.",
-        enabled = state.zebraMidtone,
-        value = ZebraEditor.displayValue(state.zebraMidtoneIRE, state.zebraUnit, transfer, state.scopeCeiling),
-        maximum = maximum,
-        selected = state.zebraMidtoneColor.label,
-        palette = SettingsPalette.midtone,
-        onEnabled = {
-            haptics.selection()
-            state.setZebraMidtone(enabled = !state.zebraMidtone)
-        },
-        onValue = {
-            state.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, state.zebraUnit, transfer, state.scopeCeiling))
-        },
-        onColor = {
-            haptics.selection()
-            state.setZebraMidtone(color = ZebraPaint.fromPersisted(it))
-        },
-    )
+    com.opencapture.monitorui.MonitorZebraMenu(ZebraUnit.entries, state.zebraUnit, { it.editorLabel },
+        { haptics.selection(); state.updateZebraUnit(it) },
+        "Switch between native 0-255 encoded codes and a 0-100 monitoring IRE scale.",
+        "High zebra warns when bright detail approaches clipping after the active log curve is compensated.",
+        "Midtone zebra gives a curve-compensated reference band for faces or key subject exposure.",
+        com.opencapture.monitorui.MonitorZebraZone(state.zebraHighlight,
+            ZebraEditor.displayValue(state.zebraHighlightIRE, state.zebraUnit, transfer, state.scopeDisplayCeiling),
+            maximum, state.zebraHighlightColor, SettingsPalette.highlight.map { com.opencapture.monitorui.settings.MonitorSettingsColorDot(it.name, it.color) },
+            onEnabled = { haptics.selection(); state.setZebraHighlight(enabled = !state.zebraHighlight) },
+            onThreshold = { state.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, state.zebraUnit, transfer, state.scopeDisplayCeiling)) },
+            onPaint = { haptics.selection(); state.setZebraHighlight(color = it) }),
+        com.opencapture.monitorui.MonitorZebraZone(state.zebraMidtone,
+            ZebraEditor.displayValue(state.zebraMidtoneIRE, state.zebraUnit, transfer, state.scopeDisplayCeiling),
+            maximum, state.zebraMidtoneColor, SettingsPalette.midtone.map { com.opencapture.monitorui.settings.MonitorSettingsColorDot(it.name, it.color) },
+            onEnabled = { haptics.selection(); state.setZebraMidtone(enabled = !state.zebraMidtone) },
+            onThreshold = { state.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, state.zebraUnit, transfer, state.scopeDisplayCeiling)) },
+            onPaint = { haptics.selection(); state.setZebraMidtone(color = it) }))
 }
 
-@Composable
-private fun ZebraZoneRow(
-    title: String,
-    help: String,
-    enabled: Boolean,
-    value: Int,
-    maximum: Int,
-    selected: String,
-    palette: List<com.opencapture.openpocketcine.settings.SettingsColorDot>,
-    onEnabled: () -> Unit,
-    onValue: (Int) -> Unit,
-    onColor: (String) -> Unit,
-) {
-    SettingsSwitchInlineRow(title, isOn = enabled, help = help, stacked = false, onToggle = onEnabled)
-    Column(Modifier.padding(start = 14.dp).alpha(if (enabled) 1f else .35f)) {
-        SettingsInlineRow("Threshold", showTopDivider = false, stacked = true) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // The slider already publishes its range and a set action; only
-                // the name was missing, and it is the row title right above.
-                com.opencapture.monitorui.MonitorSlider(value.toFloat(), 0f..maximum.toFloat(),
-                    Modifier.weight(1f).semantics { contentDescription = "$title threshold" },
-                    enabled = enabled) { onValue(it.toInt()) }
-                Text(value.toString(), style = LiveType.ui(12f, FontWeight.Medium), color = LiveDesign.text,
-                    modifier = Modifier.width(34.dp))
-            }
-        }
-        SettingsInlineRow("Color", showTopDivider = false, stacked = true) {
-            SettingsColorDots(dots = palette, selectedName = selected, enabled = enabled, onSelect = onColor)
-        }
-    }
-}
+
 
 @Composable
 private fun WaveformOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    ScopeTraceOptions(listOf("Luma", "RGB"), state.waveMode.label,
-        { haptics.selection(); state.setWaveform(mode = WaveformMode.fromPersisted(it)) },
+    com.opencapture.monitorui.MonitorScopeTraceMenu(WaveformMode.entries, state.waveMode,
+        { haptics.selection(); state.setWaveform(mode = it) }, { it.label },
         state.waveBrightness, { state.setWaveform(brightness = it) }, state.waveGuides,
         { haptics.selection(); state.setWaveform(guides = it) })
 }
@@ -425,260 +277,82 @@ private fun WaveformOptions(state: LiveAssistState) {
 @Composable
 private fun ParadeOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    ScopeTraceOptions(listOf("RGB", "YRGB"), state.paradeMode.label,
-        { haptics.selection(); state.setParade(mode = ParadeMode.fromPersisted(it)) },
+    com.opencapture.monitorui.MonitorScopeTraceMenu(ParadeMode.entries, state.paradeMode,
+        { haptics.selection(); state.setParade(mode = it) }, { it.label },
         state.paradeBrightness, { state.setParade(brightness = it) }, state.paradeGuides,
         { haptics.selection(); state.setParade(guides = it) })
 }
 
-@Composable
-private fun ScopeTraceOptions(modes: List<String>, mode: String, onMode: (String) -> Unit,
-    brightness: Int, onBrightness: (Int) -> Unit, guides: ScopeGuides, onGuides: (ScopeGuides) -> Unit) {
-    com.opencapture.monitorui.MonitorOptionGroup {
-        SettingsInlineRow("Mode", showTopDivider = false) {
-            SettingsSegmented(modes, mode, compact = false, onSelect = onMode)
-        }
-        SettingsInlineRow("Brightness", help = "Raise trace intensity in bright light.", stacked = true) {
-            SettingsPercentSlider(brightness, 0..200, onBrightness)
-        }
-    }
-    Spacer(Modifier.height(11.dp))
-    Text("GUIDE LINES", modifier = Modifier.padding(start = 12.dp, bottom = 5.dp),
-        style = LiveType.ui(7.5f, FontWeight.Medium).copy(letterSpacing = 1.sp), color = LiveDesign.faint)
-    com.opencapture.monitorui.MonitorOptionGroup { GuideToggles(guides, onGuides) }
-}
 
 @Composable
 private fun HistogramOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    SettingsSwitchInlineRow(
-        title = HistogramAssist.TRAFFIC_LIGHTS_TITLE,
-        isOn = state.histoTrafficLights,
-        help = HistogramAssist.TRAFFIC_LIGHTS_HELP,
-        showTopDivider = false,
-        stacked = false,
-    ) {
-        haptics.selection()
-        state.setHistogram(traffic = !state.histoTrafficLights)
-    }
-    SettingsInlineRow(HistogramAssist.COMPENSATION_TITLE, HistogramAssist.COMPENSATION_HELP, stacked = true) {
-        CompensationPicker(state.crushClipCompensation) {
-            haptics.selection()
-            state.setHistogram(compensation = it)
-        }
-    }
+    com.opencapture.monitorui.MonitorHistogramMenu(state.histoTrafficLights,
+        { haptics.selection(); state.setHistogram(traffic = !state.histoTrafficLights) },
+        state.crushClipCompensation, { haptics.selection(); state.setHistogram(compensation = it) },
+        HistogramAssist.TRAFFIC_LIGHTS_HELP, HistogramAssist.COMPENSATION_HELP)
 }
 
 @Composable
 private fun VectorscopeOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    SettingsInlineRow(
-        "Trace Zoom",
-        help = "Magnifies only the chroma trace; the graticule stays at unity.",
-        showTopDivider = false,
-        stacked = true,
-    ) {
-        SettingsSegmented(
-            options = VectorscopeZoom.entries.map { it.label },
-            selected = state.vectorZoom.label,
-        ) {
-            haptics.selection()
-            state.setVectorscope(zoom = VectorscopeZoom.fromPersisted(it))
-        }
-    }
-    SettingsInlineRow("Brightness", help = "Raise trace intensity when the chroma plot is hard to read.", stacked = true) {
-        SettingsPercentSlider(value = state.vectorBrightness, range = 0..200) {
-            state.setVectorscope(brightness = it)
-        }
-    }
+    com.opencapture.monitorui.MonitorVectorscopeMenu(state.vectorZoom,
+        { haptics.selection(); state.setVectorscope(zoom = it) }, state.vectorBrightness,
+        { state.setVectorscope(brightness = it) })
 }
 
 @Composable
 private fun LightsOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    SettingsInlineRow(
-        HistogramAssist.COMPENSATION_TITLE,
-        help = "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights.",
-        showTopDivider = false,
-        stacked = true,
-    ) {
-        CompensationPicker(state.crushClipCompensation) {
-            haptics.selection()
-            state.setCompensation(it)
-        }
-    }
+    com.opencapture.monitorui.MonitorCrushClipMenu(state.crushClipCompensation,
+        { haptics.selection(); state.setCompensation(it) },
+        "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights.",
+        showTopDivider = false)
 }
 
 @Composable
 private fun NdOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    SettingsInlineRow(
-        NDAssist.NOTATION_TITLE,
-        help = NDAssist.NOTATION_HELP,
-        showTopDivider = false,
-        stacked = true,
-    ) {
-        SettingsSegmented(
-            options = NDFilterNotation.entries.map { it.editorLabel },
-            selected = state.ndNotation.editorLabel,
-        ) { label ->
-            haptics.selection()
-            state.ndNotation = NDFilterNotation.fromEditorLabel(label)
-            state.persist()
-        }
-    }
-    OptionCopy(NDAssist.HELP)
+    com.opencapture.monitorui.MonitorNDMenu(state.ndNotation, {
+        haptics.selection(); state.ndNotation = it; state.persist()
+    }, NDAssist.NOTATION_TITLE, NDAssist.NOTATION_HELP, NDAssist.HELP)
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GuidesOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    Row(Modifier.fillMaxWidth().monitorTabStrip()) {
-        GuideFamily.entries.forEachIndexed { index, family ->
-            val active = state.guideFamily == family
-            MonitorTab(active, {
-                haptics.selection()
-                state.updateGuideFamily(family)
-            }, Modifier.weight(1f), separator = index > 0, accessibilityLabel = family.label) {
-                Text(family.label, color = if (active) LiveDesign.accent else LiveDesign.muted,
-                    style = LiveType.ui(13f, FontWeight.SemiBold), maxLines = 1)
-            }
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        GuideAspect.ratios(state.guideFamily).forEach { aspect ->
-            val on = aspect in state.selectedGuides
-            Text(
-                aspect.label,
-                color = if (on) Color(0xFF08191F) else LiveDesign.text,
-                fontSize = 14.sp,
-                fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
-                modifier =
-                    Modifier
-                        .clip(CardShape)
-                        .background(if (on) LiveDesign.accent else LiveDesign.glassBright)
-                        .border(1.dp, if (on) LiveDesign.accentDim else LiveDesign.hairline, CardShape)
-                        .assistClick {
-                            haptics.selection()
-                            state.toggleGuide(aspect)
-                        }
-                        .padding(horizontal = 10.dp, vertical = 12.dp),
-            )
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    SettingsSwitchInlineRow("Mask outside frame", isOn = state.guideMask, showTopDivider = false, stacked = false) {
-        haptics.selection()
-        state.updateGuideMask(!state.guideMask)
-    }
+    com.opencapture.monitorui.MonitorGuidesMenu(state.guideFamily, state.selectedGuides, state.guideMask,
+        { haptics.selection(); state.updateGuideFamily(it) },
+        { haptics.selection(); state.toggleGuide(it) },
+        { haptics.selection(); state.updateGuideMask(it) }, ratioFeedback = { haptics.selection() },
+        choiceBackground = LiveDesign.glassBright)
 }
 
 @Composable
 private fun GridOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    GridAssist.optionLabels.forEachIndexed { index, label ->
-        val on = when (label) {
-            "Thirds" -> state.gridThirds
-            "Phi Grid" -> state.gridPhi
-            else -> state.gridDiagonal
-        }
-        SettingsSwitchInlineRow(label, isOn = on, showTopDivider = index > 0, stacked = false) {
-            haptics.selection()
-            when (label) {
-                "Thirds" -> state.setGridOption(thirds = !state.gridThirds)
-                "Phi Grid" -> state.setGridOption(phi = !state.gridPhi)
-                else -> state.setGridOption(diagonal = !state.gridDiagonal)
-            }
-        }
-    }
+    com.opencapture.monitorui.MonitorGridMenu(state.gridThirds, { haptics.selection(); state.setGridOption(thirds = it) },
+        state.gridPhi, { haptics.selection(); state.setGridOption(phi = it) },
+        state.gridDiagonal, { haptics.selection(); state.setGridOption(diagonal = it) })
 }
 
 /** iOS `MirrorLongPressMenu`: help copy, then Grid-style axis switches. */
 @Composable
 private fun MirrorOptions(state: LiveAssistState) {
     val haptics = LocalOperatorHaptics.current
-    OptionCopy(MirrorAssist.EXPLANATION)
-    Spacer(Modifier.height(8.dp))
-    SettingsSwitchInlineRow(
-        "Horizontal", help = MirrorAssist.HORIZONTAL_HELP, isOn = state.mirrorHorizontal,
-        showTopDivider = false, stacked = false,
-    ) {
-        haptics.selection()
-        state.setMirrorAxes(horizontal = !state.mirrorHorizontal)
-    }
-    SettingsSwitchInlineRow(
-        "Vertical", help = MirrorAssist.VERTICAL_HELP, isOn = state.mirrorVertical, stacked = false,
-    ) {
-        haptics.selection()
-        state.setMirrorAxes(vertical = !state.mirrorVertical)
-    }
+    com.opencapture.monitorui.MonitorMirrorMenu(state.mirrorHorizontal,
+        { haptics.selection(); state.setMirrorAxes(horizontal = it) }, state.mirrorVertical,
+        { haptics.selection(); state.setMirrorAxes(vertical = it) },
+        MirrorAssist.EXPLANATION, MirrorAssist.HORIZONTAL_HELP, MirrorAssist.VERTICAL_HELP)
 }
 
-@Composable
-private fun GuideToggles(guides: ScopeGuides, onChange: (ScopeGuides) -> Unit) {
-    SettingsSwitchInlineRow("Safe clip", isOn = guides.clip, showTopDivider = false, stacked = false) {
-        onChange(guides.copy(clip = !guides.clip))
-    }
-    SettingsSwitchInlineRow("Safe crush", isOn = guides.crush, stacked = false) {
-        onChange(guides.copy(crush = !guides.crush))
-    }
-    SettingsSwitchInlineRow("Middle gray", isOn = guides.middle, stacked = false) {
-        onChange(guides.copy(middle = !guides.middle))
-    }
-}
 
-@Composable
-private fun CompensationPicker(selected: CrushClipCompensation, onSelect: (CrushClipCompensation) -> Unit) {
-    SettingsCrushClipSegmented(
-        options = CrushClipCompensation.entries.map { it.label to it.compactLabel },
-        selectedLabel = selected.label,
-        accentSelection = true,
-    ) { label ->
-        CrushClipCompensation.entries.firstOrNull { it.label == label }?.let(onSelect)
-    }
-}
 
-@Composable
-private fun OptionCopy(text: String) {
-    Text(text, color = LiveDesign.muted, fontSize = 13.sp)
-}
 
 @Composable
 internal fun DesqueezeOptions(state: LiveAssistState) {
-    SettingsInlineRow("Ratio", help = AnamorphicDesqueeze.HELP, showTopDivider = false, stacked = true) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val selected = if (state.desqueezeCustom) "Custom" else state.desqueezePreset.label
-            (DesqueezePreset.entries.map { it.label } + "Custom").chunked(4).forEach { row ->
-                SettingsSegmented(row, selected) { label ->
-                    if (label == "Custom") state.selectCustomDesqueeze()
-                    else DesqueezePreset.entries.first { it.label == label }.let(state::selectDesqueezePreset)
-                }
-            }
-        }
-    }
-    if (state.desqueezeCustom) {
-        SettingsInlineRow("Custom ratio", help = "1.00×–2.00× in 0.01 increments.", stacked = true) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                androidx.compose.material3.Slider(
-                    value = state.desqueezeCustomFactor.toFloat(),
-                    onValueChange = { state.updateDesqueezeFactor(it.toDouble()) },
-                    valueRange = 1f..2f,
-                    steps = 99,
-                    modifier = Modifier.weight(1f).semantics {
-                        contentDescription = "Anamorphic desqueeze custom ratio"
-                        stateDescription = AnamorphicDesqueeze.label(state.desqueezeCustomFactor)
-                    },
-                )
-                Text(AnamorphicDesqueeze.label(state.desqueezeCustomFactor),
-                    style = LiveType.ui(12f, FontWeight.Medium), color = LiveDesign.text)
-            }
-        }
-    }
-    SettingsInlineRow("Direction", stacked = true) {
-        SettingsSegmented(DesqueezeDirection.entries.map { it.label }, state.desqueezeDirection.label) { label ->
-            state.updateDesqueezeDirection(DesqueezeDirection.entries.first { it.label == label })
-        }
-    }
+    com.opencapture.monitorui.MonitorDesqueezeMenu(state.desqueezePreset, state.desqueezeCustom,
+        state.desqueezeCustomFactor, state.desqueezeDirection, AnamorphicDesqueeze.HELP,
+        onSelect = { if (it == null) state.selectCustomDesqueeze() else state.selectDesqueezePreset(it) },
+        onFactor = state::updateDesqueezeFactor, onDirection = state::updateDesqueezeDirection)
 }

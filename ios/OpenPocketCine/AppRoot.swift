@@ -1076,6 +1076,9 @@ struct LinkExperience: View {
         } page: { cover in
             ShellCoverPage(cover: cover)
         }
+        .onChange(of: model.shell.cover) { old, next in
+            if old == .media, next != .media { model.session.endMediaBrowse() }
+        }
         .ignoresSafeArea()
         .background(StartupColors.background.ignoresSafeArea())
         .foregroundStyle(StartupColors.ink)

@@ -1,5 +1,9 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.openpocketcine.assists.scopeDisplayCeiling
+
+import com.opencapture.openpocketcine.feed.fromColorMode
+
 import com.opencapture.openpocketcine.pairing.lastSSID
 import com.opencapture.openpocketcine.pairing.modelName
 
@@ -313,6 +317,7 @@ internal object OperatorLinkHealth {
 internal object OperatorMediaCache {
     fun candidates(context: Context): List<File> =
         listOf(
+            File(context.noBackupFilesDir, "OpenPocketCine/media"),
             File(context.filesDir, "OpenPocketCine/media"),
             File(context.filesDir, "media-cache"),
             File(context.cacheDir, "media-cache"),
@@ -325,9 +330,19 @@ internal object OperatorMediaCache {
         return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
     }
 
+    /** Same canonical root object retires gallery writes before removing cache bytes. */
+    suspend fun clearOwned(root: com.opencapture.opencine.appkit.MonitorMediaCacheRoot, fallback: () -> Unit) {
+        if (!root.root.isDirectory) { fallback(); return }
+        root.root.listFiles()?.forEach { cameraDir ->
+            if (!cameraDir.isDirectory || cameraDir.name.startsWith(".retiring-") || cameraDir.name.startsWith(".clearing-")) return@forEach
+            root.directory(cameraDir.name).clear(preserving = listOf("index.json"))
+        }
+    }
+
     fun clear(context: Context) {
-        val mediaRoot = File(context.filesDir, "OpenPocketCine/media")
-        if (mediaRoot.isDirectory) {
+        val mediaRoot = listOf(File(context.noBackupFilesDir, "OpenPocketCine/media"),
+            File(context.filesDir, "OpenPocketCine/media")).firstOrNull { it.isDirectory }
+        if (mediaRoot != null) {
             mediaRoot.listFiles()?.forEach { cameraDir ->
                 if (!cameraDir.isDirectory) return@forEach
                 cameraDir.listFiles()?.forEach { child ->
@@ -544,7 +559,7 @@ fun OperatorSetupScreen(model: AppModel, onClose: () -> Unit) {
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            OperatorMediaCache.clear(context)
+                            model.clearOperatorMediaCache()
                             confirmClearCache = false
                         },
                     ) {
@@ -691,16 +706,16 @@ internal fun assistSettingsSections(assist: LiveAssistState, colorMode: Int):
             ZebraUnit.entries, assist.zebraUnit, { it.editorLabel }, assist::updateZebraUnit,
             SettingsHelpCopy.ZEBRA_UNITS, SettingsHelpCopy.ZEBRA_HIGHLIGHT, SettingsHelpCopy.ZEBRA_MIDTONE,
             com.opencapture.monitorui.MonitorZebraZone(assist.zebraHighlight,
-                ZebraEditor.displayValue(assist.zebraHighlightIRE, assist.zebraUnit, transfer, assist.scopeCeiling),
+                ZebraEditor.displayValue(assist.zebraHighlightIRE, assist.zebraUnit, transfer, assist.scopeDisplayCeiling),
                 maximum, assist.zebraHighlightColor.common(), commonColors(SettingsPalette.highlight),
                 onEnabled = { assist.setZebraHighlight(enabled = !assist.zebraHighlight) },
-                onThreshold = { assist.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer, assist.scopeCeiling)) },
+                onThreshold = { assist.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer, assist.scopeDisplayCeiling)) },
                 onPaint = { assist.setZebraHighlight(color = it.local()) }, allowsEditingWhenOff = true),
             com.opencapture.monitorui.MonitorZebraZone(assist.zebraMidtone,
-                ZebraEditor.displayValue(assist.zebraMidtoneIRE, assist.zebraUnit, transfer, assist.scopeCeiling),
+                ZebraEditor.displayValue(assist.zebraMidtoneIRE, assist.zebraUnit, transfer, assist.scopeDisplayCeiling),
                 maximum, assist.zebraMidtoneColor.common(), commonColors(SettingsPalette.midtone),
                 onEnabled = { assist.setZebraMidtone(enabled = !assist.zebraMidtone) },
-                onThreshold = { assist.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer, assist.scopeCeiling)) },
+                onThreshold = { assist.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer, assist.scopeDisplayCeiling)) },
                 onPaint = { assist.setZebraMidtone(color = it.local()) }, allowsEditingWhenOff = true),
             reset = {
                 assist.updateZebraUnit(ZebraUnit.IRE)
@@ -742,9 +757,9 @@ private fun settingsFalseColorReferenceValues(assist: LiveAssistState, colorMode
     com.opencapture.monitorui.MonitorFalseColorReferenceValues {
     val transfer = MonitorTransfer.fromColorMode(colorMode)
     val segments = com.opencapture.openpocketcine.assists.FalseColorReference.segments(
-        assist.falseColorScale, transfer, ceiling = assist.scopeCeiling)
+        assist.falseColorScale, transfer, ceiling = assist.scopeDisplayCeiling)
     val markers = if (assist.falseColorScale.usesSceneStops)
-        com.opencapture.openpocketcine.assists.FalseColorReference.sceneStopMarkers(transfer, ceiling = assist.scopeCeiling)
+        com.opencapture.openpocketcine.assists.FalseColorReference.sceneStopMarkers(transfer, ceiling = assist.scopeDisplayCeiling)
         else emptyList()
     return com.opencapture.monitorui.MonitorFalseColorReferenceValues(
         subtitle = assist.falseColorScale.menuLabel,

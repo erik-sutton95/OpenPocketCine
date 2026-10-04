@@ -1,9 +1,10 @@
 import MonitorUI
+import OpenCineAppKit
 import OpenCineFrameIO
 import OpenPocketViewCore
 import SwiftUI
 
-struct MediaDeliveryOverlayState: Equatable {
+struct MediaDeliveryOverlayState: Equatable, Sendable {
     let destination: MediaDeliveryDestination
     let totalClips: Int
     var clipIndex: Int
@@ -53,86 +54,101 @@ struct MediaDeliveryOverlayState: Equatable {
 @MainActor
 @Observable
 final class MediaDeliveryCoordinator {
-    private(set) var overlayState: MediaDeliveryOverlayState?
-    var sharePayload: MediaSharePayload?
-    private(set) var completionToast: String?
-    private var deliveryTask: Task<Void, Never>?
-    private var cancelHandler: (() -> Void)?
-    private var activeDeliveryToken = UUID()
+    private let lifetime:
+        MonitorDeliveryModel<
+            MediaDeliveryOverlayState, MediaDeliveryRunOutcome, MediaDeliveryShareResources
+        >
+    private let execute:
+        @MainActor (
+            MediaDeliveryBeginRequest, AppModel,
+            @escaping @MainActor (MediaDeliveryOverlayState) -> Void
+        ) async -> MediaDeliveryRunOutcome
 
-    var isActive: Bool { overlayState != nil }
+    init(
+        sleep: @escaping @MainActor (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        },
+        execute:
+            @escaping @MainActor (
+                MediaDeliveryBeginRequest, AppModel,
+                @escaping @MainActor (MediaDeliveryOverlayState) -> Void
+            ) async -> MediaDeliveryRunOutcome = { request, model, progress in
+                await MediaDeliveryRunner.execute(
+                    request: request, model: model, onProgress: progress)
+            }
+    ) {
+        self.execute = execute
+        lifetime = .init(
+            sleep: sleep,
+            releaseShare: { resources in
+                // Only an explicitly returned staging lease is disposable. Originals stay cached.
+                if let root = resources.cleanupURL { try? FileManager.default.removeItem(at: root) }
+            })
+    }
+
+    var overlayState: MediaDeliveryOverlayState? { lifetime.state.progress }
+    var completionToast: String? { lifetime.state.toast }
+    var isActive: Bool { lifetime.state.running }
+    var sharePayload: MediaSharePayload? {
+        lifetime.state.share.map { .init(id: $0.id, urls: $0.payload.urls) }
+    }
+
+    /// SwiftUI's delayed nil setter belongs to the sheet lease captured when built.
+    var sharePresentation: Binding<MediaSharePayload?> {
+        let presentedID = sharePayload?.id
+        return Binding(
+            get: { self.sharePayload },
+            set: { value in
+                if value == nil, let presentedID {
+                    self.clearSharePresentation(id: presentedID)
+                }
+            })
+    }
 
     func begin(
-        _ request: MediaDeliveryBeginRequest,
-        model: AppModel,
+        _ request: MediaDeliveryBeginRequest, model: AppModel,
         onCancel: (() -> Void)? = nil,
         onComplete: ((MediaDeliveryRunOutcome) -> Void)? = nil
     ) {
-        deliveryTask?.cancel()
-        let token = UUID()
-        activeDeliveryToken = token
-        cancelHandler = onCancel
-        deliveryTask = Task { @MainActor in
-            let outcome = await MediaDeliveryRunner.execute(
-                request: request, model: model
-            ) { [weak self] state in
-                guard let self, self.activeDeliveryToken == token else { return }
-                self.overlayState = state
+        let completed: (MediaDeliveryRunOutcome) -> String? = { outcome in
+            onComplete?(outcome)
+            return nil
+        }
+        lifetime.begin(onCancel: onCancel, onComplete: completed) { progress in
+            let outcome = await self.execute(request, model, progress)
+            switch outcome {
+            case .share(let urls, _, let cleanup):
+                return .init(outcome, share: .init(urls: urls, cleanupURL: cleanup))
+            case .savedToPhotos(let count):
+                return .init(
+                    outcome, toast: "Saved \(count) clip\(count == 1 ? "" : "s") to Photos")
+            case .frameio(let summary): return .init(outcome, toast: summary)
+            case .failed(let message): return .init(outcome, toast: message)
             }
-            guard activeDeliveryToken == token else { return }
-            finish(token: token, outcome: outcome, onComplete: onComplete)
         }
     }
 
-    func cancel() {
-        activeDeliveryToken = UUID()
-        deliveryTask?.cancel()
-        deliveryTask = nil
-        cancelHandler?()
-        cancelHandler = nil
-        overlayState = nil
-    }
+    func cancel() { lifetime.cancel() }
+    func close() { lifetime.close() }
 
-    private func finish(
-        token: UUID,
-        outcome: MediaDeliveryRunOutcome,
-        onComplete: ((MediaDeliveryRunOutcome) -> Void)?
-    ) {
-        guard activeDeliveryToken == token else { return }
-        deliveryTask = nil
-        overlayState = nil
-        cancelHandler = nil
-        onComplete?(outcome)
-        switch outcome {
-        case .share(let urls, _, _):
-            sharePayload = MediaSharePayload(urls: urls)
-        case .savedToPhotos(let count):
-            showToast("Saved \(count) clip\(count == 1 ? "" : "s") to Photos")
-        case .frameio(let summary):
-            showToast(summary)
-        case .failed(let message):
-            showToast(message)
-        }
-    }
+    func clearSharePresentation(id: UUID? = nil) { lifetime.clearSharePresentation(id: id) }
 
-    func clearSharePresentation() {
-        sharePayload = nil
-    }
-
-    private func showToast(_ message: String) {
-        completionToast = message
-        Task {
-            try? await Task.sleep(for: .seconds(2.5))
-            if completionToast == message { completionToast = nil }
-        }
+    /// A matching UIKit completion acknowledges dismissal once, even if SwiftUI cleared first.
+    @discardableResult
+    func completeSharePresentation(id: UUID) -> Bool {
+        lifetime.completeSharePresentation(id: id)
     }
 }
 
-struct MediaSharePayload: Identifiable {
-    let id = UUID()
+private struct MediaDeliveryShareResources: Sendable {
+    let urls: [URL]
+    let cleanupURL: URL?
+}
+
+struct MediaSharePayload: Identifiable, Sendable {
+    let id: UUID
     let urls: [URL]
 }
-
 struct MediaDeliveryOverlay: View {
     let state: MediaDeliveryOverlayState
     var onCancel: () -> Void

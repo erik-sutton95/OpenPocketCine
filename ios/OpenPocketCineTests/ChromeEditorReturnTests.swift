@@ -193,6 +193,7 @@ final class ChromeEditorReturnTests: XCTestCase {
         XCTAssertGreaterThan(badge.midX, lock.midX)
     }
 
+    @MainActor
     func testCleanViewPinsFilterWithoutMutatingOnOff() {
         let assist = LiveAssistState()
         assist.histogram = true
@@ -213,6 +214,7 @@ final class ChromeEditorReturnTests: XCTestCase {
         XCTAssertFalse(assist.effects.histogram)
     }
 
+    @MainActor
     func testCleanViewPinCannotResurrectASwitchedOffTool() {
         let assist = LiveAssistState()
         assist.waveform = false

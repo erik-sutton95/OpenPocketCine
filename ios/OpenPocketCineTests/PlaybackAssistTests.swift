@@ -170,6 +170,7 @@ final class PlaybackAssistTests: XCTestCase {
         super.tearDown()
     }
 
+    @MainActor
     func testPlaybackEffectsCarryMonitorColorMode() {
         let assist = LiveAssistState()
         assist.syncLUT(to: .dLog2)
@@ -180,6 +181,7 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertFalse(assist.playbackEffects.replacesIdentityFeed)
     }
 
+    @MainActor
     func testPlaybackPeakingAndFalseColorStayOverlays() {
         let assist = LiveAssistState()
         assist.togglePlayback(.peaking)
@@ -193,6 +195,7 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertFalse(assist.playbackEffects.replacesIdentityFeed)
     }
 
+    @MainActor
     func testPlaybackLUTReplacesIdentityOnceACubeIsArmed() {
         let assist = LiveAssistState()
         assist.syncLUT(to: .dLog2)

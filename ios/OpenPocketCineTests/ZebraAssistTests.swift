@@ -208,12 +208,14 @@ final class ZebraAssistTests: XCTestCase {
             "a channel at the live-tap ceiling is clip; luma under it must not hide it")
     }
 
+    @MainActor
     func testFreshAssistUsesDefaultZebraOptions() {
         let assist = LiveAssistState()
         XCTAssertEqual(assist.zebraOptions, ZebraAssist.Options.default)
         XCTAssertEqual(ZebraAssist.Options.default.highlightIRE, LiveZebra.highlightIRE)
     }
 
+    @MainActor
     func testZoneTogglesAndColorsRoundTrip() {
         let assist = LiveAssistState()
         var options = assist.zebraOptions
@@ -242,6 +244,7 @@ final class ZebraAssistTests: XCTestCase {
         XCTAssertEqual(assist.effects.zebraOptions.unit, .ire)
     }
 
+    @MainActor
     func testUnitPersistsBesideAssistSnapshot() {
         ZebraAssist.persistedUnit = .ire
         XCTAssertEqual(ZebraAssist.persistedUnit, .ire)

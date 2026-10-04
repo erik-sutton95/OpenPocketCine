@@ -153,7 +153,7 @@ class ScopeGeometryTest {
         val b = frame(2)
         val c = frame(3)
         val intensity = WaveformAssist.intensity(100)
-        val layers = ScopeTraceRaster.TraceLayers()
+        val layers = com.opencapture.monitorui.MonitorScopeTraceRaster.TraceLayers()
         for (mode in WaveformMode.entries) {
             layers.waveformArgb(a, emptyList(), table, mode, intensity)
             // b's trail is a's samples: the retained live layer stands in for a re-splat.

@@ -25,7 +25,7 @@ class MonitorBackdropFeedTest {
         instrumentation.runOnMainSync { feed.attach(next) }
         assertNull(feed.acquire(next, 1_000_000_000))
         feed.submit(stale, frame(255, 0, 0), FeedEffectsRenderPlan.IDENTITY)
-        var ticket: BackdropFrameAdmission.Ticket? = null
+        var ticket: com.opencapture.opencine.runtime.BackdropFrameAdmission.Ticket? = null
         await { ticket = feed.acquire(next, 1_000_000_000); ticket != null }
         feed.submit(checkNotNull(ticket), frame(0, 255, 0), FeedEffectsRenderPlan.IDENTITY)
         await { feed.source.image != null }

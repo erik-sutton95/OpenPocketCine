@@ -3,8 +3,6 @@
 package com.opencapture.openpocketcine.media
 
 import android.graphics.SurfaceTexture
-import android.os.Handler
-import android.os.Looper
 import android.view.TextureView
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.opencapture.monitorui.monitorBackdropSource
@@ -15,42 +13,50 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.exoplayer.ExoPlayer
+import com.opencapture.opencine.media.MonitorPlaybackItemToken
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 
 /**
  * Playback present path: ExoPlayer writes an OES surface, GLES grades LUT /
  * FALSE / PEAK / ZEBRA, TextureView is only the EGL window. Same order as live
- * `LiveFeedPresenter` — toggling a look does not swap the decoder surface.
+ * `LiveFeedPresenter` - toggling a look does not swap the decoder surface.
  */
 @Composable
 internal fun PlaybackFeedView(
-    player: ExoPlayer,
+    native: Media3PlaybackPort,
+    scopeBus: com.opencapture.opencine.runtime.ScopeSampleBus,
+    preview: com.opencapture.opencine.runtime.InspectorPreviewPipeline,
     backdrop: MonitorBackdropFeed,
     plan: FeedEffectsRenderPlan,
     mirrored: Boolean,
     flippedVertically: Boolean,
-    zoom: AnchoredPinchZoom,
+    zoom: com.opencapture.monitorui.MonitorPlaybackZoom,
     sourceWidth: Int,
     sourceHeight: Int,
-    sourceIdentity: String,
+    sourceIdentity: MonitorPlaybackItemToken,
     sourceReady: Boolean,
+    sourceAdmission: (MonitorPlaybackItemToken) -> Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val main = remember { Handler(Looper.getMainLooper()) }
+    val pictureOwner = remember(native, sourceIdentity) { native.claimPicture() }
     val session =
-        remember {
+        remember(native, pictureOwner) {
             LiveFeedEffectsSession(
                 context = context,
+                scopeBus = scopeBus,
+                preview = preview,
                 backdrop = backdrop,
                 onDecoderSurface = { surface ->
-                    main.post { player.setVideoSurface(surface) }
+                    // The shared runtime already delivers on Main and refuses its retired
+                    // generation. Keep native ownership here instead of posting it a second time.
+                    native.attachPicture(surface, pictureOwner)
                 },
                 onGpuFailed = { },
                 letterboxSource = false,
@@ -58,17 +64,19 @@ internal fun PlaybackFeedView(
                 playback = true,
             )
         }
-    DisposableEffect(session, player) {
-        onDispose {
-            session.detachDisplay()
-            main.post { player.clearVideoSurface() }
-        }
+    // Configure the actual existing runtime source synchronously, before queued SDK surfaces.
+    session.setSourceAdmission { identity ->
+        (identity as? MonitorPlaybackItemToken)?.let(sourceAdmission) == true
     }
-    LaunchedEffect(sourceIdentity, sourceReady) {
-        session.configurePreviewSource(sourceIdentity, sourceReady)
+    session.configurePreviewSource(sourceIdentity, sourceReady)
+    DisposableEffect(session, native) {
+        native.bindPicture(pictureOwner,
+            retire = session::close,
+            close = session::close)
+        onDispose { session.close(); native.releasePicture(pictureOwner) }
     }
-    LaunchedEffect(plan) { session.updatePlan(plan) }
-    LaunchedEffect(sourceWidth, sourceHeight) {
+    LaunchedEffect(session, plan) { session.updatePlan(plan) }
+    LaunchedEffect(session, sourceWidth, sourceHeight) {
         session.setSourceSize(sourceWidth.coerceAtLeast(16), sourceHeight.coerceAtLeast(16))
     }
     BoxWithConstraints(modifier) {
@@ -88,6 +96,8 @@ internal fun PlaybackFeedView(
             translationY = zoom.offsetY
         },
     ) {
+        // A new actual decoder Surface cannot contain pixels queued for the departing item.
+        key(session) {
         AndroidView(
             factory = { viewContext ->
                 TextureView(viewContext).apply {
@@ -98,6 +108,7 @@ internal fun PlaybackFeedView(
             },
             modifier = Modifier.fillMaxSize(),
         )
+        }
     }
     }
 }

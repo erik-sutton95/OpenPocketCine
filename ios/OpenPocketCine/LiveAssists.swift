@@ -1,35 +1,15 @@
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineMedia
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
 /// Cinema live-monitor set. MAG is retired; PLAY stays off the video toolbar.
-enum LiveAssistTool: String, CaseIterable, Identifiable {
-    case lut = "LUT"
-    case peaking = "PEAK"
-    case falseColor = "FALSE"
-    case zebra = "ZEBRA"
-    case waveform = "WAVE"
-    case parade = "PARADE"
-    case histogram = "HISTO"
-    case vectorscope = "VECTOR"
-    case trafficLights = "LIGHTS"
-    case ndMeter = "ND"
-    case evMeter = "EV"
-    case audioMeters = "AUDIO"
-    case guides = "GUIDES"
-    case grid = "GRID"
-    case crosshair = "CROSS"
-    case level = "LEVEL"
-    case desqueeze = "DE-SQ"
-    case mirror = "MIRROR"
-    case instantReview = "PLAY"
-    case magnification = "MAG"
+typealias LiveAssistTool = MonitorAssistSelection
 
-    var id: String { rawValue }
-
+extension MonitorAssistSelection {
     var isRetired: Bool { self == .magnification }
     var isPhotographyOnly: Bool { self == .instantReview }
 
@@ -56,7 +36,7 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
 
     static var toolbarCases: [LiveAssistTool] { toolbarGroups.flatMap { $0 } }
 
-    /// View Assist settings list \u{2014} same cinema set as the bar, plus AUDIO.
+    /// View Assist settings list - same cinema set as the bar, plus AUDIO.
     static var settingsCases: [LiveAssistTool] {
         toolbarCases + [.audioMeters]
     }
@@ -65,246 +45,54 @@ enum LiveAssistTool: String, CaseIterable, Identifiable {
     static var cleanPinCases: [LiveAssistTool] { settingsCases.filter { $0 != .evMeter } }
 
     /// Compact label for the Display ▸ DISP 2 pin grid.
-    var displaySettingsTitle: String {
-        switch self {
-        case .parade: "Parade"
-        case .ndMeter: "ND"
-        case .audioMeters: "Audio Levels"
-        default: title
-        }
-    }
+    var displaySettingsTitle: String { sharedTool?.displaySettingsTitle ?? title }
 
-    var hasConfiguration: Bool {
-        switch self {
-        // Audio options affect presentation only.
-        case .instantReview, .magnification, .level, .evMeter:
-            false
-        default: true
-        }
-    }
+    var hasConfiguration: Bool { sharedTool?.hasConfiguration ?? false }
 
     /// The approved prototype owns these tool glyphs; app-only tools retain
     /// Lucide fallbacks without inventing a new visual language.
-    var monitorIcon: MonitorAssistIcon? {
-        switch self {
-        case .lut: .lut
-        case .peaking: .peaking
-        case .falseColor: .falseColor
-        case .zebra: .zebra
-        case .waveform: .waveform
-        case .parade: .rgbParade
-        case .histogram: .histogram
-        case .vectorscope: .vectorscope
-        case .trafficLights: .trafficLights
-        case .guides: .frameGuide
-        case .grid: .grid
-        case .crosshair: .crosshair
-        case .mirror: .mirror
-        case .audioMeters: .audioMeters
-        case .level: .level
-        default: nil
-        }
-    }
+    var monitorIcon: MonitorAssistIcon? { sharedTool?.monitorIcon }
 
     /// Existing app-only assist glyphs use the shared Lucide catalog.
     var opcIcon: OpcIcon? {
-        switch self {
-        case .lut: .blend
-        case .peaking: .mountain
-        case .falseColor: .contrast
-        case .zebra: nil
-        case .waveform: .audioWaveform
-        case .parade: .chartColumn
-        case .histogram: .audioLines
-        case .vectorscope: .crosshair
-        case .trafficLights: .sun
-        case .ndMeter: .aperture
-        case .evMeter: nil
-        case .audioMeters: .slidersVertical
-        case .guides: .squareDashed
-        case .grid: .grid3x3
-        case .crosshair: .plus
-        case .level: .circle
-        case .desqueeze: .chevronsUpDown
-        case .mirror: .flipHorizontal2
-        case .magnification: .zoomIn
-        case .instantReview: .image
-        }
+        sharedTool?.fallbackIcon
+            ?? (self == .instantReview ? .image : self == .magnification ? .zoomIn : nil)
     }
 
     var title: String {
-        switch self {
-        case .lut: "LUT"
-        case .peaking: "Peaking"
-        case .falseColor: "False Color"
-        case .zebra: "Zebra"
-        case .waveform: "Waveform"
-        case .parade: "RGB Parade"
-        case .histogram: "Histogram"
-        case .vectorscope: "Vectorscope"
-        case .trafficLights: "Traffic Lights"
-        case .ndMeter: "ND Suggestion"
-        case .evMeter: "EV Meter"
-        case .audioMeters: "Audio Levels"
-        case .guides: "Guides"
-        case .grid: "Grid"
-        case .crosshair: "Crosshair"
-        case .level: "Level"
-        case .desqueeze: "Anamorphic Desqueeze"
-        case .mirror: "Mirror"
-        case .magnification: "Magnify"
-        case .instantReview: "Instant Playback"
-        }
+        sharedTool?.title ?? (self == .instantReview ? "Instant Playback" : "Magnify")
     }
 }
 
-enum GuideFamily: String, CaseIterable, Codable, Identifiable {
-    case film = "Film"
-    case social = "Social"
-    var id: String { rawValue }
-}
+typealias GuideFamily = MonitorGuideFamily
 
-enum GuideAspect: String, CaseIterable, Identifiable, Codable {
-    case cinema276 = "2.76:1"
-    case cinema = "2.39:1"
-    case cinema235 = "2.35:1"
-    case twoK = "2.00:1"
-    case wide = "1.85:1"
-    case hd = "16:9"
-    case euro = "1.66:1"
-    case imax = "1.43:1"
-    case academy = "4:3"
-    case vertical = "9:16"
-    case social = "4:5"
-    case square = "1:1"
-    case portrait = "2:3"
-    case feed = "1.91:1"
+typealias GuideAspect = MonitorGuideAspect
 
-    var id: String { rawValue }
-
-    var ratio: CGFloat {
-        let parts = rawValue.split(separator: ":").compactMap { Double($0) }
-        guard parts.count == 2, parts[1] > 0 else { return 1 }
-        return CGFloat(parts[0] / parts[1])
-    }
-
-    static func ratios(for family: GuideFamily) -> [GuideAspect] {
-        switch family {
-        case .film: [.cinema276, .cinema, .cinema235, .twoK, .wide, .hd, .euro, .imax, .academy]
-        case .social: [.vertical, .social, .square, .portrait, .hd, .feed]
-        }
-    }
-}
-
-@Observable
-final class LiveAssistState {
-    var peaking = false
-    var zebra = false
-    var falseColor = false
-    var histogram = false
-    var waveform = false
-    var parade = false
-    var vectorscope = false
-    var trafficLights = false
-    var ndMeter = false
-    var evMeter = false
-    var audioMeters = false
-    var grid = false
-    var crosshair = false
-    var guides = false
-    var level = false
-    var desqueeze = false
-    var mirror = false
-    /// MIRROR axes. Tap toggles the tool; the options pick which axes it flips.
-    var mirrorHorizontal = true
-    var mirrorVertical = false
-    var instantReview = false
-    var guideAspect: GuideAspect = .cinema
-    var guideFamily: GuideFamily = .film
-    var selectedGuides: Set<GuideAspect> = [.cinema]
-    var guideMask = false
-    var gridThirds = true
-    var gridPhi = false
-    var gridDiagonal = false
-    var peakingColor: PeakingPaint = .red
-    var peakingSensitivity: PeakingSense = .medium
-    var falseColorScale: FalseColorScaleKind = .sceneStops
-    var falseColorReference = true
-    /// Video / IRE read log through the official Rec.709 look (709) or the signal (LOG).
-    /// Per assist state: renderers read it from the effects, never from a global.
-    var falseColorRec709 = false
-    var zebraHighlight = true
-    var zebraMidtone = true
-    var zebraHighlightIRE: Double = LiveZebra.highlightIRE
-    var zebraMidtoneIRE: Double = LiveZebra.midtoneIRE
-    var zebraHighlightColor: ZebraPaint = .white
-    var zebraMidtoneColor: ZebraPaint = .amber
-    var desqueezeFactor: Double = 1.33
-    var desqueezeHorizontal = true
-    var desqueezeCustom = false
-    var desqueezeCustomFactor: Double = 1.33
-    var splitComparison = false
-    var splitVertical = true
-    /// Input-referred LUT stops (−3…+3, half-stop). 0 is the cube as shipped.
-    var lutExposureStops: Double = 0
-    /// DISP 2. Chrome follows `PocketDispChrome`; assists follow `cleanViewPinnedTools`.
-    var clean = false
-    /// View-assist tools that stay on the picture in DISP 2. Filter only \u{2014} never mutates `isOn`.
-    var cleanViewPinnedTools: Set<LiveAssistTool> = LiveAssistState.cleanViewDefaultPinnedTools
-    /// OpenZCine `playbackVisibleAssistTools` \u{2014} independent of the live toolbar.
-    var playbackVisibleTools: Set<LiveAssistTool> = []
-    var showLUTPicker = false
-    var configureTool: LiveAssistTool? {
-        didSet { if configureTool != .lut { inspectorLUTCache = nil } }
-    }
-    /// Icon (or toolbar) frame in `LiveCanvasSpace` for the long-press options popup.
-    var longPressAnchor: CGRect = .zero
-    /// OpenZCine `scopes.crushClipCompensation` \u{2014} shared by HISTO edge lights and LIGHTS.
-    var crushClipCompensation = TrafficLightsAssist.defaultCompensation
-    var trafficLightsScale = TrafficLightsAssist.defaultScale
-    var trafficLightsPosition: TrafficLightsAssist.StoredCenter?
-    /// First-launch default is on \u{2014} DJI Auto applies the matching official cube.
-    var lutEnabled = true
+/// Catalog and camera source interpretation belong to the app; shared state receives media values.
+@MainActor @Observable
+final class AppMonitorLooks: MonitorLookProvider {
+    // Shared initialization may read the provider, but native lookup waits for app prefs.
+    var preparationReady = false
     var lutSelection: LUTSelection = .djiAuto
     var monitorColorMode: ColorMode?
     var monitorFamily: CameraBodyFamily = .pocket
     var monitorCameraName: String?
-    /// Media player is grading a clip (connected or not). LUT sheet must not
-    /// restamp Auto from the live SET \u{2014} disconnected has no `inPlayback` flag.
-    var gradesClip = false
-    /// Live Photo / Photo. Not persisted. Playback clears this so clip color wins.
     var liveIsPhoto = false
-    /// Inspector-only sampling follows the active scene and its visible source.
-    /// Picture effects keep their existing lifetime beneath operator pages.
-    var inspectorSceneActive = true
-    /// Settings or Media covers the live page. Scope taps and rasters have no
-    /// viewer there; looks, Face AF, Watch and relay keep their demand, and the
-    /// shared VT decoder stays up, so reveal needs no enable.
-    var liveCovered = false
-
-    private func showsScopes(_ tool: LiveAssistTool) -> Bool {
-        !liveCovered && isVisible(tool)
+    var referenceClipByte: Int {
+        OpenCineDJI.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
     }
-
-    @ObservationIgnored private var lutCube: CubeLUT?
-    @ObservationIgnored private var lutDimension = 0
-    @ObservationIgnored private var lutRGBA = Data()
-    @ObservationIgnored private var lastSaved: Data?
-    @ObservationIgnored private var inspectorLUTCache: InspectorLUTCache?
-
-    var lutArmed: Bool { lutEnabled }
-
-    var lutStatusLabel: String {
-        if liveIsPhoto, lutEnabled, lutSelection == .auto || lutSelection == .djiAuto {
+    func lutExposureTransfer(for transfer: MonitorTransfer) -> MonitorTransfer {
+        transfer.lutExposureTransfer
+    }
+    var selection: LUTSelection { lutSelection }
+    var transfer: MonitorTransfer { MonitorTransfer(monitorColorMode ?? .normal) }
+    func statusLabel(enabled: Bool) -> String {
+        if liveIsPhoto, enabled, lutSelection == .auto || lutSelection == .djiAuto {
             return "Auto · Rec.709"
         }
         return LUTResolver.statusLabel(
-            enabled: lutEnabled,
-            selection: lutSelection,
-            source: resolvedSource()
-        )
+            enabled: enabled, selection: lutSelection, source: resolvedSource())
     }
-
     func resolvedSource() -> LUTSource {
         LiveLUTResolver.resolve(
             selection: lutSelection,
@@ -319,216 +107,89 @@ final class LiveAssistState {
         )
     }
 
-    /// WAVE / PARADE / VECTOR / LIGHTS share one source-frame sample in `HevcDecoder`.
-    /// Flags are what the monitor *shows* \u{2014} DISP 2 applies the pin filter here.
-    var effects: LiveImageEffects {
-        LiveImageEffects(
-            peaking: isVisible(.peaking),
-            zebra: isVisible(.zebra),
-            falseColor: isVisible(.falseColor),
-            histogram: showsScopes(.histogram),
-            waveform: showsScopes(.waveform),
-            parade: showsScopes(.parade),
-            vectorscope: showsScopes(.vectorscope),
-            trafficLights: showsScopes(.trafficLights),
-            ndMeter: showsScopes(.ndMeter),
-            lutDimension: isVisible(.lut) ? lutDimension : 0,
-            lutRGBA: isVisible(.lut) ? lutRGBA : Data(),
-            peakingColor: peakingColor,
-            peakingSensitivity: peakingSensitivity,
-            falseColorScale: falseColorScale,
-            falseColorRec709: falseColorRec709,
-            zebraHighlight: zebraHighlight,
-            zebraMidtone: zebraMidtone,
-            zebraHighlightIRE: zebraHighlightIRE,
-            zebraMidtoneIRE: zebraMidtoneIRE,
-            zebraHighlightColor: zebraHighlightColor,
-            zebraMidtoneColor: zebraMidtoneColor,
-            colorMode: monitorColorMode ?? .normal,
-            allowsTransferInference: !liveIsPhoto,
-            splitComparison: splitComparison && isVisible(.lut),
-            splitVertical: splitVertical,
-            mirror: mirrorsHorizontally,
-            mirrorVertical: flipsVertically,
-            desqueezeFactor: isVisible(.desqueeze) ? desqueezeFactor : 1,
-            desqueezeHorizontal: desqueezeHorizontal,
-            trafficThreshold: crushClipCompensation.pixelFractionThreshold
-        )
-        .withInspectorDemand(inspectorSceneActive && !gradesClip ? configureTool : nil)
+    var cube: CubeLUT? {
+        guard preparationReady else { return nil }
+        switch resolvedSource() {
+        case .official(let id):
+            return BundledPocketLUT.cube(id)
+        case .dji(let id):
+            return BundledOfficialDJILUT.cube(id)
+        case .creative(let look):
+            return look.cube()
+        case .custom(let slot):
+            return CustomLUTStore.cube(slot)
+        case .file(let name):
+            return CustomLUTStore.cube(fileName: name)
+        case .off:
+            return nil
+        }
     }
 
-    /// Same graph as live, gated by playback-visible tools (OpenZCine `playbackImageEffects`).
-    var playbackEffects: LiveImageEffects {
-        var fx = effects
-        fx.allowsTransferInference = true
-        fx.inspectorSample = false
-        fx.peaking = isPlaybackVisible(.peaking)
-        fx.zebra = isPlaybackVisible(.zebra)
-        fx.falseColor = isPlaybackVisible(.falseColor)
-        fx.histogram = isPlaybackVisible(.histogram)
-        fx.waveform = isPlaybackVisible(.waveform)
-        fx.parade = isPlaybackVisible(.parade)
-        fx.vectorscope = isPlaybackVisible(.vectorscope)
-        fx.trafficLights = isPlaybackVisible(.trafficLights)
-        fx.ndMeter = isPlaybackVisible(.ndMeter)
-        fx.lutDimension = isPlaybackVisible(.lut) ? lutDimension : 0
-        fx.lutRGBA = isPlaybackVisible(.lut) ? lutRGBA : Data()
-        fx.splitComparison = splitComparison && isPlaybackVisible(.lut)
-        fx.mirror = isPlaybackVisible(.mirror) && mirrorHorizontal
-        fx.mirrorVertical = isPlaybackVisible(.mirror) && mirrorVertical
-        fx.desqueezeFactor = isPlaybackVisible(.desqueeze) ? desqueezeFactor : 1
-        return fx.withInspectorDemand(inspectorSceneActive && gradesClip ? configureTool : nil)
-    }
+}
 
-    init() {
+typealias LiveAssistState = MonitorAssistState<AppMonitorLooks>
+
+extension MonitorAssistState where Looks == AppMonitorLooks {
+    convenience init() {
+        weak var state: LiveAssistState?
+        self.init(
+            looks: AppMonitorLooks(), storage: .standard,
+            keys: .init(
+                assist: "OpenPocketCine.Assist.v1", cleanPins: "OpenPocketCine.CleanViewPins.v1",
+                playback: "OpenPocketCine.PlaybackAssists.v1"),
+            cleanPinCases: LiveAssistTool.cleanPinCases,
+            onToggle: { tool, enabled in
+                guard tool == .falseColor, enabled, let state else { return }
+                PocketFalseColorMap.warm(
+                    scale: state.falseColorScale,
+                    mode: state.monitorColorMode ?? .normal, rec709: state.falseColorRec709,
+                    clipByte: nil, hasLUT: state.lutEnabled && state.hasPreparedLUT)
+            })
+        state = self
         OperatorPrefs.load(into: self)
         cleanViewPinnedTools = OperatorPrefs.cleanViewPinnedTools
         playbackVisibleTools = OperatorPrefs.playbackVisibleAssistTools
-        if monitorColorMode == nil {
-            monitorColorMode = OperatorPrefs.lastMonitorColorMode
-        }
+        if monitorColorMode == nil { monitorColorMode = OperatorPrefs.lastMonitorColorMode }
+        looks.preparationReady = true
         if lutEnabled { refreshLUTCube() }
-        lastSaved = OperatorPrefs.encoded(self)
     }
-
-    /// Picture corrections stay visible in DISP 2 unless the operator unpins them.
-    static let cleanViewDefaultPinnedTools: Set<LiveAssistTool> = [
-        .lut, .peaking, .desqueeze, .mirror,
-    ]
-
-    func isOn(_ tool: LiveAssistTool) -> Bool {
-        switch tool {
-        case .lut: lutArmed
-        case .peaking: peaking
-        case .zebra: zebra
-        case .falseColor: falseColor
-        case .waveform: waveform
-        case .parade: parade
-        case .histogram: histogram
-        case .vectorscope: vectorscope
-        case .trafficLights: trafficLights
-        case .ndMeter: ndMeter
-        case .evMeter: evMeter
-        case .audioMeters: audioMeters
-        case .guides: guides
-        case .grid: grid
-        case .crosshair: crosshair
-        case .level: level
-        case .desqueeze: desqueeze
-        case .mirror: mirror
-        case .instantReview: instantReview
-        case .magnification: false
+    var lutSelection: LUTSelection {
+        get { looks.lutSelection }
+        set { looks.lutSelection = newValue }
+    }
+    var monitorColorMode: ColorMode? {
+        get { looks.monitorColorMode }
+        set { looks.monitorColorMode = newValue }
+    }
+    var monitorFamily: CameraBodyFamily {
+        get { looks.monitorFamily }
+        set { looks.monitorFamily = newValue }
+    }
+    var monitorCameraName: String? {
+        get { looks.monitorCameraName }
+        set { looks.monitorCameraName = newValue }
+    }
+    var liveIsPhoto: Bool {
+        get { looks.liveIsPhoto }
+        set { looks.liveIsPhoto = newValue; allowsTransferInference = !newValue }
+    }
+    var lutStatusLabel: String { looks.statusLabel(enabled: lutEnabled) }
+    func resolvedSource() -> LUTSource { looks.resolvedSource() }
+    var longPressAnchor: CGRect {
+        get {
+            CGRect(
+                x: longPressAnchorRect.x, y: longPressAnchorRect.y,
+                width: longPressAnchorRect.width, height: longPressAnchorRect.height)
         }
+        set { longPressAnchorRect = MonitorRect(newValue) }
     }
-
-    /// OpenZCine `MonitorChromePolicy.isToolVisible`. Pins filter DISP 2; they never flip `isOn`.
-    func isVisible(_ tool: LiveAssistTool) -> Bool {
-        guard isOn(tool) else { return false }
-        if clean { return tool != .evMeter && cleanViewPinnedTools.contains(tool) }
-        return true
-    }
-
-    /// Live picture flips as shown. The tool on with an axis off leaves that axis alone.
-    var mirrorsHorizontally: Bool { isVisible(.mirror) && mirrorHorizontal }
-    var flipsVertically: Bool { isVisible(.mirror) && mirrorVertical }
-
-    func toggleCleanViewPin(_ tool: LiveAssistTool) {
-        guard LiveAssistTool.cleanPinCases.contains(tool) else { return }
-        var pins = cleanViewPinnedTools
-        if pins.contains(tool) {
-            pins.remove(tool)
-        } else {
-            pins.insert(tool)
-        }
-        cleanViewPinnedTools = pins
-        OperatorPrefs.cleanViewPinnedTools = pins
-    }
-
-    func isPlaybackVisible(_ tool: LiveAssistTool) -> Bool {
-        tool != .evMeter && playbackVisibleTools.contains(tool)
-    }
-
-    func togglePlayback(_ tool: LiveAssistTool) {
-        guard tool != .evMeter else { return }
-        if playbackVisibleTools.contains(tool) {
-            playbackVisibleTools.remove(tool)
-        } else {
-            playbackVisibleTools.insert(tool)
-        }
-        OperatorPrefs.playbackVisibleAssistTools = playbackVisibleTools
-        if tool == .falseColor, isPlaybackVisible(.falseColor) {
-            PocketFalseColorMap.warm(
-                scale: falseColorScale,
-                mode: monitorColorMode ?? .normal,
-                rec709: falseColorRec709, clipByte: nil,
-                hasLUT: lutEnabled && lutDimension >= 2)
-        }
-    }
-
-    func toggle(_ tool: LiveAssistTool) {
-        switch tool {
-        case .lut:
-            if lutEnabled {
-                lutEnabled = false
-                refreshLUTCube()
-            } else {
-                armLastLUT()
-            }
-        case .peaking: peaking.toggle()
-        case .zebra: zebra.toggle()
-        case .falseColor:
-            falseColor.toggle()
-            if falseColor {
-                PocketFalseColorMap.warm(
-                    scale: falseColorScale,
-                    mode: monitorColorMode ?? .normal,
-                    rec709: falseColorRec709, clipByte: nil,
-                    hasLUT: lutEnabled && lutDimension >= 2)
-            }
-        case .waveform: waveform.toggle()
-        case .parade: parade.toggle()
-        case .histogram: histogram.toggle()
-        case .vectorscope: vectorscope.toggle()
-        case .trafficLights: trafficLights.toggle()
-        case .ndMeter: ndMeter.toggle()
-        case .evMeter: evMeter.toggle()
-        case .audioMeters: audioMeters.toggle()
-        case .guides:
-            guides.toggle()
-            if guides, selectedGuides.isEmpty { selectedGuides = [guideAspect] }
-        case .grid: grid.toggle()
-        case .crosshair: crosshair.toggle()
-        case .level: level.toggle()
-        case .desqueeze: desqueeze.toggle()
-        case .mirror: mirror.toggle()
-        case .instantReview: instantReview.toggle()
-        case .magnification: break
-        }
-        OperatorPrefs.save(self)
-    }
-
     /// Picking a look turns LUT on. Auto stays Auto until the operator picks something else.
     func selectLUT(_ selection: LUTSelection) {
         lutSelection = selection
         lutEnabled = true
         OperatorPrefs.lutSelection = selection
         refreshLUTCube()
-        OperatorPrefs.save(self)
-    }
-
-    /// Re-arms the last selection. The bar chip is the only off.
-    func armLastLUT() {
-        lutEnabled = true
-        refreshLUTCube()
-        OperatorPrefs.save(self)
-    }
-
-    func nudgeLUTExposure(_ delta: Double) {
-        let next = LUTExposureCompensation.stepped(lutExposureStops, by: delta)
-        guard next != lutExposureStops else { return }
-        lutExposureStops = next
-        refreshLUTCube()
-        OperatorPrefs.save(self)
+        persist()
     }
 
     /// Color / zoom / body changes only swap the cube while an Auto row is selected.
@@ -565,7 +226,7 @@ final class LiveAssistState {
         refreshLUTCube()
     }
 
-    /// LUT sheet appear. Live SET must not replace the clip's Auto cube \u{2014}
+    /// LUT sheet appear. Live SET must not replace the clip's Auto cube -
     /// including disconnected library playback (`gradesClip`, no camera SET).
     /// Watcher isolation: do not restamp from the camera session.
     func bindLUTPicker(
@@ -588,61 +249,6 @@ final class LiveAssistState {
         syncLUT(to: live, family: family, cameraName: cameraName, isPhoto: isPhoto)
     }
 
-    func refreshLUTCube() {
-        inspectorLUTCache = nil
-        guard lutEnabled, let cube = resolvedLUTCube() else {
-            lutCube = nil
-            lutDimension = 0
-            lutRGBA = Data()
-            return
-        }
-        cache(cube)
-    }
-
-    /// Resolves the same selected look for the main picture and a forced-on
-    /// inspector. Calling this never changes enablement or preferences.
-    private func resolvedLUTCube() -> CubeLUT? {
-        switch resolvedSource() {
-        case .official(let id):
-            return BundledPocketLUT.cube(id)
-        case .dji(let id):
-            return BundledOfficialDJILUT.cube(id)
-        case .creative(let look):
-            return look.cube()
-        case .custom(let slot):
-            return CustomLUTStore.cube(slot)
-        case .file(let name):
-            return CustomLUTStore.cube(fileName: name)
-        case .off:
-            return nil
-        }
-    }
-
-    func inspectorLUT(transfer: MonitorTransfer) -> (dimension: Int, rgba: Data) {
-        if let cached = inspectorLUTCache,
-            cached.selection == lutSelection, cached.transfer == transfer,
-            cached.stops == lutExposureStops
-        {
-            return (cached.dimension, cached.rgba)
-        }
-        guard let cube = resolvedLUTCube() else { return (0, Data()) }
-        let gpu = cube.colorCube.compensatingExposure(
-            stops: lutExposureStops, transfer: transfer.lutExposureTransfer)
-        let rgba = gpu.rgbaComponents.withUnsafeBytes { Data($0) }
-        inspectorLUTCache = InspectorLUTCache(
-            selection: lutSelection, stops: lutExposureStops, transfer: transfer,
-            dimension: gpu.size, rgba: rgba)
-        return (gpu.size, rgba)
-    }
-
-    private struct InspectorLUTCache {
-        var selection: LUTSelection
-        var stops: Double
-        var transfer: MonitorTransfer
-        var dimension: Int
-        var rgba: Data
-    }
-
     /// Import adds a custom cube. Auto rows keep following color; otherwise this file arms.
     func importCustom(fileName: String) {
         OperatorPrefs.selectedCustomFileName = fileName
@@ -652,7 +258,7 @@ final class LiveAssistState {
         }
         lutEnabled = true
         refreshLUTCube()
-        OperatorPrefs.save(self)
+        persist()
     }
 
     func importCustom(slot: CustomLUTSlot, fileName: String) {
@@ -669,7 +275,7 @@ final class LiveAssistState {
             OperatorPrefs.selectedCustomFileName = nil
         }
         refreshLUTCube()
-        OperatorPrefs.save(self)
+        persist()
     }
 
     func selectCustomFile(_ fileName: String) {
@@ -689,67 +295,14 @@ final class LiveAssistState {
         }
         try? CustomLUTStore.remove(StoredCustomLUT(fileName: fileName))
         refreshLUTCube()
-        OperatorPrefs.save(self)
+        persist()
     }
 
-    func cycleGuide() {
-        let all = GuideAspect.ratios(for: guideFamily)
-        guard let idx = all.firstIndex(of: guideAspect) else {
-            guideAspect = all.first ?? .cinema
-            selectedGuides = [guideAspect]
-            guides = true
-            OperatorPrefs.save(self)
-            return
-        }
-        guideAspect = all[(idx + 1) % all.count]
-        selectedGuides = [guideAspect]
-        guides = true
-        OperatorPrefs.save(self)
-    }
-
-    func toggleGuide(_ aspect: GuideAspect) {
-        if selectedGuides.contains(aspect) {
-            selectedGuides.remove(aspect)
-        } else {
-            selectedGuides.insert(aspect)
-        }
-        guideAspect = aspect
-        guides = !selectedGuides.isEmpty
-        OperatorPrefs.save(self)
-    }
-
-    func persist() {
-        persistIfNeeded(force: true)
-    }
-
-    private func persistIfNeeded(force: Bool = false) {
-        let data = OperatorPrefs.encoded(self)
-        if !force, data == lastSaved { return }
-        lastSaved = data
-        OperatorPrefs.write(data)
-    }
-
-    /// Cube for share / export. Does not use the GPU `lutRGBA` table so
-    /// Bake exposure can stay off while the monitor still shows the pull.
     func exportLUTCube(bakeExposure: Bool) -> CubeLUT? {
-        guard lutEnabled, let cube = lutCube else { return nil }
         let color = PlaybackLUTColor.resolve(
-            clip: monitorColorMode,
-            live: monitorColorMode,
+            clip: monitorColorMode, live: monitorColorMode,
             last: OperatorPrefs.lastMonitorColorMode)
-        return cube.preparedForExport(
-            bakeExposure: bakeExposure,
-            stops: lutExposureStops,
-            transfer: MonitorTransfer(color ?? .normal).lutExposureTransfer)
-    }
-
-    private func cache(_ cube: CubeLUT) {
-        lutCube = cube
-        let transfer = MonitorTransfer(monitorColorMode ?? .normal)
-        let gpu = cube.colorCube.compensatingExposure(
-            stops: lutExposureStops, transfer: transfer.lutExposureTransfer)
-        lutDimension = gpu.size
-        lutRGBA = gpu.rgbaComponents.withUnsafeBytes { Data($0) }
+        return exportCube(bakeExposure: bakeExposure, transfer: MonitorTransfer(color ?? .normal))
     }
 }
 
@@ -1116,6 +669,7 @@ enum OperatorPrefs {
         }
     }
 
+    @MainActor
     static func load(into state: LiveAssistState) {
         if let data = UserDefaults.standard.data(forKey: assistKey),
             let snap = try? JSONDecoder().decode(Snapshot.self, from: data)
@@ -1129,6 +683,7 @@ enum OperatorPrefs {
     }
 
     /// One-shot: old Built-in looks become Auto; a stored custom file becomes Custom D-Log.
+    @MainActor
     private static func migrateLegacyLUTIfNeeded(into state: LiveAssistState) {
         guard UserDefaults.standard.object(forKey: lutSelectionKey) == nil else { return }
         if lastLUTWasCustom, let file = lastCustomFileName,
@@ -1143,10 +698,12 @@ enum OperatorPrefs {
         UserDefaults.standard.set(LUTSelection.djiAuto.rawValue, forKey: lutSelectionKey)
     }
 
+    @MainActor
     static func save(_ state: LiveAssistState) {
         write(encoded(state))
     }
 
+    @MainActor
     static func encoded(_ state: LiveAssistState) -> Data? {
         try? JSONEncoder().encode(Snapshot(state))
     }
@@ -1157,131 +714,7 @@ enum OperatorPrefs {
     }
 
     /// OpenZCine `operatorPreferences.v1` / `assistConfiguration.v1` analogue \u{2014} one blob.
-    struct Snapshot: Codable {
-        var tools: [String]
-        var guideAspect: String
-        var guideFamily: String
-        var selectedGuides: [String]
-        var guideMask: Bool
-        var gridThirds: Bool
-        var gridPhi: Bool
-        var gridDiagonal: Bool
-        var peakingColor: String
-        var peakingSensitivity: String
-        var falseColorScale: String
-        var falseColorReference: Bool
-        /// Optional so settings saved before the LOG / 709 choice still decode.
-        var falseColorRec709: Bool?
-        var zebraHighlight: Bool
-        var zebraMidtone: Bool
-        var zebraHighlightIRE: Double
-        var zebraMidtoneIRE: Double
-        var zebraHighlightColor: String
-        var zebraMidtoneColor: String
-        var desqueezeFactor: Double
-        var desqueezeCustom: Bool?
-        var desqueezeCustomFactor: Double?
-        var desqueezeHorizontal: Bool
-        var splitComparison: Bool
-        var splitVertical: Bool
-        var lutArmed: Bool
-        var lutExposureStops: Double?
-        var crushClipCompensation: Int?
-        var mirrorHorizontal: Bool?
-        var mirrorVertical: Bool?
-
-        init(_ s: LiveAssistState) {
-            tools = LiveAssistTool.allCases.filter { s.isOn($0) }.map(\.rawValue)
-            guideAspect = s.guideAspect.rawValue
-            guideFamily = s.guideFamily.rawValue
-            selectedGuides = s.selectedGuides.map(\.rawValue)
-            guideMask = s.guideMask
-            gridThirds = s.gridThirds
-            gridPhi = s.gridPhi
-            gridDiagonal = s.gridDiagonal
-            peakingColor = s.peakingColor.rawValue
-            peakingSensitivity = s.peakingSensitivity.rawValue
-            falseColorScale = s.falseColorScale.rawValue
-            falseColorReference = s.falseColorReference
-            falseColorRec709 = s.falseColorRec709
-            zebraHighlight = s.zebraHighlight
-            zebraMidtone = s.zebraMidtone
-            zebraHighlightIRE = s.zebraHighlightIRE
-            zebraMidtoneIRE = s.zebraMidtoneIRE
-            zebraHighlightColor = s.zebraHighlightColor.rawValue
-            zebraMidtoneColor = s.zebraMidtoneColor.rawValue
-            desqueezeCustom = s.desqueezeCustom
-            desqueezeCustomFactor = s.desqueezeCustomFactor
-            desqueezeFactor = s.desqueezeFactor
-            desqueezeHorizontal = s.desqueezeHorizontal
-            splitComparison = s.splitComparison
-            splitVertical = s.splitVertical
-            lutArmed = s.lutEnabled
-            lutExposureStops = s.lutExposureStops
-            crushClipCompensation = s.crushClipCompensation.rawValue
-            mirrorHorizontal = s.mirrorHorizontal
-            mirrorVertical = s.mirrorVertical
-        }
-
-        func apply(to s: LiveAssistState) {
-            let on = Set(tools)
-            s.peaking = on.contains(LiveAssistTool.peaking.rawValue)
-            s.zebra = on.contains(LiveAssistTool.zebra.rawValue)
-            s.falseColor = on.contains(LiveAssistTool.falseColor.rawValue)
-            s.histogram = on.contains(LiveAssistTool.histogram.rawValue)
-            s.waveform = on.contains(LiveAssistTool.waveform.rawValue)
-            s.parade = on.contains(LiveAssistTool.parade.rawValue)
-            s.vectorscope = on.contains(LiveAssistTool.vectorscope.rawValue)
-            s.trafficLights = on.contains(LiveAssistTool.trafficLights.rawValue)
-            s.ndMeter = on.contains(LiveAssistTool.ndMeter.rawValue)
-            s.evMeter = on.contains(LiveAssistTool.evMeter.rawValue)
-            s.audioMeters = on.contains(LiveAssistTool.audioMeters.rawValue)
-            s.guides = on.contains(LiveAssistTool.guides.rawValue)
-            s.grid = on.contains(LiveAssistTool.grid.rawValue)
-            s.crosshair = on.contains(LiveAssistTool.crosshair.rawValue)
-            s.level = on.contains(LiveAssistTool.level.rawValue)
-            s.desqueeze = on.contains(LiveAssistTool.desqueeze.rawValue)
-            s.mirror = on.contains(LiveAssistTool.mirror.rawValue)
-            s.instantReview = on.contains(LiveAssistTool.instantReview.rawValue)
-            s.guideAspect = GuideAspect(rawValue: guideAspect) ?? .cinema
-            s.guideFamily = GuideFamily(rawValue: guideFamily) ?? .film
-            let restored = Set(selectedGuides.compactMap(GuideAspect.init(rawValue:)))
-            s.selectedGuides = restored.isEmpty ? [s.guideAspect] : restored
-            s.guideMask = guideMask
-            s.gridThirds = gridThirds
-            s.gridPhi = gridPhi
-            s.gridDiagonal = gridDiagonal
-            s.peakingColor = PeakingPaint(rawValue: peakingColor) ?? .red
-            s.peakingSensitivity = PeakingSense(rawValue: peakingSensitivity) ?? .medium
-            s.falseColorScale = FalseColorScaleKind(rawValue: falseColorScale) ?? .sceneStops
-            s.falseColorReference = falseColorReference
-            s.falseColorRec709 = falseColorRec709 ?? false
-            s.zebraHighlight = zebraHighlight
-            s.zebraMidtone = zebraMidtone
-            s.zebraHighlightIRE = zebraHighlightIRE
-            s.zebraMidtoneIRE = zebraMidtoneIRE
-            s.zebraHighlightColor = ZebraPaint(rawValue: zebraHighlightColor) ?? .white
-            s.zebraMidtoneColor = ZebraPaint(rawValue: zebraMidtoneColor) ?? .amber
-            s.desqueezeFactor = DesqueezeAssist.snap(desqueezeFactor)
-            s.desqueezeCustom =
-                desqueezeCustom ?? (DesqueezeRatio.matching(s.desqueezeFactor) == nil)
-            s.desqueezeCustomFactor = DesqueezeAssist.snap(desqueezeCustomFactor ?? desqueezeFactor)
-            s.desqueezeHorizontal = desqueezeHorizontal
-            s.splitComparison = splitComparison
-            s.splitVertical = splitVertical
-            if let stops = lutExposureStops {
-                s.lutExposureStops = LUTExposureCompensation.snap(stops)
-            }
-            if let raw = crushClipCompensation,
-                let value = TrafficLightsAssist.CrushClipCompensation(rawValue: raw)
-            {
-                s.crushClipCompensation = value
-            }
-            s.lutEnabled = lutArmed
-            s.mirrorHorizontal = mirrorHorizontal ?? true
-            s.mirrorVertical = mirrorVertical ?? false
-        }
-    }
+    typealias Snapshot = MonitorAssistSnapshot
 }
 
 struct FeedAlignedAssists: View {
@@ -1394,6 +827,7 @@ struct FeedAlignedAssists: View {
 }
 
 /// OpenZCine `desqueezedRect` \u{2014} framing aids sit on the visible (shrunk) picture, not the full frame.
+@MainActor
 func overlayFeedRect(
     _ full: CGRect, _ assist: LiveAssistState, pictureAspect: CGFloat?,
     sourceAspect: CGFloat? = nil

@@ -146,7 +146,7 @@ import SwiftUI
         }
     }
 
-    static func common(_ value: TrafficLightsAssist.CrushClipCompensation)
+    static func commonTraffic(_ value: TrafficLightsAssist.CrushClipCompensation)
         -> MonitorCrushClipCompensation
     {
         switch value {
@@ -341,7 +341,7 @@ extension TrafficLightsLongPressMenu {
         MonitorCrushClipMenu(
             compensation: Binding(
                 get: {
-                    PocketSettingsAssistMenus.common(TrafficLightsAssist.sharedCompensation())
+                    PocketSettingsAssistMenus.commonTraffic(TrafficLightsAssist.sharedCompensation())
                 },
                 set: {
                     let next = PocketSettingsAssistMenus.trafficLights($0)

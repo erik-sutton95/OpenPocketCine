@@ -756,6 +756,8 @@ private fun TileFeed(session: MultiviewSession, tile: MultiviewSession.Tile, fil
     val feed = remember(tile) {
         LiveFeedEffectsSession(
             context = context,
+            scopeBus = tile.scopeBus,
+            preview = tile.inspectorPreview,
             onDecoderSurface = { surface ->
                 handed[0] = surface
                 session.attachTileSurface(tile, surface)
@@ -784,7 +786,7 @@ private fun TileFeed(session: MultiviewSession, tile: MultiviewSession.Tile, fil
             tile.decoder.onOutputSizeChanged = null
             handed[0]?.let { session.detachTileSurface(tile, it) }
             handed[0] = null
-            feed.detachDisplay()
+            feed.close()
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {

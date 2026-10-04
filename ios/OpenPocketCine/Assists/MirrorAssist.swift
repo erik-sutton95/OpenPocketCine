@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 
 /// OpenZCine `MonitorAssistTool.mirror`, plus a vertical axis.
@@ -32,26 +33,21 @@ struct MirrorLongPressMenu: View {
     @Bindable var assist: LiveAssistState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(MirrorAssist.explanation)
-                .font(LiveType.ui(size: 13))
-                .foregroundStyle(LiveDesign.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 8)
-            SettingsSwitchInlineRow(
-                title: "Horizontal", help: MirrorAssist.horizontalHelp, showTopDivider: false,
-                isOn: assist.mirrorHorizontal, identifier: "mirror.horizontal"
-            ) {
-                assist.mirrorHorizontal.toggle()
-                assist.persist()
-            }
-            SettingsSwitchInlineRow(
-                title: "Vertical", help: MirrorAssist.verticalHelp,
-                isOn: assist.mirrorVertical, identifier: "mirror.vertical"
-            ) {
-                assist.mirrorVertical.toggle()
-                assist.persist()
-            }
-        }
+        MonitorMirrorMenu(
+            horizontal: Binding(
+                get: { assist.mirrorHorizontal },
+                set: {
+                    assist.mirrorHorizontal = $0; assist.persist()
+                }),
+            vertical: Binding(
+                get: { assist.mirrorVertical },
+                set: {
+                    assist.mirrorVertical = $0; assist.persist()
+                }), explanation: MirrorAssist.explanation,
+            horizontalHelp: MirrorAssist.horizontalHelp,
+            verticalHelp: MirrorAssist.verticalHelp,
+            feedback: {
+                OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
+            })
     }
 }

@@ -3,6 +3,7 @@ import CoreBluetooth
 import CoreGraphics
 import Foundation
 import Observation
+import OpenCineAppKit
 import OpenCineDJIApple
 import OpenPocketViewCore
 import UIKit
@@ -377,20 +378,33 @@ final class CameraSession {
     var gimbalLimitPanSign: Double = 0
     var gimbalLimitTiltSign: Double = 0
     /// Camera-library listing while the Media page is open.
-    var mediaFiles: [MediaFile] = []
-    var mediaFetchInProgress = false
-    var mediaFetchListedCount = 0
-    var mediaNote: String?
+    var mediaLibraryOwner: MonitorMediaLibraryModel<MediaFile>?
+    @ObservationIgnored var mediaLibraryCameraID: String?
+    var mediaFiles: [MediaFile] {
+        mediaLibraryOwner?.records.map { record in
+            var file = record.payload; file.isStarred = record.favorite; return file
+        } ?? []
+    }
+    var mediaFetchInProgress: Bool { mediaLibraryOwner?.fetching ?? false }
+    var mediaFetchListedCount: Int { mediaLibraryOwner?.fetchedCount ?? 0 }
+    var mediaOperationNote: String?
+    var mediaNote: String? {
+        get { mediaOperationNote ?? mediaLibraryOwner?.note }
+        set { mediaOperationNote = newValue }
+    }
     /// While true, keepalive must not re-enable live view or recover the feed.
-    var isBrowsingMedia = false
+    var isBrowsingMedia: Bool {
+        get { mediaLibraryOwner?.browsing ?? false }
+        set { if newValue { mediaLibrary.begin() } else { mediaLibraryOwner?.close() } }
+    }
     /// The camera body is showing its own gallery during an established live
     /// session. Like DJI Mimo, the live screen opens Media while this is true and
     /// closes it (returning the camera to live) when it turns false (#273).
     private(set) var cameraGalleryOpen = false
     @ObservationIgnored private var cameraGalleryAwayTicks = 0
     var mediaDownloadProgress: [String: Double] = [:]
-    var mediaCacheRevision: UInt64 = 0
-    var mediaLocalFavorites: Set<String> = []
+    var mediaIOCacheRevision: UInt64 = 0
+    var mediaCacheRevision: UInt64 { mediaIOCacheRevision &+ (mediaLibraryOwner?.cacheRevision ?? 0) }
     @ObservationIgnored let cameraMedia: CameraMedia
     /// Last tap-to-focus point in feed-normalized 0…1. Always drawn when not tracking.
     var focusPoint: CGPoint = CGPoint(x: 0.5, y: 0.5)
@@ -5969,28 +5983,29 @@ final class CameraSession {
 
     private func resetMediaSession(ifCurrent: () -> Bool) {
         guard ifCurrent() else { return }
-        persistMediaCatalog()
-        guard ifCurrent() else { return }
         cameraMedia.resetSession()
         guard ifCurrent() else { return }
-        isBrowsingMedia = false
+        mediaLibraryOwner?.bind(nil)
         guard ifCurrent() else { return }
-        mediaFetchInProgress = false
+        mediaLibraryOwner?.close()
         guard ifCurrent() else { return }
-        mediaNote = nil
+        mediaOperationNote = nil
         guard ifCurrent() else { return }
         mediaDownloadProgress = [:]
         guard ifCurrent() else { return }
-        loadCachedCatalogIfNeeded(ifCurrent: ifCurrent)
-        guard ifCurrent() else { return }
-        loadMediaFavorites()
+        mediaLibraryOwner?.visibility = .cachedOnly
     }
 
     func clearMediaCache() async throws {
+        let library = mediaLibrary
         cameraMedia.resetSession()
+        library.bind(nil)
+        let token = library.actionToken
         mediaDownloadProgress = [:]
-        defer { mediaCacheRevision &+= 1 }
         try await cameraMedia.clearCache(cameraID: mediaCameraID, preservingCatalog: true)
+        guard library.isCurrent(token), !Task.isCancelled else { return }
+        mediaIOCacheRevision &+= 1
+        library.refreshLocalCache()
     }
 
     private func settleLateFromSubscribe() {

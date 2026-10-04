@@ -6,34 +6,35 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ScopeSamplePublicationTest {
+    private val scopeBus = LiveScopeSampleBus()
     @Test fun changingClipsClearsScopesAndRejectsAnAlreadyQueuedOldResult() {
-        val first = LiveScopeSampleBus.openSource()
+        val first = scopeBus.openSource()
         val oldFrame = picture(200)
-        assertTrue(LiveScopeSampleBus.publish(first, oldFrame))
-        val queuedPublish = { LiveScopeSampleBus.publish(first, oldFrame) }
-        val second = LiveScopeSampleBus.openSource()
+        assertTrue(scopeBus.publish(first, oldFrame))
+        val queuedPublish = { scopeBus.publish(first, oldFrame) }
+        val second = scopeBus.openSource()
         try {
             assertFalse(queuedPublish())
-            assertTrue(LiveScopeSampleBus.bundle.isEmpty)
+            assertTrue(scopeBus.bundle.isEmpty)
             val newFrame = picture(80)
-            assertTrue(LiveScopeSampleBus.publish(second, newFrame))
-            assertEquals(newFrame, LiveScopeSampleBus.bundle)
-        } finally { LiveScopeSampleBus.closeSource(second) }
+            assertTrue(scopeBus.publish(second, newFrame))
+            assertEquals(newFrame, scopeBus.bundle)
+        } finally { scopeBus.closeSource(second) }
     }
 
     @Test fun departingLiveRendererCannotOverwriteOrClearPlayback() {
-        val live = LiveScopeSampleBus.openSource()
-        val playback = LiveScopeSampleBus.openSource()
+        val live = scopeBus.openSource()
+        val playback = scopeBus.openSource()
         val frame = picture(128)
         try {
-            assertTrue(LiveScopeSampleBus.publish(playback, frame))
-            assertFalse(LiveScopeSampleBus.publish(live, picture(230)))
-            LiveScopeSampleBus.closeSource(live)
-            assertEquals(frame, LiveScopeSampleBus.bundle)
-            assertTrue(LiveScopeSampleBus.isCurrent(playback))
-        } finally { LiveScopeSampleBus.closeSource(playback) }
-        assertFalse(LiveScopeSampleBus.publish(playback, frame))
-        assertTrue(LiveScopeSampleBus.bundle.isEmpty)
+            assertTrue(scopeBus.publish(playback, frame))
+            assertFalse(scopeBus.publish(live, picture(230)))
+            scopeBus.closeSource(live)
+            assertEquals(frame, scopeBus.bundle)
+            assertTrue(scopeBus.isCurrent(playback))
+        } finally { scopeBus.closeSource(playback) }
+        assertFalse(scopeBus.publish(playback, frame))
+        assertTrue(scopeBus.bundle.isEmpty)
     }
 
     private fun picture(code: Int) = ScopeAssistBundle(

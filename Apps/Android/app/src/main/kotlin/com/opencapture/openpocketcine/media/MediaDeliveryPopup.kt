@@ -36,7 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +56,11 @@ import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
+import com.opencapture.opencine.appkit.MonitorDeliveryCompletion
+import com.opencapture.opencine.appkit.MonitorDeliveryModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -112,58 +117,53 @@ fun MediaDeliveryHost(
     controller: MediaLibraryController,
     onDismissPopup: () -> Unit,
 ) {
-    var overlay by remember { mutableStateOf<MediaDeliveryOverlayState?>(null) }
-    var toast by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    fun presentToast(message: String) {
-        toast = message
-        scope.launch {
-            kotlinx.coroutines.delay(2500)
-            if (toast == message) toast = null
+    // One explicit composition lifetime owns both resources and disposal ordering.
+    val scope = remember(controller) { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
+    val delivery = remember(scope) {
+        MonitorDeliveryModel<MediaDeliveryOverlayState, MediaDeliveryResult, Unit>(scope)
+    }
+    DisposableEffect(delivery, scope) {
+        onDispose {
+            delivery.close()
+            scope.cancel()
         }
     }
+    val state by delivery.state.collectAsState()
+    val overlay = state.progress
+    val toast = state.toast
 
-    if (files == null && overlay == null && toast == null) return
+    if (files == null && !state.running && overlay == null && toast == null) return
 
     Box(Modifier.fillMaxSize()) {
         files?.let { selection ->
             MediaDeliveryPopup(
                 files = selection,
                 controller = controller,
-                busy = overlay != null,
+                busy = state.running,
                 onDismiss = onDismissPopup,
                 onDeliver = { action ->
-                    overlay =
-                        MediaDeliveryOverlayState(
-                            statusLine = "Preparing…",
-                            isPreparing = true,
+                    delivery.begin(
+                        onComplete = { outcome ->
+                            admittedDeliveryToast(outcome) { ready -> shareFiles(context, ready) }
+                        },
+                    ) { progress ->
+                        progress(MediaDeliveryOverlayState(statusLine = "Preparing…", isPreparing = true))
+                        val outcome = runDelivery(
+                            context = context, controller = controller, files = selection,
+                            action = action, onProgress = progress,
                         )
-                    onDismissPopup()
-                    scope.launch {
-                        val outcome =
-                            runDelivery(
-                                context = context,
-                                controller = controller,
-                                files = selection,
-                                action = action,
-                                onProgress = { overlay = it },
-                            )
-                        overlay = null
-                        presentToast(outcome)
+                        MonitorDeliveryCompletion(outcome)
                     }
+                    onDismissPopup()
                 },
             )
         }
-        overlay?.let { state ->
+        overlay?.let { progress ->
             MediaDeliveryProgressOverlay(
-                state,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                progress,
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
             )
         }
         toast?.let { message ->
@@ -171,7 +171,6 @@ fun MediaDeliveryHost(
         }
     }
 }
-
 @Composable
 fun MediaDeliveryPopup(
     files: List<MediaFile>,
@@ -584,7 +583,7 @@ private suspend fun runDelivery(
     files: List<MediaFile>,
     action: MediaDeliveryPostExportAction,
     onProgress: (MediaDeliveryOverlayState) -> Unit,
-): String {
+): MediaDeliveryResult {
     // Original camera file only — never the LRF/XRF 720p playback proxy.
     val toCache = files.filter { !controller.isDownloaded(it) }
     if (toCache.isNotEmpty()) {
@@ -623,11 +622,11 @@ private suspend fun runDelivery(
             if (controller.isDownloaded(file)) controller.localFile(file) else null
         }
     if (ready.isEmpty()) {
-        return if (toCache.isNotEmpty()) {
+        return MediaDeliveryResult.Message(if (toCache.isNotEmpty()) {
             "Couldn't cache ${toCache.size} clip(s) from the camera — check the connection and try again."
         } else {
             "Select at least one clip."
-        }
+        })
     }
     return when (action) {
         MediaDeliveryPostExportAction.SYSTEM_SHARE -> {
@@ -642,12 +641,7 @@ private suspend fun runDelivery(
                     ),
                 )
             }
-            if (!shareFiles(context, ready)) {
-                if (ready.size == 1) "Couldn't share this clip."
-                else "Couldn't share these clips."
-            } else {
-                "Ready to share ${ready.size} clip${if (ready.size == 1) "" else "s"}"
-            }
+            MediaDeliveryResult.ShareReady(ready)
         }
         MediaDeliveryPostExportAction.SAVE_TO_PHOTOS -> {
             var saved = 0
@@ -667,8 +661,10 @@ private suspend fun runDelivery(
                     }
                 if (ok) saved += 1
             }
-            if (saved == 0) "Couldn't save clips to Photos."
-            else "Saved $saved clip${if (saved == 1) "" else "s"} to Photos"
+            MediaDeliveryResult.Message(
+                if (saved == 0) "Couldn't save clips to Photos."
+                else "Saved $saved clip${if (saved == 1) "" else "s"} to Photos"
+            )
         }
     }
 }

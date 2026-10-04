@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.settings
 
+import com.opencapture.openpocketcine.feed.fromColorMode
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -314,7 +316,7 @@ private fun DashLegend(
  * (iOS `SettingsInlineRow`). When [stacked] is true (two-column View Assist
  * cards), the control sits under the title at full width.
  *
- * [help] renders the same "?" badge iOS puts beside the title — the copy that
+ * [help] renders the same "?" badge iOS puts beside the title - the copy that
  * explains what a control actually does lives there, not in a caption, so the
  * row stays one line until an operator asks.
  */
@@ -408,7 +410,7 @@ fun SettingsSwitchRow(
     }
 }
 
-/** iOS `SettingsSwitchInlineRow` — Pocket call-site alias of [SettingsSwitchRow]. */
+/** iOS `SettingsSwitchInlineRow` - Pocket call-site alias of [SettingsSwitchRow]. */
 @Composable
 fun SettingsSwitchInlineRow(
     title: String,
@@ -435,7 +437,7 @@ fun SettingsSwitchInlineRow(
  * copy in a glass popover.
  *
  * ponytail: a transcription of the private badge in media/PlaybackAssistOptions.kt
- * (the assist popups own theirs) — settings cannot see it. Hoist one copy if a
+ * (the assist popups own theirs) - settings cannot see it. Hoist one copy if a
  * third surface ever needs it.
  */
 @Composable
@@ -585,7 +587,7 @@ fun SettingsColorDots(
 /** One named swatch for [SettingsColorDots] (iOS `SettingsColorDots.Dot`). */
 data class SettingsColorDot(val name: String, val color: Color)
 
-/** iOS `SettingsPalette` — zone-scoped stripe/peaking colours. */
+/** iOS `SettingsPalette` - zone-scoped stripe/peaking colours. */
 object SettingsPalette {
     val highlight: List<SettingsColorDot> =
         listOf(
@@ -856,7 +858,7 @@ fun SettingsValueText(value: String) {
     )
 }
 
-/** Accent inline action ("Open", "Sign in") — the iOS System-tab link button treatment. */
+/** Accent inline action ("Open", "Sign in") - the iOS System-tab link button treatment. */
 @Composable
 fun SettingsLinkAction(
     title: String,
@@ -879,7 +881,7 @@ fun SettingsLinkAction(
 }
 
 /**
- * Quiet utility text link — mirrors the startup header's Privacy/Terms
+ * Quiet utility text link - mirrors the startup header's Privacy/Terms
  * treatment (iOS `StartupHeader.legalLink`): deliberately dimmer than row
  * titles so it never competes with them.
  */

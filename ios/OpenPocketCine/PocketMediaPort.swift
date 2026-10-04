@@ -44,12 +44,9 @@ import OpenPocketViewCore
             if !session.isBrowsingMedia {
                 session.cameraMedia.cancelResumeLive()
                 session.retireLivePictureRecoveryForMedia()
-                session.loadMediaFavorites()
-                session.loadCachedCatalogIfNeeded()
             }
             session.isBrowsingMedia = true
             if session.cameraGalleryOpen {
-                session.mediaFetchInProgress = false
                 session.mediaNote = MediaOperatorCopy.browsingOnCamera
             }
         } else if !session.isBrowsingMedia {

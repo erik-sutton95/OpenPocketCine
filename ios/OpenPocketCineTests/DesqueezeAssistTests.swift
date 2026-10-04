@@ -50,6 +50,7 @@ final class DesqueezeAssistTests: XCTestCase {
         XCTAssertEqual(DesqueezeAssist.snap(.infinity), 1.33)
     }
 
+    @MainActor
     func testCustomChoiceSurvivesPresetCrossingsAndRestart() {
         let assist = LiveAssistState()
         XCTAssertFalse(assist.desqueeze)
@@ -72,6 +73,7 @@ final class DesqueezeAssistTests: XCTestCase {
         XCTAssertEqual(restored.desqueezeCustomFactor, 1.47)
     }
 
+    @MainActor
     func testLegacySnapshotRestoresAllOtherPreferencesAndInfersCustom() throws {
         let assist = LiveAssistState()
         assist.grid = true
@@ -88,6 +90,7 @@ final class DesqueezeAssistTests: XCTestCase {
         XCTAssertEqual(restored.desqueezeFactor, 1.65)
     }
 
+    @MainActor
     func testLivePlaybackAndCleanVisibilityRemainIndependent() {
         let assist = LiveAssistState()
         assist.desqueezeFactor = 2
@@ -122,6 +125,7 @@ final class DesqueezeAssistTests: XCTestCase {
         XCTAssertEqual(tall.midY, viewport.midY)
     }
 
+    @MainActor
     func testFramingMatchesCorrectedSquareInsideLiveRasterAndHonorsCleanPins() {
         let assist = LiveAssistState()
         assist.desqueeze = true
@@ -175,6 +179,7 @@ final class DesqueezeAssistTests: XCTestCase {
         XCTAssertEqual(zoom.offset.height, 600)
     }
 
+    @MainActor
     func testPortraitRasterAndRecordedPictureUseTheSameOpticalCorrection() {
         let assist = LiveAssistState()
         assist.desqueeze = true

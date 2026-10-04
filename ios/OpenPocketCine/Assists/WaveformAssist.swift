@@ -1,3 +1,4 @@
+import OpenCineAppKit
 import MonitorPresentation
 import MonitorUI
 import SwiftUI
@@ -6,8 +7,8 @@ import UIKit
 /// OpenZCine waveform operator options + `MovablePanel` (id `"wave"`).
 ///
 /// Long-press toolbar rows (`AssistQuickSettingsContent.waveformRows`):
-/// * Mode — Luma / RGB
-/// * Brightness — 0…200% (default 100; OpenZCine `/400`, so 100% = 0.25)
+/// * Mode - Luma / RGB
+/// * Brightness - 0…200% (default 100; OpenZCine `/400`, so 100% = 0.25)
 /// * Safe Border Clip / Crush / Middle Gray
 ///
 /// Size is the L-corner grip only (OpenZCine dropped Small/Medium/Large; no
@@ -17,7 +18,7 @@ import UIKit
 /// are safe-border guides. Hold the panel (no drag) or long-press WAVE
 /// on the assist bar to open options.
 /// On the panel: 0.3s long-press then drag to reposition (4pt snap, 22pt haptic grid).
-/// No pinch-resize — OpenZCine scales only from the L-corner grip.
+/// No pinch-resize - OpenZCine scales only from the L-corner grip.
 enum WaveformAssist {
     static let panelID = "wave"
     static let baseSize = ScopePanelSize.waveform
@@ -36,113 +37,16 @@ enum WaveformAssist {
     static let brightnessHelp =
         "Raise trace intensity when the waveform is hard to read in bright light."
 
-    enum Mode: String, CaseIterable, Codable, Equatable, Sendable, Identifiable {
-        case luma = "Luma"
-        case rgb = "RGB"
-        var id: String { rawValue }
-    }
+    typealias Mode = MonitorWaveformMode
 
-    struct GuideLines: Codable, Equatable, Sendable {
-        var clip: Bool
-        var crush: Bool
-        var middle: Bool
+    typealias GuideLines = MonitorScopeGuides
 
-        static let `default` = GuideLines(clip: true, crush: true, middle: true)
+    /// OpenZCine `MovablePanelStoredCenter` - centre as a fraction of the overlay bounds.
+    typealias StoredCenter = MonitorScopeStoredCenter
 
-        init(clip: Bool = true, crush: Bool = true, middle: Bool = true) {
-            self.clip = clip
-            self.crush = crush
-            self.middle = middle
-        }
-    }
+    typealias Options = MonitorWaveformOptions
 
-    /// OpenZCine `MovablePanelStoredCenter` — centre as a fraction of the overlay bounds.
-    struct StoredCenter: Codable, Equatable, Sendable {
-        var xFraction: Double
-        var yFraction: Double
-
-        init(center: CGPoint, in bounds: CGRect) {
-            let width = max(bounds.width, 1)
-            let height = max(bounds.height, 1)
-            xFraction = Double((center.x - bounds.minX) / width)
-            yFraction = Double((center.y - bounds.minY) / height)
-        }
-
-        func center(in bounds: CGRect) -> CGPoint {
-            CGPoint(
-                x: bounds.minX + CGFloat(xFraction) * bounds.width,
-                y: bounds.minY + CGFloat(yFraction) * bounds.height)
-        }
-    }
-
-    struct Options: Equatable, Codable, Sendable {
-        var mode: Mode
-        var brightness: Int
-        var guides: GuideLines
-        var scale: Double
-        /// False only for a fresh automatic size; legacy saved scales stay explicit.
-        var hasCustomScale: Bool
-        var storedCenter: StoredCenter?
-        var storedCenterPortrait: StoredCenter?
-
-        static let `default` = Options(
-            mode: .rgb,
-            brightness: defaultBrightness,
-            guides: .default,
-            scale: defaultScale,
-            storedCenter: nil,
-            storedCenterPortrait: nil)
-
-        init(
-            mode: Mode = .rgb,
-            brightness: Int = defaultBrightness,
-            guides: GuideLines = .default,
-            scale: Double = defaultScale,
-            hasCustomScale: Bool = false,
-            storedCenter: StoredCenter? = nil,
-            storedCenterPortrait: StoredCenter? = nil
-        ) {
-            self.mode = mode
-            self.brightness = Self.clampedBrightness(brightness)
-            self.guides = guides
-            self.scale = Self.clampedScale(scale)
-            self.hasCustomScale = hasCustomScale || scale != defaultScale
-            self.storedCenter = storedCenter
-            self.storedCenterPortrait = storedCenterPortrait
-        }
-
-        enum CodingKeys: String, CodingKey {
-            case mode, brightness, guides, scale, hasCustomScale, storedCenter, storedCenterPortrait
-        }
-
-        init(from decoder: any Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            mode = try c.decodeIfPresent(Mode.self, forKey: .mode) ?? .rgb
-            brightness = Self.clampedBrightness(
-                try c.decodeIfPresent(Int.self, forKey: .brightness) ?? defaultBrightness)
-            guides = try c.decodeIfPresent(GuideLines.self, forKey: .guides) ?? .default
-            scale = Self.clampedScale(
-                try c.decodeIfPresent(Double.self, forKey: .scale) ?? defaultScale)
-            // Old JSON cannot distinguish an untouched 1.0 from a manual 1.0.
-            // Preserve it rather than rewriting an operator's layout on upgrade.
-            hasCustomScale =
-                try c.decodeIfPresent(Bool.self, forKey: .hasCustomScale)
-                ?? true
-            storedCenter = try c.decodeIfPresent(StoredCenter.self, forKey: .storedCenter)
-            storedCenterPortrait = try c.decodeIfPresent(
-                StoredCenter.self, forKey: .storedCenterPortrait)
-        }
-
-        static func clampedScale(_ value: Double) -> Double {
-            min(max(value, scaleRange.lowerBound), scaleRange.upperBound)
-        }
-
-        static func clampedBrightness(_ value: Int) -> Int {
-            min(max(value, brightnessRange.lowerBound), brightnessRange.upperBound)
-        }
-    }
-
-    /// OpenZCine `waveformParadeBrightnessMultiplier` — 100% = former 25%.
+    /// OpenZCine `waveformParadeBrightnessMultiplier` - 100% = former 25%.
     static func intensity(_ brightness: Int) -> Double {
         Double(Options.clampedBrightness(brightness)) / 400
     }
@@ -254,342 +158,72 @@ enum WaveformAssist {
     }
 }
 
-@MainActor
-@Observable
-final class WaveformAssistStore {
-    static let shared = WaveformAssistStore(options: load())
-    private static let defaultsKey = "OpenPocketCine.WaveformAssist.v1"
-
-    var options: WaveformAssist.Options {
-        didSet { persist() }
-    }
-    /// Session centre in canvas space (OpenZCine `movablePanelCenters["wave"]`).
-    var sessionCenter: CGPoint?
-    var sessionCenterPortrait: CGPoint?
-
-    var optionsBinding: Binding<WaveformAssist.Options> {
-        Binding(
-            get: { self.options },
-            set: { self.options = $0 }
-        )
-    }
-
-    init(options: WaveformAssist.Options = .default) {
-        self.options = options
-    }
-
-    static func load() -> WaveformAssist.Options {
-        guard let data = UserDefaults.standard.data(forKey: defaultsKey),
-            let decoded = try? JSONDecoder().decode(WaveformAssist.Options.self, from: data)
-        else { return .default }
-        return decoded
-    }
-
-    func persist() {
-        guard let data = try? JSONEncoder().encode(options) else { return }
-        UserDefaults.standard.set(data, forKey: Self.defaultsKey)
-    }
-
-    func setScale(_ scale: Double) {
-        var next = options
-        next.scale = WaveformAssist.Options.clampedScale(scale)
-        next.hasCustomScale = true
-        options = next
-    }
-
-    /// Plot, hit frame and resize origin all consume the same effective size.
-    func presentationScale(
-        in bounds: CGRect, tablet: Bool? = nil
-    ) -> Double {
-        guard bounds.width > 1, bounds.height > 1 else { return options.scale }
-        return MonitorScopeSizing.scale(
-            portrait: bounds.height > bounds.width,
-            tablet: tablet ?? (UIDevice.current.userInterfaceIdiom == .pad),
-            preferred: options.hasCustomScale ? options.scale : nil)
-    }
-
-    func sessionCenter(in bounds: CGRect) -> CGPoint? {
-        ScopeCanvasSlot.pick(sessionCenter, sessionCenterPortrait, in: bounds)
-    }
-
-    func storedCenter(in bounds: CGRect) -> WaveformAssist.StoredCenter? {
-        ScopeCanvasSlot.pick(options.storedCenter, options.storedCenterPortrait, in: bounds)
-    }
-
-    func beginDrag(center: CGPoint, in bounds: CGRect) {
-        ScopeCanvasSlot.assign(&sessionCenter, &sessionCenterPortrait, in: bounds, center)
-    }
-
-    func drag(to center: CGPoint, in bounds: CGRect) {
-        beginDrag(center: center, in: bounds)
-    }
-
-    func endDrag(bounds: CGRect) {
-        guard let center = sessionCenter(in: bounds) else { return }
-        var next = options
-        let stored = WaveformAssist.StoredCenter(center: center, in: bounds)
-        if ScopeCanvasSlot.forBounds(bounds) == .portrait {
-            next.storedCenterPortrait = stored
-        } else {
-            next.storedCenter = stored
-        }
-        options = next
-    }
-}
+typealias WaveformAssistStore = MonitorScopePanelStore<MonitorWaveformOptions>
 
 /// OpenZCine `AssistQuickSettingsContent.waveformRows`.
 struct WaveformLongPressMenu: View {
     @Binding var options: WaveformAssist.Options
     var compact: Bool = false
+    var body: some View { assistMenu.buttonStyle(.zcTapTarget) }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MonitorInspectorCard {
-                SettingsInlineRow(title: "Mode", showTopDivider: false, stacked: compact) {
-                    SettingsSegmented(
-                        options: WaveformAssist.Mode.allCases.map(\.rawValue),
-                        selected: options.mode.rawValue,
-                        compact: compact,
-                        stacked: compact
-                    ) {
-                        guard let mode = WaveformAssist.Mode(rawValue: $0), mode != options.mode
-                        else {
-                            return
-                        }
-                        options.mode = mode
-                    }
-                }
-                SettingsInlineRow(
-                    title: "Brightness",
-                    help: WaveformAssist.brightnessHelp,
-                    stacked: compact
-                ) {
-                    WaveformPercentSlider(
-                        value: Binding(
-                            get: { options.brightness },
-                            set: {
-                                let next = WaveformAssist.Options.clampedBrightness($0)
-                                guard next != options.brightness else { return }
-                                WaveformAssistHaptics.selection()
-                                options.brightness = next
-                            }),
-                        range: WaveformAssist.brightnessRange)
-                }
-            }
-            MonitorInspectorCard("Guide lines") {
-                SettingsSwitchInlineRow(
-                    title: "Safe clip",
-                    showTopDivider: false,
-                    stacked: compact,
-                    isOn: options.guides.clip
-                ) {
-                    WaveformAssistHaptics.selection()
-                    options.guides.clip.toggle()
-                }
-                SettingsSwitchInlineRow(
-                    title: "Safe crush",
-                    stacked: compact,
-                    isOn: options.guides.crush
-                ) {
-                    WaveformAssistHaptics.selection()
-                    options.guides.crush.toggle()
-                }
-                SettingsSwitchInlineRow(
-                    title: "Middle gray",
-                    stacked: compact,
-                    isOn: options.guides.middle
-                ) {
-                    WaveformAssistHaptics.selection()
-                    options.guides.middle.toggle()
-                }
-            }
-        }
+    var assistMenu: MonitorScopeTraceMenu<WaveformAssist.Mode> {
+        MonitorScopeTraceMenu(
+            modes: WaveformAssist.Mode.allCases, mode: $options.mode,
+            brightness: Binding(
+                get: { options.brightness },
+                set: {
+                    let next = WaveformAssist.Options.clampedBrightness($0)
+                    guard next != options.brightness else { return }
+                    WaveformAssistHaptics.selection(); options.brightness = next
+                }), guides: $options.guides, title: { $0.rawValue },
+            brightnessHelp: WaveformAssist.brightnessHelp,
+            brightnessRange: WaveformAssist.brightnessRange,
+            compact: compact,
+            modeFeedback: {
+                OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
+            }, guideFeedback: { WaveformAssistHaptics.selection() })
     }
 }
 
-/// OpenZCine `SettingsPercentSlider`.
-private struct WaveformPercentSlider: View {
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-
-    var body: some View {
-        HStack(spacing: 9) {
-            Slider(
-                value: Binding(
-                    get: { Double(value) },
-                    set: { value = Int($0.rounded()) }),
-                in: Double(range.lowerBound)...Double(range.upperBound),
-                step: 1
-            )
-            .tint(LiveDesign.accent)
-            .frame(minWidth: 120, idealWidth: 190)
-            Text("\(value)%")
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(LiveDesign.text)
-                .frame(width: 40, alignment: .trailing)
-                .monospacedDigit()
-        }
-    }
-}
-
-/// OpenZCine `MovablePanel` specialised for waveform — direct drag + L-corner resize.
 struct WaveformMovablePanel<Content: View>: View {
     let canvas: CGRect
     let feed: CGRect
     var chromeClearance: EdgeInsets = EdgeInsets()
     var onOpenOptions: ((CGRect) -> Void)? = nil
     @ViewBuilder var content: () -> Content
-
     @Environment(\.interfaceLocked) private var interfaceLocked
-    private var movementBounds: CGRect {
-        ScopePanelPlacement.bounds(in: canvas, clearance: chromeClearance)
-    }
     private var store: WaveformAssistStore { WaveformAssist.store }
-
-    @State private var dragOrigin: CGPoint?
-    @State private var isDragging = false
-    @State private var snapCell = 0
-    @State private var isResizing = false
-    @State private var resizeStartScale = 1.0
-
-    private var gripCornerInset: CGFloat {
-        WaveformAssist.gripVisualSize - WaveformAssist.gripExteriorGap
-    }
-
     var body: some View {
-        let size = ScopePanelPlacement.fittedSize(
-            WaveformAssist.panelSize(scale: store.presentationScale(in: canvas)), in: movementBounds
-        )
+        let bounds = ScopePanelPlacement.bounds(in: canvas, clearance: chromeClearance)
+        let scale = store.presentationScale(in: canvas)
+        let preferred = WaveformAssist.panelSize(scale: scale)
+        let size = ScopePanelPlacement.fittedSize(preferred, in: bounds)
         let fallback = WaveformAssist.defaultCenter(
             feed: feed, size: size, bounds: canvas, chromeClearance: chromeClearance)
-        let rawCenter = WaveformAssist.resolvedCenter(
+        let center = WaveformAssist.resolvedCenter(
             session: store.sessionCenter(in: canvas),
-            stored: store.storedCenter(in: canvas),
-            defaultCenter: fallback,
-            size: size,
+            stored: store.storedCenter(in: canvas), defaultCenter: fallback, size: size,
             bounds: canvas)
-        let center = ScopePanelPlacement.clamp(rawCenter, size: size, in: movementBounds)
-        let gripPad = WaveformAssist.gripHitSize - gripCornerInset
-        ZStack(alignment: .topLeading) {
-            content()
-                .overlay(alignment: .bottomTrailing) {
-                    resizeHandle
-                        .offset(x: gripPad, y: ScopePanelPlacement.gripBottomExtent)
+        MonitorMovableScopePanel(
+            layout: MonitorScopePanelLayout(
+                baseSize: WaveformAssist.baseSize,
+                preferredSize: preferred, center: center, scale: scale, canvas: canvas,
+                movementBounds: bounds),
+            enabled: !interfaceLocked, resizeLabel: "Resize waveform",
+            onMove: { event in
+                switch event {
+                case .began(let center): store.beginDrag(center: center, in: canvas)
+                case .changed(let center): store.drag(to: center, in: canvas)
+                case .ended: store.endDrag(bounds: canvas)
+                case .cancelled(let retiredCanvas): store.cancelDrag(bounds: retiredCanvas)
                 }
-                .frame(width: size.width, height: size.height, alignment: .topLeading)
-                .padding(WaveformAssist.dragHitPadding)
-                .contentShape(Rectangle())
-                .padding(-WaveformAssist.dragHitPadding)
-                .gesture(interfaceLocked ? nil : panelDragGesture(center: center))
-                .simultaneousGesture(
-                    interfaceLocked
-                        ? nil
-                        : LongPressGesture(
-                            minimumDuration: WaveformAssist.holdDuration, maximumDistance: 4
-                        ).onEnded { _ in
-                            guard !isDragging else { return }
-                            let frame = CGRect(
-                                x: center.x - size.width / 2, y: center.y - size.height / 2,
-                                width: size.width, height: size.height)
-                            WaveformAssistHaptics.confirm()
-                            onOpenOptions?(frame)
-                        })
-        }
-        .frame(
-            width: size.width + gripPad,
-            height: size.height + ScopePanelPlacement.gripBottomExtent,
-            alignment: .topLeading
-        )
-        .opacity(ScopePanelPlacement.isUsable(movementBounds) ? 1 : 0)
-        .shadow(color: .black.opacity((isDragging || isResizing) ? 0.5 : 0), radius: 18, y: 8)
-        .position(x: center.x + gripPad / 2, y: center.y + ScopePanelPlacement.gripBottomExtent / 2)
-        .sensoryFeedback(trigger: isDragging) { _, dragging in
-            dragging ? .impact(flexibility: .rigid, intensity: 1) : nil
-        }
-        .sensoryFeedback(.selection, trigger: snapCell)
-        .sensoryFeedback(trigger: isResizing) { _, resizing in
-            resizing ? .impact(flexibility: .rigid, intensity: 0.8) : nil
-        }
-        .animation(.easeOut(duration: 0.14), value: isDragging)
-        .animation(.easeOut(duration: 0.14), value: isResizing)
-        .allowsHitTesting(!interfaceLocked && ScopePanelPlacement.isUsable(movementBounds))
-    }
-
-    /// Drag the panel body to reposition (not applied to the resize grip).
-    private func panelDragGesture(center: CGPoint) -> some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .global)
-            .onChanged { drag in
-                if !isDragging {
-                    isDragging = true
-                    dragOrigin = center
-                    store.beginDrag(center: center, in: canvas)
-                }
-                guard let origin = dragOrigin else { return }
-                let proposed = CGPoint(
-                    x: origin.x + drag.translation.width,
-                    y: origin.y + drag.translation.height)
-                let size = ScopePanelPlacement.fittedSize(
-                    WaveformAssist.panelSize(scale: store.presentationScale(in: canvas)),
-                    in: movementBounds)
-                let snapped = ScopePanelPlacement.clamp(
-                    WaveformAssist.snap(proposed), size: size, in: movementBounds)
-                let cell = WaveformAssist.hapticCell(snapped)
-                if cell != snapCell { snapCell = cell }
-                store.drag(to: snapped, in: canvas)
-            }
-            .onEnded { _ in
-                store.endDrag(bounds: canvas)
-                isDragging = false
-                dragOrigin = nil
-            }
-    }
-
-    private var resizeHandle: some View {
-        let gripColor = isResizing ? LiveDesign.accent : LiveDesign.muted
-        return WaveformCornerResizeGrip()
-            .stroke(gripColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .square))
-            .frame(
-                width: WaveformAssist.gripVisualSize, height: WaveformAssist.gripVisualSize,
-                alignment: .bottomTrailing
-            )
-            .offset(y: ScopePanelPlacement.gripTopInterior - gripCornerInset)
-            .frame(
-                width: WaveformAssist.gripHitSize, height: WaveformAssist.gripHitSize,
-                alignment: .topLeading
-            )
-            .contentShape(Rectangle())
-            .gesture(interfaceLocked ? nil : resizeGesture)
-            .accessibilityLabel("Resize waveform")
-    }
-
-    private var resizeGesture: some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .global)
-            .onChanged { drag in
-                if !isResizing {
-                    isResizing = true
-                    resizeStartScale = store.presentationScale(in: canvas)
-                }
-                let reach = WaveformAssist.baseSize.width + WaveformAssist.baseSize.height
-                let delta = (drag.translation.width + drag.translation.height) / reach
-                store.setScale(resizeStartScale + delta)
-            }
-            .onEnded { _ in isResizing = false }
+            }, onResize: { store.setScale($0) },
+            onOpenOptions: onOpenOptions, onConfirm: { WaveformAssistHaptics.confirm() },
+            content: content)
     }
 }
 
-/// OpenZCine `CornerResizeGrip` — L-bracket at the bottom-trailing exterior corner.
-struct WaveformCornerResizeGrip: Shape {
-    func path(in rect: CGRect) -> Path {
-        let leg = min(rect.width, rect.height)
-        let vertex = CGPoint(x: rect.maxX, y: rect.maxY)
-        var path = Path()
-        path.move(to: vertex)
-        path.addLine(to: CGPoint(x: vertex.x - leg, y: vertex.y))
-        path.move(to: vertex)
-        path.addLine(to: CGPoint(x: vertex.x, y: vertex.y - leg))
-        return path
-    }
-}
+
 
 /// OpenZCine `OperatorSettingsHaptics.selection`.
 private enum WaveformAssistHaptics {

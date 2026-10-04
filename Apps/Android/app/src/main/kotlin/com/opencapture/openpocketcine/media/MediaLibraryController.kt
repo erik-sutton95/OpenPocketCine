@@ -1,18 +1,26 @@
 package com.opencapture.openpocketcine.media
 
-import com.opencapture.opencine.dji.MediaBrowsePolicy
-import com.opencapture.opencine.dji.MediaLiveResumeRunner
 import android.content.Context
-import android.os.SystemClock
-import android.util.Log
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.lut.ClipColorProfile
-import com.opencapture.opencine.dji.DumlFrame
+import com.opencapture.opencine.dji.DjiAndroidMediaGalleryCover
 import com.opencapture.opencine.dji.DjiCameraSession
+import com.opencapture.opencine.dji.DJIMediaCatalogRecordSource
+import com.opencapture.opencine.media.CameraMediaService
+import com.opencapture.opencine.media.MediaCatalog
+import com.opencapture.opencine.media.*
+import com.opencapture.openpocketcine.feed.MonitorTransfer
+import com.opencapture.openpocketcine.feed.fromColorMode
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import com.opencapture.opencine.appkit.*
+import com.opencapture.opencine.dji.DjiAndroidMediaAssets
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,19 +30,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private data class MediaQueryPage(
-    val files: List<MediaFile>,
-    val slices: Map<Int, MediaPageSliceInfo>,
-)
-
 class MediaLibraryController(
     context: Context,
     private val session: DjiCameraSession,
     link: MediaSessionLink? = null,
+    private val mediaService: (() -> CameraMediaService?) = { session.services.get<CameraMediaService>() },
+    cacheOwner: MediaCache? = null,
 ) {
     private val appContext = context.applicationContext
-    private val cache =
-        MediaCache(
+    private val cache = cacheOwner ?: MediaCache(
             filesDir = appContext.noBackupFilesDir,
             prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE),
         )
@@ -46,113 +50,99 @@ class MediaLibraryController(
                 rememberCameraId = { cache.rememberCameraId(it) },
             )
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val assembler = MediaChunkAssembler()
-    private var browseJob: Job? = null
-    private var resumeJob: Job? = null
-    private var browseGeneration = 0
-    private var resumeGeneration = 0
-    private var unhookFrames: (() -> Unit)? = null
+    /** Canonical namespace captured for this actual gallery; a different camera creates a new owner. */
+    val cameraId = this.link.cameraId
+    private var sourceOwner: CameraMediaService? = null
+    private val codec = PocketMediaLibraryCodec(
+        source = { sourceOwner as? DJIMediaCatalogRecordSource },
+        sourceOwnsFavorites = { isNanoBody },
+        color = { cache.readShotColor(it.path, cameraId) })
+    private val sharedCache = MonitorMediaCache(
+        cache.directory(cameraId), codec,
+        MonitorMediaOriginalEligibility.ExactSize, "index.json", listOf("index.json", "color.json"),
+        persistEmptyCatalog = false)
+    val library = MonitorMediaLibraryModel(sharedCache, PocketMediaFavoritesStore(cache, cameraId),
+        scope = scope, cacheScanning = MonitorMediaCacheScanning.BACKGROUND,
+        initialCatalog = MediaCatalog(),
+        initialRecords = cache.loadCatalog(cameraId).map { codec.record(it, cachedShotColor(it)) },
+        copy = MonitorMediaLibraryCopy(openFailed = MediaOperatorCopy.LIST_FAILED,
+            listFailed = MediaOperatorCopy.LIST_FAILED, downloadFailed = MediaOperatorCopy.DOWNLOAD_FAILED,
+            listing = MediaOperatorCopy.LISTING, empty = MediaOperatorCopy.NO_CLIPS),
+        catalogBase = MonitorMediaCatalogBase.FRESH_LISTING)
+    private var galleryCover: DjiAndroidMediaGalleryCover? = null
     private var actionCounter = 1L
     private val storageWinner = HashMap<String, Int>()
     private val thumbInFlight = HashSet<String>()
     private val downloadInFlight = HashSet<String>()
-    private var browsing = false
-    private var playbackHeld = false
-
-    var files by mutableStateOf<List<MediaFile>>(emptyList())
-        private set
-    var fetchInProgress by mutableStateOf(false)
-        private set
-    var listedCount by mutableIntStateOf(0)
-        private set
-    var note by mutableStateOf<String?>(null)
+    private val progressOwners = HashMap<String, java.util.UUID>()
+    private var released = false
+    private var actionNote by mutableStateOf<String?>(null)
     var downloadProgress by mutableStateOf<Map<String, Double>>(emptyMap())
         private set
-    var localFavorites by mutableStateOf<Set<String>>(emptySet())
-        private set
 
-    val isLive: Boolean
-        get() = session.phaseFlow.value == ConnectionPhase.LIVE && link.isLive
+    val files: List<MediaFile> get() = library.state.value.records.map(::file)
+    val fetchInProgress: Boolean get() = library.state.value.fetching ||
+        (library.state.value.browsing && sourceOwner != null && library.binding == null)
+    val listedCount: Int get() = library.state.value.records.size
+    var note: String?
+        get() = actionNote ?: library.state.value.note
+        set(value) { actionNote = value }
+    val isLive: Boolean get() = session.phaseFlow.value == ConnectionPhase.LIVE && link.isLive
+    private val browsing: Boolean get() = library.state.value.browsing
 
-    val cameraId: String
-        get() = link.cameraId
+    fun file(record: MonitorMediaRecord<MediaFile>): MediaFile = record.payload.copy(isStarred = record.favorite)
+    fun record(file: MediaFile): MonitorMediaRecord<MediaFile>? = library.record(DjiAndroidMediaAssets.asset(file).id)
 
     fun beginBrowse() {
-        resumeJob?.cancel()
-        resumeGeneration += 1
-        browseJob?.cancel()
-        loadFavorites()
-        loadCachedCatalogIfNeeded()
-        playbackHeld = false
-        browsing = true
-        session.markBrowsingMedia(true)
-        if (!isLive) {
-            session.setMediaTransportBrowsing(false)
-            fetchInProgress = false
-            note = if (files.isEmpty()) MediaOperatorCopy.NOT_CONNECTED else null
-            return
-        }
-        session.setMediaTransportBrowsing(true)
-        if (session.cameraGalleryOpen.value) {
-            // The camera owns playback (#273). DJI Mimo sends no enter or listing;
-            // ours put "Playback in progress" on the body. Show the cached catalog.
-            fetchInProgress = false
-            note = MediaOperatorCopy.BROWSING_ON_CAMERA
-            Log.i(TAG, "media: opened for camera gallery — no enter playback")
-            return
-        }
-        fetchInProgress = true
-        listedCount = files.size
-        note = MediaOperatorCopy.LISTING
-        val id = nextBrowseId()
-        browseJob = scope.launch { runBrowse(id) }
+        if (released) return
+        library.close()
+        galleryCover?.close()
+        galleryCover = session.claimMediaGalleryCover()
+        sourceOwner = if (isLive) mediaService() else null
+        library.bind(sourceOwner)
+        library.visibility(if (isLive) MonitorMediaLibraryVisibility.ALL_RECORDS else MonitorMediaLibraryVisibility.CACHED_ONLY)
+        actionNote = if (!isLive && files.isEmpty()) MediaOperatorCopy.NOT_CONNECTED else null
+        library.begin()
     }
-
     fun endBrowse() {
-        browseJob?.cancel()
-        browseJob = null
-        browseGeneration += 1
-        fetchInProgress = false
-        assembler.reset()
-        browsing = false
-        playbackHeld = false
-        val pictureOwner = session.markBrowsingMedia(false, resumePending = isLive)
-        note = null
-        unhookFrames?.invoke()
-        unhookFrames = null
-        if (!isLive) {
-            session.setMediaTransportBrowsing(false)
-            return
-        }
-        val token = nextResumeId()
-        resumeJob =
-            resumeScope.launch {
-                session.withMediaLiveResumeOwner(pictureOwner) {
-                    resumeLiveView(token, pictureOwner)
-                }
-            }
+        progressOwners.clear(); downloadProgress = emptyMap()
+        library.close()
+        galleryCover?.close(); galleryCover = null
+        actionNote = null
     }
-
     fun release() {
+        if (released) return
+        released = true
         endBrowse()
-        scope.coroutineContext[Job]?.cancel()
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            try { withContext(NonCancellable) { library.dispose() } }
+            finally { scope.coroutineContext[Job]?.cancel() }
+        }
     }
-
+    /** Settings clear is a local observation; it cannot open/query or replace raw source facts. */
+    fun cacheContentsChanged() {
+        val token = library.actionToken
+        val directory = cache.directory(cameraId)
+        val generation = directory.generation
+        val captured = library.state.value.records.toList()
+        scope.launch {
+            val facts = withContext(Dispatchers.IO) {
+                captured.associate { it.asset.id to codec.record(it.payload, cache.readShotColor(it.payload.path, cameraId)).facts }
+            }
+            if (released || !library.isCurrent(token) || directory.generation != generation) return@launch
+            library.updateLocalFacts(facts, token)
+            library.refreshLocalCache()
+        }
+    }
+    fun visibilityChanged() {
+        library.visibility(if (isLive) MonitorMediaLibraryVisibility.ALL_RECORDS else MonitorMediaLibraryVisibility.CACHED_ONLY)
+    }
     fun refresh() {
-        loadFavorites()
-        if (!isLive) {
-            note = MediaOperatorCopy.NOT_CONNECTED
-            return
-        }
-        if (!browsing) {
-            beginBrowse()
-            return
-        }
+        if (released) return
+        if (!isLive) { actionNote = MediaOperatorCopy.NOT_CONNECTED; visibilityChanged(); return }
+        if (!browsing || library.binding == null || mediaService() !== sourceOwner) { beginBrowse(); return }
         if (fetchInProgress) return
-        fetchInProgress = true
-        note = MediaOperatorCopy.LISTING
-        val id = nextBrowseId()
-        browseJob = scope.launch { listAllPages(id, includeOlderPages = playbackHeld) }
+        actionNote = null; library.refresh()
     }
 
     fun isDownloaded(file: MediaFile): Boolean = cache.isDownloaded(file, cameraId)
@@ -166,447 +156,277 @@ class MediaLibraryController(
     fun cachedShotColor(file: MediaFile): Int = cache.shotColor(file.path, cameraId, appContext)
 
     /** Shot color for Auto LUT. Never the LRF/XRF sidecar (Rec.709 even on D-Log2). */
-    fun fetchShotColor(file: MediaFile): Int {
-        localFile(file)?.let { original ->
+    suspend fun fetchShotColor(file: MediaFile): Int {
+        val capture = withContext(Dispatchers.Main.immediate) {
+            operation(file)?.let { operation ->
+                Triple(operation, localFile(file), cache.shotColor(file.path, cameraId, appContext))
+            }
+        } ?: return -1
+        val (operation, original, cached) = capture
+        if (original != null) {
             val mode = ClipColorProfile.shotColorFromFile(original, file.path)
             if (mode >= 0) {
-                cache.rememberShotColor(file.path, mode, cameraId)
-                return mode
+                withContext(Dispatchers.Main.immediate) {
+                    if (operation.isCurrent()) rememberColor(file, mode, operation)
+                }
+                return withContext(Dispatchers.Main.immediate) { if (operation.isCurrent()) mode else -1 }
             }
         }
-        val cached = cache.shotColor(file.path, cameraId, appContext)
         if (cached >= 0) return cached
-        if (!isLive) return -1
+        val storage = withContext(Dispatchers.Main.immediate) {
+            if (operation.isCurrent() && isLive) resolvedStorage(file) else null
+        } ?: return -1
         return try {
             val range = ClipColorProfile.httpRange(file.sizeBytes)
             val cap = ClipColorProfile.FILE_TAIL_BYTES * 3
-            val (data, storage) =
-                MediaTransfer.fetchRange(resolvedStorage(file), file.path, range, cap)
-            rememberStorage(storage, file.path)
+            val (data, winner) = MediaTransfer.fetchRange(storage, file.path, range, cap)
             val mode = ClipColorProfile.colorModeFromMp4(data)
-            if (mode >= 0) cache.rememberShotColor(file.path, mode, cameraId)
-            mode
-        } catch (_: Exception) {
-            -1
-        }
+            withContext(Dispatchers.Main.immediate) {
+                if (!operation.isCurrent()) return@withContext -1
+                rememberStorage(winner, file.path)
+                if (mode >= 0) rememberColor(file, mode, operation)
+                mode
+            }
+        } catch (_: Exception) { -1 }
     }
 
     fun thumbnailFile(file: MediaFile): File? = cache.existingFile(cache.thumbnailFile(cameraId, file))
 
     fun localPlaybackFile(file: MediaFile): File? = cache.localPlaybackFile(file, cameraId)
 
-    fun isFavorite(file: MediaFile): Boolean {
-        if (isNanoBody) return file.isStarred
-        return file.isStarred || localFavorites.contains(file.path)
-    }
+    fun isFavorite(file: MediaFile): Boolean = record(file)?.favorite ?: file.isStarred
 
     fun toggleFavorite(file: MediaFile) {
-        val on = !isFavorite(file)
-        applyLocalFavorite(file.path, on)
-        files =
-            files.map {
-                if (it.path == file.path) it.copy(isStarred = on) else it
-            }
+        val current = record(file) ?: return
+        val token = library.actionToken
+        val source = session.mediaConnectionIdentity
+        val on = !current.favorite
+        val keys = cache.loadFavorites(cameraId).let { if (on) it + file.path else it - file.path }
+        // Original path-based action authority updates both real-storage rows with that path.
+        val changed = library.state.value.records.filter { it.payload.path == file.path }.map {
+            it.copy(payload = it.payload.copy(isStarred = on), favorite = on, sourceFavorite = on)
+        }
+        library.applyLocalRecords(MonitorMediaCatalogCapture(resetLibrary = false, upserts = changed, sourceFavoriteKeys = keys), token)
         val handle = file.favoriteHandle
         if (handle == 0L || !isLive || !browsing) return
         val counter = nextActionCounter()
         scope.launch {
-            link.sendDuml(
-                MediaCommands.SET_CAMERA,
-                MediaCommands.CMD_MEDIA_FAVORITE,
-                MediaCommands.favoritePayload(handle, on, counter),
-            )
+            if (released || !library.isCurrent(token) || record(file)?.asset?.id != current.asset.id || !isLive || source == null || session.mediaConnectionIdentity != source) return@launch
+            link.sendDuml(MediaCommands.SET_CAMERA, MediaCommands.CMD_MEDIA_FAVORITE,
+                MediaCommands.favoritePayload(handle, on, counter))
         }
     }
 
     fun canDelete(file: MediaFile): Boolean = isLive && browsing && file.isDeletable
 
-    suspend fun delete(file: MediaFile) {
+    suspend fun delete(file: MediaFile): MediaAssetID? {
         if (!file.isDeletable) {
             note = MediaOperatorCopy.NOT_DELETABLE
-            return
+            return null
         }
         if (!browsing || !isLive) {
             note = MediaOperatorCopy.NOT_CONNECTED
-            return
+            return null
         }
+        val token = library.actionToken
+        val captured = record(file) ?: return null
+        val source = session.mediaConnectionIdentity ?: return null
+        val operation = operation(file) ?: return null
         val counter = nextActionCounter()
-        link.sendDuml(
-            MediaCommands.SET_GENERAL,
-            MediaCommands.CMD_MEDIA_DELETE,
-            MediaCommands.deletePayload(file.handle, counter),
-        )
-        delay(400)
-        dropFile(file.path)
+        return deletePocketCapturedContent(captured.asset.id,
+            admitted = { operation.isCurrent() && session.mediaConnectionIdentity == source && isLive &&
+                record(file)?.asset?.id == captured.asset.id },
+            send = { link.sendDuml(MediaCommands.SET_GENERAL, MediaCommands.CMD_MEDIA_DELETE,
+                MediaCommands.deletePayload(file.handle, counter)) },
+            remove = { dropFile(file, token); library.record(captured.asset.id) == null })
     }
 
     suspend fun ensureThumbnail(file: MediaFile) {
-        if (!isLive) return
-        if (thumbnailFile(file) != null) return
-        if (!thumbInFlight.add(file.path)) return
+        if (!isLive || thumbnailFile(file) != null) return
+        val operation = operation(file) ?: return
+        val key = operationKey(file)
+        if (!thumbInFlight.add(key)) return
+        val storage = resolvedStorage(file)
+        val address = relative(cache.thumbnailFile(cameraId, file))
         try {
-            val storage = resolvedStorage(file)
-            val data =
-                withContext(Dispatchers.IO) {
-                    MediaTransfer.fetchBytes(storage, MediaHTTP.thumbnailPath(file)).first
-                }
-            if (data.isEmpty()) throw MediaTransferError.BadResponse
-            cache.writeAtomically(data, cache.thumbnailFile(cameraId, file))
+            val data = withContext(Dispatchers.IO) {
+                MediaTransfer.fetchBytes(storage, MediaHTTP.thumbnailPath(file)).first
+            }
+            operation.thumbnail(address, data)
+            if (operation.isCurrent()) library.refreshLocalCache()
         } catch (_: Exception) {
-            if (note == null) note = MediaOperatorCopy.THUMB_FAILED
-        } finally {
-            thumbInFlight.remove(file.path)
-        }
+            if (operation.isCurrent() && note == null) note = MediaOperatorCopy.THUMB_FAILED
+        } finally { thumbInFlight.remove(key) }
     }
 
     suspend fun download(file: MediaFile) {
-        if (isDownloaded(file)) {
-            finishProgress(file.path)
-            return
-        }
-        if (!isLive) {
-            note = MediaOperatorCopy.CLIP_NOT_CACHED
-            return
-        }
-        if (!downloadInFlight.add(file.path)) return
-        setProgress(file.path, 0.0)
+        val operation = operation(file) ?: return
+        if (isDownloaded(file)) { finishProgress(file.path, operation); return }
+        if (!isLive) { note = MediaOperatorCopy.CLIP_NOT_CACHED; return }
+        val key = operationKey(file)
+        if (!downloadInFlight.add(key)) return
+        beginProgress(file.path, operation)
+        val storage = resolvedStorage(file)
         try {
-            val dest = cache.fileCache(cameraId, file)
-            val storage = resolvedStorage(file)
-            withContext(Dispatchers.IO) {
-                MediaTransfer.downloadFile(
-                    storage = storage,
-                    path = MediaHTTP.deliveryPath(file),
-                    dest = dest,
-                    expectedSize = file.sizeBytes,
-                    onProgress = { p -> setProgress(file.path, p) },
-                )
+            val dest = operation.download(relative(cache.fileCache(cameraId, file)), appContext.cacheDir) { staged ->
+                withContext(Dispatchers.IO) {
+                    MediaTransfer.downloadFile(storage, MediaHTTP.deliveryPath(file), staged, file.sizeBytes,
+                        onProgress = { progress -> publishProgress(file.path, operation, progress) })
+                }
             }
-            if (cache.existingFile(dest) == null) throw MediaTransferError.BadResponse
+            if (!operation.isCurrent()) return
             rememberStorage(storage, file.path)
-            val mode = ClipColorProfile.shotColorFromFile(dest, file.path)
-            if (mode >= 0) cache.rememberShotColor(file.path, mode, cameraId)
-            finishProgress(file.path)
+            val mode = withContext(Dispatchers.IO) { ClipColorProfile.shotColorFromFile(dest, file.path) }
+            if (!operation.isCurrent()) return
+            if (mode >= 0) rememberColor(file, mode, operation)
+            library.refreshLocalCache()
+            finishProgress(file.path, operation)
         } catch (_: Exception) {
-            clearProgress(file.path)
-            note = MediaOperatorCopy.DOWNLOAD_FAILED
-        } finally {
-            downloadInFlight.remove(file.path)
-        }
+            clearProgress(file.path, operation)
+            if (operation.isCurrent()) note = MediaOperatorCopy.DOWNLOAD_FAILED
+        } finally { downloadInFlight.remove(key) }
     }
 
     /**
-     * Pull a playable local copy. Prefers the 720p LRF/XRF sidecar even when the
-     * 4K original is already cached for export. Streams that sidecar to disk
-     * (same as the original fallback) — never a RAM copy. Never returns a `/v2`
-     * URL.
+     * Original proxy order and streaming fallback remain host policy. Canonical commits use the
+     * shared directory lease so a clear or content replacement cannot accept an outgoing result.
      */
     suspend fun cacheForPlayback(file: MediaFile): File? {
+        val operation = operation(file) ?: return null
         cache.localProxyFile(file, cameraId)?.let { return it }
         if (isLive) {
-            setProgress(file.path, 0.0)
+            beginProgress(file.path, operation)
             for (path in MediaHTTP.proxyPaths(file)) {
+                if (!operation.isCurrent()) return null
                 val dest = cache.playbackCache(cameraId, file, path)
-                cache.existingFile(dest)?.let {
-                    clearProgress(file.path)
-                    return it
-                }
+                cache.existingFile(dest)?.let { clearProgress(file.path, operation); return it }
+                val storage = resolvedStorage(file)
                 try {
-                    val storage = resolvedStorage(file)
-                    withContext(Dispatchers.IO) {
-                        MediaTransfer.downloadFile(
-                            storage = storage,
-                            path = path,
-                            dest = dest,
-                            onProgress = { p -> setProgress(file.path, p) },
-                        )
+                    val committed = operation.download(relative(dest), appContext.cacheDir) { staged ->
+                        withContext(Dispatchers.IO) {
+                            MediaTransfer.downloadFile(storage, path, staged,
+                                onProgress = { progress -> publishProgress(file.path, operation, progress) })
+                        }
                     }
+                    if (!operation.isCurrent()) return null
                     rememberStorage(storage, file.path)
-                    clearProgress(file.path)
-                    cache.existingFile(dest)?.let { return it }
-                } catch (_: Exception) {
-                    continue
-                }
+                    clearProgress(file.path, operation)
+                    library.refreshLocalCache()
+                    return committed
+                } catch (_: Exception) { if (!operation.isCurrent()) { clearProgress(file.path, operation); return null } }
             }
-            clearProgress(file.path)
+            clearProgress(file.path, operation)
         }
+        if (!operation.isCurrent()) return null
         cache.existingFile(cache.fileCache(cameraId, file))?.let { return it }
         if (!isLive) return null
-        setProgress(file.path, 0.0)
+        beginProgress(file.path, operation)
         val original = file.path
-        val dest = cache.playbackCache(cameraId, file, original)
+        val storage = resolvedStorage(file)
         return try {
-            val storage = resolvedStorage(file)
-            withContext(Dispatchers.IO) {
-                MediaTransfer.downloadFile(
-                    storage = storage,
-                    path = original,
-                    dest = dest,
-                    expectedSize = file.sizeBytes,
-                    onProgress = { p -> setProgress(file.path, p) },
-                )
+            val committed = operation.download(relative(cache.playbackCache(cameraId, file, original)),
+                appContext.cacheDir) { staged ->
+                withContext(Dispatchers.IO) {
+                    MediaTransfer.downloadFile(storage, original, staged, file.sizeBytes,
+                        onProgress = { progress -> publishProgress(file.path, operation, progress) })
+                }
             }
+            if (!operation.isCurrent()) return null
             rememberStorage(storage, original)
-            finishProgress(file.path)
-            cache.existingFile(dest)
+            library.refreshLocalCache()
+            finishProgress(file.path, operation)
+            committed
         } catch (_: Exception) {
-            clearProgress(file.path)
+            clearProgress(file.path, operation)
             null
         }
     }
 
-    private suspend fun runBrowse(id: Int) {
-        hookFrames()
-        val entered = enterPlayback()
-        if (id != browseGeneration) return
-        val decision = MediaBrowsePolicy.afterEnterPlayback(entered)
-        playbackHeld = entered
-        if (!entered) {
-            session.setMediaTransportBrowsing(false)
-            Log.i(TAG, "media: enter playback failed — listing newest page")
+    /** Capture on Main before suspension; nil source never grants an unrelated future camera. */
+    private fun operation(file: MediaFile): PocketMediaOperation? {
+        val captured = record(file) ?: return null
+        val token = library.actionToken
+        val source = session.mediaConnectionIdentity
+        return PocketMediaOperation(cache.directory(cameraId)) {
+            val currentSource = session.mediaConnectionIdentity
+            !released && library.isCurrent(token) && library.record(captured.asset.id) != null &&
+                if (source == null) currentSource == null else currentSource?.sameConnection(source) == true
         }
-        if (!decision.keepBrowsing) {
-            fetchInProgress = false
-            note = MediaOperatorCopy.PLAYBACK_FAILED
-            browsing = false
-            session.markBrowsingMedia(false)
-            return
-        }
-        listAllPages(id, includeOlderPages = decision.listOlderPages)
     }
 
-    private suspend fun enterPlayback(): Boolean {
-        repeat(3) { attempt ->
-            var acked = false
-            val unhook =
-                link.addFrameListener { frame ->
-                    if (frame.cmdSet == MediaCommands.SET_CAMERA && frame.cmdId == MediaCommands.CMD_PLAYBACK) {
-                        if (MediaCommands.isReplySuccess(frame.payload)) acked = true
-                    }
-                }
-            link.sendEnterPlayback()
-            val deadline = SystemClock.elapsedRealtime() + 900
-            while (SystemClock.elapsedRealtime() < deadline) {
-                if (acked || link.inPlayback) {
-                    unhook()
-                    return true
-                }
-                delay(40)
-            }
-            unhook()
-            if (link.inPlayback) return true
-            delay(120)
-            if (attempt == 2) return link.inPlayback
-        }
-        return link.inPlayback
+    /** Pure captured authority: StateFlow and directory generation are safe on native threads. */
+    fun playbackAdmission(record: MonitorMediaRecord<MediaFile>): MonitorPlaybackAdmission =
+        capturePocketPlaybackAdmission(library, cache.directory(cameraId), record)
+
+    /** Source order is the original Pocket recipe; a cached original never outranks a live proxy. */
+    fun playbackCandidates(record: MonitorMediaRecord<MediaFile>): List<MonitorPlaybackCandidate> {
+        val file = record.payload
+        if (this.record(file)?.asset?.id != record.asset.id) return emptyList()
+        val operation = operation(file) ?: return emptyList()
+        return pocketPlaybackCandidates(file, live = isLive,
+            cached = { path -> cache.existingFile(cache.playbackCache(cameraId, file, path)) },
+            download = { path, role ->
+                val storage = resolvedStorage(file)
+                MonitorPlaybackCandidate.HostDownload(
+                    relative(cache.playbackCache(cameraId, file, path)), MediaHTTP.playbackMIMEType(path),
+                    path, role, MonitorPlaybackAdmission(operation::isCurrent),
+                    didCommit = {
+                        if (operation.isCurrent()) {
+                            rememberStorage(storage, file.path)
+                            if (role == MediaRepresentationRole.ORIGINAL) finishProgress(file.path, operation)
+                            else clearProgress(file.path, operation)
+                        }
+                    },
+                    transfer = { sink -> transferPlaybackFile(file, path, storage, role, operation, sink) })
+            })
     }
 
-    private suspend fun listAllPages(id: Int, includeOlderPages: Boolean = true) {
+    suspend fun resolvePlaybackLook(record: MonitorMediaRecord<MediaFile>): MonitorPlaybackLook<PocketPlaybackLook>? {
+        val admission = playbackAdmission(record)
+        val mode = withContext(Dispatchers.IO) { fetchShotColor(record.payload) }
+        if (!admission.isCurrent()) return null
+        return MonitorPlaybackLook(mode.takeIf { it >= 0 }?.let { MonitorTransfer.fromColorMode(it) },
+            PocketPlaybackLook(mode))
+    }
+
+    /** The original HTTP primitive writes bounded disk staging; only the shared owner commits it. */
+    private suspend fun transferPlaybackFile(file: MediaFile, path: String, storage: Int,
+        role: MediaRepresentationRole, operation: PocketMediaOperation, sink: MediaByteSink): MediaTransferReceipt {
+        if (!operation.isCurrent()) throw MediaServiceException(MediaServiceFailure.RETIRED)
+        beginProgress(file.path, operation)
+        val staged = File(appContext.cacheDir, "opc-player-${java.util.UUID.randomUUID()}.incoming")
         try {
-            val collected = ArrayList<MediaFile>()
-            val seen = HashSet<String>()
-            var sdCursor = MediaListCommand.NEWEST_SD
-            var internalCursor = MediaListCommand.NEWEST_INTERNAL
-            var first = true
-            while (id == browseGeneration) {
-                val page = queryPage(sdCursor, internalCursor, retryEmptySd = first && playbackHeld)
-                val step =
-                    if (first) {
-                        MediaListCommand.seedPagination(page.files, seen, page.slices)
-                    } else {
-                        MediaListCommand.stepPagination(
-                            sdCursor,
-                            internalCursor,
-                            page.files,
-                            seen,
-                            page.slices,
-                        )
-                    }
-                first = false
-                sdCursor = step.sdCursor
-                internalCursor = step.internalCursor
-                collected.addAll(step.fresh.map(::applyFavoriteOverlay))
-                publish(collected)
-                if (!includeOlderPages || !step.moreAvailable) break
+            val ownerDispatcher = currentCoroutineContext()[kotlin.coroutines.ContinuationInterceptor]
+                as? kotlinx.coroutines.CoroutineDispatcher ?: Dispatchers.Main.immediate
+            withContext(Dispatchers.IO) {
+                MediaTransfer.downloadFile(storage, path, staged,
+                    if (role == MediaRepresentationRole.ORIGINAL) file.sizeBytes else 0,
+                    onProgress = { value -> publishProgress(file.path, operation, value) })
             }
-            if (id != browseGeneration) return
-            note =
-                when {
-                    collected.isNotEmpty() -> null
-                    !assembler.hasResponse -> MediaOperatorCopy.LIST_FAILED
-                    else -> MediaOperatorCopy.NO_CLIPS
-                }
-        } finally {
-            if (id == browseGeneration) fetchInProgress = false
-        }
+            pumpPocketPlaybackFile(staged, sink, operation, ownerDispatcher)
+            if (!operation.isCurrent()) throw MediaServiceException(MediaServiceFailure.RETIRED)
+            return MediaTransferReceipt(staged.length(),
+                if (role == MediaRepresentationRole.ORIGINAL) file.sizeBytes.takeIf { it > 0 } else null)
+        } catch (error: Exception) {
+            clearProgress(file.path, operation)
+            throw error
+        } finally { staged.delete() }
     }
 
-    private suspend fun queryPage(
-        sdCursor: Long,
-        internalCursor: Long,
-        retryEmptySd: Boolean,
-    ): MediaQueryPage {
-        assembler.reset()
-        val deadlineMs = SystemClock.elapsedRealtime() + 12_000L
-        link.sendMediaList(MediaListCommand.SD_COUNTER, sdCursor)
-        collectChunks(
-            MediaListCommand.SD_COUNTER,
-            floorMs = 800,
-            idleMs = 1_000,
-            deadlineMs = deadlineMs,
-        )
-        link.sendMediaListTrigger()
-        collectChunks(null, floorMs = 400, idleMs = 200, deadlineMs = deadlineMs)
-        link.sendMediaList(MediaListCommand.INTERNAL_COUNTER, internalCursor)
-        collectChunks(
-            MediaListCommand.INTERNAL_COUNTER,
-            floorMs = 800,
-            idleMs = 1_000,
-            deadlineMs = deadlineMs,
-        )
-
-        if (
-            retryEmptySd &&
-            assembler.assembled(MediaListCommand.SD_COUNTER).isEmpty() &&
-            SystemClock.elapsedRealtime() < deadlineMs
-        ) {
-            Log.i(TAG, "media: SD store answered empty â€” re-asking once")
-            assembler.reset(MediaListCommand.SD_COUNTER)
-            link.sendMediaList(MediaListCommand.SD_COUNTER, sdCursor)
-            collectChunks(
-                MediaListCommand.SD_COUNTER,
-                floorMs = 800,
-                idleMs = 1_000,
-                deadlineMs = deadlineMs,
-            )
-            link.sendMediaListTrigger()
-            collectChunks(
-                MediaListCommand.SD_COUNTER,
-                floorMs = 400,
-                idleMs = 1_000,
-                deadlineMs = deadlineMs,
-            )
-        }
-
-        val slices =
-            mapOf(
-                MediaListCommand.SD_STORAGE to
-                    MediaManifest.sliceInfo(assembler, MediaListCommand.SD_COUNTER),
-                MediaListCommand.INTERNAL_STORAGE to
-                    MediaManifest.sliceInfo(assembler, MediaListCommand.INTERNAL_COUNTER),
-            )
-        return MediaQueryPage(MediaManifest.decodeStores(assembler), slices)
+    private fun rememberColor(file: MediaFile, mode: Int, operation: PocketMediaOperation) {
+        if (mode < 0 || !operation.isCurrent()) return
+        cache.rememberShotColor(file.path, mode, cameraId, operation.generation)
+        if (operation.isCurrent()) applyPocketMediaColor(library, codec, file, mode, library.actionToken)
     }
 
-    private suspend fun collectChunks(
-        counter: Int?,
-        floorMs: Long,
-        idleMs: Long,
-        deadlineMs: Long,
-    ) {
-        val start = SystemClock.elapsedRealtime()
-        var lastChange = start
-        var lastCount = counter?.let { assembler.chunkCount(it) } ?: assembler.chunkCount
-        while (true) {
-            val now = SystemClock.elapsedRealtime()
-            if (now >= deadlineMs) break
-            if (counter != null && now - start >= floorMs && assembler.didEnd(counter)) break
-            delay(50)
-            val count = counter?.let { assembler.chunkCount(it) } ?: assembler.chunkCount
-            if (count != lastCount) {
-                lastCount = count
-                lastChange = SystemClock.elapsedRealtime()
-            }
-            val afterDelay = SystemClock.elapsedRealtime()
-            if (afterDelay - start >= floorMs && afterDelay - lastChange >= idleMs) break
-        }
-    }
+    private fun operationKey(file: MediaFile): String = DjiAndroidMediaAssets.asset(file).id.toString()
+    private fun relative(file: File): String = file.relativeTo(cache.directory(cameraId).root).invariantSeparatorsPath
 
-    private suspend fun resumeLiveView(token: Int, pictureOwner: Long) {
-        try {
-            val resumeAt = SystemClock.elapsedRealtime()
-            val result = MediaLiveResumeRunner.run(
-                timeoutMs = com.opencapture.opencine.dji.LiveViewEnablePolicy.ENDPOINT_PICTURE_GRACE_MS,
-                nowMs = SystemClock::elapsedRealtime,
-                isCurrent = { token == resumeGeneration && !browsing && session.ownsMediaLiveResume(pictureOwner) },
-                inPlayback = { link.inPlayback },
-                pictureFresh = { session.hasRecoveryPicture(resumeAt) },
-                exitPlayback = {
-                    var acked = false
-                    val unhook = link.addFrameListener { frame ->
-                        if (frame.cmdSet == MediaCommands.SET_CAMERA &&
-                            frame.cmdId == MediaCommands.CMD_PLAYBACK &&
-                            MediaCommands.isReplySuccess(frame.payload)
-                        ) acked = true
-                    }
-                    try {
-                        link.sendExitPlayback()
-                        delay(450)
-                    } finally { unhook() }
-                    acked
-                },
-                enableLiveView = link::enableLiveView,
-            )
-            if (result == MediaLiveResumeRunner.Result.EXHAUSTED) {
-                session.mediaLiveResumeExhausted(pictureOwner)
-            }
-        } finally {
-            if (token == resumeGeneration && !browsing) {
-                session.setMediaTransportBrowsing(false)
-            }
-        }
-    }
-
-    private fun hookFrames() {
-        unhookFrames?.invoke()
-        unhookFrames =
-            link.addFrameListener { frame ->
-                ingestListFrame(frame)
-            }
-    }
-
-    private fun ingestListFrame(frame: DumlFrame) {
-        assembler.ingest(frame)
-    }
-
-    private fun publish(next: List<MediaFile>) {
-        if (isNanoBody) {
-            val fav = next.filter { it.isStarred }.map { it.path }.toSet()
-            localFavorites = fav
-            cache.persistFavorites(cameraId, fav)
-        }
-        files = next
-        listedCount = next.size
-        if (next.isNotEmpty()) cache.persistCatalog(next, cameraId)
-    }
-
-    private fun loadCachedCatalogIfNeeded() {
-        if (files.isEmpty()) files = cache.loadCatalog(cameraId)
-        listedCount = files.size
-    }
-
-    private fun loadFavorites() {
-        localFavorites = cache.loadFavorites(cameraId)
-    }
-
-    private fun applyFavoriteOverlay(file: MediaFile): MediaFile {
-        if (!isNanoBody && localFavorites.contains(file.path)) {
-            return file.copy(isStarred = true)
-        }
-        return file
-    }
-
-    private fun applyLocalFavorite(path: String, on: Boolean) {
-        localFavorites = if (on) localFavorites + path else localFavorites - path
-        cache.persistFavorites(cameraId, localFavorites)
-    }
-
-    private fun dropFile(path: String) {
-        files = files.filterNot { it.path == path }
-        listedCount = files.size
-        clearProgress(path)
-        applyLocalFavorite(path, on = false)
-        if (files.isNotEmpty()) cache.persistCatalog(files, cameraId)
+    private fun dropFile(file: MediaFile, token: MonitorMediaLibraryActionToken) {
+        if (record(file) == null) return
+        val removed = library.state.value.records.filter { it.payload.path == file.path }.map { it.asset.id }.toSet()
+        library.applyLocalRemoval(removed, token)
+        clearProgress(file.path)
     }
 
     private fun resolvedStorage(file: MediaFile): Int {
@@ -634,30 +454,36 @@ class MediaLibraryController(
     private val isNanoBody: Boolean
         get() = link.cameraName.contains("Nano", ignoreCase = true)
 
-    private fun setProgress(path: String, value: Double) {
+    private fun beginProgress(path: String, operation: PocketMediaOperation) {
+        if (!operation.isCurrent()) return
+        progressOwners[path] = operation.id
+        setProgress(path, operation, 0.0)
+    }
+    private fun setProgress(path: String, operation: PocketMediaOperation, value: Double) {
+        if (!operation.isCurrent() || progressOwners[path] != operation.id) return
         downloadProgress = downloadProgress + (path to value)
     }
-
-    private fun clearProgress(path: String) {
+    private fun publishProgress(path: String, operation: PocketMediaOperation, value: Double) {
+        scope.launch { setProgress(path, operation, value) }
+    }
+    private fun clearProgress(path: String, operation: PocketMediaOperation) {
+        if (progressOwners[path] != operation.id) return
+        progressOwners.remove(path)
         downloadProgress = downloadProgress - path
     }
-
-    private fun finishProgress(path: String) {
-        setProgress(path, 1.0)
+    private fun clearProgress(path: String) {
+        progressOwners.remove(path); downloadProgress = downloadProgress - path
+    }
+    private fun finishProgress(path: String, operation: PocketMediaOperation) {
+        if (!operation.isCurrent()) return
+        if (progressOwners[path] == null) progressOwners[path] = operation.id
+        setProgress(path, operation, 1.0)
         scope.launch {
             delay(450)
-            if (downloadProgress[path] == 1.0) clearProgress(path)
+            if (operation.isCurrent() && progressOwners[path] == operation.id && downloadProgress[path] == 1.0) {
+                clearProgress(path, operation)
+            }
         }
-    }
-
-    private fun nextBrowseId(): Int {
-        browseGeneration += 1
-        return browseGeneration
-    }
-
-    private fun nextResumeId(): Int {
-        resumeGeneration += 1
-        return resumeGeneration
     }
 
     private fun nextActionCounter(): Long {
@@ -668,8 +494,6 @@ class MediaLibraryController(
     }
 
     companion object {
-        private const val TAG = "OpenPocketCine"
         private const val PREFS = "openpocketcine.media"
-        private val resumeScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     }
 }

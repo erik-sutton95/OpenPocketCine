@@ -27,6 +27,7 @@ final class GuidesAssistTests: XCTestCase {
         XCTAssertEqual(GuideAspect.hd.ratio, 16.0 / 9.0, accuracy: 1e-9)
     }
 
+    @MainActor
     func testToggleAddsAndRemoves() {
         let assist = LiveAssistState()
         assist.selectedGuides = [.cinema]

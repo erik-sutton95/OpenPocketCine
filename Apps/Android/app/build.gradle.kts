@@ -267,6 +267,8 @@ dependencies {
     implementation("com.opencapture.opencine:media:0.1.0-SNAPSHOT")
     // Live-view MediaCodec decoder (HevcDecoder), shared with OpenInstaCine.
     implementation("com.opencapture.opencine:decoder:0.1.0-SNAPSHOT")
+    // Native source/publication/inspector and GLES/Vulkan owners; app supplies Media3 adapter.
+    implementation("com.opencapture.opencine:native-runtime:0.1.0-SNAPSHOT")
     // DJI BLE link, datalink, wire models, gimbal programs and the CameraSession adapter, with the
     // DjiNative JNI facade this app's Swift library implements.
     implementation("com.opencapture.opencine:dji:0.1.0-SNAPSHOT")

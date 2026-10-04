@@ -72,6 +72,114 @@ struct LiveViewScreen: View {
     }
 
     var body: some View {
+        liveInteractionObservers
+        .onChange(of: model.assist.clean) { _, clean in
+            if clean {
+                assistsExpanded = false
+                model.captureDrum = nil
+                closeZoomDial()
+                topMenu = nil
+                model.captureSheet = nil
+                model.assist.configureTool = nil
+            }
+        }
+        .onChange(of: model.chromeEditorMode) { _, mode in
+            if mode != nil {
+                assistsExpanded = false
+                model.captureDrum = nil
+                topMenu = nil
+                model.captureSheet = nil
+                model.assist.configureTool = nil
+            }
+        }
+        .onChange(of: model.chromeSectionMounts(.toolBar)) { _, mounted in
+            if !mounted { assistsExpanded = false }
+        }
+        .onChange(of: orientationObserver.orientation) { _, _ in model.captureDrum = nil }
+        .onChange(of: topMenu) { _, value in if value != nil { selectOverlay(.top) } }
+        .onChange(of: model.captureSheet) { _, value in if value != nil { selectOverlay(.capture) }
+        }
+        .onChange(of: model.captureDrum?.id) { _, value in if value != nil { selectOverlay(.drum) }
+        }
+        .onChange(of: model.assist.configureTool) { _, value in
+            if value != nil { selectOverlay(.assist) }
+        }
+        .onChange(of: model.liveGimbalPanel) { _, value in
+            if value != .none { selectOverlay(.gimbal) }
+        }
+        .sheet(isPresented: Bindable(model.assist).showLUTPicker) {
+            LUTPicker(assist: model.assist)
+        }
+    }
+
+    private var liveInteractionObservers: some View {
+        liveCanvasWithLifecycle
+        .onChange(of: interfaceLocked) { _, locked in
+            model.session.isLocked = locked
+            if locked {
+                assistsExpanded = false
+                model.captureDrum = nil
+                closeZoomDial()
+                topMenu = nil
+                model.captureSheet = nil
+                model.assist.configureTool = nil
+                gamepad.noteBlocked()
+                headphones.noteBlocked()
+                model.liveGimbalPanel = .none
+                model.session.cancelProgrammedMove()
+            }
+        }
+        // Camera-body gallery follows DJI Mimo: open Media with it, and close
+        // Media (which returns the camera to live) when the body leaves it.
+        .onChange(of: model.liveOperatorPanel) { old, next in
+            if old == .media, next != .media { model.session.endMediaBrowse() }
+        }
+        .onChange(of: model.session.cameraGalleryOpen) { _, open in
+            if open, model.liveOperatorPanel == nil {
+                model.liveOperatorPanel = .media
+            } else if !open, model.liveOperatorPanel == .media {
+                model.liveOperatorPanel = nil
+            }
+        }
+        .onChange(of: liveChromeVisible, initial: true) { _, visible in
+            model.assist.liveCovered = !visible
+        }
+        .onChange(of: model.liveOperatorPanel) { oldPanel, panel in
+            model.session.incidentSettingsCovered = panel == .settings
+            if oldPanel == .settings { model.session.recordFeedBreadcrumb(.settingsExit) }
+            if panel == .settings { model.session.recordFeedBreadcrumb(.settingsEnter) }
+            if panel != nil {
+                model.captureDrum = nil
+                model.assist.configureTool = nil
+                closeZoomDial()
+                gamepad.noteBlocked()
+                headphones.noteBlocked()
+                model.liveGimbalPanel = .none
+            } else {
+                headphones.sync()
+            }
+        }
+        .onChange(of: model.headTrackingEnabled) { _, _ in
+            headphones.sync()
+        }
+        .onChange(of: model.isEditingChrome) { _, editing in
+            if editing {
+                headphones.noteBlocked()
+                model.liveGimbalPanel = .none
+            } else {
+                headphones.sync()
+            }
+        }
+        .onChange(of: model.session.gimbalLimitPulse) { _, _ in
+            gamepad.pulseLimit(
+                model.session.gimbalLimitContact,
+                panSign: model.session.gimbalLimitPanSign,
+                tiltSign: model.session.gimbalLimitTiltSign,
+                enabled: model.hapticsEnabled)
+        }
+    }
+
+    private var liveCanvasWithLifecycle: some View {
         GeometryReader { proxy in
             let safeArea = LiveMonitorLayout.resolvedSafeArea(
                 proxy.safeAreaInsets, scene: windowGeometry.safeArea)
@@ -144,103 +252,6 @@ struct LiveViewScreen: View {
             headphones.detach()
             gamepad.detach()
             model.session.decoder.stopSimulatorSample()
-        }
-        .onChange(of: interfaceLocked) { _, locked in
-            model.session.isLocked = locked
-            if locked {
-                assistsExpanded = false
-                model.captureDrum = nil
-                closeZoomDial()
-                topMenu = nil
-                model.captureSheet = nil
-                model.assist.configureTool = nil
-                gamepad.noteBlocked()
-                headphones.noteBlocked()
-                model.liveGimbalPanel = .none
-                model.session.cancelProgrammedMove()
-            }
-        }
-        // Camera-body gallery follows DJI Mimo: open Media with it, and close
-        // Media (which returns the camera to live) when the body leaves it.
-        .onChange(of: model.session.cameraGalleryOpen) { _, open in
-            if open, model.liveOperatorPanel == nil {
-                model.liveOperatorPanel = .media
-            } else if !open, model.liveOperatorPanel == .media {
-                model.liveOperatorPanel = nil
-            }
-        }
-        .onChange(of: liveChromeVisible, initial: true) { _, visible in
-            model.assist.liveCovered = !visible
-        }
-        .onChange(of: model.liveOperatorPanel) { oldPanel, panel in
-            model.session.incidentSettingsCovered = panel == .settings
-            if oldPanel == .settings { model.session.recordFeedBreadcrumb(.settingsExit) }
-            if panel == .settings { model.session.recordFeedBreadcrumb(.settingsEnter) }
-            if panel != nil {
-                model.captureDrum = nil
-                model.assist.configureTool = nil
-                closeZoomDial()
-                gamepad.noteBlocked()
-                headphones.noteBlocked()
-                model.liveGimbalPanel = .none
-            } else {
-                headphones.sync()
-            }
-        }
-        .onChange(of: model.headTrackingEnabled) { _, _ in
-            headphones.sync()
-        }
-        .onChange(of: model.isEditingChrome) { _, editing in
-            if editing {
-                headphones.noteBlocked()
-                model.liveGimbalPanel = .none
-            } else {
-                headphones.sync()
-            }
-        }
-        .onChange(of: model.session.gimbalLimitPulse) { _, _ in
-            gamepad.pulseLimit(
-                model.session.gimbalLimitContact,
-                panSign: model.session.gimbalLimitPanSign,
-                tiltSign: model.session.gimbalLimitTiltSign,
-                enabled: model.hapticsEnabled)
-        }
-        .onChange(of: model.assist.clean) { _, clean in
-            if clean {
-                assistsExpanded = false
-                model.captureDrum = nil
-                closeZoomDial()
-                topMenu = nil
-                model.captureSheet = nil
-                model.assist.configureTool = nil
-            }
-        }
-        .onChange(of: model.chromeEditorMode) { _, mode in
-            if mode != nil {
-                assistsExpanded = false
-                model.captureDrum = nil
-                topMenu = nil
-                model.captureSheet = nil
-                model.assist.configureTool = nil
-            }
-        }
-        .onChange(of: model.chromeSectionMounts(.toolBar)) { _, mounted in
-            if !mounted { assistsExpanded = false }
-        }
-        .onChange(of: orientationObserver.orientation) { _, _ in model.captureDrum = nil }
-        .onChange(of: topMenu) { _, value in if value != nil { selectOverlay(.top) } }
-        .onChange(of: model.captureSheet) { _, value in if value != nil { selectOverlay(.capture) }
-        }
-        .onChange(of: model.captureDrum?.id) { _, value in if value != nil { selectOverlay(.drum) }
-        }
-        .onChange(of: model.assist.configureTool) { _, value in
-            if value != nil { selectOverlay(.assist) }
-        }
-        .onChange(of: model.liveGimbalPanel) { _, value in
-            if value != .none { selectOverlay(.gimbal) }
-        }
-        .sheet(isPresented: Bindable(model.assist).showLUTPicker) {
-            LUTPicker(assist: model.assist)
         }
     }
 

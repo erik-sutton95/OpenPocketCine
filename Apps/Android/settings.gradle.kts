@@ -26,6 +26,7 @@ includeBuild("../../../OpenCine/Android") {
         substitute(module("com.opencapture.opencine:media")).using(project(":media"))
         substitute(module("com.opencapture.opencine:platform")).using(project(":platform"))
         substitute(module("com.opencapture.opencine:decoder")).using(project(":decoder"))
+        substitute(module("com.opencapture.opencine:native-runtime")).using(project(":native-runtime"))
         substitute(module("com.opencapture.opencine:dji")).using(project(":dji"))
         substitute(module("com.opencapture.opencine:vulkan")).using(project(":vulkan"))
         substitute(module("com.opencapture.opencine:multicam")).using(project(":multicam"))

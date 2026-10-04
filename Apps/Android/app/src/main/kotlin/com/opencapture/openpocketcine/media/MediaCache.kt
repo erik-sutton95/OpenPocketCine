@@ -11,11 +11,14 @@ import java.io.File
 class MediaCache(
     private val filesDir: File,
     private val prefs: SharedPreferences,
+    val root: com.opencapture.opencine.appkit.MonitorMediaCacheRoot =
+        com.opencapture.opencine.appkit.MonitorMediaCacheRoot(File(filesDir, "OpenPocketCine/media")),
 ) {
     private var colorMapCameraId: String? = null
     private var colorMapCache: JSONObject? = null
-    fun cacheRoot(cameraId: String): File =
-        File(filesDir, "OpenPocketCine/media/$cameraId")
+    private var colorMapGeneration: Long? = null
+    fun directory(cameraId: String) = root.directory(cameraId)
+    fun cacheRoot(cameraId: String): File = directory(cameraId).root
 
     fun thumbnailFile(cameraId: String, file: MediaFile): File =
         File(File(cacheRoot(cameraId), "thumbs"), cacheName(file.thumbPath) + ".jpg")
@@ -71,30 +74,39 @@ class MediaCache(
         return map.optInt(path, -1)
     }
 
-    fun rememberShotColor(path: String, colorMode: Int, cameraId: String) {
-        if (colorMode < 0) return
+    @Synchronized fun rememberShotColor(path: String, colorMode: Int, cameraId: String, expectedGeneration: Long? = null) {
+        if (colorMode < 0 || (expectedGeneration != null && directory(cameraId).generation != expectedGeneration)) return
         val map = loadColorMap(cameraId)
         map.put(path, colorMode)
-        persistColorMap(map, cameraId)
+        persistColorMap(map, cameraId, expectedGeneration)
     }
 
-    private fun loadColorMap(cameraId: String): JSONObject {
-        if (colorMapCameraId == cameraId) colorMapCache?.let { return it }
+    /** Read-only preparation never migrates or recreates deleted metadata. */
+    @Synchronized fun readShotColor(path: String, cameraId: String): Int = loadColorMap(cameraId).optInt(path, -1)
+
+    @Synchronized private fun loadColorMap(cameraId: String): JSONObject {
+        val generation = directory(cameraId).generation
+        if (colorMapCameraId == cameraId && colorMapGeneration == generation) colorMapCache?.let { return it }
         val dest = colorStoreFile(cameraId)
         val map =
             if (!dest.isFile) JSONObject()
             else runCatching { JSONObject(dest.readText()) }.getOrDefault(JSONObject())
         colorMapCameraId = cameraId
         colorMapCache = map
+        colorMapGeneration = generation
         return map
     }
 
-    private fun persistColorMap(map: JSONObject, cameraId: String) {
+    private fun persistColorMap(map: JSONObject, cameraId: String, expectedGeneration: Long? = null) {
+        val directory = directory(cameraId)
+        if (expectedGeneration != null && directory.generation != expectedGeneration) return
+        val writerGeneration = directory.generation
+        if (expectedGeneration != null && writerGeneration != expectedGeneration) return
+        directory.write(map.toString().toByteArray(Charsets.UTF_8), "color.json")
+        if (directory.generation != writerGeneration) return
         colorMapCameraId = cameraId
         colorMapCache = map
-        val dest = colorStoreFile(cameraId)
-        dest.parentFile?.mkdirs()
-        dest.writeText(map.toString())
+        colorMapGeneration = writerGeneration
     }
 
     private fun migrateLegacyShotColors(cameraId: String, context: Context?) {
@@ -113,22 +125,13 @@ class MediaCache(
     fun persistCatalog(files: List<MediaFile>, cameraId: String) {
         val dest = catalogFile(cameraId)
         dest.parentFile?.mkdirs()
-        val array = JSONArray()
-        files.forEach { array.put(it.toJson()) }
-        dest.writeText(array.toString())
+        dest.writeBytes(encodePocketMediaCatalog(files))
     }
 
     fun loadCatalog(cameraId: String): List<MediaFile> {
         val dest = catalogFile(cameraId)
         if (!dest.isFile) return emptyList()
-        return runCatching {
-            val array = JSONArray(dest.readText())
-            buildList(array.length()) {
-                for (i in 0 until array.length()) {
-                    add(MediaFile.fromJson(array.getJSONObject(i)))
-                }
-            }
-        }.getOrDefault(emptyList())
+        return runCatching { decodePocketMediaCatalog(dest.readBytes()) }.getOrDefault(emptyList())
     }
 
     fun loadFavorites(cameraId: String): Set<String> {
@@ -173,6 +176,20 @@ class MediaCache(
     }
 }
 
+/** Exact legacy JSON schema/array order; pure bytes reused by the canonical shared cache codec. */
+internal fun encodePocketMediaCatalog(files: List<MediaFile>): ByteArray {
+    val array = JSONArray()
+    files.forEach { array.put(it.toJson()) }
+    return array.toString().toByteArray(Charsets.UTF_8)
+}
+
+internal fun decodePocketMediaCatalog(bytes: ByteArray): List<MediaFile> {
+    val array = JSONArray(bytes.toString(Charsets.UTF_8))
+    return buildList(array.length()) {
+        for (i in 0 until array.length()) add(MediaFile.fromJson(array.getJSONObject(i)))
+    }
+}
+
 internal fun MediaFile.toJson(): JSONObject =
     JSONObject().apply {
         put("path", path)
@@ -191,7 +208,7 @@ internal fun MediaFile.toJson(): JSONObject =
         put("handleShared", handleShared)
     }
 
-internal fun MediaFile.Companion.fromJson(obj: JSONObject): MediaFile =
+internal fun com.opencapture.opencine.dji.MediaFile.Companion.fromJson(obj: JSONObject): MediaFile =
     MediaFile(
         path = obj.optString("path"),
         thumbPath = obj.optString("thumbPath"),

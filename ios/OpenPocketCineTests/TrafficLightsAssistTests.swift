@@ -150,4 +150,3 @@ where RawValue == Int {
 }
 
 extension HistogramAssist.CrushClipCompensation: CrushClipCompensationRow {}
-extension TrafficLightsAssist.CrushClipCompensation: CrushClipCompensationRow {}

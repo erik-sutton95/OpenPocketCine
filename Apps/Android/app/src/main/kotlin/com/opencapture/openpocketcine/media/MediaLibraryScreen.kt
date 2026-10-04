@@ -44,6 +44,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import com.opencapture.opencine.appkit.MonitorMediaCategoryFilter
+import com.opencapture.opencine.appkit.MonitorMediaSort
+import com.opencapture.monitorui.MonitorMediaLayout
+import com.opencapture.monitorui.MonitorThumbnailSize
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -80,25 +84,34 @@ import kotlinx.coroutines.launch
 @Composable
 fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     val context = LocalContext.current
-    val controller = remember(model) { MediaLibraryController(context.applicationContext, model.session) }
+    // Persisted namespace is only cache routing. It grants no camera readiness or source admission.
+    val actualCameraID = model.session.mediaConnectionIdentity?.cameraID
+        ?: context.getSharedPreferences("openpocketcine.media", android.content.Context.MODE_PRIVATE).getString("opc.media.lastCameraID", null)
+    val controller = remember(model, actualCameraID) { MediaLibraryController(context.applicationContext, model.session, cacheOwner = model.mediaCache) }
+    val owner = controller.library
+    val presentation by owner.state.collectAsState()
+    val selectionBridge = PocketMediaSelectionBridge(owner)
+    val cacheRevision by model.mediaCacheRevision.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(controller, cacheRevision) { controller.cacheContentsChanged() }
     val phase by model.session.phaseFlow.collectAsState()
     val isLive = phase == ConnectionPhase.LIVE
+    androidx.compose.runtime.LaunchedEffect(controller, phase) { controller.visibilityChanged() }
     val scope = rememberCoroutineScope()
     DisposableEffect(controller) {
         controller.beginBrowse()
         onDispose { controller.release() }
     }
 
-    var category by remember { mutableStateOf(MediaLibraryTab.ALL) }
-    var layout by remember { mutableStateOf(MediaBrowserLayout.GRID) }
-    var thumbnailSize by remember { mutableStateOf(MediaThumbnailSize.MEDIUM) }
-    var sortOrder by remember { mutableStateOf(MediaLibrarySort.NEWEST) }
+    var category by libraryValue({ MediaLibraryTab.valueOf(owner.state.value.category.name) }, { owner.filter(category = MonitorMediaCategoryFilter.valueOf(it.name)) })
+    var layout by libraryValue({ MediaBrowserLayout.valueOf(owner.state.value.layout.name) }, { owner.display(layout = MonitorMediaLayout.valueOf(it.name)) })
+    var thumbnailSize by libraryValue({ MediaThumbnailSize.valueOf(owner.state.value.thumbnailSize.name) }, { owner.display(thumbnailSize = MonitorThumbnailSize.valueOf(it.name)) })
+    var sortOrder by libraryValue({ MediaLibrarySort.valueOf(owner.state.value.sort.name) }, { owner.display(sort = MonitorMediaSort.valueOf(it.name)) })
     var filterOpen by remember { mutableStateOf(false) }
-    var formatFilters by remember { mutableStateOf(setOf<String>()) }
-    var resolutionFilters by remember { mutableStateOf(setOf<String>()) }
-    var dateStartKey by remember { mutableStateOf<String?>(null) }
-    var dateEndKey by remember { mutableStateOf<String?>(null) }
-    var colorFilters by remember { mutableStateOf(setOf<Int>()) }
+    var formatFilters by libraryValue({ owner.state.value.formats }, { owner.filter(formats = it) })
+    var resolutionFilters by libraryValue({ owner.state.value.resolutions }, { owner.filter(resolutions = it) })
+    var dateStartKey by libraryValue({ owner.state.value.dateStart }, { owner.filter(dateStart = it) })
+    var dateEndKey by libraryValue({ owner.state.value.dateEnd }, { owner.filter(dateEnd = it) })
+    var colorFilters by libraryValue({ owner.state.value.colors.mapNotNull(String::toIntOrNull).toSet() }, { owner.filter(colors = it.map(Int::toString).toSet()) })
     var playing by remember { mutableStateOf<MediaFile?>(null) }
     var viewingPhoto by remember { mutableStateOf<MediaFile?>(null) }
     val activity = LocalActivity.current as? com.opencapture.openpocketcine.MainActivity
@@ -111,34 +124,15 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
             activity?.updateSystemBars()
         }
     }
-    var isSelecting by remember { mutableStateOf(false) }
-    var selectedIDs by remember { mutableStateOf(setOf<String>()) }
+    var isSelecting by libraryValue({ owner.state.value.selecting }, { owner.select(owner.state.value.selectedIDs, it) })
+    var selectedIDs by libraryValue({ selectionBridge.selectedIDs }, { selectionBridge.apply(owner.state.value.selecting, it) })
     var deliveryFiles by remember { mutableStateOf<List<MediaFile>?>(null) }
     var confirmBatchDelete by remember { mutableStateOf(false) }
 
-    val localFavorites =
-        controller.files.filter { controller.isFavorite(it) }.map { it.path }.toSet()
-    val libraryFiles =
-        if (isLive) {
-            controller.files
-        } else {
-            MediaLibraryQuery.cachedOnly(
-                controller.files,
-                controller.files.filter { controller.isAvailableOffline(it) }.map { it.path }.toSet(),
-            )
-        }
-    val filterSource =
-        run {
-            var files =
-                MediaLibraryQuery.filtered(libraryFiles, tab = category, localFavorites = localFavorites)
-            if (category == MediaLibraryTab.FAVORITES) files = files.filter { controller.isFavorite(it) }
-            files
-        }
-    val shotColors =
-        filterSource.mapNotNull { file ->
-            val mode = controller.cachedShotColor(file)
-            if (mode >= 0) file.path to mode else null
-        }.toMap()
+    val filterSource = owner.records(presentation.category).map(controller::file)
+    val shotColors = owner.records(presentation.category).mapNotNull { record ->
+        record.facts.color?.toIntOrNull()?.let { record.payload.path to it }
+    }.toMap()
     val formatOptions = filterSource.map { it.fileExtension }.filter { it.isNotEmpty() }.toSet().sorted()
     val resolutionOptions = filterSource.mapNotNull { it.resolution }.filter { it.isNotEmpty() }.toSet().sorted()
     val colorOptions =
@@ -147,39 +141,10 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
             if (label == "—") null else mode to label
         }
     val hasDates = filterSource.any { it.dateKey.isNotEmpty() }
-    var displayed =
-        MediaLibraryQuery.filtered(
-            libraryFiles,
-            tab = category,
-            formats = formatFilters,
-            resolutions = resolutionFilters,
-            dateStart = dateStartKey,
-            dateEnd = dateEndKey,
-            colors = colorFilters,
-            shotColors = shotColors,
-            localFavorites = localFavorites,
-        )
-    if (category == MediaLibraryTab.FAVORITES) {
-        displayed = displayed.filter { controller.isFavorite(it) }
-    }
-    displayed =
-        if (sortOrder == MediaLibrarySort.RATING) {
-            displayed.sortedWith { lhs, rhs ->
-                val left = controller.isFavorite(lhs)
-                val right = controller.isFavorite(rhs)
-                when {
-                    left != right -> if (left) -1 else 1
-                    else -> rhs.filenameTimestamp.orEmpty().compareTo(lhs.filenameTimestamp.orEmpty())
-                }
-            }
-        } else {
-            MediaLibraryQuery.sorted(displayed, sortOrder)
-        }
+    val displayed = owner.displayedRecords.map(controller::file)
     val displayedVideos = displayed.filter { it.kind == MediaKind.VIDEO }
-    val selectedFiles = displayed.filter { selectedIDs.contains(it.id) }
-    val activeFilterCount =
-        formatFilters.size + resolutionFilters.size + colorFilters.size +
-            if (dateStartKey == null && dateEndKey == null) 0 else 1
+    val selectedFiles by libraryRead { owner.selectedRecords.map(controller::file) }
+    val activeFilterCount = presentation.activeFilterCount
 
     val headerCount =
         when {
@@ -210,6 +175,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         }
 
     fun open(file: MediaFile) {
+        if (controller.record(file) == null) return
         if (isSelecting) {
             selectedIDs = selectedIDs.toggle(file.id)
             return
@@ -219,8 +185,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     }
 
     fun exitSelection() {
-        isSelecting = false
-        selectedIDs = emptySet()
+        owner.clearSelection()
         confirmBatchDelete = false
     }
 
@@ -315,15 +280,14 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                                 onOpen = ::open,
                                 onSelectionChange = { nextSelecting, nextIds ->
                                     if (nextSelecting) filterOpen = false
-                                    isSelecting = nextSelecting
-                                    selectedIDs = nextIds
+                                    selectionBridge.apply(nextSelecting, nextIds)
                                 },
                             )
                         }
                     if (isSelecting) SelectionTray(selectedFiles.size,
                         cacheEnabled = isLive && selectedFiles.isNotEmpty(),
                         deleteEnabled = selectedFiles.any(controller::canDelete),
-                        onAll = { selectedIDs = displayed.map { it.id }.toSet() }, onClear = ::exitSelection,
+                        onAll = owner::selectAll, onClear = ::exitSelection,
                         onCache = { scope.launch { selectedFiles.forEach { controller.download(it) } } },
                         onStar = {
                             val makeFavorite = selectedFiles.any { !controller.isFavorite(it) }
@@ -359,21 +323,15 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                 onToggleResolution = { resolutionFilters = resolutionFilters.toggle(it) },
                 onToggleColor = { colorFilters = colorFilters.toggle(it) },
                 onDateStart = { next ->
-                    dateStartKey = next
                     val end = dateEndKey
-                    if (next != null && end != null && next > end) dateEndKey = next
+                    owner.filter(dateStart = next, dateEnd = if (next != null && end != null && next > end) next else end)
                 },
                 onDateEnd = { next ->
-                    dateEndKey = next
                     val start = dateStartKey
-                    if (next != null && start != null && next < start) dateStartKey = next
+                    owner.filter(dateEnd = next, dateStart = if (next != null && start != null && next < start) next else start)
                 },
                 onClear = {
-                    formatFilters = emptySet()
-                    resolutionFilters = emptySet()
-                    colorFilters = emptySet()
-                    dateStartKey = null
-                    dateEndKey = null
+                    owner.resetFilters()
                 },
                 onClose = { filterOpen = false },
             )

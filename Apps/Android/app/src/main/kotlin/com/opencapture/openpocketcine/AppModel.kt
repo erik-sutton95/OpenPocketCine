@@ -32,6 +32,8 @@ import com.opencapture.openpocketcine.pairing.AddSetupSlot
 import com.opencapture.openpocketcine.pairing.LocalPairingCallouts
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.openpocketcine.assists.createLiveAssistState
+import com.opencapture.openpocketcine.feed.Media3GlBackend
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.AppSessionHost
 import com.opencapture.opencine.dji.CameraCommands
@@ -59,6 +61,20 @@ class AppModel(
     review: String? = null,
 ) {
     private val appContext = context.applicationContext
+    /** One actual cache root/lifetime shared by gallery IO and operator settings. */
+    val mediaCacheRoot = com.opencapture.opencine.appkit.MonitorMediaCacheRoot(
+        java.io.File(appContext.noBackupFilesDir, "OpenPocketCine/media"))
+    val mediaCache = com.opencapture.openpocketcine.media.MediaCache(appContext.noBackupFilesDir,
+        appContext.getSharedPreferences("openpocketcine.media", Context.MODE_PRIVATE), mediaCacheRoot)
+    private val _mediaCacheRevision = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    val mediaCacheRevision: kotlinx.coroutines.flow.StateFlow<Long> = _mediaCacheRevision
+    fun clearOperatorMediaCache() {
+        scope.launch {
+            try { OperatorMediaCache.clearOwned(mediaCacheRoot) { OperatorMediaCache.clear(appContext) } }
+            finally { _mediaCacheRevision.value += 1 }
+        }
+    }
+
     init {
         DiagnosticCenter.install(appContext)
         // Load libOpenPocketCineAndroid.so before any session code runs: it implements both
@@ -121,7 +137,10 @@ class AppModel(
     val savedCameras: List<SavedCamera> get() = cameras.state.value.saved.sortedByDescending { it.lastConnected ?: 0L }
     /** Set while this Live View borrows a Multiview tile; replaces the lock button. */
     var multiviewExit by mutableStateOf<(() -> Unit)?>(null)
-    val assist = LiveAssistState.from(appContext)
+    val scopeBus = com.opencapture.opencine.runtime.ScopeSampleBus()
+    val inspectorPreview = com.opencapture.opencine.runtime.InspectorPreviewPipeline(
+        scopeBus, ::Media3GlBackend, "OpcInspector")
+    val assist = createLiveAssistState(appContext)
 
     /** The operator opened the pair page from the cameras page. */
     var pairing: Boolean
@@ -606,6 +625,7 @@ class AppModel(
         val monitor = shell.state.value.monitor
         if (monitor?.isBorrowed == true) shell.close()
         else monitor?.session?.closeNow(SessionCloseReason.REQUESTED)
+        inspectorPreview.close()
         scope.cancel()
         session.close()
     }
