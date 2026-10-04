@@ -23,16 +23,17 @@ Fixes
 - Traffic Lights no longer flag clipping just under clip; zebra at 100% marks clipped highlights.
 - Pairing finds the camera with only Nearby devices allowed (Location on Android 10 and 11). If Android stops asking, Allow opens Settings.
 - Pairing reminds you to turn off Frame Tap and force quit DJI Mimo.
-- The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
+- The gimbal joystick moves as fast diagonally as up, down or sideways. AE lock gives a stronger double tap.
 - Portrait Live View shows Recenter focus after an off-centre tap. The zoom chip, joystick and gimbal controls have the dark glow of other controls.
 - Media lists complete SD and internal-storage libraries and keeps capacity visible during playback.
-- Shutter angle stays at your chosen value when changing frame rate or opening the picker.
+- Shutter angle stays put when changing frame rate or opening the picker.
 - A new track no longer flashes on a previously tracked face.
-- Multiview Exit retries a temporary pairing refusal before showing an error.
+- Multiview Exit retries a temporary pairing refusal before an error.
 - Wi-Fi setup fields align and Connect stays above the keyboard.
-- Deleting a clip from playback works again, without playing or pausing the clip behind the dialog.
-- Live View shows the whole picture with the camera held upright, instead of a heavily zoomed crop.
+- Deleting a clip from playback works again, without playing or pausing the clip behind it.
+- Live View shows the whole picture with the camera held upright, not a zoomed crop.
 - Osmo Nano no longer shows zoom controls, and DISP settings list Zoom Chip and Gimbal Stick only when the camera has them.
+- Pocket 3: MT beside the zoom chip toggles Med-Tele (2x to 4x).
 - Live View no longer freezes for seconds after one dropped video packet.
 - Live View no longer crashes on MediaTek phones or with gimbal controls on some screens.
 

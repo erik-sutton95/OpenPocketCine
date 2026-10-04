@@ -81,6 +81,11 @@ public struct CameraStatus: Equatable, Sendable {
     public var zoomFactorRaw: UInt32 = 0
     /// `cam_lens_state` u16-LE `@14`. nil until a long enough push arrives.
     public var zoomLens: UInt16?
+    /// `cam_lens_state` u16-LE `@10` / `@12`: the wide and tele limits the body
+    /// will accept right now. A floor lifted to 434 is Med-Tele — see
+    /// `CamFov.isMedTele`. nil until a long enough push arrives.
+    public var zoomLensMin: UInt16?
+    public var zoomLensMax: UInt16?
     /// Hybrid zoom (1.0×…12×). Prefers lens `@14` (monotonic 1×→12× pinch).
     public var zoomFactor: Double? {
         CamFov.hybridFactor(raw: zoomFactorRaw, lens: zoomLens)
@@ -369,6 +374,8 @@ public enum CameraStatusDecoder {
         case "cam_lens_state" where !item.value.isEmpty:
             if let focus = FocusMode.parseLensState(item.value) { status.focusMode = focus }
             if let lens = CamFov.lensAt14(item.value) { status.zoomLens = lens }
+            if let lens = CamFov.lensMinAt10(item.value) { status.zoomLensMin = lens }
+            if let lens = CamFov.lensMaxAt12(item.value) { status.zoomLensMax = lens }
             if let point = CamLensState.focusPoint(item.value) {
                 status.focusX = point.x
                 status.focusY = point.y

@@ -447,12 +447,29 @@ final class CameraSession {
     @ObservationIgnored private var evBeforeFacePriority: EvComp?
     /// Last chip stop from the cycle button.
     var zoomStop: Double = 1
+    /// The lens an MT swap is headed for while it runs, nil otherwise. The live
+    /// view stays black and the MT button dimmed while it is set — see
+    /// `toggleMedTele`.
+    private(set) var medTeleSwap: Bool?
+    @ObservationIgnored private var medTeleTask: Task<Void, Never>?
+    /// The MT button's body: only a Pocket 3 has the second lens.
+    var supportsMedTele: Bool { supportsZoom && connectedCamera?.model.isPocket3 == true }
     var zoomStops: [Double] {
         connectedCamera?.model.activeZoomStops(
-            resolution: status.videoResolution, shootingMode: status.shootingMode)
+            resolution: status.videoResolution, shootingMode: status.shootingMode,
+            lensMin: status.zoomLensMin, lensMax: status.zoomLensMax)
             ?? CamFov.jumps
     }
     var zoomMax: Double { zoomStops.last ?? 1 }
+    /// The widest the body will actually go. Med-Tele holds it above 1x, and an
+    /// ask below it is clamped, not refused, so the UI has to stop there itself.
+    var zoomMin: Double { zoomStops.first ?? 1 }
+    /// Which of the cycle's stops are a real lens rather than a crop — see
+    /// `CameraModel.opticalZoomStops`.
+    var zoomOpticalStops: [Double] {
+        connectedCamera?.model.opticalZoomStops(cycle: zoomStops, lensMin: status.zoomLensMin)
+            ?? [1]
+    }
     /// Pinch HUD between `cam_fov` pushes. Nil when fingers are up.
     var zoomPinchPreview: Double?
     /// Chip-tap target until `cam_fov` catches up, on the same settle window as
@@ -870,6 +887,9 @@ final class CameraSession {
         lastPinchLens = nil
         lastPinchLogTenths = nil
         zoomPinchSlew = nil
+        medTeleTask?.cancel()
+        medTeleTask = nil
+        medTeleSwap = nil
         expoPin = nil
         expoGeneration = 0
         autoExposureLock = nil
@@ -1981,7 +2001,7 @@ final class CameraSession {
             lastPinchLogTenths = nil
         }
         let factor = CamFov.pinchFactor(
-            anchor: zoomPinchAnchor, magnification: magnification, max: zoomMax)
+            anchor: zoomPinchAnchor, magnification: magnification, max: zoomMax, min: zoomMin)
         if blockZoomColorHopIfRecording(for: factor) { return }
         dropDLog2ForZoom(factor)
         if CamFov.holdZoomWrite(
@@ -2103,6 +2123,106 @@ final class CameraSession {
                     "zoom: SET \(Duml.hex(frame.payload)) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))"
                 )
             })
+    }
+
+    /// The MT button: put the Pocket 3's Med-Tele lens on, or take it off,
+    /// landing on the new lens's base (2× on, 1× off).
+    ///
+    /// The picture fades to black first, and comes back when the reported floor
+    /// shows the new lens or the deadline passes, so the body's lens change never
+    /// shows. One swap at a time: a tap while one runs is dropped, and the button
+    /// is dimmed to say so.
+    ///
+    /// Measured: the swap keeps the digital crop, not the factor (MT 4× comes off
+    /// as wide 2×), so a crop comes off first, on the lens still in front.
+    ///
+    /// Refused on the tap in the states `CamFov.medTeleRefusal` names, where the
+    /// body would ignore it silently. ActiveTrack survives the send but its
+    /// subject does not, so the track is cleared here, the moment the operator
+    /// caused it. Android `PocketCameraSession.toggleMedTele`.
+    func toggleMedTele() {
+        guard supportsMedTele, medTeleSwap == nil else { return }
+        guard !isLocked else {
+            controlNote = "Zoom locked"
+            return
+        }
+        guard datalink != nil else {
+            controlNote = "Med-Tele not available"
+            return
+        }
+        if let refusal = CamFov.medTeleRefusal(
+            colorMode: status.colorMode, isRecording: status.isRecording,
+            shootingMode: status.shootingMode)
+        {
+            controlNote = refusal
+            return
+        }
+        if gimbalMoveRunning { cancelProgrammedMove() }
+        let on = !(status.zoomLensMin.map { CamFov.isMedTele(lensMin: $0) } ?? false)
+        let floor = status.zoomLensMin.map { "\($0)" } ?? "?"
+        ControlLiveLog.line("zoom: Med-Tele \(on ? "on" : "off") (floor \(floor))")
+        cancelTracking(sendClear: isTrackingActive)
+        // A coalesced pinch write belongs to the lens that is going away.
+        zoomPinchPreview = nil
+        zoomPinchSlew = nil
+        medTeleSwap = on
+        medTeleTask = Task { @MainActor [weak self] in
+            // Every wait in there is bounded, so the picture always comes back.
+            await self?.runMedTeleSwap(on)
+            guard let self, !Task.isCancelled else { return }
+            self.medTeleSwap = nil
+            self.medTeleTask = nil
+        }
+    }
+
+    private func runMedTeleSwap(_ on: Bool) async {
+        let startedAt = Date()
+        let name = on ? "Med-Tele on" : "Med-Tele off"
+        try? await Task.sleep(for: .milliseconds(CamFov.medTeleFadeMs))
+        let here: Double = on ? 1 : 2
+        if let live = status.zoomFactor, !CamFov.matches(live, here) {
+            fireZoom(.lens(CamFov.lensPosition(for: here)), target: here, announce: true)
+            let reset = await waitForStatus(timeoutMs: CamFov.medTeleCropResetTimeoutMs) {
+                $0.zoomFactor.map { CamFov.matches($0, here) } ?? true
+            }
+            if !reset { ControlLiveLog.line("zoom: Med-Tele crop reset not seen, swapping anyway") }
+        }
+        guard !Task.isCancelled, let datalink else { return }
+        let frame = Commands.setMedTele(on)
+        let seq = datalink.send(frame)
+        lastZoomSetAt = Date()
+        ControlLiveLog.line(
+            "control: send \(name) 0x02/0xFF seq=\(seq) "
+                + "payload=\(Duml.hex(frame.payload)) via=datalink")
+        controlNote = name
+        let landed = await waitForStatus(timeoutMs: CamFov.medTeleSwapTimeoutMs) {
+            $0.zoomLensMin.map { CamFov.isMedTele(lensMin: $0) == on } ?? false
+        }
+        let took = Int(Date().timeIntervalSince(startedAt) * 1000)
+        guard landed else {
+            ControlLiveLog.line("zoom: \(name) not seen after \(took) ms")
+            controlNote = "Med-Tele — camera did not switch"
+            return
+        }
+        let floor = status.zoomLensMin.map { "\($0)" } ?? "?"
+        ControlLiveLog.line("zoom: \(name) landed after \(took) ms, floor \(floor)")
+        // Turning Med-Tele on, the body restores the zoom it last had under
+        // Med-Tele, which a swap made on the body may have left above 2×: take its
+        // word.
+        markZoomStop(status.zoomFactor ?? (on ? 2 : 1))
+    }
+
+    /// Checks the telemetry until `condition` holds or the deadline passes.
+    private func waitForStatus(
+        timeoutMs: Int, _ condition: (CameraStatus) -> Bool
+    ) async -> Bool {
+        let deadline = ContinuousClock.now + .milliseconds(timeoutMs)
+        while ContinuousClock.now < deadline {
+            if Task.isCancelled { return false }
+            if condition(status) { return true }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return condition(status)
     }
 
     private func markZoomStop(_ factor: Double) {
@@ -3012,7 +3132,8 @@ final class CameraSession {
                 size: format.resolution.sizeTitle,
                 held: zoomCycleFrom,
                 stops: connectedCamera?.model.activeZoomStops(
-                    resolution: format.resolution, shootingMode: status.shootingMode) ?? [])
+                    resolution: format.resolution, shootingMode: status.shootingMode,
+                    lensMin: status.zoomLensMin, lensMax: status.zoomLensMax) ?? [])
         }
     }
 

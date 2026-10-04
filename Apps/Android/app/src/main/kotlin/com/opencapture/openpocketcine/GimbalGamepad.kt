@@ -346,7 +346,14 @@ class GimbalGamepadDriver {
             model.session.updateZoomPinch(mag)
             return
         }
-        zoomCurrent = CamFov.zoomStep(zoomCurrent, zoomY.toDouble(), dt, model.session.zoomMax())
+        zoomCurrent =
+            CamFov.zoomStep(
+                zoomCurrent,
+                zoomY.toDouble(),
+                dt,
+                model.session.zoomMax(),
+                model.session.zoomMin(),
+            )
         val mag = zoomCurrent / max(zoomAnchor, CamFov.MIN_FACTOR)
         model.session.updateZoomPinch(mag)
     }

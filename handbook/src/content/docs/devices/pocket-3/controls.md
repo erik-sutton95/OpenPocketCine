@@ -63,9 +63,99 @@ Enable:  00 15 00 0D 00 00 00
 Disable: 00 15 00 01 00 00 00
 ```
 
-This is a **candidate Med-Tele mapping**, not a general `0xFF` schema. The same
-opcode also carries a different repeating 34-byte poll. Selector and bitmask
-semantics, other mode constraints, and persistence remain unverified.
+The app has since sent these as a SET, and they work both ways — see
+[Driving Med-Tele from the app](#driving-med-tele-from-the-app-2026-09-21). They
+are a Med-Tele mapping, not a general `0xFF` schema: the same opcode also carries
+a different repeating 34-byte poll, and selector and bitmask semantics remain
+unverified.
+
+### Reading Med-Tele back (2026-09-20)
+
+Availability is announced nowhere, but the *active* state is, in three pushes
+the app already subscribes to. Measured on a physical Pocket 3 with a Galaxy
+S23 Ultra, in 4K and 2.7K, across several toggles and at connect time:
+
+| Signal | Med-Tele off | Med-Tele on |
+| --- | --- | --- |
+| `cam_status` `@5` | `01` | `0D` |
+| `cam_lens_state` `@10`/`@12`/`@14` (min/max/current, u16-LE) | 217 / *FORMAT ceiling* / 217 | 434 / 868 / 434 |
+| `cam_fov` `@12` (u32-LE, lens ×100) | 21700 | 43400 |
+
+OpenPocketCine reads the **wide limit at `@10`**: a floor above `CamFov.lens1x`
+(217) is Med-Tele. No SET is invented to ask; the state is inferred from status
+the body already sends. The **tele** limit at `@12` is deliberately not part of
+that test, because with Med-Tele off it is the FORMAT's own digital ceiling
+rather than anything to do with the second lens.
+
+That ceiling was read back directly on 2026-09-21, one FORMAT at a time with
+Med-Tele off: **868 at 1080P, 651 at 2.7K, 434 at 4K** — exactly
+`217 × pocket3ZoomMax`, the 3× at 2.7K predicted before it was measured. So
+`@12` reports the same per-FORMAT ceiling that `VideoResolution.pocket3ZoomMax`
+hardcodes, for every FORMAT rather than only the measured ones, and a body that
+gains a mode reports it without a table edit. Replacing the table with the push
+is a worthwhile follow-up; nothing here depends on it yet.
+
+The Med-Tele lens range is a fixed **434…868 in every FORMAT**, unlike normal
+mode where the ceiling is FORMAT-dependent. Changing FORMAT does **not** turn
+Med-Tele off. As at the per-FORMAT ceiling, a lens SET **below** 434 is
+*clamped* to 434, not refused — the body reports 434 back and the readout
+settles at 2×.
+
+The existing readout needs no correction: `CamFov.factorFromLens(L)` reduces to
+`L / 217`, which is identically the composed factor `2 × (L / 434)`. So 434 is
+2.0×, 651 is 3.0× and 868 is 4.0× — the optical 2× with digital crop stacked on
+top, which is what the operator sees. Only the offered *stops* were wrong: the
+per-FORMAT ceiling (434 at 4K) equals the Med-Tele floor, which left no control
+at all while the real range was 2×…4×.
+
+### Driving Med-Tele from the app (2026-09-21)
+
+The mapping above was replayed as a **SET the app sends**, on a physical
+Pocket 3 with a Galaxy S23 Ultra over a live UDP session. It works in both
+directions and it is not slow: the lens moves and `cam_lens_state` reports the
+new floor in **well under a second**, with no picture drop and no reconnection.
+Byte `@3` is the same value `cam_status` `@5` reports back — `0D` on, `01` off —
+so the SET and the status agree on one encoding.
+
+Three refusals were measured, and two of them are silent — no movement, no NACK:
+
+| Condition | What the body does |
+| --- | --- |
+| Recording | Ignores the swap |
+| D-Log M | Ignores the swap |
+| ActiveTrack running | Accepts the swap and **orphans the subject** |
+
+Silence is why a caller must not wait on an ACK to decide the swap landed: the
+honest confirmation is the reported floor moving, with a deadline behind it.
+
+**The body keeps the crop, not the factor.** Swapping with a digital crop on
+carries that crop onto the new lens. To land on the new lens's base, take the
+crop off first (a lens SET to the current base) and send the swap once the
+status shows it.
+
+There is an **ordering hazard** for anything that wants a zoom past the base. A
+lens SET that overtakes the swap is clamped to the *old* window, so asking for
+868 at 4K before the swap lands leaves the lens at 434 — two stops short,
+silently. The zoom has to wait for the floor to change, not for a timer.
+
+Not probed, and so not claimed: SlowMo, TimeLapse and SuperNight; HLG; and
+whether enabling Med-Tele clamps ISO to the 1600 ceiling the exposure menu
+shows.
+
+### The MT button in the apps
+
+| | |
+| --- | --- |
+| Where | Beside the zoom chip, on the row above the gimbal stick, in portrait and landscape |
+| When | Pocket 3 only. Dimmed while recording, outside Normal colour and outside Video mode, where a tap only says why |
+| What a tap does | Takes any crop off, then swaps: 2× lens base on, 1× wide lens off. Clears ActiveTrack first |
+| While it runs | The picture fades to black until the reported floor moves; the button takes no taps |
+| If the body refuses | `Med-Tele — camera did not switch` after 2 s |
+
+The app only offers the swap in Video and Normal colour, the states measured to
+work; HLG, D-Log and the other modes are refused rather than guessed at. The
+zoom chip keeps cycling crops inside whichever lens is on: 2× / 3× / 4× with
+Med-Tele, the FORMAT's own stops without.
 
 ## Gimbal controls
 

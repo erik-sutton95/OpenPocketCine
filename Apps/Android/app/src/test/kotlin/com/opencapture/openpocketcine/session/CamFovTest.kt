@@ -136,6 +136,18 @@ class CamFovTest {
     }
 
     @Test
+    fun medTeleSwapBytesAndRefusalsMatchIos() {
+        assertTrue(CameraCommands.medTele(true).contentEquals(byteArrayOf(0x00, 0x15, 0x00, 0x0D, 0x00, 0x00, 0x00)))
+        assertTrue(CameraCommands.medTele(false).contentEquals(byteArrayOf(0x00, 0x15, 0x00, 0x01, 0x00, 0x00, 0x00)))
+        val normal = CameraCommands.COLOR_NORMAL
+        val video = CameraCommands.SHOOT_VIDEO
+        assertNull(CamFov.medTeleRefusal(normal, false, video))
+        assertEquals("Med-Tele — stop recording first", CamFov.medTeleRefusal(normal, true, video))
+        assertEquals("Med-Tele — Video mode only", CamFov.medTeleRefusal(normal, false, CameraCommands.SHOOT_SLOWMO))
+        assertEquals("Med-Tele — Normal colour only", CamFov.medTeleRefusal(CameraCommands.COLOR_DLOG, false, video))
+    }
+
+    @Test
     fun lensAt14AndFovSubscribeSetHybridFactor() {
         val fov =
             byteArrayOf(

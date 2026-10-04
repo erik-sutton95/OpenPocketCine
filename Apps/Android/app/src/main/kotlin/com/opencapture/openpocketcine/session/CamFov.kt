@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine.session
 
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.round
 import kotlin.math.roundToInt
 import java.util.Locale
@@ -52,6 +54,84 @@ object CamFov {
         return lens.takeIf { it in 100..3_000 }
     }
 
+    /** `cam_lens_state` u16-LE `@10` — the widest lens the body will accept right now. */
+    fun lensMinAt10(value: ByteArray): Int? = lensLimit(value, 10)
+
+    /** `cam_lens_state` u16-LE `@12` — the longest lens the body will accept right now. */
+    fun lensMaxAt12(value: ByteArray): Int? = lensLimit(value, 12)
+
+    private fun lensLimit(value: ByteArray, at: Int): Int? {
+        if (value.size < at + 2) return null
+        val lens = (value[at].toInt() and 0xFF) or ((value[at + 1].toInt() and 0xFF) shl 8)
+        return lens.takeIf { it in 100..3_000 }
+    }
+
+    /**
+     * Med-Tele (Pocket 3, 2× / 40 mm) is on when the body lifts its own wide limit off
+     * [LENS_1X]. Measured on a Pocket 3: the floor is `217` normally and `434` under
+     * Med-Tele, in every FORMAT. Only the floor is tested — with Med-Tele off the tele
+     * limit is the FORMAT's own digital ceiling (868 at 1080P, 651 at 2.7K, 434 at 4K),
+     * so it says nothing about which lens is in front of the sensor.
+     *
+     * `cam_status` `@5` also flips (`0x01` → `0x0D`), but the floor is the signal that
+     * matters: the body clamps an ask to these limits instead of refusing it, so asking
+     * below the floor silently parks the lens there. The test sits halfway between the two
+     * floors, so a one-step wobble on 217 cannot read as Med-Tele and 434 cannot read as off.
+     */
+    fun isMedTele(lensMin: Int): Boolean = lensMin >= MED_TELE_THRESHOLD
+    private const val MED_TELE_THRESHOLD = LENS_1X + LENS_1X / 2
+
+    /**
+     * Why the body would ignore a Med-Tele swap right now, or null when it takes it.
+     * Each refusal was measured *silent* (no movement, no NACK), so the MT button says
+     * so on the tap instead of waiting out a swap that never comes:
+     * - colour other than Normal (D-Log M ignored the SET for 4 s; HLG and an unreported
+     *   mode are refused too, because nobody has seen them work);
+     * - recording (ignored mid-take, the same SET landed once REC stopped);
+     * - any shooting mode but Video. SlowMo, TimeLapse and Low-Light were never probed,
+     *   so they stay refused until one run says otherwise.
+     *
+     * ActiveTrack is not here: the swap works with a track running, it is the subject
+     * that does not survive it, so the caller clears tracking instead. iOS
+     * `CamFov.medTeleRefusal`.
+     */
+    fun medTeleRefusal(colorMode: Int, isRecording: Boolean, shootingMode: Int): String? =
+        when {
+            isRecording -> "Med-Tele — stop recording first"
+            shootingMode != CameraCommands.SHOOT_VIDEO -> "Med-Tele — Video mode only"
+            colorMode != CameraCommands.COLOR_NORMAL -> "Med-Tele — Normal colour only"
+            else -> null
+        }
+
+    /** The fade to black a Med-Tele swap runs behind; the swap goes once it is dark. */
+    const val MED_TELE_FADE_MS = 100L
+    /** Longest a Med-Tele swap waits for its crop reset to land before going. */
+    const val MED_TELE_CROP_RESET_TIMEOUT_MS = 1_500L
+    /**
+     * How long a sent swap has to show up in the reported floor. Measured under 1 s both
+     * ways over many runs; the deadline exists because the refusals are silent.
+     */
+    const val MED_TELE_SWAP_TIMEOUT_MS = 2_000L
+
+    /**
+     * The chip cycle while Med-Tele holds the floor up: whole factors from the body's own
+     * floor to its own ceiling, which is 2×…4× on a Pocket 3.
+     *
+     * 1× is deliberately absent. It is unreachable — the camera clamps a wider ask back to
+     * the floor — so offering it would spend a tap to go nowhere, which is what the
+     * per-FORMAT stops do today. Null when Med-Tele is off or the body has not reported
+     * its limits yet, and the caller keeps the per-FORMAT table.
+     */
+    fun medTeleStops(lensMin: Int, lensMax: Int): List<Double>? {
+        if (!isMedTele(lensMin)) return null
+        val low = factorFromLens(lensMin) ?: return null
+        val high = factorFromLens(lensMax) ?: return null
+        val first = ceil(low - 0.05).toInt()
+        val last = floor(high + 0.05).toInt()
+        if (last < first) return listOf(displayTenths(low))
+        return (first..last).map { it.toDouble() }
+    }
+
     fun factor(raw: Int): Double {
         if (raw == 0) return MIN_FACTOR
         if (raw >= RAW_AT_1X) return MIN_FACTOR
@@ -86,10 +166,12 @@ object CamFov {
      *
      * A FORMAT change can drop the ceiling under a stop the operator already picked — 2.7K offers
      * 3×, 4K stops at 2×. The stop is only the readout's last resort, before any `cam_fov` lands,
-     * but even then it must not advertise a factor this FORMAT would refuse.
+     * but even then it must not advertise a factor this FORMAT would refuse. Med-Tele does the
+     * same from below, so the floor holds too.
      */
     fun stopWithinCycle(stop: Double, stops: List<Double>): Double =
         clamp(stop, stops.lastOrNull() ?: MIN_FACTOR)
+            .coerceAtLeast(stops.firstOrNull() ?: MIN_FACTOR)
 
     /**
      * The line to show when a new FORMAT pulls the zoom ceiling out from under the factor the
@@ -158,8 +240,17 @@ object CamFov {
 
     fun displayTenths(factor: Double): Double = round(clamp(factor) * 10.0) / 10.0
 
-    fun pinchFactor(anchor: Double, magnification: Double, max: Double = MAX_FACTOR): Double =
-        clamp(anchor * magnification, max)
+    /**
+     * [min] is the body's own wide limit, above [MIN_FACTOR] only while a second lens holds
+     * the floor up (Med-Tele). Spreading past it would otherwise preview a factor the camera
+     * clamps straight back, so the pinch stops where the optics do.
+     */
+    fun pinchFactor(
+        anchor: Double,
+        magnification: Double,
+        max: Double = MAX_FACTOR,
+        min: Double = MIN_FACTOR,
+    ): Double = clamp(anchor * magnification, max).coerceAtLeast(clamp(min, max))
 
     /** Right trigger minus left trigger onto −1…1 (positive = zoom in). */
     fun triggerZoomAxis(left: Double, right: Double): Double {
@@ -172,11 +263,21 @@ object CamFov {
     const val ZOOM_RATE_PER_SECOND = 3.0
     const val ZOOM_STEP_INTERVAL_MS = 50L
 
-    /** Hold-to-zoom: `y` is R2−L2 (−1…1). Integrate `dt` seconds of analog rate. */
-    fun zoomStep(current: Double, y: Double, dt: Double, max: Double = MAX_FACTOR): Double {
-        if (dt <= 0.0) return clamp(current, max)
+    /**
+     * Hold-to-zoom: `y` is R2−L2 (−1…1). Integrate `dt` seconds of analog rate, between the
+     * body's own limits — see [pinchFactor] for why [min] is not always 1×.
+     */
+    fun zoomStep(
+        current: Double,
+        y: Double,
+        dt: Double,
+        max: Double = MAX_FACTOR,
+        min: Double = MIN_FACTOR,
+    ): Double {
+        val floor = clamp(min, max)
+        if (dt <= 0.0) return clamp(current, max).coerceAtLeast(floor)
         val t = CameraCommands.gimbalLinearThrow(y.toFloat()).toDouble()
-        return clamp(current + t * ZOOM_RATE_PER_SECOND * dt, max)
+        return clamp(current + t * ZOOM_RATE_PER_SECOND * dt, max).coerceAtLeast(floor)
     }
 
     fun pinchLens(factor: Double): Int = lensPosition(factor)

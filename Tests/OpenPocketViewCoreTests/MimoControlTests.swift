@@ -1104,6 +1104,30 @@ import Testing
         #expect(abs((s.zoomFactor ?? 0) - 1) < 0.01)
     }
 
+    @Test func medTeleSwapBytesAndRefusals() {
+        let on = Commands.setMedTele(true)
+        #expect(on.cmdSet == 0x02)
+        #expect(on.cmdId == 0xFF)
+        #expect(on.payload == [0x00, 0x15, 0x00, 0x0D, 0x00, 0x00, 0x00])
+        #expect(Commands.setMedTele(false).payload == [0x00, 0x15, 0x00, 0x01, 0x00, 0x00, 0x00])
+        let video = Int(ShootingMode.video.rawValue)
+        #expect(
+            CamFov.medTeleRefusal(colorMode: .normal, isRecording: false, shootingMode: video)
+                == nil)
+        #expect(
+            CamFov.medTeleRefusal(colorMode: .normal, isRecording: true, shootingMode: video)
+                == "Med-Tele — stop recording first")
+        #expect(
+            CamFov.medTeleRefusal(colorMode: .normal, isRecording: false, shootingMode: 0)
+                == "Med-Tele — Video mode only")
+        #expect(
+            CamFov.medTeleRefusal(colorMode: .dLog, isRecording: false, shootingMode: video)
+                == "Med-Tele — Normal colour only")
+        #expect(
+            CamFov.medTeleRefusal(colorMode: nil, isRecording: false, shootingMode: video)
+                == "Med-Tele — Normal colour only")
+    }
+
     @Test func camFovHybridReadoutSnapsTeleAndTicksTenths() {
         #expect(CamFov.displayTenths(2.286) == 2.3)
         #expect(CamFov.displayTenths(2.9) == 2.9)

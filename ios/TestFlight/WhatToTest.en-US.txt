@@ -14,7 +14,8 @@ New and changed
 - Joystick size: Small, Medium or Large in Settings, Controls. Its ink turns dark over bright scenes and light over dark ones.
 - Live View indicators are glass pills for camera battery, phone battery and link. Tap the link pill to swap signal and feed fps.
 - REC setup shows your format and color, such as 4K 25p over D-Log2, in line with the timecode.
-- Tabs use one highlighted edge instead of boxes, lists fade softly at their edges and tool buttons share one size.
+- Tabs use one highlighted edge, lists fade at their edges and tool buttons share one size.
+- Pocket 3: MT beside the zoom chip toggles Med-Tele, whose zoom cycles 2x to 4x.
 
 Fixes
 
@@ -22,20 +23,20 @@ Fixes
 - Pairing says what blocks it: Bluetooth or Local Network access (with Open Settings), Personal Hotspot, or DJI Frame Tap and DJI Mimo holding the camera.
 - The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
 - Media lists complete SD and internal libraries, retries Nano's briefly empty first response and keeps capacity visible during playback.
-- Switching clips in Media no longer freezes the app while the previous clip is still being processed.
-- Live View no longer freezes for several seconds after a single dropped video packet. The picture returns with the camera's next keyframe.
+- Switching clips in Media no longer freezes the app while the last clip is still processing.
+- Live View no longer freezes for seconds after one dropped video packet. The picture returns with the camera's next keyframe.
 - Shutter angle stays at your chosen value when changing frame rate. Opening the picker no longer changes the saved angle.
 - Tapping to move focus no longer snaps back to the old point first. A new track no longer flashes on a previously tracked face.
 - A vertical camera feed fits whole in portrait, and Live View refits when the camera turns between horizontal and vertical.
 - Value drums open on the current value instead of sliding in.
 - Multiview repairs its picture after returning from another app, keeping the camera connected while it waits.
 - Multiview Exit retries a temporary pairing refusal before showing an error; cameras already returned to their Wi-Fi stay untouched.
-- Wi-Fi headings and fields align, Connect stays above the keyboard, and connecting or cancelling waits for scan cleanup.
+- Wi-Fi fields align, Connect stays above the keyboard, and connect or cancel waits for scan cleanup.
 
 What to test
 
 - Open Media on a camera with many clips or both storage types. On Nano, open it right after playback starts. Confirm all clips and capacity appear.
 - In Multiview, try Grid and Center stage in both orientations, Camera settings, an app switch, Wi-Fi and Hotspot, then Exit once.
 - Double-tap an object to track it, with a face in the scene. Set the joystick to Large and check its ink over bright and dark scenes.
-- Turn the camera vertical in portrait: the whole picture should show. Set 180° and change FPS: angle should stay 180°.
+- Turn the camera vertical in portrait: the whole picture should show. Set 180° and change FPS: angle should stay 180°. On Pocket 3, tap MT twice: 2x, then 1x.
 - Pair with Local Network or Bluetooth off for OpenPocketCine, or Personal Hotspot on: the error should name the fix.

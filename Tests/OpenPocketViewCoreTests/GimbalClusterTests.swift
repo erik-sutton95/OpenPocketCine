@@ -26,6 +26,25 @@ import Testing
         #expect(cluster.headTrack.y < cluster.bounds.minY)
     }
 
+    @Test func medTeleSitsLeadingOfTheFieldMonitorZoomRow() {
+        // Field Monitor: zoom on the stick's leading edge, gimbal button trailing.
+        let stick = MonitorLayoutRegion(x: 600, y: 300, width: 88, height: 88)
+        let zoom = MonitorLayoutRegion(x: 600, y: 256, width: 44, height: 36)
+        let controls = MonitorLayoutRegion(x: 652, y: 256, width: 36, height: 36)
+        let cluster = GimbalCluster(stick: stick, zoom: zoom, controls: controls)
+        #expect(cluster.medTele == MonitorLayoutRegion(x: 556, y: 256, width: 36, height: 36))
+    }
+
+    @Test func medTeleSitsLeadingOfZoomWithTheGimbalButtonOn() {
+        let cluster = GimbalCluster.inTrailingBottom(
+            well: well, floorY: 330, canvasMaxY: canvasMaxY, showGimbalButton: true)
+        #expect(cluster.controls.width > 1)
+        #expect(abs(cluster.medTele.maxX - (cluster.zoom.x - GimbalCluster.gap)) < 0.05)
+        #expect(cluster.medTele.maxX < cluster.controls.x)
+        #expect(abs(cluster.medTele.midY - cluster.zoom.midY) < 0.05)
+        #expect(cluster.medTele.width == GimbalCluster.medTeleSize)
+    }
+
     @Test func recordOnTheFloorLiftsTheClusterAboveAndKeepsTheTrailingEdge() {
         let record = MonitorLayoutRegion(x: 620, y: 300, width: 83, height: 83)
         let cluster = GimbalCluster.inTrailingBottom(

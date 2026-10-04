@@ -259,7 +259,8 @@ final class GimbalGamepadBridge {
             return
         }
         zoomCurrent = CamFov.zoomStep(
-            current: zoomCurrent, y: zoomY, dt: dt, max: model.session.zoomMax)
+            current: zoomCurrent, y: zoomY, dt: dt, max: model.session.zoomMax,
+            min: model.session.zoomMin)
         let mag = zoomCurrent / max(zoomAnchor, CamFov.minFactor)
         model.session.updateZoomPinch(magnification: mag)
     }

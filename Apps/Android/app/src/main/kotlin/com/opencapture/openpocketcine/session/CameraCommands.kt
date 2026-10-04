@@ -302,6 +302,7 @@ object CameraCommands {
     const val CMD_MEDIA_FAVORITE = 0xBF
     const val CMD_NANO_GATE = 0x09
     const val CMD_LIVE_VIEW = 0xA8
+    const val CMD_MED_TELE = 0xFF
 
     const val PID_ISO_LIMIT = 0x000F
 
@@ -463,6 +464,18 @@ object CameraCommands {
     }
 
     fun pollTracking(): ByteArray = byteArrayOf(0x00)
+
+    /**
+     * `0x02/0xFF` Pocket 3 Med-Tele lens swap. The byte at `@3` is the value `cam_status`
+     * reports back at `@5`: `0x0D` on the 2× lens, `0x01` on the wide.
+     *
+     * Confirmed on a physical Pocket 3 (2026-09-20/21), both directions, under 1 s,
+     * picture unbroken. The body parks the lens on the new floor (217 off, 434 on), so no
+     * zoom SET follows a bare swap. Silently ignored in the states [CamFov.medTeleRefusal]
+     * names. iOS `Commands.setMedTele`.
+     */
+    fun medTele(on: Boolean): ByteArray =
+        byteArrayOf(0x00, 0x15, 0x00, if (on) 0x0D else 0x01, 0x00, 0x00, 0x00)
 
     fun mediaList(counter: Int, cursor: Int): ByteArray {
         val payload = MEDIA_LIST_TEMPLATE.copyOf()

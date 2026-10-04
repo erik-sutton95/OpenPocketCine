@@ -240,10 +240,11 @@ unspecified in those rows).
 **Low-Light:** 4K 16:9 and 1080p @ 24/25/30. No 2.7K, no 48/50/60, no 1:1/9:16.
 
 **Zoom (DJI spec):** Video 1080p 4×, 2.7K 3×, 4K 2×.
-SlowMo / Timelapse: off. The current `CameraModel.activeZoomStops` clamps
-4K to 2× but still offers 4× for 2.7K. The [physical Mimo survey](../handbook/src/content/docs/devices/pocket-3/controls.md#zoom-and-med-tele)
-confirmed the 3× endpoint at 2.7K. The app clamp still needs an implementation
-correction; the existing code is not proof of 4× support.
+SlowMo / Timelapse: off. `CameraModel.activeZoomStops` now clamps per FORMAT
+from `VideoResolution.pocket3ZoomMax`, so 2.7K offers 1×/2×/3× — measured on a
+body, matching the [physical Mimo survey](../handbook/src/content/docs/devices/pocket-3/controls.md#zoom-and-med-tele).
+Under **Med-Tele** the per-FORMAT ceiling does not apply at all: the range is a
+fixed 2×…4× read from `cam_lens_state`.
 
 **Stills:** 16:9 3840×2160, 1:1 3072×3072. No 4:3 video on this body.
 
