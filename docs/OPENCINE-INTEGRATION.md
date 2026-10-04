@@ -315,3 +315,28 @@ app destination/name, sidecar metadata, optional absence and progress callbacks.
 Repository checks, the regenerated build for both simulator architectures and
 all eight selected native adapter/export tests pass. Physical iPhone export
 qualification remains untested. No OpenCine pin or Android behavior changes here.
+
+## Pocket operator settings owner adoption
+
+Both shells compose OpenCine's operator settings page and typed sections for
+connection, saved cameras, view assists, safety and motion, display, account
+and cache, reporting, legal links and app information. Native iOS sharing keeps
+its existing implemented flow; Android Sharing remains Coming soon and its
+Frame.io account remains Not configured. Local preferences, source calibration,
+DJI motion actions and cache/report callbacks stay app bindings. The separate
+long-press assist surfaces remain app-owned.
+
+The common settings page owns tabs, session actions, keyboard avoidance and
+responsive assist card ordering. Persisted names, defaults, unknown values,
+clean-view pins and existing test assertions are retained. Pocket requests
+joined tab edges through the shared page spacing value. The original Swift
+owner also had a six-point gap; correcting the original joined-edge contract
+is recorded separately from the adoption.
+
+This local candidate passes 280 portable tests, strict concurrency, repository
+and handbook checks, both simulator architectures, 40 affected native unit
+tests and three original UI flows. Android passes native Swift staging, 506
+consumer cases, lint and release assembly; all 41 JNI exports and staged/debug/
+release native library hashes match. Shared Swift and Android gates also pass.
+Physical settings qualification remains untested on both platforms. No
+OpenCine pin moves in this increment.

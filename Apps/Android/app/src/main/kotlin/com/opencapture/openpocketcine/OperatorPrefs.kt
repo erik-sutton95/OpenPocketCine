@@ -28,15 +28,7 @@ enum class PortraitFeedAspect(val raw: String) {
     }
 }
 
-enum class OperatorSettingsTab(val title: String, val subtitle: String, val pill: String, val rail: String) {
-    LINK("Link", "Connection state and link behavior.", "LIVE", "Connection"),
-    SHARING("Sharing", "Coming soon.", "SHARE", "Coming soon"),
-    ASSIST("View Assist", "Behavior for live-view tools.", "ASSIST", "Scopes & overlays"),
-    CONTROLS("Controls", "Touch behavior and safety.", "TOUCH", "Dials and safety"),
-    DISPLAY("Display", "Live view buttons and chrome.", "VISIBILITY", "Live view"),
-    STORAGE("Storage", "Local cache and integrations.", "DATA", "Cache & accounts"),
-    SYSTEM("System", "App-level behavior.", "APP", "App behavior"),
-}
+typealias OperatorSettingsTab = com.opencapture.monitorui.settings.MonitorSettingsTab
 
 enum class LiveOperatorPanel {
     SETTINGS,

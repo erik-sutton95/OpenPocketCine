@@ -159,7 +159,10 @@ or the file on the card. WAVE and HISTO still measure the decoded picture. Turn
 it off indoors; extra brightness uses more power.
 
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
-in portrait. Settings groups use compact information buttons beside their labels;
+in portrait. Operator Setup tabs stay joined when switching orientations.
+View Assist cards use one column on a
+narrow page and two when there is room for both sets of controls. Saved options
+and clean-view pins stay in place when switching tabs or resizing the page. Settings groups use compact information buttons beside their labels;
 Controls groups touch safety, gimbal options, and the on-screen joystick separately.
 Use Android’s system Back button or back gesture to return from
 Settings, Media library and pairing. These pages omit the large in-app Back button.

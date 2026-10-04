@@ -27,6 +27,30 @@ Simulator and emulator checks cover presentation and installed-build migration;
 physical pairing, station networking and live recovery remain pending under
 items 18-20 in [the integration checklist](OPENCINE-INTEGRATION.md).
 
+## Shared operator settings ownership (P2)
+
+Both shells now compose the shared operator settings page and typed section
+owners. View Assist cards follow the available width, using one column on a
+narrow page and two when both columns can retain their touch targets. Existing
+Pocket preferences, DJI actions, source calibration and clean-view pins remain
+unchanged. iOS keeps its implemented feed sharing and account actions; Android
+Sharing and Frame.io remain unavailable as recorded in the Operator Setup row.
+Automated consumer checks pass on both platforms, including 40 affected
+native iOS tests and three original UI flows. Physical settings checks remain
+untested for this increment on both platforms.
+
+Pocket requests joined settings tab edges on both platforms. The shared page
+adds an optional spacing value with its existing six-point portrait default;
+Pocket explicitly supplies zero. Swift applies this value in both orientations;
+Compose keeps its already joined landscape column. Existing Insta and Nikon
+callers retain their defaults. The original Pocket Swift owner also used a
+six-point gap, so the original joined-edge UI test failure is recorded as a
+separate contract correction, rather than attributed to the shared adoption.
+The unchanged UI test still requires adjacent edges within 0.5 points and
+44-point minimum targets. The unchanged test passes in portrait and landscape
+on the private simulator. Android consumer checks pass; physical settings
+layout remains untested on both platforms.
+
 ## Apple transaction ownership (P2)
 
 The iOS control exchange now lives in OpenCineDJIApple. This Apple OS workflow keeps the

@@ -122,7 +122,10 @@ It does not change the camera's HDR/HLG color mode or the file on the card.
 Turn it off indoors; extra brightness uses more power.
 
 Operator Setup and Media use a navigation rail in landscape and scrolling tabs
-in portrait. Settings and Media place Back outside the full-height sidebar in
+in portrait. Operator Setup tabs stay joined when switching orientations.
+View Assist cards use one column on a
+narrow page and two when there is room for both sets of controls. Saved options
+and clean-view pins stay in place when switching tabs or resizing the page. Settings and Media place Back outside the full-height sidebar in
 landscape; portrait keeps it beside the brand and title in the header. Back uses
 the same button styling as the live-view controls. The bottom of the Media sidebar
 holds one row with Grid and List buttons and Small/Medium/Large sizes; in portrait,
