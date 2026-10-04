@@ -68,13 +68,20 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
         for returnToLive in [false, true] {
             let now = Date.timeIntervalSinceReferenceDate
             var waits: [CheckedContinuation<Void, Never>] = []
-            let session = CameraSession(borrowing: HevcDecoder(), pictureRecoveryTiming: .init(
+            let session = CameraSession(pictureRecoveryTiming: .init(
                 wallNow: { now }, monotonicNow: { now }, wait: { delay in
                     XCTAssertEqual(delay, .milliseconds(100))
                     await withCheckedContinuation { waits.append($0) }
                 }))
+            let peer = ConnectionDonorPeer(cached: true)
+            guard await peer.admitExistingConnection(session) else { return }
             let driver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+            defer {
+                session.disconnect(); driver.close(); session.decoder.close()
+                withExtendedLifetime(peer) {}
+            }
             session.datalink = driver
+            XCTAssertNil(session.decoder.lastSourceFrameAt, "Admission does not fabricate native picture")
             let token = session.cameraMedia.resumeID
             var entered = false
             let waiting = Task {
@@ -114,15 +121,20 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
     }
 
     func testMediaReturnDuringNilDriverNegotiationQueuesTheReplacementPictureOwner() async {
-        let session = CameraSession(borrowing: HevcDecoder())
+        let session = CameraSession()
+        let peer = ConnectionDonorPeer(cached: true)
+        defer { session.disconnect(); session.decoder.close(); withExtendedLifetime(peer) {} }
+        guard await peer.admitExistingConnection(session) else { return }
         let originalGeneration = session.cameraMedia.resumeID
         var negotiation: CheckedContinuation<Void, Never>?
         var finishedNegotiation = false
-        session.startFeedRecovery { _ in
+        guard session.startFeedRecovery({ _ in
             await withCheckedContinuation { negotiation = $0 }
             finishedNegotiation = true
-        }
-        while negotiation == nil { await Task.yield() }
+        }) else { XCTFail("Current real run must admit negotiation in the genuine nil-driver gap"); return }
+        let negotiationDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while negotiation == nil, ContinuousClock.now < negotiationDeadline { await Task.yield() }
+        guard negotiation != nil else { XCTFail("Admitted negotiation must reach the manual wait"); return }
         XCTAssertNil(session.datalink, "Exercise the full-rejoin gap before a driver is adopted")
         session.beginMediaBrowse()
         session.endMediaBrowse()

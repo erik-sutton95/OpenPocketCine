@@ -10,9 +10,12 @@ import XCTest
 final class EVMeterAssistTests: XCTestCase {
     func testFeedRecoveryRetiresCameraMeterWithoutChangingCompensation() async {
         let session = CameraSession()
+        let peer = ConnectionDonorPeer(cached: true)
+        defer { session.disconnect(); withExtendedLifetime(peer) {} }
+        guard await peer.admitExistingConnection(session) else { return }
         session.status.evComp = EvComp(thirds: 3)
         session.status.meteredEv = EvComp(thirds: -4)
-        session.startFeedRecovery { _ in }
+        XCTAssertTrue(session.startFeedRecovery { _ in })
         XCTAssertNil(session.status.meteredEv)
         XCTAssertEqual(session.status.evComp?.thirds, 3)
         await Task.yield()

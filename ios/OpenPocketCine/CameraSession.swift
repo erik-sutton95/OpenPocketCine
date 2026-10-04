@@ -122,9 +122,6 @@ final class CameraSession {
     @ObservationIgnored private var recentKeepaliveFailures = 0
     @ObservationIgnored private var rawAccessUnits = 0
     @ObservationIgnored private var rawFramesEnqueued = 0
-    @ObservationIgnored private var lastIdrRequest = Date.distantPast
-    @ObservationIgnored private var liveViewEnableSent = false
-    @ObservationIgnored private var liveViewEnableSends = 0
     /// Pocket 3: one 1080→boot-4K SET after a black first picture. Not P4.
     @ObservationIgnored private var firstPictureFormatPoked = false
     @ObservationIgnored private var firstPictureFormatPokeTask: Task<Void, Never>?
@@ -135,10 +132,8 @@ final class CameraSession {
     @ObservationIgnored private var incidentSocketGeneration = 0
     @ObservationIgnored var incidentSettingsCovered = false
 
-    @ObservationIgnored private var liveEnableGate = SerialSessionGate()
     /// `0x09/0xa8` sends while `awaitingIDR` is still true. Caps the mid-session
     /// IDR retry at one extra enable so a missed keyframe cannot 1 Hz loop.
-    @ObservationIgnored private var idrHoldEnableCount = 0
     /// Audio/Vocal/DSP GETs on first connect sat on UDP and lined up with the TCP RST.
     @ObservationIgnored private var audioRefreshPending = false
     /// One GET/SET of `0x8E` pid `0x0039` after first picture — turn Mimo glamour off.
@@ -164,6 +159,10 @@ final class CameraSession {
     @ObservationIgnored private var feedWatchdog = FeedWatchdog()
     @ObservationIgnored private var lastFeedFreezeLogAt: Date?
     @ObservationIgnored lazy var pictureRecovery = makePictureRecovery()
+    @ObservationIgnored private var liveViewSource: DjiAppleLiveViewScope?
+    private var liveViewHistory: DjiAppleLiveViewHistory {
+        pictureRecovery.liveViewHistory
+    }
     @ObservationIgnored private let pictureRecoveryTiming: DjiApplePictureRecoveryTiming
     @ObservationIgnored private var foregroundCheckTask: Task<Void, Never>?
     @ObservationIgnored private var foregroundGeneration = 0
@@ -201,6 +200,9 @@ final class CameraSession {
     #if DEBUG
         @ObservationIgnored var connectionNativePeers: ConnectionNativePeers?
         @ObservationIgnored var sessionRecoveryNativePeers: SessionRecoveryNativePeers?
+        /// DEBUG watchdog/adopter probe clock; nil uses the normal wall clock.
+        /// Recipe/repair timing is the immutable pictureRecoveryTiming passed at init.
+        @ObservationIgnored var liveViewDonorTiming: DjiApplePictureRecoveryTiming?
     #endif
     private var connectionTransport: DjiAppleConnectionTransport {
         #if DEBUG
@@ -651,12 +653,12 @@ final class CameraSession {
         decoder.onHandoffNeedsIDR = { [weak self] in
             guard let self else { return }
             if self.isBrowsingMedia { return }
-            let since = Date().timeIntervalSince(self.lastIdrRequest)
+            let since = Date().timeIntervalSince(self.liveViewHistory.lastAcceptedEnableWallTime)
             guard
                 FeedWatchdog.shouldSendEnableForAssistVTStart(
                     secondsSinceLastEnable: since,
                     hasPresentedPicture: self.decoder.lastPresentedAt != nil,
-                    liveViewEnableSends: self.liveViewEnableSends)
+                    liveViewEnableSends: self.liveViewHistory.locallyAcceptedEnables)
             else { return }
             self.sendRecoverEnable(force: true, reason: "assist VT start")
         }
@@ -682,7 +684,7 @@ final class CameraSession {
                 EncoderPresentPath.shouldRequestEnableAfterParameterChange(
                     accessUnitHasIDR: false,
                     udpReceiveAlive: videoAlive,
-                    secondsSinceLastEnable: now.timeIntervalSince(self.lastIdrRequest)
+                    secondsSinceLastEnable: now.timeIntervalSince(self.liveViewHistory.lastAcceptedEnableWallTime)
                 )
             else { return }
             self.sendRecoverEnable(force: false, reason: "encoder format change")
@@ -994,10 +996,9 @@ final class CameraSession {
         hasVideoFormat = false
         nalTypes = ""
         lastKeyframeAge = "—"
-        liveViewEnableSent = false
-        liveViewEnableSends = 0
+        if let source = liveViewSource { pictureRecovery.retireLiveView(scope: source) }
+        liveViewSource = nil
         resetFirstPictureFormatPoke()
-        idrHoldEnableCount = 0
         audioRefreshPending = false
         glamourClearPending = false
         focusTrackPending = false
@@ -1071,10 +1072,9 @@ final class CameraSession {
         guard isCurrent() else { return }
         ble.disconnect()
         guard isCurrent() else { return }
-        liveViewEnableSent = false
-        liveViewEnableSends = 0
+        if let source = liveViewSource { pictureRecovery.retireLiveView(scope: source) }
+        liveViewSource = nil
         resetFirstPictureFormatPoke()
-        idrHoldEnableCount = 0
         audioRefreshPending = false
         glamourClearPending = false
         focusTrackPending = false
@@ -1143,7 +1143,7 @@ final class CameraSession {
                     guard let self else { return .init() }
                     return .init(ownsConnection: !self.isMultiviewBorrowed, endpoint: self.connectionRunEndpoint,
                         path: .init(joinedSSID: self.joinedSSID, stationSSID: self.stationSSID,
-                            stationHost: self.stationHost), initialLiveViewEnableSent: self.liveViewEnableSent)
+                            stationHost: self.stationHost), initialLiveViewEnableSent: self.liveViewHistory.initialAccepted)
                 }, prepare: { [weak self] target, _, attempt in
                     guard let self, let camera = self.connectionCamera(target), attempt.isCurrent else { return }
                     self.prepareConnectionSource(camera, attempt: attempt)
@@ -1170,11 +1170,10 @@ final class CameraSession {
         guard attempt.isCurrent else { return }
         rawAccessUnits = 0
         rawFramesEnqueued = 0
-        lastIdrRequest = Date.distantPast
-        liveViewEnableSent = false
-        liveViewEnableSends = 0
+        guard let source = pictureRecovery.prepareLiveViewSource(run: attempt,
+            recipe: .captured(from: camera.model)), attempt.isCurrent else { return }
+        liveViewSource = source
         resetFirstPictureFormatPoke()
-        idrHoldEnableCount = 0
         audioRefreshPending = true
         glamourClearPending = true
         focusTrackPending = true
@@ -1265,6 +1264,10 @@ final class CameraSession {
     private func registerConnectionEndpoint(_ endpoint: any DjiAppleConnectionEndpoint,
         attempt: DjiAppleConnectionRun.Attempt) {
         guard attempt.isCurrent, !isMultiviewBorrowed, connectionRunEndpoint === endpoint else { return }
+        if let driver = endpoint as? DatalinkDriver, let source = liveViewSource {
+            guard pictureRecovery.bindLiveView(endpoint: driver, recovery: .init(datalink: driver),
+                scope: source), attempt.isCurrent else { return }
+        }
         #if DEBUG
             if let peers = connectionNativePeers { peers.registered(endpoint, attempt); return }
         #endif
@@ -3022,14 +3025,20 @@ final class CameraSession {
 
     /// Send center and stop the stream. Always fire — the camera needs rest.
     func endGimbalStick(cancelMove: Bool = false) {
+        endGimbalStick(cancelMove: cancelMove, ifCurrent: { true })
+    }
+
+    private func endGimbalStick(cancelMove: Bool, ifCurrent: () -> Bool) {
+        guard ifCurrent() else { return }
         if cancelMove { cancelNativeHeadTrack() }
+        guard ifCurrent() else { return }
         // Programmed movement owns the gimbal until it rests itself.
         if moveDriving && !cancelMove { return }
         if gimbalMoveRunning {
-            cancelProgrammedMove()
+            cancelProgrammedMove(ifCurrent: ifCurrent)
             return
         }
-        restGimbalStickWire()
+        restGimbalStickWire(ifCurrent: ifCurrent)
     }
 
     private func restGimbalStickWire(ifCurrent: () -> Bool = { true }) {
@@ -4196,7 +4205,7 @@ final class CameraSession {
                 alreadySettled: firstPictureSettled)
         {
             let signature =
-                "\(videoPackets).\(rawAccessUnits).\(hasVideoFormat).\(liveViewEnableSends).\(datalink?.receiveErrorCount ?? 0)"
+                "\(videoPackets).\(rawAccessUnits).\(hasVideoFormat).\(liveViewHistory.locallyAcceptedEnables).\(datalink?.receiveErrorCount ?? 0)"
             let now = Date()
             guard
                 signature != lastFirstPictureSignature
@@ -4229,13 +4238,46 @@ final class CameraSession {
                     Date().timeIntervalSince($0)
                 })
             log.info(
-                "live: first-picture videoPkts=\(self.videoPackets, privacy: .public) aus=\(self.rawAccessUnits, privacy: .public) lastAU=\(auAge, privacy: .public)s drop=\(self.droppedIncomplete, privacy: .public) rxErr=\(self.datalink?.receiveErrorCount ?? 0, privacy: .public) lastVideo=\(videoAge, privacy: .public)s lastStatus=\(statusAge, privacy: .public)s lastRebuild=\(rebuildAge, privacy: .public)s hadVideo=\(hadVideo ? 1 : 0) format=\(self.hasVideoFormat ? 1 : 0) idrHold=\(self.decoder.awaitingIDR ? 1 : 0) nals=\(self.nalTypes, privacy: .public) enables=\(self.liveViewEnableSends, privacy: .public) tcp=\(self.datalink?.isTcpPokeReady == true ? 1 : 0) flow=\(self.datalink?.isFlowHealthy == true ? 1 : 0) write=\(write, privacy: .public)"
+                "live: first-picture videoPkts=\(self.videoPackets, privacy: .public) aus=\(self.rawAccessUnits, privacy: .public) lastAU=\(auAge, privacy: .public)s drop=\(self.droppedIncomplete, privacy: .public) rxErr=\(self.datalink?.receiveErrorCount ?? 0, privacy: .public) lastVideo=\(videoAge, privacy: .public)s lastStatus=\(statusAge, privacy: .public)s lastRebuild=\(rebuildAge, privacy: .public)s hadVideo=\(hadVideo ? 1 : 0) format=\(self.hasVideoFormat ? 1 : 0) idrHold=\(self.decoder.awaitingIDR ? 1 : 0) nals=\(self.nalTypes, privacy: .public) enables=\(self.liveViewHistory.locallyAcceptedEnables, privacy: .public) tcp=\(self.datalink?.isTcpPokeReady == true ? 1 : 0) flow=\(self.datalink?.isFlowHealthy == true ? 1 : 0) write=\(write, privacy: .public)"
             )
         }
     }
 
+    #if DEBUG
+        /// Read-only local history. Date.distantPast remains the donor sentinel;
+        /// these are app operation facts, never camera receipt/picture evidence.
+        struct LiveViewDonorHistory {
+            let initialAccepted: Bool
+            let locallyAcceptedEnables: Int
+            let lastEnableWallTime: Date
+            let idrHoldEnableCount: Int
+            let gateInFlight: Bool
+            let watchdogStage: FeedWatchdog.Stage
+        }
+        var liveViewDonorHistory: LiveViewDonorHistory {
+            .init(initialAccepted: liveViewHistory.initialAccepted,
+                locallyAcceptedEnables: liveViewHistory.locallyAcceptedEnables, lastEnableWallTime: liveViewHistory.lastAcceptedEnableWallTime,
+                idrHoldEnableCount: liveViewHistory.idrHoldEnableCount, gateInFlight: liveViewHistory.gateInFlight,
+                watchdogStage: feedWatchdog.stage)
+        }
+        /// Calls the current admitted owner through the app compatibility projection.
+        /// No readiness override; original donor bodies/results are archived separately.
+        @discardableResult
+        func donorRecoverLiveView(force: Bool, reason: String) -> Bool {
+            sendRecoverEnable(force: force, reason: reason)
+        }
+        private func liveViewDonorDate() -> Date {
+            guard let timing = liveViewDonorTiming else { return Date() }
+            return Date(timeIntervalSinceReferenceDate: timing.wallNow())
+        }
+    #endif
+
     private func beginIDRHoldIfNeeded() {
+        #if DEBUG
+        let presented = decoder.lastPresentedAt.map { liveViewDonorDate().timeIntervalSince($0) }
+        #else
         let presented = decoder.lastPresentedAt.map { Date().timeIntervalSince($0) }
+        #endif
         if CameraSoftAP.shouldBeginIDRHoldOnEnable(
             hasPresentedPicture: CameraSoftAP.isPresentedPictureFresh(
                 secondsSinceLastPresented: presented))
@@ -4247,73 +4289,26 @@ final class CameraSession {
     /// Pocket, Nano and Action 6 capture (`0x09/0xa8`). Other Action / 360 live start is
     /// uncaptured — do not invent it.
     func startCapturedLiveView(reason: String) -> Bool {
-        if isBrowsingMedia, reason != "media browse ended" { return false }
-        guard liveEnableGate.begin() else {
-            log.info("live: skip overlapping 0x09/0xa8 (\(reason, privacy: .public))")
-            return false
+        guard !isMultiviewBorrowed else { return false }
+        if datalink == nil {
+            // Explicit legacy local acceptance: no run/endpoint/history or wire evidence.
+            return (!isBrowsingMedia || reason == "media browse ended")
+                && connectedCamera?.model.usesCapturedLiveEnable != false
         }
-        defer { liveEnableGate.end() }
-        guard connectedCamera?.model.usesCapturedLiveEnable != false else {
-            log.info(
-                "live: skip 0x09/0xa8 — \(self.connectedCamera?.model.name ?? "camera", privacy: .public) has no captured enable (\(reason, privacy: .public))"
-            )
-            if controlNote == nil {
-                controlNote = "Live view for this camera is not captured yet."
-            }
-            return false
-        }
-        let nanoGate = connectedCamera?.model.usesNanoLiveViewGate == true
-        if nanoGate {
-            datalink?.send(Commands.nanoLiveViewGate(start: true))
-        }
-        if connectedCamera?.model.sendsLiveViewPrepare ?? true {
-            datalink?.send(Commands.liveViewPrepare())
-        }
-        datalink?.startLiveView(
-            receiver: connectedCamera?.model.liveViewEnableReceiver
-                ?? Commands.liveViewEnableReceiverPocket)
-        return true
+        let purpose: DjiAppleLiveViewPurpose = reason == "media browse ended"
+            ? .capturedMediaReturnRecipe : .capturedRecipe
+        return locallyAccepted(pictureRecovery.requestLiveView(purpose, reason: reason))
     }
 
-    /// One enable after path + display are ready. Never before `192.168.2.x` exists
-    /// unless handshake already proved the socket (`pathProven`).
+    private func locallyAccepted(_ outcome: DjiAppleLiveViewOutcome) -> Bool {
+        if case .locallyAccepted = outcome { return true }
+        return false
+    }
+
+    /// One captured owner operation after path or handshake admission.
     private func sendInitialLiveViewEnable(displayAttached: Bool, pathProven: Bool = false) {
-        if isBrowsingMedia { return }
-        let pathReady = pathProven || cameraPathReady()
-        if pathProven
-            ? CameraSoftAP.shouldSendLiveViewEnableAfterHandshake(alreadySent: liveViewEnableSent)
-            : CameraSoftAP.shouldSendLiveViewEnable(
-                pathReady: pathReady, displayAttached: displayAttached,
-                alreadySent: liveViewEnableSent)
-        {
-            guard startCapturedLiveView(reason: "first picture") else { return }
-            liveViewEnableSent = true
-            liveViewEnableSends += 1
-            lastIdrRequest = Date()
-            idrHoldEnableCount = 1
-            beginIDRHoldIfNeeded()
-            log.info(
-                "live: sent 0x09/0xa8 once (path ready, display attached) #\(self.liveViewEnableSends, privacy: .public)"
-            )
-            return
-        }
-        // Display layout missed the wait (rare). Path is up and handshake already
-        // succeeded — one enable so we are not stuck on the 5 s stall cooldown.
-        if pathReady, !liveViewEnableSent {
-            guard startCapturedLiveView(reason: "display wait") else { return }
-            liveViewEnableSent = true
-            liveViewEnableSends += 1
-            lastIdrRequest = Date()
-            idrHoldEnableCount = 1
-            beginIDRHoldIfNeeded()
-            log.info(
-                "live: sent 0x09/0xa8 once after display wait (attached=\(displayAttached)) #\(self.liveViewEnableSends, privacy: .public)"
-            )
-        } else {
-            log.info(
-                "live: skipped enable pathReady=\(pathReady) attached=\(displayAttached) sent=\(self.liveViewEnableSent)"
-            )
-        }
+        _ = pictureRecovery.requestLiveView(.initial(pathProven: pathProven, displayAttached: displayAttached),
+            reason: pathProven || displayAttached ? "first picture" : "display wait")
     }
 
     /// SET ACK silence while video is dead. Video still flowing is handled in
@@ -4346,7 +4341,7 @@ final class CameraSession {
             )
         else { return }
         if FeedWatchdog.shouldHoldForGOPReset(
-            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
+            secondsSinceLastEnable: now.timeIntervalSince(liveViewHistory.lastAcceptedEnableWallTime),
             lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) }
         ) {
             log.info("control: SET timeouts during GOP-reset grace — leave UDP")
@@ -4392,7 +4387,7 @@ final class CameraSession {
         guard cameraMedia.resumeLiveTask == nil else { return false }
         let now = Date()
         if FeedWatchdog.shouldHoldForGOPReset(
-            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
+            secondsSinceLastEnable: now.timeIntervalSince(liveViewHistory.lastAcceptedEnableWallTime),
             lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) }
         ) {
             return false
@@ -4433,7 +4428,7 @@ final class CameraSession {
             videoFresh: videoFresh,
             sawPicture: hasStableLivePicture,
             statusFresh: statusFresh,
-            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
+            secondsSinceLastEnable: now.timeIntervalSince(liveViewHistory.lastAcceptedEnableWallTime),
             pathReady: cameraPathReady()
         )
     }
@@ -4482,7 +4477,7 @@ final class CameraSession {
         if !firstPictureSettled,
             CameraSoftAP.shouldMarkFirstPictureSettled(
                 secondsSinceLastPresented: presentedAge,
-                secondsSinceLastEnable: Date().timeIntervalSince(lastIdrRequest))
+                secondsSinceLastEnable: Date().timeIntervalSince(liveViewHistory.lastAcceptedEnableWallTime))
         {
             firstPictureSettled = true
         }
@@ -4544,12 +4539,7 @@ final class CameraSession {
             resolution: original.resolution, frameRate: original.frameRate, fromOperator: false)
         await waitForRecordingFormatPokeSettle()
         guard !Task.isCancelled, !isBrowsingMedia else { return }
-        guard startCapturedLiveView(reason: "first-picture format poke") else { return }
-        liveViewEnableSends += 1
-        lastIdrRequest = Date()
-        if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
-        beginIDRHoldIfNeeded()
-        idrHoldEnableCount += 1
+        _ = pictureRecovery.requestLiveView(.firstPictureFormat, reason: "first-picture format poke")
     }
 
     private func waitForRecordingFormatPokeSettle() async {
@@ -4596,9 +4586,9 @@ final class CameraSession {
         let model = connectedCamera?.model.name ?? "none"
         let needs = connectedCamera?.model.needsFirstPictureFormatPoke == true
         let line =
-            "feed: first-picture step=\(step.rawValue) defer=\(deferred ? 1 : 0) needsPoke=\(needs ? 1 : 0) poked=\(firstPictureFormatPoked ? 1 : 0) inFlight=\(firstPictureFormatPokeTask != nil ? 1 : 0) known=\(known ? 1 : 0) model=\(model) boot=\(original.chipLabel) kick=\(kick.chipLabel) legal=\(legal ? 1 : 0) formats=\(status.availableVideoFormats.count) enables=\(liveViewEnableSends) videoPkts=\(packets) lastVideo=\(videoAge)s presented=\(presented)s decoderFmt=\(decoder.hasFormat ? 1 : 0) idrHold=\(decoder.awaitingIDR ? 1 : 0)"
+            "feed: first-picture step=\(step.rawValue) defer=\(deferred ? 1 : 0) needsPoke=\(needs ? 1 : 0) poked=\(firstPictureFormatPoked ? 1 : 0) inFlight=\(firstPictureFormatPokeTask != nil ? 1 : 0) known=\(known ? 1 : 0) model=\(model) boot=\(original.chipLabel) kick=\(kick.chipLabel) legal=\(legal ? 1 : 0) formats=\(status.availableVideoFormats.count) enables=\(liveViewHistory.locallyAcceptedEnables) videoPkts=\(packets) lastVideo=\(videoAge)s presented=\(presented)s decoderFmt=\(decoder.hasFormat ? 1 : 0) idrHold=\(decoder.awaitingIDR ? 1 : 0)"
         let signature =
-            "\(step.rawValue).\(deferred).\(needs).\(firstPictureFormatPoked).\(known).\(packets).\(liveViewEnableSends).\(decoder.hasFormat)"
+            "\(step.rawValue).\(deferred).\(needs).\(firstPictureFormatPoked).\(known).\(packets).\(liveViewHistory.locallyAcceptedEnables).\(decoder.hasFormat)"
         let now = Date()
         guard
             signature != lastFirstPictureSignature
@@ -4619,11 +4609,11 @@ final class CameraSession {
             return
         }
         let packets = datalink?.videoPackets ?? 0
-        let since = Date().timeIntervalSince(lastIdrRequest)
+        let since = Date().timeIntervalSince(liveViewHistory.lastAcceptedEnableWallTime)
         let videoAge = datalink?.lastVideoPacketAt.map { Date().timeIntervalSince($0) }
         let step = CameraSoftAP.firstPictureStep(
             videoPackets: packets,
-            enableSends: liveViewEnableSends,
+            enableSends: liveViewHistory.locallyAcceptedEnables,
             secondsSinceLastEnable: since,
             secondsSinceLastVideo: videoAge,
             secondsSinceLastRebuild: datalink?.secondsSinceLastRebuild,
@@ -4657,21 +4647,17 @@ final class CameraSession {
         case .resendEnable:
             // Do not route through sendRecoverEnable — inPlayback / VT-ready
             // holds skipped the only PLI and sat on Waiting for live view.
-            if liveViewEnableSends == 0 {
+            if liveViewHistory.locallyAcceptedEnables == 0 {
                 log.info("live: first-picture enable never sent — sending now")
                 sendInitialLiveViewEnable(
                     displayAttached: decoder.isDisplayReady, pathProven: true)
                 return
             }
             log.info("live: first-picture resend enable (waiting for IDR)")
-            guard startCapturedLiveView(reason: "first-picture resend") else { return }
+            guard locallyAccepted(pictureRecovery.requestLiveView(.firstPictureResend,
+                reason: "first-picture resend")) else { return }
             recordFeedRepair(
                 "enable", phase: .locallySent, reason: FeedRepairRecord.firstPictureReason)
-            liveViewEnableSends += 1
-            lastIdrRequest = Date()
-            if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
-            beginIDRHoldIfNeeded()
-            idrHoldEnableCount += 1
             return
         case .rebuildUDP:
             guard allowTransportRecovery else { return }
@@ -4695,7 +4681,11 @@ final class CameraSession {
     private func applyFeedWatchdog() {
         if needsForegroundRecover { return }
         if datalink?.isRebuilding == true || pictureRecovery.isBusy { return }
+        #if DEBUG
+        let now = liveViewDonorDate()
+        #else
         let now = Date()
+        #endif
         let live: Bool
         if case .live = phase { live = true } else { live = false }
         let wentBlack = decoder.displayedImageRemoved || decoder.displayLayer.status == .failed
@@ -4718,7 +4708,7 @@ final class CameraSession {
             hadVideo: FeedWatchdog.hadVideo(
                 videoPackets: datalink?.videoPackets ?? 0,
                 lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) }),
-            secondsSinceLastEnable: now.timeIntervalSince(lastIdrRequest),
+            secondsSinceLastEnable: now.timeIntervalSince(liveViewHistory.lastAcceptedEnableWallTime),
             secondsSinceFocusTrackSet: secondsSinceFocusTrackSet,
             secondsSinceZoomSet: secondsSinceZoomSet,
             zoomPinchActive: zoomPinchPreview != nil,
@@ -4730,7 +4720,7 @@ final class CameraSession {
             referenceRecoveryNeeded: decoder.referenceRecoveryNeeded,
             secondsSinceLastIrap: decoder.lastIrapAt.map { now.timeIntervalSince($0) },
             repairReady: decoder.isDisplayReady && !isBrowsingMedia && !status.inPlayback
-                && !liveEnableGate.inFlight
+                && !liveViewHistory.gateInFlight
         )
         let watchdogBeforeTick = feedWatchdog
         let action = feedWatchdog.tick(snap)
@@ -4831,110 +4821,30 @@ final class CameraSession {
             logFeedObserve(snap: snap, watchdog: action)
             let pictureOwner = cameraMedia.resumeID
             startFeedRecovery { [weak self] attempt in
-                guard let self, !Task.isCancelled,
-                    self.isLivePictureRepairCurrent(pictureOwner)
-                else { return }
-                let started = Date()
-                guard self.decoder.rebuildPresentationIfNeeded(referenceLossOnly: referenceLossOnly)
-                else {
-                    // The serialized owner still holds this generation's
-                    // unspent request; preserve its exact previous ladder.
+                guard let self, attempt.isCurrent, self.isLivePictureRepairCurrent(pictureOwner) else { return }
+                let result = await attempt.repairNativeOutput(referenceLossOnly: referenceLossOnly,
+                    pictureIntent: pictureOwner)
+                guard attempt.isCurrent, self.isLivePictureRepairCurrent(pictureOwner) else { return }
+                switch result {
+                case .unspent:
                     self.feedWatchdog = watchdogBeforeTick
-                    return
-                }
-                // The rebuild is a real attempt, but a temporarily detached
-                // display or in-flight enable is not a failed connection.
-                // Keep this owner and its bounded deadline while gates settle.
-                var sent = false
-                let enableReady = {
-                    self.decoder.isPresentationReady && self.cameraPathReady()
-                        && !self.isBrowsingMedia && !self.status.inPlayback
-                        && !self.liveEnableGate.inFlight
-                }
-                while !Task.isCancelled,
-                    self.isLivePictureRepairCurrent(pictureOwner),
-                    Date().timeIntervalSince(started) < FeedWatchdog.decoderRepairDeadline
-                {
-                    if enableReady() {
-                        sent = self.sendRecoverEnable(force: true, reason: "watchdog decoder")
-                        if sent { break }
-                    }
-                    try? await Task.sleep(for: .milliseconds(250))
-                }
-                guard !Task.isCancelled, self.isLivePictureRepairCurrent(pictureOwner) else {
-                    return
-                }
-                guard sent else {
+                case .blockedReadiness:
                     self.recordFeedRepair("decoder", phase: .blocked, reason: "notReady")
                     ControlLiveLog.line("recovery: action=decoder effect=blocked reason=notReady")
-                    // No wire attempt was sent. Preserve the held frame; the
-                    // existing watchdog deadline/path owner handles escalation.
-                    return
-                }
-                // Resend the keyframe request until an IRAP newer than it lands;
-                // unanswered twice, rebuild the endpoint (FeedWatchdog.decoderRepairStep).
-                var keyframeRequests = 1
-                var restored = false
-                repair: while !Task.isCancelled, self.isLivePictureRepairCurrent(pictureOwner) {
-                    if self.hasFreshRecoveryPicture(since: started) {
-                        restored = true
-                        break
-                    }
-                    let now = Date()
-                    switch FeedWatchdog.decoderRepairStep(
-                        secondsSinceRepairStart: now.timeIntervalSince(started),
-                        secondsSinceLastEnable: now.timeIntervalSince(self.lastIdrRequest),
-                        secondsSinceLastIrap: self.decoder.lastIrapAt.map {
-                            now.timeIntervalSince($0)
-                        },
-                        keyframeRequests: keyframeRequests)
-                    {
-                    case .wait:
-                        break
-                    case .resendKeyframe:
-                        if enableReady(),
-                            self.sendRecoverEnable(force: true, reason: "watchdog keyframe resend")
-                        {
-                            keyframeRequests += 1
-                        }
-                    case .rebuildEndpoint:
-                        self.recordFeedRepair(
-                            "endpoint", phase: .requested, reason: "keyframeUnanswered")
-                        ControlLiveLog.line(
-                            "recovery: action=endpoint effect=requested reason=keyframeUnanswered requests=\(keyframeRequests)"
-                        )
-                        await self.repairDatalink(reason: "keyframe unanswered", attempt: attempt)
-                        return
-                    case .deadline:
-                        break repair
-                    }
-                    do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
-                }
-                guard !Task.isCancelled, self.isLivePictureRepairCurrent(pictureOwner) else {
-                    return
-                }
-                if restored {
-                    self.recordFeedRepair(
-                        "decoder", phase: .pictureRestored, reason: "outputResumed")
-                    ControlLiveLog.line(
-                        "recovery: action=decoder effect=freshPicture reason=outputResumed")
+                case .restored:
+                    self.recordFeedRepair("decoder", phase: .pictureRestored, reason: "outputResumed")
+                    ControlLiveLog.line("recovery: action=decoder effect=freshPicture reason=outputResumed")
                     self.feedWatchdog = FeedWatchdog()
-                } else {
-                    if self.decoder.nativeOutputExpected,
-                        (self.decoder.nativeOutputAge ?? .infinity) < FeedWatchdog.stallThreshold
-                    {
-                        self.recordFeedRepair(
-                            "decoder", phase: .blocked, reason: "presentationOnly")
-                        ControlLiveLog.line(
-                            "recovery: action=decoder effect=blocked reason=presentationOnly")
-                        self.feedWatchdog = FeedWatchdog()
-                        return
-                    }
+                case .presentationOnly:
+                    self.recordFeedRepair("decoder", phase: .blocked, reason: "presentationOnly")
+                    ControlLiveLog.line("recovery: action=decoder effect=blocked reason=presentationOnly")
+                    self.feedWatchdog = FeedWatchdog()
+                case .fullRejoinRequired:
                     FeedIncidentRuntime.noteExhausted(now: ProcessInfo.processInfo.systemUptime)
-                    ControlLiveLog.line(
-                        "recovery: action=decoder effect=exhausted reason=pictureDeadline")
+                    ControlLiveLog.line("recovery: action=decoder effect=exhausted reason=pictureDeadline")
                     self.recordFeedRepair("rejoin", phase: .requested, reason: "pictureDeadline")
                     await self.rejoinDatalinkKeepingLive(attempt: attempt)
+                case .endpointRepair, .superseded: break
                 }
             }
         case .reopenDatalink:
@@ -4971,51 +4881,7 @@ final class CameraSession {
     /// Re-enable only after SoftAP + VT/display are ready. Holds P-frames until IDR.
     @discardableResult
     private func sendRecoverEnable(force: Bool, reason: String = "recover") -> Bool {
-        recordFeedRepair("enable", phase: .requested)
-        ControlLiveLog.line("recovery: action=enable effect=requested")
-        endGimbalStick(cancelMove: true)
-        if isBrowsingMedia {
-            recordFeedRepair("enable", phase: .blocked, reason: "mediaBrowsing")
-            return false
-        }
-        if status.inPlayback {
-            sendExitPlayback()
-            ControlLiveLog.line("feed: hold enable — camera still in playback (\(reason))")
-            recordFeedRepair("enable", phase: .blocked, reason: "playback")
-            return false
-        }
-        let pathReady = cameraPathReady()
-        let decoderReady = decoder.isPresentationReady
-        guard FeedWatchdog.shouldSendRecoverEnable(pathReady: pathReady, decoderReady: decoderReady)
-        else {
-            recordFeedRepair(
-                "enable", phase: .blocked, reason: pathReady ? "decoderNotReady" : "pathNotReady")
-            log.info(
-                "feed: hold enable path=\(pathReady ? 1 : 0) decoder=\(decoderReady ? 1 : 0) reason=\(reason, privacy: .public)"
-            )
-            return false
-        }
-        if !force, Date().timeIntervalSince(lastIdrRequest) < FeedWatchdog.escalateAfter {
-            recordFeedRepair("enable", phase: .blocked, reason: "cooldown")
-            return false
-        }
-        guard startCapturedLiveView(reason: reason) else {
-            recordFeedRepair("enable", phase: .blocked, reason: "enableGate")
-            return false
-        }
-        lastIdrRequest = Date()
-        liveViewEnableSends += 1
-        if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
-        beginIDRHoldIfNeeded()
-        idrHoldEnableCount += 1
-        log.info(
-            "live: recover 0x09/0xa8 (\(reason, privacy: .public), VT ready, hold IDR) #\(self.liveViewEnableSends, privacy: .public)"
-        )
-        ControlLiveLog.line(
-            "feed: recover 0x09/0xa8 reason=\(reason) #\(liveViewEnableSends)")
-        recordFeedRepair("enable", phase: .locallySent)
-        ControlLiveLog.line("recovery: action=enable effect=sent")
-        return true
+        locallyAccepted(pictureRecovery.requestLiveView(.recover(force: force), reason: reason))
     }
 
     func resetFeedWatchdog() { resetFeedWatchdog(ifCurrent: { true }) }
@@ -5028,7 +4894,6 @@ final class CameraSession {
         pictureRecovery.cancel()
         guard ifCurrent() else { return }
         lastFeedFreezeLogAt = nil
-        liveEnableGate.end()
     }
 
     private func resetLinkHealthMeasurements(ifCurrent: () -> Bool = { true }) {
@@ -5074,9 +4939,9 @@ final class CameraSession {
     private func noteLiveFrame() {
         lastGoodFrameAt = Date()
         consecutiveBadLiveFrames = 0
-        if !decoder.awaitingIDR { idrHoldEnableCount = 0 }
+        if !decoder.awaitingIDR, let source = liveViewSource { pictureRecovery.notePresentedSource(scope: source) }
         armFaceAFAfterFirstPicture()
-        if liveViewEnableSent {
+        if liveViewHistory.initialAccepted {
             let audio = audioRefreshPending
             let glamour = glamourClearPending
             let focus = focusTrackPending
@@ -5330,22 +5195,23 @@ final class CameraSession {
     }
 
     private func makePictureRecovery() -> DjiApplePictureRecovery {
-        DjiApplePictureRecovery(context: { [weak self] in
+        DjiApplePictureRecovery(connectionRun: connectionRun, context: { [weak self] in
             guard let self else { return .init() }
             return .init(rebuilding: self.datalink?.isRebuilding == true,
                 endpointIdentity: self.datalink.map { ObjectIdentifier($0) },
                 pictureIntent: self.cameraMedia.resumeID, browsingMedia: self.isBrowsingMedia,
-                holdsMonitor: self.holdsMonitor, sessionRecovering: self.sessionRecovery.isRecovering)
+                holdsMonitor: self.holdsMonitor, sessionRecovering: self.sessionRecovery.isRecovering,
+                ownsConnection: !self.isMultiviewBorrowed)
         }, native: .init(prepare: { [weak self] in
             guard let self else { return Date.timeIntervalSinceReferenceDate }
             self.endGimbalStick(cancelMove: true)
             return self.prepareForDatalinkRecovery().timeIntervalSinceReferenceDate
-        }, enable: { [weak self] in
-            guard let self else { return }
-            self.sendInitialLiveViewEnable(
-                displayAttached: self.decoder.isDisplayReady, pathProven: true)
-            self.feedWatchdog = FeedWatchdog()
-        }, probe: { [weak self] in
+        }, prepareScoped: { [weak self] scope in
+            guard let self, scope.isCurrent else { return Date.timeIntervalSinceReferenceDate }
+            self.endGimbalStick(cancelMove: true, ifCurrent: { scope.isCurrent })
+            guard scope.isCurrent else { return Date.timeIntervalSinceReferenceDate }
+            return self.prepareForDatalinkRecovery(ifCurrent: { scope.isCurrent }).timeIntervalSinceReferenceDate
+        }, enable: {}, probe: { [weak self] in
             self?.recoverFirstPictureIfNeeded(
                 allowTransportRecovery: false, currentRepairOwnsFirstPicture: true)
         }, picture: { [weak self] since, now in
@@ -5354,54 +5220,151 @@ final class CameraSession {
                 since: Date(timeIntervalSinceReferenceDate: since),
                 now: Date(timeIntervalSinceReferenceDate: now)),
                 lastPresentedAt: self.decoder.lastPresentedAt?.timeIntervalSinceReferenceDate)
-        }), timing: pictureRecoveryTiming, event: { [weak self] event in
-            guard let self else { return }
+        }), liveViewNative: .init(observeOutput: { [weak self] since, now in
+            guard let self else { return nil }
+            return .init(pathReady: self.cameraPathReady(), playbackBlocked: self.status.inPlayback,
+                presentationReady: self.decoder.isPresentationReady, awaitingIDR: self.decoder.awaitingIDR,
+                nativeOutputExpected: self.decoder.nativeOutputExpected,
+                nativeOutputAge: self.decoder.nativeOutputAge,
+                lastIrapWallTime: self.decoder.lastIrapAt?.timeIntervalSinceReferenceDate,
+                picture: .init(fresh: self.hasFreshRecoveryPicture(
+                    since: Date(timeIntervalSinceReferenceDate: since),
+                    now: Date(timeIntervalSinceReferenceDate: now)),
+                    lastPresentedAt: self.decoder.lastPresentedAt?.timeIntervalSinceReferenceDate))
+        }, perform: { [weak self] effect, scope in
+            self?.performLiveViewNative(effect, scope: scope)
+        }, rebuildOutput: { [weak self] referenceLossOnly, scope in
+            guard let self, scope.isCurrent else { return false }
+            return self.decoder.rebuildPresentationIfNeeded(referenceLossOnly: referenceLossOnly)
+        }), timing: pictureRecoveryTiming, event: { [weak self] event, scope in
+            guard let self, scope.isCurrent else { return }
             switch event {
             case .admitted:
                 self.status.meteredEv = nil
+                guard scope.isCurrent else { return }
                 self.feedRecovering = true
+                guard scope.isCurrent else { return }
                 self.refreshFeedWarmup()
             case .released:
                 if !self.feedWatchdog.isRecovering { self.feedRecovering = false }
+                guard scope.isCurrent else { return }
                 self.refreshFeedWarmup()
+            case .endpointInitialPolicyCompleted:
+                // Original native.enable reset this even when initial policy refused.
+                // The event is local workflow completion, not a wire receipt.
+                self.feedWatchdog = FeedWatchdog()
+            case .endpointRepairRequested(let requests):
+                self.recordFeedRepair("endpoint", phase: .requested, reason: "keyframeUnanswered")
+                ControlLiveLog.line("recovery: action=endpoint effect=requested reason=keyframeUnanswered requests=\(requests)")
             case .restored:
                 ControlLiveLog.line("feed: endpoint recovery has fresh picture")
             case .holdForWatchdog(let cycles):
                 ControlLiveLog.line("feed: endpoint recovery picture deadline expired")
-                ControlLiveLog.line(
-                    "feed: keep BLE, video still arriving; watchdog owns the stall cycle=\(cycles)")
+                ControlLiveLog.line("feed: keep BLE, video still arriving; watchdog owns the stall cycle=\(cycles)")
                 self.recordFeedRepair("session", phase: .blocked, reason: "videoLive")
+                guard scope.isCurrent else { return }
                 self.feedWatchdog = FeedWatchdog()
             case .escalateSession:
                 ControlLiveLog.line("feed: endpoint recovery picture deadline expired")
-                self.beginSessionRecovery(
-                    reason: "endpoint recovery has no fresh picture", trigger: .datalinkLost)
+                self.beginSessionRecovery(reason: "endpoint recovery has no fresh picture", trigger: .datalinkLost)
             case .negotiationFailed(let reason):
                 ControlLiveLog.line("feed: endpoint negotiation failed (\(reason))")
-                self.beginSessionRecovery(
-                    reason: "endpoint negotiation failed", trigger: .datalinkLost)
+                self.beginSessionRecovery(reason: "endpoint negotiation failed", trigger: .datalinkLost)
             }
         })
     }
 
-    private func prepareForDatalinkRecovery() -> Date {
+    private func performLiveViewNative(_ effect: DjiAppleLiveViewNativeEffect,
+        scope: DjiAppleLiveViewScope) {
+        guard scope.isCurrent else { return }
+        switch effect {
+        case .prepareRecover:
+            recordFeedRepair("enable", phase: .requested)
+            ControlLiveLog.line("recovery: action=enable effect=requested")
+            endGimbalStick(cancelMove: true, ifCurrent: { scope.isCurrent })
+        case .prepareMediaReturn:
+            status.meteredEv = nil
+        case .exitPlayback:
+            sendExitPlayback()
+        case .holdPicture(let always):
+            if always { decoder.beginIDRHold() } else { beginIDRHoldIfNeeded() }
+        case .requestFinished(let purpose, let reason, let outcome):
+            switch outcome {
+            case .blocked(.uncaptured):
+                log.info("live: skip 0x09/0xa8 \u{2014} \(self.connectedCamera?.model.name ?? "camera", privacy: .public) has no captured enable (\(reason, privacy: .public))")
+                if controlNote == nil { controlNote = "Live view for this camera is not captured yet." }
+                guard scope.isCurrent else { return }
+            case .blocked(.overlap):
+                log.info("live: skip overlapping 0x09/0xa8 (\(reason, privacy: .public))")
+            default: break
+            }
+            guard scope.isCurrent else { return }
+            switch purpose {
+            case .recover:
+                switch outcome {
+                case .locallyAccepted(let history):
+                    log.info("live: recover 0x09/0xa8 (\(reason, privacy: .public), VT ready, hold IDR) #\(history.locallyAcceptedEnables, privacy: .public)")
+                    ControlLiveLog.line("feed: recover 0x09/0xa8 reason=\(reason) #\(history.locallyAcceptedEnables)")
+                    recordFeedRepair("enable", phase: .locallySent)
+                    ControlLiveLog.line("recovery: action=enable effect=sent")
+                case .blocked(let block):
+                    let detail: String
+                    switch block {
+                    case .mediaBrowsing: detail = "mediaBrowsing"
+                    case .playback:
+                        detail = "playback"
+                        ControlLiveLog.line("feed: hold enable \u{2014} camera still in playback (\(reason))")
+                    case .pathNotReady, .presentationNotReady:
+                        let pathReady = block == .presentationNotReady
+                        let decoderReady = self.decoder.isPresentationReady
+                        guard scope.isCurrent else { return }
+                        log.info("feed: hold enable path=\(pathReady ? 1 : 0) decoder=\(decoderReady ? 1 : 0) reason=\(reason, privacy: .public)")
+                        detail = pathReady ? "decoderNotReady" : "pathNotReady"
+                    case .cooldown: detail = "cooldown"
+                    default: detail = "enableGate"
+                    }
+                    recordFeedRepair("enable", phase: .blocked, reason: detail)
+                case .superseded: break
+                }
+            case .initial(let pathProven, let displayAttached):
+                if case .locallyAccepted(let history) = outcome {
+                    if pathProven || displayAttached {
+                        log.info("live: sent 0x09/0xa8 once (path ready, display attached) #\(history.locallyAcceptedEnables, privacy: .public)")
+                    } else {
+                        log.info("live: sent 0x09/0xa8 once after display wait (attached=\(displayAttached)) #\(history.locallyAcceptedEnables, privacy: .public)")
+                    }
+                } else if outcome == .blocked(.alreadyAccepted) || outcome == .blocked(.pathNotReady) {
+                    let pathReady = pathProven || self.cameraPathReady()
+                    guard scope.isCurrent else { return }
+                    log.info("live: skipped enable pathReady=\(pathReady) attached=\(displayAttached) sent=\(self.liveViewHistory.initialAccepted)")
+                }
+            default: break
+            }
+        }
+    }
+
+    private func prepareForDatalinkRecovery(ifCurrent: () -> Bool = { true }) -> Date {
         // The held picture may return before this endpoint's first exposure report.
+        guard ifCurrent() else { return Date() }
         status.meteredEv = nil
+        guard ifCurrent() else { return Date() }
         // The new handshake restarts DUML sequence numbering. Old retries,
         // pending sliders, and GET continuations belong to the retired session.
         controlSeam?.linkDidChange()
+        guard ifCurrent() else { return Date() }
         commandTimeoutsAt.removeAll()
         audioTail?.cancel()
         audioTail = nil
         tapFocusTask?.cancel()
         tapFocusTask = nil
         stopTrackingPoll()
+        guard ifCurrent() else { return Date() }
         controlExchange.retire(CancellationError(), notifySets: true)
+        guard ifCurrent() else { return Date() }
         decoder.flushForRecovery()
-        liveViewEnableSent = false
-        liveViewEnableSends = 0
+        guard ifCurrent() else { return Date() }
         resetFirstPictureFormatPoke()
-        idrHoldEnableCount = 0
+        guard ifCurrent() else { return Date() }
         firstPictureSettled = false
         audioRefreshPending = true
         glamourClearPending = true
@@ -5638,37 +5601,43 @@ final class CameraSession {
     /// Stage 4: new UDP handshake + register + subscribe on SoftAP. BLE and
     /// `phase == .live` stay so the operator is not dumped to a black home screen.
     private func rejoinDatalinkKeepingLive(attempt: DjiApplePictureRecovery.Attempt) async {
-        guard let camera = connectedCamera else { return }
+        guard attempt.isCurrent, let camera = connectedCamera else { return }
         let pictureOwner = cameraMedia.resumeID
         log.info("feed: full datalink rejoin (SoftAP bind kept)")
-        disposeDatalink()
-        let started = prepareForDatalinkRecovery()
+        disposeDatalink(ifCurrent: { attempt.isCurrent })
+        guard attempt.isCurrent,
+            let started = attempt.prepareReplacementEndpoint() else { return }
         var attemptedDatalink: DatalinkDriver?
         do {
             try Task.checkCancellation()
+            guard attempt.isCurrent else { return }
             // Station drivers check the hotspot path themselves in open().
             if connectionSetup == .cameraWiFi {
                 try await WiFiJoiner.waitUntilCameraPathReady(timeout: 8, host: .pocket)
             }
             try Task.checkCancellation()
+            guard attempt.isCurrent else { return }
             let dl = makeDatalink(camera)
+            guard attempt.isCurrent else { dl.close(); return }
             wireDatalink(dl)
+            guard attempt.isCurrent else { dl.close(); return }
             datalink = dl
             attemptedDatalink = dl
+            guard attempt.bindReplacementLiveView(dl, recovery: .init(datalink: dl)) else { return }
             decoder.beginIDRHold()
             try await dl.open { [self] in
-                guard shouldCommitLiveHandshake(dl) else { return }
+                guard attempt.isCurrent, shouldCommitLiveHandshake(dl) else { return }
                 guard isLivePictureRepairCurrent(pictureOwner) else { return }
                 sendInitialLiveViewEnable(
                     displayAttached: decoder.isDisplayReady, pathProven: true)
             }
-            guard shouldCommitLiveHandshake(dl) else { return }
+            guard attempt.isCurrent, shouldCommitLiveHandshake(dl) else { return }
             // New session: the old stall ladder is over. First picture owns
             // the new driver until a rolling picture; then a fresh watchdog.
             feedWatchdog = FeedWatchdog()
             startKeepalive(ssid: joinedSSID)
             _ = await attempt.waitForPicture(.init(datalink: dl),
-                since: started.timeIntervalSinceReferenceDate, pictureIntent: pictureOwner,
+                since: started, pictureIntent: pictureOwner,
                 timeout: .seconds(2 * CameraSoftAP.foregroundPictureGrace))
         } catch is CancellationError {
             return
@@ -5988,15 +5957,7 @@ final class CameraSession {
 
     @discardableResult
     func restartLiveViewAfterMedia() -> Bool {
-        guard datalink?.isClosed == false else { return false }
-        guard startCapturedLiveView(reason: "media browse ended") else { return false }
-        status.meteredEv = nil
-        liveViewEnableSent = true
-        liveViewEnableSends += 1
-        lastIdrRequest = Date()
-        idrHoldEnableCount = 1
-        decoder.beginIDRHold()
-        return true
+        locallyAccepted(pictureRecovery.requestLiveView(.mediaReturn, reason: "media browse ended"))
     }
 
     func resetMediaSession() { resetMediaSession(ifCurrent: { true }) }

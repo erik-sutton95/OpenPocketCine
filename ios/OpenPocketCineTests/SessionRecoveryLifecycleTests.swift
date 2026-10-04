@@ -95,19 +95,32 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
     }
 
     func testCanceledRepairCannotReleaseNewRepairOwnership() async {
-        let session = CameraSession(borrowing: HevcDecoder())
+        let session = CameraSession()
+        let peer = ConnectionDonorPeer(cached: true)
+        defer { session.disconnect(); session.decoder.close(); withExtendedLifetime(peer) {} }
+        guard await peer.admitExistingConnection(session) else { return }
         var first: CheckedContinuation<Void, Never>?
         var second: CheckedContinuation<Void, Never>?
-        session.startFeedRecovery { _ in await withCheckedContinuation { first = $0 } }
-        while first == nil { await Task.yield() }
+        guard session.startFeedRecovery({ _ in await withCheckedContinuation { first = $0 } }) else {
+            XCTFail("Current real run must admit the first repair"); return
+        }
+        let firstDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while first == nil, ContinuousClock.now < firstDeadline { await Task.yield() }
+        guard first != nil else { XCTFail("First admitted repair must reach its manual wait"); return }
         session.resetFeedWatchdog()
-        session.startFeedRecovery { _ in await withCheckedContinuation { second = $0 } }
-        while second == nil { await Task.yield() }
+        guard session.startFeedRecovery({ _ in await withCheckedContinuation { second = $0 } }) else {
+            first?.resume(); XCTFail("Current real run must admit the replacement repair"); return
+        }
+        let secondDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while second == nil, ContinuousClock.now < secondDeadline { await Task.yield() }
+        guard second != nil else {
+            first?.resume(); XCTFail("Replacement repair must reach its manual wait"); return
+        }
 
         first?.resume()
         for _ in 0..<20 { await Task.yield() }
         var thirdStarted = false
-        session.startFeedRecovery { _ in thirdStarted = true }
+        XCTAssertFalse(session.startFeedRecovery { _ in thirdStarted = true })
         for _ in 0..<20 { await Task.yield() }
         XCTAssertFalse(thirdStarted, "Old completion must not admit a competing repair")
         XCTAssertTrue(session.feedRecovering, "The second repair is still running")

@@ -5,24 +5,52 @@ import XCTest
 
 @MainActor
 final class GimbalModeSelectionTests: XCTestCase {
-    private func liveModel() async throws -> AppModel {
-        let decoder = HevcDecoder()
+    private func liveModel(ownedRepairPolicy: ConnectionDonorPeer? = nil) async throws -> AppModel {
+        let decoder: HevcDecoder
+        var admittedModel: AppModel?
+        if let ownedRepairPolicy {
+            let model = AppModel()
+            model.session = CameraSession()
+            decoder = model.session.decoder
+            let camera = FoundCamera(id: UUID(), name: "OsmoPocket4P-Test",
+                model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22)
+            let admitted = await ownedRepairPolicy.admitExistingConnection(model.session, target: camera)
+            admittedModel = try XCTUnwrap(admitted ? model : nil)
+        } else { decoder = HevcDecoder() }
         decoder.effects.histogram = true
         decoder.unlockHardwareDecoder()
-        decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer())
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
-        while decoder.lastPresentedAt == nil, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
+        if let admittedModel {
+            // The owned session's real presentation callback records rolling
+            // native output; warmup must finish before repair becomes the gate.
+            let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+            while admittedModel.session.isFeedWarming, ContinuousClock.now < deadline {
+                decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer())
+                try await Task.sleep(for: .milliseconds(40))
+            }
+            XCTAssertFalse(admittedModel.session.isFeedWarming)
+        } else {
+            // Preserve the original borrowed-context native picture setup.
+            decoder.handleDecodedFrame(ScopeTestBuffers.makeEdgeBuffer())
+            let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+            while decoder.lastPresentedAt == nil, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
         }
         XCTAssertNotNil(decoder.lastPresentedAt)
-        let model = AppModel()
-        model.session = CameraSession(borrowing: decoder)
-        model.session.updateMultiview(
-            camera: FoundCamera(
-                id: UUID(), name: "OsmoPocket4P-Test",
-                model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
-            driver: DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: ""),
-            status: CameraStatus())
+        let model = admittedModel ?? AppModel()
+        if ownedRepairPolicy != nil {
+            model.session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+            XCTAssertFalse(model.session.isMultiviewBorrowed)
+            XCTAssertEqual(model.session.phase, .live)
+        } else {
+            model.session = CameraSession(borrowing: decoder)
+            model.session.updateMultiview(
+                camera: FoundCamera(
+                    id: UUID(), name: "OsmoPocket4P-Test",
+                    model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
+                driver: DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: ""),
+                status: CameraStatus())
+        }
         return model
     }
 
@@ -30,8 +58,9 @@ final class GimbalModeSelectionTests: XCTestCase {
         let saved = OperatorPrefs.headTrackingEnabled
         defer { OperatorPrefs.headTrackingEnabled = saved }
         for context in ["warming", "held", "repair", "inactive"] {
-            let model = try await liveModel()
-            defer { model.session.disconnect() }
+            let policy = context == "repair" ? ConnectionDonorPeer(cached: true) : nil
+            let model = try await liveModel(ownedRepairPolicy: policy)
+            defer { model.session.disconnect(); withExtendedLifetime(policy) {} }
             let session = model.session
             switch context {
             case "warming":
@@ -39,7 +68,7 @@ final class GimbalModeSelectionTests: XCTestCase {
                 session.noteMultiviewFrame()
             case "held": session.holdsMonitor = true
             case "repair":
-                session.startFeedRecovery { _ in try? await Task.sleep(for: .seconds(1)) }
+                XCTAssertTrue(session.startFeedRecovery { _ in try? await Task.sleep(for: .seconds(1)) })
             default: session.noteSceneBecameInactive()
             }
             model.headTrackingEnabled = true

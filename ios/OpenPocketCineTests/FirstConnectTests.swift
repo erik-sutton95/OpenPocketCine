@@ -1330,6 +1330,7 @@ final class ConnectionDonorPeer {
     var advertisesRecoveryCamera = true
     var recoveryPicture = SessionRecoveryNativePeers.Picture()
     var onRegistered: (() -> Void)?
+    var registeredAttempt: DjiAppleConnectionRun.Attempt?
     var onRecoveryPower: (() async -> Bool)?
     var onRecoveryScan: (() -> Void)?
     var onGatt: (() async throws -> Void)?
@@ -1482,6 +1483,13 @@ final class ConnectionDonorPeer {
 
     func session(borrowing decoder: HevcDecoder? = nil) -> CameraSession {
         let session = CameraSession(borrowing: decoder, heartbeatTiming: heartbeatTiming)
+        configureConnection(session)
+        return session
+    }
+
+    /// Existing per-instance SIMULATED bindings, shared by sessions constructed
+    /// with their own native picture/repair clocks. No run token is manufactured.
+    func configureConnection(_ session: CameraSession) {
         app = session
         if station {
             session.connectionSetup = hotspot ? .phoneHotspot : .wifi
@@ -1496,13 +1504,32 @@ final class ConnectionDonorPeer {
             }, registered: { [unowned self, weak session] _, attempt in
                 trace.append("registered"); session?.phase = .live
                 guard attempt.isCurrent else { return }; trace.append("enable")
+                registeredAttempt = attempt
                 onRegistered?()
             }, ssid: cached ? network : nil, password: cached ? "SIMULATED-PASSWORD" : nil,
             stationNetwork: station ? .init(ssid: network, password: "SIMULATED-PASSWORD", hotspot: hotspot) : nil, persist: { [unowned self] _, _ in trace.append("persist") },
             forget: { [unowned self] in trace.append("forget") })
         session.sessionHeartbeat.endpoint = .init(writeBLE: { [unowned self] in send($0) },
             registerDatalink: {}, transport: { .init() })
-        return session
+    }
+
+    /// Only an already-owned transport session may admit the SIMULATED run.
+    /// All workflow authority comes from public connect and its real registered Attempt.
+    func admitExistingConnection(_ session: CameraSession, target: FoundCamera? = nil) async -> Bool {
+        XCTAssertFalse(session.isMultiviewBorrowed, "Fixture setup cannot promote a borrowed transport")
+        guard !session.isMultiviewBorrowed else { return false }
+        configureConnection(session)
+        registeredAttempt = nil
+        session.connect(target ?? camera)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while (session.phase != .live || registeredAttempt?.isCurrent != true),
+            ContinuousClock.now < deadline { await Task.yield() }
+        guard session.phase == .live, registeredAttempt?.isCurrent == true else {
+            XCTFail("SIMULATED fixture requires a current real public connection run")
+            session.disconnect()
+            return false
+        }
+        return true
     }
 }
 

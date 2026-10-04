@@ -12,10 +12,11 @@ import XCTest
 final class ConnectionLifecycleRegressionTests: XCTestCase {
     func testStatsAgingDoesNotReplaceAnEstablishedPictureWithStartupWaiting() async throws {
         let model = AppModel()
+        let peer = ConnectionDonorPeer(cached: true)
         let decoder = model.session.decoder
         decoder.effects.histogram = true
         decoder.unlockHardwareDecoder()
-        defer { model.session.disconnect() }
+        defer { model.session.disconnect(); withExtendedLifetime(peer) {} }
         XCTAssertTrue(model.session.isFeedWarming)
         try await presentRollingPictures(model)
         XCTAssertFalse(model.session.isFeedWarming)
@@ -31,8 +32,15 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
             "An established monitor must keep its held picture instead of returning to startup Waiting"
         )
         XCTAssertEqual(model.session.liveFPS, "—", "Idle test session must lose its cached FPS")
-        model.session.phase = .live
-        model.session.startFeedRecovery { _ in try? await Task.sleep(for: .seconds(30)) }
+        // The original idle-aging picture remains distinct from the admitted
+        // live source. Public connect resets source; qualify a new real rolling
+        // native picture before preserving the recovery/chrome assertions.
+        guard await peer.admitExistingConnection(model.session) else { return }
+        decoder.unlockHardwareDecoder()
+        try await presentRollingPictures(model)
+        XCTAssertGreaterThan(try XCTUnwrap(decoder.lastPresentedAt), heldPicture)
+        XCTAssertEqual(model.session.phase, .live, "The current public run supplies phase")
+        XCTAssertTrue(model.session.startFeedRecovery { _ in try? await Task.sleep(for: .seconds(30)) })
         model.session.refreshLinkHealth(at: Date.timeIntervalSinceReferenceDate + 3)
         XCTAssertEqual(
             model.session.liveFPS, "RECOV", "Recovery must remain visible in its own chrome")
