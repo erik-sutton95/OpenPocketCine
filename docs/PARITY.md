@@ -1839,3 +1839,27 @@ Physical iPhone export remains untested.
 This ownership move is Apple-only. Android continues sharing original files
 with its existing delivery path; no Android conversion feature is added.
 Full player/delivery workflow ownership and full P2 remain unfinished.
+
+### Pocket actual DJI media producer
+
+The actual connected camera now exposes an optional shared media service.
+Playback entry, catalog wire order/assembler/pagination and finite live return
+move into OpenCineDJIApple. The app retains primitive IO, captured snapshot facts,
+genuine recovery admission and cache/favorite/view policy. Native ingress captures
+its authority before actor queueing. Endpoint/catalog retirement stays separate
+from same-session return, including the existing nil-driver recovery behavior.
+
+Unknown/no-response catalog work retains cached records with the existing
+list-failed message, an explicit correction from the donor's empty publication.
+Actual empty catalog completion remains known empty. Gallery-open refusal,
+newest-page fallback and all original recovery/cache assertions remain intact.
+Thumbnail/transfer/delete operations remain absent in the optional service.
+
+Shared owner/manual-clock and mirrored connection registration scenarios pass.
+Pocket portable/strict/repository gates and both simulator architectures pass;
+all six original recovery, eight original cache and two actual-port native methods
+pass. Android shared/consumer gates, native staging, packages and JNI41 pass.
+Physical camera behavior remains untested. The browse owner is Apple-specific;
+Android retains its existing owner. This is a producer prerequisite, with app
+production growing by 34 lines after explicit authority/registration bindings.
+Whole library/cache/player ownership and full P2 remain unfinished. No pin move.

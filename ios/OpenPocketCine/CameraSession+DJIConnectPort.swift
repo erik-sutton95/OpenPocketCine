@@ -1,5 +1,6 @@
 import Foundation
 import OpenCineCore
+import OpenCineMedia
 import OpenPocketViewCore
 
 /// The shared document's saved camera (SHELL-02), for app files that do not import OpenCineCore
@@ -83,9 +84,19 @@ extension CameraSession: DJIConnectPort {
             switch phase {
             case .live:
                 guard let camera = connectedCamera else { throw CancellationError() }
+                var services = CameraServices()
+                if let producer = await connectedMediaService() {
+                    services.register(producer as any CameraMediaService,
+                        as: (any CameraMediaService).self)
+                }
+                try Task.checkCancellation()
+                guard connectedCamera?.id == camera.id, case .live = phase else {
+                    throw CancellationError()
+                }
                 return DJIConnection(
                     session: control, joinedNetwork: next == .cameraWiFi ? joinedSSID : nil,
-                    camera: DJISighting(id: cameraID, name: camera.name, model: camera.model, modelId: camera.modelId))
+                    camera: DJISighting(id: cameraID, name: camera.name, model: camera.model, modelId: camera.modelId),
+                    services: services)
             case .failed(let why):
                 throw typedFailure(why)
             case .idle:

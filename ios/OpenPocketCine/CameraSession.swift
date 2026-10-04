@@ -5694,6 +5694,12 @@ final class CameraSession {
             guard let self, let dl, self.datalink === dl else { return }
             self.decoder.noteCompressedDiscontinuity()
         }
+        // Admission was captured by the raw UDP callback before this actor queue.
+        dl.onMediaFrame = { [weak self, weak dl] frame, admission in
+            guard let self, let dl, self.datalink === dl, let admission else { return }
+            _ = self.cameraMedia.mediaService?.ingest(frame, admission: admission)
+        }
+        cameraMedia.mediaService?.attachIngress(dl.mediaIngress)
         dl.onStatusFrame = { [weak self, weak dl] frame in
             guard let self, let dl, self.datalink === dl else { return }
             self.applyIncomingStatus(frame)
@@ -5709,7 +5715,6 @@ final class CameraSession {
     func applyIncomingStatus(_ frame: Duml.Frame) {
         route(frame)
         if frame.cmdSet == 0x00, frame.cmdId == 0x27 {
-            if isBrowsingMedia { ingestMediaListFrame(frame) }
             return
         }
         if !isMultiviewControlsOnly, frame.cmdSet == 0x02, frame.cmdId == 0x89 {

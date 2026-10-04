@@ -1,49 +1,10 @@
 import Foundation
+import OpenCineDJIApple
+import OpenCineMedia
 import OpenPocketViewCore
 
-/// One bounded post-gallery owner. Dependencies are the actual shell operations;
-/// tests drive this same loop without a camera or wall-clock-length deadline.
-@MainActor
-enum MediaLiveResumeRunner {
-    enum Result: Equatable { case restored, exhausted, superseded }
-
-    static func run(
-        timeout: Duration = .seconds(FeedWatchdog.decoderRepairDeadline),
-        isCurrent: () -> Bool,
-        inPlayback: () -> Bool,
-        pictureFresh: () -> Bool,
-        exitPlayback: () async -> Bool,
-        enableLiveView: () -> Bool
-    ) async -> Result {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        var attempt = 1
-        var exitAcknowledged = false
-        var enableSent = false
-        while !Task.isCancelled, isCurrent() {
-            switch MediaLiveResume.action(
-                attempt: attempt, inPlayback: inPlayback(),
-                exitAcknowledged: exitAcknowledged, pictureFresh: pictureFresh(),
-                enableSent: enableSent, deadlineExpired: ContinuousClock.now >= deadline)
-            {
-            case .done:
-                return .restored
-            case .exhausted:
-                return .exhausted
-            case .exitPlayback:
-                let acknowledged = await exitPlayback()
-                exitAcknowledged = acknowledged || exitAcknowledged
-                attempt += 1
-                do { try await Task.sleep(for: .milliseconds(180)) } catch { return .superseded }
-            case .enableLiveView:
-                enableSent = enableLiveView()
-                do { try await Task.sleep(for: .milliseconds(100)) } catch { return .superseded }
-            case .waitForPicture:
-                do { try await Task.sleep(for: .milliseconds(100)) } catch { return .superseded }
-            }
-        }
-        return .superseded
-    }
-}
+/// Existing native goldens exercise the integration-owned finite return loop.
+typealias MediaLiveResumeRunner = DjiAppleMediaLiveReturn
 
 /// Operator-facing media notes. Never name a sister app or another camera brand.
 enum MediaOperatorCopy {
@@ -60,11 +21,6 @@ enum MediaOperatorCopy {
     static let clipOpenFailed = "Could not open that clip."
     static let clipLoading = "Loading clip from camera…"
     static let clipNotCached = "This clip is not cached on the phone."
-}
-
-private struct MediaQueryPage {
-    var files: [MediaFile]
-    var slices: [Int: MediaPageSliceInfo]
 }
 
 /// Playback-held media list + SoftAP HTTP cache. Owned by `CameraSession`.
@@ -84,12 +40,13 @@ final class CameraMedia {
         self.httpConfiguration = httpConfiguration
     }
 
-    var assembler = MediaChunkAssembler()
+    var mediaPort: PocketMediaPort?
+    var mediaService: DjiAppleMediaService?
+    var mediaBrowse: (any CameraMediaBrowse)?
     var browseTask: Task<Void, Never>?
     var resumeLiveTask: Task<Void, Never>?
     var browseID = 0
     var resumeID = 0
-    var playbackHeld = false
     var actionCounter: UInt32 = 1
     var storageWinner: [String: Int] = [:]
     var favorites: Set<String> = []
@@ -156,8 +113,10 @@ final class CameraMedia {
         browseTask?.cancel()
         browseTask = nil
         cancelResumeLive()
-        playbackHeld = false
-        assembler.reset()
+        mediaService?.retire()
+        mediaService = nil
+        mediaPort = nil
+        mediaBrowse = nil
         storageWinner.removeAll()
         thumbInFlight.removeAll()
         downloadInFlight.removeAll()
@@ -771,6 +730,8 @@ extension CameraSession {
         retireLivePictureRecoveryForMedia()
         cameraMedia.browseTask?.cancel()
         cameraMedia.browseTask = nil
+        cameraMedia.mediaService?.retire()
+        cameraMedia.mediaBrowse = nil
         loadMediaFavorites()
         loadCachedCatalogIfNeeded()
         guard hasMediaDatalink, isLivePhase else {
@@ -801,13 +762,16 @@ extension CameraSession {
         }
     }
 
-    func endMediaBrowse() {
+    func endMediaBrowse() { endMediaBrowse(returning: nil) }
+
+    /// The integration provides the loop; this host claims the existing genuine recovery slot.
+    func endMediaBrowse(returning: (@MainActor (Int) async -> Void)?) {
         cameraMedia.browseTask?.cancel()
         cameraMedia.browseTask = nil
         cameraMedia.browseID += 1
         mediaFetchInProgress = false
-        cameraMedia.playbackHeld = false
-        cameraMedia.assembler.reset()
+        if returning == nil { cameraMedia.mediaService?.retire() }
+        cameraMedia.mediaBrowse = nil
         isBrowsingMedia = false
         mediaNote = nil
         cameraMedia.resumeLiveTask?.cancel()
@@ -829,7 +793,12 @@ extension CameraSession {
                 }
             }
             await self.claimMediaLiveRecovery(token: token) { [weak self] in
-                await self?.resumeLiveViewAfterMedia(token: token)
+                guard let self else { return }
+                if let returning {
+                    await returning(token)
+                } else {
+                    await self.resumeLiveViewAfterMedia(token: token)
+                }
             }
         }
     }
@@ -837,9 +806,9 @@ extension CameraSession {
     /// Mimo "Back to live view": keep sending `0x02/0x0c` exit until the camera
     /// drops the playback bit, then `0x09/0xa8`. Enable while still in playback
     /// ACKs `E0`/`D6` and the camera stays on "Playback in progress".
-    func resumeLiveViewAfterMedia(token: Int) async {
+    func mediaReturnAuthority(token: Int) -> DjiAppleMediaReturnAuthority {
         let started = Date()
-        let result = await MediaLiveResumeRunner.run(
+        return .init(
             isCurrent: { self.isLivePictureRepairCurrent(token) },
             inPlayback: { self.status.inPlayback },
             pictureFresh: { self.hasFreshRecoveryPicture(since: started) },
@@ -857,18 +826,29 @@ extension CameraSession {
                     return false
                 }
             },
-            enableLiveView: { self.restartLiveViewAfterMedia() })
-        guard !Task.isCancelled, isLivePictureRepairCurrent(token) else { return }
-        switch result {
-        case .restored:
-            ControlLiveLog.line("media: live resume has fresh picture")
-        case .exhausted:
-            ControlLiveLog.line("media: live resume picture deadline or exit budget expired")
-            beginSessionRecovery(
-                reason: "live picture did not return after media", trigger: .datalinkLost)
-        case .superseded:
-            break
-        }
+            enableLiveView: { self.restartLiveViewAfterMedia() },
+            completed: { result in
+                guard !Task.isCancelled, self.isLivePictureRepairCurrent(token) else { return }
+                switch result {
+                case .restored:
+                    ControlLiveLog.line("media: live resume has fresh picture")
+                case .exhausted:
+                    ControlLiveLog.line("media: live resume picture deadline or exit budget expired")
+                    self.beginSessionRecovery(
+                        reason: "live picture did not return after media", trigger: .datalinkLost)
+                case .superseded:
+                    break
+                }
+            })
+    }
+
+    func resumeLiveViewAfterMedia(token: Int) async {
+        let authority = mediaReturnAuthority(token: token)
+        let result = await MediaLiveResumeRunner.run(
+            isCurrent: authority.isCurrent, inPlayback: authority.inPlayback,
+            pictureFresh: authority.pictureFresh, exitPlayback: authority.exitPlayback,
+            enableLiveView: authority.enableLiveView)
+        authority.completed(result)
     }
 
     func refreshMedia() {
@@ -889,11 +869,7 @@ extension CameraSession {
         mediaFetchInProgress = true
         mediaNote = MediaOperatorCopy.listing
         let id = cameraMedia.nextBrowseID()
-        await listAllMediaPages(id: id, includeOlderPages: cameraMedia.playbackHeld)
-    }
-
-    func ingestMediaListFrame(_ frame: Duml.Frame) {
-        _ = cameraMedia.assembler.ingest(frame)
+        await listAllMediaPages(id: id)
     }
 
     func ensureThumbnail(for file: MediaFile) async {
@@ -1211,176 +1187,84 @@ extension CameraSession {
 
     private func runMediaBrowse(id: Int) async {
         guard id == cameraMedia.browseID else { return }
-        let entered = await enterPlaybackForMedia()
-        guard !Task.isCancelled, id == cameraMedia.browseID else { return }
-        let decision = MediaBrowsePolicy.afterEnterPlayback(entered)
-        cameraMedia.playbackHeld = entered
-        if !entered {
-            datalink?.setMediaBrowsing(false)
-            ControlLiveLog.line("media: enter playback failed — listing newest page")
-        }
-        guard decision.keepBrowsing else {
-            mediaFetchInProgress = false
-            mediaNote = MediaOperatorCopy.playbackFailed
-            isBrowsingMedia = false
-            return
-        }
-        await listAllMediaPages(id: id, includeOlderPages: decision.listOlderPages)
-    }
-
-    private func enterPlaybackForMedia() async -> Bool {
-        for attempt in 1...3 {
-            if Task.isCancelled { return false }
-            do {
-                let reply = try await awaitMediaOpcode(0x02, 0x0C, timeout: .milliseconds(900)) {
-                    self.sendEnterPlayback()
-                }
-                if CameraReply.parse(reply.payload).isSuccess || status.inPlayback {
-                    ControlLiveLog.line("media: enter playback ok attempt=\(attempt)")
-                    return true
-                }
-            } catch {
-                if status.inPlayback { return true }
-            }
-            try? await Task.sleep(for: .milliseconds(120))
-        }
-        return status.inPlayback
-    }
-
-    private func listAllMediaPages(id: Int, includeOlderPages: Bool = true) async {
-        defer {
+        guard let producer = await connectedMediaService() else {
             if id == cameraMedia.browseID {
                 mediaFetchInProgress = false
+                mediaNote = MediaOperatorCopy.notConnected
             }
+            return
         }
-        var collected: [MediaFile] = []
-        var seen = Set<String>()
-        var sdCursor = MediaListCommand.newestSD
-        var internalCursor = MediaListCommand.newestInternal
-        var first = true
-        while !Task.isCancelled, id == cameraMedia.browseID {
-            let page = await queryMediaPage(
-                sdCursor: sdCursor, internalCursor: internalCursor,
-                retryEmptySD: first && cameraMedia.playbackHeld)
-            let step =
-                first
-                ? MediaListCommand.seedPagination(
-                    page: page.files, seen: &seen, slices: page.slices)
-                : MediaListCommand.stepPagination(
-                    sdCursor: sdCursor, internalCursor: internalCursor,
-                    page: page.files, seen: &seen, slices: page.slices)
-            first = false
-            sdCursor = step.sdCursor
-            internalCursor = step.internalCursor
-            collected.append(contentsOf: step.fresh.map { applyFavoriteOverlay($0) })
-            publishMediaFiles(collected)
-            if !includeOlderPages || !step.moreAvailable { break }
+        do {
+            let browse = try await producer.openBrowse()
+            // Begin/end synchronously retire the service before this continuation can publish.
+            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
+            cameraMedia.mediaBrowse = browse
+            await listAllMediaPages(id: id)
+        } catch {
+            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
+            mediaFetchInProgress = false
+            mediaNote = MediaOperatorCopy.listFailed
         }
-        guard id == cameraMedia.browseID else { return }
-        if collected.isEmpty {
-            if !cameraMedia.assembler.hasResponse {
-                mediaNote = MediaOperatorCopy.listFailed
-            } else {
-                mediaNote = MediaOperatorCopy.noClips
+    }
+
+    /// Native records preserve storage/path/favorite/cache facts; cursor/query policy is shared.
+    private func listAllMediaPages(id: Int) async {
+        defer {
+            if id == cameraMedia.browseID { mediaFetchInProgress = false }
+        }
+        guard let browse = cameraMedia.mediaBrowse, let producer = cameraMedia.mediaService else {
+            mediaNote = MediaOperatorCopy.listFailed
+            return
+        }
+        do {
+            let cursor = try await browse.catalog()
+            defer { cursor.close() }
+            var collected: [MediaFile] = []
+            while let delta = try await cursor.next() {
+                guard !Task.isCancelled, id == cameraMedia.browseID else { return }
+                if delta.reset { collected.removeAll() }
+                for asset in delta.upserts {
+                    guard let record = producer.mediaCatalogRecord(asset.id, binding: browse.binding)
+                    else { throw MediaServiceError.retired }
+                    collected.append(applyFavoriteOverlay(record.file))
+                }
+                publishMediaFiles(collected)
+                if delta.complete { break }
             }
-        } else {
-            mediaNote = nil
+            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
+            mediaNote = collected.isEmpty ? MediaOperatorCopy.noClips : nil
+        } catch {
+            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
+            mediaNote = MediaOperatorCopy.listFailed
         }
     }
 
     private func listNewestMediaPage() async {
-        let page = await queryMediaPage(
-            sdCursor: MediaListCommand.newestSD,
-            internalCursor: MediaListCommand.newestInternal,
-            retryEmptySD: cameraMedia.playbackHeld)
-        var seen = Set<String>()
-        var collected: [MediaFile] = []
-        for file in page.files where seen.insert(MediaListCommand.pageKey(file)).inserted {
-            collected.append(applyFavoriteOverlay(file))
+        guard let browse = cameraMedia.mediaBrowse, let producer = cameraMedia.mediaService else {
+            return
         }
-        for file in mediaFiles where seen.insert(MediaListCommand.pageKey(file)).inserted {
-            collected.append(file)
-        }
-        publishMediaFiles(collected)
-    }
-
-    private func queryMediaPage(
-        sdCursor: UInt32, internalCursor: UInt32, retryEmptySD: Bool
-    ) async -> MediaQueryPage {
-        cameraMedia.assembler.reset()
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(12))
-        sendMediaFrame(
-            Commands.mediaList(
-                counter: MediaListCommand.sdCounter, cursor: sdCursor))
-        await collectMediaChunks(
-            counter: MediaListCommand.sdCounter, floor: .milliseconds(800),
-            idle: .seconds(1), deadline: deadline)
-        sendMediaFrame(Commands.mediaListTrigger())
-        await collectMediaChunks(
-            counter: nil, floor: .milliseconds(400), idle: .milliseconds(200),
-            deadline: deadline)
-        sendMediaFrame(
-            Commands.mediaList(
-                counter: MediaListCommand.internalCounter, cursor: internalCursor))
-        await collectMediaChunks(
-            counter: MediaListCommand.internalCounter, floor: .milliseconds(800),
-            idle: .seconds(1), deadline: deadline)
-
-        // Nano can confirm playback before its dock SD is mounted (`0x26` replies d8 and opens a
-        // start-only stream). Re-ask once after the first two-store pass instead of delaying all bodies.
-        if retryEmptySD,
-            cameraMedia.assembler.assembled(counter: MediaListCommand.sdCounter).isEmpty,
-            clock.now < deadline
-        {
-            ControlLiveLog.line("media: SD store answered empty â€” re-asking once")
-            cameraMedia.assembler.reset(counter: MediaListCommand.sdCounter)
-            sendMediaFrame(
-                Commands.mediaList(counter: MediaListCommand.sdCounter, cursor: sdCursor))
-            await collectMediaChunks(
-                counter: MediaListCommand.sdCounter, floor: .milliseconds(800),
-                idle: .seconds(1), deadline: deadline)
-            sendMediaFrame(Commands.mediaListTrigger())
-            await collectMediaChunks(
-                counter: MediaListCommand.sdCounter, floor: .milliseconds(400),
-                idle: .seconds(1), deadline: deadline)
-        }
-
-        let slices = [
-            MediaListCommand.sdStorage: MediaManifest.sliceInfo(
-                assembler: cameraMedia.assembler, counter: MediaListCommand.sdCounter),
-            MediaListCommand.internalStorage: MediaManifest.sliceInfo(
-                assembler: cameraMedia.assembler, counter: MediaListCommand.internalCounter),
-        ]
-        return MediaQueryPage(
-            files: MediaManifest.decodeStores(assembler: cameraMedia.assembler), slices: slices)
-    }
-
-    private func collectMediaChunks(
-        counter: UInt8?, floor: Duration, idle: Duration, deadline: ContinuousClock.Instant
-    ) async {
-        let clock = ContinuousClock()
-        let start = clock.now
-        var lastChange = start
-        var lastCount =
-            counter.map { cameraMedia.assembler.chunkCount(counter: $0) }
-            ?? cameraMedia.assembler.chunkCount
-        while !Task.isCancelled {
-            let now = clock.now
-            if now >= deadline { break }
-            if let counter, now - start >= floor,
-                cameraMedia.assembler.didEnd(counter: counter)
-            { break }
-            try? await Task.sleep(for: .milliseconds(50))
-            let count =
-                counter.map { cameraMedia.assembler.chunkCount(counter: $0) }
-                ?? cameraMedia.assembler.chunkCount
-            if count != lastCount {
-                lastCount = count
-                lastChange = clock.now
+        let id = cameraMedia.browseID
+        do {
+            let cursor = try producer.newestCatalog(binding: browse.binding)
+            defer { cursor.close() }
+            guard let page = try await cursor.next(),
+                !Task.isCancelled, id == cameraMedia.browseID else { return }
+            var seen = Set<String>()
+            var collected: [MediaFile] = []
+            for asset in page.upserts {
+                guard let record = producer.mediaCatalogRecord(asset.id, binding: browse.binding)
+                else { throw MediaServiceError.retired }
+                if seen.insert(MediaListCommand.pageKey(record.file)).inserted {
+                    collected.append(applyFavoriteOverlay(record.file))
+                }
             }
-            let afterSleep = clock.now
-            if afterSleep - start >= floor, afterSleep - lastChange >= idle { break }
+            for file in mediaFiles where seen.insert(MediaListCommand.pageKey(file)).inserted {
+                collected.append(file)
+            }
+            publishMediaFiles(collected)
+        } catch {
+            guard !Task.isCancelled, id == cameraMedia.browseID else { return }
+            mediaNote = MediaOperatorCopy.listFailed
         }
     }
 

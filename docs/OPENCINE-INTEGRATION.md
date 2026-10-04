@@ -340,3 +340,32 @@ consumer cases, lint and release assembly; all 41 JNI exports and staged/debug/
 release native library hashes match. Shared Swift and Android gates also pass.
 Physical settings qualification remains untested on both platforms. No
 OpenCine pin moves in this increment.
+
+## Pocket DJI media browse producer
+
+The actual connection registers `DjiAppleMediaService`. Playback entry retries,
+SD/trigger/internal query ordering, assembler collection, pagination and finite
+live return now belong to OpenCineDJIApple. `PocketMediaPort` supplies primitive
+native IO, immutable snapshot identity and genuine picture-recovery admission.
+Nil-driver recovery preserves the captured session identity without granting
+catalog IO. Raw UDP ingress authority is captured before actor queueing; endpoint
+replacement retires catalog admission while keeping same-session return authority.
+
+Unknown catalog replies preserve existing records with the existing list-failed
+message instead of publishing a known-empty reset. Actual empty replies remain
+known empty. Gallery-open refusal and newest-page fallback remain intact.
+Favorites, view filtering, cache/library policy, thumbnails, transfers and deletion
+remain app-owned; unadopted optional media operations remain absent.
+
+This local increment passes shared 2,124 Swift scenarios, strict and atlas gates;
+Pocket 280 portable scenarios, strict and repository checks; both simulator
+architectures and all 16 native recovery/cache/port methods. Android passes 1,065
+shared cases with the two known Core skips and 506 consumer cases without skips,
+full lint/assembly and native Swift staging. All 41 JNI exports and staged/debug/
+release native hashes match. The original recovery/cache golden files remain
+unchanged. Physical camera listing/gallery/live return remains untested.
+
+The actual browse producer is Apple-specific; Swift/Kotlin optional connection
+service registration is mirrored. Android retains its existing media owner.
+This producer enables the next library/player adoption; full P2 and app pin moves
+remain unfinished.
