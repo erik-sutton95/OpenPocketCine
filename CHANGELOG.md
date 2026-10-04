@@ -130,6 +130,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Android assist tools no longer sit on top of the capture drawer or a gimbal
+  panel. The palette is a separate popup window above every inspector, so it
+  now hides while one is open; iOS already draws it underneath.
 - Android Live View shows the whole picture with the camera held upright,
   such as an Osmo Nano turned to portrait. The renderer cropped the vertical
   frame to its middle 16:9 strip before grading and cropped it again for

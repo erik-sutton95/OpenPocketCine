@@ -22,7 +22,7 @@ import com.opencapture.openpocketcine.OperatorPrefs
  *
  * [inspectorOpen] hides the cluster so the palette Popup cannot cover inspector
  * controls (iOS collapses the palette while `configureTool` is set). Landscape
- * and portrait chrome should pass `assist.configureTool != null`.
+ * and portrait chrome pass it while the capture drawer or a gimbal panel is open.
  */
 @Composable
 fun MonitorAssistCluster(portrait: Boolean, locked: Boolean, isOn: (LiveAssistTool) -> Boolean,
