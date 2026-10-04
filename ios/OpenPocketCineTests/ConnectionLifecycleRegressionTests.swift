@@ -11,8 +11,11 @@ import XCTest
 @MainActor
 final class ConnectionLifecycleRegressionTests: XCTestCase {
     func testStatsAgingDoesNotReplaceAnEstablishedPictureWithStartupWaiting() async throws {
-        let model = AppModel()
         let peer = ConnectionDonorPeer(cached: true)
+        let session = CameraSession()
+        // Install OS peers before the original idle native callbacks capture the Run.
+        peer.configureConnection(session)
+        let model = AppModel(session: session)
         let decoder = model.session.decoder
         decoder.effects.histogram = true
         decoder.unlockHardwareDecoder()

@@ -14,6 +14,7 @@ import XCTest
 @MainActor
 private func establishAdmittedLiveView(_ session: CameraSession, driver: DatalinkDriver,
     modelID: Int = 0x0022, policy: ConnectionDonorPeer,
+    network: String? = nil,
     endpointProvider: (() -> DatalinkDriver)? = nil) async {
     XCTAssertFalse(session.isMultiviewBorrowed, "Fixture setup cannot promote a borrowed transport")
     guard !session.isMultiviewBorrowed else { return }
@@ -30,7 +31,7 @@ private func establishAdmittedLiveView(_ session: CameraSession, driver: Datalin
             XCTAssertTrue(endpoint === (endpointProvider?() ?? driver))
             policy.trace.append("registered SIMULATED host phase; no enable")
             session?.phase = .live
-        }, ssid: policy.network, password: "SIMULATED-PASSWORD", stationNetwork: nil,
+        }, ssid: network ?? policy.network, password: "SIMULATED-PASSWORD", stationNetwork: nil,
         persist: { _, _ in policy.trace.append("persist SIMULATED fixture only") }, forget: {})
     let camera = FoundCamera(id: UUID(), name: "SIMULATED admitted live-view",
         model: .resolve(modelId: modelID, name: "SIMULATED admitted live-view"), modelId: modelID)
@@ -296,7 +297,7 @@ final class HandshakeBindTests: XCTestCase {
 @MainActor
 final class LiveEnableDonorTests: XCTestCase {
     private func bind(_ modelID: Int, session: CameraSession, driver: DatalinkDriver,
-        borrowed: Bool = false, policy: ConnectionDonorPeer? = nil) async {
+        borrowed: Bool = false, policy: ConnectionDonorPeer? = nil, network: String? = nil) async {
         if borrowed {
             XCTAssertTrue(session.isMultiviewBorrowed, "Borrowed contract requires a genuinely borrowed session")
             guard session.isMultiviewBorrowed else { return }
@@ -308,7 +309,7 @@ final class LiveEnableDonorTests: XCTestCase {
             return
         }
         await establishAdmittedLiveView(session, driver: driver, modelID: modelID,
-            policy: policy ?? ConnectionDonorPeer(cached: true))
+            policy: policy ?? ConnectionDonorPeer(cached: true), network: network)
     }
 
     private func fence(_ driver: DatalinkDriver, peer: EndpointPinnedCamera) async {
@@ -336,8 +337,12 @@ final class LiveEnableDonorTests: XCTestCase {
     func testPocketDonorPreparesBeforeOneUDPEnable() async throws {
         let peer = try EndpointPinnedCamera()
         let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
-        let session = CameraSession()
-        await bind(0x0022, session: session, driver: driver)
+        let policy = ConnectionDonorPeer(cached: true)
+        // capturedRecipe does not mark initial history, so hold the independent monitor's
+        // manual wake for this migrated direct-recipe comparison. Initial/native cadence
+        // remain exercised below with their original clocks.
+        let session = CameraSession(heartbeatTiming: policy.heartbeatTiming)
+        await bind(0x0022, session: session, driver: driver, policy: policy)
         defer { session.disconnect(); driver.close(); peer.stop() }
         XCTAssertTrue(session.startCapturedLiveView(reason: "SIMULATED donor Pocket"))
         await fence(driver, peer: peer)
@@ -350,8 +355,11 @@ final class LiveEnableDonorTests: XCTestCase {
     func testNanoDonorPairsItsGateWithEnableWithoutPocketPrepare() async throws {
         let peer = try EndpointPinnedCamera()
         let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
-        let session = CameraSession()
-        await bind(0x0019, session: session, driver: driver)
+        let policy = ConnectionDonorPeer(cached: true)
+        // Isolate this migrated direct recipe without advancing its monitor wake.
+        let session = CameraSession(heartbeatTiming: policy.heartbeatTiming)
+        await bind(0x0019, session: session, driver: driver, policy: policy,
+            network: "OsmoNano-SIMULATED")
         defer { session.disconnect(); driver.close(); peer.stop() }
         XCTAssertTrue(session.startCapturedLiveView(reason: "SIMULATED donor Nano"))
         await fence(driver, peer: peer)
@@ -365,8 +373,10 @@ final class LiveEnableDonorTests: XCTestCase {
     func testActionSixDonorUsesCapturedReceiverWithoutEitherPreparation() async throws {
         let peer = try EndpointPinnedCamera()
         let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
-        let session = CameraSession()
-        await bind(0x0018, session: session, driver: driver)
+        let policy = ConnectionDonorPeer(cached: true)
+        // Isolate this migrated direct recipe without advancing its monitor wake.
+        let session = CameraSession(heartbeatTiming: policy.heartbeatTiming)
+        await bind(0x0018, session: session, driver: driver, policy: policy)
         defer { session.disconnect(); driver.close(); peer.stop() }
         XCTAssertTrue(session.startCapturedLiveView(reason: "SIMULATED donor Action6"))
         await fence(driver, peer: peer)
