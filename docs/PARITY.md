@@ -1768,3 +1768,34 @@ actual adopter compilation/native/full consumer qualification is pending.
 SIMULATED registered/enable labels establish synchronous host order, not
 physical wire qualification. Physical camera recovery, full P2 and the prior
 optical UI automation limitation remain unfinished.
+
+## Apple playback-feed, audio and conform ownership candidate
+
+Pocket replaces its copied AVPlayer output/display-link/assist pipeline and audio
+tap/polling implementation with the existing OpenCineApple owners. The app keeps
+its measured DJI calibration, HDR preference, diagnostics, AVAudioSession policy
+and typed operator-effect conversion. Output attachment still precedes native
+item replacement; source retirement and old-owner shutdown affect only the
+captured source. Portable conform preview uses OpenCineMedia's existing policy
+and mirrored Swift/Kotlin vectors.
+The original public tap and video-layout compatibility helpers remain unchanged
+until the whole player/layout migration.
+
+Unknown clip audio now stays absent through the meter overlay and inspector.
+Known PCM zero remains measured silence. Android native playback keeps its
+existing platform owner in this Apple adapter exception. The portable Swift
+conform alias passes the actual Android native-staged consumer gate.
+
+Two native retirement fixtures now establish a real encoded clip and AVPlayer
+output through the existing owner constructor. Their original histogram,
+output-attachment and successor-retirement assertions remain. The generated
+clip is SIMULATED and both fixtures pass with their original assertions.
+They do not expose a public test-only frame input.
+
+Verification passes: 280 portable tests, strict concurrency, repository and
+handbook checks, both simulator architectures, all 50 affected native iOS tests,
+506 Android tests without skips, lint, debug/release assembly and JNI41 validation.
+Staged and packaged native libraries match. Physical playback remains untested.
+Whole player workflow/page, gallery/DUML, assists and delivery ownership remain
+separate work. Full P2 and the prior optical automation limitation remain
+unfinished.

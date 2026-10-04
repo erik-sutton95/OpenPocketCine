@@ -425,8 +425,8 @@ struct MediaPlayerView: View {
     @State private var deliveryPresentation: MediaDeliveryPresentation?
     @State private var playbackAssistToolbarFrame: CGRect = .zero
     @State private var playbackBarFrame: CGRect = .zero
-    @State private var playbackAudioLevels = AudioMeterLevels.silent
-    @State private var audioMeterController = PlaybackAudioMeterController()
+    @State private var playbackAudioLevels: AudioMeterLevels?
+    @State private var audioMeterController = MediaPlaybackAudioSession.makeMeter()
 
     private let scrubSeekThrottle: CFAbsoluteTime = 0.075
     private let scrubSeekTolerance = CMTime(seconds: 0.1, preferredTimescale: 600)
@@ -1200,7 +1200,7 @@ struct MediaPlayerView: View {
         if model.assist.isPlaybackVisible(.ndMeter) {
             NDMeterOverlay(bounds: canvas, feed: videoRect, chromeClearance: clearance)
         }
-        if model.assist.isPlaybackVisible(.audioMeters) {
+        if model.assist.isPlaybackVisible(.audioMeters), let playbackAudioLevels {
             AudioMeterOverlay(
                 levels: playbackAudioLevels, sensitivity: nil,
                 bounds: canvas, chromeClearance: clearance,
@@ -1221,6 +1221,7 @@ struct MediaPlayerView: View {
     }
 
     private func attachPlaybackAssists(to item: AVPlayerItem) {
+        playbackAudioLevels = nil
         audioMeterController.attach(to: item)
         updatePlaybackEffects()
     }
@@ -1228,7 +1229,7 @@ struct MediaPlayerView: View {
     private func updatePlaybackEffects() {
         let fx = model.assist.playbackEffects
         playbackFeed.setEffects(
-            fx,
+            fx.playbackFrameEffects,
             transfer: MonitorTransfer(fx.colorMode),
             sampleBus: model.frameSamples)
         syncPlaybackAudioMetering()
@@ -1237,11 +1238,11 @@ struct MediaPlayerView: View {
     private func syncPlaybackAudioMetering() {
         if model.assist.isPlaybackVisible(.audioMeters) {
             audioMeterController.startPolling { [self] levels in
-                playbackAudioLevels = levels
+                playbackAudioLevels = levels.map(AudioMeterLevels.init)
             }
         } else {
             audioMeterController.stopPolling()
-            playbackAudioLevels = .silent
+            playbackAudioLevels = nil
         }
     }
 
@@ -1571,6 +1572,7 @@ struct MediaPlayerView: View {
         playbackFlashTask?.cancel()
         audioMeterController.stopPolling()
         audioMeterController.detach(from: player.currentItem)
+        audioMeterController.close()
         playbackFeed.shutdown()
         model.assist.configureTool = nil
         teardownPlayer()

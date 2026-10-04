@@ -96,20 +96,17 @@ final class EVMeterAssistTests: XCTestCase {
             "A fully covered left edge hides the meter until the palette closes")
     }
 
-    func testChangingPlaybackItemsRetiresThePreviousScopeSamplesBeforeLoading() async {
+    func testChangingPlaybackItemsRetiresThePreviousScopeSamplesBeforeLoading() async throws {
         let samples = LiveFrameSampleBus()
         let session = PlaybackFeedSession()
-        session.setEffects(LiveImageEffects(histogram: true), transfer: .rec709, sampleBus: samples)
-        let first = AVPlayerItem(asset: AVMutableComposition())
-        session.prepare(first)
-        let delivered = expectation(description: "first clip scope bundle published")
-        withObservationTracking {
-            _ = samples.playbackBundle
-        } onChange: {
-            delivered.fulfill()
-        }
-        session.submit(ScopeTestBuffers.makeFlatBuffer(code: 180), timeNs: 1)
-        await fulfillment(of: [delivered], timeout: 2)
+        session.setEffects(
+            LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+            sampleBus: samples)
+        let fixture = try await PlaybackOutputFixture.make(in: self)
+        defer { session.shutdown(); fixture.close() }
+        let first = fixture.item
+        fixture.prepare(session)
+        try await fixture.publishScopes(using: session, samples: samples, in: self)
         XCTAssertGreaterThan(samples.playbackBundle?.samples.histogramLuma[180] ?? 0, 0)
         session.beginSourceChange()
         XCTAssertNil(samples.playbackBundle)

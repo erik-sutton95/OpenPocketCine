@@ -11,6 +11,80 @@ import XCTest
 /// identity on `AVPlayerLayer`, assist image on `CIFeedView` only after a bake
 /// lands. `AVVideoComposition` after `replaceCurrentItem` never showed the look.
 final class PlaybackAssistTests: XCTestCase {
+    @MainActor
+    func testPlaybackFrameProjectionPreservesTheDonorNativePolicy() {
+        for mode in [ColorMode.normal, .hdr, .dLog, .dLogM, .dLog2] {
+            for scale in FalseColorScaleKind.allCases {
+                for clip in [Int?.none, Int?.some(143)] {
+                    var effects = LiveImageEffects()
+                    effects.peaking = true
+                    effects.peakingColor = .green
+                    effects.peakingSensitivity = .high
+                    effects.zebra = true
+                    effects.falseColor = true
+                    effects.falseColorScale = scale
+                    effects.falseColorRec709 = true
+                    effects.zebraHighlightIRE = 93
+                    effects.zebraMidtoneIRE = 47
+                    effects.zebraHighlightColor = .cyan
+                    effects.zebraMidtoneColor = .red
+                    effects.histogram = true
+                    effects.waveform = true
+                    effects.parade = true
+                    effects.vectorscope = true
+                    effects.trafficLights = true
+                    effects.ndMeter = true
+                    effects.trafficThreshold = 0.004
+                    effects.colorMode = mode
+                    effects.clipByte = clip
+                    let cube = BuiltInLook.mono.cube()
+                    effects.lutDimension = cube.size
+                    effects.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
+                    effects.splitComparison = true
+                    effects.splitVertical = false
+                    effects.desqueezeFactor = 1.57
+                    effects.desqueezeHorizontal = false
+                    effects.allowsTransferInference = false
+                    effects.mirror = true
+                    effects.mirrorVertical = true
+                    let value = effects.playbackFrameEffects
+                    XCTAssertEqual(value.nativeAssistPolicy, effects.nativeAssistPolicy)
+                    XCTAssertEqual(value.clipByte, clip)
+                    XCTAssertEqual(value.transfer, MonitorTransfer(mode))
+                    XCTAssertTrue(value.mirror)
+                    XCTAssertTrue(value.mirrorVertical)
+                }
+            }
+        }
+        for effects in [
+            LiveImageEffects(), LiveImageEffects(faceAF: true),
+            LiveImageEffects(inspectorSample: true),
+        ] {
+            XCTAssertEqual(effects.playbackFrameEffects.needsSample, effects.needsSample)
+        }
+    }
+
+    @MainActor
+    func testPlaybackAudioWithoutASourceRemainsUnknown() async {
+        let runtime = MediaPlaybackAudioSession.makeMeter()
+        let polled = expectation(description: "actual native audio owner polls its absent source")
+        var observed: AudioMeterLevels?
+        var received = false
+        runtime.startPolling { value in
+            guard !received else { return }
+            received = true
+            observed = value.map(AudioMeterLevels.init)
+            polled.fulfill()
+        }
+        await fulfillment(of: [polled], timeout: 2)
+        runtime.close()
+        XCTAssertTrue(received)
+        XCTAssertNil(observed, "An absent PCM source must not become measured silence")
+        XCTAssertEqual(
+            AudioMeterLevels(OpenCineMedia.MonitorAudioMeterLevels.silent), .silent,
+            "Known silence remains a distinct measured value")
+    }
+
     /// Sentry OPENPOCKETCINE-IOS-2Q: Main waited on a busy pull during a clip
     /// change until the watchdog killed the app.
     @MainActor
@@ -39,7 +113,7 @@ final class PlaybackAssistTests: XCTestCase {
             session.attach(host: host, player: player)
             var effects = LiveImageEffects()
             effects.zebra = true
-            session.setEffects(effects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
+            session.setEffects(effects.playbackFrameEffects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
             try? await Task.sleep(for: .milliseconds(150))
             session.shutdown()
             XCTAssertEqual(player.seekCount, 0, "A ready output must still wait for a numeric time")
@@ -57,7 +131,7 @@ final class PlaybackAssistTests: XCTestCase {
         session.attach(host: host, player: player)
         var effects = LiveImageEffects()
         effects.zebra = true
-        session.setEffects(effects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
+        session.setEffects(effects.playbackFrameEffects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
         let deadline = ContinuousClock.now.advanced(by: .seconds(2))
         while player.seekCount == 0, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(10))
@@ -183,7 +257,7 @@ final class PlaybackAssistTests: XCTestCase {
         ]
         for c in cases {
             let plan = PlaybackFeedHandoff.plan(
-                effects: c.effects, overlayOnly: c.overlayOnly, unmanagedBake: c.unmanagedBake,
+                effects: c.effects.playbackFrameEffects, overlayOnly: c.overlayOnly, unmanagedBake: c.unmanagedBake,
                 metalHasPresented: c.metalHasPresented, hdrDisplay: c.hdrDisplay)
             XCTAssertEqual(plan.showPlayer, c.showPlayer, "\(c.name): showPlayer")
             XCTAssertEqual(plan.showFeed, c.showFeed, "\(c.name): showFeed")
@@ -326,7 +400,7 @@ final class PlaybackAssistTests: XCTestCase {
         fx.lutDimension = cube.size
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         let waiting = PlaybackFeedHandoff.plan(
-            effects: fx, overlayOnly: false, unmanagedBake: false, metalHasPresented: false)
+            effects: fx.playbackFrameEffects, overlayOnly: false, unmanagedBake: false, metalHasPresented: false)
         XCTAssertTrue(waiting.showPlayer)
         XCTAssertFalse(waiting.showFeed)
 
@@ -378,7 +452,7 @@ final class PlaybackAssistTests: XCTestCase {
         session.attach(host: host, player: player)
         var fx = LiveImageEffects()
         fx.zebra = true
-        session.setEffects(fx, transfer: .rec709, sampleBus: LiveFrameSampleBus())
+        session.setEffects(fx.playbackFrameEffects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
         XCTAssertFalse(host.ciFeed.hasPresentedFrame)
         XCTAssertFalse(host.playerLayer.isHidden)
         session.shutdown()

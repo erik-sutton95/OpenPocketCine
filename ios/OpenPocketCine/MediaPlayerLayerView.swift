@@ -10,7 +10,7 @@ struct MediaPlayerLayerView: UIViewRepresentable {
     var transfer: MonitorTransfer
     var sampleBus: LiveFrameSampleBus
 
-    final class Coordinator {
+    @MainActor final class Coordinator {
         let session: PlaybackFeedSession
         let generation: Int
         init(session: PlaybackFeedSession) {
@@ -27,14 +27,14 @@ struct MediaPlayerLayerView: UIViewRepresentable {
         let view = PlaybackFeedHostView()
         view.attachGeneration = context.coordinator.generation
         session.attach(host: view, player: player)
-        session.setEffects(effects, transfer: transfer, sampleBus: sampleBus)
+        session.setEffects(effects.playbackFrameEffects, transfer: transfer, sampleBus: sampleBus)
         return view
     }
 
     func updateUIView(_ uiView: PlaybackFeedHostView, context: Context) {
         uiView.attachGeneration = context.coordinator.generation
         session.attach(host: uiView, player: player)
-        session.setEffects(effects, transfer: transfer, sampleBus: sampleBus)
+        session.setEffects(effects.playbackFrameEffects, transfer: transfer, sampleBus: sampleBus)
     }
 
     static func dismantleUIView(_ uiView: PlaybackFeedHostView, coordinator: Coordinator) {

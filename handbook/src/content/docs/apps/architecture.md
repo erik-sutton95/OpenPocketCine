@@ -60,3 +60,11 @@ rejects stale completions after a replacement. A media transition retires pictur
 without canceling admitted endpoint negotiation. Native picture actions and the full
 connection/recovery policy remain app adapters; no camera command or portable policy
 changes in this Apple-only ownership move. Physical camera qualification remains pending.
+
+Clip playback also uses the shared Apple video-output, assist and audio-meter
+owners. Pocket supplies its source calibration, HDR preference and audio-session
+policy. An unmeasured audio source remains unavailable rather than appearing as
+silent measurements. The portable conform-preview policy comes from shared
+Media. Automated consumer and simulated native playback checks pass; physical
+device qualification remains pending. The gallery, player workflow and delivery
+are still app-owned parts of the shared-shell migration.

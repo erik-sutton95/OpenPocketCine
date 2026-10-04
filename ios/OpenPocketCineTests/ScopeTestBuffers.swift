@@ -1,6 +1,12 @@
+import AVFoundation
 import CoreVideo
 import Foundation
 import OpenPocketViewCore
+import Observation
+import UIKit
+import XCTest
+
+@testable import OpenPocketCine
 
 /// Shared synthetic-buffer factories for the scope-pipeline tests.
 ///
@@ -188,5 +194,205 @@ enum ScopeTestBuffers {
             }
         }
         return buffer
+    }
+}
+
+/// SIMULATED: real encoded clip -> AVPlayerItemVideoOutput -> native feed -> source-owned scopes.
+/// This fixture never calls an app/shared submit helper or writes sample-bus publications.
+@MainActor
+final class PlaybackOutputFixture {
+    let item: AVPlayerItem
+    let player = AVPlayer()
+    let host = PlaybackFeedHostView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
+    private let url: URL
+    private var readiness: XCTestExpectation?
+    private var readinessObservation: NSKeyValueObservation?
+
+    private init(url: URL) {
+        self.url = url
+        item = AVPlayerItem(url: url)
+    }
+
+    static func make(in test: XCTestCase, code: UInt8 = 180) async throws -> PlaybackOutputFixture {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("simulated-playback-output-\(UUID().uuidString).mov")
+        do {
+            let writer = try PlaybackClipWriter(url: url, code: code)
+            try await writer.write(in: test)
+            return PlaybackOutputFixture(url: url)
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            throw error
+        }
+    }
+
+    func prepare(_ session: PlaybackFeedSession) {
+        // The real owner attaches its output before the item becomes current.
+        session.prepare(item)
+        player.replaceCurrentItem(with: item)
+        session.attach(host: host, player: player)
+    }
+
+    func publishScopes(
+        using session: PlaybackFeedSession, samples: LiveFrameSampleBus, in test: XCTestCase
+    ) async throws {
+        let ready = test.expectation(description: "actual encoded clip becomes ready")
+        readiness = ready
+        readinessObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] _, _ in
+            Task { @MainActor in
+                guard let self, self.item.status != .unknown, let readiness = self.readiness else {
+                    return
+                }
+                self.readiness = nil
+                readiness.fulfill()
+            }
+        }
+        await test.fulfillment(of: [ready], timeout: 3)
+        readinessObservation?.invalidate()
+        readinessObservation = nil
+        readiness = nil
+        guard item.status == .readyToPlay else {
+            throw item.error ?? PlaybackFixtureError.itemNotReady
+        }
+        XCTAssertTrue(item.outputs.contains(where: { $0 === session.output }))
+
+        let delivered = test.expectation(description: "actual playback output publishes a scope bundle")
+        let waiter = PlaybackPublicationWait(samples: samples, delivered: delivered)
+        waiter.arm()
+        session.noteItemReady()
+        player.play()
+        // Same publication timeout as the former direct-buffer fixtures.
+        await test.fulfillment(of: [delivered], timeout: 2)
+        waiter.stop()
+        player.pause()
+    }
+
+    func close() {
+        readinessObservation?.invalidate()
+        readinessObservation = nil
+        readiness = nil
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        try? FileManager.default.removeItem(at: url)
+    }
+}
+
+private enum PlaybackFixtureError: Error {
+    case cannotAddVideo, writingFailed, itemNotReady
+}
+
+@MainActor
+private final class PlaybackPublicationWait {
+    private let samples: LiveFrameSampleBus
+    private let delivered: XCTestExpectation
+    private var active = true
+
+    init(samples: LiveFrameSampleBus, delivered: XCTestExpectation) {
+        self.samples = samples
+        self.delivered = delivered
+    }
+
+    func arm() {
+        guard active else { return }
+        if samples.playbackBundle != nil {
+            active = false
+            delivered.fulfill()
+            return
+        }
+        withObservationTracking {
+            _ = samples.playbackBundle
+        } onChange: { [weak self] in
+            // Observation fires before storage; resample actual publication after that callback.
+            Task { @MainActor in self?.arm() }
+        }
+    }
+
+    func stop() { active = false }
+}
+
+@MainActor
+private final class PlaybackClipWriter {
+    private let writer: AVAssetWriter
+    private let input: AVAssetWriterInput
+    private let adaptor: AVAssetWriterInputPixelBufferAdaptor
+    private let buffer: CVPixelBuffer
+    private var frame = 0
+    private let frameCount = 60
+    private var finishedAppending = false
+    private var cancelled = false
+    private var completed: XCTestExpectation?
+    private var failure: Error?
+
+    init(url: URL, code: UInt8) throws {
+        writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        input = AVAssetWriterInput(
+            mediaType: .video,
+            outputSettings: [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: 64, AVVideoHeightKey: 64,
+                AVVideoColorPropertiesKey: [
+                    AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                    AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                    AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+                ],
+            ])
+        adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: 64,
+                kCVPixelBufferHeightKey as String: 64,
+            ])
+        buffer = ScopeTestBuffers.makeFlatBuffer(code: code, width: 64, height: 64)
+        guard writer.canAdd(input) else { throw PlaybackFixtureError.cannotAddVideo }
+        writer.add(input)
+    }
+
+    func write(in test: XCTestCase) async throws {
+        guard writer.startWriting() else {
+            throw writer.error ?? PlaybackFixtureError.writingFailed
+        }
+        writer.startSession(atSourceTime: .zero)
+        let completion = test.expectation(description: "actual flat H264 fixture written")
+        completed = completion
+        input.requestMediaDataWhenReady(on: .main) { [weak self] in
+            // This callback was explicitly scheduled on the main queue.
+            MainActor.assumeIsolated { self?.appendAvailableFrames() }
+        }
+        await test.fulfillment(of: [completion], timeout: 3)
+        guard writer.status == .completed else {
+            cancelled = true
+            completed = nil
+            let error = failure ?? writer.error ?? PlaybackFixtureError.writingFailed
+            writer.cancelWriting()
+            throw error
+        }
+    }
+
+    private func appendAvailableFrames() {
+        guard !cancelled, !finishedAppending else { return }
+        while input.isReadyForMoreMediaData, frame < frameCount {
+            guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(frame), timescale: 30))
+            else {
+                cancelled = true
+                failure = writer.error ?? PlaybackFixtureError.writingFailed
+                writer.cancelWriting()
+                completed?.fulfill()
+                completed = nil
+                return
+            }
+            frame += 1
+        }
+        guard frame == frameCount else { return }
+        finishedAppending = true
+        writer.endSession(atSourceTime: CMTime(value: Int64(frameCount), timescale: 30))
+        input.markAsFinished()
+        writer.finishWriting { [weak self] in
+            Task { @MainActor in
+                guard let self, !self.cancelled else { return }
+                self.completed?.fulfill()
+                self.completed = nil
+            }
+        }
     }
 }

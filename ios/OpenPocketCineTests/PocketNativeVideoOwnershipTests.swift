@@ -144,25 +144,23 @@ final class PocketNativeVideoOwnershipTests: XCTestCase {
         XCTAssertNil(picture.onPresented)
     }
 
-    func testOldPlaybackShutdownCannotClearItsSuccessorBundle() async {
+    func testOldPlaybackShutdownCannotClearItsSuccessorBundle() async throws {
         let samples = LiveFrameSampleBus()
         let old = PlaybackFeedSession()
-        old.setEffects(LiveImageEffects(histogram: true), transfer: .rec709, sampleBus: samples)
+        old.setEffects(
+            LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+            sampleBus: samples)
         let oldItem = AVPlayerItem(asset: AVMutableComposition())
         old.prepare(oldItem)
         let successor = PlaybackFeedSession()
         successor.setEffects(
-            LiveImageEffects(histogram: true), transfer: .rec709, sampleBus: samples)
-        let successorItem = AVPlayerItem(asset: AVMutableComposition())
-        successor.prepare(successorItem)
-        let delivered = expectation(description: "successor clip bundle delivered")
-        withObservationTracking {
-            _ = samples.playbackBundle
-        } onChange: {
-            delivered.fulfill()
-        }
-        successor.submit(ScopeTestBuffers.makeFlatBuffer(code: 180), timeNs: 1)
-        await fulfillment(of: [delivered], timeout: 2)
+            LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+            sampleBus: samples)
+        let fixture = try await PlaybackOutputFixture.make(in: self)
+        defer { old.shutdown(); successor.shutdown(); fixture.close() }
+        let successorItem = fixture.item
+        fixture.prepare(successor)
+        try await fixture.publishScopes(using: successor, samples: samples, in: self)
         XCTAssertTrue(oldItem.outputs.contains(where: { $0 === old.output }))
         XCTAssertTrue(successorItem.outputs.contains(where: { $0 === successor.output }))
         XCTAssertGreaterThan(samples.playbackBundle?.samples.histogramLuma[180] ?? 0, 0)

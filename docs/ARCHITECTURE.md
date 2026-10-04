@@ -119,6 +119,36 @@ the actual source. Runtime reset supports reuse; terminal close retires that own
 The picture view does not close the decoder. Connection, recovery, keepalive and
 continuous DJI gesture ownership remain app-side work in the later P2 increments.
 
+## Apple clip playback ownership
+
+Pocket configures `OpenCineApple.MonitorPlaybackFeedSession` with its existing
+measured source profile, HDR display preference, journal and frame-advance
+notification. `MonitorPlaybackFeedHost` holds the identity AVPlayer layer and
+processed-picture siblings. The shared owner holds video-output attachment,
+display-link polling, the serial pull queue, item/source retirement and assist
+publication. The app attaches that output before replacing the player's item.
+Its adapter converts existing operator effects into `MonitorFrameEffects` values;
+it contains no second sampling or rendering loop.
+
+`MonitorPlaybackAudioMeterRuntime` owns the real audio tap, cancellable track
+query, source lease, polling and meter history. The app retains AVAudioSession
+activation policy and converts measured values for its existing overlay.
+Unmeasured audio stays absent through the overlay and clip inspector; measured
+zero remains known silence. Player disposal closes the audio and feed owners.
+Portable conform policy is the shared `MonitorConformPreview`, using the existing
+constructor and source names through an app type alias.
+
+The adjacent `PlaybackFrameTap` and `PlaybackVideoLayout` public helpers retain
+their original code bodies until whole-player/layout adoption. They are temporary
+app compatibility policy, separate from the shared conform algorithm.
+
+The gallery/DUML adapter, per-clip preparation and player workflow, assists UI and
+delivery remain app-owned migration work; AVAudioSession policy stays with the app.
+This bounded adoption passes portable, strict, repository, both-architecture iOS
+build and Android consumer checks. All 50 affected native iOS tests pass, including
+real decoded-video source retirement. These native fixtures are SIMULATED;
+full P2 and physical device playback qualification remain unfinished.
+
 ## Shared monitor presentation
 
 The multi-brand direction is [Shared Monitor Engine](SHARED-MONITOR-ENGINE.md).
