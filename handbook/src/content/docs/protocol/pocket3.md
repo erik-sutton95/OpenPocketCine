@@ -67,6 +67,10 @@ Read [Audio DSP: preserve the Pocket 3 blob](../../devices/pocket-3/settings/#au
 
 Read [Zoom and Med-Tele](../../devices/pocket-3/controls/#zoom-and-med-tele).
 
+### Reading Med-Tele back (2026-09-20)
+
+Read [Reading Med-Tele back](../../devices/pocket-3/controls/#reading-med-tele-back-2026-09-20).
+
 ## Gimbal controls
 
 Read [Gimbal controls](../../devices/pocket-3/controls/#gimbal-controls).

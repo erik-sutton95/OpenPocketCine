@@ -28,20 +28,26 @@ public struct GimbalProgramZoom: Sendable {
     public var liveZoom: Double? { status.zoomFactor }
     /// The 50 Hz target path is measured on Pocket 4 Pro. Other bodies retain 20 Hz.
     public var usesHighRateTargets: Bool { model?.isPocket4Pro == true }
-    private var maximumZoom: Double {
+    /// The body's own lens window outranks the FORMAT table: under Pocket 3
+    /// Med-Tele it is 2×…4× in every FORMAT.
+    private var zoomStops: [Double] {
         model?.activeZoomStops(resolution: status.videoResolution,
-            shootingMode: status.shootingMode).last ?? 1
+            shootingMode: status.shootingMode,
+            lensMin: status.zoomLensMin, lensMax: status.zoomLensMax) ?? []
     }
+    private var minimumZoom: Double { zoomStops.first ?? 1 }
+    private var maximumZoom: Double { zoomStops.last ?? 1 }
+    private var zoomRange: ClosedRange<Double> { minimumZoom...max(minimumZoom, maximumZoom) }
 
     public var failureReason: String? {
         guard program.changesZoom else { return nil }
         guard let color = status.colorMode else { return "Wait for camera color mode before a zoom move" }
         guard color != .dLog2 else { return "Zoom moves are unavailable in D-Log2" }
-        let maximum = maximumZoom
+        let range = zoomRange
         guard [program.a, program.b, program.c].compactMap({ $0 }).allSatisfy({
-            $0.zoom.isFinite && $0.zoom >= 1 && $0.zoom <= maximum
+            $0.zoom.isFinite && range.contains($0.zoom)
         }) else { return "Saved zoom exceeds the current FORMAT limit" }
-        guard let liveZoom, liveZoom.isFinite, (1...maximum).contains(liveZoom)
+        guard let liveZoom, liveZoom.isFinite, range.contains(liveZoom)
         else { return "Wait for camera zoom feedback" }
         return nil
     }
@@ -118,7 +124,7 @@ public struct GimbalProgramZoom: Sendable {
         guard failureReason == nil, factor.isFinite, now.isFinite,
             canSample(at: now) else { return nil }
         sampledAt = now
-        guard (1...maximumZoom).contains(factor) else { return nil }
+        guard zoomRange.contains(factor) else { return nil }
         let lens = CamFov.pinchLens(for: factor)
         guard lens != lastLens else { return nil }
         lastLens = lens
@@ -151,18 +157,18 @@ public struct GimbalProgramZoom: Sendable {
         -> NativeProgramZoomCommand?
     {
         guard nativeFailure(for: demand, at: now) == nil,
-            demand.destination.isFinite, (1...maximumZoom).contains(demand.destination) else { return nil }
+            demand.destination.isFinite, zoomRange.contains(demand.destination) else { return nil }
         nativeWakeAt = now + demand.nextChange
         let command = demand.command
         switch command {
         case .position(let factor):
-            guard factor.isFinite, (1...maximumZoom).contains(factor), command != lastNativeCommand else { return nil }
+            guard factor.isFinite, zoomRange.contains(factor), command != lastNativeCommand else { return nil }
             preparationZoom = factor
             preparationSentAt = now
             sampledAt = now
             lastLens = CamFov.pinchLens(for: factor)
         case .track(let factor):
-            guard factor.isFinite, (1...maximumZoom).contains(factor) else { return nil }
+            guard factor.isFinite, zoomRange.contains(factor) else { return nil }
             let due = sampledAt + NativeProgramZoom.interval
             guard now >= due - 1e-9 else {
                 nativeWakeAt = due

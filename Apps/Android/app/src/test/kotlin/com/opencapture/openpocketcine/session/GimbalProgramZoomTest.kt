@@ -187,6 +187,18 @@ class GimbalProgramZoomTest {
         assertTrue(paused.ready(5.21))
     }
 
+    @Test fun medTeleWindowReplacesTheFormatRange() {
+        val pocket3 = CameraModel("Osmo Pocket 3")
+        val medTele = ready.copy(resolutionCode = 0x10, zoomFactor = 2.0, zoomLensMin = 434, zoomLensMax = 868)
+        val tele = program.copy(a = a.copy(zoom = 2.0), b = b.copy(zoom = 4.0), c = c.copy(zoom = 3.0))
+        // 4K alone caps a Pocket 3 at 2×; the Med-Tele body reaches 2×…4× there.
+        assertNull(nativeProgramZoomFailure(tele, pocket3, medTele))
+        assertEquals("Saved zoom exceeds the current FORMAT limit", nativeProgramZoomFailure(tele, pocket3, medTele.copy(zoomLensMin = -1, zoomLensMax = -1)))
+        // 1× is below the floor the body clamps to, so a waypoint there would never be reached.
+        assertEquals("Saved zoom exceeds the current FORMAT limit", nativeProgramZoomFailure(program, pocket3, medTele))
+        assertEquals("Wait for camera zoom feedback", nativeProgramZoomFailure(tele, pocket3, medTele, target = 1.5))
+    }
+
     @Test fun receivedStatusChangesTakeEffectBeforeAnyUiMerge() {
         fun subscribe(name: String, value: ByteArray) = DumlFrame(0, 0, 1, 0, 0, 0x99, StatusExtras.packSubscribe(name, value))
         var status = ready

@@ -67,6 +67,45 @@ This is a **candidate Med-Tele mapping**, not a general `0xFF` schema. The same
 opcode also carries a different repeating 34-byte poll. Selector and bitmask
 semantics, other mode constraints, and persistence remain unverified.
 
+### Reading Med-Tele back (2026-09-20)
+
+Availability is announced nowhere, but the *active* state is, in three pushes
+the app already subscribes to. Measured on a physical Pocket 3 with a Galaxy
+S23 Ultra, in 4K and 2.7K, across several toggles and at connect time:
+
+| Signal | Med-Tele off | Med-Tele on |
+| --- | --- | --- |
+| `cam_status` `@5` | `01` | `0D` |
+| `cam_lens_state` `@10`/`@12`/`@14` (min/max/current, u16-LE) | 217 / *FORMAT ceiling* / 217 | 434 / 868 / 434 |
+| `cam_fov` `@12` (u32-LE, lens ×100) | 21700 | 43400 |
+
+OpenPocketCine reads the **wide limit at `@10`**: a floor above `CamFov.lens1x`
+(217) is Med-Tele. No SET is invented to ask; the state is inferred from status
+the body already sends. The **tele** limit at `@12` is deliberately not part of
+that test, because with Med-Tele off it is the FORMAT's own digital ceiling
+rather than anything to do with the second lens.
+
+That ceiling was read back directly on 2026-09-21, one FORMAT at a time with
+Med-Tele off: **868 at 1080P, 651 at 2.7K, 434 at 4K** — exactly
+`217 × pocket3ZoomMax`, the 3× at 2.7K predicted before it was measured. So
+`@12` reports the same per-FORMAT ceiling that `VideoResolution.pocket3ZoomMax`
+hardcodes, for every FORMAT rather than only the measured ones, and a body that
+gains a mode reports it without a table edit. Replacing the table with the push
+is a worthwhile follow-up; nothing here depends on it yet.
+
+The Med-Tele lens range is a fixed **434…868 in every FORMAT**, unlike normal
+mode where the ceiling is FORMAT-dependent. Changing FORMAT does **not** turn
+Med-Tele off. As at the per-FORMAT ceiling, a lens SET **below** 434 is
+*clamped* to 434, not refused — the body reports 434 back and the readout
+settles at 2×.
+
+The existing readout needs no correction: `CamFov.factorFromLens(L)` reduces to
+`L / 217`, which is identically the composed factor `2 × (L / 434)`. So 434 is
+2.0×, 651 is 3.0× and 868 is 4.0× — the optical 2× with digital crop stacked on
+top, which is what the operator sees. Only the offered *stops* were wrong: the
+per-FORMAT ceiling (434 at 4K) equals the Med-Tele floor, which left no control
+at all while the real range was 2×…4×.
+
 ## Gimbal controls
 
 The Video monitor's gimbal popup contains separate **mode** and **rotational

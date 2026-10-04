@@ -816,9 +816,10 @@ struct LiveViewScreen: View {
                     ?? (layout.viewport.height > layout.viewport.width)) ? .bottom : .trailing,
                 bottomClearance: 0,
                 isPresented: zoomDialVisible,
-                scale: MonitorZoomScale(minimum: 1, maximum: model.session.zoomMax),
+                scale: MonitorZoomScale(
+                    minimum: model.session.zoomMin, maximum: model.session.zoomMax),
                 marks: Array(Set([1, 1.5, 2, 4, 6, 9] + model.session.zoomStops)).sorted(),
-                opticalStops: model.session.zoomStops.contains(3) ? [1, 3] : [1],
+                opticalStops: model.session.zoomOpticalStops,
                 caption: OsmoMonitorPresentation.zoomCaption(model.session),
                 value: Binding(
                     get: { model.session.zoomDialReadout },
