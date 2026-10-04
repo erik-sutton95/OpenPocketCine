@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreImage
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
@@ -26,7 +27,7 @@ final class MediaLogExportTests: XCTestCase, @unchecked Sendable {
             var output = [Float](repeating: 0, count: 4)
             let result = try XCTUnwrap(filter.outputImage)
             output.withUnsafeMutableBytes {
-                MediaLUT.colorContext(preservingEncodedValues: true).render(
+                MonitorMediaExporter.colorContext(preservingEncodedValues: true).render(
                     result, toBitmap: $0.baseAddress!, rowBytes: 16,
                     bounds: image.extent, format: .RGBAf, colorSpace: space)
             }

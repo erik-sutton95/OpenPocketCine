@@ -1799,3 +1799,19 @@ Staged and packaged native libraries match. Physical playback remains untested.
 Whole player workflow/page, gallery/DUML, assists and delivery ownership remain
 separate work. Full P2 and the prior optical automation limitation remain
 unfinished.
+
+### Pocket shared native export owner
+
+iOS original copy/transcode, LUT baking, preset fallback, export progress,
+readability and metadata sidecars now belong to `MonitorMediaExporter`.
+The app retains Documents/exports, filename extension rules, original error
+cases and the D-Log/D-Log2 cube and embedded shot-color metadata policy.
+The encoded-value and both-direction exported-movie golden assertions remain.
+New app-adapter fixtures cover copy bytes, destination/name, metadata sidecars,
+optional absence and preparation/completion progress. Repository checks,
+both simulator architectures and all eight selected native tests pass.
+Physical iPhone export remains untested.
+
+This ownership move is Apple-only. Android continues sharing original files
+with its existing delivery path; no Android conversion feature is added.
+Full player/delivery workflow ownership and full P2 remain unfinished.

@@ -68,3 +68,8 @@ silent measurements. The portable conform-preview policy comes from shared
 Media. Automated consumer and simulated native playback checks pass; physical
 device qualification remains pending. The gallery, player workflow and delivery
 are still app-owned parts of the shared-shell migration.
+
+Native clip export also uses the shared Apple exporter. Pocket retains output
+filenames, its exports folder, clip metadata and DJI shot-color policy. The
+shared owner supplies copy, transcode, LUT processing and progress. Physical
+export and Share qualification remain pending.

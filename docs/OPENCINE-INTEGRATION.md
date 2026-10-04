@@ -298,3 +298,20 @@ The old source names remain until a later minor release.
 
 CI, Xcode Cloud and contributors need the shared repository. Publish OpenCine first, then
 replace the sibling path with a versioned dependency: follow `OpenCine/atlas/docs/PUBLISH.md`.
+
+## Pocket native media exporter adoption
+
+`OpenCineApple.MonitorMediaExporter` owns native original copy/transcode, LUT
+baking, export-session preset fallback and progress, output readability and
+metadata sidecars. `MediaLUT` now supplies only the existing Documents/exports
+filename policy, source curve cube and DJI shot-color metadata replacement.
+It retains the preparation progress callback and original app error cases.
+
+Original copies, M4V-to-MP4 copies, ordinary display-color baking and encoded
+D-Log/D-Log2 conversion retain their prior policies. The existing encoded-value,
+raster-fitting, preset/progress and both-direction movie golden assertions are
+retained against the actual shared owner. Adapter fixtures cover original bytes,
+app destination/name, sidecar metadata, optional absence and progress callbacks.
+Repository checks, the regenerated build for both simulator architectures and
+all eight selected native adapter/export tests pass. Physical iPhone export
+qualification remains untested. No OpenCine pin or Android behavior changes here.
