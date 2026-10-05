@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine.lut
 
-import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.monitorScrollFade

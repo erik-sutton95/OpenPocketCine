@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.portraitZones
+import com.opencapture.monitorui.portraitOnFeedControls
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image

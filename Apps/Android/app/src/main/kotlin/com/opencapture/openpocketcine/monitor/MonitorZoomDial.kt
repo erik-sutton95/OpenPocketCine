@@ -11,7 +11,7 @@ import androidx.compose.runtime.Composable
 import com.opencapture.monitorui.MonitorZoomAttachment
 import com.opencapture.monitorui.MonitorZoomCaption
 import com.opencapture.openpocketcine.LiveZoom
-import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 
 /** Existing session gestures adapt to the shared native logarithmic zoom scale. */
 @OptIn(ExperimentalLayoutApi::class)

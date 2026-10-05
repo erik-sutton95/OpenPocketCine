@@ -3,6 +3,8 @@
 package com.opencapture.openpocketcine.media
 
 import com.opencapture.openpocketcine.feed.colorMode
+import com.opencapture.monitorui.detectMonitorPlaybackVideoGestures as detectPlaybackVideoGestures
+import com.opencapture.monitorui.monitorPlaybackUnitPoint as unitPoint
 
 import com.opencapture.monitorui.LocalMonitorBackdrops
 import com.opencapture.monitorui.monitorBackdropSource
@@ -99,10 +101,10 @@ import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.liveModuleFrame
-import com.opencapture.openpocketcine.monitorBottomInsetDp
+import com.opencapture.monitorui.monitorBottomInsetDp
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalMonitorGlass
-import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.MonitorGlass
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs

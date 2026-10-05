@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.openpocketcine.LiveChromeMetrics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -133,7 +134,7 @@ private fun LiveAssistBarRow(
     val trailingFade = scroll.canScrollForward
     Box(
         modifier
-            .height(LiveDesign.CONTROL_HEIGHT_DP.dp)
+            .height(LiveChromeMetrics.CONTROL_HEIGHT_DP.dp)
             .fillMaxWidth()
             .monitorGlass(),
     ) {

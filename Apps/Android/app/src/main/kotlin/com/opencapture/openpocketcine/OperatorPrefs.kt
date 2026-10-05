@@ -6,7 +6,6 @@ import android.content.Context
 import androidx.core.content.edit
 import com.opencapture.monitorui.MonitorJoystickSize
 import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.openpocketcine.feed.FeedUpscaleSwitch
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.lut.LutCatalog
 import org.json.JSONObject
@@ -219,14 +218,10 @@ object OperatorPrefs {
         prefs(context).edit { putStringSet(CLEAN_PINS, HashSet(resolvedCleanPins(value))) }
     }
 
-    fun feedUpscaler(context: Context): FeedUpscaler {
-        val value = FeedUpscaler.fromStored(prefs(context).getString(FEED_UPSCALER, null))
-        FeedUpscaleSwitch.rendererReads = value
-        return value
-    }
+    fun feedUpscaler(context: Context): FeedUpscaler =
+        FeedUpscaler.fromStored(prefs(context).getString(FEED_UPSCALER, null))
 
     fun setFeedUpscaler(context: Context, value: FeedUpscaler) {
-        FeedUpscaleSwitch.rendererReads = value
         prefs(context).edit { putString(FEED_UPSCALER, value.label) }
     }
 

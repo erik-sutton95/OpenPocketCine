@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.appkit.diagnostics.ManualProblemReport
+import com.opencapture.opencine.appkit.diagnostics.ManualProblemReportEnvelope
 import com.opencapture.opencine.dji.PrivacyRedactor
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -60,10 +62,10 @@ object DiagnosticCenter {
         exceptionJournal.startWriter { batch ->
             persistBatch(exceptionFile(), batch, EXCEPTION_CAP, exceptionWritten, exceptionJournal)
         }
-        filesDir()?.let { FeedIncidentRuntime.install(it) }
+        filesDir()?.let { AppDiagnostics.incidents.install(it) }
         DjiLog.sink = ::log
-        ReliabilityReporting.install(context.applicationContext)
-        ManualProblemReport.install(context.applicationContext)
+        AppDiagnostics.reporting.install(context.applicationContext, AppDiagnostics.incidents)
+        AppDiagnostics.manualReport.install(context.applicationContext)
         log("notice", "diagnostics", "boot", "diagnostics installed")
     }
 
@@ -91,7 +93,7 @@ object DiagnosticCenter {
                     ),
                 journal = journalLines(),
                 exceptions = exceptionLines(),
-                extras = FeedIncidentRuntime.reportExtras(),
+                extras = AppDiagnostics.incidents.reportExtras(),
                 cap = minOf(maxChars, BoundedDiagnosticFormatter.CHARACTER_CAP),
                 isSafeNetwork = PrivacyRedactor::isCameraNetwork,
             )
@@ -121,7 +123,7 @@ object DiagnosticCenter {
         val env = environment(session)
         val journal = journalLines()
         val exceptions = exceptionLines()
-        return writeShareFiles(context, env, journal, exceptions, FeedIncidentRuntime.exportExtras())
+        return writeShareFiles(context, env, journal, exceptions, AppDiagnostics.incidents.exportExtras())
             .firstOrNull { it.name == "report.txt" }
     }
 
@@ -138,7 +140,7 @@ object DiagnosticCenter {
         Thread(
             {
                 try {
-                    val extras = FeedIncidentRuntime.exportExtras()
+                    val extras = AppDiagnostics.incidents.exportExtras()
                     val files = writeShareFiles(app, env, journal, exceptions, extras)
                     Handler(Looper.getMainLooper()).post { launchShare(app, files, emailSupport) }
                 } catch (_: Exception) {

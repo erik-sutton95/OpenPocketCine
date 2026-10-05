@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.diagnostics.ManualProblemReportDelivery
+import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import com.opencapture.openpocketcine.assists.scopeDisplayCeiling
 
 import com.opencapture.openpocketcine.feed.fromColorMode
@@ -100,10 +102,7 @@ import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
-import com.opencapture.openpocketcine.diagnostics.ManualProblemReport
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
-import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDelivery
-import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.feed.LutLookResolver
 import com.opencapture.openpocketcine.feed.MonitorTransfer
@@ -971,20 +970,20 @@ private fun StorageRows(model: AppModel, onClearCache: () -> Unit) {
 private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
     val context = LocalContext.current
     val view = LocalView.current
-    var reliabilityOptIn by remember { mutableStateOf(ReliabilityReporting.isOptedIn) }
+    var reliabilityOptIn by remember { mutableStateOf(AppDiagnostics.reporting.isOptedIn) }
     var diagnosticOptions by remember { mutableStateOf(false) }
     var showReportForm by remember { mutableStateOf(false) }
-    val report by ManualProblemReport.snapshot.collectAsState()
+    val report by AppDiagnostics.manualReport.snapshot.collectAsState()
     com.opencapture.monitorui.settings.MonitorSupportSettings(
-        automaticReports = reliabilityOptIn, available = ReliabilityReporting.isAvailable,
+        automaticReports = reliabilityOptIn, available = AppDiagnostics.reporting.isAvailable,
         automaticHelp = SettingsHelpCopy.RELIABILITY_REPORTS,
         unavailableHelp = SettingsHelpCopy.RELIABILITY_UNAVAILABLE,
-        onAutomaticReports = { reliabilityOptIn = it; ReliabilityReporting.setConsent(it) },
+        onAutomaticReports = { reliabilityOptIn = it; AppDiagnostics.reporting.setConsent(it) },
         report = { showReportForm = true }, privacy = { onLegal(LegalKind.PRIVACY) },
         status = if (report.delivery == ManualProblemReportDelivery.IDLE) null else
             com.opencapture.monitorui.settings.MonitorReportStatus(report.statusLabel,
                 report.detail ?: "This phone keeps one report until Sentry accepts it or you discard it.", report.eventId),
-        discard = if (report.allowsDiscard) ({ ManualProblemReport.discard() }) else null,
+        discard = if (report.allowsDiscard) ({ AppDiagnostics.manualReport.discard() }) else null,
         feedback = { operatorHaptic(view, model.hapticsEnabled) },
     )
     com.opencapture.monitorui.settings.MonitorDiagnosticSettings(
@@ -992,7 +991,7 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
         deleteHelp = "Remove saved feed reports from this phone. Connection logs remain. Turn off automatic reporting to clear pending uploads. Reports already sent cannot be removed here.",
         save = { DiagnosticCenter.shareReport(context, model.session, copyForFeedback = false) },
         delete = {
-            com.opencapture.openpocketcine.diagnostics.FeedIncidentRuntime.deleteStoredReports { deleted ->
+            AppDiagnostics.incidents.deleteStoredReports { deleted ->
                 android.widget.Toast.makeText(context,
                     if (deleted) "Saved feed reports deleted" else "Couldn't delete saved feed reports. Please try again.",
                     android.widget.Toast.LENGTH_LONG).show()

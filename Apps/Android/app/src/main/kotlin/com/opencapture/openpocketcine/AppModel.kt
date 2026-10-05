@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -184,7 +185,7 @@ class AppModel(
         private set
     var screenCaptured by mutableStateOf(false)
     val hdrDisplayActive: Boolean
-        get() = HdrDisplay.isEffective(hdrDisplay, screenCaptured)
+        get() = MonitorHDRDisplay.isEffective(hdrDisplay, screenCaptured)
     var cacheFullResolution by mutableStateOf(OperatorPrefs.cacheFullResolution(appContext))
         private set
     var recordConfirmationEnabled by mutableStateOf(OperatorPrefs.recordConfirmationEnabled(appContext))

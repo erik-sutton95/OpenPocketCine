@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.OperatorHaptics
 import com.opencapture.opencine.dji.GamepadDpad
 import com.opencapture.opencine.dji.GamepadFaceButton
 import com.opencapture.opencine.dji.GamepadGimbalStick

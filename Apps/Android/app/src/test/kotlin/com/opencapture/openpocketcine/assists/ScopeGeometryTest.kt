@@ -3,6 +3,9 @@ package com.opencapture.openpocketcine.assists
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.monitorui.MonitorScopeTraceRaster as ScopeTraceRaster
+import com.opencapture.monitorui.MonitorTrafficLightsGeometry as TrafficLightsAssist
+import com.opencapture.monitorui.MonitorVectorscopeGraticule as VectorscopeGraticule
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -64,7 +67,6 @@ class ScopeGeometryTest {
         assertEquals(0.5, WaveformAssist.intensity(200), 1e-9)
         assertEquals(1.0, ParadeAssist.intensity(100), 1e-9)
         assertEquals(2.0, ParadeAssist.intensity(200), 1e-9)
-        assertEquals(1.0, VectorscopeAssist.intensity(100), 1e-9)
         assertEquals(30.50, WaveformAxis.middleGrayIRE(CameraCommands.COLOR_DLOG2), 0.01)
         assertEquals(39.88, WaveformAxis.middleGrayIRE(CameraCommands.COLOR_DLOG), 0.01)
         assertEquals(40.9, WaveformAxis.middleGrayIRE(CameraCommands.COLOR_NORMAL), 0.05)

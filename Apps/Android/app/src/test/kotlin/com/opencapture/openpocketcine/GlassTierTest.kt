@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.portraitFillCropContent
 import com.opencapture.opencine.runtime.GpuLiveLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals

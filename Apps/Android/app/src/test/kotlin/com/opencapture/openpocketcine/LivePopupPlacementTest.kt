@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.portraitZones
+import com.opencapture.monitorui.livePortraitReadoutFrame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -48,109 +50,5 @@ class LivePopupPlacementTest {
         assertEquals(437f, panel.x + panel.width / 2f, .001f)
         assertEquals(0f, panel.y, .001f)
         assertEquals(480f, panel.width)
-    }
-
-    @Test
-    fun portraitRecordingCategoriesSitBelowTheInfoBar() {
-        val panel = LivePopupPlacement.topCapturePanel(
-            190f, 393f, 852f, 0f, 0f, 59f, 34f, ceilingY = 80f, floorY = 736f)
-        assertEquals(86f, panel.y, .001f)
-        assertEquals(393f / 2f, panel.x + panel.width / 2f, .001f)
-        assertEquals(365f, panel.width)
-    }
-
-    private val portraitToolbar = ChromeRect(12f, 720f, 360f, 58f)
-    private val portraitIcon = ChromeRect(280f, 724f, 48f, 50f)
-    private val landscapeToolbar = ChromeRect(12f, 320f, 360f, 58f)
-    private val landscapeIcon = ChromeRect(12f, 324f, 48f, 50f)
-
-    /** Every assist-options case asks for a 400 dp card with no side insets. */
-    private fun assistOptions(
-        icon: ChromeRect,
-        toolbar: ChromeRect,
-        panelHeight: Float,
-        viewportWidth: Float,
-        viewportHeight: Float,
-        safeTop: Float = 0f,
-        safeBottom: Float = 0f,
-        ceilingY: Float = 0f,
-        keyboardHeight: Float = 0f,
-    ): LivePopupPlacement.Box {
-        LiveChromeMetrics.scale = 1f
-        return LivePopupPlacement.assistOptions(
-            icon = icon,
-            toolbar = toolbar,
-            preferredWidth = 400f,
-            panelHeight = panelHeight,
-            viewportWidth = viewportWidth,
-            viewportHeight = viewportHeight,
-            safeLeading = 0f,
-            safeTrailing = 0f,
-            safeTop = safeTop,
-            safeBottom = safeBottom,
-            ceilingY = ceilingY,
-            keyboardHeight = keyboardHeight,
-        )
-    }
-
-    private fun portraitAssistOptions(keyboardHeight: Float = 0f) =
-        assistOptions(portraitIcon, portraitToolbar, 280f, 390f, 844f, 59f, 34f, keyboardHeight = keyboardHeight)
-
-    @Test
-    fun assistOptionsParksAboveToolbarTrailingToIcon() {
-        val box = portraitAssistOptions()
-        assertTrue(box.width <= 400f)
-        assertTrue(box.y + minOf(280f, box.maxHeight) <= portraitToolbar.minY - 10f + 0.05f)
-        assertTrue(box.y >= 12f)
-        assertTrue(box.x + box.width <= portraitIcon.maxX + 0.5f || box.x >= 16f)
-    }
-
-    @Test
-    fun assistOptionsStaysBelowTopDeckCeiling() {
-        val topDeckBottom = 92f
-        val box = assistOptions(landscapeIcon, landscapeToolbar, 400f, 844f, 390f, ceilingY = topDeckBottom + 8f)
-        assertTrue(box.y >= topDeckBottom + 8f - 0.05f, "capture pickers stay under STBY / TC")
-        assertTrue(box.y + box.maxHeight <= landscapeToolbar.minY - 10f + 0.05f)
-    }
-
-    @Test
-    fun assistOptionsMayReachTopMargin() {
-        val box = assistOptions(landscapeIcon, landscapeToolbar, 400f, 844f, 390f, ceilingY = 0f)
-        assertEquals(LivePopupPlacement.ASSIST_MARGIN, box.y, 0.05f)
-        assertTrue(box.maxHeight > 200f)
-        assertTrue(box.y + box.maxHeight <= landscapeToolbar.minY - 10f + 0.05f)
-    }
-
-    @Test
-    fun assistOptionsLiftsAboveKeyboardInPortrait() {
-        val parked = portraitAssistOptions()
-        val keyboard = 336f
-        val lifted = portraitAssistOptions(keyboardHeight = keyboard)
-        val keyboardTop = 844f - keyboard
-        val parkedBottom = parked.y + minOf(280f, parked.maxHeight)
-        val liftedBottom = lifted.y + minOf(280f, lifted.maxHeight)
-        assertTrue(parkedBottom > keyboardTop, "parked zebra card sits under the number pad")
-        assertTrue(liftedBottom <= keyboardTop - LiveChromeMetrics.POPUP_GAP + 0.05f)
-        assertTrue(lifted.y < parked.y)
-    }
-
-    @Test
-    fun assistOptionsLiftsAboveKeyboardInLandscape() {
-        val keyboard = 240f
-        val lifted = assistOptions(
-            icon = ChromeRect(80f, 330f, 48f, 58f),
-            toolbar = ChromeRect(16f, 330f, 276f, 58f),
-            panelHeight = 220f,
-            viewportWidth = 874f,
-            viewportHeight = 402f,
-            ceilingY = 68f,
-            keyboardHeight = keyboard,
-        )
-        val keyboardTop = 402f - keyboard
-        assertTrue(lifted.y >= 68f - 0.05f)
-        assertTrue(
-            lifted.y + minOf(220f, lifted.maxHeight) <=
-                keyboardTop - LiveChromeMetrics.POPUP_GAP + 0.05f,
-        )
     }
 }

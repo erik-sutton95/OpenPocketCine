@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import androidx.compose.foundation.Canvas

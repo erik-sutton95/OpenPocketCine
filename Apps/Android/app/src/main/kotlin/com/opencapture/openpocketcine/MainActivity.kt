@@ -1,5 +1,9 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.rememberOperatorHaptics
+import com.opencapture.opencine.runtime.MonitorHDRDisplay
+import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
@@ -67,9 +71,6 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.AutomaticReportsPrompt
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
-import com.opencapture.openpocketcine.diagnostics.ManualProblemReport
-import com.opencapture.openpocketcine.diagnostics.ReliabilityReporting
-import com.opencapture.openpocketcine.diagnostics.ReliabilityReportingConsent
 import com.opencapture.openpocketcine.multiview.MultiviewQualificationPolicy
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.window.Dialog
@@ -145,13 +146,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         if (::model.isInitialized) model.shell.setSceneActive(false)
-        ManualProblemReport.setForeground(false)
+        AppDiagnostics.manualReport.setForeground(false)
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
-        ManualProblemReport.setForeground(true)
+        AppDiagnostics.manualReport.setForeground(true)
         if (::model.isInitialized) {
             model.shell.setSceneActive(true)
             model.gimbalGamepad.ensureListening(this, model)
@@ -219,7 +220,7 @@ private fun OpenPocketCineApp(model: AppModel) {
     val shell by model.shell.state.collectAsState()
     val showLive = shell.monitor != null
     LaunchedEffect(model.hdrDisplay, model.screenCaptured, activity) {
-        HdrDisplay.apply(activity, enabled = model.hdrDisplayActive)
+        MonitorHDRDisplay.apply(activity, enabled = model.hdrDisplayActive)
     }
     DisposableEffect(activity) {
         val windowManager = activity?.windowManager
@@ -260,7 +261,7 @@ private fun OpenPocketCineApp(model: AppModel) {
             AppPanelHost(model)
         }
         var showAutomaticPrompt by remember {
-            mutableStateOf(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
+            mutableStateOf(AppDiagnostics.consent.shouldOfferAutomaticPrompt())
         }
         if (!launchSplashVisible && !showLive && !model.showsMultiview && showAutomaticPrompt &&
             model.homePanel != AppPanel.PRIVACY
@@ -268,11 +269,11 @@ private fun OpenPocketCineApp(model: AppModel) {
             AutomaticReportsPrompt(
                 onPrivacy = { model.homePanel = AppPanel.PRIVACY },
                 onEnable = {
-                    ReliabilityReporting.setConsent(true)
+                    AppDiagnostics.reporting.setConsent(true)
                     showAutomaticPrompt = false
                 },
                 onNotNow = {
-                    ReliabilityReporting.setConsent(false)
+                    AppDiagnostics.reporting.setConsent(false)
                     showAutomaticPrompt = false
                 },
             )

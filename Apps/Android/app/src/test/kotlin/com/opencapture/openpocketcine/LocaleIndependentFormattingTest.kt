@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.media.FrameRateSampler
 import com.opencapture.openpocketcine.lut.LutExposureCompensation
 import com.opencapture.openpocketcine.media.MediaLibraryQuery
 import com.opencapture.opencine.dji.CamFov

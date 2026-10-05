@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.monitorui.MonitorFloatingDrag
 import com.opencapture.monitorui.MonitorMotionDismissBackdrop
 import androidx.compose.ui.geometry.Rect
@@ -114,7 +115,7 @@ fun LiveGimbalButton(
 ) {
     Box(
         modifier
-            .size(LiveDesign.ZOOM_CHIP_DP.dp)
+            .size(LiveChromeMetrics.ZOOM_CHIP_DP.dp)
             .chromeClickable(enabled = !locked, onClick = onClick)
             .semantics { contentDescription = "Gimbal controls" },
         contentAlignment = Alignment.Center,
