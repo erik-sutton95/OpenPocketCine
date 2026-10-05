@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.GamepadGimbalStick
+import com.opencapture.opencine.media.GamepadGimbalStick
 import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.opencine.dji.CameraCommands
