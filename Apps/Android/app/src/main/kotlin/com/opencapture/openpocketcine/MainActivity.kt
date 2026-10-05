@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.applyMonitorSystemBars
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.appkit.rememberOperatorHaptics
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
@@ -80,10 +81,10 @@ import com.opencapture.opencine.appkit.ShellBrand
 import com.opencapture.opencine.appkit.ShellActions
 import com.opencapture.opencine.appkit.ShellModel
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
-import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
+import com.opencapture.opencine.appkit.DiscoveryPermissions
 import com.opencapture.openpocketcine.pairing.LocalPairingCallouts
 import com.opencapture.openpocketcine.pairing.PairingCallouts
-import com.opencapture.openpocketcine.pairing.PermissionGate
+import com.opencapture.opencine.appkit.PermissionGate
 import com.opencapture.openpocketcine.pairing.rememberPermissionGate
 import com.opencapture.openpocketcine.pairing.startupBackdrop
 import java.util.concurrent.atomic.AtomicBoolean

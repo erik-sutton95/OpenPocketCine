@@ -1,12 +1,12 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.appkit.OperatorHaptics
-import com.opencapture.opencine.dji.GamepadDpad
-import com.opencapture.opencine.dji.GamepadFaceButton
-import com.opencapture.opencine.dji.GamepadGimbalStick
-import com.opencapture.opencine.dji.GamepadOperatorAction
-import com.opencapture.opencine.dji.GamepadOperatorMap
-import com.opencapture.opencine.dji.GamepadShoulder
+import com.opencapture.opencine.media.GamepadDpad
+import com.opencapture.opencine.media.GamepadFaceButton
+import com.opencapture.opencine.media.GamepadGimbalStick
+import com.opencapture.opencine.media.GamepadOperatorAction
+import com.opencapture.opencine.media.GamepadOperatorMap
+import com.opencapture.opencine.media.GamepadShoulder
 import android.annotation.SuppressLint
 import android.content.Context
 import android.hardware.input.InputManager
