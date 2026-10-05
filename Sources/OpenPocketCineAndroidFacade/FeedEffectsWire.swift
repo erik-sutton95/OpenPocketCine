@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineCameraVocabulary
 import OpenPocketViewCore
 
 /// Bakes LUT-adjacent assist payloads for the Android GLES feed.
@@ -110,8 +111,8 @@ public enum FeedEffectsWire {
     /// 50…102400 reads as unknown: the reference EI 1600.
     private static func prepared(
         colorModeCode: Int, iso: Int
-    ) -> (transfer: MonitorTransfer, ceiling: OpenCineDJI.ScopeExposureCeiling) {
-        let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    ) -> (transfer: MonitorTransfer, ceiling: OpenCineCameraVocabulary.ScopeExposureCeiling) {
+        let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
         ceiling.setISO(iso)
         return (monitorTransfer(colorModeCode: colorModeCode), ceiling)
     }
@@ -119,7 +120,7 @@ public enum FeedEffectsWire {
     private static func overlayCube(
         scale: LiveFalseColorScale,
         transfer: MonitorTransfer,
-        ceiling: OpenCineDJI.ScopeExposureCeiling,
+        ceiling: OpenCineCameraVocabulary.ScopeExposureCeiling,
         rec709: Bool,
         component: ((red: Double, green: Double, blue: Double, weight: Double)) -> (
             Double, Double, Double
@@ -285,7 +286,7 @@ public enum FeedEffectsWire {
 
     private static func cacheKey(
         _ kind: String, scale: LiveFalseColorScale, transfer: MonitorTransfer,
-        ceiling: OpenCineDJI.ScopeExposureCeiling
+        ceiling: OpenCineCameraVocabulary.ScopeExposureCeiling
     ) -> String {
         let clip = ceiling.clipByte(transfer: transfer)
         return "\(kind):\(scale.rawValue):\(transfer.rawValue):\(clip)"

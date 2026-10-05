@@ -1,6 +1,7 @@
 import CoreVideo
 import Metal
 import MonitorUI
+import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import XCTest
 
@@ -11,7 +12,7 @@ import XCTest
 /// and the end-to-end legal-scaled contract.
 final class LiveScopesTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
 
     // MARK: - Plot geometry
 

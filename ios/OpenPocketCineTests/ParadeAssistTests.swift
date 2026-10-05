@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -7,7 +8,7 @@ import XCTest
 
 final class ParadeAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
 
     func testLaneXMatchesOpenZCineSplit() {
         let plot = WaveformAxis.plotRect(in: CGSize(width: 250, height: 153))

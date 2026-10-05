@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineAppKitApple
 import OpenPocketViewCore
 import SwiftUI
 
@@ -111,24 +112,12 @@ struct LiveAutoExposureUnlockButton: View {
     }
 }
 
-/// SET-relative yaw/pitch for the live debug rings (head + gimbal).
-struct HeadTrackAxisPose: Equatable {
-    var yawDeg: Double
-    var pitchDeg: Double
-    var gimbalYawDeg: Double?
-    var gimbalPitchDeg: Double?
-    var locked: Bool
-}
-
 /// Compass Head Lock starts tracking; the same control becomes STOP.
 struct LiveHeadTrackCalibrateButton: View {
-    static let calibrateTitle = "Calibrate Head Lock"
-    static let stopTitle = "STOP"
-
     var title: String
     var onTap: () -> Void
 
-    private var isStop: Bool { title == Self.stopTitle }
+    private var isStop: Bool { title == HeadphoneMotionBridge.stopTitle }
     private var size: CGFloat { LiveChromeMetrics.zoomButtonSize }
 
     var body: some View {

@@ -2,6 +2,7 @@ import CoreImage
 import CoreVideo
 import Foundation
 import OpenCineApple
+import OpenCineCameraVocabulary
 import OpenCineMedia
 import OpenPocketViewCore
 
@@ -31,18 +32,7 @@ extension MonitorTransfer {
 
 /// DJI source calibration supplied to neutral native owners; it is not a camera observation.
 enum PocketMonitorCalibration {
-    static let clipProfile = ScopeClipProfile(
-        calibrations: [
-            .dlog2: .init(
-                referenceISO: OpenCineDJI.ScopeExposureCeiling.referenceEI,
-                referenceByte: OpenCineDJI.ScopeExposureCeiling.dlog2LiveTapByteAt1600,
-                refinementMaximumByte: OpenCineDJI.ScopeExposureCeiling.dlog2LiveTapByteAt1600High),
-            .dlog: .init(
-                referenceISO: OpenCineDJI.ScopeExposureCeiling.dlogReferenceEI,
-                referenceByte: OpenCineDJI.ScopeExposureCeiling.dlogLiveTapByteAtNative,
-                refinementMaximumByte: OpenCineDJI.ScopeExposureCeiling.dlogLiveTapByteAtNativeHigh,
-                refinementAtOrAboveReference: true),
-        ], defaultISO: OpenCineDJI.ScopeExposureCeiling.referenceEI)
+    static let clipProfile = OpenCineCameraVocabulary.ScopeExposureCeiling.sourceProfile
 }
 
 // Source adapters select measured calibration and interpretation for the shared native owner.
