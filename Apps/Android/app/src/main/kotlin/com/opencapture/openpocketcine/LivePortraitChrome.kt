@@ -1,5 +1,10 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.PortraitZones
+import com.opencapture.monitorui.portraitAspectToggle
+import com.opencapture.monitorui.portraitAssistToolbar
+import com.opencapture.monitorui.livePortraitReadoutFrame
+import com.opencapture.monitorui.LivePortraitMetrics
 import com.opencapture.opencine.dji.CaptureShutterPolicy
 import com.opencapture.opencine.dji.EvComp
 import com.opencapture.monitorui.MonitorExposureReadout
@@ -77,39 +82,6 @@ import com.opencapture.opencine.dji.CameraStatus
 import kotlin.math.max
 import kotlin.math.min
 
-data class PortraitZones(
-    val topBar: ChromeRect,
-    val feed: ChromeRect,
-    val assistToolbar: ChromeRect,
-    val controls: ChromeRect,
-    val systemBar: ChromeRect,
-)
-
-object LivePortraitMetrics {
-    val TOP_BAR get() = 44f * LiveChromeMetrics.scale
-    val TOP_BAR_LIFT get() = 8f * LiveChromeMetrics.scale
-    val SYSTEM_BAR get() = 100f * LiveChromeMetrics.scale
-    val SYSTEM_BAR_LIFT get() = 14f * LiveChromeMetrics.scale
-    val CAPTURE get() = 64f * LiveChromeMetrics.scale
-    val ASSIST get() = 58f * LiveChromeMetrics.scale
-    val TOGGLE get() = 40f * LiveChromeMetrics.scale
-    val TOGGLE_GAP get() = 8f * LiveChromeMetrics.scale
-    val ASSIST_RAIL_EXPANDED get() = 60f * LiveChromeMetrics.scale
-    val ASSIST_RAIL_COLLAPSED get() = 44f * LiveChromeMetrics.scale
-    val ASSIST_RAIL_EDGE get() = 10f * LiveChromeMetrics.scale
-    val REC_OPTIONS get() = 40f * LiveChromeMetrics.scale
-    val REC_OPTIONS_INSET get() = 10f * LiveChromeMetrics.scale
-    val REC_OPTIONS_GAP get() = 8f * LiveChromeMetrics.scale
-
-    val FIT_BELOW_FEED_SLOT: Float
-        get() =
-            max(
-                TOGGLE_GAP + TOGGLE,
-                LiveChromeMetrics.STICK_GAP + LiveChromeMetrics.ZOOM + LiveChromeMetrics.STICK_GAP +
-                    LiveChromeMetrics.STICK + LiveChromeMetrics.STICK_INSET,
-            )
-}
-
 fun liveFitFeedOriginY(
     viewportHeight: Float,
     feedHeight: Float,
@@ -123,38 +95,6 @@ fun liveFitFeedOriginY(
     val ideal = (max(0f, viewportHeight) - height) / 2f
     val latest = max(top, keepClear - height)
     return min(max(ideal, top), latest)
-}
-
-fun portraitZones(
-    viewportWidth: Float,
-    viewportHeight: Float,
-    safeTop: Float,
-    safeBottom: Float,
-    clean: Boolean,
-    fill: Boolean,
-    assistToolbarHeight: Float,
-    feedAspectRatio: Float = 16f / 9f,
-): PortraitZones {
-    val layout = com.opencapture.monitorui.MonitorLayoutPolicy.portrait(
-        viewportWidth, viewportHeight, safeTop, safeBottom, fill, !clean, feedAspectRatio,
-    )
-    fun com.opencapture.monitorui.MonitorRect.chrome() = ChromeRect(x, y, width, height)
-    return PortraitZones(layout.status.chrome(), layout.picture.chrome(),
-        ChromeRect(0f, layout.controlsFloor, viewportWidth, 0f), layout.values.chrome(), layout.system.chrome())
-}
-
-/** Actual visible status row, shared by tap and hold presentation routes. */
-fun livePortraitReadoutFrame(layout: LiveMonitorLayout, zones: PortraitZones): ChromeRect =
-    ChromeRect(zones.topBar.minX, zones.topBar.minY + 6f, layout.viewportWidth, zones.topBar.height)
-
-/**
- * iOS `LiveViewScreen` fillCrop: landscape fill over-widens a 16:9 picture to
- * the well height, then clips to the well (center crop). Vertical Pocket fill
- * stays the pillarboxed 9:16 picture and does not use this.
- */
-fun portraitFillCropContent(well: ChromeRect): ChromeRect {
-    val contentWidth = well.height * 16f / 9f
-    return ChromeRect(well.midX - contentWidth / 2f, well.minY, contentWidth, well.height)
 }
 
 fun fillAssistRail(
@@ -172,32 +112,6 @@ fun fillAssistRail(
         if (expanded) max(0f, railBottom - top - edge) else LivePortraitMetrics.ASSIST_RAIL_COLLAPSED
     val y = if (expanded) top else max(top, railBottom - height - edge)
     return ChromeRect(feed.minX + edge, y, width, height)
-}
-
-fun portraitAspectToggle(viewportWidth: Float, floorY: Float): ChromeRect {
-    val frame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitAspect(viewportWidth, floorY)
-    return ChromeRect(frame.x, frame.y, frame.width, frame.height)
-}
-
-fun portraitAssistToolbar(floorY: Float, tablet: Boolean): ChromeRect {
-    val frame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitAssists(floorY, tablet)
-    return ChromeRect(frame.x, frame.y, frame.width, frame.height)
-}
-
-fun portraitOnFeedControls(
-    viewportWidth: Float,
-    floorY: Float,
-    showGimbalButton: Boolean = false,
-): GimbalCluster {
-    val stickFrame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitStick(viewportWidth, floorY)
-    val zoomFrame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitZoom(stickFrame)
-    val gimbalFrame = com.opencapture.monitorui.MonitorLayoutPolicy.portraitGimbal(stickFrame, zoomFrame)
-    val stick = ChromeRect(stickFrame.x, stickFrame.y, stickFrame.width, stickFrame.height)
-    val zoom = ChromeRect(zoomFrame.x, zoomFrame.y, zoomFrame.width, zoomFrame.height)
-    val controls =
-        if (showGimbalButton) ChromeRect(gimbalFrame.x, gimbalFrame.y, gimbalFrame.width, gimbalFrame.height)
-        else ChromeRect(0f, 0f, 0f, 0f)
-    return GimbalCluster(stick, zoom, controls)
 }
 
 @Composable

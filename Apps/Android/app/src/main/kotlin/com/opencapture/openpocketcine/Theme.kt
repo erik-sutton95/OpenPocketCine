@@ -103,20 +103,6 @@ object LiveDesign {
     val feedWell = Color.Black
 
     const val CORNER_RADIUS_DP = 12f
-    const val CONTROL_HEIGHT_DP = 44f
-    const val LOCK_SIZE_DP = 54f
-    const val RECORD_SIZE_DP = 70f
-    const val AUX_SIZE_DP = 54f
-    const val DISP_WIDTH_DP = 54f
-    const val DISP_HEIGHT_DP = 54f
-    const val RAIL_WIDTH_DP = 70f
-    const val ZOOM_CHIP_DP = 44f
-    const val GIMBAL_STICK_DP = com.opencapture.monitorui.MonitorLayoutPolicy.STICK_SIDE
-    const val GIMBAL_KNOB_DP = 41f
-    const val TOP_DECK_HEIGHT_DP = 35f
-    const val FOCUS_RESET_DP = 40f
-    const val TOP_PICKER_WIDTH_DP = 480f
-    const val CAPTURE_PICKER_WIDTH_DP = 480f
 }
 
 private val OpcTypography =

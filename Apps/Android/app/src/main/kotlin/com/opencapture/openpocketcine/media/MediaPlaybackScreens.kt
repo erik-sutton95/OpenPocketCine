@@ -101,7 +101,7 @@ import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.liveModuleFrame
-import com.opencapture.openpocketcine.monitorBottomInsetDp
+import com.opencapture.monitorui.monitorBottomInsetDp
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.LocalOperatorHaptics
