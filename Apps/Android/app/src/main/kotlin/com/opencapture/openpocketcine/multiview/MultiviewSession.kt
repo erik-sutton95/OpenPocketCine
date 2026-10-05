@@ -184,6 +184,8 @@ class MultiviewSession(
             if (!lease.allows()) return null
             return AppModel(app, borrowing = decoder, controlLease = lease).also {
                 it.session.updateMultiview(camera, endpoint, latestSettings)
+                // The capture drums edit through the shared control model; close() unbinds it.
+                it.control.bind(it.session.control)
                 controlsModel = it
             }
         }

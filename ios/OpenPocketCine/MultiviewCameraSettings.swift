@@ -19,6 +19,8 @@ extension MultiviewSession {
         let editor = CameraSession(borrowing: tile.decoder, controlsOnly: true)
         let model = AppModel(session: editor)
         editor.updateMultiview(camera: camera, driver: tile.driver, status: tile.settings)
+        // The capture drums edit through the shared control model; retiring unbinds it.
+        model.control.bind(editor.control)
         model.frameSamples = tile.sampleBus
         tile.controlsModel = model
         tile.previewDemand = true
@@ -58,6 +60,9 @@ struct MultiviewCameraSettings: View {
     private struct PanelIdentity: Hashable {
         let model: ObjectIdentifier
         let category: CaptureSheet
+        /// The panel captures its field on appear; it appears again once the freshly bound
+        /// controls first describe the camera.
+        let described: Bool
     }
 
     private var cameras: [MultiviewSession.Tile] { session.tiles.filter { $0.camera != nil } }
@@ -106,7 +111,8 @@ struct MultiviewCameraSettings: View {
                                     .environment(model)
                                     .id(
                                         PanelIdentity(
-                                            model: ObjectIdentifier(model), category: category))
+                                            model: ObjectIdentifier(model), category: category,
+                                            described: model.control.snapshot != nil))
                                     notes(tile: tile, model: model)
                                 }
                                 .onGeometryChange(for: CGFloat.self) {
