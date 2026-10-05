@@ -344,7 +344,7 @@ enum ReliabilityReporting {
     {
         guard summary.outcome != "live", UUID(uuidString: summary.sessionID) != nil,
             summary.healthyExposureSeconds.isFinite, summary.healthyExposureSeconds >= 0,
-            let json = try? FeedIncidentJSON.encoder().encode(summary), json.count <= 4_096
+            let json = try? FeedIncidentCoding.encoder().encode(summary), json.count <= 4_096
         else { return }
         let event = Event(level: .info)
         event.eventId = ReliabilityReportingPrivacy.eventID(fromIncidentID: summary.sessionID)
