@@ -27,11 +27,3 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
         onQuickActiveChange = onQuickActiveChange, quickBottomClearanceDp = quickBottomClearanceDp, onOpen = onOpen)
 }
 
-@Composable
-fun MonitorIconButton(icon: OpcIcon, label: String, modifier: Modifier = Modifier,
-    selected: Boolean = false, enabled: Boolean = true, side: Dp = 44.dp, iconSize: Dp = 20.dp,
-    onClick: () -> Unit) {
-    com.opencapture.monitorui.MonitorActionButton(label, modifier, selected, enabled, side, onClick) { tint ->
-        OpcIcon(icon, null, Modifier.size(iconSize), tint)
-    }
-}

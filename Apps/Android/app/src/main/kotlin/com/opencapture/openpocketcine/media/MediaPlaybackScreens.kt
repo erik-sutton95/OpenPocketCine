@@ -3,6 +3,8 @@
 package com.opencapture.openpocketcine.media
 
 import com.opencapture.openpocketcine.feed.colorMode
+import com.opencapture.monitorui.detectMonitorPlaybackVideoGestures as detectPlaybackVideoGestures
+import com.opencapture.monitorui.monitorPlaybackUnitPoint as unitPoint
 
 import com.opencapture.monitorui.LocalMonitorBackdrops
 import com.opencapture.monitorui.monitorBackdropSource
