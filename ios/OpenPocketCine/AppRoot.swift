@@ -1068,8 +1068,7 @@ struct LinkExperience: View {
                         guard model.cameras.attempts.isEmpty else { return }
                         model.openMultiview()
                         showMultiview = true
-                    } : nil,
-                privacy: { model.homePanel = .privacy }, terms: { model.homePanel = .terms }),
+                    } : nil),
             safeArea: { proxy in
                 Self.pageSafeArea(
                     proxy.safeAreaInsets, window: windowGeometry.safeArea,
