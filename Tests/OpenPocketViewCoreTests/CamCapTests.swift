@@ -1,3 +1,4 @@
+import OpenCineCore
 import Testing
 
 @testable import OpenPocketViewCore
