@@ -374,7 +374,7 @@ final class AppModel {
 
     var showsWatcherBrowse = false
     var shareThisFeed: Bool = OperatorPrefs.shareThisFeed
-    var sharePasscode: String = WatcherRelayKeychain.hostPasscode
+    var sharePasscode: String = WatcherRelayKeychain.app.hostPasscode
     var controlRequestsAllowed: Bool = OperatorPrefs.controlRequests {
         didSet { OperatorPrefs.controlRequests = controlRequestsAllowed }
     }
@@ -545,7 +545,7 @@ final class AppModel {
 
     func startRelayHost() {
         guard isLive, shareThisFeed, !session.isMultiviewBorrowed else { return }
-        WatcherRelayKeychain.hostPasscode = sharePasscode
+        WatcherRelayKeychain.app.hostPasscode = sharePasscode
         let name = UIDevice.current.name
         let camera = session.connectedCamera?.name ?? ""
         relayHost.start(
@@ -619,17 +619,17 @@ final class AppModel {
     }
 
     func joinWatcher(_ host: WatcherRelayDiscovery) {
-        let code = WatcherRelayKeychain.rememberedPasscode(forHost: host.name)
+        let code = WatcherRelayKeychain.app.rememberedPasscode(forHost: host.name)
         relayClient.join(
             endpoint: host.endpoint,
             hostName: host.name,
             passcode: code,
-            watcherID: WatcherRelayKeychain.installID,
+            watcherID: WatcherRelayKeychain.app.installID,
             deviceName: UIDevice.current.name)
     }
 
     func retryWatcherPasscode(_ code: String) {
-        WatcherRelayKeychain.rememberPasscode(code, forHost: relayClient.hostTitle)
+        WatcherRelayKeychain.app.rememberPasscode(code, forHost: relayClient.hostTitle)
         relayClient.retryPasscode(code)
     }
 
