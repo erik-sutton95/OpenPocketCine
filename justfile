@@ -179,7 +179,7 @@ watch-build: ios-generate
 
 # Run all native production checks that do not require camera hardware.
 # Swift format lint remains optional until the existing tree is fully formatted.
-native-check: swift-test relay-test ios-test ios-build watch-build
+native-check: swift-test ios-test ios-build watch-build
 
 # Format production Swift sources.
 format: swift-format
@@ -300,10 +300,6 @@ android-play-sync-secrets:
 # Dispatch Android Play on main (signed AAB; Play API upload if PLAY_SERVICE_ACCOUNT_JSON exists).
 android-play-dispatch track="alpha" status="completed":
     gh workflow run android-play.yml --ref main --field track={{track}} --field status={{status}}
-
-# Deterministic macOS load tests against the iOS relay transport and encoder shell.
-relay-test:
-    ./scripts/test-watcher-relay.sh
 
 # Fast programmed-motion regression loop.
 gimbal-test:

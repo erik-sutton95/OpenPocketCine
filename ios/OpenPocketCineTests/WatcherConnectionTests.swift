@@ -1,4 +1,6 @@
 import Network
+import OpenCineRelayApple
+import OpenPocketViewCore
 import XCTest
 
 @testable import OpenPocketCine
@@ -17,7 +19,8 @@ final class WatcherConnectionTests: XCTestCase {
     }
 
     private func host(passcode: String = "") -> WatcherRelayTransport {
-        let host = WatcherRelayTransport()
+        let host = WatcherRelayTransport(
+            versionMismatchReason: WatcherRelayJoin.versionMismatchReason)
         host.queue.sync {
             host.start(
                 hostName: "Loopback relay", cameraName: "Test camera", passcode: passcode,

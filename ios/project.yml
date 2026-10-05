@@ -45,6 +45,8 @@ targets:
       - package: OpenCine
         product: OpenCineRelay
       - package: OpenCine
+        product: OpenCineRelayApple
+      - package: OpenCine
         product: MonitorUI
       - package: OpenCine
         product: MonitorPresentation
@@ -152,6 +154,8 @@ targets:
         product: OpenCineMotion
       - package: OpenCine
         product: OpenCineRelay
+      - package: OpenCine
+        product: OpenCineRelayApple
       - package: OpenCine
         product: OpenCineApple
       - package: OpenCine
