@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineAppKit
 import OpenPocketViewCore
 
 /// Shell owner for feed-incident persistence. Core records in memory; this type
@@ -16,19 +17,6 @@ import OpenPocketViewCore
 /// - `noteExhausted(now:)` when the repair owner spends its budget
 /// - `noteUnexpectedDisconnect(now:)` for BLE/path loss before ages exist
 /// - `reportExtras()` from Share Diagnostics (journal-independent)
-struct FeedIncidentSessionSummary: Equatable, Codable {
-    var sessionID: String
-    var healthyExposureSeconds: Double
-    var incidentCount: Int
-    var outcome: String
-    var sourceRevision: String
-    var recordedAt: Date? = Date()
-    var appVersion: String? = nil
-    var appBuild: String? = nil
-    var testSource: FeedIncidentTestSource? = nil
-    var buildIdentity: String? = nil
-}
-
 /// Diagnostics only (STATE-01 decision): one feed-incident journal per app run, attributed to
 /// the single owned connection. Only an owned `CameraSession` reaches `beginSession` (connect),
 /// `endSession` (a borrowed Multiview session returns from `disconnect()` first) and the socket
@@ -276,7 +264,7 @@ enum FeedIncidentRuntime {
         if storeExtras == nil { storeExtras = preparedStore()?.exportExtras() }
         var extras = storeExtras ?? []
         if let summary = currentSessionSummary(),
-            let data = try? FeedIncidentJSON.encoder().encode(summary),
+            let data = try? FeedIncidentCoding.encoder().encode(summary),
             let body = String(data: data, encoding: .utf8)
         {
             extras.append(("session-summary.json", body))

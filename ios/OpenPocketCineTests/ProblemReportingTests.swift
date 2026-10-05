@@ -1,3 +1,4 @@
+import OpenCineAppKit
 import XCTest
 
 @testable import OpenPocketCine
@@ -140,23 +141,6 @@ import XCTest
         XCTAssertNil(ProblemReporting(directory: root).pending)
         XCTAssertTrue(restored.status.contains("expired"))
     }
-
-    func testAutomaticOptOutDoesNotCancelManualReportButCameraGateDoes() {
-        let gate = ReliabilityReportingGate()
-        gate.setCameraIPv4PathReadyForTests(false)
-        let manual = ManualCancellationProbe()
-        gate.register(manual)
-        gate.cancelPending(includeIndependent: false)
-        XCTAssertFalse(manual.cancelled)
-        gate.setCameraSessionActive(true)
-        XCTAssertTrue(manual.cancelled)
-    }
-}
-
-private final class ManualCancellationProbe: ReliabilityReportingCancellable {
-    var independentOfAutomaticConsent: Bool { true }
-    var cancelled = false
-    func cancel() { cancelled = true }
 }
 
 /// No socket is opened by these transport tests.

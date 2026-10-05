@@ -6,6 +6,7 @@ import OpenCineAppKit
 import OpenCineCore
 import OpenCineFrameIO
 import OpenCineRelayApple
+import OpenCineWatch
 import OpenPocketViewCore
 import SwiftUI
 import UIKit

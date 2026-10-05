@@ -1,3 +1,4 @@
+import OpenCineAppUITesting
 import XCTest
 
 /// Opt-in real-device check for #406: connects the saved camera over its Wi-Fi or Hotspot
