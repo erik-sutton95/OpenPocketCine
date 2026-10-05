@@ -475,50 +475,6 @@
     </issue>
 
     <issue
-        id="ConfigurationScreenWidthHeight"
-        message="Using Configuration.screenWidthDp instead of LocalWindowInfo.current.containerSize"
-        errorLine1="                    probe.screenWidthDp = configuration.screenWidthDp"
-        errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/androidTest/kotlin/com/opencapture/openpocketcine/MonitorZoomInputTest.kt"
-            line="59"
-            column="43"/>
-    </issue>
-
-    <issue
-        id="ConfigurationScreenWidthHeight"
-        message="Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize"
-        errorLine1="                    probe.screenHeightDp = configuration.screenHeightDp"
-        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/androidTest/kotlin/com/opencapture/openpocketcine/MonitorZoomInputTest.kt"
-            line="60"
-            column="44"/>
-    </issue>
-
-    <issue
-        id="ConfigurationScreenWidthHeight"
-        message="Using Configuration.screenWidthDp instead of LocalWindowInfo.current.containerSize"
-        errorLine1="                        configuration.screenWidthDp.toFloat(),"
-        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/androidTest/kotlin/com/opencapture/openpocketcine/MonitorZoomInputTest.kt"
-            line="63"
-            column="25"/>
-    </issue>
-
-    <issue
-        id="ConfigurationScreenWidthHeight"
-        message="Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize"
-        errorLine1="                        configuration.screenHeightDp.toFloat(),"
-        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/androidTest/kotlin/com/opencapture/openpocketcine/MonitorZoomInputTest.kt"
-            line="64"
-            column="25"/>
-    </issue>
-
-    <issue
         id="ModifierParameter"
         message="Modifier parameter should be the first optional parameter"
         errorLine1="    modifier: Modifier = Modifier,"
