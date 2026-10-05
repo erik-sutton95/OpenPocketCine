@@ -1,5 +1,9 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.monitorChromeEditStroke
+import com.opencapture.opencine.appkit.MonitorChromeEditBadgeLayer
+import com.opencapture.opencine.appkit.MonitorChromeEditBanner
+import com.opencapture.opencine.appkit.monitorChromeEditBoxes
 import com.opencapture.opencine.appkit.ObservePhoneBattery
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.platform.LocalVPNProbe
@@ -1037,16 +1041,15 @@ fun LiveViewScreen(model: AppModel) {
             val editing = model.chromeEditorMode
             if (editing != null) {
                 val boxes =
-                    chromeEditBoxes(
+                    monitorChromeEditBoxes(
                         layout = layout,
-                        model = model,
+                        mounts = model::chromeSectionMounts,
                         uiLocked = uiLocked,
                         zoom = zoom,
                         stick = stick,
                         statusChips = statusChipFrames.toMap(),
                     )
-                ChromeEditBadgeLayer(
-                    mode = editing,
+                MonitorChromeEditBadgeLayer(
                     boxes = boxes,
                     viewportWidth = vw,
                     viewportHeight = vh,
@@ -1056,7 +1059,7 @@ fun LiveViewScreen(model: AppModel) {
                 val floor =
                     if (showsBottomBars) minOf(layout.assist.minY, layout.capture.minY)
                     else layout.feed.maxY
-                ChromeEditBanner(
+                MonitorChromeEditBanner(
                     mode = editing,
                     modifier =
                         Modifier
@@ -1448,7 +1451,7 @@ internal fun LandscapeChrome(
                     Modifier
                         .liveModuleFrame(zoom)
                         .alpha(if (uiLocked || zoomBlocked) 0.4f else 1f)
-                        .chromeEditStroke(editing != null, true),
+                        .monitorChromeEditStroke(editing != null, true),
                 onCycle = {
                     model.commitZoomCycle(LiveZoom.nextJump(model.zoomCycleFrom(), model.monitorZoomStops().primary))
                 },
@@ -1479,7 +1482,7 @@ internal fun LandscapeChrome(
             )
         }
         if (capabilities.gimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) && !stick.isEmpty) {
-            Box(Modifier.liveModuleFrame(stick).alpha(if (captureOpen) 0f else 1f).chromeEditStroke(editing != null, true)) {
+            Box(Modifier.liveModuleFrame(stick).alpha(if (captureOpen) 0f else 1f).monitorChromeEditStroke(editing != null, true)) {
                 LiveGimbalStick(
                     enabled = !captureOpen && !uiLocked && model.liveOperatorPanel == null && hits,
                     onMove = model::updateGimbalStick,
@@ -1578,7 +1581,7 @@ private fun LiveTopDeck(
         val visible = editing == null || model.chrome(editing).isVisible(section)
         return Modifier
             .then(if (editing != null) Modifier.graphicsLayer { alpha = if (visible) 1f else 0.3f } else Modifier)
-            .chromeEditStroke(editing != null, visible)
+            .monitorChromeEditStroke(editing != null, visible)
             .reportChromeFrame { rect ->
                 onChipFrame(section, rect)
                 if (picker != null) onPickerFrame(picker, rect)

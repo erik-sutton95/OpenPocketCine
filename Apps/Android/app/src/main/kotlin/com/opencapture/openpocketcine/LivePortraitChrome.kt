@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.monitorChromeEditStroke
 import com.opencapture.monitorui.PortraitZones
 import com.opencapture.monitorui.portraitAspectToggle
 import com.opencapture.monitorui.portraitAssistToolbar
@@ -163,7 +164,7 @@ fun LivePortraitChrome(
                 Modifier
                     .liveModuleFrame(rail)
                     .alpha(if (uiLocked) 0.4f else 1f)
-                    .chromeEditStroke(editing != null, true),
+                    .monitorChromeEditStroke(editing != null, true),
             ) {
                 com.opencapture.openpocketcine.assists.MonitorAssistCluster(
                     portrait = true, locked = uiLocked || !chromeInteractive,
@@ -211,7 +212,7 @@ fun LivePortraitChrome(
                     Modifier
                         .liveModuleFrame(zoom)
                         .alpha(if (uiLocked || zoomBlocked) 0.4f else 1f)
-                        .chromeEditStroke(editing != null, true),
+                        .monitorChromeEditStroke(editing != null, true),
                 onCycle = {
                     model.commitZoomCycle(LiveZoom.nextJump(model.zoomCycleFrom(), model.monitorZoomStops().primary))
                 },
@@ -240,7 +241,7 @@ fun LivePortraitChrome(
             )
         }
         if (showGimbalButton) {
-            Box(Modifier.liveModuleFrame(stick).alpha(if (captureOpen) 0f else 1f).chromeEditStroke(editing != null, true)) {
+            Box(Modifier.liveModuleFrame(stick).alpha(if (captureOpen) 0f else 1f).monitorChromeEditStroke(editing != null, true)) {
                 LiveGimbalStick(
                     enabled = !captureOpen && !uiLocked && model.liveOperatorPanel == null && chromeInteractive,
                     onMove = model::updateGimbalStick,
