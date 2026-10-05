@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.appkit.MultiviewRecordContext
 import com.opencapture.opencine.core.CommandRejection
 import com.opencapture.opencine.core.MonitorEntryID
 import com.opencapture.opencine.core.PictureHealth
@@ -119,7 +120,7 @@ class MultiviewMulticamTest {
         assertTrue(strict.isRefused)
         val exclusion = Exclusion(tiles[2].id, ExclusionReason.Rejected(CommandRejection.RecordingStateUnknown))
         assertEquals(listOf(exclusion), strict.exclusions)
-        assertEquals("Waiting for a camera's record state.", recordRefusal(strict))
+        assertEquals("Waiting for a camera's record state.", MultiviewRecordContext(strict).refusal)
 
         val subset = plan(tiles, TargetPolicy.ELIGIBLE_SUBSET)
         assertTrue(subset.isExecutable)

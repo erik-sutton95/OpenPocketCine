@@ -31,14 +31,21 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.opencapture.openpocketcine.multiview.MultiviewCameraAction
-import com.opencapture.openpocketcine.multiview.MultiviewAssistPalette
 import com.opencapture.openpocketcine.multiview.MultiviewCameraSettings
 import com.opencapture.openpocketcine.multiview.MultiviewSession
-import com.opencapture.openpocketcine.multiview.MultiviewCameraMenu
-import com.opencapture.openpocketcine.multiview.MultiviewTileChrome
-import com.opencapture.openpocketcine.multiview.MultiviewTileOverlay
-import com.opencapture.openpocketcine.multiview.multiviewTileReadouts
+import com.opencapture.openpocketcine.multiview.MultiviewStageContent
+import com.opencapture.opencine.appkit.MultiviewCameraAction as MultiviewStageAction
+import com.opencapture.opencine.appkit.MultiviewRecordContext
+import com.opencapture.opencine.appkit.MultiviewStage
+import com.opencapture.opencine.appkit.MultiviewStageActions
+import com.opencapture.opencine.appkit.MultiviewTile
+import com.opencapture.opencine.appkit.MultiviewTileStatus
+import com.opencapture.opencine.appkit.MultiviewTool
+import com.opencapture.opencine.multicam.MulticamGroup
+import com.opencapture.opencine.multicam.MulticamSnapshot
+import com.opencapture.opencine.multicam.RecordDirection
+import com.opencapture.opencine.multicam.RecordPlan
+import com.opencapture.opencine.multicam.TargetPolicy
 import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CameraModel
@@ -157,12 +164,9 @@ class MultiviewTileChromeTest {
                                 scale = constraints.maxWidth / width
                                 CompositionLocalProvider(LocalDensity provides Density(scale, 1f)) {
                                     Box(Modifier.size(width.dp, height.dp)) {
-                                        MultiviewAssistPalette(stage, layout.controlCellSize,
-                                            Modifier.offset(layout.assists.x.dp, layout.assists.y.dp)
-                                                .requiredSize(layout.assists.width.dp, layout.assists.height.dp),
-                                            maxExpandedHeight = layout.assists.height) {
-                                            settingsOpened = true
-                                        }
+                                        MultiviewStageContent(stage, layout, confirmsRecord = false, interactive = true,
+                                            onAdd = {}, onOpenLive = {}, onSettings = { settingsOpened = true },
+                                            onNetwork = {}, onExit = {}) {}
                                     }
                                 }
                             }
@@ -316,26 +320,73 @@ class MultiviewTileChromeTest {
         }
     }
 
+    /** One camera's values as Pocket maps them (73 %, 8 GB free, a 1:24 take, TC 01:02:03). */
+    private fun tile(name: String, status: MultiviewTileStatus? = null) = MultiviewTile(
+        name = name, model = "Osmo Pocket 4", format = "4K · 30p · Normal", battery = 73, storage = "8 GB",
+        timecode = "01:02:03", tally = "REC 1:24", recording = true, status = status,
+        actions = listOf(
+            MultiviewStageAction(MultiviewStageAction.LIVE_VIEW, "Open Live View"),
+            MultiviewStageAction("record", "Stop recording", MultiviewStageAction.Kind.RECORD),
+            MultiviewStageAction("lut", "Disable Auto LUT"),
+            MultiviewStageAction("reconnect", "Reconnect"),
+            MultiviewStageAction("experimental", "Try experimental shared Wi-Fi"),
+            MultiviewStageAction("remove", "Remove camera", MultiviewStageAction.Kind.DESTRUCTIVE),
+        ),
+    )
+
+    /** A [width] x [height] dp viewport scaled to fit the device, as the toolbar fixture does. */
+    @androidx.compose.runtime.Composable
+    private fun Scaled(width: Float, height: Float, onScale: (Float) -> Unit = {}, content: @androidx.compose.runtime.Composable () -> Unit) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val scale = minOf(constraints.maxWidth / width, constraints.maxHeight / height)
+            onScale(scale)
+            CompositionLocalProvider(LocalDensity provides Density(scale, 1f)) {
+                Box(Modifier.requiredSize(width.dp, height.dp)) { content() }
+            }
+        }
+    }
+
+    /** The shared stage over fixed values; every action lands in [dispatched]. */
+    @androidx.compose.runtime.Composable
+    private fun FixtureStage(
+        tiles: List<MultiviewTile?>, layout: MultiviewPresentationLayout, arrangement: MultiviewArrangement,
+        dispatched: MutableList<String>,
+    ) {
+        val plan = RecordPlan.make(RecordDirection.START, TargetPolicy.STRICT, emptyList(), MulticamGroup(), MulticamSnapshot())
+        MultiviewStage(
+            tiles, layout, arrangement, selected = 0, fill = false, tools = MultiviewTool.entries,
+            readouts = null, recording = true, groupBusy = false, confirmsRecord = false,
+            actions = MultiviewStageActions(
+                select = {}, arrange = {}, setFill = {},
+                openLiveView = { dispatched += MultiviewStageAction.LIVE_VIEW }, add = {},
+                perform = { action, _ -> dispatched += action }, close = {},
+                recordContext = { MultiviewRecordContext(plan) },
+                record = { _, _ -> dispatched += "record" },
+            ),
+        ) {}
+    }
+
     @Test fun focusedMainMetadataReservesTheOverlayReadoutBand() {
-        var bottom = 0f
+        val width = 780f
+        val height = 520f
+        val layout = MultiviewPresentationLayout.compute(width, height, MultiviewSafeArea(),
+            MultiviewArrangement.GRID, selected = 0)
+        var origin = 0f
         var density = 1f
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                density = activity.resources.displayMetrics.density
                 activity.setContent {
                     MaterialTheme {
-                        Box(Modifier.size(390.dp, 260.dp).onGloballyPositioned { bottom = it.boundsInWindow().bottom }) {
-                            MultiviewTileOverlay(
-                                multiviewTileReadouts(0, "Main camera", "Osmo Pocket 4", CameraStatus(
-                                    batteryPercent = 73, sdTotalMb = 65536, sdFreeMb = 8192,
-                                    recordElapsedSec = 84), "01:02:03:04", true, true, false, false, true, null),
-                                focused = true, compact = false, clean = false, enabled = true,
-                                onOptions = {}, readoutsOverlay = true,
-                            )
+                        Scaled(width, height, onScale = { density = it }) {
+                            Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.boundsInWindow().top }) {
+                                FixtureStage(listOf(tile("Main camera"), null, null, null), layout,
+                                    MultiviewArrangement.GRID, mutableListOf())
+                            }
                         }
                     }
                 }
             }
+            val bottom = origin + layout.tiles[0].maxY * density
             for (label in listOf("Storage 8 GB", "REC 1:24", "Camera battery 73 percent")) {
                 val hit = android.graphics.Rect().also { awaitNode(label).getBoundsInScreen(it) }
                 assertTrue(hit.bottom <= bottom - 45 * density + 1, "$label must stay above exposure values: $hit")
@@ -346,29 +397,16 @@ class MultiviewTileChromeTest {
     }
 
     @Test fun compactPortraitFeedShowsTelemetryAndEveryCameraAction() {
-        val actions = Collections.synchronizedList(mutableListOf<MultiviewCameraAction>())
+        val layout = MultiviewPresentationLayout.compute(390f, 844f, MultiviewSafeArea(),
+            MultiviewArrangement.CENTER_STAGE, selected = 0)
+        val actions = Collections.synchronizedList(mutableListOf<String>())
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent {
                     MaterialTheme {
-                        var menu by remember { mutableStateOf(false) }
-                        Box(Modifier.size(298.dp, 112.dp)) {
-                            MultiviewTileChrome(
-                                readouts = multiviewTileReadouts(
-                                    1, "Side angle", "Osmo Pocket 4", CameraStatus(
-                                        batteryPercent = 73, sdTotalMb = 65536, sdFreeMb = 8192,
-                                        recordElapsedSec = 84,
-                                    ), "01:02:03:04", true, true, false, false, true, null,
-                                ),
-                                focused = true, compact = true, enabled = true, onOptions = { menu = true },
-                            )
-                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                MultiviewCameraMenu(
-                                    "Side angle", recording = true, lutEnabled = true,
-                                    canOpen = true, canRecord = true, canReconnect = true, canRemove = true,
-                                    experimentalRetryEnabled = true,
-                                ) { action -> actions.add(action); menu = false }
-                            }
+                        Scaled(390f, 844f) {
+                            FixtureStage(listOf(null, tile("Side angle"), null, null), layout,
+                                MultiviewArrangement.CENTER_STAGE, actions)
                         }
                     }
                 }
@@ -381,30 +419,30 @@ class MultiviewTileChromeTest {
                 click(awaitNode("Camera B options"))
                 click(awaitNode(label))
             }
-            assertEquals(MultiviewCameraAction.entries, actions.toList())
+            awaitCondition { actions.size == labels.size }
+            assertEquals(listOf(MultiviewStageAction.LIVE_VIEW, "record", "lut", "reconnect", "experimental", "remove"),
+                actions.toList())
         }
     }
 
     @Test fun cleanDisplayKeepsRecoveryStatusAndOptionsReachableOnCompactFeeds() {
-        var optionsOpened = false
+        val layout = MultiviewPresentationLayout.compute(390f, 844f, MultiviewSafeArea(),
+            MultiviewArrangement.CENTER_STAGE, selected = 0)
+        val restoring = MultiviewTileStatus("Restoring picture…", inProgress = false)
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent {
                     MaterialTheme {
-                        Box(Modifier.size(120.dp, 64.dp)) {
-                            MultiviewTileOverlay(
-                                readouts = multiviewTileReadouts(
-                                    1, "Side angle", "Osmo Pocket 4", CameraStatus(), null,
-                                    false, false, false, true, true, null,
-                                ), focused = true, compact = true, clean = true, enabled = true,
-                                onOptions = { optionsOpened = true },
-                            )
+                        Scaled(390f, 844f) {
+                            FixtureStage(listOf(null, tile("Side angle", restoring), null, null), layout,
+                                MultiviewArrangement.CENTER_STAGE, mutableListOf())
                         }
                     }
                 }
             }
+            click(awaitNode("Change display mode"))
             click(awaitNode("Restoring picture… Camera B options"))
-            scenario.onActivity { assertTrue(optionsOpened) }
+            awaitNode("Open Live View")
         }
     }
 
