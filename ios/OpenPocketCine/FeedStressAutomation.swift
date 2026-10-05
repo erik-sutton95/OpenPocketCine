@@ -400,8 +400,8 @@ enum FeedStressAutomation {
                 return true
             }
             guard first else { return }
-            FeedIncidentRuntime.noteTestSource(.faultInjection)
-            ReliabilityReporting.noteCurrentTestSource(.faultInjection)
+            AppDiagnostics.incidents.noteTestSource(.faultInjection)
+            AppDiagnostics.reporting.noteCurrentTestSource(.faultInjection)
         }
 
         func snapshotLine() -> String {

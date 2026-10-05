@@ -8,7 +8,7 @@ struct OpenPocketCineApp: App {
             MultiviewUIReview.prepareIfRequested()
             ReliabilityReportingVerification.prepareIfRequested()
         #endif
-        ReliabilityReporting.install()
+        AppDiagnostics.reporting.install()
         #if DEBUG
             ReliabilityReportingVerification.runIfRequested()
         #endif

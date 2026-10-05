@@ -67,7 +67,7 @@ final class HevcDecoder: OpenCineApple.MonitorLiveVideoRuntime {
                 assists: LiveAssistEngine.configuration,
                 shouldRebuildSession: { CameraSoftAP.shouldRebuildVTSession(status: $0) },
                 policyChanged: { replacing in
-                    FeedIncidentRuntime.recordBreadcrumb(
+                    AppDiagnostics.incidents.recordBreadcrumb(
                         FeedIncidentBreadcrumb(
                             monotonicAt: ProcessInfo.processInfo.systemUptime, kind: .assistChange,
                             detail: replacing ? "replacement" : "identity"))

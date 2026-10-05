@@ -745,7 +745,7 @@ final class CameraSession {
             guard isCurrent() else { return nil }
             cameraReportedCapture = CameraStatus()
         }
-        ReliabilityReporting.setCameraSessionActive(true)
+        AppDiagnostics.reporting.setCameraSessionActive(true)
         guard isCurrent() else { return nil }
         LocalVPNProbe.noteIfActive()
         guard isCurrent() else { return nil }
@@ -782,8 +782,8 @@ final class CameraSession {
         cameraReportedCapture = CameraStatus()
         // Before the link closes: do not leave the camera on Fast for the next session.
         gimbal.restorePrepNow()
-        ReliabilityReporting.setCameraSessionActive(false)
-        FeedIncidentRuntime.endSession(now: ProcessInfo.processInfo.systemUptime)
+        AppDiagnostics.reporting.setCameraSessionActive(false)
+        AppDiagnostics.incidents.endSession(now: ProcessInfo.processInfo.systemUptime)
         incidentSessionActive = false
         incidentPrevious = nil
         reconnectTarget = nil
@@ -2893,7 +2893,7 @@ final class CameraSession {
         incidentSessionActive = true
         incidentPrevious = nil
         let info = Bundle.main.infoDictionary ?? [:]
-        FeedIncidentRuntime.beginSession(
+        AppDiagnostics.incidents.beginSession(
             FeedIncidentSessionContext(
                 sessionID: UUID().uuidString,
                 appVersion: info["CFBundleShortVersionString"] as? String ?? "unknown",
@@ -2902,18 +2902,18 @@ final class CameraSession {
                 osName: "iOS", osVersion: UIDevice.current.systemVersion,
                 hardwareClass: DiagnosticCenter.machineIdentifier,
                 cameraFamily: cameraFamily,
-                testSource: FeedIncidentOrigin.currentTestSource(),
-                buildIdentity: FeedIncidentOrigin.currentBuildIdentity()))
+                testSource: AppDiagnostics.origin.currentTestSource(),
+                buildIdentity: AppDiagnostics.origin.currentBuildIdentity()))
     }
 
     func recordFeedBreadcrumb(_ kind: FeedIncidentBreadcrumbKind, detail: String = "") {
-        FeedIncidentRuntime.recordBreadcrumb(
+        AppDiagnostics.incidents.recordBreadcrumb(
             FeedIncidentBreadcrumb(
                 monotonicAt: ProcessInfo.processInfo.systemUptime, kind: kind, detail: detail))
     }
 
     private func recordFeedRepair(_ action: String, phase: FeedRepairPhase, reason: String? = nil) {
-        FeedIncidentRuntime.recordRepair(
+        AppDiagnostics.incidents.recordRepair(
             FeedRepairRecord(
                 monotonicAt: ProcessInfo.processInfo.systemUptime, action: action, phase: phase,
                 reason: reason))
@@ -2937,8 +2937,8 @@ final class CameraSession {
         }
         incidentPrevious = (now, counts)
         let currentError = decoder.isDecoderWedged
-        FeedIncidentRuntime.noteDecoderGeneration(decoder.sourceFrameGeneration)
-        FeedIncidentRuntime.ingestSnapshot(
+        AppDiagnostics.incidents.noteDecoderGeneration(decoder.sourceFrameGeneration)
+        AppDiagnostics.incidents.ingestSnapshot(
             FeedIncidentSnapshot(
                 monotonicNow: now, wallClock: wall,
                 rates: FeedIncidentRates(
@@ -3584,7 +3584,7 @@ final class CameraSession {
                     ControlLiveLog.line("recovery: action=decoder effect=blocked reason=presentationOnly")
                     self.feedWatchdog = FeedWatchdog()
                 case .fullRejoinRequired:
-                    FeedIncidentRuntime.noteExhausted(now: ProcessInfo.processInfo.systemUptime)
+                    AppDiagnostics.incidents.noteExhausted(now: ProcessInfo.processInfo.systemUptime)
                     ControlLiveLog.line("recovery: action=decoder effect=exhausted reason=pictureDeadline")
                     self.recordFeedRepair("rejoin", phase: .requested, reason: "pictureDeadline")
                     await self.rejoinDatalinkKeepingLive(attempt: attempt)
@@ -4236,7 +4236,7 @@ final class CameraSession {
         attempt: DjiAppleRecoveryEpisode.Attempt) {
         guard attempt.isCurrent, !isMultiviewBorrowed else { return }
         if case .initialDrop = kind {
-            FeedIncidentRuntime.noteUnexpectedDisconnect(now: ProcessInfo.processInfo.systemUptime)
+            AppDiagnostics.incidents.noteUnexpectedDisconnect(now: ProcessInfo.processInfo.systemUptime)
             guard attempt.isCurrent else { return }
             recordFeedRepair("session", phase: .requested, reason: String(describing: attempt.trigger))
             guard attempt.isCurrent else { return }
@@ -4431,7 +4431,7 @@ final class CameraSession {
 
     private func wireDatalink(_ dl: DatalinkDriver) {
         incidentSocketGeneration += 1
-        FeedIncidentRuntime.noteSocketGeneration(incidentSocketGeneration)
+        AppDiagnostics.incidents.noteSocketGeneration(incidentSocketGeneration)
         dl.onVideoDiscontinuity = { [weak self, weak dl] in
             guard let self, let dl, self.datalink === dl else { return }
             self.decoder.noteCompressedDiscontinuity()

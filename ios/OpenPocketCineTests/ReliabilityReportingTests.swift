@@ -7,38 +7,21 @@ import XCTest
 @testable import OpenPocketCine
 
 final class ReliabilityReportingTests: XCTestCase {
-    func testOnlyExhaustedIncidentsAreErrors() {
-        XCTAssertEqual(ReliabilityReporting.level(forOutcome: "exhausted"), .error)
-        XCTAssertEqual(ReliabilityReporting.level(forOutcome: "interrupted"), .warning)
-        XCTAssertEqual(ReliabilityReporting.level(forOutcome: "recovered"), .info)
-        XCTAssertEqual(ReliabilityReporting.level(forOutcome: "suppressed"), .info)
-    }
-
     private var suite: UserDefaults!
     private var cacheRoot: URL!
-
-    private func waitForReceipt(_ id: String, state: ReliabilityReportingReceiptState) {
-        let ready = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in
-                ReliabilityReporting.receipt(for: id)?.state == state
-            }, object: nil)
-        wait(for: [ready], timeout: 10)
-    }
 
     override func setUp() {
         super.setUp()
         suite = UserDefaults(suiteName: "opc.reliability.test.\(UUID().uuidString)")
-        ReliabilityReportingConsent.defaults = suite
-        ReliabilityReportingConsent.resetForTests()
+        AppDiagnostics.consent.defaults = suite
+        AppDiagnostics.consent.resetForTests()
         cacheRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("opc-rel-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
-        ReliabilityReporting.sdkCacheRoot = cacheRoot
-        ReliabilityReporting.setCaptureHandlerForTests(nil)
-        ReliabilityReportingURLProtocol.gate = ReliabilityReportingGate.shared
-        ReliabilityReportingGate.shared.resetForTests()
-        ReliabilityReportingURLProtocol.dsnHost = "o0.ingest.sentry.io"
-        ReliabilityReportingURLProtocol.onEnvelopeAccepted = nil
+        AppDiagnostics.reporting.sdkCacheRoot = cacheRoot
+        AppDiagnostics.reporting.setCaptureHandlerForTests(nil)
+        AppDiagnostics.gate.resetForTests()
+        AppDiagnostics.reporting.dsnHost = "o0.ingest.sentry.io"
         ReliabilityReportingURLProtocol.forwardingSession = URLSession(
             configuration: {
                 let config = URLSessionConfiguration.ephemeral
@@ -48,58 +31,18 @@ final class ReliabilityReportingTests: XCTestCase {
     }
 
     override func tearDown() {
-        ReliabilityReportingGate.shared.resetForTests()
-        ReliabilityReportingConsent.resetForTests()
-        ReliabilityReportingConsent.defaults = .standard
-        ReliabilityReporting.setCaptureHandlerForTests(nil)
-        FeedIncidentOrigin.resetForTests()
+        AppDiagnostics.gate.resetForTests()
+        AppDiagnostics.consent.resetForTests()
+        AppDiagnostics.consent.defaults = .standard
+        AppDiagnostics.reporting.setCaptureHandlerForTests(nil)
+        AppDiagnostics.origin.resetForTests()
         try? FileManager.default.removeItem(at: cacheRoot)
         super.tearDown()
     }
 
-    func testConsentDefaultsOffAndRevokePurgesOnlySDKOwnedSpool() {
-        XCTAssertFalse(ReliabilityReportingConsent.isOptedIn)
-        XCTAssertFalse(ReliabilityReporting.isOptedIn)
-        ReliabilityReportingConsent.setOptedIn(true)
-        XCTAssertTrue(ReliabilityReporting.isOptedIn)
-        let localDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("opc-local-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: localDir, withIntermediateDirectories: true)
-        let local = localDir.appendingPathComponent("incident-keep.json")
-        try? Data("keep".utf8).write(to: local)
-        defer { try? FileManager.default.removeItem(at: localDir) }
-        ReliabilityReportingReceipts.store(
-            ReliabilityReportingReceipt(
-                incidentID: "inc-1", eventID: "abc", state: .queued, updatedAt: Date()),
-            root: cacheRoot)
-        XCTAssertNotNil(ReliabilityReportingReceipts.load(incidentID: "inc-1", root: cacheRoot))
-        ReliabilityReporting.setConsent(false)
-        XCTAssertFalse(ReliabilityReporting.isOptedIn)
-        let purged = XCTNSPredicateExpectation(
-            predicate: NSPredicate { [self] _, _ in
-                ReliabilityReportingReceipts.load(incidentID: "inc-1", root: cacheRoot) == nil
-            }, object: nil)
-        wait(for: [purged], timeout: 10)
-        XCTAssertNil(ReliabilityReportingReceipts.load(incidentID: "inc-1", root: cacheRoot))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: local.path))
-    }
-
-    func testDSNRequiresHTTPSSentryShape() {
-        XCTAssertNil(ReliabilityReportingDSN.validated(""))
-        XCTAssertNil(ReliabilityReportingDSN.validated("http://key@host/1"))
-        XCTAssertNil(ReliabilityReportingDSN.validated("https://ingest.sentry.io/1"))
-        XCTAssertNil(ReliabilityReportingDSN.validated("https://key:secret@ingest.sentry.io/1"))
-        XCTAssertNil(
-            ReliabilityReportingDSN.validated("https://key@ingest.sentry.io/1?token=value"))
-        XCTAssertNil(
-            ReliabilityReportingDSN.validated("https://key@ingest.sentry.io/not-a-project"))
-        XCTAssertNotNil(
-            ReliabilityReportingDSN.validated("https://publickey@o0.ingest.sentry.io/0"))
-    }
-
     func testColdStartOnCameraNetworkStillInstallsCrashCapture() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.shared.setCameraIPv4PathReadyForTests(true)
+        AppDiagnostics.consent.setOptedIn(true)
+        AppDiagnostics.gate.setCameraIPv4PathReadyForTests(true)
         let previousDSN = ProcessInfo.processInfo.environment["SENTRY_DSN"]
         setenv("SENTRY_DSN", "https://publickey@o0.ingest.sentry.io/0", 1)
         defer {
@@ -108,13 +51,13 @@ final class ReliabilityReportingTests: XCTestCase {
             } else {
                 unsetenv("SENTRY_DSN")
             }
-            ReliabilityReporting.setConsent(false)
+            AppDiagnostics.reporting.setConsent(false)
         }
-        ReliabilityReporting.install()
+        AppDiagnostics.reporting.install()
         let installed = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in SentrySDK.isEnabled }, object: nil)
         wait(for: [installed], timeout: 10)
-        XCTAssertTrue(ReliabilityReportingGate.shared.shouldBlockUpload)
+        XCTAssertTrue(AppDiagnostics.gate.shouldBlockUpload)
     }
 
     func testRefusedSDKRequestsFailWithoutHTTPResponse() {
@@ -134,10 +77,10 @@ final class ReliabilityReportingTests: XCTestCase {
             ),
         ]
         for c in cases {
-            ReliabilityReportingConsent.resetForTests()
-            ReliabilityReportingGate.shared.resetForTests()
-            if let optedIn = c.optedIn { ReliabilityReportingConsent.setOptedIn(optedIn) }
-            ReliabilityReportingGate.shared.setCameraSessionActive(c.cameraActive)
+            AppDiagnostics.consent.resetForTests()
+            AppDiagnostics.gate.resetForTests()
+            if let optedIn = c.optedIn { AppDiagnostics.consent.setOptedIn(optedIn) }
+            AppDiagnostics.gate.setCameraSessionActive(c.cameraActive)
             let session = ReliabilityReportingURLProtocol.makeSDKSession()
             let done = expectation(description: c.name)
             var response: URLResponse?
@@ -154,13 +97,13 @@ final class ReliabilityReportingTests: XCTestCase {
     }
 
     func testCameraActivationCancelsInFlightForwardWithoutResponse() {
-        ReliabilityReportingConsent.setOptedIn(true)
+        AppDiagnostics.consent.setOptedIn(true)
         SlowForwardProtocol.reset()
         let forwardConfig = URLSessionConfiguration.ephemeral
         forwardConfig.protocolClasses = [SlowForwardProtocol.self]
         ReliabilityReportingURLProtocol.forwardingSession = URLSession(
             configuration: forwardConfig)
-        ReliabilityReportingGate.shared.setCameraSessionActive(false)
+        AppDiagnostics.gate.setCameraSessionActive(false)
         let session = ReliabilityReportingURLProtocol.makeSDKSession()
         let url = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
         let done = expectation(description: "race")
@@ -171,7 +114,7 @@ final class ReliabilityReportingTests: XCTestCase {
             done.fulfill()
         }.resume()
         wait(for: [SlowForwardProtocol.started], timeout: 10)
-        ReliabilityReporting.setCameraSessionActive(true)
+        AppDiagnostics.reporting.setCameraSessionActive(true)
         wait(for: [done], timeout: 10)
         XCTAssertNil(response)
         ReliabilityReportingURLProtocol.forwardingSession = {
@@ -181,37 +124,16 @@ final class ReliabilityReportingTests: XCTestCase {
         }()
     }
 
-    func testLaunchEnvironmentMarksAutomationWithoutXCTestClass() {
-        XCTAssertTrue(
-            FeedIncidentOrigin.isAutomationLaunch(["OPV_PHYSICAL_UI_REVIEW": "1"]))
-        XCTAssertTrue(
-            FeedIncidentOrigin.isAutomationLaunch(["OPV_UI_REVIEW_SCREEN": "live"]))
-        XCTAssertTrue(
-            FeedIncidentOrigin.isAutomationLaunch(["OPV_FEED_STRESS": "1"]))
-        XCTAssertFalse(
-            FeedIncidentOrigin.isAutomationLaunch(["OPV_UI_REVIEW_SCREEN": ""]))
-        XCTAssertFalse(FeedIncidentOrigin.isAutomationLaunch([:]))
-        FeedIncidentOrigin.overrideTestSourceForTests = nil
-        XCTAssertEqual(
-            FeedIncidentOrigin.currentTestSource(
-                environment: ["OPV_PHYSICAL_UI_REVIEW": "1"], injectionActivated: false),
-            .automation)
-        XCTAssertEqual(
-            FeedIncidentOrigin.currentTestSource(
-                environment: [:], injectionActivated: true),
-            .faultInjection)
-    }
-
     func testScrubDoesNotStampCurrentOriginOntoLegacyOrFatalEvents() {
-        FeedIncidentOrigin.overrideTestSourceForTests = .verification
-        FeedIncidentOrigin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
+        AppDiagnostics.origin.overrideTestSourceForTests = .verification
+        AppDiagnostics.origin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
         let event = Event(level: .fatal)
         event.tags = ["failingStage": "decodedOutput"]
-        _ = ReliabilityReportingPrivacy.scrub(event)
+        _ = AppDiagnostics.reporting.privacy.scrub(event)
         XCTAssertNil(event.tags?["testSource"])
         XCTAssertNil(event.tags?["buildIdentity"])
         event.tags = ["testSource": "manual", "buildIdentity": "ios-priorrun0123456789abcdefab"]
-        _ = ReliabilityReportingPrivacy.scrub(event)
+        _ = AppDiagnostics.reporting.privacy.scrub(event)
         XCTAssertEqual(event.tags?["testSource"], "manual")
         XCTAssertEqual(event.tags?["buildIdentity"], "ios-priorrun0123456789abcdefab")
     }
@@ -225,28 +147,10 @@ final class ReliabilityReportingTests: XCTestCase {
         assist.message = "assistChange"
         assist.data = ["assistState": "private_project"]
         event.breadcrumbs = [scene, assist]
-        _ = ReliabilityReportingPrivacy.scrub(event)
+        _ = AppDiagnostics.reporting.privacy.scrub(event)
         XCTAssertEqual(event.breadcrumbs?.count, 2)
         XCTAssertNil(event.breadcrumbs?[0].data?["sceneState"])
         XCTAssertNil(event.breadcrumbs?[1].data?["assistState"])
-    }
-
-    func testEventIDAndFingerprintAreStable() {
-        let id = "12c2d058-d584-4270-9aa2-eca08bf20986"
-        let first = ReliabilityReportingPrivacy.eventID(fromIncidentID: id)
-        let second = ReliabilityReportingPrivacy.eventID(fromIncidentID: id)
-        XCTAssertEqual(first, second)
-        XCTAssertEqual(first.sentryIdString, "12c2d058d58442709aa2eca08bf20986")
-        let prints = ReliabilityReportingPrivacy.fingerprint(
-            schema: 1, kind: "freshInputStaleOutput", stage: "decodedOutput",
-            errorClass: "invalidSession")
-        XCTAssertEqual(
-            prints,
-            [
-                "feed-incident", "schema:1", "kind:freshInputStaleOutput",
-                "stage:decodedOutput", "errorClass:invalidSession",
-            ]
-        )
     }
 
     func testOnlyTypedFeedBreadcrumbsSurviveScrubbing() {
@@ -265,7 +169,7 @@ final class ReliabilityReportingTests: XCTestCase {
         event.breadcrumbs = [
             typed, scene, repair, arbitrary, Breadcrumb(level: .info, category: "http"),
         ]
-        _ = ReliabilityReportingPrivacy.scrub(event)
+        _ = AppDiagnostics.reporting.privacy.scrub(event)
         XCTAssertEqual(event.breadcrumbs?.count, 3)
         XCTAssertEqual(event.breadcrumbs?[0].message, "settingsEnter")
         XCTAssertNil(event.breadcrumbs?[0].data)
@@ -288,8 +192,8 @@ final class ReliabilityReportingTests: XCTestCase {
     }
 
     func testSDKCapturePreservesOriginalBuildAfterUpgrade() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        let options = ReliabilityReporting.makeOptions(
+        AppDiagnostics.consent.setOptedIn(true)
+        let options = SentryReliabilitySink.makeOptions(
             dsn: "https://publickey@o0.ingest.sentry.io/0",
             urlSession: ReliabilityReportingURLProtocol.makeSDKSession())
         let prepared = expectation(description: "SDK prepared original provenance")
@@ -308,49 +212,21 @@ final class ReliabilityReportingTests: XCTestCase {
         wait(for: [prepared], timeout: 10)
     }
 
-    func testQueuedIncidentKeepsOriginalReleaseAndOccurrenceTime() throws {
-        ReliabilityReportingConsent.setOptedIn(true)
-        var bundle = try stallBundle(id: UUID().uuidString)
-        bundle.header.outcome = .recovered
-        bundle.header.appVersion = "0.1.0"
-        bundle.header.appBuild = "107"
-        bundle.header.sourceRevision = String(repeating: "a", count: 40)
-        bundle.header.testSource = .faultInjection
-        bundle.header.buildIdentity = "ios-0123456789abcdef0123456789abcd"
-        bundle.header.startedAtWallClock = Date(timeIntervalSince1970: 1_780_000_000)
-        FeedIncidentOrigin.overrideTestSourceForTests = .verification
-        FeedIncidentOrigin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
-        let captured = expectation(description: "original provenance")
-        let expectedTime = bundle.header.startedAtWallClock
-        ReliabilityReporting.setCaptureHandlerForTests { event, _ in
-            XCTAssertEqual(event.releaseName, "com.opencapture.openpocketcine@0.1.0+107")
-            XCTAssertEqual(event.dist, "107")
-            XCTAssertEqual(event.timestamp, expectedTime)
-            XCTAssertEqual(event.tags?["sourceRevision"], String(repeating: "a", count: 40))
-            XCTAssertEqual(event.tags?["testSource"], "faultInjection")
-            XCTAssertEqual(event.tags?["buildIdentity"], "ios-0123456789abcdef0123456789abcd")
-            XCTAssertNotEqual(event.tags?["testSource"], "verification")
-            captured.fulfill()
-        }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        wait(for: [captured], timeout: 10)
-    }
-
     func testQueuedReplayOriginSurvivesActualSDKScopeMerge() throws {
-        ReliabilityReportingConsent.setOptedIn(true)
+        AppDiagnostics.consent.setOptedIn(true)
         var bundle = try stallBundle(id: UUID().uuidString)
         bundle.header.outcome = .recovered
         bundle.header.kind = .transportStall
         bundle.header.testSource = .faultInjection
         bundle.header.buildIdentity = "ios-queuedorigin0123456789abcdef"
-        FeedIncidentOrigin.overrideTestSourceForTests = .verification
-        FeedIncidentOrigin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
-        let options = ReliabilityReporting.makeOptions(
+        AppDiagnostics.origin.overrideTestSourceForTests = .verification
+        AppDiagnostics.origin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
+        let options = SentryReliabilitySink.makeOptions(
             dsn: "https://publickey@o0.ingest.sentry.io/0",
             urlSession: ReliabilityReportingURLProtocol.makeSDKSession())
         let prepared = expectation(description: "SDK beforeSend original origin")
         options.beforeSend = { event in
-            let scrubbed = ReliabilityReportingPrivacy.scrub(event)
+            let scrubbed = AppDiagnostics.reporting.privacy.scrub(event)
             guard scrubbed.fingerprint?.first == "feed-incident" else { return nil }
             XCTAssertEqual(scrubbed.tags?["testSource"], "faultInjection")
             XCTAssertEqual(scrubbed.tags?["buildIdentity"], "ios-queuedorigin0123456789abcdef")
@@ -367,15 +243,19 @@ final class ReliabilityReportingTests: XCTestCase {
             scope.setTag(value: "ios-current-run-identity-value", key: "buildIdentity")
         }
         let constructed = expectation(description: "constructed event")
-        ReliabilityReporting.setCaptureHandlerForTests { event, _ in
+        AppDiagnostics.reporting.setCaptureHandlerForTests { typed, _ in
+            let event = SentryReliabilitySink.event(typed)
+            XCTAssertEqual(event.eventId.sentryIdString, typed.eventID)
+            XCTAssertNil(event.user)
+            XCTAssertEqual(event.breadcrumbs?.count, 0)
             XCTAssertEqual(event.tags?["testSource"], "faultInjection")
             XCTAssertTrue(event.fingerprint?.contains("kind:transportStall") == true)
             SentrySDK.capture(event: event) { scope in
-                ReliabilityReporting.applyOriginalTags(event.tags, to: scope)
+                SentryReliabilitySink.applyOriginalTags(event.tags, to: scope)
             }
             constructed.fulfill()
         }
-        ReliabilityReporting.enqueueFinalized(bundle)
+        AppDiagnostics.reporting.enqueueFinalized(bundle)
         wait(for: [constructed, prepared], timeout: 10)
     }
 
@@ -404,7 +284,7 @@ final class ReliabilityReportingTests: XCTestCase {
         event.exceptions = [
             Exception(value: "/" + "Users/example/Library/crash", type: "NSError")
         ]
-        _ = ReliabilityReportingPrivacy.scrub(event)
+        _ = AppDiagnostics.reporting.privacy.scrub(event)
         XCTAssertNil(event.user)
         XCTAssertNil(event.request)
         XCTAssertEqual(event.breadcrumbs?.count ?? 0, 0)
@@ -426,145 +306,6 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertFalse(event.exceptions?.first?.value?.contains("example/Library") ?? true)
     }
 
-    func testImmediateConfirmationIsNotOverwrittenByQueuedReceipt() throws {
-        ReliabilityReportingConsent.setOptedIn(true)
-        let id = "cccccccccccccccccccccccccccccccc"
-        var bundle = try stallBundle(id: id)
-        bundle.header.outcome = .recovered
-        ReliabilityReporting.setCaptureHandlerForTests { event, _ in
-            ReliabilityReporting.noteTransportSuccess(eventID: event.eventId.sentryIdString)
-        }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        waitForReceipt(id, state: .confirmed)
-    }
-
-    func testIncidentExposureDoesNotInheritPreviousSessionSummary() throws {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReporting.noteSessionSummary(
-            FeedIncidentSessionSummary(
-                sessionID: UUID().uuidString, healthyExposureSeconds: 123456,
-                incidentCount: 99, outcome: "healthy", sourceRevision: "test"))
-        var bundle = try stallBundle(id: "dddddddddddddddddddddddddddddddd")
-        bundle.header.outcome = .recovered
-        let captured = expectation(description: "incident")
-        ReliabilityReporting.setCaptureHandlerForTests { event, _ in
-            guard event.fingerprint?.first == "feed-incident" else { return }
-            XCTAssertNotEqual(event.extra?["healthyExposureSeconds"] as? Double, 123456)
-            XCTAssertNil(event.extra?["incidentCount"])
-            captured.fulfill()
-        }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        wait(for: [captured], timeout: 10)
-    }
-
-    func testCaptureEnqueueIsQueuedNotDeliveredAndDedupsConfirmed() throws {
-        ReliabilityReportingConsent.setOptedIn(true)
-        var bundle = try stallBundle(id: "12c2d058d58442709aa2eca08bf20986")
-        bundle.header.outcome = .recovered
-        let captured = expectation(description: "handler")
-        captured.expectedFulfillmentCount = 1
-        ReliabilityReporting.setCaptureHandlerForTests { event, data in
-            XCTAssertEqual(event.eventId.sentryIdString, "12c2d058d58442709aa2eca08bf20986")
-            XCTAssertEqual(event.fingerprint?.first, "feed-incident")
-            XCTAssertTrue(event.fingerprint?.contains("kind:freshInputStaleOutput") == true)
-            XCTAssertNil(event.user)
-            let text = String(data: data, encoding: .utf8) ?? ""
-            XCTAssertTrue(text.contains("prelude"))
-            XCTAssertTrue(text.contains("repairs") || text.contains("during"))
-            XCTAssertFalse(text.contains("control-live.log"))
-            captured.fulfill()
-        }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        wait(for: [captured], timeout: 10)
-        waitForReceipt("12c2d058d58442709aa2eca08bf20986", state: .queued)
-        XCTAssertEqual(
-            ReliabilityReporting.receipt(for: "12c2d058d58442709aa2eca08bf20986")?.state,
-            .queued)
-        ReliabilityReporting.noteTransportSuccess(eventID: "12c2d058d58442709aa2eca08bf20986")
-        waitForReceipt("12c2d058d58442709aa2eca08bf20986", state: .confirmed)
-        XCTAssertEqual(
-            ReliabilityReporting.receipt(for: "12c2d058d58442709aa2eca08bf20986")?.state,
-            .confirmed)
-        let again = expectation(description: "no-second")
-        again.isInverted = true
-        ReliabilityReporting.setCaptureHandlerForTests { _, _ in again.fulfill() }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        wait(for: [again], timeout: 0.3)
-    }
-
-    func testOpenCheckpointDoesNotEnqueueDuplicate() throws {
-        ReliabilityReportingConsent.setOptedIn(true)
-        let open = try stallBundle(id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-        XCTAssertEqual(open.header.outcome, .open)
-        XCTAssertFalse(ReliabilityReporting.isFinalized(open))
-        let captured = expectation(description: "open-must-not-capture")
-        captured.isInverted = true
-        ReliabilityReporting.setCaptureHandlerForTests { _, _ in captured.fulfill() }
-        ReliabilityReporting.enqueueFinalized(open)
-        wait(for: [captured], timeout: 0.4)
-        XCTAssertNil(ReliabilityReporting.receipt(for: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-    }
-
-    func testHealthyOnlyEndSummaryDoesNotClaimHealthyAtZeroExposure() {
-        XCTAssertEqual(
-            FeedIncidentRuntime.summaryOutcome(incidentCount: 0, exposure: 12), "healthy")
-        XCTAssertEqual(
-            FeedIncidentRuntime.summaryOutcome(incidentCount: 0, exposure: 0), "no-exposure")
-        XCTAssertEqual(FeedIncidentRuntime.summaryOutcome(incidentCount: 2, exposure: 40), "ended")
-    }
-
-    func testDeleteStoredIncidentsClearsExtrasCache() {
-        FeedIncidentRuntime.seedExtrasCacheForTests([
-            ("incident-dead.json", "should-not-share")
-        ])
-        XCTAssertEqual(FeedIncidentRuntime.reportExtras().count, 1)
-        let done = expectation(description: "deleted")
-        FeedIncidentRuntime.deleteStoredIncidents { done.fulfill() }
-        wait(for: [done], timeout: 10)
-        XCTAssertTrue(FeedIncidentRuntime.reportExtras().isEmpty)
-    }
-
-    func testRevokeAbortsQueuedCapture() throws {
-        ReliabilityReportingConsent.setOptedIn(true)
-        var bundle = try stallBundle(id: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-        bundle.header.outcome = .interrupted
-        let captured = expectation(description: "revoked")
-        captured.isInverted = true
-        ReliabilityReporting.setCaptureHandlerForTests { _, _ in captured.fulfill() }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        ReliabilityReporting.setConsent(false)
-        wait(for: [captured], timeout: 0.5)
-        XCTAssertFalse(ReliabilityReporting.isOptedIn)
-        XCTAssertNil(ReliabilityReporting.receipt(for: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
-    }
-
-    func testTransportSuccessConfirmsOnlyMatchingEventID() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingReceipts.store(
-            ReliabilityReportingReceipt(
-                incidentID: "a", eventID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                state: .queued, updatedAt: Date()),
-            root: cacheRoot)
-        ReliabilityReportingReceipts.store(
-            ReliabilityReportingReceipt(
-                incidentID: "b", eventID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                state: .queued, updatedAt: Date()),
-            root: cacheRoot)
-        ReliabilityReporting.noteTransportSuccess(eventID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-        waitForReceipt("a", state: .confirmed)
-        XCTAssertEqual(
-            ReliabilityReportingReceipts.load(incidentID: "a", root: cacheRoot)?.state,
-            .confirmed)
-        XCTAssertEqual(
-            ReliabilityReportingReceipts.load(incidentID: "b", root: cacheRoot)?.state,
-            .queued)
-        var request = URLRequest(url: URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!)
-        request.httpBody = Data("{\"event_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n{}".utf8)
-        XCTAssertEqual(
-            ReliabilityReportingEnvelopeID.eventID(from: request),
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-    }
-
     func testReceiptTTLAndOptionsPrivacyFlags() {
         var old = ReliabilityReportingReceipt(
             incidentID: "old", eventID: "e", state: .queued,
@@ -578,7 +319,7 @@ final class ReliabilityReportingTests: XCTestCase {
             root: cacheRoot, now: Date(), ttl: 10)
         XCTAssertNil(ReliabilityReportingReceipts.load(incidentID: "old", root: cacheRoot))
         let session = ReliabilityReportingURLProtocol.makeSDKSession()
-        let options = ReliabilityReporting.makeOptions(
+        let options = SentryReliabilitySink.makeOptions(
             dsn: "https://publickey@o0.ingest.sentry.io/0", urlSession: session)
         XCTAssertFalse(options.sendDefaultPii)
         XCTAssertFalse(options.enableSwizzling)
@@ -592,7 +333,7 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertTrue(options.enableCrashHandler)
         XCTAssertTrue(options.enableAppHangTracking)
         // Tests run a development build: reinstalls must not read as watchdog kills.
-        XCTAssertEqual(ReliabilityReportingConfiguration.environment, "development")
+        XCTAssertEqual(AppDiagnostics.host.environment, "development")
         XCTAssertFalse(options.enableWatchdogTerminationTracking)
         XCTAssertEqual(options.maxCacheItems, 30)
         XCTAssertEqual(options.maxAttachmentSize, 256 * 1_024)

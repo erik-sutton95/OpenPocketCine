@@ -74,8 +74,8 @@
             if ProcessInfo.processInfo.environment["OPV_CONSENT_REVIEW_ID"] == nil,
                 let defaults = UserDefaults(suiteName: "opc.monitor.presentation.review")
             {
-                ReliabilityReportingConsent.defaults = defaults
-                ReliabilityReportingConsent.setOptedIn(false)
+                AppDiagnostics.consent.defaults = defaults
+                AppDiagnostics.consent.setOptedIn(false)
             }
             model.showsLaunchSplash = false
             model.assist.lutEnabled = false
