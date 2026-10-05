@@ -201,7 +201,12 @@ final class MultiviewUIFlowTests: XCTestCase {
         let recordFrame = app.buttons["multiview.recordAll"].frame
         let displayFrame = app.buttons["multiview.display"].frame
         for _ in 0..<4 {
-            if button.isHittable, !rail.exists || rail.frame.contains(button.frame) { break }
+            if button.isHittable,
+                !rail.exists
+                    || rail.frame.insetBy(dx: 0, dy: -paletteShortfall).contains(button.frame)
+            {
+                break
+            }
             guard rail.exists else { break }
             if button.frame.minY < rail.frame.minY { rail.swipeDown() } else { rail.swipeUp() }
         }
@@ -210,6 +215,10 @@ final class MultiviewUIFlowTests: XCTestCase {
         XCTAssertEqual(app.buttons["multiview.display"].frame, displayFrame)
         return button
     }
+
+    /// The open landscape palette is two cells plus 11 pt tall (MonitorAssistPaletteLayout, as on
+    /// Pocket main): 3 pt short of its rows, so the lower row overruns the rail by that much.
+    private let paletteShortfall: CGFloat = 3
 
     /// Camera settings reuse Live View's trailing gimbal panel geometry.
     private func assertSidePanel() {
