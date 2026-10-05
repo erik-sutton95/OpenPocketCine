@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.ObservePhoneBattery
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
@@ -187,7 +188,7 @@ fun LiveViewScreen(model: AppModel) {
     val verticalPicture by model.session.decoder.isVerticalPicture.collectAsState()
     val hasPicture by model.session.decoder.hasPicture.collectAsState()
 
-    ObservePhoneBattery(model)
+    ObservePhoneBattery { model.applyPhoneBattery(it.percent ?: -1, it.externalPower == true) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(1_000)

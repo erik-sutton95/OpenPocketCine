@@ -61,7 +61,8 @@ class MonitorPreviewActivity : ComponentActivity() {
             // Preview the real layout without reading or changing reporting consent.
             setContent {
                 OpenPocketCineTheme {
-                    com.opencapture.openpocketcine.diagnostics.AutomaticReportsPrompt(
+                    com.opencapture.opencine.appkit.diagnostics.AutomaticReportsPrompt(
+                        product = com.opencapture.openpocketcine.diagnostics.AppDiagnostics.host.product,
                         onPrivacy = {}, onEnable = {}, onNotNow = {},
                     )
                 }
