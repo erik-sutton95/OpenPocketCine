@@ -665,7 +665,7 @@ internal fun LivePortraitStatus(model: AppModel, layout: LiveMonitorLayout, stat
                 Text(portraitStorageLabel(status).substringBefore(" ·"), style = LiveType.mono(13.5f, FontWeight.SemiBold))
             }
         }, link = {
-            com.opencapture.openpocketcine.monitor.MonitorTelemetry(bars, fpsLabel,
+            com.opencapture.monitorui.MonitorTelemetry(bars, fpsLabel,
                 model.phoneBatteryPercent, status.batteryPercent, horizontal = true, showsPower = false)
         }, format = {
                 val setupSheet = CaptureShutterPolicy.portraitSetupSheet(status.shootingMode)
