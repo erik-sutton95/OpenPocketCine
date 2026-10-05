@@ -1,6 +1,8 @@
 @file:androidx.media3.common.util.UnstableApi
 package com.opencapture.openpocketcine.media
 
+import android.graphics.SurfaceTexture
+import android.view.Surface
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
@@ -19,8 +21,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -81,5 +85,57 @@ class PocketPlaybackMetadataAdmissionTest {
                 }
             }
         } finally { scope.cancel() }
+    }
+
+    /** Media3 prepared before the claimed picture has its surface decodes black on Codec2/gfxstream. */
+    @Test fun prepareWaitsForTheClaimedPictureSurface() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val texture = SurfaceTexture(0)
+        val surface = Surface(texture)
+        try {
+            withContext(Dispatchers.Main.immediate) {
+                val token = MonitorPlaybackItemToken(UUID.randomUUID(), 0)
+                var currentItem: MediaItem? = null
+                val calls = mutableListOf<String>()
+                val player = Proxy.newProxyInstance(ExoPlayer::class.java.classLoader,
+                    arrayOf(ExoPlayer::class.java)) { _, method, arguments ->
+                    calls += method.name
+                    when (method.name) {
+                        "getCurrentMediaItem" -> currentItem
+                        "setMediaItem" -> { currentItem = arguments!![0] as MediaItem; null }
+                        else -> null
+                    }
+                } as ExoPlayer
+                val native = Media3PlaybackPort(player, scope)
+                val item = MonitorPlaybackItem(URI("file:///actual.mov"), "video/quicktime", "actual",
+                    MediaRepresentationRole.ORIGINAL)
+                try {
+                    native.retireItem(token)
+                    val first = native.claimPicture()
+                    scope.launch { runCatching { native.prepare(item, token, null) } }
+                    yield()
+                    assertTrue("setMediaItem" in calls)
+                    assertEquals(0, calls.count { it == "prepare" })
+                    native.attachPicture(surface, first)
+                    yield()
+                    assertEquals(1, calls.count { it == "prepare" })
+                    assertTrue(calls.indexOf("setVideoSurface") < calls.indexOf("prepare"))
+
+                    // The next item retires the shown picture; its prepare waits for the successor's surface.
+                    val next = token.copy(revision = 1)
+                    native.retireItem(next)
+                    scope.launch { runCatching { native.prepare(item, next, null) } }
+                    yield()
+                    assertEquals(1, calls.count { it == "prepare" })
+                    val second = native.claimPicture()
+                    yield()
+                    assertEquals(1, calls.count { it == "prepare" })
+                    native.attachPicture(surface, second)
+                    yield()
+                    assertEquals(2, calls.count { it == "prepare" })
+                    assertTrue(calls.lastIndexOf("setVideoSurface") < calls.lastIndexOf("prepare"))
+                } finally { native.close(token) }
+            }
+        } finally { scope.cancel(); surface.release(); texture.release() }
     }
 }
