@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.appkit.diagnostics.ManualProblemReport
+import com.opencapture.opencine.appkit.diagnostics.ManualSubmitResult
 import com.opencapture.opencine.appkit.diagnostics.ManualReportImages
 import com.opencapture.opencine.appkit.diagnostics.ManualReportImageNormalizer
 import android.graphics.BitmapFactory
@@ -71,7 +73,7 @@ internal fun ManualProblemReportDialog(
     onClose: () -> Unit,
     onPrivacy: () -> Unit,
 ) {
-    if (!ManualProblemReport.isConfigured()) {
+    if (!AppDiagnostics.manualReport.isConfigured()) {
         AlertDialog(
             onDismissRequest = onClose,
             title = { Text("Report unavailable", color = LiveDesign.text) },
@@ -88,7 +90,7 @@ internal fun ManualProblemReportDialog(
         )
         return
     }
-    val report by ManualProblemReport.snapshot.collectAsState()
+    val report by AppDiagnostics.manualReport.snapshot.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf("") }
@@ -372,7 +374,7 @@ internal fun ManualProblemReportDialog(
                             return@SettingsActionPill
                         }
                         when (
-                            ManualProblemReport.submit(
+                            AppDiagnostics.manualReport.submit(
                                 message = message,
                                 replyEmail = email,
                                 diagnostics =
@@ -397,7 +399,7 @@ internal fun ManualProblemReportDialog(
                     }
                 } else if (report.allowsDiscard) {
                     SettingsActionPill("Discard") {
-                        ManualProblemReport.discard()
+                        AppDiagnostics.manualReport.discard()
                         onClose()
                     }
                 }

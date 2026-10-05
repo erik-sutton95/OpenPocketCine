@@ -1,17 +1,10 @@
 package com.opencapture.openpocketcine.diagnostics
 
-import com.opencapture.opencine.media.FeedIncidentRecorder
-import com.opencapture.opencine.dji.PrivacyRedactor
-import com.opencapture.opencine.media.FeedIncidentAges
-import com.opencapture.opencine.media.FeedIncidentBundle
-import com.opencapture.opencine.media.FeedIncidentExport
-import com.opencapture.opencine.media.FeedIncidentFailingStage
-import com.opencapture.opencine.media.FeedIncidentKind
-import com.opencapture.opencine.media.FeedIncidentLifecycle
-import com.opencapture.opencine.media.FeedIncidentOutcome
-import com.opencapture.opencine.media.FeedIncidentRates
-import com.opencapture.opencine.media.FeedIncidentSessionContext
-import com.opencapture.opencine.media.FeedIncidentSnapshot
+import com.opencapture.opencine.appkit.diagnostics.ReliabilityEvent
+import com.opencapture.opencine.appkit.diagnostics.ReliabilityEventLevel
+import com.opencapture.opencine.appkit.diagnostics.ReliabilityReportingReceipts
+import com.opencapture.opencine.appkit.diagnostics.ReliabilityReportingReceipt
+import com.opencapture.opencine.appkit.diagnostics.ReliabilityReportingReceiptState
 import com.opencapture.opencine.media.FeedIncidentTestSource
 import io.sentry.Breadcrumb
 import io.sentry.SentryEvent
@@ -20,7 +13,6 @@ import io.sentry.protocol.Request
 import io.sentry.protocol.SentryException
 import io.sentry.protocol.User
 import java.io.File
-import java.net.URL
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -31,6 +23,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ReliabilityReportingTest {
+    private val consent = AppDiagnostics.consent
+    private val dsn = AppDiagnostics.dsn
+    private val gate = AppDiagnostics.gate
+    private val origin = AppDiagnostics.origin
+    private val reporting = AppDiagnostics.reporting
     private lateinit var cacheRoot: File
 
     companion object {
@@ -41,234 +38,22 @@ class ReliabilityReportingTest {
     fun setUp() {
         cacheRoot = File(System.getProperty("java.io.tmpdir"), "opc-rel-${System.nanoTime()}")
         cacheRoot.mkdirs()
-        ReliabilityReporting.sdkCacheRoot = cacheRoot
-        ReliabilityReportingConsent.resetForTests()
-        ReliabilityReportingDSN.buildDsn = null
-        ReliabilityReportingDSN.environment = emptyMap()
-        ReliabilityReporting.setCaptureHandlerForTests(null)
-        ReliabilityReportingGate.resetForTests()
-        ReliabilityReporting.dsnHost = "o0.ingest.sentry.io"
+        reporting.sdkCacheRoot = cacheRoot
+        consent.resetForTests()
+        dsn.buildDsn = null
+        dsn.environment = emptyMap()
+        reporting.setCaptureHandlerForTests(null)
+        gate.resetForTests()
+        reporting.dsnHost = "o0.ingest.sentry.io"
     }
 
     @AfterTest
     fun tearDown() {
-        ReliabilityReporting.setCaptureHandlerForTests(null)
-        ReliabilityReportingConsent.resetForTests()
-        ReliabilityReportingGate.resetForTests()
-        FeedIncidentOrigin.resetForTests()
+        reporting.setCaptureHandlerForTests(null)
+        consent.resetForTests()
+        gate.resetForTests()
+        origin.resetForTests()
         cacheRoot.deleteRecursively()
-    }
-
-    @Test
-    fun onlyExhaustedIncidentsAreErrors() {
-        assertEquals(SentryLevel.ERROR, ReliabilityReporting.level("exhausted"))
-        assertEquals(SentryLevel.WARNING, ReliabilityReporting.level("interrupted"))
-        assertEquals(SentryLevel.INFO, ReliabilityReporting.level("recovered"))
-        assertEquals(SentryLevel.INFO, ReliabilityReporting.level("suppressed"))
-    }
-
-    @Test
-    fun consentDefaultsOffAndRevokePurgesOnlySdkOwnedSpool() {
-        assertFalse(ReliabilityReportingConsent.isOptedIn)
-        assertFalse(ReliabilityReporting.isOptedIn)
-        ReliabilityReportingConsent.setOptedIn(true)
-        assertTrue(ReliabilityReporting.isOptedIn)
-        val localDir = File(System.getProperty("java.io.tmpdir"), "opc-local-${System.nanoTime()}")
-        localDir.mkdirs()
-        val local = File(localDir, "incident-keep.json")
-        local.writeText("keep")
-        ReliabilityReportingReceipts.store(
-            ReliabilityReportingReceipt(
-                incidentID = "inc-1",
-                eventID = "abc",
-                state = ReliabilityReportingReceiptState.QUEUED,
-                updatedAt = System.currentTimeMillis(),
-            ),
-            cacheRoot,
-        )
-        assertNotNull(ReliabilityReportingReceipts.load("inc-1", cacheRoot))
-        ReliabilityReporting.setConsent(false)
-        assertFalse(ReliabilityReporting.isOptedIn)
-        waitUntil { ReliabilityReportingReceipts.load("inc-1", cacheRoot) == null }
-        assertNull(ReliabilityReportingReceipts.load("inc-1", cacheRoot))
-        assertTrue(local.isFile)
-        localDir.deleteRecursively()
-    }
-
-    @Test
-    fun dsnRequiresHttpsSentryShape() {
-        assertNull(ReliabilityReportingDSN.validated(""))
-        assertNull(ReliabilityReportingDSN.validated("http://key@host/1"))
-        assertNull(ReliabilityReportingDSN.validated("https://ingest.sentry.io/1"))
-        assertNull(ReliabilityReportingDSN.validated("https://key:secret@ingest.sentry.io/1"))
-        assertNull(ReliabilityReportingDSN.validated("https://key@ingest.sentry.io/1?token=value"))
-        assertNull(ReliabilityReportingDSN.validated("https://key@ingest.sentry.io/1#frag"))
-        assertNull(ReliabilityReportingDSN.validated("https://key@ingest.sentry.io/not-a-project"))
-        assertNotNull(ReliabilityReportingDSN.validated("https://publickey@o0.ingest.sentry.io/0"))
-        ReliabilityReportingDSN.buildDsn = ""
-        assertFalse(ReliabilityReportingDSN.isAvailable)
-        ReliabilityReportingDSN.buildDsn = "https://publickey@o0.ingest.sentry.io/0"
-        assertTrue(ReliabilityReportingDSN.isAvailable)
-    }
-
-    @Test
-    fun cameraGateBlocksEvenWithInternetAndCancelsPending() {
-        val fake = FakeTask()
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.setValidInternetForTests(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        ReliabilityReportingGate.setCameraSessionActive(false)
-        ReliabilityReportingGate.register(fake)
-        assertFalse(ReliabilityReportingGate.shouldBlockUpload)
-        assertTrue(ReliabilityReportingGate.isConnected)
-        ReliabilityReportingGate.setCameraSessionActive(true)
-        assertTrue(ReliabilityReportingGate.shouldBlockUpload)
-        assertFalse(ReliabilityReportingGate.isConnected)
-        assertTrue(fake.cancelled)
-        ReliabilityReportingGate.setCameraSessionActive(false)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(true)
-        assertTrue(ReliabilityReportingGate.shouldBlockUpload)
-        assertFalse(ReliabilityReportingGate.isConnected)
-    }
-
-    @Test
-    fun manualRegisterSurvivesMissingConsentAndConsentRevoke() {
-        val fake = object : ReliabilityReportingCancellable {
-            var cancelled = false
-            override val independentOfAutomaticConsent = true
-            override fun cancel() {
-                cancelled = true
-            }
-        }
-        ReliabilityReportingConsent.setOptedIn(false)
-        ReliabilityReportingGate.setValidInternetForTests(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        ReliabilityReportingGate.setCameraSessionActive(false)
-        ReliabilityReportingGate.register(fake)
-        assertFalse(fake.cancelled)
-        ReliabilityReportingGate.cancelPending(includeIndependent = false)
-        assertFalse(fake.cancelled)
-        ReliabilityReportingGate.setCameraSessionActive(true)
-        assertTrue(fake.cancelled)
-    }
-
-    @Test
-    fun automaticPromptIsOffUntilConfiguredAndUndecided() {
-        ReliabilityReportingDSN.buildDsn = null
-        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
-        ReliabilityReportingDSN.buildDsn = "https://publickey@o0.ingest.sentry.io/0"
-        assertTrue(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
-        ReliabilityReportingConsent.setOptedIn(true)
-        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
-        ReliabilityReportingConsent.resetForTests()
-        ReliabilityReportingDSN.buildDsn = "https://publickey@o0.ingest.sentry.io/0"
-        ReliabilityReportingConsent.setOptedIn(false)
-        assertFalse(ReliabilityReportingConsent.shouldOfferAutomaticPrompt())
-        assertFalse(ReliabilityReportingConsent.isOptedIn)
-        assertTrue(ReliabilityReportingConsent.hasDecision)
-    }
-
-    @Test
-    fun persistedChoiceRestoresWithoutRepromptingOrWritingUnasked() {
-        data class Case(
-            val name: String,
-            val dsn: String?,
-            val choice: Boolean?,
-            val hasDecision: Boolean,
-            val optedIn: Boolean?,
-            val offersPrompt: Boolean,
-        )
-        val cases =
-            listOf(
-                Case("absent choice offers prompt when configured without writing", CONFIGURED_DSN, null,
-                    hasDecision = false, optedIn = false, offersPrompt = true),
-                Case("unavailable destination does not mark asked on absent choice", null, null,
-                    hasDecision = false, optedIn = null, offersPrompt = false),
-                Case("explicit decline persists across restore and does not reprompt", CONFIGURED_DSN, false,
-                    hasDecision = true, optedIn = false, offersPrompt = false),
-                Case("explicit accept persists across restore and does not reprompt", CONFIGURED_DSN, true,
-                    hasDecision = true, optedIn = true, offersPrompt = false),
-            )
-        for (case in cases) {
-            ReliabilityReportingConsent.resetForTests()
-            val stored = mutableMapOf<String, Boolean>()
-            ReliabilityReportingDSN.buildDsn = case.dsn
-            ReliabilityReportingConsent.restorePersistedChoice(
-                hasChoice = false,
-                persist = { stored[ReliabilityReportingConsent.KEY] = it },
-            )
-            val choice = case.choice
-            if (choice == null) {
-                assertTrue(stored.isEmpty(), case.name)
-            } else {
-                ReliabilityReportingConsent.setOptedIn(choice)
-                assertEquals(choice, stored[ReliabilityReportingConsent.KEY], case.name)
-                ReliabilityReportingConsent.resetForTests()
-                ReliabilityReportingConsent.restorePersistedChoice(
-                    hasChoice = stored.contains(ReliabilityReportingConsent.KEY),
-                    optedIn = stored[ReliabilityReportingConsent.KEY] == true,
-                    persist = { stored[ReliabilityReportingConsent.KEY] = it },
-                )
-            }
-            assertEquals(case.hasDecision, ReliabilityReportingConsent.hasDecision, case.name)
-            case.optedIn?.let { assertEquals(it, ReliabilityReportingConsent.isOptedIn, case.name) }
-            assertEquals(case.offersPrompt, ReliabilityReportingConsent.shouldOfferAutomaticPrompt(), case.name)
-        }
-    }
-
-    @Test
-    fun hostIsolationRejectsNonDsnHosts() {
-        val dsnHost = "o0.ingest.sentry.io"
-        val allowed = URL("https://o0.ingest.sentry.io/api/0/envelope/")
-        val other = URL("https://example.com/ingest")
-        assertTrue(ReliabilityReportingHostPolicy.allows(allowed, dsnHost))
-        assertFalse(ReliabilityReportingHostPolicy.allows(other, dsnHost))
-        assertEquals(
-            ReliabilityReportingLoadDecision.REJECT_HOST,
-            ReliabilityReportingNetwork.decision(other, dsnHost),
-        )
-        ReliabilityReportingGate.setCameraSessionActive(true)
-        assertEquals(
-            ReliabilityReportingLoadDecision.BLOCK_CAMERA_PATH,
-            ReliabilityReportingNetwork.decision(allowed, dsnHost),
-        )
-    }
-
-    @Test
-    fun revokedConsentDisconnectsTransportGate() {
-        ReliabilityReportingConsent.setOptedIn(false)
-        ReliabilityReportingGate.setCameraSessionActive(false)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        ReliabilityReportingGate.setValidInternetForTests(true)
-        assertFalse(ReliabilityReportingGate.isConnected)
-        ReliabilityReportingConsent.setOptedIn(true)
-        assertTrue(ReliabilityReportingGate.isConnected)
-    }
-
-    @Test
-    fun eventIdAndFingerprintAreStable() {
-        val id = "12c2d058-d584-4270-9aa2-eca08bf20986"
-        val first = ReliabilityReportingPrivacy.eventId(id)
-        val second = ReliabilityReportingPrivacy.eventId(id)
-        assertEquals(first.toString(), second.toString())
-        assertEquals("12c2d058d58442709aa2eca08bf20986", first.toString())
-        val prints =
-            ReliabilityReportingPrivacy.fingerprint(
-                schema = 1,
-                kind = "freshInputStaleOutput",
-                stage = "decodedOutput",
-                errorClass = "invalidSession",
-            )
-        assertEquals(
-            listOf(
-                "feed-incident",
-                "schema:1",
-                "kind:freshInputStaleOutput",
-                "stage:decodedOutput",
-                "errorClass:invalidSession",
-            ),
-            prints,
-        )
     }
 
     @Test
@@ -280,7 +65,7 @@ class ReliabilityReportingTest {
         scene.setData("sceneState", "Erik")
         scene.setData("assistState", "private_project")
         event.breadcrumbs = mutableListOf(scene)
-        ReliabilityReportingPrivacy.scrub(event)
+        reporting.privacy.scrub(event)
         assertEquals(1, event.breadcrumbs?.size)
         assertNull(event.breadcrumbs?.first()?.data?.get("sceneState"))
         assertNull(event.breadcrumbs?.first()?.data?.get("assistState"))
@@ -288,15 +73,15 @@ class ReliabilityReportingTest {
 
     @Test
     fun scrubDoesNotStampCurrentOriginOntoLegacyEvents() {
-        FeedIncidentOrigin.overrideTestSourceForTests = FeedIncidentTestSource.VERIFICATION
+        origin.overrideTestSourceForTests = FeedIncidentTestSource.VERIFICATION
         val event = SentryEvent()
         event.level = SentryLevel.FATAL
         event.setTag("failingStage", "decodedOutput")
-        ReliabilityReportingPrivacy.scrub(event)
+        reporting.privacy.scrub(event)
         assertNull(event.tags?.get("testSource"))
         event.setTag("testSource", "manual")
         event.setTag("buildIdentity", "android-priorrun0123456789abcdef")
-        ReliabilityReportingPrivacy.scrub(event)
+        reporting.privacy.scrub(event)
         assertEquals("manual", event.tags?.get("testSource"))
         assertEquals("android-priorrun0123456789abcdef", event.tags?.get("buildIdentity"))
     }
@@ -322,7 +107,7 @@ class ReliabilityReportingTest {
         arbitrary.category = "feed"
         arbitrary.message = "arbitrary operator text"
         event.breadcrumbs = mutableListOf(typed, scene, repair, arbitrary, Breadcrumb())
-        ReliabilityReportingPrivacy.scrub(event)
+        reporting.privacy.scrub(event)
         assertEquals(3, event.breadcrumbs?.size)
         assertEquals("settingsEnter", event.breadcrumbs?.get(0)?.message)
         assertTrue(event.breadcrumbs?.get(0)?.data.isNullOrEmpty())
@@ -355,7 +140,7 @@ class ReliabilityReportingTest {
         exception.value = "/" + "Users/example/Library/crash"
         exception.type = "RuntimeException"
         event.exceptions = mutableListOf(exception)
-        ReliabilityReportingPrivacy.scrub(event)
+        reporting.privacy.scrub(event)
         assertNull(event.user)
         assertNull(event.request)
         assertTrue(event.breadcrumbs.isNullOrEmpty())
@@ -372,204 +157,14 @@ class ReliabilityReportingTest {
         assertNull(feed?.get("serial"))
         assertFalse(event.exceptions?.first()?.value?.contains("example/Library") == true)
         event.setTag("sourceRevision", "a".repeat(40))
-        ReliabilityReportingPrivacy.scrub(event)
+        reporting.privacy.scrub(event)
         assertEquals("a".repeat(40), event.tags?.get("sourceRevision"))
-    }
-
-    @Test
-    fun queuedIncidentKeepsOriginalReleaseAndOccurrenceTime() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        ReliabilityReportingGate.setCameraSessionActive(false)
-        val bundle = stallBundle("12121212121212121212121212121212")
-        bundle.header.appVersion = "0.1.0"
-        bundle.header.appBuild = "107"
-        bundle.header.sourceRevision = "a".repeat(40)
-        bundle.header.testSource = FeedIncidentTestSource.FAULT_INJECTION
-        bundle.header.buildIdentity = "android-0123456789abcdef0123456789ab"
-        bundle.header.kind = FeedIncidentKind.TRANSPORT_STALL
-        bundle.header.startedAtWallClockMs = 1_780_000_000_000L
-        FeedIncidentOrigin.overrideTestSourceForTests = FeedIncidentTestSource.VERIFICATION
-        FeedIncidentOrigin.overrideBuildIdentityForTests = "android-current-run-identity-value"
-        var captured = false
-        ReliabilityReporting.setCaptureHandlerForTests { event, _ ->
-            captured = true
-            assertEquals("com.opencapture.openpocketcine@0.1.0+107", event.release)
-            assertEquals("107", event.dist)
-            assertEquals(java.util.Date(1_780_000_000_000L), event.timestamp)
-            assertEquals("a".repeat(40), event.tags?.get("sourceRevision"))
-            assertEquals("faultInjection", event.tags?.get("testSource"))
-            assertEquals("android-0123456789abcdef0123456789ab", event.tags?.get("buildIdentity"))
-            assertTrue(event.fingerprints?.contains("kind:transportStall") == true)
-            assertTrue(event.tags?.get("testSource") != "verification")
-        }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        waitUntil { captured }
-        assertTrue(captured)
-    }
-
-    @Test
-    fun queuedReplayOriginSurvivesJsonReloadAndCurrentRunOverride() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        ReliabilityReportingGate.setCameraSessionActive(false)
-        val original = stallBundle("14141414141414141414141414141414")
-        original.header.testSource = FeedIncidentTestSource.FAULT_INJECTION
-        original.header.buildIdentity = "android-queuedorigin0123456789abcd"
-        original.header.kind = FeedIncidentKind.TRANSPORT_STALL
-        val encoded = FeedIncidentJson.encode(original)
-        val json = org.json.JSONObject(String(encoded, Charsets.UTF_8))
-        json.getJSONObject("header").remove("testSource")
-        json.getJSONObject("header").remove("buildIdentity")
-        val legacy = FeedIncidentJson.decode(json.toString().toByteArray(Charsets.UTF_8))
-        assertNotNull(legacy)
-        assertEquals(FeedIncidentTestSource.UNKNOWN, legacy.header.testSource)
-        assertEquals("unknown", legacy.header.buildIdentity)
-        val restored = FeedIncidentJson.decode(encoded)
-        assertNotNull(restored)
-        FeedIncidentOrigin.overrideTestSourceForTests = FeedIncidentTestSource.VERIFICATION
-        FeedIncidentOrigin.overrideBuildIdentityForTests = "android-current-run-identity-value"
-        var captured = false
-        ReliabilityReporting.setCaptureHandlerForTests { event, _ ->
-            captured = true
-            assertEquals("faultInjection", event.tags?.get("testSource"))
-            assertEquals("android-queuedorigin0123456789abcd", event.tags?.get("buildIdentity"))
-            assertTrue(event.fingerprints?.contains("kind:transportStall") == true)
-            assertTrue(event.tags?.get("testSource") != "verification")
-        }
-        ReliabilityReporting.enqueueFinalized(restored)
-        waitUntil { captured }
-        assertTrue(captured)
-    }
-
-    @Test
-    fun queuedReceiptOlderThanFiveMinutesCanRetry() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        ReliabilityReportingGate.setCameraSessionActive(false)
-        val id = "13131313131313131313131313131313"
-        ReliabilityReportingReceipts.store(
-            ReliabilityReportingReceipt(
-                incidentID = id,
-                eventID = id,
-                state = ReliabilityReportingReceiptState.QUEUED,
-                updatedAt = System.currentTimeMillis() - 301_000L,
-            ),
-            cacheRoot,
-        )
-        var captured = 0
-        ReliabilityReporting.setCaptureHandlerForTests { _, _ -> captured += 1 }
-        ReliabilityReporting.enqueueFinalized(stallBundle(id))
-        waitUntil { captured == 1 }
-        assertEquals(1, captured)
-    }
-
-    @Test
-    fun captureEnqueueIsQueuedNotDeliveredAndDedupsConfirmed() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        ReliabilityReportingGate.setCameraSessionActive(false)
-        val bundle = stallBundle("12c2d058d58442709aa2eca08bf20986")
-        var captured = 0
-        ReliabilityReporting.setCaptureHandlerForTests { event, data ->
-            captured += 1
-            assertEquals("12c2d058d58442709aa2eca08bf20986", event.eventId.toString())
-            assertEquals("feed-incident", event.fingerprints?.first())
-            assertTrue(event.fingerprints?.contains("kind:freshInputStaleOutput") == true)
-            assertNull(event.user)
-            val text = String(data, Charsets.UTF_8)
-            assertTrue(text.contains("prelude"))
-            assertFalse(text.contains("control-live.log"))
-        }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        waitForReceipt("12c2d058d58442709aa2eca08bf20986", ReliabilityReportingReceiptState.QUEUED)
-        assertEquals(1, captured)
-        ReliabilityReporting.noteTransportSuccess("12c2d058d58442709aa2eca08bf20986")
-        waitForReceipt("12c2d058d58442709aa2eca08bf20986", ReliabilityReportingReceiptState.CONFIRMED)
-        ReliabilityReporting.setCaptureHandlerForTests { _, _ -> captured += 1 }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        Thread.sleep(300)
-        assertEquals(1, captured)
-    }
-
-    @Test
-    fun openCheckpointDoesNotEnqueue() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        val open = stallBundle("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", outcome = FeedIncidentOutcome.OPEN)
-        assertFalse(ReliabilityReporting.isFinalized(open))
-        var captured = false
-        ReliabilityReporting.setCaptureHandlerForTests { _, _ -> captured = true }
-        ReliabilityReporting.enqueueFinalized(open)
-        Thread.sleep(400)
-        assertFalse(captured)
-        assertNull(ReliabilityReporting.receipt("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-    }
-
-    @Test
-    fun cameraPathDoesNotEnqueueWhileBlocked() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.setCameraSessionActive(true)
-        val bundle = stallBundle("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-        var captured = false
-        ReliabilityReporting.setCaptureHandlerForTests { _, _ -> captured = true }
-        ReliabilityReporting.enqueueFinalized(bundle)
-        Thread.sleep(400)
-        assertFalse(captured)
-        assertNull(ReliabilityReporting.receipt("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
-    }
-
-    @Test
-    fun vendorEnvelopeMapsStageAndErrorClass() {
-        val bundle = stallBundle("cccccccccccccccccccccccccccccccc")
-        bundle.header.failingStage = FeedIncidentFailingStage.DECODED_OUTPUT
-        bundle.header.errorClass = "invalidSession"
-        val envelope = ReliabilityReportingPrivacy.validatedEnvelope(bundle)
-        assertNotNull(envelope)
-        assertEquals("feed.incident", envelope.eventName)
-        assertEquals(1, envelope.schemaVersion)
-        assertEquals("decodedOutput", envelope.grouping.failingStage)
-        assertEquals("invalidSession", envelope.grouping.errorClass)
-        assertEquals(
-            listOf(
-                "feed-incident",
-                "schema:1",
-                "kind:freshInputStaleOutput",
-                "stage:decodedOutput",
-                "errorClass:invalidSession",
-            ),
-            ReliabilityReportingPrivacy.fingerprint(
-                envelope.schemaVersion,
-                envelope.kind,
-                envelope.grouping.failingStage,
-                envelope.grouping.errorClass,
-            ),
-        )
-        val json = ReliabilityReportingPrivacy.typedJson(bundle)
-        assertNotNull(json)
-        assertTrue(json.size <= 262_144)
-    }
-
-    @Test
-    fun unknownStageIsRejected() {
-        val bundle = stallBundle("dddddddddddddddddddddddddddddddd")
-        bundle.header.failingStage = FeedIncidentFailingStage.PACKET
-        val envelope = FeedIncidentExport.envelope(bundle)
-        assertTrue(FeedIncidentFailingStage.isKnown(envelope.grouping.failingStage))
-        assertFalse(FeedIncidentFailingStage.isKnown("not-a-stage"))
-        assertNull(
-            ReliabilityReportingPrivacy.validatedEnvelope(
-                bundle.copy(
-                    header = bundle.header.copy(incidentId = "unknown"),
-                ),
-            ),
-        )
     }
 
     @Test
     fun optionsDisableScreenshotsReplayProfilingAndPii() {
         val options =
-            ReliabilityReporting.makeOptions("https://publickey@o0.ingest.sentry.io/0")
+            makeOptions("https://publickey@o0.ingest.sentry.io/0", reporting)
         assertFalse(options.isSendDefaultPii)
         assertFalse(options.isAttachScreenshot)
         assertFalse(options.isAttachViewHierarchy)
@@ -590,23 +185,16 @@ class ReliabilityReportingTest {
     }
 
     @Test
-    fun sessionSummaryDoesNotClaimHealthyAtZeroExposure() {
-        assertEquals("healthy", FeedIncidentRuntime.summaryOutcome(0, 12.0))
-        assertEquals("no-exposure", FeedIncidentRuntime.summaryOutcome(0, 0.0))
-        assertEquals("ended", FeedIncidentRuntime.summaryOutcome(2, 40.0))
-    }
-
-    @Test
     fun httpSuccessConfirmsQueuedReceiptAndCameraCancelKeepsItQueued() {
         val server = okhttp3.mockwebserver.MockWebServer()
         server.start()
         try {
-            ReliabilityReportingConsent.setOptedIn(true)
-            ReliabilityReportingHostPolicy.requireHttps = false
-            ReliabilityReporting.dsnHost = server.hostName
-            ReliabilityReportingGate.setCameraSessionActive(false)
-            ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-            ReliabilityReportingGate.setValidInternetForTests(true)
+            consent.setOptedIn(true)
+            gate.hostPolicy.requireHttps = false
+            reporting.dsnHost = server.hostName
+            gate.setCameraSessionActive(false)
+            gate.setCameraIPv4PathReadyForTests(false)
+            gate.setValidInternetForTests(true)
             val options = io.sentry.SentryOptions()
             options.dsn = "http://key@${server.hostName}/1"
             val details =
@@ -625,7 +213,7 @@ class ReliabilityReportingTest {
                 cacheRoot,
             )
             server.enqueue(okhttp3.mockwebserver.MockResponse().setResponseCode(200).setBody("{}"))
-            val transport = ReliabilityReportingTransport(options, details)
+            val transport = ReliabilityReportingTransport(reporting, options, details)
             transport.send(envelopeWithId(options, eventId), io.sentry.Hint())
             val recorded = server.takeRequest(3, java.util.concurrent.TimeUnit.SECONDS)
             assertNotNull(recorded)
@@ -653,10 +241,10 @@ class ReliabilityReportingTest {
                         return okhttp3.mockwebserver.MockResponse().setResponseCode(200).setBody("{}")
                     }
                 }
-            val slow = ReliabilityReportingTransport(options, details)
+            val slow = ReliabilityReportingTransport(reporting, options, details)
             slow.send(envelopeWithId(options, blockedId), io.sentry.Hint())
             Thread.sleep(80)
-            ReliabilityReporting.setCameraSessionActive(true)
+            reporting.setCameraSessionActive(true)
             Thread.sleep(400)
             assertEquals(
                 ReliabilityReportingReceiptState.QUEUED,
@@ -665,7 +253,7 @@ class ReliabilityReportingTest {
             slow.close()
         } finally {
             server.shutdown()
-            ReliabilityReportingHostPolicy.requireHttps = true
+            gate.hostPolicy.requireHttps = true
         }
     }
 
@@ -673,31 +261,6 @@ class ReliabilityReportingTest {
         val event = SentryEvent()
         event.eventId = io.sentry.protocol.SentryId(hex)
         return io.sentry.SentryEnvelope.from(options.serializer, event, null)
-    }
-
-    @Test
-    fun backoffGrowsWithJitterBound() {
-        val first = ReliabilityReportingBackoff.delaySeconds(0, 0.0)
-        val later = ReliabilityReportingBackoff.delaySeconds(5, 1.0)
-        assertTrue(later > first)
-        assertTrue(later <= 30.0)
-    }
-
-    @Test
-    fun immediateConfirmationIsNotOverwrittenByQueuedReceipt() {
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.setCameraIPv4PathReadyForTests(false)
-        val id = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-        ReliabilityReporting.setCaptureHandlerForTests { event, _ ->
-            ReliabilityReporting.noteTransportSuccess(event.eventId.toString())
-        }
-        ReliabilityReporting.enqueueFinalized(stallBundle(id))
-        waitForReceipt(id, ReliabilityReportingReceiptState.CONFIRMED)
-    }
-
-    private fun waitForReceipt(id: String, state: ReliabilityReportingReceiptState) {
-        waitUntil { ReliabilityReporting.receipt(id)?.state == state }
-        assertEquals(state, ReliabilityReporting.receipt(id)?.state)
     }
 
     // Returns as soon as the predicate holds; the ceiling only matters on a loaded CI runner.
@@ -709,74 +272,40 @@ class ReliabilityReportingTest {
         }
     }
 
-    private fun stallBundle(
-        id: String,
-        outcome: FeedIncidentOutcome = FeedIncidentOutcome.RECOVERED,
-    ): FeedIncidentBundle {
-        val recorder = FeedIncidentRecorder(PrivacyRedactor::redact) { id }
-        recorder.beginSession(
-            FeedIncidentSessionContext(
-                sessionId = "session-1",
-                appVersion = "0.1.0",
-                appBuild = "2",
-                sourceRevision = "test",
-                osName = "Android",
-                osVersion = "16",
-                hardwareClass = "Pixel",
-                cameraFamily = "pocket",
-            ),
-        )
-        recorder.recordSnapshot(healthy(1.0))
-        recorder.recordSnapshot(staleOutput(3.0))
-        val recovered = recorder.recordSnapshot(healthy(4.0))
-        val bundle = recovered?.bundle ?: error("expected recovered bundle")
-        bundle.header.outcome = outcome
-        return bundle
-    }
-
-    private fun healthy(monotonic: Double) =
-        FeedIncidentSnapshot(
-            monotonicNow = monotonic,
-            wallClockMs = 1_000L + (monotonic * 1000).toLong(),
-            rates =
-                FeedIncidentRates(
-                    packetHz = 25.0,
-                    accessUnitHz = 25.0,
-                    decodedOutputHz = 25.0,
-                    presentHz = 25.0,
-                ),
-            ages =
-                FeedIncidentAges(
-                    packetAge = 0.04,
-                    accessUnitAge = 0.04,
-                    decodedOutputAge = 0.04,
-                    presentAge = 0.04,
-                ),
-            lifecycle = FeedIncidentLifecycle(connected = true, liveEstablished = true),
-        )
-
-    private fun staleOutput(monotonic: Double) =
-        healthy(monotonic).copy(
-            rates =
-                FeedIncidentRates(
-                    packetHz = 25.0,
-                    accessUnitHz = 25.0,
-                    decodeSubmitHz = 25.0,
-                    decodedOutputHz = 0.0,
-                ),
-            ages =
-                FeedIncidentAges(
-                    packetAge = 0.04,
-                    accessUnitAge = 0.04,
-                    decodedOutputAge = 5.0,
-                    presentAge = 5.0,
-                ),
-        )
-
-    private class FakeTask : ReliabilityReportingCancellable {
-        var cancelled = false
-        override fun cancel() {
-            cancelled = true
-        }
+    @Test
+    fun typedEventKeepsItsPayloadAsASentryEvent() {
+        val event =
+            ReliabilityEvent(
+                eventId = "12c2d058d58442709aa2eca08bf20986",
+                level = ReliabilityEventLevel.WARNING,
+                timestampMs = 1_780_000_000_000L,
+                release = AppDiagnostics.host.release("0.1.0", "107"),
+                dist = "107",
+                message = "feed incident decodedOutput",
+                fingerprints = listOf("feed-incident", "schema:1", "kind:transportStall"),
+                tags = mapOf("failingStage" to "decodedOutput", "testSource" to "faultInjection"),
+                extras = mapOf("schemaVersion" to 1, "worstGapSeconds" to 2.5),
+                contexts = mapOf("feed" to mapOf("kind" to "transportStall", "schemaVersion" to 1)),
+            )
+        val sentry = event.toSentryEvent()
+        assertEquals(SentryLevel.WARNING, sentry.level)
+        assertEquals("12c2d058d58442709aa2eca08bf20986", sentry.eventId.toString())
+        assertEquals(java.util.Date(1_780_000_000_000L), sentry.timestamp)
+        assertEquals("com.opencapture.openpocketcine@0.1.0+107", sentry.release)
+        assertEquals("107", sentry.dist)
+        assertEquals("feed incident decodedOutput", sentry.message?.formatted)
+        assertEquals(event.fingerprints, sentry.fingerprints)
+        assertEquals(event.tags, sentry.tags)
+        assertEquals(event.extras, sentry.extras)
+        assertEquals(event.contexts["feed"], sentry.contexts["feed"])
+        assertNull(sentry.user)
+        assertNull(sentry.request)
+        assertTrue(sentry.breadcrumbs.isNullOrEmpty())
+        // The SDK's beforeSend scrub keeps an event the shared rules already scrubbed.
+        reporting.privacy.scrub(sentry)
+        assertEquals("feed incident decodedOutput", sentry.message?.formatted)
+        assertEquals(event.tags, sentry.tags)
+        assertEquals(event.extras, sentry.extras)
+        assertEquals(event.contexts["feed"], sentry.contexts["feed"])
     }
 }

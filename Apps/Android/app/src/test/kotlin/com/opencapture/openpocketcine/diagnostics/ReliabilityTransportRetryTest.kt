@@ -47,13 +47,13 @@ class ReliabilityTransportRetryTest {
         val cache = Cache()
         val options = SentryOptions().apply { setEnvelopeDiskCache(cache) }
         val details = RequestDetails(server.url("/envelope/").toString(), emptyMap())
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.resetForTests()
-        ReliabilityReportingHostPolicy.requireHttps = false
-        ReliabilityReporting.dsnHost = server.hostName
-        var transport = ReliabilityReportingTransport(options, details)
+        AppDiagnostics.consent.setOptedIn(true)
+        AppDiagnostics.gate.resetForTests()
+        AppDiagnostics.gate.hostPolicy.requireHttps = false
+        AppDiagnostics.reporting.dsnHost = server.hostName
+        var transport = ReliabilityReportingTransport(AppDiagnostics.reporting, options, details)
         try {
-            ReliabilityReportingGate.setCameraSessionActive(true)
+            AppDiagnostics.gate.setCameraSessionActive(true)
             val event = SentryEvent().apply {
                 eventId = SentryId("98989898989898989898989898989898")
             }
@@ -66,9 +66,9 @@ class ReliabilityTransportRetryTest {
             assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
             assertEquals(1, cache.entries.size)
             transport.close()
-            transport = ReliabilityReportingTransport(options, details)
+            transport = ReliabilityReportingTransport(AppDiagnostics.reporting, options, details)
             server.enqueue(MockResponse().setResponseCode(200))
-            ReliabilityReportingGate.setCameraSessionActive(false)
+            AppDiagnostics.gate.setCameraSessionActive(false)
             transport.flush(2000)
             assertNotNull(server.takeRequest(1, TimeUnit.SECONDS))
             assertTrue(cache.entries.isEmpty())
@@ -77,8 +77,8 @@ class ReliabilityTransportRetryTest {
         } finally {
             transport.close()
             server.shutdown()
-            ReliabilityReportingConsent.resetForTests()
-            ReliabilityReportingGate.resetForTests()
+            AppDiagnostics.consent.resetForTests()
+            AppDiagnostics.gate.resetForTests()
         }
     }
 
@@ -89,11 +89,11 @@ class ReliabilityTransportRetryTest {
         val cache = Cache()
         val options = SentryOptions().apply { setEnvelopeDiskCache(cache) }
         val details = RequestDetails(server.url("/envelope/").toString(), emptyMap())
-        ReliabilityReportingConsent.setOptedIn(true)
-        ReliabilityReportingGate.resetForTests()
-        ReliabilityReportingHostPolicy.requireHttps = false
-        ReliabilityReporting.dsnHost = server.hostName
-        val transport = ReliabilityReportingTransport(options, details)
+        AppDiagnostics.consent.setOptedIn(true)
+        AppDiagnostics.gate.resetForTests()
+        AppDiagnostics.gate.hostPolicy.requireHttps = false
+        AppDiagnostics.reporting.dsnHost = server.hostName
+        val transport = ReliabilityReportingTransport(AppDiagnostics.reporting, options, details)
         try {
             server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "60"))
             val event = SentryEvent().apply {
@@ -108,8 +108,8 @@ class ReliabilityTransportRetryTest {
         } finally {
             transport.close()
             server.shutdown()
-            ReliabilityReportingConsent.resetForTests()
-            ReliabilityReportingGate.resetForTests()
+            AppDiagnostics.consent.resetForTests()
+            AppDiagnostics.gate.resetForTests()
         }
     }
 }
