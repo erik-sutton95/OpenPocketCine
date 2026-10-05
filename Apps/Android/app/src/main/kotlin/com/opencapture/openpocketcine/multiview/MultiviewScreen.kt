@@ -69,6 +69,7 @@ import com.opencapture.openpocketcine.LiveViewScreen
 import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 import com.opencapture.openpocketcine.liveChromeGlass
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private val StageCanvas = MonitorPalette.backgroundDeep
@@ -176,6 +177,7 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
             onSettings = { cameraSettings = true },
             onNetwork = { showNetwork = true },
             onExit = { if (session.tiles.any { it.camera != null }) showLeave = true else closeStage() },
+            scope = scope,
         ) { tile -> if (tile.liveModel == null) TileFeed(session, tile, session.fill) }
         if (cameraSettings) {
             MultiviewCameraSettings(session, session.focusedIndex, maxWidth.value, maxHeight.value, safe) {
@@ -268,9 +270,10 @@ internal fun MultiviewStageContent(
     onSettings: () -> Unit,
     onNetwork: () -> Unit,
     onExit: () -> Unit,
+    /** Outlives the stage: Live View replaces it while a record or reconnect is in flight. */
+    scope: CoroutineScope = rememberCoroutineScope(),
     picture: @Composable (MultiviewSession.Tile) -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     val haptics = LocalOperatorHaptics.current
     val assigned = session.tiles.filter { it.camera != null }
     MultiviewStage(
@@ -305,7 +308,7 @@ internal fun MultiviewStageContent(
             },
             close = onExit,
             recordContext = session::recordContext,
-            record = { plan, slot -> session.record(plan, together = slot == null) },
+            record = { plan, slot -> scope.launch { session.record(plan, together = slot == null) } },
             toggleLut = {
                 val enabled = !assigned.all { it.lutEnabled }
                 assigned.forEach { if (it.lutEnabled != enabled) it.toggleLUT() }
