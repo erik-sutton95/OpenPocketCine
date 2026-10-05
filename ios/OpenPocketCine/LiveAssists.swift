@@ -1135,7 +1135,7 @@ struct FeedLevelView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: LevelAssist.refresh)) { _ in
-            let mode = model.session.levelReading.mode(
+            let mode = model.session.gimbal.levelReading.mode(
                 now: ProcessInfo.processInfo.systemUptime,
                 // Picture-relative like the stick: TT180 mirrors the shown
                 // picture in both Selfie Flip states. Either flip axis reverses

@@ -709,14 +709,14 @@ enum FeedStressAutomation {
         private static func stopMotionAndRestore(_ baseline: FeedStressBaseline) {
             guard let model = AppModelDiagnosticsAnchor.model else { return }
             let session = model.session
-            session.endGimbalStick(cancelMove: true)
+            session.gimbal.endStick(cancelMove: true)
             guard baseline.captured else { return }
             if ProcessInfo.processInfo.environment["OPV_FEED_STRESS_RECORD"] == "1",
                 session.status.isRecording
             {
                 session.control.record(start: false)
             }
-            session.endGimbalStick(cancelMove: true)
+            session.gimbal.endStick(cancelMove: true)
             if let iso = baseline.isoIndex, iso != session.status.isoIndex {
                 session.control.setISO(iso)
             }

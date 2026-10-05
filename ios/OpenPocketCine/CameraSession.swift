@@ -150,10 +150,8 @@ final class CameraSession {
         [lastZoomSetAt.map { Date().timeIntervalSince($0) }, datalink?.secondsSinceNativeZoomSet]
             .compactMap { $0 }.min()
     }
-    /// Last non-rest gimbal throw. Motion can pause HEVC.
-    @ObservationIgnored private var lastGimbalThrowAt: Date?
     private var secondsSinceGimbalThrow: TimeInterval? {
-        lastGimbalThrowAt.map { Date().timeIntervalSince($0) }
+        gimbal.lastThrowAt.map { Date().timeIntervalSince($0) }
     }
     @ObservationIgnored private var feedWatchdog = FeedWatchdog()
     @ObservationIgnored private var lastFeedFreezeLogAt: Date?
@@ -274,11 +272,7 @@ final class CameraSession {
     /// Last camera-control reply (empty when the last command succeeded).
     var controlNote: String?
     /// Live extra-mirror (TT180 && Flip off). Shell XORs MIRROR assist.
-    private(set) var gimbalPoseViewFlip = false
-    var gimbalYawTenthDeg: Int16? { gimbalStickMapping.yawTenthDeg }
-    var gimbalPitchTenthDeg: Int16? { gimbalStickMapping.pitchTenthDeg }
-    @ObservationIgnored private var lastNativeGimbalWaypoint: GimbalWaypoint?
-    @ObservationIgnored private var gimbalOverlayMotion = GimbalOverlayMotion()
+    var gimbalPoseViewFlip = false
     /// Pocket 3-axis only. Nano hides the gimbal button and sheet.
     var hasGimbal: Bool { connectedCamera?.model.hasGimbal ?? false }
     /// Nano is a fixed 1× prime: no zoom chrome and no zoom SET from any input.
@@ -287,89 +281,14 @@ final class CameraSession {
     var gimbalSpeed: GimbalSpeed = .defaultSpeed
     var gimbalRamp: GimbalRamp = OperatorPrefs.gimbalRamp
     var gimbalDoubleTap: GimbalDoubleTap = OperatorPrefs.gimbalDoubleTap
-    /// In-flight Double-tap Level move, judged on each attitude push.
-    @ObservationIgnored private var worldLevelSnap: WorldLevelSnap?
     var gimbalProgram = GimbalProgram()
     var gimbalMoveRunning = false
     var gimbalMovePaused = false
     var gimbalMoveCanPause = false
-    private(set) var gimbalStartCountdown: Int?
-    var liveGimbalWaypoint: GimbalWaypoint? {
-        guard var point = lastNativeGimbalWaypoint else { return nil }
-        point.zoom = zoomReadout
-        return point
-    }
-
-    var freshGimbalWaypoint: GimbalWaypoint? {
-        guard let received = lastMoveAttitudeAt,
-            ProcessInfo.processInfo.systemUptime - received <= 0.3,
-            let pose = liveGimbalWaypoint, let native = pose.nativePitchDeg,
-            native.isFinite, (-180...180).contains(native)
-        else { return nil }
-        return pose
-    }
-
+    var gimbalStartCountdown: Int?
     private(set) var gimbalControlSceneActive = true
-    @ObservationIgnored private var nativeTargetGeneration: UInt64 = 0
-    @ObservationIgnored private var nativeHeadToken: UInt64?
-    @ObservationIgnored private var nativeMoveToken: UInt64?
-
-    func beginNativeHeadTrack() -> UInt64? {
-        guard phase == .live, !sessionRecovery.isRecovering, gimbalControlSceneActive,
-            !isFeedWarming, hasGimbal, !isLocked, !gimbalMoveRunning, !gimbalStickHeld,
-            !isBrowsingMedia, !isLiveVideoStale, freshGimbalWaypoint != nil,
-            let datalink
-        else { return nil }
-        cancelNativeHeadTrack()
-        restGimbalStickWire()
-        prepHeadTrackGimbal()
-        noteGimbalAppMotion()
-        nativeTargetGeneration &+= 1
-        nativeHeadToken = nativeTargetGeneration
-        datalink.beginNativeTargets(token: nativeTargetGeneration)
-        return nativeTargetGeneration
-    }
-
-    func updateNativeHeadTrack(target: GimbalWaypoint, token: UInt64) -> Bool {
-        guard phase == .live, !sessionRecovery.isRecovering, gimbalControlSceneActive,
-            nativeHeadToken == token, !gimbalMoveRunning, !gimbalStickHeld,
-            !isLocked, !isBrowsingMedia, !isLiveVideoStale, let live = freshGimbalWaypoint,
-            GimbalMoveEngine.canSendNativeTarget(from: live, to: target),
-            let frame = Commands.gimbalTimedTarget(
-                waypoint: target,
-                duration: HeadTrackNative.commandDuration), let datalink
-        else {
-            endNativeHeadTrack(token: token)
-            return false
-        }
-        return datalink.noteNativeTarget(frame, token: token)
-    }
-
-    func endNativeHeadTrack(token: UInt64) {
-        guard nativeHeadToken == token else { return }
-        nativeHeadToken = nil
-        datalink?.endNativeTargets(token: token)
-    }
-
-    private func cancelNativeHeadTrack() {
-        if let token = nativeHeadToken { endNativeHeadTrack(token: token) }
-    }
-
-    var overlayGimbalWaypoint: GimbalWaypoint? {
-        guard !isLiveVideoStale,
-            var pose = gimbalOverlayMotion.pose(at: ProcessInfo.processInfo.systemUptime)
-        else { return nil }
-        pose.zoom = zoomReadout
-        return pose
-    }
-    /// Last `0x04/0x05` hex + i16 dump (pitch-field hunt; payload is ~50 B).
-    @ObservationIgnored var lastGimbalAttitudeHex = ""
-    @ObservationIgnored var lastGimbalAttitudeDump = ""
-    /// World level from the attitude quaternion. LEVEL polls it at 10 Hz;
-    /// ingest at push rate must not invalidate observers.
-    @ObservationIgnored private(set) var levelReading = LevelReading()
     /// Pose-only stick invert (TT180). Shell XORs MIRROR assist.
-    private(set) var gimbalPoseInvertPan = false
+    var gimbalPoseInvertPan = false
     /// Increments on a rising-edge gimbal-limit contact. Shell plays haptics.
     var gimbalLimitPulse: UInt = 0
     var gimbalLimitContact: GimbalLimitWatch.Contact = []
@@ -483,10 +402,6 @@ final class CameraSession {
         return FeedWatchdog.shouldTreatLiveVideoAsStale(
             lastVideoPacketAge: videoAge, hadVideo: had, recovering: recovering)
     }
-    /// Latest held gimbal stick. Nil when the operator is not touching it.
-    @ObservationIgnored private var pendingGimbalAxes: (UInt16, UInt16)?
-    @ObservationIgnored private var gimbalStickHeld = false
-    @ObservationIgnored private var lastGimbalStickAt: Date?
     @ObservationIgnored private lazy var subjectTracking = makeSubjectTracking()
     @ObservationIgnored private let subjectTrackingTiming: DjiAppleTrackingTiming
     @ObservationIgnored private var lastFaceAt: Date?
@@ -563,31 +478,14 @@ final class CameraSession {
     /// After a local res+fps / color SET, ignore subscribe snapshots that have not caught up.
     /// FORMAT sheet: skip reseat while `0x02/0x18` is in flight.
     var isFormatPinActive: Bool { editorReconciliation.hasFormat }
-    @ObservationIgnored private var gimbalFollowFamilyConfirmed = false
-    @ObservationIgnored private var gimbalModePin: CameraValuePin<GimbalMode>?
-    @ObservationIgnored private var gimbalSpeedPin: CameraValuePin<GimbalSpeed>?
     /// Requested white balance remains separate from actual camera status.
     var pendingWhiteBalance: WhiteBalance? {
         access(keyPath: \.pendingWhiteBalance)
         return editorReconciliation.requestedWhiteBalance
     }
-    @ObservationIgnored private var gimbalStickMapping = GimbalStickMapping()
-    @ObservationIgnored private var gimbalLimitWatch = GimbalLimitWatch()
-    @ObservationIgnored private var lastGimbalCommand = (x: 0.0, y: 0.0)
-    @ObservationIgnored private var gimbalRampFilter = GimbalRampFilter()
-    @ObservationIgnored private var gimbalParamPoll = GimbalParamPoll()
-    /// Operator speed/tilt lock held while head tracking or Motion Control runs on Fast.
-    @ObservationIgnored private var gimbalPrep = GimbalPrepRestore()
-    @ObservationIgnored private var moveEngine = GimbalMoveEngine()
-    @ObservationIgnored private var moveTask: Task<Void, Never>?
-    @ObservationIgnored private var lastMoveAttitudeAt: TimeInterval?
-    @ObservationIgnored private var movePoseStableSince: TimeInterval?
-    @ObservationIgnored private var lastMoveObservedPose: GimbalWaypoint?
-    @ObservationIgnored private var moveGeneration = 0
-    @ObservationIgnored private var moveDriving = false
-    @ObservationIgnored private var lastMoveLogAt: Date?
-    @ObservationIgnored private var wasRecording = false
     @ObservationIgnored let decoder: HevcDecoder
+    /// Stick, mode/speed pins, pose, level, head-track targets and programmed moves.
+    @ObservationIgnored private(set) lazy var gimbal = DjiAppleGimbalControl(host: self)
     var isMultiviewBorrowed = false
     private(set) var isMultiviewControlsOnly = false
     @ObservationIgnored var multiviewControlAdmission: (() -> Bool)?
@@ -614,13 +512,12 @@ final class CameraSession {
         self.subjectTrackingTiming = subjectTrackingTiming ?? .continuous
         self.cameraMedia = cameraMedia ?? CameraMedia()
         self.decoder = sharedDecoder ?? HevcDecoder()
-        gimbalStickMapping = GimbalStickMapping()
         if sharedDecoder != nil, controlsOnly {
             isMultiviewBorrowed = true
             isMultiviewControlsOnly = true
             return
         }
-        syncGimbalPose()
+        gimbal.syncPose()
         if sharedDecoder != nil {
             isMultiviewBorrowed = true
             self.decoder.onSourceFrame = { [weak self] lease in
@@ -700,11 +597,10 @@ final class CameraSession {
         isFeedWarming = decoder.lastPresentedAt == nil
     }
     /// Hand the pose back to the tile so a Live View pan or TT180 survives close.
-    var multiviewPose: GimbalStickMapping { gimbalStickMapping }
+    var multiviewPose: GimbalStickMapping { gimbal.stickMapping }
     func adoptMultiviewPose(_ pose: GimbalStickMapping) {
         guard isMultiviewBorrowed, !isMultiviewControlsOnly else { return }
-        gimbalStickMapping = pose
-        syncGimbalPose()
+        gimbal.adoptPose(pose)
     }
     func noteMultiviewFrame() {
         guard isMultiviewBorrowed, !isMultiviewControlsOnly else { return }
@@ -733,7 +629,7 @@ final class CameraSession {
             controlExchange.retire(CancellationError())
             return
         }
-        endGimbalStick(cancelMove: true)
+        gimbal.endStick(cancelMove: true)
         subjectTracking.stopPolling()
         tapFocus.retire()
         faceAFArmTask?.cancel()
@@ -885,7 +781,7 @@ final class CameraSession {
         controlBinding.retire(.requested)
         cameraReportedCapture = CameraStatus()
         // Before the link closes: do not leave the camera on Fast for the next session.
-        restoreGimbalPrep(gimbalPrep.restoreNow())
+        gimbal.restorePrepNow()
         ReliabilityReporting.setCameraSessionActive(false)
         FeedIncidentRuntime.endSession(now: ProcessInfo.processInfo.systemUptime)
         incidentSessionActive = false
@@ -922,10 +818,8 @@ final class CameraSession {
         editorReconciliation.retire()
         autoExposureLock = nil
         autoWhiteBalanceLock = nil
-        gimbalModePin = nil
-        gimbalSpeedPin = nil
         resetGimbalPoseForNewStream()
-        resetGimbalControls()
+        gimbal.resetControls()
         controlBusy = false
         controlNote = nil
         focusPoint = CGPoint(x: 0.5, y: 0.5)
@@ -940,13 +834,7 @@ final class CameraSession {
         lastFacePriorityEVAt = .distantPast
         facePriorityAcquireAt = nil
         isLocked = false
-        datalink?.restGimbalStick()
-        pendingGimbalAxes = nil
-        gimbalStickHeld = false
-        lastGimbalStickAt = nil
-        lastGimbalThrowAt = nil
-        lastGimbalCommand = (0, 0)
-        gimbalLimitWatch.reset()
+        gimbal.dropStick()
         videoPackets = 0
         accessUnits = 0
         framesEnqueued = 0
@@ -1003,7 +891,7 @@ final class CameraSession {
         foregroundGeneration += 1
         foregroundCheckTask?.cancel()
         foregroundCheckTask = nil
-        cancelProgrammedMove(ifCurrent: isCurrent)
+        gimbal.cancelProgrammedMove(ifCurrent: isCurrent)
         guard isCurrent() else { return }
         if let recoveryAttempt {
             guard recoveryAttempt.retireCapturedConnectionRun() else { return }
@@ -1018,15 +906,8 @@ final class CameraSession {
         controlExchange.retire(Fail.disconnected)
         guard isCurrent() else { return }
         commandTimeoutsAt.removeAll()
-        datalink?.restGimbalStick()
+        gimbal.dropStick(ifCurrent: isCurrent)
         guard isCurrent() else { return }
-        pendingGimbalAxes = nil
-        gimbalStickHeld = false
-        guard isCurrent() else { return }
-        lastGimbalStickAt = nil
-        lastGimbalThrowAt = nil
-        lastGimbalCommand = (0, 0)
-        gimbalLimitWatch.reset()
         disposeDatalink(ifCurrent: isCurrent)
         guard isCurrent() else { return }
         ble.disconnect()
@@ -1340,7 +1221,7 @@ final class CameraSession {
                         self.withMutation(keyPath: \.zoomOptimistic) {}
                     }
                 case .cancelProgrammedMove:
-                    if self.gimbalMoveRunning { self.cancelProgrammedMove() }
+                    if self.gimbalMoveRunning { self.gimbal.cancelProgrammedMove() }
                 case .chipRequested(let from, let to):
                     ControlLiveLog.line(
                         "zoom: setZoom \(from) → \(to) locked=\(self.isLocked) live=\(self.datalink != nil)")
@@ -1464,7 +1345,6 @@ final class CameraSession {
                 }
             })
     }
-
 
     private func makeTapFocus() -> DjiAppleTapFocus {
         DjiAppleTapFocus(
@@ -1607,7 +1487,6 @@ final class CameraSession {
         guard cameraSettings.admits(authority) else { return }
         status.directionalAudio = facts.directional
     }
-
 
     /// ActiveTrack packet and polling ownership is integration-owned; native faces/focus stay here.
     private func makeSubjectTracking() -> DjiAppleSubjectTracking {
@@ -1783,17 +1662,13 @@ final class CameraSession {
             s.selfieFlip = next
             status = s
             ControlLiveLog.line(
-                "control: Selfie Flip \(next?.label ?? "nil") extra-mirror=\(gimbalStickMapping.commanded180 && !(next?.isOn ?? false) ? 1 : 0)"
+                "control: Selfie Flip \(next?.label ?? "nil") extra-mirror=\(gimbal.stickMapping.commanded180 && !(next?.isOn ?? false) ? 1 : 0)"
             )
             decoder.invalidatePictureFlipPresentation()
         }
-        syncGimbalPose()
+        gimbal.syncPose()
         return true
     }
-
-    /// Success is `0x07/0x45` `[00 01]` (already paired) or a `0x07/0x46` approval
-    /// request (ACKed in `route()`). `[00 02]` means keep waiting for `0x46`;
-    /// `[00 06]` is deferred (Android Multiview `PairingDeferred`), never success.
 
     func waitFrame(
         _ set: UInt8, _ cmd: UInt8,
@@ -2018,8 +1893,6 @@ final class CameraSession {
         return zoomGesture.dialReadout
     }
 
-
-
     private func noteZoomIfChanged(_ new: CameraStatus) {
         zoomGesture.observe(new)
         guard new.zoomFactorRaw != lastLoggedZoomRaw || new.zoomLens != lastLoggedZoomLens else {
@@ -2064,13 +1937,6 @@ final class CameraSession {
     /// keeps it from overtaking.
     func setZoomStop() { zoomGesture.stop() }
 
-
-
-
-
-    /// Chip tap is urgent. Slider / pinch pipelines at 20 Hz without waiting
-    /// for ACK (Mimo). D-Log2→D-Log must be on the body before this SET.
-
     /// D-Log native 400 ↔ D-Log2 native 1600 when the operator is still on base.
     private func hopNativeISO(from: ColorMode?, to: ColorMode) {
         guard
@@ -2084,44 +1950,7 @@ final class CameraSession {
         setISO(next)
     }
 
-    /// True when a zoom SET would need a D-Log2→D-Log hop while rolling.
-    private func blockZoomColorHopIfRecording(for factor: Double) -> Bool {
-        guard
-            CamFov.zoomNeedsColorHopWhileRecording(
-                factor: factor, current: status.colorMode, isRecording: status.isRecording)
-        else { return false }
-        controlNote = ControlHud.recordingColorLockNote
-        ControlLiveLog.line("zoom: blocked — color hop while recording")
-        return true
-    }
-
-    /// D-Log2 rejects every zoom SET. Hop to D-Log before `0xB8`, and restore
-    /// only when parked back at 1× after the gesture — not mid-pinch.
-
-
-    /// Body `cam_image_effect` is D-Log — the hop that unlocks 0xB8 has landed.
-
-    /// Color hop landed — send the zoom SET that was waiting, if any.
-
-
-
-
-
-
     private typealias ControlExpect = DjiAppleControlExpectation
-
-
-
-
-    /// Hold pending choices until their own telemetry confirms them.
-
-
-
-
-
-    /// Drop `cam_expo_param` snapshots that still show the pre-SET ISO / shutter / EV / mode.
-
-
 
     func setISO(_ index: IsoIndex, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
         editorReconciliation.pinExpo(iso: index.isoValue, isoIndex: index)
@@ -2507,7 +2336,7 @@ final class CameraSession {
             return
         }
         guard colorModes.contains(mode) else { return }
-        if gimbalMoveRunning { cancelProgrammedMove() }
+        if gimbalMoveRunning { gimbal.cancelProgrammedMove() }
         let from = status.colorMode
         guard zoomColor.manualColorSelected(mode) else { return }
         editorReconciliation.holdColor(mode)
@@ -2517,534 +2346,6 @@ final class CameraSession {
             onFail: { [weak self] in self?.editorReconciliation.clearColor() })
         hopNativeISO(from: from, to: mode)
         if mode == .dLog { zoomGesture.confirmIfReady() }
-    }
-
-    /// Stream `0x04/0x01` while the on-screen stick is held. No ACK — do not
-    /// ride `fireCamera`. `x`/`y` are −1…1 (right / up); `GimbalStick.encode`
-    /// maps that onto tilt/pan. Invert follows the visible picture (Flip or
-    /// 180, XOR MIRROR assist).
-    func updateGimbalStick(
-        x: Double, y: Double, sensitivity: Int = GimbalStick.defaultSensitivity,
-        assistMirror: Bool = false, linear: Bool = false,
-        mapping: GimbalStick.Mapping = .defaults
-    ) {
-        guard !isLocked else { return }
-        guard datalink != nil else { return }
-        guard case .live = phase, gimbalControlSceneActive, !isFeedWarming,
-            !sessionRecovery.isRecovering
-        else {
-            endGimbalStick(cancelMove: true)
-            return
-        }
-        let restZone = linear ? GimbalStick.deadzone : mapping.deadzone
-        if !linear, hypot(x, y) > restZone { cancelNativeHeadTrack() }
-        if isLiveVideoStale, !moveDriving {
-            endGimbalStick(cancelMove: true)
-            return
-        }
-        if gimbalMoveRunning, !linear {
-            if hypot(x, y) > restZone {
-                cancelProgrammedMove()
-            } else {
-                return
-            }
-        }
-        var throwX = x
-        var throwY = y
-        if !linear {
-            let rawDt =
-                lastGimbalStickAt.map { Date().timeIntervalSince($0) } ?? GimbalStick.streamInterval
-            let dt = min(max(rawDt, 0.001), 0.12)
-            let ramped = gimbalRampFilter.tick(
-                targetX: x, targetY: y, ramp: gimbalRamp, dt: dt)
-            throwX = ramped.0
-            throwY = ramped.1
-        }
-        // Linear callers (programmed move, HeadTrack, calibrate) speak
-        // `0x04/0x05` space: no screen-relative pan invert.
-        let invert =
-            linear
-            ? false
-            : GimbalStick.liveInvertPan(poseInvert: gimbalPoseInvertPan, assistMirror: assistMirror)
-        let axes = GimbalStick.encode(
-            x: throwX, y: throwY, invertPan: invert, sensitivity: sensitivity, linear: linear,
-            mapping: linear ? .defaults : mapping)
-        pendingGimbalAxes = axes
-        lastGimbalCommand = (x, y)
-        lastGimbalStickAt = Date()
-        if axes.axis0 != GimbalStick.center || axes.axis1 != GimbalStick.center {
-            movePoseStableSince = nil
-            lastGimbalThrowAt = Date()
-            noteGimbalAppMotion()
-        }
-        if !gimbalStickHeld {
-            gimbalStickHeld = true
-            ControlLiveLog.line(
-                "control: gimbal stick stream invert=\(gimbalStickMapping.invertPan ? 1 : 0)"
-            )
-        }
-        datalink?.noteGimbalStick(axis0: axes.axis0, axis1: axes.axis1)
-        tickGimbalLimit()
-    }
-
-    /// Mimo Fast + tilt unlocked. Untracked — a tracked SET can skip while UDP
-    /// is `.waiting`, and `0x4C` Follow can damp the stick. The operator's
-    /// speed and tilt lock come back once the gimbal is idle (`restoreGimbalPrep`).
-    func prepHeadTrackGimbal() {
-        guard !isLocked, let datalink else { return }
-        let seqs = gimbalPrep.prep(speed: gimbalSpeed, mode: gimbalMode).map {
-            datalink.sendUntracked($0)
-        }
-        ControlLiveLog.line(
-            "head-track: gimbal Fast+unlock seq=\(seqs.map(String.init).joined(separator: ",")) restore speed=\(gimbalPrep.speed?.label ?? "-") mode=\(gimbalPrep.mode?.label ?? "-")"
-        )
-    }
-
-    /// Put back the speed/tilt lock that `prepHeadTrackGimbal` replaced. Pins
-    /// keep a Fast readback already in flight from flashing in the menu.
-    private func restoreGimbalPrep(_ restore: GimbalPrepRestore.Restore?) {
-        guard let restore, let datalink else { return }
-        let now = Date.timeIntervalSinceReferenceDate
-        if let speed = restore.speed {
-            gimbalSpeedPin = CameraValuePin(speed, now: now)
-            if gimbalSpeed != speed { gimbalSpeed = speed }
-        }
-        if restore.mode == .tiltLocked, gimbalMode == .follow {
-            gimbalModePin = CameraValuePin(.tiltLocked, now: now)
-            gimbalMode = .tiltLocked
-        }
-        let seqs = restore.frames.map { datalink.sendUntracked($0) }
-        ControlLiveLog.line(
-            "control: gimbal restore speed=\(restore.speed?.label ?? "-") mode=\(restore.mode?.label ?? "-") seq=\(seqs.map(String.init).joined(separator: ","))"
-        )
-    }
-
-    /// On-screen stick double-tap and gamepad Circle/B, per the Double-tap setting.
-    func performGimbalDoubleTap() {
-        switch gimbalDoubleTap {
-        case .recenter: recenterGimbal()
-        case .level: levelGimbalToWorld()
-        }
-    }
-
-    /// Double-tap Level: one `0x04/0x14` move to the nearest world target
-    /// (horizon or plumb), judged on the attitude quaternion. Roll is not commanded.
-    func levelGimbalToWorld() {
-        guard !isLocked else { return }
-        let now = ProcessInfo.processInfo.systemUptime
-        guard let tilt = levelReading.pitchDeg(now: now) else {
-            controlNote = WorldLevelSnap.noLevelData
-            return
-        }
-        guard let datalink else { return }
-        guard let pose = lastNativeGimbalWaypoint,
-            let plan = WorldLevelSnap.plan(tiltDeg: tilt, pose: pose, now: now)
-        else {
-            controlNote = WorldLevelSnap.unreachableNote
-            return
-        }
-        endGimbalStick(cancelMove: true)
-        movePoseStableSince = nil
-        lastMoveObservedPose = nil
-        gimbalOverlayMotion.reset()
-        lastGimbalStickAt = Date()
-        worldLevelSnap = plan.snap
-        let seq = datalink.send(plan.frame)
-        ControlLiveLog.line(
-            "control: send World level 0x04/0x14 seq=\(seq) tilt=\(String(format: "%.1f", tilt)) target=\(plan.snap.target) payload=\(Duml.hex(plan.frame.payload))"
-        )
-    }
-
-    private func judgeWorldLevelSnap() {
-        guard let snap = worldLevelSnap else { return }
-        // The operator or a programmed move took the gimbal: drop it silently.
-        // A stick takeover also ends the camera's timed move so it cannot fight the stick.
-        if gimbalStickHeld || gimbalMoveRunning {
-            worldLevelSnap = nil
-            if gimbalStickHeld { _ = datalink?.sendUntracked(Commands.gimbalTimedStop()) }
-            return
-        }
-        let now = ProcessInfo.processInfo.systemUptime
-        let fpv = gimbalMode == .fpv ? WorldLevelSnap.fpvRollNote : ""
-        switch snap.evaluate(tiltDeg: levelReading.pitchDeg(now: now), now: now) {
-        case .pending:
-            return
-        case .expired:
-            worldLevelSnap = nil
-            return
-        case .arrived:
-            controlNote = snap.target.successNote + fpv
-        case .failed(let error):
-            _ = datalink?.sendUntracked(Commands.gimbalTimedStop())
-            controlNote = WorldLevelSnap.failureNote(errorDeg: error) + fpv
-        }
-        worldLevelSnap = nil
-        ControlLiveLog.line("control: world level \(controlNote ?? "-")")
-    }
-
-    /// Stick double-tap (hardware joystick). Wire is Mimo's recenter button:
-    /// `0x04/0x4C` `FE 08`. Mimo has no stick double-tap.
-    func recenterGimbal() {
-        guard !isLocked else { return }
-        guard datalink != nil else { return }
-        worldLevelSnap = nil
-        endGimbalStick(cancelMove: true)
-        movePoseStableSince = nil
-        lastMoveObservedPose = nil
-        gimbalOverlayMotion.reset()
-        lastGimbalStickAt = Date()
-        let frame = Commands.gimbalRecenter()
-        let seq = datalink?.send(frame) ?? 0
-        ControlLiveLog.line(
-            "control: send Gimbal recenter 0x04/0x4C seq=\(seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink"
-        )
-        controlNote = "Gimbal re-centered"
-    }
-
-    /// Stick triple-tap. `FE 09` is a 180.
-    func flipGimbal() {
-        guard !isLocked else { return }
-        guard datalink != nil else { return }
-        endGimbalStick(cancelMove: true)
-        movePoseStableSince = nil
-        lastMoveObservedPose = nil
-        gimbalOverlayMotion.reset()
-        lastGimbalStickAt = Date()
-        gimbalStickMapping.noteRotate180()
-        let frame = Commands.gimbalFlip()
-        let seq = datalink?.send(frame) ?? 0
-        ControlLiveLog.line(
-            "control: send Gimbal flip 0x04/0x4C seq=\(seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink invert=\(gimbalStickMapping.invertPan ? 1 : 0) face=\(gimbalStickMapping.face == .selfie ? "selfie" : gimbalStickMapping.face == .front ? "front" : "unknown") rot180=\(gimbalStickMapping.rotated180 ? 1 : 0) parity=\(gimbalStickMapping.rotateParity ? 1 : 0)"
-        )
-    }
-
-    /// Send center and stop the stream. Always fire — the camera needs rest.
-    func endGimbalStick(cancelMove: Bool = false) {
-        endGimbalStick(cancelMove: cancelMove, ifCurrent: { true })
-    }
-
-    private func endGimbalStick(cancelMove: Bool, ifCurrent: () -> Bool) {
-        guard ifCurrent() else { return }
-        if cancelMove { cancelNativeHeadTrack() }
-        guard ifCurrent() else { return }
-        // Programmed movement owns the gimbal until it rests itself.
-        if moveDriving && !cancelMove { return }
-        if gimbalMoveRunning {
-            cancelProgrammedMove(ifCurrent: ifCurrent)
-            return
-        }
-        restGimbalStickWire(ifCurrent: ifCurrent)
-    }
-
-    private func restGimbalStickWire(ifCurrent: () -> Bool = { true }) {
-        guard ifCurrent() else { return }
-        gimbalRampFilter.reset()
-        pendingGimbalAxes = nil
-        lastGimbalCommand = (0, 0)
-        gimbalLimitWatch.reset()
-        if gimbalStickHeld { lastGimbalStickAt = Date() }
-        guard gimbalStickHeld else { return }
-        gimbalStickHeld = false
-        guard ifCurrent() else { return }
-        ControlLiveLog.line("control: gimbal stick rest")
-        datalink?.restGimbalStick()
-    }
-
-    var canSetGimbalConfiguration: Bool {
-        hasGimbal && !isLocked && phase == .live && gimbalControlSceneActive
-            && !isFeedWarming && !holdsMonitor && !sessionRecovery.isRecovering
-            && !isLiveVideoStale && datalink != nil && datalink?.isClosed != true
-    }
-
-    func setGimbalMode(_ mode: GimbalMode) {
-        guard canSetGimbalConfiguration else { return }
-        cancelProgrammedMove()
-        gimbalPrep.mode = nil
-        gimbalFollowFamilyConfirmed = false
-        gimbalModePin = CameraValuePin(mode, now: Date.timeIntervalSinceReferenceDate)
-        gimbalMode = mode
-        for frame in GimbalControl.setModeFrames(mode) {
-            let seq = datalink?.sendUntracked(frame) ?? 0
-            ControlLiveLog.line(
-                "control: send Gimbal mode \(mode.label) seq=\(seq) payload=\(Duml.hex(frame.payload))"
-            )
-        }
-    }
-
-    func setGimbalSpeed(_ speed: GimbalSpeed) {
-        guard canSetGimbalConfiguration else { return }
-        cancelProgrammedMove()
-        gimbalPrep.speed = nil
-        gimbalSpeedPin = CameraValuePin(speed, now: Date.timeIntervalSinceReferenceDate)
-        gimbalSpeed = speed
-        let frame = Commands.setGimbalSpeed(speed)
-        let seq = datalink?.sendUntracked(frame) ?? 0
-        ControlLiveLog.line(
-            "control: send Gimbal speed \(speed.label) seq=\(seq) payload=\(Duml.hex(frame.payload))"
-        )
-    }
-
-    func setGimbalWaypoint(_ slot: GimbalWaypointSlot) {
-        guard hasGimbal, !isLocked else { return }
-        guard let point = liveGimbalWaypoint, point.nativePitchDeg != nil, point == point.clamped()
-        else {
-            controlNote = ControlHud.gimbalPoseNotReady
-            return
-        }
-        let now = ProcessInfo.processInfo.systemUptime
-        guard !gimbalMoveRunning, !gimbalStickHeld, let receivedAt = lastMoveAttitudeAt,
-            now - receivedAt <= 0.3, let stableSince = movePoseStableSince,
-            now - stableSince >= 0.5
-        else {
-            controlNote = ControlHud.gimbalHoldStill
-            return
-        }
-        gimbalProgram.setPoint(slot, point)
-    }
-
-    func clearGimbalWaypoint(_ slot: GimbalWaypointSlot) {
-        cancelProgrammedMove()
-        gimbalProgram[slot] = nil
-        if !gimbalProgram.canRun { cancelProgrammedMove() }
-    }
-
-    func setGimbalLegDuration(ab: TimeInterval? = nil, bc: TimeInterval? = nil) {
-        if gimbalMoveRunning { cancelProgrammedMove() }
-        if let ab {
-            let floor = GimbalProgram.minTravelDuration(
-                from: gimbalProgram.a, to: gimbalProgram.b)
-            gimbalProgram.durationAB = GimbalProgram.snapDuration(max(ab, floor))
-        }
-        if let bc {
-            let floor = GimbalProgram.minTravelDuration(
-                from: gimbalProgram.b, to: gimbalProgram.c)
-            gimbalProgram.durationBC = GimbalProgram.snapDuration(max(bc, floor))
-        }
-    }
-
-    func setGimbalSmoothness(_ value: Double) {
-        guard value.isFinite else { return }
-        cancelProgrammedMove()
-        gimbalProgram.smoothness = min(1, max(0, value))
-    }
-
-    func clearGimbalProgram() {
-        cancelProgrammedMove()
-        gimbalProgram = GimbalProgram(
-            durationAB: gimbalProgram.durationAB, durationBC: gimbalProgram.durationBC)
-    }
-
-    func setGimbalLoop(_ enabled: Bool) {
-        cancelProgrammedMove()
-        gimbalProgram.loop = enabled
-    }
-
-    var programmedZoomUnavailableReason: String? {
-        GimbalProgramZoom(program: gimbalProgram, model: connectedCamera?.model, status: status)
-            .failureReason
-    }
-
-    var canRunProgrammedMove: Bool {
-        programmedZoomUnavailableReason == nil && !isFeedWarming && !isLiveVideoStale
-            && gimbalProgram.canRun
-            && [gimbalProgram.a, gimbalProgram.b, gimbalProgram.c]
-                .compactMap { $0 }.allSatisfy { $0.nativePitchDeg != nil }
-    }
-
-    func runProgrammedMove() {
-        guard gimbalControlSceneActive, hasGimbal, !isLocked else { return }
-        if gimbalMoveRunning {
-            cancelProgrammedMove()
-            return
-        }
-        if let reason = programmedZoomUnavailableReason {
-            controlNote = reason
-            return
-        }
-        guard canRunProgrammedMove, let live = liveGimbalWaypoint, live.nativePitchDeg != nil,
-            let receivedAt = lastMoveAttitudeAt,
-            ProcessInfo.processInfo.systemUptime - receivedAt <= 0.3
-        else {
-            controlNote = ControlHud.gimbalPoseNotReady
-            return
-        }
-        let take = gimbalProgram
-        var validation = GimbalMoveEngine()
-        guard validation.start(program: take, live: live) else {
-            controlNote = validation.failure ?? ControlHud.programmedMoveNeedAB
-            return
-        }
-        moveEngine = validation
-        if take.changesZoom {
-            // Retire manual requests and any delayed wide-angle color restoration.
-            let key = CameraSetMailbox.zoomOpcodeKey
-            controlExchange.cancelSet(key)
-            guard zoomGesture.retireForProgrammedZoom() else { return }
-        }
-        controlNote = nil
-        cancelNativeHeadTrack()
-        restGimbalStickWire()
-        gimbalMoveRunning = true
-        gimbalMovePaused = false
-        gimbalMoveCanPause = false
-        gimbalStartCountdown = 3
-        moveDriving = true
-        lastMoveLogAt = nil
-        moveTask?.cancel()
-        moveTask = Task { @MainActor [weak self] in
-            for remaining in (1...3).reversed() {
-                guard let self, !Task.isCancelled, self.gimbalMoveRunning else { return }
-                self.gimbalStartCountdown = remaining
-                do { try await Task.sleep(for: .seconds(1)) } catch { return }
-            }
-            guard let self, !Task.isCancelled, self.gimbalMoveRunning else { return }
-            self.gimbalStartCountdown = nil
-            self.prepHeadTrackGimbal()
-            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
-            guard self.gimbalMoveRunning, self.gimbalControlSceneActive,
-                !Task.isCancelled
-            else { return }
-            guard let datalink = self.datalink else {
-                self.cancelProgrammedMove()
-                return
-            }
-            self.nativeTargetGeneration &+= 1
-            let token = self.nativeTargetGeneration
-            self.nativeMoveToken = token
-            let zoom =
-                take.changesZoom
-                ? GimbalProgramZoom(
-                    program: take, model: self.connectedCamera?.model, status: self.status) : nil
-            if let reason = zoom?.failureReason {
-                self.cancelProgrammedMove()
-                self.controlNote = reason
-                return
-            }
-            let started = datalink.startNativeProgram(program: take, token: token, zoom: zoom) {
-                [weak self] token, engine, pose in
-                guard let self, self.nativeMoveToken == token, self.gimbalMoveRunning else {
-                    return
-                }
-                self.moveEngine = engine
-                self.gimbalMovePaused = engine.isPaused
-                self.gimbalMoveCanPause = engine.running
-                self.logMotionProgress(live: pose, force: !engine.running)
-                if !engine.running {
-                    self.nativeMoveToken = nil
-                    self.controlNote = engine.failure
-                    self.gimbalMoveRunning = false
-                    self.gimbalMovePaused = false
-                    self.gimbalMoveCanPause = false
-                    self.moveDriving = false
-                    self.moveTask = nil
-                    self.restGimbalStickWire()
-                }
-            }
-            self.gimbalMoveCanPause = started
-            if !started {
-                self.controlNote = ControlHud.gimbalPoseNotReady
-                self.cancelProgrammedMove()
-            }
-        }
-    }
-
-    func restartProgrammedMove() {
-        guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning, gimbalMovePaused else {
-            return
-        }
-        cancelProgrammedMove()
-        runProgrammedMove()
-    }
-
-    func pauseOrResumeProgrammedMove() {
-        guard gimbalControlSceneActive, !isLocked, gimbalMoveRunning,
-            let token = nativeMoveToken, let datalink
-        else { return }
-        if gimbalMovePaused {
-            guard datalink.resumeNativeProgram(token: token) else {
-                controlNote = "Wait for the camera to settle, then resume"
-                return
-            }
-            gimbalMovePaused = false
-        } else {
-            guard datalink.pauseNativeProgram(token: token) else { return }
-            gimbalMovePaused = true
-        }
-        controlNote = nil
-    }
-
-    private func endNativeMoveTargets() {
-        guard let token = nativeMoveToken else { return }
-        nativeMoveToken = nil
-        _ = datalink?.cancelNativeProgram(token: token)
-    }
-
-    func cancelProgrammedMove() { cancelProgrammedMove(ifCurrent: { true }) }
-
-    private func cancelProgrammedMove(ifCurrent: () -> Bool) {
-        guard ifCurrent() else { return }
-        cancelNativeHeadTrack()
-        guard ifCurrent() else { return }
-        let hadStream = nativeMoveToken != nil
-        endNativeMoveTargets()
-        guard ifCurrent() else { return }
-        moveGeneration &+= 1
-        moveTask?.cancel()
-        moveTask = nil
-        moveEngine.cancel()
-        let was = gimbalMoveRunning
-        gimbalStartCountdown = nil
-        guard ifCurrent() else { return }
-        gimbalMoveRunning = false
-        guard ifCurrent() else { return }
-        gimbalMovePaused = false
-        guard ifCurrent() else { return }
-        gimbalMoveCanPause = false
-        guard ifCurrent() else { return }
-        moveDriving = false
-        if was {
-            if !hadStream { _ = datalink?.sendUntracked(Commands.gimbalTimedStop()) }
-            guard ifCurrent() else { return }
-            restGimbalStickWire(ifCurrent: ifCurrent)
-            guard ifCurrent() else { return }
-        }
-        if let live = liveGimbalWaypoint {
-            logMotionProgress(live: live, force: true)
-        }
-    }
-
-    private func logMotionProgress(live: GimbalWaypoint, force: Bool) {
-        let text = moveEngine.hudText(program: gimbalProgram, live: live)
-        let now = Date()
-        let logDue = lastMoveLogAt.map { now.timeIntervalSince($0) >= 0.5 } ?? true
-        if logDue || force, !text.isEmpty {
-            lastMoveLogAt = now
-            ControlLiveLog.line(
-                "gimbal-move: \(text.replacingOccurrences(of: "\n", with: " | "))")
-        }
-    }
-
-    private func requestGimbalParams() {
-        guard hasGimbal, datalink != nil,
-            gimbalParamPoll.shouldRequest(at: ProcessInfo.processInfo.systemUptime)
-        else { return }
-        _ = datalink?.sendUntracked(Commands.gimbalParamsGet())
-    }
-
-    private func resetGimbalControls() {
-        cancelProgrammedMove()
-        gimbalProgram = GimbalProgram()
-        lastMoveAttitudeAt = nil
-        lastNativeGimbalWaypoint = nil
-        gimbalOverlayMotion.reset()
-        movePoseStableSince = nil
-        lastMoveObservedPose = nil
-        gimbalOverlayMotion.reset()
-        gimbalMode = .follow
-        gimbalSpeed = .defaultSpeed
-        gimbalParamPoll = GimbalParamPoll()
-        gimbalRampFilter.reset()
-        wasRecording = false
     }
 
     /// Feed tap: inside the AF-C face box → ActiveTrack SET with that rect.
@@ -3096,7 +2397,7 @@ final class CameraSession {
 
     /// Drag-to-track: `0x02/0xA6` centre+size, then poll `0x02/0xA5` until lock or idle.
     func startTracking(_ box: TrackingBox) {
-        cancelProgrammedMove()
+        gimbal.cancelProgrammedMove()
         subjectTracking.start(box)
     }
 
@@ -3110,9 +2411,9 @@ final class CameraSession {
             guard !controlBusy else { return }
             control.shutter()
         case .recenter:
-            performGimbalDoubleTap()
+            gimbal.performDoubleTap()
         case .flip:
-            flipGimbal()
+            gimbal.flip()
         case .track:
             handleGamepadTrackToggle()
         case .zoomChipIn:
@@ -3226,9 +2527,9 @@ final class CameraSession {
     }
 
     private var isFaceSceneMoving: Bool {
-        if gimbalStickHeld { return true }
+        if gimbal.stickHeld { return true }
         return FaceTrackHold.isSceneMoving(
-            secondsSinceGimbal: lastGimbalStickAt.map { Date().timeIntervalSince($0) })
+            secondsSinceGimbal: gimbal.lastStickAt.map { Date().timeIntervalSince($0) })
     }
 
     private func considerFaceAF(_ buffer: CVPixelBuffer) {
@@ -3571,7 +2872,7 @@ final class CameraSession {
                     }
                 case .liveMonitorMaintenance:
                     if !self.isBrowsingMedia, self.shouldStartUDPRebuild {
-                        self.endGimbalStick(cancelMove: true)
+                        self.gimbal.endStick(cancelMove: true)
                         self.startFeedRecovery { [weak self] attempt in
                             await self?.repairDatalink(reason: "keepalive", attempt: attempt)
                         }
@@ -3868,7 +3169,7 @@ final class CameraSession {
         if GimbalStick.shouldHoldWatchdog(
             secondsSinceThrow: secondsSinceGimbalThrow,
             lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) },
-            stickHeld: gimbalStickHeld)
+            stickHeld: gimbal.stickHeld)
         {
             log.info("control: SET timeouts during gimbal grace — leave UDP")
             return
@@ -3883,7 +3184,7 @@ final class CameraSession {
         commandTimeoutsAt.removeAll()
         log.info("control: SET timeouts with video stale — rebuild UDP")
         ControlLiveLog.line("control: SET timeouts, video stale — rebuilding UDP")
-        endGimbalStick(cancelMove: true)
+        gimbal.endStick(cancelMove: true)
         startFeedRecovery { [weak self] attempt in
             await self?.repairDatalink(reason: "command timeouts", attempt: attempt)
         }
@@ -3911,7 +3212,7 @@ final class CameraSession {
         if GimbalStick.shouldHoldWatchdog(
             secondsSinceThrow: secondsSinceGimbalThrow,
             lastVideoPacketAge: datalink?.lastVideoPacketAt.map { now.timeIntervalSince($0) },
-            stickHeld: gimbalStickHeld)
+            stickHeld: gimbal.stickHeld)
         {
             return false
         }
@@ -3998,12 +3299,6 @@ final class CameraSession {
         }
         applyFeedWatchdog()
     }
-
-
-    /// Pocket 3 operator workaround: SET 1080 then the boot 4K, then one enable.
-    /// Same-tab FORMAT never sends `0x02/0x18`. One shot per connect / rejoin.
-
-
 
     private func logFirstPictureObserve(
         step: CameraSoftAP.FirstPictureStep,
@@ -4162,7 +3457,7 @@ final class CameraSession {
             secondsSinceZoomSet: secondsSinceZoomSet,
             zoomPinchActive: zoomPinchPreview != nil,
             secondsSinceGimbalThrow: secondsSinceGimbalThrow,
-            gimbalStickHeld: gimbalStickHeld,
+            gimbalStickHeld: gimbal.stickHeld,
             secondsSinceCameraSet: datalink?.secondsSinceLastCommand,
             lastDecoderOutputAge: decoder.nativeOutputAge,
             decoderOutputExpected: decoder.nativeOutputExpected,
@@ -4251,9 +3546,9 @@ final class CameraSession {
             }
             return
         case .resendLiveViewEnable:
-            endGimbalStick(cancelMove: true)
+            gimbal.endStick(cancelMove: true)
             let line =
-                feedWatchdog.stallLogLine(snap) + " stickHeld=\(gimbalStickHeld ? 1 : 0)"
+                feedWatchdog.stallLogLine(snap) + " stickHeld=\(gimbal.stickHeld ? 1 : 0)"
             log.info("\(line, privacy: .public)")
             ControlLiveLog.line(line)
             logFeedObserve(snap: snap, watchdog: action)
@@ -4262,7 +3557,7 @@ final class CameraSession {
                 feedWatchdog = watchdogBeforeTick
             }
         case .rebuildVTSession:
-            endGimbalStick(cancelMove: true)
+            gimbal.endStick(cancelMove: true)
             let referenceLossOnly = snap.referenceRecoveryNeeded
             let reason = referenceLossOnly ? "referenceLoss" : "outputSilence"
             recordFeedRepair("decoder", phase: .requested, reason: reason)
@@ -4297,7 +3592,7 @@ final class CameraSession {
                 }
             }
         case .reopenDatalink:
-            endGimbalStick(cancelMove: true)
+            gimbal.endStick(cancelMove: true)
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
             logFeedObserve(snap: snap, watchdog: action)
@@ -4308,7 +3603,7 @@ final class CameraSession {
             // back. New handshake on the same SoftAP, last frame held. This
             // used to map to another UDP rebuild — a camera that dropped the
             // session never answered, and Reconnecting stayed up (#218).
-            endGimbalStick(cancelMove: true)
+            gimbal.endStick(cancelMove: true)
             log.info("\(self.feedWatchdog.stallLogLine(snap), privacy: .public)")
             ControlLiveLog.line(feedWatchdog.stallLogLine(snap))
             logFeedObserve(snap: snap, watchdog: action)
@@ -4512,7 +3807,7 @@ final class CameraSession {
         sessionHeartbeat.resetPathGrace()
         recordFeedBreadcrumb(.sceneActivity, detail: "inactive")
         gimbalControlSceneActive = false
-        cancelProgrammedMove()
+        gimbal.cancelProgrammedMove()
         foregroundGeneration += 1
         foregroundCheckTask?.cancel()
         foregroundCheckTask = nil
@@ -4606,7 +3901,7 @@ final class CameraSession {
         }
         ControlLiveLog.line("session: foreground fresh video, repairing presentation")
         decoder.prepareAfterForeground()
-        endGimbalStick(cancelMove: true)
+        gimbal.endStick(cancelMove: true)
         if decoder.nativeOutputExpected {
             // This task suppresses keepalive/watchdog ticks while it exists.
             // Release it so the existing native-output repair owner can run;
@@ -4653,11 +3948,11 @@ final class CameraSession {
                 ownsConnection: !self.isMultiviewBorrowed)
         }, native: .init(prepare: { [weak self] in
             guard let self else { return Date.timeIntervalSinceReferenceDate }
-            self.endGimbalStick(cancelMove: true)
+            self.gimbal.endStick(cancelMove: true)
             return self.prepareForDatalinkRecovery().timeIntervalSinceReferenceDate
         }, prepareScoped: { [weak self] scope in
             guard let self, scope.isCurrent else { return Date.timeIntervalSinceReferenceDate }
-            self.endGimbalStick(cancelMove: true, ifCurrent: { scope.isCurrent })
+            self.gimbal.endStick(cancelMove: true, ifCurrent: { scope.isCurrent })
             guard scope.isCurrent else { return Date.timeIntervalSinceReferenceDate }
             return self.prepareForDatalinkRecovery(ifCurrent: { scope.isCurrent }).timeIntervalSinceReferenceDate
         }, enable: {}, probe: { [weak self] in
@@ -4730,7 +4025,7 @@ final class CameraSession {
         case .prepareRecover:
             recordFeedRepair("enable", phase: .requested)
             ControlLiveLog.line("recovery: action=enable effect=requested")
-            endGimbalStick(cancelMove: true, ifCurrent: { scope.isCurrent })
+            gimbal.endStick(cancelMove: true, ifCurrent: { scope.isCurrent })
         case .prepareMediaReturn:
             status.meteredEv = nil
         case .exitPlayback:
@@ -5200,74 +4495,7 @@ final class CameraSession {
             settleLateFromSubscribe()
             return
         }
-        if frame.cmdSet == 0x04, frame.cmdId == 0x05 {
-            requestGimbalParams()
-            if frame.payload.count == 50, let family = s.gimbalModeFamily {
-                gimbalFollowFamilyConfirmed = family == .follow
-                let resolved = GimbalControl.modeFromFamily(family, current: gimbalMode)
-                // Follow-family alone cannot confirm the tilt-lock choice.
-                let reportedMode: GimbalMode? = family == .follow ? nil : resolved
-                // Per attitude frame: write only on change so the gimbal sheet
-                // does not re-render at the attitude rate.
-                let mode =
-                    CameraValuePin.reconcile(
-                        &gimbalModePin, reported: reportedMode,
-                        now: Date.timeIntervalSinceReferenceDate
-                    ) ?? resolved
-                if mode != gimbalMode { gimbalMode = mode }
-            }
-            lastGimbalAttitudeHex = Duml.hex(frame.payload, limit: 80)
-            lastGimbalAttitudeDump = GimbalStick.attitudeAngleDump(frame.payload)
-            levelReading.ingest(frame.payload, now: ProcessInfo.processInfo.systemUptime)
-            judgeWorldLevelSnap()
-            let wasTT180 = gimbalStickMapping.commanded180
-            gimbalStickMapping.applyAttitude(frame.payload)
-            syncGimbalPose()
-            let attitude = GimbalStick.isAttitude(frame.payload)
-            if attitude {
-                lastNativeGimbalWaypoint = GimbalWaypoint.from(
-                    yawTenth: GimbalStick.yawTenthDeg(frame.payload),
-                    pitchTenth: GimbalStick.pitchTenthDeg(frame.payload), zoom: zoomReadout,
-                    nativePitchTenth: GimbalStick.nativePitchTenthDeg(frame.payload))
-            }
-            if attitude, let pose = liveGimbalWaypoint {
-                let now = ProcessInfo.processInfo.systemUptime
-                gimbalOverlayMotion.observe(pose, at: now)
-                if let previous = lastMoveObservedPose, let receivedAt = lastMoveAttitudeAt,
-                    now - receivedAt <= 0.3,
-                    GimbalMoveEngine.angularDistance(previous, pose) <= 0.100001
-                {
-                    if movePoseStableSince == nil { movePoseStableSince = now }
-                } else {
-                    movePoseStableSince = now
-                    lastMoveObservedPose = pose
-                }
-                if gimbalStickHeld { movePoseStableSince = nil }
-                lastMoveAttitudeAt = now
-                restoreGimbalPrep(
-                    gimbalPrep.restore(busy: nativeHeadToken != nil || gimbalMoveRunning, now: now))
-            }
-            tickGimbalLimit()
-            if gimbalStickMapping.commanded180 != wasTT180 {
-                ControlLiveLog.line(
-                    "control: gimbal TT180=\(gimbalStickMapping.commanded180 ? 1 : 0) yaw=\(gimbalStickMapping.yawTenthDeg.map { String($0) } ?? "-") seed=\(gimbalStickMapping.poseSeeded ? 1 : 0) view=\(gimbalPoseViewFlip ? 1 : 0)"
-                )
-            }
-        }
-        if frame.cmdSet == 0x04, frame.cmdId == 0x27 {
-            let previousFace = gimbalStickMapping.face
-            let body = gimbalStickMapping.noteBodyFace(s.gimbalFace)
-            syncGimbalPose()
-            if body {
-                ControlLiveLog.line(
-                    "control: gimbal body TT180 invert=\(gimbalStickMapping.invertPan ? 1 : 0) rot180=\(gimbalStickMapping.rotated180 ? 1 : 0) view=\(gimbalStickMapping.poseViewFlip ? 1 : 0) pend=\(gimbalStickMapping.pendingRotateCount)"
-                )
-            } else if let new = gimbalStickMapping.face, previousFace != new {
-                ControlLiveLog.line(
-                    "control: gimbal face=\(new == .selfie ? "selfie" : "front") invert=\(gimbalStickMapping.invertPan ? 1 : 0) rot180=\(gimbalStickMapping.rotated180 ? 1 : 0) view=\(gimbalStickMapping.poseViewFlip ? 1 : 0) parity=\(gimbalStickMapping.rotateParity ? 1 : 0)"
-                )
-            }
-        }
+        gimbal.ingest(frame, status: s)
         absorbCameraFocus(s)
         noteExpoIfChanged(s)
         noteZoomIfChanged(s)
@@ -5277,30 +4505,7 @@ final class CameraSession {
         // Presentation pins cannot calibrate the source.
         decoder.refreshSourceCalibration()
         let flipChanged = s.selfieFlip != status.selfieFlip
-        if wasRecording && !s.isRecording {
-            cancelProgrammedMove()
-        }
-        wasRecording = s.isRecording
-        if frame.cmdSet == 0x04, frame.cmdId == 0x50,
-            let params = GimbalParamState.parseGetReply(frame.payload)
-        {
-            let resolved = GimbalControl.modeFromGet(params, commanded: gimbalMode)
-            let reportedMode: GimbalMode? =
-                gimbalFollowFamilyConfirmed && (gimbalMode == .follow || gimbalMode == .tiltLocked)
-                ? resolved : nil
-            let mode =
-                CameraValuePin.reconcile(
-                    &gimbalModePin, reported: reportedMode, now: Date.timeIntervalSinceReferenceDate
-                ) ?? resolved
-            if mode != gimbalMode { gimbalMode = mode }
-            if let speed = params.speed {
-                let reconciled =
-                    CameraValuePin.reconcile(
-                        &gimbalSpeedPin, reported: speed, now: Date.timeIntervalSinceReferenceDate
-                    ) ?? speed
-                if reconciled != gimbalSpeed { gimbalSpeed = reconciled }
-            }
-        }
+        gimbal.settle(frame, status: s)
         guard editorReconciliation.admits(editor.authority) else { return }
         status = s
         guard editorReconciliation.admits(editor.authority) else { return }
@@ -5309,69 +4514,21 @@ final class CameraSession {
         if flipReply || flipChanged {
             if flipChanged {
                 ControlLiveLog.line(
-                    "control: Selfie Flip \(s.selfieFlip?.label ?? "nil") extra-mirror=\(gimbalStickMapping.commanded180 && !(s.selfieFlip?.isOn ?? false) ? 1 : 0)"
+                    "control: Selfie Flip \(s.selfieFlip?.label ?? "nil") extra-mirror=\(gimbal.stickMapping.commanded180 && !(s.selfieFlip?.isOn ?? false) ? 1 : 0)"
                 )
                 decoder.invalidatePictureFlipPresentation()
             }
-            syncGimbalPose()
+            gimbal.syncPose()
         }
         settleLateFromSubscribe()
     }
 
     private func resetGimbalPoseForNewStream() {
-        cancelProgrammedMove()
-        lastMoveAttitudeAt = nil
-        lastNativeGimbalWaypoint = nil
-        gimbalOverlayMotion.reset()
-        movePoseStableSince = nil
-        lastMoveObservedPose = nil
-        gimbalOverlayMotion.reset()
-        gimbalParamPoll = GimbalParamPoll()
-        gimbalStickMapping = GimbalStickMapping()
-        lastGimbalCommand = (0, 0)
-        gimbalLimitWatch.reset()
+        gimbal.resetPose()
         lastSelfieFlipReplyAt = nil
         decoder.invalidatePictureFlipPresentation()
         decoder.poseViewFlip = false
-        syncGimbalPose()
-    }
-
-    /// Our own pan must never read as a reconnect-at-180 seed.
-    private func noteGimbalAppMotion() {
-        guard !gimbalStickMapping.poseSeeded else { return }
-        gimbalStickMapping.noteAppMotion()
-        if gimbalStickMapping.poseSeeded {
-            ControlLiveLog.line(
-                "control: gimbal seed front by app motion yaw=\(gimbalStickMapping.yawTenthDeg.map { String($0) } ?? "-")"
-            )
-        }
-    }
-
-    private func syncGimbalPose() {
-        gimbalStickMapping.selfieFlip = status.selfieFlip?.isOn ?? false
-        // Runs per gimbal attitude frame: an unchanged write still notifies
-        // `livePictureViewFlip` readers and the stick pads.
-        let viewFlip = gimbalStickMapping.poseViewFlip
-        if gimbalPoseViewFlip != viewFlip { gimbalPoseViewFlip = viewFlip }
-        let invertPan = gimbalStickMapping.invertPan
-        if gimbalPoseInvertPan != invertPan { gimbalPoseInvertPan = invertPan }
-        decoder.poseViewFlip = viewFlip
-        decoder.syncPictureFlip()
-    }
-
-    private func tickGimbalLimit() {
-        let pulse = gimbalLimitWatch.tick(
-            x: lastGimbalCommand.x,
-            y: lastGimbalCommand.y,
-            yawTenthDeg: gimbalStickMapping.yawTenthDeg,
-            pitchTenthDeg: gimbalStickMapping.pitchTenthDeg,
-            now: Date().timeIntervalSinceReferenceDate,
-            settling180: !gimbalStickMapping.pendingWant180.isEmpty)
-        guard !pulse.isEmpty else { return }
-        gimbalLimitContact = pulse
-        gimbalLimitPanSign = gimbalLimitWatch.lastPanSign
-        gimbalLimitTiltSign = gimbalLimitWatch.lastTiltSign
-        gimbalLimitPulse += 1
+        gimbal.syncPose()
     }
 
     var hasMediaDatalink: Bool { datalink != nil }
@@ -5627,5 +4784,23 @@ final class CameraSession {
                 "the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again"
             }
         }
+    }
+}
+
+extension CameraSession: DjiAppleGimbalHost {
+    var gimbalLink: (any DjiAppleGimbalLink)? { datalink }
+    var isLivePhase: Bool { phase == .live }
+    var cameraModel: CameraModel? { connectedCamera?.model }
+    func gimbalLog(_ line: String) { ControlLiveLog.line(line) }
+
+    func gimbalPoseDidSync(viewFlip: Bool) {
+        decoder.poseViewFlip = viewFlip
+        decoder.syncPictureFlip()
+    }
+
+    /// Retire manual requests and any delayed wide-angle color restoration.
+    func retireZoomForProgrammedMove() -> Bool {
+        controlExchange.cancelSet(CameraSetMailbox.zoomOpcodeKey)
+        return zoomGesture.retireForProgrammedZoom()
     }
 }

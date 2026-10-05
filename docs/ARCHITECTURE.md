@@ -482,3 +482,12 @@ The app keeps actual point clamping, reticle/face presentation, tracking cancell
 diagnostic copy. This source-only Apple proposal changes no Android workflow; native
 first-picture format poke and zoom/color restoration remain distinct integration work.
 No physical camera qualification or full session checkpoint closure is claimed.
+
+## Apple gimbal control ownership
+
+`DjiAppleGimbalControl` in OpenCineDJIApple owns the stick stream, mode/speed pins, pose
+mapping, limit watch, world level, head-track tokens and programmed moves. CameraSession
+is its `DjiAppleGimbalHost`: it keeps the observable gimbal state the views read
+(`gimbalMode`, `gimbalProgram`, `gimbalMoveRunning`, ...), applies the pose view flip to
+the decoder, retires manual zoom for a zoom take and journals through `ControlLiveLog`.
+Views call actions on `session.gimbal`. Wire traffic, pins and timings are unchanged.

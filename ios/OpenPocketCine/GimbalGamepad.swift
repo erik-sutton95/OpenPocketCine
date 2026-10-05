@@ -76,7 +76,7 @@ final class GimbalGamepadBridge {
         if padActive {
             padActive = false
             model?.gimbalPadHeld = false
-            model?.session.endGimbalStick()
+            model?.session.gimbal.endStick()
         }
         stopZoomPump()
         if zoomActive {
@@ -174,7 +174,7 @@ final class GimbalGamepadBridge {
         if GamepadGimbalStick.restHeldMotion(from: lastStick, to: stick, driving: padActive) {
             padActive = false
             model.gimbalPadHeld = false
-            model.session.endGimbalStick()
+            model.session.gimbal.endStick()
         }
         lastStick = stick
         let axes = stick.axes(
@@ -190,14 +190,14 @@ final class GimbalGamepadBridge {
             if padActive {
                 padActive = false
                 model.gimbalPadHeld = false
-                model.session.endGimbalStick()
+                model.session.gimbal.endStick()
             }
         } else {
             padActive = true
             // Per controller poll: AppRoot observes gimbalAnalogHeld, so an
             // unchanged write re-evaluated the root body at the poll rate.
             if !model.gimbalPadHeld { model.gimbalPadHeld = true }
-            model.session.updateGimbalStick(
+            model.session.gimbal.updateStick(
                 x: x, y: y, sensitivity: model.gimbalStickSensitivity,
                 assistMirror: model.assist.mirrorsHorizontally)
         }

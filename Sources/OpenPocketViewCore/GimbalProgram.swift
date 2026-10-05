@@ -1,38 +1,7 @@
 import Foundation
 
 // GimbalWaypoint, GimbalWaypointSlot, GimbalProgram and the straight-line pose math
-// (GimbalPath) live in OpenCineCore's OpenCineMotion. The DJI native-target engine stays here.
-
-/// First-order follow on analog throw. Off is a passthrough.
-public struct GimbalRampFilter: Equatable, Sendable {
-    public var x: Double = 0
-    public var y: Double = 0
-
-    public init(x: Double = 0, y: Double = 0) {
-        self.x = x
-        self.y = y
-    }
-
-    public mutating func reset() {
-        x = 0
-        y = 0
-    }
-
-    public mutating func tick(
-        targetX: Double, targetY: Double, ramp: GimbalRamp, dt: TimeInterval
-    ) -> (Double, Double) {
-        let tau = ramp.tau
-        if tau <= 0 || dt <= 0 {
-            x = targetX
-            y = targetY
-            return (x, y)
-        }
-        let alpha = 1 - exp(-dt / tau)
-        x += (targetX - x) * alpha
-        y += (targetY - y) * alpha
-        return (x, y)
-    }
-}
+// (GimbalPath) live in OpenCineMotion; the ramp filter and native-target engine in OpenCineDJI.
 
 /// Project a stored yaw/pitch onto the live picture. Each waypoint is a
 /// direction on the unit sphere in gimbal space; as live `0x04/0x05`

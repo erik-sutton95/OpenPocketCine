@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.opencapture.opencine.runtime.GpuLiveLayout
 
 internal val LocalGpuLive = staticCompositionLocalOf<LiveVulkanSession?> { null }
 

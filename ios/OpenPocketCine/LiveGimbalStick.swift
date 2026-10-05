@@ -74,7 +74,7 @@ struct LiveGimbalStick: View {
         .onDisappear {
             cancelTaps()
             contact = false
-            model.session.endGimbalStick()
+            model.session.gimbal.endStick()
         }
         .onChange(of: interfaceLocked) { _, locked in
             if locked {
@@ -111,7 +111,7 @@ struct LiveGimbalStick: View {
                     // Per drag sample; AppRoot observes gimbalAnalogHeld.
                     if !model.gimbalScreenHeld { model.gimbalScreenHeld = true }
                     knobOffset = CGSize(width: mapped.visualX, height: mapped.visualY)
-                    model.session.updateGimbalStick(
+                    model.session.gimbal.updateStick(
                         x: mapped.commandX, y: mapped.commandY,
                         sensitivity: model.gimbalStickSensitivity,
                         assistMirror: model.assist.mirrorsHorizontally,
@@ -142,14 +142,14 @@ struct LiveGimbalStick: View {
                 guard !Task.isCancelled else { return }
                 if taps.commitDouble() {
                     hapticRecenter()
-                    model.session.performGimbalDoubleTap()
+                    model.session.gimbal.performDoubleTap()
                 }
             }
         case .third:
             pendingDouble?.cancel()
             pendingDouble = nil
             hapticFlip()
-            model.session.flipGimbal()
+            model.session.gimbal.flip()
         }
     }
 
@@ -196,6 +196,6 @@ struct LiveGimbalStick: View {
         dragging = false
         model.gimbalScreenHeld = false
         knobOffset = .zero
-        model.session.endGimbalStick()
+        model.session.gimbal.endStick()
     }
 }

@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.openpocketcine.feed.GpuLiveLayout
+import com.opencapture.opencine.runtime.GpuLiveLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

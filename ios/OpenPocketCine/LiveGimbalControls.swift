@@ -416,7 +416,7 @@ private struct LiveGimbalMoveEditor: View {
             .accessibilityIdentifier("motion.editor.scroll")
             .accessibilityValue(canScrollFurther ? "More settings below" : "End of settings")
 
-            if let reason = model.session.programmedZoomUnavailableReason {
+            if let reason = model.session.gimbal.programmedZoomUnavailableReason {
                 Text(reason)
                     .font(LiveType.ui(size: 11, weight: .regular))
                     .foregroundStyle(LiveDesign.muted)
@@ -477,12 +477,12 @@ private struct LiveGimbalMoveEditor: View {
                 .b, duration: model.session.gimbalProgram.durationAB,
                 floor: GimbalProgram.minTravelDuration(
                     from: model.session.gimbalProgram.a, to: model.session.gimbalProgram.b)
-            ) { model.session.setGimbalLegDuration(ab: $0) }
+            ) { model.session.gimbal.setLegDuration(ab: $0) }
             waypointRow(
                 .c, duration: model.session.gimbalProgram.durationBC,
                 floor: GimbalProgram.minTravelDuration(
                     from: model.session.gimbalProgram.b, to: model.session.gimbalProgram.c)
-            ) { model.session.setGimbalLegDuration(bc: $0) }
+            ) { model.session.gimbal.setLegDuration(bc: $0) }
 
             if model.session.gimbalProgram.b != nil, model.session.gimbalProgram.c != nil {
                 VStack(alignment: .leading, spacing: 4) {
@@ -494,7 +494,7 @@ private struct LiveGimbalMoveEditor: View {
                     Slider(
                         value: Binding(
                             get: { model.session.gimbalProgram.smoothness },
-                            set: { if canInteract() { model.session.setGimbalSmoothness($0) } }),
+                            set: { if canInteract() { model.session.gimbal.setSmoothness($0) } }),
                         in: 0...1, step: 0.05
                     )
                     .tint(LiveDesign.accent)
@@ -509,7 +509,7 @@ private struct LiveGimbalMoveEditor: View {
                 helpColor: MonitorTheme.secondary,
                 isOn: Binding(
                     get: { model.session.gimbalProgram.loop },
-                    set: { if canInteract() { model.session.setGimbalLoop($0) } })
+                    set: { if canInteract() { model.session.gimbal.setLoop($0) } })
             )
             .disabled(model.session.gimbalMoveRunning)
             .accessibilityIdentifier("motion.loop")
@@ -521,9 +521,9 @@ private struct LiveGimbalMoveEditor: View {
             Button {
                 guard canInteract() else { return }
                 if model.session.gimbalMovePaused {
-                    model.session.restartProgrammedMove()
+                    model.session.gimbal.restartProgrammedMove()
                 } else {
-                    model.session.clearGimbalProgram()
+                    model.session.gimbal.clearProgram()
                 }
             } label: {
                 Text(model.session.gimbalMovePaused ? "Restart" : LiveGimbalCopy.clear)
@@ -537,7 +537,7 @@ private struct LiveGimbalMoveEditor: View {
             if model.session.gimbalMoveCanPause {
                 Button(model.session.gimbalMovePaused ? "Resume" : "Pause") {
                     guard canInteract() else { return }
-                    model.session.pauseOrResumeProgrammedMove()
+                    model.session.gimbal.pauseOrResumeProgrammedMove()
                 }
                 .buttonStyle(.zcTapTarget)
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -548,7 +548,7 @@ private struct LiveGimbalMoveEditor: View {
 
             Button {
                 guard canInteract() else { return }
-                model.session.runProgrammedMove()
+                model.session.gimbal.runProgrammedMove()
             } label: {
                 Text(
                     model.session.gimbalMoveRunning
@@ -573,7 +573,7 @@ private struct LiveGimbalMoveEditor: View {
     }
 
     private var runEnabled: Bool {
-        model.session.canRunProgrammedMove || model.session.gimbalMoveRunning
+        model.session.gimbal.canRunProgrammedMove || model.session.gimbalMoveRunning
     }
 
     private func waypointRow(
@@ -599,7 +599,7 @@ private struct LiveGimbalMoveEditor: View {
                     .accessibilityIdentifier("motion.waypoint.\(slot.letter).readout")
                 Button {
                     guard canInteract() else { return }
-                    model.session.setGimbalWaypoint(slot)
+                    model.session.gimbal.setWaypoint(slot)
                 } label: {
                     Text(set ? "RESET" : "SET")
                         .font(MonitorTheme.font(10, weight: .bold)).tracking(0.6)
@@ -619,7 +619,7 @@ private struct LiveGimbalMoveEditor: View {
                 if set {
                     Button {
                         guard canInteract() else { return }
-                        model.session.clearGimbalWaypoint(slot)
+                        model.session.gimbal.clearWaypoint(slot)
                     } label: {
                         OpcIcon.x
                             .frame(width: 12, height: 12)
@@ -666,7 +666,7 @@ private struct LiveGimbalMoveEditor: View {
                 // Render eligibility must recover on release without waiting
                 // for another render after the tap-suppression deadline.
                 !canInteract.isDragging && model.liveGimbalPanel == .editor
-                    && model.session.canSetGimbalConfiguration
+                    && model.session.gimbal.canSetConfiguration
                     && model.session.connectedCamera?.id == cameraID
                     && model.session.phase.label == phase
             },
@@ -676,7 +676,7 @@ private struct LiveGimbalMoveEditor: View {
             },
             onChange: { next in
                 guard canInteract(), model.liveGimbalPanel == .editor,
-                    model.session.canSetGimbalConfiguration,
+                    model.session.gimbal.canSetConfiguration,
                     model.session.connectedCamera?.id == cameraID,
                     model.session.phase.label == phase
                 else { return }
@@ -705,7 +705,7 @@ private struct LiveGimbalRunPill: View {
             if model.session.gimbalMoveCanPause {
                 Button(model.session.gimbalMovePaused ? "Resume" : "Pause") {
                     guard canInteract() else { return }
-                    model.session.pauseOrResumeProgrammedMove()
+                    model.session.gimbal.pauseOrResumeProgrammedMove()
                 }
                 .font(LiveType.ui(size: 13, weight: .bold))
                 .foregroundStyle(LiveDesign.text)
@@ -716,7 +716,7 @@ private struct LiveGimbalRunPill: View {
             }
             Button {
                 guard canInteract() else { return }
-                model.session.runProgrammedMove()
+                model.session.gimbal.runProgrammedMove()
             } label: {
                 Text(
                     model.session.gimbalMoveRunning
@@ -733,10 +733,10 @@ private struct LiveGimbalRunPill: View {
             .buttonStyle(.zcTapTarget)
             .accessibilityIdentifier("motion.startStop")
             .disabled(
-                !model.session.canRunProgrammedMove && !model.session.gimbalMoveRunning
+                !model.session.gimbal.canRunProgrammedMove && !model.session.gimbalMoveRunning
             )
             .opacity(
-                model.session.canRunProgrammedMove || model.session.gimbalMoveRunning ? 1 : 0.45)
+                model.session.gimbal.canRunProgrammedMove || model.session.gimbalMoveRunning ? 1 : 0.45)
 
             Button {
                 guard canInteract() else { return }
@@ -762,7 +762,7 @@ struct LiveGimbalWaypointMarks: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: GimbalStick.streamInterval)) { _ in
-            let live = model.session.overlayGimbalWaypoint
+            let live = model.session.gimbal.overlayWaypoint
             let aspect = feed.width > 1 ? Double(feed.width / max(feed.height, 1)) : 16 / 9
             ZStack(alignment: .topLeading) {
                 if let live {

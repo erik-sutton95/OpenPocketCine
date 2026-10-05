@@ -227,9 +227,9 @@ final class AppModel {
     }
     /// A manual mode selection takes control back from the AirPods stream.
     func setGimbalMode(_ mode: GimbalMode) {
-        guard session.canSetGimbalConfiguration else { return }
+        guard session.gimbal.canSetConfiguration else { return }
         headTrackingEnabled = false
-        session.setGimbalMode(mode)
+        session.gimbal.setMode(mode)
     }
 
     /// Live SET / STOP chip. SET starts tracking and locks forward; STOP ends it.

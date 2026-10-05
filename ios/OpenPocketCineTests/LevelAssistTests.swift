@@ -68,7 +68,7 @@ final class GimbalDoubleTapTests: XCTestCase {
     func testLevelDoubleTapWithoutAttitudeRefusesAndSaysSo() {
         let session = CameraSession()
         session.gimbalDoubleTap = .level
-        session.performGimbalDoubleTap()
+        session.gimbal.performDoubleTap()
         XCTAssertEqual(session.controlNote, WorldLevelSnap.noLevelData)
     }
 }
