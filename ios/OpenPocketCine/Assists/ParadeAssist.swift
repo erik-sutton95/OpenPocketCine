@@ -25,17 +25,7 @@ import UIKit
 enum ParadeAssist {
     static let panelID = "parade"
     static let baseSize = ScopePanelSize.parade
-    static let scaleRange: ClosedRange<Double> = 0.6...1.6
-    static let defaultScale = 1.0
     static let brightnessRange: ClosedRange<Int> = 0...200
-    static let defaultBrightness = 100
-    static let holdDuration: Double = 0.3
-    static let positionGrid: CGFloat = 4
-    static let hapticGrid: CGFloat = 22
-    static let dragHitPadding: CGFloat = 10
-    static let gripHitSize: CGFloat = 56
-    static let gripVisualSize: CGFloat = 14
-    static let gripExteriorGap: CGFloat = 2
 
     typealias Mode = MonitorParadeMode
 
@@ -80,53 +70,7 @@ enum ParadeAssist {
     }
 
     static func panelSize(scale: Double) -> CGSize {
-        let clamped = Options.clampedScale(scale)
-        return CGSize(
-            width: (baseSize.width * clamped).rounded(),
-            height: (baseSize.height * clamped).rounded())
-    }
-
-    /// Unplaced tools start at the canvas center; saved/session centers win later.
-    static func defaultCenter(
-        feed _: CGRect,
-        size: CGSize,
-        bounds: CGRect,
-        chromeClearance _: EdgeInsets = EdgeInsets(),
-        gap _: CGFloat = 10
-    ) -> CGPoint {
-        clamp(
-            CGPoint(x: bounds.midX, y: bounds.midY), size: size, bounds: bounds)
-    }
-
-    static func clamp(_ point: CGPoint, size: CGSize, bounds: CGRect) -> CGPoint {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        return CGPoint(
-            x: min(max(bounds.minX + halfWidth, point.x), bounds.maxX - halfWidth),
-            y: min(max(bounds.minY + halfHeight, point.y), bounds.maxY - halfHeight))
-    }
-
-    static func snap(_ point: CGPoint, grid: CGFloat = positionGrid) -> CGPoint {
-        CGPoint(
-            x: (point.x / grid).rounded() * grid,
-            y: (point.y / grid).rounded() * grid)
-    }
-
-    static func hapticCell(_ point: CGPoint, grid: CGFloat = hapticGrid) -> Int {
-        Int((point.x / grid).rounded()) &* 100_000
-            &+ Int((point.y / grid).rounded())
-    }
-
-    static func resolvedCenter(
-        session: CGPoint?,
-        stored: StoredCenter?,
-        defaultCenter: CGPoint,
-        size: CGSize,
-        bounds: CGRect
-    ) -> CGPoint {
-        if let session { return clamp(session, size: size, bounds: bounds) }
-        if let stored { return clamp(stored.center(in: bounds), size: size, bounds: bounds) }
-        return clamp(defaultCenter, size: size, bounds: bounds)
+        MonitorScopePanelCentering.panelSize(baseSize, scale: Options.clampedScale(scale))
     }
 
     @MainActor
@@ -161,14 +105,16 @@ enum ParadeAssist {
     }
 
     /// Direct drag + L-corner resize wrapper (OpenZCine `MovablePanel` id `"parade"`).
+    @MainActor
     static func overlay<Content: View>(
         canvas: CGRect,
         feed: CGRect,
         chromeClearance: EdgeInsets = EdgeInsets(),
         @ViewBuilder content: @escaping () -> Content
-    ) -> ParadeMovablePanel<Content> {
-        ParadeMovablePanel(
-            canvas: canvas, feed: feed, chromeClearance: chromeClearance, content: content)
+    ) -> MonitorScopeStoredPanel<Options, Content> {
+        MonitorScopeStoredPanel(
+            store: store, baseSize: baseSize, canvas: canvas, chromeClearance: chromeClearance,
+            resizeLabel: "Resize parade", content: content)
     }
 }
 
@@ -198,43 +144,6 @@ struct ParadeLongPressMenu: View {
             }, guideFeedback: { ParadeAssistHaptics.selection() })
     }
 }
-
-struct ParadeMovablePanel<Content: View>: View {
-    let canvas: CGRect
-    let feed: CGRect
-    var chromeClearance: EdgeInsets = EdgeInsets()
-    @ViewBuilder var content: () -> Content
-    @Environment(\.interfaceLocked) private var interfaceLocked
-    private var store: ParadeAssistStore { ParadeAssist.store }
-    var body: some View {
-        let bounds = ScopePanelPlacement.bounds(in: canvas, clearance: chromeClearance)
-        let scale = store.presentationScale(in: canvas)
-        let preferred = ParadeAssist.panelSize(scale: scale)
-        let size = ScopePanelPlacement.fittedSize(preferred, in: bounds)
-        let fallback = ParadeAssist.defaultCenter(
-            feed: feed, size: size, bounds: canvas, chromeClearance: chromeClearance)
-        let center = ParadeAssist.resolvedCenter(
-            session: store.sessionCenter(in: canvas),
-            stored: store.storedCenter(in: canvas), defaultCenter: fallback, size: size,
-            bounds: canvas)
-        MonitorMovableScopePanel(
-            layout: MonitorScopePanelLayout(
-                baseSize: ParadeAssist.baseSize,
-                preferredSize: preferred, center: center, scale: scale, canvas: canvas,
-                movementBounds: bounds),
-            enabled: !interfaceLocked, resizeLabel: "Resize parade",
-            onMove: { event in
-                switch event {
-                case .began(let center): store.beginDrag(center: center, in: canvas)
-                case .changed(let center): store.drag(to: center, in: canvas)
-                case .ended: store.endDrag(bounds: canvas)
-                case .cancelled(let retiredCanvas): store.cancelDrag(bounds: retiredCanvas)
-                }
-            }, onResize: { store.setScale($0) }, content: content)
-    }
-}
-
-
 
 /// OpenZCine `OperatorSettingsHaptics.selection`.
 private enum ParadeAssistHaptics {

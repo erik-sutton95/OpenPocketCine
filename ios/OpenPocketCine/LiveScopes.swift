@@ -96,7 +96,7 @@ struct WaveformOverlay: View {
 
     var body: some View {
         let options = WaveformAssist.store.options
-        let size = ScopePanelPlacement.size(
+        let size = MonitorScopePanelPlacement.size(
             WaveformAssist.panelSize(scale: WaveformAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let intensity = WaveformAssist.intensity(options.brightness)
@@ -145,7 +145,7 @@ struct ParadeOverlay: View {
 
     var body: some View {
         let options = ParadeAssist.store.options
-        let size = ScopePanelPlacement.size(
+        let size = MonitorScopePanelPlacement.size(
             ParadeAssist.panelSize(scale: ParadeAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let intensity = ParadeAssist.intensity(options.brightness)
@@ -188,7 +188,7 @@ struct HistogramOverlay: View {
 
     var body: some View {
         let options = HistogramAssist.store.options
-        let size = ScopePanelPlacement.size(
+        let size = MonitorScopePanelPlacement.size(
             HistogramAssist.panelSize(scale: HistogramAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let plot = ScopeMiniChrome(
@@ -232,7 +232,7 @@ struct VectorscopeOverlay: View {
         let plot = ScopeMiniChrome(
             title: "Vector",
             chip: VectorscopeAssist.chip(zoom: options.zoom),
-            size: ScopePanelPlacement.size(
+            size: MonitorScopePanelPlacement.size(
                 VectorscopeAssist.panelSize(
                     scale: VectorscopeAssist.store.presentationScale(in: canvas)),
                 canvas: canvas, clearance: chromeClearance)
@@ -274,16 +274,15 @@ struct TrafficLightsOverlay: View {
 
     var body: some View {
         let store = TrafficLightsAssist.store
-        let size = ScopePanelPlacement.size(
+        let size = MonitorScopePanelPlacement.size(
             TrafficLightsAssist.panelSize(scale: store.scale),
             canvas: bounds, clearance: chromeClearance)
         TrafficLightsMovablePanel(
             store: store,
             size: size,
-            defaultCenter: TrafficLightsAssist.defaultCenter(
-                feed: feed, size: size, bounds: bounds, chromeClearance: chromeClearance),
+            defaultCenter: MonitorScopePanelCentering.defaultCenter(size: size, bounds: bounds),
             bounds: bounds,
-            placementBounds: ScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
+            placementBounds: MonitorScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
         ) {
             // Metered once in the sampler with the operator threshold riding
             // `LiveImageEffects.trafficThreshold` - render the bundle directly.
