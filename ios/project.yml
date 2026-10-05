@@ -208,6 +208,9 @@ targets:
       - OpenPocketCineUITests
     dependencies:
       - target: OpenPocketCine
+      # The UI tests every app shares (OpenCine OpenCineAppUITesting).
+      - package: OpenCine
+        product: OpenCineAppUITesting
     settings:
       base:
         SWIFT_VERSION: "5.0"
