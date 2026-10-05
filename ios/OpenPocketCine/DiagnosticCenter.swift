@@ -151,6 +151,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         case .failed: phase = "failed"
         }
         return DiagnosticEnvironment(
+            product: "OpenPocketCine",
             appVersion: info?["CFBundleShortVersionString"] as? String ?? "0",
             appBuild: info?["CFBundleVersion"] as? String ?? "0",
             osName: "iOS",
@@ -169,7 +170,8 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
             environment: environment(session: session),
             journal: ControlLiveLog.recentLines(),
             exceptions: Self.readLines(Self.exceptionsURL),
-            extras: FeedIncidentRuntime.reportExtras() + Self.metricKitExtras())
+            extras: FeedIncidentRuntime.reportExtras() + Self.metricKitExtras(),
+            isSafeNetwork: PrivacyRedactor.isCameraNetwork)
     }
 
     @MainActor
@@ -179,7 +181,8 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         let exceptions = Self.readLines(Self.exceptionsURL)
         let extras = Self.metricKitExtras() + FeedIncidentRuntime.reportExtras()
         let body = DiagnosticReport.fullReport(
-            environment: env, journal: journal, exceptions: exceptions, extras: extras)
+            environment: env, journal: journal, exceptions: exceptions, extras: extras,
+            isSafeNetwork: PrivacyRedactor.isCameraNetwork)
         guard let dir = Self.diagnosticsDirectory else { return nil }
         let name = "report.txt"
         let url = dir.appendingPathComponent(name)
@@ -205,7 +208,8 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
     func compactSummary(session: CameraSession) -> String {
         DiagnosticReport.compactSummary(
             environment: environment(session: session),
-            recent: ControlLiveLog.recentLines())
+            recent: ControlLiveLog.recentLines(),
+            isSafeNetwork: PrivacyRedactor.isCameraNetwork)
     }
 
     @MainActor
