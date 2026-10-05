@@ -264,7 +264,7 @@ struct SettingsRootView: View {
                 reset: { feedback(); resetPeaking() }),
             .trafficLights(TrafficLightsAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
                 reset: { feedback(); resetTrafficLights() }),
-        ]).buttonStyle(.zcTapTarget).monitorFullWidthCard()
+        ]).buttonStyle(.monitorTapTarget).monitorFullWidthCard()
 
         MonitorExposureMeterSettings(isOn: model.assist.evMeter,
             help: "Show the camera's exposure meter at the picture's left edge in DISP 1. Auto and Manual use the camera reading without changing exposure settings.",

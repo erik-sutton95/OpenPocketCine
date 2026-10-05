@@ -237,7 +237,7 @@ struct LUTPicker: View {
                     .padding(.vertical, 8)
                     .background(LiveDesign.glassBright, in: Capsule())
             }
-            .buttonStyle(.zcTapTarget)
+            .buttonStyle(.monitorTapTarget)
             if imported.isEmpty {
                 Text("Imported looks land here. Auto stays on Built-in or DJI.")
                     .font(LiveType.ui(size: 11, weight: .medium, design: .rounded))
@@ -274,7 +274,7 @@ struct LUTPicker: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.zcTapTarget)
+            .buttonStyle(.monitorTapTarget)
             Button {
                 pendingDeletion = lut.fileName
             } label: {
@@ -285,7 +285,7 @@ struct LUTPicker: View {
                     .padding(.horizontal, 8)
                     .background(LiveDesign.glassBright, in: Capsule())
             }
-            .buttonStyle(.zcTapTarget)
+            .buttonStyle(.monitorTapTarget)
             .fixedSize()
         }
         .padding(.vertical, 6)

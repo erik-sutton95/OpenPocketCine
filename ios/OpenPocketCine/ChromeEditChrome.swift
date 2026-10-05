@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 
 // MARK: - Edit view (per-DISP chrome)
@@ -238,7 +239,7 @@ struct ChromeEditBadge: View {
                 .background(on ? LiveDesign.accent : Color.black.opacity(0.9), in: Circle())
                 .overlay(Circle().strokeBorder(LiveDesign.text.opacity(0.55), lineWidth: 1))
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .minTapTarget()
         .accessibilityLabel(section.title)
         .accessibilityValue(on ? "Shown" : "Hidden")
@@ -303,7 +304,7 @@ struct ChromeEditBanner: View {
                     .padding(.vertical, 6)
                     .background(LiveDesign.accent, in: Capsule())
             }
-            .buttonStyle(.zcTapTarget)
+            .buttonStyle(.monitorTapTarget)
             .accessibilityIdentifier("monitor.chromeEdit.done")
         }
         .padding(.leading, 12)

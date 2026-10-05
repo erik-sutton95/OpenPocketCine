@@ -40,7 +40,7 @@ enum LiveDesign {
     static var aeLock: Color { LiveHDRDisplay.chromeColor(hex: 0xF5D052) }
     static var rec: Color { LiveHDRDisplay.chromeColor(hex: 0xD13034) }
     static var info: Color { accent }
-    static let cornerRadius = DesignTokens.cornerRadius
+    static let cornerRadius = MonitorTheme.radius
     static let controlHeight: CGFloat = 58
 }
 
@@ -131,7 +131,7 @@ struct StartupFilledButtonStyle: ButtonStyle {
                 .padding(.vertical, 14)
                 .background(
                     StartupColors.accent.opacity(configuration.isPressed ? 0.80 : 1),
-                    in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
+                    in: RoundedRectangle(cornerRadius: MonitorTheme.radius)
                 )
                 .opacity(isEnabled ? 1 : 0.4)
         }

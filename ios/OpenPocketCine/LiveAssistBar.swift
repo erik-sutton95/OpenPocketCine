@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 import UIKit
 
@@ -52,7 +53,7 @@ struct LiveAssistBar: View {
         .padding(.trailing, 14)
         .frame(height: LiveDesign.controlHeight)
         .liveChromeGlass(
-            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+            in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous)
         )
         .overlay(alignment: .leading) { scrollChevron(.leading) }
         .overlay(alignment: .trailing) { scrollChevron(.trailing) }

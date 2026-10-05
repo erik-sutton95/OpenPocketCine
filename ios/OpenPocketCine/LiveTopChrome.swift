@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -148,7 +149,7 @@ struct LiveTopChrome: View {
         } label: {
             inlineReadout(icon: .video, value: recFormatLabel, isActive: active)
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .geometryGroup()
         .background(pickerAnchor(.recFormat))
         .accessibilityLabel("Recording format")
@@ -163,7 +164,7 @@ struct LiveTopChrome: View {
         } label: {
             inlineReadout(icon: .contrast, value: colorLabel, isActive: active)
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .geometryGroup()
         .background(pickerAnchor(.color))
         .accessibilityLabel("Color mode")
@@ -177,7 +178,7 @@ struct LiveTopChrome: View {
             inlineReadout(icon: .folder, value: storageLabel)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .geometryGroup()
         .accessibilityLabel("Storage remaining")
         .accessibilityValue(storageLabel)
