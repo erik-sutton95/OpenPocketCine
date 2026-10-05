@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.diagnostics
 
-import com.opencapture.opencine.dji.FeedIncidentSessionSummary
-import com.opencapture.opencine.dji.FeedIncidentTestSource
+import com.opencapture.opencine.media.FeedIncidentSessionSummary
+import com.opencapture.opencine.media.FeedIncidentTestSource
 import java.io.File
 import java.util.UUID
 import org.json.JSONObject

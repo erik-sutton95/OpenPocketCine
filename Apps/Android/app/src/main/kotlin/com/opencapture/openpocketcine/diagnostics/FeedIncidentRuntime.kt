@@ -1,14 +1,14 @@
 package com.opencapture.openpocketcine.diagnostics
 
 import com.opencapture.opencine.dji.FeedIncidentSink
-import com.opencapture.opencine.dji.FeedIncidentBreadcrumb
-import com.opencapture.opencine.dji.FeedIncidentBundle
-import com.opencapture.opencine.dji.FeedIncidentPersistenceJob
-import com.opencapture.opencine.dji.FeedIncidentSessionContext
-import com.opencapture.opencine.dji.FeedIncidentSessionSummary
-import com.opencapture.opencine.dji.FeedIncidentSnapshot
-import com.opencapture.opencine.dji.FeedIncidentTestSource
-import com.opencapture.opencine.dji.FeedRepairRecord
+import com.opencapture.opencine.media.FeedIncidentBreadcrumb
+import com.opencapture.opencine.media.FeedIncidentBundle
+import com.opencapture.opencine.media.FeedIncidentPersistenceJob
+import com.opencapture.opencine.media.FeedIncidentSessionContext
+import com.opencapture.opencine.media.FeedIncidentSessionSummary
+import com.opencapture.opencine.media.FeedIncidentSnapshot
+import com.opencapture.opencine.media.FeedIncidentTestSource
+import com.opencapture.opencine.media.FeedRepairRecord
 import com.opencapture.opencine.dji.PrivacyRedactor
 import java.io.File
 import java.util.concurrent.Executors

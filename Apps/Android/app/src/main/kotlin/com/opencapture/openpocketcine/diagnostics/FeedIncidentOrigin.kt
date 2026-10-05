@@ -1,7 +1,8 @@
 package com.opencapture.openpocketcine.diagnostics
 
-import com.opencapture.opencine.dji.FeedIncidentBuildIdentity
-import com.opencapture.opencine.dji.FeedIncidentTestSource
+import com.opencapture.opencine.dji.PrivacyRedactor
+import com.opencapture.opencine.media.FeedIncidentBuildIdentity
+import com.opencapture.opencine.media.FeedIncidentTestSource
 import com.opencapture.openpocketcine.BuildConfig
 
 /** Current-run origin only. Cached incidents keep the values persisted with them. */
@@ -37,8 +38,8 @@ internal object FeedIncidentOrigin {
     }
 
     fun currentBuildIdentity(): String {
-        overrideBuildIdentityForTests?.let { return FeedIncidentBuildIdentity.parse(it) }
-        return FeedIncidentBuildIdentity.parse(runCatching { BuildConfig.BUILD_IDENTITY }.getOrNull())
+        overrideBuildIdentityForTests?.let { return FeedIncidentBuildIdentity.parse(it, PrivacyRedactor::redact) }
+        return FeedIncidentBuildIdentity.parse(runCatching { BuildConfig.BUILD_IDENTITY }.getOrNull(), PrivacyRedactor::redact)
     }
 
     private fun isAutomatedHarness(): Boolean {

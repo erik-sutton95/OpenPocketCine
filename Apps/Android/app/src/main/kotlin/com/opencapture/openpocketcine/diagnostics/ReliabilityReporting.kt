@@ -1,14 +1,15 @@
 package com.opencapture.openpocketcine.diagnostics
 
-import com.opencapture.opencine.dji.FeedIncidentBreadcrumb
-import com.opencapture.opencine.dji.FeedIncidentBuildIdentity
-import com.opencapture.opencine.dji.FeedIncidentBundle
-import com.opencapture.opencine.dji.FeedIncidentNativeBreadcrumb
-import com.opencapture.opencine.dji.FeedIncidentOutcome
-import com.opencapture.opencine.dji.FeedIncidentSessionSummary
-import com.opencapture.opencine.dji.FeedIncidentTestSource
-import com.opencapture.opencine.dji.FeedIncidentVendorEnvelope
-import com.opencapture.opencine.dji.FeedRepairRecord
+import com.opencapture.opencine.dji.PrivacyRedactor
+import com.opencapture.opencine.media.FeedIncidentBreadcrumb
+import com.opencapture.opencine.media.FeedIncidentBuildIdentity
+import com.opencapture.opencine.media.FeedIncidentBundle
+import com.opencapture.opencine.media.FeedIncidentNativeBreadcrumb
+import com.opencapture.opencine.media.FeedIncidentOutcome
+import com.opencapture.opencine.media.FeedIncidentSessionSummary
+import com.opencapture.opencine.media.FeedIncidentTestSource
+import com.opencapture.opencine.media.FeedIncidentVendorEnvelope
+import com.opencapture.opencine.media.FeedRepairRecord
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -441,12 +442,12 @@ internal object ReliabilityReporting {
         event.setTag("outcome", summary.outcome)
         event.setTag("sourceRevision", summary.sourceRevision)
         event.setTag("testSource", (summary.testSource ?: FeedIncidentTestSource.UNKNOWN).wire)
-        event.setTag("buildIdentity", FeedIncidentBuildIdentity.parse(summary.buildIdentity))
+        event.setTag("buildIdentity", FeedIncidentBuildIdentity.parse(summary.buildIdentity, PrivacyRedactor::redact))
         event.setExtra("healthyExposureSeconds", summary.healthyExposureSeconds)
         event.setExtra("incidentCount", summary.incidentCount)
         event.setExtra("sourceRevision", summary.sourceRevision)
         event.setExtra("testSource", (summary.testSource ?: FeedIncidentTestSource.UNKNOWN).wire)
-        event.setExtra("buildIdentity", FeedIncidentBuildIdentity.parse(summary.buildIdentity))
+        event.setExtra("buildIdentity", FeedIncidentBuildIdentity.parse(summary.buildIdentity, PrivacyRedactor::redact))
         capturePayload(
             ReliabilityReportingPrivacy.scrub(event),
             json,

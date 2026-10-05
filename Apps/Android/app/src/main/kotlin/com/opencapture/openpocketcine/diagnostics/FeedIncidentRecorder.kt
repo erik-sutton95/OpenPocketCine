@@ -1,25 +1,26 @@
 package com.opencapture.openpocketcine.diagnostics
 
-import com.opencapture.opencine.dji.FeedIncidentBounds
-import com.opencapture.opencine.dji.FeedIncidentBreadcrumb
-import com.opencapture.opencine.dji.FeedIncidentBreadcrumbKind
-import com.opencapture.opencine.dji.FeedIncidentBundle
-import com.opencapture.opencine.dji.FeedIncidentClassifier
-import com.opencapture.opencine.dji.FeedIncidentErrorCount
-import com.opencapture.opencine.dji.FeedIncidentFailingStage
-import com.opencapture.opencine.dji.FeedIncidentHeader
-import com.opencapture.opencine.dji.FeedIncidentKind
-import com.opencapture.opencine.dji.FeedIncidentLifecycle
-import com.opencapture.opencine.dji.FeedIncidentOutcome
-import com.opencapture.opencine.dji.FeedIncidentPersistenceJob
-import com.opencapture.opencine.dji.FeedIncidentPrivacy
-import com.opencapture.opencine.dji.FeedIncidentSampling
-import com.opencapture.opencine.dji.FeedIncidentSessionContext
-import com.opencapture.opencine.dji.FeedIncidentSnapshot
-import com.opencapture.opencine.dji.FeedIncidentSuppression
-import com.opencapture.opencine.dji.FeedIncidentTestSource
-import com.opencapture.opencine.dji.FeedIncidentVerdict
-import com.opencapture.opencine.dji.FeedRepairRecord
+import com.opencapture.opencine.dji.PrivacyRedactor
+import com.opencapture.opencine.media.FeedIncidentBounds
+import com.opencapture.opencine.media.FeedIncidentBreadcrumb
+import com.opencapture.opencine.media.FeedIncidentBreadcrumbKind
+import com.opencapture.opencine.media.FeedIncidentBundle
+import com.opencapture.opencine.media.FeedIncidentClassifier
+import com.opencapture.opencine.media.FeedIncidentErrorCount
+import com.opencapture.opencine.media.FeedIncidentFailingStage
+import com.opencapture.opencine.media.FeedIncidentHeader
+import com.opencapture.opencine.media.FeedIncidentKind
+import com.opencapture.opencine.media.FeedIncidentLifecycle
+import com.opencapture.opencine.media.FeedIncidentOutcome
+import com.opencapture.opencine.media.FeedIncidentPersistenceJob
+import com.opencapture.opencine.media.FeedIncidentPrivacy
+import com.opencapture.opencine.media.FeedIncidentSampling
+import com.opencapture.opencine.media.FeedIncidentSessionContext
+import com.opencapture.opencine.media.FeedIncidentSnapshot
+import com.opencapture.opencine.media.FeedIncidentSuppression
+import com.opencapture.opencine.media.FeedIncidentTestSource
+import com.opencapture.opencine.media.FeedIncidentVerdict
+import com.opencapture.opencine.media.FeedRepairRecord
 import java.util.UUID
 
 /**
@@ -178,7 +179,7 @@ internal class FeedIncidentRecorder(
         val gap = FeedIncidentPrivacy.gapSeconds(snapshot, stage)
         val header =
             FeedIncidentHeader(
-                incidentId = FeedIncidentPrivacy.token(makeIncidentId()),
+                incidentId = FeedIncidentPrivacy.token(makeIncidentId(), redact = PrivacyRedactor::redact),
                 sessionId = session.sessionId,
                 kind = kind,
                 failingStage = stage,
