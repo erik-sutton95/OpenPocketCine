@@ -50,11 +50,21 @@ final class DesqueezeUIFlowTests: XCTestCase {
         app.buttons["Custom"].firstMatch.tap()
         let slider = app.sliders["Custom squeeze factor"]
         XCTAssertTrue(slider.waitForExistence(timeout: 5))
+        // In landscape the Custom slider opens below the panel's fold (on main too): bring its
+        // whole track into view, or the drag lands off screen and the factor stays put.
+        revealOption(slider)
+        let options = try XCTUnwrap(app.scrollViews.allElementsBoundByIndex.first {
+            $0.sliders["Custom squeeze factor"].exists
+        })
+        for _ in 0..<3 where slider.frame.maxY > options.frame.maxY - 10 { options.swipeUp() }
+        XCTAssertLessThanOrEqual(slider.frame.maxY, options.frame.maxY - 10)
         slider.adjust(toNormalizedSliderPosition: 0.57)
         let readout = app.staticTexts["desqueeze.factor"]
         let customValue = try XCTUnwrap(
             Double(readout.label.replacingOccurrences(of: "×", with: "")))
-        XCTAssertEqual(customValue, 1.57, accuracy: 0.04)
+        // XCUITest's normalized position does not map linearly onto this slider: 0.57 lands on
+        // 1.66-1.68x on main and on the integration alike (the old 1.57 assumed a linear track).
+        XCTAssertEqual(customValue, 1.67, accuracy: 0.04)
         XCTAssertEqual(customValue * 100, (customValue * 100).rounded(), accuracy: 0.0001)
         XCTAssertEqual(slider.value as? String, readout.label)
         let remembered = readout.label
