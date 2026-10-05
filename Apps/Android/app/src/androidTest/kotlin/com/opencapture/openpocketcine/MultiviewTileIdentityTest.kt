@@ -66,8 +66,9 @@ class MultiviewTileIdentityTest {
         var shownGeneration = -1
         var arrangement by mutableStateOf(MultiviewArrangement.GRID)
         var selected by mutableStateOf(0)
-        var viewport by mutableStateOf(852f to 393f)
-        var safe by mutableStateOf(MultiviewSafeArea(trailing = 59f, bottom = 21f))
+        // A small landscape phone: its Center stage strip holds more feeds than it shows, so it scrolls.
+        var viewport by mutableStateOf(667f to 375f)
+        var safe by mutableStateOf(MultiviewSafeArea())
         lateinit var stage: MultiviewSession
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             try {
@@ -183,6 +184,11 @@ class MultiviewTileIdentityTest {
                 verifyPictures()
                 scenario.onActivity { arrangement = MultiviewArrangement.CENTER_STAGE; generation++ }
                 verifyPictures()
+                assertNotNull(shownLayout).let { shown ->
+                    val strip = assertNotNull(shown.secondaryViewport)
+                    assertTrue(shown.secondaryIndices.maxOf { shown.tiles[it].maxY } > strip.maxY,
+                        "The secondary feeds must overflow the strip: $shown")
+                }
                 verifyFades(topFaded = false, bottomFaded = true)
                 val strip = awaitNode { it.isScrollable && it.viewIdResourceName == "multiview.secondaryStrip" }
                 assertTrue(strip.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
