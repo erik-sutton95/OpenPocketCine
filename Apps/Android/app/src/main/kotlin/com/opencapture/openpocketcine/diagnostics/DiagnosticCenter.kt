@@ -3,7 +3,6 @@ package com.opencapture.openpocketcine.diagnostics
 import com.opencapture.opencine.appkit.MediaShare
 import com.opencapture.opencine.appkit.diagnostics.ManualProblemReport
 import com.opencapture.opencine.appkit.diagnostics.ManualProblemReportEnvelope
-import com.opencapture.opencine.dji.PrivacyRedactor
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -18,6 +17,7 @@ import androidx.core.net.toUri
 import com.opencapture.opencine.dji.DjiLog
 import com.opencapture.opencine.media.DecoderErrorRecord
 import com.opencapture.opencine.platform.LocalVPNProbe
+import com.opencapture.opencine.vocabulary.PrivacyRedactor
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.opencine.appkit.DiscoveryPermissions
 import com.opencapture.opencine.dji.DjiCameraSession

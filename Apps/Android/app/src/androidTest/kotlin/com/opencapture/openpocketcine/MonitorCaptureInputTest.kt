@@ -42,7 +42,7 @@ import com.opencapture.monitorui.MonitorReadoutDismissBackdrop
 import com.opencapture.monitorui.MonitorReadoutRegions
 import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.monitorui.monitorPickerPassthrough
-import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.vocabulary.CameraStatus
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue

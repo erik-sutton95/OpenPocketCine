@@ -1,8 +1,5 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.EvComp
-import com.opencapture.opencine.media.GamepadShutterSync
-import com.opencapture.opencine.dji.ShutterAngle
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -15,18 +12,21 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.monitorui.MonitorQuickControl
 import com.opencapture.opencine.appkit.MonitorCaptureField
 import com.opencapture.opencine.appkit.captureField
 import com.opencapture.opencine.appkit.commit
 import com.opencapture.opencine.appkit.quickControl
 import com.opencapture.opencine.core.SettingKey
-import com.opencapture.opencine.dji.ApertureStrategy
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraModel
-import com.opencapture.opencine.dji.CameraStatus
-import com.opencapture.opencine.dji.VideoFormat
+import com.opencapture.opencine.vocabulary.ApertureStrategy
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.ConnectionPhase
+import com.opencapture.opencine.vocabulary.EvComp
+import com.opencapture.opencine.vocabulary.GamepadShutterSync
+import com.opencapture.opencine.vocabulary.ShutterAngle
+import com.opencapture.opencine.vocabulary.VideoFormat
 
 /** Reuses the persistent picker's production choices and typed action methods. */
 internal fun captureQuickControl(sheet: LiveSheet, status: CameraStatus, model: AppModel,
@@ -244,7 +244,7 @@ internal fun captureQuickFocusControl(status: CameraStatus) = MonitorQuickContro
 
 /** One native option list for the persistent picker and the readout preview. */
 internal object CaptureFocusChoices {
-    val labels = com.opencapture.opencine.dji.FocusOption.entries.map { it.chip }
+    val labels = com.opencapture.opencine.vocabulary.FocusOption.entries.map { it.chip }
     fun selection(status: CameraStatus): String = when (status.focusMode) {
         CameraCommands.FOCUS_SINGLE -> "AF-S"
         CameraCommands.FOCUS_CONTINUOUS -> labels.getOrNull(status.focusTrack + 1)
@@ -327,7 +327,7 @@ internal fun releaseCaptureQuickControl(sheet: LiveSheet, expected: MonitorQuick
             if (!model.control.isCurrent(editor)) return@commitCaptureQuickControl
             val choice = field.choices.firstOrNull { it.label == value &&
                 (sheet != LiveSheet.FOCUS || it.value == commonFocusValue(value,
-                    com.opencapture.opencine.dji.FocusTrackMode.fromRaw(currentStatus.focusTrack))) }
+                    com.opencapture.opencine.vocabulary.FocusTrackMode.fromRaw(currentStatus.focusTrack))) }
             if (choice != null) { model.control.commit(choice, field); return@commitCaptureQuickControl }
             if (sheet != LiveSheet.FOCUS) return@commitCaptureQuickControl
         }

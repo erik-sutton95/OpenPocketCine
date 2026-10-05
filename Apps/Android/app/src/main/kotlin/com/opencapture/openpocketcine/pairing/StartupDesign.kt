@@ -3,8 +3,8 @@ package com.opencapture.openpocketcine.pairing
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.DjiFailures
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.openpocketcine.LiveDesign
 
 /** Pairing chrome — DJI Sky Blue `#00A3E0` on Black, no Nikon gold. */

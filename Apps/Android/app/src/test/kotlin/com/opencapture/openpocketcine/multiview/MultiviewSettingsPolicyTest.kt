@@ -1,9 +1,9 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.LiveSheet
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraModel
-import com.opencapture.opencine.dji.CameraStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

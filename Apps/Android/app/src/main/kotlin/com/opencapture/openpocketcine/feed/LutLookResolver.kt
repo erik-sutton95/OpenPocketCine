@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.feed
 
+import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.openpocketcine.lut.LutCatalog
-import com.opencapture.opencine.dji.CameraCommands
 
 /** File the live GPU path should pack, mirroring iOS `LUTResolver`. */
 internal sealed class LutLookSource {

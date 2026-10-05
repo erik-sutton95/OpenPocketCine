@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.opencapture.opencine.vocabulary.*
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.multiview.MultiviewSession
 import com.opencapture.openpocketcine.session.*

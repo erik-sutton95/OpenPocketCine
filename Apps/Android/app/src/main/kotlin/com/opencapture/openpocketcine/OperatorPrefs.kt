@@ -1,11 +1,11 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.media.GamepadGimbalStick
-import com.opencapture.opencine.dji.ShutterAngle
 import android.content.Context
 import androidx.core.content.edit
 import com.opencapture.monitorui.MonitorJoystickSize
-import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.GamepadGimbalStick
+import com.opencapture.opencine.vocabulary.ShutterAngle
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.lut.LutCatalog
 import org.json.JSONObject

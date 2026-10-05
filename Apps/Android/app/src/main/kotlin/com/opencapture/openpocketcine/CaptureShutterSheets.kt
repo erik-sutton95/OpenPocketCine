@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.CaptureShutterPolicy
+import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
 
 // Sheet navigation for stills: the capture policy lives in OpenCine's DJI module, the sheets here.
 

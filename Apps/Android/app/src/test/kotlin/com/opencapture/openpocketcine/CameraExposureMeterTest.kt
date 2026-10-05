@@ -1,9 +1,11 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.fromJson
+import com.opencapture.opencine.dji.toJson
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.opencine.dji.StatusExtras
 import kotlin.test.Test
 import kotlin.test.assertEquals

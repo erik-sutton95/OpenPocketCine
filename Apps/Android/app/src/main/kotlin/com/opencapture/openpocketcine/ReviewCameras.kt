@@ -12,13 +12,13 @@ import com.opencapture.opencine.core.CameraSession
 import com.opencapture.opencine.core.ConnectionFailure
 import com.opencapture.opencine.core.RouteKind
 import com.opencapture.opencine.dji.CameraConnectionSetup
-import com.opencapture.opencine.dji.CameraModel
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.DjiConnectPort
 import com.opencapture.opencine.dji.DjiFailures
 import com.opencapture.opencine.dji.FoundCamera
 import com.opencapture.opencine.dji.MultiviewNetworkStore
 import com.opencapture.opencine.dji.DjiCameraSession
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.openpocketcine.pairing.AddSetupSlot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow

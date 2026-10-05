@@ -3,8 +3,6 @@ package com.opencapture.openpocketcine
 import com.opencapture.monitorui.MonitorBatteryOutlineRow
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.media.CameraLinkPhase
-import com.opencapture.opencine.dji.CaptureShutterPolicy
-import com.opencapture.opencine.dji.RecordConfirmationRequest
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.snap
@@ -66,8 +64,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
-import com.opencapture.opencine.dji.ConnectionPhase
-import com.opencapture.opencine.dji.CameraCommands
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -97,6 +93,10 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
+import com.opencapture.opencine.vocabulary.ConnectionPhase
+import com.opencapture.opencine.vocabulary.RecordConfirmationRequest
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -539,7 +539,7 @@ internal fun LiveCaptureButton(model: AppModel, enabled: Boolean, diameter: Floa
     val status by model.session.status.collectAsState()
     val photo = CaptureShutterPolicy.isStillCapture(status.shootingMode)
     com.opencapture.opencine.appkit.MonitorCaptureButton(model.control, diameter,
-        enabled = enabled && (!photo || model.session.phase == com.opencapture.opencine.dji.ConnectionPhase.LIVE),
+        enabled = enabled && (!photo || model.session.phase == com.opencapture.opencine.vocabulary.ConnectionPhase.LIVE),
         modifier = modifier, photo = photo, confirm = model.recordConfirmationEnabled,
         takePhoto = model::pressShutter, openMode = openMode)
 }
@@ -557,7 +557,7 @@ internal fun RecordButton(
         recording = recording,
         locked = !enabled,
         busy = !enabled,
-        phase = com.opencapture.opencine.dji.ConnectionPhase.LIVE,
+        phase = com.opencapture.opencine.vocabulary.ConnectionPhase.LIVE,
     ),
     onClick: () -> Unit,
 ) {
@@ -698,7 +698,7 @@ fun TimecodeReadout(timecode: String?, modifier: Modifier = Modifier, portrait: 
     val config = LocalConfiguration.current
     val tablet = min(config.screenWidthDp, config.screenHeightDp) >= 600
     val incoming = timecode?.takeIf { it.isNotBlank() }
-    val clock = com.opencapture.opencine.dji.timecodeClock(incoming)
+    val clock = com.opencapture.opencine.vocabulary.timecodeClock(incoming)
         ?: if (portrait) "00:00:00" else "--:--:--"
     val raw = clock
     val colon = raw.lastIndexOf(':')

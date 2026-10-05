@@ -1,8 +1,8 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.lut.LutCatalog
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

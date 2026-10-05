@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.feed
 
+import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.openpocketcine.lut.LutCatalog
-import com.opencapture.opencine.dji.CameraCommands
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs

@@ -33,11 +33,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.opencapture.opencine.dji.FocusOverlay
-import com.opencapture.opencine.dji.LiveFeedFocusGesture
-import com.opencapture.opencine.dji.LiveTrackingChrome
-import com.opencapture.opencine.dji.TrackingBox
-import com.opencapture.opencine.dji.TrackingHud
+import com.opencapture.opencine.vocabulary.FocusOverlay
+import com.opencapture.opencine.vocabulary.LiveFeedFocusGesture
+import com.opencapture.opencine.vocabulary.LiveTrackingChrome
+import com.opencapture.opencine.vocabulary.TrackingBox
+import com.opencapture.opencine.vocabulary.TrackingHud
 import kotlin.math.max
 import kotlin.math.min
 

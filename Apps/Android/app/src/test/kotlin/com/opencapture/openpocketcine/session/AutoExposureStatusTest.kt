@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.session
 
 import com.opencapture.opencine.dji.*
 import com.opencapture.monitorui.MonitorExposureReadout
+import com.opencapture.opencine.vocabulary.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

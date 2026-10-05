@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
-import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.opencine.vocabulary.CameraStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

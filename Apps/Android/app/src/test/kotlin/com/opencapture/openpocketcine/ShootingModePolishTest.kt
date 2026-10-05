@@ -1,12 +1,15 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.CaptureShutterPolicy
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraModel
-import com.opencapture.opencine.dji.CameraStatus
-import com.opencapture.opencine.dji.VideoFormat
-import com.opencapture.opencine.dji.VideoFrameRate
-import com.opencapture.opencine.dji.VideoResolution
+import com.opencapture.opencine.dji.commandExtra
+import com.opencapture.opencine.dji.payload
+import com.opencapture.opencine.dji.setPayload
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
+import com.opencapture.opencine.vocabulary.VideoFormat
+import com.opencapture.opencine.vocabulary.VideoFrameRate
+import com.opencapture.opencine.vocabulary.VideoResolution
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -64,7 +67,7 @@ class ShootingModePolishTest {
         )
         val live = CaptureShutterPolicy.request(
             CameraCommands.SHOOT_VIDEO, recording = false, locked = false, busy = false,
-            phase = com.opencapture.opencine.dji.ConnectionPhase.LIVE,
+            phase = com.opencapture.opencine.vocabulary.ConnectionPhase.LIVE,
         )
         val slowMo = live.copy(shootingMode = CameraCommands.SHOOT_SLOWMO)
         val photo = live.copy(shootingMode = CameraCommands.SHOOT_PHOTO)
