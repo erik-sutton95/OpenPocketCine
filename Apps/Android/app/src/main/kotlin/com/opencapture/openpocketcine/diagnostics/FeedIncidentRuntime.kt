@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.media.FeedIncidentRecorder
 import com.opencapture.opencine.dji.FeedIncidentSink
 import com.opencapture.opencine.media.FeedIncidentBreadcrumb
 import com.opencapture.opencine.media.FeedIncidentBundle
@@ -24,7 +25,7 @@ internal object FeedIncidentRuntime : FeedIncidentSink {
         Executors.newSingleThreadExecutor { thread ->
             Thread(thread, "opc.feed-incident").apply { isDaemon = true }
         }
-    private val recorder = FeedIncidentRecorder()
+    private val recorder = FeedIncidentRecorder(redact = PrivacyRedactor::redact)
     private var store: FeedIncidentStore? = null
     @Volatile private var latestSnapshot: FeedIncidentSnapshot? = null
     private val snapshotScheduled = AtomicBoolean(false)

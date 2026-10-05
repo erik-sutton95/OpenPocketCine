@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.media.FeedIncidentRecorder
+import com.opencapture.opencine.dji.PrivacyRedactor
 import com.opencapture.opencine.media.FeedIncidentAges
 import com.opencapture.opencine.media.FeedIncidentBundle
 import com.opencapture.opencine.media.FeedIncidentExport
@@ -711,7 +713,7 @@ class ReliabilityReportingTest {
         id: String,
         outcome: FeedIncidentOutcome = FeedIncidentOutcome.RECOVERED,
     ): FeedIncidentBundle {
-        val recorder = FeedIncidentRecorder { id }
+        val recorder = FeedIncidentRecorder(PrivacyRedactor::redact) { id }
         recorder.beginSession(
             FeedIncidentSessionContext(
                 sessionId = "session-1",
