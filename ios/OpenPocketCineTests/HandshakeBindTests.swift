@@ -184,7 +184,9 @@ final class HandshakeBindTests: XCTestCase {
         }
         let admission = ConnectionDonorPeer(cached: true)
         await establishAdmittedLiveView(session, driver: driver, policy: admission)
-        driver.startLiveView()
+        _ = session.pictureRecovery.requestLiveView(
+            .initial(pathProven: true, displayAttached: session.decoder.isDisplayReady),
+            reason: "first picture")
         let initialDeadline = ContinuousClock.now.advanced(by: .seconds(1))
         while peer.snapshot.enables < 1, ContinuousClock.now < initialDeadline {
             try await Task.sleep(for: .milliseconds(10))

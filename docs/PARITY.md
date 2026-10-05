@@ -1916,3 +1916,48 @@ qualification are pending. Prior settings/DJI results qualify their earlier sour
 not this uncompiled combined candidate. Android assist adoption remains a separate
 source proposal, with the current Android implementation retained. Physical behavior
 and full thin-app exit remain untested/incomplete. No pins or remote refs move.
+
+## Apple ActiveTrack owner candidate
+
+The Pocket iOS candidate delegates the complete ActiveTrack request/report/polling
+workflow to OpenCineDJIApple. Existing native face/focus presentation, transport
+admission and operator actions remain app policy. Wire commands, request IDs,
+box math, 500ms cadence, six idle ticks and short post-CLEAR push hold retain their
+existing meanings. Late old-driver acknowledgements and reentrant outgoing
+publications cannot start work or mutate a successor tracking request.
+
+This is an Apple-only native ownership increment. Android retains its existing
+integration-owned scheduler and public behavior. Ten manual-clock integration
+scenarios and four actual CameraSession native methods are prepared but unexecuted.
+Compilation, simulator qualification and physical camera behavior are untested
+for this candidate. No app pin or published interface has moved.
+
+The paired Apple camera-settings candidate moves the whole serialized GET/SET
+chain into DJIApple, including mandatory GET-before-DSP-patch and glamour disable.
+Native audio meters, focus/face presentation, saved preference keys and operator
+pins remain host policy. Existing raw bytes, GET order, nil/unknown semantics and
+ordinary rollback behavior remain intact. Twelve tracking and ten camera-settings
+manual-clock cases plus six actual-session native methods are source prepared;
+none has been compiled or executed. Android retains its existing integration
+request scheduler. Physical behavior and the full session checkpoint remain open.
+
+### Apple tap-focus ownership candidate
+
+A source-only Apple candidate moves the complete tap-focus sequence into DJIApple. The
+existing untracked PREPARE, point/hint/commit order and three 800 ms deadlines remain
+unchanged. iOS focus clamping, reticle/face behavior and diagnostic copy stay in the app.
+Android keeps its existing integration workflow and no UI/command behavior change is
+proposed there. Simulated continuation and actual absent-transport host fixtures are
+prepared; automated/platform/physical qualification has not run for this candidate.
+
+### Apple format-poke and zoom-color owner candidate
+
+A source-only paired extraction retires12 native workflow methods and their copied task,
+color-hop and queued-stage state. DJIApple owns both first-picture format changes/waits and
+actual D-Log-confirmed queued zoom release, original mailbox options and wide-angle restore.
+The actual app composition retains single-format editor/shutter policy, gesture/HUD and
+ISO preferences/logging; no whole workflow callback remains.11 native callers and the actual
+incoming-status confirmation hook are wired to the owner. All existing numeric and native
+goldens are retained unchanged.23 new manual-gate shared scenarios and4 actual nil-transport
+native scenarios are proposed, uncompiled/unexecuted. Android preserves its existing
+integration behavior. Physical format/zoom/color/ISO behavior remains untested.

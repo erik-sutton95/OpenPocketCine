@@ -163,7 +163,7 @@ HUD updates must respect 5 Hz without delaying REC, format or control settlement
 [LiveFeedPlan](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/LiveFeedPlan.kt)
 line 57 rebuilds plan objects for scope, inspector, ISO and look state.
 `LiveFeedEffectsSession` line 350 compares reference identity, releases effects
-and creates [FeedEffectsGlProgram](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/FeedEffectsGlProgram.kt).
+and creates [FeedEffectsGlProgram](https://github.com/erik-sutton95/OpenPocketCine/blob/cc97a3d80021d59a28a1b133f823adb7ead9d044/Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/FeedEffectsGlProgram.kt).
 Its lines 30–42/255 recreate programs and cube textures. This is event-driven,
 not shader compilation per frame. CPU cube caching does not retain GL resources.
 

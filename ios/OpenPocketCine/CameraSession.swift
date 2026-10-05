@@ -14,7 +14,6 @@ import os
 @MainActor
 @Observable
 final class CameraSession {
-    @TaskLocal private static var audioControlGeneration: Int?
 
     var phase: ConnectionPhase = .idle {
         didSet {
@@ -40,7 +39,7 @@ final class CameraSession {
             statusStorage = newValue
             if let lock = autoExposureLock, !lock.holds(newValue) { autoExposureLock = nil }
             // A pending AWB Lock is judged once the camera answers its Custom SET.
-            if let lock = autoWhiteBalanceLock, whiteBalancePin == nil, !lock.holds(newValue) {
+            if let lock = autoWhiteBalanceLock, !editorReconciliation.hasWhiteBalance, !lock.holds(newValue) {
                 autoWhiteBalanceLock = nil
             }
             guard newValue != previous else { return }
@@ -124,9 +123,8 @@ final class CameraSession {
     @ObservationIgnored private var rawAccessUnits = 0
     @ObservationIgnored private var rawFramesEnqueued = 0
     /// Pocket 3: one 1080→boot-4K SET after a black first picture. Not P4.
-    @ObservationIgnored private var firstPictureFormatPoked = false
-    @ObservationIgnored private var firstPictureFormatPokeTask: Task<Void, Never>?
-    @ObservationIgnored private var firstPictureFormatPokeGeneration = 0
+    @ObservationIgnored private lazy var firstPictureFormat = makeFirstPictureFormat()
+    private var firstPictureFormatPoked: Bool { firstPictureFormat.snapshot.poked }
     /// One `0x09/0xa8` write in flight. Overlapping enables are a black well.
     @ObservationIgnored private var incidentSessionActive = false
     @ObservationIgnored private var incidentPrevious: (at: Double, counts: [Int])?
@@ -413,11 +411,20 @@ final class CameraSession {
     /// WB Mode AWB Lock. Cleared like `autoExposureLock` when status stops holding it.
     private(set) var autoWhiteBalanceLock: AutoWhiteBalanceLock?
     /// Operator-drawn search rect while the camera is still hunting a subject.
-    var searchBox: TrackingBox?
+    var searchBox: TrackingBox? {
+        access(keyPath: \.searchBox)
+        return subjectTracking.snapshot.searchBox
+    }
     /// Locked subject box. Camera floats when `0xA5` carries them; else a tight stand-in.
-    var subjectBox: TrackingBox?
+    var subjectBox: TrackingBox? {
+        access(keyPath: \.subjectBox)
+        return subjectTracking.snapshot.subjectBox
+    }
     /// True after `0xA5` replies `00 01 00 00`.
-    var isTracking = false
+    var isTracking: Bool {
+        access(keyPath: \.isTracking)
+        return subjectTracking.snapshot.tracking
+    }
     /// Local AF-C primary face from Vision. Nil in AF-S or while subject tracking.
     var faceBox: TrackingBox?
     /// Every AF-C face in the frame. Dim extras stay up while a subject is locked.
@@ -480,22 +487,14 @@ final class CameraSession {
     @ObservationIgnored private var pendingGimbalAxes: (UInt16, UInt16)?
     @ObservationIgnored private var gimbalStickHeld = false
     @ObservationIgnored private var lastGimbalStickAt: Date?
-    @ObservationIgnored private var nextTrackingId: UInt16 = 1
-    @ObservationIgnored private var trackingPollTask: Task<Void, Never>?
-    @ObservationIgnored private var trackingSawLock = false
-    /// After our CLEAR, ignore leftover `0x89` briefly. Then the camera is truth.
-    @ObservationIgnored private var lastOperatorClearAt: Date?
-    /// Last `0x89` subject push. Silence means the body dropped the lock.
-    @ObservationIgnored private var lastSubjectPushAt: Date?
-    @ObservationIgnored private var lastLiveTrackingAt: Date?
+    @ObservationIgnored private lazy var subjectTracking = makeSubjectTracking()
+    @ObservationIgnored private let subjectTrackingTiming: DjiAppleTrackingTiming
     @ObservationIgnored private var lastFaceAt: Date?
     @ObservationIgnored private var lastFaceHitAt: Date?
     @ObservationIgnored private var lastTapFocusAt: Date?
     /// Operator tap only; camera-adopted points do not start the stale-echo hold.
     @ObservationIgnored private var lastFocusTapAt: Date?
     @ObservationIgnored private var feedDoubleTap = FeedDoubleTapTrack()
-    /// The operator's latest ActiveTrack box, until the camera reports it.
-    @ObservationIgnored private var trackingRequest: (box: TrackingBox, at: Date)?
     private var faceAFArmed = false
     @ObservationIgnored private var faceAFArmTask: Task<Void, Never>?
     /// First GOP has rolled past the IDR grace. Later stalls are the watchdog.
@@ -509,26 +508,25 @@ final class CameraSession {
     @ObservationIgnored private var lastFacePriorityEVAt = Date.distantPast
     @ObservationIgnored private var facePriorityAcquireAt: Date?
     @ObservationIgnored private var evBeforeFacePriority: EvComp?
-    /// Last chip stop from the cycle button.
-    var zoomStop: Double = 1
+    @ObservationIgnored private lazy var zoomGesture = makeZoomGesture()
+    var zoomStop: Double {
+        access(keyPath: \.zoomStop)
+        return zoomGesture.snapshot.stop
+    }
     var zoomStops: [Double] {
         connectedCamera?.model.activeZoomStops(
             resolution: status.videoResolution, shootingMode: status.shootingMode)
             ?? CamFov.jumps
     }
     var zoomMax: Double { zoomStops.last ?? 1 }
-    /// Pinch HUD between `cam_fov` pushes. Nil when fingers are up.
-    var zoomPinchPreview: Double?
-    /// Chip-tap target until `cam_fov` catches up, on the same settle window as
-    /// every other control. It has to expire on its own: the body answers an ask
-    /// it cannot honour by clamping to its own ceiling, and it moves the lens
-    /// without being asked (a FORMAT change resets to 1×, so does the operator
-    /// working the camera directly). None of those ever report the asked-for
-    /// factor, so a pin that only cleared on a match would sit on the chip
-    /// showing a zoom the camera is not at for the rest of the session.
-    private var zoomPin: CameraValuePin<Double>?
-    /// Nil when live matches, or once the pin has run out of settle window.
-    var zoomOptimistic: Double? { zoomPin?.expected }
+    var zoomPinchPreview: Double? {
+        access(keyPath: \.zoomPinchPreview)
+        return zoomGesture.snapshot.preview
+    }
+    var zoomOptimistic: Double? {
+        access(keyPath: \.zoomOptimistic)
+        return zoomGesture.snapshot.optimistic
+    }
 
     /// Last successful SoftAP creds. Kept across disconnect — reconnect GetSSID often returns `0xE4`.
     /// Exposed so Frame.io can leave the camera AP and rejoin after upload.
@@ -552,50 +550,27 @@ final class CameraSession {
     @ObservationIgnored private var commandTimeoutsAt: [Date] = []
     private var controlGeneration: Int { controlExchange.generation }
     /// Audio GET→patch→SET round trips ride their own chain, off the SET path.
-    @ObservationIgnored private var audioTail: Task<Void, Never>?
-    @ObservationIgnored private var tapFocusTask: Task<Void, Never>?
-    /// Set when we drop D-Log2 for telephoto so 1× can restore it.
-    @ObservationIgnored private var restoreDLog2OnWide = false
-    /// One tele color SET per engage — do not retry-storm 0x42.
-    @ObservationIgnored private var teleColorSent = false
-    /// True from D-Log2→D-Log send until `cam_image_effect` is D-Log. Hold `0xB8`.
-    private(set) var zoomColorHopPending = false
-    @ObservationIgnored private var zoomColorHopUntil: Date?
-    @ObservationIgnored private var zoomColorHopGeneration: UInt64 = 0
-    @ObservationIgnored private var pendingZoomAfterHop: Double?
-    @ObservationIgnored private var pendingZoomAfterHopStage:
-        (@MainActor (ControlWireEvent) -> Void)?
-    @ObservationIgnored private var zoomStopTouched = false
-
-    @ObservationIgnored private var zoomPinchAnchor = 1.0
-    /// Active pinch slew (100 or 300) so we can STOP on lift / when live lands.
-    @ObservationIgnored private var zoomPinchSlew: UInt16?
-    /// Last lens written this pinch so we skip duplicate 0xB8.
-    @ObservationIgnored private var lastPinchLens: UInt16?
-    /// Last 0.1× we journaled for a pinch slider (wire is finer).
-    @ObservationIgnored private var lastPinchLogTenths: Double?
+    @ObservationIgnored private lazy var cameraSettings = makeCameraSettings()
+    @ObservationIgnored private lazy var editorReconciliation = makeEditorReconciliation()
+    @ObservationIgnored private lazy var tapFocus = makeTapFocus()
+    @ObservationIgnored private lazy var zoomColor = makeZoomColor()
+    /// Shared owner commits actual hop state before notifying native observation.
+    var zoomColorHopPending: Bool {
+        access(keyPath: \.zoomColorHopPending)
+        return zoomColor.snapshot.hopPending
+    }
     /// After a local ISO / shutter / expo SET, ignore subscribe snapshots that have not caught up.
-    @ObservationIgnored private var expoPin: ExpoPin?
-    @ObservationIgnored private var expoGeneration: UInt64 = 0
-    @ObservationIgnored private var audioPin: AudioPin?
     /// After a local res+fps / color SET, ignore subscribe snapshots that have not caught up.
-    @ObservationIgnored private var formatPin:
-        (expected: VideoFormat, deadline: Date, shutterAngle: Double?, angleDeadline: Date)?
-    @ObservationIgnored private var captureModeGeneration: UInt64 = 0
-    @ObservationIgnored private var formatRequestGeneration: UInt64 = 0
     /// FORMAT sheet: skip reseat while `0x02/0x18` is in flight.
-    var isFormatPinActive: Bool { formatPin != nil }
-    @ObservationIgnored private var colorPin: (expected: ColorMode, deadline: Date)?
+    var isFormatPinActive: Bool { editorReconciliation.hasFormat }
     @ObservationIgnored private var gimbalFollowFamilyConfirmed = false
     @ObservationIgnored private var gimbalModePin: CameraValuePin<GimbalMode>?
     @ObservationIgnored private var gimbalSpeedPin: CameraValuePin<GimbalSpeed>?
-    @ObservationIgnored private var shootingModePin: CameraValuePin<Int>?
-    @ObservationIgnored private var whiteBalancePin: CameraValuePin<WhiteBalance>?
-    /// White balance requested but not yet reported by the camera (`whiteBalancePin`).
-    private(set) var pendingWhiteBalance: WhiteBalance?
-    @ObservationIgnored private var focusModePin: CameraValuePin<FocusMode>?
-    @ObservationIgnored private var focusTrackPin: CameraValuePin<FocusTrackMode>?
-    @ObservationIgnored private var isoLimitPin: CameraValuePin<IsoLimit>?
+    /// Requested white balance remains separate from actual camera status.
+    var pendingWhiteBalance: WhiteBalance? {
+        access(keyPath: \.pendingWhiteBalance)
+        return editorReconciliation.requestedWhiteBalance
+    }
     @ObservationIgnored private var gimbalStickMapping = GimbalStickMapping()
     @ObservationIgnored private var gimbalLimitWatch = GimbalLimitWatch()
     @ObservationIgnored private var lastGimbalCommand = (x: 0.0, y: 0.0)
@@ -631,10 +606,12 @@ final class CameraSession {
     init(
         borrowing sharedDecoder: HevcDecoder? = nil, cameraMedia: CameraMedia? = nil,
         controlsOnly: Bool = false, heartbeatTiming: DjiAppleHeartbeatTiming? = nil,
-        pictureRecoveryTiming: DjiApplePictureRecoveryTiming? = nil
+        pictureRecoveryTiming: DjiApplePictureRecoveryTiming? = nil,
+        subjectTrackingTiming: DjiAppleTrackingTiming? = nil
     ) {
         self.heartbeatTiming = heartbeatTiming ?? .continuous
         self.pictureRecoveryTiming = pictureRecoveryTiming ?? .continuous
+        self.subjectTrackingTiming = subjectTrackingTiming ?? .continuous
         self.cameraMedia = cameraMedia ?? CameraMedia()
         self.decoder = sharedDecoder ?? HevcDecoder()
         gimbalStickMapping = GimbalStickMapping()
@@ -745,21 +722,20 @@ final class CameraSession {
         guard isMultiviewBorrowed else { return }
         controlBinding.retire(.requested)
         cameraReportedCapture = CameraStatus()
-        formatPin = nil
+        editorReconciliation.clearFormat()
         if isMultiviewControlsOnly {
             // Detach only this editor's commands. The tile keeps its transport,
             // decoder callbacks, frame samples, pose and recovery ownership.
             datalink = nil
             multiviewControlAdmission = nil
             phase = .idle
-            audioTail?.cancel()
-            audioTail = nil
+            cameraSettings.retire()
             controlExchange.retire(CancellationError())
             return
         }
         endGimbalStick(cancelMove: true)
-        stopTrackingPoll()
-        tapFocusTask?.cancel()
+        subjectTracking.stopPolling()
+        tapFocus.retire()
         faceAFArmTask?.cancel()
         controlExchange.retire(CancellationError())
         datalink = nil
@@ -936,55 +912,24 @@ final class CameraSession {
         lastZoomLogAt = .distantPast
         lastFirstPictureLogAt = .distantPast
         lastFirstPictureSignature = ""
-        audioTail = nil
-        tapFocusTask?.cancel()
-        tapFocusTask = nil
+        cameraSettings.retire()
+        tapFocus.retire()
         faceAFArmTask?.cancel()
         faceAFArmTask = nil
         faceAFArmed = false
         firstPictureSettled = false
-        restoreDLog2OnWide = false
-        teleColorSent = false
-        zoomColorHopPending = false
-        zoomColorHopUntil = nil
-        zoomColorHopGeneration += 1
-        discardZoomAfterHop()
-        zoomStop = 1
-        zoomStopTouched = false
-        zoomPinchPreview = nil
-        zoomPin = nil
-        zoomPinchAnchor = 1
-        lastPinchLens = nil
-        lastPinchLogTenths = nil
-        zoomPinchSlew = nil
-        expoPin = nil
-        expoGeneration = 0
+        zoomGesture.reset()
+        editorReconciliation.retire()
         autoExposureLock = nil
         autoWhiteBalanceLock = nil
-        audioPin = nil
-        formatPin = nil
-        colorPin = nil
         gimbalModePin = nil
         gimbalSpeedPin = nil
-        shootingModePin = nil
-        whiteBalancePin = nil
-        pendingWhiteBalance = nil
-        focusModePin = nil
-        focusTrackPin = nil
-        isoLimitPin = nil
         resetGimbalPoseForNewStream()
         resetGimbalControls()
         controlBusy = false
         controlNote = nil
         focusPoint = CGPoint(x: 0.5, y: 0.5)
-        stopTrackingPoll()
-        searchBox = nil
-        subjectBox = nil
-        isTracking = false
-        trackingSawLock = false
-        lastOperatorClearAt = nil
-        lastLiveTrackingAt = nil
-        lastSubjectPushAt = nil
+        subjectTracking.reset()
         lastFaceAt = nil
         lastFaceHitAt = nil
         lastTapFocusAt = nil
@@ -1012,7 +957,7 @@ final class CameraSession {
         lastKeyframeAge = "—"
         if let source = liveViewSource { pictureRecovery.retireLiveView(scope: source) }
         liveViewSource = nil
-        resetFirstPictureFormatPoke()
+        firstPictureFormat.reset()
         audioRefreshPending = false
         glamourClearPending = false
         focusTrackPending = false
@@ -1088,7 +1033,7 @@ final class CameraSession {
         guard isCurrent() else { return }
         if let source = liveViewSource { pictureRecovery.retireLiveView(scope: source) }
         liveViewSource = nil
-        resetFirstPictureFormatPoke()
+        firstPictureFormat.reset()
         audioRefreshPending = false
         glamourClearPending = false
         focusTrackPending = false
@@ -1187,7 +1132,7 @@ final class CameraSession {
         guard let source = pictureRecovery.prepareLiveViewSource(run: attempt,
             recipe: .captured(from: camera.model)), attempt.isCurrent else { return }
         liveViewSource = source
-        resetFirstPictureFormatPoke()
+        firstPictureFormat.reset()
         audioRefreshPending = true
         glamourClearPending = true
         focusTrackPending = true
@@ -1322,6 +1267,392 @@ final class CameraSession {
 
     // ---- BLE frame routing -----------------------------------------------------------------------
 
+    private func makeFirstPictureFormat() -> DjiAppleFirstPictureFormat {
+        DjiAppleFirstPictureFormat(
+            binding: { [weak self] in
+                guard let self else { return .init() }
+                return .init(
+                    endpoint: self.datalink.map(ObjectIdentifier.init),
+                    controlGeneration: self.controlGeneration)
+            },
+            facts: { [weak self] in
+                guard let self else {
+                    return .init(status: .init(), browsing: true, formatPinned: false)
+                }
+                return .init(
+                    status: self.status, browsing: self.isBrowsingMedia,
+                    formatPinned: self.editorReconciliation.hasFormat)
+            },
+            setFormat: { [weak self] format in
+                self?.setVideoFormat(
+                    resolution: format.resolution, frameRate: format.frameRate, fromOperator: false)
+            },
+            enable: { [weak self] in
+                _ = self?.pictureRecovery.requestLiveView(
+                    .firstPictureFormat, reason: "first-picture format poke")
+            },
+            event: { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .changed: break
+                case .preparing(let original, let kick, let legal, let count):
+                    self.log.info(
+                        "live: Pocket 3 first-picture format poke \(original.chipLabel, privacy: .public) → \(kick.chipLabel, privacy: .public) → \(original.chipLabel, privacy: .public) legal=\(legal ? 1 : 0) formats=\(count, privacy: .public)"
+                    )
+                    ControlLiveLog.line(
+                        "feed: Pocket 3 format poke \(original.chipLabel) → \(kick.chipLabel) → \(original.chipLabel) legal=\(legal ? 1 : 0) formats=\(count)"
+                    )
+                }
+            })
+    }
+
+    private func makeZoomGesture() -> DjiAppleZoomGesture {
+        DjiAppleZoomGesture(
+            binding: { [weak self] in
+                guard let self else { return .init() }
+                return .init(endpoint: self.datalink.map(ObjectIdentifier.init),
+                    controlGeneration: self.controlGeneration)
+            },
+            facts: { [weak self] in
+                guard let self else {
+                    return .init(status: .init(), stops: CamFov.jumps, supportsZoom: false, locked: true)
+                }
+                return .init(status: self.status, stops: self.zoomStops,
+                    supportsZoom: self.supportsZoom, locked: self.isLocked)
+            }, color: zoomColor,
+            sendStop: { [weak self] frame, completion in
+                guard let self else { completion(false); return }
+                self.fireCamera(frame, name: "Zoom stop", onSettle: completion)
+            }, event: { [weak self] event in
+                guard let self else { return }
+                let authority = self.zoomGesture.authority
+                switch event {
+                case .changed(let previous, let next, let revision):
+                    if previous.stop != next.stop {
+                        self.withMutation(keyPath: \.zoomStop) {}
+                        guard self.zoomGesture.revision == revision else { return }
+                    }
+                    if previous.preview != next.preview {
+                        self.withMutation(keyPath: \.zoomPinchPreview) {}
+                        guard self.zoomGesture.revision == revision else { return }
+                    }
+                    if previous.optimistic != next.optimistic {
+                        self.withMutation(keyPath: \.zoomOptimistic) {}
+                    }
+                case .cancelProgrammedMove:
+                    if self.gimbalMoveRunning { self.cancelProgrammedMove() }
+                case .chipRequested(let from, let to):
+                    ControlLiveLog.line(
+                        "zoom: setZoom \(from) → \(to) locked=\(self.isLocked) live=\(self.datalink != nil)")
+                case .unavailableChip(let to):
+                    self.controlNote = "Zoom \(to): no command"
+                    guard self.zoomGesture.admits(authority) else { return }
+                    ControlLiveLog.line("zoom: tap ignored, no write for \(to)")
+                case .chipPreparing(let to):
+                    self.controlNote = "Zoom \(to)"
+                case .sliderRequested(let factor, let position):
+                    ControlLiveLog.line(
+                        "zoom: setZoomSlider \(CamFov.displayLabel(factor: factor)) lens=\(position) locked=\(self.isLocked) live=\(self.datalink != nil)")
+                case .slewRequested(let value):
+                    ControlLiveLog.line(
+                        "zoom: setZoomSlew \(value) locked=\(self.isLocked) live=\(self.datalink != nil)")
+                case .stopRequested:
+                    ControlLiveLog.line(
+                        "zoom: setZoomStop locked=\(self.isLocked) live=\(self.datalink != nil)")
+                case .stopPreparing:
+                    self.lastZoomSetAt = Date()
+                case .stopSettled(let frame, let ok):
+                    ControlLiveLog.line(
+                        "zoom: SET \(Duml.hex(frame.payload)) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
+                case .locked:
+                    self.controlNote = "Zoom locked"
+                case .recordingBlocked:
+                    self.controlNote = ControlHud.recordingColorLockNote
+                    guard self.zoomGesture.admits(authority) else { return }
+                    ControlLiveLog.line("zoom: blocked \u{2014} color hop while recording")
+                }
+            })
+    }
+
+    private func makeZoomColor() -> DjiAppleZoomColor {
+        DjiAppleZoomColor(
+            binding: { [weak self] in
+                guard let self else { return .init() }
+                return .init(
+                    endpoint: self.datalink.map(ObjectIdentifier.init),
+                    controlGeneration: self.controlGeneration)
+            },
+            facts: { [weak self] in
+                guard let self else {
+                    return .init(
+                        status: .init(), model: nil, supportsZoom: false, previewing: false,
+                        locked: true)
+                }
+                return .init(
+                    status: self.status, model: self.connectedCamera?.model,
+                    supportsZoom: self.supportsZoom, previewing: self.zoomPinchPreview != nil,
+                    locked: self.isLocked)
+            },
+            send: { [weak self] request, event in
+                guard let self else {
+                    event(.stage(.notSent))
+                    event(.failed)
+                    event(.settled(false))
+                    return
+                }
+                self.fireCamera(
+                    request.frame, name: request.name, expect: request.expectation,
+                    retransmits: request.retransmits, coalesce: request.coalesce,
+                    onStage: { event(.stage($0)) }, onFail: { event(.failed) },
+                    onSettle: { event(.settled($0)) })
+            },
+            event: { [weak self] event in
+                guard let self else { return }
+                let authority = self.zoomColor.authority
+                switch event {
+                case .changed(let previous, let next, let revision):
+                    if previous.hopPending != next.hopPending {
+                        self.withMutation(keyPath: \.zoomColorHopPending) {}
+                        guard self.zoomColor.revision == revision else { return }
+                    }
+                case .hopRetry:
+                    ControlLiveLog.line("zoom: D-Log hop timed out \u{2014} resend 0x42")
+                case .hopPreparing:
+                    self.editorReconciliation.clearColor()
+                    guard self.zoomColor.admits(authority) else { return }
+                    self.controlNote = "D-Log \u{2014} D-Log2 cannot zoom"
+                    guard self.zoomColor.admits(authority) else { return }
+                    ControlLiveLog.line("zoom: hold 0xB8 until D-Log2 → D-Log")
+                case .nativeISO(let from, let to):
+                    self.hopNativeISO(from: from, to: to)
+                case .hopFailed:
+                    self.editorReconciliation.clearColor()
+                case .hopSettled(let success):
+                    ControlLiveLog.line("zoom: D-Log2 → D-Log ack=\(success ? "ok" : "failed")")
+                case .confirmed:
+                    self.editorReconciliation.holdColor(.dLog)
+                    guard self.zoomColor.admits(authority) else { return }
+                    ControlLiveLog.line("zoom: D-Log2 → D-Log body confirmed")
+                case .restoredPreparing:
+                    self.status.colorMode = .dLog2
+                    guard self.zoomColor.admits(authority) else { return }
+                    self.editorReconciliation.holdColor(.dLog2)
+                case .restoreFailed:
+                    self.editorReconciliation.clearColor()
+                case .restoreSettled(let success):
+                    ControlLiveLog.line(
+                        "zoom: restore D-Log2 on 1× ack=\(success ? "ok" : "failed")")
+                    if success { self.controlNote = "Zoom 1× · D-Log2" }
+                case .flushed(let factor):
+                    _ = self.zoomGesture.flushed(factor)
+                case .slewCleared:
+                    break
+                case .recordingBlocked:
+                    self.controlNote = ControlHud.recordingColorLockNote
+                    guard self.zoomColor.admits(authority) else { return }
+                    ControlLiveLog.line("zoom: blocked \u{2014} color hop while recording")
+                case .locked:
+                    self.controlNote = "Zoom locked"
+                case .zoomPreparing:
+                    self.lastZoomSetAt = Date()
+                case .zoomSettled(let frame, let name, let announce, let success):
+                    if success, announce { self.controlNote = name }
+                    guard self.zoomColor.admits(authority) else { return }
+                    ControlLiveLog.line(
+                        "zoom: SET \(Duml.hex(frame.payload)) ack=\(success ? "ok" : (self.controlNote ?? "failed"))"
+                    )
+                }
+            })
+    }
+
+
+    private func makeTapFocus() -> DjiAppleTapFocus {
+        DjiAppleTapFocus(
+            binding: { [weak self] in
+                guard let self else { return .init() }
+                return .init(
+                    endpoint: self.datalink.map(ObjectIdentifier.init),
+                    controlGeneration: self.controlGeneration)
+            },
+            sendPrepare: { [weak self] frame in self?.datalink?.sendUntracked(frame) ?? 0 },
+            request: { [weak self] frame, name, timeout in
+                guard let self else { return false }
+                return await self.requestCamera(frame, name: name, timeout: timeout)
+            },
+            prepared: { prepare, seq in
+                ControlLiveLog.line(
+                    "control: send AE spot 0x02/0x22 seq=\(seq) flags=0x\(String(prepare.flags, radix: 16)) payload=\(Duml.hex(prepare.payload)) via=datalink"
+                )
+            })
+    }
+
+    /// Integration owns pending editor reconciliation; camera reports and native wire remain host policy.
+    private func makeEditorReconciliation() -> DjiAppleEditorReconciliation {
+        DjiAppleEditorReconciliation(binding: { [weak self] in
+            guard let self else { return .init() }
+            return .init(endpoint: self.datalink.map(ObjectIdentifier.init),
+                controlGeneration: self.controlGeneration)
+        }, whiteBalanceChanged: { [weak self] _, _ in
+            guard let self else { return }
+            self.withMutation(keyPath: \.pendingWhiteBalance) {}
+        })
+    }
+
+    private func makeCameraSettings() -> DjiAppleCameraSettings {
+        DjiAppleCameraSettings(
+            binding: { [weak self] in
+                guard let self else { return .init() }
+                return .init(
+                    endpoint: self.datalink.map(ObjectIdentifier.init),
+                    controlGeneration: self.controlGeneration)
+            },
+            request: { [weak self] frame, name in
+                guard let self else { return false }
+                return await self.requestCamera(frame, name: name)
+            },
+            audio: { [weak self] in
+                guard let self, !Task.isCancelled,
+                    DjiAppleCameraSettings.requestControlGeneration.map({ $0 == self.controlGeneration }) ?? true
+                else { return .init() }
+                // The captured GET cache is updated before editor callbacks. A retired
+                // presentation cannot discard its actual bytes. Operator rollback flags
+                // keep their original status values; only the raw blob/at2 come from GET.
+                let reported = self.cameraReportedCapture
+                return .init(
+                    blob: reported.audioDspBlob ?? self.status.audioDspBlob,
+                    at2: reported.audioDspBlob != nil ? reported.audioDspAt2 : self.status.audioDspAt2,
+                    wind: self.status.windNR, directional: self.status.directionalAudio)
+            }, glamour: { [weak self] in
+                guard let self, !Task.isCancelled,
+                    DjiAppleCameraSettings.requestControlGeneration.map({ $0 == self.controlGeneration }) ?? true
+                else { return nil }
+                return self.cameraReportedCapture.glamourBlob ?? self.status.glamourBlob
+            },
+            event: { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .channelCompleted(let channel, let previous, let ok, let authority):
+                    guard self.cameraSettings.admits(authority) else { return }
+                    if !ok {
+                        if self.status.audioChannel == channel {
+                            self.status.audioChannel = previous
+                        }
+                        guard self.cameraSettings.admits(authority) else { return }
+                        self.editorReconciliation.clearAudioPin(channel: true)
+                    }
+                    ControlLiveLog.line(
+                        "audio: channel \(channel.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))"
+                    )
+                case .vocalCompleted(let boost, let previous, let ok, let authority):
+                    guard self.cameraSettings.admits(authority) else { return }
+                    if !ok {
+                        if self.status.vocalBoost == boost { self.status.vocalBoost = previous }
+                        guard self.cameraSettings.admits(authority) else { return }
+                        self.editorReconciliation.clearAudioPin(vocal: true)
+                    }
+                    ControlLiveLog.line(
+                        "audio: vocal \(boost.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))"
+                    )
+                case .focusPreparing(let authority):
+                    guard self.cameraSettings.admits(authority) else { return }
+                    self.lastFocusTrackAt = Date()
+                case .focusCompleted(let track, let previous, let pinID, let ok, let authority):
+                    guard self.cameraSettings.admits(authority) else { return }
+                    if !ok, self.editorReconciliation.hasFocusTrackRequest(id: pinID) {
+                        self.editorReconciliation.clearFocusTrack()
+                        guard self.cameraSettings.admits(authority) else { return }
+                        self.status.focusTrack = previous
+                    }
+                    ControlLiveLog.line(
+                        "focus: track \(track.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))"
+                    )
+                case .missingDSP(let name, let authority):
+                    guard self.cameraSettings.admits(authority) else { return }
+                    self.controlNote = "\(name): no DSP blob"
+                    ControlLiveLog.line("audio: \(name) skipped — no GET blob")
+                case .dspPrepared(let facts, let authority):
+                    self.applyAudioDSPFacts(facts, authority: authority)
+                case .dspRejected(let facts, let authority):
+                    self.applyAudioDSPFacts(facts, authority: authority)
+                    guard self.cameraSettings.admits(authority) else { return }
+                    self.editorReconciliation.clearAudioPin(wind: true, directional: true)
+                case .dspCompleted(let name, let ok, let authority):
+                    guard self.cameraSettings.admits(authority) else { return }
+                    ControlLiveLog.line(
+                        "audio: \(name) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
+                case .glamourPrepared(let blob, let authority):
+                    guard self.cameraSettings.admits(authority) else { return }
+                    self.status.glamourBlob = blob
+                    guard self.cameraSettings.admits(authority) else { return }
+                    self.status.glamourEnabled = false
+                case .glamourRejected(let previous, let authority):
+                    guard self.cameraSettings.admits(authority) else { return }
+                    self.status.glamourBlob = previous
+                    guard self.cameraSettings.admits(authority) else { return }
+                    self.status.glamourEnabled = previous.map(GlamourEffect.isEnabled)
+                }
+            })
+    }
+
+    private func applyAudioDSPFacts(
+        _ facts: DjiAppleAudioDSPFacts,
+        authority: DjiAppleCameraSettings.Authority
+    ) {
+        guard cameraSettings.admits(authority) else { return }
+        status.audioDspBlob = facts.blob
+        guard cameraSettings.admits(authority) else { return }
+        status.audioDspAt2 = facts.at2
+        guard cameraSettings.admits(authority) else { return }
+        status.windNR = facts.wind
+        guard cameraSettings.admits(authority) else { return }
+        status.directionalAudio = facts.directional
+    }
+
+
+    /// ActiveTrack packet and polling ownership is integration-owned; native faces/focus stay here.
+    private func makeSubjectTracking() -> DjiAppleSubjectTracking {
+        DjiAppleSubjectTracking(
+            binding: { [weak self] in
+                guard let self else { return .init() }
+                return .init(
+                    endpoint: self.datalink.map(ObjectIdentifier.init),
+                    controlGeneration: self.controlExchange.generation)
+            },
+            send: { [weak self] frame, name, retransmits, settle in
+                self?.fireCamera(frame, name: name, retransmits: retransmits, onSettle: settle)
+            }, timing: subjectTrackingTiming,
+            event: { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .changed(let previous, let next, let revision):
+                    // The owner committed its snapshot before any synchronous observation callback.
+                    if previous.searchBox != next.searchBox {
+                        self.withMutation(keyPath: \.searchBox) {}
+                        guard self.subjectTracking.revision == revision else { return }
+                    }
+                    if previous.subjectBox != next.subjectBox {
+                        self.withMutation(keyPath: \.subjectBox) {}
+                        guard self.subjectTracking.revision == revision else { return }
+                    }
+                    if previous.tracking != next.tracking {
+                        self.withMutation(keyPath: \.isTracking) {}
+                    }
+                case .preparing(let authority):
+                    guard self.subjectTracking.admits(authority) else { return }
+                    self.faceBox = nil
+                    guard self.subjectTracking.admits(authority) else { return }
+                    self.faceTarget = nil
+                    guard self.subjectTracking.admits(authority) else { return }
+                    self.lastFaceHitAt = nil
+                case .tooSmall(let authority):
+                    guard self.subjectTracking.admits(authority) else { return }
+                    self.noteFrameTooSmall()
+                case .focus(let x, let y):
+                    self.adoptCameraFocus(x: x, y: y, fromTrackingBox: true)
+                }
+            })
+    }
+
     /// Packet workflows live in the shared owner; host policy and presentation stay here.
     private func makeControlExchange() -> DjiAppleControlExchange {
         #if DEBUG
@@ -1358,7 +1689,7 @@ final class CameraSession {
                 case .replyReceived:
                     self.commandTimeoutsAt.removeAll()
                 case .reply(let frame, let request, let late):
-                    if frame.cmdId == 0xa5 { self.applyTrackingPoll(frame.payload) }
+                    if frame.cmdId == 0xa5 { self.subjectTracking.receivePoll(frame.payload) }
                     _ = self.finishControlReply(
                         frame, name: request.name,
                         opcode: String(format: "0x%02X/0x%02X", frame.cmdSet, frame.cmdId),
@@ -1530,8 +1861,8 @@ final class CameraSession {
         }
         // Return the old mode to Auto before leaving it; the camera keeps Manual per mode.
         unlockAutoExposure()
-        captureModeGeneration &+= 1
-        let modeGeneration = captureModeGeneration
+        editorReconciliation.advanceCaptureGeneration()
+        let modeGeneration = editorReconciliation.captureGeneration
         let sessionGeneration = controlGeneration
         let previousMode = status.shootingMode
         let previousFormats = status.availableVideoFormats
@@ -1539,26 +1870,26 @@ final class CameraSession {
         let previousIso = status.availableIsoIndices
         let previousColor = status.availableColorModes
         let wire = Int(mode.wireByte(for: connectedCamera?.model))
-        let pin = CameraValuePin(wire, now: Date.timeIntervalSinceReferenceDate)
-        shootingModePin = pin
+        let pin = editorReconciliation.holdShootingMode(wire)
         var next = status
         if previousMode != wire {
             next.clearModeDependentCapabilities()
         }
         next.shootingMode = wire
         status = next
-        formatPin = nil
+        guard editorReconciliation.isPending(pin) else { return }
+        editorReconciliation.clearFormat()
         fireCamera(
             Commands.setShootingMode(mode, model: connectedCamera?.model), name: mode.label,
             onFail: { [weak self] in
-                guard let self, self.shootingModePin?.id == pin.id,
-                    self.captureModeGeneration == modeGeneration,
+                guard let self, self.editorReconciliation.isPending(pin),
+                    self.editorReconciliation.captureGeneration == modeGeneration,
                     self.controlGeneration == sessionGeneration,
                     self.status.shootingMode == wire
                 else { return }
-                self.captureModeGeneration &+= 1
-                self.shootingModePin = nil
-                self.formatPin = nil
+                self.editorReconciliation.advanceCaptureGeneration()
+                _ = self.editorReconciliation.reject(pin)
+                self.editorReconciliation.clearFormat()
                 self.status.shootingMode = previousMode
                 self.status.availableVideoFormats = previousFormats
                 self.status.availableShutterDenoms = previousShutter
@@ -1569,15 +1900,15 @@ final class CameraSession {
 
     func setIsoLimit(_ limit: IsoLimit) {
         let previous = status.isoLimit
-        let pin = CameraValuePin(limit, now: Date.timeIntervalSinceReferenceDate)
-        isoLimitPin = pin
+        let pin = editorReconciliation.holdIsoLimit(limit)
         status.isoLimit = limit
+        guard editorReconciliation.isPending(pin) else { return }
         let base = (status.colorMode ?? .normal).isoAutoBase(for: connectedCamera?.model) ?? 100
         fireCamera(
             Commands.setIsoLimit(limit), name: "ISO \(limit.label(base: base))",
             onFail: { [weak self] in
-                guard let self, self.isoLimitPin?.id == pin.id else { return }
-                self.isoLimitPin = nil
+                guard let self, self.editorReconciliation.isPending(pin) else { return }
+                _ = self.editorReconciliation.reject(pin)
                 self.status.isoLimit = previous
             },
             onSettle: { [weak self] ok in
@@ -1604,13 +1935,13 @@ final class CameraSession {
 
     func setEv(_ ev: EvComp, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
         let previous = status.evComp
-        pinExpo(ev: ev)
+        editorReconciliation.pinExpo(ev: ev)
         status.evComp = ev
         fireCamera(
             Commands.setEv(ev), name: "EV \(ev.label)", expect: .ev(ev),
             coalesce: true, onStage: onStage,
             onFail: { [weak self] in
-                self?.clearExpoPin(ev: true)
+                self?.editorReconciliation.clearExpoPin(ev: true)
                 self?.status.evComp = previous
             },
             onSettle: { [weak self] ok in
@@ -1621,10 +1952,8 @@ final class CameraSession {
 
     func refreshIsoLimit() async {
         guard IsoLimit.shouldGet(colorMode: status.colorMode) else { return }
-        enqueueAudio {
-            _ = await self.requestCamera(Commands.getIsoLimit(), name: "ISO limit GET")
-        }
-        await audioTail?.value
+        cameraSettings.refreshIsoLimit()
+        await cameraSettings.waitForPending()
     }
 
     func setFov(_ fov: FovSetting) {
@@ -1639,16 +1968,16 @@ final class CameraSession {
         }
         autoExposureLock = nil
         if mode != .manual {
-            formatPin?.shutterAngle = nil
-            clearExpoPin(shutter: true)
+            editorReconciliation.clearFormatAngle()
+            editorReconciliation.clearExpoPin(shutter: true)
         }
         let previous = status.expoMode
-        pinExpo(mode: mode)
+        editorReconciliation.pinExpo(mode: mode)
         status.expoMode = mode
         fireCamera(
             Commands.setExpoMode(mode), name: "ExpoMode", expect: .expo(mode),
             onFail: { [weak self] in
-                self?.clearExpoPin(mode: true)
+                self?.editorReconciliation.clearExpoPin(mode: true)
                 self?.status.expoMode = previous
             })
     }
@@ -1671,73 +2000,34 @@ final class CameraSession {
         ControlLiveLog.line("expo: mode=\(mode) iso=\(iso) shutter=\(shutter) ev=\(ev)")
     }
 
-    /// Chip label. Pinch preview, then the chip-tap target, then `cam_fov`.
-    /// Stays on live 1× while D-Log2→D-Log is in flight — the body ignores zoom.
     var zoomReadout: Double {
-        CamFov.readout(
-            live: status.zoomFactor,
-            preview: zoomColorHopPending ? nil : zoomPinchPreview,
-            fallback: fallbackZoomStop,
-            optimistic: zoomColorHopPending ? nil : zoomOptimistic)
+        access(keyPath: \.zoomStop)
+        access(keyPath: \.zoomPinchPreview)
+        access(keyPath: \.zoomOptimistic)
+        _ = zoomColorHopPending
+        return zoomGesture.readout
     }
-
-    /// `zoomStop` can outlive the FORMAT that allowed it — see
-    /// `CamFov.stopWithinCycle`.
     private var fallbackZoomStop: Double {
-        CamFov.stopWithinCycle(zoomStop, stops: zoomStops)
+        access(keyPath: \.zoomStop)
+        return zoomGesture.fallback
     }
-
-    /// Zoom disc hub. Hundredths, not the chip's 0.1× steps. Follows the finger
-    /// even while a D-Log2 hop is holding camera writes.
     var zoomDialReadout: Double {
-        CamFov.continuousReadout(
-            live: status.zoomFactor, preview: zoomPinchPreview, fallback: fallbackZoomStop,
-            optimistic: zoomOptimistic)
+        access(keyPath: \.zoomStop)
+        access(keyPath: \.zoomPinchPreview)
+        access(keyPath: \.zoomOptimistic)
+        return zoomGesture.dialReadout
     }
 
-    /// Drops a chip pin the camera never confirmed, so the HUD falls back to
-    /// `cam_fov`. Runs ahead of the unchanged-bytes guard below: a body that
-    /// clamps the ask, or that resets the lens on its own, reports the same
-    /// bytes every push and would never get the pin cleared. `CamFov.matches` is
-    /// the confirmation test because the live factor comes back off a lens
-    /// position, a hair off what was asked.
-    private func reconcileZoomPin(_ live: Double?) {
-        // Reconcile a copy: `zoomPin` is observed, and an inout access notifies
-        // every zoom reader (chip, caption, watcher relay) on each status frame
-        // even when nothing changes. Reconcile only ever releases the pin.
-        guard zoomPin != nil else { return }
-        var pin = zoomPin
-        _ = CameraValuePin.reconcile(
-            &pin, reported: live, now: Date.timeIntervalSinceReferenceDate,
-            confirms: CamFov.matches)
-        if pin == nil { zoomPin = nil }
-    }
+
 
     private func noteZoomIfChanged(_ new: CameraStatus) {
-        reconcileZoomPin(new.zoomFactor)
+        zoomGesture.observe(new)
         guard new.zoomFactorRaw != lastLoggedZoomRaw || new.zoomLens != lastLoggedZoomLens else {
             return
         }
         lastLoggedZoomRaw = new.zoomFactorRaw
         lastLoggedZoomLens = new.zoomLens
         guard new.zoomFactorRaw > 0 || new.zoomLens != nil else { return }
-        if let factor = new.zoomFactor {
-            if !zoomStopTouched {
-                // Raw zoom moves every status frame during a slew; the stop
-                // rarely does. Write only on change so zoom readers stay quiet.
-                var stop = zoomStop
-                if abs(factor - CamFov.maxFactor) < 0.15 {
-                    stop = 12
-                } else if abs(factor - 6) < 0.2 {
-                    stop = 6
-                } else if abs(factor - 3) < 0.2 {
-                    stop = 3
-                } else if factor < 2.5 {
-                    stop = 1
-                }
-                if stop != zoomStop { zoomStop = stop }
-            }
-        }
         let now = Date()
         guard now.timeIntervalSince(lastZoomLogAt) >= 0.5 else { return }
         lastZoomLogAt = now
@@ -1751,199 +2041,35 @@ final class CameraSession {
     /// Pinch HUD (0.1×) + slider (every distinct lens tick, ~20 Hz latest-wins).
     /// Gesture owns the chip until lift; cam_fov does not re-anchor mid-pinch.
     func updateZoomPinch(magnification: Double) {
-        guard supportsZoom else { return }
-        if gimbalMoveRunning { cancelProgrammedMove() }
-        if zoomPinchPreview == nil {
-            zoomPinchAnchor = status.zoomFactor ?? zoomOptimistic ?? zoomStop
-            zoomPinchSlew = nil
-            zoomPin = nil
-            lastPinchLens = nil
-            lastPinchLogTenths = nil
-        }
-        let factor = CamFov.pinchFactor(
-            anchor: zoomPinchAnchor, magnification: magnification, max: zoomMax)
-        if blockZoomColorHopIfRecording(for: factor) { return }
-        dropDLog2ForZoom(factor)
-        if CamFov.holdZoomWrite(
-            factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
-        {
-            queueZoomAfterHop(factor, onStage: nil)
-            zoomPinchPreview = factor
-            return
-        }
-        discardZoomAfterHop()
-        let first = zoomPinchPreview == nil
-        zoomPinchPreview = factor
-        let lens = CamFov.pinchLens(for: factor)
-        if first && abs(factor - zoomPinchAnchor) < 0.01 { return }
-        if lastPinchLens == lens { return }
-        lastPinchLens = lens
-        applyPinchWrite(preview: factor)
+        zoomGesture.updatePinch(magnification: magnification)
     }
 
-    func endZoomPinch() {
-        zoomPinchSlew = nil
-        discardZoomAfterHop()
-        if let preview = zoomPinchPreview {
-            markZoomStop(preview)
-            restoreDLog2IfNeeded(afterZoom: preview)
-        }
-        zoomPinchPreview = nil
-    }
+    func endZoomPinch() { zoomGesture.endPinch() }
 
     /// Cycle button. Body stops are sliders (Pro 217 / 651 / 1302 / 2604).
     func setZoom(_ factor: Double, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
-        guard supportsZoom else {
-            onStage?(.notSent)
-            return
-        }
-        if gimbalMoveRunning { cancelProgrammedMove() }
-        let from = CamFov.displayLabel(factor: zoomReadout)
-        let to = CamFov.displayLabel(factor: factor)
-        ControlLiveLog.line(
-            "zoom: setZoom \(from) → \(to) locked=\(isLocked) live=\(datalink != nil)")
-        guard !isLocked else {
-            controlNote = "Zoom locked"
-            onStage?(.notSent)
-            return
-        }
-        guard let write = CamFov.chipWrite(forJump: factor) else {
-            controlNote = "Zoom \(to): no command"
-            ControlLiveLog.line("zoom: tap ignored, no write for \(to)")
-            onStage?(.notSent)
-            return
-        }
-        if blockZoomColorHopIfRecording(for: factor) {
-            onStage?(.notSent)
-            return
-        }
-        zoomPinchPreview = nil
-        zoomPinchSlew = nil
-        dropDLog2ForZoom(factor)
-        if CamFov.holdZoomWrite(
-            factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
-        {
-            queueZoomAfterHop(factor, onStage: onStage)
-            return
-        }
-        zoomPin = CameraValuePin(factor, now: Date.timeIntervalSinceReferenceDate)
-        markZoomStop(factor)
-        controlNote = "Zoom \(to)"
-        fireZoom(write, target: factor, announce: true, onStage: onStage)
+        zoomGesture.chip(factor, onStage: onStage)
     }
 
     /// Pinch hybrid: `0A 4E` + unquantized lens. Coalesces to the newest tick.
     func setZoomSlider(_ factor: Double, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
-        if gimbalMoveRunning { cancelProgrammedMove() }
-        let position = CamFov.pinchLens(for: factor)
-        let tenths = CamFov.displayTenths(factor)
-        if lastPinchLogTenths != tenths {
-            lastPinchLogTenths = tenths
-            ControlLiveLog.line(
-                "zoom: setZoomSlider \(CamFov.displayLabel(factor: factor)) lens=\(position) locked=\(isLocked) live=\(datalink != nil)"
-            )
-        }
-        guard !isLocked else {
-            controlNote = "Zoom locked"
-            onStage?(.notSent)
-            return
-        }
-        if blockZoomColorHopIfRecording(for: factor) {
-            onStage?(.notSent)
-            return
-        }
-        dropDLog2ForZoom(factor)
-        if CamFov.holdZoomWrite(
-            factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
-        {
-            queueZoomAfterHop(factor, onStage: onStage)
-            return
-        }
-        zoomPinchSlew = nil
-        fireZoom(.lens(position), target: tenths, announce: false, onStage: onStage)
+        zoomGesture.slider(factor, onStage: onStage)
     }
 
     /// Directional slew. 100 toward 12×; 300 from 12× to the 9.15× detent.
-    func setZoomSlew(_ value: UInt16) {
-        if gimbalMoveRunning { cancelProgrammedMove() }
-        let to = value == CamFov.slewTele ? 12.0 : value == CamFov.slewWide ? CamFov.slewDetent : 0
-        ControlLiveLog.line(
-            "zoom: setZoomSlew \(value) locked=\(isLocked) live=\(datalink != nil)"
-        )
-        guard !isLocked else {
-            controlNote = "Zoom locked"
-            return
-        }
-        fireZoom(.slew(value), target: to > 0 ? to : nil, announce: false)
-    }
+    func setZoomSlew(_ value: UInt16) { zoomGesture.slew(value) }
 
     /// Older takes sent `FF 00 00 00` after a `03 00` slew. Newer recapture omitted
     /// it (camera may ignore). Same opcode as the slew, so the per-opcode queue
     /// keeps it from overtaking.
-    func setZoomStop() {
-        if gimbalMoveRunning { cancelProgrammedMove() }
-        ControlLiveLog.line(
-            "zoom: setZoomStop locked=\(isLocked) live=\(datalink != nil)"
-        )
-        guard !isLocked, supportsZoom else { return }
-        lastZoomSetAt = Date()
-        let frame = Commands.setZoomStop()
-        fireCamera(
-            frame, name: "Zoom stop",
-            onSettle: { [weak self] ok in
-                ControlLiveLog.line(
-                    "zoom: SET \(Duml.hex(frame.payload)) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))"
-                )
-            })
-    }
+    func setZoomStop() { zoomGesture.stop() }
 
-    private func markZoomStop(_ factor: Double) {
-        zoomStop = factor
-        zoomStopTouched = true
-    }
 
-    private func applyPinchWrite(preview: Double) {
-        setZoomSlider(preview)
-    }
+
+
 
     /// Chip tap is urgent. Slider / pinch pipelines at 20 Hz without waiting
     /// for ACK (Mimo). D-Log2→D-Log must be on the body before this SET.
-    private func fireZoom(
-        _ write: CamFov.ChipWrite, target: Double?, announce: Bool,
-        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil
-    ) {
-        guard supportsZoom else {
-            onStage?(.notSent)
-            return
-        }
-        let frame: Duml.Frame
-        let name: String
-        switch write {
-        case .lens(let position):
-            frame = Commands.setZoomLens(position)
-            name = target.map { "Zoom \(CamFov.displayLabel(factor: $0))" } ?? "Zoom slider"
-        case .slew(let value):
-            frame = Commands.setZoomSlew(value)
-            name =
-                target.map { "Zoom \(CamFov.displayLabel(factor: $0))" }
-                ?? (value == CamFov.slewTele
-                    ? "Zoom 1×" : value == CamFov.slewWide ? "Zoom 3×" : "Zoom slew")
-        }
-        lastZoomSetAt = Date()
-        fireCamera(
-            frame, name: name,
-            expect: announce ? target.map { .zoom($0) } : nil,
-            retransmits: announce,
-            coalesce: !announce,
-            onStage: onStage,
-            onSettle: { [weak self] ok in
-                guard let self else { return }
-                if ok, announce { self.controlNote = name }
-                ControlLiveLog.line(
-                    "zoom: SET \(Duml.hex(frame.payload)) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))"
-                )
-            })
-    }
 
     /// D-Log native 400 ↔ D-Log2 native 1600 when the operator is still on base.
     private func hopNativeISO(from: ColorMode?, to: ColorMode) {
@@ -1971,380 +2097,38 @@ final class CameraSession {
 
     /// D-Log2 rejects every zoom SET. Hop to D-Log before `0xB8`, and restore
     /// only when parked back at 1× after the gesture — not mid-pinch.
-    private func dropDLog2ForZoom(_ factor: Double) {
-        if blockZoomColorHopIfRecording(for: factor) { return }
-        guard let next = CamFov.colorMode(forZoom: factor, current: status.colorMode) else {
-            if zoomPinchPreview == nil, pendingZoomAfterHop == nil, !zoomColorHopPending {
-                restoreDLog2IfNeeded(afterZoom: factor)
-            }
-            return
-        }
-        sendZoomColorOnce(next)
-    }
 
-    private func sendZoomColorOnce(_ next: ColorMode) {
-        guard !status.isRecording else {
-            controlNote = ControlHud.recordingColorLockNote
-            return
-        }
-        if zoomColorHopPending {
-            if let until = zoomColorHopUntil, Date() >= until {
-                ControlLiveLog.line("zoom: D-Log hop timed out — resend 0x42")
-                zoomColorHopPending = false
-                teleColorSent = false
-            } else {
-                return
-            }
-        }
-        teleColorSent = true
-        zoomColorHopPending = true
-        zoomColorHopUntil = Date().addingTimeInterval(2)
-        zoomColorHopGeneration += 1
-        let hopGen = zoomColorHopGeneration
-        restoreDLog2OnWide = true
-        let from = status.colorMode
-        // Do not pin color — holdZoomWrite must see live D-Log2 until the body hops.
-        colorPin = nil
-        controlNote = "D-Log — D-Log2 cannot zoom"
-        ControlLiveLog.line("zoom: hold 0xB8 until D-Log2 → D-Log")
-        fireCamera(
-            Commands.setColorMode(next, model: connectedCamera?.model), name: "D-Log (zoom)",
-            expect: .color(next),
-            onFail: { [weak self] in
-                guard let self, self.zoomColorHopGeneration == hopGen else { return }
-                self.colorPin = nil
-                self.restoreDLog2OnWide = false
-                self.teleColorSent = false
-                self.zoomColorHopPending = false
-                self.zoomColorHopUntil = nil
-            },
-            onSettle: { [weak self] ok in
-                ControlLiveLog.line("zoom: D-Log2 → D-Log ack=\(ok ? "ok" : "failed")")
-                guard let self, self.zoomColorHopGeneration == hopGen else { return }
-                if ok {
-                    self.confirmZoomColorHopIfReady()
-                } else {
-                    self.teleColorSent = false
-                    self.zoomColorHopPending = false
-                    self.zoomColorHopUntil = nil
-                }
-            })
-        hopNativeISO(from: from, to: next)
-    }
 
     /// Body `cam_image_effect` is D-Log — the hop that unlocks 0xB8 has landed.
-    private func confirmZoomColorHopIfReady() {
-        guard zoomColorHopPending else { return }
-        guard status.colorMode == .dLog else { return }
-        zoomColorHopPending = false
-        zoomColorHopUntil = nil
-        colorPin = (.dLog, Date().addingTimeInterval(2))
-        ControlLiveLog.line("zoom: D-Log2 → D-Log body confirmed")
-        flushZoomAfterColorHop()
-    }
 
     /// Color hop landed — send the zoom SET that was waiting, if any.
-    private func flushZoomAfterColorHop() {
-        guard let factor = pendingZoomAfterHop else { return }
-        if CamFov.holdZoomWrite(
-            factor: factor, current: status.colorMode, hopPending: zoomColorHopPending)
-        {
-            return
-        }
-        let onStage = pendingZoomAfterHopStage
-        pendingZoomAfterHop = nil
-        pendingZoomAfterHopStage = nil
-        zoomPinchPreview = factor
-        markZoomStop(factor)
-        setZoomSlider(factor, onStage: onStage)
-    }
 
-    private func queueZoomAfterHop(
-        _ factor: Double, onStage: (@MainActor (ControlWireEvent) -> Void)?
-    ) {
-        pendingZoomAfterHopStage?(.notSent)
-        pendingZoomAfterHop = factor
-        pendingZoomAfterHopStage = onStage
-    }
 
-    private func discardZoomAfterHop() {
-        let callback = pendingZoomAfterHopStage
-        pendingZoomAfterHop = nil
-        pendingZoomAfterHopStage = nil
-        callback?(.notSent)
-    }
 
-    private func restoreDLog2IfNeeded(afterZoom factor: Double) {
-        guard restoreDLog2OnWide, CamFov.shouldRestoreDLog2(factor: factor) else { return }
-        guard !status.isRecording else { return }
-        restoreDLog2OnWide = false
-        teleColorSent = false
-        let from = status.colorMode
-        status.colorMode = .dLog2
-        colorPin = (.dLog2, Date().addingTimeInterval(2))
-        fireCamera(
-            Commands.setColorMode(.dLog2, model: connectedCamera?.model), name: "D-Log2",
-            expect: .color(.dLog2),
-            onFail: { [weak self] in self?.colorPin = nil },
-            onSettle: { [weak self] ok in
-                ControlLiveLog.line("zoom: restore D-Log2 on 1× ack=\(ok ? "ok" : "failed")")
-                if ok { self?.controlNote = "Zoom 1× · D-Log2" }
-            })
-        hopNativeISO(from: from, to: .dLog2)
-    }
 
-    private struct AudioPin {
-        var channel: AudioChannel?
-        var vocal: VocalBoost?
-        var wind: WindNoiseReduction?
-        var directional: DirectionalAudio?
-        var deadline: Date
-    }
 
-    private struct ExpoPin {
-        var generation: UInt64
-        var iso: Int?
-        var isoIndex: IsoIndex?
-        var shutter: Int?
-        var ev: EvComp?
-        var mode: ExpoMode?
-        var deadline: Date
-    }
 
     private typealias ControlExpect = DjiAppleControlExpectation
 
-    private func pinAudio(
-        channel: AudioChannel? = nil,
-        vocal: VocalBoost? = nil,
-        wind: WindNoiseReduction? = nil,
-        directional: DirectionalAudio? = nil
-    ) {
-        var pin = audioPin ?? AudioPin(deadline: Date().addingTimeInterval(2))
-        pin.deadline = Date().addingTimeInterval(2)
-        if let channel { pin.channel = channel }
-        if let vocal { pin.vocal = vocal }
-        if let wind { pin.wind = wind }
-        if let directional { pin.directional = directional }
-        audioPin = pin
-    }
 
-    private func audioPinIsEmpty(_ pin: AudioPin) -> Bool {
-        pin.channel == nil && pin.vocal == nil && pin.wind == nil && pin.directional == nil
-    }
 
-    private func clearAudioPin(
-        channel: Bool = false, vocal: Bool = false, wind: Bool = false, directional: Bool = false
-    ) {
-        guard var pin = audioPin else { return }
-        if channel { pin.channel = nil }
-        if vocal { pin.vocal = nil }
-        if wind { pin.wind = nil }
-        if directional { pin.directional = nil }
-        audioPin = audioPinIsEmpty(pin) ? nil : pin
-    }
 
     /// Hold pending choices until their own telemetry confirms them.
-    private func absorbStaleChoices(_ incoming: inout CameraStatus, reported: CameraStatus) {
-        let now = Date.timeIntervalSinceReferenceDate
-        if let held = CameraValuePin.reconcile(
-            &shootingModePin, reported: reported.shootingMode >= 0 ? reported.shootingMode : nil,
-            now: now)
-        {
-            if incoming.shootingMode != held {
-                incoming.availableVideoFormats = status.availableVideoFormats
-                incoming.availableShutterDenoms = status.availableShutterDenoms
-                incoming.availableIsoIndices = status.availableIsoIndices
-                incoming.availableColorModes = status.availableColorModes
-            }
-            incoming.shootingMode = held
-        }
-        let pendingWB = CameraValuePin.reconcile(
-            &whiteBalancePin, reported: reported.whiteBalance, now: now)
-        if pendingWB != pendingWhiteBalance { pendingWhiteBalance = pendingWB }
-        if let held = CameraValuePin.reconcile(
-            &focusModePin, reported: reported.focusMode, now: now)
-        {
-            incoming.focusMode = held
-        }
-        if let held = CameraValuePin.reconcile(
-            &focusTrackPin, reported: reported.focusTrack, now: now)
-        {
-            incoming.focusTrack = held
-        }
-        if let held = CameraValuePin.reconcile(&isoLimitPin, reported: reported.isoLimit, now: now)
-        {
-            incoming.isoLimit = held
-        }
-    }
 
-    private func absorbStaleAudio(_ incoming: inout CameraStatus, reported: CameraStatus) {
-        guard var pin = audioPin else { return }
-        if Date() >= pin.deadline {
-            audioPin = nil
-            return
-        }
-        if let expect = pin.channel {
-            if reported.audioChannel == expect {
-                pin.channel = nil
-            } else if incoming.audioChannel != nil {
-                incoming.audioChannel = status.audioChannel
-            }
-        }
-        if let expect = pin.vocal {
-            if reported.vocalBoost == expect {
-                pin.vocal = nil
-            } else if incoming.vocalBoost != nil {
-                incoming.vocalBoost = status.vocalBoost
-            }
-        }
-        if let expect = pin.wind {
-            if reported.windNR == expect {
-                pin.wind = nil
-            } else if incoming.windNR != nil {
-                incoming.windNR = status.windNR
-            }
-        }
-        if let expect = pin.directional {
-            if reported.directionalAudio == expect {
-                pin.directional = nil
-            } else if incoming.directionalAudio != nil {
-                incoming.directionalAudio = status.directionalAudio
-            }
-        }
-        audioPin = audioPinIsEmpty(pin) ? nil : pin
-    }
 
-    private func pinExpo(
-        iso: Int? = nil, isoIndex: IsoIndex? = nil, shutter: Int? = nil,
-        ev: EvComp? = nil, mode: ExpoMode? = nil
-    ) {
-        expoGeneration += 1
-        var pin =
-            expoPin ?? ExpoPin(generation: expoGeneration, deadline: Date().addingTimeInterval(2))
-        pin.generation = expoGeneration
-        pin.deadline = Date().addingTimeInterval(2)
-        if iso != nil || isoIndex != nil {
-            pin.iso = iso
-            pin.isoIndex = isoIndex
-        }
-        if let shutter { pin.shutter = shutter }
-        if let ev { pin.ev = ev }
-        if let mode { pin.mode = mode }
-        expoPin = pin
-    }
 
-    private func pinIsEmpty(_ pin: ExpoPin) -> Bool {
-        pin.isoIndex == nil && pin.shutter == nil && pin.ev == nil && pin.mode == nil
-    }
 
-    private func clearExpoPin(
-        iso: Bool = false, shutter: Bool = false, ev: Bool = false, mode: Bool = false
-    ) {
-        guard var pin = expoPin else { return }
-        if iso {
-            pin.iso = nil
-            pin.isoIndex = nil
-        }
-        if shutter { pin.shutter = nil }
-        if ev { pin.ev = nil }
-        if mode { pin.mode = nil }
-        expoPin = pinIsEmpty(pin) ? nil : pin
-    }
 
     /// Drop `cam_expo_param` snapshots that still show the pre-SET ISO / shutter / EV / mode.
-    private func absorbStaleExpo(_ incoming: inout CameraStatus, reported: CameraStatus) {
-        defer {
-            // Exposure reports cannot confirm the requested FORMAT, even when
-            // an early report happens to contain the desired denominator.
-            if let pin = formatPin, let angle = pin.shutterAngle,
-                Date() < pin.angleDeadline, incoming.expoMode == .manual
-            {
-                incoming.shutterDenom = ShutterAngle.denom(
-                    degrees: angle, fps: pin.expected.frameRate.fps,
-                    available: incoming.availableShutterDenoms)
-            }
-        }
-        guard var pin = expoPin else { return }
-        if Date() >= pin.deadline {
-            expoPin = nil
-            return
-        }
-        if let expectIdx = pin.isoIndex {
-            let matched =
-                reported.isoIndex == expectIdx
-                || (expectIdx.isoValue.map { reported.iso == $0 } ?? false)
-            if matched {
-                pin.isoIndex = nil
-                pin.iso = nil
-            } else {
-                incoming.isoIndex = status.isoIndex
-                incoming.iso = status.iso
-            }
-        }
-        if let expectShutter = pin.shutter {
-            if reported.shutterDenom == expectShutter {
-                pin.shutter = nil
-            } else {
-                incoming.shutterDenom = status.shutterDenom
-            }
-        }
-        if let expectEv = pin.ev {
-            if reported.evComp == expectEv {
-                pin.ev = nil
-            } else {
-                incoming.evComp = status.evComp
-            }
-        }
-        if let expectMode = pin.mode {
-            if reported.expoMode == expectMode {
-                pin.mode = nil
-            } else {
-                incoming.expoMode = status.expoMode
-            }
-        }
-        expoPin = pinIsEmpty(pin) ? nil : pin
-    }
 
-    private func absorbStaleFormat(_ incoming: inout CameraStatus, reportedThisFrame: Bool)
-        -> Double?
-    {
-        guard let pin = formatPin else { return nil }
-        let deadline = pin.shutterAngle == nil ? pin.deadline : pin.angleDeadline
-        if Date() >= deadline {
-            formatPin = nil
-            if pin.shutterAngle != nil {
-                controlNote = "Frame rate unconfirmed; choose the shutter angle again"
-            }
-            return nil
-        }
-        if !VideoFormat.absorbStale(
-            incoming: &incoming, expected: pin.expected, reportedThisFrame: reportedThisFrame)
-        {
-            formatPin = nil
-            return pin.shutterAngle
-        }
-        return nil
-    }
 
-    private func absorbStaleColor(_ incoming: inout CameraStatus, reported: CameraStatus) {
-        guard let pin = colorPin else { return }
-        if Date() >= pin.deadline {
-            colorPin = nil
-            return
-        }
-        if reported.colorMode == pin.expected {
-            colorPin = nil
-            return
-        }
-        incoming.colorMode = status.colorMode
-    }
 
     func setISO(_ index: IsoIndex, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
-        pinExpo(iso: index.isoValue, isoIndex: index)
+        editorReconciliation.pinExpo(iso: index.isoValue, isoIndex: index)
         fireCamera(
             Commands.setIsoIndex(index), name: "ISO \(index.label)", expect: .iso(index),
             coalesce: true, onStage: onStage,
-            onFail: { [weak self] in self?.clearExpoPin(iso: true) },
+            onFail: { [weak self] in self?.editorReconciliation.clearExpoPin(iso: true) },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
                     "iso: SET \(index.label) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
@@ -2359,18 +2143,18 @@ final class CameraSession {
         ensureManual: Bool = true
     ) {
         // A direct speed choice supersedes an angle waiting for FORMAT.
-        formatPin?.shutterAngle = nil
+        editorReconciliation.clearFormatAngle()
         if ensureManual, status.expoMode != .manual {
-            pinExpo(mode: .manual)
+            editorReconciliation.pinExpo(mode: .manual)
             fireCamera(
                 Commands.setExpoMode(.manual), name: "Manual expo", expect: .expo(.manual),
-                onFail: { [weak self] in self?.clearExpoPin(mode: true) })
+                onFail: { [weak self] in self?.editorReconciliation.clearExpoPin(mode: true) })
         }
-        pinExpo(shutter: denom)
+        editorReconciliation.pinExpo(shutter: denom)
         fireCamera(
             Commands.setShutter(denom: denom), name: "1/\(denom)", expect: .shutter(denom),
             coalesce: true, onStage: onStage,
-            onFail: { [weak self] in self?.clearExpoPin(shutter: true) },
+            onFail: { [weak self] in self?.editorReconciliation.clearExpoPin(shutter: true) },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
                     "shutter: SET 1/\(denom) ack=\(ok ? "ok" : (self?.controlNote ?? "failed"))")
@@ -2384,18 +2168,14 @@ final class CameraSession {
             return
         }
         guard !status.isPhoto else { return }
-        if let pin = formatPin,
-            Date() >= (pin.shutterAngle == nil ? pin.deadline : pin.angleDeadline)
-        {
-            formatPin = nil
-        }
+        editorReconciliation.expireFormatForOperatorAngle()
         let angle = ShutterAngle.nearestDegrees(degrees)
         OperatorPrefs.shutterAngleDegrees = angle
         let denom = ShutterAngle.denom(
             degrees: angle, fps: status.fps, available: status.availableShutterDenoms)
-        if formatPin != nil, status.expoMode == .manual, !status.isPhoto {
-            formatPin?.shutterAngle = angle
-            pinExpo(shutter: denom)
+        if editorReconciliation.hasFormat, status.expoMode == .manual, !status.isPhoto {
+            editorReconciliation.holdFormatAngle(angle)
+            editorReconciliation.pinExpo(shutter: denom)
             status.shutterDenom = denom
             return
         }
@@ -2493,9 +2273,11 @@ final class CameraSession {
     private func fireWhiteBalance(
         _ wb: WhiteBalance, onStage: (@MainActor (ControlWireEvent) -> Void)?
     ) {
-        let pin = CameraValuePin(wb, now: Date.timeIntervalSinceReferenceDate)
-        whiteBalancePin = pin
-        pendingWhiteBalance = wb
+        let pin = editorReconciliation.holdWhiteBalance(wb)
+        guard editorReconciliation.isPending(pin) else {
+            onStage?(.notSent)
+            return
+        }
         let name =
             wb.mode == .auto
             ? "WB Auto tint \(wb.tint)"
@@ -2508,9 +2290,8 @@ final class CameraSession {
             frame, name: name, expect: .wb(wb),
             coalesce: true, onStage: onStage,
             onFail: { [weak self] in
-                guard let self, self.whiteBalancePin?.id == pin.id else { return }
-                self.whiteBalancePin = nil
-                self.pendingWhiteBalance = nil
+                guard let self, self.editorReconciliation.isPending(pin) else { return }
+                _ = self.editorReconciliation.reject(pin)
             },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
@@ -2543,15 +2324,18 @@ final class CameraSession {
             return
         }
         let previous = status.focusMode
-        let pin = CameraValuePin(mode, now: Date.timeIntervalSinceReferenceDate)
-        focusModePin = pin
+        let pin = editorReconciliation.holdFocusMode(mode)
         status.focusMode = mode
+        guard editorReconciliation.isPending(pin) else {
+            onStage?(.notSent)
+            return
+        }
         fireCamera(
             Commands.setFocusMode(mode), name: "Focus \(mode.label)", expect: .focus(mode),
             onStage: onStage,
             onFail: { [weak self] in
-                guard let self, self.focusModePin?.id == pin.id else { return }
-                self.focusModePin = nil
+                guard let self, self.editorReconciliation.isPending(pin) else { return }
+                _ = self.editorReconciliation.reject(pin)
                 self.status.focusMode = previous
             },
             onSettle: { [weak self] ok in
@@ -2563,23 +2347,12 @@ final class CameraSession {
     func setFocusTrack(_ track: FocusTrackMode) {
         guard supportsFocusMode else { return }
         let previous = status.focusTrack
-        let pin = CameraValuePin(track, now: Date.timeIntervalSinceReferenceDate)
-        focusTrackPin = pin
+        let pin = editorReconciliation.holdFocusTrack(track)
         status.focusTrack = track
+        guard editorReconciliation.isPending(pin) else { return }
         lastFocusTrackAt = Date()
-        // Same 0x8E waiter as audio / glamour GETs. fireCamera on this opcode
-        // lets a GET steal the ACK, retransmit, and trip the feed watchdog.
-        enqueueAudio {
-            self.lastFocusTrackAt = Date()
-            let ok = await self.requestCamera(
-                Commands.setFocusTrack(track), name: "AF-C \(track.label)")
-            if !ok, self.focusTrackPin?.id == pin.id {
-                self.focusTrackPin = nil
-                self.status.focusTrack = previous
-            }
-            ControlLiveLog.line(
-                "focus: track \(track.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
-        }
+        // Same 0x8E waiter as audio / glamour GETs. The integration serializes the request.
+        cameraSettings.setFocusTrack(track, previous: previous, pinID: pin.id)
     }
 
     func setFocusOption(_ option: FocusOption) {
@@ -2596,134 +2369,48 @@ final class CameraSession {
     }
 
     func setAudioChannel(_ channel: AudioChannel) {
-        pinAudio(channel: channel)
+        editorReconciliation.pinAudio(channel: channel)
         let previous = status.audioChannel
         status.audioChannel = channel
-        enqueueAudio {
-            let ok = await self.requestCamera(
-                Commands.setAudioChannel(channel), name: "Audio \(channel.label)")
-            if !ok {
-                if self.status.audioChannel == channel { self.status.audioChannel = previous }
-                self.clearAudioPin(channel: true)
-            }
-            ControlLiveLog.line(
-                "audio: channel \(channel.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
-        }
+        cameraSettings.setChannel(channel, previous: previous)
     }
 
     func setVocalBoost(_ boost: VocalBoost) {
-        pinAudio(vocal: boost)
+        editorReconciliation.pinAudio(vocal: boost)
         let previous = status.vocalBoost
         status.vocalBoost = boost
-        enqueueAudio {
-            let ok = await self.requestCamera(
-                Commands.setVocalBoost(boost), name: "Vocal \(boost.label)")
-            if !ok {
-                if self.status.vocalBoost == boost { self.status.vocalBoost = previous }
-                self.clearAudioPin(vocal: true)
-            }
-            ControlLiveLog.line(
-                "audio: vocal \(boost.label) ack=\(ok ? "ok" : (self.controlNote ?? "failed"))")
-        }
+        cameraSettings.setVocalBoost(boost, previous: previous)
     }
 
     /// GET `0xA0` blob, patch `@2`, SET `0x9F`. Never invent the blob. The GET is
     /// a true round trip, so audio patches ride their own chain — never the SET path.
     func setWindNR(_ value: WindNoiseReduction) {
-        pinAudio(wind: value)
+        editorReconciliation.pinAudio(wind: value)
         status.windNR = value
-        enqueueAudio {
-            await self.patchAudioDsp(name: "Wind \(value.label)") {
-                AudioDspBlob.patchWind($0, value)
-            }
-        }
+        cameraSettings.setWind(value)
     }
 
     func setDirectionalAudio(_ value: DirectionalAudio) {
-        pinAudio(directional: value)
+        editorReconciliation.pinAudio(directional: value)
         status.directionalAudio = value
         status.windNR = .on
-        enqueueAudio {
-            await self.patchAudioDsp(name: "Dir \(value.label)") {
-                AudioDspBlob.patchDirectional($0, value)
-            }
-        }
+        cameraSettings.setDirectional(value)
     }
 
     func refreshFocusTrack() async {
-        enqueueAudio {
-            _ = await self.requestCamera(Commands.getFocusTrack(), name: "Focus track GET")
-        }
-        await audioTail?.value
+        cameraSettings.refreshFocus()
+        await cameraSettings.waitForPending()
     }
 
     /// Mimo persists glamour on the camera. GET pid `0x0039` and SET enable `@5 = 00`.
     func clearGlamourIfEnabled() async {
-        enqueueAudio {
-            let ok = await self.requestCamera(Commands.getGlamour(), name: "Glamour GET")
-            guard ok, let blob = self.status.glamourBlob, GlamourEffect.isEnabled(blob),
-                let off = GlamourEffect.disabled(blob)
-            else { return }
-            let previous = self.status.glamourBlob
-            self.status.glamourBlob = off
-            self.status.glamourEnabled = false
-            let setOk = await self.requestCamera(Commands.setGlamour(off), name: "Glamour off")
-            if !setOk {
-                self.status.glamourBlob = previous
-                self.status.glamourEnabled = previous.map(GlamourEffect.isEnabled)
-            }
-        }
-        await audioTail?.value
+        cameraSettings.clearGlamour()
+        await cameraSettings.waitForPending()
     }
 
     func refreshAudioState() async {
-        enqueueAudio {
-            for (frame, name) in zip(
-                Commands.audioStateGets, ["Audio ch GET", "Vocal GET", "AudioDSP GET"])
-            {
-                _ = await self.requestCamera(frame, name: name)
-            }
-        }
-        await audioTail?.value
-    }
-
-    private func enqueueAudio(_ work: @escaping @MainActor () async -> Void) {
-        let previous = audioTail
-        let generation = controlGeneration
-        audioTail = Task { @MainActor in
-            await previous?.value
-            guard !Task.isCancelled, self.controlGeneration == generation else { return }
-            await Self.$audioControlGeneration.withValue(generation) { await work() }
-        }
-    }
-
-    private func patchAudioDsp(name: String, patch: ([UInt8]) -> [UInt8]) async {
-        let got = await requestCamera(Commands.audioDspGet(), name: "AudioDSP GET")
-        guard got, let blob = status.audioDspBlob, blob.count > 2 else {
-            controlNote = "\(name): no DSP blob"
-            ControlLiveLog.line("audio: \(name) skipped — no GET blob")
-            return
-        }
-        let next = patch(blob)
-        let previousBlob = status.audioDspBlob
-        let previousAt2 = status.audioDspAt2
-        let previousWind = status.windNR
-        let previousDir = status.directionalAudio
-        status.audioDspBlob = next
-        if next.count > 2 {
-            AudioDspBlob.applyByte2(next[2], to: &status)
-        } else {
-            status.audioDspAt2 = AudioDspBlob.at2(next)
-        }
-        let ok = await requestCamera(Commands.audioDspSet(next), name: name)
-        if !ok {
-            status.audioDspBlob = previousBlob
-            status.audioDspAt2 = previousAt2
-            status.windNR = previousWind
-            status.directionalAudio = previousDir
-            clearAudioPin(wind: true, directional: true)
-        }
-        ControlLiveLog.line("audio: \(name) ack=\(ok ? "ok" : (controlNote ?? "failed"))")
+        cameraSettings.refreshAudio()
+        await cameraSettings.waitForPending()
     }
 
     /// `0x02/0x18` via `Commands.setVideoFormat(resolution:frameRate:)`.
@@ -2750,16 +2437,15 @@ final class CameraSession {
             ShutterAngle.rematchesFormat(
                 usesAngle: OperatorPrefs.shutterUsesAngle, manual: status.expoMode == .manual,
                 isPhoto: status.isPhoto, previousFps: previousFps, nextFps: format.frameRate.fps,
-                alreadyPending: formatPin?.shutterAngle != nil)
-            ? formatPin?.shutterAngle ?? OperatorPrefs.shutterAngleDegrees : nil
-        formatRequestGeneration &+= 1
-        let requestGeneration = formatRequestGeneration
-        let modeGeneration = captureModeGeneration
+                alreadyPending: editorReconciliation.requestedFormatAngle != nil)
+            ? editorReconciliation.requestedFormatAngle ?? OperatorPrefs.shutterAngleDegrees : nil
+        editorReconciliation.advanceFormatGeneration()
+        let requestGeneration = editorReconciliation.formatGeneration
+        let modeGeneration = editorReconciliation.captureGeneration
         let sessionGeneration = controlGeneration
         // The dependent shutter has a bounded confirmation window beyond the
         // normal two-second FORMAT projection; no separate command task owns it.
-        let now = Date()
-        formatPin = (format, now.addingTimeInterval(2), angle, now.addingTimeInterval(8))
+        editorReconciliation.holdFormat(format, shutterAngle: angle)
         var next = status
         next.videoResolution = format.resolution
         next.videoFormat = format
@@ -2767,7 +2453,7 @@ final class CameraSession {
         if let angle {
             let denom = ShutterAngle.denom(
                 degrees: angle, fps: next.fps, available: next.availableShutterDenoms)
-            pinExpo(shutter: denom)
+            editorReconciliation.pinExpo(shutter: denom)
             next.shutterDenom = denom
         }
         status = next
@@ -2779,18 +2465,18 @@ final class CameraSession {
             name: format.chipLabel,
             expect: .format(format),
             onFail: { [weak self] in
-                guard let self, self.formatRequestGeneration == requestGeneration,
-                    self.captureModeGeneration == modeGeneration,
+                guard let self, self.editorReconciliation.formatGeneration == requestGeneration,
+                    self.editorReconciliation.captureGeneration == modeGeneration,
                     self.controlGeneration == sessionGeneration
                 else { return }
                 self.status.videoFormat = previousFormat
                 self.status.videoResolution = previousRes
                 self.status.fps = previousFps
-                if self.formatPin?.shutterAngle != nil {
+                if self.editorReconciliation.requestedFormatAngle != nil {
                     self.status.shutterDenom = previousShutter
-                    self.clearExpoPin(shutter: true)
+                    self.editorReconciliation.clearExpoPin(shutter: true)
                 }
-                self.formatPin = nil
+                self.editorReconciliation.clearFormat()
             })
         // The matching format subscribe owns the shutter rematch. A parallel
         // shutter SET can land on the old encoder and be reset by FORMAT.
@@ -2823,19 +2509,14 @@ final class CameraSession {
         guard colorModes.contains(mode) else { return }
         if gimbalMoveRunning { cancelProgrammedMove() }
         let from = status.colorMode
-        if mode == .dLog2 {
-            teleColorSent = false
-            zoomColorHopPending = false
-            zoomColorHopUntil = nil
-            zoomColorHopGeneration += 1
-        }
-        colorPin = (mode, Date().addingTimeInterval(2))
+        guard zoomColor.manualColorSelected(mode) else { return }
+        editorReconciliation.holdColor(mode)
         fireCamera(
             Commands.setColorMode(mode, model: connectedCamera?.model),
             name: mode.label(for: bodyFamily), expect: .color(mode),
-            onFail: { [weak self] in self?.colorPin = nil })
+            onFail: { [weak self] in self?.editorReconciliation.clearColor() })
         hopNativeISO(from: from, to: mode)
-        if mode == .dLog { confirmZoomColorHopIfReady() }
+        if mode == .dLog { zoomGesture.confirmIfReady() }
     }
 
     /// Stream `0x04/0x01` while the on-screen stick is held. No ACK — do not
@@ -3198,11 +2879,7 @@ final class CameraSession {
             // Retire manual requests and any delayed wide-angle color restoration.
             let key = CameraSetMailbox.zoomOpcodeKey
             controlExchange.cancelSet(key)
-            zoomPinchPreview = nil
-            zoomPinchSlew = nil
-            discardZoomAfterHop()
-            restoreDLog2OnWide = false
-            zoomPin = nil
+            guard zoomGesture.retireForProgrammedZoom() else { return }
         }
         controlNote = nil
         cancelNativeHeadTrack()
@@ -3403,7 +3080,7 @@ final class CameraSession {
     /// `0x32` region). Glamour is `0x8E` pid `0x0039`, not `0x68`.
     func markFocus(at normalized: CGPoint) {
         guard supportsTapFocus else { return }
-        cancelTracking(sendClear: isTrackingActive)
+        subjectTracking.cancel(sendClear: isTrackingActive)
         // Hold the tap reticle so AF-C face detect cannot hide it immediately.
         lastTapFocusAt = Date()
         lastFocusTapAt = Date()
@@ -3414,72 +3091,17 @@ final class CameraSession {
         let y = Float(min(max(normalized.y, 0), 1))
         focusPoint = CGPoint(x: Double(x), y: Double(y))
         guard datalink != nil else { return }
-        tapFocusTask?.cancel()
-        tapFocusTask = Task { @MainActor in
-            await self.sendTapFocusBurst(x: x, y: y)
-        }
-    }
-
-    /// Mimo sends `0x22` then `0x30` before either ACK. A second `0x22 [02]`
-    /// often has no ACK — waiting 3 s for it starves `0x30` and stalls the feed.
-    private func sendTapFocusBurst(x: Float, y: Float) async {
-        guard datalink != nil, !Task.isCancelled else { return }
-        let prepare = Commands.tapFocusPrepare()
-        let seq = datalink?.sendUntracked(prepare) ?? 0
-        ControlLiveLog.line(
-            "control: send AE spot 0x02/0x22 seq=\(seq) flags=0x\(String(prepare.flags, radix: 16)) payload=\(Duml.hex(prepare.payload)) via=datalink"
-        )
-        guard !Task.isCancelled else { return }
-        let focused = await requestCamera(
-            Commands.tapFocusPoint(x, y), name: "Focus region", timeout: .milliseconds(800))
-        guard !Task.isCancelled, focused else { return }
-        _ = await requestCamera(
-            Commands.tapFocusLiveHint(), name: "AE hint", timeout: .milliseconds(800))
-        guard !Task.isCancelled else { return }
-        _ = await requestCamera(
-            Commands.tapFocusCommit(x, y), name: "Focus", timeout: .milliseconds(800))
+        tapFocus.start(x: x, y: y)
     }
 
     /// Drag-to-track: `0x02/0xA6` centre+size, then poll `0x02/0xA5` until lock or idle.
     func startTracking(_ box: TrackingBox) {
         cancelProgrammedMove()
-        if box.isTooSmall {
-            noteFrameTooSmall()
-            return
-        }
-        stopTrackingPoll()
-        lastOperatorClearAt = nil
-        lastLiveTrackingAt = nil
-        lastSubjectPushAt = nil
-        searchBox = box
-        subjectBox = nil
-        trackingRequest = (box, Date())
-        isTracking = false
-        trackingSawLock = false
-        faceBox = nil
-        faceTarget = nil
-        lastFaceHitAt = nil
-        let id = nextTrackingId
-        nextTrackingId &+= 1
-        if nextTrackingId == 0 { nextTrackingId = 1 }
-        guard datalink != nil else { return }
-        fireCamera(
-            Commands.setTrackingBox(
-                id: id,
-                x: Float(box.centerX),
-                y: Float(box.centerY),
-                width: Float(box.width),
-                height: Float(box.height)
-            ),
-            name: "Track"
-        ) { [weak self] ok in
-            guard ok else { return }
-            self?.beginTrackingPoll()
-        }
+        subjectTracking.start(box)
     }
 
     func cancelSubjectTracking() {
-        cancelTracking(sendClear: true)
+        subjectTracking.cancel(sendClear: true)
     }
 
     func handleGamepadAction(_ action: GamepadOperatorAction) {
@@ -3557,9 +3179,7 @@ final class CameraSession {
     }
 
     func noteFrameTooSmall() {
-        searchBox = nil
-        subjectBox = nil
-        isTracking = false
+        subjectTracking.rejectSmallBox()
         controlNote = "Frame Too Small"
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(ControlHud.toastHoldSeconds))
@@ -3582,91 +3202,7 @@ final class CameraSession {
         )
     }
 
-    private var isTrackingActive: Bool { isTracking || searchBox != nil || subjectBox != nil }
-
-    private func cancelTracking(sendClear: Bool) {
-        stopTrackingPoll()
-        let had = isTrackingActive
-        searchBox = nil
-        subjectBox = nil
-        isTracking = false
-        trackingSawLock = false
-        if sendClear { lastOperatorClearAt = Date() }
-        lastLiveTrackingAt = nil
-        lastSubjectPushAt = nil
-        trackingRequest = nil
-        guard sendClear, had, datalink != nil else { return }
-        fireCamera(Commands.clearTrackingBox(), name: "Track clear")
-    }
-
-    private func beginTrackingPoll() {
-        stopTrackingPoll()
-        trackingPollTask = Task { @MainActor [weak self] in
-            var idleTicks = 0
-            while !Task.isCancelled {
-                guard let session = self, session.isTrackingActive else { return }
-                session.fireCamera(
-                    Commands.pollTracking(), name: "Track poll", retransmits: false)
-                try? await Task.sleep(for: .milliseconds(500))
-                guard let session = self else { return }
-                if session.trackingSawLock,
-                    TrackingClearPolicy.shouldDropForSilence(
-                        lastPush: session.lastSubjectPushAt, now: Date())
-                {
-                    session.clearLocalTracking()
-                    return
-                }
-                if session.isTracking {
-                    idleTicks = 0
-                } else if session.trackingSawLock {
-                    session.clearLocalTracking()
-                    return
-                } else {
-                    idleTicks += 1
-                    if idleTicks >= 6 {
-                        session.clearLocalTracking()
-                        return
-                    }
-                }
-            }
-        }
-    }
-
-    private func stopTrackingPoll() {
-        trackingPollTask?.cancel()
-        trackingPollTask = nil
-    }
-
-    private func clearLocalTracking() {
-        searchBox = nil
-        subjectBox = nil
-        isTracking = false
-        lastLiveTrackingAt = nil
-        lastSubjectPushAt = nil
-        stopTrackingPoll()
-    }
-
-    /// Live subject rect. Bypasses the 5 Hz status HUD — Mimo paints this ~15 Hz.
-    /// The camera is the source of truth: a body-screen lock starts here, a
-    /// body-screen cancel is silence + `0xA5` idle.
-    private func applyLiveTrackingPush(_ payload: [UInt8]) {
-        guard
-            TrackingClearPolicy.shouldApplyLivePush(
-                operatorClearedAt: lastOperatorClearAt, now: Date())
-        else { return }
-        guard let box = TrackingBox.parseLivePush(payload), acceptsTrackingReport(box)
-        else { return }
-        lastSubjectPushAt = Date()
-        // Per ActiveTrack push: unchanged writes would still re-render the
-        // tracking layer, so publish only what moved.
-        let subject = smoothedSubject(toward: box)
-        if subjectBox != subject { subjectBox = subject }
-        if !isTracking { isTracking = true }
-        trackingSawLock = true
-        if searchBox != nil { searchBox = nil }
-        adoptCameraFocus(x: box.centerX, y: box.centerY, fromTrackingBox: true)
-        if trackingPollTask == nil { beginTrackingPoll() }
-    }
+    private var isTrackingActive: Bool { subjectTracking.snapshot.active }
 
     private func adoptCameraFocus(x: Double, y: Double, fromTrackingBox: Bool) {
         guard
@@ -3879,52 +3415,6 @@ final class CameraSession {
         var lastHit: Date
     }
 
-    /// Drop the camera's previous subject until it reports the operator's new box.
-    private func acceptsTrackingReport(_ box: TrackingBox) -> Bool {
-        guard let request = trackingRequest else { return true }
-        guard
-            TrackingStartPolicy.accepts(
-                box, requested: request.box,
-                secondsSinceRequest: Date().timeIntervalSince(request.at))
-        else { return false }
-        trackingRequest = nil
-        return true
-    }
-
-    private func smoothedSubject(toward box: TrackingBox) -> TrackingBox {
-        let now = Date()
-        let dt = lastLiveTrackingAt.map { now.timeIntervalSince($0) } ?? .infinity
-        lastLiveTrackingAt = now
-        return TrackingBoxSmoothing.blend(from: subjectBox, toward: box, dt: dt)
-    }
-
-    private func applyTrackingPoll(_ payload: [UInt8]) {
-        guard
-            TrackingClearPolicy.shouldApplyLivePush(
-                operatorClearedAt: lastOperatorClearAt, now: Date())
-        else { return }
-        switch TrackingPoll.parse(payload) {
-        case .locked(let cameraBox):
-            if let cameraBox, !acceptsTrackingReport(cameraBox) { break }
-            if !isTracking { isTracking = true }
-            trackingSawLock = true
-            if let cameraBox {
-                let subject = smoothedSubject(toward: cameraBox)
-                if subjectBox != subject { subjectBox = subject }
-            } else if subjectBox == nil, let search = searchBox {
-                subjectBox = TrackingBox.subject(from: search)
-            }
-            if searchBox != nil { searchBox = nil }
-        case .idle:
-            if isTracking { isTracking = false }
-            if trackingSawLock {
-                clearLocalTracking()
-            }
-        case nil:
-            break
-        }
-    }
-
     /// One fire-and-forget SET. Latest-wins pending while the same opcode is in flight.
     private func fireCamera(
         _ frame: Duml.Frame, name: String, expect: ControlExpect? = nil,
@@ -3968,7 +3458,7 @@ final class CameraSession {
     ) async -> Bool {
         let generation = controlGeneration
         guard !Task.isCancelled,
-            Self.audioControlGeneration.map({ $0 == generation }) ?? true
+            DjiAppleCameraSettings.requestControlGeneration.map({ $0 == generation }) ?? true
         else { return false }
         guard admitsMultiviewControl, datalink != nil, datalink?.isRebuilding != true else {
             controlNote = "not live"
@@ -4013,24 +3503,26 @@ final class CameraSession {
         _ reply: Duml.Frame, name: String, opcode: String, expect: ControlExpect?,
         late: Bool = false, announce: Bool = true
     ) -> Bool {
+        let receiptSource = editorReconciliation.authority
+        let parsed = CameraReply.parse(reply.payload)
         _ = CameraStatusDecoder.apply(
             reply, to: &cameraReportedCapture, model: connectedCamera?.model)
         controlSeam?.sessionDidChange()
+        guard !Task.isCancelled, editorReconciliation.admitsSource(receiptSource) else { return false }
         var next = status
         _ = CameraStatusDecoder.apply(reply, to: &next, model: connectedCamera?.model)
         var reported = CameraStatus()
         _ = CameraStatusDecoder.apply(reply, to: &reported, model: connectedCamera?.model)
-        absorbStaleChoices(&next, reported: reported)
-        absorbStaleAudio(&next, reported: reported)
-        absorbStaleExpo(&next, reported: reported)
-        absorbStaleColor(&next, reported: reported)
-        let formatReported =
-            reported.videoFormat != nil
-            || reported.videoResolution != nil || reported.fps > 0
-        let angle = absorbStaleFormat(&next, reportedThisFrame: formatReported)
-        status = next
-        rematchShutterAngle(angle)
-        let parsed = CameraReply.parse(reply.payload)
+        let editor = editorReconciliation.project(incoming: next, reported: reported,
+            committed: status, origin: .acknowledgment)
+        // The valid captured wire receipt and permission to publish this editor
+        // projection are separate. A successor request can retire the projection.
+        if editorReconciliation.admits(editor.authority) {
+            if editor.formatExpired { controlNote = "Frame rate unconfirmed; choose the shutter angle again" }
+            if editorReconciliation.admits(editor.authority) { status = editor.status }
+            if editorReconciliation.admits(editor.authority) { rematchShutterAngle(editor.rematchAngle) }
+        }
+        guard !Task.isCancelled, editorReconciliation.admitsSource(receiptSource) else { return false }
         ControlLiveLog.line(
             "control: got \(name) \(opcode) seq=\(reply.seq) flags=0x\(String(reply.flags, radix: 16)) payload=\(Duml.hex(reply.payload)) success=\(parsed.isSuccess)\(late ? " late-hold" : "")"
         )
@@ -4040,11 +3532,13 @@ final class CameraSession {
         }
         if expect?.matchesLegacySettlement(by: status) == true {
             controlNote = nil
+            guard !Task.isCancelled, editorReconciliation.admitsSource(receiptSource) else { return false }
             ControlLiveLog.line(
                 "control: \(name) \(opcode) subscribe already matches after \(parsed.message)")
             return true
         }
         if announce { controlNote = "\(name): \(parsed.message)" }
+        guard !Task.isCancelled, editorReconciliation.admitsSource(receiptSource) else { return false }
         log.info("control: \(name, privacy: .public) \(parsed.message, privacy: .public)")
         return false
     }
@@ -4064,7 +3558,7 @@ final class CameraSession {
                     sessionRecovering: self.sessionRecovery.isRecovering,
                     foregroundChecking: self.foregroundCheckTask != nil,
                     feedRepairing: self.pictureRecovery.isBusy,
-                    formatPoking: self.firstPictureFormatPokeTask != nil)
+                    formatPoking: self.firstPictureFormat.snapshot.running)
             }, event: { [weak self] event in
                 guard let self else { return }
                 switch event {
@@ -4505,70 +3999,11 @@ final class CameraSession {
         applyFeedWatchdog()
     }
 
-    private func resetFirstPictureFormatPoke() {
-        firstPictureFormatPokeGeneration += 1
-        firstPictureFormatPokeTask?.cancel()
-        firstPictureFormatPokeTask = nil
-        firstPictureFormatPoked = false
-    }
 
     /// Pocket 3 operator workaround: SET 1080 then the boot 4K, then one enable.
     /// Same-tab FORMAT never sends `0x02/0x18`. One shot per connect / rejoin.
-    private func startFirstPictureFormatPoke() {
-        if firstPictureFormatPokeTask != nil { return }
-        firstPictureFormatPokeGeneration += 1
-        let generation = firstPictureFormatPokeGeneration
-        firstPictureFormatPokeTask = Task { @MainActor [weak self] in
-            defer {
-                if self?.firstPictureFormatPokeGeneration == generation {
-                    self?.firstPictureFormatPokeTask = nil
-                }
-            }
-            await self?.runFirstPictureFormatPoke()
-        }
-    }
 
-    private func runFirstPictureFormatPoke() async {
-        guard !status.isRecording, !isBrowsingMedia else { return }
-        let original = VideoFormat.firstPictureOriginal(
-            format: status.videoFormat,
-            resolution: status.videoResolution,
-            fps: status.fps)
-        let kick = VideoFormat.firstPictureEncoderKick(
-            from: original, available: status.availableVideoFormats)
-        firstPictureFormatPoked = true
-        let legal =
-            status.availableVideoFormats.isEmpty
-            || status.availableVideoFormats.contains(kick)
-        log.info(
-            "live: Pocket 3 first-picture format poke \(original.chipLabel, privacy: .public) → \(kick.chipLabel, privacy: .public) → \(original.chipLabel, privacy: .public) legal=\(legal ? 1 : 0) formats=\(self.status.availableVideoFormats.count, privacy: .public)"
-        )
-        ControlLiveLog.line(
-            "feed: Pocket 3 format poke \(original.chipLabel) → \(kick.chipLabel) → \(original.chipLabel) legal=\(legal ? 1 : 0) formats=\(status.availableVideoFormats.count)"
-        )
-        setVideoFormat(resolution: kick.resolution, frameRate: kick.frameRate, fromOperator: false)
-        await waitForRecordingFormatPokeSettle()
-        guard !Task.isCancelled else { return }
-        setVideoFormat(
-            resolution: original.resolution, frameRate: original.frameRate, fromOperator: false)
-        await waitForRecordingFormatPokeSettle()
-        guard !Task.isCancelled, !isBrowsingMedia else { return }
-        _ = pictureRecovery.requestLiveView(.firstPictureFormat, reason: "first-picture format poke")
-    }
 
-    private func waitForRecordingFormatPokeSettle() async {
-        let start = Date()
-        let pinWait = CameraSoftAP.firstPictureFormatPokePinWait
-        while formatPin != nil, Date().timeIntervalSince(start) < pinWait {
-            try? await Task.sleep(for: .milliseconds(50))
-            if Task.isCancelled { return }
-        }
-        let minSettle = CameraSoftAP.firstPictureFormatPokeMinSettle
-        let elapsed = Date().timeIntervalSince(start)
-        if elapsed < minSettle {
-            try? await Task.sleep(for: .seconds(minSettle - elapsed))
-        }
-    }
 
     private func logFirstPictureObserve(
         step: CameraSoftAP.FirstPictureStep,
@@ -4600,7 +4035,7 @@ final class CameraSession {
         let model = connectedCamera?.model.name ?? "none"
         let needs = connectedCamera?.model.needsFirstPictureFormatPoke == true
         let line =
-            "feed: first-picture step=\(step.rawValue) defer=\(deferred ? 1 : 0) needsPoke=\(needs ? 1 : 0) poked=\(firstPictureFormatPoked ? 1 : 0) inFlight=\(firstPictureFormatPokeTask != nil ? 1 : 0) known=\(known ? 1 : 0) model=\(model) boot=\(original.chipLabel) kick=\(kick.chipLabel) legal=\(legal ? 1 : 0) formats=\(status.availableVideoFormats.count) enables=\(liveViewHistory.locallyAcceptedEnables) videoPkts=\(packets) lastVideo=\(videoAge)s presented=\(presented)s decoderFmt=\(decoder.hasFormat ? 1 : 0) idrHold=\(decoder.awaitingIDR ? 1 : 0)"
+            "feed: first-picture step=\(step.rawValue) defer=\(deferred ? 1 : 0) needsPoke=\(needs ? 1 : 0) poked=\(firstPictureFormatPoked ? 1 : 0) inFlight=\(firstPictureFormat.snapshot.running ? 1 : 0) known=\(known ? 1 : 0) model=\(model) boot=\(original.chipLabel) kick=\(kick.chipLabel) legal=\(legal ? 1 : 0) formats=\(status.availableVideoFormats.count) enables=\(liveViewHistory.locallyAcceptedEnables) videoPkts=\(packets) lastVideo=\(videoAge)s presented=\(presented)s decoderFmt=\(decoder.hasFormat ? 1 : 0) idrHold=\(decoder.awaitingIDR ? 1 : 0)"
         let signature =
             "\(step.rawValue).\(deferred).\(needs).\(firstPictureFormatPoked).\(known).\(packets).\(liveViewHistory.locallyAcceptedEnables).\(decoder.hasFormat)"
         let now = Date()
@@ -4634,7 +4069,7 @@ final class CameraSession {
             secondsSinceLastStatus: datalink?.lastStatusAt.map { Date().timeIntervalSince($0) },
             needsRecordingFormatPoke: connectedCamera?.model.needsFirstPictureFormatPoke == true,
             alreadyPokedRecordingFormat: firstPictureFormatPoked,
-            recordingFormatPokeInFlight: firstPictureFormatPokeTask != nil,
+            recordingFormatPokeInFlight: firstPictureFormat.snapshot.running,
             isRecording: status.isRecording,
             hasPresentedPicture: CameraSoftAP.isPresentedPictureFresh(
                 secondsSinceLastPresented: decoder.lastPresentedAt.map {
@@ -4656,7 +4091,7 @@ final class CameraSession {
             break
         case .pokeRecordingFormat:
             if deferPoke { return }
-            startFirstPictureFormatPoke()
+            firstPictureFormat.start()
             return
         case .resendEnable:
             // Do not route through sendRecoverEnable — inPlayback / VT-ready
@@ -5367,17 +4802,15 @@ final class CameraSession {
         controlSeam?.linkDidChange()
         guard ifCurrent() else { return Date() }
         commandTimeoutsAt.removeAll()
-        audioTail?.cancel()
-        audioTail = nil
-        tapFocusTask?.cancel()
-        tapFocusTask = nil
-        stopTrackingPoll()
+        cameraSettings.retire()
+        tapFocus.retire()
+        subjectTracking.stopPolling()
         guard ifCurrent() else { return Date() }
         controlExchange.retire(CancellationError(), notifySets: true)
         guard ifCurrent() else { return Date() }
         decoder.flushForRecovery()
         guard ifCurrent() else { return Date() }
-        resetFirstPictureFormatPoke()
+        firstPictureFormat.reset()
         guard ifCurrent() else { return Date() }
         firstPictureSettled = false
         audioRefreshPending = true
@@ -5732,20 +5165,17 @@ final class CameraSession {
             return
         }
         if !isMultiviewControlsOnly, frame.cmdSet == 0x02, frame.cmdId == 0x89 {
-            applyLiveTrackingPush(frame.payload)
+            subjectTracking.receiveLivePush(frame.payload)
         }
         _ = CameraStatusDecoder.apply(
             frame, to: &cameraReportedCapture, model: connectedCamera?.model)
         controlSeam?.sessionDidChange()
         var s = status
-        let priorMode = s.shootingMode
         let applied = CameraStatusDecoder.apply(frame, to: &s, model: connectedCamera?.model)
         // Decode only reported fields while a control is settling. The merged
         // snapshot already contains optimistic values and cannot confirm a SET.
         var reported = CameraStatus()
-        if shootingModePin != nil || whiteBalancePin != nil || focusModePin != nil
-            || focusTrackPin != nil || isoLimitPin != nil || expoPin != nil
-            || audioPin != nil || formatPin != nil || colorPin != nil
+        if editorReconciliation.needsSparseReport
         {
             _ = CameraStatusDecoder.apply(frame, to: &reported, model: connectedCamera?.model)
         }
@@ -5756,24 +5186,16 @@ final class CameraSession {
             s.selfieFlip = SelfieFlip(rawValue: parsed.value)
         }
         guard applied || flipReply else { return }
-        absorbStaleChoices(&s, reported: reported)
-        if s.shootingMode != priorMode {
-            captureModeGeneration &+= 1
-            formatPin = nil
-        }
-        absorbStaleExpo(&s, reported: reported)
-        if s.expoMode == .auto, formatPin?.shutterAngle != nil {
-            formatPin?.shutterAngle = nil
-            clearExpoPin(shutter: true)
-        }
-        absorbStaleAudio(&s, reported: reported)
-        let formatReported =
-            reported.videoFormat != nil
-            || reported.videoResolution != nil || reported.fps > 0
-        let angle = absorbStaleFormat(&s, reportedThisFrame: formatReported)
-        absorbStaleColor(&s, reported: reported)
+        let editor = editorReconciliation.project(incoming: s, reported: reported,
+            committed: status, origin: .subscription)
+        guard editorReconciliation.admits(editor.authority) else { return }
+        if editor.formatExpired { controlNote = "Frame rate unconfirmed; choose the shutter angle again" }
+        guard editorReconciliation.admits(editor.authority) else { return }
+        s = editor.status
+        let angle = editor.rematchAngle
         if isMultiviewControlsOnly {
             if status != s { status = s }
+            guard editorReconciliation.admits(editor.authority) else { return }
             rematchShutterAngle(angle)
             settleLateFromSubscribe()
             return
@@ -5879,9 +5301,11 @@ final class CameraSession {
                 if reconciled != gimbalSpeed { gimbalSpeed = reconciled }
             }
         }
+        guard editorReconciliation.admits(editor.authority) else { return }
         status = s
+        guard editorReconciliation.admits(editor.authority) else { return }
         rematchShutterAngle(angle)
-        confirmZoomColorHopIfReady()
+        zoomGesture.confirmIfReady()
         if flipReply || flipChanged {
             if flipChanged {
                 ControlLiveLog.line(

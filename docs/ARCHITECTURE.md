@@ -441,3 +441,44 @@ and [`ANDROID.md`](../ANDROID.md).
 
 See the [protocol handbook](https://opencapture.org/openpocketcine/docs/) for wire-level detail
 (Markdown source in `handbook/src/content/docs/`; stub at [`protocol-notes.md`](protocol-notes.md)).
+
+## Apple subject tracking ownership
+
+`DjiAppleSubjectTracking` in OpenCineDJIApple owns ActiveTrack request IDs, pending
+box admission, camera push/poll interpretation, smoothing and the single polling
+lifetime. CameraSession projects the committed snapshot through its existing
+search/subject/tracking properties. Native face detection and focus presentation,
+operator gimbal cancellation and the actual control exchange stay with the host.
+
+The owner captures the real datalink and control generation before acknowledgements
+and polling suspension. Native face preparation rechecks the same publication
+authority between synchronous host mutations. Retiring tracking never sends a
+camera command; the operator clear path retains its existing conditional CLEAR.
+The original 500ms polling, six idle ticks and clear/silence policies remain in use.
+This Apple integration increment does not replace the remaining session facade,
+watch/relay/motion ownership or Android's existing DJI scheduler.
+
+## Apple serialized camera settings
+
+`DjiAppleCameraSettings` owns the actual FIFO camera request chain: audio channel,
+vocal boost, mandatory DSP GET/patch/SET, audio/focus/ISO-limit refresh, focus-track
+SET and glamour GET/disable. Its typed output returns captured rollback facts and
+actual pin identity; the host keeps editor pins, optimistic status and diagnostics.
+The owner captures native driver/control identity and request generation across
+suspension; retired operations cannot publish rollback or write into a successor.
+The existing native request/response primitive and protocol math stay unchanged.
+There is no app enqueue callback, shadow audio catalog or synthesized DSP blob.
+
+## Apple tap-focus sequence candidate
+
+The proposed `DjiAppleTapFocus` owns one independent four-write tap sequence and its local
+cancellation. The actual session supplies its datalink identity/control generation, untracked
+PREPARE write and existing request primitive. PREPARE has no ACK wait; the point, hint and
+commit keep the original 800 ms deadlines. A refused point stops the sequence, while a
+refused hint still permits commit. Retiring or replacing the captured control source cannot
+authorize a later write or cancel a successor sequence.
+
+The app keeps actual point clamping, reticle/face presentation, tracking cancellation and
+diagnostic copy. This source-only Apple proposal changes no Android workflow; native
+first-picture format poke and zoom/color restoration remain distinct integration work.
+No physical camera qualification or full session checkpoint closure is claimed.
