@@ -1,4 +1,5 @@
 import AVFoundation
+import MonitorUI
 import OSLog
 import OpenCineApple
 import OpenCineMedia

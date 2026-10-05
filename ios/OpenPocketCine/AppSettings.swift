@@ -51,7 +51,7 @@ struct CloseButton: View {
                 .frame(width: size, height: size)
                 .glassCircle(interactive: true)
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .accessibilityLabel("Close")
     }
 }
@@ -71,7 +71,7 @@ struct HelpBadge: View {
                 .background(LiveDesign.background.opacity(0.5), in: Circle())
                 .overlay(Circle().stroke(LiveDesign.hairline, lineWidth: 1))
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .popover(isPresented: $showing) {
             Text(text)
                 .font(LiveType.ui(size: 12, weight: .regular))
@@ -175,10 +175,10 @@ struct SettingsNumberField: View {
             .frame(width: 44, height: 30)
             .background(
                 LiveDesign.background.opacity(0.5),
-                in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous)
                     .stroke(LiveDesign.hairline, lineWidth: 1)
             )
     }
@@ -313,7 +313,7 @@ struct SettingsActionPill: View {
             .background(background, in: Capsule())
             .overlay(Capsule().stroke(tint.opacity(0.5), lineWidth: 1))
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
     }
 }
 
@@ -363,7 +363,7 @@ struct DisplayToggleItem: View {
                     .stroke(LiveDesign.hairline, lineWidth: 1)
             )
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
     }
 }
 
@@ -386,7 +386,7 @@ struct SettingsSwitchInlineRow: View {
             } label: {
                 SettingsSwitchGraphic(isOn: isOn)
             }
-            .buttonStyle(.zcTapTarget)
+            .buttonStyle(.monitorTapTarget)
             .modifier(SettingsSwitchAccess(identifier: identifier, title: title, isOn: isOn))
         }
     }
@@ -426,7 +426,7 @@ struct SettingsSegmented: View {
                 OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
             }
         )
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
     }
 }
 
@@ -451,7 +451,7 @@ struct SettingsResetButton: View {
                 .background(LiveDesign.background.opacity(0.42), in: Circle())
                 .overlay(Circle().stroke(LiveDesign.hairline, lineWidth: 1))
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .accessibilityLabel("Reset to defaults")
     }
 }
@@ -937,9 +937,9 @@ struct AppPanelChrome<Content: View>: View {
                     .padding(.vertical, 10)
                     .background(
                         StartupColors.accent,
-                        in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius)
+                        in: RoundedRectangle(cornerRadius: MonitorTheme.radius)
                     )
-                    .buttonStyle(.zcTapTarget)
+                    .buttonStyle(.monitorTapTarget)
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)

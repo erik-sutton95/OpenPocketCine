@@ -1234,7 +1234,7 @@ struct AssistToolRow: View {
                     } label: {
                         AssistToolChip(tool: tool, isOn: assist.isOn(tool))
                     }
-                    .buttonStyle(.zcTapTarget)
+                    .buttonStyle(.monitorTapTarget)
                     .simultaneousGesture(
                         LongPressGesture(minimumDuration: 0.25).onEnded { _ in
                             guard !isLocked, tool.hasConfiguration else { return }

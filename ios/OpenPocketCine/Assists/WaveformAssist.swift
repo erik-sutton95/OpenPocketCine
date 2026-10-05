@@ -164,7 +164,7 @@ typealias WaveformAssistStore = MonitorScopePanelStore<MonitorWaveformOptions>
 struct WaveformLongPressMenu: View {
     @Binding var options: WaveformAssist.Options
     var compact: Bool = false
-    var body: some View { assistMenu.buttonStyle(.zcTapTarget) }
+    var body: some View { assistMenu.buttonStyle(.monitorTapTarget) }
 
     var assistMenu: MonitorScopeTraceMenu<WaveformAssist.Mode> {
         MonitorScopeTraceMenu(

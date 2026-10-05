@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -80,7 +81,7 @@ struct MonitorRecoveryOverlay: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
         .liquidGlass(
-            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+            in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous)
         )
         .shadow(color: .black.opacity(0.35), radius: 22, y: 10)
     }

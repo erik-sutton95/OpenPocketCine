@@ -660,7 +660,7 @@ struct MediaLibraryView: View {
                 .frame(width: card.width, height: card.height, alignment: .topLeading)
                 .liquidGlass(
                     in: RoundedRectangle(
-                        cornerRadius: DesignTokens.cornerRadius, style: .continuous)
+                        cornerRadius: MonitorTheme.radius, style: .continuous)
                 )
                 .offset(x: card.x, y: card.y)
                 .accessibilityElement(children: .contain)

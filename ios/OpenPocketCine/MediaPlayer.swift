@@ -158,7 +158,7 @@ struct MediaPhotoViewer: View {
                     } label: {
                         MediaCircleIconButton(icon: .x, size: 34)
                     }
-                    .buttonStyle(.zcTapTarget)
+                    .buttonStyle(.monitorTapTarget)
                     Text(file.filename)
                         .font(LiveType.ui(size: 14, weight: .semibold))
                         .foregroundStyle(LiveDesign.text)
@@ -276,7 +276,7 @@ struct MediaPhotoViewer: View {
                 .frame(width: 34, height: 34)
                 .liquidGlass(in: Circle(), interactive: true)
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .accessibilityLabel(favorite ? "Remove from favorites" : "Add to favorites")
     }
 
@@ -286,7 +286,7 @@ struct MediaPhotoViewer: View {
         } label: {
             MediaCircleIconButton(icon: .trash, size: 34)
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .confirmationDialog(
             "Delete this photo from the camera?",
             isPresented: $isDeleteConfirmPresented,
@@ -313,7 +313,7 @@ struct MediaPhotoViewer: View {
                 MediaCircleIconButton(icon: .share, size: 34)
             }
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .disabled(isPreparingShare)
         .accessibilityLabel("Share photo")
     }

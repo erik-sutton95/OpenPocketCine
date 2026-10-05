@@ -62,7 +62,7 @@ struct LivePortraitRecOptionsButton: View {
                 .frame(width: 40, height: 40)
                 .liquidGlass(in: Circle())
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .popover(isPresented: $popoverOpen, attachmentAnchor: .point(.bottomTrailing)) {
             recOptionsMenu
                 .presentationCompactAdaptation(.popover)
@@ -135,7 +135,7 @@ struct LivePortraitAspectToggle: View {
                     .overlay(Circle().strokeBorder(LiveDesign.hairline, lineWidth: 1))
             }
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .accessibilityLabel(aspect == .fill ? "Fit feed in frame" : "Fill frame with feed")
         .accessibilityValue(aspect == .fill ? "Fill" : "Fit")
     }
@@ -169,7 +169,7 @@ struct LivePortraitAssistRail: View {
                 .frame(width: 44, height: 44)
                 .liveChromeGlass(in: Circle())
         }
-        .buttonStyle(.zcTapTarget)
+        .buttonStyle(.monitorTapTarget)
         .accessibilityLabel("Show view assists")
     }
 
@@ -183,7 +183,7 @@ struct LivePortraitAssistRail: View {
                     .frame(width: 13, height: 13)
                     .frame(width: 36, height: 28)
             }
-            .buttonStyle(.zcTapTarget)
+            .buttonStyle(.monitorTapTarget)
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 2) {
                     ForEach(LiveAssistTool.toolbarCases) { tool in
@@ -210,7 +210,7 @@ struct LivePortraitAssistRail: View {
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .liveChromeGlass(
-            in: RoundedRectangle(cornerRadius: DesignTokens.cornerRadius, style: .continuous))
+            in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous))
     }
 
     private func presentOptions(for tool: LiveAssistTool) {

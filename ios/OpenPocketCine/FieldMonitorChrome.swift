@@ -96,7 +96,7 @@ struct FieldMonitorStatusChrome: View {
                     .lineLimit(1).minimumScaleFactor(0.75)
             }.foregroundStyle(.white)
         }
-        .buttonStyle(.zcTapTarget).accessibilityLabel("Storage remaining").accessibilityValue(
+        .buttonStyle(.monitorTapTarget).accessibilityLabel("Storage remaining").accessibilityValue(
             storage)
     }
 
@@ -180,7 +180,7 @@ struct FieldMonitorStatusChrome: View {
     }
 }
 
-/// Same 44×44pt pad/unpad hit region as `zcTapTarget`. Gesture and backdrop
+/// Same 44×44pt pad/unpad hit region as `monitorTapTarget`. Gesture and backdrop
 /// frames attach to the expanded region; negative padding restores layout.
 enum MonitorReadoutHitTarget {
     static let minimumSize: CGFloat = 44
@@ -381,7 +381,7 @@ struct FieldMonitorGauges: View {
                         icon: showsFPS ? .gauge : .signal, value: showsFPS ? fpsValue : nil,
                         bars: bars, color: linkColor)
                 }
-                .buttonStyle(.zcTapTarget)
+                .buttonStyle(.monitorTapTarget)
                 .accessibilityLabel(
                     "Live link \(bars) of 4 bars, feed \(model.session.liveFPS) frames per second"
                 )

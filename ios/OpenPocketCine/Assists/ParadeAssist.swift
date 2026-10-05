@@ -178,7 +178,7 @@ typealias ParadeAssistStore = MonitorScopePanelStore<MonitorParadeOptions>
 struct ParadeLongPressMenu: View {
     @Binding var options: ParadeAssist.Options
     var compact: Bool = false
-    var body: some View { assistMenu.buttonStyle(.zcTapTarget) }
+    var body: some View { assistMenu.buttonStyle(.monitorTapTarget) }
 
     var assistMenu: MonitorScopeTraceMenu<ParadeAssist.Mode> {
         MonitorScopeTraceMenu(

@@ -149,7 +149,7 @@ typealias VectorscopeAssistStore = MonitorScopePanelStore<MonitorVectorscopeOpti
 struct VectorscopeLongPressMenu: View {
     @Binding var options: VectorscopeAssist.Options
     var compact: Bool = false
-    var body: some View { assistMenu.buttonStyle(.zcTapTarget) }
+    var body: some View { assistMenu.buttonStyle(.monitorTapTarget) }
 
     var assistMenu: MonitorVectorscopeMenu {
         MonitorVectorscopeMenu(
