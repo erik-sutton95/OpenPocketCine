@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
 

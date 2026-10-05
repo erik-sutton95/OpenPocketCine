@@ -1,3 +1,4 @@
+import OpenCineCore
 import OpenPocketViewCore
 import OpenCineDJIApple
 import XCTest

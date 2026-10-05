@@ -39,8 +39,9 @@ import com.opencapture.opencine.core.RouteKind
 import com.opencapture.opencine.core.SavedCamera
 import com.opencapture.opencine.dji.CameraConnectionSetup
 import com.opencapture.opencine.dji.ConnectionPhase
-import com.opencapture.opencine.dji.LocalVPNFilter
+import com.opencapture.opencine.core.LocalVPNFilter
 import com.opencapture.opencine.dji.SharedWiFi
+import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import kotlinx.coroutines.delay
@@ -133,7 +134,7 @@ fun PairingCallouts(model: AppModel, discovery: PermissionGate, onEnableBluetoot
                 onAction = { runCatching { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } },
             )
         }
-        if (LocalVPNFilter.isActive(context)) {
+        if (LocalVPNProbe.isActive(context)) {
             PairingCallout(title = "Check the connection", body = LocalVPNFilter.WIZARD_BANNER, icon = MonitorIcon.TRIANGLE_ALERT)
         }
         if (slowScan && waitingForCamera) {

@@ -372,7 +372,8 @@ fail the same way (#239). Do not add a second bind ladder for this.
 Shells detect a local VPN (`TRANSPORT_VPN` on Android; CFNetwork scoped
 tunnel names on iOS), journal `vpn: local VPN or ad blocker active`, and
 put `vpn=on|off` on the diagnostic report. Operator copy lives in
-`LocalVPNFilter`. The Join Wi-Fi wizard step always names the workaround;
+OpenCineCore's `LocalVPNFilter` (Kotlin core; Android detection is `:platform`
+`LocalVPNProbe`). The Join Wi-Fi wizard step always names the workaround;
 the live well repeats it after 8 s with no picture when a tunnel is on.
 
 ## Pointers
