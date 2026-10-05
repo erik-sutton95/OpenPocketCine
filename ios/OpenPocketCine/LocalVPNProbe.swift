@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineCore
 import OpenPocketViewCore
 
 /// Best-effort local-VPN probe for the iOS shell. Android uses

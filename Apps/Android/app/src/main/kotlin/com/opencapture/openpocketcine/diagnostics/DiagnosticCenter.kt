@@ -16,10 +16,10 @@ import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.opencapture.opencine.dji.DjiLog
 import com.opencapture.opencine.media.DecoderErrorRecord
+import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.media.MediaShare
 import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
-import com.opencapture.opencine.dji.LocalVPNFilter
 import com.opencapture.opencine.dji.DjiCameraSession
 import java.io.File
 import java.text.SimpleDateFormat
@@ -265,7 +265,7 @@ object DiagnosticCenter {
         val family = session.connectedCamera?.model?.family ?: "none"
         val model = session.connectedCamera?.model?.name ?: "none"
         val phase = session.phase.name.lowercase()
-        val vpn = appContext?.let { LocalVPNFilter.isActive(it) } ?: false
+        val vpn = appContext?.let { LocalVPNProbe.isActive(it) } ?: false
         return Env(
             appVersion = BuildConfig.VERSION_NAME,
             appBuild = BuildConfig.VERSION_CODE.toString(),

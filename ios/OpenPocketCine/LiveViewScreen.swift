@@ -1,6 +1,7 @@
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
 
