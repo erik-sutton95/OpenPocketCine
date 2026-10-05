@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.monitorChromeEditStroke
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,7 +27,7 @@ internal fun LiveSystemChrome(model: AppModel, layout: LiveMonitorLayout,
     ).resolved(uiLocked, model.control.isRecording, model.session.isMultiviewBorrowed)
     // Keep collection in this bounded observation scope, away from native picture geometry.
     control
-    fun decoration() = Modifier.chromeEditStroke(editing != null, true)
+    fun decoration() = Modifier.monitorChromeEditStroke(editing != null, true)
     MonitorSystemControls(field, visibility, capturePresented = capturePresented,
         navigationHidden = navigationHidden, interactive = interactive,
         lock = { enabled ->

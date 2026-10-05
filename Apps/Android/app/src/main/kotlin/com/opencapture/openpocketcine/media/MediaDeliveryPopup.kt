@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.opencine.appkit.MediaShare
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
 import com.opencapture.monitorui.monitorScrollFade
@@ -669,37 +670,10 @@ private suspend fun runDelivery(
     }
 }
 
-private fun shareFiles(context: Context, files: List<File>): Boolean {
-    if (files.size == 1) {
-        return MediaShare.shareCachedFile(
-            context,
-            files.first(),
-            MediaHTTP.playbackMIMEType(files.first().name),
-        )
-    }
-    val uris = ArrayList<Uri>()
-    for (file in files) {
-        val uri =
-            runCatching { FileProvider.getUriForFile(context, MediaShare.authority(context), file) }.getOrNull()
-                ?: continue
-        uris.add(uri)
-    }
-    if (uris.isEmpty()) {
-        val first = files.firstOrNull() ?: return false
-        return MediaShare.shareCachedFile(context, first, MediaHTTP.playbackMIMEType(first.name))
-    }
-    val mime = if (uris.size == 1) MediaHTTP.playbackMIMEType(files.first().name) else "*/*"
-    val intent =
-        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            type = mime
-            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-    val chooser = Intent.createChooser(intent, null)
-    if (context !is android.app.Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(chooser)
-    return true
-}
+private val mediaShare = MediaShare(album = "OpenPocketCine")
+
+private fun shareFiles(context: Context, files: List<File>): Boolean =
+    mediaShare.shareFiles(context, files, MediaHTTP::playbackMIMEType)
 
 private fun insertIntoGallery(context: Context, file: File): Uri? =
-    MediaShare.insertIntoGallery(context, file, MediaHTTP.playbackMIMEType(file.name))
+    mediaShare.insertIntoGallery(context, file, MediaHTTP.playbackMIMEType(file.name))

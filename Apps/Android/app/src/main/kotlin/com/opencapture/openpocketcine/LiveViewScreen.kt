@@ -1,5 +1,10 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.monitorChromeEditStroke
+import com.opencapture.opencine.appkit.MonitorChromeEditBadgeLayer
+import com.opencapture.opencine.appkit.MonitorChromeEditBanner
+import com.opencapture.opencine.appkit.monitorChromeEditBoxes
+import com.opencapture.opencine.appkit.ObservePhoneBattery
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
@@ -100,6 +105,8 @@ import com.opencapture.monitorui.MonitorQuickGestureOwner
 import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.opencine.core.LocalVPNFilter
 import com.opencapture.opencine.dji.SessionRecoveryCopy
+import com.opencapture.opencine.appkit.MonitorRecoveryOverlay
+import com.opencapture.opencine.dji.SessionRecoveryUi
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.delay
@@ -187,7 +194,7 @@ fun LiveViewScreen(model: AppModel) {
     val verticalPicture by model.session.decoder.isVerticalPicture.collectAsState()
     val hasPicture by model.session.decoder.hasPicture.collectAsState()
 
-    ObservePhoneBattery(model)
+    ObservePhoneBattery { model.applyPhoneBattery(it.percent ?: -1, it.externalPower == true) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(1_000)
@@ -648,7 +655,7 @@ fun LiveViewScreen(model: AppModel) {
                         onQuickActiveChange = { topQuickActive = it; if (it) sheet = null })
                 }
             }, power = {
-                com.opencapture.openpocketcine.monitor.MonitorTelemetry(bars, fpsLabel,
+                com.opencapture.monitorui.MonitorTelemetry(bars, fpsLabel,
                     model.phoneBatteryPercent, status.batteryPercent,
                     horizontal = portrait && !checkNotNull(layout.field).tablet,
                     showsLink = !portrait || checkNotNull(layout.field).tablet)
@@ -1019,8 +1026,11 @@ fun LiveViewScreen(model: AppModel) {
             }, recovery = {
             if (recovery.isRecovering) {
                 MonitorRecoveryOverlay(
-                    state = recovery,
-                    deviceName = model.session.connectedCamera?.name.orEmpty(),
+                    retrying = recovery is SessionRecoveryUi.Retrying,
+                    title = SessionRecoveryCopy.title(recovery),
+                    detail = SessionRecoveryCopy.detail(recovery, model.session.connectedCamera?.name.orEmpty()),
+                    retryTitle = SessionRecoveryCopy.RETRY_CONNECTION,
+                    operatorMenuTitle = SessionRecoveryCopy.OPERATOR_MENU,
                     onRetry = { model.session.retrySessionRecovery() },
                     onOperatorMenu = { model.disconnect() },
                 )
@@ -1031,16 +1041,15 @@ fun LiveViewScreen(model: AppModel) {
             val editing = model.chromeEditorMode
             if (editing != null) {
                 val boxes =
-                    chromeEditBoxes(
+                    monitorChromeEditBoxes(
                         layout = layout,
-                        model = model,
+                        mounts = model::chromeSectionMounts,
                         uiLocked = uiLocked,
                         zoom = zoom,
                         stick = stick,
                         statusChips = statusChipFrames.toMap(),
                     )
-                ChromeEditBadgeLayer(
-                    mode = editing,
+                MonitorChromeEditBadgeLayer(
                     boxes = boxes,
                     viewportWidth = vw,
                     viewportHeight = vh,
@@ -1050,7 +1059,7 @@ fun LiveViewScreen(model: AppModel) {
                 val floor =
                     if (showsBottomBars) minOf(layout.assist.minY, layout.capture.minY)
                     else layout.feed.maxY
-                ChromeEditBanner(
+                MonitorChromeEditBanner(
                     mode = editing,
                     modifier =
                         Modifier
@@ -1442,7 +1451,7 @@ internal fun LandscapeChrome(
                     Modifier
                         .liveModuleFrame(zoom)
                         .alpha(if (uiLocked || zoomBlocked) 0.4f else 1f)
-                        .chromeEditStroke(editing != null, true),
+                        .monitorChromeEditStroke(editing != null, true),
                 onCycle = {
                     model.commitZoomCycle(LiveZoom.nextJump(model.zoomCycleFrom(), model.monitorZoomStops().primary))
                 },
@@ -1473,7 +1482,7 @@ internal fun LandscapeChrome(
             )
         }
         if (capabilities.gimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK) && !stick.isEmpty) {
-            Box(Modifier.liveModuleFrame(stick).alpha(if (captureOpen) 0f else 1f).chromeEditStroke(editing != null, true)) {
+            Box(Modifier.liveModuleFrame(stick).alpha(if (captureOpen) 0f else 1f).monitorChromeEditStroke(editing != null, true)) {
                 LiveGimbalStick(
                     enabled = !captureOpen && !uiLocked && model.liveOperatorPanel == null && hits,
                     onMove = model::updateGimbalStick,
@@ -1572,7 +1581,7 @@ private fun LiveTopDeck(
         val visible = editing == null || model.chrome(editing).isVisible(section)
         return Modifier
             .then(if (editing != null) Modifier.graphicsLayer { alpha = if (visible) 1f else 0.3f } else Modifier)
-            .chromeEditStroke(editing != null, visible)
+            .monitorChromeEditStroke(editing != null, visible)
             .reportChromeFrame { rect ->
                 onChipFrame(section, rect)
                 if (picker != null) onPickerFrame(picker, rect)

@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.appkit.MediaShare
 import com.opencapture.opencine.appkit.diagnostics.ManualProblemReport
 import com.opencapture.opencine.appkit.diagnostics.ManualProblemReportEnvelope
 import com.opencapture.opencine.dji.PrivacyRedactor
@@ -18,7 +19,6 @@ import com.opencapture.opencine.dji.DjiLog
 import com.opencapture.opencine.media.DecoderErrorRecord
 import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.openpocketcine.BuildConfig
-import com.opencapture.openpocketcine.media.MediaShare
 import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
 import com.opencapture.opencine.dji.DjiCameraSession
 import java.io.File

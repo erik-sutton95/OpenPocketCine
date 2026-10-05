@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.media.MonitorNDFilterRecommendation
 import com.opencapture.opencine.media.FrameRateSampler
 import com.opencapture.openpocketcine.lut.LutExposureCompensation
 import com.opencapture.openpocketcine.media.MediaLibraryQuery
@@ -33,9 +34,9 @@ class LocaleIndependentFormattingTest {
 
     @Test
     fun ndLabelsKeepTheDecimalPoint() {
-        assertEquals("+2.0", underCommaLocale { NDFilterRecommendation.stopsLabel(2.0) })
-        assertEquals("−1.5", underCommaLocale { NDFilterRecommendation.stopsLabel(-1.5) })
-        assertEquals("ND 1.5", underCommaLocale { NDFilterRecommendation.densityLabel(5.0) })
+        assertEquals("+2.0", underCommaLocale { MonitorNDFilterRecommendation.stopsLabel(2.0, "\u2014") })
+        assertEquals("−1.5", underCommaLocale { MonitorNDFilterRecommendation.stopsLabel(-1.5, "\u2014") })
+        assertEquals("ND 1.5", underCommaLocale { MonitorNDFilterRecommendation.densityLabel(5.0, "\u2014") })
     }
 
     @Test

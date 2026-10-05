@@ -2,6 +2,7 @@
 
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.monitorui.MonitorConfirmPopup
 import com.opencapture.openpocketcine.feed.colorMode
 import com.opencapture.monitorui.detectMonitorPlaybackVideoGestures as detectPlaybackVideoGestures
 import com.opencapture.monitorui.monitorPlaybackUnitPoint as unitPoint
@@ -314,9 +315,10 @@ fun MediaPhotoViewer(
         }
 
         if (confirmDelete) {
-            MediaConfirmPopup(
+            MonitorConfirmPopup(
                 title = "Delete this photo from the camera?",
                 confirmTitle = "Delete",
+                onClickFeedback = LocalOperatorHaptics.current::selection,
                 onDismiss = { confirmDelete = false },
                 onConfirm = {
                     confirmDelete = false

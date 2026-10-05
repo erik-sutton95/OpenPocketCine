@@ -3,16 +3,12 @@ package com.opencapture.openpocketcine.media
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -292,81 +288,6 @@ fun MediaGlassTrack(
                 .clip(shape)
                 .background(LiveDesign.accent, shape),
         )
-    }
-}
-
-@Composable
-fun MediaConfirmPopup(
-    title: String,
-    confirmTitle: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-    destructive: Boolean = true,
-) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDismiss,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier
-                .padding(24.dp)
-                .width(320.dp)
-                .clip(MediaCornerShape)
-                .background(LiveDesign.surface, MediaCornerShape)
-                .border(1.dp, LiveDesign.hairline, MediaCornerShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {},
-                )
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(title, color = LiveDesign.text, style = LiveType.ui(15f, FontWeight.SemiBold))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .clip(MediaCornerShape)
-                        .border(1.dp, LiveDesign.hairline, MediaCornerShape)
-                        .chromeClickable(onClick = onDismiss)
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("Cancel", color = LiveDesign.muted, style = LiveType.ui(14f, FontWeight.SemiBold))
-                }
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .clip(MediaCornerShape)
-                        .background(
-                            if (destructive) LiveDesign.rec.copy(alpha = 0.22f) else LiveDesign.accentDim,
-                            MediaCornerShape,
-                        )
-                        .border(
-                            1.dp,
-                            if (destructive) LiveDesign.rec.copy(alpha = 0.55f) else LiveDesign.accent.copy(alpha = 0.55f),
-                            MediaCornerShape,
-                        )
-                        .chromeClickable(onClick = onConfirm)
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        confirmTitle,
-                        color = if (destructive) LiveDesign.rec else LiveDesign.text,
-                        style = LiveType.ui(14f, FontWeight.SemiBold),
-                    )
-                }
-            }
-        }
     }
 }
 
