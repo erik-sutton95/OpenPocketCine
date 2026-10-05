@@ -365,7 +365,7 @@ struct SettingsRootView: View {
                         OperatorPrefs.gimbalGamepadStick = next
                         gimbalGamepadStick = next
                         model.gimbalPadHeld = false
-                        model.session.endGimbalStick()
+                        model.session.gimbal.endStick()
                     }
                 }), help: SettingsHelpCopy.gimbalJoystick, feedback: preferenceFeedback),
             status: model.gamepadConnected ? "Connected" : "Not connected", statusHelp: SettingsHelpCopy.gamepad)

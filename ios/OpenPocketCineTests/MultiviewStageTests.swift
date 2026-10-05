@@ -177,11 +177,11 @@ import XCTest
             .init(
                 sender: 0, receiver: 0, seq: 1, flags: 0, cmdSet: 4, cmdId: 5,
                 payload: [UInt8](repeating: 0, count: GimbalStick.attitudeLength)))
-        let start = try XCTUnwrap(borrowed.freshGimbalWaypoint)
+        let start = try XCTUnwrap(borrowed.gimbal.freshWaypoint)
         var end = start
         end.yawDeg += 10
         borrowed.gimbalProgram = GimbalProgram(a: start, b: end)
-        borrowed.runProgrammedMove()
+        borrowed.gimbal.runProgrammedMove()
         XCTAssertTrue(borrowed.gimbalMoveRunning, borrowed.controlNote ?? "Move did not start")
         XCTAssertEqual(borrowed.gimbalStartCountdown, 3)
 

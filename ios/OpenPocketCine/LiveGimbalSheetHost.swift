@@ -37,7 +37,7 @@ struct LiveGimbalSheetHost: View {
     }
 
     private var canApply: Bool {
-        canPresentEditor && model.session.canSetGimbalConfiguration
+        canPresentEditor && model.session.gimbal.canSetConfiguration
     }
 
     private var interactionContext: Context {
@@ -76,7 +76,7 @@ struct LiveGimbalSheetHost: View {
                     case .speed:
                         drum(
                             GimbalSpeed.pickerOrder, selected: model.session.gimbalSpeed,
-                            title: { $0.label }, select: model.session.setGimbalSpeed)
+                            title: { $0.label }, select: model.session.gimbal.setSpeed)
                     case .ramp:
                         drum(
                             GimbalRamp.pickerOrder, selected: model.gimbalRamp,

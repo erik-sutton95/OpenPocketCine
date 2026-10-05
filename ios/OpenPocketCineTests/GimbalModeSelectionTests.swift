@@ -73,7 +73,7 @@ final class GimbalModeSelectionTests: XCTestCase {
             }
             model.headTrackingEnabled = true
             model.setGimbalMode(.directionLock)
-            session.setGimbalSpeed(.fast)
+            session.gimbal.setSpeed(.fast)
             XCTAssertEqual(session.gimbalMode, .follow, context)
             XCTAssertEqual(session.gimbalSpeed, .defaultSpeed, context)
             XCTAssertTrue(model.headTrackingEnabled, context)

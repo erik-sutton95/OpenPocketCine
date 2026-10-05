@@ -38,8 +38,8 @@ double-tap and gamepad Circle/B do. **Recenter** (default) sends the camera's
 body-relative `0x04/0x4C` `FE 08`. **Level** snaps the lens to the nearest world
 target: horizon when |tilt| < 45°, otherwise plumb down (−90°) or up (+90°).
 
-World tilt comes from the `0x04/0x05` quaternion at `@24…@39` (core
-`WorldLevel.swift`, Android `session/WorldLevel.kt`). It maps world to camera;
+World tilt comes from the `0x04/0x05` quaternion at `@24…@39` (OpenCineDJI
+`WorldLevel.swift`, Kotlin `WorldLevel.kt` in OpenCine `Android/dji`). It maps world to camera;
 gravity in the camera frame gives tilt and roll. The fit on 1,014 captured
 Follow frames matched display tilt `@20` with a 0.02° median error; roll stayed
 within 1.1° while the gimbal held the horizon.

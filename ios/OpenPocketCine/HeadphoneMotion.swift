@@ -213,7 +213,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         guard let model, pendingCalibrate, haveHead, canDrive, !model.gimbalAnalogHeld,
             HeadTrackNative.headSampleIsFresh(measuredAt: lastHeadMeasuredAt, now: uptime())
         else { return }
-        guard let pose = model.session.freshGimbalWaypoint else {
+        guard let pose = model.session.gimbal.freshWaypoint else {
             model.session.controlNote = "Head tracking waiting for gimbal"
             return
         }
@@ -562,7 +562,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         guard
             HeadTrackNative.headSampleIsFresh(
                 measuredAt: lastHeadMeasuredAt, now: uptime()),
-            model.session.freshGimbalWaypoint != nil
+            model.session.gimbal.freshWaypoint != nil
         else {
             stopDrive()
             return
@@ -572,9 +572,9 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             stopDrive()
             return
         }
-        if nativeToken == nil { nativeToken = model.session.beginNativeHeadTrack() }
+        if nativeToken == nil { nativeToken = model.session.gimbal.beginNativeHeadTrack() }
         guard let token = nativeToken else { return }
-        guard model.session.updateNativeHeadTrack(target: target, token: token) else {
+        guard model.session.gimbal.updateNativeHeadTrack(target: target, token: token) else {
             stopDrive()
             return
         }
@@ -585,7 +585,7 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         driving = false
         guard let token = nativeToken else { return }
         nativeToken = nil
-        model?.session.endNativeHeadTrack(token: token)
+        model?.session.gimbal.endNativeHeadTrack(token: token)
     }
 
     private func invalidateHeadCallbacks() {
@@ -631,11 +631,11 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         let lookUp = look.up
         let originGimbalYaw = calibratedByUser ? gimbalYaw0Deg : 0
         let originGimbalPitch = calibratedByUser ? gimbalPitch0Deg : 0
-        let gimbalYawDeg = model.session.gimbalYawTenthDeg.map {
+        let gimbalYawDeg = model.session.gimbal.stickMapping.yawTenthDeg.map {
             HeadTrack.bodyLookRightDeg(
                 liveYawDeg: Double($0) / 10, originYawDeg: originGimbalYaw)
         }
-        let gimbalPitchDeg = model.session.gimbalPitchTenthDeg.map {
+        let gimbalPitchDeg = model.session.gimbal.stickMapping.pitchTenthDeg.map {
             HeadTrack.bodyLookUpDeg(
                 livePitchDeg: Double($0) / 10, originPitchDeg: originGimbalPitch)
         }
@@ -672,8 +672,8 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
             calibratedByUser ? (track.lastTarget?.yawDeg ?? gimbalYaw0Deg) - gimbalYaw0Deg : 0
         let predP =
             calibratedByUser ? (track.lastTarget?.pitchDeg ?? gimbalPitch0Deg) - gimbalPitch0Deg : 0
-        let rawY = model.session.gimbalYawTenthDeg.map { String($0) } ?? "-"
-        let rawP = model.session.gimbalPitchTenthDeg.map { String($0) } ?? "-"
+        let rawY = model.session.gimbal.stickMapping.yawTenthDeg.map { String($0) } ?? "-"
+        let rawP = model.session.gimbal.stickMapping.pitchTenthDeg.map { String($0) } ?? "-"
         let setMark = calibratedByUser ? "SET" : "no SET"
         if hudDue {
             lastHudAt = now
@@ -689,8 +689,8 @@ final class HeadphoneMotionBridge: NSObject, CMHeadphoneMotionManagerDelegate {
         }
         if logDue {
             lastLogAt = now
-            let att = model.session.lastGimbalAttitudeHex
-            let dump = model.session.lastGimbalAttitudeDump
+            let att = model.session.gimbal.lastAttitudeHex
+            let dump = model.session.gimbal.lastAttitudeDump
             ControlLiveLog.line(
                 String(
                     format:

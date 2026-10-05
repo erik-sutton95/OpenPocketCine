@@ -1198,11 +1198,6 @@ extension CameraSession {
         return !status.inPlayback && status.internalTotalMb == 0
     }
 
-    private var isLivePhase: Bool {
-        if case .live = phase { return true }
-        return false
-    }
-
     private func mediaThumbDest(_ file: MediaFile) -> URL {
         cameraMedia.thumbnailCacheURL(cameraID: mediaCameraID, file: file)
     }

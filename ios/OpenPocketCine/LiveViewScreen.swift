@@ -126,7 +126,7 @@ struct LiveViewScreen: View {
                 gamepad.noteBlocked()
                 headphones.noteBlocked()
                 model.liveGimbalPanel = .none
-                model.session.cancelProgrammedMove()
+                model.session.gimbal.cancelProgrammedMove()
             }
         }
         // Camera-body gallery follows DJI Mimo: open Media with it, and close
