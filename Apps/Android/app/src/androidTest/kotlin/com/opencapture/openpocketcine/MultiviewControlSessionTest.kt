@@ -9,12 +9,12 @@ import com.opencapture.opencine.dji.PID_AUDIO_CHANNEL
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.FoundCamera
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.multiview.MultiviewSession
 import com.opencapture.opencine.dji.CameraNetworkPath
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.DumlFrame
-import com.opencapture.opencine.dji.FoundCamera
 import java.net.DatagramSocket
 import java.net.Socket
 import kotlin.test.assertEquals

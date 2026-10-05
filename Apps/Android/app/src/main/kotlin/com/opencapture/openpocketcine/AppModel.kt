@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.ConnectionPhase
+import com.opencapture.opencine.vocabulary.GimbalDoubleTap
+import com.opencapture.opencine.vocabulary.GimbalRamp
 import com.opencapture.opencine.vocabulary.VideoFormat
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.opencine.appkit.AppIntegration
@@ -40,8 +42,6 @@ import com.opencapture.openpocketcine.assists.createLiveAssistState
 import com.opencapture.openpocketcine.feed.Media3GlBackend
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.AppSessionHost
-import com.opencapture.opencine.dji.GimbalDoubleTap
-import com.opencapture.opencine.dji.GimbalRamp
 import com.opencapture.opencine.dji.DjiCameraSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -616,7 +616,7 @@ class AppModel(
         if (shell.state.value.monitor != null) shell.close() else session.disconnect()
     }
 
-    fun borrowMonitor(camera: com.opencapture.opencine.dji.FoundCamera, release: () -> Unit) {
+    fun borrowMonitor(camera: com.opencapture.opencine.vocabulary.FoundCamera, release: () -> Unit) {
         shell.borrow(ConnectedCamera(SavedCamera(camera.id, DjiCameraSessionAdapter.INTEGRATION,
             advertisedName = camera.name, model = camera.model.name), session.control), release)
     }

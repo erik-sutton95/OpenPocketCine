@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
 
-// Sheet navigation for stills: the capture policy lives in OpenCine's DJI module, the sheets here.
+// Sheet navigation for stills: the capture policy lives in OpenCine's camera vocabulary, the sheets here.
 
 fun CaptureShutterPolicy.portraitSetupSheet(shootingMode: Int): LiveSheet =
     if (portraitSetupOpensMode(shootingMode)) LiveSheet.MODE else LiveSheet.FORMAT

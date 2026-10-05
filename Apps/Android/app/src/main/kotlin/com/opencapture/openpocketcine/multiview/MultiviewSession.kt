@@ -4,6 +4,7 @@ import com.opencapture.opencine.dji.applyAttitude
 import com.opencapture.opencine.dji.fromJson
 import com.opencapture.opencine.dji.toJson
 import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.FoundCamera
 import com.opencapture.opencine.vocabulary.GimbalStickMapping
 import com.opencapture.openpocketcine.feed.Media3GlBackend
 
@@ -43,7 +44,6 @@ import com.opencapture.opencine.dji.BleLink
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.DumlFrame
-import com.opencapture.opencine.dji.FoundCamera
 import com.opencapture.opencine.decoder.HevcDecoder
 import com.opencapture.opencine.dji.LiveViewEnablePolicy
 import com.opencapture.opencine.dji.MultiviewControlLease
