@@ -140,7 +140,7 @@ camera bitstream, or the existing queue bounds solve this measured failure.
 
 ### Automated and operator checks
 
-`just relay-test` compiles the real Apple relay shell on macOS. Delayed completion
+OpenCine `OpenCineRelayAppleTests` compile the real Apple relay shell on macOS. Delayed completion
 injection checks control/video isolation, eight healthy watchers beside one
 blocked watcher, keyframe-only resume, bounded encoder input, late completion
 following stop, and bounded state traffic. A real VideoToolbox encode checks the

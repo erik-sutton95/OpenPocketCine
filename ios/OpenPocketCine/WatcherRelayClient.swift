@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Observation
+import OpenCineRelayApple
 import OpenPocketViewCore
 
 enum WatcherRelayClientStatus: Equatable {
