@@ -67,7 +67,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         event(
             level: .notice, category: .diagnostics, code: "boot",
             message: "diagnostics installed")
-        FeedIncidentRuntime.install()
+        AppDiagnostics.incidents.install()
     }
 
     func event(
@@ -170,7 +170,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
             environment: environment(session: session),
             journal: ControlLiveLog.recentLines(),
             exceptions: Self.readLines(Self.exceptionsURL),
-            extras: FeedIncidentRuntime.reportExtras() + Self.metricKitExtras(),
+            extras: AppDiagnostics.incidents.reportExtras() + Self.metricKitExtras(),
             isSafeNetwork: PrivacyRedactor.isCameraNetwork)
     }
 
@@ -179,7 +179,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         let env = environment(session: session)
         let journal = ControlLiveLog.recentLines()
         let exceptions = Self.readLines(Self.exceptionsURL)
-        let extras = Self.metricKitExtras() + FeedIncidentRuntime.reportExtras()
+        let extras = Self.metricKitExtras() + AppDiagnostics.incidents.reportExtras()
         let body = DiagnosticReport.fullReport(
             environment: env, journal: journal, exceptions: exceptions, extras: extras,
             isSafeNetwork: PrivacyRedactor.isCameraNetwork)

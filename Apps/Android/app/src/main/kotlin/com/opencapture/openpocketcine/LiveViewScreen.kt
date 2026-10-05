@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
+import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import com.opencapture.opencine.media.CameraLinkHealthInputs
 import com.opencapture.opencine.media.CameraLinkHealthScorer
@@ -97,7 +98,7 @@ import androidx.compose.ui.unit.IntOffset
 import android.os.SystemClock
 import com.opencapture.monitorui.MonitorQuickGestureOwner
 import com.opencapture.monitorui.monitorReadoutGesture
-import com.opencapture.opencine.dji.LocalVPNFilter
+import com.opencapture.opencine.core.LocalVPNFilter
 import com.opencapture.opencine.dji.SessionRecoveryCopy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -743,7 +744,7 @@ fun LiveViewScreen(model: AppModel) {
                     delay(LocalVPNFilter.LIVE_HINT_DELAY_MS)
                     showVpnHint =
                         LocalVPNFilter.shouldHintOnLiveWait(
-                            vpnActive = LocalVPNFilter.isActive(context),
+                            vpnActive = LocalVPNProbe.isActive(context),
                             hadVideo = false,
                             secondsWithoutVideo = LocalVPNFilter.LIVE_HINT_DELAY_SECONDS,
                         )

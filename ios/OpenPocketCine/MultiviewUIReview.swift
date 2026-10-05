@@ -14,8 +14,8 @@
             guard isActive,
                 let defaults = UserDefaults(suiteName: "opc.multiview.presentation.review")
             else { return }
-            ReliabilityReportingConsent.defaults = defaults
-            ReliabilityReportingConsent.setOptedIn(false)
+            AppDiagnostics.consent.defaults = defaults
+            AppDiagnostics.consent.setOptedIn(false)
         }
 
         static func sessionFromEnvironment() -> MultiviewSession? {
