@@ -973,7 +973,7 @@ struct AppRoot: View {
             Button("Grant") { model.relayHost.grantControl() }
             Button("Deny", role: .cancel) { model.relayHost.denyControl() }
         }
-        .onAppear { model.shell.setSceneActive(scenePhase == .active) }
+        .onAppear { model.assist.inspectorSceneActive = scenePhase == .active }
         .onChange(of: scenePhase) { _, phase in
             ProblemReporting.shared.tick()
             model.shell.setSceneActive(phase == .active)
