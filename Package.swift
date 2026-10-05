@@ -51,6 +51,7 @@ let package = Package(
             name: "OpenPocketCineAndroidFacade",
             dependencies: [
                 "OpenPocketViewCore",
+                .product(name: "OpenCineCameraVocabulary", package: "OpenCine"),
                 .product(name: "OpenCineJNISupport", package: "OpenCine"),
                 // The DJI wire natives behind OpenCine's Kotlin DjiNative (linked into this .so).
                 .product(name: "OpenCineDJIAndroid", package: "OpenCine"),
@@ -58,7 +59,10 @@ let package = Package(
         ),
         .testTarget(
             name: "OpenPocketCineAndroidFacadeTests",
-            dependencies: ["OpenPocketCineAndroidFacade", "OpenPocketViewCore"]
+            dependencies: [
+                "OpenPocketCineAndroidFacade", "OpenPocketViewCore",
+                .product(name: "OpenCineCameraVocabulary", package: "OpenCine"),
+            ]
         ),
     ]
 )

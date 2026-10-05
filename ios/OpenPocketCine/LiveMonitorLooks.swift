@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import SwiftUI
 import os
@@ -376,7 +377,7 @@ enum PocketFalseColorMap {
                         viaLook
                         ? ScopeDisplayScale.monitorPercent(
                             read.encoded, transfer: .rec709,
-                            clipByte: OpenCineDJI.ScopeExposureCeiling.referenceClipByte(transfer: .rec709))
+                            clipByte: OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(transfer: .rec709))
                         : min(
                             100,
                             max(
@@ -441,7 +442,7 @@ enum PocketFalseColorMap {
                         viaLook
                         ? ScopeDisplayScale.monitorPercent(
                             read.encoded, transfer: .rec709,
-                            clipByte: OpenCineDJI.ScopeExposureCeiling.referenceClipByte(transfer: .rec709))
+                            clipByte: OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(transfer: .rec709))
                         : min(
                             100,
                             max(

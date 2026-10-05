@@ -1,6 +1,7 @@
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCameraVocabulary
 import OpenCineMedia
 import OpenPocketViewCore
 import SwiftUI
@@ -77,7 +78,7 @@ final class AppMonitorLooks: MonitorLookProvider {
     var monitorCameraName: String?
     var liveIsPhoto = false
     var referenceClipByte: Int {
-        OpenCineDJI.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
+        OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
     }
     func lutExposureTransfer(for transfer: MonitorTransfer) -> MonitorTransfer {
         transfer.lutExposureTransfer

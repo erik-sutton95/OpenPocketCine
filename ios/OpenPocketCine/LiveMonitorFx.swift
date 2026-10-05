@@ -1,6 +1,7 @@
 import CoreImage
 import Metal
 import OpenCineApple
+import OpenCineCameraVocabulary
 import OpenCineMedia
 import OpenPocketViewCore
 import UIKit
@@ -15,13 +16,13 @@ extension LiveImageEffects {
         get { transfer.colorMode }
         set {
             transfer = MonitorTransfer(newValue)
-            referenceClipByte = OpenCineDJI.ScopeExposureCeiling.referenceClipByte(
+            referenceClipByte = OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(
                 transfer: transfer)
         }
     }
-    mutating func stamp(transfer: MonitorTransfer, ceiling: OpenCineDJI.ScopeExposureCeiling) {
+    mutating func stamp(transfer: MonitorTransfer, ceiling: OpenCineCameraVocabulary.ScopeExposureCeiling) {
         self.transfer = transfer
-        referenceClipByte = OpenCineDJI.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
+        referenceClipByte = OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
         clipByte = ceiling.clipByte(transfer: transfer)
     }
     init(faceAF: Bool) { self.init(); self.faceAF = faceAF }
