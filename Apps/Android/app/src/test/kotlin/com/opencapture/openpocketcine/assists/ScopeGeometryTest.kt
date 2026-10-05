@@ -3,6 +3,7 @@ package com.opencapture.openpocketcine.assists
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CameraStatus
+import com.opencapture.monitorui.MonitorScopeTraceRaster as ScopeTraceRaster
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
