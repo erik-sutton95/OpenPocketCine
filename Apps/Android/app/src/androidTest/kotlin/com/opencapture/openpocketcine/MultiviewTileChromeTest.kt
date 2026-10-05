@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Density
@@ -35,6 +36,7 @@ import com.opencapture.openpocketcine.multiview.MultiviewCameraSettings
 import com.opencapture.openpocketcine.multiview.MultiviewSession
 import com.opencapture.openpocketcine.multiview.MultiviewStageContent
 import com.opencapture.opencine.appkit.MultiviewCameraAction as MultiviewStageAction
+import com.opencapture.opencine.appkit.MultiviewReadout
 import com.opencapture.opencine.appkit.MultiviewRecordContext
 import com.opencapture.opencine.appkit.MultiviewStage
 import com.opencapture.opencine.appkit.MultiviewStageActions
@@ -56,6 +58,7 @@ import com.opencapture.monitorui.MonitorDrawerTabs
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.MonitorInspectorPolicy
+import com.opencapture.monitorui.MonitorLayoutPolicy
 import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.monitorui.MultiviewArrangement
 import com.opencapture.monitorui.MultiviewPresentationLayout
@@ -63,6 +66,7 @@ import java.net.DatagramSocket
 import java.net.Socket
 import java.util.Collections
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -119,19 +123,21 @@ class MultiviewTileChromeTest {
         }
     }
 
-    @Test fun rightToolbarScrollKeepsAllFourActionsReachableOnSmallLandscape() =
+    // Landscape stages mount Live View's horizontal View Assist palette at its bottom-leading slot,
+    // whichever edge holds a cutout and whichever arrangement shows (Pocket main's MultiviewScreen).
+    @Test fun smallLandscapePaletteShowsAllFourActionsWithoutScrolling() =
         toolbarFixture(667f, 375f, MultiviewSafeArea())
 
-    @Test fun rightIslandMovesToolbarToNativeLeftColumnWithFullTouchTargets() =
+    @Test fun rightIslandKeepsPaletteInLiveViewSlotWithFullTouchTargets() =
         toolbarFixture(852f, 393f, MultiviewSafeArea(trailing = 59f, bottom = 21f))
 
-    @Test fun rightNotchMovesToolbarToNativeLeftColumnWithFullTouchTargets() =
+    @Test fun rightNotchKeepsPaletteInLiveViewSlotWithFullTouchTargets() =
         toolbarFixture(844f, 390f, MultiviewSafeArea(trailing = 44f, bottom = 21f))
 
-    @Test fun leftIslandKeepsToolbarAlignedWithNativeWifiAndDisplay() =
+    @Test fun leftIslandKeepsPaletteInLiveViewSlotLeftOfDisplay() =
         toolbarFixture(852f, 393f, MultiviewSafeArea(leading = 59f, bottom = 21f))
 
-    @Test fun centerStagePaletteBelowLeftIslandKeepsAllActionsReachable() =
+    @Test fun centerStagePaletteKeepsAllActionsReachableWithLeftIsland() =
         toolbarFixture(852f, 393f, MultiviewSafeArea(leading = 59f, bottom = 21f), MultiviewArrangement.CENTER_STAGE)
 
     @Test fun centerStagePaletteBelowWifiKeepsAllActionsReachableWithRightNotch() =
@@ -145,11 +151,13 @@ class MultiviewTileChromeTest {
         }
         val layout = MultiviewPresentationLayout.compute(width, height, safe,
             arrangement = arrangement, selected = 0)
-        val toolbarOnLeft = arrangement == MultiviewArrangement.CENTER_STAGE || safe.trailing > safe.leading
-        val column = if (toolbarOnLeft) layout.sessionControls.midX else layout.display.midX
+        val live = MonitorLayoutPolicy.fieldMonitor(width, height, safe.top, safe.leading, safe.bottom, safe.trailing)
+        assertTrue(layout.assistsHorizontal)
+        assertEquals(live.assists, layout.assists, "Multiview reuses Live View's landscape palette slot")
         lateinit var stage: MultiviewSession
         var settingsOpened = false
         var scale = 1f
+        val origin = android.graphics.PointF()
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             try {
                 scenario.onActivity { activity ->
@@ -163,7 +171,10 @@ class MultiviewTileChromeTest {
                             BoxWithConstraints(Modifier.fillMaxSize()) {
                                 scale = constraints.maxWidth / width
                                 CompositionLocalProvider(LocalDensity provides Density(scale, 1f)) {
-                                    Box(Modifier.size(width.dp, height.dp)) {
+                                    Box(Modifier.size(width.dp, height.dp).onGloballyPositioned {
+                                        val screen = it.positionOnScreen()
+                                        origin.set(screen.x, screen.y)
+                                    }) {
                                         MultiviewStageContent(stage, layout, confirmsRecord = false, interactive = true,
                                             onAdd = {}, onOpenLive = {}, onSettings = { settingsOpened = true },
                                             onNetwork = {}, onExit = {}) {}
@@ -173,36 +184,40 @@ class MultiviewTileChromeTest {
                         }
                     }
                 }
-                awaitNode(if (arrangement == MultiviewArrangement.GRID) "Show Focused stage" else "Show Grid")
+                val layoutTitle = if (arrangement == MultiviewArrangement.GRID) "Show Focused stage" else "Show Grid"
+                awaitNode(layoutTitle)
                 click(awaitNode("Show Multiview tools"))
-                awaitNode("Toggle Auto LUT for all cameras")
-                    .performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id)
-                val lut = awaitNode("Toggle Auto LUT for all cameras") { node ->
-                    val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
-                    node.contentDescription?.toString() == "Toggle Auto LUT for all cameras" &&
-                        bounds.height() + 1 >= layout.controlCellSize * scale
+                awaitNode("Collapse Multiview tools")
+                // Expanded, the four tools fill two columns of two, ranked FOCUS/GRID, LUT, FIT, CAM.
+                val titles = listOf(layoutTitle, "Toggle Auto LUT for all cameras", "Fill frame with feed", "Camera settings")
+                val hits = titles.map { title -> android.graphics.Rect().also { awaitNode(title).getBoundsInScreen(it) } }
+                val lane = android.graphics.Rect().also { awaitNode("Collapse Multiview tools").getBoundsInScreen(it) }
+                fun x(dp: Float) = origin.x + dp * scale
+                fun y(dp: Float) = origin.y + dp * scale
+                val cell = layout.controlCellSize
+                val step = cell + MonitorLayoutPolicy.ASSIST_SPACING
+                // The plate grows up and trailing from the slot's bottom-leading corner, inset 4.
+                val plate = PALETTE_PLATE_EXTRA + 2 * cell
+                val top = layout.assists.maxY - plate + 4
+                val expected = listOf(0 to 0, 0 to 1, 1 to 0, 1 to 1).map { (column, row) ->
+                    android.graphics.RectF(x(layout.assists.x + 4 + column * step), y(top + row * step),
+                        x(layout.assists.x + 4 + column * step + cell), y(minOf(top + row * step + cell, layout.assists.maxY - 4)))
                 }
-                val lutHit = android.graphics.Rect().also(lut::getBoundsInScreen)
-                assertTrue(abs(lutHit.exactCenterX() - column * scale) <= 1.5f,
-                    "LUT must align with the native system column: $lutHit")
-                assertEquals(toolbarOnLeft, lutHit.exactCenterX() < width / 2 * scale)
-                click(lut)
+                titles.indices.forEach { index ->
+                    val hit = hits[index]
+                    val want = expected[index]
+                    assertTrue(abs(hit.left - want.left) <= 1.5f && abs(hit.top - want.top) <= 1.5f &&
+                        abs(hit.right - want.right) <= 1.5f && abs(hit.bottom - want.bottom) <= 1.5f,
+                        "${titles[index]} $hit must fill its palette cell $want (scale $scale)")
+                }
+                assertTrue(hits.all { it.width() + 1 >= cell * scale }, "Every tool keeps a full-width target: $hits")
+                assertTrue(hits.all { it.height() + 1 >= 44 * scale }, "Every tool keeps a 44dp target: $hits")
+                assertTrue(maxOf(lane.right, hits.maxOf { it.right }) < x(layout.display.x),
+                    "The open palette stays short of DISP: $hits $lane")
+                assertTrue(hits.minOf { it.top } > y(layout.network.maxY), "The palette sits below Wi-Fi: $hits")
+                click(awaitNode(titles[1]))
                 scenario.onActivity { assertTrue(!stage.tiles[0].lutEnabled) }
-                val rail = awaitNode("scrollable toolbar") { it.isScrollable }
-                assertTrue(rail.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
-                SystemClock.sleep(250)
-                awaitNode("scrollable toolbar") { it.isScrollable }.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-                awaitNode("Camera settings").performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id)
-                val settings = awaitNode("Camera settings after toolbar scroll settles") { node ->
-                    val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
-                    node.contentDescription?.toString() == "Camera settings" && bounds.height() + 1 >= layout.controlCellSize * scale
-                }
-                val hit = android.graphics.Rect().also(settings::getBoundsInScreen)
-                assertTrue(hit.height() + 1 >= layout.controlCellSize * scale, "Scrolling must expose a full camera settings target: $hit")
-                assertTrue(abs(hit.exactCenterX() - column * scale) <= 1.5f,
-                    "Camera settings must align with the native system column: $hit")
-                assertEquals(toolbarOnLeft, hit.exactCenterX() < width / 2 * scale)
-                click(settings)
+                click(awaitNode(titles[3]))
                 scenario.onActivity {
                     assertTrue(settingsOpened)
                     assertEquals(4, stage.tiles.size)
@@ -251,12 +266,15 @@ class MultiviewTileChromeTest {
                                     Box(Modifier.size(width.dp, height.dp).onGloballyPositioned { coordinates ->
                                         val origin = coordinates.boundsInWindow()
                                         android.graphics.RectF(origin.left, origin.top, origin.right, origin.bottom).roundOut(expectedViewport)
-                                        // Camera settings reuse Live View's trailing gimbal inspector frame.
+                                        // Camera settings reuse Live View's trailing gimbal inspector frame,
+                                        // in whole pixels as Compose lays it out (dp sizes round to px).
                                         val panel = MonitorInspectorPolicy.frame(width, height, trailing = true)
-                                        val panelY = if (panel.portrait) (height - panel.height) / 2 else 0f
-                                        android.graphics.RectF(origin.left + (width - panel.width) * density.density,
-                                            origin.top + panelY * density.density, origin.left + width * density.density,
-                                            origin.top + (panelY + panel.height) * density.density).roundOut(expectedPanel)
+                                        val viewport = coordinates.size
+                                        val panelWidth = with(density) { panel.width.dp.roundToPx() }.coerceAtMost(viewport.width)
+                                        val panelHeight = with(density) { panel.height.dp.roundToPx() }.coerceAtMost(viewport.height)
+                                        val panelY = if (panel.portrait) ((viewport.height - panelHeight) / 2f).roundToInt() else 0
+                                        android.graphics.RectF(origin.left + viewport.width - panelWidth, origin.top + panelY,
+                                            origin.left + viewport.width, origin.top + panelY + panelHeight).roundOut(expectedPanel)
                                     }.testTag("multiview.settingsViewport")) {
                                         MultiviewCameraSettings(stage, 0, width, height,
                                             MultiviewSafeArea(top = 24f, bottom = 20f)) {}
@@ -350,11 +368,11 @@ class MultiviewTileChromeTest {
     @androidx.compose.runtime.Composable
     private fun FixtureStage(
         tiles: List<MultiviewTile?>, layout: MultiviewPresentationLayout, arrangement: MultiviewArrangement,
-        dispatched: MutableList<String>,
+        dispatched: MutableList<String>, selected: Int = 0,
     ) {
         val plan = RecordPlan.make(RecordDirection.START, TargetPolicy.STRICT, emptyList(), MulticamGroup(), MulticamSnapshot())
         MultiviewStage(
-            tiles, layout, arrangement, selected = 0, fill = false, tools = MultiviewTool.entries,
+            tiles, layout, arrangement, selected = selected, fill = false, tools = MultiviewTool.entries,
             readouts = null, recording = true, groupBusy = false, confirmsRecord = false,
             actions = MultiviewStageActions(
                 select = {}, arrange = {}, setFill = {},
@@ -366,33 +384,52 @@ class MultiviewTileChromeTest {
         ) {}
     }
 
-    @Test fun focusedMainMetadataReservesTheOverlayReadoutBand() {
+    /** Grid's selected tile carries its values inline, between storage and the tally, past the palette. */
+    @Test fun selectedGridTileCarriesItsValuesInlineBesideThePalette() {
         val width = 780f
         val height = 520f
+        // Camera C sits over the bottom-leading View Assist palette, so its footer starts past it.
         val layout = MultiviewPresentationLayout.compute(width, height, MultiviewSafeArea(),
-            MultiviewArrangement.GRID, selected = 0)
-        var origin = 0f
+            MultiviewArrangement.GRID, selected = 2)
+        val frame = layout.tiles[2]
+        assertTrue(layout.readouts.x > frame.x, "The palette must reach under camera C's footer: $layout")
+        val values = listOf(MultiviewReadout("ISO", "400"), MultiviewReadout("SHUTTER", "1/50"),
+            MultiviewReadout("WB", "5600K"))
+        val origin = android.graphics.PointF()
         var density = 1f
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent {
                     MaterialTheme {
                         Scaled(width, height, onScale = { density = it }) {
-                            Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.boundsInWindow().top }) {
-                                FixtureStage(listOf(tile("Main camera"), null, null, null), layout,
-                                    MultiviewArrangement.GRID, mutableListOf())
+                            Box(Modifier.fillMaxSize().onGloballyPositioned {
+                                val screen = it.positionOnScreen()
+                                origin.set(screen.x, screen.y)
+                            }) {
+                                FixtureStage(listOf(null, null, tile("Main camera").copy(readouts = values), null), layout,
+                                    MultiviewArrangement.GRID, mutableListOf(), selected = 2)
                             }
                         }
                     }
                 }
             }
-            val bottom = origin + layout.tiles[0].maxY * density
-            for (label in listOf("Storage 8 GB", "REC 1:24", "Camera battery 73 percent")) {
-                val hit = android.graphics.Rect().also { awaitNode(label).getBoundsInScreen(it) }
-                assertTrue(hit.bottom <= bottom - 45 * density + 1, "$label must stay above exposure values: $hit")
+            fun hit(label: String) = android.graphics.Rect().also { awaitNode(label).getBoundsInScreen(it) }
+            val footer = listOf(hit("Camera battery 73 percent"), hit("Storage 8 GB")) +
+                values.map { hit(it.value) } + listOf(hit("REC 1:24"))
+            val start = origin.x + layout.readouts.x * density
+            val bottom = origin.y + frame.maxY * density
+            val palette = android.graphics.RectF(origin.x + layout.assists.x * density, origin.y + layout.assists.y * density,
+                origin.x + layout.assists.maxX * density, origin.y + layout.assists.maxY * density)
+            for (rect in footer) {
+                assertTrue(rect.left >= start - 1 && rect.bottom <= bottom + 1 && rect.bottom >= bottom - 14 * density,
+                    "Footer $rect must sit on camera C's bottom row, from the value row's start $start, bottom $bottom")
+                assertTrue(!android.graphics.RectF(rect).intersect(palette), "Footer $rect must clear the palette $palette")
+            }
+            footer.zipWithNext().forEach { (left, right) ->
+                assertTrue(left.right <= right.left + 1, "Battery, storage, values and tally keep their order: $footer")
             }
             awaitNode("Timecode 01:02:03")
-            awaitNode("Camera A options")
+            awaitNode("Camera C options")
         }
     }
 
@@ -440,7 +477,14 @@ class MultiviewTileChromeTest {
                     }
                 }
             }
+            awaitNode("Exit Multiview")
             click(awaitNode("Change display mode"))
+            // Clean display closes open options when it applies; tap the status after it has.
+            val deadline = SystemClock.uptimeMillis() + 5_000
+            while (find("Exit Multiview") != null) {
+                assertTrue(SystemClock.uptimeMillis() < deadline, "Clean display must hide the stage chrome")
+                SystemClock.sleep(32)
+            }
             click(awaitNode("Restoring picture… Camera B options"))
             awaitNode("Open Live View")
         }
@@ -466,21 +510,30 @@ class MultiviewTileChromeTest {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
     }
 
-    private fun awaitNode(label: String, matches: (AccessibilityNodeInfo) -> Boolean = {
+    /** The first node, in the active window or any interactive window, that [matches]. */
+    private fun find(label: String, matches: (AccessibilityNodeInfo) -> Boolean = {
         it.text?.toString() == label || it.contentDescription?.toString() == label || it.viewIdResourceName == label
-    }): AccessibilityNodeInfo {
+    }): AccessibilityNodeInfo? {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        val deadline = SystemClock.uptimeMillis() + 5_000
         fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
             if (node == null) return null
             if (matches(node)) return node
             for (index in 0 until node.childCount) find(node.getChild(index))?.let { return it }
             return null
         }
+        find(automation.rootInActiveWindow)?.let { return it }
+        for (window in automation.windows.orEmpty()) find(window.root)?.let { return it }
+        return null
+    }
+
+    private fun awaitNode(label: String, matches: (AccessibilityNodeInfo) -> Boolean = {
+        it.text?.toString() == label || it.contentDescription?.toString() == label || it.viewIdResourceName == label
+    }): AccessibilityNodeInfo {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val deadline = SystemClock.uptimeMillis() + 5_000
         while (SystemClock.uptimeMillis() < deadline) {
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-            find(automation.rootInActiveWindow)?.let { return it }
-            for (window in automation.windows.orEmpty()) find(window.root)?.let { return it }
+            find(label, matches)?.let { return it }
             SystemClock.sleep(32)
         }
         fun labels(node: AccessibilityNodeInfo?): List<String> {
@@ -503,3 +556,9 @@ class MultiviewTileChromeTest {
         error("Camera settings binding did not update")
     }
 }
+
+/**
+ * Live View's expanded landscape palette is two cells plus 11 dp tall (MonitorAssistPalette, as on
+ * Pocket main): 4 + 48 + 6 + 48 + 4 needs 14, so its lower row is 3 dp short of a full cell.
+ */
+private const val PALETTE_PLATE_EXTRA = 11f

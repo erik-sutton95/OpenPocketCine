@@ -24,6 +24,7 @@ final class MultiviewSession {
         func retireControls() {
             controlsModel?.captureSheet = nil
             controlsModel?.captureDrum = nil
+            controlsModel?.control.unbind()
             controlsModel?.session.releaseMultiview()
             controlsModel = nil
             previewDemand = false

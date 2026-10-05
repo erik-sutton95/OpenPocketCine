@@ -32,7 +32,11 @@ final class MultiviewUIFlowTests: XCTestCase {
                 layout.tap()
                 XCTAssertEqual(layout.value as? String, expected)
                 XCTAssertEqual(record.frame, recordFrame)
-                XCTAssertEqual(display.frame, displayFrame)
+                // Landscape Center stage keeps the far right for the strip: DISP leaves Live
+                // View's slot above Record for the one left of it, and returns in Grid.
+                if orientation == .portrait || expected == "Center stage" {
+                    XCTAssertEqual(display.frame, displayFrame)
+                }
                 XCTAssertEqual(app.buttons.matching(identifier: "multiview.add").count, 1)
                 let tile = app.buttons["multiview.tile.1"]
                 XCTAssertTrue(tile.isHittable)
@@ -52,14 +56,18 @@ final class MultiviewUIFlowTests: XCTestCase {
                         XCTAssertGreaterThanOrEqual(layout.frame.minY, tile.frame.maxY)
                     }
                 } else {
-                    XCTAssertEqual(display.frame.midX, record.frame.midX, accuracy: 1)
-                    XCTAssertLessThan(display.frame.maxY, record.frame.minY)
-                    XCTAssertEqual(tile.frame.minY, close.minY, accuracy: 0.5)
                     if expected == "Grid" {
-                        XCTAssertEqual(network.minY, close.minY, accuracy: 0.5)
+                        XCTAssertEqual(display.frame.midX, record.frame.midX, accuracy: 1)
+                        XCTAssertLessThan(display.frame.maxY, record.frame.minY)
                     } else {
-                        XCTAssertEqual(network.midX, close.midX, accuracy: 0.5)
-                        XCTAssertEqual(network.minY, close.maxY + 8, accuracy: 0.5)
+                        XCTAssertEqual(display.frame.midY, record.frame.midY, accuracy: 1)
+                        XCTAssertLessThan(display.frame.maxX, record.frame.minX)
+                    }
+                    XCTAssertEqual(tile.frame.minY, close.minY, accuracy: 0.5)
+                    // Landscape keeps Wi-Fi under Exit in both arrangements.
+                    XCTAssertEqual(network.midX, close.midX, accuracy: 0.5)
+                    XCTAssertEqual(network.minY, close.maxY + 8, accuracy: 0.5)
+                    if expected == "Center stage" {
                         let strip = app.scrollViews["multiview.secondaryStrip"]
                         XCTAssertTrue(strip.exists)
                         XCTAssertGreaterThan(strip.frame.minX, tile.frame.maxX)
@@ -181,8 +189,9 @@ final class MultiviewUIFlowTests: XCTestCase {
         }
     }
 
-    /// Smaller phones keep full-size buttons in a bounded side rail.
-    /// Reveal the requested control without changing the native Record/DISP slots.
+    /// Smaller phones keep full-size buttons in a bounded side rail; portrait Center stage shows
+    /// them as a fixed column with no scroll view. Reveal the requested control without changing
+    /// the native Record/DISP slots.
     private func revealToolbarButton(_ identifier: String) -> XCUIElement {
         let expand = app.buttons["multiview.toolbar.expand"]
         if expand.waitForExistence(timeout: 2) { expand.tap() }
@@ -192,7 +201,13 @@ final class MultiviewUIFlowTests: XCTestCase {
         let recordFrame = app.buttons["multiview.recordAll"].frame
         let displayFrame = app.buttons["multiview.display"].frame
         for _ in 0..<4 {
-            if button.isHittable, rail.frame.contains(button.frame) { break }
+            if button.isHittable,
+                !rail.exists
+                    || rail.frame.insetBy(dx: 0, dy: -paletteShortfall).contains(button.frame)
+            {
+                break
+            }
+            guard rail.exists else { break }
             if button.frame.minY < rail.frame.minY { rail.swipeDown() } else { rail.swipeUp() }
         }
         XCTAssertTrue(button.isHittable)
@@ -200,6 +215,10 @@ final class MultiviewUIFlowTests: XCTestCase {
         XCTAssertEqual(app.buttons["multiview.display"].frame, displayFrame)
         return button
     }
+
+    /// The open landscape palette is two cells plus 11 pt tall (MonitorAssistPaletteLayout, as on
+    /// Pocket main): 3 pt short of its rows, so the lower row overruns the rail by that much.
+    private let paletteShortfall: CGFloat = 3
 
     /// Camera settings reuse Live View's trailing gimbal panel geometry.
     private func assertSidePanel() {

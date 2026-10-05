@@ -49,6 +49,8 @@
                 tile.networkVerified = true
                 tile.status = "Live · Video mode"
                 tile.settings.iso = [400, 800, 200, 1600][index]
+                // One ISO report sets both, as on a camera; the controls read the index.
+                tile.settings.isoIndex = [.iso400, .iso800, .iso200, .iso1600][index]
                 tile.settings.shutterDenom = 50
                 tile.settings.shootingMode = Int(ShootingMode.video.rawValue)
             tile.settings.whiteBalance = .custom(kelvin: 5600, tint: 0)
