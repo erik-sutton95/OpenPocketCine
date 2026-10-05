@@ -15,7 +15,6 @@ import com.opencapture.openpocketcine.assists.AudioMeterReading
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-typealias AudioMeterBallistics = com.opencapture.opencine.media.MonitorAudioMeterBallistics
 typealias AudioMeterChannel = com.opencapture.opencine.media.MonitorAudioMeterChannel
 typealias AudioMeterLevels = com.opencapture.opencine.media.MonitorAudioMeterLevels
 

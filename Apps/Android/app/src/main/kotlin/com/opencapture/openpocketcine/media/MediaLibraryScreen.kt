@@ -220,11 +220,11 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val portrait = maxHeight > maxWidth
-            com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
+            com.opencapture.monitorui.MonitorPageScaffold(
                 modifier = Modifier.statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp),
                 navigationWidth = 206f,
                 heading = {
-                    com.opencapture.openpocketcine.monitor.MonitorPageHeading(
+                    com.opencapture.monitorui.MonitorPageHeading(
                         "Media", model.session.connectedCamera?.name ?: "OpenPocketCine")
                 },
                 navigation = { compact ->

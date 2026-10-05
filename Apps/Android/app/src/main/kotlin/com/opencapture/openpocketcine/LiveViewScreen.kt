@@ -774,7 +774,7 @@ fun LiveViewScreen(model: AppModel) {
                             Text(
                                 LocalVPNFilter.LIVE_HINT,
                                 color = LiveDesign.muted,
-                                style = LiveType.ui(12f, design = LiveTypeDesign.Rounded),
+                                style = LiveType.ui(12f),
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 28.dp),
                             )

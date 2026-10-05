@@ -953,5 +953,3 @@ struct AppPanelHost: View {
         }
     }
 }
-
-typealias MediaLibraryStubView = MediaLibraryView

@@ -3,7 +3,7 @@ title: DUML frame
 description: 0x55 framing, CRCs, flags, and set/cmd layout used on BLE and UDP.
 ---
 
-Format and CRCs are in `Sources/OpenPocketViewCore/DumlFrame.swift` (self-tested). Plaintext — no encryption anywhere.
+Format and CRCs are in OpenCine `Sources/OpenCineDJI/DumlFrame.swift` (self-tested). Plaintext: no encryption anywhere.
 
 ## Layout
 

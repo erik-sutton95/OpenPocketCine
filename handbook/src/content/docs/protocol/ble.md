@@ -21,7 +21,7 @@ Model id is decoded from the advert:
 
 On iOS, `CBAdvertisementDataManufacturerDataKey` gives the raw value with the 2-byte company id little-endian first — strip it before applying advert offsets.
 
-Decode lives in `Sources/OpenPocketViewCore/BleAdvert.swift`.
+Decode lives in OpenCine `Sources/OpenCineDJI/BleAdvert.swift`.
 
 ## GATT
 

@@ -29,11 +29,6 @@ enum WaveformAssist {
 
     typealias Mode = MonitorWaveformMode
 
-    typealias GuideLines = MonitorScopeGuides
-
-    /// OpenZCine `MovablePanelStoredCenter` - centre as a fraction of the overlay bounds.
-    typealias StoredCenter = MonitorScopeStoredCenter
-
     typealias Options = MonitorWaveformOptions
 
     /// OpenZCine `waveformParadeBrightnessMultiplier` - 100% = former 25%.
@@ -46,7 +41,9 @@ enum WaveformAssist {
     }
 
     @MainActor
-    static var store: WaveformAssistStore { WaveformAssistStore.shared }
+    static var store: MonitorScopePanelStore<MonitorWaveformOptions> {
+        MonitorScopePanelStore<MonitorWaveformOptions>.shared
+    }
 
     /// OpenZCine `AssistQuickSettingsContent.waveformRows`.
     static func longPressMenu(
@@ -103,8 +100,6 @@ enum WaveformAssist {
             onOpenOptions: onOpenOptions, onConfirm: { WaveformAssistHaptics.confirm() }, content: content)
     }
 }
-
-typealias WaveformAssistStore = MonitorScopePanelStore<MonitorWaveformOptions>
 
 /// OpenZCine `AssistQuickSettingsContent.waveformRows`.
 struct WaveformLongPressMenu: View {

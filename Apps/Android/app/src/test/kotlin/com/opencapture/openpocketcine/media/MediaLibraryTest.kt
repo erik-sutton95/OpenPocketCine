@@ -1,7 +1,11 @@
 package com.opencapture.openpocketcine.media
 
 import com.opencapture.opencine.dji.MediaBrowsePolicy
+import com.opencapture.opencine.dji.MediaChunkAssembler
+import com.opencapture.opencine.dji.MediaListCommand
 import com.opencapture.opencine.dji.MediaLiveResume
+import com.opencapture.opencine.dji.MediaManifest
+import com.opencapture.opencine.dji.MediaPageSliceInfo
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.test.Test

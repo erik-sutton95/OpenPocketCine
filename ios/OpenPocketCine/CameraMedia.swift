@@ -4,9 +4,6 @@ import OpenCineDJIApple
 import OpenCineMedia
 import OpenPocketViewCore
 
-/// Existing native goldens exercise the integration-owned finite return loop.
-typealias MediaLiveResumeRunner = DjiAppleMediaLiveReturn
-
 /// Operator-facing media notes. Never name a sister app or another camera brand.
 enum MediaOperatorCopy {
     static let listing = "Listing camera clips…"
@@ -727,7 +724,7 @@ extension CameraSession {
 
     func resumeLiveViewAfterMedia(token: Int) async {
         let authority = mediaReturnAuthority(token: token)
-        let result = await MediaLiveResumeRunner.run(
+        let result = await DjiAppleMediaLiveReturn.run(
             isCurrent: authority.isCurrent, inPlayback: authority.inPlayback,
             pictureFresh: authority.pictureFresh, exitPlayback: authority.exitPlayback,
             enableLiveView: authority.enableLiveView)

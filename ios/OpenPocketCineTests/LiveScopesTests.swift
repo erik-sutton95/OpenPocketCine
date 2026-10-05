@@ -1,5 +1,6 @@
 import CoreVideo
 import Metal
+import MonitorUI
 import OpenPocketViewCore
 import XCTest
 
@@ -31,7 +32,7 @@ final class LiveScopesTests: XCTestCase {
         XCTAssertGreaterThan(line100, clip.minY)
         XCTAssertLessThan(line100, line0, "y grows downward")
 
-        let scissor = ScopeTraceMetal.scissor(
+        let scissor = MonitorScopeTraceMetal.scissor(
             clip: clip, bounds: bounds, drawable: CGSize(width: 750, height: 459))
         XCTAssertNotNil(scissor)
         XCTAssertGreaterThan(scissor?.width ?? 0, 0)
@@ -132,11 +133,11 @@ final class LiveScopesTests: XCTestCase {
             ScopeDisplayScale.crushLevel, scopePlotRect(CGSize(width: 250, height: 153), top: 26))
         let table = WaveformAxis.levelTable(
             for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
-        var vertices = [ScopeTraceMetal.Vertex](
-            repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
-            count: ScopeTraceMetal.maxVertexCount(points: 1, mode: .waveform(.rgb)))
+        var vertices = [MonitorScopeTraceMetal.Vertex](
+            repeating: MonitorScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
+            count: MonitorScopeTraceMetal.maxVertexCount(points: 1, mode: .waveform(.rgb)))
         let written = vertices.withUnsafeMutableBufferPointer { out in
-            ScopeTraceMetal.fillVertices(
+            MonitorScopeTraceMetal.fillVertices(
                 out, from: 0, points: [point], mode: .waveform(.rgb), rect: plot,
                 opacity: 1, levelTable: table)
         }

@@ -60,7 +60,6 @@ import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
-import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.LutLookResolver
@@ -434,7 +433,7 @@ private fun CatalogTab(
             ) {
                 Text(
                     caption,
-                    style = LiveType.ui(11f, FontWeight.Medium, LiveTypeDesign.Rounded),
+                    style = LiveType.ui(11f, FontWeight.Medium),
                     color = LiveDesign.muted,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
@@ -585,7 +584,7 @@ internal fun LUTSplitComparisonBar(
                 )
                 Text(
                     "50/50",
-                    style = LiveType.ui(LutPickerMetrics.SPLIT_TYPE_PT, FontWeight.SemiBold, LiveTypeDesign.Rounded),
+                    style = LiveType.ui(LutPickerMetrics.SPLIT_TYPE_PT, FontWeight.SemiBold),
                     color = LiveDesign.text,
                 )
             }
@@ -621,7 +620,7 @@ private fun LutSegmentedButtons(
             ) {
                 Text(
                     item,
-                    style = LiveType.ui(13f, FontWeight.SemiBold, LiveTypeDesign.Rounded),
+                    style = LiveType.ui(13f, FontWeight.SemiBold),
                     color = if (on) Color(0xFF08191F) else LiveDesign.muted,
                     maxLines = 1,
                 )

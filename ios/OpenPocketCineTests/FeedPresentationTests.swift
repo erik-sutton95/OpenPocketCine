@@ -1,5 +1,6 @@
 import CoreImage
 import Metal
+import OpenCineApple
 import QuartzCore
 import XCTest
 import os
@@ -61,7 +62,7 @@ final class FeedPresentationTests: XCTestCase {
     }
 
     func testPresentationJournalReportsSilenceAfterAWindowOfPicture() throws {
-        var metrics = FeedPresentationMetrics(startedAt: 0)
+        var metrics = MonitorPresentationMetrics(startedAt: 0)
         for tick in 1...25 { metrics.notePresented(at: Double(tick) / 25) }
         let rolling = try XCTUnwrap(metrics.drain(at: 1))
         XCTAssertEqual(rolling.gpuFramesPerSecond, 25, accuracy: 0.001)
@@ -72,7 +73,7 @@ final class FeedPresentationTests: XCTestCase {
     }
 
     func testPresentationJournalUsesActualElapsedWindowAndKeepsEarlierHitches() throws {
-        var metrics = FeedPresentationMetrics(startedAt: 0)
+        var metrics = MonitorPresentationMetrics(startedAt: 0)
         metrics.noteAcquire(milliseconds: 450)
         metrics.noteGPUCompletion(milliseconds: 180)
         for tick in 1...50 { metrics.notePresented(at: Double(tick) / 25) }

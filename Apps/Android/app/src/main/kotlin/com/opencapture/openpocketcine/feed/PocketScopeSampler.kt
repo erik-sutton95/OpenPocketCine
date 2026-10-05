@@ -1,11 +1,6 @@
 package com.opencapture.openpocketcine.feed
 
-typealias ScopePoint = com.opencapture.opencine.media.ScopePoint
-typealias ScopeSamples = com.opencapture.opencine.media.ScopeSamples
-typealias ScopeHistogramDisplay = com.opencapture.opencine.media.ScopeHistogramDisplay
 typealias ScopeAssistBundle = com.opencapture.opencine.media.ScopeAssistBundle
-typealias ScopeChroma = com.opencapture.opencine.media.ScopeChroma
-typealias VectorscopeRaster = com.opencapture.opencine.media.VectorscopeRaster
 
 object PocketScopeSampler {
     const val MAX_WIDTH = com.opencapture.opencine.media.ScopeSampler.MAX_WIDTH
@@ -48,16 +43,16 @@ object PocketScopeSampler {
     ): ScopeAssistBundle =
         com.opencapture.opencine.media.ScopeSampler.sample(bytes, width, height, bytesPerRow, transfer, includePoints, includeVectorPoints, look, trafficThreshold, previous, ceiling, iso)
 
-    fun monitorPoints(points: List<ScopePoint>, look: com.opencapture.opencine.media.MonitorLUTCube?): List<ScopePoint> =
+    fun monitorPoints(points: List<com.opencapture.opencine.media.ScopePoint>, look: com.opencapture.opencine.media.MonitorLUTCube?): List<com.opencapture.opencine.media.ScopePoint> =
         com.opencapture.opencine.media.ScopeSampler.monitorPoints(points, look)
 
     fun histogramDisplay(
-        samples: ScopeSamples,
-        previous: ScopeHistogramDisplay,
+        samples: com.opencapture.opencine.media.ScopeSamples,
+        previous: com.opencapture.opencine.media.ScopeHistogramDisplay,
         transfer: MonitorTransfer,
         iso: Int? = null,
         ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED,
-    ): ScopeHistogramDisplay =
+    ): com.opencapture.opencine.media.ScopeHistogramDisplay =
         com.opencapture.opencine.media.ScopeSampler.histogramDisplay(samples, previous, transfer, iso, ceiling)
 
     fun displayChannel(

@@ -5,12 +5,7 @@ import com.opencapture.opencine.media.MonitorTransfer.Companion as MonitorTransf
 import com.opencapture.opencine.dji.CameraCommands
 
 typealias MonitorTransfer = com.opencapture.opencine.media.MonitorTransfer
-typealias ScopeChannelLight = com.opencapture.opencine.media.ScopeChannelLight
-typealias ScopeTrafficLightsReading = com.opencapture.opencine.media.ScopeTrafficLightsReading
 typealias LiveColorScience = com.opencapture.opencine.media.LiveColorScience
-typealias Hlg = com.opencapture.opencine.media.Hlg
-typealias DLog = com.opencapture.opencine.media.DLog
-typealias DLog2 = com.opencapture.opencine.media.DLog2
 
 /** Raw colour identifiers stay in the source adapter; the renderer receives a neutral curve. */
 val MonitorTransfer.colorMode: Int
@@ -101,10 +96,10 @@ object ScopeTrafficLights {
         blue: IntArray,
         transfer: MonitorTransfer,
         threshold: Double = DEFAULT_THRESHOLD,
-        previous: ScopeTrafficLightsReading? = null,
+        previous: com.opencapture.opencine.media.ScopeTrafficLightsReading? = null,
         luma: IntArray? = null,
         ceiling: com.opencapture.opencine.media.ScopeClipSource = ScopeExposureCeiling.UNOBSERVED,
-    ): ScopeTrafficLightsReading =
+    ): com.opencapture.opencine.media.ScopeTrafficLightsReading =
         com.opencapture.opencine.media.ScopeTrafficLights.reading(red, green, blue, transfer, threshold, previous, luma, ceiling)
 
     fun edgeEnergy(bins: IntArray, from: Int, to: Int): Double =

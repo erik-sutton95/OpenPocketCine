@@ -52,6 +52,7 @@ import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MultiviewArrangement
 import com.opencapture.monitorui.MultiviewPresentationLayout
 import com.opencapture.monitorui.MultiviewSafeArea
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.appkit.MultiviewCameraPicker
 import com.opencapture.opencine.appkit.MultiviewPickerRow
 import com.opencapture.opencine.appkit.MultiviewStage
@@ -66,7 +67,6 @@ import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LiveViewScreen
-import com.opencapture.openpocketcine.LocalOperatorHaptics
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
 import com.opencapture.openpocketcine.liveChromeGlass
 import kotlinx.coroutines.CoroutineScope

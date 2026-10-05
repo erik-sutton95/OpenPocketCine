@@ -1,11 +1,12 @@
 import CoreImage
 import Metal
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
 @testable import OpenPocketCine
 
-/// LUT / peaking / false colour / zebra share `needsGPUFeed` → `FeedFrameBaker` →
+/// LUT / peaking / false colour / zebra share `needsGPUFeed` → `MonitorFrameBaker` →
 /// texel-for-texel blit. A leftover `scaleY: -1` anywhere in that chain inverted
 /// all four versus the clean HEVC layer. `LiveFeedPresent` is gone — the present
 /// is now a plain blit — so the testable seam is the baker's texture orientation.
@@ -105,7 +106,7 @@ final class LiveFeedOrientationTests: XCTestCase {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal required")
         }
-        let baker = FeedFrameBaker(device: device)
+        let baker = MonitorFrameBaker(device: device)
         let source = Self.verticalMarker()
         let drawable = CGSize(width: 64, height: 64)
         let done = expectation(description: "bake")
@@ -217,7 +218,7 @@ final class LiveFeedOrientationTests: XCTestCase {
         return CGFloat(bestRow) > e.height / 2
     }
 
-    /// CI top-center maps to Metal y = 0 (`FeedFrameBaker.metalOriginTransform`).
+    /// CI top-center maps to Metal y = 0 (`MonitorFrameBaker.metalOriginTransform`).
     private static func metalTopIsBrighter(texture: MTLTexture, device: MTLDevice) -> Bool {
         guard let queue = device.makeCommandQueue(),
             let commandBuffer = queue.makeCommandBuffer(),

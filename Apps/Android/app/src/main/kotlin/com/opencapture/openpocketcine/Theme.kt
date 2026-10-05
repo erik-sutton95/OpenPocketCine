@@ -38,9 +38,6 @@ object OpcFonts {
     val mono = sora
 }
 
-/** Compatibility names for existing consumers; UI 2.0 uses Sora throughout. */
-enum class LiveTypeDesign { Default, Rounded, Monospaced }
-
 /** One optical family for every surface. Numeric readouts use tabular Sora figures. */
 object LiveType {
     fun display(size: Float, weight: FontWeight = FontWeight.SemiBold) =
@@ -50,8 +47,7 @@ object LiveType {
 
     fun text(size: Float, weight: FontWeight = FontWeight.Normal) = display(size, weight)
 
-    fun ui(size: Float, weight: FontWeight = FontWeight.Normal, design: LiveTypeDesign = LiveTypeDesign.Default): TextStyle =
-        if (design == LiveTypeDesign.Monospaced) mono(size, weight) else display(size, weight)
+    fun ui(size: Float, weight: FontWeight = FontWeight.Normal): TextStyle = display(size, weight)
 
     fun mono(size: Float, weight: FontWeight = FontWeight.Medium) =
         display(size, weight).copy(fontFeatureSettings = "tnum")

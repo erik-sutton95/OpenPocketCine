@@ -4,19 +4,6 @@ import OpenCineMedia
 /// Compatibility source name; the shared Media owner holds the conform policy and goldens.
 public typealias ConformPreview = OpenCineMedia.MonitorConformPreview
 
-/// Decision for a tap on the letterboxed playback frame.
-public enum PlaybackFrameTap: Equatable, Sendable {
-    case restartPlayback
-    case toggleTransport
-    case ignore
-
-    public static func action(chromeVisible: Bool, reachedEnd: Bool) -> PlaybackFrameTap {
-        _ = chromeVisible
-        if reachedEnd { return .restartPlayback }
-        return .toggleTransport
-    }
-}
-
 /// Letterbox the video raster in a container; OpenZCine `aspectFitRect`.
 public enum PlaybackVideoLayout {
     public static func aspectFitRect(videoSize: CGSize, in container: CGRect) -> CGRect {

@@ -3,9 +3,6 @@ import OpenPocketViewCore
 import OpenCineMedia
 import SwiftUI
 
-/// OpenZCine `ScopePalette` - additive trace colours shared by WAVE / PARADE / HISTO / VECTOR.
-typealias ScopePalette = MonitorUI.MonitorScopePalette
-
 /// Landscape and portrait keep independent stored centres.
 typealias ScopeCanvasSlot = MonitorScopeCanvasSlot
 
@@ -77,15 +74,6 @@ extension MonitorTransfer {
     }
 }
 
-/// BT.709 chroma used by BOTH the vectorscope trace binning and the graticule
-/// targets - one function so plot and targets can never disagree.
-/// OpenZCine `VectorscopeSampler.chroma` / `VectorscopeColor.traceTint`.
-typealias ScopeChroma = OpenCineMedia.ScopeChroma
-
-/// OpenZCine `drawVectorscopeGraticule` constants - outer ring, crosshair,
-/// I-phase skin line at 123°, six 75% SMPTE boxes. Always on (no popup toggle).
-typealias VectorscopeGraticule = MonitorVectorscopeGraticule
-
 // MARK: - WAVE
 
 struct WaveformOverlay: View {
@@ -100,7 +88,7 @@ struct WaveformOverlay: View {
             WaveformAssist.panelSize(scale: WaveformAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let intensity = WaveformAssist.intensity(options.brightness)
-        let plot = ScopeMiniChrome(
+        let plot = MonitorScopePanelPlate(
             title: "Wave", chip: options.mode.rawValue.uppercased(),
             size: size
         ) {
@@ -149,7 +137,7 @@ struct ParadeOverlay: View {
             ParadeAssist.panelSize(scale: ParadeAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
         let intensity = ParadeAssist.intensity(options.brightness)
-        let plot = ScopeMiniChrome(
+        let plot = MonitorScopePanelPlate(
             title: "Parade",
             chip: ParadeAssist.chip(options.mode),
             size: size
@@ -191,14 +179,14 @@ struct HistogramOverlay: View {
         let size = MonitorScopePanelPlacement.size(
             HistogramAssist.panelSize(scale: HistogramAssist.store.presentationScale(in: canvas)),
             canvas: canvas, clearance: chromeClearance)
-        let plot = ScopeMiniChrome(
+        let plot = MonitorScopePanelPlate(
             title: HistogramAssist.panelTitle, chip: HistogramAssist.chip,
             size: size
         ) {
             // Draw-only body: curves arrive remapped / blended / smoothed and
             // the traffic reading pre-metered (DESIGN §3.2) - no math on main.
             ScopeBundleScope { assist in
-                HistogramScopePlot(
+                MonitorHistogramScopePlot(
                     display: assist.histogramDisplay,
                     traffic: assist.traffic,
                     showTrafficLights: options.trafficLights)
@@ -217,8 +205,6 @@ struct HistogramOverlay: View {
     }
 }
 
-private typealias HistogramScopePlot = MonitorUI.MonitorHistogramScopePlot
-
 // MARK: - VECTOR
 
 struct VectorscopeOverlay: View {
@@ -229,7 +215,7 @@ struct VectorscopeOverlay: View {
 
     var body: some View {
         let options = VectorscopeAssist.store.options
-        let plot = ScopeMiniChrome(
+        let plot = MonitorScopePanelPlate(
             title: "Vector",
             chip: VectorscopeAssist.chip(zoom: options.zoom),
             size: MonitorScopePanelPlacement.size(
@@ -257,12 +243,6 @@ struct VectorscopeOverlay: View {
         }
     }
 }
-
-/// Shared CbCr density raster for VECTOR. Points are already monitor-domain
-/// (through the operator LUT or the official DJI display cube) - the only math
-/// here is ``ScopeChroma`` and the density ramp. One binning path feeds both
-/// the Metal texture and the Canvas fallback so they can never disagree.
-typealias VectorscopeRaster = OpenCineMedia.VectorscopeRaster
 
 // MARK: - LIGHTS
 
@@ -310,8 +290,6 @@ private struct ScopeBundleScope<Content: View>: View {
     var body: some View { content(model.monitorSamples.displayBundle) }
 }
 
-private typealias ScopeMiniChrome = MonitorScopePanelPlate
-
 /// OpenZCine `drawVectorscopeGraticule` - ring, crosshair, dashed I-phase
-/// skin line, 75% boxes. Geometry lives on ``VectorscopeGraticule`` so the
+/// skin line, 75% boxes. Geometry lives on ``MonitorVectorscopeGraticule`` so the
 /// Metal overlay and Canvas fallback cannot drift.

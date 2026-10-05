@@ -1,5 +1,6 @@
 import AVFoundation
 import Observation
+import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -37,7 +38,7 @@ final class EVMeterAssistTests: XCTestCase {
         XCTAssertEqual(assist.effects, baseline)
         XCTAssertEqual(assist.effects.withInspectorDemand(.evMeter), baseline)
         let restored = LiveAssistState()
-        OperatorPrefs.Snapshot(assist).apply(to: restored)
+        MonitorAssistSnapshot(assist).apply(to: restored)
         XCTAssertTrue(restored.evMeter)
         restored.clean = true
         restored.cleanViewPinnedTools = [.evMeter]
@@ -46,7 +47,7 @@ final class EVMeterAssistTests: XCTestCase {
         XCTAssertFalse(restored.isPlaybackVisible(.evMeter))
         XCTAssertFalse(restored.playbackEffects.needsSample)
         assist.evMeter = false
-        OperatorPrefs.Snapshot(assist).apply(to: restored)
+        MonitorAssistSnapshot(assist).apply(to: restored)
         XCTAssertFalse(restored.evMeter)
     }
 

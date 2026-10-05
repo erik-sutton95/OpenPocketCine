@@ -1,3 +1,6 @@
+import MonitorPresentation
+import MonitorUI
+import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -133,17 +136,17 @@ final class WaveformAssistTests: XCTestCase {
 
         let table = WaveformAxis.levelTable(
             for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
-        let black = OpenPocketCine.ScopePoint(
+        let black = ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: blackByte, green: blackByte, blue: blackByte,
             luma: blackByte)
-        let mid = OpenPocketCine.ScopePoint(
+        let mid = ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: grey, green: grey, blue: grey, luma: grey)
-        let clip = OpenPocketCine.ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 247, green: 247, blue: 247, luma: 247)
-        var vertices = [ScopeTraceMetal.Vertex](
-            repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
-            count: ScopeTraceMetal.maxVertexCount(points: 3, mode: .waveform(.rgb)))
+        let clip = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 247, green: 247, blue: 247, luma: 247)
+        var vertices = [MonitorScopeTraceMetal.Vertex](
+            repeating: MonitorScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
+            count: MonitorScopeTraceMetal.maxVertexCount(points: 3, mode: .waveform(.rgb)))
         let written = vertices.withUnsafeMutableBufferPointer { out in
-            ScopeTraceMetal.fillVertices(
+            MonitorScopeTraceMetal.fillVertices(
                 out, from: 0, points: [black, mid, clip], mode: .waveform(.rgb), rect: plot,
                 opacity: 1, levelTable: table)
         }
@@ -215,7 +218,7 @@ final class WaveformAssistTests: XCTestCase {
         XCTAssertEqual(ScopeCanvasSlot.forBounds(landscape), .landscape)
         XCTAssertEqual(ScopeCanvasSlot.forBounds(portrait), .portrait)
 
-        let store = WaveformAssistStore(options: .default)
+        let store = MonitorScopePanelStore<MonitorWaveformOptions>(options: .default)
         store.beginDrag(center: CGPoint(x: 120, y: 80), in: landscape)
         store.endDrag(bounds: landscape)
         store.beginDrag(center: CGPoint(x: 200, y: 400), in: portrait)

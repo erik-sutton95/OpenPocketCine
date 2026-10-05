@@ -46,7 +46,8 @@ final class SharedAssistScopeDisplayTests: XCTestCase {
         trace: Bool,
         plot: (UInt64, @escaping @MainActor (MTKView) -> MonitorScopeDisplayOptions) -> AnyView
     ) throws {
-        try XCTSkipIf(!ScopeTraceMetal.isAvailable, "Shared native scope pipeline unavailable")
+        try XCTSkipIf(
+            !MonitorScopeTraceMetal.isAvailable, "Shared native scope pipeline unavailable")
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 250, height: 153))
         let host = UIHostingController(rootView: AnyView(EmptyView()))
         window.rootViewController = host

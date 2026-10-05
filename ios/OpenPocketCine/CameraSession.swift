@@ -1951,8 +1951,6 @@ final class CameraSession {
         setISO(next)
     }
 
-    private typealias ControlExpect = DjiAppleControlExpectation
-
     func setISO(_ index: IsoIndex, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
         editorReconciliation.pinExpo(iso: index.isoValue, isoIndex: index)
         fireCamera(
@@ -2719,7 +2717,7 @@ final class CameraSession {
 
     /// One fire-and-forget SET. Latest-wins pending while the same opcode is in flight.
     private func fireCamera(
-        _ frame: Duml.Frame, name: String, expect: ControlExpect? = nil,
+        _ frame: Duml.Frame, name: String, expect: DjiAppleControlExpectation? = nil,
         retransmits: Bool = true, coalesce: Bool = false,
         onStage: (@MainActor (ControlWireEvent) -> Void)? = nil,
         onFail: (@MainActor () -> Void)? = nil,
@@ -2802,7 +2800,7 @@ final class CameraSession {
     }
 
     private func finishControlReply(
-        _ reply: Duml.Frame, name: String, opcode: String, expect: ControlExpect?,
+        _ reply: Duml.Frame, name: String, opcode: String, expect: DjiAppleControlExpectation?,
         late: Bool = false, announce: Bool = true
     ) -> Bool {
         let receiptSource = editorReconciliation.authority

@@ -25,9 +25,6 @@ enum VectorscopeAssist {
     /// OpenZCine `AssistConfiguration.Scopes.VectorscopeZoom`.
     typealias Zoom = MonitorVectorscopeZoom
 
-    /// OpenZCine `MovablePanelStoredCenter` - centre as a fraction of the overlay bounds.
-    typealias StoredCenter = MonitorScopeStoredCenter
-
     typealias Options = MonitorVectorscopeOptions
 
     /// OpenZCine `Scopes.brightnessMultiplier` - vectorscope keeps the unity baseline.
@@ -45,7 +42,9 @@ enum VectorscopeAssist {
     }
 
     @MainActor
-    static var store: VectorscopeAssistStore { VectorscopeAssistStore.shared }
+    static var store: MonitorScopePanelStore<MonitorVectorscopeOptions> {
+        MonitorScopePanelStore<MonitorVectorscopeOptions>.shared
+    }
 
     /// OpenZCine `AssistQuickSettingsContent.vectorscopeRows`.
     static func longPressMenu(
@@ -88,8 +87,6 @@ enum VectorscopeAssist {
             resizeLabel: "Resize vectorscope", content: content)
     }
 }
-
-typealias VectorscopeAssistStore = MonitorScopePanelStore<MonitorVectorscopeOptions>
 
 /// OpenZCine `AssistQuickSettingsContent.vectorscopeRows`.
 struct VectorscopeLongPressMenu: View {
