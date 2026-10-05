@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import XCTest
 
@@ -166,6 +167,6 @@ final class AudioAssistTests: XCTestCase {
         XCTAssertFalse(AudioMeterOverlay.allowsHits(locked: true, movement: usable))
         XCTAssertFalse(AudioMeterOverlay.allowsHits(locked: false, movement: tiny))
         XCTAssertEqual(AudioMeterOverlay.pointerSlop, 4)
-        XCTAssertFalse(ScopePanelPlacement.isUsable(tiny))
+        XCTAssertFalse(MonitorScopePanelPlacement.isUsable(tiny))
     }
 }

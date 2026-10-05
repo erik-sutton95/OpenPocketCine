@@ -16,21 +16,12 @@ import UIKit
 /// and uniformly scalable 0.6…1.6 from the bottom-trailing grip.
 enum TrafficLightsAssist {
     static let panelID = "traffic-lights"
-    static let baseSize = CGSize(width: 74, height: 168)
-    static let scaleRange: ClosedRange<Double> = 0.6...1.6
-    static let defaultScale = 1.0
+    static let baseSize = ScopePanelSize.trafficLights
     static let defaultCompensation = CrushClipCompensation.zero
     static let compensationTitle = "Crush/Clip Compensation"
     static let compensationHelp =
         "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights."
 
-    static let holdDuration: Double = 0.3
-    static let positionGrid: CGFloat = 4
-    static let hapticGrid: CGFloat = 22
-    static let dragHitPadding: CGFloat = 10
-    static let gripHitSize: CGFloat = 56
-    static let gripVisualSize: CGFloat = 14
-    static let gripExteriorGap: CGFloat = 2
 
     /// OpenZCine `TrafficLightsMeterMini` chrome - 74×168 landscape box.
     static let meterTitle = MonitorTrafficLightsGeometry.meterTitle
@@ -108,58 +99,8 @@ enum TrafficLightsAssist {
     /// Normalized centre - OpenZCine `MovablePanelStoredCenter`.
     typealias StoredCenter = MonitorScopeStoredCenter
 
-    static func clampedScale(_ value: Double) -> Double {
-        min(max(value, scaleRange.lowerBound), scaleRange.upperBound)
-    }
-
     static func panelSize(scale: Double) -> CGSize {
-        let clamped = clampedScale(scale)
-        return CGSize(
-            width: (baseSize.width * clamped).rounded(),
-            height: (baseSize.height * clamped).rounded())
-    }
-
-    /// Unplaced tools start at the canvas center; saved/session centers win later.
-    static func defaultCenter(
-        feed _: CGRect,
-        size: CGSize,
-        bounds: CGRect,
-        chromeClearance _: EdgeInsets,
-        gap _: CGFloat = 10
-    ) -> CGPoint {
-        clamp(
-            CGPoint(x: bounds.midX, y: bounds.midY), size: size, in: bounds)
-    }
-
-    static func clamp(_ point: CGPoint, size: CGSize, in bounds: CGRect) -> CGPoint {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        return CGPoint(
-            x: min(max(bounds.minX + halfWidth, point.x), bounds.maxX - halfWidth),
-            y: min(max(bounds.minY + halfHeight, point.y), bounds.maxY - halfHeight))
-    }
-
-    static func snap(_ point: CGPoint, grid: CGFloat = positionGrid) -> CGPoint {
-        CGPoint(
-            x: (point.x / grid).rounded() * grid,
-            y: (point.y / grid).rounded() * grid)
-    }
-
-    static func hapticCell(_ point: CGPoint, grid: CGFloat = hapticGrid) -> Int {
-        Int((point.x / grid).rounded()) &* 100_000
-            &+ Int((point.y / grid).rounded())
-    }
-
-    static func resolvedCenter(
-        session: CGPoint? = nil,
-        stored: StoredCenter?,
-        defaultCenter: CGPoint,
-        size: CGSize,
-        bounds: CGRect
-    ) -> CGPoint {
-        if let session { return clamp(session, size: size, in: bounds) }
-        let raw = stored?.center(in: bounds) ?? defaultCenter
-        return clamp(raw, size: size, in: bounds)
+        MonitorScopePanelCentering.panelSize(baseSize, scale: MonitorScopePanelCentering.clampedScale(scale))
     }
 
     /// OpenZCine keeps one `scopes.crushClipCompensation` for histogram + goal-post.
@@ -240,8 +181,8 @@ struct TrafficLightsMovablePanel<Content: View>: View {
     @State private var sessionCenter: CGPoint?
     @State private var sessionCenterPortrait: CGPoint?
     var body: some View {
-        let movement = placementBounds ?? ScopePanelPlacement.bounds(in: bounds)
-        let center = TrafficLightsAssist.resolvedCenter(
+        let movement = placementBounds ?? MonitorScopePanelPlacement.bounds(in: bounds)
+        let center = MonitorScopePanelCentering.resolvedCenter(
             session: ScopeCanvasSlot.pick(sessionCenter, sessionCenterPortrait, in: bounds),
             stored: ScopeCanvasSlot.pick(store.position, store.positionPortrait, in: bounds),
             defaultCenter: defaultCenter, size: size, bounds: bounds)
@@ -273,7 +214,7 @@ struct TrafficLightsMovablePanel<Content: View>: View {
                     }
                     store.persist()
                 }
-            }, onResize: { store.scale = TrafficLightsAssist.clampedScale($0) },
+            }, onResize: { store.scale = MonitorScopePanelCentering.clampedScale($0) },
             onResizeEnded: { store.persist() }, content: content)
     }
 }

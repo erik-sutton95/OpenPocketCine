@@ -10,15 +10,6 @@ import SwiftUI
 enum NDAssist {
     static let panelID = "nd-meter"
     static let baseSize = ScopePanelSize.ndMeter
-    static let scaleRange: ClosedRange<Double> = 0.6...1.6
-    static let defaultScale = 1.0
-    static let holdDuration: Double = 0.3
-    static let positionGrid: CGFloat = 4
-    static let hapticGrid: CGFloat = 22
-    static let dragHitPadding: CGFloat = 10
-    static let gripHitSize: CGFloat = 56
-    static let gripVisualSize: CGFloat = 14
-    static let gripExteriorGap: CGFloat = 2
     static let meterTitle = "ND"
     static let accessibilityTitle = "ND Suggestion"
     static let defaultNotation = NDFilterNotation.factor
@@ -33,18 +24,6 @@ enum NDAssist {
         NDLongPressMenu()
     }
 
-    /// Unplaced tools start at the canvas center; saved/session centers win later.
-    static func defaultCenter(
-        feed _: CGRect,
-        size: CGSize,
-        bounds: CGRect,
-        chromeClearance _: EdgeInsets,
-        gap _: CGFloat = 10
-    ) -> CGPoint {
-        clamp(
-            CGPoint(x: bounds.midX, y: bounds.midY), size: size, in: bounds)
-    }
-
     static func reading(from bundle: ScopeAssistBundle) -> NDFilterSuggestion? {
         NDFilterRecommendation.reading(
             lumaHistogram: bundle.samples.histogramLuma, transfer: bundle.transfer)
@@ -54,46 +33,8 @@ enum NDAssist {
 
     typealias Snapshot = MonitorNDOptions
 
-    static func clampedScale(_ value: Double) -> Double {
-        min(max(value, scaleRange.lowerBound), scaleRange.upperBound)
-    }
-
     static func panelSize(scale: Double) -> CGSize {
-        let clamped = clampedScale(scale)
-        return CGSize(
-            width: (baseSize.width * clamped).rounded(),
-            height: (baseSize.height * clamped).rounded())
-    }
-
-    static func clamp(_ point: CGPoint, size: CGSize, in bounds: CGRect) -> CGPoint {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        return CGPoint(
-            x: min(max(bounds.minX + halfWidth, point.x), bounds.maxX - halfWidth),
-            y: min(max(bounds.minY + halfHeight, point.y), bounds.maxY - halfHeight))
-    }
-
-    static func snap(_ point: CGPoint, grid: CGFloat = positionGrid) -> CGPoint {
-        CGPoint(
-            x: (point.x / grid).rounded() * grid,
-            y: (point.y / grid).rounded() * grid)
-    }
-
-    static func hapticCell(_ point: CGPoint, grid: CGFloat = hapticGrid) -> Int {
-        Int((point.x / grid).rounded()) &* 100_000
-            &+ Int((point.y / grid).rounded())
-    }
-
-    static func resolvedCenter(
-        session: CGPoint? = nil,
-        stored: StoredCenter?,
-        defaultCenter: CGPoint,
-        size: CGSize,
-        bounds: CGRect
-    ) -> CGPoint {
-        if let session { return clamp(session, size: size, in: bounds) }
-        let raw = stored?.center(in: bounds) ?? defaultCenter
-        return clamp(raw, size: size, in: bounds)
+        MonitorScopePanelCentering.panelSize(baseSize, scale: MonitorScopePanelCentering.clampedScale(scale))
     }
 
     @MainActor
@@ -127,16 +68,15 @@ struct NDMeterOverlay: View {
 
     var body: some View {
         let store = NDAssist.store
-        let size = ScopePanelPlacement.size(
+        let size = MonitorScopePanelPlacement.size(
             NDAssist.panelSize(scale: store.scale),
             canvas: bounds, clearance: chromeClearance)
         NDMovablePanel(
             store: store,
             size: size,
-            defaultCenter: NDAssist.defaultCenter(
-                feed: feed, size: size, bounds: bounds, chromeClearance: chromeClearance),
+            defaultCenter: MonitorScopePanelCentering.defaultCenter(size: size, bounds: bounds),
             bounds: bounds,
-            placementBounds: ScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
+            placementBounds: MonitorScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
         ) {
             NDMeterLiveChip(notation: store.notation)
         }
@@ -178,8 +118,8 @@ struct NDMovablePanel<Content: View>: View {
     @State private var sessionCenter: CGPoint?
     @State private var sessionCenterPortrait: CGPoint?
     var body: some View {
-        let movement = placementBounds ?? ScopePanelPlacement.bounds(in: bounds)
-        let center = NDAssist.resolvedCenter(
+        let movement = placementBounds ?? MonitorScopePanelPlacement.bounds(in: bounds)
+        let center = MonitorScopePanelCentering.resolvedCenter(
             session: ScopeCanvasSlot.pick(sessionCenter, sessionCenterPortrait, in: bounds),
             stored: ScopeCanvasSlot.pick(store.position, store.positionPortrait, in: bounds),
             defaultCenter: defaultCenter, size: size, bounds: bounds)
@@ -211,7 +151,7 @@ struct NDMovablePanel<Content: View>: View {
                     }
                     store.persist()
                 }
-            }, onResize: { store.scale = NDAssist.clampedScale($0) },
+            }, onResize: { store.scale = MonitorScopePanelCentering.clampedScale($0) },
             onResizeEnded: { store.persist() }, content: content)
     }
 }

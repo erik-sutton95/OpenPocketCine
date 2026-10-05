@@ -31,7 +31,7 @@ struct FalseColorReferenceOverlay: View {
     private var store: FalseColorReferencePositionStore { .shared }
 
     var body: some View {
-        let movement = ScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
+        let movement = MonitorScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
         let preferred = FalseColorReference.panelSize
         let fit = min(
             1, max(1, movement.width) / preferred.width, max(1, movement.height) / preferred.height)
@@ -56,8 +56,8 @@ struct FalseColorReferenceOverlay: View {
             onConfigure()
         }
         .position(center)
-        .opacity(ScopePanelPlacement.isUsable(movement) ? 1 : 0)
-        .allowsHitTesting(!interfaceLocked && ScopePanelPlacement.isUsable(movement))
+        .opacity(MonitorScopePanelPlacement.isUsable(movement) ? 1 : 0)
+        .allowsHitTesting(!interfaceLocked && MonitorScopePanelPlacement.isUsable(movement))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("False color reference")
         .accessibilityIdentifier("monitor.falseColor.reference")
@@ -86,7 +86,7 @@ struct FalseColorReferenceOverlay: View {
                     dragBounds = bounds
                 }
                 guard dragBounds == bounds, let origin = dragOrigin else { return }
-                dragCenter = ScopePanelPlacement.clamp(
+                dragCenter = MonitorScopePanelPlacement.clamp(
                     CGPoint(
                         x: origin.x + value.translation.width,
                         y: origin.y + value.translation.height),
