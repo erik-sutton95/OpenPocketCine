@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.appkit.PermissionGate
+import com.opencapture.opencine.appkit.DiscoveryPermissions
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background

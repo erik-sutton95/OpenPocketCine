@@ -19,7 +19,7 @@ import com.opencapture.opencine.dji.DjiLog
 import com.opencapture.opencine.media.DecoderErrorRecord
 import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.openpocketcine.BuildConfig
-import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
+import com.opencapture.opencine.appkit.DiscoveryPermissions
 import com.opencapture.opencine.dji.DjiCameraSession
 import java.io.File
 import java.text.SimpleDateFormat

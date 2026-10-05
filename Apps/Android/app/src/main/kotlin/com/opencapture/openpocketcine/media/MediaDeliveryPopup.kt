@@ -206,7 +206,7 @@ fun MediaDeliveryPopup(
         val window = (dialogView.parent as? DialogWindowProvider)?.window
         window?.setDimAmount(0f)
         window?.let {
-            com.opencapture.openpocketcine.applyMonitorSystemBars(it)
+            com.opencapture.opencine.appkit.applyMonitorSystemBars(it)
         }
         onDispose { }
     }
