@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.appkit.diagnostics.ManualReportImages
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest

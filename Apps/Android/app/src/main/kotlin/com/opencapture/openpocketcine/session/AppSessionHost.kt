@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine.session
 
 import android.content.Context
 import com.opencapture.opencine.dji.FaceDetectorPort
-import com.opencapture.opencine.dji.FeedIncidentSink
+import com.opencapture.opencine.media.FeedIncidentSink
 import com.opencapture.opencine.media.FeedIncidentTestSource
 import com.opencapture.opencine.dji.DjiSessionHost
 import com.opencapture.openpocketcine.BuildConfig

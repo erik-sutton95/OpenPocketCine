@@ -1,7 +1,8 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.appkit.diagnostics.FeedSessionSummaryStore
 import com.opencapture.opencine.media.FeedIncidentRecorder
-import com.opencapture.opencine.dji.FeedIncidentSink
+import com.opencapture.opencine.media.FeedIncidentSink
 import com.opencapture.opencine.media.FeedIncidentBreadcrumb
 import com.opencapture.opencine.media.FeedIncidentBundle
 import com.opencapture.opencine.media.FeedIncidentPersistenceJob

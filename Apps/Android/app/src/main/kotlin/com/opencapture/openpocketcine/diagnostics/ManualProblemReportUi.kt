@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.appkit.diagnostics.ManualReportImages
+import com.opencapture.opencine.appkit.diagnostics.ManualReportImageNormalizer
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest

@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.diagnostics
 
+import com.opencapture.opencine.appkit.diagnostics.ManualReportImages
 import com.opencapture.opencine.dji.PrivacyRedactor
 import android.content.Context
 import android.os.Handler
