@@ -47,6 +47,8 @@ targets:
       - package: OpenCine
         product: OpenCineRelayApple
       - package: OpenCine
+        product: OpenCineWatch
+      - package: OpenCine
         product: MonitorUI
       - package: OpenCine
         product: MonitorPresentation
@@ -182,6 +184,9 @@ targets:
     dependencies:
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
+      # The wrist monitor and its WatchConnectivity client (OpenCineWatch).
+      - package: OpenCine
+        product: OpenCineWatch
     configFiles:
       Debug: OpenPocketCineWatch/Watch.xcconfig
       Release: OpenPocketCineWatch/Watch.xcconfig
