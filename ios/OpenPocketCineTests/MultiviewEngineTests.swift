@@ -1,3 +1,4 @@
+import OpenCineAppKit
 import OpenCineCore
 import OpenCineMulticam
 import OpenPocketViewCore

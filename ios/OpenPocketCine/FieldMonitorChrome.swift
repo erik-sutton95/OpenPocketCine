@@ -434,17 +434,6 @@ struct FieldMonitorGauges: View {
         phonePercent = value < 0 ? -1 : Int((value * 100).rounded())
     }
 
-    /// Multiview tiles: the camera battery pill without its glyph.
-    static func cameraBattery(_ percent: Int) -> some View {
-        gauge(
-            icon: nil, value: (0...100).contains(percent) ? "\(percent)%" : "—", bars: 0,
-            color: batteryColor(percent)
-        )
-        .accessibilityLabel(
-            (0...100).contains(percent)
-                ? "Camera battery \(percent) percent" : "Camera battery unavailable")
-    }
-
     /// One glass pill per gauge: white icon, status color on the value only.
     private static func gauge(icon: OpcIcon?, value: String?, bars: Int, color: Color)
         -> some View

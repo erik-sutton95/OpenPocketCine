@@ -1,4 +1,6 @@
 import MonitorPresentation
+import MonitorUI
+import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -152,7 +154,7 @@ import XCTest
             width: 956, height: 440,
             safeArea: .init(leading: 59, bottom: 21),
             arrangement: .centerStage, selected: 0)
-        controller.update(ids: session.tiles.map(\.id), layout: first, roots: roots)
+        controller.update(layout: first, roots: roots)
         controller.view.layoutIfNeeded()
         try await Task.sleep(for: .milliseconds(150))
         let original = try owners()
@@ -174,7 +176,7 @@ import XCTest
                 width: width, height: height,
                 safeArea: .init(bottom: 21, trailing: 59),
                 arrangement: arrangement, selected: selected)
-            controller.update(ids: session.tiles.map(\.id), layout: layout, roots: roots)
+            controller.update(layout: layout, roots: roots)
             controller.view.layoutIfNeeded()
             try await Task.sleep(for: .milliseconds(100))
             XCTAssertEqual(try owners(), original)
