@@ -1,3 +1,4 @@
+import OpenCineAppKitApple
 import OpenCineCore
 import OpenPocketViewCore
 import OpenCineDJIApple
@@ -108,7 +109,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.recordConfirmation,
             SettingsHelpCopy.haptics,
             SettingsHelpCopy.headTracking,
-            LiveHeadTrackCalibrateButton.calibrateTitle,
+            HeadphoneMotionBridge.calibrateTitle,
             SettingsHelpCopy.joystickSensitivity,
             SettingsHelpCopy.virtualJoystickInvertPan,
             SettingsHelpCopy.virtualJoystickInvertTilt,

@@ -65,6 +65,8 @@ targets:
       - package: OpenCine
         product: OpenCineCameraVocabulary
       - package: OpenCine
+        product: OpenCineAppKitApple
+      - package: OpenCine
         product: OpenCineDJI
       - package: OpenCine
         product: OpenCineDJIApple
@@ -164,6 +166,8 @@ targets:
         product: OpenCineApple
       - package: OpenCine
         product: OpenCineCameraVocabulary
+      - package: OpenCine
+        product: OpenCineAppKitApple
       - package: OpenCine
         product: OpenCineDJI
       - package: OpenCine

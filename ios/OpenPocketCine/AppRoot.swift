@@ -3,6 +3,7 @@ import MonitorPresentation
 import MonitorUI
 import Observation
 import OpenCineAppKit
+import OpenCineAppKitApple
 import OpenCineCore
 import OpenCineFrameIO
 import OpenCineRelayApple
@@ -236,7 +237,7 @@ final class AppModel {
     }
 
     /// Live SET / STOP chip. SET starts tracking and locks forward; STOP ends it.
-    var headTrackControlTitle = LiveHeadTrackCalibrateButton.calibrateTitle
+    var headTrackControlTitle = HeadphoneMotionBridge.calibrateTitle
     /// Raw AirPods attitude / gyro / SET-relative look. Empty when Head Tracking is off.
     var headTrackImuReadout = ""
     /// SET-relative (or first-sample) yaw/pitch for the live axis rings. `nil` without IMU.
