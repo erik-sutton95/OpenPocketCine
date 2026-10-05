@@ -3,12 +3,6 @@ import OpenCineMedia
 import OpenPocketViewCore
 import UIKit
 
-// Compatibility names retain call sites while the native owner holds the implementation.
-typealias PlaybackFeedHandoff = OpenCineApple.MonitorPlaybackFeedHandoff
-typealias PlaybackDisplayLink = OpenCineApple.MonitorPlaybackDisplayLink
-typealias PlaybackVideoOutput = OpenCineApple.MonitorPlaybackVideoOutput
-typealias PlaybackPixelCopy = OpenCineApple.MonitorPlaybackPixelCopy
-
 /// Pocket supplies measured source calibration, display preference and diagnostics.
 final class PlaybackFeedSession: OpenCineApple.MonitorPlaybackFeedSession, @unchecked Sendable {
     @MainActor init() {

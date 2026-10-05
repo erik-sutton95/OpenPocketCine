@@ -129,7 +129,7 @@ class ScopeGeometryTest {
     @Test
     fun waveformRasterIsPlotSizedAndTransparentWhereEmpty() {
         val table = FloatArray(256) { it * 100f / 255f }
-        val mid = com.opencapture.openpocketcine.feed.ScopePoint(0.5, 0.5, 128, 128, 128, 128)
+        val mid = com.opencapture.opencine.media.ScopePoint(0.5, 0.5, 128, 128, 128, 128)
         val px =
             ScopeTraceRaster.waveformArgb(
                 listOf(mid),
@@ -149,7 +149,7 @@ class ScopeGeometryTest {
         val table = FloatArray(256) { it * 100f / 255f }
         fun frame(seed: Int) = List(400) { i ->
             val v = (i * 37 + seed * 11) % 256
-            com.opencapture.openpocketcine.feed.ScopePoint((i % 200) / 200.0, 0.5, v, 255 - v, (v * 3) % 256, v)
+            com.opencapture.opencine.media.ScopePoint((i % 200) / 200.0, 0.5, v, 255 - v, (v * 3) % 256, v)
         }
         val a = frame(1)
         val b = frame(2)
@@ -178,7 +178,7 @@ class ScopeGeometryTest {
 
     @Test
     fun vectorscopeRasterIsPlotSizedAndTransparentWhereEmpty() {
-        val white = com.opencapture.openpocketcine.feed.ScopePoint(0.5, 0.5, 255, 255, 255, 255)
+        val white = com.opencapture.opencine.media.ScopePoint(0.5, 0.5, 255, 255, 255, 255)
         val px =
             ScopeTraceRaster.vectorscopeArgb(
                 listOf(white),

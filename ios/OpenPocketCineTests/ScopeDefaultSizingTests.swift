@@ -1,3 +1,5 @@
+import MonitorPresentation
+import OpenCineAppKit
 import XCTest
 
 @testable import OpenPocketCine
@@ -11,7 +13,7 @@ final class ScopeDefaultSizingTests: XCTestCase {
         let legacy = Data(#"{"scale":1,"storedCenter":{"xFraction":0.25,"yFraction":0.4}}"#.utf8)
         let wave = try JSONDecoder().decode(WaveformAssist.Options.self, from: legacy)
         let parade = try JSONDecoder().decode(ParadeAssist.Options.self, from: legacy)
-        let histogram = try JSONDecoder().decode(HistogramAssist.Options.self, from: legacy)
+        let histogram = try JSONDecoder().decode(MonitorHistogramOptions.self, from: legacy)
         let vector = try JSONDecoder().decode(VectorscopeAssist.Options.self, from: legacy)
         XCTAssertTrue(wave.hasCustomScale)
         XCTAssertTrue(parade.hasCustomScale)
@@ -22,15 +24,17 @@ final class ScopeDefaultSizingTests: XCTestCase {
         XCTAssertEqual(histogram.storedCenter?.xFraction, 0.25)
         XCTAssertEqual(vector.storedCenter?.xFraction, 0.25)
         XCTAssertEqual(
-            WaveformAssistStore(options: wave).presentationScale(in: portrait, tablet: false), 1)
+            MonitorScopePanelStore<MonitorWaveformOptions>(options: wave)
+                .presentationScale(in: portrait, tablet: false), 1)
         XCTAssertEqual(
-            ParadeAssistStore(options: parade).presentationScale(in: portrait, tablet: false), 1)
+            MonitorScopePanelStore<MonitorParadeOptions>(options: parade)
+                .presentationScale(in: portrait, tablet: false), 1)
         XCTAssertEqual(
-            HistogramAssistStore(options: histogram).presentationScale(in: portrait, tablet: false),
-            1)
+            MonitorScopePanelStore<MonitorHistogramOptions>(options: histogram)
+                .presentationScale(in: portrait, tablet: false), 1)
         XCTAssertEqual(
-            VectorscopeAssistStore(options: vector).presentationScale(in: portrait, tablet: false),
-            1)
+            MonitorScopePanelStore<MonitorVectorscopeOptions>(options: vector)
+                .presentationScale(in: portrait, tablet: false), 1)
     }
 
     func testFreshDefaultsRemainAutomaticAfterPersistence() throws {
@@ -41,14 +45,14 @@ final class ScopeDefaultSizingTests: XCTestCase {
         let parade = try decoder.decode(
             ParadeAssist.Options.self, from: encoder.encode(ParadeAssist.Options.default))
         let histogram = try decoder.decode(
-            HistogramAssist.Options.self, from: encoder.encode(HistogramAssist.Options.default))
+            MonitorHistogramOptions.self, from: encoder.encode(MonitorHistogramOptions.default))
         let vector = try decoder.decode(
             VectorscopeAssist.Options.self, from: encoder.encode(VectorscopeAssist.Options.default))
         XCTAssertFalse(wave.hasCustomScale)
         XCTAssertFalse(parade.hasCustomScale)
         XCTAssertFalse(histogram.hasCustomScale)
         XCTAssertFalse(vector.hasCustomScale)
-        let store = WaveformAssistStore(options: wave)
+        let store = MonitorScopePanelStore<MonitorWaveformOptions>(options: wave)
         XCTAssertEqual(store.presentationScale(in: portrait, tablet: false), 0.6)
         XCTAssertEqual(store.presentationScale(in: landscape, tablet: false), 0.8)
         XCTAssertEqual(store.presentationScale(in: portrait, tablet: true), 0.8)
@@ -73,10 +77,10 @@ final class ScopeDefaultSizingTests: XCTestCase {
                 }
             }
         }
-        let wave = WaveformAssistStore()
-        let parade = ParadeAssistStore()
-        let histogram = HistogramAssistStore()
-        let vector = VectorscopeAssistStore()
+        let wave = MonitorScopePanelStore<MonitorWaveformOptions>()
+        let parade = MonitorScopePanelStore<MonitorParadeOptions>()
+        let histogram = MonitorScopePanelStore<MonitorHistogramOptions>()
+        let vector = MonitorScopePanelStore<MonitorVectorscopeOptions>()
         wave.options.brightness = 150
         XCTAssertFalse(
             wave.options.hasCustomScale, "Changing trace options must not freeze automatic sizing")

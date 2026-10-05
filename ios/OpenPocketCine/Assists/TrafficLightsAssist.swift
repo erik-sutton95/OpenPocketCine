@@ -56,18 +56,12 @@ enum TrafficLightsAssist {
 
     typealias CrushClipCompensation = MonitorCrushClipCompensation
 
-    /// OpenZCine `TrafficLightsBarSide` - which half of a goal-post shows fill.
-    typealias BarSide = MonitorTrafficLightsGeometry.BarSide
-
-    /// OpenZCine `TrafficLightsChannelDisplay` - display transform only (not IRE).
-    typealias ChannelDisplay = MonitorTrafficLightsGeometry.ChannelDisplay
-
     /// OpenZCine `TrafficLightsMeter.channelDisplay` - centre-anchored single-sided fill.
     static func channelDisplay(
         for channel: ScopeChannelLight,
         balanceCenter center: Double = balanceCenter,
         deadZone: Double = balanceDeadZone
-    ) -> ChannelDisplay {
+    ) -> MonitorTrafficLightsGeometry.ChannelDisplay {
         MonitorTrafficLightsGeometry.channelDisplay(
             for: channel, balanceCenter: center, deadZone: deadZone)
     }
@@ -76,7 +70,7 @@ enum TrafficLightsAssist {
         level: Double,
         balanceCenter center: Double = balanceCenter,
         deadZone: Double = balanceDeadZone
-    ) -> ChannelDisplay {
+    ) -> MonitorTrafficLightsGeometry.ChannelDisplay {
         MonitorTrafficLightsGeometry.channelDisplay(
             level: level, balanceCenter: center, deadZone: deadZone)
     }
@@ -96,16 +90,15 @@ enum TrafficLightsAssist {
         MonitorTrafficLightsGeometry.accessibilityValue(for: reading)
     }
 
-    /// Normalized centre - OpenZCine `MovablePanelStoredCenter`.
-    typealias StoredCenter = MonitorScopeStoredCenter
-
     static func panelSize(scale: Double) -> CGSize {
         MonitorScopePanelCentering.panelSize(baseSize, scale: MonitorScopePanelCentering.clampedScale(scale))
     }
 
     /// OpenZCine keeps one `scopes.crushClipCompensation` for histogram + goal-post.
     @MainActor
-    static var store: TrafficLightsAssistStore { TrafficLightsAssistStore.shared }
+    static var store: MonitorTrafficLightsPreferenceStore {
+        MonitorTrafficLightsPreferenceStore.shared
+    }
 
     @MainActor
     static func sharedCompensation() -> CrushClipCompensation {
@@ -133,11 +126,7 @@ enum TrafficLightsAssist {
     static func longPressMenu(_ assist: LiveAssistState) -> TrafficLightsLongPressMenu {
         longPressMenu(assist: assist)
     }
-
-    typealias Snapshot = MonitorTrafficLightsOptions
 }
-
-typealias TrafficLightsAssistStore = MonitorTrafficLightsPreferenceStore
 
 // MARK: - Long-press rows
 
@@ -172,7 +161,7 @@ private enum TrafficLightsAssistHaptics {
 
 /// Drag to reposition; drag the corner grip to scale.
 struct TrafficLightsMovablePanel<Content: View>: View {
-    @Bindable var store: TrafficLightsAssistStore
+    @Bindable var store: MonitorTrafficLightsPreferenceStore
     let size: CGSize
     let defaultCenter: CGPoint
     let bounds: CGRect
@@ -206,7 +195,7 @@ struct TrafficLightsMovablePanel<Content: View>: View {
                         let center = ScopeCanvasSlot.pick(
                             sessionCenter, sessionCenterPortrait, in: bounds)
                     else { return }
-                    let stored = TrafficLightsAssist.StoredCenter(center: center, in: bounds)
+                    let stored = MonitorScopeStoredCenter(center: center, in: bounds)
                     if ScopeCanvasSlot.forBounds(bounds) == .portrait {
                         store.positionPortrait = stored
                     } else {

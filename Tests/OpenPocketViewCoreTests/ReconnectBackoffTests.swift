@@ -2,7 +2,7 @@ import Testing
 
 @testable import OpenPocketViewCore
 
-@Suite("ReconnectBackoff")
+@Suite("DjiReconnectBackoff")
 struct ReconnectBackoffTests {
     /// Base 0.5 s doubling to a 30 s cap, spread +/-30% by jitter; negative attempts are the first.
     @Test(arguments: [
@@ -10,13 +10,13 @@ struct ReconnectBackoffTests {
         (3, 0.0, 2.8), (3, 1.0, 5.2), (20, 1.0, 30.0), (-3, 0.5, 0.5),
     ])
     func delayGrowsClampsAndJitters(attempt: Int, jitter: Double, expected: Double) {
-        let backoff = ReconnectBackoff(
+        let backoff = DjiReconnectBackoff(
             baseSeconds: 0.5, maxSeconds: 30, multiplier: 2, jitterFraction: 0.3)
         #expect(abs(backoff.delaySeconds(forAttempt: attempt, jitter: jitter) - expected) < 1e-9)
     }
 
     @Test func jitterSampleIsClampedToUnitRange() {
-        let backoff = ReconnectBackoff(
+        let backoff = DjiReconnectBackoff(
             baseSeconds: 1, maxSeconds: 30, multiplier: 2, jitterFraction: 0.5)
         #expect(
             backoff.delaySeconds(forAttempt: 0, jitter: -1)
@@ -27,7 +27,7 @@ struct ReconnectBackoffTests {
     }
 
     @Test func legacyStandaloneAndMonitorDefaultsRemainCompatible() {
-        var backoff = ReconnectBackoff()
+        var backoff = DjiReconnectBackoff()
         #expect(backoff.maxSeconds == 30)
         #expect(backoff.delaySeconds(forAttempt: 20, jitter: 0.5) == 30)
         #expect(SessionRecoveryPolicy.monitor.backoff.maxSeconds == 8)

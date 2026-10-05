@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.monitorui.MonitorGridGeometry
+import com.opencapture.monitorui.MonitorGuideGeometry
+import com.opencapture.opencine.media.MonitorAnamorphicDesqueeze
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.media.AnchoredPinchZoom
@@ -50,17 +53,17 @@ class AnamorphicDesqueezeTest {
 
     @Test
     fun hundredthStepsClampAndRejectNonfiniteValuesBeforePersistence() {
-        assertEquals(1.01, AnamorphicDesqueeze.snap(1.005))
-        assertEquals(1.34, AnamorphicDesqueeze.snap(1.335))
-        assertEquals(1.0, AnamorphicDesqueeze.snap(-10.0))
-        assertEquals(2.0, AnamorphicDesqueeze.snap(50.0))
+        assertEquals(1.01, MonitorAnamorphicDesqueeze.snap(1.005))
+        assertEquals(1.34, MonitorAnamorphicDesqueeze.snap(1.335))
+        assertEquals(1.0, MonitorAnamorphicDesqueeze.snap(-10.0))
+        assertEquals(2.0, MonitorAnamorphicDesqueeze.snap(50.0))
         for (raw in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
             val state = LiveAssistState()
             state.updateDesqueezeFactor(raw)
             assertEquals(1.33, LiveAssistState(state.encoded()).desqueezeCustomFactor)
         }
         for (hundredths in 100..200) {
-            assertEquals(hundredths / 100.0, AnamorphicDesqueeze.snap(hundredths / 100.0))
+            assertEquals(hundredths / 100.0, MonitorAnamorphicDesqueeze.snap(hundredths / 100.0))
         }
     }
 
@@ -137,9 +140,9 @@ class AnamorphicDesqueezeTest {
         state.selectDesqueezePreset(DesqueezePreset.X200)
         val content = AssistRect(0f, 0f, 1600f, 900f).fittedContent(state.presentedAspect(16f / 9f, playback = true))
         assertEquals(AssistRect(0f, 225f, 1600f, 450f), content)
-        val grid = GridAssist.segments(content, thirds = true, phi = false, diagonal = false)
+        val grid = MonitorGridGeometry.segments(content, thirds = true, phi = false, diagonal = false)
         assertTrue(grid.all { content.contains(it.from.x, it.from.y) && content.contains(it.to.x, it.to.y) })
-        val guide = GuidesAssist.rectForRatio(content, 2.39f)
+        val guide = MonitorGuideGeometry.rectForRatio(content, 2.39f)
         assertEquals(content.midX, guide.midX, .001f)
         assertEquals(content.midY, guide.midY, .001f)
         var zoom = AnchoredPinchZoom().pinchChanged(2f, .5f, .5f, content.width, content.height)

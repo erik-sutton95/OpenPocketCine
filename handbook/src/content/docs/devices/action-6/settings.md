@@ -56,7 +56,7 @@ resolutionID, frameRateID, 00, 00, 00
 `cam_video_param_v2` readback begins with the same resolution and fps bytes.
 Other readback bytes are not copied into the five-byte SET. The frame-rate
 IDs match existing
-[`VideoFrameRate`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CameraControl.swift) values:
+`VideoFrameRate` (OpenCine `Sources/OpenCineDJI/CameraControl.swift`) values:
 
 | UI fps | 24 | 25 | 30 | 48 | 50 | 60 | 100 | 120 | 200 | 240 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -243,7 +243,7 @@ change (T03 **43958**, 09:02:01) becomes **08** at T04 **22297**,
 not the ordinary ISO-index enum.
 
 The existing version-1 no-Auto shortcut in
-[`CamCapIsoAutoMax`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CamCap.swift) cannot be
+`CamCapIsoAutoMax` (OpenCine `Sources/OpenCineDJI/CamCap.swift`) cannot be
 applied to Action 6. Manual exposure is also not a reason to suppress Auto ISO.
 
 ## Colour selection and recording
@@ -620,9 +620,9 @@ no qualified audio-setting selection.
    documents its separate long-exposure options.
 
 Source integration points are
-[`CameraControl`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CameraControl.swift),
-[`CamCap`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CamCap.swift), and
-[`CameraStatus`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CameraStatus.swift). Live-path
+OpenCine `Sources/OpenCineDJI/CameraControl.swift`,
+`Sources/OpenCineDJI/CamCap.swift`, and
+`Sources/OpenCineDJI/CameraStatus.swift`. Live-path
 changes still require the established
 [connection-reliability](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/connection-reliability.md) contract and physical
 qualification; this evidence document does not authorize new periodic live

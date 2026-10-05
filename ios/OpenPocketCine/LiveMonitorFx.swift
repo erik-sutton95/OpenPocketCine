@@ -7,8 +7,6 @@ import UIKit
 
 /// The shared value owns picture and sample demand. DJI source facts remain adapter inputs.
 typealias LiveImageEffects = OpenCineMedia.MonitorFrameEffects
-typealias PeakingPaint = PeakingAssist.Color
-typealias PeakingSense = PeakingAssist.Sensitivity
 typealias FalseColorScaleKind = OpenCineMedia.MonitorFalseColorSelection
 typealias ZebraPaint = MonitorZebraPaint
 
@@ -74,12 +72,6 @@ extension LiveImageEffects {
     }
 
 }
-
-/// Compatibility name; the actual bake and retained texture pool are native-owned.
-typealias FeedFrameBaker = OpenCineApple.MonitorFrameBaker
-
-typealias FeedPresentationMetrics = OpenCineApple.MonitorPresentationMetrics
-typealias FeedPresentOperations = OpenCineApple.MonitorPresentOperations
 
 /// The app supplies operator choices; the stable native host owns rendering and presentation.
 final class CIFeedView: OpenCineApple.MonitorPictureHost {

@@ -1,4 +1,5 @@
 import CoreImage
+import OpenCineAppKit
 import XCTest
 
 @testable import OpenPocketCine
@@ -51,7 +52,7 @@ final class MirrorAssistTests: XCTestCase {
         XCTAssertFalse(state.effects.mirror)
 
         let restored = LiveAssistState()
-        OperatorPrefs.Snapshot(state).apply(to: restored)
+        MonitorAssistSnapshot(state).apply(to: restored)
         XCTAssertFalse(restored.mirrorHorizontal)
         XCTAssertTrue(restored.mirrorVertical)
     }

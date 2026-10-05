@@ -27,7 +27,7 @@ enum HistogramAssist {
     static let plotTop: CGFloat = WaveformAxis.titleHeight
     /// OpenZCine `histogramReferenceX(95)` clip band - on WAVE’s IRE axis.
     static let clipZoneIRE = MonitorUI.MonitorHistogramGeometry.clipZoneIRE
-    /// Crush / clip lamp size - must match ``HistogramScopePlot`` blocks.
+    /// Crush / clip lamp size - must match ``MonitorHistogramScopePlot`` blocks.
     static let trafficLampWidth: CGFloat = MonitorUI.MonitorHistogramGeometry.trafficLampWidth
     static let trafficLampHeight: CGFloat = MonitorUI.MonitorHistogramGeometry.trafficLampHeight
     /// Inset from the panel edge so the top lamp clears the rounded corner.
@@ -67,21 +67,19 @@ enum HistogramAssist {
 
     typealias CrushClipCompensation = MonitorCrushClipCompensation
 
-    /// OpenZCine `MovablePanelStoredCenter` - centre as a fraction of the overlay bounds.
-    typealias StoredCenter = MonitorScopeStoredCenter
-
-    typealias Options = MonitorHistogramOptions
-
     static func panelSize(scale: Double) -> CGSize {
-        MonitorScopePanelCentering.panelSize(baseSize, scale: Options.clampedScale(scale))
+        MonitorScopePanelCentering.panelSize(
+            baseSize, scale: MonitorHistogramOptions.clampedScale(scale))
     }
 
     @MainActor
-    static var store: HistogramAssistStore { HistogramAssistStore.shared }
+    static var store: MonitorScopePanelStore<MonitorHistogramOptions> {
+        MonitorScopePanelStore<MonitorHistogramOptions>.shared
+    }
 
     /// OpenZCine `AssistQuickSettingsContent.histogramRows`.
     static func longPressMenu(
-        options: Binding<Options>,
+        options: Binding<MonitorHistogramOptions>,
         compact: Bool = false
     ) -> HistogramLongPressMenu {
         HistogramLongPressMenu(options: options, compact: compact)
@@ -127,18 +125,16 @@ enum HistogramAssist {
         feed: CGRect,
         chromeClearance: EdgeInsets = EdgeInsets(),
         @ViewBuilder content: @escaping () -> Content
-    ) -> MonitorScopeStoredPanel<Options, Content> {
+    ) -> MonitorScopeStoredPanel<MonitorHistogramOptions, Content> {
         MonitorScopeStoredPanel(
             store: store, baseSize: baseSize, canvas: canvas, chromeClearance: chromeClearance,
             resizeLabel: "Resize histogram", content: content)
     }
 }
 
-typealias HistogramAssistStore = MonitorScopePanelStore<MonitorHistogramOptions>
-
 /// OpenZCine `AssistQuickSettingsContent.histogramRows`.
 struct HistogramLongPressMenu: View {
-    @Binding var options: HistogramAssist.Options
+    @Binding var options: MonitorHistogramOptions
     var compact: Bool = false
     var body: some View { assistMenu }
 

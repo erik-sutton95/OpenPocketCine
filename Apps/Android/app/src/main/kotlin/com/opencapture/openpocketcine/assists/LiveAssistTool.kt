@@ -2,10 +2,6 @@ package com.opencapture.openpocketcine.assists
 
 typealias LiveAssistTool = com.opencapture.monitorui.MonitorAssistTool
 
-typealias GuideFamily = com.opencapture.monitorui.MonitorGuideFamily
-
-typealias GuideAspect = com.opencapture.monitorui.MonitorGuideAspect
-
 typealias PeakingColor = com.opencapture.opencine.media.MonitorPeakingColor
 
 typealias PeakingSense = com.opencapture.opencine.media.MonitorPeakingSense

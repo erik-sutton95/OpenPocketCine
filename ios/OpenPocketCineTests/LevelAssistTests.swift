@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -18,7 +19,7 @@ final class LevelAssistTests: XCTestCase {
         assist.level = true
         XCTAssertTrue(assist.isVisible(.level))
         let restored = LiveAssistState()
-        OperatorPrefs.Snapshot(assist).apply(to: restored)
+        MonitorAssistSnapshot(assist).apply(to: restored)
         XCTAssertTrue(restored.level)
     }
 

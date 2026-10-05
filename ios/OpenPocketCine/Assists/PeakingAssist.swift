@@ -26,24 +26,22 @@ enum PeakingAssist {
     /// Segmented-control copy in `peakingRows`.
     static let sensitivityOptions = Sensitivity.allCases.map(\.rawValue)
 
-    typealias Options = MonitorPeakingOptions
-
-    /// Detector + paint values the GPU peaking pass reads (OpenZCine `PeakingSettings`).
-    typealias OverlaySpec = MonitorPeakingOverlaySpec
-
-    static func overlay(from options: Options) -> OverlaySpec { options.overlay }
-
-    static func overlay(from effects: LiveImageEffects) -> OverlaySpec {
-        OverlaySpec(color: effects.peakingColor, sensitivity: effects.peakingSensitivity)
+    static func overlay(from options: MonitorPeakingOptions) -> MonitorPeakingOverlaySpec {
+        options.overlay
     }
 
-    static func overlay(color: Color, sensitivity: Sensitivity) -> OverlaySpec {
-        OverlaySpec(color: color, sensitivity: sensitivity)
+    static func overlay(from effects: LiveImageEffects) -> MonitorPeakingOverlaySpec {
+        MonitorPeakingOverlaySpec(
+            color: effects.peakingColor, sensitivity: effects.peakingSensitivity)
+    }
+
+    static func overlay(color: Color, sensitivity: Sensitivity) -> MonitorPeakingOverlaySpec {
+        MonitorPeakingOverlaySpec(color: color, sensitivity: sensitivity)
     }
 
     /// OpenZCine `AssistQuickSettingsContent.peakingRows` - Sensitivity segmented + Color dots.
     static func longPressMenu(
-        options: Binding<Options>,
+        options: Binding<MonitorPeakingOptions>,
         compact: Bool = false
     ) -> PeakingLongPressMenu {
         PeakingLongPressMenu(options: options, compact: compact)
@@ -99,8 +97,8 @@ enum PeakingAssist {
 }
 
 extension LiveImageEffects {
-    var peakingOptions: PeakingAssist.Options {
-        get { PeakingAssist.Options(color: peakingColor, sensitivity: peakingSensitivity) }
+    var peakingOptions: MonitorPeakingOptions {
+        get { MonitorPeakingOptions(color: peakingColor, sensitivity: peakingSensitivity) }
         set {
             peakingColor = newValue.color
             peakingSensitivity = newValue.sensitivity
@@ -109,8 +107,8 @@ extension LiveImageEffects {
 }
 
 extension LiveAssistState {
-    var peakingOptions: PeakingAssist.Options {
-        get { PeakingAssist.Options(color: peakingColor, sensitivity: peakingSensitivity) }
+    var peakingOptions: MonitorPeakingOptions {
+        get { MonitorPeakingOptions(color: peakingColor, sensitivity: peakingSensitivity) }
         set {
             peakingColor = newValue.color
             peakingSensitivity = newValue.sensitivity
@@ -119,7 +117,7 @@ extension LiveAssistState {
 }
 
 struct PeakingLongPressMenu: View {
-    @Binding var options: PeakingAssist.Options
+    @Binding var options: MonitorPeakingOptions
     var compact: Bool = false
 
     var body: some View { assistMenu }

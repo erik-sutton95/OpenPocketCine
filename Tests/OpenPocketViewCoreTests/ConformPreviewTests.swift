@@ -42,11 +42,6 @@ import Testing
         }
     }
 
-    @Test func frameTapRestartsAtEnd() {
-        #expect(PlaybackFrameTap.action(chromeVisible: true, reachedEnd: true) == .restartPlayback)
-        #expect(PlaybackFrameTap.action(chromeVisible: true, reachedEnd: false) == .toggleTransport)
-    }
-
     @Test func aspectFitCentersTheRaster() {
         let rect = PlaybackVideoLayout.aspectFitRect(
             videoSize: CGSize(width: 16, height: 9),

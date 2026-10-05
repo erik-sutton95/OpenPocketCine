@@ -55,4 +55,4 @@ advertised at bytes 18–19 of 34-byte pktType `0x01` telemetry. Merge both
 sources forward modulo `UInt16`; a delayed telemetry frame must not rewind a
 newer reply cursor. Echo that result at 40 Hz or a manifest can stop mid-page.
 
-Transport parsing lives in `Sources/OpenPocketViewCore/DumlTransport.swift`.
+Transport parsing lives in OpenCine `Sources/OpenCineDJI/DumlTransport.swift`.

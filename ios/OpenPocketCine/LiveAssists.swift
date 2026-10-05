@@ -64,8 +64,6 @@ extension MonitorAssistSelection {
     }
 }
 
-typealias GuideFamily = MonitorGuideFamily
-
 typealias GuideAspect = MonitorGuideAspect
 
 /// Catalog and camera source interpretation belong to the app; shared state receives media values.
@@ -672,7 +670,7 @@ enum OperatorPrefs {
     @MainActor
     static func load(into state: LiveAssistState) {
         if let data = UserDefaults.standard.data(forKey: assistKey),
-            let snap = try? JSONDecoder().decode(Snapshot.self, from: data)
+            let snap = try? JSONDecoder().decode(MonitorAssistSnapshot.self, from: data)
         {
             snap.apply(to: state)
         }
@@ -705,16 +703,13 @@ enum OperatorPrefs {
 
     @MainActor
     static func encoded(_ state: LiveAssistState) -> Data? {
-        try? JSONEncoder().encode(Snapshot(state))
+        try? JSONEncoder().encode(MonitorAssistSnapshot(state))
     }
 
     static func write(_ data: Data?) {
         guard let data else { return }
         UserDefaults.standard.set(data, forKey: assistKey)
     }
-
-    /// OpenZCine `operatorPreferences.v1` / `assistConfiguration.v1` analogue \u{2014} one blob.
-    typealias Snapshot = MonitorAssistSnapshot
 }
 
 struct FeedAlignedAssists: View {

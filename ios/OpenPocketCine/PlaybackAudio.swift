@@ -11,8 +11,8 @@ private let playbackAudioLogger = Logger(
 
 /// Configures `AVAudioSession` for in-app clip playback so audio plays through the mute switch.
 enum MediaPlaybackAudioSession {
-    @MainActor static func makeMeter() -> PlaybackAudioMeterController {
-        PlaybackAudioMeterController(onTapFailure: { status in
+    @MainActor static func makeMeter() -> OpenCineApple.MonitorPlaybackAudioMeterRuntime {
+        OpenCineApple.MonitorPlaybackAudioMeterRuntime(onTapFailure: { status in
             playbackAudioLogger.error("MTAudioProcessingTapCreate failed: \(status)")
         })
     }
@@ -40,9 +40,6 @@ enum MediaPlaybackAudioSession {
         }
     }
 }
-
-/// Compatibility source name; the native owner holds tap, polling and source lifetime.
-typealias PlaybackAudioMeterController = OpenCineApple.MonitorPlaybackAudioMeterRuntime
 
 /// The existing overlay consumes DJI DTOs; absence stays optional at this value seam.
 extension AudioMeterLevels {

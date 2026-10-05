@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.feed
 
+import com.opencapture.opencine.media.ScopeSamples
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

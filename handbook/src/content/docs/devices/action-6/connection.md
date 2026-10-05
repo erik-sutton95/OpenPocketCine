@@ -77,8 +77,8 @@ the cause is not established by this analysis.
 
 All nine app `09/A8` writes use sender **0x02**, receiver **0x41**, flags
 **0x40**, and the same ten-byte body as the existing
-[`Commands.liveViewEnable`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/Commands.swift)
-template. This is direct Action 6 evidence for the receiver used by Nano,
+`Commands.liveViewEnable` template (OpenCine
+`Sources/OpenCineDJI/Commands.swift`). This is direct Action 6 evidence for the receiver used by Nano,
 rather than the Pocket receiver **0x08**.
 
 | Request frame | UTC time | Response frame | First response byte |
@@ -235,7 +235,7 @@ The operator subsequently confirmed **manual exposure M with ISO Auto** in UI
 shot **035**, with an **Auto ISO MAX ceiling of 25600**. This is separate,
 later UI evidence, not a state transition decoded from this startup take. It
 is important when adapting
-[`CamCapIsoAutoMax`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CamCap.swift): its current
+`CamCapIsoAutoMax` (OpenCine `Sources/OpenCineDJI/CamCap.swift`): its current
 version-1 shortcut treats that version as no-Auto data based on an older
 D-Log 2 case. The Action 6 version-1 table and UI evidence show that version
 alone cannot make that decision. Manual exposure must not be treated as
@@ -256,9 +256,9 @@ implying a fixed ISO.
 | Focus | Current `supportsTapFocus`/`supportsFocusMode` defaults for non-Nano bodies are not Action evidence. No autofocus support is established by this take. |
 
 These are findings against
-[`CameraModel`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CameraModel.swift),
-[`CameraControl`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CameraControl.swift), and
-[`CameraStatus`](https://github.com/erik-sutton95/OpenPocketCine/blob/main/Sources/OpenPocketViewCore/CameraStatus.swift), not changes
+OpenCine `Sources/OpenCineDJI/CameraModel.swift`,
+`Sources/OpenCineDJI/CameraControl.swift`, and
+`Sources/OpenCineDJI/CameraStatus.swift`, not changes
 to production behavior. Preserve the existing
 [live-session](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/live-session.md) and
 [connection-reliability](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/connection-reliability.md) contracts when implementing

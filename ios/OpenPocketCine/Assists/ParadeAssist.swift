@@ -9,7 +9,7 @@ import UIKit
 /// Sources: `OperatorPreferences.Scopes.ParadeMode`,
 /// `MonitorPanels.AssistQuickSettingsContent.paradeRows`,
 /// `MonitorOverlays.LiveParadeScopePanel` / `ParadeScopePlot` / `ScopeMini` chip,
-/// `ScopeTraceMetal.Mode.parade`.
+/// `MonitorScopeTraceMetal.Mode.parade`.
 ///
 /// Long-press toolbar rows (`AssistQuickSettingsContent.paradeRows`):
 /// * Mode - RGB / YRGB
@@ -56,11 +56,6 @@ enum ParadeAssist {
         return originX + CGFloat(xRatio) * (width - 1)
     }
 
-    typealias GuideLines = MonitorScopeGuides
-
-    /// OpenZCine `MovablePanelStoredCenter` - centre as a fraction of the overlay bounds.
-    typealias StoredCenter = MonitorScopeStoredCenter
-
     typealias Options = MonitorParadeOptions
 
     /// Trace opacity at the given brightness. OpenZCine uses `/400` after a calibration
@@ -74,7 +69,9 @@ enum ParadeAssist {
     }
 
     @MainActor
-    static var store: ParadeAssistStore { ParadeAssistStore.shared }
+    static var store: MonitorScopePanelStore<MonitorParadeOptions> {
+        MonitorScopePanelStore<MonitorParadeOptions>.shared
+    }
 
     /// OpenZCine `AssistQuickSettingsContent.paradeRows`.
     static func longPressMenu(
@@ -117,8 +114,6 @@ enum ParadeAssist {
             resizeLabel: "Resize parade", content: content)
     }
 }
-
-typealias ParadeAssistStore = MonitorScopePanelStore<MonitorParadeOptions>
 
 /// OpenZCine `AssistQuickSettingsContent.paradeRows`.
 struct ParadeLongPressMenu: View {

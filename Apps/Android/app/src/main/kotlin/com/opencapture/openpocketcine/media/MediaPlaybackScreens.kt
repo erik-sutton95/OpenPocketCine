@@ -91,6 +91,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import com.opencapture.opencine.appkit.*
 import com.opencapture.opencine.media.MonitorPlaybackLookTiming
+import com.opencapture.opencine.media.MonitorConformPreview
 import com.opencapture.monitorui.MonitorPlaybackPresentation
 import com.opencapture.monitorui.MonitorPlaybackActions
 import com.opencapture.monitorui.MonitorPlaybackScreen
@@ -405,7 +406,7 @@ fun MediaPlayerScreen(
         )
 
     fun conformedLabel(seconds: Float): String =
-        MediaClipFormatting.durationLabel(ConformPreview.conformedDuration(seconds.toDouble(), conformSpeed))
+        MediaClipFormatting.durationLabel(MonitorConformPreview.conformedDuration(seconds.toDouble(), conformSpeed))
 
     DisposableEffect(capturedComposition) {
         onDispose {

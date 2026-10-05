@@ -1,6 +1,8 @@
 import AVFoundation
 import CoreImage
 import CoreVideo
+import MonitorUI
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
@@ -529,16 +531,16 @@ final class LiveFrameSampleTests: XCTestCase {
                 for: transfer, clipByte: ceiling.clipByte(transfer: transfer))
             let bytes: [UInt8] = [0, 16, 78, 128, 200, 255]
             let points = bytes.map {
-                OpenPocketCine.ScopePoint(
+                ScopePoint(
                     xRatio: 0.5, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
             }
-            let capacity = ScopeTraceMetal.maxVertexCount(
+            let capacity = MonitorScopeTraceMetal.maxVertexCount(
                 points: points.count, mode: .waveform(.rgb))
-            var vertices = [ScopeTraceMetal.Vertex](
-                repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
+            var vertices = [MonitorScopeTraceMetal.Vertex](
+                repeating: MonitorScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
                 count: capacity)
             let written = vertices.withUnsafeMutableBufferPointer { out in
-                ScopeTraceMetal.fillVertices(
+                MonitorScopeTraceMetal.fillVertices(
                     out, from: 0, points: points, mode: .waveform(.rgb), rect: plot,
                     opacity: 1, levelTable: table)
             }
@@ -741,13 +743,13 @@ final class LiveFrameSampleTests: XCTestCase {
     // MARK: - Bake
 
     func testBakeSizeKeepsSourceAspectAndClampsToDrawable() {
-        let fourK = FeedFrameBaker.bakeSize(
+        let fourK = MonitorFrameBaker.bakeSize(
             source: CGSize(width: 3840, height: 2160),
             drawable: CGSize(width: 1920, height: 1080))
         XCTAssertEqual(fourK.width, 1920, accuracy: 1)
         XCTAssertEqual(fourK.height, 1080, accuracy: 1)
 
-        let smaller = FeedFrameBaker.bakeSize(
+        let smaller = MonitorFrameBaker.bakeSize(
             source: CGSize(width: 1280, height: 720),
             drawable: CGSize(width: 1920, height: 1080))
         XCTAssertEqual(smaller.width, 1280, accuracy: 1)

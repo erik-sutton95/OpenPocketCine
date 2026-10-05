@@ -3,8 +3,6 @@ import OpenCineMedia
 import OpenPocketViewCore
 import SwiftUI
 
-typealias DesqueezeRatio = MonitorDesqueezePreset
-
 /// Local optical correction, following the same factor range as the reference monitor.
 enum DesqueezeAssist {
     static let factorRange = MonitorAnamorphicDesqueeze.factorRange
@@ -32,7 +30,7 @@ enum DesqueezeAssist {
 }
 
 extension LiveAssistState {
-    func selectDesqueezePreset(_ preset: DesqueezeRatio) {
+    func selectDesqueezePreset(_ preset: MonitorDesqueezePreset) {
         desqueezeCustom = false
         desqueezeFactor = preset.factor
         persist()
@@ -56,7 +54,7 @@ struct DesqueezeLongPressMenu: View {
     var body: some View {
         MonitorDesqueezeMenu(
             selected: assist.desqueezeCustom
-                ? nil : DesqueezeRatio.matching(assist.desqueezeFactor),
+                ? nil : MonitorDesqueezePreset.matching(assist.desqueezeFactor),
             custom: assist.desqueezeCustom,
             factor: Binding(
                 get: { assist.desqueezeFactor },

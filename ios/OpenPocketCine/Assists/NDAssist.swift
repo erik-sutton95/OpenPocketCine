@@ -12,36 +12,33 @@ enum NDAssist {
     static let baseSize = ScopePanelSize.ndMeter
     static let meterTitle = "ND"
     static let accessibilityTitle = "ND Suggestion"
-    static let defaultNotation = NDFilterNotation.factor
+    static let defaultNotation = MonitorNDFilterNotation.factor
+    /// No-filter label for the chip and its reading.
+    static let noneLabel = "\u{2014}"
     static let notationTitle = "Units"
     static let notationHelp =
         "Stops vs middle gray, filter factor (ND16 / ND32 / ND64), or optical density (ND 0.3 = 1 stop)."
     static let helpCopy =
         "Meters the live picture against middle gray and suggests a screw-on ND \u{2014} stops and ND number \u{2014} to balance it. The app cannot set a filter."
-    static var notationOptions: [String] { NDFilterNotation.allCases.map(\.editorLabel) }
+    static var notationOptions: [String] { MonitorNDFilterNotation.allCases.map(\.editorLabel) }
 
     static func longPressMenu(assist _: LiveAssistState) -> NDLongPressMenu {
         NDLongPressMenu()
     }
 
-    static func reading(from bundle: ScopeAssistBundle) -> NDFilterSuggestion? {
-        NDFilterRecommendation.reading(
-            lumaHistogram: bundle.samples.histogramLuma, transfer: bundle.transfer)
+    static func reading(from bundle: ScopeAssistBundle) -> MonitorNDFilterSuggestion? {
+        MonitorNDFilterRecommendation.reading(
+            lumaHistogram: bundle.samples.histogramLuma, transfer: bundle.transfer,
+            noneLabel: noneLabel)
     }
-
-    typealias StoredCenter = MonitorScopeStoredCenter
-
-    typealias Snapshot = MonitorNDOptions
 
     static func panelSize(scale: Double) -> CGSize {
         MonitorScopePanelCentering.panelSize(baseSize, scale: MonitorScopePanelCentering.clampedScale(scale))
     }
 
     @MainActor
-    static var store: NDAssistStore { NDAssistStore.shared }
+    static var store: MonitorNDPreferenceStore { MonitorNDPreferenceStore.shared }
 }
-
-typealias NDAssistStore = MonitorNDPreferenceStore
 
 struct NDLongPressMenu: View {
     @Bindable var store = NDAssist.store
@@ -87,7 +84,7 @@ struct NDMeterOverlay: View {
 /// chip does not re-evaluate on every bundle (up to 25 Hz).
 private struct NDMeterLiveChip: View {
     @Environment(AppModel.self) private var model
-    var notation: NDFilterNotation
+    var notation: MonitorNDFilterNotation
 
     var body: some View {
         NDMeterChip(
@@ -98,18 +95,18 @@ private struct NDMeterLiveChip: View {
 
 /// App binding keeps the inherited unknown marker content.
 struct NDMeterChip: View {
-    var reading: NDFilterSuggestion?
-    var notation: NDFilterNotation = NDAssist.defaultNotation
+    var reading: MonitorNDFilterSuggestion?
+    var notation: MonitorNDFilterNotation = NDAssist.defaultNotation
 
     var body: some View {
         MonitorNDFilterChip(
-            reading: reading, notation: notation, emptyLabel: NDFilterRecommendation.noneLabel)
+            reading: reading, notation: notation, emptyLabel: NDAssist.noneLabel)
     }
 }
 
 /// Drag to reposition; drag the corner grip to scale.
 struct NDMovablePanel<Content: View>: View {
-    @Bindable var store: NDAssistStore
+    @Bindable var store: MonitorNDPreferenceStore
     let size: CGSize
     let defaultCenter: CGPoint
     let bounds: CGRect
@@ -143,7 +140,7 @@ struct NDMovablePanel<Content: View>: View {
                         let center = ScopeCanvasSlot.pick(
                             sessionCenter, sessionCenterPortrait, in: bounds)
                     else { return }
-                    let stored = NDAssist.StoredCenter(center: center, in: bounds)
+                    let stored = MonitorScopeStoredCenter(center: center, in: bounds)
                     if ScopeCanvasSlot.forBounds(bounds) == .portrait {
                         store.positionPortrait = stored
                     } else {

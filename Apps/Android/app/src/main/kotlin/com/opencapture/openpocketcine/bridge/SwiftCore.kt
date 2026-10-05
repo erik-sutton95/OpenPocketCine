@@ -4,7 +4,7 @@ import com.opencapture.opencine.dji.DjiNative
 
 /**
  * JNI binding to `libOpenPocketCineAndroid.so` for this app's own natives: core version, LUT
- * packing, feed-effect cubes and playback conform. The DJI wire natives in the same library
+ * packing and feed-effect cubes. The DJI wire natives in the same library
  * belong to OpenCine's [DjiNative]. Staged by `:app:stageSwiftCore` / `just android-core`.
  */
 object SwiftCore {
@@ -12,15 +12,6 @@ object SwiftCore {
     val isAvailable: Boolean by lazy { DjiNative.load("OpenPocketCineAndroid") }
 
     external fun coreVersion(): String
-
-    external fun hevcCsd(annexB: ByteArray): ByteArray?
-
-    external fun hevcNalTypes(annexB: ByteArray): String?
-
-    external fun hevcIsKeyframe(annexB: ByteArray): Boolean
-
-    /** `"1\\u001F{size}\\u001Fcustom:{fileName}"` or empty on reject. */
-    external fun validateImportedLut(utf8: ByteArray, fileName: String): String?
 
     /** Packed-2D RGBA8 cube (`n³ × 4`) for GLES upload. Input-referred LUT exposure. */
     external fun packImportedLut(utf8: ByteArray, exposureStops: Double, colorMode: Int): ByteArray?
@@ -44,7 +35,4 @@ object SwiftCore {
         highlightIRE: Float,
         midtoneIRE: Float,
     ): FloatArray?
-
-    /** Probe JSON for playback conform preview. See `AndroidSessionWire.conformPreviewJSON`. */
-    external fun conformPreviewJSON(request: String): String?
 }
