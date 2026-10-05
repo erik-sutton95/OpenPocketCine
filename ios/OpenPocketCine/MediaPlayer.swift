@@ -146,7 +146,7 @@ struct MediaPhotoViewer: View {
                 VStack(spacing: 12) {
                     ProgressView().tint(LiveDesign.accent)
                     Text("Preparing image…")
-                        .font(LiveType.ui(size: 14, weight: .medium))
+                        .font(MonitorTheme.font(14, weight: .medium))
                         .foregroundStyle(LiveDesign.muted)
                 }
             }
@@ -160,7 +160,7 @@ struct MediaPhotoViewer: View {
                     }
                     .buttonStyle(.monitorTapTarget)
                     Text(file.filename)
-                        .font(LiveType.ui(size: 14, weight: .semibold))
+                        .font(MonitorTheme.font(14, weight: .semibold))
                         .foregroundStyle(LiveDesign.text)
                         .lineLimit(1)
                     Spacer(minLength: 8)

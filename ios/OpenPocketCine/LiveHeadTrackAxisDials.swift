@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -41,7 +42,7 @@ struct LiveHeadTrackAxisDials: View {
         }
         .overlay(alignment: .topTrailing) {
             Text(pose.locked ? "SET" : "IMU")
-                .font(LiveType.ui(size: 9, weight: .semibold, design: .rounded))
+                .font(MonitorTheme.font(9, weight: .semibold))
                 .foregroundStyle(LiveDesign.text.opacity(0.72))
                 .padding(.top, 6)
                 .padding(.trailing, 10)
@@ -73,7 +74,7 @@ struct LiveHeadTrackAxisDials: View {
     ) -> some View {
         VStack(spacing: 4) {
             Text(title)
-                .font(LiveType.ui(size: 10, weight: .semibold, design: .rounded))
+                .font(MonitorTheme.font(10, weight: .semibold))
                 .foregroundStyle(LiveDesign.text.opacity(0.78))
             ZStack {
                 Circle()
@@ -115,7 +116,7 @@ struct LiveHeadTrackAxisDials: View {
                 .fill(color)
                 .frame(width: 8, height: 3)
             Text(title)
-                .font(LiveType.ui(size: 9, weight: .semibold, design: .rounded))
+                .font(MonitorTheme.font(9, weight: .semibold))
                 .foregroundStyle(color.opacity(0.86))
         }
     }

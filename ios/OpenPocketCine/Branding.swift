@@ -1,3 +1,4 @@
+import MonitorUI
 import SwiftUI
 import UIKit
 
@@ -35,7 +36,7 @@ struct OPCMonogramMark: View {
                     )
                     .overlay {
                         Text("OPC")
-                            .font(LiveType.display(size * 0.34, weight: .heavy))
+                            .font(MonitorTheme.font(size * 0.34, weight: .heavy))
                             .kerning(size * 0.02)
                             .foregroundStyle(BrandColors.accent)
                     }
@@ -54,11 +55,11 @@ struct OpenPocketCineWordmark: View {
     var body: some View {
         VStack(alignment: .leading, spacing: fontSize * 0.18) {
             Text("OpenPocketCine")
-                .font(LiveType.ui(size: fontSize, weight: .bold, design: .rounded))
+                .font(MonitorTheme.font(fontSize, weight: .bold))
                 .foregroundStyle(BrandColors.ink)
             if let subtitle {
                 Text(subtitle)
-                    .font(LiveType.ui(size: fontSize * 0.38, weight: .medium, design: .rounded))
+                    .font(MonitorTheme.font(fontSize * 0.38, weight: .medium))
                     .foregroundStyle(BrandColors.muted)
             }
         }

@@ -39,6 +39,8 @@ let package = Package(
                 .product(name: "OpenCineDJI", package: "OpenCine"),
                 // Saved-camera values (`SavedCamera`) the Wi-Fi guards read (SHELL-02).
                 .product(name: "OpenCineCore", package: "OpenCine"),
+                // Live chrome layout policy (`MonitorLayoutRegion`, `GimbalCluster`).
+                .product(name: "MonitorPresentation", package: "OpenCine"),
             ]
         ),
         .testTarget(

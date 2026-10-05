@@ -288,17 +288,17 @@ struct ChromeEditBanner: View {
                 .foregroundStyle(LiveDesign.accent)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Editing \(mode.title)")
-                    .font(LiveType.ui(size: 11.5, weight: .semibold))
+                    .font(MonitorTheme.font(11.5, weight: .semibold))
                     .foregroundStyle(LiveDesign.text)
                 Text("Tap an eye to show or hide it")
-                    .font(LiveType.ui(size: 10, weight: .regular))
+                    .font(MonitorTheme.font(10, weight: .regular))
                     .foregroundStyle(LiveDesign.muted)
             }
             Button {
                 model.endChromeEditing()
             } label: {
                 Text("Done")
-                    .font(LiveType.ui(size: 11.5, weight: .bold))
+                    .font(MonitorTheme.font(11.5, weight: .bold))
                     .foregroundStyle(LiveDesign.background)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)

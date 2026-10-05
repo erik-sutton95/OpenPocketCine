@@ -129,7 +129,7 @@ struct LiveTopChrome: View {
                 .fill(rec ? LiveDesign.rec : LiveDesign.faint)
                 .frame(width: 9, height: 9)
             Text(rec ? "REC" : "STBY")
-                .font(LiveType.ui(size: 11, weight: .bold, design: .default))
+                .font(MonitorTheme.font(11, weight: .bold))
                 .foregroundStyle(rec ? LiveDesign.text : LiveDesign.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)

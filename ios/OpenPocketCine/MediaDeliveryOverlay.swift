@@ -163,7 +163,7 @@ struct MediaDeliveryOverlay: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(state.statusLine)
-                    .font(LiveType.ui(size: 12, weight: .semibold))
+                    .font(MonitorTheme.font(12, weight: .semibold))
                     .foregroundStyle(LiveDesign.text)
                     .lineLimit(1)
                 if state.totalClips > 1 {
@@ -185,7 +185,7 @@ struct MediaDeliveryOverlay: View {
                 .frame(width: 44, height: 4)
             }
             Button("Cancel", action: onCancel)
-                .font(LiveType.ui(size: 11, weight: .semibold))
+                .font(MonitorTheme.font(11, weight: .semibold))
                 .foregroundStyle(LiveDesign.muted)
         }
         .padding(.horizontal, 14)

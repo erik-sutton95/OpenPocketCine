@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 

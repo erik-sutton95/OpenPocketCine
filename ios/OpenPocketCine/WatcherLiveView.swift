@@ -147,10 +147,10 @@ struct WatcherLiveView: View {
             Button("Leave") { model.stopWatching() }
                 .accessibilityIdentifier("watcher.leave")
             VStack(alignment: .leading, spacing: 2) {
-                Text(client.hostTitle).font(LiveType.ui(size: 13, weight: .semibold)).lineLimit(1)
+                Text(client.hostTitle).font(MonitorTheme.font(13, weight: .semibold)).lineLimit(1)
                 if !clean {
                     Text("WATCHING · \(client.receivedFPS) fps")
-                        .font(LiveType.ui(size: 10, weight: .medium, design: .monospaced))
+                        .font(MonitorTheme.font(10, weight: .medium))
                         .foregroundStyle(LiveDesign.text.opacity(0.65))
                 }
             }
@@ -168,7 +168,7 @@ struct WatcherLiveView: View {
                 clean.toggle()
             }
         }
-        .font(LiveType.ui(size: 12, weight: .semibold))
+        .font(MonitorTheme.font(12, weight: .semibold))
         .foregroundStyle(LiveDesign.text)
         .padding(.horizontal, 12).padding(.vertical, 9)
         .liveChromeCapsule()
@@ -193,10 +193,10 @@ struct WatcherLiveView: View {
 
     private func reading(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(LiveType.ui(size: 8, weight: .medium)).foregroundStyle(
+            Text(label).font(MonitorTheme.font(8, weight: .medium)).foregroundStyle(
                 LiveDesign.text.opacity(0.65))
             Text(value.isEmpty ? "—" : value).font(
-                LiveType.ui(size: 12, weight: .semibold, design: .monospaced)
+                MonitorTheme.font(12, weight: .semibold)
             )
             .foregroundStyle(LiveDesign.text)
         }
@@ -227,7 +227,7 @@ struct WatcherLiveView: View {
                 .buttonStyle(StartupFilledButtonStyle())
             }
         }
-        .font(LiveType.ui(size: 14, weight: .medium))
+        .font(MonitorTheme.font(14, weight: .medium))
         .foregroundStyle(LiveDesign.text)
         .padding(14)
         .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
@@ -237,7 +237,7 @@ struct WatcherLiveView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 Text(client.canControl ? "CONTROL · YOU" : "CONTROL · \(client.token.holderName)")
-                    .font(LiveType.ui(size: 10, weight: .semibold))
+                    .font(MonitorTheme.font(10, weight: .semibold))
                     .foregroundStyle(
                         client.canControl ? LiveDesign.accent : LiveDesign.text.opacity(0.65))
                 if client.canControl {
@@ -259,7 +259,7 @@ struct WatcherLiveView: View {
             }.padding(.horizontal, 12).padding(.vertical, 8)
         }
         .monitorScrollFade(.horizontal)
-        .font(LiveType.ui(size: 12, weight: .semibold))
+        .font(MonitorTheme.font(12, weight: .semibold))
         .foregroundStyle(LiveDesign.text)
         .background(.black.opacity(0.72), in: Capsule())
     }

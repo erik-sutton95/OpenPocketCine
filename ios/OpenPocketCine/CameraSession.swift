@@ -2,6 +2,7 @@ import AVFoundation
 import CoreBluetooth
 import CoreGraphics
 import Foundation
+import MonitorUI
 import Observation
 import OpenCineAppKit
 import OpenCineDJIApple

@@ -430,7 +430,7 @@ struct LiveZoomChip: View {
     var body: some View {
         KeyframeAnimator(initialValue: Double(1), trigger: snapTick) { progress in
             Text(title)
-                .font(LiveType.ui(size: 18, weight: .bold))
+                .font(MonitorTheme.font(18, weight: .bold))
                 .foregroundStyle(isDigitalCrop ? MonitorTheme.digitalCrop : LiveDesign.text)
                 .minimumScaleFactor(0.75)
                 .scaleEffect(reduceMotion ? 1 : MonitorMotion.chipPopScale(at: progress))
