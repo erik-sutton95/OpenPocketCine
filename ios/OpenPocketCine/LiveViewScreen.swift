@@ -589,19 +589,6 @@ struct LiveViewScreen: View {
                 feed: layout.onFeed,
                 topBar: showsStatusBar ? layout.topDeck : nil
             )
-
-            if model.chromeSectionMounts(.toolBar) {
-                FieldMonitorAssistPalette(
-                    layout: layout, isLocked: interfaceLocked,
-                    otherOverlayPresented: topMenu != nil || zoomDialVisible,
-                    expanded: $assistsExpanded,
-                    onExpansionActivityChange: { assistsRevealing = $0 }
-                )
-                .opacity(interfaceLocked ? 0.4 : 1)
-                .allowsHitTesting(!interfaceLocked)
-                .zIndex(6)
-            }
-
         }
         .frame(width: layout.viewport.width, height: layout.viewport.height)
         // Pin the overlay tree itself. `preferredColorScheme` on the screen is
@@ -610,6 +597,22 @@ struct LiveViewScreen: View {
         .environment(\.colorScheme, .dark)
         .preferredColorScheme(.dark)
         .ignoresSafeArea()
+
+        // Outside the tools ZStack: MonitorScreen draws the camera values above the tools slot,
+        // and the expanded palette must cover them as on main (its zIndex beats the values' 0).
+        if model.chromeSectionMounts(.toolBar) {
+            FieldMonitorAssistPalette(
+                layout: layout, isLocked: interfaceLocked,
+                otherOverlayPresented: topMenu != nil || zoomDialVisible,
+                expanded: $assistsExpanded,
+                onExpansionActivityChange: { assistsRevealing = $0 }
+            )
+            .opacity(interfaceLocked ? 0.4 : 1)
+            .allowsHitTesting(!interfaceLocked)
+            .environment(\.colorScheme, .dark)
+            .ignoresSafeArea()
+            .zIndex(6)
+        }
     }
 
     /// Full-screen overlays — not in-flow, not `.sheet` for live capture.
