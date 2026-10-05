@@ -11,6 +11,8 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import com.opencapture.opencine.media.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 import kotlin.time.Duration
 
@@ -25,6 +27,8 @@ class Media3PlaybackPort(val player: ExoPlayer, scope: CoroutineScope) : Monitor
     private var tick: Job? = null
     private var closed = false
     private var pictureOwner: UUID? = null
+    /** A claimed or retired picture whose decoder surface has not arrived yet. */
+    private val picturePending = MutableStateFlow(false)
     /** Main-owned SDK boundary; renderer admission uses the separately captured pure predicate. */
     /** Captured host listing value, qualified by the actual item token; absent by default. */
     var listedFrameRate: (MonitorPlaybackItemToken) -> Double? = { null }
@@ -41,18 +45,20 @@ class Media3PlaybackPort(val player: ExoPlayer, scope: CoroutineScope) : Monitor
         check(!closed)
         val previous = pictureClose
         val owner = UUID.randomUUID()
-        pictureOwner = owner; pictureRetire = null; pictureClose = null
+        pictureOwner = owner; pictureRetire = null; pictureClose = null; picturePending.value = true
         previous?.invoke()
         if (!closed && pictureOwner == owner) player.clearVideoSurface()
         return owner
     }
     fun attachPicture(surface: Surface, owner: UUID) {
-        if (!closed && pictureOwner == owner && token?.let(::admitted) != false) player.setVideoSurface(surface)
+        if (!closed && pictureOwner == owner && token?.let(::admitted) != false) {
+            player.setVideoSurface(surface); picturePending.value = false
+        }
     }
     fun releasePicture(owner: UUID) {
         if (closed || pictureOwner != owner) return
         val departing = pictureClose
-        pictureOwner = null; pictureRetire = null; pictureClose = null
+        pictureOwner = null; pictureRetire = null; pictureClose = null; picturePending.value = false
         departing?.invoke()
         if (!closed && pictureOwner == null) player.clearVideoSurface()
     }
@@ -66,7 +72,11 @@ class Media3PlaybackPort(val player: ExoPlayer, scope: CoroutineScope) : Monitor
         val capturedPicture = pictureOwner
         pictureRetire?.invoke()
         if (closed || this.token != token) return
-        if (pictureOwner == capturedPicture) player.clearVideoSurface()
+        if (pictureOwner == capturedPicture) {
+            player.clearVideoSurface()
+            // The next item's picture is claimed after this token change; hold its prepare until then.
+            if (capturedPicture != null) picturePending.value = true
+        }
         if (closed || this.token != token) return
         player.stop()
         if (closed || this.token != token) return
@@ -102,6 +112,11 @@ class Media3PlaybackPort(val player: ExoPlayer, scope: CoroutineScope) : Monitor
         player.repeatMode = Player.REPEAT_MODE_OFF
         if (closed || this.token != token || preparation != request) throw MonitorPlaybackException(MonitorPlaybackFailure.RETIRED)
         player.setMediaItem(MediaItem.Builder().setUri(item.url.toString().toUri()).setMimeType(item.mimeType).setMediaId(request).build())
+        if (!current(token, request)) throw MonitorPlaybackException(MonitorPlaybackFailure.RETIRED)
+        // Prepared before its surface, Media3 configures the decoder on a PlaceholderSurface and
+        // switches it later; the Codec2/gfxstream emulator path then decodes into buffers without
+        // a host color buffer and every frame is black. Prepare onto the claimed picture instead.
+        picturePending.first { !it }
         if (!current(token, request)) throw MonitorPlaybackException(MonitorPlaybackFailure.RETIRED)
         player.prepare()
         if (!current(token, request)) throw MonitorPlaybackException(MonitorPlaybackFailure.RETIRED)
@@ -154,7 +169,7 @@ class Media3PlaybackPort(val player: ExoPlayer, scope: CoroutineScope) : Monitor
         if (closed || this.token?.owner != token.owner) return
         closed = true
         val departing = pictureClose
-        pictureOwner = null; pictureRetire = null; pictureClose = null
+        pictureOwner = null; pictureRetire = null; pictureClose = null; picturePending.value = false
         this.token = null; onEvent = null; retireObservers(); sourceAdmission = null
         departing?.invoke()
         owner.cancel(); player.release()
