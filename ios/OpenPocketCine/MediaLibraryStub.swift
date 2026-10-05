@@ -689,10 +689,10 @@ struct MediaLibraryView: View {
                     .foregroundStyle(LiveDesign.faint)
             }
             Text(model.session.mediaFetchInProgress ? "Listing clips" : "No clips yet")
-                .font(LiveType.ui(size: 15, weight: .medium))
+                .font(MonitorTheme.font(15, weight: .medium))
                 .foregroundStyle(LiveDesign.muted)
             Text(model.session.mediaNote ?? emptySubtitle)
-                .font(LiveType.ui(size: 12))
+                .font(MonitorTheme.font(12))
                 .foregroundStyle(LiveDesign.faint)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
@@ -706,14 +706,14 @@ struct MediaLibraryView: View {
                 .controlSize(.large)
                 .tint(LiveDesign.muted)
             Text("Listing clips on camera…")
-                .font(LiveType.ui(size: 15, weight: .medium))
+                .font(MonitorTheme.font(15, weight: .medium))
                 .foregroundStyle(LiveDesign.muted)
             Text(
                 session.mediaFetchListedCount == 0
                     ? "Querying card storage…"
                     : "\(session.mediaFetchListedCount) clip\(session.mediaFetchListedCount == 1 ? "" : "s") found so far"
             )
-            .font(LiveType.ui(size: 12))
+            .font(MonitorTheme.font(12))
             .foregroundStyle(LiveDesign.faint)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -953,5 +953,3 @@ struct AppPanelHost: View {
         }
     }
 }
-
-typealias MediaLibraryStubView = MediaLibraryView

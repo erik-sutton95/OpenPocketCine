@@ -664,13 +664,13 @@ internal fun AssistRows(model: AppModel, statusColorMode: Int, onOpenLut: () -> 
             assist.toggle(LiveAssistTool.DESQ)
         }
         com.opencapture.monitorui.MonitorDesqueezeMenu(
-            preset = assist.desqueezePreset.common(), custom = assist.desqueezeCustom,
-            factor = assist.desqueezeCustomFactor, direction = assist.desqueezeDirection.common(),
+            preset = assist.desqueezePreset, custom = assist.desqueezeCustom,
+            factor = assist.desqueezeCustomFactor, direction = assist.desqueezeDirection,
             help = com.opencapture.openpocketcine.assists.AnamorphicDesqueeze.HELP,
             onSelect = { if (it == null) assist.selectCustomDesqueeze()
-                else assist.selectDesqueezePreset(it.local()) },
+                else assist.selectDesqueezePreset(it) },
             onFactor = assist::updateDesqueezeFactor,
-            onDirection = { assist.updateDesqueezeDirection(it.local()) },
+            onDirection = { assist.updateDesqueezeDirection(it) },
         )
     }
 
@@ -706,16 +706,16 @@ internal fun assistSettingsSections(assist: LiveAssistState, colorMode: Int):
             SettingsHelpCopy.ZEBRA_UNITS, SettingsHelpCopy.ZEBRA_HIGHLIGHT, SettingsHelpCopy.ZEBRA_MIDTONE,
             com.opencapture.monitorui.MonitorZebraZone(assist.zebraHighlight,
                 ZebraEditor.displayValue(assist.zebraHighlightIRE, assist.zebraUnit, transfer, assist.scopeDisplayCeiling),
-                maximum, assist.zebraHighlightColor.common(), commonColors(SettingsPalette.highlight),
+                maximum, assist.zebraHighlightColor, commonColors(SettingsPalette.highlight),
                 onEnabled = { assist.setZebraHighlight(enabled = !assist.zebraHighlight) },
                 onThreshold = { assist.setZebraHighlight(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer, assist.scopeDisplayCeiling)) },
-                onPaint = { assist.setZebraHighlight(color = it.local()) }, allowsEditingWhenOff = true),
+                onPaint = { assist.setZebraHighlight(color = it) }, allowsEditingWhenOff = true),
             com.opencapture.monitorui.MonitorZebraZone(assist.zebraMidtone,
                 ZebraEditor.displayValue(assist.zebraMidtoneIRE, assist.zebraUnit, transfer, assist.scopeDisplayCeiling),
-                maximum, assist.zebraMidtoneColor.common(), commonColors(SettingsPalette.midtone),
+                maximum, assist.zebraMidtoneColor, commonColors(SettingsPalette.midtone),
                 onEnabled = { assist.setZebraMidtone(enabled = !assist.zebraMidtone) },
                 onThreshold = { assist.setZebraMidtone(ire = ZebraEditor.ireFromDisplay(it, assist.zebraUnit, transfer, assist.scopeDisplayCeiling)) },
-                onPaint = { assist.setZebraMidtone(color = it.local()) }, allowsEditingWhenOff = true),
+                onPaint = { assist.setZebraMidtone(color = it) }, allowsEditingWhenOff = true),
             reset = {
                 assist.updateZebraUnit(ZebraUnit.IRE)
                 assist.setZebraHighlight(enabled = true, ire = LiveZebra.HIGHLIGHT_IRE, color = ZebraPaint.WHITE)
@@ -723,30 +723,30 @@ internal fun assistSettingsSections(assist: LiveAssistState, colorMode: Int):
             }),
         com.opencapture.monitorui.settings.MonitorAssistSettingsSection.Trace.waveform(
             WaveformMode.entries, assist.waveMode, { assist.setWaveform(mode = it) }, { it.label },
-            assist.waveBrightness, { assist.setWaveform(brightness = it) }, assist.waveGuides.common(),
-            { assist.setWaveform(guides = it.local()) },
+            assist.waveBrightness, { assist.setWaveform(brightness = it) }, assist.waveGuides,
+            { assist.setWaveform(guides = it) },
             reset = { assist.setWaveform(mode = WaveformMode.RGB, brightness = 100, guides = ScopeGuides()) }),
         com.opencapture.monitorui.settings.MonitorAssistSettingsSection.Trace.parade(
             ParadeMode.entries, assist.paradeMode, { assist.setParade(mode = it) }, { it.label },
-            assist.paradeBrightness, { assist.setParade(brightness = it) }, assist.paradeGuides.common(),
-            { assist.setParade(guides = it.local()) },
+            assist.paradeBrightness, { assist.setParade(brightness = it) }, assist.paradeGuides,
+            { assist.setParade(guides = it) },
             reset = { assist.setParade(mode = ParadeMode.RGB, brightness = 100, guides = ScopeGuides()) }),
         com.opencapture.monitorui.settings.MonitorAssistSettingsSection.Histogram(
             assist.histoTrafficLights, { assist.setHistogram(traffic = !assist.histoTrafficLights) },
-            assist.crushClipCompensation.common(), { assist.setHistogram(compensation = it.local()) },
+            assist.crushClipCompensation, { assist.setHistogram(compensation = it) },
             HistogramAssist.TRAFFIC_LIGHTS_HELP, HistogramAssist.COMPENSATION_HELP,
             reset = { assist.setHistogram(traffic = true, compensation = CrushClipCompensation.ZERO) }),
         com.opencapture.monitorui.settings.MonitorAssistSettingsSection.Vectorscope(
-            assist.vectorZoom.common(), { assist.setVectorscope(zoom = it.local()) },
+            assist.vectorZoom, { assist.setVectorscope(zoom = it) },
             assist.vectorBrightness, { assist.setVectorscope(brightness = it) },
             reset = { assist.setVectorscope(zoom = VectorscopeZoom.X1, brightness = 100) }),
         com.opencapture.monitorui.settings.MonitorAssistSettingsSection.Peaking(
-            assist.peakingSensitivity.common(), assist.peakingColor.common(), commonColors(SettingsPalette.peaking),
+            assist.peakingSensitivity, assist.peakingColor, commonColors(SettingsPalette.peaking),
             SettingsHelpCopy.PEAKING_SENSITIVITY, SettingsHelpCopy.PEAKING_COLOR,
-            { assist.setPeaking(sense = it.local()) }, { assist.setPeaking(color = it.local()) },
+            { assist.setPeaking(sense = it) }, { assist.setPeaking(color = it) },
             reset = { assist.setPeaking(color = PeakingColor.RED, sense = PeakingSense.MED) }),
         com.opencapture.monitorui.settings.MonitorAssistSettingsSection.TrafficLights(
-            assist.crushClipCompensation.common(), { assist.setCompensation(it.local()) }, SettingsHelpCopy.TRAFFIC_LIGHTS_COMPENSATION,
+            assist.crushClipCompensation, { assist.setCompensation(it) }, SettingsHelpCopy.TRAFFIC_LIGHTS_COMPENSATION,
             reset = { assist.setCompensation(CrushClipCompensation.ZERO) }),
     )
 }
@@ -1039,110 +1039,7 @@ fun OperatorCloseButton(onClose: () -> Unit, modifier: Modifier = Modifier) {
     PanelCloseButton(onClick = onClose, modifier = modifier)
 }
 
-/** Finite adapters keep the app's persisted option types and action entry points unchanged. */
+/** Maps the app settings palette dots onto the shared settings color dot. */
 private fun commonColors(colors: List<SettingsColorDot>) = colors.map {
     com.opencapture.monitorui.settings.MonitorSettingsColorDot(it.name, it.color)
-}
-
-private fun ScopeGuides.common() = com.opencapture.monitorui.MonitorScopeGuides(clip, crush, middle)
-private fun com.opencapture.monitorui.MonitorScopeGuides.local() = ScopeGuides(clip, crush, middle)
-
-private fun PeakingColor.common(): com.opencapture.opencine.media.MonitorPeakingColor = when (this) {
-    PeakingColor.WHITE -> com.opencapture.opencine.media.MonitorPeakingColor.WHITE
-    PeakingColor.BLUE -> com.opencapture.opencine.media.MonitorPeakingColor.BLUE
-    PeakingColor.RED -> com.opencapture.opencine.media.MonitorPeakingColor.RED
-    PeakingColor.GREEN -> com.opencapture.opencine.media.MonitorPeakingColor.GREEN
-}
-
-private fun com.opencapture.opencine.media.MonitorPeakingColor.local(): PeakingColor = when (this) {
-    com.opencapture.opencine.media.MonitorPeakingColor.WHITE -> PeakingColor.WHITE
-    com.opencapture.opencine.media.MonitorPeakingColor.BLUE -> PeakingColor.BLUE
-    com.opencapture.opencine.media.MonitorPeakingColor.RED -> PeakingColor.RED
-    com.opencapture.opencine.media.MonitorPeakingColor.GREEN -> PeakingColor.GREEN
-}
-
-private fun PeakingSense.common(): com.opencapture.opencine.media.MonitorPeakingSense = when (this) {
-    PeakingSense.LOW -> com.opencapture.opencine.media.MonitorPeakingSense.LOW
-    PeakingSense.MED -> com.opencapture.opencine.media.MonitorPeakingSense.MED
-    PeakingSense.HIGH -> com.opencapture.opencine.media.MonitorPeakingSense.HIGH
-}
-
-private fun com.opencapture.opencine.media.MonitorPeakingSense.local(): PeakingSense = when (this) {
-    com.opencapture.opencine.media.MonitorPeakingSense.LOW -> PeakingSense.LOW
-    com.opencapture.opencine.media.MonitorPeakingSense.MED -> PeakingSense.MED
-    com.opencapture.opencine.media.MonitorPeakingSense.HIGH -> PeakingSense.HIGH
-}
-
-private fun ZebraPaint.common(): com.opencapture.opencine.media.MonitorZebraPaint = when (this) {
-    ZebraPaint.WHITE -> com.opencapture.opencine.media.MonitorZebraPaint.WHITE
-    ZebraPaint.AMBER -> com.opencapture.opencine.media.MonitorZebraPaint.AMBER
-    ZebraPaint.RED -> com.opencapture.opencine.media.MonitorZebraPaint.RED
-    ZebraPaint.CYAN -> com.opencapture.opencine.media.MonitorZebraPaint.CYAN
-    ZebraPaint.GREEN -> com.opencapture.opencine.media.MonitorZebraPaint.GREEN
-}
-
-private fun com.opencapture.opencine.media.MonitorZebraPaint.local(): ZebraPaint = when (this) {
-    com.opencapture.opencine.media.MonitorZebraPaint.WHITE -> ZebraPaint.WHITE
-    com.opencapture.opencine.media.MonitorZebraPaint.AMBER -> ZebraPaint.AMBER
-    com.opencapture.opencine.media.MonitorZebraPaint.RED -> ZebraPaint.RED
-    com.opencapture.opencine.media.MonitorZebraPaint.CYAN -> ZebraPaint.CYAN
-    com.opencapture.opencine.media.MonitorZebraPaint.GREEN -> ZebraPaint.GREEN
-}
-
-private fun CrushClipCompensation.common(): com.opencapture.opencine.media.MonitorCrushClipCompensation = when (this) {
-    CrushClipCompensation.ZERO -> com.opencapture.opencine.media.MonitorCrushClipCompensation.ZERO
-    CrushClipCompensation.QUARTER -> com.opencapture.opencine.media.MonitorCrushClipCompensation.QUARTER
-    CrushClipCompensation.HALF -> com.opencapture.opencine.media.MonitorCrushClipCompensation.HALF
-    CrushClipCompensation.THREE_QUARTER -> com.opencapture.opencine.media.MonitorCrushClipCompensation.THREE_QUARTER
-    CrushClipCompensation.ONE -> com.opencapture.opencine.media.MonitorCrushClipCompensation.ONE
-}
-
-private fun com.opencapture.opencine.media.MonitorCrushClipCompensation.local(): CrushClipCompensation = when (this) {
-    com.opencapture.opencine.media.MonitorCrushClipCompensation.ZERO -> CrushClipCompensation.ZERO
-    com.opencapture.opencine.media.MonitorCrushClipCompensation.QUARTER -> CrushClipCompensation.QUARTER
-    com.opencapture.opencine.media.MonitorCrushClipCompensation.HALF -> CrushClipCompensation.HALF
-    com.opencapture.opencine.media.MonitorCrushClipCompensation.THREE_QUARTER -> CrushClipCompensation.THREE_QUARTER
-    com.opencapture.opencine.media.MonitorCrushClipCompensation.ONE -> CrushClipCompensation.ONE
-}
-
-private fun VectorscopeZoom.common(): com.opencapture.monitorui.MonitorVectorscopeZoom = when (this) {
-    VectorscopeZoom.X1 -> com.opencapture.monitorui.MonitorVectorscopeZoom.X1
-    VectorscopeZoom.X2 -> com.opencapture.monitorui.MonitorVectorscopeZoom.X2
-    VectorscopeZoom.X4 -> com.opencapture.monitorui.MonitorVectorscopeZoom.X4
-}
-
-private fun com.opencapture.monitorui.MonitorVectorscopeZoom.local(): VectorscopeZoom = when (this) {
-    com.opencapture.monitorui.MonitorVectorscopeZoom.X1 -> VectorscopeZoom.X1
-    com.opencapture.monitorui.MonitorVectorscopeZoom.X2 -> VectorscopeZoom.X2
-    com.opencapture.monitorui.MonitorVectorscopeZoom.X4 -> VectorscopeZoom.X4
-}
-
-private fun com.opencapture.openpocketcine.assists.DesqueezePreset.common(): com.opencapture.opencine.media.MonitorDesqueezePreset = when (this) {
-    com.opencapture.openpocketcine.assists.DesqueezePreset.X110 -> com.opencapture.opencine.media.MonitorDesqueezePreset.X110
-    com.opencapture.openpocketcine.assists.DesqueezePreset.X120 -> com.opencapture.opencine.media.MonitorDesqueezePreset.X120
-    com.opencapture.openpocketcine.assists.DesqueezePreset.X133 -> com.opencapture.opencine.media.MonitorDesqueezePreset.X133
-    com.opencapture.openpocketcine.assists.DesqueezePreset.X150 -> com.opencapture.opencine.media.MonitorDesqueezePreset.X150
-    com.opencapture.openpocketcine.assists.DesqueezePreset.X160 -> com.opencapture.opencine.media.MonitorDesqueezePreset.X160
-    com.opencapture.openpocketcine.assists.DesqueezePreset.X180 -> com.opencapture.opencine.media.MonitorDesqueezePreset.X180
-    com.opencapture.openpocketcine.assists.DesqueezePreset.X200 -> com.opencapture.opencine.media.MonitorDesqueezePreset.X200
-}
-
-private fun com.opencapture.opencine.media.MonitorDesqueezePreset.local(): com.opencapture.openpocketcine.assists.DesqueezePreset = when (this) {
-    com.opencapture.opencine.media.MonitorDesqueezePreset.X110 -> com.opencapture.openpocketcine.assists.DesqueezePreset.X110
-    com.opencapture.opencine.media.MonitorDesqueezePreset.X120 -> com.opencapture.openpocketcine.assists.DesqueezePreset.X120
-    com.opencapture.opencine.media.MonitorDesqueezePreset.X133 -> com.opencapture.openpocketcine.assists.DesqueezePreset.X133
-    com.opencapture.opencine.media.MonitorDesqueezePreset.X150 -> com.opencapture.openpocketcine.assists.DesqueezePreset.X150
-    com.opencapture.opencine.media.MonitorDesqueezePreset.X160 -> com.opencapture.openpocketcine.assists.DesqueezePreset.X160
-    com.opencapture.opencine.media.MonitorDesqueezePreset.X180 -> com.opencapture.openpocketcine.assists.DesqueezePreset.X180
-    com.opencapture.opencine.media.MonitorDesqueezePreset.X200 -> com.opencapture.openpocketcine.assists.DesqueezePreset.X200
-}
-
-private fun com.opencapture.openpocketcine.assists.DesqueezeDirection.common(): com.opencapture.opencine.media.MonitorDesqueezeDirection = when (this) {
-    com.opencapture.openpocketcine.assists.DesqueezeDirection.HORIZONTAL -> com.opencapture.opencine.media.MonitorDesqueezeDirection.HORIZONTAL
-    com.opencapture.openpocketcine.assists.DesqueezeDirection.VERTICAL -> com.opencapture.opencine.media.MonitorDesqueezeDirection.VERTICAL
-}
-
-private fun com.opencapture.opencine.media.MonitorDesqueezeDirection.local(): com.opencapture.openpocketcine.assists.DesqueezeDirection = when (this) {
-    com.opencapture.opencine.media.MonitorDesqueezeDirection.HORIZONTAL -> com.opencapture.openpocketcine.assists.DesqueezeDirection.HORIZONTAL
-    com.opencapture.opencine.media.MonitorDesqueezeDirection.VERTICAL -> com.opencapture.openpocketcine.assists.DesqueezeDirection.VERTICAL
 }

@@ -209,7 +209,7 @@ struct MediaDeliveryPopup: View {
             }
             if let statusMessage {
                 Text(statusMessage)
-                    .font(LiveType.ui(size: 12))
+                    .font(MonitorTheme.font(12))
                     .foregroundStyle(LiveDesign.accent)
             }
         }
@@ -228,7 +228,7 @@ struct MediaDeliveryPopup: View {
                         OpcIcon.share
                             .frame(width: 13, height: 13)
                     }
-                    .font(LiveType.display(14, weight: .bold))
+                    .font(MonitorTheme.font(14, weight: .bold))
                     .kerning(1)
                     .textCase(.uppercase)
                     .foregroundStyle(LiveDesign.text)
@@ -247,7 +247,7 @@ struct MediaDeliveryPopup: View {
                             OpcIcon.chevronLeft
                                 .frame(width: 12, height: 12)
                         }
-                        .font(LiveType.ui(size: 13, weight: .semibold))
+                        .font(MonitorTheme.font(13, weight: .semibold))
                         .foregroundStyle(LiveDesign.accent)
                     }
                     .buttonStyle(.monitorTapTarget)
@@ -258,7 +258,7 @@ struct MediaDeliveryPopup: View {
                             .textCase(.uppercase)
                             .foregroundStyle(LiveDesign.text)
                         Text("Options")
-                            .font(LiveType.ui(size: 11, weight: .medium))
+                            .font(MonitorTheme.font(11, weight: .medium))
                             .foregroundStyle(LiveDesign.muted)
                     }
                     Spacer(minLength: 0)
@@ -272,7 +272,7 @@ struct MediaDeliveryPopup: View {
     private var summary: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("\(files.count) clip\(files.count == 1 ? "" : "s")")
-                .font(LiveType.ui(size: 15, weight: .semibold))
+                .font(MonitorTheme.font(15, weight: .semibold))
                 .foregroundStyle(LiveDesign.text)
             if cached.count < files.count {
                 Text(
@@ -280,19 +280,19 @@ struct MediaDeliveryPopup: View {
                         ? "\(files.count - cached.count) on-camera clip(s) will be cached from the camera first."
                         : "\(files.count - cached.count) on-camera clip(s) will be skipped — reconnect the camera to cache them."
                 )
-                .font(LiveType.ui(size: 12))
+                .font(MonitorTheme.font(12))
                 .foregroundStyle(LiveDesign.muted)
             }
             if destination == .frameio, !model.isFrameioConfigured {
                 Text("Frame.io isn't configured — add credentials in Settings → Storage.")
-                    .font(LiveType.ui(size: 12))
+                    .font(MonitorTheme.font(12))
                     .foregroundStyle(LiveDesign.accent)
             } else if destination == .frameio,
                 let name = selectedFrameioProject?.name
                     ?? FrameioDestination.loaded?.projectName, step == .options
             {
                 Text("Project: \(name)")
-                    .font(LiveType.ui(size: 12))
+                    .font(MonitorTheme.font(12))
                     .foregroundStyle(LiveDesign.muted)
             }
         }
@@ -317,9 +317,9 @@ struct MediaDeliveryPopup: View {
                 ) { title in
                     HStack(spacing: 12) {
                         OpcIcon.folder.frame(width: 24, height: 24)
-                        Text(title).font(LiveType.ui(size: 14, weight: .semibold))
+                        Text(title).font(MonitorTheme.font(14, weight: .semibold))
                         Spacer(minLength: 8)
-                        Text("Coming soon").font(LiveType.ui(size: 11))
+                        Text("Coming soon").font(MonitorTheme.font(11))
                     }
                     .foregroundStyle(LiveDesign.muted)
                     .padding(.horizontal, 12).padding(.vertical, 14)
@@ -349,7 +349,7 @@ struct MediaDeliveryPopup: View {
                     .frame(width: 24, height: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(candidate.title)
-                        .font(LiveType.ui(size: 14, weight: .semibold))
+                        .font(MonitorTheme.font(14, weight: .semibold))
                         .foregroundStyle(enabled ? LiveDesign.text : LiveDesign.faint)
                     Text(
                         candidate == .frameio && model.isFrameioConfigured
@@ -357,7 +357,7 @@ struct MediaDeliveryPopup: View {
                             ? "Sign in from Settings → Storage first."
                             : candidate.subtitle
                     )
-                    .font(LiveType.ui(size: 11))
+                    .font(MonitorTheme.font(11))
                     .foregroundStyle(LiveDesign.muted)
                 }
                 Spacer()
@@ -436,7 +436,7 @@ struct MediaDeliveryPopup: View {
             }
                 ?? "Frame.io needs the internet. Hop off the camera's Wi‑Fi to sign in and pick a project — the camera reconnects automatically when you're done."
         )
-        .font(LiveType.ui(size: 13))
+        .font(MonitorTheme.font(13))
         .foregroundStyle(LiveDesign.muted)
         .fixedSize(horizontal: false, vertical: true)
 
@@ -444,7 +444,7 @@ struct MediaDeliveryPopup: View {
             HStack(spacing: 8) {
                 ProgressView().tint(LiveDesign.accent)
                 Text("Switching networks…")
-                    .font(LiveType.ui(size: 13))
+                    .font(MonitorTheme.font(13))
                     .foregroundStyle(LiveDesign.muted)
             }
         } else {
@@ -457,7 +457,7 @@ struct MediaDeliveryPopup: View {
                     OpcIcon.wifiOff
                         .frame(width: 16, height: 16)
                 }
-                .font(LiveType.ui(size: 15, weight: .semibold))
+                .font(MonitorTheme.font(15, weight: .semibold))
                 .foregroundStyle(LiveDesign.text)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
@@ -480,28 +480,28 @@ struct MediaDeliveryPopup: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 4) {
                 Text("Project")
-                    .font(LiveType.ui(size: 14, weight: .semibold))
+                    .font(MonitorTheme.font(14, weight: .semibold))
                     .foregroundStyle(LiveDesign.text)
                 HelpBadge(text: "Upload destination in your Frame.io workspace.")
             }
             if !model.isFrameioConnected {
                 Text("Sign in to Frame.io from Settings → Storage to upload.")
-                    .font(LiveType.ui(size: 12))
+                    .font(MonitorTheme.font(12))
                     .foregroundStyle(LiveDesign.muted)
             }
             if frameioProjectsLoading {
                 HStack(spacing: 8) {
                     ProgressView().tint(LiveDesign.accent)
                     Text("Loading projects…")
-                        .font(LiveType.ui(size: 12))
+                        .font(MonitorTheme.font(12))
                         .foregroundStyle(LiveDesign.muted)
                 }
             } else if let frameioProjectsError {
                 Text(frameioProjectsError)
-                    .font(LiveType.ui(size: 12))
+                    .font(MonitorTheme.font(12))
                     .foregroundStyle(LiveDesign.accent)
                 Button("Retry") { Task { await loadFrameioProjects() } }
-                    .font(LiveType.ui(size: 13, weight: .semibold))
+                    .font(MonitorTheme.font(13, weight: .semibold))
                     .foregroundStyle(LiveDesign.accent)
             } else if frameioListing != nil {
                 frameioProjectMenu
@@ -514,7 +514,7 @@ struct MediaDeliveryPopup: View {
                             .frame(width: 16, height: 16)
                             .foregroundStyle(LiveDesign.accent)
                         Text("Create new project")
-                            .font(LiveType.ui(size: 13, weight: .semibold))
+                            .font(MonitorTheme.font(13, weight: .semibold))
                             .foregroundStyle(LiveDesign.text)
                         Spacer()
                     }
@@ -557,7 +557,7 @@ struct MediaDeliveryPopup: View {
                     .frame(width: 14, height: 14)
                     .foregroundStyle(LiveDesign.muted)
                 Text(selectedFrameioProject?.name ?? "Select a project")
-                    .font(LiveType.ui(size: 13, weight: .semibold))
+                    .font(MonitorTheme.font(13, weight: .semibold))
                     .foregroundStyle(
                         selectedFrameioProject != nil ? LiveDesign.text : LiveDesign.muted
                     )
@@ -582,7 +582,7 @@ struct MediaDeliveryPopup: View {
             if let file = files.first, files.count == 1 {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Filename")
-                        .font(LiveType.ui(size: 12, weight: .semibold))
+                        .font(MonitorTheme.font(12, weight: .semibold))
                         .foregroundStyle(LiveDesign.muted)
                     Text(
                         MediaDelivery.filename(
@@ -608,7 +608,7 @@ struct MediaDeliveryPopup: View {
             if configuration.convertLog {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(MediaDeliveryCopy.convertLogDestination)
-                        .font(LiveType.ui(size: 14, weight: .semibold))
+                        .font(MonitorTheme.font(14, weight: .semibold))
                     MonitorSegmentedControl(
                         options: LogColorTransform.allCases,
                         selection: $configuration.logTransform, stacked: true,
@@ -686,7 +686,7 @@ struct MediaDeliveryPopup: View {
                 beginDelivery()
             } label: {
                 Text(actionTitle)
-                    .font(LiveType.ui(size: 15, weight: .semibold))
+                    .font(MonitorTheme.font(15, weight: .semibold))
                     .foregroundStyle(canContinue ? LiveDesign.text : LiveDesign.faint)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)

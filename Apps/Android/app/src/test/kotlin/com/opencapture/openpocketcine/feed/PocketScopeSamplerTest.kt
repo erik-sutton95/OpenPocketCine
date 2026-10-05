@@ -1,5 +1,10 @@
 package com.opencapture.openpocketcine.feed
 
+import com.opencapture.opencine.media.ScopeHistogramDisplay
+import com.opencapture.opencine.media.ScopePoint
+import com.opencapture.opencine.media.ScopeSamples
+import com.opencapture.opencine.media.VectorscopeRaster
+import com.opencapture.opencine.runtime.InspectorPreviewAdmission
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

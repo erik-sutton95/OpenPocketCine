@@ -74,7 +74,7 @@ struct HelpBadge: View {
         .buttonStyle(.monitorTapTarget)
         .popover(isPresented: $showing) {
             Text(text)
-                .font(LiveType.ui(size: 12, weight: .regular))
+                .font(MonitorTheme.font(12, weight: .regular))
                 .foregroundStyle(LiveDesign.text)
                 .padding(12)
                 .frame(width: 248)
@@ -135,9 +135,7 @@ struct SettingsInlineRow<Trailing: View>: View {
         HStack(spacing: 6) {
             Text(title)
                 .font(
-                    LiveType.ui(
-                        size: CGFloat(MonitorSettingsCardMetrics.rowTitlePointSize),
-                        weight: .semibold)
+                    MonitorTheme.font(CGFloat(MonitorSettingsCardMetrics.rowTitlePointSize), weight: .semibold)
                 )
                 .foregroundStyle(LiveDesign.text)
                 .lineLimit(stacked ? 2 : 1)
@@ -344,7 +342,7 @@ struct DisplayToggleItem: View {
         Button(action: action) {
             HStack(spacing: 7) {
                 Text(title)
-                    .font(LiveType.ui(size: 11.5, weight: .semibold, design: .default))
+                    .font(MonitorTheme.font(11.5, weight: .semibold))
                     .foregroundStyle(LiveDesign.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.64)
@@ -557,9 +555,7 @@ struct SettingsRowCard<Content: View>: View {
                 HStack(alignment: .center, spacing: 8) {
                     Text(title)
                         .font(
-                            LiveType.ui(
-                                size: CGFloat(MonitorSettingsCardMetrics.titlePointSize),
-                                weight: .semibold)
+                            MonitorTheme.font(CGFloat(MonitorSettingsCardMetrics.titlePointSize), weight: .semibold)
                         )
                         .foregroundStyle(LiveDesign.text)
                         .fixedSize(horizontal: false, vertical: true)
@@ -652,7 +648,7 @@ struct SettingsDashScale: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             Text(title)
-                .font(LiveType.ui(size: 13, weight: .semibold))
+                .font(MonitorTheme.font(13, weight: .semibold))
                 .foregroundStyle(LiveDesign.text)
             Text(caption)
                 .font(MonitorTheme.font(11.5, weight: .medium)).monospacedDigit()
@@ -706,7 +702,7 @@ struct SettingsDashScale: View {
     private func legend(_ name: String, _ sub: String) -> some View {
         HStack(spacing: 4) {
             Text(name)
-                .font(LiveType.ui(size: 10, weight: .semibold))
+                .font(MonitorTheme.font(10, weight: .semibold))
                 .foregroundStyle(LiveDesign.muted)
             Text(sub)
                 .font(MonitorTheme.font(9, weight: .regular)).monospacedDigit()
@@ -776,7 +772,7 @@ struct SettingsLiveTile: View {
                 .shadow(color: tint.opacity(0.7), radius: 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(isLinked ? "Active Link" : "No Link")
-                    .font(LiveType.ui(size: 12, weight: .semibold))
+                    .font(MonitorTheme.font(12, weight: .semibold))
                     .foregroundStyle(LiveDesign.text)
                     .lineLimit(1)
                     .fixedSize()
@@ -922,16 +918,16 @@ struct AppPanelChrome<Content: View>: View {
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("OPENPOCKETCINE")
-                        .font(LiveType.ui(size: 10, weight: .semibold, design: .rounded))
+                        .font(MonitorTheme.font(10, weight: .semibold))
                         .tracking(1.3)
                         .foregroundStyle(StartupColors.muted)
                     Text(title)
-                        .font(LiveType.ui(size: 17, weight: .bold, design: .rounded))
+                        .font(MonitorTheme.font(17, weight: .bold))
                         .foregroundStyle(StartupColors.ink)
                 }
                 Spacer()
                 Button("Done", action: onClose)
-                    .font(LiveType.ui(size: 16, weight: .semibold, design: .rounded))
+                    .font(MonitorTheme.font(16, weight: .semibold))
                     .foregroundStyle(StartupColors.darkText)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)

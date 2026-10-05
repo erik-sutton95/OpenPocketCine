@@ -21,8 +21,7 @@ struct LiveDispToggle: View {
             VStack(spacing: 3) {
                 Text("DISP")
                     .font(
-                        LiveType.ui(
-                            size: CGFloat(MonitorCapturePopupChrome.dispSize), weight: .bold)
+                        MonitorTheme.font(CGFloat(MonitorCapturePopupChrome.dispSize), weight: .bold)
                     )
                     .tracking(CGFloat(MonitorCapturePopupChrome.dispTracking))
                 HStack(spacing: 3) {

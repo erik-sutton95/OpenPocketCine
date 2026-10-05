@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 
@@ -81,7 +82,7 @@ struct AudioMeterOverlay: View {
     static let pointerSlop: CGFloat = 4
 
     static func allowsHits(locked: Bool, movement: CGRect) -> Bool {
-        !locked && ScopePanelPlacement.isUsable(movement)
+        !locked && MonitorScopePanelPlacement.isUsable(movement)
     }
 
     let levels: AudioMeterLevels
@@ -98,8 +99,8 @@ struct AudioMeterOverlay: View {
 
     var body: some View {
         let options = store.options
-        let movement = ScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
-        let usable = ScopePanelPlacement.isUsable(movement)
+        let movement = MonitorScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
+        let usable = MonitorScopePanelPlacement.isUsable(movement)
         let hittable = Self.allowsHits(locked: interfaceLocked, movement: movement)
         let preferred = AudioAssist.panelSize(orientation: options.orientation)
         let scale = min(
@@ -155,7 +156,7 @@ struct AudioMeterOverlay: View {
                     translation: value.translation, visualCenter: center, currentBounds: bounds,
                     size: size, canvas: bounds, movement: movement,
                     locked: interfaceLocked, sceneActive: scenePhase == .active,
-                    usable: ScopePanelPlacement.isUsable(movement)
+                    usable: MonitorScopePanelPlacement.isUsable(movement)
                 )
             }
             .onEnded { _ in
@@ -163,7 +164,7 @@ struct AudioMeterOverlay: View {
                 guard
                     let center = drag.persistableCenter(
                         locked: interfaceLocked, sceneActive: scenePhase == .active,
-                        usable: ScopePanelPlacement.isUsable(movement), currentBounds: bounds)
+                        usable: MonitorScopePanelPlacement.isUsable(movement), currentBounds: bounds)
                 else { return }
                 store.setCenter(center, in: bounds)
             }

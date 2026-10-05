@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.readPhoneBatteryReadout
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import android.content.Context
 import android.content.Intent

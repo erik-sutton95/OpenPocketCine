@@ -111,7 +111,7 @@ forever. After the initial enable and its one permitted resend, the existing
 16-second picture deadline transfers to negotiated recovery. Pocket 3's legal
 FORMAT workaround retains its separate ownership; this is not a periodic PLI.
 
-State machine: `Sources/OpenPocketViewCore/FeedWatchdog.swift` (tested). Session hook: `CameraSession.applyFeedWatchdog()`.
+State machine: OpenCine `Sources/OpenCineDJI/FeedWatchdog.swift` (tested). Session hook: `CameraSession.applyFeedWatchdog()`.
 
 The [September 20 regression audit](audits/2026-09-20-connection-regressions.md)
 records reproducible source failures and the remaining physical qualification.

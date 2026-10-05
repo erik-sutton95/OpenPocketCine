@@ -28,8 +28,6 @@ struct LUTLibraryWireTests {
             1 1 1
             """
         let utf8 = Array(text.utf8)
-        let record = try #require(LUTLibraryWire.validatedImport(utf8: utf8, fileName: "Look.cube"))
-        #expect(record.hasPrefix("1\u{001F}2\u{001F}"))
         let packed = try #require(LUTLibraryWire.packedImportedLUT(utf8: utf8))
         #expect(packed.count == 2 * 2 * 2 * 4)
         // (r=1,g=0,b=1) → dst (g*n² + b*n + r)*4 = (0 + 2 + 1)*4 = 12

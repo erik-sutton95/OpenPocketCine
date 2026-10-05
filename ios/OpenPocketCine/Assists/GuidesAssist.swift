@@ -23,7 +23,7 @@ enum GuidesAssist {
     @MainActor
     @ViewBuilder
     static func overlay(feed: CGRect, assist: LiveAssistState, fallback: GuideAspect) -> some View {
-        AspectGuideFrameView(
+        MonitorAspectGuideFrames(
             selectedRatios: assist.selectedGuides.isEmpty ? [fallback] : assist.selectedGuides,
             maskEnabled: assist.guideMask,
             feed: feed
@@ -64,6 +64,3 @@ private struct GuidesLongPressMenu: View {
             }, onToggle: { assist.toggleGuide($0) })
     }
 }
-
-/// Native guide rendering and the union mask belong to the common monitor UI.
-typealias AspectGuideFrameView = MonitorAspectGuideFrames

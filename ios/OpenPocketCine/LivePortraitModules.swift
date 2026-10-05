@@ -96,7 +96,7 @@ struct LivePortraitRecOptionsButton: View {
             action()
         } label: {
             Text(title)
-                .font(LiveType.ui(size: 14, weight: .medium))
+                .font(MonitorTheme.font(14, weight: .medium))
                 .foregroundStyle(LiveDesign.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
@@ -121,7 +121,7 @@ struct LivePortraitAspectToggle: View {
                     (aspect == .fill ? OpcIcon.minimize : OpcIcon.maximize)
                         .frame(width: 20, height: 20)
                     Text(aspect == .fill ? "FILL" : "FIT")
-                        .font(LiveType.text(11, weight: .semibold))
+                        .font(MonitorTheme.font(11, weight: .semibold))
                 }
                 .foregroundStyle(LiveDesign.text)
                 .frame(minWidth: 54, minHeight: 50)

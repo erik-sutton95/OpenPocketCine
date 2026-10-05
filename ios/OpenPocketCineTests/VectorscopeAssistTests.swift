@@ -1,3 +1,5 @@
+import MonitorUI
+import OpenCineMedia
 import XCTest
 
 @testable import OpenPocketCine
@@ -82,7 +84,7 @@ final class VectorscopeAssistTests: XCTestCase {
     }
 
     func testTraceZoomExpandsChromaBins() throws {
-        let point = OpenPocketCine.ScopePoint(
+        let point = ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: 160, green: 80, blue: 80, luma: 100)
         let unity = try XCTUnwrap(VectorscopeRaster.pixels(from: [point], gain: 1, intensity: 1))
         let zoomed = try XCTUnwrap(VectorscopeRaster.pixels(from: [point], gain: 2, intensity: 1))
@@ -109,7 +111,7 @@ final class VectorscopeAssistTests: XCTestCase {
         XCTAssertEqual(tint.red, 1, accuracy: 1e-9)
         XCTAssertEqual(tint.green, 1, accuracy: 1e-9)
         XCTAssertEqual(tint.blue, 1, accuracy: 1e-9)
-        let grey = OpenPocketCine.ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 32, green: 32, blue: 32, luma: 32)
+        let grey = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 32, green: 32, blue: 32, luma: 32)
         let pixels = try XCTUnwrap(VectorscopeRaster.pixels(from: [grey], gain: 1, intensity: 1))
         let n = VectorscopeRaster.bins
         var found = false
@@ -130,7 +132,7 @@ final class VectorscopeAssistTests: XCTestCase {
     }
 
     func testBrightnessScalesDensityAlpha() throws {
-        let red = OpenPocketCine.ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 191, green: 0, blue: 0, luma: 40)
+        let red = ScopePoint(xRatio: 0.5, yRatio: 0.5, red: 191, green: 0, blue: 0, luma: 40)
         let full = try XCTUnwrap(VectorscopeRaster.pixels(from: [red], gain: 1, intensity: 1))
         let half = try XCTUnwrap(VectorscopeRaster.pixels(from: [red], gain: 1, intensity: 0.5))
         func peakAlpha(_ pixels: [UInt8]) -> UInt8 {
@@ -145,10 +147,10 @@ final class VectorscopeAssistTests: XCTestCase {
     }
 
     func testSkinLineIsIPhaseAt123Degrees() {
-        XCTAssertEqual(VectorscopeGraticule.skinAngleDegrees, 123, accuracy: 0.001)
-        XCTAssertEqual(VectorscopeGraticule.skinLength, 0.92, accuracy: 0.001)
+        XCTAssertEqual(MonitorVectorscopeGraticule.skinAngleDegrees, 123, accuracy: 0.001)
+        XCTAssertEqual(MonitorVectorscopeGraticule.skinLength, 0.92, accuracy: 0.001)
         let rect = CGRect(x: 0, y: 0, width: 200, height: 200)
-        let end = VectorscopeGraticule.skinEnd(in: rect)
+        let end = MonitorVectorscopeGraticule.skinEnd(in: rect)
         let angle = 123.0 * Double.pi / 180
         XCTAssertEqual(end.x, 100 + CGFloat(cos(angle)) * 100 * 0.92, accuracy: 0.01)
         XCTAssertEqual(end.y, 100 - CGFloat(sin(angle)) * 100 * 0.92, accuracy: 0.01)
@@ -156,10 +158,10 @@ final class VectorscopeAssistTests: XCTestCase {
 
     func testGraticuleTargetsUse75PercentBoxes() {
         XCTAssertEqual(
-            VectorscopeGraticule.targets.map(\.label), ["R", "Mg", "B", "Cy", "G", "Yl"])
-        XCTAssertEqual(VectorscopeGraticule.boxSide, 7)
+            MonitorVectorscopeGraticule.targets.map(\.label), ["R", "Mg", "B", "Cy", "G", "Yl"])
+        XCTAssertEqual(MonitorVectorscopeGraticule.boxSide, 7)
         let rect = CGRect(x: 0, y: 0, width: 200, height: 200)
-        let red = VectorscopeGraticule.targetCenter(red: 191, green: 0, blue: 0, in: rect)
+        let red = MonitorVectorscopeGraticule.targetCenter(red: 191, green: 0, blue: 0, in: rect)
         let chroma = ScopeChroma.rec709(red: UInt8(191), green: 0, blue: 0)
         XCTAssertEqual(red.x, 100 + CGFloat(chroma.cb) * 200, accuracy: 0.01)
         XCTAssertEqual(red.y, 100 - CGFloat(chroma.cr) * 200, accuracy: 0.01)

@@ -138,9 +138,9 @@ zero remains known silence. Player disposal closes the audio and feed owners.
 Portable conform policy is the shared `MonitorConformPreview`, using the existing
 constructor and source names through an app type alias.
 
-The adjacent `PlaybackFrameTap` and `PlaybackVideoLayout` public helpers retain
-their original code bodies until whole-player/layout adoption. They are temporary
-app compatibility policy, separate from the shared conform algorithm.
+The adjacent `PlaybackVideoLayout` public helper retains its original code body
+until whole-player/layout adoption. It is temporary app compatibility policy,
+separate from the shared conform algorithm.
 
 The gallery/DUML adapter, per-clip preparation and player workflow, assists UI and
 delivery remain app-owned migration work; AVAudioSession policy stays with the app.
@@ -433,7 +433,7 @@ SDK). Both apps must call the same state machines:
 | Link score → 0–4 bars | `CameraLinkHealth` + `LinkSignalBars` | top-bar FPS chip (delivery health, not RSSI) |
 | Camera SET mailbox, retransmit, settle | `CameraSetMailbox` | iOS `fireCamera`. Android still uses local `inflight` / `inflightPending`, `fireKind` and `finishInflight`; migration to the shared mailbox remains pending. See [stress/refactor follow-up](connection-stress-testing.md#turn-failures-into-refactors). |
 | Diagnostics redaction and report shape | `PrivacyRedactor`, `DiagnosticReport` | iOS `DiagnosticCenter` (os.Logger, MetricKit, screenshot paste); Android `diagnostics/DiagnosticCenter` (logcat + share) |
-| Live-picture ND meter (stops / ND32 / ND 0.3 to balance the frame) | `NDFilterRecommendation` | iOS/Android **ND** HUD chip (Kotlin lockstep). Starts centered until placed; directly draggable within the fixed-control boundaries. Long-press switches notation. Suggestion only — not a SET. Shares the LIGHTS/HISTO scope tap when the chip is on. |
+| Live-picture ND meter (stops / ND32 / ND 0.3 to balance the frame) | `MonitorNDFilterRecommendation` | iOS/Android **ND** HUD chip (Kotlin lockstep). Starts centered until placed; directly draggable within the fixed-control boundaries. Long-press switches notation. Suggestion only, not a SET. Shares the LIGHTS/HISTO scope tap when the chip is on. |
 | Watcher relay (Bonjour second-screen) | `WatcherRelayProtocol`, framing, join, bitrate ladder, `WatcherRelayEncodePolicy` admission/keyframe cooldown, `WatcherRelayRecovery` deadlines/backoff, frame freshness, fitted `WatcherFocusPoint`, control lease | iOS `WatcherRelayHost` (observable state), `WatcherRelayTransport` (socket queue), `WatcherRelayEncoder`, `WatcherRelayBrowser` / `WatcherRelayClient` (shared camera Wi-Fi only; `WatcherRelayNetwork` disables peer-to-peer everywhere). Android: PARITY exception — Sharing stays Coming soon. |
 
 Platform shells own sockets, BLE, SoftAP join, permissions, lifecycle, rendering,

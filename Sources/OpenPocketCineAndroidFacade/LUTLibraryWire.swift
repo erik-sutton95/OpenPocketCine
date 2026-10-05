@@ -5,17 +5,6 @@ import OpenPocketViewCore
 /// Kotlin never parses `.cube` text; the shared `CubeLUT` parser is the only path.
 public enum LUTLibraryWire {
     public static let maximumSourceBytes = 16 * 1024 * 1024
-    public static let validationRecordVersion = "1"
-    public static let fieldSeparator = "\u{001F}"
-
-    public static func validatedImport(utf8: [UInt8], fileName: String) -> String? {
-        guard utf8.count <= maximumSourceBytes, isSafeStoredFileName(fileName),
-            let cube = cube(from: utf8)
-        else { return nil }
-        let gpu = cube.colorCube
-        return [validationRecordVersion, String(gpu.size), "custom:" + fileName]
-            .joined(separator: fieldSeparator)
-    }
 
     public static func packedImportedLUT(
         utf8: [UInt8],

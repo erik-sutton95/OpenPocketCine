@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.monitorui.MonitorPlaybackChromeSwipe
+import com.opencapture.monitorui.MonitorPlaybackFrameScrub
+import com.opencapture.opencine.media.MonitorAudioMeterBallistics
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -98,18 +101,18 @@ class PlaybackChromeTest {
 
     @Test
     fun chromeSwipeHidesOnDownAndShowsOnUp() {
-        assertEquals(PlaybackChromeSwipe.HIDE, PlaybackChromeSwipe.classify(0f, 50f))
-        assertEquals(PlaybackChromeSwipe.SHOW, PlaybackChromeSwipe.classify(0f, -50f))
-        assertEquals(PlaybackChromeSwipe.NONE, PlaybackChromeSwipe.classify(0f, 30f))
-        assertEquals(PlaybackChromeSwipe.NONE, PlaybackChromeSwipe.classify(80f, 50f))
-        assertEquals(PlaybackChromeSwipe.NONE, PlaybackChromeSwipe.classify(4f, 10f))
+        assertEquals(MonitorPlaybackChromeSwipe.HIDE, MonitorPlaybackChromeSwipe.classify(0f, 50f))
+        assertEquals(MonitorPlaybackChromeSwipe.SHOW, MonitorPlaybackChromeSwipe.classify(0f, -50f))
+        assertEquals(MonitorPlaybackChromeSwipe.NONE, MonitorPlaybackChromeSwipe.classify(0f, 30f))
+        assertEquals(MonitorPlaybackChromeSwipe.NONE, MonitorPlaybackChromeSwipe.classify(80f, 50f))
+        assertEquals(MonitorPlaybackChromeSwipe.NONE, MonitorPlaybackChromeSwipe.classify(4f, 10f))
     }
 
     @Test
     fun frameScrubMapsHorizontalDeltaOntoDuration() {
         assertEquals(
             5f,
-            PlaybackFrameScrub.timeAfterDelta(
+            MonitorPlaybackFrameScrub.timeAfterDelta(
                 originSeconds = 0f,
                 deltaPx = 50f,
                 videoWidthPx = 100f,
@@ -119,39 +122,39 @@ class PlaybackChromeTest {
         )
         assertEquals(
             0f,
-            PlaybackFrameScrub.timeAfterDelta(-5f, -100f, 100f, 10f),
+            MonitorPlaybackFrameScrub.timeAfterDelta(-5f, -100f, 100f, 10f),
             0.001f,
         )
         assertEquals(
             10f,
-            PlaybackFrameScrub.timeAfterDelta(8f, 100f, 100f, 10f),
+            MonitorPlaybackFrameScrub.timeAfterDelta(8f, 100f, 100f, 10f),
             0.001f,
         )
-        assertEquals(350L, PlaybackFrameScrub.LONG_PRESS_MS)
+        assertEquals(350L, MonitorPlaybackFrameScrub.LONG_PRESS_MS)
     }
 
     @Test
     fun ballisticsAttackInstantlyAndDecayAtTwentySixDbPerSecond() {
-        val loud = AudioMeterBallistics.step(AudioMeterChannel.Silent, peakLinear = 1.0, dt = 0.04)
+        val loud = MonitorAudioMeterBallistics.step(AudioMeterChannel.Silent, peakLinear = 1.0, dt = 0.04)
         assertEquals(0.0, loud.levelDB, 1e-9)
         assertEquals(0.0, loud.peakDB, 1e-9)
-        val next = AudioMeterBallistics.step(loud, peakLinear = 0.0, dt = 0.5)
-        assertEquals(-AudioMeterBallistics.LEVEL_DECAY_PER_SECOND * 0.5, next.levelDB, 1e-9)
+        val next = MonitorAudioMeterBallistics.step(loud, peakLinear = 0.0, dt = 0.5)
+        assertEquals(-MonitorAudioMeterBallistics.LEVEL_DECAY_PER_SECOND * 0.5, next.levelDB, 1e-9)
         assertEquals(0.0, next.peakDB, 1e-9)
         assertEquals(0.5, next.peakAge, 1e-9)
     }
 
     @Test
     fun peakHoldThenFalls() {
-        var channel = AudioMeterBallistics.step(AudioMeterChannel.Silent, peakLinear = 1.0, dt = 0.04)
-        channel = AudioMeterBallistics.step(channel, peakLinear = 0.0, dt = 1.0)
+        var channel = MonitorAudioMeterBallistics.step(AudioMeterChannel.Silent, peakLinear = 1.0, dt = 0.04)
+        channel = MonitorAudioMeterBallistics.step(channel, peakLinear = 0.0, dt = 1.0)
         assertEquals(0.0, channel.peakDB, 1e-9)
-        channel = AudioMeterBallistics.step(channel, peakLinear = 0.0, dt = 1.0)
-        assertTrue(channel.peakAge > AudioMeterBallistics.PEAK_HOLD_SECONDS)
+        channel = MonitorAudioMeterBallistics.step(channel, peakLinear = 0.0, dt = 1.0)
+        assertTrue(channel.peakAge > MonitorAudioMeterBallistics.PEAK_HOLD_SECONDS)
         assertTrue(channel.peakDB < 0.0)
-        assertEquals(AudioMeterBallistics.FLOOR_DB, AudioMeterBallistics.decibels(fromLinear = 0.0), 1e-9)
-        assertEquals(0.0, AudioMeterBallistics.decibels(fromLinear = 1.0), 1e-9)
-        assertTrue(abs(AudioMeterBallistics.decibels(fromLinear = 0.5) - (-6.0206)) < 0.01)
+        assertEquals(MonitorAudioMeterBallistics.FLOOR_DB, MonitorAudioMeterBallistics.decibels(fromLinear = 0.0), 1e-9)
+        assertEquals(0.0, MonitorAudioMeterBallistics.decibels(fromLinear = 1.0), 1e-9)
+        assertTrue(abs(MonitorAudioMeterBallistics.decibels(fromLinear = 0.5) - (-6.0206)) < 0.01)
     }
 
     @Test

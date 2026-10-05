@@ -25,12 +25,10 @@ enum CrosshairAssist {
         CrosshairLongPressMenu(compact: compact)
     }
 
-    static func overlay(feed: CGRect) -> Overlay {
-        Overlay(feed: feed)
-    }
-
     /// OpenZCine `FeedCrosshairView` - two 40×1.4 rectangles, white 65%, feed centre.
-    typealias Overlay = MonitorFeedCrosshair
+    static func overlay(feed: CGRect) -> MonitorFeedCrosshair {
+        MonitorFeedCrosshair(feed: feed)
+    }
 }
 
 /// OpenZCine `AssistPanel` CROSS copy: 13pt muted. Android `OptionCopy` is 11pt in the

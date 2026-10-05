@@ -98,7 +98,7 @@ domain/code, bounded pairing-retry count and AP-set acknowledgement. Camera
 identifiers, PINs and network names are omitted. These are transition events,
 not a polling stream.
 
-Portable types: `Sources/OpenPocketViewCore/Diagnostics.swift`. iOS
+Portable types: OpenCine `Sources/OpenCineMedia/Diagnostics.swift`. iOS
 `DiagnosticCenter` (MetricKit, uncaught `NSException`, screenshot paste).
 Android `diagnostics/DiagnosticCenter` (uncaught handler, share sheet).
 Android has no TestFlight screenshot hook — PARITY exception.

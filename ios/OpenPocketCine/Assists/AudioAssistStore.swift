@@ -10,8 +10,6 @@ extension AudioAssist {
 
     typealias StoredCenter = MonitorAudioStoredCenter
 
-    typealias Options = MonitorAudioOptions
-
     static func panelSize(orientation: Orientation) -> CGSize {
         MonitorAudioMetrics.panelSize(orientation: orientation)
     }

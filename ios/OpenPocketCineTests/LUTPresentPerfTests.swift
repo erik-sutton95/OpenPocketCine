@@ -1,6 +1,7 @@
 import CoreImage
 import CoreVideo
 import Metal
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
@@ -28,7 +29,7 @@ final class LUTPresentPerfTests: XCTestCase {
         fx.lutDimension = cube.size
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
 
-        let baker = FeedFrameBaker(device: device)
+        let baker = MonitorFrameBaker(device: device)
         let drawable = CGSize(width: 1920, height: 1080)
         // First GPU compiles the cube pipeline — discard that hitch.
         _ = measureBake(
@@ -64,7 +65,7 @@ final class LUTPresentPerfTests: XCTestCase {
     }
 
     private func measureBake(
-        baker: FeedFrameBaker, drawable: CGSize, width: Int, height: Int,
+        baker: MonitorFrameBaker, drawable: CGSize, width: Int, height: Int,
         effects: LiveImageEffects, frames: Int, skip: Int
     ) -> Double {
         let buffer = ScopeTestBuffers.makeFlatBuffer(code: 78, width: width, height: height)

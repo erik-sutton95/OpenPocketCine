@@ -1,3 +1,4 @@
+import OpenCineApple
 import XCTest
 
 @testable import OpenPocketCine
@@ -53,14 +54,14 @@ final class FeedUpscaleTests: XCTestCase {
     }
 
     func testMpsFitTransformMatchesOpenZCinePositiveScale() {
-        let fill = FeedPresentScaler.mpsFitTransform(
+        let fill = MonitorPresentScaler.mpsFitTransform(
             sourceWidth: 1280, sourceHeight: 720, targetWidth: 2560, targetHeight: 1440)
         XCTAssertEqual(fill.scaleX, 2, accuracy: 0.0001)
         XCTAssertEqual(fill.scaleY, 2, accuracy: 0.0001)
         XCTAssertEqual(fill.translateX, 0, accuracy: 0.0001)
         XCTAssertEqual(fill.translateY, 0, accuracy: 0.0001)
 
-        let letterbox = FeedPresentScaler.mpsFitTransform(
+        let letterbox = MonitorPresentScaler.mpsFitTransform(
             sourceWidth: 1280, sourceHeight: 720, targetWidth: 2560, targetHeight: 1600)
         XCTAssertEqual(letterbox.scaleX, 2, accuracy: 0.0001)
         XCTAssertGreaterThan(letterbox.scaleY, 0)
@@ -71,7 +72,8 @@ final class FeedUpscaleTests: XCTestCase {
 
     func testMetalBakeFlipPutsCITopOnMetalRowZero() {
         let extent = CGRect(x: 0, y: 0, width: 100, height: 80)
-        let t = FeedFrameBaker.metalOriginTransform(extent: extent, bakeWidth: 100, bakeHeight: 80)
+        let t = MonitorFrameBaker.metalOriginTransform(
+            extent: extent, bakeWidth: 100, bakeHeight: 80)
         // CI top-center (y = height) lands at Metal y = 0.
         let top = CGPoint(x: 50, y: 80).applying(t)
         XCTAssertEqual(top.x, 50, accuracy: 0.001)

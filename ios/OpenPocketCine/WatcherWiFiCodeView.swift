@@ -14,9 +14,9 @@ struct WatcherWiFiCodeView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     Text("Join camera Wi-Fi")
-                        .font(LiveType.ui(size: 22, weight: .bold))
+                        .font(MonitorTheme.font(22, weight: .bold))
                     Text(model.session.joinedSSID ?? "Camera Wi-Fi")
-                        .font(LiveType.ui(size: 16, weight: .medium))
+                        .font(MonitorTheme.font(16, weight: .medium))
                     if scenePhase == .active, model.isLive, let code {
                         Image(decorative: code, scale: 1)
                             .resizable()

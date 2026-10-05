@@ -1,5 +1,6 @@
 import CoreImage
 import Metal
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
@@ -456,7 +457,7 @@ final class LUTAssistTests: XCTestCase {
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         let graded = LiveMonitorCompositor.apply(to: source, effects: fx)
 
-        let baker = FeedFrameBaker(device: device)
+        let baker = MonitorFrameBaker(device: device)
         let drawable = CGSize(width: 32, height: 32)
         let done = expectation(description: "bake")
         baker.scheduleBake(

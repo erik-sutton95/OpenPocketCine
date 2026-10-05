@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.monitorui.MonitorConfirmPopup
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip
@@ -219,11 +220,11 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val portrait = maxHeight > maxWidth
-            com.opencapture.openpocketcine.monitor.MonitorPageScaffold(
+            com.opencapture.monitorui.MonitorPageScaffold(
                 modifier = Modifier.statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp),
                 navigationWidth = 206f,
                 heading = {
-                    com.opencapture.openpocketcine.monitor.MonitorPageHeading(
+                    com.opencapture.monitorui.MonitorPageHeading(
                         "Media", model.session.connectedCamera?.name ?: "OpenPocketCine")
                 },
                 navigation = { compact ->
@@ -364,9 +365,10 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         )
 
         if (confirmBatchDelete) {
-            MediaConfirmPopup(
+            MonitorConfirmPopup(
                 title = "Delete ${selectedIDs.size} item${if (selectedIDs.size == 1) "" else "s"} from the camera?",
                 confirmTitle = "Delete",
+                onClickFeedback = LocalOperatorHaptics.current::selection,
                 onDismiss = { confirmBatchDelete = false },
                 onConfirm = {
                     confirmBatchDelete = false

@@ -4,8 +4,6 @@ import OpenPocketViewCore
 
 /// Output storage and source-curve policy for the shared native exporter.
 enum MediaLUT {
-    typealias ExportResult = MonitorMediaExporter.ExportResult
-
     enum ExportError: LocalizedError {
         case sessionSetupFailed
         case failed(String)
@@ -28,7 +26,7 @@ enum MediaLUT {
         logTransform: LogColorTransform? = nil,
         metadata: MediaClipDeliveryMetadata?,
         progress: @escaping @Sendable (Double) -> Void
-    ) async throws -> ExportResult {
+    ) async throws -> MonitorMediaExporter.ExportResult {
         let outputURL = try makeExportURL(filename: outputFilename, format: format)
         progress(0.02)
         let look: MonitorMediaExporter.Look?

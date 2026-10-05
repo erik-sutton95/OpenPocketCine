@@ -2,6 +2,7 @@
 
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.monitorui.MonitorConfirmPopup
 import com.opencapture.openpocketcine.feed.colorMode
 import com.opencapture.monitorui.detectMonitorPlaybackVideoGestures as detectPlaybackVideoGestures
 import com.opencapture.monitorui.monitorPlaybackUnitPoint as unitPoint
@@ -90,6 +91,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import com.opencapture.opencine.appkit.*
 import com.opencapture.opencine.media.MonitorPlaybackLookTiming
+import com.opencapture.opencine.media.MonitorConformPreview
 import com.opencapture.monitorui.MonitorPlaybackPresentation
 import com.opencapture.monitorui.MonitorPlaybackActions
 import com.opencapture.monitorui.MonitorPlaybackScreen
@@ -314,9 +316,10 @@ fun MediaPhotoViewer(
         }
 
         if (confirmDelete) {
-            MediaConfirmPopup(
+            MonitorConfirmPopup(
                 title = "Delete this photo from the camera?",
                 confirmTitle = "Delete",
+                onClickFeedback = LocalOperatorHaptics.current::selection,
                 onDismiss = { confirmDelete = false },
                 onConfirm = {
                     confirmDelete = false
@@ -403,7 +406,7 @@ fun MediaPlayerScreen(
         )
 
     fun conformedLabel(seconds: Float): String =
-        MediaClipFormatting.durationLabel(ConformPreview.conformedDuration(seconds.toDouble(), conformSpeed))
+        MediaClipFormatting.durationLabel(MonitorConformPreview.conformedDuration(seconds.toDouble(), conformSpeed))
 
     DisposableEffect(capturedComposition) {
         onDispose {

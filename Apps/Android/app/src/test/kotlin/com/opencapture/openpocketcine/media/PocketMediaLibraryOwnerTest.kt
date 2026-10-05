@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine.media
 
 import com.opencapture.opencine.appkit.*
 import com.opencapture.opencine.dji.DjiAndroidMediaAssets
+import com.opencapture.opencine.dji.MediaManifest
 import com.opencapture.opencine.media.*
 import com.opencapture.openpocketcine.OperatorMediaCache
 import java.nio.file.Files

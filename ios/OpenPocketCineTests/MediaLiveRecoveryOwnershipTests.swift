@@ -9,7 +9,7 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
     func testProductionMediaLoopSendsOneEnableThenExhaustsItsPictureDeadline() async {
         var exits = 0
         var enables = 0
-        let result = await MediaLiveResumeRunner.run(
+        let result = await DjiAppleMediaLiveReturn.run(
             timeout: .milliseconds(450),
             isCurrent: { true }, inPlayback: { false }, pictureFresh: { false },
             exitPlayback: {
@@ -28,7 +28,7 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
     func testProductionMediaLoopWaitsForAcceptedEnableAndFreshPicture() async {
         var attempts = 0
         var accepted = 0
-        let result = await MediaLiveResumeRunner.run(
+        let result = await DjiAppleMediaLiveReturn.run(
             timeout: .seconds(2),
             isCurrent: { true }, inPlayback: { false }, pictureFresh: { accepted == 1 },
             exitPlayback: { true },
@@ -48,7 +48,7 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
         var exit: CheckedContinuation<Bool, Never>?
         var enables = 0
         let task = Task {
-            await MediaLiveResumeRunner.run(
+            await DjiAppleMediaLiveReturn.run(
                 isCurrent: { current }, inPlayback: { false }, pictureFresh: { false },
                 exitPlayback: { await withCheckedContinuation { exit = $0 } },
                 enableLiveView: {

@@ -21,12 +21,6 @@ typealias StoredCenter = com.opencapture.monitorui.MonitorScopeStoredCenter
 typealias ScopeGuides = com.opencapture.monitorui.MonitorScopeGuides
 typealias ScopePanelSize = com.opencapture.monitorui.MonitorScopePanelSize
 
-typealias GridSegment = com.opencapture.monitorui.MonitorGridSegment
-
-typealias GridAssist = com.opencapture.monitorui.MonitorGridGeometry
-
-typealias GuidesAssist = com.opencapture.monitorui.MonitorGuideGeometry
-
 typealias CrosshairAssist = com.opencapture.monitorui.MonitorCrosshairGeometry
 
 object MirrorAssist {

@@ -15,7 +15,7 @@ import com.opencapture.monitorui.MonitorVectorscopeScopePlot
 import com.opencapture.monitorui.MonitorScopeGuides
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.NDFilterRecommendation
+import com.opencapture.opencine.media.MonitorNDFilterRecommendation
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.feed.ScopeAssistBundle
@@ -98,9 +98,9 @@ object NDAssist {
 internal fun NDMeterPanel(state: LiveAssistState, modifier: Modifier = Modifier) {
     val transfer = state.scopeBundle.transfer
     val reading =
-        NDFilterRecommendation.reading(state.scopeBundle.samples.histogramLuma, transfer)
+        MonitorNDFilterRecommendation.reading(state.scopeBundle.samples.histogramLuma, transfer, "\u2014")
     com.opencapture.monitorui.MonitorNDFilterChip(reading, state.ndNotation, modifier,
-        emptyLabel = NDFilterRecommendation.NONE_LABEL)
+        emptyLabel = "\u2014")
 }
 
 private fun ScopeAssistBundle.resolvedTransfer(colorMode: Int): MonitorTransfer =

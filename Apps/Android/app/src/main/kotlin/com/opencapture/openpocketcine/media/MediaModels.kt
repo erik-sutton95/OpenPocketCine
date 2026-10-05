@@ -7,9 +7,6 @@ import java.util.Locale
 typealias MediaFile = com.opencapture.opencine.dji.MediaFile
 typealias MediaKind = com.opencapture.opencine.dji.MediaKind
 typealias MediaHTTP = com.opencapture.opencine.dji.MediaHTTP
-typealias MediaPageSliceInfo = com.opencapture.opencine.dji.MediaPageSliceInfo
-typealias MediaPageStep = com.opencapture.opencine.dji.MediaPageStep
-typealias MediaListCommand = com.opencapture.opencine.dji.MediaListCommand
 typealias MediaCommands = com.opencapture.opencine.dji.MediaCommands
 
 fun MediaHTTP.pathUrl(storage: Int, path: String): HttpUrl = pathUrlString(storage, path).toHttpUrl()

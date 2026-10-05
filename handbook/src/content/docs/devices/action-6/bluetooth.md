@@ -243,8 +243,8 @@ The highest-value remaining captures are:
 
 Reference comparisons use the repository's [BLE pairing](../../../protocol/ble/),
 [Pocket 3 observations](../../pocket-3/),
-`Sources/OpenPocketViewCore/Commands.swift`, `Sources/OpenPocketViewCore/BleAdvert.swift`
-and `ios/OpenPocketCine/BleLink.swift`. They are comparisons, not physical tests
+OpenCine `Sources/OpenCineDJI/Commands.swift`, `Sources/OpenCineDJI/BleAdvert.swift`
+and `Sources/OpenCineDJIApple/DjiAppleBluetoothLink.swift`. They are comparisons, not physical tests
 of OpenPocketCine with this loaner.
 
 ## Independent advertising capture after disconnect

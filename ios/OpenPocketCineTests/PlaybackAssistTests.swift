@@ -2,6 +2,7 @@ import AVFoundation
 import CoreImage
 import CoreVideo
 import Metal
+import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
@@ -259,7 +260,7 @@ final class PlaybackAssistTests: XCTestCase {
                 showPlayer: true, showFeed: false),
         ]
         for c in cases {
-            let plan = PlaybackFeedHandoff.plan(
+            let plan = MonitorPlaybackFeedHandoff.plan(
                 effects: c.effects.playbackFrameEffects, overlayOnly: c.overlayOnly, unmanagedBake: c.unmanagedBake,
                 metalHasPresented: c.metalHasPresented, hdrDisplay: c.hdrDisplay)
             XCTAssertEqual(plan.showPlayer, c.showPlayer, "\(c.name): showPlayer")
@@ -274,57 +275,61 @@ final class PlaybackAssistTests: XCTestCase {
     }
 
     func testPausedLinkParksOnlyAfterAPausedSeekCanLand() {
-        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: nil, now: 10))
-        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.1))
-        XCTAssertFalse(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.5))
-        XCTAssertTrue(PlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.61))
+        XCTAssertFalse(MonitorPlaybackDisplayLink.parkIsDue(idleSince: nil, now: 10))
+        XCTAssertFalse(MonitorPlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.1))
+        XCTAssertFalse(MonitorPlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.5))
+        XCTAssertTrue(MonitorPlaybackDisplayLink.parkIsDue(idleSince: 10, now: 10.61))
     }
 
     func testPlaybackDisplayLinkDoesNotCapTheCubeAtTwentyFour() {
         XCTAssertGreaterThanOrEqual(
-            PlaybackDisplayLink.pollRange.maximum, 60,
+            MonitorPlaybackDisplayLink.pollRange.maximum, 60,
             "max 30 preferred 24 is the 22–23 fps LUT hitch; LUT-off is AVPlayerLayer at clip rate")
-        XCTAssertNotEqual(PlaybackDisplayLink.pollRange.preferred, 24)
-        XCTAssertGreaterThan(PlaybackDisplayLink.pollRange.minimum, 15)
+        XCTAssertNotEqual(MonitorPlaybackDisplayLink.pollRange.preferred, 24)
+        XCTAssertGreaterThan(MonitorPlaybackDisplayLink.pollRange.minimum, 15)
         XCTAssertTrue(
-            PlaybackDisplayLink.shouldPull(itemHasPresented: false, hasNewPixelBuffer: false),
+            MonitorPlaybackDisplayLink.shouldPull(
+                itemHasPresented: false, hasNewPixelBuffer: false),
             "until the first cube lands, keep pulling even without a new buffer")
         XCTAssertFalse(
-            PlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: false),
+            MonitorPlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: false),
             "after present, the cube only bakes a new player frame")
         XCTAssertTrue(
-            PlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: true))
+            MonitorPlaybackDisplayLink.shouldPull(itemHasPresented: true, hasNewPixelBuffer: true))
     }
 
     func testPausedPlaybackParksTheDisplayLinkOnceTheSourceIsReady() {
-        XCTAssertTrue(PlaybackDisplayLink.shouldPark(itemHasPresented: true, playerRate: 0))
+        XCTAssertTrue(MonitorPlaybackDisplayLink.shouldPark(itemHasPresented: true, playerRate: 0))
         XCTAssertFalse(
-            PlaybackDisplayLink.shouldPark(itemHasPresented: true, playerRate: 1),
+            MonitorPlaybackDisplayLink.shouldPark(itemHasPresented: true, playerRate: 1),
             "playing keeps display-rate polling")
         XCTAssertFalse(
-            PlaybackDisplayLink.shouldPark(itemHasPresented: false, playerRate: 0),
+            MonitorPlaybackDisplayLink.shouldPark(itemHasPresented: false, playerRate: 0),
             "a new item keeps force-pulling until it presents")
     }
 
     func testScopesOnlyPlaybackIsReadyWithoutAMetalCompletion() {
         XCTAssertTrue(
-            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: false, hdrDisplay: false),
+            MonitorPlaybackFeedHandoff.sourceReadyWithoutMetal(
+                needsGPUFeed: false, hdrDisplay: false),
             "scopes-only never reaches a Metal completion")
         XCTAssertFalse(
-            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: true, hdrDisplay: false))
+            MonitorPlaybackFeedHandoff.sourceReadyWithoutMetal(
+                needsGPUFeed: true, hdrDisplay: false))
         XCTAssertFalse(
-            PlaybackFeedHandoff.sourceReadyWithoutMetal(needsGPUFeed: false, hdrDisplay: true))
+            MonitorPlaybackFeedHandoff.sourceReadyWithoutMetal(
+                needsGPUFeed: false, hdrDisplay: true))
     }
 
     func testPlaybackVideoOutputGradesNativeYUVNotBGRA() {
         XCTAssertFalse(
-            PlaybackVideoOutput.forcesRGBConversion,
+            MonitorPlaybackVideoOutput.forcesRGBConversion,
             "32BGRA from AVPlayerItemVideoOutput converts every HEVC frame; live grades 420")
         XCTAssertEqual(
-            PlaybackVideoOutput.pixelFormat,
+            MonitorPlaybackVideoOutput.pixelFormat,
             kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
         XCTAssertEqual(
-            PlaybackVideoOutput.pixelBufferAttributes[
+            MonitorPlaybackVideoOutput.pixelBufferAttributes[
                 kCVPixelBufferMetalCompatibilityKey as String] as? Bool,
             true)
     }
@@ -343,47 +348,47 @@ final class PlaybackAssistTests: XCTestCase {
 
     func testNextClipForcesAPullUntilTheHostPresents() {
         XCTAssertTrue(
-            PlaybackFeedHandoff.shouldForcePull(
+            MonitorPlaybackFeedHandoff.shouldForcePull(
                 effectsChanged: false, hasLastBuffer: true, metalHasPresented: true,
                 itemHasPresented: false),
             "stale lastBuffer + metal from the previous clip must not skip the new item")
         XCTAssertTrue(
-            PlaybackFeedHandoff.shouldForcePull(
+            MonitorPlaybackFeedHandoff.shouldForcePull(
                 effectsChanged: false, hasLastBuffer: true, metalHasPresented: false,
                 itemHasPresented: false),
             "prepare drops metal ownership — LUT must bake the new item without toggling the chip")
         XCTAssertFalse(
-            PlaybackFeedHandoff.shouldForcePull(
+            MonitorPlaybackFeedHandoff.shouldForcePull(
                 effectsChanged: false, hasLastBuffer: true, metalHasPresented: true,
                 itemHasPresented: true))
         XCTAssertTrue(
-            PlaybackFeedHandoff.shouldForcePull(
+            MonitorPlaybackFeedHandoff.shouldForcePull(
                 effectsChanged: false, hasLastBuffer: false, metalHasPresented: true,
                 itemHasPresented: true))
         XCTAssertTrue(
-            PlaybackFeedHandoff.shouldForcePull(
+            MonitorPlaybackFeedHandoff.shouldForcePull(
                 effectsChanged: true, hasLastBuffer: true, metalHasPresented: true,
                 itemHasPresented: true))
     }
 
     func testShouldAdoptHostPrefersTheNewerRepresentable() {
         XCTAssertTrue(
-            PlaybackFeedHandoff.shouldAdoptHost(
+            MonitorPlaybackFeedHandoff.shouldAdoptHost(
                 incomingGeneration: 1, currentGeneration: nil, isSameHost: false),
             "first host always binds")
         XCTAssertTrue(
-            PlaybackFeedHandoff.shouldAdoptHost(
+            MonitorPlaybackFeedHandoff.shouldAdoptHost(
                 incomingGeneration: 1, currentGeneration: 1, isSameHost: true),
             "SwiftUI updateUIView on the bound host must keep it")
         XCTAssertTrue(
-            PlaybackFeedHandoff.shouldAdoptHost(
+            MonitorPlaybackFeedHandoff.shouldAdoptHost(
                 incomingGeneration: 2, currentGeneration: 1, isSameHost: false))
         XCTAssertFalse(
-            PlaybackFeedHandoff.shouldAdoptHost(
+            MonitorPlaybackFeedHandoff.shouldAdoptHost(
                 incomingGeneration: 1, currentGeneration: 2, isSameHost: false),
             "the departing next-clip identity must not steal LUT present")
         XCTAssertFalse(
-            PlaybackFeedHandoff.shouldAdoptHost(
+            MonitorPlaybackFeedHandoff.shouldAdoptHost(
                 incomingGeneration: 2, currentGeneration: 2, isSameHost: false),
             "equal generation on a different view is the outgoing slide twin")
     }
@@ -402,7 +407,7 @@ final class PlaybackAssistTests: XCTestCase {
         var fx = LiveImageEffects()
         fx.lutDimension = cube.size
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        let waiting = PlaybackFeedHandoff.plan(
+        let waiting = MonitorPlaybackFeedHandoff.plan(
             effects: fx.playbackFrameEffects, overlayOnly: false, unmanagedBake: false, metalHasPresented: false)
         XCTAssertTrue(waiting.showPlayer)
         XCTAssertFalse(waiting.showFeed)
@@ -514,13 +519,13 @@ final class PlaybackAssistTests: XCTestCase {
 
     func testLUTReplacePresentsUnmanagedLikeLive() {
         XCTAssertTrue(
-            PlaybackFeedHandoff.presentUnmanaged(overlay: false, unmanagedBake: true),
+            MonitorPlaybackFeedHandoff.presentUnmanaged(overlay: false, unmanagedBake: true),
             "LUT cube product is NSNull, same as live HevcDecoder")
         XCTAssertFalse(
-            PlaybackFeedHandoff.presentUnmanaged(overlay: false, unmanagedBake: false),
+            MonitorPlaybackFeedHandoff.presentUnmanaged(overlay: false, unmanagedBake: false),
             "identity fallback stays color-managed")
         XCTAssertTrue(
-            PlaybackFeedHandoff.presentUnmanaged(overlay: true, unmanagedBake: false),
+            MonitorPlaybackFeedHandoff.presentUnmanaged(overlay: true, unmanagedBake: false),
             "zebra / peaking / false colour overlay is unmanaged chrome")
     }
 
@@ -581,7 +586,7 @@ final class PlaybackAssistTests: XCTestCase {
         CVBufferSetAttachment(
             made.buffer, kCVImageBufferTransferFunctionKey,
             kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate)
-        let cloned = PlaybackPixelCopy.untaggedBGRA(made.buffer)
+        let cloned = MonitorPlaybackPixelCopy.untaggedBGRA(made.buffer)
         XCTAssertNil(
             CVBufferGetAttachment(cloned, kCVImageBufferColorPrimariesKey, nil),
             "clone must drop Rec.709 tags so NSNull present is not a black well")
@@ -608,7 +613,7 @@ final class PlaybackAssistTests: XCTestCase {
         let identity = displayIsSource ? source : CIImage(cvPixelBuffer: buffer)
         let product = LiveMonitorCompositor.applyProduct(to: source, effects: fx, display: identity)
         XCTAssertTrue(product.unmanagedBake)
-        let baker = FeedFrameBaker(device: device)
+        let baker = MonitorFrameBaker(device: device)
         let drawable = CGSize(width: 32, height: 32)
         func luma(unmanaged: Bool) -> Float {
             let done = XCTestExpectation(description: "bake unmanaged=\(unmanaged)")

@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -36,19 +37,20 @@ final class ParadeAssistTests: XCTestCase {
         let grey = UInt8((LiveColorScience.encode(0.18, transfer: .dlog2) * 255).rounded())
         let bytes: [UInt8] = [black, grey, 247]
         let points = bytes.map {
-            OpenPocketCine.ScopePoint(xRatio: 0.25, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
+            ScopePoint(xRatio: 0.25, yRatio: 0.5, red: $0, green: $0, blue: $0, luma: $0)
         }
-        let rgbCapacity = ScopeTraceMetal.maxVertexCount(points: points.count, mode: .parade(.rgb))
-        let yrgbCapacity = ScopeTraceMetal.maxVertexCount(
+        let rgbCapacity = MonitorScopeTraceMetal.maxVertexCount(
+            points: points.count, mode: .parade(.rgb))
+        let yrgbCapacity = MonitorScopeTraceMetal.maxVertexCount(
             points: points.count, mode: .parade(.yrgb))
         XCTAssertEqual(rgbCapacity, points.count * 3)
         XCTAssertEqual(yrgbCapacity, points.count * 4)
 
-        var rgb = [ScopeTraceMetal.Vertex](
-            repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
+        var rgb = [MonitorScopeTraceMetal.Vertex](
+            repeating: MonitorScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
             count: rgbCapacity)
         let rgbWritten = rgb.withUnsafeMutableBufferPointer { out in
-            ScopeTraceMetal.fillVertices(
+            MonitorScopeTraceMetal.fillVertices(
                 out, from: 0, points: points, mode: .parade(.rgb), rect: plot,
                 opacity: 1, levelTable: table)
         }
@@ -77,11 +79,11 @@ final class ParadeAssistTests: XCTestCase {
                 accuracy: 0.01)
         }
 
-        var yrgb = [ScopeTraceMetal.Vertex](
-            repeating: ScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
+        var yrgb = [MonitorScopeTraceMetal.Vertex](
+            repeating: MonitorScopeTraceMetal.Vertex(position: .zero, size: 0, color: .zero),
             count: yrgbCapacity)
         let yrgbWritten = yrgb.withUnsafeMutableBufferPointer { out in
-            ScopeTraceMetal.fillVertices(
+            MonitorScopeTraceMetal.fillVertices(
                 out, from: 0, points: points, mode: .parade(.yrgb), rect: plot,
                 opacity: 1, levelTable: table)
         }

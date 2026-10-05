@@ -46,9 +46,6 @@ enum PocketMonitorCalibration {
 }
 
 // Source adapters select measured calibration and interpretation for the shared native owner.
-typealias ScopePoint = OpenCineMedia.ScopePoint
-typealias ScopeSamples = OpenCineMedia.ScopeSamples
-typealias ScopeHistogramDisplay = OpenCineMedia.ScopeHistogramDisplay
 typealias ScopeAssistBundle = OpenCineMedia.ScopeAssistBundle
 typealias PocketScopeSampler = OpenCineMedia.ScopeSampler
 
@@ -99,7 +96,6 @@ extension LiveFrameSampleBus {
 
 /// Source adaptation supplies measured saturation, look tables and transfer inference.
 final class LiveAssistEngine: Sendable {
-    typealias Result = OpenCineApple.MonitorAssistEngine.Result
     private let native: OpenCineApple.MonitorAssistEngine
     static var configuration: OpenCineApple.MonitorAssistConfiguration {
         let curves = Dictionary(
@@ -129,7 +125,7 @@ final class LiveAssistEngine: Sendable {
     func submit(
         _ buffer: CVPixelBuffer, effects: LiveImageEffects? = nil,
         transfer: MonitorTransfer? = nil, timeNs: Int64 = 0,
-        completion: @escaping @Sendable (Result) -> Void
+        completion: @escaping @Sendable (OpenCineApple.MonitorAssistEngine.Result) -> Void
     ) {
         native.submit(
             buffer, effects: effects?.nativeAssistPolicy, transfer: transfer,

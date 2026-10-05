@@ -205,7 +205,7 @@ measurement. State that D-Log M ND readings are estimates and that a measured
 signal value does not identify sensor clipping.
 
 Sources: [curve investigation](pocket3-dlogm-curve.md),
-[ND recommendation](../Sources/OpenPocketViewCore/NDFilterRecommendation.swift),
+[ND recommendation](../../OpenCine/Sources/OpenCineMedia/MonitorNDFilterRecommendation.swift),
 [transfer implementation](../../OpenCine/Sources/OpenCineDJI/LiveColorScience.swift),
 [Android Face Priority exposure](../../OpenCine/Android/dji/src/main/kotlin/com/opencapture/opencine/dji/FacePriorityExposure.kt),
 [PR #316](https://github.com/erik-sutton95/OpenPocketCine/pull/316).

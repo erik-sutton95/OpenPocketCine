@@ -181,27 +181,9 @@ fun SettingsActionPill(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier
-            .alpha(if (enabled) 1f else 0.45f)
-            .background(background, CircleShape)
-            .border(1.dp, tint.copy(alpha = 0.5f), CircleShape)
-            .settingsClickable(role = Role.Button, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        icon?.let {
-            OpcIcon(icon = it, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
-        }
-        Text(
-            title.uppercase(),
-            style = chromeStyle(10.5f, FontWeight.Bold, mono = true),
-            color = tint,
-            maxLines = 1,
-            letterSpacing = 0.6.sp,
-        )
-    }
+    // Main's capsule-sized touch area (under 48 dp), kept 1:1 with main.
+    com.opencapture.monitorui.settings.MonitorSettingsActionPill(
+        title, icon, tint, background, modifier, enabled, minimumTouchTarget = false, onClick = onClick)
 }
 
 /**
@@ -831,20 +813,7 @@ fun SettingsCrushClipSegmented(
 /** iOS `SettingsSwitchGraphic`: 39×22 capsule, cyan thumb on dim track when on. */
 @Composable
 fun SettingsSwitchGraphic(isOn: Boolean) {
-    val thumbX by animateFloatAsState(if (isOn) 20.5f else 3.5f, tween(160), label = "settings-switch")
-    Box(
-        Modifier
-            .size(39.dp, 22.dp)
-            .background(if (isOn) LiveDesign.accentDim else LiveDesign.surface, CircleShape)
-            .border(1.dp, if (isOn) LiveDesign.accentDim else LiveDesign.hairline, CircleShape),
-    ) {
-        Box(
-            Modifier
-                .offset(x = thumbX.dp, y = 3.5.dp)
-                .size(15.dp)
-                .background(if (isOn) LiveDesign.accent else LiveDesign.muted, CircleShape),
-        )
-    }
+    com.opencapture.monitorui.settings.MonitorSettingsSwitchGraphic(isOn = isOn)
 }
 
 /** Plain monospace value text (iOS `SettingsValueText`). */

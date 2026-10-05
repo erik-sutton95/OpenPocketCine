@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine.lut
 
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
+import com.opencapture.monitorui.MonitorLabelWheel
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.monitorScrollFade
@@ -11,16 +12,12 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.snapping.SnapPosition
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,13 +26,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -44,27 +38,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -77,14 +60,12 @@ import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
-import com.opencapture.openpocketcine.LiveTypeDesign
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.LutLookResolver
 import com.opencapture.openpocketcine.pairing.StartupColors
 import com.opencapture.opencine.dji.CameraCommands
 import java.io.File
-import kotlin.math.abs
 
 private enum class LutTab(val label: String) {
     DJI("DJI"),
@@ -99,13 +80,6 @@ internal object LutPickerMetrics {
     const val CAPTION_DP = 28f
     const val ROW_DP = 52f
     const val WHEEL_GAP_DP = 4f
-    const val WHEEL_DP = CONTENT_DP - CAPTION_DP - WHEEL_GAP_DP
-    /** Softer than iOS 0.22 / 0.78 so the extra fade well still reads as a list. */
-    const val FADE_IN = 0.12f
-    const val FADE_OUT = 0.88f
-    /** Centered / neighbour drum faces — 3 pt under iOS 30 / 23 so S25 matches the baseline photo. */
-    const val CENTER_PT = 27f
-    const val NEIGHBOR_PT = 20f
     const val SPLIT_TYPE_PT = 11f
     const val SPLIT_ICON_DP = 13f
     const val SPLIT_PAD_H_DP = 10f
@@ -116,9 +90,7 @@ internal object LutPickerMetrics {
 private val LutContentHeight = LutPickerMetrics.CONTENT_DP.dp
 private val LutCaptionHeight = LutPickerMetrics.CAPTION_DP.dp
 private val LutDrumRowHeight = LutPickerMetrics.ROW_DP.dp
-private val LutDrumWheelHeight = LutPickerMetrics.WHEEL_DP.dp
 
-private const val DRUM_NOT_LAID_OUT = -1
 
 /** Settings sheet. Same body as the assist-tray form; 50/50 stays inline. */
 @Composable
@@ -461,18 +433,24 @@ private fun CatalogTab(
             ) {
                 Text(
                     caption,
-                    style = LiveType.ui(11f, FontWeight.Medium, LiveTypeDesign.Rounded),
+                    style = LiveType.ui(11f, FontWeight.Medium),
                     color = LiveDesign.muted,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
-        LutDrumWheel(
+        val haptics = LocalOperatorHaptics.current
+        MonitorLabelWheel(
             entries = entries,
             selection = wheelSelection,
-            onSelect = onSelect,
+            matches = LutCatalog::matches,
+            key = { it.id },
+            label = { it.title },
+            onSelect = { onSelect(it.id) },
+            rowHeight = LutDrumRowHeight,
             wheelHeight = drumH,
+            onClickFeedback = { haptics.selection() },
         )
     }
 }
@@ -606,7 +584,7 @@ internal fun LUTSplitComparisonBar(
                 )
                 Text(
                     "50/50",
-                    style = LiveType.ui(LutPickerMetrics.SPLIT_TYPE_PT, FontWeight.SemiBold, LiveTypeDesign.Rounded),
+                    style = LiveType.ui(LutPickerMetrics.SPLIT_TYPE_PT, FontWeight.SemiBold),
                     color = LiveDesign.text,
                 )
             }
@@ -642,7 +620,7 @@ private fun LutSegmentedButtons(
             ) {
                 Text(
                     item,
-                    style = LiveType.ui(13f, FontWeight.SemiBold, LiveTypeDesign.Rounded),
+                    style = LiveType.ui(13f, FontWeight.SemiBold),
                     color = if (on) Color(0xFF08191F) else LiveDesign.muted,
                     maxLines = 1,
                 )
@@ -655,136 +633,6 @@ private fun LutSegmentedButtons(
  * iOS `AccentDrumWheel`: snapping wheel — the settled row renders large in
  * accent between two hairlines; neighbours sit in the 0.22 / 0.78 fade.
  */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun LutDrumWheel(
-    entries: List<LutEntry>,
-    selection: String,
-    onSelect: (String) -> Unit,
-    wheelHeight: Dp = LutDrumWheelHeight,
-) {
-    if (entries.isEmpty()) return
-    val optionKey = entries.joinToString { it.id }
-    val selectedIndex = entries.indexOfFirst { LutCatalog.matches(it, selection) }.coerceAtLeast(0)
-    val listState = remember(optionKey) { LazyListState(firstVisibleItemIndex = selectedIndex) }
-    var seated by remember { mutableStateOf(false) }
-    val fling =
-        rememberSnapFlingBehavior(
-            lazyListState = listState,
-            snapPosition = SnapPosition.Center,
-        )
-    val centeredIndex by remember {
-        derivedStateOf {
-            val layout = listState.layoutInfo
-            val center = (layout.viewportStartOffset + layout.viewportEndOffset) / 2
-            layout.visibleItemsInfo
-                .minByOrNull { abs(it.offset + it.size / 2 - center) }
-                ?.index ?: DRUM_NOT_LAID_OUT
-        }
-    }
-    LaunchedEffect(entries, selection) {
-        seated = false
-        val index = entries.indexOfFirst { LutCatalog.matches(it, selection) }
-        if (index >= 0) {
-            listState.scrollToItem(index)
-        }
-    }
-    LaunchedEffect(listState, entries, selection) {
-        snapshotFlow { listState.isScrollInProgress to centeredIndex }
-            .collect { (scrolling, index) ->
-                if (scrolling || index == DRUM_NOT_LAID_OUT) return@collect
-                val entry = entries.getOrNull(index) ?: return@collect
-                if (LutCatalog.matches(entry, selection)) {
-                    seated = true
-                    return@collect
-                }
-                if (!seated) return@collect
-                onSelect(entry.id)
-            }
-    }
-    val rowPx = with(LocalDensity.current) { LutDrumRowHeight.toPx() }
-    val hairlinePx = with(LocalDensity.current) { 1.dp.toPx() }
-    val edgePadding = ((wheelHeight - LutDrumRowHeight) / 2).coerceAtLeast(0.dp)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(wheelHeight)
-            .clipToBounds()
-            .drawWithContent {
-                drawContent()
-                val y0 = size.height / 2f - rowPx / 2f
-                val y1 = size.height / 2f + rowPx / 2f
-                drawLine(
-                    LiveDesign.hairlineStrong,
-                    Offset(0f, y0),
-                    Offset(size.width, y0),
-                    hairlinePx,
-                )
-                drawLine(
-                    LiveDesign.hairlineStrong,
-                    Offset(0f, y1),
-                    Offset(size.width, y1),
-                    hairlinePx,
-                )
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(wheelHeight)
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        Brush.verticalGradient(
-                            colorStops =
-                                arrayOf(
-                                    0f to Color.Transparent,
-                                    LutPickerMetrics.FADE_IN to Color.Black,
-                                    LutPickerMetrics.FADE_OUT to Color.Black,
-                                    1f to Color.Transparent,
-                                ),
-                        ),
-                        blendMode = BlendMode.DstIn,
-                    )
-                },
-        ) {
-            LazyColumn(
-                state = listState,
-                flingBehavior = fling,
-                contentPadding = PaddingValues(vertical = edgePadding),
-                modifier = Modifier.fillMaxWidth().height(wheelHeight),
-            ) {
-                items(entries.size, key = { entries[it].id }) { index ->
-                    val entry = entries[index]
-                    val centered = index == centeredIndex
-                    Box(
-                        Modifier.fillMaxWidth()
-                            .requiredHeight(LutDrumRowHeight)
-                            .chromeClickable(onClick = { onSelect(entry.id) }),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            entry.title,
-                            style =
-                                LiveType.mono(
-                                    if (centered) LutPickerMetrics.CENTER_PT else LutPickerMetrics.NEIGHBOR_PT,
-                                    if (centered) FontWeight.SemiBold else FontWeight.Normal,
-                                ),
-                            color = if (centered) LiveDesign.accent else LiveDesign.muted.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 private fun creativeCaption(
     selection: String,
     colorMode: Int,

@@ -308,8 +308,8 @@ OpenCaptureMonitor/   # working title for the monorepo — rename when the umbre
 
 Candidate (OpenCine plan CORE-02, local branch `opencine/core-02-dji`): ISO, white balance and
 record start/stop go through `OpenCineCore.CameraSession` adapters, `session.control`
-(`ios/OpenPocketCine/DJICameraSessionAdapter.swift`, Android
-`session/DjiCameraSessionAdapter.kt`). Receipts follow the Core lifecycle: an ACK is
+(OpenCine `Sources/OpenCineDJI/DJICameraSessionAdapter.swift`, Android OpenCine
+`Android/dji/.../DjiCameraSessionAdapter.kt`). Receipts follow the Core lifecycle: an ACK is
 `accepted`, only the camera's own status confirms, a settle without ACK or matching status is
 `timedOut` (never success), a NACK is `rejected(cameraRefused)`. The record lamp, gamepad,
 watcher and Watch resolve to explicit start or stop from the reported state; a start while

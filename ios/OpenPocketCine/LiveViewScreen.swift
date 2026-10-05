@@ -899,7 +899,7 @@ private struct LiveFeedWarmupCover: View {
                     .foregroundStyle(LiveDesign.text.opacity(0.72))
                 if showVPNHint {
                     Text(LocalVPNFilter.liveHint)
-                        .font(LiveType.ui(size: 12, weight: .regular, design: .rounded))
+                        .font(MonitorTheme.font(12, weight: .regular))
                         .foregroundStyle(LiveDesign.muted)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 28)
@@ -1035,7 +1035,7 @@ private struct LiveSessionBanners: View {
         Group {
             if model.session.feedRecovering {
                 Text("Reconnecting")
-                    .font(LiveType.ui(size: 11, weight: .semibold, design: .rounded))
+                    .font(MonitorTheme.font(11, weight: .semibold))
                     .foregroundStyle(LiveDesign.text)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -1046,7 +1046,7 @@ private struct LiveSessionBanners: View {
             }
             if let note = model.session.controlNote, !note.isEmpty, !model.session.feedRecovering {
                 Text(note)
-                    .font(LiveType.ui(size: 12, weight: .semibold, design: .rounded))
+                    .font(MonitorTheme.font(12, weight: .semibold))
                     .foregroundStyle(LiveDesign.text.opacity(0.92))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)

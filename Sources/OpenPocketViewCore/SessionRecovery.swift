@@ -1,13 +1,6 @@
 import Foundation
 import OpenCineDJI
 
-// Transitional source names retain the app module's existing portable API.
-public typealias SessionRecoveryState = OpenCineDJI.SessionRecoveryState
-public typealias SessionDropStormGuard = OpenCineDJI.SessionDropStormGuard
-public typealias SessionRecoveryDecision = OpenCineDJI.SessionRecoveryDecision
-public typealias SessionRecoveryTrigger = OpenCineDJI.SessionRecoveryTrigger
-public typealias SessionRecoveryPolicy = OpenCineDJI.SessionRecoveryPolicy
-
 /// Operator-facing recovery copy. Never names a sister app or another brand.
 public enum SessionRecoveryCopy {
     public static func title(_ state: SessionRecoveryState) -> String {

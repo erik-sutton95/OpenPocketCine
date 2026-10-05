@@ -22,7 +22,7 @@ struct ProblemReportView: View {
     var body: some View {
         NavigationStack {
             reportForm
-                .font(LiveType.ui(size: 15, weight: .regular))
+                .font(MonitorTheme.font(15, weight: .regular))
                 .navigationTitle("Report a problem").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
@@ -206,7 +206,7 @@ struct ReliabilityConsentPrompt: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Help improve OpenPocketCine").font(LiveType.ui(size: 23, weight: .semibold))
+                Text("Help improve OpenPocketCine").font(MonitorTheme.font(23, weight: .semibold))
                 Text(
                     "Optional crash, error and feed-dropout reports are used only to improve the app's stability and reliability."
                 )
@@ -221,7 +221,7 @@ struct ReliabilityConsentPrompt: View {
                 Button("Not now") { onChoice(false) }
                     .buttonStyle(.bordered).accessibilityIdentifier("reliability.consent.decline")
             }
-            .font(LiveType.ui(size: 16, weight: .regular)).padding(24)
+            .font(MonitorTheme.font(16, weight: .regular)).padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .monitorScrollFade()

@@ -1,3 +1,4 @@
+import MonitorPresentation
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -95,7 +96,7 @@ final class TrafficLightsAssistTests: XCTestCase {
             XCTAssertFalse(red(5, row.thresholds[4]).crush, row.name)
         }
         XCTAssertEqual(TrafficLightsAssist.defaultCompensation, .zero)
-        XCTAssertEqual(HistogramAssist.Options.default.crushClipCompensation, .zero)
+        XCTAssertEqual(MonitorHistogramOptions.default.crushClipCompensation, .zero)
     }
 
     private struct CompensationRow {
