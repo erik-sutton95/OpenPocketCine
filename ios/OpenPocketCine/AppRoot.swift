@@ -882,7 +882,7 @@ struct AppRoot: View {
             }
         }
         .environment(model)
-        .environment(\.font, LiveType.text(16))
+        .environment(\.font, MonitorTheme.font(16))
         .environment(
             \.monitorHDRChromeGain,
             model.hdrDisplayActive ? CGFloat(LiveHDRDisplay.presentGain) : 1

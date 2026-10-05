@@ -17,7 +17,7 @@ struct LegalDocumentView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("OpenPocketCine")
-                            .font(LiveType.ui(size: 9.5, weight: .bold))
+                            .font(MonitorTheme.font(9.5, weight: .bold))
                             .kerning(0.8)
                             .foregroundStyle(LiveDesign.accent)
                             .textCase(.uppercase)
@@ -25,7 +25,7 @@ struct LegalDocumentView: View {
                                 .leading,
                                 OperatorPanelMetrics.closeButtonClearance(safeArea: insets))
                         Text(kind.title)
-                            .font(LiveType.ui(size: 24, weight: .semibold))
+                            .font(MonitorTheme.font(24, weight: .semibold))
                             .foregroundStyle(LiveDesign.text)
                             .padding(
                                 .leading,
@@ -34,7 +34,7 @@ struct LegalDocumentView: View {
 
                     ScrollView {
                         Text(kind.body)
-                            .font(LiveType.ui(size: 14, weight: .regular))
+                            .font(MonitorTheme.font(14, weight: .regular))
                             .foregroundStyle(LiveDesign.text)
                             .lineSpacing(5)
                             .frame(maxWidth: .infinity, alignment: .leading)

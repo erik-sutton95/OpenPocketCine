@@ -42,18 +42,18 @@ struct MonitorRecoveryOverlay: View {
                     .frame(width: 26)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(SessionRecoveryCopy.title(state))
-                        .font(LiveType.ui(size: 16, weight: .semibold, design: .rounded))
+                        .font(MonitorTheme.font(16, weight: .semibold))
                         .foregroundStyle(LiveDesign.text)
                     Text(
                         SessionRecoveryCopy.detail(
                             state, deviceName: model.session.recoveryDeviceName)
                     )
-                    .font(LiveType.ui(size: 12, weight: .medium))
+                    .font(MonitorTheme.font(12, weight: .medium))
                     .foregroundStyle(LiveDesign.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     if case .retrying = state {
                         Text(Self.progressDetail(model.session.phase))
-                            .font(LiveType.ui(size: 12, weight: .medium))
+                            .font(MonitorTheme.font(12, weight: .medium))
                             .foregroundStyle(LiveDesign.text)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -123,7 +123,7 @@ struct MonitorRecoveryOverlay: View {
             } icon: {
                 icon.frame(width: 13, height: 13)
             }
-            .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
+            .font(MonitorTheme.font(13, weight: .semibold))
             .foregroundStyle(tint == nil ? LiveDesign.text : Color.black)
             .lineLimit(1)
             .minimumScaleFactor(0.85)

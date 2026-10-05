@@ -12,22 +12,22 @@ struct WatcherBrowseView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text("Watch a feed")
-                        .font(LiveType.ui(size: 22, weight: .bold, design: .rounded))
+                        .font(MonitorTheme.font(22, weight: .bold))
                         .foregroundStyle(StartupColors.ink)
                     Spacer()
                     Button("Close") { model.stopWatching() }
-                        .font(LiveType.ui(size: 15, weight: .semibold))
+                        .font(MonitorTheme.font(15, weight: .semibold))
                 }
                 Text(
                     "Join the same camera Wi-Fi as the sharing phone first. On that phone, open Operator Setup → Sharing → Show Wi-Fi code. Scan it with Camera, join the network, then return here."
                 )
-                .font(LiveType.ui(size: 13, weight: .regular, design: .rounded))
+                .font(MonitorTheme.font(13, weight: .regular))
                 .foregroundStyle(StartupColors.muted)
 
                 Text(
                     "Already joined? Choose the shared feed below. Keep the camera connection inside the app on the sharing phone only."
                 )
-                .font(LiveType.ui(size: 13, weight: .regular))
+                .font(MonitorTheme.font(13, weight: .regular))
                 .foregroundStyle(StartupColors.muted)
                 Button("Find shared feeds") { model.startWatcherBrowse() }
                     .buttonStyle(StartupFilledButtonStyle())
@@ -37,15 +37,15 @@ struct WatcherBrowseView: View {
                     passcodePrompt
                 case .failed(let message):
                     Text(message)
-                        .font(LiveType.ui(size: 14, weight: .medium))
+                        .font(MonitorTheme.font(14, weight: .medium))
                         .foregroundStyle(LiveDesign.rec)
                 case .reconnecting(let attempt):
                     Text("Reconnecting… \(attempt) of \(WatcherRelayRecovery.maximumRetries)")
-                        .font(LiveType.ui(size: 14, weight: .medium))
+                        .font(MonitorTheme.font(14, weight: .medium))
                         .foregroundStyle(StartupColors.muted)
                 case .connecting:
                     Text("Joining…")
-                        .font(LiveType.ui(size: 14, weight: .medium))
+                        .font(MonitorTheme.font(14, weight: .medium))
                         .foregroundStyle(StartupColors.muted)
                 default:
                     EmptyView()
@@ -56,7 +56,7 @@ struct WatcherBrowseView: View {
                         model.relayBrowser.browseError
                             ?? "No shared feeds on this network. Check that both devices joined the same camera Wi-Fi and Share this feed is on. Allow Local Network if asked."
                     )
-                    .font(LiveType.ui(size: 14, weight: .regular, design: .rounded))
+                    .font(MonitorTheme.font(14, weight: .regular))
                     .foregroundStyle(StartupColors.muted)
                     .padding(.top, 8)
                 } else {
@@ -66,11 +66,11 @@ struct WatcherBrowseView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(host.name)
-                                    .font(LiveType.ui(size: 16, weight: .semibold))
+                                    .font(MonitorTheme.font(16, weight: .semibold))
                                     .foregroundStyle(StartupColors.ink)
                                 if !host.cameraName.isEmpty {
                                     Text(host.cameraName)
-                                        .font(LiveType.ui(size: 12, weight: .regular))
+                                        .font(MonitorTheme.font(12, weight: .regular))
                                         .foregroundStyle(StartupColors.muted)
                                 }
                             }
@@ -94,7 +94,7 @@ struct WatcherBrowseView: View {
     private var passcodePrompt: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("This feed needs a passcode.")
-                .font(LiveType.ui(size: 14, weight: .medium))
+                .font(MonitorTheme.font(14, weight: .medium))
             SecureField("Passcode", text: $passcode)
                 .textFieldStyle(.roundedBorder)
             Button("Join") {

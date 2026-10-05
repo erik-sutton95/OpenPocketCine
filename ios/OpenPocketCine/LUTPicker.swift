@@ -76,7 +76,7 @@ struct LUTPicker: View {
             }
             if let importError {
                 Text(importError)
-                    .font(LiveType.ui(size: 12, weight: .regular, design: .rounded))
+                    .font(MonitorTheme.font(12, weight: .regular))
                     .foregroundStyle(StartupColors.destructive)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -166,7 +166,7 @@ struct LUTPicker: View {
     ) -> some View {
         VStack(spacing: 4) {
             Text(caption)
-                .font(LiveType.ui(size: 11, weight: .medium, design: .rounded))
+                .font(MonitorTheme.font(11, weight: .medium))
                 .foregroundStyle(LiveDesign.muted)
                 .multilineTextAlignment(.center)
                 .frame(height: captionHeight)
@@ -231,7 +231,7 @@ struct LUTPicker: View {
                 importing = true
             } label: {
                 Text("Import .cube")
-                    .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
+                    .font(MonitorTheme.font(13, weight: .semibold))
                     .foregroundStyle(LiveDesign.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
@@ -240,7 +240,7 @@ struct LUTPicker: View {
             .buttonStyle(.monitorTapTarget)
             if imported.isEmpty {
                 Text("Imported looks land here. Auto stays on Built-in or DJI.")
-                    .font(LiveType.ui(size: 11, weight: .medium, design: .rounded))
+                    .font(MonitorTheme.font(11, weight: .medium))
                     .foregroundStyle(LiveDesign.muted)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -267,7 +267,7 @@ struct LUTPicker: View {
                 assist.selectCustomFile(lut.fileName)
             } label: {
                 Text(lut.displayName)
-                    .font(LiveType.ui(size: 13, weight: .semibold, design: .rounded))
+                    .font(MonitorTheme.font(13, weight: .semibold))
                     .foregroundStyle(selected ? LiveDesign.accent : LiveDesign.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -279,7 +279,7 @@ struct LUTPicker: View {
                 pendingDeletion = lut.fileName
             } label: {
                 Text("Clear")
-                    .font(LiveType.ui(size: 12, weight: .semibold, design: .rounded))
+                    .font(MonitorTheme.font(12, weight: .semibold))
                     .foregroundStyle(StartupColors.destructive)
                     .padding(.vertical, 6)
                     .padding(.horizontal, 8)
