@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.dji.EvComp
-import com.opencapture.opencine.dji.GamepadShutterSync
+import com.opencapture.opencine.media.GamepadShutterSync
 import com.opencapture.monitorui.MonitorQuickControl
 import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CameraStatus

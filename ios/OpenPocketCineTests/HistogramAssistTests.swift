@@ -1,3 +1,4 @@
+import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -7,7 +8,7 @@ import XCTest
 /// Pins OpenZCine histogram rows + `MovablePanel` ("histo") onto PocketCine.
 final class HistogramAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
 
     func testHistogramPlotUsesWaveIREAxis() {
         let size = ScopePanelSize.histogram

@@ -1,4 +1,5 @@
 import CoreImage
+import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import XCTest
 
@@ -7,7 +8,7 @@ import XCTest
 /// Pins OpenZCine `falseColorRows` + `FalseColorScale.legendStops` against what we ship.
 final class FalseColorAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
 
     func testExposureChangeKeepsFalseColorPaintAvailable() throws {
         ceiling.setISO(1600)

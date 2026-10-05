@@ -1,6 +1,7 @@
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineAppKitApple
 import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
@@ -14,7 +15,7 @@ struct LiveViewScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var interfaceLocked = false
     @State private var gamepad = GimbalGamepadBridge()
-    @State private var headphones = HeadphoneMotionBridge()
+    @State private var headphones = HeadphoneMotionBridge.appBridge()
     @State private var orientationObserver = InterfaceOrientationObserver()
     @State private var topMenu: LiveTopMenu?
     @State private var topPickerFrames: [LiveTopMenu: CGRect] = [:]
@@ -245,7 +246,7 @@ struct LiveViewScreen: View {
             model.session.decoder.startSimulatorSampleIfNeeded()
             model.session.isLocked = interfaceLocked
             gamepad.attach(model: model)
-            headphones.attach(model: model)
+            headphones.attach(host: model)
         }
         .onDisappear {
             model.captureDrum = nil

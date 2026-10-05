@@ -1,6 +1,7 @@
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -9,7 +10,7 @@ import XCTest
 
 final class WaveformAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineDJI.ScopeExposureCeiling()
+    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
 
     func testWaveAxisMatchesTrafficLightIRE() {
         let black = LiveColorScience.encode(0, transfer: .dlog2)

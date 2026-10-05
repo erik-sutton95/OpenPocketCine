@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import com.opencapture.opencine.media.FaceDetectFlight
 import com.opencapture.opencine.dji.*
 import android.graphics.Bitmap
 import android.graphics.Rect
