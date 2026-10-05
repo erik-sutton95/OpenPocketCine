@@ -238,18 +238,3 @@ internal fun groupRecordingNote(result: RecordResult, allMatch: Boolean): String
         "${result.confirmed} of $targets confirmed · check camera tiles"
     }
 }
-
-/** Why a strict plan is refused, for the disabled control's description. */
-internal fun recordRefusal(plan: RecordPlan): String? {
-    if (!plan.isRefused) return null
-    return when (val reason = plan.exclusions.firstOrNull()?.reason) {
-        com.opencapture.opencine.multicam.ExclusionReason.Busy,
-        com.opencapture.opencine.multicam.ExclusionReason.CameraTransitioning,
-        -> "A camera is busy."
-        is com.opencapture.opencine.multicam.ExclusionReason.Rejected -> when (reason.rejection) {
-            CommandRejection.RecordingStateUnknown -> "Waiting for a camera's record state."
-            else -> "A camera is not connected."
-        }
-        else -> "A camera is not connected."
-    }
-}

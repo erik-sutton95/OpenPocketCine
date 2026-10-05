@@ -36,7 +36,7 @@ import com.opencapture.monitorui.MultiviewArrangement
 import com.opencapture.monitorui.MultiviewPresentationLayout
 import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.openpocketcine.multiview.MultiviewSession
-import com.opencapture.openpocketcine.multiview.MultiviewTileCanvas
+import com.opencapture.monitorui.MultiviewTileCanvas
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.math.abs

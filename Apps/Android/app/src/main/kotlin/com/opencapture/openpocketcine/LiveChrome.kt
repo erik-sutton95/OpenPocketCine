@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.monitorui.MonitorBatteryOutlineRow
 import com.opencapture.opencine.dji.CaptureShutterPolicy
 import com.opencapture.opencine.dji.RecordConfirmationRequest
 import androidx.compose.animation.animateColorAsState
@@ -176,48 +177,6 @@ fun FitScale(maxWidth: Dp, content: @Composable () -> Unit) {
         val height = (placeable.height * scale).toInt()
         layout(width, height) {
             placeable.placeWithLayer(0, 0) {
-                scaleX = scale
-                scaleY = scale
-                transformOrigin = TransformOrigin(0f, 0f)
-            }
-        }
-    }
-}
-
-/**
- * Uniform scale-to-fit, centered. Floor matches iOS `minimumScaleFactor(0.65)`
- * on the battery readout so "100" + bolt stay inside the outline.
- */
-internal fun scaleToFitFactor(
-    contentWidth: Int,
-    contentHeight: Int,
-    maxWidth: Int,
-    maxHeight: Int,
-    minScale: Float = 0.65f,
-): Float {
-    if (contentWidth <= 0 || contentHeight <= 0 || maxWidth <= 0 || maxHeight <= 0) return 1f
-    val scaleX = if (contentWidth > maxWidth) maxWidth / contentWidth.toFloat() else 1f
-    val scaleY = if (contentHeight > maxHeight) maxHeight / contentHeight.toFloat() else 1f
-    return min(scaleX, scaleY).coerceIn(minScale, 1f)
-}
-
-@Composable
-private fun ScaleToFit(
-    minScale: Float,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Layout(content, modifier) { measurables, constraints ->
-        val measurable = measurables.firstOrNull() ?: return@Layout layout(0, 0) {}
-        val placeable = measurable.measure(Constraints())
-        val maxW = if (constraints.hasBoundedWidth) constraints.maxWidth else placeable.width
-        val maxH = if (constraints.hasBoundedHeight) constraints.maxHeight else placeable.height
-        val scale = scaleToFitFactor(placeable.width, placeable.height, maxW, maxH, minScale)
-        layout(maxW, maxH) {
-            placeable.placeWithLayer(
-                ((maxW - placeable.width * scale) / 2f).toInt(),
-                ((maxH - placeable.height * scale) / 2f).toInt(),
-            ) {
                 scaleX = scale
                 scaleY = scale
                 transformOrigin = TransformOrigin(0f, 0f)
@@ -1646,87 +1605,8 @@ fun BatteryPair(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        BatteryOutlineRow(percent = phonePercent, charging = phoneCharging, camera = false)
-        BatteryOutlineRow(percent = cameraPercent, charging = cameraCharging, camera = true)
-    }
-}
-
-/** iOS `LiveBatteryRow` outline: 26×15 body, nub drawn outside the trailing edge. */
-internal const val BATTERY_CELL_W_DP = 26f
-internal const val BATTERY_CELL_H_DP = 15f
-
-@Composable
-internal fun BatteryOutlineRow(percent: Int, charging: Boolean, camera: Boolean) {
-    val tint =
-        when {
-            percent < 0 -> LiveDesign.faint
-            percent <= 20 -> LiveDesign.rec
-            percent <= 40 -> LiveDesign.amber
-            else -> LiveDesign.good
-        }
-    val readout = if (percent < 0) "—" else "$percent"
-    // Phone and camera are told apart only by the glyph, so both rows speak a
-    // bare number without this. The em dash for "unknown" reads as nothing.
-    val source = if (camera) "Camera battery" else "Phone battery"
-    val level = if (percent < 0) "level unknown" else "$percent percent"
-    val power = if (charging) ", charging" else ""
-    Row(
-        Modifier.clearAndSetSemantics { contentDescription = "$source $level$power" },
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OpcIcon(if (camera) OpcIcon.CAMERA else OpcIcon.SMARTPHONE, null, Modifier.size(10.dp), LiveDesign.muted)
-        Box(Modifier.size(BATTERY_CELL_W_DP.dp, BATTERY_CELL_H_DP.dp), contentAlignment = Alignment.Center) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 2.dp, vertical = 1.dp)
-                    .clip(RoundedCornerShape(2.5.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                ScaleToFit(minScale = 0.65f, modifier = Modifier.fillMaxSize()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(1.dp),
-                    ) {
-                        if (charging) OpcIcon(OpcIcon.ZAP, null, Modifier.size(7.dp), tint)
-                        Text(
-                            readout,
-                            color = tint,
-                            style =
-                                LiveType.ui(10f, FontWeight.Medium).copy(
-                                    color = tint,
-                                    fontFeatureSettings = "tnum",
-                                    lineHeight = 10.sp,
-                                    lineHeightStyle =
-                                        LineHeightStyle(
-                                            alignment = LineHeightStyle.Alignment.Center,
-                                            trim = LineHeightStyle.Trim.Both,
-                                        ),
-                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                ),
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Clip,
-                        )
-                    }
-                }
-            }
-            Canvas(Modifier.fillMaxSize()) {
-                drawRoundRect(
-                    tint.copy(alpha = 0.85f),
-                    cornerRadius = CornerRadius(3.5.dp.toPx()),
-                    style = Stroke(1.2.dp.toPx()),
-                )
-            }
-            Box(
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .offset(x = 3.dp)
-                    .size(1.6.dp, 6.dp)
-                    .background(tint.copy(alpha = 0.85f), RoundedCornerShape(1.dp)),
-            )
-        }
+        MonitorBatteryOutlineRow(percent = phonePercent, charging = phoneCharging, camera = false)
+        MonitorBatteryOutlineRow(percent = cameraPercent, charging = cameraCharging, camera = true)
     }
 }
 
