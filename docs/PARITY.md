@@ -27,6 +27,21 @@ Simulator and emulator checks cover presentation and installed-build migration;
 physical pairing, station networking and live recovery remain pending under
 items 18-20 in [the integration checklist](OPENCINE-INTEGRATION.md).
 
+## Shared Multiview stage
+
+Both shells draw OpenCine's shared Multiview stage over their existing
+sessions. Operator-visible behavior is unchanged on each platform: iOS keeps
+its centered camera options panel and status pill, Android keeps its per-tile
+menu and status card with Reconnect and Remove. Android's disabled Record all
+description now also says "A camera is not in a video mode.", which iOS
+already said. The iOS camera picker's Cancel tint is the shared accent
+(0x00A3E6) instead of Pocket's chrome accent (0x00A3E0). Pocket iOS unit tests
+pass; of the five Multiview UI flows, the same two fail before and after the
+change on the lane simulator (the palette rail is not a scroll view there).
+The Android instrumentation tests drive the shared stage; on the lane emulator
+the same 9 of 19 pass before and after. Physical Multiview remains untested
+for this change on both platforms.
+
 ## Shared operator settings ownership (P2)
 
 Both shells now compose the shared operator settings page and typed section

@@ -241,9 +241,14 @@ left cutout bounds the palette below the island while preserving native touch
 targets and scrolling. Grid retains the opposite-cutout toolbar policy. Record
 and DISP always reuse the platform's normal Field Monitor geometry.
 
-iOS `MultiviewStageCanvas` retains four child hosting controllers keyed by tile
-identity and moves their existing views between the canvas and native scroll
-view. Scroll changes update a native alpha mask; backdrop preparation reads
+The stage itself (tiles, camera options, tools, program readouts, DISP, record
+on all cameras and the camera picker) is OpenCine's shared `MultiviewStage`
+(appkit, SwiftUI and Compose). Pocket maps each `MultiviewSession` tile to a
+`MultiviewTile` value (`MultiviewTileValues`) and answers the stage's actions;
+pictures, the video backdrop, camera settings, network setup and borrowed Live
+View stay in the app. The iOS canvas (`MultiviewStageCanvas`, OpenCine
+MonitorUI) retains four child hosting controllers keyed by slot and moves their
+existing views between the canvas and native scroll view. Scroll changes update a native alpha mask; backdrop preparation reads
 actual converted view bounds and intersects them with the scroll viewport at
 its existing admission cadence. No scroll observer publishes into the camera
 session, and no additional decoder or preview-enable path is created.
