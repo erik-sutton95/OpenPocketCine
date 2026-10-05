@@ -1,5 +1,6 @@
 #if targetEnvironment(simulator)
     import Foundation
+    import MonitorPresentation
     import OpenPocketViewCore
 
     /// Deterministic simulator-only presentation fixture. Opt-in environment values
@@ -97,6 +98,8 @@
             model.assist.mirror = false
             model.assist.configureTool = nil
             model.assist.clean = false
+            // The palette ranks tools by persisted use: start every review from the first-run order.
+            model.assistToolUsage = MonitorToolUsage()
             WaveformAssist.store.options = .default
             ParadeAssist.store.options = .default
             HistogramAssist.store.options = .default
@@ -222,6 +225,8 @@
     final class ReviewDJIPort: DJIConnectPort {
         var onSightings: (([DJISighting]) -> Void)?
         var onStage: ((DJIConnectionStage, String?) -> Void)?
+        /// The session's saved-hotspot ask, which this port stands in for (CameraSession+DJIConnectPort).
+        var confirmHotspot: ((String) async -> Bool)?
         private let state: String
 
         init(state: String) { self.state = state }
@@ -240,6 +245,11 @@
         func stopScan() {}
 
         func connect(cameraID: String, setup: DJISetup, restoreAccessPoint: Bool) async throws -> DJIConnection {
+            if case .phoneHotspot(let network, nil) = setup, SharedWiFiPath.address(hotspot: true) == nil,
+                let confirmHotspot
+            {
+                guard await confirmHotspot(network) else { throw CancellationError() }
+            }
             switch state {
             case "connecting": onStage?(.joiningWiFi, "Joining Studio-5G on this iPhone")
             case "pair-approve": onStage?(.awaitingApproval, nil)

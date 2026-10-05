@@ -79,9 +79,10 @@ struct PocketPlaybackLook: Equatable, Sendable {
     func mediaPlaybackRecord(for file: MediaFile) -> MonitorMediaRecord<MediaFile>? {
         if let record = mediaRecord(for: file) { return record }
         #if targetEnvironment(simulator)
-            if MonitorMediaReview.clipURL(for: file) != nil {
-                // The existing explicit simulator review accepts supplied fixture files outside its
-                // catalog. A typed local value is not inserted into a camera catalog or local index.
+            if MonitorMediaReview.isActive, file.path.hasPrefix(MonitorMediaReview.pathPrefix) {
+                // The explicit simulator review accepts its fixture files outside its catalog, with
+                // or without supplied footage: the player's controls work without it, as on main.
+                // A typed local value is not inserted into a camera catalog or local index.
                 let codec = PocketMediaCatalogCodec(
                     source: { nil }, sourceOwnsFavorites: { false }, shotColor: { _ in nil })
                 return codec.record(file)
