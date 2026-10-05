@@ -83,7 +83,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.opencapture.openpocketcine.glass.LiquidSlider
 import com.opencapture.openpocketcine.assists.AssistLongPress
 import com.opencapture.opencine.dji.ApertureStrategy
 import com.opencapture.opencine.dji.CameraCommands
