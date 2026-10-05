@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineAppKit
 import OpenPocketViewCore
 import PhotosUI
 import SwiftUI
@@ -6,7 +7,7 @@ import SwiftUI
 struct ProblemReportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
-    @State private var reporting = ProblemReporting.shared
+    @State private var reporting = AppDiagnostics.problemReporting
     @State private var message = ""
     @State private var email = ""
     @State private var includeDetails = false
@@ -138,7 +139,7 @@ struct ProblemReportView: View {
                     )
                     .font(.footnote)
                     Button("Reporting privacy") { showPrivacy = true }
-                    if !ReliabilityReporting.isAvailable {
+                    if !AppDiagnostics.reporting.isAvailable {
                         Text(
                             "Reporting isn't available in this build. Contact support@openpocketcine.app."
                         )
@@ -158,7 +159,7 @@ struct ProblemReportView: View {
                     }
                     .disabled(
                         message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            || !ReliabilityReporting.isAvailable || preparingImages
+                            || !AppDiagnostics.reporting.isAvailable || preparingImages
                             || !selectedImages.isEmpty
                     )
                     .accessibilityIdentifier("support.report.send")

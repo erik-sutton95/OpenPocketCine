@@ -17,12 +17,12 @@
             guard mode != nil,
                 let defaults = UserDefaults(suiteName: "opc.reliability.verification")
             else { return }
-            ReliabilityReportingConsent.defaults = defaults
-            ReliabilityReportingConsent.setOptedIn(true)
-            ReliabilityReporting.sdkCacheRoot = ReliabilityReporting.sdkCacheRoot
+            AppDiagnostics.consent.defaults = defaults
+            AppDiagnostics.consent.setOptedIn(true)
+            AppDiagnostics.reporting.sdkCacheRoot = AppDiagnostics.reporting.sdkCacheRoot
                 .appendingPathComponent("verification", isDirectory: true)
             if mode == "gatedIncident" {
-                ReliabilityReportingGate.shared.setCameraSessionActive(true)
+                AppDiagnostics.gate.setCameraSessionActive(true)
             }
         }
 
@@ -39,7 +39,7 @@
         private static func poll(mode: String, id: String, remaining: Int, captured: Bool) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 if mode == "gatedIncident", remaining == 30 {
-                    ReliabilityReporting.setCameraSessionActive(false)
+                    AppDiagnostics.reporting.setCameraSessionActive(false)
                 }
                 let ready = SentrySDK.isEnabled
                 var submitted = captured
@@ -60,11 +60,11 @@
                     if ["incident", "gatedIncident"].contains(mode),
                         let bundle = syntheticIncident(id: id)
                     {
-                        ReliabilityReporting.setFinalizedSpoolLoader { [bundle] }
+                        AppDiagnostics.reporting.setFinalizedSpoolLoader { [bundle] }
                         submitted = true
                     }
                 }
-                ReliabilityReporting.enqueueFinalizedFromSpool()
+                AppDiagnostics.reporting.enqueueFinalizedFromSpool()
                 writeStatus(id: id, phase: ready ? "capturing" : "starting")
                 if remaining > 0 {
                     poll(mode: mode, id: id, remaining: remaining - 1, captured: submitted)
@@ -75,8 +75,8 @@
         private static func writeStatus(id: String, phase: String) {
             let status: [String: Any] = [
                 "id": id, "phase": phase, "sdkEnabled": SentrySDK.isEnabled,
-                "uploadBlocked": ReliabilityReportingGate.shared.shouldBlockUpload,
-                "receipt": ReliabilityReporting.receipt(for: id)?.state.rawValue ?? "none",
+                "uploadBlocked": AppDiagnostics.gate.shouldBlockUpload,
+                "receipt": AppDiagnostics.reporting.receipt(for: id)?.state.rawValue ?? "none",
                 "applicationActive": UIApplication.shared.applicationState == .active,
             ]
             guard
@@ -95,13 +95,13 @@
                     sessionID: UUID().uuidString,
                     appVersion: Bundle.main.object(
                         forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
-                    appBuild: ReliabilityReportingConfiguration.build,
+                    appBuild: AppDiagnostics.host.build,
                     sourceRevision: Bundle.main.object(forInfoDictionaryKey: "OPCSourceRevision")
                         as? String ?? "unknown",
                     osName: "iOS", osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
                     hardwareClass: "verification", cameraFamily: "synthetic",
                     testSource: .verification,
-                    buildIdentity: FeedIncidentOrigin.currentBuildIdentity()))
+                    buildIdentity: AppDiagnostics.origin.currentBuildIdentity()))
             let now = Date()
             func snapshot(_ time: Double, healthy: Bool) -> FeedIncidentSnapshot {
                 FeedIncidentSnapshot(

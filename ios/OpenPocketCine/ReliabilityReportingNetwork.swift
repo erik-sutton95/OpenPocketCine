@@ -4,11 +4,6 @@ import OpenCineAppKit
 // The reporting network policy (camera-path gate, DSN host policy, envelope event ID, backoff) is
 // OpenCineAppKit's; this file is its adapter to the Sentry SDK's own URLSession.
 
-extension ReliabilityReportingGate {
-    /// The camera network this app's cameras serve.
-    static let shared = ReliabilityReportingGate(cameraIPv4Prefix: "192.168.2.")
-}
-
 final class ReliabilityReportingTaskBox: ReliabilityReportingCancellable {
     var inner: URLSessionDataTask?
     func cancel() { inner?.cancel() }
@@ -16,11 +11,10 @@ final class ReliabilityReportingTaskBox: ReliabilityReportingCancellable {
 
 /// Intercepts only the dedicated Sentry URLSession. Never registered globally.
 final class ReliabilityReportingURLProtocol: URLProtocol, @unchecked Sendable {
-    static var gate: ReliabilityReportingGate = .shared
-    static var dsnHost: String?
-    static var onEnvelopeAccepted: ((String) -> Void)?
+    static var gate: ReliabilityReportingGate { AppDiagnostics.gate }
+    static var dsnHost: String? { AppDiagnostics.reporting.dsnHost }
     static let redirectGuard = ReliabilityReportingRedirectGuard {
-        ReliabilityReportingURLProtocol.dsnHost
+        AppDiagnostics.reporting.dsnHost
     }
     static var forwardingSession: URLSession = makeForwardingSession()
 
@@ -40,7 +34,7 @@ final class ReliabilityReportingURLProtocol: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        guard ReliabilityReportingConsent.isOptedIn else {
+        guard AppDiagnostics.consent.isOptedIn else {
             failWithoutResponse(URLError(.notConnectedToInternet))
             return
         }
@@ -63,7 +57,7 @@ final class ReliabilityReportingURLProtocol: URLProtocol, @unchecked Sendable {
             [weak self, weak box] data, response, error in
             guard let self else { return }
             if let box { Self.gate.unregister(box) }
-            if Self.gate.shouldBlockUpload || !ReliabilityReportingConsent.isOptedIn {
+            if Self.gate.shouldBlockUpload || !AppDiagnostics.consent.isOptedIn {
                 self.failWithoutResponse(URLError(.notConnectedToInternet))
                 return
             }
@@ -82,7 +76,7 @@ final class ReliabilityReportingURLProtocol: URLProtocol, @unchecked Sendable {
                     (200..<300).contains(http.statusCode),
                     let eventID = self.pendingEventID
                 {
-                    Self.onEnvelopeAccepted?(eventID)
+                    AppDiagnostics.reporting.noteTransportSuccess(eventID: eventID)
                 }
             }
             if let data { self.client?.urlProtocol(self, didLoad: data) }
@@ -95,7 +89,7 @@ final class ReliabilityReportingURLProtocol: URLProtocol, @unchecked Sendable {
         box.inner = dataTask
         forwardingTask = box
         Self.gate.register(box)
-        if Self.gate.shouldBlockUpload || !ReliabilityReportingConsent.isOptedIn {
+        if Self.gate.shouldBlockUpload || !AppDiagnostics.consent.isOptedIn {
             box.cancel()
             failWithoutResponse(URLError(.notConnectedToInternet))
             return

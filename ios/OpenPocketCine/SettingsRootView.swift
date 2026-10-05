@@ -100,7 +100,7 @@ struct SettingsRootView: View {
     @State private var showProblemReport = false
     @State private var showDiagnosticOptions = false
     @State private var supportError = false
-    @State private var reliabilityOptIn = ReliabilityReporting.isOptedIn
+    @State private var reliabilityOptIn = AppDiagnostics.reporting.isOptedIn
     @State private var gimbalGamepadStick = OperatorPrefs.gimbalGamepadStick
 
     var body: some View {
@@ -504,8 +504,8 @@ struct SettingsRootView: View {
     @ViewBuilder private var systemRows: some View {
         MonitorSupportSettings(
             automaticReports: Binding(get: { reliabilityOptIn }, set: {
-                reliabilityOptIn = $0; ReliabilityReporting.setConsent($0)
-            }), available: ReliabilityReporting.isAvailable,
+                reliabilityOptIn = $0; AppDiagnostics.reporting.setConsent($0)
+            }), available: AppDiagnostics.reporting.isAvailable,
             automaticHelp: SettingsHelpCopy.reliabilityReports,
             unavailableHelp: SettingsHelpCopy.reliabilityUnavailable,
             report: { showProblemReport = true }, privacy: { legalKind = .privacy })
@@ -515,7 +515,7 @@ struct SettingsRootView: View {
                 if let url = DiagnosticCenter.shared.writeReport(session: model.session) {
                     diagnosticsShare = DiagnosticSharePayload(url: url)
                 } else { supportError = true }
-            }, delete: { FeedIncidentRuntime.deleteStoredIncidents {} })
+            }, delete: { AppDiagnostics.incidents.deleteStoredIncidents {} })
 
         MonitorProjectLegalSettings(
             sourceHelp: SettingsHelpCopy.sourceHelp, termsHelp: "How you can use OpenPocketCine.",
