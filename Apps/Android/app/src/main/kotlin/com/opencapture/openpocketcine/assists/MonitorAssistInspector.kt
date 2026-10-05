@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.opencapture.monitorui.MonitorInspector
 import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.openpocketcine.AppModel
-import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 

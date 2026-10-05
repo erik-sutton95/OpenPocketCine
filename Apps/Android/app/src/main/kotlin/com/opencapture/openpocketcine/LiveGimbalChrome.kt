@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.monitorui.MonitorFloatingDrag
 import com.opencapture.monitorui.MonitorMotionDismissBackdrop
 import androidx.compose.ui.geometry.Rect

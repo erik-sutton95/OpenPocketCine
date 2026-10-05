@@ -35,7 +35,7 @@ import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LivePopupCloseButton
 import com.opencapture.openpocketcine.LiveType
-import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.lut.LUTPicker

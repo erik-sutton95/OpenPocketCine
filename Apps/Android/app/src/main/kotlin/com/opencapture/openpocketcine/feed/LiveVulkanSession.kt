@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.feed
 
+import com.opencapture.opencine.runtime.VulkanCrashGuard
 import android.content.Context
 import android.view.Surface
 import com.opencapture.openpocketcine.OperatorPrefs
@@ -14,8 +15,8 @@ internal class LiveVulkanSession(context: Context, scopeBus: LiveScopeSampleBus,
     private val app = context.applicationContext
     private val runtime = com.opencapture.opencine.runtime.NativeVulkanFeedSession(context, scopeBus,
         clipProfile = ScopeExposureCeiling.PROFILE,
-        beforeFirstImport = { VulkanCrashGuard.arm(app) },
-        onImportedFrame = { if (it == VulkanCrashGuard.FRAMES_TO_CLEAR) VulkanCrashGuard.clear(app) },
+        beforeFirstImport = { appVulkanCrashGuard.arm(app) },
+        onImportedFrame = { if (it == VulkanCrashGuard.FRAMES_TO_CLEAR) appVulkanCrashGuard.clear(app) },
         journal = { level, event, message -> DiagnosticCenter.log(level, "feed", event, message) },
         logTag = "OpcVulkan", preview = preview, onDecoderSurface = onDecoderSurface,
         onFirstFrame = onFirstFrame, onFailed = onFailed,

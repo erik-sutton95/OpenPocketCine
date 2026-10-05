@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.dji.CaptureShutterPolicy
 import com.opencapture.opencine.dji.EvComp
 import com.opencapture.opencine.dji.ShutterAngle

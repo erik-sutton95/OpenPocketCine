@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
+import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import com.opencapture.opencine.media.CameraLinkHealthInputs
 import com.opencapture.opencine.media.CameraLinkHealthScorer
 import com.opencapture.opencine.media.FrameRateSampler
@@ -120,7 +122,7 @@ import com.opencapture.monitorui.monitorBackdropSource
 import com.opencapture.openpocketcine.feed.MonitorBackdropFeed
 import com.opencapture.openpocketcine.feed.rememberMonitorBackdropFeed
 import com.opencapture.openpocketcine.feed.OpcVulkan
-import com.opencapture.openpocketcine.feed.VulkanCrashGuard
+import com.opencapture.openpocketcine.feed.appVulkanCrashGuard
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.media.MediaLibraryScreen
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
@@ -270,7 +272,7 @@ fun LiveViewScreen(model: AppModel) {
     var vulkanFailed by remember { mutableStateOf(false) }
     val vulkanSession =
         remember {
-            if (OpcVulkan.isAvailable && !VulkanCrashGuard.isTripped(context)) {
+            if (OpcVulkan.isAvailable && !appVulkanCrashGuard.isTripped(context)) {
                 LiveVulkanSession(
                     context = context,
                     scopeBus = model.scopeBus,
@@ -506,7 +508,7 @@ fun LiveViewScreen(model: AppModel) {
         var vulkanSurfaceView by remember { mutableStateOf<SurfaceView?>(null) }
         LaunchedEffect(vulkanSurfaceView, model.hdrDisplayActive) {
             val surface = vulkanSurfaceView ?: return@LaunchedEffect
-            HdrDisplay.apply(surface, enabled = model.hdrDisplayActive)
+            MonitorHDRDisplay.apply(surface, enabled = model.hdrDisplayActive)
         }
         var glesTextureView by remember { mutableStateOf<TextureView?>(null) }
         val wantsFaceDetect by model.session.wantsFaceDetect.collectAsState()

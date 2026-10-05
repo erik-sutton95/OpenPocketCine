@@ -1,5 +1,8 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.rememberOperatorHaptics
+import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -217,7 +220,7 @@ private fun OpenPocketCineApp(model: AppModel) {
     val shell by model.shell.state.collectAsState()
     val showLive = shell.monitor != null
     LaunchedEffect(model.hdrDisplay, model.screenCaptured, activity) {
-        HdrDisplay.apply(activity, enabled = model.hdrDisplayActive)
+        MonitorHDRDisplay.apply(activity, enabled = model.hdrDisplayActive)
     }
     DisposableEffect(activity) {
         val windowManager = activity?.windowManager

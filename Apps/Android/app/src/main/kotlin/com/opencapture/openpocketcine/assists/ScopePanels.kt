@@ -16,7 +16,7 @@ import com.opencapture.monitorui.MonitorScopeGuides
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.NDFilterRecommendation
-import com.opencapture.openpocketcine.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.feed.ScopeAssistBundle
 import com.opencapture.openpocketcine.feed.WaveformIre
