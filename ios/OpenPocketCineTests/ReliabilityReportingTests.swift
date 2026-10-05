@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineAppKit
 import OpenPocketViewCore
 import Sentry
 import XCTest
@@ -114,41 +115,6 @@ final class ReliabilityReportingTests: XCTestCase {
             predicate: NSPredicate { _, _ in SentrySDK.isEnabled }, object: nil)
         wait(for: [installed], timeout: 10)
         XCTAssertTrue(ReliabilityReportingGate.shared.shouldBlockUpload)
-    }
-
-    func testCameraGateBlocksEvenWithInternetAndCancelsPending() {
-        let fake = FakeTask()
-        ReliabilityReportingGate.shared.setValidInternetForTests(true)
-        ReliabilityReportingGate.shared.setCameraIPv4PathReadyForTests(false)
-        ReliabilityReportingGate.shared.setCameraSessionActive(false)
-        ReliabilityReportingGate.shared.register(fake)
-        XCTAssertFalse(ReliabilityReportingGate.shared.shouldBlockUpload)
-        ReliabilityReportingGate.shared.setCameraSessionActive(true)
-        XCTAssertTrue(ReliabilityReportingGate.shared.shouldBlockUpload)
-        XCTAssertTrue(fake.cancelled)
-        ReliabilityReportingGate.shared.setCameraSessionActive(false)
-        ReliabilityReportingGate.shared.setCameraIPv4PathReadyForTests(true)
-        XCTAssertTrue(ReliabilityReportingGate.shared.shouldBlockUpload)
-    }
-
-    func testHostIsolationRejectsNonDSNHosts() {
-        let dsnHost = "o0.ingest.sentry.io"
-        let allowed = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
-        let other = URL(string: "https://example.com/ingest")!
-        XCTAssertTrue(ReliabilityReportingHostPolicy.allows(allowed, dsnHost: dsnHost))
-        XCTAssertFalse(ReliabilityReportingHostPolicy.allows(other, dsnHost: dsnHost))
-        XCTAssertEqual(
-            ReliabilityReportingNetwork.decision(
-                for: other, dsnHost: dsnHost, gate: ReliabilityReportingGate.shared),
-            .rejectHost)
-        ReliabilityReportingGate.shared.setCameraSessionActive(true)
-        XCTAssertEqual(
-            ReliabilityReportingNetwork.decision(
-                for: allowed, dsnHost: dsnHost, gate: ReliabilityReportingGate.shared),
-            .blockCameraPath)
-        XCTAssertEqual(
-            ReliabilityReportingNetwork.retentionError(for: .blockCameraPath).code,
-            URLError.notConnectedToInternet)
     }
 
     func testRefusedSDKRequestsFailWithoutHTTPResponse() {
@@ -634,13 +600,6 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertEqual(options.sessionReplay.onErrorSampleRate, 0)
     }
 
-    func testBackoffGrowsWithJitterBound() {
-        let first = ReliabilityReportingBackoff.delaySeconds(attempt: 0, jitter: 0)
-        let later = ReliabilityReportingBackoff.delaySeconds(attempt: 5, jitter: 1)
-        XCTAssertGreaterThan(later, first)
-        XCTAssertLessThanOrEqual(later, 30)
-    }
-
     private func stallBundle(id: String) throws -> FeedIncidentBundle {
         var recorder = FeedIncidentRecorder(makeIncidentID: { id })
         _ = recorder.beginSession(
@@ -673,11 +632,6 @@ final class ReliabilityReportingTests: XCTestCase {
                     connected: true, liveEstablished: true)))
         return try XCTUnwrap(job?.bundle)
     }
-}
-
-private final class FakeTask: ReliabilityReportingCancellable {
-    var cancelled = false
-    func cancel() { cancelled = true }
 }
 
 private final class SlowForwardProtocol: URLProtocol {

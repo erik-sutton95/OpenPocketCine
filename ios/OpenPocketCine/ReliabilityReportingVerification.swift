@@ -1,5 +1,6 @@
 #if DEBUG
     import Foundation
+    import OpenCineAppKit
     import OpenPocketViewCore
     import Sentry
     import UIKit

@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import OpenCineAppKit
 import OpenPocketViewCore
 import Sentry
 
