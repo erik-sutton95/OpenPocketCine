@@ -648,15 +648,10 @@ struct AssistToolIcon: View {
     var size: CGFloat? = 19
 
     var body: some View {
-        if tool == .evMeter {
-            Text("EV")
-                .font(MonitorTheme.font(size.map { $0 * 0.7 } ?? 17, weight: .semibold))
-                .frame(width: size, height: size)
-        } else if let icon = tool.monitorIcon {
-            icon.frame(width: size, height: size)
+        if let shared = tool.sharedTool {
+            MonitorAssistToolGlyph(tool: shared, size: size)
         } else if let icon = tool.lucideIcon {
             icon.frame(width: size, height: size)
-                .rotationEffect(.degrees(tool == .desqueeze ? 90 : 0))
         }
     }
 }
