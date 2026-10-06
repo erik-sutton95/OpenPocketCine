@@ -34,6 +34,9 @@ final class AppModel {
     /// `connects`: the cameras and pair pages discover and connect through this model (the app's
     /// one root model). A Multiview tile's live or settings model, previews and tests never do.
     init(session: CameraSession? = nil, connects: Bool = false) {
+        #if targetEnvironment(simulator)
+            if session == nil, MonitorUIReview.isActive { MonitorUIReview.resetMediaFavorites() }
+        #endif
         let session = session ?? CameraSession()
         self.session = session
         var port: any DJIConnectPort = session
