@@ -1,9 +1,10 @@
 import MetalKit
 import MonitorUI
+import OpenCineAppKitApple
 
 @MainActor
 func scopeDisplay(_ view: MTKView) -> MonitorScopeDisplayOptions {
-    LiveHDRDisplay.configure(view)
+    LiveHDRDisplay.app.configure(view)
     return MonitorScopeDisplayOptions(
-        hdr: LiveHDRDisplay.isEnabled, gain: LiveHDRDisplay.presentGain)
+        hdr: LiveHDRDisplay.app.isEnabled, gain: LiveHDRDisplay.app.presentGain)
 }

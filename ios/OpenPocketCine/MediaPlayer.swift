@@ -827,7 +827,9 @@ struct MediaPlayerView: View {
             TrafficLightsOverlay(bounds: canvas, feed: videoRect, chromeClearance: clearance)
         }
         if model.assist.isPlaybackVisible(.ndMeter) {
-            NDMeterOverlay(bounds: canvas, feed: videoRect, chromeClearance: clearance)
+            NDMeterOverlay(
+                stores: .app, bounds: canvas, feed: videoRect, chromeClearance: clearance,
+                reading: { [model] in NDAssist.reading(from: model.frameSamples.displayBundle) })
         }
         if model.assist.isPlaybackVisible(.audioMeters), let playbackAudioLevels {
             AudioMeterOverlay(

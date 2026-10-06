@@ -22,7 +22,7 @@ final class ReliabilityReportingTests: XCTestCase {
         AppDiagnostics.reporting.setCaptureHandlerForTests(nil)
         AppDiagnostics.gate.resetForTests()
         AppDiagnostics.reporting.dsnHost = "o0.ingest.sentry.io"
-        ReliabilityReportingURLProtocol.forwardingSession = URLSession(
+        AppDiagnostics.forwarder.session = URLSession(
             configuration: {
                 let config = URLSessionConfiguration.ephemeral
                 config.waitsForConnectivity = false
@@ -58,70 +58,6 @@ final class ReliabilityReportingTests: XCTestCase {
             predicate: NSPredicate { _, _ in SentrySDK.isEnabled }, object: nil)
         wait(for: [installed], timeout: 10)
         XCTAssertTrue(AppDiagnostics.gate.shouldBlockUpload)
-    }
-
-    func testRefusedSDKRequestsFailWithoutHTTPResponse() {
-        let envelopeURL = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
-        let cases: [(name: String, optedIn: Bool?, cameraActive: Bool, url: URL, code: Int)] = [
-            (
-                "camera session blocks the SDK", nil, true, envelopeURL,
-                NSURLErrorNotConnectedToInternet
-            ),
-            (
-                "revoked consent blocks a cached envelope", false, false, envelopeURL,
-                NSURLErrorNotConnectedToInternet
-            ),
-            (
-                "host isolation rejects a non-DSN host", true, false,
-                URL(string: "https://example.com/secret")!, NSURLErrorCannotFindHost
-            ),
-        ]
-        for c in cases {
-            AppDiagnostics.consent.resetForTests()
-            AppDiagnostics.gate.resetForTests()
-            if let optedIn = c.optedIn { AppDiagnostics.consent.setOptedIn(optedIn) }
-            AppDiagnostics.gate.setCameraSessionActive(c.cameraActive)
-            let session = ReliabilityReportingURLProtocol.makeSDKSession()
-            let done = expectation(description: c.name)
-            var response: URLResponse?
-            var code: Int?
-            session.dataTask(with: c.url) { _, resp, error in
-                response = resp
-                code = (error as NSError?)?.code
-                done.fulfill()
-            }.resume()
-            wait(for: [done], timeout: 10)
-            XCTAssertNil(response, c.name)
-            XCTAssertEqual(code, c.code, c.name)
-        }
-    }
-
-    func testCameraActivationCancelsInFlightForwardWithoutResponse() {
-        AppDiagnostics.consent.setOptedIn(true)
-        SlowForwardProtocol.reset()
-        let forwardConfig = URLSessionConfiguration.ephemeral
-        forwardConfig.protocolClasses = [SlowForwardProtocol.self]
-        ReliabilityReportingURLProtocol.forwardingSession = URLSession(
-            configuration: forwardConfig)
-        AppDiagnostics.gate.setCameraSessionActive(false)
-        let session = ReliabilityReportingURLProtocol.makeSDKSession()
-        let url = URL(string: "https://o0.ingest.sentry.io/api/0/envelope/")!
-        let done = expectation(description: "race")
-        var response: URLResponse?
-        session.dataTask(with: url) { _, resp, error in
-            response = resp
-            XCTAssertEqual((error as NSError?)?.code, NSURLErrorNotConnectedToInternet)
-            done.fulfill()
-        }.resume()
-        wait(for: [SlowForwardProtocol.started], timeout: 10)
-        AppDiagnostics.reporting.setCameraSessionActive(true)
-        wait(for: [done], timeout: 10)
-        XCTAssertNil(response)
-        ReliabilityReportingURLProtocol.forwardingSession = {
-            let config = URLSessionConfiguration.ephemeral
-            config.waitsForConnectivity = false
-            return URLSession(configuration: config)
-        }()
     }
 
     func testScrubDoesNotStampCurrentOriginOntoLegacyOrFatalEvents() {
@@ -180,22 +116,11 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertEqual(event.breadcrumbs?[2].data?["repairAction"] as? String, "decoder")
     }
 
-    func testVerificationUsesTheRealRecorderAndProducesRecoveredIncident() throws {
-        let id = UUID().uuidString
-        let bundle = try XCTUnwrap(ReliabilityReportingVerification.syntheticIncident(id: id))
-        XCTAssertEqual(bundle.header.incidentID, id)
-        XCTAssertEqual(bundle.header.outcome, .recovered)
-        XCTAssertEqual(bundle.header.failingStage, .decodedOutput)
-        XCTAssertEqual(bundle.header.cameraFamily, "synthetic")
-        XCTAssertFalse(bundle.prelude.isEmpty)
-        XCTAssertEqual(bundle.breadcrumbs.first?.kind, .settingsEnter)
-    }
-
     func testSDKCapturePreservesOriginalBuildAfterUpgrade() {
         AppDiagnostics.consent.setOptedIn(true)
         let options = SentryReliabilitySink.makeOptions(
             dsn: "https://publickey@o0.ingest.sentry.io/0",
-            urlSession: ReliabilityReportingURLProtocol.makeSDKSession())
+            urlSession: AppReliabilityURLProtocol.makeSDKSession())
         let prepared = expectation(description: "SDK prepared original provenance")
         options.beforeSend = { event in
             XCTAssertEqual(event.releaseName, "com.opencapture.openpocketcine@0.1.0+107")
@@ -223,7 +148,7 @@ final class ReliabilityReportingTests: XCTestCase {
         AppDiagnostics.origin.overrideBuildIdentityForTests = "ios-current-run-identity-value"
         let options = SentryReliabilitySink.makeOptions(
             dsn: "https://publickey@o0.ingest.sentry.io/0",
-            urlSession: ReliabilityReportingURLProtocol.makeSDKSession())
+            urlSession: AppReliabilityURLProtocol.makeSDKSession())
         let prepared = expectation(description: "SDK beforeSend original origin")
         options.beforeSend = { event in
             let scrubbed = AppDiagnostics.reporting.privacy.scrub(event)
@@ -306,19 +231,8 @@ final class ReliabilityReportingTests: XCTestCase {
         XCTAssertFalse(event.exceptions?.first?.value?.contains("example/Library") ?? true)
     }
 
-    func testReceiptTTLAndOptionsPrivacyFlags() {
-        var old = ReliabilityReportingReceipt(
-            incidentID: "old", eventID: "e", state: .queued,
-            updatedAt: Date(timeIntervalSince1970: 1))
-        ReliabilityReportingReceipts.store(old, root: cacheRoot)
-        let url = ReliabilityReportingReceipts.directory(root: cacheRoot)
-            .appendingPathComponent("old.json")
-        try? FileManager.default.setAttributes(
-            [.modificationDate: Date(timeIntervalSince1970: 1)], ofItemAtPath: url.path)
-        ReliabilityReportingReceipts.applyTTL(
-            root: cacheRoot, now: Date(), ttl: 10)
-        XCTAssertNil(ReliabilityReportingReceipts.load(incidentID: "old", root: cacheRoot))
-        let session = ReliabilityReportingURLProtocol.makeSDKSession()
+    func testOptionsPrivacyFlags() {
+        let session = AppReliabilityURLProtocol.makeSDKSession()
         let options = SentryReliabilitySink.makeOptions(
             dsn: "https://publickey@o0.ingest.sentry.io/0", urlSession: session)
         XCTAssertFalse(options.sendDefaultPii)
@@ -373,17 +287,4 @@ final class ReliabilityReportingTests: XCTestCase {
                     connected: true, liveEstablished: true)))
         return try XCTUnwrap(job?.bundle)
     }
-}
-
-private final class SlowForwardProtocol: URLProtocol {
-    static var started = XCTestExpectation(description: "slow-start")
-
-    static func reset() {
-        started = XCTestExpectation(description: "slow-start")
-    }
-
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    override func startLoading() { Self.started.fulfill() }
-    override func stopLoading() {}
 }

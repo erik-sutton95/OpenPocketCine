@@ -1,5 +1,6 @@
 import CoreImage
 import Metal
+import OpenCineAppKitApple
 import OpenCineApple
 import OpenCineCameraVocabulary
 import OpenCineMedia
@@ -80,10 +81,10 @@ final class CIFeedView: OpenCineApple.MonitorPictureHost {
         super.init(
             frame: frame,
             options: { screen in
-                LiveHDRDisplay.refreshGain(screen: screen)
+                LiveHDRDisplay.app.refreshGain(screen: screen)
                 return OpenCineApple.MonitorPresentationOptions(
                     upscaler: FeedUpscaleSwitch.rendererReadsUpscaler,
-                    hdr: LiveHDRDisplay.isEnabled, hdrGain: LiveHDRDisplay.presentGain,
+                    hdr: LiveHDRDisplay.app.isEnabled, hdrGain: LiveHDRDisplay.app.presentGain,
                     previewSuperResolutionInput: FeedUpscaleSwitch.presentsSuperResolutionInput)
             }, logSubsystem: "com.opencapture.openpocketcine")
         #if DEBUG
