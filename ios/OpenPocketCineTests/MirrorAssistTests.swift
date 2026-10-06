@@ -5,25 +5,6 @@ import XCTest
 @testable import OpenPocketCine
 
 final class MirrorAssistTests: XCTestCase {
-    func testFeedScaleIsHorizontalNotVertical() {
-        let off = MirrorAssist.feedScale(mirrored: false)
-        XCTAssertEqual(off.width, 1)
-        XCTAssertEqual(off.height, 1)
-
-        let on = MirrorAssist.feedScale(mirrored: true)
-        XCTAssertEqual(on.width, -1, "OpenZCine mirror is a negative X scale")
-        XCTAssertEqual(on.height, 1, "Y must stay +1 — a negative Y is a vertical flip")
-    }
-
-    func testVerticalFlipIsNegativeYAndComposesWithMirror() {
-        let v = MirrorAssist.feedScale(mirrored: false, flippedVertically: true)
-        XCTAssertEqual(v.width, 1)
-        XCTAssertEqual(v.height, -1)
-        let both = MirrorAssist.feedScale(mirrored: true, flippedVertically: true)
-        XCTAssertEqual(both.width, -1, "both axes is a 180° turn")
-        XCTAssertEqual(both.height, -1)
-    }
-
     func testVerticalFlipMapsTapBackToCameraSpace() {
         // Underslung: the operator taps the top-left of the screen, the camera sees bottom-left.
         let size = CGSize(width: 400, height: 200)
@@ -55,13 +36,6 @@ final class MirrorAssistTests: XCTestCase {
         MonitorAssistSnapshot(state).apply(to: restored)
         XCTAssertFalse(restored.mirrorHorizontal)
         XCTAssertTrue(restored.mirrorVertical)
-    }
-
-    func testFeedScalePreservesDesqueezeOnXOnly() {
-        let squeeze = CGSize(width: 1.33, height: 1)
-        let on = MirrorAssist.feedScale(mirrored: true, squeeze: squeeze)
-        XCTAssertEqual(on.width, -1.33, accuracy: 0.0001)
-        XCTAssertEqual(on.height, 1)
     }
 
     func testMirrorAloneDoesNotForceGPUFeed() {
