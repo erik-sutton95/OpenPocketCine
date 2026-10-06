@@ -44,7 +44,7 @@ import SwiftUI
                 scale: assist.falseColorScale, transfer: transfer,
                 rec709: assist.falseColorRec709, clipByte: clipByte),
             title: { FalseColorAssist.menuLabel(for: $0) },
-            scaleHelp: FalseColorAssist.scaleHelp, readHelp: FalseColorAssist.readHelp,
+            scaleHelp: FalseColorLooks.app.scaleHelp, readHelp: FalseColorAssist.readHelp,
             referenceHelp: FalseColorAssist.referenceHelp, compact: compact,
             selectionFeedback: feedback, readFeedback: doubleFeedback,
             referenceFeedback: doubleFeedback, onReferenceEnabled: { assist.falseColor = true })
@@ -54,11 +54,11 @@ import SwiftUI
         scale: FalseColorScaleKind, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> MonitorFalseColorReferenceValues {
         let segments = FalseColorReference.segments(
-            scale: scale, transfer: transfer, rec709: rec709, clipByte: clipByte)
+            scale: scale, transfer: transfer, rec709: rec709, clipByte: clipByte, looks: .app)
         let markers =
             scale == .sceneStops
             ? FalseColorReference.sceneStopMarkers(
-                transfer: transfer, rec709: rec709, clipByte: clipByte) : []
+                transfer: transfer, rec709: rec709, clipByte: clipByte, looks: .app) : []
         return MonitorFalseColorReferenceValues(
             subtitle: scale.referenceScaleLabel + " · "
                 + FalseColorReference.curveKeyLabel(
@@ -190,7 +190,9 @@ extension ZebraLongPressMenu {
                     }),
                 displayValue: options.displayValue(
                     for: threshold.wrappedValue, transfer: transfer, clipByte: clipByte),
-                colors: palette.map { .init(value: $0, title: $0.rawValue, color: $0.swatch) },
+                colors: palette.map {
+                    .init(value: $0, title: $0.rawValue, color: $0.swatch(LiveDesign.self))
+                },
                 paint: paint)
         }
         return MonitorZebraMenu(
@@ -330,7 +332,7 @@ extension PeakingLongPressMenu {
             colors: PeakingAssist.palette.map {
                 .init(
                     value: PocketSettingsAssistMenus.common($0), title: $0.rawValue,
-                    color: $0.swatch)
+                    color: $0.swatch(Palette.self))
             },
             sensitivityHelp: PeakingAssist.sensitivityHelp, colorHelp: PeakingAssist.colorHelp,
             compact: compact, feedback: PocketSettingsAssistMenus.feedback)

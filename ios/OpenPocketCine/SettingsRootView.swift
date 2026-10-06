@@ -252,8 +252,10 @@ struct SettingsRootView: View {
         MonitorViewAssistSettings(sections: [
             .falseColor(PocketSettingsAssistMenus.falseColor(assist: model.assist, compact: true,
                 transfer: transfer, clipByte: clipByte), reset: { feedback(); resetFalseColor() }),
-            .zebra(ZebraAssist.longPressMenu(assist: model.assist, compact: true)
-                .commonMenu(transfer: transfer, clipByte: clipByte), reset: { feedback(); resetZebra() }),
+            .zebra(ZebraAssist.longPressMenu(
+                assist: model.assist, stores: .app, palette: LiveDesign.self, haptics: .app,
+                transfer: transfer, clipByte: clipByte, compact: true
+            ).commonMenu(transfer: transfer, clipByte: clipByte), reset: { feedback(); resetZebra() }),
             .waveform(WaveformAssist.longPressMenu(
                 assist: model.assist, stores: .app, haptics: .app, compact: true
             ).commonMenu,
@@ -270,7 +272,9 @@ struct SettingsRootView: View {
                 assist: model.assist, stores: .app, haptics: .app, compact: true
             ).commonMenu,
                 reset: { feedback(); resetVectorscope() }),
-            .peaking(PeakingAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
+            .peaking(PeakingAssist.longPressMenu(
+                assist: model.assist, palette: LiveDesign.self, haptics: .app, compact: true
+            ).commonMenu,
                 reset: { feedback(); resetPeaking() }),
             .trafficLights(TrafficLightsAssist.longPressMenu(
                 assist: model.assist, stores: .app, haptics: .app, compact: true
@@ -295,7 +299,7 @@ struct SettingsRootView: View {
     }
 
     private func resetZebra() {
-        model.assist.zebraOptions = .default
+        model.assist.setZebraOptions(.default, stores: .app)
         model.assist.persist()
     }
 

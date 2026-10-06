@@ -1,6 +1,7 @@
 import CoreImage
 import OpenCineCameraVocabulary
 import OpenPocketViewCore
+import OpenCineCameraControls
 import XCTest
 
 @testable import OpenPocketCine
@@ -75,29 +76,6 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(anchors.clip, 200.0 / 255.0)
     }
 
-    func testScaleOptionsMatchOpenZCine() {
-        XCTAssertEqual(FalseColorAssist.scaleOptions, ["CineStop", "Video", "IRE", "Limits"])
-        XCTAssertEqual(FalseColorAssist.Options.default.scale, .sceneStops)
-        XCTAssertTrue(FalseColorAssist.Options.default.referenceEnabled)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "CineStop"), .sceneStops)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "Video"), .stops)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "PStops"), .stops)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "ZC Stops"), .stops)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "IRE"), .ire)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "Limits"), .limits)
-        XCTAssertEqual(FalseColorAssist.scale(forMenuLabel: "unknown"), .sceneStops)
-        XCTAssertEqual(FalseColorAssist.menuLabel(for: .sceneStops), "CineStop")
-        XCTAssertEqual(FalseColorAssist.menuLabel(for: .stops), "Video")
-        XCTAssertEqual(FalseColorAssist.menuLabel(for: .ire), "IRE")
-        XCTAssertEqual(FalseColorAssist.menuLabel(for: .limits), "Limits")
-        XCTAssertTrue(FalseColorAssist.scaleHelp.contains("CineStop"))
-        XCTAssertTrue(FalseColorAssist.scaleHelp.contains("Video"))
-        // A saved "CineStop" predates the scene-stop scale: it keeps the Video scale.
-        XCTAssertEqual(FalseColorScaleKind(rawValue: "CineStop"), .stops)
-        XCTAssertEqual(FalseColorScaleKind(rawValue: "SceneStops"), .sceneStops)
-        XCTAssertEqual(LiveImageEffects().falseColorScale, .sceneStops)
-    }
-
     /// Legend copy is pinned once, in core `LiveColorScienceTests`; the shell must
     /// match it band for band (the `zip` in `legendStops` would silently truncate).
     func testLegendLabelsMatchCoreFalseColorBands() {
@@ -112,6 +90,13 @@ final class FalseColorAssistTests: XCTestCase {
                     transfer: .dlog2, rec709: false, clipByte: ceiling.clipByte(transfer: .dlog2)
                 ).map(\.label), core, "\(scale) legend stops")
         }
+    }
+
+    /// The scale help names this app's scales, and its legend chrome is the shared ruler's size.
+    func testScaleHelpAndReferenceChromeFollowTheSharedReference() {
+        XCTAssertTrue(FalseColorLooks.app.scaleHelp.contains("CineStop"))
+        XCTAssertTrue(FalseColorLooks.app.scaleHelp.contains("Video"))
+        XCTAssertEqual(FalseColorReferenceChrome.panelSize, FalseColorReference.panelSize)
     }
 
     @MainActor
@@ -131,45 +116,6 @@ final class FalseColorAssistTests: XCTestCase {
         XCTAssertEqual(assist.falseColorScale, .stops)
         FalseColorAssist.selectScale("CineStop", assist: assist)
         XCTAssertEqual(assist.falseColorScale, .sceneStops)
-    }
-
-    func testCineStopRulerPlacesZonesOnTheStopAxis() {
-        let segments = FalseColorReference.segments(
-            scale: .sceneStops, transfer: .dlog2, rec709: false,
-            clipByte: ceiling.clipByte(transfer: .dlog2))
-        XCTAssertEqual(
-            segments.map(\.band.label),
-            ["crush", "shadows", "−2", "−1", "18%", "+1", "+2", "highlights", "clip"])
-        XCTAssertEqual(segments.first?.lowerFraction, 0)
-        XCTAssertEqual(segments.last?.upperFraction, 1)
-        for index in 0..<(segments.count - 1) {
-            XCTAssertEqual(
-                segments[index].upperFraction, segments[index + 1].lowerFraction, accuracy: 0.0001)
-        }
-        XCTAssertEqual(
-            FalseColorReference.sceneStopMarkers(
-                transfer: .dlog2, rec709: false, clipByte: ceiling.clipByte(transfer: .dlog2)
-            ).map(\.label),
-            ["−6", "−4", "−2", "18%", "+2", "+4", "+6", "+8", "clip"],
-            "D-Log2 at ISO 1600: +10 would collide with the +10.9 clip mark")
-        XCTAssertEqual(
-            FalseColorReference.sceneStopMarkers(
-                transfer: .rec709, rec709: false, clipByte: ceiling.clipByte(transfer: .rec709)
-            ).map(\.label),
-            ["−6", "−4", "−2", "18%", "clip"], "Rec.709 clips at +2.5")
-        let labels = FalseColorReference.sceneStopMarkers(
-            transfer: .dlog2, rec709: false, clipByte: ceiling.clipByte(transfer: .dlog2))
-        for index in 0..<(labels.count - 1) {
-            XCTAssertGreaterThan(
-                labels[index + 1].fraction - labels[index].fraction, 0.06, "labels never crowd")
-        }
-        let rec709Clip = FalseColorReference.sceneStopMarkers(
-            transfer: .rec709, rec709: false, clipByte: ceiling.clipByte(transfer: .rec709)
-        ).last
-        XCTAssertEqual(
-            rec709Clip?.fraction ?? 0, 11.0 / 12, accuracy: 0.01,
-            "the ruler ends one stop past this curve's clip")
-        XCTAssertEqual(FalseColorReference.axisLabels(scale: .sceneStops), [])
     }
 
     func testCineStopPaintsEveryStopFlat() {
@@ -205,67 +151,6 @@ final class FalseColorAssistTests: XCTestCase {
     }
 
     /// OpenZCine `testFalseColorReferenceUsesCompactProportionalScales`.
-    func testReferenceOverlayMatchesOpenZCineChrome() {
-        XCTAssertEqual(FalseColorReference.panelSize, CGSize(width: 264, height: 52))
-        XCTAssertEqual(FalseColorReferenceChrome.panelSize, FalseColorReference.panelSize)
-
-        let ire = FalseColorReference.segments(
-            scale: .ire, transfer: .dlog2, rec709: false,
-            clipByte: ceiling.clipByte(transfer: .dlog2))
-        XCTAssertEqual(ire.count, 6)
-        XCTAssertEqual(ire[0].lowerFraction, 0, accuracy: 0.0001)
-        XCTAssertEqual(ire[0].upperFraction, 0.025, accuracy: 0.0001)
-        XCTAssertEqual(ire[2].lowerFraction, 0.38, accuracy: 0.0001)
-        XCTAssertEqual(ire[2].upperFraction, 0.42, accuracy: 0.0001)
-        XCTAssertEqual(ire[4].lowerFraction, 0.80, accuracy: 0.0001)
-        XCTAssertEqual(ire[4].upperFraction, 0.95, accuracy: 0.0001)
-        XCTAssertEqual(ire.last?.upperFraction, 1)
-        XCTAssertLessThan(ire[1].upperFraction, ire[2].lowerFraction)
-
-        let stops = FalseColorReference.segments(
-            scale: .stops, transfer: .dlog2, rec709: false,
-            clipByte: ceiling.clipByte(transfer: .dlog2))
-        XCTAssertEqual(stops.count, 9)
-        XCTAssertEqual(stops[0].lowerFraction, 0, accuracy: 0.0001)
-        XCTAssertEqual(stops[0].upperFraction, 0.05, accuracy: 0.0001)
-        XCTAssertEqual(stops[3].lowerFraction, 0.41, accuracy: 0.0001)
-        XCTAssertEqual(stops[3].upperFraction, 0.49, accuracy: 0.0001)
-        XCTAssertEqual(stops.last?.upperFraction, 1)
-        XCTAssertLessThan(stops[2].upperFraction, stops[3].lowerFraction)
-
-        XCTAssertEqual(
-            FalseColorReference.axisLabels(scale: .ire),
-            ["crush", "18%", "skin", "clip"])
-        XCTAssertEqual(
-            FalseColorReference.axisLabels(scale: .stops),
-            ["crush", "18%", "skin", "clip"])
-        XCTAssertEqual(
-            FalseColorReference.axisLabels(scale: .limits),
-            ["crushed", "midtones untouched", "clipped"])
-        XCTAssertEqual(FalseColorReference.curveKeyLabel(.dlog2), "D-Log2")
-        XCTAssertEqual(FalseColorReference.curveKeyLabel(.dlog), "D-Log")
-        XCTAssertEqual(FalseColorReference.curveKeyLabel(.rec709), "709")
-        XCTAssertEqual(FalseColorReference.curveKeyLabel(.hdr), "HLG")
-
-        let limits = FalseColorReference.segments(
-            scale: .limits, transfer: .dlog2, rec709: false,
-            clipByte: ceiling.clipByte(transfer: .dlog2))
-        XCTAssertEqual(limits.count, 4)
-        XCTAssertEqual(limits[0].lowerFraction, 0, accuracy: 0.0001)
-        XCTAssertEqual(limits[0].upperFraction, 0.05, accuracy: 0.0001)
-        XCTAssertEqual(limits[1].lowerFraction, 0.05, accuracy: 0.0001)
-        XCTAssertEqual(limits[1].upperFraction, 0.10, accuracy: 0.0001)
-        XCTAssertEqual(limits[2].lowerFraction, 0.94, accuracy: 0.0001)
-        // Limits clip starts on the clip shelf every clip tool shares, not 99 IRE.
-        let shelfIRE = ScopeDisplayScale.monitorPercent(
-            LiveColorScience.clipShelf(ceiling: ceiling.clipEncoded(transfer: .dlog2)),
-            transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
-        XCTAssertLessThan(shelfIRE, 99)
-        XCTAssertEqual(limits[2].upperFraction, shelfIRE / 100, accuracy: 0.0001)
-        XCTAssertEqual(limits[3].lowerFraction, shelfIRE / 100, accuracy: 0.0001)
-        XCTAssertEqual(limits[3].upperFraction, 1, accuracy: 0.0001)
-
-    }
 
     func testIREOverlayPaintsRec709GreyGreenAndDLog2GreyAsAGap() {
         let rec709Cube = PocketFalseColorMap.overlayPaintCube(

@@ -71,7 +71,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsNumberField.doneTitle,
             PeakingAssist.sensitivityHelp,
             PeakingAssist.colorHelp,
-            FalseColorAssist.scaleHelp,
+            FalseColorLooks.app.scaleHelp,
             FalseColorAssist.referenceHelp,
             WaveformAssist.brightnessHelp,
             ParadeAssist.brightnessHelp,

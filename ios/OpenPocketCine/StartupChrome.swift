@@ -51,6 +51,10 @@ enum LiveDesign {
 extension LiveDesign: LiveChromePalette {
     /// Ink on the accent stays this app's white text.
     static var onAccent: Color { text }
+
+    static func chromeColor(red: CGFloat, green: CGFloat, blue: CGFloat) -> Color {
+        LiveHDRDisplay.chromeColor(red: red, green: green, blue: blue)
+    }
 }
 
 typealias CloseButton = LiveCloseButton<LiveDesign>

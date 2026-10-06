@@ -11,9 +11,10 @@ enum AssistLongPressChrome {
     @ViewBuilder
     static func menu(for tool: LiveAssistTool, assist: LiveAssistState) -> some View {
         switch tool {
-        case .peaking: PeakingAssist.longPressMenu(assist: assist)
-        case .falseColor: FalseColorAssist.longPressMenu(assist: assist)
-        case .zebra: ZebraAssist.longPressMenu(assist: assist)
+        case .peaking:
+            PeakingAssist.longPressMenu(assist: assist, palette: LiveDesign.self, haptics: .app)
+        case .falseColor: LiveFalseColorMenu(assist: assist)
+        case .zebra: LiveZebraMenu(assist: assist)
         case .lut: LUTAssist.longPressMenu(assist: assist)
         case .waveform: WaveformAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
         case .parade: ParadeAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
@@ -22,12 +23,13 @@ enum AssistLongPressChrome {
             VectorscopeAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
         case .trafficLights:
             TrafficLightsAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
-        case .ndMeter: NDAssist.longPressMenu(assist: assist)
+        case .ndMeter: NDAssist.longPressMenu(stores: .app, haptics: .app)
         case .guides: GuidesAssist.longPressMenu(assist: assist, haptics: .app)
         case .grid: GridAssist.longPressMenu(assist: assist, haptics: .app)
         case .crosshair: CrosshairAssist.longPressMenu(assist: assist)
         case .mirror: MirrorAssist.longPressMenu(assist: assist, haptics: .app)
-        case .audioMeters: AudioAssist.longPressMenu(assist: assist)
+        case .audioMeters:
+            AudioAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
         case .desqueeze: DesqueezeAssist.longPressMenu(assist: assist, haptics: .app)
         case .level, .instantReview, .magnification, .evMeter:
             EmptyView()
