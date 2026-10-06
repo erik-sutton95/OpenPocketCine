@@ -42,6 +42,8 @@ import com.opencapture.monitorui.MonitorReadoutDismissBackdrop
 import com.opencapture.monitorui.MonitorReadoutRegions
 import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.monitorui.monitorPickerPassthrough
+import com.opencapture.opencine.cameracontrols.LiveControlSheet
+import com.opencapture.opencine.cameracontrols.LivePickerHost
 import com.opencapture.opencine.cameracontrols.LiveSheet
 import com.opencapture.opencine.cameracontrols.LockButton
 import com.opencapture.opencine.vocabulary.CameraStatus

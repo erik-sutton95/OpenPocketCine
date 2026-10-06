@@ -300,16 +300,7 @@ object FalseColorBands {
         Band(lo, hi, r / 255.0, g / 255.0, b / 255.0, label)
 }
 
-object AssistLongPress {
-    const val PANEL_MS = 300L
-    /** LUT-matched close on every assist / capture options card (iOS 34 pt reads large on S25). */
-    const val CLOSE_DP = 27f
-    const val PANEL_PAD_DP = 12f
-    const val PANEL_GAP_DP = 8f
-
-    fun preferredWidthDp(tool: LiveAssistTool): Float =
-        if (tool == LiveAssistTool.GUIDES) 472f else 400f
-}
+typealias AssistLongPress = com.opencapture.monitorui.MonitorAssistPanelMetrics
 
 /** iOS `ZebraAssist.Options.displayValue` / `ire(fromDisplay:)`. Thresholds stay 0–100 IRE. */
 object ZebraEditor {

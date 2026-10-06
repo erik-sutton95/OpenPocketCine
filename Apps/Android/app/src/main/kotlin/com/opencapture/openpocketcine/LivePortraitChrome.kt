@@ -71,6 +71,7 @@ import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.monitorui.monitorPickerPassthrough
 import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.opencine.cameracontrols.CaptureLists
+import com.opencapture.opencine.cameracontrols.LiveControlSheet
 import com.opencapture.opencine.cameracontrols.LiveFocusResetButton
 import com.opencapture.opencine.cameracontrols.LiveGimbalButton
 import com.opencapture.opencine.cameracontrols.LiveGimbalOverlay
