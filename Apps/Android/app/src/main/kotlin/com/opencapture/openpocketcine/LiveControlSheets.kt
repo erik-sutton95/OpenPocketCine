@@ -1,9 +1,6 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
@@ -14,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,16 +26,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
 import com.opencapture.opencine.appkit.captureField
 import com.opencapture.opencine.appkit.commit
-import com.opencapture.monitorui.MonitorTab
-import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.MonitorQuickPreview
 import com.opencapture.monitorui.monitorScrollFade
 import androidx.compose.runtime.LaunchedEffect
@@ -56,8 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -69,27 +58,27 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.opencapture.opencine.cameracontrols.CaptureFocusChoices
+import com.opencapture.opencine.cameracontrols.CaptureDrumWheel
 import com.opencapture.opencine.cameracontrols.CaptureLists
 import com.opencapture.opencine.cameracontrols.CapturePanelEffects
+import com.opencapture.opencine.cameracontrols.CheckedRows
+import com.opencapture.opencine.cameracontrols.FocusBody
 import com.opencapture.opencine.cameracontrols.IsoSheetLogic
 import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.cameracontrols.LocalCapturePreview
+import com.opencapture.opencine.cameracontrols.LocalViewportPortrait
+import com.opencapture.opencine.cameracontrols.ModeBar
+import com.opencapture.opencine.cameracontrols.PrefToggle
+import com.opencapture.opencine.cameracontrols.SheetHeader
 import com.opencapture.opencine.cameracontrols.applyCaptureFocusChoice
 import com.opencapture.opencine.cameracontrols.applyCaptureShootingMode
-import com.opencapture.opencine.cameracontrols.chromeClickable
+import com.opencapture.opencine.cameracontrols.capturePanelShape
 import com.opencapture.opencine.cameracontrols.isRecordingSetup
 import com.opencapture.opencine.cameracontrols.isTopAnchored
+import com.opencapture.opencine.cameracontrols.viewportIsPortrait
 import com.opencapture.opencine.vocabulary.ApertureStrategy
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraStatus
@@ -128,9 +117,6 @@ fun LiveControlSheet(
         }
     }
 }
-
-private val LocalCapturePreview = staticCompositionLocalOf<MonitorQuickPreview?> { null }
-private val LocalViewportPortrait = staticCompositionLocalOf { true }
 
 /** Format, color and shooting mode share one native recording-options panel. */
 @Composable
@@ -838,106 +824,6 @@ fun LivePickerHost(
 }
 
 @Composable
-private fun viewportIsPortrait(): Boolean = LocalViewportPortrait.current
-
-private fun capturePanelShape(fromTop: Boolean, portrait: Boolean): RoundedCornerShape {
-    val top = com.opencapture.monitorui.MonitorLayoutPolicy.capturePanelTopCorner(fromTop, portrait).dp
-    val bottom = com.opencapture.monitorui.MonitorLayoutPolicy.capturePanelBottomCorner(fromTop, portrait).dp
-    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
-}
-
-@Composable
-private fun SheetHeader(title: String, subtitle: String, onClose: () -> Unit,
-    showsClose: Boolean = true) {
-    val interactive = LocalCapturePreview.current == null
-    Row(
-        Modifier.fillMaxWidth().then(
-            if (!showsClose) Modifier.height(com.opencapture.monitorui.MonitorLayoutPolicy.CAPTURE_HEADER_HEIGHT.dp)
-            else Modifier,
-        ),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            Modifier.weight(1f),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
-        ) {
-            Text(
-                title,
-                style = LiveType.ui(9f, FontWeight.SemiBold).copy(letterSpacing = 1.8.sp),
-                maxLines = 1,
-            )
-            Text(
-                subtitle.uppercase(),
-                style = LiveType.ui(8.5f).copy(letterSpacing = 1.19.sp),
-                color = LiveDesign.faint,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(bottom = 2.dp),
-            )
-        }
-        if (showsClose) {
-            Box(Modifier.size(44.dp).chromeClickable(enabled = interactive, onClick = { if (interactive) onClose() })
-                .semantics { contentDescription = "Close camera control" }, contentAlignment = Alignment.Center) {
-                OpcIcon(OpcIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ModeBar(
-    tabs: List<String>,
-    selected: Int,
-    enabled: Boolean,
-    uppercase: Boolean = true,
-    onSelect: (Int) -> Unit,
-) {
-    val haptics = LocalOperatorHaptics.current
-    Row(Modifier.fillMaxWidth().monitorTabStrip()) {
-        tabs.forEachIndexed { index, title ->
-            val active = index == selected
-            MonitorTab(active, { haptics.selection(); onSelect(index) }, Modifier.weight(1f), enabled = enabled,
-                separator = index > 0, accessibilityLabel = title, horizontalPadding = 0.dp) {
-                Text(if (uppercase) title.uppercase() else title,
-                    style = LiveType.ui(11f, FontWeight.SemiBold).copy(letterSpacing = .44.sp),
-                    color = if (active) LiveDesign.accent else LiveDesign.muted, maxLines = 1,
-                    textAlign = TextAlign.Center)
-            }
-        }
-    }
-}
-
-@Composable
-private fun CheckedRows(
-    options: List<String>,
-    selected: String?,
-    enabled: Boolean,
-    onSelect: (String) -> Unit,
-) {
-    var shown by remember(options) { mutableStateOf(selected.orEmpty()) }
-    LaunchedEffect(selected) {
-        if (!selected.isNullOrEmpty() && selected != shown) shown = selected
-    }
-    CaptureDrumWheel(options, shown, interactive = enabled, onSelect = { value ->
-        if (value != shown) {
-            shown = value
-            onSelect(value)
-        }
-    })
-}
-
-
-@Composable
-private fun FocusBody(status: CameraStatus, enabled: Boolean, onSelect: (String) -> Unit) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        CaptureDrumWheel(CaptureFocusChoices.labels, CaptureFocusChoices.selection(status), interactive = enabled, onSelect = onSelect)
-        Text("AF-S focuses once. AF-C follows focus continuously; Showcase, Lock and Priority use the camera's supported tracking modes.",
-            style = LiveType.ui(9.5f).copy(lineHeight = 13.3.sp), color = LiveDesign.faint)
-    }
-}
-
-@Composable
 private fun AudioBody(status: CameraStatus, enabled: Boolean, selectedMode: Int, model: AppModel) {
     when (selectedMode) {
         0 ->
@@ -969,66 +855,6 @@ private fun AudioBody(status: CameraStatus, enabled: Boolean, selectedMode: Int,
                 enabled = enabled,
             ) { label -> model.setVocalBoost(label == "On") }
     }
-}
-
-@Composable
-private fun PrefToggle(
-    title: String,
-    help: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    val preview = LocalCapturePreview.current
-    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp)
-        .chromeClickable(enabled = enabled && preview == null) { if (enabled && preview == null) onCheckedChange(!checked) }
-        .semantics { role = Role.Switch }.alpha(if (enabled || preview != null) 1f else .45f),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = LiveType.ui(11.5f, FontWeight.SemiBold))
-            Text(help, style = LiveType.ui(9.5f).copy(lineHeight = 13.3.sp), color = LiveDesign.faint)
-        }
-        CaptureSwitchGraphic(checked)
-    }
-}
-
-@Composable
-private fun CaptureSwitchGraphic(isOn: Boolean) {
-    Box(
-        Modifier
-            .width(38.dp)
-            .height(22.dp)
-            .clip(RoundedCornerShape(50))
-            .background(if (isOn) LiveDesign.accentDim else LiveDesign.surface)
-            .border(1.dp, if (isOn) LiveDesign.accentDim else LiveDesign.hairline, RoundedCornerShape(50)),
-    ) {
-        Box(
-            Modifier
-                .align(if (isOn) Alignment.CenterEnd else Alignment.CenterStart)
-                .padding(2.dp)
-                .size(18.dp)
-                .clip(CircleShape)
-                .background(LiveDesign.text),
-        )
-    }
-}
-
-/** Camera mapping stays above this shared, presentation-only horizontal drum. */
-@Composable
-private fun CaptureDrumWheel(
-    options: List<String>, selection: String, markedValues: Set<String> = emptySet(),
-    interactive: Boolean = true,
-    onSelect: (String) -> Unit,
-) {
-    val haptics = LocalOperatorHaptics.current
-    val preview = LocalCapturePreview.current
-    com.opencapture.monitorui.MonitorValueDrum(
-        preview?.control?.options ?: options, preview?.selection ?: selection,
-        markedValues = preview?.control?.marked ?: markedValues,
-        interactive = interactive && preview == null, displayPosition = preview?.position,
-        dimDisabled = preview == null, onDetent = { haptics.confirm() },
-        onSelect = { value -> if (interactive && preview == null) onSelect(value) },
-    )
 }
 
 private fun initialSelectedMode(
