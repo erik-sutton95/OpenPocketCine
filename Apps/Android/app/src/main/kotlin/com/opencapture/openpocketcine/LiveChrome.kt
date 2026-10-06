@@ -2,6 +2,7 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.monitorui.MonitorBatteryOutlineRow
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
+import com.opencapture.opencine.cameracontrols.CaptureLists
 import com.opencapture.opencine.media.CameraLinkPhase
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateOffsetAsState

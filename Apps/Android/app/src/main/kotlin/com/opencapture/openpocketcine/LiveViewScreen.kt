@@ -6,6 +6,12 @@ import com.opencapture.opencine.appkit.MonitorChromeEditBanner
 import com.opencapture.opencine.appkit.monitorChromeEditBoxes
 import com.opencapture.opencine.appkit.ObservePhoneBattery
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
+import com.opencapture.opencine.cameracontrols.CaptureLists
+import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.cameracontrols.hidesLowerCaptureValues
+import com.opencapture.opencine.cameracontrols.isTopAnchored
+import com.opencapture.opencine.cameracontrols.opening
+import com.opencapture.opencine.cameracontrols.retainedSheet
 import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import com.opencapture.opencine.media.CameraLinkHealthInputs

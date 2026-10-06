@@ -70,6 +70,10 @@ import com.opencapture.monitorui.MonitorQuickGestureOwner
 import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.monitorui.monitorPickerPassthrough
 import com.opencapture.monitorui.monitorScrollFade
+import com.opencapture.opencine.cameracontrols.CaptureLists
+import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.cameracontrols.captureShutterReadout
+import com.opencapture.opencine.cameracontrols.portraitSetupSheet
 import com.opencapture.opencine.vocabulary.ApertureStrategy
 import com.opencapture.opencine.vocabulary.CamFov
 import com.opencapture.opencine.vocabulary.CameraCommands

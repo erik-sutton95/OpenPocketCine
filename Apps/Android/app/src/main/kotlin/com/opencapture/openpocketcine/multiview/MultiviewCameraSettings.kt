@@ -53,14 +53,14 @@ import com.opencapture.monitorui.MonitorImagePreview
 import com.opencapture.monitorui.MonitorInspector
 import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.monitorui.monitorScrollFade
+import com.opencapture.opencine.cameracontrols.CaptureLists
+import com.opencapture.opencine.cameracontrols.LiveSheet
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
-import com.opencapture.openpocketcine.CaptureLists
 import com.opencapture.openpocketcine.LiveControlSheet
 import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.LiveSheet
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
