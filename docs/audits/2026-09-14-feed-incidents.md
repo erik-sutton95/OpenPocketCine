@@ -70,7 +70,7 @@ results; isolate the relevant session/window before comparing builds.
 
 ### P1: incoming video suppresses all watchdog repair of stopped output
 
-[`FeedWatchdog.tick`](../../../OpenCine/Sources/OpenCineDJI/FeedWatchdog.swift)
+[`FeedWatchdog.tick`](../../../OpenCine/Sources/OpenCineCameraVocabulary/FeedWatchdog.swift)
 returns `.none` and resets its stage when `udpReceiveAlive` is true. It does not
 use `decoderFailed` to recover the decoder. Meanwhile
 [`LinkDiagnoser.repair`](../../../OpenCine/Sources/OpenCineDJI/LinkDiagnosis.swift)
@@ -102,7 +102,7 @@ the indefinite outage.
 rebuild immediately on invalid-session status. The synchronous path retries the
 same sample; the asynchronous path rebuilds and subsequent AUs continue.
 Neither path establishes that the new decoder has received an IRAP/IDR.
-[`CameraSoftAP.shouldRebuildVTSession`](../../../OpenCine/Sources/OpenCineDJI/CameraSoftAP.swift)
+[`CameraSoftAP.shouldRebuildVTSession`](../../../OpenCine/Sources/OpenCineCameraVocabulary/CameraSoftAP.swift)
 only recognizes invalid-session status; other persistent failures just increment
 an error counter. The stream has no periodic GOP guarantee.
 
@@ -187,7 +187,7 @@ making that classifier an acting owner would expand the consequences.
 [`FrameRateSampler`](../../../OpenCine/Sources/OpenCineMedia/FrameRateSampler.swift)
 updates only when a frame is recorded. The iOS session reads its retained
 `displayFPS` when building the FPS chip; the sampler has no observation-time
-expiry. [`LiveViewLink.fpsChipLabel`](../../Sources/OpenPocketViewCore/CameraLinkHealth.swift)
+expiry. [`LiveViewLink.fpsChipLabel`](../../../OpenCine/Sources/OpenCineCameraVocabulary/LiveViewLink.swift)
 returns that value whenever it is positive and recovery is false. This combines
 badly with the no-action decoder stall path above.
 
@@ -218,7 +218,7 @@ stack collection and file I/O on the decoder callback or ACK queue.
 
 ### P2: manual tail reports lose incident onset and session attribution
 
-[`DiagnosticReport`](../../Sources/OpenPocketViewCore/Diagnostics.swift)
+[`DiagnosticReport`](../../../OpenCine/Sources/OpenCineMedia/Diagnostics.swift)
 keeps the last 2,500 journal lines and uses the last 12 for compact feedback.
 [`ControlLiveLog`](../../ios/OpenPocketCine/ControlLiveLog.swift) rotates by line
 count. Routine control polling competes with the critical incident record;
