@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.monitorGlass
+import com.opencapture.opencine.cameracontrols.AssistToolCell
 
 /**
  * OpenZCine landscape assist strip: glass pill, tools in groups of three,

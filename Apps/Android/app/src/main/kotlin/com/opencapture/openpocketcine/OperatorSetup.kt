@@ -88,17 +88,17 @@ import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.openpocketcine.assists.CrushClipCompensation
 import com.opencapture.openpocketcine.settings.SettingsFalseColorKey
 import com.opencapture.openpocketcine.assists.FalseColorScale
-import com.opencapture.openpocketcine.assists.HistogramAssist
+import com.opencapture.opencine.cameracontrols.HistogramAssist
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
-import com.opencapture.openpocketcine.assists.LiveZebra
+import com.opencapture.opencine.cameracontrols.LiveZebra
 import com.opencapture.openpocketcine.assists.ParadeMode
 import com.opencapture.openpocketcine.assists.PeakingColor
 import com.opencapture.openpocketcine.assists.PeakingSense
 import com.opencapture.openpocketcine.assists.ScopeGuides
 import com.opencapture.openpocketcine.assists.VectorscopeZoom
 import com.opencapture.openpocketcine.assists.WaveformMode
-import com.opencapture.openpocketcine.assists.ZebraEditor
+import com.opencapture.opencine.cameracontrols.ZebraEditor
 import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
@@ -551,7 +551,7 @@ internal fun AssistRows(model: AppModel, statusColorMode: Int, onOpenLut: () -> 
         com.opencapture.monitorui.MonitorDesqueezeMenu(
             preset = assist.desqueezePreset, custom = assist.desqueezeCustom,
             factor = assist.desqueezeCustomFactor, direction = assist.desqueezeDirection,
-            help = com.opencapture.openpocketcine.assists.AnamorphicDesqueeze.HELP,
+            help = com.opencapture.opencine.cameracontrols.AnamorphicDesqueeze.HELP,
             onSelect = { if (it == null) assist.selectCustomDesqueeze()
                 else assist.selectDesqueezePreset(it) },
             onFactor = assist::updateDesqueezeFactor,
@@ -640,10 +640,10 @@ internal fun assistSettingsSections(assist: LiveAssistState, colorMode: Int):
 private fun settingsFalseColorReferenceValues(assist: LiveAssistState, colorMode: Int):
     com.opencapture.monitorui.MonitorFalseColorReferenceValues {
     val transfer = MonitorTransfer.fromColorMode(colorMode)
-    val segments = com.opencapture.openpocketcine.assists.FalseColorReference.segments(
+    val segments = com.opencapture.opencine.cameracontrols.FalseColorReference.segments(
         assist.falseColorScale, transfer, ceiling = assist.scopeDisplayCeiling)
     val markers = if (assist.falseColorScale.usesSceneStops)
-        com.opencapture.openpocketcine.assists.FalseColorReference.sceneStopMarkers(transfer, ceiling = assist.scopeDisplayCeiling)
+        com.opencapture.opencine.cameracontrols.FalseColorReference.sceneStopMarkers(transfer, ceiling = assist.scopeDisplayCeiling)
         else emptyList()
     return com.opencapture.monitorui.MonitorFalseColorReferenceValues(
         subtitle = assist.falseColorScale.menuLabel,
@@ -653,7 +653,7 @@ private fun settingsFalseColorReferenceValues(assist: LiveAssistState, colorMode
         },
         markers = markers.mapIndexed { index, marker ->
             com.opencapture.monitorui.MonitorFalseColorReferenceMarker(index, marker.label, marker.fraction)
-        }, axisLabels = com.opencapture.openpocketcine.assists.FalseColorReference.axisLabels(assist.falseColorScale))
+        }, axisLabels = com.opencapture.opencine.cameracontrols.FalseColorReference.axisLabels(assist.falseColorScale))
 }
 
 @Composable

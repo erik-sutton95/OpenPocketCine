@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.feed
 
+import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+
 typealias MonitorTransfer = com.opencapture.opencine.media.MonitorTransfer
 typealias LiveColorScience = com.opencapture.opencine.media.LiveColorScience
 

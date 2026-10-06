@@ -113,13 +113,13 @@ import com.opencapture.openpocketcine.MonitorGlass
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
-import com.opencapture.openpocketcine.assists.AudioAssist
-import com.opencapture.openpocketcine.assists.AssistAudioOverlay
+import com.opencapture.opencine.cameracontrols.AudioAssist
+import com.opencapture.opencine.cameracontrols.AssistAudioOverlay
 import com.opencapture.openpocketcine.assists.AssistRect
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.openpocketcine.assists.LiveAssistTool
-import com.opencapture.openpocketcine.assists.MirrorAssist
+import com.opencapture.opencine.cameracontrols.MirrorAssist
 import com.opencapture.openpocketcine.assists.PlaybackAssistBar
 import com.opencapture.openpocketcine.assists.scopePanelChrome
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
@@ -288,7 +288,7 @@ fun MediaPhotoViewer(
                 contentAlignment = Alignment.Center,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    com.opencapture.openpocketcine.assists.AssistToolCell(
+                    com.opencapture.opencine.cameracontrols.AssistToolCell(
                         tool = LiveAssistTool.DESQ,
                         isOn = assist.isPlaybackVisible(LiveAssistTool.DESQ), enabled = true,
                         onClick = { assist.togglePlayback(LiveAssistTool.DESQ) },
@@ -551,7 +551,7 @@ fun MediaPlayerScreen(
                     PlaybackAudioMetersOverlay(video = local, canvas = local, left = meterLeft, right = meterRight, state = assist)
                 }
             }, tools = { chrome ->
-                com.opencapture.openpocketcine.assists.MonitorAssistCluster(portrait = chrome.portrait,
+                com.opencapture.opencine.cameracontrols.MonitorAssistCluster(prefs = OperatorPrefs, portrait = chrome.portrait,
                     locked = false, playback = true, isOn = assist::isPlaybackVisible, onToggle = { assist.togglePlayback(it) },
                     onLongPress = { assist.configureTool = it }, requestExpand = chrome.expanded,
                     onExpansionHandled = chrome.onExpansionHandled, modifier = Modifier.liveModuleFrame(ChromeRect(chrome.frame.x, chrome.frame.y, chrome.frame.width, chrome.frame.height)))

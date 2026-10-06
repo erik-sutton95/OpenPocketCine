@@ -33,7 +33,7 @@ import com.opencapture.openpocketcine.feed.LiveScopeSampleBus
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.feed.PocketScopeSampler
 import com.opencapture.openpocketcine.feed.ScopeAssistBundle
-import com.opencapture.openpocketcine.feed.ScopeExposureCeiling
+import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
 import com.opencapture.openpocketcine.resolveTier
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive

@@ -44,6 +44,14 @@ import com.opencapture.openpocketcine.lut.AppLutPickerCopy
 import com.opencapture.opencine.cameracontrols.LUTSplitComparisonBar
 import com.opencapture.openpocketcine.pickerPanelGlass
 import com.opencapture.openpocketcine.settings.SettingsPalette
+import com.opencapture.opencine.cameracontrols.ZebraEditor
+import com.opencapture.opencine.cameracontrols.NDAssist
+import com.opencapture.opencine.cameracontrols.MirrorAssist
+import com.opencapture.opencine.cameracontrols.HistogramAssist
+import com.opencapture.opencine.cameracontrols.AudioAssist
+import com.opencapture.opencine.cameracontrols.AssistToolGlyph
+import com.opencapture.opencine.cameracontrols.AssistInspectorScopePreview
+import com.opencapture.opencine.cameracontrols.AnamorphicDesqueeze
 
 private val CardShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 

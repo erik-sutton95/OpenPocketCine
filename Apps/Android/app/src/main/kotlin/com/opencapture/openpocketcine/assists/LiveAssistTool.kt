@@ -20,9 +20,3 @@ typealias VectorscopeZoom = com.opencapture.monitorui.MonitorVectorscopeZoom
 
 /** OpenZCine `AssistConfiguration.CrushClipCompensation` - shared HISTO + LIGHTS. */
 typealias CrushClipCompensation = com.opencapture.opencine.media.MonitorCrushClipCompensation
-
-object LiveZebra {
-    const val HIGHLIGHT_IRE = 99.0
-    const val MIDTONE_IRE = 55.0
-    const val MIDTONE_HALF_WIDTH_IRE = 5.0
-}

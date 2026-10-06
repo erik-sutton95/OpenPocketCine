@@ -1539,7 +1539,8 @@ internal fun LandscapeChrome(
         }
         if (showsAssist) {
             Box(Modifier.liveModuleFrame(layout.assist).alpha(if (uiLocked) .4f else 1f)) {
-                com.opencapture.openpocketcine.assists.MonitorAssistCluster(
+                com.opencapture.opencine.cameracontrols.MonitorAssistCluster(
+                    prefs = OperatorPrefs,
                     portrait = false, locked = uiLocked || !hits,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = capabilities.audio && CaptureShutterPolicy.showsAudioControls(status.shootingMode),
