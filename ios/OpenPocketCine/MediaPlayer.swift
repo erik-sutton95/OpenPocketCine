@@ -412,7 +412,7 @@ struct MediaPlayerView: View {
         get { playback?.looping ?? false }
         nonmutating set { playback?.setLooping(newValue) }
     }
-    private var conformSource: ConformPreview.Source { playback?.metadata.conform ?? .init() }
+    private var conformSource: MonitorConformPreview.Source { playback?.metadata.conform ?? .init() }
     private var conformTarget: Double? {
         get { playback?.conformTarget }
         nonmutating set { playback?.setConformTarget(newValue) }
@@ -876,12 +876,12 @@ struct MediaPlayerView: View {
 
     private var conformSpeed: Double {
         guard let target = conformTarget, let rate = conformSource.captureRate else { return 1 }
-        return ConformPreview.speed(captureRate: rate, targetRate: target)
+        return MonitorConformPreview.speed(captureRate: rate, targetRate: target)
     }
 
     private func conformedLabel(_ seconds: Double) -> String {
         MediaTimeFormatting.label(
-            ConformPreview.conformedDuration(sourceSeconds: seconds, speed: conformSpeed))
+            MonitorConformPreview.conformedDuration(sourceSeconds: seconds, speed: conformSpeed))
     }
 
     private func appear() {
