@@ -96,6 +96,7 @@ import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
 import kotlin.math.max
 import kotlin.math.min
+import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
 
 fun liveFitFeedOriginY(
     viewportHeight: Float,

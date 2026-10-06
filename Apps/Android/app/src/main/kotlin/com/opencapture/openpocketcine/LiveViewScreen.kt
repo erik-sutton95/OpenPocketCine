@@ -170,6 +170,7 @@ import com.opencapture.openpocketcine.session.LiveFaceDetector
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import kotlinx.coroutines.isActive
+import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
 
 @Composable
 fun LiveViewScreen(model: AppModel) {

@@ -49,6 +49,7 @@ import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.PocketControlPort
 import com.opencapture.opencine.dji.PocketControlState
 import kotlinx.coroutines.MainScope
+import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
 
 /**
  * Debug-only, deterministic visual review of production chrome. This activity
