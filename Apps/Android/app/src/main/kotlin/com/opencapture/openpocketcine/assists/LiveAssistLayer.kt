@@ -6,7 +6,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.opencapture.opencine.cameracontrols.AssistOverlayLayer
+import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.fromColorMode
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.feed.GpuOverlayBus
 import com.opencapture.openpocketcine.feed.LiveScopeSampleBus
@@ -56,7 +58,7 @@ fun LiveAssistLayer(
     val scopePublication by scopeBus.publications.collectAsState()
     AssistOverlayLayer(
         state, scopePublication.bundle, status, AppAssistHost, modifier, locked, playback,
-        feedFrame, framingFrame, placementFrame, audioPlacementFrame, onOpenOptions, showsAudio, colorMode,
+        feedFrame, framingFrame, placementFrame, audioPlacementFrame, onOpenOptions, showsAudio, MonitorTransfer.fromColorMode(colorMode),
         onScopeStackMoved = { GpuOverlayBus.onSlotsMoved?.invoke() },
     ) {
         com.opencapture.openpocketcine.LiveFocusTrackingLayer(
