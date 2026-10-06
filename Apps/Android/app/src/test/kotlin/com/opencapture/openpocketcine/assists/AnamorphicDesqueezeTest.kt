@@ -6,7 +6,7 @@ import com.opencapture.opencine.media.MonitorAnamorphicDesqueeze
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.media.AnchoredPinchZoom
-import com.opencapture.openpocketcine.media.PlaybackVideoLayout
+import com.opencapture.opencine.media.PlaybackVideoLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

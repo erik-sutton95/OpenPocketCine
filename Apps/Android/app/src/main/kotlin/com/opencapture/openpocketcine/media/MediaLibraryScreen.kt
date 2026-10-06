@@ -90,6 +90,18 @@ import com.opencapture.opencine.cameracontrols.MediaThumbnailSize
 import com.opencapture.opencine.cameracontrols.MediaLibraryCopy
 import com.opencapture.opencine.cameracontrols.MediaClipPresentation
 import com.opencapture.opencine.cameracontrols.MediaBrowserLayout
+import com.opencapture.opencine.cameracontrols.MediaSelectionTray
+import com.opencapture.opencine.cameracontrols.MediaScrollablePlaceholder
+import com.opencapture.opencine.cameracontrols.MediaListingState
+import com.opencapture.opencine.cameracontrols.MediaFilterPopup
+import com.opencapture.opencine.cameracontrols.MediaEmptyState
+import com.opencapture.opencine.cameracontrols.MediaCategoryTab
+import com.opencapture.opencine.cameracontrols.MediaCategoryStrip
+import com.opencapture.opencine.cameracontrols.MediaCatalogHeaderRow
+import com.opencapture.opencine.cameracontrols.MediaCatalogDisplayControls
+import com.opencapture.opencine.cameracontrols.MediaCapsuleShape
+import com.opencapture.opencine.cameracontrols.MediaCacheBar
+import com.opencapture.opencine.cameracontrols.LocalMediaBackdropGlass
 
 @Composable
 fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
@@ -216,7 +228,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         }
     }
 
-    CompositionLocalProvider(LocalMonitorGlass provides null) {
+    CompositionLocalProvider(LocalMonitorGlass provides null, LocalMediaBackdropGlass provides false) {
     Box(
         Modifier
             .fillMaxSize()
@@ -242,13 +254,13 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         if (compact) {
-                            CategoryStrip(category) { category = it }
+                            MediaCategoryStrip(category) { category = it }
                         } else {
                             val railScroll = rememberScrollState()
                             Column(Modifier.weight(1f).monitorScrollFade(railScroll).verticalScroll(railScroll)) {
                                 Column(Modifier.fillMaxWidth().monitorTabStrip()) {
                                     MediaLibraryTab.entries.forEach { tab ->
-                                        CategoryTab(tab, active = tab == category, fill = true) { category = tab }
+                                        MediaCategoryTab(tab, active = tab == category, fill = true) { category = tab }
                                     }
                                 }
                             }
@@ -263,7 +275,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                 },
             ) {
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        HeaderRow(
+                        MediaCatalogHeaderRow(
                             headerTitle = headerTitle, headerCount = headerCount,
                             fetchInProgress = controller.fetchInProgress, isLive = isLive,
                             isSelecting = isSelecting,
@@ -273,7 +285,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                         )
                         controller.downloadProgress.entries.firstOrNull()?.let { (path, progress) ->
                             val name = displayed.firstOrNull { it.path == path }?.filename ?: path.substringAfterLast('/')
-                            CacheBar(name, progress)
+                            MediaCacheBar(name, progress)
                         }
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             MediaGalleryPane(
@@ -294,7 +306,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                                 },
                             )
                         }
-                    if (isSelecting) SelectionTray(selectedFiles.size,
+                    if (isSelecting) MediaSelectionTray(selectedFiles.size,
                         cacheEnabled = isLive && selectedFiles.isNotEmpty(),
                         deleteEnabled = selectedFiles.any(controller::canDelete),
                         onAll = owner::selectAll, onClear = ::exitSelection,
@@ -319,7 +331,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         }
 
         if (filterOpen) {
-            FilterPopup(
+            MediaFilterPopup(
                 formatOptions = formatOptions,
                 resolutionOptions = resolutionOptions,
                 colorOptions = colorOptions,
@@ -393,53 +405,6 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     }
 }
 
-@Composable
-private fun MediaCatalogDisplayControls(
-    list: Boolean,
-    thumbnailSize: MediaThumbnailSize,
-    onList: (Boolean) -> Unit,
-    onThumbnailSize: (MediaThumbnailSize) -> Unit,
-) {
-    com.opencapture.monitorui.MonitorCatalogDisplayControls(
-        list = list,
-        thumbnailSize = com.opencapture.monitorui.MonitorThumbnailSize.valueOf(thumbnailSize.name),
-        onList = onList,
-        onThumbnailSize = { onThumbnailSize(MediaThumbnailSize.valueOf(it.name)) },
-    )
-}
-
-@Composable
-private fun CategoryStrip(category: MediaLibraryTab, onSelect: (MediaLibraryTab) -> Unit) {
-    val scroll = rememberScrollState()
-    Row(Modifier.monitorScrollFade(scroll, vertical = false).horizontalScroll(scroll).monitorTabStrip()) {
-        MediaLibraryTab.entries.forEach { tab ->
-            CategoryTab(tab, active = tab == category) { onSelect(tab) }
-        }
-    }
-}
-
-@Composable
-private fun CategoryTab(tab: MediaLibraryTab, active: Boolean, fill: Boolean = false, onClick: () -> Unit) {
-    val haptics = LocalOperatorHaptics.current
-    val label =
-        when (tab) {
-            MediaLibraryTab.ALL -> "All"
-            MediaLibraryTab.VIDEOS -> "Videos"
-            MediaLibraryTab.PHOTOS -> "Photos"
-            MediaLibraryTab.FAVORITES -> "Favorites"
-        }
-    MonitorTab(active, { haptics.selection(); onClick() }, Modifier.then(if (fill) Modifier.fillMaxWidth() else Modifier),
-        vertical = fill, separator = tab != MediaLibraryTab.entries.first(),
-        accessibilityLabel = "Show $label media") {
-        Row(Modifier.then(if (fill) Modifier.fillMaxWidth() else Modifier),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // iOS category tabs carry no glyph.
-            Text(label, color = if (active) LiveDesign.accent else LiveDesign.muted,
-                style = LiveType.ui(12f, if (active) FontWeight.SemiBold else FontWeight.Medium))
-        }
-    }
-}
-
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun MediaGalleryPane(
@@ -472,10 +437,10 @@ private fun MediaGalleryPane(
         Box(Modifier.fillMaxSize()) {
             when {
                 displayed.isEmpty() && controller.fetchInProgress ->
-                    ScrollableGalleryPlaceholder { ListingState(controller.listedCount) }
+                    MediaScrollablePlaceholder { MediaListingState(controller.listedCount) }
                 displayed.isEmpty() ->
-                    ScrollableGalleryPlaceholder {
-                        EmptyState(controller.fetchInProgress, controller.note ?: emptySubtitle)
+                    MediaScrollablePlaceholder {
+                        MediaEmptyState(controller.fetchInProgress, controller.note ?: emptySubtitle)
                     }
                 layout == MediaBrowserLayout.LIST -> {
                     LazyColumn(
@@ -544,134 +509,7 @@ private fun MediaGalleryPane(
     } else gallery()
 }
 
-@Composable
-private fun HeaderRow(
-    headerTitle: String, headerCount: String, fetchInProgress: Boolean, isLive: Boolean,
-    isSelecting: Boolean, sortOrder: MediaLibrarySort, filterOpen: Boolean, activeFilterCount: Int,
-    onFilter: () -> Unit, onSort: () -> Unit, compact: Boolean,
-) {
-    com.opencapture.monitorui.MonitorCatalogHeader(
-        title = "$headerTitle · $headerCount",
-        subtitle = when {
-            fetchInProgress -> "Reading camera media…"
-            isSelecting -> "Swipe to scroll · Hold or drag sideways to select"
-            isLive -> "Tap to open · Hold, then drag to select"
-            else -> "Available offline"
-        },
-        compact = compact, sort = sortOrder.menuLabel,
-        filterActive = filterOpen || activeFilterCount > 0,
-        filterCount = activeFilterCount,
-        onSort = onSort, onFilter = onFilter)
-}
-
-@Composable
-private fun SelectionTray(count: Int, cacheEnabled: Boolean, deleteEnabled: Boolean,
-    onAll: () -> Unit, onClear: () -> Unit, onCache: () -> Unit, onStar: () -> Unit,
-    onDelete: () -> Unit, onShare: () -> Unit) {
-    com.opencapture.monitorui.MonitorSelectionTray(count) {
-        TrayTextChip(OpcIcon.CIRCLE_CHECK, "All", LiveDesign.accent, onAll)
-        TrayTextChip(OpcIcon.X, "Clear", LiveDesign.muted, onClear)
-        MediaCircleIconButton(OpcIcon.DOWNLOAD, "Cache selected clips", onCache, enabled = cacheEnabled, size = 34.dp)
-        MediaCircleIconButton(OpcIcon.STAR, "Favorite selected clips", onStar, enabled = count > 0, size = 34.dp)
-        MediaCircleIconButton(OpcIcon.TRASH, "Delete selected clips", onDelete, enabled = deleteEnabled, size = 34.dp)
-        MediaCircleIconButton(OpcIcon.SHARE, "Share selected clips", onShare, enabled = count > 0, size = 34.dp)
-    }
-}
-
 /** iOS selection chip: 13dp glyph beside its label. */
-@Composable
-private fun TrayTextChip(icon: OpcIcon, label: String, tint: Color, onClick: () -> Unit) {
-    Row(Modifier.height(34.dp).chromeClickable(onClick = onClick).padding(horizontal = 7.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        OpcIcon(icon, null, Modifier.size(13.dp), tint)
-        Text(label, color = tint, style = LiveType.ui(11f, FontWeight.SemiBold))
-    }
-}
-
-@Composable
-private fun CacheBar(filename: String, progress: Double) {
-    Row(
-        Modifier
-            .padding(top = 8.dp)
-            .fillMaxWidth()
-            .clip(MediaCapsuleShape)
-            .panelGlass(MediaCapsuleShape)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        MediaGlassTrack(fraction = progress.toFloat(), trackWidth = 120.dp)
-        Text(
-            "CACHING $filename ${(progress * 100).toInt()}%",
-            color = LiveDesign.muted,
-            fontSize = 10.sp,
-            fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun ScrollableGalleryPlaceholder(content: @Composable () -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxWidth().heightIn(min = maxHeight).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) { content() }
-    }
-}
-
-@Composable
-private fun EmptyState(listing: Boolean, subtitle: String) {
-    Column(
-        Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        if (listing) {
-            CircularProgressIndicator(color = LiveDesign.accent)
-        } else {
-            OpcIcon(
-                icon = OpcIcon.FILM,
-                contentDescription = null,
-                tint = LiveDesign.faint,
-                modifier = Modifier.size(40.dp),
-            )
-        }
-        Text(
-            if (listing) "Listing clips" else "No clips yet",
-            color = LiveDesign.muted,
-            style = LiveType.ui(15f, FontWeight.Medium),
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        Text(
-            subtitle,
-            color = LiveDesign.faint,
-            style = LiveType.ui(12f),
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun ListingState(listed: Int) {
-    Column(
-        Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        CircularProgressIndicator(color = LiveDesign.muted)
-        Text("Listing clips on camera…", color = LiveDesign.muted, style = LiveType.ui(15f, FontWeight.Medium), modifier = Modifier.padding(top = 12.dp))
-        Text(
-            if (listed == 0) "Querying card storage…"
-            else "$listed clip${if (listed == 1) "" else "s"} found so far",
-            color = LiveDesign.faint,
-            style = LiveType.ui(12f),
-        )
-    }
-}
 
 @Composable
 private fun LucideActionPill(
@@ -721,120 +559,6 @@ private fun LucideActionPill(
                         .background(LiveDesign.accent)
                         .padding(horizontal = 5.dp, vertical = 2.dp),
             )
-        }
-    }
-}
-
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-@Composable
-private fun FilterPopup(
-    formatOptions: List<String>,
-    resolutionOptions: List<String>,
-    colorOptions: List<Pair<Int, String>>,
-    hasDates: Boolean,
-    formatFilters: Set<String>,
-    resolutionFilters: Set<String>,
-    colorFilters: Set<Int>,
-    dateStartKey: String?,
-    dateEndKey: String?,
-    onToggleFormat: (String) -> Unit,
-    onToggleResolution: (String) -> Unit,
-    onToggleColor: (Int) -> Unit,
-    onDateStart: (String?) -> Unit,
-    onDateEnd: (String?) -> Unit,
-    onClear: () -> Unit,
-    onClose: () -> Unit,
-) {
-    var pickingBound by remember { mutableStateOf<String?>(null) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
-    val insets = WindowInsets.safeDrawing
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val card = com.opencapture.monitorui.MonitorLayoutPolicy.mediaFilterPopup(
-            maxWidth.value, maxHeight.value,
-            insets.getTop(density) / density.density,
-            insets.getLeft(density, layoutDirection) / density.density,
-            insets.getBottom(density) / density.density,
-            insets.getRight(density, layoutDirection) / density.density,
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.18f))
-                .clickable(onClick = onClose),
-        )
-        val filterScroll = rememberScrollState()
-        Column(
-            Modifier
-                .absoluteOffset { IntOffset((card.x * density.density).roundToInt(), (card.y * density.density).roundToInt()) }
-                .width(card.width.dp)
-                .height(card.height.dp)
-                .clip(MediaCornerShape)
-                .panelGlass(MediaCornerShape)
-                .padding(16.dp)
-                .monitorScrollFade(filterScroll)
-                .verticalScroll(filterScroll)
-                .semantics { contentDescription = "Filter popup" },
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "FILTER",
-                    color = LiveDesign.muted,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = com.opencapture.openpocketcine.OpcFonts.sora,
-                    letterSpacing = 0.8.sp,
-                )
-                Spacer(Modifier.weight(1f))
-                MediaCloseButton(onClick = onClose, size = 26.dp)
-            }
-            Spacer(Modifier.height(10.dp))
-            com.opencapture.monitorui.MonitorMediaFilterForm(
-                formats = formatOptions,
-                resolutions = resolutionOptions,
-                colors = colorOptions.map { com.opencapture.monitorui.MonitorMediaColorOption(it.first, it.second) },
-                formatSelection = formatFilters,
-                resolutionSelection = resolutionFilters,
-                colorSelection = colorFilters,
-                dateStartLabel = dateStartKey?.let { MediaClipPresentation.dateLabel(it) },
-                dateEndLabel = dateEndKey?.let { MediaClipPresentation.dateLabel(it) },
-                hasDates = hasDates,
-                onToggleFormat = onToggleFormat,
-                onToggleResolution = onToggleResolution,
-                onToggleColor = onToggleColor,
-                onPickStart = { pickingBound = "start" },
-                onPickEnd = { pickingBound = "end" },
-                onClear = onClear,
-            )
-        }
-        pickingBound?.let { bound ->
-            key(bound) {
-                val isStart = bound == "start"
-                val current = if (isStart) dateStartKey else dateEndKey
-                val pickerState = rememberDatePickerState(
-                    initialSelectedDateMillis = current?.let { MediaLibraryQuery.millisFromDateKey(it) },
-                )
-                DatePickerDialog(
-                    onDismissRequest = { pickingBound = null },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            pickerState.selectedDateMillis?.let { millis ->
-                                val key = MediaLibraryQuery.dateKeyFromMillis(millis)
-                                if (isStart) onDateStart(key) else onDateEnd(key)
-                            }
-                            pickingBound = null
-                        }) { Text("Done") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            if (isStart) onDateStart(null) else onDateEnd(null)
-                            pickingBound = null
-                        }) { Text("Clear") }
-                    },
-                ) {
-                    DatePicker(pickerState)
-                }
-            }
         }
     }
 }

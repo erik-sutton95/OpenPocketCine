@@ -13,6 +13,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Assert.*
 import org.junit.Test
+import com.opencapture.opencine.cameracontrols.admittedDeliveryToast
+import com.opencapture.opencine.cameracontrols.MediaDeliveryResult
 
 /** SIMULATED completion facts cross the actual admitted share/copy adapter. */
 class MediaDeliveryLifetimeAdapterTest {
