@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenCineAppKitApple
 import OpenCineCameraControls
 import OpenCineCore
@@ -68,7 +69,7 @@ final class OperatorFacingCopyTests: XCTestCase {
             ZebraAssist.unitsHelp,
             ZebraAssist.highlightHelp,
             ZebraAssist.midtoneHelp,
-            SettingsNumberField.doneTitle,
+            MonitorSettingsNumberField.doneTitle,
             PeakingAssist.sensitivityHelp,
             PeakingAssist.colorHelp,
             FalseColorLooks.app.scaleHelp,
