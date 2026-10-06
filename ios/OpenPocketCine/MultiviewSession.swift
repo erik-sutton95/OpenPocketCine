@@ -4,6 +4,9 @@ import OpenCineCore
 import OpenCineMulticam
 import OpenPocketViewCore
 import UIKit
+import OpenCineDJIApple
+import OpenCineApple
+import OpenCineMedia
 
 @MainActor @Observable
 final class MultiviewSession {
@@ -34,7 +37,7 @@ final class MultiviewSession {
         var previewDemand = false {
             didSet { if previewDemand != oldValue, liveModel == nil { updateLUT() } }
         }
-        var driver: DatalinkDriver? {
+        var driver: DjiAppleDatalink? {
             didSet {
                 liveModel?.session.datalink = nil
                 retireControls()
@@ -48,7 +51,7 @@ final class MultiviewSession {
         var identity: [UInt8]?
         // Per ACK frame bookkeeping; no view reads it.
         @ObservationIgnored var responses: [UInt16: Duml.Frame] = [:]
-        var camera: FoundCamera? {
+        var camera: DjiAppleSighting? {
             didSet {
                 if camera?.id != oldValue?.id {
                     retireControls()
@@ -69,7 +72,7 @@ final class MultiviewSession {
         @ObservationIgnored var settingsPublishedAt = Date.distantPast
         let sampleBus = LiveFrameSampleBus()
         var lutEnabled = true
-        var effects = LiveImageEffects()
+        var effects = MonitorFrameEffects()
         var lutCaption = "Auto LUT"
 
         func updateSettings(_ frame: Duml.Frame) {
@@ -106,7 +109,7 @@ final class MultiviewSession {
                 decoder.poseViewFlip = pose.poseViewFlip
                 decoder.assistMirror = false
             }
-            var next = LiveImageEffects()
+            var next = MonitorFrameEffects()
             next.colorMode = settings.colorMode ?? .normal
             let lut = OfficialDJILUT.auto(
                 colorMode: settings.colorMode,
@@ -237,7 +240,7 @@ final class MultiviewSession {
             ControlLiveLog.line("multiview: assist VT handoff enable")
         }
         /// Install the input callbacks for exactly this tile's current endpoint.
-        func bindPreviewInput(_ driver: DatalinkDriver) {
+        func bindPreviewInput(_ driver: DjiAppleDatalink) {
             let tile = self
             driver.onVideoDiscontinuity = { [weak tile, weak driver] in
                 guard let tile, let driver, tile.driver === driver else { return }
@@ -309,7 +312,7 @@ final class MultiviewSession {
         var previewStarted: Date?
     }
     let tiles = (0..<MultiviewQualificationPolicy.tileCount).map { _ in Tile() }
-    var found: [FoundCamera] = []
+    var found: [DjiAppleSighting] = []
     var busy = false
     var ready = false
     var ssid = ""
@@ -338,7 +341,7 @@ final class MultiviewSession {
     var closing = false
     var connectingCameras: Bool { tiles.contains { $0.connecting } }
     private var provisioners: [UUID: MultiviewProvisioner] = [:]
-    private var searches: [UUID: MultiviewDiscovery] = [:]
+    private var searches: [UUID: DjiAppleNetworkDiscovery] = [:]
     private var connectionTasks: [UUID: Task<Void, Never>] = [:]
     private var hostJoin: Task<Void, Error>?
     private var addressReservations: [String: UUID] = [:]
@@ -349,7 +352,7 @@ final class MultiviewSession {
     private let saveStage: (MultiviewStageStore.Stage?) -> Bool
     private let loadNetwork: (String, Bool) -> MultiviewNetworkStore.Network?
     private var cleanupJournalWritten = false
-    private let ble = BleLink(allowsConcurrentCameras: true, host: .pocket)
+    private let ble = DjiAppleBluetoothLink(allowsConcurrentCameras: true, host: .pocket)
     private var scanTask: Task<Void, Never>?
     private var networkScanTask: Task<Void, Error>?
     private var discovering = false
@@ -436,7 +439,7 @@ final class MultiviewSession {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self else { return }
-                self.ready = SharedWiFiPath.address(hotspot: self.usePhoneHotspot) != nil
+                self.ready = DjiAppleSharedWiFiPath.address(hotspot: self.usePhoneHotspot) != nil
                 for tile in self.tiles {
                     tile.driver?.keepalive()
                     tile.recoverAssistHandoff()
@@ -513,7 +516,7 @@ final class MultiviewSession {
             refreshDiscovery()
         }
         let task = Task {
-            var camera: FoundCamera?
+            var camera: DjiAppleSighting?
             for _ in 0..<10 {
                 try Task.checkCancellation()
                 camera = found.first(where: { $0.hasMultiviewPreview })
@@ -549,7 +552,7 @@ final class MultiviewSession {
         }
     }
 
-    @discardableResult func recordStationChange(_ camera: FoundCamera) -> Bool {
+    @discardableResult func recordStationChange(_ camera: DjiAppleSighting) -> Bool {
         let saved = MultiviewStageStore.Camera(
             slot: 0, id: camera.id, name: camera.name, modelId: camera.modelId,
             identity: nil, address: "", experimental: false, lutEnabled: false)
@@ -595,7 +598,7 @@ final class MultiviewSession {
         // The host phone must not try joining its own hotspot. Its local bridge
         // may appear only after the first camera associates.
         if usePhoneHotspot { return }
-        guard let address = try await SharedWiFiPath.joinHost(ssid: ssid, password: password)
+        guard let address = try await DjiAppleSharedWiFiPath.joinHost(ssid: ssid, password: password)
         else { throw Failure.network }
         host = address
         ready = true
@@ -681,7 +684,7 @@ final class MultiviewSession {
         let now = Date()
         guard
             let snapshot = tile.watchdogSnapshot(
-                now: now, pathReady: SharedWiFiPath.address(hotspot: usePhoneHotspot) != nil)
+                now: now, pathReady: DjiAppleSharedWiFiPath.address(hotspot: usePhoneHotspot) != nil)
         else { return }
         if snapshot.pathReady {
             tile.pathLostAt = nil
@@ -760,7 +763,7 @@ final class MultiviewSession {
                         return
                     }
                     if sentAt == nil, applicationActive, tile.decoder.isPresentationReady,
-                        SharedWiFiPath.address(hotspot: usePhoneHotspot) != nil,
+                        DjiAppleSharedWiFiPath.address(hotspot: usePhoneHotspot) != nil,
                         let camera = tile.camera
                     {
                         driver.startLiveView(receiver: camera.model.liveViewEnableReceiver)
@@ -823,7 +826,7 @@ final class MultiviewSession {
         await connectPreview(tile)
     }
 
-    func add(_ camera: FoundCamera, to tile: Tile, experimental: Bool = false) async {
+    func add(_ camera: DjiAppleSighting, to tile: Tile, experimental: Bool = false) async {
         let reasons = ResourceAdmission.reasons(
             admitting: ResourceRequest(entry: MonitorEntryID(tile.id), device: nil, claims: []),
             qualification: MulticamSupport.qualification(camera.model, experimental: experimental),
@@ -881,7 +884,7 @@ final class MultiviewSession {
             let outcome = try await join.run(
                 identity: identity, exchange: { try await client.exchange($0, timeout: $1) },
                 send: client.send, next: client.next, status: { tile.status = $0 },
-                hotspotReady: { SharedWiFiPath.address(hotspot: true) != nil },
+                hotspotReady: { DjiAppleSharedWiFiPath.address(hotspot: true) != nil },
                 verifyOnNetwork: {
                     try await self.discoverPreview(tile, camera: camera, identity: identity)
                     return true
@@ -926,9 +929,9 @@ final class MultiviewSession {
         }
     }
 
-    private func discoverPreview(_ tile: Tile, camera: FoundCamera, identity: [UInt8]) async throws
+    private func discoverPreview(_ tile: Tile, camera: DjiAppleSighting, identity: [UInt8]) async throws
     {
-        let search = MultiviewDiscovery()
+        let search = DjiAppleNetworkDiscovery()
         searches[tile.id] = search
         defer {
             search.cancel()
@@ -939,7 +942,7 @@ final class MultiviewSession {
         tile.controlHost = nil
         tile.recordingAvailable = false
         let excluded = Set(tiles.filter { $0.id != tile.id }.compactMap(\.controlHost))
-        if SharedWiFiPath.validAddress(tile.cameraAddress) {
+        if DjiAppleSharedWiFiPath.validAddress(tile.cameraAddress) {
             do {
                 try await openPreview(tile, camera: camera, identity: identity)
                 return
@@ -970,7 +973,7 @@ final class MultiviewSession {
         )
     }
 
-    private func openPreview(_ tile: Tile, camera: FoundCamera, identity: [UInt8]) async throws {
+    private func openPreview(_ tile: Tile, camera: DjiAppleSighting, identity: [UInt8]) async throws {
         let address = tile.cameraAddress
         guard addressReservations[address] == nil || addressReservations[address] == tile.id else {
             throw Failure.unavailable
@@ -981,7 +984,7 @@ final class MultiviewSession {
                 addressReservations.removeValue(forKey: address)
             }
         }
-        guard running, SharedWiFiPath.validAddress(tile.cameraAddress),
+        guard running, DjiAppleSharedWiFiPath.validAddress(tile.cameraAddress),
             !tiles.contains(where: { $0.id != tile.id && $0.controlHost == tile.cameraAddress })
         else {
             throw ProvisioningFailure.message(
@@ -1001,7 +1004,7 @@ final class MultiviewSession {
         tile.lastEnable = .distantPast
         if tile.hasPicture { tile.decoder.beginIDRHold() } else { tile.decoder.reset() }
         tile.status = "Connecting normal preview"
-        let driver = DatalinkDriver(
+        let driver = DjiAppleDatalink(
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken,
             stationHost: tile.cameraAddress, stationHotspot: usePhoneHotspot,
@@ -1169,8 +1172,8 @@ final class MultiviewSession {
         if success, !networkConfigured { cleanupJournalWritten = true }
         return success
     }
-    private func restoredCamera(_ saved: MultiviewStageStore.Camera) -> FoundCamera {
-        FoundCamera(
+    private func restoredCamera(_ saved: MultiviewStageStore.Camera) -> DjiAppleSighting {
+        DjiAppleSighting(
             id: saved.id, name: saved.name,
             model: .resolve(modelId: saved.modelId, name: saved.name), modelId: saved.modelId)
     }
@@ -1192,7 +1195,7 @@ final class MultiviewSession {
         // With no cleanup, retain the last preferences even if setup is cancelled.
         if cleanupJournalWritten { persistStage() }
     }
-    func enqueueAdd(_ camera: FoundCamera, to tile: Tile, experimental: Bool = false) {
+    func enqueueAdd(_ camera: DjiAppleSighting, to tile: Tile, experimental: Bool = false) {
         guard running, networkConfigured, !closing, tile.camera == nil, !tile.connecting else {
             return
         }
@@ -1286,11 +1289,11 @@ final class MultiviewSession {
             throw error
         }
     }
-    static func wifiAddress() -> String? { SharedWiFiPath.address() }
+    static func wifiAddress() -> String? { DjiAppleSharedWiFiPath.address() }
 }
 
 /// Discovery is broader than the preview command profiles captured so far.
-extension FoundCamera {
+extension DjiAppleSighting {
     var appearsInMultiview: Bool { MulticamSupport.appears(model) }
     var hasMultiviewPreview: Bool { MulticamSupport.hasPreview(model) }
 }

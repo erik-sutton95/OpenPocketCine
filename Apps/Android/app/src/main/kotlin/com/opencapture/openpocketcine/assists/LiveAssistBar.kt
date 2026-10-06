@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
 import com.opencapture.opencine.cameracontrols.reportChromeFrame
-import com.opencapture.openpocketcine.LiveChromeMetrics
+import com.opencapture.monitorui.LiveChromeMetrics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -17,7 +17,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.opencapture.openpocketcine.ChromeRect
+import com.opencapture.monitorui.MonitorRect
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -31,6 +31,7 @@ import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.monitorGlass
 import com.opencapture.opencine.cameracontrols.AssistToolCell
 import com.opencapture.monitorui.MonitorAssistTool
+import com.opencapture.opencine.appkit.MonitorAssistState
 
 /**
  * OpenZCine landscape assist strip: glass pill, tools in groups of three,
@@ -54,12 +55,12 @@ fun LiveAssistBar(
 
 @Composable
 fun LiveAssistBar(
-    state: LiveAssistState,
+    state: MonitorAssistState,
     locked: Boolean,
     onLongPress: (MonitorAssistTool) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val frames = remember { mutableStateMapOf<MonitorAssistTool, ChromeRect>() }
+    val frames = remember { mutableStateMapOf<MonitorAssistTool, MonitorRect>() }
     LiveAssistBarRow(
         locked = locked,
         isOn = { state.isOn(it) },
@@ -82,7 +83,7 @@ fun LiveAssistBar(
  */
 @Composable
 fun PlaybackAssistBar(
-    state: LiveAssistState,
+    state: MonitorAssistState,
     onLongPress: (MonitorAssistTool) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -129,7 +130,7 @@ private fun LiveAssistBarRow(
     onClick: (MonitorAssistTool) -> Unit,
     onLongPress: (MonitorAssistTool) -> Unit,
     modifier: Modifier = Modifier,
-    onToolFrame: (MonitorAssistTool, ChromeRect) -> Unit = { _, _ -> },
+    onToolFrame: (MonitorAssistTool, MonitorRect) -> Unit = { _, _ -> },
 ) {
     val scroll = rememberScrollState()
     val leadingFade = scroll.canScrollBackward

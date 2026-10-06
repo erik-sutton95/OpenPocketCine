@@ -3,6 +3,7 @@ import Network
 import Observation
 import OpenCineRelayApple
 import OpenPocketViewCore
+import OpenCineApple
 
 enum WatcherRelayClientStatus: Equatable {
     case idle

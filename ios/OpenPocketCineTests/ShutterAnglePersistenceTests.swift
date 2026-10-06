@@ -3,6 +3,7 @@ import OpenPocketViewCore
 import Network
 import SwiftUI
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -40,7 +41,7 @@ final class ShutterAnglePersistenceTests: XCTestCase {
         OperatorPrefs.shutterUsesAngle = true
         OperatorPrefs.shutterAngleDegrees = 180
         let peer = try ShutterAnglePeer()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = fixture(controlsOnly: true)
         session.datalink = driver
         defer {
@@ -130,7 +131,7 @@ final class ShutterAnglePersistenceTests: XCTestCase {
         OperatorPrefs.shutterUsesAngle = true
         OperatorPrefs.shutterAngleDegrees = 180
         let peer = try ShutterAnglePeer()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = fixture(controlsOnly: true)
         session.datalink = driver
         defer {
@@ -203,10 +204,10 @@ final class ShutterAnglePersistenceTests: XCTestCase {
         status.shutterDenom = 48
         status.availableShutterDenoms = [24, 48, 50, 60, 120, 240]
         session.updateMultiview(
-            camera: FoundCamera(
+            camera: DjiAppleSighting(
                 id: UUID(), name: "OsmoPocket3-Test",
                 model: CameraModel.resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil),
-            driver: DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: ""), status: status)
+            driver: DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: ""), status: status)
         return session
     }
 

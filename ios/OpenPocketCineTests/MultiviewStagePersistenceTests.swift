@@ -1,6 +1,7 @@
 import Foundation
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -58,7 +59,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         session.networkConfigured = true
         session.ssid = "Old hotspot"
         session.usePhoneHotspot = true
-        session.tiles[0].camera = FoundCamera(
+        session.tiles[0].camera = DjiAppleSighting(
             id: UUID(), name: "OsmoPocket3-Test", model: .resolve(modelId: 0x20, name: "Test"),
             modelId: 0x20)
         session.selectNetworkSource(hotspot: false)
@@ -212,7 +213,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
                 journal = $0
                 return true
             })
-        let camera = FoundCamera(
+        let camera = DjiAppleSighting(
             id: UUID(), name: "OsmoPocket3-Test",
             model: .resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil)
         XCTAssertTrue(session.recordStationChange(camera))
@@ -236,10 +237,10 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         var journal: MultiviewStageStore.Stage?
         var attempts: [UUID: Int] = [:]
         var waits = 0
-        let first = FoundCamera(
+        let first = DjiAppleSighting(
             id: UUID(), name: "OsmoNano-Test", model: .resolve(modelId: 0x19, name: "Test"),
             modelId: 0x19)
-        let second = FoundCamera(
+        let second = DjiAppleSighting(
             id: UUID(), name: "OsmoPocket4Pro-Test", model: .resolve(modelId: 0x26, name: "Test"),
             modelId: 0x26)
         let session = MultiviewSession(
@@ -281,7 +282,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
                 journal = $0
                 return true
             })
-        let camera = FoundCamera(
+        let camera = DjiAppleSighting(
             id: UUID(), name: "OsmoNano-Test", model: .resolve(modelId: 0x19, name: "Test"),
             modelId: 0x19)
         XCTAssertTrue(session.recordStationChange(camera))
@@ -320,7 +321,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
                 journal = $0
                 return true
             })
-        let camera = FoundCamera(
+        let camera = DjiAppleSighting(
             id: UUID(), name: "OsmoPocket3-Test",
             model: .resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil)
         XCTAssertTrue(session.recordStationChange(camera))

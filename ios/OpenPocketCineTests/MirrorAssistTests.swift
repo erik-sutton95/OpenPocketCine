@@ -2,6 +2,7 @@ import CoreImage
 import OpenCineAppKit
 import OpenCineCameraControls
 import XCTest
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -40,7 +41,7 @@ final class MirrorAssistTests: XCTestCase {
     }
 
     func testMirrorAloneDoesNotForceGPUFeed() {
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.mirror = true
         XCTAssertFalse(
             fx.needsGPUFeed,
@@ -50,7 +51,7 @@ final class MirrorAssistTests: XCTestCase {
     func testCompositorDoesNotFlipRasterWhenMirrorIsSet() {
         let source = CIImage(color: CIColor(red: 1, green: 0, blue: 0))
             .cropped(to: CGRect(x: 0, y: 0, width: 8, height: 4))
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.mirror = true
         let output = LiveMonitorCompositor.apply(to: source, effects: fx)
         XCTAssertEqual(output.extent, source.extent)

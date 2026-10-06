@@ -5,17 +5,18 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import com.opencapture.monitorui.MonitorRect
 
 class LiveLevelOverlayTest {
-    private fun ChromeRect.inside(o: ChromeRect) = minX >= o.minX && maxX <= o.maxX && minY >= o.minY && maxY <= o.maxY
+    private fun MonitorRect.inside(o: MonitorRect) = minX >= o.minX && maxX <= o.maxX && minY >= o.minY && maxY <= o.maxY
 
     @Test
     fun stripsSitEquidistantFromTheFeedCentre() {
-        val viewport = ChromeRect(0f, 0f, 390f, 844f)
+        val viewport = MonitorRect(0f, 0f, 390f, 844f)
         for ((feed, portrait) in listOf(
-            ChromeRect(0f, 0f, 844f, 390f) to false,
-            ChromeRect(-200f, 120f, 790f, 444f) to true,
-            ChromeRect(0f, 200f, 390f, 219f) to true,
+            MonitorRect(0f, 0f, 844f, 390f) to false,
+            MonitorRect(-200f, 120f, 790f, 444f) to true,
+            MonitorRect(0f, 200f, 390f, 219f) to true,
         )) {
             val visible = LiveLevel.visible(feed, viewport)
             val frames = LiveLevel.frames(feed, viewport, portrait)

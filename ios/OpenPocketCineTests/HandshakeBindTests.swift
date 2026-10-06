@@ -12,10 +12,10 @@ import XCTest
 /// loopback native endpoint. The DEBUG registered label supplies host phase only;
 /// it never sends an enable or fabricates a camera/picture observation.
 @MainActor
-private func establishAdmittedLiveView(_ session: CameraSession, driver: DatalinkDriver,
+private func establishAdmittedLiveView(_ session: CameraSession, driver: DjiAppleDatalink,
     modelID: Int = 0x0022, policy: ConnectionDonorPeer,
     network: String? = nil,
-    endpointProvider: (() -> DatalinkDriver)? = nil) async {
+    endpointProvider: (() -> DjiAppleDatalink)? = nil) async {
     XCTAssertFalse(session.isMultiviewBorrowed, "Fixture setup cannot promote a borrowed transport")
     guard !session.isMultiviewBorrowed else { return }
     policy.app = session
@@ -25,7 +25,7 @@ private func establishAdmittedLiveView(_ session: CameraSession, driver: Datalin
         exchangeTiming: policy.exchangeTiming, currentEndpoint: { policy.current },
         attach: { [weak session] endpoint in
             policy.current = endpoint
-            session?.datalink = endpoint as? DatalinkDriver
+            session?.datalink = endpoint as? DjiAppleDatalink
         }, registered: { [weak session] endpoint, attempt in
             XCTAssertTrue(attempt.isCurrent)
             XCTAssertTrue(endpoint === (endpointProvider?() ?? driver))
@@ -33,7 +33,7 @@ private func establishAdmittedLiveView(_ session: CameraSession, driver: Datalin
             session?.phase = .live
         }, ssid: network ?? policy.network, password: "SIMULATED-PASSWORD", stationNetwork: nil,
         persist: { _, _ in policy.trace.append("persist SIMULATED fixture only") }, forget: {})
-    let camera = FoundCamera(id: UUID(), name: "SIMULATED admitted live-view",
+    let camera = DjiAppleSighting(id: UUID(), name: "SIMULATED admitted live-view",
         model: .resolve(modelId: modelID, name: "SIMULATED admitted live-view"), modelId: modelID)
     session.connect(camera)
     let registered = ContinuousClock.now.advanced(by: .seconds(2))
@@ -46,8 +46,8 @@ private func establishAdmittedLiveView(_ session: CameraSession, driver: Datalin
 @MainActor
 private final class LiveViewReplacementProbe {
     var replaced = false
-    var endpoint: DatalinkDriver
-    init(endpoint: DatalinkDriver) { self.endpoint = endpoint }
+    var endpoint: DjiAppleDatalink
+    init(endpoint: DjiAppleDatalink) { self.endpoint = endpoint }
 }
 
 @MainActor
@@ -71,7 +71,7 @@ final class HandshakeBindTests: XCTestCase {
 
     func testShortHandshakeAckCannotRegisterUntilTheInitialCommandWindowArrives() async throws {
         let peer = try EndpointPinnedCamera(holdInitialWindow: true)
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let opening = Task { try await driver.open() }
         defer {
             opening.cancel()
@@ -97,7 +97,7 @@ final class HandshakeBindTests: XCTestCase {
 
     func testRepairRetiresAnActiveAudioChainEvenWhenAnotherWorkItemOwnsItsTail() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = CameraSession()
         defer {
             session.disconnect()
@@ -135,7 +135,7 @@ final class HandshakeBindTests: XCTestCase {
 
     func testRepairRetiresOldControlRetriesAndRequestWaitersBeforeNewHandshake() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = CameraSession()
         defer {
             session.disconnect()
@@ -175,7 +175,7 @@ final class HandshakeBindTests: XCTestCase {
 
     func testNegotiatedEndpointWithoutFreshPictureTransfersToSessionRecovery() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = CameraSession()
         defer {
             session.disconnect()
@@ -203,7 +203,7 @@ final class HandshakeBindTests: XCTestCase {
 
     func testCancelledEndpointNegotiationCannotPublishSuccessOrKeepSending() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         defer {
             driver.close()
             peer.stop()
@@ -243,7 +243,7 @@ final class HandshakeBindTests: XCTestCase {
     func testUDPRepairRenegotiatesPeerDestinationBeforeResumingLive() async throws {
         let peer = try EndpointPinnedCamera()
         let port = try await peer.start()
-        let driver = DatalinkDriver.loopbackForTesting(port: port)
+        let driver = DjiAppleDatalink.loopbackForTesting(port: port)
         defer {
             driver.close()
             peer.stop()
@@ -284,7 +284,7 @@ final class HandshakeBindTests: XCTestCase {
         ]
         for testCase in cases {
             var calls: [String] = []
-            DatalinkDriver.prepareHandshakeBind(
+            DjiAppleDatalink.prepareHandshakeBind(
                 existingSocket: testCase.socket,
                 discard: { calls.append("discard") },
                 reset: { calls.append("reset") })
@@ -298,12 +298,12 @@ final class HandshakeBindTests: XCTestCase {
 /// separately; these cases do not qualify a physical camera.
 @MainActor
 final class LiveEnableDonorTests: XCTestCase {
-    private func bind(_ modelID: Int, session: CameraSession, driver: DatalinkDriver,
+    private func bind(_ modelID: Int, session: CameraSession, driver: DjiAppleDatalink,
         borrowed: Bool = false, policy: ConnectionDonorPeer? = nil, network: String? = nil) async {
         if borrowed {
             XCTAssertTrue(session.isMultiviewBorrowed, "Borrowed contract requires a genuinely borrowed session")
             guard session.isMultiviewBorrowed else { return }
-            session.updateMultiview(camera: FoundCamera(id: UUID(), name: "SIMULATED borrowed",
+            session.updateMultiview(camera: DjiAppleSighting(id: UUID(), name: "SIMULATED borrowed",
                 model: .resolve(modelId: modelID, name: "SIMULATED borrowed"), modelId: modelID),
                 driver: driver, status: CameraStatus())
             do { try await driver.open() }
@@ -314,7 +314,7 @@ final class LiveEnableDonorTests: XCTestCase {
             policy: policy ?? ConnectionDonorPeer(cached: true), network: network)
     }
 
-    private func fence(_ driver: DatalinkDriver, peer: EndpointPinnedCamera) async {
+    private func fence(_ driver: DjiAppleDatalink, peer: EndpointPinnedCamera) async {
         // An explicit known read reaches the same serialized UDP queue after the
         // operation. The peer observes it; a negative assertion cannot use a dead sink.
         // This read is fixture-owned and excluded from live recipe comparisons.
@@ -338,7 +338,7 @@ final class LiveEnableDonorTests: XCTestCase {
 
     func testPocketDonorPreparesBeforeOneUDPEnable() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let policy = ConnectionDonorPeer(cached: true)
         // capturedRecipe does not mark initial history, so hold the independent monitor's
         // manual wake for this migrated direct-recipe comparison. Initial/native cadence
@@ -356,7 +356,7 @@ final class LiveEnableDonorTests: XCTestCase {
 
     func testNanoDonorPairsItsGateWithEnableWithoutPocketPrepare() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let policy = ConnectionDonorPeer(cached: true)
         // Isolate this migrated direct recipe without advancing its monitor wake.
         let session = CameraSession(heartbeatTiming: policy.heartbeatTiming)
@@ -374,7 +374,7 @@ final class LiveEnableDonorTests: XCTestCase {
 
     func testActionSixDonorUsesCapturedReceiverWithoutEitherPreparation() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let policy = ConnectionDonorPeer(cached: true)
         // Isolate this migrated direct recipe without advancing its monitor wake.
         let session = CameraSession(heartbeatTiming: policy.heartbeatTiming)
@@ -390,7 +390,7 @@ final class LiveEnableDonorTests: XCTestCase {
 
     func testKnownUncapturedDonorRefusesWithoutARecipeWrite() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = CameraSession()
         await bind(0x0017, session: session, driver: driver)
         defer { session.disconnect(); driver.close(); peer.stop() }
@@ -408,7 +408,7 @@ final class LiveEnableDonorTests: XCTestCase {
 
     func testMediaGateBlocksOrdinaryEnableAndRetainsExplicitReturnException() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = CameraSession()
         await bind(0x0022, session: session, driver: driver)
         defer { session.disconnect(); driver.close(); peer.stop() }
@@ -460,8 +460,8 @@ final class LiveEnableDonorTests: XCTestCase {
         let (session, policy) = timedSession(clock, wallNow: { wallOrigin + clock.time })
         let oldPeer = try EndpointPinnedCamera()
         let newPeer = try EndpointPinnedCamera()
-        let oldDriver = DatalinkDriver.loopbackForTesting(port: try await oldPeer.start())
-        let newDriver = DatalinkDriver.loopbackForTesting(port: try await newPeer.start())
+        let oldDriver = DjiAppleDatalink.loopbackForTesting(port: try await oldPeer.start())
+        let newDriver = DjiAppleDatalink.loopbackForTesting(port: try await newPeer.start())
         let probe = LiveViewReplacementProbe(endpoint: oldDriver)
         await establishAdmittedLiveView(session, driver: oldDriver, policy: policy,
             endpointProvider: { probe.endpoint })
@@ -472,7 +472,7 @@ final class LiveEnableDonorTests: XCTestCase {
             oldPeer.stop(); newPeer.stop(); session.decoder.close()
             withExtendedLifetime((policy, display)) {}
         }
-        let successor = FoundCamera(id: UUID(), name: "SIMULATED successor live-view",
+        let successor = DjiAppleSighting(id: UUID(), name: "SIMULATED successor live-view",
             model: .resolve(modelId: 0x0022, name: "SIMULATED successor live-view"), modelId: 0x0022)
         session.gimbalMoveRunning = true
         session.gimbalMovePaused = true
@@ -521,7 +521,7 @@ final class LiveEnableDonorTests: XCTestCase {
         let wallOrigin = Date.timeIntervalSinceReferenceDate
         let (session, policy) = timedSession(clock, wallNow: { wallOrigin + clock.time })
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         await bind(0x0022, session: session, driver: driver, policy: policy)
         defer {
             session.disconnect(); clock.cancelAll(); driver.close(); peer.stop()
@@ -560,7 +560,7 @@ final class LiveEnableDonorTests: XCTestCase {
         let wallOrigin = Date.timeIntervalSinceReferenceDate
         let (session, policy) = timedSession(clock, wallNow: { wallOrigin + clock.time })
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         await bind(0x0022, session: session, driver: driver, policy: policy)
         let display = DisplayLayerView(session.decoder.displayLayer)
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64); display.layoutSubviews()
@@ -591,7 +591,7 @@ final class LiveEnableDonorTests: XCTestCase {
         var wall = Date.timeIntervalSinceReferenceDate
         let (session, policy) = timedSession(clock, wallNow: { wall })
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         await bind(0x0022, session: session, driver: driver, policy: policy)
         let display = DisplayLayerView(session.decoder.displayLayer)
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64); display.layoutSubviews()
@@ -616,7 +616,7 @@ final class LiveEnableDonorTests: XCTestCase {
         let wallOrigin = Date.timeIntervalSinceReferenceDate
         let (session, policy) = timedSession(clock, wallNow: { wallOrigin + clock.time })
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         await bind(0x0022, session: session, driver: driver, policy: policy)
         defer {
             session.disconnect(); clock.cancelAll(); driver.close(); peer.stop()
@@ -637,7 +637,7 @@ final class LiveEnableDonorTests: XCTestCase {
         let wallOrigin = Date.timeIntervalSinceReferenceDate
         let (session, policy) = timedSession(clock, wallNow: { wallOrigin + clock.time })
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         await bind(0x0022, session: session, driver: driver, policy: policy)
         let display = DisplayLayerView(session.decoder.displayLayer)
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64); display.layoutSubviews()
@@ -664,7 +664,7 @@ final class LiveEnableDonorTests: XCTestCase {
 
     /// SIMULATED encoded bytes cross the real UDP assembler, VT and native host.
     /// Await both actual decoded-source and presentation events, never submission alone.
-    private func establishNativePicture(_ session: CameraSession, driver: DatalinkDriver,
+    private func establishNativePicture(_ session: CameraSession, driver: DjiAppleDatalink,
         peer: EndpointPinnedCamera) async throws -> Date {
         let decoder = session.decoder
         decoder.effects.histogram = true
@@ -722,7 +722,7 @@ final class LiveEnableDonorTests: XCTestCase {
     /// Missing fragment 1 corrupts the pending P-frame. A later group makes the
     /// real assembler report discontinuity; dependent P-frames cannot repair it.
     private func deliverNativeReferenceLoss(_ session: CameraSession,
-        driver: DatalinkDriver, peer: EndpointPinnedCamera) async throws {
+        driver: DjiAppleDatalink, peer: EndpointPinnedCamera) async throws {
         let lost = expectation(description: "SIMULATED UDP fragment gap reports reference loss")
         var reported = false
         let original = driver.onVideoDiscontinuity
@@ -755,7 +755,7 @@ final class LiveEnableDonorTests: XCTestCase {
         let (session, policy) = timedSession(clock, wallNow: { wallOrigin + clock.time },
             recordWait: { nativeWaits.append($0) })
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         await bind(0x0022, session: session, driver: driver, policy: policy)
         let display = DisplayLayerView(session.decoder.displayLayer)
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64); display.layoutSubviews()
@@ -815,7 +815,7 @@ final class LiveEnableDonorTests: XCTestCase {
         let (session, policy) = timedSession(clock, wallNow: { wallOrigin + clock.time },
             recordWait: { nativeWaits.append($0) })
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         await bind(0x0022, session: session, driver: driver, policy: policy)
         let display = DisplayLayerView(session.decoder.displayLayer)
         display.frame = CGRect(x: 0, y: 0, width: 64, height: 64); display.layoutSubviews()
@@ -905,7 +905,7 @@ final class LiveEnableDonorTests: XCTestCase {
     /// Direct public-body admission is tested; no claim about a natural UI trigger.
     func testBorrowedTransportMustRefuseItsOwnLiveEnable() async throws {
         let peer = try EndpointPinnedCamera()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = CameraSession(borrowing: HevcDecoder())
         await bind(0x0022, session: session, driver: driver, borrowed: true)
         defer { session.releaseMultiview(); driver.close(); peer.stop() }

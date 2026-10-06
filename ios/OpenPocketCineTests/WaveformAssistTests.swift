@@ -26,40 +26,40 @@ final class WaveformAssistTests: XCTestCase {
 
     func testIREZeroAndHundredSitOnPlotEdges() {
         let size = CGSize(width: 250, height: 153)
-        let plot = WaveformAxis.plotRect(in: size)
+        let plot = MonitorWaveformAxis.plotRect(in: size)
         let shared = MonitorScopeGeometry.plotRect(size, top: 26)
-        let line0 = WaveformAxis.scaleLineY(0, plot)
-        let line100 = WaveformAxis.scaleLineY(100, plot)
-        let line5 = WaveformAxis.scaleLineY(5, plot)
-        let line95 = WaveformAxis.scaleLineY(95, plot)
-        let grayIRE = WaveformAxis.middleGrayIRE(transfer: .dlog2)
-        let lineGray = WaveformAxis.scaleLineY(grayIRE, plot)
+        let line0 = MonitorWaveformAxis.scaleLineY(0, plot)
+        let line100 = MonitorWaveformAxis.scaleLineY(100, plot)
+        let line5 = MonitorWaveformAxis.scaleLineY(5, plot)
+        let line95 = MonitorWaveformAxis.scaleLineY(95, plot)
+        let grayIRE = MonitorWaveformAxis.middleGrayIRE(transfer: .dlog2)
+        let lineGray = MonitorWaveformAxis.scaleLineY(grayIRE, plot)
         XCTAssertEqual(plot.height, 125, accuracy: 0.01)
-        XCTAssertEqual(plot.maxY, size.height - WaveformAxis.bottomPad, accuracy: 0.01)
+        XCTAssertEqual(plot.maxY, size.height - MonitorWaveformAxis.bottomPad, accuracy: 0.01)
         XCTAssertGreaterThan(
             plot.maxY - shared.maxY, 5,
             "WAVE 0 uses the panel floor, not the 8pt shared chrome pad")
-        XCTAssertEqual(line0, plot.maxY - WaveformAxis.plotInset, accuracy: 0.01)
-        XCTAssertEqual(line100, plot.minY + WaveformAxis.plotInset, accuracy: 0.01)
+        XCTAssertEqual(line0, plot.maxY - MonitorWaveformAxis.plotInset, accuracy: 0.01)
+        XCTAssertEqual(line100, plot.minY + MonitorWaveformAxis.plotInset, accuracy: 0.01)
         XCTAssertEqual(
-            WaveformAxis.plotX(0, plot), plot.minX + WaveformAxis.plotInset, accuracy: 0.01)
+            MonitorWaveformAxis.plotX(0, plot), plot.minX + MonitorWaveformAxis.plotInset, accuracy: 0.01)
         XCTAssertEqual(
-            WaveformAxis.plotX(100, plot), plot.maxX - WaveformAxis.plotInset, accuracy: 0.01)
+            MonitorWaveformAxis.plotX(100, plot), plot.maxX - MonitorWaveformAxis.plotInset, accuracy: 0.01)
         XCTAssertEqual(
-            WaveformAxis.plotX(50, plot), plot.midX, accuracy: 0.01)
+            MonitorWaveformAxis.plotX(50, plot), plot.midX, accuracy: 0.01)
         XCTAssertEqual(line0 - line5, (line0 - line100) * 0.05, accuracy: 0.2)
         XCTAssertEqual(line95 - line100, (line0 - line100) * 0.05, accuracy: 0.2)
         XCTAssertEqual(grayIRE, 30.50, accuracy: 0.05)
         XCTAssertGreaterThan(lineGray - line100, (line0 - line100) * 0.55)
         XCTAssertLessThan(line0 - lineGray, (line0 - line100) * 0.75)
 
-        let blackByte = WaveformAxis.legalBlackByte(transfer: .dlog2)
+        let blackByte = MonitorWaveformAxis.legalBlackByte(transfer: .dlog2)
         XCTAssertEqual(blackByte, 16, "D-Log2 paper black is tap byte 16")
         XCTAssertEqual(
-            WaveformAxis.levelTable(for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))[
+            MonitorWaveformAxis.levelTable(for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))[
                 Int(blackByte)], 0, accuracy: 0.002)
         XCTAssertEqual(
-            WaveformAxis.traceY(
+            MonitorWaveformAxis.traceY(
                 blackByte, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot),
             line0, accuracy: 0.1,
             "crushed paper black sits on the drawn 0 line")
@@ -70,23 +70,23 @@ final class WaveformAssistTests: XCTestCase {
 
         let grey = UInt8((LiveColorScience.encode(0.18, transfer: .dlog2) * 255).rounded())
         XCTAssertEqual(
-            WaveformAxis.traceY(
+            MonitorWaveformAxis.traceY(
                 grey, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot),
             lineGray, accuracy: 0.5,
             "18% gray sits on the paper-IRE guide, not 50")
         XCTAssertEqual(
-            WaveformAxis.traceY(
+            MonitorWaveformAxis.traceY(
                 247, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot), line100,
             accuracy: 0.01)
         XCTAssertEqual(
-            WaveformAxis.traceY(
+            MonitorWaveformAxis.traceY(
                 223, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog), plot), line100,
             accuracy: 0.01)
         XCTAssertEqual(
-            WaveformAxis.legalBlackByte(transfer: .dlog), 24,
+            MonitorWaveformAxis.legalBlackByte(transfer: .dlog), 24,
             "D-Log paper black is tap byte 24")
 
-        let table = WaveformAxis.levelTable(
+        let table = MonitorWaveformAxis.levelTable(
             for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         let black = ScopePoint(
             xRatio: 0.5, yRatio: 0.5, red: blackByte, green: blackByte, blue: blackByte,
@@ -107,7 +107,7 @@ final class WaveformAssistTests: XCTestCase {
         XCTAssertEqual(Double(vertices[3].position.y) + 0.5, Double(lineGray), accuracy: 0.5)
         XCTAssertEqual(Double(vertices[6].position.y) + 0.5, Double(line100), accuracy: 0.1)
 
-        let leftoverCrush = WaveformAxis.plotY(ScopeDisplayScale.crushLevel, plot)
+        let leftoverCrush = MonitorWaveformAxis.plotY(ScopeDisplayScale.crushLevel, plot)
         XCTAssertEqual(
             leftoverCrush, line0, accuracy: 0.5,
             "a leftover 0.05 table value is 0.05 IRE (on 0), not a 5% shelf")

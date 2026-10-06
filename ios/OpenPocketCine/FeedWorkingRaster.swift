@@ -2,6 +2,7 @@ import CoreImage
 import CoreVideo
 import Metal
 import OpenPocketViewCore
+import OpenCineApple
 
 /// Cap the raster the LUT cube sees. 720p proxies pass through. A 4K original
 /// is export-only — memcpy + CIColorCube at 3840 is why a "trivial" cube hitch.
@@ -11,9 +12,9 @@ enum FeedWorkingRaster {
     private static let context: CIContext = {
         if let device = MTLCreateSystemDefaultDevice() {
             return CIContext(
-                mtlDevice: device, options: LiveMonitorWorkingSpace.displayContextOptions)
+                mtlDevice: device, options: MonitorWorkingSpace.displayContextOptions)
         }
-        return CIContext(options: LiveMonitorWorkingSpace.displayContextOptions)
+        return CIContext(options: MonitorWorkingSpace.displayContextOptions)
     }()
 
     private struct PoolKey: Hashable {

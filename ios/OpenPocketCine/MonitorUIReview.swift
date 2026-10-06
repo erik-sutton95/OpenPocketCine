@@ -1,3 +1,5 @@
+import OpenCineDJIApple
+
 #if targetEnvironment(simulator)
     import Foundation
     import MonitorPresentation
@@ -256,7 +258,7 @@
         func stopScan() {}
 
         func connect(cameraID: String, setup: DJISetup, restoreAccessPoint: Bool) async throws -> DJIConnection {
-            if case .phoneHotspot(let network, nil) = setup, SharedWiFiPath.address(hotspot: true) == nil,
+            if case .phoneHotspot(let network, nil) = setup, DjiAppleSharedWiFiPath.address(hotspot: true) == nil,
                 let confirmHotspot
             {
                 guard await confirmHotspot(network) else { throw CancellationError() }

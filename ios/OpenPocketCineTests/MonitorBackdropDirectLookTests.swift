@@ -3,6 +3,8 @@ import CoreVideo
 import MonitorPresentation
 import OpenPocketViewCore
 import XCTest
+import OpenCineApple
+import OpenCineMedia
 
 @testable import MonitorUI
 @testable import OpenPocketCine
@@ -13,12 +15,12 @@ import XCTest
 final class MonitorBackdropDirectLookTests: XCTestCase {
     func testDirectLookMatchesTheCGImagePathForIdentityAndLUT() throws {
         let cube = BuiltInLook.mono.cube()
-        var lut = LiveImageEffects()
+        var lut = MonitorFrameEffects()
         lut.lutDimension = cube.size
         lut.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
-        for effects in [LiveImageEffects(), lut] {
+        for effects in [MonitorFrameEffects(), lut] {
             let source = Self.colorBars()
-            let looks = AssistInspectorImageRenderer()
+            let looks = MonitorInspectorImageRenderer()
             let renderer = MonitorBackdropRenderer()
             let canvas = CGSize(width: 440, height: 300)
             let frame = CGRect(x: 20, y: 40, width: 400, height: 225)

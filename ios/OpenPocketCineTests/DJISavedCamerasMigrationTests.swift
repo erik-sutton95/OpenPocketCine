@@ -3,6 +3,7 @@ import OpenCineAppKit
 import OpenCineCore
 import OpenCineDJI
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -252,7 +253,7 @@ final class DJISavedCamerasMigrationTests: XCTestCase {
     /// at the error it threw; a setting only Settings fixes offers Open Settings.
     func testConnectFailuresKeepTheAppCopy() {
         let session = OpenPocketCine.CameraSession()
-        session.lastConnectError = DatalinkDriver.DatalinkError.noHandshake
+        session.lastConnectError = DjiAppleDatalink.DatalinkError.noHandshake
         let silent = session.typedFailure("camera never answered the datalink handshake")
         XCTAssertEqual(silent.message, StartupConnectionCopy.datalinkSilent)
         XCTAssertTrue(silent.message.contains("DJI Frame Tap") && silent.message.contains("DJI Mimo"))
@@ -264,7 +265,7 @@ final class DJISavedCamerasMigrationTests: XCTestCase {
         XCTAssertEqual(approval.reason, .notApproved)
         XCTAssertTrue(approval.message.contains("DJI Frame Tap"))
 
-        session.lastConnectError = DatalinkDriver.DatalinkError.localNetworkDenied
+        session.lastConnectError = DjiAppleDatalink.DatalinkError.localNetworkDenied
         let local = session.typedFailure(StartupConnectionCopy.localNetworkDenied)
         XCTAssertEqual(local.reason, .permission(.localNetwork))
         XCTAssertEqual(local.actions, [.openSettings, .retry])
@@ -328,7 +329,7 @@ final class DJISavedCamerasMigrationTests: XCTestCase {
 
     /// A nameless first advert lists by its model; the record keeps the real advertised name.
     func testSightingsListByTitle() {
-        let nameless = FoundCamera(
+        let nameless = DjiAppleSighting(
             id: UUID(), name: "DJI camera", model: .resolve(modelId: 0x19, name: nil), modelId: 0x19)
         XCTAssertEqual(OpenPocketCine.CameraSession.sighting(nameless).name, nameless.model.name)
         XCTAssertEqual(OpenPocketCine.CameraSession.sighting(nameless).modelId, 0x19)

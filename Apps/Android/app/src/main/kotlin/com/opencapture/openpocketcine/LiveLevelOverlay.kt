@@ -29,6 +29,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlinx.coroutines.delay
+import com.opencapture.monitorui.MonitorRect
 
 /**
  * LEVEL: camera world attitude ([LevelReading]), not this phone. Mirrors iOS
@@ -53,18 +54,18 @@ internal object LiveLevel {
     const val ROLL_LIFT_PORTRAIT = 22f
     val good = Color(0.18f, 0.78f, 0.42f)
 
-    fun visible(feed: ChromeRect, viewport: ChromeRect): ChromeRect {
+    fun visible(feed: MonitorRect, viewport: MonitorRect): MonitorRect {
         val x = maxOf(feed.minX, viewport.minX)
         val y = maxOf(feed.minY, viewport.minY)
         val w = minOf(feed.maxX, viewport.maxX) - x
         val h = minOf(feed.maxY, viewport.maxY) - y
-        return if (w <= 0f || h <= 0f) feed else ChromeRect(x, y, w, h)
+        return if (w <= 0f || h <= 0f) feed else MonitorRect(x, y, w, h)
     }
 
-    data class Frames(val roll: ChromeRect, val tilt: ChromeRect)
+    data class Frames(val roll: MonitorRect, val tilt: MonitorRect)
 
     /** Strips in dp against the on-screen part of the feed (OpenZCine #47). */
-    fun frames(feed: ChromeRect, viewport: ChromeRect, portrait: Boolean): Frames {
+    fun frames(feed: MonitorRect, viewport: MonitorRect, portrait: Boolean): Frames {
         val v = visible(feed, viewport)
         val rollWidth = minOf(MAX_LENGTH, v.width - 24f).coerceAtLeast(0f)
         val rollMidY = v.maxY - if (portrait) ROLL_LIFT_PORTRAIT else ROLL_LIFT_LANDSCAPE
@@ -72,8 +73,8 @@ internal object LiveLevel {
         // Same offset from centre as roll, kept 6 dp inside the picture (portrait fill).
         val tiltMidX = minOf(v.midX + (rollMidY - v.midY), v.maxX - 6f - THICKNESS / 2f)
         return Frames(
-            ChromeRect(v.midX - rollWidth / 2f, rollMidY - THICKNESS / 2f, rollWidth, THICKNESS),
-            ChromeRect(tiltMidX - THICKNESS / 2f, v.midY - tiltHeight / 2f, THICKNESS, tiltHeight),
+            MonitorRect(v.midX - rollWidth / 2f, rollMidY - THICKNESS / 2f, rollWidth, THICKNESS),
+            MonitorRect(tiltMidX - THICKNESS / 2f, v.midY - tiltHeight / 2f, THICKNESS, tiltHeight),
         )
     }
 
@@ -91,8 +92,8 @@ internal object LiveLevel {
 internal fun LiveLevelOverlay(
     reading: LevelReading,
     viewFlip: Boolean,
-    feed: ChromeRect,
-    viewport: ChromeRect,
+    feed: MonitorRect,
+    viewport: MonitorRect,
     portrait: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -147,7 +148,7 @@ private val bandFill = Color.Black.copy(alpha = 0.32f)
  * white centreline, cross-bar marker, zero notches, number at the start. Layout in
  * dp inside [rect]; positive reads up / right. Green when level.
  */
-private fun DrawScope.drawStrip(rect: ChromeRect, vertical: Boolean, value: Double?, measurer: TextMeasurer) {
+private fun DrawScope.drawStrip(rect: MonitorRect, vertical: Boolean, value: Double?, measurer: TextMeasurer) {
     if (rect.isEmpty) return
     val white = LiveDesign.text
     val isLevel = value != null && abs(value) < LiveLevel.THRESHOLD

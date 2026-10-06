@@ -63,7 +63,6 @@ import com.opencapture.opencine.dji.FoundCameraIdentity
 import com.opencapture.opencine.vocabulary.FoundCamera
 import com.opencapture.openpocketcine.pairing.AddSetupSlot
 import com.opencapture.openpocketcine.pairing.isBusy
-import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.createLiveAssistState
 import com.opencapture.openpocketcine.feed.Media3GlBackend
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
@@ -76,6 +75,12 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
 import com.opencapture.monitorui.MonitorAssistTool
+import com.opencapture.opencine.runtime.InspectorPreviewPipeline
+import com.opencapture.monitorui.settings.MonitorSettingsTab
+import com.opencapture.opencine.runtime.ScopeSampleBus
+import com.opencapture.opencine.appkit.MonitorDisplaySection
+import com.opencapture.opencine.appkit.MonitorDisplayChrome
+import com.opencapture.opencine.appkit.MonitorDisplayMode
 
 /**
  * [borrowing] builds a Live View model over a Multiview tile's decoder (iOS
@@ -208,9 +213,9 @@ class AppModel(
             if (value == null) shell.dismissCover()
             else shell.open(if (value == LiveOperatorPanel.SETTINGS) ShellModel.Cover.SETTINGS else ShellModel.Cover.MEDIA)
         }
-    override var operatorSettingsTab by mutableStateOf(OperatorSettingsTab.LINK)
-    var chromeEditorMode by mutableStateOf<PocketDispMode?>(null)
-    override var chromeEditorReturnMode by mutableStateOf<PocketDispMode?>(null)
+    override var operatorSettingsTab by mutableStateOf(MonitorSettingsTab.LINK)
+    var chromeEditorMode by mutableStateOf<MonitorDisplayMode?>(null)
+    override var chromeEditorReturnMode by mutableStateOf<MonitorDisplayMode?>(null)
     override var liveChromeInteractive by mutableStateOf(true)
     override var keepScreenAwake by mutableStateOf(OperatorPrefs.keepScreenAwake(appContext))
         private set
@@ -289,55 +294,55 @@ class AppModel(
     override val gimbalGamepad = GimbalGamepadDriver(OperatorPrefs::gimbalGamepadStick)
     override var gamepadConnected by mutableStateOf(false)
 
-    val currentDispMode: PocketDispMode
-        get() = if (assistClean) PocketDispMode.CLEAN else PocketDispMode.LIVE
+    val currentDispMode: MonitorDisplayMode
+        get() = if (assistClean) MonitorDisplayMode.CLEAN else MonitorDisplayMode.LIVE
 
-    val dispChrome: PocketDispChrome
+    val dispChrome: MonitorDisplayChrome
         get() = chrome(currentDispMode)
 
     override val isEditingChrome: Boolean
         get() = chromeEditorMode != null
 
-    override fun chrome(mode: PocketDispMode): PocketDispChrome =
+    override fun chrome(mode: MonitorDisplayMode): MonitorDisplayChrome =
         when (mode) {
-            PocketDispMode.LIVE -> dispLive
-            PocketDispMode.CLEAN -> dispClean
+            MonitorDisplayMode.LIVE -> dispLive
+            MonitorDisplayMode.CLEAN -> dispClean
         }
 
-    fun chromeSectionMounts(section: PocketDispSection): Boolean {
+    fun chromeSectionMounts(section: MonitorDisplaySection): Boolean {
         val editing = chromeEditorMode
         if (editing != null && editing == currentDispMode) return true
-        if (section == PocketDispSection.RAIL_SETTINGS && !dispLive.railSettings && !dispClean.railSettings) {
+        if (section == MonitorDisplaySection.RAIL_SETTINGS && !dispLive.railSettings && !dispClean.railSettings) {
             return true
         }
         return dispChrome.isVisible(section)
     }
 
-    override fun toggleChrome(section: PocketDispSection, mode: PocketDispMode) {
+    override fun toggleChrome(section: MonitorDisplaySection, mode: MonitorDisplayMode) {
         when (mode) {
-            PocketDispMode.LIVE -> {
+            MonitorDisplayMode.LIVE -> {
                 dispLive = dispLive.toggling(section)
                 OperatorPrefs.setDispLive(appContext, dispLive)
             }
-            PocketDispMode.CLEAN -> {
+            MonitorDisplayMode.CLEAN -> {
                 dispClean = dispClean.toggling(section)
                 OperatorPrefs.setDispClean(appContext, dispClean)
             }
         }
     }
 
-    override fun beginChromeEditing(mode: PocketDispMode) {
+    override fun beginChromeEditing(mode: MonitorDisplayMode) {
         homePanel = null
         liveOperatorPanel = null
         liveGimbalPanel = LiveGimbalPanel.NONE
-        setDisplayMode(clean = mode == PocketDispMode.CLEAN)
+        setDisplayMode(clean = mode == MonitorDisplayMode.CLEAN)
         chromeEditorMode = mode
     }
 
     fun endChromeEditing() {
         chromeEditorReturnMode = chromeEditorMode
         chromeEditorMode = null
-        operatorSettingsTab = OperatorSettingsTab.DISPLAY
+        operatorSettingsTab = MonitorSettingsTab.DISPLAY
         liveOperatorPanel = LiveOperatorPanel.SETTINGS
     }
 

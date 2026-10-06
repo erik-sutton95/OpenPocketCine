@@ -3,16 +3,15 @@ import OpenCineCameraControls
 import OpenPocketViewCore
 import OpenCineMedia
 import SwiftUI
+import MonitorPresentation
 
 /// Landscape and portrait keep independent stored centres.
-typealias ScopeCanvasSlot = MonitorScopeCanvasSlot
 
-typealias ScopePanelSize = MonitorScopePanelSize
 
 /// Display level from `ScopeDisplayScale` → y inside `rect`.
 ///
 /// Legacy 4% top/bottom stretch (`crushLevel`…`clipLevel`). WAVE / PARADE /
-/// HISTO use ``WaveformAxis`` instead. LIGHTS still sits on this scale.
+/// HISTO use ``MonitorWaveformAxis`` instead. LIGHTS still sits on this scale.
 func scopeLevelY(_ level: Double, _ rect: CGRect) -> CGFloat {
     let lo = ScopeDisplayScale.crushLevel
     let hi = ScopeDisplayScale.clipLevel
@@ -25,7 +24,6 @@ func scopeLevelY(_ level: Double, _ rect: CGRect) -> CGFloat {
 /// (D-Log2 = 30.50) - not remapped to 50. The plot uses the full panel under
 /// the title so 0 / 100 sit on the min / max edges (the old 8pt chrome pad
 /// was the ~5% empty band under the floor).
-typealias WaveformAxis = MonitorUI.MonitorWaveformAxis
 
 /// Y of a 0…100 scale line (crush/clip anchors after the stretch).
 func scopeScaleLineY(_ scaleIRE: Double, _ rect: CGRect) -> CGFloat {
@@ -252,18 +250,17 @@ struct TrafficLightsOverlay: View {
             placementBounds: MonitorScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
         ) {
             // Metered once in the sampler with the operator threshold riding
-            // `LiveImageEffects.trafficThreshold` - render the bundle directly.
+            // `MonitorFrameEffects.trafficThreshold` - render the bundle directly.
             ScopeBundleScope { _ in
-                TrafficLightsMeterMini(reading: model.monitorSamples.bundle.traffic)
+                MonitorTrafficLightsMeter(reading: model.monitorSamples.bundle.traffic)
             }
         }
     }
 }
 
-/// OpenZCine `TrafficLightsMeterMini` - RED-style RGB goal posts, clip lamps on
+/// OpenZCine `MonitorTrafficLightsMeter` - RED-style RGB goal posts, clip lamps on
 /// top, crush lamps on the floor, `TL` title. `fillsWidth` is the portrait
 /// full-bleed stack; the landscape floating panel stays the 74-box.
-typealias TrafficLightsMeterMini = MonitorTrafficLightsMeter
 
 // MARK: - Chrome + drawing
 

@@ -5,6 +5,8 @@ import OpenCineRelayApple
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
+import OpenCineAppKit
+import OpenCineApple
 
 /// Operator-facing Settings help. Never name a sister app or another camera brand.
 enum SettingsHelpCopy {
@@ -16,6 +18,10 @@ enum SettingsHelpCopy {
         "Watching devices join this camera’s Wi-Fi, then receive the shared picture from this phone."
     static let editView =
         "Opens the monitor with an eye on each element you can show or hide."
+    static let liveDisplayTitle = MonitorDisplayMode.live.settingsTitle
+    static let cleanDisplayTitle = MonitorDisplayMode.clean.settingsTitle
+    static let liveDisplayCaption = MonitorDisplayMode.live.settingsCaption
+    static let cleanDisplayCaption = MonitorDisplayMode.clean.settingsCaption
     static let frameIO =
         "Sign in to upload clips from the share popup. Frame.io needs the internet, so the phone hops off the camera Wi‑Fi for the upload."
     static let shareThisFeed =
@@ -74,7 +80,6 @@ enum SettingsHelpCopy {
         "Remove local copies of saved freeze reports. Turn off Automatic error reports to clear pending uploads. Reports already sent cannot be removed here."
 }
 
-typealias OperatorSettingsTab = MonitorSettingsTab
 
 struct SettingsRootView: View {
     /// Real device insets after the host zeros the clean landscape edge.
@@ -174,7 +179,7 @@ struct SettingsRootView: View {
             network: model.session.joinedSSID.flatMap { $0.isEmpty ? nil : $0 },
             networkHelp: "SSID joined for this session. The password stays in the iOS Keychain on this phone.")
 
-        if FeedUpscaler.supportedOnThisDevice.count > 1 {
+        if MonitorUpscaler.supportedOnThisDevice.count > 1 {
             SettingsRowCard(title: "Processing") {
                 SettingsInlineRow(
                     title: "Feed Upscaler",
@@ -182,11 +187,11 @@ struct SettingsRootView: View {
                     showTopDivider: false
                 ) {
                     SettingsSegmented(
-                        options: FeedUpscaler.supportedOnThisDevice.map(\.rawValue),
+                        options: MonitorUpscaler.supportedOnThisDevice.map(\.rawValue),
                         selected: FeedUpscaleSwitch.shared.upscaler.rawValue,
                         compact: true
                     ) { value in
-                        guard let choice = FeedUpscaler(rawValue: value) else { return }
+                        guard let choice = MonitorUpscaler(rawValue: value) else { return }
                         FeedUpscaleSwitch.shared.upscaler = choice
                     }
                 }
@@ -395,7 +400,7 @@ struct SettingsRootView: View {
                 hdrDisplay: Bindable(model).hdrDisplay, help: SettingsHelpCopy.hdrDisplay,
                 feedback: { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) }
             )
-            MonitorDisplaySections(sections: PocketDispMode.allCases.map { mode in
+            MonitorDisplaySections(sections: MonitorDisplayMode.allCases.map { mode in
                 MonitorDisplaySection(
                     id: mode.rawValue, title: mode.settingsTitle, caption: mode.settingsCaption,
                     reset: {
@@ -414,10 +419,10 @@ struct SettingsRootView: View {
         .onAppear { model.chromeEditorReturnMode = nil }
     }
 
-    private func displayVisibility(_ mode: PocketDispMode) -> [MonitorDisplayToggle] {
+    private func displayVisibility(_ mode: MonitorDisplayMode) -> [MonitorDisplayToggle] {
         let chrome = mode == .clean ? Bindable(model).dispClean : Bindable(model).dispLive
         let capabilities = OsmoMonitorPresentation.capabilities(model.session)
-        let values: [(String, String, WritableKeyPath<PocketDispChrome, Bool>, Bool)] = [
+        let values: [(String, String, WritableKeyPath<MonitorDisplayChrome, Bool>, Bool)] = [
             ("Status Bar", "REC, timecode, format, and FPS along the top of the feed.", \.statusBar, true),
             ("Tool Bar", "The view-assist strip under the feed.", \.toolBar, true),
             ("Camera Values", "ISO, shutter, white balance, and the rest of the capture strip.", \.cameraValues, true),
@@ -446,7 +451,7 @@ struct SettingsRootView: View {
     }
 
     private var cleanPins: [MonitorDisplayToggle] {
-        LiveAssistTool.cleanPinCases.map { tool in
+        MonitorAssistSelection.cleanPinCases.map { tool in
             MonitorDisplayToggle(id: "clean.pin." + tool.rawValue,
                 title: tool.displaySettingsTitle,
                 isOn: model.assist.cleanViewPinnedTools.contains(tool),

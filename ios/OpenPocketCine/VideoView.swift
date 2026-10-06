@@ -4,6 +4,7 @@ import OpenCineApple
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
+import OpenCineMedia
 
 /// Hosts the HEVC display layer and the Core Image feed (used only while GPU assists are on).
 /// `effects` and `sampleBus` are read here so toggling PEAK/LUT/WAVE refreshes this representable
@@ -16,7 +17,7 @@ import UIKit
 /// same host; it has no pose latch, so it applies on the toggle.
 struct VideoView: View {
     let decoder: HevcDecoder
-    var effects: LiveImageEffects
+    var effects: MonitorFrameEffects
     var sampleBus: LiveFrameSampleBus
     /// `CameraStatus.monitorTransfer` (ColorMode `3F`/`3C`/`17`/`41`). Simulator clip is `.dlog2`.
     var transfer: MonitorTransfer?
@@ -41,7 +42,7 @@ struct VideoView: View {
     }
 
     /// Mirror stays a view-space flip so the GPU path does not also flip the buffer.
-    private var rasterEffects: LiveImageEffects {
+    private var rasterEffects: MonitorFrameEffects {
         var fx = effects
         fx.mirror = false
         return fx
@@ -50,13 +51,13 @@ struct VideoView: View {
 
 struct VideoDisplayRepresentable: UIViewRepresentable {
     let decoder: HevcDecoder
-    var effects: LiveImageEffects
+    var effects: MonitorFrameEffects
     var assistMirror: Bool
     var flipVertical = false
     var pictureFlip: Bool
     var sampleBus: LiveFrameSampleBus
     var transfer: MonitorTransfer?
-    var feedUpscaler: FeedUpscaler
+    var feedUpscaler: MonitorUpscaler
     var hdrDisplay: Bool
 
     func makeUIView(context: Context) -> DisplayLayerView {

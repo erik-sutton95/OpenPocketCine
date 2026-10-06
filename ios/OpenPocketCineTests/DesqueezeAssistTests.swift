@@ -2,6 +2,7 @@ import CoreImage
 import OpenCineCameraControls
 import OpenPocketViewCore
 import XCTest
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -109,7 +110,7 @@ final class DesqueezeAssistTests: XCTestCase {
     func testCompositorCorrectsExtentOnceWithLUTAndPixelWarnings() {
         let source = CIImage(color: CIColor(red: 0.4, green: 0.4, blue: 0.4))
             .cropped(to: CGRect(x: 0, y: 0, width: 160, height: 90))
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.desqueezeFactor = 2
         fx.peaking = true
         fx.zebra = true

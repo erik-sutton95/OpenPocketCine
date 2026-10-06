@@ -5,6 +5,7 @@ import Photos
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import MonitorUI
 
 /// OpenZCine `IconFrameio` template mark.
 struct FrameioMark: View {
@@ -70,7 +71,7 @@ enum MediaDeliveryDestination: String, CaseIterable, Identifiable, Sendable {
         case .frameio: "Upload to your Frame.io project"
         }
     }
-    var icon: OpcIcon {
+    var icon: MonitorIcon {
         switch self {
         case .nativeShare: .share
         case .frameio: .upload

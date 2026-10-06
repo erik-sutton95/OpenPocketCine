@@ -10,6 +10,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
+import com.opencapture.opencine.media.MonitorAudioMeterChannel
+import com.opencapture.monitorui.MonitorPlaybackZoom
 
 private const val ENCODING_PCM_16BIT = 2
 private const val ENCODING_PCM_FLOAT = 4
@@ -18,7 +21,7 @@ class PlaybackChromeTest {
     @Test
     fun pinchAtCenterDoesNotOffset() {
         val zoom =
-            AnchoredPinchZoom().pinchChanged(
+            MonitorPlaybackZoom().pinchChanged(
                 magnification = 2f,
                 startAnchorX = 0.5f,
                 startAnchorY = 0.5f,
@@ -34,7 +37,7 @@ class PlaybackChromeTest {
     @Test
     fun pinchAtCornerKeepsThePointUnderTheFinger() {
         val zoom =
-            AnchoredPinchZoom().pinchChanged(
+            MonitorPlaybackZoom().pinchChanged(
                 magnification = 2f,
                 startAnchorX = 0f,
                 startAnchorY = 0f,
@@ -49,16 +52,16 @@ class PlaybackChromeTest {
     @Test
     fun pinchClampsAtFourAndNeverBelowOne() {
         val up =
-            AnchoredPinchZoom().pinchChanged(
+            MonitorPlaybackZoom().pinchChanged(
                 magnification = 8f,
                 startAnchorX = 0.5f,
                 startAnchorY = 0.5f,
                 width = 200f,
                 height = 100f,
             )
-        assertEquals(AnchoredPinchZoom.MAX_SCALE, up.scale, 0.001f)
+        assertEquals(MonitorPlaybackZoom.MAX_SCALE, up.scale, 0.001f)
         val down =
-            AnchoredPinchZoom().pinchChanged(
+            MonitorPlaybackZoom().pinchChanged(
                 magnification = 0.2f,
                 startAnchorX = 0.5f,
                 startAnchorY = 0.5f,
@@ -72,7 +75,7 @@ class PlaybackChromeTest {
     @Test
     fun endGestureBelowThresholdResets() {
         val zoomed =
-            AnchoredPinchZoom().pinchChanged(
+            MonitorPlaybackZoom().pinchChanged(
                 magnification = 1.03f,
                 startAnchorX = 0.5f,
                 startAnchorY = 0.5f,
@@ -86,10 +89,10 @@ class PlaybackChromeTest {
 
     @Test
     fun panOnlyAppliesWhileZoomedAndClampsOnEnd() {
-        val idle = AnchoredPinchZoom().panChanged(40f, -10f)
+        val idle = MonitorPlaybackZoom().panChanged(40f, -10f)
         assertEquals(0f, idle.offsetX, 0.001f)
         val zoomed =
-            AnchoredPinchZoom()
+            MonitorPlaybackZoom()
                 .pinchChanged(2f, 0.5f, 0.5f, 100f, 100f)
                 .endGesture(100f, 100f)
                 .panChanged(400f, 400f)
@@ -135,7 +138,7 @@ class PlaybackChromeTest {
 
     @Test
     fun ballisticsAttackInstantlyAndDecayAtTwentySixDbPerSecond() {
-        val loud = MonitorAudioMeterBallistics.step(AudioMeterChannel.Silent, peakLinear = 1.0, dt = 0.04)
+        val loud = MonitorAudioMeterBallistics.step(MonitorAudioMeterChannel.Silent, peakLinear = 1.0, dt = 0.04)
         assertEquals(0.0, loud.levelDB, 1e-9)
         assertEquals(0.0, loud.peakDB, 1e-9)
         val next = MonitorAudioMeterBallistics.step(loud, peakLinear = 0.0, dt = 0.5)
@@ -146,7 +149,7 @@ class PlaybackChromeTest {
 
     @Test
     fun peakHoldThenFalls() {
-        var channel = MonitorAudioMeterBallistics.step(AudioMeterChannel.Silent, peakLinear = 1.0, dt = 0.04)
+        var channel = MonitorAudioMeterBallistics.step(MonitorAudioMeterChannel.Silent, peakLinear = 1.0, dt = 0.04)
         channel = MonitorAudioMeterBallistics.step(channel, peakLinear = 0.0, dt = 1.0)
         assertEquals(0.0, channel.peakDB, 1e-9)
         channel = MonitorAudioMeterBallistics.step(channel, peakLinear = 0.0, dt = 1.0)
@@ -216,7 +219,7 @@ class PlaybackChromeTest {
 
     @Test
     fun identityPlanIsANoOpPlaybackLook() {
-        val identity = com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan.IDENTITY
+        val identity = FeedEffectsRenderPlan.IDENTITY
         assertFalse(identity.hasPlaybackLook)
         assertTrue(com.opencapture.openpocketcine.feed.PlaybackLookEffect(identity).isNoOp(3840, 2160))
         val px = intArrayOf(0xFF8090A0.toInt())
@@ -227,7 +230,7 @@ class PlaybackChromeTest {
     @Test
     fun zebraHighlightPaintsHotPixels() {
         val plan =
-            com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan(
+            FeedEffectsRenderPlan(
                 lutCube = null,
                 falseColorPaint = null,
                 falseColorWeight = null,

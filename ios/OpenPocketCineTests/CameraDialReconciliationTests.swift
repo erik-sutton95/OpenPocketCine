@@ -2,6 +2,7 @@ import MonitorPresentation
 import OpenCineCore
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -68,15 +69,15 @@ final class CameraDialReconciliationTests: XCTestCase {
         actual.zoomLens = CamFov.lensPosition(for: 1)
         actual.colorMode = color
         let model = CameraModel.resolve(modelId: 0x0020, name: "OsmoPocket3-Test")
-        session.updateMultiview(camera: FoundCamera(id: UUID(), name: model.name, model: model, modelId: 0x0020),
-                                driver: DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: ""),
+        session.updateMultiview(camera: DjiAppleSighting(id: UUID(), name: model.name, model: model, modelId: 0x0020),
+                                driver: DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: ""),
                                 status: actual)
         return session
     }
 
     func testAutoShutterCaptionTracksTelemetryWhileEVIsSettling() {
         let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
-        session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         defer { session.disconnect() }
         session.status.expoMode = .auto
         session.setEv(EvComp(thirds: 1))
@@ -102,7 +103,7 @@ final class CameraDialReconciliationTests: XCTestCase {
     func testShootingModeDoesNotBounceThroughAnOlderStatusPush() {
         let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
         // An unopened driver admits the command without opening a socket.
-        session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         defer { session.disconnect() }
         session.status.shootingMode = Int(ShootingMode.video.rawValue)
         session.setShootingMode(.slowMo)
@@ -119,7 +120,7 @@ final class CameraDialReconciliationTests: XCTestCase {
 
     func testUnrelatedPushCannotConfirmFocusOrWhiteBalance() {
         let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
-        session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         defer { session.disconnect() }
         session.status.focusMode = .single
         session.status.whiteBalance = .auto
@@ -147,7 +148,7 @@ final class CameraDialReconciliationTests: XCTestCase {
 
     func testParameterDialsIgnoreUnrelatedFramesUntilTheirOwnConfirmation() {
         let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
-        session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         defer { session.disconnect() }
         session.status.isoLimit = .max800
         session.status.audioChannel = .stereo

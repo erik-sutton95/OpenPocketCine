@@ -101,7 +101,7 @@ import com.opencapture.monitorui.MonitorEditingCancellation
 import com.opencapture.monitorui.MonitorLayoutPolicy
 import com.opencapture.monitorui.MonitorPlaybackLayout
 import com.opencapture.openpocketcine.AppModel
-import com.opencapture.openpocketcine.ChromeRect
+import com.opencapture.monitorui.MonitorRect
 import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.liveModuleFrame
@@ -115,8 +115,8 @@ import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.opencine.cameracontrols.AudioAssist
 import com.opencapture.opencine.cameracontrols.AssistAudioOverlay
-import com.opencapture.openpocketcine.assists.AssistRect
-import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.monitorui.MonitorScopeRect
+import com.opencapture.opencine.appkit.MonitorAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.monitorui.MonitorAssistTool
 import com.opencapture.opencine.cameracontrols.MirrorAssist
@@ -140,6 +140,10 @@ import com.opencapture.opencine.media.PlaybackVideoLayout
 import com.opencapture.opencine.cameracontrols.MediaCornerShape
 import com.opencapture.opencine.cameracontrols.MediaCircleIconButton
 import com.opencapture.opencine.cameracontrols.LocalMediaBackdropGlass
+import com.opencapture.monitorui.MonitorPlaybackGestureConfig
+import com.opencapture.opencine.media.MonitorAudioMeterChannel
+import com.opencapture.monitorui.MonitorPlaybackZoom
+import com.opencapture.opencine.media.MonitorAudioMeterLevels
 
 @Composable
 fun MediaPhotoViewer(
@@ -154,7 +158,7 @@ fun MediaPhotoViewer(
     var showDesqueezeOptions by remember { mutableStateOf(false) }
     var bitmap by remember(file.id) { mutableStateOf<Bitmap?>(null) }
     var loading by remember { mutableStateOf(true) }
-    var zoom by remember(file.id) { mutableStateOf(AnchoredPinchZoom()) }
+    var zoom by remember(file.id) { mutableStateOf(MonitorPlaybackZoom()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val photoDensity = LocalDensity.current
     val photoLayoutDir = LocalLayoutDirection.current
@@ -180,7 +184,7 @@ fun MediaPhotoViewer(
 
     LaunchedEffect(file.id) {
         loading = true
-        zoom = AnchoredPinchZoom()
+        zoom = MonitorPlaybackZoom()
         bitmap =
             withContext(Dispatchers.IO) {
                 val cached = controller.localFile(file) ?: controller.thumbnailFile(file)
@@ -219,7 +223,7 @@ fun MediaPhotoViewer(
                     .pointerInput(file.id, fitted.width, fitted.height) {
                         detectPlaybackVideoGestures(
                             isReady = { true }, isZoomed = { zoom.isZoomed },
-                            config = PlaybackGestureConfig(enableTap = false, enableScrub = false, enableSwipe = false),
+                            config = MonitorPlaybackGestureConfig(enableTap = false, enableScrub = false, enableSwipe = false),
                             onTap = {}, onChromeSwipe = {}, onScrubStart = {}, onScrubDelta = {}, onScrubEnd = {},
                             onPinch = { magnification, centroid ->
                                 val anchor = unitPoint(centroid, fitted.width, fitted.height)
@@ -354,8 +358,8 @@ fun MediaPlayerScreen(
     val haptics = LocalOperatorHaptics.current
     var active by remember { mutableStateOf(startingAt) }
     val playlist = if (files.any { it.id == active.id }) files else listOf(active)
-    var meterLeft by remember { mutableStateOf(AudioMeterChannel.Silent) }
-    var meterRight by remember { mutableStateOf(AudioMeterChannel.Silent) }
+    var meterLeft by remember { mutableStateOf(MonitorAudioMeterChannel.Silent) }
+    var meterRight by remember { mutableStateOf(MonitorAudioMeterChannel.Silent) }
     val libraryState by controller.library.state.collectAsState()
     val activeRecord = controller.record(active)
     val favorite = activeRecord?.favorite ?: active.isStarred
@@ -445,8 +449,8 @@ fun MediaPlayerScreen(
     LaunchedEffect(composition, audioMetersOn, conformTarget != null) {
         meterSampler.reset()
         if (!audioMetersOn) {
-            meterLeft = AudioMeterChannel.Silent
-            meterRight = AudioMeterChannel.Silent
+            meterLeft = MonitorAudioMeterChannel.Silent
+            meterRight = MonitorAudioMeterChannel.Silent
             meterBox.readAndReset()
             return@LaunchedEffect
         }
@@ -454,15 +458,15 @@ fun MediaPlayerScreen(
         val conforming = conformTarget != null
         if (conforming) {
             meterBox.readAndReset()
-            meterLeft = AudioMeterChannel.Silent
-            meterRight = AudioMeterChannel.Silent
+            meterLeft = MonitorAudioMeterChannel.Silent
+            meterRight = MonitorAudioMeterChannel.Silent
         }
         while (true) {
             delay(42)
             val now = System.nanoTime()
             val dt = (now - last) / 1_000_000_000.0
             last = now
-            val levels = meterSampler.step(dt, outputMuted = conformTarget != null) ?: AudioMeterLevels.Silent
+            val levels = meterSampler.step(dt, outputMuted = conformTarget != null) ?: MonitorAudioMeterLevels.Silent
             meterLeft = levels.left
             meterRight = levels.right
         }
@@ -561,7 +565,7 @@ fun MediaPlayerScreen(
                 com.opencapture.opencine.cameracontrols.MonitorAssistCluster(prefs = OperatorPrefs, portrait = chrome.portrait,
                     locked = false, playback = true, isOn = assist::isPlaybackVisible, onToggle = { assist.togglePlayback(it) },
                     onLongPress = { assist.configureTool = it }, requestExpand = chrome.expanded,
-                    onExpansionHandled = chrome.onExpansionHandled, modifier = Modifier.liveModuleFrame(ChromeRect(chrome.frame.x, chrome.frame.y, chrome.frame.width, chrome.frame.height)))
+                    onExpansionHandled = chrome.onExpansionHandled, modifier = Modifier.liveModuleFrame(MonitorRect(chrome.frame.x, chrome.frame.y, chrome.frame.width, chrome.frame.height)))
             }, assistInspector = { chrome ->
                 assist.configureTool?.let { configure ->
                     com.opencapture.openpocketcine.assists.MonitorAssistInspector(configure, assist, model,
@@ -578,14 +582,14 @@ fun MediaPlayerScreen(
 private fun PlaybackAudioMetersOverlay(
     video: PlaybackVideoLayout.Rect,
     canvas: PlaybackVideoLayout.Rect,
-    left: AudioMeterChannel,
-    right: AudioMeterChannel,
-    state: LiveAssistState,
+    left: MonitorAudioMeterChannel,
+    right: MonitorAudioMeterChannel,
+    state: MonitorAssistState,
 ) {
     val density = LocalDensity.current.density
-    val bounds = AssistRect(0f, 0f, canvas.width, canvas.height)
+    val bounds = MonitorScopeRect(0f, 0f, canvas.width, canvas.height)
     val edge = 14f * density
-    val placement = AssistRect(edge, edge, (canvas.width - 2 * edge).coerceAtLeast(1f),
+    val placement = MonitorScopeRect(edge, edge, (canvas.width - 2 * edge).coerceAtLeast(1f),
         (canvas.height - 2 * edge).coerceAtLeast(1f))
     AssistAudioOverlay(state, left.asReading(), right.asReading(), bounds, placement,
         onOpenOptions = { state.configureTool = MonitorAssistTool.AUDIO })

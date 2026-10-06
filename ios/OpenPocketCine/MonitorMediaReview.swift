@@ -1,3 +1,5 @@
+import MonitorUI
+
 #if targetEnvironment(simulator)
     import Foundation
     import MonitorPresentation
@@ -160,7 +162,7 @@
                                 .init(red: 0.08, green: 0.11, blue: 0.14),
                             ],
                             startPoint: .topLeading, endPoint: .bottomTrailing)
-                        OpcIcon.mountain.frame(width: 46, height: 46)
+                        MonitorIcon.mountain.frame(width: 46, height: 46)
                             .foregroundStyle(.white.opacity(0.16))
                     }
                     .accessibilityLabel("Generated review thumbnail for \(item.filename)")

@@ -1,5 +1,6 @@
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -12,7 +13,7 @@ final class GimbalModeSelectionTests: XCTestCase {
             let model = AppModel()
             model.session = CameraSession()
             decoder = model.session.decoder
-            let camera = FoundCamera(id: UUID(), name: "OsmoPocket4P-Test",
+            let camera = DjiAppleSighting(id: UUID(), name: "OsmoPocket4P-Test",
                 model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22)
             let admitted = await ownedRepairPolicy.admitExistingConnection(model.session, target: camera)
             admittedModel = try XCTUnwrap(admitted ? model : nil)
@@ -39,16 +40,16 @@ final class GimbalModeSelectionTests: XCTestCase {
         XCTAssertNotNil(decoder.lastPresentedAt)
         let model = admittedModel ?? AppModel()
         if ownedRepairPolicy != nil {
-            model.session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+            model.session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
             XCTAssertFalse(model.session.isMultiviewBorrowed)
             XCTAssertEqual(model.session.phase, .live)
         } else {
             model.session = CameraSession(borrowing: decoder)
             model.session.updateMultiview(
-                camera: FoundCamera(
+                camera: DjiAppleSighting(
                     id: UUID(), name: "OsmoPocket4P-Test",
                     model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
-                driver: DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: ""),
+                driver: DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: ""),
                 status: CameraStatus())
         }
         return model
@@ -105,7 +106,7 @@ final class GimbalModeSelectionTests: XCTestCase {
         XCTAssertTrue(model.headTrackingEnabled)
         model.session = CameraSession(borrowing: HevcDecoder())
         model.session.updateMultiview(
-            camera: FoundCamera(
+            camera: DjiAppleSighting(
                 id: UUID(), name: "OsmoPocket4P-Test",
                 model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
             driver: nil, status: CameraStatus())

@@ -9,6 +9,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.opencapture.opencine.media.ScopeAssistBundle
 
 class SharedAssistScopeOwnershipTest {
     @Test fun distinctMonitorBusesRejectEachOthersSources() {

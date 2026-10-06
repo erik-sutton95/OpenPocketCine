@@ -2,12 +2,13 @@ import AVFoundation
 import OpenCineApple
 import OpenPocketViewCore
 import SwiftUI
+import OpenCineMedia
 
 /// Stable native playback adapter; UI chrome is a sibling of this host.
 struct MediaPlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
     let session: MonitorPlaybackFeedSession
-    var effects: LiveImageEffects
+    var effects: MonitorFrameEffects
     var transfer: MonitorTransfer
     var sampleBus: LiveFrameSampleBus
 

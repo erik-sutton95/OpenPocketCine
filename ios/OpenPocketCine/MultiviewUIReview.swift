@@ -1,3 +1,5 @@
+import OpenCineDJIApple
+
 #if DEBUG
     import MonitorUI
     import OpenPocketViewCore
@@ -41,7 +43,7 @@
             let models = [0x22, 0x20, 0x19, 0x21]
             for index in 0..<min(4, max(0, count)) {
                 let tile = session.tiles[index]
-                tile.camera = FoundCamera(
+                tile.camera = DjiAppleSighting(
                     id: UUID(), name: names[index],
                     model: .resolve(modelId: models[index], name: names[index]),
                     modelId: models[index])

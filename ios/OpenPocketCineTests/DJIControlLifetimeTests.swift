@@ -2,6 +2,7 @@ import OpenCineAppKit
 import OpenCineCore
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -10,7 +11,7 @@ final class DJIControlLifetimeTests: XCTestCase {
     func testOwnedShellCloseTearsDownNativeLinkAndCoverDoesNot() async {
         let session = OpenPocketCine.CameraSession()
         defer { session.disconnect() }
-        let driver = DatalinkDriver(port: 9011, tcpPoke: false, pairingToken: "")
+        let driver = DjiAppleDatalink(port: 9011, tcpPoke: false, pairingToken: "")
         session.datalink = driver
         session.phase = .live
         session.status.shootingMode = 1
@@ -46,7 +47,7 @@ final class DJIControlLifetimeTests: XCTestCase {
     func testLateCloseCannotCancelSuccessorWhileSavedCameraScanning() {
         let session = OpenPocketCine.CameraSession()
         defer { session.disconnect() }
-        let driver = DatalinkDriver(port: 9012, tcpPoke: false, pairingToken: "")
+        let driver = DjiAppleDatalink(port: 9012, tcpPoke: false, pairingToken: "")
         session.datalink = driver
         session.phase = .live
         let first = session.control
@@ -64,7 +65,7 @@ final class DJIControlLifetimeTests: XCTestCase {
     func testBorrowedShellReturnReleasesViewWithoutClosingTileTransport() {
         let decoder = HevcDecoder()
         let view = OpenPocketCine.CameraSession(borrowing: decoder)
-        let tileDriver = DatalinkDriver(port: 9013, tcpPoke: false, pairingToken: "")
+        let tileDriver = DjiAppleDatalink(port: 9013, tcpPoke: false, pairingToken: "")
         defer { tileDriver.close() }
         view.datalink = tileDriver
         let common = view.control

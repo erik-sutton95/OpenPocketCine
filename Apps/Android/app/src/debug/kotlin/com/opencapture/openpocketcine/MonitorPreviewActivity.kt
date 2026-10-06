@@ -50,6 +50,8 @@ import com.opencapture.opencine.dji.PocketControlPort
 import com.opencapture.opencine.dji.PocketControlState
 import kotlinx.coroutines.MainScope
 import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
+import com.opencapture.monitorui.LiveMonitorLayout
+import com.opencapture.monitorui.MonitorRect
 
 /**
  * Debug-only, deterministic visual review of production chrome. This activity
@@ -155,7 +157,7 @@ private fun ReviewMonitor(model: AppModel, capabilities: MonitorLayoutCapabiliti
             Modifier.liveModuleFrame(layout.onFeed).monitorBackdropSource(backdrop), contentScale = ContentScale.FillBounds)
         else Box(Modifier.liveModuleFrame(layout.onFeed).background(Color(0xFF4A4C48)))
         com.opencapture.openpocketcine.assists.LiveAssistLayer(model.assist, model.scopeBus, status, focus = null,
-            feedFrame = layout.onFeed, placementFrame = ChromeRect(6f, safeTop + 6f, width - 12f,
+            feedFrame = layout.onFeed, placementFrame = MonitorRect(6f, safeTop + 6f, width - 12f,
                 (zones?.systemBar?.minY ?: (height - safeBottom)) - safeTop - 12f), locked = locked,
             onOpenOptions = { tool, frame -> model.assist.longPressAnchor = com.opencapture.monitorui.MonitorRect(frame.x, frame.y, frame.width, frame.height); model.assist.configureTool = tool })
         if (zones != null) {

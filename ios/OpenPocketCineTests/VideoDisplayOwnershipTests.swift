@@ -1,6 +1,8 @@
 import OpenCineAppKitApple
 import UIKit
 import XCTest
+import OpenCineApple
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -97,7 +99,7 @@ final class VideoDisplayOwnershipTests: XCTestCase {
         _ decoder: HevcDecoder, hdrDisplay: Bool
     ) -> VideoDisplayRepresentable {
         VideoDisplayRepresentable(
-            decoder: decoder, effects: LiveImageEffects(), assistMirror: false,
+            decoder: decoder, effects: MonitorFrameEffects(), assistMirror: false,
             pictureFlip: false, sampleBus: LiveFrameSampleBus(), transfer: nil,
             feedUpscaler: decoder.feedUpscaler, hdrDisplay: hdrDisplay)
     }

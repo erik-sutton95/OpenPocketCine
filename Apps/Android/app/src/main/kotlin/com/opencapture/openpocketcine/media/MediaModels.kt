@@ -3,8 +3,8 @@ package com.opencapture.openpocketcine.media
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.dji.MediaCommands
 
-typealias MediaCommands = com.opencapture.opencine.dji.MediaCommands
 
 fun MediaHTTP.pathUrl(storage: Int, path: String): HttpUrl = pathUrlString(storage, path).toHttpUrl()
 

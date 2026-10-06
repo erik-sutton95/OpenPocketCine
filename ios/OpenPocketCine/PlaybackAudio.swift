@@ -5,6 +5,7 @@ import OpenCineApple
 import OpenCineMedia
 import OpenPocketViewCore
 import SwiftUI
+import MonitorPresentation
 
 private let playbackAudioLogger = Logger(
     subsystem: "OpenPocketCine", category: "media-playback-audio")
@@ -57,8 +58,8 @@ extension AudioMeterLevels {
 /// Playback assist chip: existing icon, label and operator actions remain app composition.
 struct PlaybackAssistToolButton: View {
     @Environment(AppModel.self) private var model
-    let tool: LiveAssistTool
-    var onConfigure: (LiveAssistTool) -> Void
+    let tool: MonitorAssistSelection
+    var onConfigure: (MonitorAssistSelection) -> Void
     @State private var buildup: Task<Void, Never>?
 
     var body: some View {

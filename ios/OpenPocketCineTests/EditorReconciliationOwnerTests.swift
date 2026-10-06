@@ -4,6 +4,7 @@ import Observation
 import OpenCineDJI
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -25,10 +26,10 @@ final class EditorReconciliationOwnerTests: XCTestCase {
         status.availableShutterDenoms = [24, 48, 60, 120, 240]
         status.whiteBalance = .auto
         session.updateMultiview(
-            camera: FoundCamera(
+            camera: DjiAppleSighting(
                 id: UUID(), name: "OsmoPocket3-Test",
                 model: CameraModel.resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil),
-            driver: DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: ""), status: status)
+            driver: DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: ""), status: status)
         return session
     }
 
@@ -130,7 +131,7 @@ final class EditorReconciliationOwnerTests: XCTestCase {
 
     func testActualOwnedDisconnectRetiresPendingEditorWithoutInventingCameraConfirmation() {
         let session = CameraSession()
-        let driver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        let driver = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         session.datalink = driver
         session.setWhiteBalanceCustom(kelvin: 5600, tint: 0)
         XCTAssertEqual(session.pendingWhiteBalance, .custom(kelvin: 5600, tint: 0))
@@ -357,7 +358,7 @@ final class EditorReconciliationOwnerTests: XCTestCase {
         _ body: (CameraSession, EditorReconciliationPeer) async throws -> Void
     ) async throws {
         let peer = try EditorReconciliationPeer()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = borrowed()
         let unusedDriver = session.datalink
         session.datalink = driver

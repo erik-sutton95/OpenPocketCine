@@ -5,6 +5,7 @@ import OpenPocketViewCore
 import Observation
 import UIKit
 import XCTest
+import OpenCineApple
 
 @testable import OpenPocketCine
 

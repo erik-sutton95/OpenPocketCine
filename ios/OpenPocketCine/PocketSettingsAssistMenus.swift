@@ -19,7 +19,7 @@ import SwiftUI
 
     static func falseColor(
         assist: LiveAssistState, compact: Bool, transfer: MonitorTransfer, clipByte: Int
-    ) -> MonitorFalseColorMenu<FalseColorScaleKind> {
+    ) -> MonitorFalseColorMenu<MonitorFalseColorSelection> {
         MonitorFalseColorMenu(
             scales: FalseColorAssist.scaleOptions.map { FalseColorAssist.scale(forMenuLabel: $0) },
             scale: Binding(
@@ -51,7 +51,7 @@ import SwiftUI
     }
 
     private static func referenceValues(
-        scale: FalseColorScaleKind, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
+        scale: MonitorFalseColorSelection, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> MonitorFalseColorReferenceValues {
         let segments = FalseColorReference.segments(
             scale: scale, transfer: transfer, rec709: rec709, clipByte: clipByte, looks: .app)

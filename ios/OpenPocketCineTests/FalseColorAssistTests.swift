@@ -3,6 +3,8 @@ import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import OpenCineCameraControls
 import XCTest
+import OpenCineApple
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -79,7 +81,7 @@ final class FalseColorAssistTests: XCTestCase {
     /// Legend copy is pinned once, in core `LiveColorScienceTests`; the shell must
     /// match it band for band (the `zip` in `legendStops` would silently truncate).
     func testLegendLabelsMatchCoreFalseColorBands() {
-        for scale in FalseColorScaleKind.allCases where !scale.liveScale.usesSceneStops {
+        for scale in MonitorFalseColorSelection.allCases where !scale.liveScale.usesSceneStops {
             let core = PocketFalseColorMap.bands(
                 scale: scale, transfer: .dlog2, rec709: false,
                 clipByte: ceiling.clipByte(transfer: .dlog2)
@@ -255,7 +257,7 @@ final class FalseColorAssistTests: XCTestCase {
     /// `overlayWeightData` return nil until the lattice build lands). Tests
     /// must warm first — the app shows the plain look meanwhile.
     private func warmOverlayCubes(
-        scale: FalseColorScaleKind, mode: ColorMode, recordReadinessDuration: Bool = false
+        scale: MonitorFalseColorSelection, mode: ColorMode, recordReadinessDuration: Bool = false
     ) throws {
         let started = ProcessInfo.processInfo.systemUptime
         let clip = ceiling.clipByte(transfer: MonitorTransfer(mode))
@@ -292,7 +294,7 @@ final class FalseColorAssistTests: XCTestCase {
         let g = UInt8(clamping: Int((MonitorTransfer.rec709.middleGrayEncoded * 255).rounded()))
         let codes = Self.solidImage(code: g)
         let identity = codes
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.falseColor = true
         fx.falseColorScale = .ire
         fx.colorMode = .normal
@@ -322,7 +324,7 @@ final class FalseColorAssistTests: XCTestCase {
                     clipByte: ceiling.clipByte(transfer: .dlog2)) * 255)
                     .rounded()))
         let codes = Self.solidImage(code: encoded)
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.falseColor = true
         fx.falseColorScale = .stops
         fx.colorMode = .dLog2
@@ -337,7 +339,7 @@ final class FalseColorAssistTests: XCTestCase {
         try warmOverlayCubes(scale: .limits, mode: .dLog2)
         let grey = UInt8(clamping: Int((MonitorTransfer.dlog2.middleGrayEncoded * 255).rounded()))
         let codes = Self.solidImage(code: grey)
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.falseColor = true
         fx.falseColorScale = .limits
         fx.colorMode = .dLog2
@@ -347,7 +349,7 @@ final class FalseColorAssistTests: XCTestCase {
 
         let painted = LiveMonitorCompositor.apply(to: codes, effects: fx, display: codes)
         let gradedOnly = {
-            var lutOnly = LiveImageEffects()
+            var lutOnly = MonitorFrameEffects()
             lutOnly.lutDimension = look.size
             lutOnly.lutRGBA = fx.lutRGBA
             lutOnly.colorMode = .dLog2
@@ -386,7 +388,7 @@ final class FalseColorAssistTests: XCTestCase {
                     clipByte: ceiling.clipByte(transfer: .dlog2)) * 255)
                     .rounded()))
         let codes = Self.solidImage(code: encoded)
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.falseColor = true
         fx.falseColorScale = .stops
         fx.colorMode = .dLog2
@@ -408,7 +410,7 @@ final class FalseColorAssistTests: XCTestCase {
             by: CGAffineTransform(
                 scaleX: CGFloat(w) / max(image.extent.width, 1),
                 y: CGFloat(h) / max(image.extent.height, 1)))
-        let context = CIContext(options: LiveMonitorWorkingSpace.contextOptions)
+        let context = CIContext(options: MonitorWorkingSpace.contextOptions)
         context.render(
             scaled, toBitmap: &data, rowBytes: w * 4,
             bounds: CGRect(x: 0, y: 0, width: w, height: h),
@@ -435,7 +437,7 @@ final class FalseColorAssistTests: XCTestCase {
     }
 
     private static func sampleRGB(_ image: CIImage) -> (Float, Float, Float) {
-        let context = CIContext(options: LiveMonitorWorkingSpace.contextOptions)
+        let context = CIContext(options: MonitorWorkingSpace.contextOptions)
         var bytes = [UInt8](repeating: 0, count: 4)
         context.render(
             image, toBitmap: &bytes, rowBytes: 4,

@@ -4,7 +4,6 @@ import OpenCineApple
 import os
 
 /// Source-compatible name; native support and scaling math have one shared owner.
-typealias FeedUpscaler = OpenCineApple.MonitorUpscaler
 
 /// Persisted feed-upscaler choice. The renderer reads `rendererReadsUpscaler` off the main actor.
 @MainActor
@@ -14,7 +13,7 @@ final class FeedUpscaleSwitch {
 
     private nonisolated static let storageKey = "OpenPocketCine.feedUpscaler"
 
-    var upscaler: FeedUpscaler = FeedUpscaleSwitch.rendererReadsUpscaler {
+    var upscaler: MonitorUpscaler = FeedUpscaleSwitch.rendererReadsUpscaler {
         didSet {
             Self.rendererReadsUpscaler = upscaler
             UserDefaults.standard.set(upscaler.rawValue, forKey: Self.storageKey)
@@ -22,10 +21,10 @@ final class FeedUpscaleSwitch {
     }
 
     private nonisolated static let rendererSelection = OSAllocatedUnfairLock(
-        initialState: FeedUpscaler.supported(or: storedChoice))
+        initialState: MonitorUpscaler.supported(or: storedChoice))
     private nonisolated static let rendererInputPreview = OSAllocatedUnfairLock(initialState: false)
 
-    nonisolated static var rendererReadsUpscaler: FeedUpscaler {
+    nonisolated static var rendererReadsUpscaler: MonitorUpscaler {
         get { rendererSelection.withLock { $0 } }
         set { rendererSelection.withLock { $0 = newValue } }
     }
@@ -35,9 +34,9 @@ final class FeedUpscaleSwitch {
         set { rendererInputPreview.withLock { $0 = newValue } }
     }
 
-    private nonisolated static var storedChoice: FeedUpscaler? {
+    private nonisolated static var storedChoice: MonitorUpscaler? {
         guard let stored = UserDefaults.standard.string(forKey: storageKey) else { return nil }
-        if let known = FeedUpscaler(rawValue: stored) { return known }
+        if let known = MonitorUpscaler(rawValue: stored) { return known }
         switch stored {
         case "Lanczos": return .lanczos
         case "MetalFX": return .spatial
@@ -58,7 +57,7 @@ final class FeedUpscaleSwitch {
         }
     }
 
-    @ObservationIgnored private var restoreAfterOff: FeedUpscaler?
+    @ObservationIgnored private var restoreAfterOff: MonitorUpscaler?
 }
 
 extension SettingsHelpCopy {

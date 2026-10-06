@@ -1,9 +1,9 @@
 package com.opencapture.openpocketcine.feed
 
 import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+import com.opencapture.opencine.media.LiveColorScience
+import com.opencapture.opencine.media.MonitorTransfer
 
-typealias MonitorTransfer = com.opencapture.opencine.media.MonitorTransfer
-typealias LiveColorScience = com.opencapture.opencine.media.LiveColorScience
 
 /** Supplies the source calibration defaults while common owners retain every scope calculation. */
 object ScopeAnchors {

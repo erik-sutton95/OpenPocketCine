@@ -3,7 +3,7 @@ package com.opencapture.openpocketcine
 import com.opencapture.opencine.media.MonitorNDFilterRecommendation
 import com.opencapture.opencine.media.FrameRateSampler
 import com.opencapture.opencine.vocabulary.CamFov
-import com.opencapture.openpocketcine.lut.LutExposureCompensation
+import com.opencapture.opencine.media.MonitorLUTExposureCompensation
 import com.opencapture.opencine.vocabulary.MediaLibraryQuery
 import java.util.Locale
 import kotlin.test.Test
@@ -41,8 +41,8 @@ class LocaleIndependentFormattingTest {
 
     @Test
     fun lutExposureLabelKeepsTheDecimalPoint() {
-        assertEquals("+1.5", underCommaLocale { LutExposureCompensation.label(1.5) })
-        assertEquals("−2.0", underCommaLocale { LutExposureCompensation.label(-2.0) })
+        assertEquals("+1.5", underCommaLocale { MonitorLUTExposureCompensation.label(1.5) })
+        assertEquals("−2.0", underCommaLocale { MonitorLUTExposureCompensation.label(-2.0) })
     }
 
     @Test

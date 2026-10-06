@@ -360,12 +360,12 @@ final class FeedPresentationTests: XCTestCase {
     func testBilinearPresentsAtSourceSizeAndOtherUpscalersKeepThePanel() {
         let panel = CGSize(width: 2796, height: 1290)
         let source = CGSize(width: 1280, height: 720)
-        for upscaler in [FeedUpscaler.off, .lanczos] {
+        for upscaler in [MonitorUpscaler.off, .lanczos] {
             XCTAssertEqual(
                 CIFeedView.presentDrawableSize(
                     source: source, panel: panel, upscaler: upscaler, hdr: false), source)
         }
-        for upscaler in [FeedUpscaler.spatial, .superResolution] {
+        for upscaler in [MonitorUpscaler.spatial, .superResolution] {
             XCTAssertEqual(
                 CIFeedView.presentDrawableSize(
                     source: source, panel: panel, upscaler: upscaler, hdr: false), panel)

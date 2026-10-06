@@ -12,7 +12,7 @@ import XCTest
 /// or Adobe's integrator-program name.
 final class OperatorFacingCopyTests: XCTestCase {
     func testSharedTransportFailureRetainsAppCopyAndCallerFallback() {
-        let denied = DatalinkDriver.DatalinkError.localNetworkDenied
+        let denied = DjiAppleDatalink.DatalinkError.localNetworkDenied
         XCTAssertEqual(djiConnectionFailureDescription(denied), StartupConnectionCopy.localNetworkDenied)
         XCTAssertEqual(djiConnectionFailureDescription(denied, fallback: "generic"),
             StartupConnectionCopy.localNetworkDenied)
@@ -98,10 +98,10 @@ final class OperatorFacingCopyTests: XCTestCase {
             SettingsHelpCopy.stream,
             SettingsHelpCopy.shareFeed,
             SettingsHelpCopy.editView,
-            PocketDispMode.live.settingsTitle,
-            PocketDispMode.clean.settingsTitle,
-            PocketDispMode.live.settingsCaption,
-            PocketDispMode.clean.settingsCaption,
+            SettingsHelpCopy.liveDisplayTitle,
+            SettingsHelpCopy.cleanDisplayTitle,
+            SettingsHelpCopy.liveDisplayCaption,
+            SettingsHelpCopy.cleanDisplayCaption,
             SettingsHelpCopy.frameIO,
             SettingsHelpCopy.shareThisFeed,
             SettingsHelpCopy.watchAFeed,

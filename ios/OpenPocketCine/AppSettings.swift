@@ -6,8 +6,6 @@ import OpenPocketViewCore
 import SwiftUI
 import UIKit
 
-typealias PocketDispMode = MonitorDisplayMode
-typealias PocketDispChrome = MonitorDisplayChrome
 
 enum AppPanel: String, Identifiable {
     case settings, media, privacy, terms, licenses, notice
@@ -48,7 +46,7 @@ struct HelpBadge: View {
         Button {
             showing.toggle()
         } label: {
-            OpcIcon.info
+            MonitorIcon.info
                 .foregroundStyle(LiveDesign.faint)
                 .frame(width: 9, height: 9)
                 .frame(width: 16, height: 16)
@@ -145,7 +143,7 @@ struct SettingsValueText: View {
 
 struct SettingsActionPill: View {
     let title: String
-    var icon: OpcIcon? = nil
+    var icon: MonitorIcon? = nil
     var tint: Color = LiveDesign.accent
     var background: Color = LiveDesign.accentDim
     var fillsHeight = false
@@ -300,7 +298,7 @@ struct SettingsResetButton: View {
             OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
             action()
         } label: {
-            OpcIcon.refreshCw
+            MonitorIcon.refreshCw
                 .foregroundStyle(LiveDesign.muted)
                 .frame(width: 12, height: 12)
                 .frame(width: 28, height: 28)
@@ -375,7 +373,6 @@ struct VirtualJoystickDeadzoneSlider: View {
     }
 }
 
-typealias OperatorSettingsHaptics = OpenCineCameraControls.OperatorSettingsHaptics
 
 extension OperatorHaptics {
     /// The operator's haptics switch, read at each tap.

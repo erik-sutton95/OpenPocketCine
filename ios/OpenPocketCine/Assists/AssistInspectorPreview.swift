@@ -4,16 +4,17 @@ import MonitorUI
 import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
+import OpenCineMedia
 
 enum AssistInspectorPreviewPolicy {
     static let maximumImageDimension = CGFloat(MonitorInspectorImageSizing.maximumDimension)
     static let refreshInterval: Duration = .nanoseconds(
         Int64(MonitorPreviewAdmission.minimumIntervalNanoseconds))
 
-    static func height(width: CGFloat, tool: LiveAssistTool) -> CGFloat {
+    static func height(width: CGFloat, tool: MonitorAssistSelection) -> CGFloat {
         CGFloat(MonitorInspectorPreviewPolicy.height(width: Double(width), tool: tool))
     }
-    static func isImage(_ tool: LiveAssistTool) -> Bool {
+    static func isImage(_ tool: MonitorAssistSelection) -> Bool {
         MonitorInspectorPreviewPolicy.isImage(tool)
     }
 
@@ -21,9 +22,9 @@ enum AssistInspectorPreviewPolicy {
     /// Other pixel warnings are omitted so the operator can assess this tool.
     @MainActor
     static func imageEffects(
-        assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer,
+        assist: LiveAssistState, tool: MonitorAssistSelection, transfer: MonitorTransfer,
         ceiling: OpenCineMedia.ScopeExposureCeiling
-    ) -> LiveImageEffects {
+    ) -> MonitorFrameEffects {
         assist.inspectorImageEffects(
             tool: tool, transfer: transfer,
             clipByte: ceiling.clipByte(transfer: transfer))
@@ -33,9 +34,9 @@ enum AssistInspectorPreviewPolicy {
     /// main picture. This must not resolve or prepare a preview-only LUT.
     @MainActor
     static func imageOptions(
-        assist: LiveAssistState, tool: LiveAssistTool, transfer: MonitorTransfer,
+        assist: LiveAssistState, tool: MonitorAssistSelection, transfer: MonitorTransfer,
         ceiling: OpenCineMedia.ScopeExposureCeiling
-    ) -> LiveImageEffects {
+    ) -> MonitorFrameEffects {
         assist.inspectorImageOptions(
             tool: tool, transfer: transfer,
             clipByte: ceiling.clipByte(transfer: transfer))
@@ -49,8 +50,8 @@ private struct AssistInspectorImageConfiguration: Equatable {
     let source: ObjectIdentifier
     let sourceEpoch: UInt64
     let playback: Bool
-    let tool: LiveAssistTool
-    let effects: LiveImageEffects
+    let tool: MonitorAssistSelection
+    let effects: MonitorFrameEffects
     let transfer: MonitorTransfer
     let lutSelection: LUTSelection
     let lutExposureStops: Double
@@ -64,15 +65,15 @@ private struct AssistInspectorImageConfiguration: Equatable {
 /// existing bounded sample bundle. Image tasks borrow the session's retained
 /// worker, so tool changes and remounts cannot reset its one-job/5 Hz admission.
 struct AssistInspectorPreview: View {
-    var tool: LiveAssistTool
+    var tool: MonitorAssistSelection
     /// A host's own picture effects replace the tool's forced assist, e.g. a Multiview camera.
-    var pictureEffects: LiveImageEffects? = nil
+    var pictureEffects: MonitorFrameEffects? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.audioInspectorLevels) private var audioInspectorLevels
     @State private var owner: UUID?
     @State private var image: CGImage?
-    @State private var renderedTool: LiveAssistTool?
+    @State private var renderedTool: MonitorAssistSelection?
     @State private var availableWidth: CGFloat = 0
 
     private var isActive: Bool {
@@ -194,7 +195,7 @@ struct AssistInspectorPreview: View {
                 VectorscopeOverlay()
             }
         case .trafficLights:
-            TrafficLightsMeterMini(reading: model.monitorSamples.displayBundle.traffic)
+            MonitorTrafficLightsMeter(reading: model.monitorSamples.displayBundle.traffic)
                 .frame(width: 88, height: 120)
         case .ndMeter:
             NDMeterChip(

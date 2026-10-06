@@ -4,6 +4,7 @@ import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -187,7 +188,7 @@ import XCTest
 
     /// A live control link with a fresh record report, as `openPreview` and the 1 s monitor leave it.
     private func link(_ tile: MultiviewSession.Tile) {
-        tile.driver = DatalinkDriver(port: 9020, tcpPoke: false, pairingToken: "")
+        tile.driver = DjiAppleDatalink(port: 9020, tcpPoke: false, pairingToken: "")
         tile.controlHost = "192.0.2.20"
         tile.recordingAvailable = true
     }

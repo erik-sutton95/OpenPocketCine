@@ -4,6 +4,8 @@ import QuartzCore
 import VideoToolbox
 import XCTest
 import OpenCineDJIApple
+import OpenCineApple
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -50,7 +52,7 @@ final class FirstConnectTests: XCTestCase {
         container.addSublayer(decoder.displayLayer)
         decoder.displayLayer.bounds = CGRect(x: 0, y: 0, width: 64, height: 64)
         XCTAssertTrue(decoder.isDisplayReady)
-        decoder.effects = LiveImageEffects()
+        decoder.effects = MonitorFrameEffects()
         XCTAssertEqual(decoder.lastPresentedAt, presented)
         XCTAssertEqual(decoder.lastSourceFrameAt, source)
         XCTAssertEqual(heartbeats, firstHeartbeats)
@@ -348,10 +350,10 @@ final class FirstConnectTests: XCTestCase {
         decoder.onHandoffNeedsIDR = { requests += 1 }
         _ = decoder.decode(accessUnit: au)
         decoder.unlockHardwareDecoder()
-        var effects = LiveImageEffects()
+        var effects = MonitorFrameEffects()
         effects.zebra = true
         decoder.effects = effects
-        decoder.effects = LiveImageEffects()
+        decoder.effects = MonitorFrameEffects()
         decoder.effects = effects
         XCTAssertEqual(decoder.vtRebuildCount, rebuilds)
         XCTAssertEqual(
@@ -406,7 +408,7 @@ final class FirstConnectTests: XCTestCase {
 
     func testRepeatedParameterSetsDoNotRebuildVT() {
         let decoder = HevcDecoder()
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.histogram = true
         decoder.effects = fx
         let sets =
@@ -426,12 +428,12 @@ final class FirstConnectTests: XCTestCase {
         let decoder = HevcDecoder()
         let feed = CIFeedView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
         decoder.processedFeed = feed
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.lutDimension = 2
         fx.lutRGBA = Data(count: 2 * 2 * 2 * 4 * MemoryLayout<Float>.size)
         decoder.effects = fx
         decoder.beginIDRHold()
-        decoder.effects = LiveImageEffects()
+        decoder.effects = MonitorFrameEffects()
         XCTAssertFalse(decoder.awaitingIDR, "LUT off is not a GOP reset")
         XCTAssertFalse(decoder.displayedImageRemoved)
         XCTAssertTrue(feed.isHidden)
@@ -445,7 +447,7 @@ final class FirstConnectTests: XCTestCase {
         let decoder = HevcDecoder()
         var idrRequests = 0
         decoder.onHandoffNeedsIDR = { idrRequests += 1 }
-        var zebra = LiveImageEffects()
+        var zebra = MonitorFrameEffects()
         zebra.zebra = true
         decoder.effects = zebra
         _ = decoder.decode(
@@ -459,7 +461,7 @@ final class FirstConnectTests: XCTestCase {
         let decoder = HevcDecoder()
         var idrRequests = 0
         decoder.onHandoffNeedsIDR = { idrRequests += 1 }
-        var zebra = LiveImageEffects()
+        var zebra = MonitorFrameEffects()
         zebra.zebra = true
         decoder.effects = zebra
         _ = decoder.decode(
@@ -494,14 +496,14 @@ final class FirstConnectTests: XCTestCase {
         XCTAssertTrue(decoder.enqueueDecodedFrame(ScopeTestBuffers.makeEdgeBuffer()))
         XCTAssertNotNil(decoder.lastPresentedAt)
 
-        var lut = LiveImageEffects()
+        var lut = MonitorFrameEffects()
         lut.lutDimension = 2
         lut.lutRGBA = Data(count: 2 * 2 * 2 * 4 * MemoryLayout<Float>.size)
         decoder.effects = lut
         XCTAssertEqual(idrRequests, 1, "first VT start needs one 0x09/0xa8")
         XCTAssertTrue(decoder.videoToolboxActive)
 
-        decoder.effects = LiveImageEffects()
+        decoder.effects = MonitorFrameEffects()
         XCTAssertEqual(idrRequests, 1, "LUT off must not GOP-reset")
         XCTAssertTrue(decoder.videoToolboxActive, "keep VT for the rest of the session")
         XCTAssertFalse(decoder.awaitingIDR)
@@ -734,7 +736,7 @@ final class ConnectionRunDonorTraceTests: XCTestCase {
         XCTAssertEqual(session.stationSSID, peer.network)
         XCTAssertEqual(session.stationHost, "198.51.100.7")
         // An AP run retains the prior station path until new connection facts arrive.
-        let another = FoundCamera(id: UUID(uuidString: "FC064E5E-2B01-4F6B-94D2-663C03C8F002")!,
+        let another = DjiAppleSighting(id: UUID(uuidString: "FC064E5E-2B01-4F6B-94D2-663C03C8F002")!,
             name: peer.camera.name, model: peer.camera.model, modelId: peer.camera.modelId)
         session.connectionSetup = .cameraWiFi
         session.connect(another)
@@ -955,7 +957,7 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         peer.recoveryClock = clock
         let decoder = HevcDecoder()
         let session = peer.recoverySession(clock: clock, borrowing: decoder)
-        let tileDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let tileDriver = DjiAppleDatalink(port: 9, tcpPoke: false, pairingToken: "")
         defer {
             session.cancelSessionRecovery()
             session.disconnect()
@@ -1040,7 +1042,7 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
         let session = await peer.establishedRecoverySession(clock: clock)
-        let successorDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let successorDriver = DjiAppleDatalink(port: 9, tcpPoke: false, pairingToken: "")
         let sentinel = ConnectionObservationSentinel()
         defer {
             session.disconnect(); clock.cancelAll(); successorDriver.close(); session.decoder.close()
@@ -1073,8 +1075,8 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
         let session = await peer.establishedRecoverySession(clock: clock)
-        let retiredDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
-        let successorDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let retiredDriver = DjiAppleDatalink(port: 9, tcpPoke: false, pairingToken: "")
+        let successorDriver = DjiAppleDatalink(port: 9, tcpPoke: false, pairingToken: "")
         let sentinel = ConnectionObservationSentinel()
         let originalDispose = try XCTUnwrap(session.sessionRecoveryNativePeers?.disposeEndpoint)
         defer {
@@ -1110,7 +1112,7 @@ final class SessionRecoveryDonorTraceTests: XCTestCase {
         let peer = ConnectionDonorPeer(cached: true)
         peer.recoveryClock = clock
         let session = await peer.establishedRecoverySession(clock: clock)
-        let successorDriver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let successorDriver = DjiAppleDatalink(port: 9, tcpPoke: false, pairingToken: "")
         let sentinel = ConnectionObservationSentinel()
         defer { session.disconnect(); clock.cancelAll(); successorDriver.close(); session.decoder.close() }
         session.gimbalMoveRunning = true
@@ -1326,7 +1328,7 @@ final class ConnectionDonorPeer {
     var handshakeMisses = 0
     var gattMisses = 0
     var recoveryClock: SessionRecoveryDonorClock?
-    var recoveryAdvertisement: AsyncStream<FoundCamera>.Continuation?
+    var recoveryAdvertisement: AsyncStream<DjiAppleSighting>.Continuation?
     var advertisesRecoveryCamera = true
     var recoveryPicture = SessionRecoveryNativePeers.Picture()
     var onRegistered: (() -> Void)?
@@ -1344,7 +1346,7 @@ final class ConnectionDonorPeer {
             }
         }
     }
-    let camera = FoundCamera(id: UUID(uuidString: "FC064E5E-2B01-4F6B-94D2-663C03C8F001")!,
+    let camera = DjiAppleSighting(id: UUID(uuidString: "FC064E5E-2B01-4F6B-94D2-663C03C8F001")!,
         name: "OsmoPocket4-SIMULATED", model: CameraModel.resolve(modelId: 0x0021, name: "OsmoPocket4-SIMULATED", brand: .dji), modelId: 0x0021)
 
     init(cached: Bool = false, deferred: Bool = false, station: Bool = false, hotspot: Bool = false) {
@@ -1471,7 +1473,7 @@ final class ConnectionDonorPeer {
             scan: { [unowned self] in
                 trace.append("scan")
                 onRecoveryScan?()
-                let pair = AsyncStream.makeStream(of: FoundCamera.self)
+                let pair = AsyncStream.makeStream(of: DjiAppleSighting.self)
                 recoveryAdvertisement = pair.continuation
                 if advertisesRecoveryCamera { pair.continuation.yield(camera) }
                 return pair.stream
@@ -1515,7 +1517,7 @@ final class ConnectionDonorPeer {
 
     /// Only an already-owned transport session may admit the SIMULATED run.
     /// All workflow authority comes from public connect and its real registered Attempt.
-    func admitExistingConnection(_ session: CameraSession, target: FoundCamera? = nil) async -> Bool {
+    func admitExistingConnection(_ session: CameraSession, target: DjiAppleSighting? = nil) async -> Bool {
         XCTAssertFalse(session.isMultiviewBorrowed, "Fixture setup cannot promote a borrowed transport")
         guard !session.isMultiviewBorrowed else { return false }
         configureConnection(session)

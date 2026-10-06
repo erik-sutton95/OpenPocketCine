@@ -9,16 +9,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.OperatorPrefs
-import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.opencine.appkit.MonitorAssistState
 import com.opencapture.opencine.vocabulary.PlaybackLutColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.opencapture.monitorui.MonitorAssistTool
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
 
 /** Bakes the live GPU look off the UI thread when operator state or color mode changes. */
 @Composable
 internal fun rememberLiveFeedEffectsPlan(
-    assist: LiveAssistState,
+    assist: MonitorAssistState,
     lutSelection: String,
     status: CameraStatus,
     family: String,

@@ -36,8 +36,6 @@ enum PocketMonitorCalibration {
 }
 
 // Source adapters select measured calibration and interpretation for the shared native owner.
-typealias ScopeAssistBundle = OpenCineMedia.ScopeAssistBundle
-typealias PocketScopeSampler = OpenCineMedia.ScopeSampler
 
 extension ScopeSampler {
     static func minInterval(
@@ -58,7 +56,7 @@ extension ScopeSampler {
     }
 
     /// Display cube for VECTOR when no operator LUT is armed.
-    static func monitorCube(for transfer: MonitorTransfer, effects: LiveImageEffects) -> CubeLUT? {
+    static func monitorCube(for transfer: MonitorTransfer, effects: MonitorFrameEffects) -> CubeLUT? {
         if let armed = ScopeMonitorLook.cube(from: effects) { return armed }
         switch transfer {
         case .dlog: return BundledOfficialDJILUT.cube(.pocketDLog)
@@ -71,12 +69,11 @@ extension ScopeSampler {
 
 /// Operator LUT (armed in effects) as a scope-side cube.
 enum ScopeMonitorLook {
-    static func cube(from effects: LiveImageEffects) -> CubeLUT? {
+    static func cube(from effects: MonitorFrameEffects) -> CubeLUT? {
         OpenCineApple.MonitorAssistEngine.armedCube(effects.nativeImagePlan)
     }
 }
 
-typealias LiveFrameSampleBus = OpenCineApple.LiveFrameSampleBus
 
 extension LiveFrameSampleBus {
     convenience init() { self.init(profile: PocketMonitorCalibration.clipProfile) }
@@ -109,11 +106,11 @@ final class LiveAssistEngine: Sendable {
     func adopt(exposureCeiling: OpenCineMedia.ScopeExposureCeiling) {
         native.adopt(exposureCeiling: exposureCeiling)
     }
-    func updatePolicy(effects: LiveImageEffects, transfer: MonitorTransfer) {
+    func updatePolicy(effects: MonitorFrameEffects, transfer: MonitorTransfer) {
         native.updatePolicy(effects: effects.nativeAssistPolicy, transfer: transfer)
     }
     func submit(
-        _ buffer: CVPixelBuffer, effects: LiveImageEffects? = nil,
+        _ buffer: CVPixelBuffer, effects: MonitorFrameEffects? = nil,
         transfer: MonitorTransfer? = nil, timeNs: Int64 = 0,
         completion: @escaping @Sendable (OpenCineApple.MonitorAssistEngine.Result) -> Void
     ) {

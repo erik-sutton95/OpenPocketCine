@@ -8,6 +8,8 @@ import com.opencapture.opencine.runtime.InspectorPreviewAdmission
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.opencapture.opencine.media.MonitorTransfer
+import com.opencapture.opencine.media.MonitorLUTCube
 
 class PocketScopeSamplerTest {
     @Test
@@ -165,7 +167,7 @@ class PocketScopeSamplerTest {
                 }
             }
         }
-        val cube = FeedEffectsCube(size, rgba)
+        val cube = MonitorLUTCube(size, rgba)
         val mapped = cube.map(1f, 0f, 0f)
         assertEquals(1f, mapped.first, 1e-5f)
         assertEquals(0f, mapped.second, 1e-5f)

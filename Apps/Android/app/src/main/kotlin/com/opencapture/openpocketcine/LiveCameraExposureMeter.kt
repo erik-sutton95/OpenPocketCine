@@ -19,6 +19,8 @@ import com.opencapture.monitorui.monitorReadoutShadow
 import com.opencapture.opencine.vocabulary.EvComp
 import kotlin.math.cos
 import kotlin.math.sin
+import com.opencapture.opencine.appkit.MonitorDisplayMode
+import com.opencapture.monitorui.MonitorRect
 
 /** Camera telemetry only; this never reads the configured compensation or sampled picture. */
 internal class CameraExposureMeter(raw: Int, available: Boolean = true) {
@@ -31,18 +33,18 @@ internal class CameraExposureMeter(raw: Int, available: Boolean = true) {
         if (value == null) "Camera exposure meter, unavailable" else "Camera exposure meter, $label EV"
 
     companion object {
-        fun frame(feed: ChromeRect, mode: PocketDispMode, avoid: ChromeRect? = null): ChromeRect? {
-            if (mode != PocketDispMode.LIVE || feed.width < 40f || feed.height < 84f) return null
+        fun frame(feed: MonitorRect, mode: MonitorDisplayMode, avoid: MonitorRect? = null): MonitorRect? {
+            if (mode != MonitorDisplayMode.LIVE || feed.width < 40f || feed.height < 84f) return null
             val x = feed.minX + 6f
             val top = feed.minY + 6f
             val bottom = feed.maxY - 6f
             val preferredCenter = feed.midY - 16f
-            fun fit(lower: Float, upper: Float): ChromeRect? {
+            fun fit(lower: Float, upper: Float): MonitorRect? {
                 val height = minOf(180f, upper - lower)
                 if (height < 72f) return null
                 // Not coerceIn: upper - height can round an ULP below lower, and coerceIn throws.
                 val y = maxOf(lower, minOf(preferredCenter - height / 2f, upper - height))
-                return ChromeRect(x, y, 28f, height)
+                return MonitorRect(x, y, 28f, height)
             }
             val preferred = fit(top, bottom) ?: return null
             if (avoid == null || avoid.isEmpty || avoid.minX >= preferred.maxX || avoid.maxX <= x ||
@@ -58,10 +60,10 @@ internal class CameraExposureMeter(raw: Int, available: Boolean = true) {
 internal fun LiveCameraExposureMeter(
     raw: Int,
     available: Boolean,
-    feed: ChromeRect,
-    mode: PocketDispMode,
+    feed: MonitorRect,
+    mode: MonitorDisplayMode,
     modifier: Modifier = Modifier,
-    avoid: ChromeRect? = null,
+    avoid: MonitorRect? = null,
 ) {
     val frame = CameraExposureMeter.frame(feed, mode, avoid) ?: return
     val reading = CameraExposureMeter(raw, available)

@@ -1,16 +1,17 @@
 package com.opencapture.openpocketcine.assists
 
-import com.opencapture.openpocketcine.feed.MonitorTransfer
+import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.openpocketcine.feed.PocketScopeSampler
-import com.opencapture.openpocketcine.feed.ScopeAssistBundle
+import com.opencapture.opencine.media.ScopeAssistBundle
 import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import com.opencapture.opencine.appkit.MonitorAssistState
 
 class SharedAssistCalibrationAdapterTest {
     @Test fun emptyPublicationsKeepCalibrationTablesAndSampledPublicationsKeepTheirImmutableFacts() {
-        val state = LiveAssistState()
+        val state = MonitorAssistState()
         assertNull(state.scopeBundle.iso)
         assertEquals(247, state.scopeDisplayCeiling.clipByte(MonitorTransfer.DLOG2))
         assertEquals(223, state.scopeDisplayCeiling.clipByte(MonitorTransfer.DLOG))

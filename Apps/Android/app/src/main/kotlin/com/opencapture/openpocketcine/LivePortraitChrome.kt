@@ -92,12 +92,16 @@ import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
 import com.opencapture.opencine.vocabulary.EvComp
 import com.opencapture.opencine.cameracontrols.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
-import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.opencine.appkit.MonitorAssistState
 import com.opencapture.monitorui.MonitorAssistTool
 import kotlin.math.max
 import kotlin.math.min
 import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
 import com.opencapture.monitorui.MonitorIcon
+import com.opencapture.opencine.appkit.MonitorDisplaySection
+import com.opencapture.monitorui.LiveMonitorLayout
+import com.opencapture.monitorui.MonitorValue
+import com.opencapture.monitorui.MonitorRect
 
 fun liveFitFeedOriginY(
     viewportHeight: Float,
@@ -115,10 +119,10 @@ fun liveFitFeedOriginY(
 }
 
 fun fillAssistRail(
-    feed: ChromeRect,
+    feed: MonitorRect,
     captureStripTop: Float?,
     expanded: Boolean,
-): ChromeRect {
+): MonitorRect {
     val edge = LivePortraitMetrics.ASSIST_RAIL_EDGE
     val feedBottom = feed.maxY
     val railBottom = captureStripTop?.let { min(max(it, feed.minY), feedBottom) } ?: feedBottom
@@ -128,7 +132,7 @@ fun fillAssistRail(
     val height =
         if (expanded) max(0f, railBottom - top - edge) else LivePortraitMetrics.ASSIST_RAIL_COLLAPSED
     val y = if (expanded) top else max(top, railBottom - height - edge)
-    return ChromeRect(feed.minX + edge, y, width, height)
+    return MonitorRect(feed.minX + edge, y, width, height)
 }
 
 @Composable
@@ -141,7 +145,7 @@ fun LivePortraitChrome(
     onLock: () -> Unit,
     sheet: LiveSheet?,
     onSheet: (LiveSheet?) -> Unit,
-    assist: LiveAssistState,
+    assist: MonitorAssistState,
     onAssistLongPress: (MonitorAssistTool) -> Unit,
     chromeInteractive: Boolean,
     controlBusy: Boolean,
@@ -151,9 +155,9 @@ fun LivePortraitChrome(
     bars: Int = 0,
     sourceIsVertical: Boolean = false,
     capabilities: com.opencapture.opencine.core.MonitorLayoutCapabilities = model.monitorLayout(),
-    onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
-    readoutFrame: ChromeRect = livePortraitReadoutFrame(layout, zones),
-    onAssistBoundsChanged: (ChromeRect?) -> Unit = {},
+    onTileFrame: (LiveSheet, MonitorRect) -> Unit = { _, _ -> },
+    readoutFrame: MonitorRect = livePortraitReadoutFrame(layout, zones),
+    onAssistBoundsChanged: (MonitorRect?) -> Unit = {},
     captureQuickActive: Boolean = false,
 ) {
     val captureOpen = sheet != null || captureQuickActive
@@ -161,12 +165,12 @@ fun LivePortraitChrome(
     val fill = sourceIsVertical || (!desqueezeVisible && model.portraitFeedAspect == PortraitFeedAspect.FILL)
     val tablet = min(layout.viewportWidth, layout.viewportHeight) >= 600f
     val editing = model.chromeEditorMode
-    val showsAssist = model.chromeSectionMounts(PocketDispSection.TOOL_BAR) &&
+    val showsAssist = model.chromeSectionMounts(MonitorDisplaySection.TOOL_BAR) &&
         model.liveOperatorPanel == null && assist.configureTool == null
 
     val floorY = zones.assistToolbar.minY
     val showGimbalButton =
-        capabilities.gimbal && model.chromeSectionMounts(PocketDispSection.GIMBAL_STICK)
+        capabilities.gimbal && model.chromeSectionMounts(MonitorDisplaySection.GIMBAL_STICK)
     val cluster = layout.gimbalCluster(showGimbalButton)
     val stick = cluster.stick
     val zoom = cluster.zoom
@@ -209,7 +213,7 @@ fun LivePortraitChrome(
             )
         }
 
-        if (!captureOpen && capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) {
+        if (!captureOpen && capabilities.zoom && model.chromeSectionMounts(MonitorDisplaySection.ZOOM_CHIP)) {
             val zoomReadout by model.session.zoomReadout.collectAsState()
             val zoomDialReadout by model.session.zoomDialReadout.collectAsState()
             val zoomPinching by model.session.zoomPinching.collectAsState()
@@ -274,8 +278,8 @@ fun LivePortraitChrome(
                 layout = layout,
                 feed = layout.onFeed,
                 joystickBounds = stick,
-                zoomBounds = if (capabilities.zoom && model.chromeSectionMounts(PocketDispSection.ZOOM_CHIP)) zoom
-                    else ChromeRect(0f, 0f, 0f, 0f),
+                zoomBounds = if (capabilities.zoom && model.chromeSectionMounts(MonitorDisplaySection.ZOOM_CHIP)) zoom
+                    else MonitorRect(0f, 0f, 0f, 0f),
                 uiLocked = uiLocked,
             )
         }
@@ -293,7 +297,7 @@ fun LivePortraitChrome(
 @Composable
 fun LivePortraitTopBar(model: AppModel, status: CameraStatus) {
     Box(Modifier.fillMaxSize().monitorMaterial(MonitorMaterial.Expanded)) {
-        if (model.chromeSectionMounts(PocketDispSection.STORAGE)) {
+        if (model.chromeSectionMounts(MonitorDisplaySection.STORAGE)) {
             Text(
                 portraitStorageLabel(status),
                 color = LiveDesign.text,
@@ -306,11 +310,11 @@ fun LivePortraitTopBar(model: AppModel, status: CameraStatus) {
             Modifier.fillMaxSize().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (model.chromeSectionMounts(PocketDispSection.TIMECODE)) {
+            if (model.chromeSectionMounts(MonitorDisplaySection.TIMECODE)) {
                 TimecodeReadout(status.timecode, portrait = true)
             }
             Spacer(Modifier.weight(1f))
-            if (model.chromeSectionMounts(PocketDispSection.BATTERIES)) {
+            if (model.chromeSectionMounts(MonitorDisplaySection.BATTERIES)) {
                 CameraBatteryReadout(status.batteryPercent)
             }
         }
@@ -350,7 +354,7 @@ fun LiveCaptureStrip(
     facePriority: Boolean = false,
     shutterUsesAngle: Boolean = false,
     onOpen: (LiveSheet) -> Unit,
-    onTileFrame: (LiveSheet, ChromeRect) -> Unit = { _, _ -> },
+    onTileFrame: (LiveSheet, MonitorRect) -> Unit = { _, _ -> },
     model: AppModel? = null,
     onQuickActiveChange: (Boolean) -> Unit = {},
     quickBottomClearanceDp: Float = 0f,
@@ -368,7 +372,7 @@ fun LiveCaptureStrip(
     )
     fun value(sheet: LiveSheet, label: String, readout: String, annotation: String? = null,
         valueIcon: MonitorIcon? = null, badgeIcon: MonitorIcon? = null) =
-        com.opencapture.openpocketcine.monitor.MonitorValue(
+        MonitorValue(
             sheet.name, label, readout, selected = active == sheet, annotation = annotation,
             valueIcon = valueIcon, badgeIcon = badgeIcon,
         )
@@ -435,7 +439,7 @@ private fun WbAutoGlyph(tint: Color, modifier: Modifier = Modifier) {
 
 @Composable
 fun LivePortraitAssistRail(
-    assist: LiveAssistState,
+    assist: MonitorAssistState,
     expanded: Boolean,
     locked: Boolean,
     onExpandedChange: (Boolean) -> Unit,
@@ -673,11 +677,11 @@ internal fun LivePortraitStatus(model: AppModel, layout: LiveMonitorLayout, stat
     common
     com.opencapture.monitorui.MonitorStatusChrome(field,
         model.control.statusPresentation(status.recordElapsedSec),
-        showsTimecode = CaptureShutterPolicy.showsVideoTransport(status.shootingMode) && capabilities.timecode && model.chromeSectionMounts(PocketDispSection.TIMECODE),
-        showsRecording = CaptureShutterPolicy.showsVideoTransport(status.shootingMode) && model.chromeSectionMounts(PocketDispSection.REC_READOUT),
+        showsTimecode = CaptureShutterPolicy.showsVideoTransport(status.shootingMode) && capabilities.timecode && model.chromeSectionMounts(MonitorDisplaySection.TIMECODE),
+        showsRecording = CaptureShutterPolicy.showsVideoTransport(status.shootingMode) && model.chromeSectionMounts(MonitorDisplaySection.REC_READOUT),
         modifier = Modifier.monitorReadoutShadow(),
         storage = {
-            if (model.chromeSectionMounts(PocketDispSection.STORAGE)) Row(verticalAlignment = Alignment.CenterVertically,
+            if (model.chromeSectionMounts(MonitorDisplaySection.STORAGE)) Row(verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 SdCardGlyph(LiveDesign.text)
                 Text(portraitStorageLabel(status).substringBefore(" ·"), style = LiveType.mono(13.5f, FontWeight.SemiBold))
