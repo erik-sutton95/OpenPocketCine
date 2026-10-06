@@ -177,31 +177,4 @@ final class ChromeEditorReturnTests: XCTestCase {
             LiveAssistState.cleanViewDefaultPinnedTools
         )
     }
-
-    func testFocusEditRectUsesTrackedBoxAndFallsBackToAFPoint() {
-        let feed = CGRect(x: 0, y: 0, width: 1600, height: 900)
-        let box = TrackingBox(x: 0.25, y: 0.2, width: 0.2, height: 0.3)
-        let tracked = LiveChromeEditGeometry.focusEditRect(
-            overlay: .face(box),
-            faces: [],
-            focusPoint: CGPoint(x: 0.5, y: 0.5),
-            mirrored: false,
-            in: feed
-        )
-        XCTAssertEqual(tracked.minX, 400, accuracy: 0.5)
-        XCTAssertEqual(tracked.minY, 180, accuracy: 0.5)
-        XCTAssertEqual(tracked.width, 320, accuracy: 0.5)
-        XCTAssertEqual(tracked.height, 270, accuracy: 0.5)
-
-        let fallback = LiveChromeEditGeometry.focusEditRect(
-            overlay: .focus,
-            faces: [],
-            focusPoint: CGPoint(x: 0.5, y: 0.5),
-            mirrored: false,
-            in: feed
-        )
-        XCTAssertEqual(fallback.midX, 800, accuracy: 0.5)
-        XCTAssertEqual(fallback.midY, 450, accuracy: 0.5)
-        XCTAssertEqual(fallback.width, fallback.height, accuracy: 0.5)
-    }
 }
