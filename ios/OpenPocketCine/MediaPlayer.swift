@@ -831,7 +831,7 @@ struct MediaPlayerView: View {
         }
         if model.assist.isPlaybackVisible(.audioMeters), let playbackAudioLevels {
             AudioMeterOverlay(
-                levels: playbackAudioLevels, sensitivity: nil,
+                stores: .app, levels: playbackAudioLevels, sensitivity: nil,
                 bounds: canvas, chromeClearance: clearance,
                 hapticsEnabled: model.hapticsEnabled,
                 onConfigure: { presentPlaybackAssistOptions(.audioMeters) })

@@ -330,7 +330,7 @@ extension PeakingLongPressMenu {
             colors: PeakingAssist.palette.map {
                 .init(
                     value: PocketSettingsAssistMenus.common($0), title: $0.rawValue,
-                    color: $0.swatch)
+                    color: $0.swatch(Palette.self))
             },
             sensitivityHelp: PeakingAssist.sensitivityHelp, colorHelp: PeakingAssist.colorHelp,
             compact: compact, feedback: PocketSettingsAssistMenus.feedback)

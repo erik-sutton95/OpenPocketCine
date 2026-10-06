@@ -270,7 +270,9 @@ struct SettingsRootView: View {
                 assist: model.assist, stores: .app, haptics: .app, compact: true
             ).commonMenu,
                 reset: { feedback(); resetVectorscope() }),
-            .peaking(PeakingAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
+            .peaking(PeakingAssist.longPressMenu(
+                assist: model.assist, palette: LiveDesign.self, haptics: .app, compact: true
+            ).commonMenu,
                 reset: { feedback(); resetPeaking() }),
             .trafficLights(TrafficLightsAssist.longPressMenu(
                 assist: model.assist, stores: .app, haptics: .app, compact: true
