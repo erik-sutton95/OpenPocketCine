@@ -299,6 +299,7 @@ dependencies {
     androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation(libs.kotlin.test.junit)
+    androidTestImplementation(testFixtures("com.opencapture.opencine:core:0.1.0-SNAPSHOT"))
 
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.json)

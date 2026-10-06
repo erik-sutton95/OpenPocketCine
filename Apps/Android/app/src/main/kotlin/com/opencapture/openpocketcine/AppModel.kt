@@ -75,6 +75,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
+import com.opencapture.monitorui.MonitorAssistTool
 
 /**
  * [borrowing] builds a Live View model over a Multiview tile's decoder (iOS
@@ -726,7 +727,7 @@ class AppModel(
 
     /** The tile's LUT choice travels into and out of its borrowed Live View. */
     fun setBorrowedLut(enabled: Boolean) {
-        if (assist.lutOn != enabled) assist.toggle(com.opencapture.openpocketcine.assists.LiveAssistTool.LUT)
+        if (assist.lutOn != enabled) assist.toggle(com.opencapture.monitorui.MonitorAssistTool.LUT)
     }
 
     fun borrowedLutEnabled(): Boolean = assist.lutOn

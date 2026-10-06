@@ -52,7 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LocalMonitorGlass
-import com.opencapture.openpocketcine.OpcIcon
+import com.opencapture.monitorui.MonitorIcon
 import kotlinx.coroutines.launch
 import com.opencapture.opencine.vocabulary.MediaLibraryTab
 import com.opencapture.opencine.vocabulary.MediaLibrarySort
@@ -393,7 +393,7 @@ private fun MediaGalleryPane(
 
 @Composable
 private fun LucideActionPill(
-    icon: OpcIcon,
+    icon: MonitorIcon,
     title: String,
     onClick: () -> Unit,
     active: Boolean = false,
@@ -413,7 +413,7 @@ private fun LucideActionPill(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        OpcIcon(
+        MonitorIcon(
             icon = icon,
             contentDescription = null,
             tint = if (active) LiveDesign.accent else LiveDesign.muted,
