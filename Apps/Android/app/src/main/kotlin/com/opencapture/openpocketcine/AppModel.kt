@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.appkit.readPhoneBatteryReadout
+import com.opencapture.opencine.cameracontrols.GamepadHost
+import com.opencapture.opencine.cameracontrols.GimbalGamepadDriver
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import android.content.Context
 import android.content.Intent
@@ -13,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.ConnectionPhase
+import com.opencapture.opencine.vocabulary.GamepadOperatorAction
 import com.opencapture.opencine.vocabulary.GimbalDoubleTap
 import com.opencapture.opencine.vocabulary.GimbalRamp
 import com.opencapture.opencine.vocabulary.VideoFormat
@@ -61,7 +64,7 @@ class AppModel(
     controlLease: com.opencapture.opencine.dji.MultiviewControlLease? = null,
     discovers: Boolean = false,
     review: String? = null,
-) {
+) : GamepadHost {
     private val appContext = context.applicationContext
     /** One actual cache root/lifetime shared by gallery IO and operator settings. */
     val mediaCacheRoot = com.opencapture.opencine.appkit.MonitorMediaCacheRoot(
@@ -191,7 +194,7 @@ class AppModel(
         private set
     var recordConfirmationEnabled by mutableStateOf(OperatorPrefs.recordConfirmationEnabled(appContext))
         private set
-    var hapticsEnabled by mutableStateOf(OperatorPrefs.hapticsEnabled(appContext))
+    override var hapticsEnabled by mutableStateOf(OperatorPrefs.hapticsEnabled(appContext))
         private set
     var gimbalStickSensitivity by mutableIntStateOf(OperatorPrefs.gimbalStickSensitivity(appContext))
         private set
@@ -254,8 +257,8 @@ class AppModel(
     var phoneCharging by mutableStateOf(false)
         private set
     var uiLocked by mutableStateOf(false)
-    val gimbalGamepad = GimbalGamepadDriver()
-    var gamepadConnected by mutableStateOf(false)
+    val gimbalGamepad = GimbalGamepadDriver(OperatorPrefs::gimbalGamepadStick)
+    override var gamepadConnected by mutableStateOf(false)
 
     val currentDispMode: PocketDispMode
         get() = if (assistClean) PocketDispMode.CLEAN else PocketDispMode.LIVE
@@ -539,17 +542,27 @@ class AppModel(
         )
     }
 
-    fun updateGimbalPadStick(x: Float, y: Float) {
+    override fun updateGimbalPadStick(x: Float, y: Float) {
         if (uiLocked) return
         session.updateGimbalStick(x, y, gimbalStickSensitivity, assist.mirrorsHorizontally)
     }
 
-    fun endGimbalStick() = session.endGimbalStick()
+    override fun endGimbalStick() = session.endGimbalStick()
 
     val isLive: Boolean
         get() = shellState.monitor != null
 
-    fun canDriveGimbalPad(): Boolean =
+    // GamepadHost (camera-controls): the gamepad driver reaches the session through these.
+    override val lastGimbalLimitContact get() = session.lastGimbalLimitContact
+    override val zoomReadout get() = session.zoomReadout.value
+    override val zoomColorHopPending get() = session.zoomColorHopPending
+    override fun presentControlNote(note: String) = session.presentControlNote(note)
+    override fun zoomMax() = session.zoomMax()
+    override fun updateZoomPinch(magnification: Double) = session.updateZoomPinch(magnification)
+    override fun endZoomPinch() = session.endZoomPinch()
+    override fun handleGamepadAction(action: GamepadOperatorAction) = session.handleGamepadAction(action)
+
+    override fun canDriveGimbalPad(): Boolean =
         isLive &&
             !uiLocked &&
             liveOperatorPanel == null &&
