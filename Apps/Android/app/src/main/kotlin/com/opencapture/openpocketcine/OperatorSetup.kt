@@ -1,6 +1,9 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.appkit.diagnostics.ManualProblemReportDelivery
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.ConnectionPhase
+import com.opencapture.opencine.vocabulary.GamepadGimbalStick
 import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import com.opencapture.openpocketcine.assists.scopeDisplayCeiling
 
@@ -9,7 +12,6 @@ import com.opencapture.openpocketcine.feed.fromColorMode
 import com.opencapture.openpocketcine.pairing.lastSSID
 import com.opencapture.openpocketcine.pairing.modelName
 
-import com.opencapture.opencine.media.GamepadGimbalStick
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.monitorui.monitorTabStrip
@@ -92,7 +94,6 @@ import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.assists.LiveZebra
 import com.opencapture.openpocketcine.assists.ParadeMode
 import com.opencapture.openpocketcine.assists.PeakingColor
-import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.openpocketcine.assists.PeakingSense
 import com.opencapture.openpocketcine.assists.ScopeGuides
 import com.opencapture.openpocketcine.assists.VectorscopeZoom
@@ -100,7 +101,6 @@ import com.opencapture.openpocketcine.assists.WaveformMode
 import com.opencapture.openpocketcine.assists.ZebraEditor
 import com.opencapture.openpocketcine.assists.ZebraPaint
 import com.opencapture.openpocketcine.assists.ZebraUnit
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
 import com.opencapture.openpocketcine.feed.FeedUpscaler

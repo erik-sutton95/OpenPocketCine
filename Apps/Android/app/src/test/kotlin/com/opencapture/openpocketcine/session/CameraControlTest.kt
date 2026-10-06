@@ -2,9 +2,10 @@ package com.opencapture.openpocketcine.session
 
 import com.opencapture.opencine.core.CameraValuePin
 import com.opencapture.opencine.dji.*
-import com.opencapture.opencine.dji.ShutterAngle
 import com.opencapture.opencine.media.ExtraMirrorHold
 import com.opencapture.opencine.media.FeedPresentPolicy
+import com.opencapture.opencine.vocabulary.*
+import com.opencapture.opencine.vocabulary.ShutterAngle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.EvComp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -17,6 +16,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.monitorui.monitorReadoutShadow
+import com.opencapture.opencine.vocabulary.EvComp
 import kotlin.math.cos
 import kotlin.math.sin
 

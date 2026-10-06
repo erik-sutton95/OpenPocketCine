@@ -4,6 +4,7 @@ import com.opencapture.opencine.appkit.applyMonitorSystemBars
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.appkit.rememberOperatorHaptics
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -69,7 +70,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.appkit.diagnostics.AutomaticReportsPrompt
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.multiview.MultiviewQualificationPolicy

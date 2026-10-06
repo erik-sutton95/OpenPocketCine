@@ -1,11 +1,11 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraStatus
-import com.opencapture.opencine.dji.FormatPin
-import com.opencapture.opencine.dji.VideoFormat
-import com.opencapture.opencine.dji.VideoFrameRate
-import com.opencapture.opencine.dji.VideoResolution
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.FormatPin
+import com.opencapture.opencine.vocabulary.VideoFormat
+import com.opencapture.opencine.vocabulary.VideoFrameRate
+import com.opencapture.opencine.vocabulary.VideoResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

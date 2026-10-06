@@ -1,14 +1,16 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.EvComp
-import com.opencapture.opencine.dji.ShutterAngle
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraStatus
-import com.opencapture.opencine.dji.FocusOption
-import com.opencapture.opencine.dji.FocusTrackMode
-import com.opencapture.opencine.dji.VideoFormat
-import com.opencapture.opencine.dji.VideoFrameRate
-import com.opencapture.opencine.dji.VideoResolution
+import com.opencapture.opencine.dji.parseIsoIndices
+import com.opencapture.opencine.dji.parseShutterDenoms
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.EvComp
+import com.opencapture.opencine.vocabulary.FocusOption
+import com.opencapture.opencine.vocabulary.FocusTrackMode
+import com.opencapture.opencine.vocabulary.ShutterAngle
+import com.opencapture.opencine.vocabulary.VideoFormat
+import com.opencapture.opencine.vocabulary.VideoFrameRate
+import com.opencapture.opencine.vocabulary.VideoResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -1251,17 +1253,17 @@ class CaptureSheetTest {
     fun fpsChipLabelIsLiveViewHealthNotRecordFps() {
         data class Chip(
             val why: String,
-            val connection: com.opencapture.opencine.dji.ConnectionPhase,
+            val connection: com.opencapture.opencine.vocabulary.ConnectionPhase,
             val recovering: Boolean,
             val measured: Double,
             val expected: String,
         )
-        val live = com.opencapture.opencine.dji.ConnectionPhase.LIVE
+        val live = com.opencapture.opencine.vocabulary.ConnectionPhase.LIVE
         val cases = listOf(
-            Chip("idle hides fps", com.opencapture.opencine.dji.ConnectionPhase.IDLE, false, 0.0, "\u2014"),
+            Chip("idle hides fps", com.opencapture.opencine.vocabulary.ConnectionPhase.IDLE, false, 0.0, "\u2014"),
             Chip("live without frames", live, false, 0.0, "LINK"),
             Chip("recovering", live, true, 12.0, "RECOV"),
-            Chip("failed", com.opencapture.opencine.dji.ConnectionPhase.FAILED, false, 25.0, "FAIL"),
+            Chip("failed", com.opencapture.opencine.vocabulary.ConnectionPhase.FAILED, false, 25.0, "FAIL"),
             Chip("live with frames", live, false, 25.0, "25.00"),
         )
         for (case in cases) {

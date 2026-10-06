@@ -32,6 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.FoundCamera
 import com.opencapture.openpocketcine.multiview.MultiviewCameraSettings
 import com.opencapture.openpocketcine.multiview.MultiviewSession
 import com.opencapture.openpocketcine.multiview.MultiviewStageContent
@@ -48,12 +52,8 @@ import com.opencapture.opencine.multicam.MulticamSnapshot
 import com.opencapture.opencine.multicam.RecordDirection
 import com.opencapture.opencine.multicam.RecordPlan
 import com.opencapture.opencine.multicam.TargetPolicy
-import com.opencapture.opencine.dji.CameraStatus
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraModel
 import com.opencapture.opencine.dji.CameraNetworkPath
 import com.opencapture.opencine.dji.DatalinkDriver
-import com.opencapture.opencine.dji.FoundCamera
 import com.opencapture.monitorui.MonitorDrawerTabs
 import com.opencapture.monitorui.MonitorTab
 import com.opencapture.monitorui.monitorTabStrip

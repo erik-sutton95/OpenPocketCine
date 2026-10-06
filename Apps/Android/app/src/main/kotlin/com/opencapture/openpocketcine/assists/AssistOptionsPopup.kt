@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.openpocketcine.feed.fromColorMode
 
 import com.opencapture.monitorui.monitorScrollFade
@@ -41,7 +42,6 @@ import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.lut.LUTPicker
 import com.opencapture.openpocketcine.lut.LUTSplitComparisonBar
 import com.opencapture.openpocketcine.pickerPanelGlass
-import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.openpocketcine.settings.SettingsPalette
 
 private val CardShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)

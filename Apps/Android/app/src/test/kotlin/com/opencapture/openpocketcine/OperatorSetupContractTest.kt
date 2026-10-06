@@ -1,9 +1,9 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.media.GamepadGimbalStick
-import com.opencapture.opencine.dji.ConnectionPhase
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.ConnectionPhase
+import com.opencapture.opencine.vocabulary.GamepadGimbalStick
 import com.opencapture.openpocketcine.feed.FeedUpscaler
-import com.opencapture.opencine.dji.CameraCommands
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

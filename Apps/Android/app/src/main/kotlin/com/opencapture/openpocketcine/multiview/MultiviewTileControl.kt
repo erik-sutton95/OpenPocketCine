@@ -18,12 +18,12 @@ import com.opencapture.opencine.multicam.RecordResult
 import com.opencapture.opencine.multicam.RecordSubmissionException
 import com.opencapture.opencine.multicam.TargetOutcome
 import com.opencapture.opencine.multicam.TargetPolicy
-import com.opencapture.opencine.dji.CameraModel
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.ControlWireEvent
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.PocketControlPort
 import com.opencapture.opencine.dji.PocketControlState
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

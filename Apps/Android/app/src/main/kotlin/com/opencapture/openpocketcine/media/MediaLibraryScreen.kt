@@ -60,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import kotlin.math.roundToInt
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -78,7 +79,6 @@ import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.openpocketcine.panelGlass
 import kotlinx.coroutines.launch
 
@@ -138,7 +138,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     val resolutionOptions = filterSource.mapNotNull { it.resolution }.filter { it.isNotEmpty() }.toSet().sorted()
     val colorOptions =
         shotColors.values.toSet().sorted().mapNotNull { mode ->
-            val label = com.opencapture.opencine.dji.CameraCommands.colorLabel(mode)
+            val label = com.opencapture.opencine.vocabulary.CameraCommands.colorLabel(mode)
             if (label == "—") null else mode to label
         }
     val hasDates = filterSource.any { it.dateKey.isNotEmpty() }

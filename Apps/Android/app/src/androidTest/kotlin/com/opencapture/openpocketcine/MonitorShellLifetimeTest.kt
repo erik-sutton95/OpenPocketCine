@@ -6,9 +6,9 @@ import com.opencapture.opencine.appkit.ShellModel
 import com.opencapture.opencine.core.ConnectedCamera
 import com.opencapture.opencine.core.SavedCamera
 import com.opencapture.opencine.core.SessionCloseReason
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.DjiCameraSession
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Test
 import org.junit.runner.RunWith

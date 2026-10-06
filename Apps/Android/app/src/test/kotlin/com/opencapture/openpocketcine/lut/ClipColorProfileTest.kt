@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine.lut
 
-import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraCommands
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

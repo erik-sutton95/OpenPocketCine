@@ -1,5 +1,11 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.dji.applyAttitude
+import com.opencapture.opencine.dji.fromJson
+import com.opencapture.opencine.dji.toJson
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.FoundCamera
+import com.opencapture.opencine.vocabulary.GimbalStickMapping
 import com.opencapture.openpocketcine.feed.Media3GlBackend
 
 import com.opencapture.opencine.dji.hasMultiviewPreview
@@ -35,12 +41,9 @@ import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlanFactory
 import com.opencapture.opencine.dji.BleLink
-import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.DumlFrame
-import com.opencapture.opencine.dji.FoundCamera
-import com.opencapture.opencine.dji.GimbalStickMapping
 import com.opencapture.opencine.decoder.HevcDecoder
 import com.opencapture.opencine.dji.LiveViewEnablePolicy
 import com.opencapture.opencine.dji.MultiviewControlLease
@@ -1337,7 +1340,7 @@ class MultiviewSession(
     }
 
     private fun restoredCamera(saved: MultiviewStageStore.Camera): FoundCamera {
-        val model = com.opencapture.opencine.dji.CameraModel.fromJson(
+        val model = com.opencapture.opencine.vocabulary.CameraModel.fromJson(
             DjiNative.resolveCameraModel(saved.modelId ?: -1, saved.name, saved.bleAddress, true))
         return FoundCamera(saved.id, saved.bleAddress, saved.name, model, saved.modelId)
     }
