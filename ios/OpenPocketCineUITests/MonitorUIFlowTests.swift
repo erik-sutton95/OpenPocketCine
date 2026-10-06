@@ -189,6 +189,20 @@ final class MonitorUIFlowTests: XCTestCase {
                 format: "identifier == %@ AND label == %@",
                 "monitor.settings.card.title", "Zebra")
         ).firstMatch
+        let falseColor = app.staticTexts.matching(
+            NSPredicate(format: "identifier == %@ AND label == %@",
+                "monitor.settings.card.title", "False Color")).firstMatch
+        let evMeter = app.staticTexts.matching(
+            NSPredicate(format: "identifier == %@ AND label == %@",
+                "monitor.settings.card.title", "EV Meter")).firstMatch
+        if app.frame.width > 700 {
+            // main: the tool cards stay in one column, with EV Meter and LUT beside them.
+            XCTAssertEqual(zebra.frame.minX, falseColor.frame.minX, accuracy: 1,
+                "Zebra sits in False Color's column")
+            XCTAssertGreaterThan(zebra.frame.minY, falseColor.frame.maxY)
+            XCTAssertGreaterThan(evMeter.frame.minX, falseColor.frame.maxX,
+                "EV Meter sits beside the tool column")
+        }
         for _ in 0..<6 where !zebra.isHittable {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.8))
                 .press(
