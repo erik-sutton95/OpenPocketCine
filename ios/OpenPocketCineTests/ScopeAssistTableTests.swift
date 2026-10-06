@@ -1,3 +1,4 @@
+import OpenCineCameraControls
 import XCTest
 
 @testable import OpenPocketCine

@@ -1,6 +1,7 @@
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCameraControls
 import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import SwiftUI
@@ -8,61 +9,11 @@ import XCTest
 
 @testable import OpenPocketCine
 
+/// The WAVE popup on this app's assist state, and WAVE's floor against this app's legacy
+/// LIGHTS scale (`scopeLevelY`). The scope itself is pinned in OpenCineCameraControlsTests.
 final class WaveformAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
     private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
-
-    func testWaveAxisMatchesTrafficLightIRE() {
-        let black = LiveColorScience.encode(0, transfer: .dlog2)
-        let grey = LiveColorScience.encode(0.18, transfer: .dlog2)
-        XCTAssertEqual(
-            WaveformAxis.unit(
-                black, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 0,
-            accuracy: 1e-9)
-        XCTAssertEqual(
-            WaveformAxis.unit(grey, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)),
-            0.305, accuracy: 0.005,
-            "D-Log2 18% gray stays at paper IRE 30.50, not remapped to 50")
-        XCTAssertEqual(
-            WaveformAxis.unit(
-                247.0 / 255, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 1,
-            accuracy: 1e-4)
-        XCTAssertEqual(
-            WaveformAxis.unit(
-                223.0 / 255, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog)), 1,
-            accuracy: 1e-4)
-        XCTAssertLessThan(
-            WaveformAxis.unit(
-                188.0 / 255, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 0.90)
-        XCTAssertEqual(
-            WaveformAxis.unit(1, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 1,
-            accuracy: 1e-9)
-        XCTAssertEqual(
-            WaveformAxis.unit(0, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2)), 0,
-            accuracy: 1e-9)
-        XCTAssertEqual(
-            WaveformAxis.middleGrayIRE(transfer: .dlog2), 30.50, accuracy: 0.05)
-        XCTAssertEqual(
-            WaveformAxis.middleGrayIRE(transfer: .dlog), 39.88, accuracy: 0.05)
-        let dlogBlack = LiveColorScience.encode(0, transfer: .dlog)
-        let dlogGrey = LiveColorScience.encode(0.18, transfer: .dlog)
-        XCTAssertEqual(
-            WaveformAxis.unit(
-                dlogBlack, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog)), 0,
-            accuracy: 1e-9)
-        XCTAssertEqual(
-            WaveformAxis.unit(
-                dlogGrey, transfer: .dlog, clipByte: ceiling.clipByte(transfer: .dlog)), 0.3988,
-            accuracy: 0.005)
-    }
-
-    func testHoldWithoutDragOpensOptions() {
-        XCTAssertTrue(WaveformAssist.shouldPresentOptions(translation: .zero))
-        XCTAssertTrue(
-            WaveformAssist.shouldPresentOptions(translation: CGSize(width: 3, height: -2)))
-        XCTAssertFalse(
-            WaveformAssist.shouldPresentOptions(translation: CGSize(width: 20, height: 0)))
-    }
 
     @MainActor
     func testPresentOptionsWiresTheSharedPopup() {
@@ -161,84 +112,5 @@ final class WaveformAssistTests: XCTestCase {
             leftoverCrush, line0, accuracy: 0.5,
             "a leftover 0.05 table value is 0.05 IRE (on 0), not a 5% shelf")
         XCTAssertGreaterThan(line0 - line5, 4)
-    }
-
-    func testSafeBordersAreDottedFiveAndNinetyFive() {
-        let on = WaveformAxis.guideStrokes(
-            clip: true, crush: true, middle: true, transfer: .dlog2)
-        XCTAssertEqual(on.count, 5)
-        XCTAssertEqual(on[0].ire, 0, accuracy: 0.01)
-        XCTAssertEqual(on[1].ire, 100, accuracy: 0.01)
-        XCTAssertEqual(on[2].ire, 5, accuracy: 0.01)
-        XCTAssertEqual(on[3].ire, 95, accuracy: 0.01)
-        XCTAssertEqual(on[4].ire, 30.50, accuracy: 0.05)
-        XCTAssertFalse(on[0].dashed || on[0].usesCrushClipColor, "0 is the solid min line")
-        XCTAssertFalse(on[1].dashed || on[1].usesCrushClipColor, "100 is the solid max line")
-        XCTAssertTrue(on[2].dashed && on[2].usesCrushClipColor, "5 is the dotted crush buffer")
-        XCTAssertTrue(on[3].dashed && on[3].usesCrushClipColor, "95 is the dotted clip buffer")
-        XCTAssertFalse(on[4].dashed || on[4].usesCrushClipColor, "gray is a solid paper-IRE line")
-        XCTAssertEqual(WaveformAxis.crushClipDash, [3, 3])
-        let off = WaveformAxis.guideStrokes(
-            clip: false, crush: false, middle: false, transfer: .dlog2)
-        XCTAssertEqual(off.map(\.ire), [0, 100])
-        let dlog = WaveformAxis.guideStrokes(
-            clip: false, crush: false, middle: true, transfer: .dlog)
-        XCTAssertEqual(dlog.last?.ire ?? 0, 39.88, accuracy: 0.05)
-    }
-
-    func testISOMovesClipOnly() {
-        let grey = LiveColorScience.encode(0.18, transfer: .dlog2)
-        let black = LiveColorScience.encode(0, transfer: .dlog2)
-        let at1600 = WaveformAxis.unit(
-            grey, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 1600))
-        let at400 = WaveformAxis.unit(
-            grey, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 400))
-        XCTAssertEqual(at1600, 0.305, accuracy: 0.005)
-        XCTAssertEqual(at400, 0.305, accuracy: 0.005)
-        XCTAssertEqual(
-            WaveformAxis.unit(
-                black, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 400)), 0,
-            accuracy: 1e-9)
-        let clip1600 = ceiling.clipEncoded(transfer: .dlog2, iso: 1600)
-        let clip400 = ceiling.clipEncoded(transfer: .dlog2, iso: 400)
-        XCTAssertEqual(
-            WaveformAxis.unit(
-                clip1600, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 1600)),
-            1, accuracy: 1e-9)
-        XCTAssertEqual(
-            WaveformAxis.unit(
-                clip400, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2, iso: 400)),
-            1, accuracy: 1e-9)
-        XCTAssertLessThan(clip400, clip1600, "lower EI pulls 100 down; gray stays at paper IRE")
-    }
-
-    @MainActor
-    func testOrientationCentresStayIndependent() {
-        let landscape = CGRect(x: 0, y: 0, width: 874, height: 402)
-        let portrait = CGRect(x: 0, y: 0, width: 402, height: 874)
-        XCTAssertEqual(ScopeCanvasSlot.forBounds(landscape), .landscape)
-        XCTAssertEqual(ScopeCanvasSlot.forBounds(portrait), .portrait)
-
-        let store = MonitorScopePanelStore<MonitorWaveformOptions>(options: .default)
-        store.beginDrag(center: CGPoint(x: 120, y: 80), in: landscape)
-        store.endDrag(bounds: landscape)
-        store.beginDrag(center: CGPoint(x: 200, y: 400), in: portrait)
-        store.endDrag(bounds: portrait)
-
-        let land = store.storedCenter(in: landscape)?.center(in: landscape)
-        let port = store.storedCenter(in: portrait)?.center(in: portrait)
-        XCTAssertEqual(land?.x ?? 0, 120, accuracy: 0.5)
-        XCTAssertEqual(land?.y ?? 0, 80, accuracy: 0.5)
-        XCTAssertEqual(port?.x ?? 0, 200, accuracy: 0.5)
-        XCTAssertEqual(port?.y ?? 0, 400, accuracy: 0.5)
-        XCTAssertNotEqual(store.options.storedCenter, store.options.storedCenterPortrait)
-    }
-
-    func testLegacyStoredCenterStaysLandscapeOnly() throws {
-        let data = Data(#"{"storedCenter":{"xFraction":0.25,"yFraction":0.4}}"#.utf8)
-        let decoded = try JSONDecoder().decode(WaveformAssist.Options.self, from: data)
-        XCTAssertEqual(decoded.storedCenter?.xFraction ?? 0, 0.25, accuracy: 0.001)
-        XCTAssertEqual(decoded.storedCenter?.yFraction ?? 0, 0.4, accuracy: 0.001)
-        XCTAssertNil(decoded.storedCenterPortrait)
     }
 }

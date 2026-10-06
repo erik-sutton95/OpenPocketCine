@@ -1,6 +1,7 @@
 #if targetEnvironment(simulator)
     import Foundation
     import MonitorPresentation
+    import OpenCineCameraControls
     import OpenPocketViewCore
 
     /// Deterministic simulator-only presentation fixture. Opt-in environment values
@@ -115,7 +116,7 @@
             HistogramAssist.store.options = .default
             VectorscopeAssist.store.options = .default
             AudioAssist.store.options = .init()
-            FalseColorReferencePositionStore.shared.positions = FalseColorReferencePositions()
+            AssistPanelStores.app.reference.positions = FalseColorReferencePositions()
             WaveformAssist.store.sessionCenter = nil
             WaveformAssist.store.sessionCenterPortrait = nil
             ParadeAssist.store.sessionCenter = nil

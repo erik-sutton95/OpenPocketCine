@@ -15,11 +15,13 @@ enum AssistLongPressChrome {
         case .falseColor: FalseColorAssist.longPressMenu(assist: assist)
         case .zebra: ZebraAssist.longPressMenu(assist: assist)
         case .lut: LUTAssist.longPressMenu(assist: assist)
-        case .waveform: WaveformAssist.longPressMenu(assist: assist)
-        case .parade: ParadeAssist.longPressMenu(assist: assist)
-        case .histogram: HistogramAssist.longPressMenu(assist: assist)
-        case .vectorscope: VectorscopeAssist.longPressMenu(assist: assist)
-        case .trafficLights: TrafficLightsAssist.longPressMenu(assist: assist)
+        case .waveform: WaveformAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
+        case .parade: ParadeAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
+        case .histogram: HistogramAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
+        case .vectorscope:
+            VectorscopeAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
+        case .trafficLights:
+            TrafficLightsAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
         case .ndMeter: NDAssist.longPressMenu(assist: assist)
         case .guides: GuidesAssist.longPressMenu(assist: assist, haptics: .app)
         case .grid: GridAssist.longPressMenu(assist: assist, haptics: .app)

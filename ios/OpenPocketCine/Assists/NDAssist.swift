@@ -1,6 +1,7 @@
 import OpenCineAppKit
 import MonitorPresentation
 import MonitorUI
+import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
 
@@ -37,7 +38,7 @@ enum NDAssist {
     }
 
     @MainActor
-    static var store: MonitorNDPreferenceStore { MonitorNDPreferenceStore.shared }
+    static var store: MonitorNDPreferenceStore { AssistPanelStores.app.nd }
 }
 
 struct NDLongPressMenu: View {

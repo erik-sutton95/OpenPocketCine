@@ -1,6 +1,7 @@
 import MonitorUI
 import OpenCineAppKit
 import MonitorPresentation
+import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
 
@@ -28,7 +29,7 @@ struct FalseColorReferenceOverlay: View {
     @State private var dragCenter: CGPoint?
     @State private var dragBounds: CGRect?
     @State private var cancelled = false
-    private var store: FalseColorReferencePositionStore { .shared }
+    private var store: FalseColorReferencePositionStore { AssistPanelStores.app.reference }
 
     var body: some View {
         let movement = MonitorScopePanelPlacement.bounds(in: bounds, clearance: chromeClearance)
