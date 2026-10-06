@@ -4,7 +4,7 @@ import com.opencapture.opencine.media.MonitorNDFilterRecommendation
 import com.opencapture.opencine.media.FrameRateSampler
 import com.opencapture.opencine.vocabulary.CamFov
 import com.opencapture.openpocketcine.lut.LutExposureCompensation
-import com.opencapture.openpocketcine.media.MediaLibraryQuery
+import com.opencapture.opencine.vocabulary.MediaLibraryQuery
 import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -20,5 +20,5 @@ fun createLiveAssistState(context: Context): LiveAssistState {
 
 /** Before the first tap, use the source's existing calibration table, not a measurement. */
 internal val LiveAssistState.scopeDisplayCeiling: com.opencapture.opencine.media.ScopeClipSource
-    get() = if (scopeBundle.isEmpty) com.opencapture.openpocketcine.feed.ScopeExposureCeiling.UNOBSERVED
+    get() = if (scopeBundle.isEmpty) com.opencapture.opencine.vocabulary.ScopeExposureCeiling.UNOBSERVED
         else scopeCeiling

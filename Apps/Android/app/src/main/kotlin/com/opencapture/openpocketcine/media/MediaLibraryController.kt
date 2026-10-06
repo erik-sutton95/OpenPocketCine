@@ -14,7 +14,7 @@ import com.opencapture.opencine.media.CameraMediaService
 import com.opencapture.opencine.media.MediaCatalog
 import com.opencapture.opencine.media.*
 import com.opencapture.openpocketcine.feed.MonitorTransfer
-import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.opencine.vocabulary.fromColorMode
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import com.opencapture.opencine.appkit.*
@@ -30,6 +30,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaFile
+import com.opencapture.opencine.vocabulary.MediaCacheGrade
+import com.opencapture.opencine.cameracontrols.MediaOperatorCopy
 
 class MediaLibraryController(
     context: Context,

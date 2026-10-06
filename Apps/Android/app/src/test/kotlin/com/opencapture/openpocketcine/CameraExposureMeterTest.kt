@@ -12,6 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.opencapture.opencine.cameracontrols.CleanPinTool
 
 class CameraExposureMeterTest {
     @Test fun reportedMeterAndConfiguredCompensationStayIndependentInAutoAndManual() {

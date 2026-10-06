@@ -6,6 +6,9 @@ import com.opencapture.opencine.dji.DjiAndroidMediaAssets
 import com.opencapture.opencine.media.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.opencapture.opencine.vocabulary.MediaKind
+import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaFile
 
 /** Pure canonical JSON plus captured source records. No listing/command loop or shadow index. */
 internal class PocketMediaLibraryCodec(

@@ -5,7 +5,7 @@ package com.opencapture.openpocketcine.media
 import com.opencapture.monitorui.MonitorConfirmPopup
 import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.vocabulary.CameraStatus
-import com.opencapture.openpocketcine.feed.colorMode
+import com.opencapture.opencine.vocabulary.colorMode
 import com.opencapture.monitorui.detectMonitorPlaybackVideoGestures as detectPlaybackVideoGestures
 import com.opencapture.monitorui.monitorPlaybackUnitPoint as unitPoint
 
@@ -113,17 +113,17 @@ import com.opencapture.openpocketcine.MonitorGlass
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.assists.AssistOptionsPopup
-import com.opencapture.openpocketcine.assists.AudioAssist
-import com.opencapture.openpocketcine.assists.AssistAudioOverlay
+import com.opencapture.opencine.cameracontrols.AudioAssist
+import com.opencapture.opencine.cameracontrols.AssistAudioOverlay
 import com.opencapture.openpocketcine.assists.AssistRect
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.openpocketcine.assists.LiveAssistTool
-import com.opencapture.openpocketcine.assists.MirrorAssist
+import com.opencapture.opencine.cameracontrols.MirrorAssist
 import com.opencapture.openpocketcine.assists.PlaybackAssistBar
 import com.opencapture.openpocketcine.assists.scopePanelChrome
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
-import com.opencapture.openpocketcine.lut.PlaybackLutColor
+import com.opencapture.opencine.vocabulary.PlaybackLutColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -133,6 +133,9 @@ import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import com.opencapture.opencine.vocabulary.MediaFile
+import com.opencapture.opencine.vocabulary.MediaClipFormatting
+import com.opencapture.opencine.cameracontrols.MediaOperatorCopy
 
 @Composable
 fun MediaPhotoViewer(
@@ -288,7 +291,7 @@ fun MediaPhotoViewer(
                 contentAlignment = Alignment.Center,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    com.opencapture.openpocketcine.assists.AssistToolCell(
+                    com.opencapture.opencine.cameracontrols.AssistToolCell(
                         tool = LiveAssistTool.DESQ,
                         isOn = assist.isPlaybackVisible(LiveAssistTool.DESQ), enabled = true,
                         onClick = { assist.togglePlayback(LiveAssistTool.DESQ) },
@@ -551,7 +554,7 @@ fun MediaPlayerScreen(
                     PlaybackAudioMetersOverlay(video = local, canvas = local, left = meterLeft, right = meterRight, state = assist)
                 }
             }, tools = { chrome ->
-                com.opencapture.openpocketcine.assists.MonitorAssistCluster(portrait = chrome.portrait,
+                com.opencapture.opencine.cameracontrols.MonitorAssistCluster(prefs = OperatorPrefs, portrait = chrome.portrait,
                     locked = false, playback = true, isOn = assist::isPlaybackVisible, onToggle = { assist.togglePlayback(it) },
                     onLongPress = { assist.configureTool = it }, requestExpand = chrome.expanded,
                     onExpansionHandled = chrome.onExpansionHandled, modifier = Modifier.liveModuleFrame(ChromeRect(chrome.frame.x, chrome.frame.y, chrome.frame.width, chrome.frame.height)))

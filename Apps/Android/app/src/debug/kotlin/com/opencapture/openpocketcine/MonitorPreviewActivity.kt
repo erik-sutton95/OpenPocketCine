@@ -37,6 +37,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.opencapture.opencine.cameracontrols.LiveGimbalPanel
 import com.opencapture.opencine.cameracontrols.LiveGimbalSheetHost
+import com.opencapture.opencine.cameracontrols.LivePickerHost
 import com.opencapture.opencine.cameracontrols.LiveSheet
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraModel
@@ -48,6 +49,7 @@ import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.PocketControlPort
 import com.opencapture.opencine.dji.PocketControlState
 import kotlinx.coroutines.MainScope
+import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
 
 /**
  * Debug-only, deterministic visual review of production chrome. This activity

@@ -9,6 +9,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.json.JSONObject
+import com.opencapture.opencine.cameracontrols.formatCacheSize
+import com.opencapture.opencine.cameracontrols.formatAppVersion
+import com.opencapture.opencine.cameracontrols.connectionPhaseLabel
+import com.opencapture.opencine.cameracontrols.OperatorLinkHealth
+import com.opencapture.opencine.cameracontrols.CleanPinTool
 
 class OperatorSetupContractTest {
     @Test

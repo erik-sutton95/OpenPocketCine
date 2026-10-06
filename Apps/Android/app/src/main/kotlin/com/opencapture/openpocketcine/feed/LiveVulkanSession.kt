@@ -6,6 +6,7 @@ import android.view.Surface
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.opencine.runtime.GlesPresentationOptions
+import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
 
 internal class LiveVulkanSession(context: Context, scopeBus: LiveScopeSampleBus,
     preview: InspectorPreviewPipeline, onDecoderSurface: (Surface) -> Unit,

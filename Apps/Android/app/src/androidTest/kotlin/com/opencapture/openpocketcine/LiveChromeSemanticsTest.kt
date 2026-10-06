@@ -69,7 +69,7 @@ class LiveChromeSemanticsTest {
 
     @Test fun assistToolSpeaksItsNameStateAndHoldGesture() {
         val spoken = render {
-            com.opencapture.openpocketcine.assists.AssistToolCell(
+            com.opencapture.opencine.cameracontrols.AssistToolCell(
                 tool = LiveAssistTool.WAVE,
                 isOn = true,
                 enabled = true,
@@ -87,7 +87,7 @@ class LiveChromeSemanticsTest {
      */
     @Test fun aClearedAssistToolStillOffersTapAndHold() {
         val actions = actionsOf("Waveform, on. Hold for options") {
-            com.opencapture.openpocketcine.assists.AssistToolCell(
+            com.opencapture.opencine.cameracontrols.AssistToolCell(
                 tool = LiveAssistTool.WAVE,
                 isOn = true,
                 enabled = true,
@@ -102,7 +102,7 @@ class LiveChromeSemanticsTest {
     @Test fun everyAssistToolIsNamedInWordsNotItsChipAbbreviation() {
         for (tool in LiveAssistTool.entries) {
             val spoken = render {
-                com.opencapture.openpocketcine.assists.AssistToolCell(
+                com.opencapture.opencine.cameracontrols.AssistToolCell(
                     tool = tool,
                     isOn = false,
                     enabled = true,

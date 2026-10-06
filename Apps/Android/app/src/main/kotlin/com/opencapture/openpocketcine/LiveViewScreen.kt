@@ -9,6 +9,7 @@ import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.cameracontrols.CaptureLists
 import com.opencapture.opencine.cameracontrols.LiveAutoExposureUnlockButton
 import com.opencapture.opencine.cameracontrols.LiveChromeReadout
+import com.opencapture.opencine.cameracontrols.LiveControlSheet
 import com.opencapture.opencine.cameracontrols.LiveFeedGestureWell
 import com.opencapture.opencine.cameracontrols.LiveFocusResetButton
 import com.opencapture.opencine.cameracontrols.LiveGimbalButton
@@ -16,6 +17,7 @@ import com.opencapture.opencine.cameracontrols.LiveGimbalOverlay
 import com.opencapture.opencine.cameracontrols.LiveGimbalPanel
 import com.opencapture.opencine.cameracontrols.LiveGimbalSheetHost
 import com.opencapture.opencine.cameracontrols.LiveGimbalStick
+import com.opencapture.opencine.cameracontrols.LivePickerHost
 import com.opencapture.opencine.cameracontrols.LiveSheet
 import com.opencapture.opencine.cameracontrols.LiveViewLink
 import com.opencapture.opencine.cameracontrols.LiveZoom
@@ -167,8 +169,8 @@ import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.LiveFaceDetector
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import com.opencapture.opencine.cameracontrols.PortraitFeedAspect
 
 @Composable
 fun LiveViewScreen(model: AppModel) {
@@ -973,7 +975,7 @@ fun LiveViewScreen(model: AppModel) {
                     safeTop = safeTop,
                     safeBottom = safeBottom,
                     floorY = zones?.systemBar?.minY,
-                    model = model,
+                    host = model,
                     status = status,
                     locked = uiLocked,
                     onSelect = { sheet = it },
@@ -1537,7 +1539,8 @@ internal fun LandscapeChrome(
         }
         if (showsAssist) {
             Box(Modifier.liveModuleFrame(layout.assist).alpha(if (uiLocked) .4f else 1f)) {
-                com.opencapture.openpocketcine.assists.MonitorAssistCluster(
+                com.opencapture.opencine.cameracontrols.MonitorAssistCluster(
+                    prefs = OperatorPrefs,
                     portrait = false, locked = uiLocked || !hits,
                     isOn = assist::isOn, onToggle = { assist.toggle(it) }, onLongPress = onAssistLongPress,
                     showsAudio = capabilities.audio && CaptureShutterPolicy.showsAudioControls(status.shootingMode),

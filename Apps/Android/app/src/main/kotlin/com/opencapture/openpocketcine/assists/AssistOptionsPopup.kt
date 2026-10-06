@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine.assists
 
 import com.opencapture.opencine.cameracontrols.LivePopupCloseButton
 import com.opencapture.opencine.vocabulary.CameraCommands
-import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.opencine.vocabulary.fromColorMode
 
 import com.opencapture.monitorui.monitorScrollFade
 import androidx.compose.foundation.layout.Arrangement
@@ -39,10 +39,19 @@ import com.opencapture.openpocketcine.LiveType
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.feed.MonitorTransfer
-import com.opencapture.openpocketcine.lut.LUTPicker
-import com.opencapture.openpocketcine.lut.LUTSplitComparisonBar
+import com.opencapture.opencine.cameracontrols.LUTPicker
+import com.opencapture.openpocketcine.lut.AppLutPickerCopy
+import com.opencapture.opencine.cameracontrols.LUTSplitComparisonBar
 import com.opencapture.openpocketcine.pickerPanelGlass
 import com.opencapture.openpocketcine.settings.SettingsPalette
+import com.opencapture.opencine.cameracontrols.ZebraEditor
+import com.opencapture.opencine.cameracontrols.NDAssist
+import com.opencapture.opencine.cameracontrols.MirrorAssist
+import com.opencapture.opencine.cameracontrols.HistogramAssist
+import com.opencapture.opencine.cameracontrols.AudioAssist
+import com.opencapture.opencine.cameracontrols.AssistToolGlyph
+import com.opencapture.opencine.cameracontrols.AssistInspectorScopePreview
+import com.opencapture.opencine.cameracontrols.AnamorphicDesqueeze
 
 private val CardShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
@@ -126,6 +135,7 @@ fun AssistOptionsPopup(
                         .fillMaxWidth(),
                 ) {
                     LUTPicker(
+                        copy = AppLutPickerCopy,
                         selection = lutSelection,
                         onSelect = { id ->
                             if (model != null) {

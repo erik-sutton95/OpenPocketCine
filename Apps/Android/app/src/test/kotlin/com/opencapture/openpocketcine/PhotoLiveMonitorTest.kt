@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraStatus
-import com.opencapture.openpocketcine.lut.LutCatalog
+import com.opencapture.opencine.vocabulary.LutCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -34,7 +34,7 @@ class PhotoLiveMonitorTest {
     @Test
     fun photoCatalogKeepsGenericExtraCubes() {
         val photo =
-            LutCatalog.djiEntries(
+            LutCatalog.officialEntries(
                 listOf("DJI_Official_Pocket4P_DLog2_Rec709_33.cube", "Film.cube"),
                 isPhotoLive = true,
             )

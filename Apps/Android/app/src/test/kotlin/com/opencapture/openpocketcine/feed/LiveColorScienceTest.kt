@@ -7,6 +7,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.opencapture.opencine.vocabulary.inferred
+import com.opencapture.opencine.vocabulary.fromColorMode
+import com.opencapture.opencine.vocabulary.COLOR_DLOG_M
+import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
 
 class FeedUpscaleTest {
     @Test

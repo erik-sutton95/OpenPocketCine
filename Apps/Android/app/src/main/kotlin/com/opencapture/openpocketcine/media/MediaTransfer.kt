@@ -9,6 +9,7 @@ import java.io.OutputStream
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
+import com.opencapture.opencine.vocabulary.MediaHTTP
 
 sealed class MediaTransferError : Exception() {
     data object BadResponse : MediaTransferError()

@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.feed
 
+import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+
 typealias ScopeAssistBundle = com.opencapture.opencine.media.ScopeAssistBundle
 
 object PocketScopeSampler {

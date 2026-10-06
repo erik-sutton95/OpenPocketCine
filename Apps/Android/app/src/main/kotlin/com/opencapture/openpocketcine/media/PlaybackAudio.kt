@@ -11,7 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.TeeAudioProcessor
-import com.opencapture.openpocketcine.assists.AudioMeterReading
+import com.opencapture.opencine.cameracontrols.AudioMeterReading
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
