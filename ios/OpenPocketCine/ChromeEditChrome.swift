@@ -1,5 +1,6 @@
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCameraControls
 import SwiftUI
 
 // MARK: - Edit view (per-DISP chrome)

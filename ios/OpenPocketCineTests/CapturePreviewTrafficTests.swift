@@ -1,5 +1,6 @@
 import MonitorPresentation
 import Network
+import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
@@ -70,7 +71,7 @@ final class CapturePreviewTrafficTests: XCTestCase {
         // explicit commit, so the zero-traffic assertions cannot pass on a dead sink.
         let snapshot = try XCTUnwrap(CaptureQuickSnapshot.primary(.wb, model: model))
         let value = try XCTUnwrap(snapshot.changedValue(translation: -56, current: snapshot))
-        snapshot.apply(value, model: model)
+        snapshot.apply(value, host: model)
         let deadline = ContinuousClock.now.advanced(by: .seconds(1))
         while peer.cameraCommands == baseline, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
