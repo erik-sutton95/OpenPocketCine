@@ -57,24 +57,24 @@ internal fun Modifier.settingsClickable(role: Role, enabled: Boolean = true, onC
 /** One named swatch for [SettingsColorDots] (iOS `SettingsColorDots.Dot`). */
 data class SettingsColorDot(val name: String, val color: Color)
 
-/** iOS `SettingsPalette` - zone-scoped stripe/peaking colours. */
+/** iOS `SettingsPalette` - zone-scoped stripe/peaking colours; each dot shows the colour its overlay paints. */
 object SettingsPalette {
     val highlight: List<SettingsColorDot> =
         listOf(
             SettingsColorDot("White", LiveDesign.text),
-            SettingsColorDot("Amber", LiveDesign.accent),
+            SettingsColorDot("Amber", LiveDesign.amber),
             SettingsColorDot("Red", LiveDesign.rec),
         )
     val midtone: List<SettingsColorDot> =
         listOf(
-            SettingsColorDot("Amber", LiveDesign.accent),
-            SettingsColorDot("Cyan", LiveDesign.info),
+            SettingsColorDot("Amber", LiveDesign.amber),
+            SettingsColorDot("Cyan", Color(0f, 0.85f, 0.9f)),
             SettingsColorDot("Green", LiveDesign.good),
         )
     val peaking: List<SettingsColorDot> =
         listOf(
             SettingsColorDot("White", LiveDesign.text),
-            SettingsColorDot("Blue", LiveDesign.info),
+            SettingsColorDot("Blue", Color(64f / 255f, 142f / 255f, 1f)),
             SettingsColorDot("Red", LiveDesign.rec),
             SettingsColorDot("Green", LiveDesign.good),
         )
