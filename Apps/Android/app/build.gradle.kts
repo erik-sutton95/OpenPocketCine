@@ -263,6 +263,8 @@ dependencies {
     implementation(libs.opencine.monitor.ui)
     // Cameras and pairing pages, the connection model and the saved-camera store (SHELL-02).
     implementation(libs.opencine.appkit)
+    // Capture sheets, live chrome and gimbal views over the camera vocabulary (camera-controls).
+    implementation("com.opencapture.opencine:camera-controls:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:core:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:media:0.1.0-SNAPSHOT")
     // Live-view MediaCodec decoder (HevcDecoder), shared with OpenInstaCine.

@@ -11,9 +11,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.opencapture.monitorui.MonitorToolUsageState
+import com.opencapture.opencine.cameracontrols.LocalLiveCanvasOrigin
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.ChromeRect
-import com.opencapture.openpocketcine.LocalLiveCanvasOrigin
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.OperatorPrefs
 

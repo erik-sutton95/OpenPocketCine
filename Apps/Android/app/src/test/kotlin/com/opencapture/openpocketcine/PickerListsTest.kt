@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.cameracontrols.CaptureLists
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.FocusOption
@@ -8,6 +9,7 @@ import com.opencapture.opencine.vocabulary.GimbalDoubleTap
 import com.opencapture.opencine.vocabulary.GimbalMode
 import com.opencapture.opencine.vocabulary.GimbalRamp
 import com.opencapture.opencine.vocabulary.GimbalSpeed
+import com.opencapture.opencine.vocabulary.IsoLimit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
