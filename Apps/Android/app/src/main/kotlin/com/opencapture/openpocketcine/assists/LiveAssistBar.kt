@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.opencine.cameracontrols.reportChromeFrame
 import com.opencapture.openpocketcine.LiveChromeMetrics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -17,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.opencapture.openpocketcine.ChromeRect
-import com.opencapture.openpocketcine.reportChromeFrame
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size

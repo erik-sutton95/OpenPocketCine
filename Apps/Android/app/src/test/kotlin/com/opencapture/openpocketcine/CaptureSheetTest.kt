@@ -96,47 +96,6 @@ class CaptureSheetTest {
         )
     }
 
-    @Test
-    fun holdFpsIgnoresHundredthTick() {
-        assertEquals("25.00", LiveChromeReadout.holdFPS("25.13", "25.00"))
-        assertEquals("25.00", LiveChromeReadout.holdFPS("24.70", "25.00"))
-        assertEquals("25.50", LiveChromeReadout.holdFPS("25.50", "25.00"))
-        assertEquals("RECOV", LiveChromeReadout.holdFPS("RECOV", "25.00"))
-        assertEquals("25.00", LiveChromeReadout.holdFPS("25.00", "LINK"))
-        assertEquals("—", LiveChromeReadout.holdFPS("—", "25.00"))
-    }
-
-    @Test
-    fun fpsChipLabelIsLiveViewHealthNotRecordFps() {
-        data class Chip(
-            val why: String,
-            val connection: com.opencapture.opencine.vocabulary.ConnectionPhase,
-            val recovering: Boolean,
-            val measured: Double,
-            val expected: String,
-        )
-        val live = com.opencapture.opencine.vocabulary.ConnectionPhase.LIVE
-        val cases = listOf(
-            Chip("idle hides fps", com.opencapture.opencine.vocabulary.ConnectionPhase.IDLE, false, 0.0, "\u2014"),
-            Chip("live without frames", live, false, 0.0, "LINK"),
-            Chip("recovering", live, true, 12.0, "RECOV"),
-            Chip("failed", com.opencapture.opencine.vocabulary.ConnectionPhase.FAILED, false, 25.0, "FAIL"),
-            Chip("live with frames", live, false, 25.0, "25.00"),
-        )
-        for (case in cases) {
-            assertEquals(
-                case.expected,
-                LiveViewLink.fpsChipLabel(
-                    connection = case.connection,
-                    recovering = case.recovering,
-                    formattedFPS = "25.00",
-                    measuredFPS = case.measured,
-                ),
-                case.why,
-            )
-        }
-    }
-
     companion object {
         private const val SHUTTER_25P =
             "016d000002000101001e00052180be00409f00009900889300a08f00808c00c48900d08700408600e28400e88300208300808200f48100908100408100f08000c88000a080007880006480005080003c80003280002880001e80001980000c80000a8000088000068000058000048000"

@@ -71,12 +71,15 @@ import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.monitorui.monitorPickerPassthrough
 import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.opencine.cameracontrols.CaptureLists
+import com.opencapture.opencine.cameracontrols.LiveFocusResetButton
 import com.opencapture.opencine.cameracontrols.LiveGimbalButton
 import com.opencapture.opencine.cameracontrols.LiveGimbalOverlay
 import com.opencapture.opencine.cameracontrols.LiveGimbalPanel
+import com.opencapture.opencine.cameracontrols.LiveGimbalStick
 import com.opencapture.opencine.cameracontrols.LiveSheet
 import com.opencapture.opencine.cameracontrols.LiveZoom
 import com.opencapture.opencine.cameracontrols.LiveZoomChip
+import com.opencapture.opencine.cameracontrols.SdCardGlyph
 import com.opencapture.opencine.cameracontrols.captureShutterReadout
 import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.cameracontrols.portraitSetupSheet
