@@ -1,6 +1,7 @@
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCameraVocabulary
 import OpenCineMedia
 import OpenPocketViewCore
 import SwiftUI
@@ -77,7 +78,7 @@ final class AppMonitorLooks: MonitorLookProvider {
     var monitorCameraName: String?
     var liveIsPhoto = false
     var referenceClipByte: Int {
-        OpenCineDJI.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
+        OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
     }
     func lutExposureTransfer(for transfer: MonitorTransfer) -> MonitorTransfer {
         transfer.lutExposureTransfer
@@ -112,6 +113,9 @@ final class AppMonitorLooks: MonitorLookProvider {
             return BundledPocketLUT.cube(id)
         case .dji(let id):
             return BundledOfficialDJILUT.cube(id)
+        case .iLogRec709:
+            // No I-Log cube ships with this app; Pocket never resolves it.
+            return nil
         case .creative(let look):
             return look.cube()
         case .custom(let slot):

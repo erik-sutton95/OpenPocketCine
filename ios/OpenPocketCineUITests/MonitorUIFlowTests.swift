@@ -1094,7 +1094,8 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     private func mediaClipCenter(_ filename: String) -> XCUICoordinate {
-        app.otherElements["monitor.media.clip.UI-REVIEW/\(filename)"]
+        // A clip is identified by its page key, `<storage>:<path>` (`MediaFile.id`), on main too.
+        app.otherElements["monitor.media.clip.0:UI-REVIEW/\(filename)"]
             .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     }
 

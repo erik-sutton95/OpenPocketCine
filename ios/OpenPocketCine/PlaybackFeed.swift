@@ -1,4 +1,5 @@
 import OpenCineApple
+import OpenCineCameraVocabulary
 import OpenCineMedia
 import OpenPocketViewCore
 import UIKit
@@ -66,7 +67,7 @@ extension LiveImageEffects {
         value.zebraMidtoneColor = playbackPaint(zebraMidtoneColor)
         value.transfer = MonitorTransfer(colorMode)
         value.clipByte = clipByte
-        value.referenceClipByte = OpenCineDJI.ScopeExposureCeiling.referenceClipByte(
+        value.referenceClipByte = OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(
             transfer: value.transfer)
         value.allowsTransferInference = allowsTransferInference
         value.splitComparison = splitComparison

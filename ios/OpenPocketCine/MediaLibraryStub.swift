@@ -449,7 +449,9 @@ struct MediaLibraryView: View {
             } empty: {
                 if session.mediaFetchInProgress { listingState } else { emptyState }
             } filters: {
-                filterButton
+                MonitorCatalogFilterButton(
+                    activeCount: activeFilterCount, open: isFilterPopupPresented
+                ) { isFilterPopupPresented.toggle() }
             }
 
             if isFilterPopupPresented {
@@ -579,34 +581,6 @@ struct MediaLibraryView: View {
                 isBatchDeleteConfirmPresented = true
             }
         }
-    }
-
-    private var filterButton: some View {
-        let on = isFilterPopupPresented || hasActiveFilters
-        return Button {
-            isFilterPopupPresented.toggle()
-        } label: {
-            HStack(spacing: 7) {
-                MonitorIcon.listFilter.view().frame(width: 13, height: 13)
-                Text("Filter").font(MonitorTheme.font(10.5, weight: .semibold)).lineLimit(1)
-                if activeFilterCount > 0 {
-                    Text("\(activeFilterCount)")
-                        .font(MonitorTheme.font(10.5, weight: .semibold))
-                }
-            }
-            .foregroundStyle(on ? MonitorTheme.text : MonitorTheme.secondary)
-            .padding(.horizontal, 11).frame(minWidth: 44, minHeight: 44)
-            .background(
-                on ? MonitorTheme.accent.opacity(0.18) : Color.white.opacity(0.04),
-                in: RoundedRectangle(cornerRadius: 9))
-        }
-        .buttonStyle(MonitorButtonStyle())
-        .accessibilityLabel("Filter library")
-        .accessibilityValue(
-            activeFilterCount == 0 ? "Off" : "\(activeFilterCount) active"
-        )
-        .accessibilityAddTraits(on ? .isSelected : [])
-        .accessibilityIdentifier("monitor.media.filter")
     }
 
     private var filterPopup: some View {

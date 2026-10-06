@@ -250,9 +250,8 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
     1. Long-press a camera's only setup, rename it, relaunch and reconnect. Repeat
        for one setup of a camera with several; other names and routes stay intact.
        Clear the setup name and confirm the default title returns after relaunch.
-    2. Open Privacy and Terms from saved cameras and from empty startup, then
-       close each document. Pairing progress and the selected page stay intact.
-       Repeat in portrait, both phone landscape directions and on a tablet.
+    2. Saved cameras and empty startup show no Privacy or Terms links (as on main);
+       Settings still opens both documents.
 
 The SHELL-02 simulator/emulator runs use synthetic camera records and credentials.
 They do not prove Bluetooth, camera networking, store signing or physical-device
