@@ -1,9 +1,20 @@
 #!/bin/sh
-# Check out the OpenCine platform repository pinned in opencine-pins.txt next to this
-# repository (../OpenCine) at its exact commit, then verify the commit. Never follows a branch.
+# Check out each repository named in opencine-pins.txt next to this app
+# (../<Name>) at its exact commit, then verify the commit. Never follows a branch.
 # Usage: scripts/checkout-opencine.sh [base-url]   (default https://github.com/erik-sutton95)
+#
+# This file is the bootstrap, so the app keeps its own copy: it runs before the
+# pin exists. Keep it identical to OpenCine/scripts/checkout-opencine.sh.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
+canon="$root/../OpenCine/scripts/checkout-opencine.sh"
+if [ -f "$canon" ]; then
+  me=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+  if [ "$me" != "$canon" ] && ! cmp -s "$me" "$canon"; then
+    echo "error: scripts/checkout-opencine.sh differs from ../OpenCine/scripts/checkout-opencine.sh" >&2
+    exit 1
+  fi
+fi
 base=${1:-https://github.com/erik-sutton95}
 grep -v '^#' "$root/opencine-pins.txt" | while read -r name sha; do
   [ -n "$name" ] || continue

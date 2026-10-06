@@ -44,7 +44,7 @@ SIBLING_PACKAGES = {
                       *SWIFT_ANDROID_CORE]),
     ],
     "android": [
-        ("OpenCine", ["Package.swift", *SWIFT_ANDROID_CORE,
+        ("OpenCine", ["Package.swift", "scripts/android-stage-swift-core.sh", *SWIFT_ANDROID_CORE,
                       "Android/settings.gradle.kts", "Android/build.gradle.kts",
                       "Android/gradle.properties", "Android/gradle",
                       "Android/core", "Android/media", "Android/decoder", "Android/dji",

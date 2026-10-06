@@ -116,6 +116,11 @@ class BuildIdentityTests(unittest.TestCase):
         self.assertEqual((False, True), self.changes(nested, opencine, kotlin, "val policy = 2\n"))
         self.assertEqual((True, False), self.changes(nested, opencine, swift, "let policy = 2\n"))
 
+    def test_stage_script_changes_android_identity_only(self):
+        name = "scripts/android-stage-swift-core.sh"
+        opencine, nested = self.opencine_sibling({name: "echo 1\n"})
+        self.assertEqual((False, True), self.changes(nested, opencine, name, "echo 2\n"))
+
     def test_other_integrations_change_neither_identity(self):
         names = ["Sources/OpenCineNikon/Ptp.swift", "Sources/Insta360Apple/Luna.swift",
                  "Android/insta360-luna/Luna.kt", "atlas/README.md"]
