@@ -3,6 +3,7 @@ import MonitorUI
 import OpenCineAppKit
 import OpenCineCameraControls
 import OpenCineCameraVocabulary
+import OpenPocketViewCore
 import SwiftUI
 
 typealias LiveCameraControlBar = CaptureControlBar<AppModel, EmptyView>
@@ -19,8 +20,10 @@ typealias LiveHeadTrackCalibrateButton = HeadTrackCalibrateButton<LiveDesign>
 typealias LivePortraitAspectToggle = PortraitAspectToggle<LiveDesign>
 typealias LiveZoomPinchWell = FeedGestureWell<AppModel>
 typealias LiveZoomChip = ZoomChip<AppModel>
+typealias MonitorRecoveryOverlay = SessionRecoveryOverlay<AppModel>
 
-extension LiveSystemRail where Host == AppModel, Record == LiveRecordButton, Display == LiveDispToggle {
+extension LiveSystemRail
+where Host == AppModel, Record == LiveRecordButton, Display == LiveDispToggle {
     init(
         locked: Binding<Bool>, layout: FieldMonitorLayout, capturePresented: Bool, visible: Bool,
         interactive: Bool
@@ -45,6 +48,20 @@ extension LiveAssistPalette where Host == AppModel, Icon == AssistToolIcon {
             layout: layout, isLocked: isLocked, otherOverlayPresented: otherOverlayPresented,
             expanded: expanded, onExpansionActivityChange: onExpansionActivityChange
         ) { AssistToolIcon(tool: $0, size: nil) }
+    }
+}
+
+extension SessionRecoveryOverlay where Host == AppModel {
+    static func progressDetail(_ phase: ConnectionPhase) -> String {
+        switch phase {
+        case .idle, .scanning: "Looking for your camera…"
+        case .connectingGatt, .pairing: "Connecting to your camera…"
+        case .awaitingApproval: "Approve on the camera screen if asked."
+        case .readingWifiCreds, .joiningWifi: "Rejoining camera Wi-Fi…"
+        case .openingDatalink: "Restoring the camera connection…"
+        case .live: "Waiting for a new live picture…"
+        case .failed: "Connection attempt failed. Trying again…"
+        }
     }
 }
 
@@ -98,4 +115,9 @@ extension AppModel: LiveChromeHost {
     }
     func handleFeedTap(at point: CGPoint) { session.handleFeedTap(at: point) }
     func startTracking(_ box: TrackingBox) { session.startTracking(box) }
+    var sessionRecovery: SessionRecoveryState { session.sessionRecovery }
+    var sessionRecoveryCardGraceElapsed: Bool { session.sessionRecoveryCardGraceElapsed }
+    var recoveryDeviceName: String { session.recoveryDeviceName }
+    var recoveryProgressDetail: String { MonitorRecoveryOverlay.progressDetail(session.phase) }
+    func retrySessionRecovery() { session.retrySessionRecovery() }
 }
