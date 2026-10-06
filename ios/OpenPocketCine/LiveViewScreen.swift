@@ -986,44 +986,6 @@ private struct LiveFeedAssistsPane: View {
     }
 }
 
-enum LiveChromeEditGeometry {
-    /// Badge the drawn AF / head box; stand in at the AF point when nothing is locked.
-    static func focusEditRect(
-        overlay: FocusOverlay,
-        faces: [TrackingBox],
-        focusPoint: CGPoint,
-        mirrored: Bool,
-        flippedVertically: Bool = false,
-        in feed: CGRect
-    ) -> CGRect {
-        let tracked: TrackingBox?
-        switch overlay {
-        case .search(let box), .subject(let box), .face(let box):
-            tracked = box
-        case .focus:
-            tracked = faces.first
-        }
-        if let box = tracked {
-            let drawn = box.flipped(horizontal: mirrored, vertical: flippedVertically)
-            return CGRect(
-                x: feed.minX + drawn.x * feed.width,
-                y: feed.minY + drawn.y * feed.height,
-                width: max(1, drawn.width * feed.width),
-                height: max(1, drawn.height * feed.height)
-            )
-        }
-        let side = min(feed.width, feed.height) * 0.14
-        let x = mirrored ? 1 - focusPoint.x : focusPoint.x
-        let y = flippedVertically ? 1 - focusPoint.y : focusPoint.y
-        return CGRect(
-            x: feed.minX + x * feed.width - side / 2,
-            y: feed.minY + y * feed.height - side / 2,
-            width: side,
-            height: side
-        )
-    }
-}
-
 private struct LiveSessionBanners: View {
     @Environment(AppModel.self) private var model
     var feed: CGRect

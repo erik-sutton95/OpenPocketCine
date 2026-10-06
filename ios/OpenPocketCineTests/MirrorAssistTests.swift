@@ -1,5 +1,6 @@
 import CoreImage
 import OpenCineAppKit
+import OpenCineCameraControls
 import XCTest
 
 @testable import OpenPocketCine
