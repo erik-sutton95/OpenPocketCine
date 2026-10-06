@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine.assists
 
-import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.monitorui.MonitorScopeTraceRaster as ScopeTraceRaster
@@ -77,9 +76,9 @@ class ScopeGeometryTest {
         assertEquals(0.5, WaveformAssist.intensity(200), 1e-9)
         assertEquals(1.0, ParadeAssist.intensity(100), 1e-9)
         assertEquals(2.0, ParadeAssist.intensity(200), 1e-9)
-        assertEquals(30.50, WaveformAxis.middleGrayIRE(CameraCommands.COLOR_DLOG2), 0.01)
-        assertEquals(39.88, WaveformAxis.middleGrayIRE(CameraCommands.COLOR_DLOG), 0.01)
-        assertEquals(40.9, WaveformAxis.middleGrayIRE(CameraCommands.COLOR_NORMAL), 0.05)
+        assertEquals(30.50, WaveformAxis.middleGrayIRE(MonitorTransfer.DLOG2), 0.01)
+        assertEquals(39.88, WaveformAxis.middleGrayIRE(MonitorTransfer.DLOG), 0.01)
+        assertEquals(40.9, WaveformAxis.middleGrayIRE(MonitorTransfer.REC709), 0.05)
     }
 
     @Test
@@ -321,7 +320,7 @@ class ScopeGeometryTest {
             listOf("crush", "18%", "skin", "clip"),
             FalseColorReference.axisLabels(FalseColorScale.STOPS),
         )
-        assertEquals("D-Log2", FalseColorReference.curveKeyLabel(CameraCommands.COLOR_DLOG2))
+        assertEquals("D-Log2", FalseColorReference.curveKeyLabel(MonitorTransfer.DLOG2))
         val ire = FalseColorReference.segments(FalseColorScale.IRE, transfer)
         assertEquals(6, ire.size)
         assertEquals(0.0, ire[0].lowerFraction, 1e-4)

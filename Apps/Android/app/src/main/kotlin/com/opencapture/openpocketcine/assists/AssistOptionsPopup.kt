@@ -12,7 +12,9 @@ import com.opencapture.monitorui.settings.MonitorSettingsColorDot
 import com.opencapture.opencine.cameracontrols.AssistHost
 import com.opencapture.opencine.cameracontrols.AssistLutPicker
 import com.opencapture.opencine.cameracontrols.AssistOptionsPanel
+import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.fromColorMode
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.lut.AppLutPickerCopy
@@ -64,9 +66,10 @@ fun AssistOptionsPopup(
         },
         family = model?.session?.connectedCamera?.model?.family ?: "pocket",
         cameraName = model?.session?.connectedCamera?.name,
+        colorMode = colorMode,
     )
     AssistOptionsPanel(
-        tool, state, onDismiss, AppAssistHost, lut, modifier, maxHeightDp, colorMode, embedded, playback, isPhoto,
+        tool, state, onDismiss, AppAssistHost, lut, modifier, maxHeightDp, MonitorTransfer.fromColorMode(colorMode), embedded, playback, isPhoto,
         imagePreview = model?.let { { AssistInspectorImagePreview(tool, state, it, lutSelection, colorMode, playback) } },
     )
 }
