@@ -27,7 +27,7 @@ final class WaveformAssistTests: XCTestCase {
     func testIREZeroAndHundredSitOnPlotEdges() {
         let size = CGSize(width: 250, height: 153)
         let plot = WaveformAxis.plotRect(in: size)
-        let shared = scopePlotRect(size, top: 26)
+        let shared = MonitorScopeGeometry.plotRect(size, top: 26)
         let line0 = WaveformAxis.scaleLineY(0, plot)
         let line100 = WaveformAxis.scaleLineY(100, plot)
         let line5 = WaveformAxis.scaleLineY(5, plot)

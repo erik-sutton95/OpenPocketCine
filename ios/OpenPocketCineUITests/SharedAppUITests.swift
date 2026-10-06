@@ -1,6 +1,8 @@
 import OpenCineAppUITesting
 
 // The UI tests every app shares (OpenCine `OpenCineAppUITesting`) run as this app's tests.
+final class CamerasPageFollowupTests: OpenCineAppUITesting.CamerasPageFollowupTests {}
+final class DesqueezeUIFlowTests: OpenCineAppUITesting.DesqueezeUIFlowTests {}
 final class EVMeterUIFlowTests: OpenCineAppUITesting.EVMeterUIFlowTests {}
 final class FeedStressTests: OpenCineAppUITesting.FeedStressTests {}
 final class MotionUIFlowTests: OpenCineAppUITesting.MotionUIFlowTests {}

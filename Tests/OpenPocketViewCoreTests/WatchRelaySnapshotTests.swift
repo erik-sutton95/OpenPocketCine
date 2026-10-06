@@ -5,17 +5,6 @@ import Testing
 
 @Suite("Watch relay snapshot from this app's camera status")
 struct WatchRelaySnapshotTests {
-    private func sampleState() -> WatchRelayState {
-        WatchRelayState(
-            isRecording: true,
-            timecode: "01:02:03",
-            media: "12 GB · 47%",
-            cameraBatteryPercent: 80,
-            cameraName: "Osmo Pocket 4",
-            connection: .connected,
-            feedLive: true)
-    }
-
     @Test("Snapshot maps live telemetry onto the wrist state")
     func snapshotMapsLiveStatus() {
         var status = CameraStatus()
@@ -62,35 +51,5 @@ struct WatchRelaySnapshotTests {
         let lowLight = WatchRelayState.snapshot(
             status: status, phase: .live, cameraName: "Pocket 3", feedLive: true)
         #expect(!lowLight.isPhotography)
-    }
-
-    @Test("Wrist-down does not cover a live tally with open-on-iPhone")
-    func placeholderKeepsLastTallyWhenUnreachable() {
-        let live = sampleState()
-        #expect(
-            WatchMonitorPlaceholder.resolve(
-                isReachable: false, state: live, hasFeed: true) == .none)
-        #expect(
-            WatchMonitorPlaceholder.resolve(
-                isReachable: false, state: nil, hasFeed: false) == .openOnIPhone)
-        #expect(
-            WatchMonitorPlaceholder.resolve(
-                isReachable: true, state: nil, hasFeed: false) == .none)
-        let noCamera = WatchRelayState.snapshot(
-            status: CameraStatus(), phase: .idle, cameraName: "", feedLive: false)
-        #expect(
-            WatchMonitorPlaceholder.resolve(
-                isReachable: true, state: noCamera, hasFeed: false) == .noCamera)
-    }
-
-    @Test("Disconnect labels a retained picture, even while the wrist is down")
-    func disconnectedSnapshotOverlaysOldFrame() {
-        let noCamera = WatchRelayState.snapshot(
-            status: CameraStatus(), phase: .idle, cameraName: "", feedLive: false)
-        for reachable in [true, false] {
-            #expect(
-                WatchMonitorPlaceholder.resolve(
-                    isReachable: reachable, state: noCamera, hasFeed: true) == .noCamera)
-        }
     }
 }

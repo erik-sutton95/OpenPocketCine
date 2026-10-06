@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenCineAppKit
 import OpenCineCore
 import OpenPocketViewCore

@@ -14,8 +14,8 @@ struct LiveTrackingCancelButton: View {
                 .frame(width: 11, height: 11)
                 .foregroundStyle(LiveDesign.background)
                 .frame(
-                    width: LiveTrackingChrome.cancelSize,
-                    height: LiveTrackingChrome.cancelSize
+                    width: MonitorTrackingGeometry.cancelSize,
+                    height: MonitorTrackingGeometry.cancelSize
                 )
                 .background(LiveDesign.good, in: Circle())
         }

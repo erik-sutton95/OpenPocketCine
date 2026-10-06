@@ -18,8 +18,8 @@ final class LiveScopesTests: XCTestCase {
 
     func testTraceClipCoversAnchoredBandAndScissorFits() {
         let bounds = CGSize(width: 250, height: 153)
-        let plot = scopePlotRect(bounds, top: 26)
-        let clip = scopeTraceClipRect(plot)
+        let plot = MonitorScopeGeometry.plotRect(bounds, top: 26)
+        let clip = MonitorScopeGeometry.traceClipRect(plot)
         XCTAssertEqual(clip.minX, plot.minX, accuracy: 0.01)
         XCTAssertEqual(clip.maxX, plot.maxX, accuracy: 0.01)
         XCTAssertEqual(clip.minY, plot.minY - 2, accuracy: 0.01)
@@ -43,7 +43,7 @@ final class LiveScopesTests: XCTestCase {
     }
 
     func testGreyMarkerSitsAtTheTransferMidLevel() {
-        let plot = scopePlotRect(CGSize(width: 250, height: 153), top: 26)
+        let plot = MonitorScopeGeometry.plotRect(CGSize(width: 250, height: 153), top: 26)
         for transfer in MonitorTransfer.allCases {
             let marker = scopeLevelY(ceiling.anchors(transfer: transfer).midLevel, plot)
             let greyTick = scopeTraceLevelY(
@@ -131,7 +131,7 @@ final class LiveScopesTests: XCTestCase {
         let plot = WaveformAxis.plotRect(in: CGSize(width: 250, height: 153))
         let line0 = WaveformAxis.scaleLineY(0, plot)
         let leftover = scopeLevelY(
-            ScopeDisplayScale.crushLevel, scopePlotRect(CGSize(width: 250, height: 153), top: 26))
+            ScopeDisplayScale.crushLevel, MonitorScopeGeometry.plotRect(CGSize(width: 250, height: 153), top: 26))
         let table = WaveformAxis.levelTable(
             for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
         var vertices = [MonitorScopeTraceMetal.Vertex](
