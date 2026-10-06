@@ -142,11 +142,12 @@ publication policy. iOS [CameraSession](../../ios/OpenPocketCine/CameraSession.s
 lines 49–70 retains immediate control truth separately from its 5 Hz notification
 gate. Root collection alone does not prove every Android widget recomposes.
 
-[SwiftCoreJNI](../../Sources/OpenPocketCineAndroidFacade/SwiftCoreJNI.swift)
-`swiftCoreApplyStatus` parses the incoming status before asking whether the frame
-is recognized. [AndroidSessionWire](../../Sources/OpenPocketCineAndroidFacade/AndroidSessionWire.swift)
-lines 113–317 repeatedly scans the same string for each field. The host probe
-below isolates this cost. It excludes Kotlin `JSONObject`, JNI copying and UI work.
+Status JSON lives in
+[DjiNativeWire](../../../OpenCine/Sources/OpenCineDJIAndroid/DjiNativeWire.swift).
+[DjiNativeJNI.swiftCoreApplyStatus](../../../OpenCine/Sources/OpenCineDJIAndroid/DjiNativeJNI.swift)
+rejects an unrecognized frame before parsing the previous status, then indexes that JSON once.
+The September 22 measurement below recorded the older per-field rescan. The host probe
+isolates the current codec cost. It excludes Kotlin `JSONObject`, JNI copying and UI work.
 
 Quick experiment: reject non-status frames before rebuilding state, using the
 shared decoder's recognition rules so new opcodes are not silently lost.
@@ -336,8 +337,8 @@ Transport inspection also found existing limits worth preserving:
 ## Host status-codec measurement
 
 Run `just performance-status-probe`. The [probe](../../tools/performance-status-probe.sh)
-copies current production core and `AndroidSessionWire` into an isolated temporary
-Swift package, builds Release and removes it afterward. It uses synthetic data,
+builds the sibling OpenCine products `OpenCineDJI` and `OpenCineDJIAndroid` in an
+isolated temporary Swift package, builds Release and removes it afterward. It uses synthetic data,
 asserts recognized battery updates and unknown-frame rejection, warms each case
 100 times, then records seven batches of 3,000 calls. Timings are informational;
 there is no hardware-dependent timing assertion.

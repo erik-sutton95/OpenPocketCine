@@ -1,30 +1,38 @@
 #!/usr/bin/env bash
-# Host-only synthetic measurement of the production Android status facade.
+# Host-only synthetic measurement of the production Android status JSON.
+# That codec is DjiNativeWire in the sibling OpenCine package.
 # Timing is informational: this does not measure JNI, Kotlin, UI, or phone energy.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+opencine="$(cd "$repo_root/../OpenCine" && pwd)"
+if [[ ! -f "$opencine/Package.swift" ]]; then
+    printf 'PROBE missing sibling OpenCine at %s\n' "$opencine" >&2
+    exit 1
+fi
 probe_root="$(mktemp -d "${TMPDIR:-/tmp}/opc-status-probe.XXXXXX")"
 trap 'rm -rf "$probe_root"' EXIT
 
-mkdir -p "$probe_root/Sources/OpenPocketViewCore" \
-    "$probe_root/Sources/OpenPocketCineAndroidFacade" "$probe_root/Tests/ProbeTests"
-cp "$repo_root"/Sources/OpenPocketViewCore/*.swift "$probe_root/Sources/OpenPocketViewCore/"
-cp "$repo_root/Sources/OpenPocketCineAndroidFacade/AndroidSessionWire.swift" \
-    "$probe_root/Sources/OpenPocketCineAndroidFacade/"
+mkdir -p "$probe_root/Tests/ProbeTests"
 
-cat > "$probe_root/Package.swift" <<'SWIFT'
+cat > "$probe_root/Package.swift" <<SWIFT
 // swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "StatusProbe",
-    platforms: [.macOS(.v12)],
+    platforms: [.macOS(.v13)],
+    dependencies: [
+        .package(path: "$opencine"),
+    ],
     targets: [
-        .target(name: "OpenPocketViewCore"),
-        .target(name: "OpenPocketCineAndroidFacade", dependencies: ["OpenPocketViewCore"]),
         .testTarget(
-            name: "ProbeTests", dependencies: ["OpenPocketViewCore", "OpenPocketCineAndroidFacade"]),
+            name: "ProbeTests",
+            dependencies: [
+                .product(name: "OpenCineDJI", package: "OpenCine"),
+                .product(name: "OpenCineDJIAndroid", package: "OpenCine"),
+            ]
+        ),
     ]
 )
 SWIFT
@@ -32,8 +40,8 @@ SWIFT
 cat > "$probe_root/Tests/ProbeTests/ProbeTests.swift" <<'SWIFT'
 import Foundation
 import XCTest
-import OpenPocketViewCore
-import OpenPocketCineAndroidFacade
+import OpenCineDJI
+import OpenCineDJIAndroid
 
 final class ProbeTests: XCTestCase {
     func testStatusCost() {
@@ -48,7 +56,7 @@ final class ProbeTests: XCTestCase {
         initial.iso = 100
         initial.shutterDenom = 50
         initial.timecode = "01:02:03:04"
-        let json = AndroidSessionWire.statusJSON(initial)
+        let json = DjiNativeWire.statusJSON(initial)
         var payload = [UInt8](repeating: 0, count: 34)
         payload[20] = 81
         let battery = Duml.Frame(
@@ -58,7 +66,7 @@ final class ProbeTests: XCTestCase {
             sender: 0, receiver: 0, seq: 0, flags: 0,
             cmdSet: 0xFE, cmdId: 0xFE, payload: [])
 
-        let restored = AndroidSessionWire.status(fromJSON: json)
+        let restored = DjiNativeWire.status(fromJSON: json)
         XCTAssertEqual(restored.batteryPercent, initial.batteryPercent)
         XCTAssertEqual(restored.storageFreeMb, initial.storageFreeMb)
         XCTAssertEqual(restored.iso, initial.iso)
@@ -99,18 +107,18 @@ final class ProbeTests: XCTestCase {
             return state.batteryPercent
         }
         bench("facade_status_parse") {
-            AndroidSessionWire.status(fromJSON: json).batteryPercent
+            DjiNativeWire.status(fromJSON: json).batteryPercent
         }
         bench("facade_status_serialize") {
-            AndroidSessionWire.statusJSON(initial).utf8.count
+            DjiNativeWire.statusJSON(initial).utf8.count
         }
         bench("facade_status_parse_apply_serialize") {
-            var state = AndroidSessionWire.status(fromJSON: json)
+            var state = DjiNativeWire.status(fromJSON: json)
             CameraStatusDecoder.apply(battery, to: &state)
-            return AndroidSessionWire.statusJSON(state).utf8.count
+            return DjiNativeWire.statusJSON(state).utf8.count
         }
         bench("unrecognized_parse_before_reject") {
-            var state = AndroidSessionWire.status(fromJSON: json)
+            var state = DjiNativeWire.status(fromJSON: json)
             return CameraStatusDecoder.apply(unknown, to: &state) ? 1 : state.batteryPercent
         }
         // Keep timed results observable without using timing as a pass/fail gate.
@@ -120,8 +128,13 @@ final class ProbeTests: XCTestCase {
 SWIFT
 
 cd "$repo_root"
-printf 'PROBE source_commit=%s architecture=%s\n' "$(git rev-parse HEAD)" "$(uname -m)"
-if git diff --quiet HEAD -- Sources/OpenPocketViewCore Sources/OpenPocketCineAndroidFacade/AndroidSessionWire.swift; then
+printf 'PROBE source_commit=%s architecture=%s\n' "$(git -C "$opencine" rev-parse HEAD)" "$(uname -m)"
+printf 'PROBE pocket_commit=%s\n' "$(git -C "$repo_root" rev-parse HEAD)"
+if git -C "$opencine" diff --quiet HEAD -- \
+    Sources/OpenCineDJIAndroid/DjiNativeWire.swift \
+    Sources/OpenCineDJI/CameraStatus+DJIWire.swift \
+    Sources/OpenCineCameraVocabulary/CameraStatus.swift
+then
     printf 'PROBE production_sources_dirty=false\n'
 else
     printf 'PROBE production_sources_dirty=true\n'
