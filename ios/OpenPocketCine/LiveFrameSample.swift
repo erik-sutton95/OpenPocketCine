@@ -15,8 +15,8 @@ extension MonitorTransfer {
         case .dlog: .dLog
         case .dlogm: .dLogM
         case .dlog2: .dLog2
-        // ponytail: no DJI wire mode carries I-Log; Pocket never selects it.
-        case .ilog: .normal
+        // ponytail: no DJI wire mode carries I-Log or the Nikon curves; Pocket never selects them.
+        case .ilog, .srgb, .nlog, .log3G10: .normal
         }
     }
 
@@ -63,7 +63,7 @@ extension ScopeSampler {
         switch transfer {
         case .dlog: return BundledOfficialDJILUT.cube(.pocketDLog)
         case .dlog2: return BundledOfficialDJILUT.cube(.pocketDLog2)
-        case .rec709, .hdr, .dlogm, .ilog: return nil
+        case .rec709, .hdr, .dlogm, .ilog, .srgb, .nlog, .log3G10: return nil
         }
     }
 
@@ -99,7 +99,7 @@ final class LiveAssistEngine: Sendable {
                 switch transfer {
                 case .dlog: return BundledOfficialDJILUT.cube(.pocketDLog)
                 case .dlog2: return BundledOfficialDJILUT.cube(.pocketDLog2)
-                case .rec709, .hdr, .dlogm, .ilog: return nil
+                case .rec709, .hdr, .dlogm, .ilog, .srgb, .nlog, .log3G10: return nil
                 }
             },
             inferTransfer: { MonitorTransfer.inferred(minByte: $0, maxByte: $1, fallback: $2) },
