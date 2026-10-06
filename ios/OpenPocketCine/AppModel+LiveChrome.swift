@@ -11,6 +11,27 @@ typealias FieldMonitorGauges = LiveTelemetryGauges<AppModel>
 typealias LiveTopPickerHost = LiveTopSheetHost<AppModel>
 typealias ChromeEditBadgeLayer = ChromeEditBadges<AppModel>
 typealias ChromeEditBanner = ChromeEditDoneBanner<AppModel>
+typealias LiveSystemChrome = LiveSystemRail<AppModel, LiveRecordButton, LiveDispToggle>
+typealias LiveFocusResetButton = FocusResetButton<AppModel>
+typealias LiveAutoExposureUnlockButton = AutoExposureUnlockButton<AppModel>
+typealias LiveHeadTrackCalibrateButton = HeadTrackCalibrateButton<LiveDesign>
+typealias LivePortraitAspectToggle = PortraitAspectToggle<LiveDesign>
+
+extension LiveSystemRail where Host == AppModel, Record == LiveRecordButton, Display == LiveDispToggle {
+    init(
+        locked: Binding<Bool>, layout: FieldMonitorLayout, capturePresented: Bool, visible: Bool,
+        interactive: Bool
+    ) {
+        self.init(
+            locked: locked, layout: layout, capturePresented: capturePresented, visible: visible,
+            interactive: interactive
+        ) {
+            LiveRecordButton(diameter: $0)
+        } display: {
+            LiveDispToggle(size: $0)
+        }
+    }
+}
 
 extension LiveAssistPalette where Host == AppModel, Icon == AssistToolIcon {
     init(
@@ -43,4 +64,9 @@ extension AppModel: LiveChromeHost {
     var liveSignalBars: Int { session.liveSignalBars }
     var liveFPS: String { session.liveFPS }
     var gimbalPanelOpen: Bool { liveGimbalPanel != .none }
+    var multiviewBorrowed: Bool { session.isMultiviewBorrowed }
+    func openSettings() { shell.open(.settings) }
+    func openMedia() { shell.open(.media) }
+    func resetFocusPoint() { session.resetFocusPoint() }
+    func unlockAutoExposure() { session.unlockAutoExposure() }
 }
