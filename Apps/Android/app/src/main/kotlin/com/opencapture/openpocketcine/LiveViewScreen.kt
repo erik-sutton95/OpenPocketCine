@@ -150,7 +150,7 @@ import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.openpocketcine.assists.LiveAssistState
-import com.opencapture.openpocketcine.assists.LiveAssistTool
+import com.opencapture.monitorui.MonitorAssistTool
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
 import com.opencapture.opencine.media.FeedPresentPolicy
 import com.opencapture.openpocketcine.feed.GpuOverlayBus
@@ -159,6 +159,7 @@ import com.opencapture.openpocketcine.feed.LiveVulkanSession
 import com.opencapture.openpocketcine.feed.LocalGpuLive
 import com.opencapture.monitorui.LocalMonitorBackdrops
 import com.opencapture.monitorui.monitorBackdropSource
+import com.opencapture.monitorui.portraitVerticalPicture
 import com.opencapture.openpocketcine.feed.MonitorBackdropFeed
 import com.opencapture.openpocketcine.feed.rememberMonitorBackdropFeed
 import com.opencapture.openpocketcine.feed.OpcVulkan
@@ -233,7 +234,7 @@ fun LiveViewScreen(model: AppModel) {
     LaunchedEffect(status.shootingMode) {
         sheet = CaptureShutterPolicy.retainedSheet(sheet, status.shootingMode)
         if (!model.showsAudio(status) &&
-            assist.configureTool == LiveAssistTool.AUDIO
+            assist.configureTool == MonitorAssistTool.AUDIO
         ) {
             assist.configureTool = null
         }
@@ -433,7 +434,7 @@ fun LiveViewScreen(model: AppModel) {
         val safeTrailing = with(density) { cutout.getRight(this, layoutDir).toDp().value }
         val vw = maxWidth.value
         val vh = maxHeight.value
-        val desqueezeVisible = assist.isVisible(LiveAssistTool.DESQ)
+        val desqueezeVisible = assist.isVisible(MonitorAssistTool.DESQ)
         val fill = verticalPicture || (!desqueezeVisible && model.portraitFeedAspect == PortraitFeedAspect.FILL)
         val feedAspectRatio = if (verticalPicture) 9f / 16f else 16f / 9f
         val assistH =
@@ -548,7 +549,6 @@ fun LiveViewScreen(model: AppModel) {
         var topQuickActive by remember { mutableStateOf(false) }
         val captureQuickActive = stripQuickActive || topQuickActive
         var canvasOrigin by remember { mutableStateOf(Offset.Zero) }
-        val platesGen = GpuOverlayBus.platesGeneration
         DisposableEffect(vulkanSession) {
             GpuOverlayBus.onSlotsMoved = { vulkanSession?.slotsMoved() }
             model.session.decoder.onOutputSizeChanged = { w, h ->
@@ -563,7 +563,6 @@ fun LiveViewScreen(model: AppModel) {
             useVulkan,
             effectsPlan,
             canvasOrigin,
-            platesGen,
             pictureContent,
             desqueezeVisible,
             density.density,
@@ -579,7 +578,6 @@ fun LiveViewScreen(model: AppModel) {
                 with(density) { picture.height.dp.toPx() },
                 stretchToRect = desqueezeVisible,
             )
-            session.setPlates(GpuOverlayBus.plateSnapshot())
             session.updateEffects(
                 plan = effectsPlan,
                 uiScale = density.density,
@@ -827,7 +825,7 @@ fun LiveViewScreen(model: AppModel) {
                 )
             }
 
-            if (assist.isVisible(LiveAssistTool.LEVEL)) {
+            if (assist.isVisible(MonitorAssistTool.LEVEL)) {
                 LiveLevelOverlay(
                     reading = model.session.levelReading,
                     // Picture-relative like the stick: TT180 mirrors the shown picture in both Selfie Flip states.
@@ -1429,7 +1427,7 @@ internal fun LandscapeChrome(
     sheet: LiveSheet?,
     onSheet: (LiveSheet?) -> Unit,
     assist: LiveAssistState,
-    onAssistLongPress: (LiveAssistTool) -> Unit,
+    onAssistLongPress: (MonitorAssistTool) -> Unit,
     chromeInteractive: Boolean,
     controlBusy: Boolean,
     fpsLabel: String,
@@ -1662,12 +1660,3 @@ private fun LiveTopDeck(
     }
 }
 
-/**
- * iOS `FieldMonitorLayout`: a vertical camera is shown whole, resting on the bottom of the
- * well. Height-only sizing overflowed narrow phones and clipped both sides.
- */
-internal fun portraitVerticalPicture(well: ChromeRect): ChromeRect {
-    val height = minOf(well.height, well.width * 16f / 9f)
-    val width = height * 9f / 16f
-    return ChromeRect(well.midX - width / 2f, well.maxY - height, width, height)
-}

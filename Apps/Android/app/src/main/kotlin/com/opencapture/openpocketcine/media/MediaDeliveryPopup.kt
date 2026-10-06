@@ -56,7 +56,7 @@ import androidx.core.content.FileProvider
 import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
-import com.opencapture.openpocketcine.OpcIcon
+import com.opencapture.monitorui.MonitorIcon
 import com.opencapture.opencine.appkit.MonitorDeliveryCompletion
 import com.opencapture.opencine.appkit.MonitorDeliveryModel
 import kotlinx.coroutines.CoroutineScope
@@ -332,7 +332,7 @@ fun MediaDeliveryProgressOverlay(
             )
         } else {
             // Native share is Android's only destination (iOS shows the destination glyph).
-            OpcIcon(OpcIcon.SHARE, null, Modifier.size(13.dp), LiveDesign.accent)
+            MonitorIcon(MonitorIcon.SHARE, null, Modifier.size(13.dp), LiveDesign.accent)
         }
         Column(Modifier.weight(1f)) {
             Text(
@@ -388,7 +388,7 @@ private fun DestinationHeader(onClose: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        OpcIcon(OpcIcon.SHARE, contentDescription = null, tint = LiveDesign.text, modifier = Modifier.size(13.dp))
+        MonitorIcon(MonitorIcon.SHARE, contentDescription = null, tint = LiveDesign.text, modifier = Modifier.size(13.dp))
         Text(
             "SHARE",
             style = LiveType.ui(9f, FontWeight.SemiBold),
@@ -408,7 +408,7 @@ private fun OptionsHeader(title: String, onBack: () -> Unit, onClose: () -> Unit
     ) {
         Row(Modifier.chromeClickable(onClick = onBack), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OpcIcon(OpcIcon.CHEVRON_LEFT, null, Modifier.size(12.dp), LiveDesign.accent)
+            MonitorIcon(MonitorIcon.CHEVRON_LEFT, null, Modifier.size(12.dp), LiveDesign.accent)
             Text("Back", style = LiveType.ui(12.5f, FontWeight.SemiBold), color = LiveDesign.accent)
         }
         Column(Modifier.weight(1f)) {
@@ -431,8 +431,8 @@ private fun UpcomingDestinationRow(title: String) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        OpcIcon(
-            OpcIcon.FOLDER,
+        MonitorIcon(
+            MonitorIcon.FOLDER,
             contentDescription = null,
             tint = LiveDesign.muted,
             modifier = Modifier.size(24.dp),
@@ -465,8 +465,8 @@ private fun DestinationRow(enabled: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        OpcIcon(
-            OpcIcon.SHARE,
+        MonitorIcon(
+            MonitorIcon.SHARE,
             contentDescription = null,
             tint = if (enabled) LiveDesign.text else LiveDesign.faint,
             modifier = Modifier.size(18.dp),
@@ -483,8 +483,8 @@ private fun DestinationRow(enabled: Boolean, onClick: () -> Unit) {
                 color = LiveDesign.muted,
             )
         }
-        OpcIcon(
-            OpcIcon.CHEVRON_RIGHT,
+        MonitorIcon(
+            MonitorIcon.CHEVRON_RIGHT,
             contentDescription = null,
             tint = LiveDesign.faint,
             modifier = Modifier.size(12.dp),

@@ -63,7 +63,7 @@ import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
-import com.opencapture.openpocketcine.OpcIcon
+import com.opencapture.monitorui.MonitorIcon
 import com.opencapture.openpocketcine.feed.InspectorPreviewPipeline
 
 internal fun multiviewSettingsCategories(camera: CameraModel, status: CameraStatus): List<LiveSheet> = buildList {
@@ -132,7 +132,7 @@ internal fun MultiviewCameraSettings(
                 Box(Modifier.size(48.dp).chromeClickable(onClick = onDismiss)
                     .semantics { contentDescription = "Close camera settings"; role = Role.Button },
                     contentAlignment = Alignment.Center) {
-                    OpcIcon(OpcIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
+                    MonitorIcon(MonitorIcon.X, null, Modifier.size(13.dp), LiveDesign.muted)
                 }
             }
         },

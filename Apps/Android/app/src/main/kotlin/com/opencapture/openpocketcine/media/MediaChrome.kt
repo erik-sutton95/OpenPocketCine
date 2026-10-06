@@ -50,7 +50,7 @@ import com.opencapture.openpocketcine.GlassTier
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalMonitorGlass
-import com.opencapture.openpocketcine.OpcIcon
+import com.opencapture.monitorui.MonitorIcon
 import com.opencapture.openpocketcine.liveChromeGlass
 import com.opencapture.openpocketcine.panelGlass
 import kotlin.math.max
@@ -86,8 +86,8 @@ fun MediaBackButton(
             .semantics { contentDescription = "Back" },
         contentAlignment = Alignment.Center,
     ) {
-        OpcIcon(
-            icon = OpcIcon.CHEVRON_LEFT,
+        MonitorIcon(
+            icon = MonitorIcon.CHEVRON_LEFT,
             contentDescription = null,
             tint = LiveDesign.text,
             modifier = Modifier.size(size * 0.47f),
@@ -113,8 +113,8 @@ fun MediaFavoriteButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        OpcIcon(
-            icon = OpcIcon.STAR,
+        MonitorIcon(
+            icon = MonitorIcon.STAR,
             contentDescription = null,
             tint = if (favorite) Color(0xFFE9C35A) else LiveDesign.text,
             modifier = Modifier.size(size * 0.50f),
@@ -129,7 +129,7 @@ fun MediaActionPill(
     title: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    icon: OpcIcon? = null,
+    icon: MonitorIcon? = null,
     active: Boolean = false,
     enabled: Boolean = true,
     badge: Int? = null,
@@ -148,7 +148,7 @@ fun MediaActionPill(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (icon != null) {
-            OpcIcon(
+            MonitorIcon(
                 icon = icon,
                 contentDescription = null,
                 tint = if (active) LiveDesign.accent else LiveDesign.muted,
@@ -352,8 +352,8 @@ internal object PlaybackChromeMetrics {
     const val actionChipSize = 44f
     const val actionChipIcon = 18f
     const val actionChipCorner = 14f
-    val hideChromeIcon = OpcIcon.MAXIMIZE
-    val showChromeIcon = OpcIcon.MINIMIZE
+    val hideChromeIcon = MonitorIcon.MAXIMIZE
+    val showChromeIcon = MonitorIcon.MINIMIZE
 
     fun usesDarkenedBars(tier: GlassTier): Boolean = tier == GlassTier.FLAT
 
@@ -371,7 +371,7 @@ internal object PlaybackChromeMetrics {
 
 @Composable
 fun PlaybackActionChip(
-    icon: OpcIcon,
+    icon: MonitorIcon,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -409,7 +409,7 @@ fun PlaybackActionChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        OpcIcon(
+        MonitorIcon(
             icon = icon,
             contentDescription = null,
             tint = tint,
@@ -428,7 +428,7 @@ fun PlaybackActionChip(
 
 @Composable
 fun MediaTransportIconButton(
-    icon: OpcIcon,
+    icon: MonitorIcon,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -456,7 +456,7 @@ fun MediaTransportIconButton(
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        OpcIcon(
+        MonitorIcon(
             icon = icon,
             contentDescription = null,
             tint =

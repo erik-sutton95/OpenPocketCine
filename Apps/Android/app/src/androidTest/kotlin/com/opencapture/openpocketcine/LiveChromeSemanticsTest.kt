@@ -18,7 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.opencapture.openpocketcine.assists.LiveAssistTool
+import com.opencapture.monitorui.MonitorAssistTool
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -70,7 +70,7 @@ class LiveChromeSemanticsTest {
     @Test fun assistToolSpeaksItsNameStateAndHoldGesture() {
         val spoken = render {
             com.opencapture.opencine.cameracontrols.AssistToolCell(
-                tool = LiveAssistTool.WAVE,
+                tool = MonitorAssistTool.WAVE,
                 isOn = true,
                 enabled = true,
                 onLongClick = {},
@@ -88,7 +88,7 @@ class LiveChromeSemanticsTest {
     @Test fun aClearedAssistToolStillOffersTapAndHold() {
         val actions = actionsOf("Waveform, on. Hold for options") {
             com.opencapture.opencine.cameracontrols.AssistToolCell(
-                tool = LiveAssistTool.WAVE,
+                tool = MonitorAssistTool.WAVE,
                 isOn = true,
                 enabled = true,
                 onLongClick = {},
@@ -100,7 +100,7 @@ class LiveChromeSemanticsTest {
     }
 
     @Test fun everyAssistToolIsNamedInWordsNotItsChipAbbreviation() {
-        for (tool in LiveAssistTool.entries) {
+        for (tool in MonitorAssistTool.entries) {
             val spoken = render {
                 com.opencapture.opencine.cameracontrols.AssistToolCell(
                     tool = tool,
@@ -113,7 +113,7 @@ class LiveChromeSemanticsTest {
             assertEquals(listOf("${tool.title}, off"), spoken, "tool $tool")
             // LUT is an initialism the operator says aloud; the rest must not
             // fall back to the on-screen abbreviation.
-            if (tool != LiveAssistTool.LUT) {
+            if (tool != MonitorAssistTool.LUT) {
                 assertTrue(tool.title != tool.chipLabel, "tool $tool still speaks its chip label")
             }
         }

@@ -12,6 +12,7 @@ import com.opencapture.opencine.vocabulary.fromColorMode
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.feed.GpuOverlayBus
 import com.opencapture.openpocketcine.feed.LiveScopeSampleBus
+import com.opencapture.monitorui.MonitorAssistTool
 
 /**
  * camera-controls' [AssistOverlayLayer] on this app's GLES feed: WAVE / PARADE / HISTO / VECTOR / LIGHTS
@@ -50,7 +51,7 @@ fun LiveAssistLayer(
     pictureMirrored: Boolean = state.mirrorsHorizontally,
     /** MIRROR Vertical. */
     pictureFlippedVertically: Boolean = state.flipsVertically,
-    onOpenOptions: ((LiveAssistTool, ChromeRect) -> Unit)? = null,
+    onOpenOptions: ((MonitorAssistTool, ChromeRect) -> Unit)? = null,
     showsAudio: Boolean = true,
     /** WAVE / PARADE / FALSE ruler. Playback passes clip color; live uses [CameraStatus.monitorColorMode]. */
     colorMode: Int = status.monitorColorMode,

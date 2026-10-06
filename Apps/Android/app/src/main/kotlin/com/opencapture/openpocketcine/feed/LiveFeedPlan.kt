@@ -13,6 +13,7 @@ import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.opencine.vocabulary.PlaybackLutColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.opencapture.monitorui.MonitorAssistTool
 
 /** Bakes the live GPU look off the UI thread when operator state or color mode changes. */
 @Composable
@@ -24,7 +25,7 @@ internal fun rememberLiveFeedEffectsPlan(
     cameraName: String?,
     playback: Boolean = false,
     clipColorMode: Int = -1,
-    previewTool: com.opencapture.openpocketcine.assists.LiveAssistTool? = null,
+    previewTool: com.opencapture.monitorui.MonitorAssistTool? = null,
 ): FeedEffectsRenderPlan {
     val context = LocalContext.current
     var plan by remember { mutableStateOf(FeedEffectsRenderPlan.IDENTITY) }

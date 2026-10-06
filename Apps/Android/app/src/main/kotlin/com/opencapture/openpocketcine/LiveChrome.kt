@@ -82,6 +82,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import java.util.Locale
+import com.opencapture.monitorui.MonitorIcon
 
 val ChromeShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
@@ -279,8 +280,8 @@ fun MultiviewReturnButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
             },
         contentAlignment = Alignment.Center,
     ) {
-        OpcIcon(
-            icon = OpcIcon.LAYOUT_GRID,
+        MonitorIcon(
+            icon = MonitorIcon.LAYOUT_GRID,
             contentDescription = null,
             tint = LiveDesign.text,
             modifier = Modifier.size(22.dp),
@@ -807,7 +808,7 @@ fun CameraGlyph(tint: Color, modifier: Modifier = Modifier) {
 
 @Composable
 fun VideoGlyph(tint: Color, modifier: Modifier = Modifier) {
-    OpcIcon(OpcIcon.VIDEO, null, modifier.size(14.dp), tint)
+    MonitorIcon(MonitorIcon.VIDEO, null, modifier.size(14.dp), tint)
 }
 
 @Composable

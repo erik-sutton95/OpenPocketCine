@@ -19,6 +19,7 @@ import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.lut.AppLutPickerCopy
 import com.opencapture.openpocketcine.settings.SettingsPalette
+import com.opencapture.monitorui.MonitorAssistTool
 
 /** This app's assist values: its settings palettes, the envelope guide mask, and the calibration table before the first tap. */
 internal val AppAssistHost = AssistHost(
@@ -37,7 +38,7 @@ internal val AppAssistHost = AssistHost(
  */
 @Composable
 fun AssistOptionsPopup(
-    tool: LiveAssistTool,
+    tool: MonitorAssistTool,
     state: LiveAssistState,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,

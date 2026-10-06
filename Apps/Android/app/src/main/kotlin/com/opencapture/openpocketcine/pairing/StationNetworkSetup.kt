@@ -88,7 +88,7 @@ import com.opencapture.monitorui.MonitorLinkHealth
 import com.opencapture.monitorui.MonitorPalette
 import com.opencapture.monitorui.MonitorTypography
 import com.opencapture.monitorui.monitorScrollFade
-import com.opencapture.openpocketcine.OpcIcon
+import com.opencapture.monitorui.MonitorIcon
 import com.opencapture.opencine.dji.MultiviewNetworkStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -301,7 +301,7 @@ fun StationNetworkSetup(
 
     @Composable
     fun networkRow(name: String, detail: String? = null, detailColor: Color? = null) = SetupRow(
-        OpcIcon.WIFI, name, detail, detailColor = detailColor, lock = true,
+        MonitorIcon.WIFI, name, detail, detailColor = detailColor, lock = true,
         modifier = Modifier.setupClickable(!working) { open(SetupPage.Password(name)) }
             .testTag("stationSetup.network.$name"),
     )
@@ -318,11 +318,11 @@ fun StationNetworkSetup(
     // --- Choose ---
 
     @Composable
-    fun choice(setup: CameraConnectionSetup, icon: OpcIcon, body: String, tag: String, modifier: Modifier) {
+    fun choice(setup: CameraConnectionSetup, icon: MonitorIcon, body: String, tag: String, modifier: Modifier) {
         val tile: @Composable () -> Unit = {
             Box(Modifier.size(44.dp).background(MonitorPalette.accent.copy(alpha = .14f), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center) {
-                OpcIcon(icon, null, Modifier.size(22.dp), MonitorPalette.accent)
+                MonitorIcon(icon, null, Modifier.size(22.dp), MonitorPalette.accent)
             }
         }
         val text: @Composable (Modifier) -> Unit = { textModifier ->
@@ -353,7 +353,7 @@ fun StationNetworkSetup(
             Row(card.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 tile()
                 text(Modifier.weight(1f))
-                OpcIcon(OpcIcon.CHEVRON_RIGHT, null, Modifier.align(Alignment.CenterVertically).size(18.dp), MonitorPalette.faint)
+                MonitorIcon(MonitorIcon.CHEVRON_RIGHT, null, Modifier.align(Alignment.CenterVertically).size(18.dp), MonitorPalette.faint)
             }
         }
     }
@@ -372,7 +372,7 @@ fun StationNetworkSetup(
             } else {
                 camera?.let {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OpcIcon(OpcIcon.CAMERA, null, Modifier.size(16.dp), MonitorPalette.muted)
+                        MonitorIcon(MonitorIcon.CAMERA, null, Modifier.size(16.dp), MonitorPalette.muted)
                         Text("${it.displayName} · ${it.modelName}", color = MonitorPalette.muted, style = setupFont(12.5f))
                     }
                 }
@@ -383,14 +383,14 @@ fun StationNetworkSetup(
             if (landscape) {
                 // Equal-height tiles side by side.
                 Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    choice(CameraConnectionSetup.WIFI, OpcIcon.WIFI, wifiBody, "Best for studios and several cameras",
+                    choice(CameraConnectionSetup.WIFI, MonitorIcon.WIFI, wifiBody, "Best for studios and several cameras",
                         Modifier.weight(1f).fillMaxHeight())
-                    choice(CameraConnectionSetup.PHONE_HOTSPOT, OpcIcon.RADIO, hotspotBody, "Best on the move",
+                    choice(CameraConnectionSetup.PHONE_HOTSPOT, MonitorIcon.RADIO, hotspotBody, "Best on the move",
                         Modifier.weight(1f).fillMaxHeight())
                 }
             } else {
-                choice(CameraConnectionSetup.WIFI, OpcIcon.WIFI, wifiBody, "Best for studios and several cameras", Modifier)
-                choice(CameraConnectionSetup.PHONE_HOTSPOT, OpcIcon.RADIO, hotspotBody, "Best on the move", Modifier)
+                choice(CameraConnectionSetup.WIFI, MonitorIcon.WIFI, wifiBody, "Best for studios and several cameras", Modifier)
+                choice(CameraConnectionSetup.PHONE_HOTSPOT, MonitorIcon.RADIO, hotspotBody, "Best on the move", Modifier)
             }
             Text(
                 if (camera == null) "Choose the shared network before adding cameras. Saved passwords stay on this phone."
@@ -417,7 +417,7 @@ fun StationNetworkSetup(
                     if (here != null) {
                         networkRow(here, if (hasPassword(here)) "Connected · password saved" else "Connected", good)
                     } else if (hint != null) {
-                        SetupRow(OpcIcon.WIFI, hint.first, hint.second,
+                        SetupRow(MonitorIcon.WIFI, hint.first, hint.second,
                             modifier = Modifier.setupClickable(!working) {
                                 if (!wifiNameAccess.granted) wifiNameAccess.request()
                                 else settings(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
@@ -466,7 +466,7 @@ fun StationNetworkSetup(
                 if (scan == null || scanning || nearby.isEmpty()) {
                     if (nearby.isNotEmpty()) SetupDivider()
                     SetupRow(
-                        if (scanning) null else OpcIcon.SCAN,
+                        if (scanning) null else MonitorIcon.SCAN,
                         when {
                             scanning -> "The camera is looking for networks…"
                             scan == null -> "Turn the camera on to find networks"
@@ -497,7 +497,7 @@ fun StationNetworkSetup(
                 ) {
                     Box(Modifier.size(38.dp).background(MonitorPalette.accent.copy(alpha = .14f), RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center) {
-                        OpcIcon(OpcIcon.WIFI, null, Modifier.size(19.dp), MonitorPalette.accent)
+                        MonitorIcon(MonitorIcon.WIFI, null, Modifier.size(19.dp), MonitorPalette.accent)
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(ssid, style = setupFont(16f, FontWeight.SemiBold))
@@ -544,7 +544,7 @@ fun StationNetworkSetup(
                     .padding(horizontal = 14.dp, vertical = 12.dp).testTag("stationSetup.hotspotStatus"),
                 horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
-                OpcIcon(if (hotspotDetected) OpcIcon.RADIO else OpcIcon.TRIANGLE_ALERT, null, Modifier.size(18.dp), tint)
+                MonitorIcon(if (hotspotDetected) MonitorIcon.RADIO else MonitorIcon.TRIANGLE_ALERT, null, Modifier.size(18.dp), tint)
                 Text(
                     if (hotspotDetected) "Hotspot is on" else "Hotspot not detected yet. It can appear once the camera joins.",
                     color = tint, style = setupFont(13f, FontWeight.SemiBold),
@@ -562,7 +562,7 @@ fun StationNetworkSetup(
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OpcIcon(OpcIcon.SETTINGS, null, Modifier.size(16.dp), MonitorPalette.text)
+                    MonitorIcon(MonitorIcon.SETTINGS, null, Modifier.size(16.dp), MonitorPalette.text)
                     Text("Open Settings", style = setupFont(13.5f, FontWeight.SemiBold))
                 }
             }
@@ -668,7 +668,7 @@ fun StationNetworkSetup(
         Box(Modifier.fillMaxWidth().padding(start = inset, end = inset, top = 8.dp, bottom = 16.dp)) {
             when (page) {
                 SetupPage.Networks -> SetupRow(
-                    OpcIcon.PLUS, "Other network…", null,
+                    MonitorIcon.PLUS, "Other network…", null,
                     modifier = Modifier.setupCard().setupClickable(!working) { otherName = ""; otherNetwork = true }
                         .testTag("stationSetup.otherNetwork"),
                 )
@@ -744,7 +744,7 @@ fun StationNetworkSetup(
                     lockedNetwork != null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.TopCenter) {
                         Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                OpcIcon(OpcIcon.WIFI, null, Modifier.size(20.dp), MonitorPalette.text)
+                                MonitorIcon(MonitorIcon.WIFI, null, Modifier.size(20.dp), MonitorPalette.text)
                                 Text(lockedNetwork.ssid, style = setupFont(15f))
                             }
                             Text("Cameras are using this network. Remove them before changing it.",
@@ -884,7 +884,7 @@ private fun SetupBarButton(text: String?, enabled: Boolean, modifier: Modifier, 
         contentAlignment = Alignment.Center,
     ) {
         if (text == null) {
-            OpcIcon(OpcIcon.CHEVRON_LEFT, null, Modifier.size(22.dp), MonitorPalette.text)
+            MonitorIcon(MonitorIcon.CHEVRON_LEFT, null, Modifier.size(22.dp), MonitorPalette.text)
         } else {
             Text(text, style = TextStyle(fontSize = 17.sp, color = MonitorPalette.text))
         }
@@ -927,7 +927,7 @@ private fun SetupGroup(rows: @Composable () -> Unit) {
 
 @Composable
 private fun SetupRow(
-    icon: OpcIcon?,
+    icon: MonitorIcon?,
     title: String,
     detail: String?,
     modifier: Modifier = Modifier,
@@ -941,13 +941,13 @@ private fun SetupRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
         if (progress) SetupSpinner(17.dp)
-        else icon?.let { OpcIcon(it, null, Modifier.size(17.dp), MonitorPalette.accent) }
+        else icon?.let { MonitorIcon(it, null, Modifier.size(17.dp), MonitorPalette.accent) }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = setupFont(14.5f, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
             detail?.let { Text(it, color = detailColor ?: MonitorPalette.muted, style = setupFont(11f)) }
         }
-        if (lock) OpcIcon(OpcIcon.LOCK, null, Modifier.size(13.dp), MonitorPalette.faint)
-        if (chevron) OpcIcon(OpcIcon.CHEVRON_RIGHT, null, Modifier.size(16.dp), MonitorPalette.faint)
+        if (lock) MonitorIcon(MonitorIcon.LOCK, null, Modifier.size(13.dp), MonitorPalette.faint)
+        if (chevron) MonitorIcon(MonitorIcon.CHEVRON_RIGHT, null, Modifier.size(16.dp), MonitorPalette.faint)
     }
 }
 
@@ -956,7 +956,7 @@ private fun SetupCheck(title: String, detail: String?) {
     val good = MonitorLinkHealth.stable
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(20.dp).background(good.copy(alpha = .16f), CircleShape), contentAlignment = Alignment.Center) {
-            OpcIcon(OpcIcon.CHECK, null, Modifier.size(12.dp), good)
+            MonitorIcon(MonitorIcon.CHECK, null, Modifier.size(12.dp), good)
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = setupFont(13f, FontWeight.Medium))
@@ -1044,7 +1044,7 @@ private fun SetupSecureField(
                     .semantics { contentDescription = if (reveal) "Hide password" else "Show password" },
                 contentAlignment = Alignment.Center,
             ) {
-                OpcIcon(if (reveal) OpcIcon.EYE_OFF else OpcIcon.EYE, null, Modifier.size(18.dp), MonitorPalette.muted)
+                MonitorIcon(if (reveal) MonitorIcon.EYE_OFF else MonitorIcon.EYE, null, Modifier.size(18.dp), MonitorPalette.muted)
             }
         }
     }
