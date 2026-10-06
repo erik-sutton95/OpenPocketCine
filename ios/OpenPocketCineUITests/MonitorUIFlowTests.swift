@@ -1030,6 +1030,10 @@ final class MonitorUIFlowTests: XCTestCase {
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         XCTAssertTrue(alert.buttons["Open Settings"].exists)
         XCTAssertTrue(alert.buttons["Connect"].exists)
+        // Main named the camera that joins the hotspot.
+        XCTAssertTrue(
+            alert.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Studio camera joins this iPhone’s hotspot'"))
+                .firstMatch.exists)
         capture("hotspot-connect-prompt")
         alert.buttons["Cancel"].tap()
         XCTAssertFalse(app.staticTexts["CONNECTING"].exists)
@@ -1047,6 +1051,60 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertTrue(progress.waitForExistence(timeout: 10))
             XCTAssertTrue(app.buttons["Cancel connecting to Studio camera"].exists)
             capture("connecting-progress-\(orientation.rawValue)")
+        }
+    }
+
+    /// A nearby camera reads as main showed it, and Pair connects it at once on the four pages.
+    func testNearbyPairStartsThePocketWizard() {
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
+        app.launch()
+        rotate(.portrait)
+        let pair = app.buttons["Pair OsmoPocket3-4D5E"]
+        XCTAssertTrue(pair.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Pocket · Osmo Pocket 3 · nearby"].exists)
+        XCTAssertTrue(app.staticTexts["Needs approval on the camera"].exists)
+        capture("nearby-card")
+        pair.tap()
+        XCTAssertTrue(
+            app.staticTexts[
+                "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds."
+            ].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Look for an Approve / pairing prompt"].exists)
+        XCTAssertTrue(app.staticTexts["Connecting (Bluetooth)…"].exists, "the live line is the connect's phase")
+        // Main's rail: step 2 is the approve page, not the connect plan's Bluetooth step.
+        XCTAssertTrue(app.descendants(matching: .any)["Step 2: Approve on the camera, current"].exists)
+        capture("pair-approve-from-nearby")
+    }
+
+    /// The wizard's Wi-Fi page and a Bluetooth permission failure, as main showed them.
+    func testPairWizardWiFiPageAndBluetoothFailure() {
+        let pages: [(String, [String])] = [
+            (
+                "pair-join",
+                [
+                    "We read the camera's network over Bluetooth, then join its Wi-Fi for you.",
+                    "Tap Join when iOS asks to join the camera network", "Bluetooth link", "Camera Wi-Fi",
+                ]
+            ),
+            (
+                "pair-bluetooth",
+                [
+                    "OpenPocketCine needs Bluetooth access to find the camera. Open Settings, turn on Bluetooth for OpenPocketCine, then try again.",
+                    "Open Settings",
+                ]
+            ),
+        ]
+        for (state, texts) in pages {
+            app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "pair"
+            app.launchEnvironment["OPV_UI_REVIEW_STATE"] = state
+            app.launch()
+            rotate(.portrait)
+            XCTAssertTrue(app.staticTexts[texts[0]].waitForExistence(timeout: 10), state)
+            for text in texts.dropFirst() {
+                XCTAssertTrue(app.staticTexts[text].firstMatch.exists || app.buttons[text].exists, "\(state): \(text)")
+            }
+            capture(state)
+            app.terminate()
         }
     }
 

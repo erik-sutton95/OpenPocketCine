@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineAppKit
 import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
@@ -139,39 +140,51 @@ struct StartupFilledButtonStyle: ButtonStyle {
     }
 }
 
-/// The DJI entry's pairing slot (SHELL-02): why Bluetooth discovery is not running (with Open
-/// Settings where only Settings fixes it), the vendor-app check before pairing, or after 20 s
-/// without a camera the still-looking tip, and the VPN banner when a filter may block the link.
-struct PocketPairingTips: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if case .failed(let reason) = model.session.phase, StartupConnectionCopy.bluetoothProblems.contains(reason) {
-                tip("Bluetooth", reason, settings: StartupConnectionCopy.opensSettings(reason))
-            } else if model.session.scanLooksEmpty, model.cameras.nearby.isEmpty {
-                tip(StartupConnectionCopy.scanEmptyTitle, StartupConnectionCopy.scanEmptyHint)
-            } else {
-                tip(StartupConnectionCopy.preCheckTitle, StartupConnectionCopy.preCheck)
-            }
-            if LocalVPNProbe.isActive() { tip("Check the connection", LocalVPNFilter.wizardBanner) }
-        }
+extension AppModel {
+    /// The pair wizard in OpenPocketCine's words: the four Pocket and Nano pages, the pre-check (or
+    /// the still-looking hint once a scan turns up nothing), the session's live label, a Bluetooth
+    /// failure, the camera Wi-Fi joined and a local VPN.
+    func pairingWizard() -> PairingWizard {
+        PairingWizard(
+            bodies: [
+                "Turn the camera on and keep the phone nearby. Pocket and Nano both appear. Choose the one you want.",
+                "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
+                "We read the camera's network over Bluetooth, then join its Wi-Fi for you.",
+                "Exposure, LUTs and scopes go live as soon as the video link is up.",
+            ],
+            approveLines: ["Look for an Approve / pairing prompt", "Tap it on the camera screen"],
+            joinLines: [
+                "Leave the camera on. It brings up its own Wi-Fi",
+                "On 5.8 GHz that can take about a minute; we keep trying",
+            ],
+            choosing: session.scanLooksEmpty && cameras.nearby.isEmpty
+                ? .init(
+                    title: StartupConnectionCopy.scanEmptyTitle, icon: .camera,
+                    lines: [StartupConnectionCopy.scanEmptyHint])
+                : .init(
+                    title: StartupConnectionCopy.preCheckTitle, icon: .phone, lines: [StartupConnectionCopy.preCheck]),
+            label: liveLabel,
+            discoveryFailure: discoveryFailure, joinedNetwork: session.joinedSSID,
+            vpnActive: LocalVPNProbe.isActive())
     }
 
-    /// The shared pair page's instruction card, with an optional Open Settings.
-    private func tip(_ title: String, _ text: String, settings: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text(title.uppercased()).font(MonitorTheme.font(9, weight: .bold)).tracking(1.4)
-            Text(text).font(MonitorTheme.font(12.5)).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-            if settings, let url = URL(string: UIApplication.openSettingsURLString) {
-                Button(StartupConnectionCopy.openSettings) { openURL(url) }
-                    .font(MonitorTheme.font(12.5, weight: .semibold)).foregroundStyle(MonitorTheme.accent)
-            }
-        }
-        .foregroundStyle(MonitorTheme.secondary).frame(maxWidth: .infinity, alignment: .leading)
-        .padding(13)
-        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 11))
-        .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color.white.opacity(0.06), lineWidth: 1))
+    /// Main's live label: the scan while choosing, then the session's phase (a connect starts at
+    /// the Bluetooth link; the simulator review's scripted camera never moves the session).
+    private var liveLabel: String {
+        typealias Phase = OpenPocketViewCore.ConnectionPhase
+        if cameras.attempts.isEmpty { return Phase.scanning.label }
+        return session.phase == .idle ? Phase.connectingGatt.label : session.phase.label
+    }
+
+    /// Why Bluetooth discovery is not running, in this app's copy, with Open Settings where only
+    /// Settings fixes it.
+    var discoveryFailure: ConnectionFailure? {
+        guard cameras.attempts.isEmpty, case .failed(let why) = session.phase,
+            StartupConnectionCopy.bluetoothProblems.contains(why)
+        else { return nil }
+        let (reason, code) = CameraSession.reason(nil, why)
+        var failure = CameraSession.failure(reason, code, StartupConnectionCopy.friendly(why))
+        if StartupConnectionCopy.opensSettings(why) { failure.actions = [.openSettings, .retry] }
+        return failure
     }
 }

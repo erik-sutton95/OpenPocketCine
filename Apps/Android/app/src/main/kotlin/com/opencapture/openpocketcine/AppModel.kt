@@ -36,17 +36,20 @@ import com.opencapture.opencine.core.SessionCloseReason
 import com.opencapture.opencine.appkit.BodyRecordsV0
 import com.opencapture.opencine.appkit.CamerasModel
 import com.opencapture.opencine.appkit.IntegrationSlots
+import com.opencapture.opencine.appkit.NearbyCardCopy
 import com.opencapture.opencine.appkit.SavedCamerasStore
 import com.opencapture.opencine.appkit.StoredString
 import com.opencapture.opencine.appkit.stored
+import com.opencapture.opencine.core.NearbyCamera
 import com.opencapture.opencine.core.RouteKind
 import com.opencapture.opencine.core.SavedCamera
 import com.opencapture.opencine.dji.CameraWifiCredentialStore
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.DjiConnectPort
 import com.opencapture.opencine.dji.DjiIntegration
+import com.opencapture.opencine.dji.FoundCameraIdentity
+import com.opencapture.opencine.vocabulary.FoundCamera
 import com.opencapture.openpocketcine.pairing.AddSetupSlot
-import com.opencapture.openpocketcine.pairing.LocalPairingCallouts
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.createLiveAssistState
@@ -102,10 +105,11 @@ class AppModel(
     /**
      * Cameras and pairing through the shared OpenCine flow (SHELL-02): the DJI integration over
      * the session, with its Wi-Fi passwords in the Multiview store; forget drops the camera's saved
-     * Wi-Fi (D1). The pairing callouts come from the activity; Add setup is the station wizard.
+     * Wi-Fi (D1). Nearby cards read in this app's words; Add setup is the station wizard.
      */
+    private val port: DjiConnectPort = review?.let { ReviewCameras.port(it, session) } ?: session
     val integration = DjiIntegration(
-        review?.let { ReviewCameras.port(it, session) } ?: session,
+        port,
         loadNetwork = networkStore::load,
         saveNetwork = { ssid, password, hotspot -> networkStore.save(ssid, password, hotspot) },
         forgetCredentials = CameraWifiCredentialStore(appContext)::remove,
@@ -116,8 +120,8 @@ class AppModel(
                 AppIntegration(
                     integration,
                     IntegrationSlots(
-                        pairing = { LocalPairingCallouts.current() },
                         addRoute = { camera, done -> AddSetupSlot(this, camera, done) },
+                        nearbyCard = { camera -> nearbyCard(camera, port.found.value.firstOrNull { it.id == camera.id }) },
                     ),
                 ),
             )
@@ -694,6 +698,21 @@ class AppModel(
 
     companion object {
         const val CAMERAS = "openpocketcine.cameras"
+
+        /**
+         * A nearby camera as the cameras and pair pages have always shown it (main's
+         * `NearbyCameraRow`): Pocket or Nano by name, unverified bodies marked.
+         */
+        fun nearbyCard(camera: NearbyCamera, found: FoundCamera?): NearbyCardCopy {
+            val name = found?.name ?: camera.name
+            val model = found?.model?.name ?: camera.model ?: camera.name
+            return NearbyCardCopy(
+                FoundCameraIdentity.listTitle(name, model),
+                FoundCameraIdentity.listSubtitle(name, model, found?.model?.family ?: "other") +
+                    if (found?.model?.verified == false) " · unverified" else "",
+                "Needs approval on the camera",
+            )
+        }
         /** The records every earlier build reads, kept mirrored (SHELL-02 D11). */
         const val LEGACY_CAMERAS = "openpocketcine.saved-cameras"
 

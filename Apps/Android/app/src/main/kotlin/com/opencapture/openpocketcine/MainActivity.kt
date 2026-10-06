@@ -80,9 +80,10 @@ import com.opencapture.opencine.appkit.AppShell
 import com.opencapture.opencine.appkit.ShellBrand
 import com.opencapture.opencine.appkit.ShellActions
 import com.opencapture.opencine.appkit.ShellModel
+import com.opencapture.opencine.appkit.PairingWizard
+import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
 import com.opencapture.opencine.appkit.DiscoveryPermissions
-import com.opencapture.openpocketcine.pairing.LocalPairingCallouts
 import com.opencapture.openpocketcine.pairing.PairingCallouts
 import com.opencapture.opencine.appkit.PermissionGate
 import com.opencapture.openpocketcine.pairing.rememberPermissionGate
@@ -283,6 +284,38 @@ private fun OpenPocketCineApp(model: AppModel) {
     }
 }
 
+/**
+ * The pair wizard in OpenPocketCine's words (the Android pair page it has always shown): the four
+ * Pocket and Nano pages, and Nearby devices or Bluetooth as the primary action while discovery
+ * cannot run.
+ */
+internal fun pairingWizard(
+    label: String,
+    joinedNetwork: String?,
+    vpnActive: Boolean,
+    granted: Boolean,
+    needsSettings: Boolean,
+    radioOn: Boolean,
+) = PairingWizard(
+    bodies = listOf(
+        "Turn the camera on and keep the phone nearby. Pocket and Nano both appear. Choose the one you want.",
+        "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
+        "We read the camera's network over Bluetooth, then join its Wi-Fi for you.",
+        "Exposure, LUTs and scopes go live as soon as the video link is up.",
+    ),
+    approveLines = listOf("Look for an Approve / pairing prompt", "Tap it on the camera screen"),
+    joinLines = listOf("Leave the camera on. It brings up its own Wi-Fi", "On 5.8 GHz that can take about a minute; we keep trying"),
+    label = label,
+    joinedNetwork = joinedNetwork,
+    vpnActive = vpnActive,
+    blocker = when {
+        !granted && needsSettings -> "Open Settings"
+        !granted -> "Allow ${DiscoveryPermissions.settingsName(DiscoveryPermissions.discovery()).lowercase()}"
+        !radioOn -> "Turn Bluetooth on"
+        else -> null
+    },
+)
+
 /** Permission granted or Bluetooth on: look again, unless a camera is connecting or live. */
 private fun beginDiscovery(model: AppModel, onBluetoothOff: () -> Unit = {}) {
     val state = model.cameras.state.value
@@ -313,11 +346,18 @@ private fun LinkExperience(
             landscape = true, safeLeading = leading.value, safeTrailing = trailing.value,
         ).first.dp
     }
+    val phase by model.session.phaseFlow.collectAsState()
+    val radioOn by model.session.radioOn.collectAsState()
     AppShell(model.shell, ShellBrand("OpenPocketCine"),
         ShellActions(
             diagnostics = { DiagnosticCenter.shareReport(context, model.session) },
             reportProblem = { showProblemReport = true },
-            multiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null),
+            multiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null,
+            // Pair on a nearby card connects it at once, on the pair page.
+            pair = {
+                model.shell.beginPairing()
+                state.nearby.firstOrNull { it.id == model.cameras.state.value.selection }?.let(model.cameras::connect)
+            }),
         monitor = { LiveViewScreen(model) },
         page = { ShellCoverPage(model, it) },
         pageFrame = { route, content ->
@@ -330,20 +370,32 @@ private fun LinkExperience(
             ).padding(vertical = 16.dp)) {
                 Box(Modifier.weight(1f).padding(start = if (pair) 14.dp else 18.dp,
                     end = if (pair) 14.dp else 18.dp, top = if (pair) 0.dp else 8.dp)) {
-                    CompositionLocalProvider(LocalPairingCallouts provides {
-                        PairingCallouts(model, discovery, onEnableBluetooth)
-                    }) {
-                        if (pair) {
-                            BackHandler(enabled = state.attempts.isNotEmpty() || state.saved.isNotEmpty()) {
-                                if (state.attempts.isNotEmpty()) model.cameras.cancelAll()
-                                else model.shell.endPairing()
-                            }
+                    if (pair) {
+                        // As the pair page always did: Back stops a connect and leaves the page.
+                        BackHandler(enabled = state.attempts.isNotEmpty() || state.saved.isNotEmpty()) {
+                            model.cameras.cancelAll()
+                            model.shell.endPairing()
                         }
-                        content()
                     }
+                    content()
                 }
             }
-        })
+        },
+        pairingFlow = pairingWizard(
+            label = PairingWizard.phaseLabel(
+                when {
+                    state.attempts.isEmpty() -> ConnectionPhase.SCANNING
+                    phase == ConnectionPhase.IDLE -> ConnectionPhase.CONNECTING_GATT
+                    else -> phase
+                },
+            ),
+            joinedNetwork = model.session.joinedSSID, vpnActive = LocalVPNProbe.isActive(context),
+            granted = discovery.granted, needsSettings = discovery.needsSettings, radioOn = radioOn,
+        ).flow(
+            model.cameras, onDone = model.shell::endPairing, rescan = model.session::startScan,
+            onBlocker = { if (!discovery.granted) discovery.request() else onEnableBluetooth() },
+            content = { PairingCallouts(model, discovery, onEnableBluetooth) },
+        ))
     if (showProblemReport) {
         ManualProblemReportDialog(model = model, onClose = { showProblemReport = false }, onPrivacy = { showReportingPrivacy = true })
     }

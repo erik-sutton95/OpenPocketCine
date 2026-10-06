@@ -48,9 +48,13 @@ final class AppModel {
                     AppIntegration(
                         integration,
                         slots: IntegrationSlots(
-                            pairing: { AnyView(PocketPairingTips()) },
                             addRoute: { camera, done in
                                 AnyView(AddSetupView(camera: camera, done: done))
+                            },
+                            nearbyCard: { [weak session] camera in
+                                Self.nearbyCard(
+                                    camera,
+                                    verified: session?.found.first { $0.id.uuidString == camera.id }?.model.verified)
                             }))
                 ] : [],
             store: Self.camerasStore(defaults))
@@ -74,6 +78,17 @@ final class AppModel {
             }
         }
         control.onNote = { [weak self] in self?.session.controlNote = $0 }
+    }
+
+    /// A nearby camera as the cameras page and pair page have always shown it: Pocket or Nano by
+    /// name, and unverified bodies marked.
+    static func nearbyCard(_ camera: NearbyCamera, verified: Bool?) -> NearbyCardCopy {
+        let model = camera.model ?? camera.name
+        return NearbyCardCopy(
+            name: FoundCameraIdentity.listTitle(advertisedName: camera.name, modelName: model),
+            subtitle: FoundCameraIdentity.listSubtitle(advertisedName: camera.name, modelName: model)
+                + (verified == false ? " · unverified" : ""),
+            status: "Needs approval on the camera")
     }
 
     /// The saved cameras: the shared document `OpenPocketCine.Cameras`, merged on every launch
@@ -104,7 +119,7 @@ final class AppModel {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 hotspotQuestion = HotspotQuestion(
-                    id: id, network: network, continuation: continuation)
+                    id: id, camera: hotspotCamera, network: network, continuation: continuation)
             }
         } onCancel: {
             Task { @MainActor [weak self] in
@@ -112,6 +127,14 @@ final class AppModel {
                 self?.answerHotspot(false)
             }
         }
+    }
+
+    /// The saved camera whose connect asks, by the name its card shows.
+    private var hotspotCamera: String {
+        for attempt in cameras.attempts.values {
+            if case .saved(let camera, _) = attempt.target { return camera.displayName }
+        }
+        return "The camera"
     }
 
     func answerHotspot(_ connect: Bool) {
@@ -1033,6 +1056,8 @@ private struct WatcherRecordConfirmation: ViewModifier {
 /// A saved hotspot connect waiting on the operator (Personal Hotspot is not reported on).
 struct HotspotQuestion {
     let id: UUID
+    /// The camera that joins the hotspot, by its card name.
+    let camera: String
     let network: String
     fileprivate let continuation: CheckedContinuation<Bool, Never>
     /// The operator went to Settings: ask again when the app is back.
@@ -1072,13 +1097,22 @@ struct LinkExperience: View {
                         guard model.cameras.attempts.isEmpty else { return }
                         model.openMultiview()
                         showMultiview = true
-                    } : nil),
+                    } : nil,
+                // Pair on a nearby card connects it at once, on the pair page.
+                pair: {
+                    model.shell.beginPairing()
+                    if let sighting = model.cameras.nearby.first(where: { $0.id == model.cameras.selection }) {
+                        model.cameras.connect(sighting)
+                    }
+                }),
             safeArea: { proxy in
                 Self.pageSafeArea(
                     proxy.safeAreaInsets, window: windowGeometry.safeArea,
                     portrait: proxy.size.height > proxy.size.width,
                     orientation: orientation.orientation)
-            }
+            },
+            pairingFlow: model.pairingWizard().flow(
+                model.cameras, onDone: { model.shell.endPairing() }, rescan: { model.session.startScan() })
         ) { _ in
             LiveViewScreen()
         } page: { cover in
@@ -1130,7 +1164,7 @@ struct LinkExperience: View {
             Button("Cancel", role: .cancel) { model.answerHotspot(false) }
         } message: { question in
             Text(
-                "The camera joins this iPhone’s hotspot “\(question.network)”. Turn on Personal Hotspot and Allow Others to Join (Settings or Control Center), then tap Connect."
+                "\(question.camera) joins this iPhone’s hotspot “\(question.network)”. Turn on Personal Hotspot and Allow Others to Join (Settings or Control Center), then tap Connect."
             )
         }
         .onChange(of: model.session.phase) { _, phase in
