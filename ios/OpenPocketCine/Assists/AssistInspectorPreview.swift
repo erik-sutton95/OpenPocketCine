@@ -93,7 +93,7 @@ struct AssistInspectorPreview: View {
             transfer: source.transfer,
             lutSelection: model.assist.lutSelection,
             lutExposureStops: model.assist.lutExposureStops,
-            customLUTName: OperatorPrefs.selectedCustomFileName,
+            customLUTName: LUTPreferences.app.selectedCustomFileName,
             lutColorMode: model.assist.monitorColorMode,
             lutFamily: model.assist.monitorFamily, lutCameraName: model.assist.monitorCameraName)
     }

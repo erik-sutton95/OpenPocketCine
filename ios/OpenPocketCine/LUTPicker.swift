@@ -59,7 +59,7 @@ struct LUTPicker: View {
                 category = next
                 switch next {
                 case .dji:
-                    if !assist.lutSelection.isDJI { assist.selectLUT(.djiAuto) }
+                    if !assist.lutSelection.isOfficial { assist.selectLUT(.officialAuto) }
                 case .creative:
                     if !assist.lutSelection.isCreative { assist.selectLUT(.creativeMono) }
                 case .custom:
@@ -138,10 +138,10 @@ struct LUTPicker: View {
         case .dji:
             catalogTab(
                 cases: LUTSelection.djiCatalog(isPhotoLive: livePhotoCatalog),
-                inCatalog: assist.lutSelection.isDJI
+                inCatalog: assist.lutSelection.isOfficial
                     && LUTSelection.djiCatalog(isPhotoLive: livePhotoCatalog).contains(
                         assist.lutSelection),
-                fallback: .djiAuto,
+                fallback: .officialAuto,
                 caption: djiCaption,
                 allowsSelection: !livePhotoCatalog
             )
@@ -208,10 +208,10 @@ struct LUTPicker: View {
 
     private var djiCaption: String {
         if livePhotoCatalog { return LUTAssist.photoRec709Caption }
-        if assist.lutSelection == .djiAuto || assist.lutSelection == .auto {
+        if assist.lutSelection == .officialAuto || assist.lutSelection == .auto {
             return LUTResolver.autoCaption(source: assist.resolvedSource())
         }
-        if assist.lutSelection.isDJI {
+        if assist.lutSelection.isOfficial {
             return "Official DJI Rec.709 cube"
         }
         return "Official DJI looks for this color / camera"
@@ -225,7 +225,7 @@ struct LUTPicker: View {
     }
 
     @ViewBuilder private var customTab: some View {
-        let imported = CustomLUTStore.list()
+        let imported = CustomLUTStore.app.list()
         VStack(spacing: 6) {
             Button {
                 importing = true
@@ -261,7 +261,7 @@ struct LUTPicker: View {
     private func customFileRow(_ lut: StoredCustomLUT) -> some View {
         let selected =
             assist.lutSelection == .customFile
-            && OperatorPrefs.selectedCustomFileName == lut.fileName
+            && LUTPreferences.app.selectedCustomFileName == lut.fileName
         return HStack(spacing: 6) {
             Button {
                 assist.selectCustomFile(lut.fileName)
@@ -310,9 +310,9 @@ struct LUTPicker: View {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         do {
-            let stored = try CustomLUTStore.importFile(from: url)
-            guard CustomLUTStore.cube(stored) != nil else {
-                try? CustomLUTStore.remove(stored)
+            let stored = try CustomLUTStore.app.importFile(from: url)
+            guard CustomLUTStore.app.cube(stored) != nil else {
+                try? CustomLUTStore.app.remove(stored)
                 throw CustomLUTStoreError.unreadable
             }
             assist.importCustom(fileName: stored.fileName)

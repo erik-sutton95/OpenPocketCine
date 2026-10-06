@@ -158,7 +158,7 @@ struct PocketPlaybackLook: Equatable, Sendable {
         guard authority.admission.isCurrent(), !Task.isCancelled,
             let color = PlaybackLUTColor.resolve(
                 clip: clip, live: status.colorMode,
-                last: OperatorPrefs.lastMonitorColorMode ?? previousColor)
+                last: LUTPreferences.app.lastMonitorColorMode ?? previousColor)
         else { return nil }
         return .init(
             transfer: MonitorTransfer(color),
