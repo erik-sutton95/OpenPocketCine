@@ -85,7 +85,8 @@ privacy, a wrong-camera or blind action, or a check that could never work), or a
   balance at once, as on `main` (restored to `main`); the Android HUD is unchanged. A write from
   a picker sheet says the camera's own message on a refusal and nothing on a timeout, on both
   platforms (restored to `main`); "Connect the camera to use its controls." and a write held
-  back after the camera state changed keep the shared copy (kept fix: a wrong-camera guard).
+  back after the camera state changed keep the shared copy (the latter is a kept fix: a
+  wrong-camera guard).
 - iOS and Android lay the live monitor out from what the connected body declares through
   OpenCineDJI (gimbal and head tracking from its motion, zoom, focus, aperture, audio meters and
   timecode), not from app flags. Android single view shows the timecode on every body, Nano
