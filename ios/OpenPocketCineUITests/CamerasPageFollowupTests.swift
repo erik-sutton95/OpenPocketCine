@@ -17,38 +17,16 @@ final class CamerasPageFollowupTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
     }
 
-    func testSingleSetupCanBeRenamedAndCleared() {
+    /// Main's setup menu has no Rename setup (a single camera Wi-Fi setup has no Forget either).
+    func testASetupOffersNoRename() {
         app.launch()
         let chip = app.buttons.matching(
             NSPredicate(format: "label == %@", "Connect Travel camera over Camera Wi-Fi")
         ).firstMatch
         XCTAssertTrue(chip.waitForExistence(timeout: 10))
         chip.press(forDuration: 0.8)
-        app.buttons["Rename setup"].tap()
-        let dialog = app.alerts["Rename setup"]
-        XCTAssertTrue(dialog.waitForExistence(timeout: 5))
-        let field = dialog.textFields.firstMatch
-        field.tap()
-        field.typeText(
-            String(
-                repeating: XCUIKeyboardKey.delete.rawValue,
-                count: (field.value as? String ?? "").count))
-        field.typeText("Location A")
-        dialog.buttons["Save"].tap()
-        let renamed = app.buttons.matching(
-            NSPredicate(format: "label == %@", "Connect Travel camera over Location A")
-        ).firstMatch
-        XCTAssertTrue(renamed.waitForExistence(timeout: 5))
-        capture("single-setup-renamed")
-        renamed.press(forDuration: 0.8)
-        app.buttons["Rename setup"].tap()
-        let clearField = app.alerts["Rename setup"].textFields.firstMatch
-        clearField.tap()
-        clearField.typeText(
-            String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Location A".count))
-        app.alerts["Rename setup"].buttons["Save"].tap()
-        XCTAssertTrue(chip.waitForExistence(timeout: 5))
-        capture("single-setup-default-restored")
+        XCTAssertFalse(app.buttons["Rename setup"].waitForExistence(timeout: 2))
+        capture("single-setup-menu")
     }
 
     private func capture(_ name: String) {

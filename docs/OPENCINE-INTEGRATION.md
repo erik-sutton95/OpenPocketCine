@@ -55,16 +55,28 @@ checked out next to this repository as `../OpenCine` by `scripts/checkout-openci
 
 ## What changes for users
 
-- Cameras and pairing now use the shared OpenCine flow on iOS and Android.
-  Select a nearby camera and Continue; approval and Wi-Fi prompts follow the
-  camera's reported progress. Saved-camera cards show their own attempt and
-  typed failure actions, including Open Settings where applicable. Add setup
-  retains the existing Wi-Fi/hotspot wizard, and Multiview keeps its entry.
+The parity lane (2026-10-06) checked every difference below against `main` (27b15028). Each is
+marked: restored to `main`, kept fix (`main`'s behavior was a defect: data loss, security or
+privacy, a wrong-camera or blind action, or a check that could never work), or already matched
+`main`. Copy that used an em dash on `main` now uses a period or comma (OpenInstaCine iPhone
+`main`'s punctuation for the same lines).
+
+- Cameras and pairing use the shared OpenCine flow on iOS and Android and look as on `main`
+  (restored): the four-page pair wizard (find, approve, join camera Wi-Fi, open the video link)
+  with its bodies, instruction cards, check list, live phase label and failure banner; Pair on a
+  nearby card connects it at once; nearby cards read Pocket or Nano, mark unverified bodies and
+  say "Needs approval on the camera"; Try again after a failed pairing looks again; the
+  connecting card's Wi-Fi caption is the phase label; Open Settings only where only Settings
+  fixes it (iPhone; Android cards offer Try again); the iPhone hotspot ask names the camera; a
+  setup chip's menu offers Forget only. Add setup retains the existing Wi-Fi/hotspot wizard, and
+  Multiview keeps its entry.
 - Saved cameras import without changing their IDs, Wi-Fi secrets, media favorites
   or other preferences. Legacy records stay mirrored for downgrade compatibility;
   edits made in an older build merge on the next upgrade. A malformed record no
-  longer wipes the readable records. Forget also drops Android camera Wi-Fi
-  credentials, matching iOS. The legacy mirror removal release is undecided.
+  longer wipes the readable records (kept fix: on `main` one bad record emptied the
+  list on the next save). Forget also drops Android camera Wi-Fi credentials,
+  matching iOS (kept fix: `main` left the camera's password stored). The legacy
+  mirror removal release is undecided.
 
 - Shared UI and media math are meant to be invisible: screenshots matched the pre-move app
   and the moved media tests keep their numbers (golden values unchanged).
@@ -75,24 +87,29 @@ checked out next to this repository as `../OpenCine` by `scripts/checkout-openci
   OpenCineDJI (gimbal and head tracking from its motion, zoom, focus, aperture, audio meters and
   timecode), not from app flags. The one visible difference: a Nano no longer shows a live
   timecode it never reports (Multi View already hid it). On Android the APERTURE sheet and
-  drum now appear only on Action 6, and FOCUS follows the body's declaration instead of a
-  product-name check.
-- Record is never a blind toggle: the app sends start or stop for the state the camera
-  reported, and waits for the first record state after connecting.
+  drum appear only on Action 6 and FOCUS only on the bodies `main` showed it for (already
+  matched `main`; both now follow the body's declaration instead of a product-name check).
+- Record sends start or stop for the state the camera reported, as on `main`. Right after
+  connecting it waits for the camera's first record state ("Waiting for the camera's record
+  state") instead of assuming "not recording" (kept fix: a blind Start on a camera already
+  recording).
 - Apple Watch, watcher relay and confirmed record commands go to the camera they showed. After
-  a link change the watch says "Camera changed. Try again." instead of acting on another camera.
+  a link change the watch says "Camera changed. Try again." instead of acting on another camera
+  (kept fix: `main` ran them on whatever camera was live).
 - Android scopes, zebra and false colour read the clip ceiling of the feed they show. Two feeds
-  (Multiview tile, playback) no longer share one ceiling.
+  (Multiview tile, playback) no longer share one ceiling (kept fix: after an ISO 1600 clip,
+  live ISO 800 clipping went unflagged until the next scope tap).
 - Multiview (MULTI-02): Record all and a tile's record send an explicit start or stop per
-  camera, after the plan the operator confirmed is checked again; each tile shows its own result
-  and nothing is stopped because another camera failed. A camera in Photo mode now disables Record all
-  and its own record action (strict policy) instead of receiving a record frame. The confirmation also closes when a camera's
-  link is replaced or its capabilities change. On Android it now closes on the same changes as on
-  iPhone (before: only the recording flag and availability).
+  camera after the confirmed plan is checked again, and each tile shows its own result (already
+  matched `main`). A camera in Photo mode disables Record all and its own record action instead
+  of receiving a video record frame (kept fix). On Android the confirmation also closes when a
+  camera's mode or capabilities change, as on iPhone (kept fix: before, only on a replaced
+  link).
 - Frame.io (OPTIONAL-01, iPhone only): an account, folder or file id containing `/`, `?`, `#`,
-  `\`, whitespace or control characters is rejected before any request; a token refresh that
-  omits the refresh token keeps the previous one (was: forced sign-in at next expiry); cancelling
-  a batch reports "Cancelled." instead of counting failed clips. Keychain namespace unchanged.
+  `\`, whitespace or control characters is rejected before any request (kept fix); a token
+  refresh that omits the refresh token keeps the previous one (kept fix; was: every request
+  failed until Disconnect and Connect); cancelling a batch shows no failed count, as on `main`.
+  Keychain namespace unchanged.
 - Gimbal motion and watcher relay (OPTIONAL-02): no change intended; the relay wire bytes are
   unchanged (golden v1 tests).
 - Live decoder (MEDIA-02 step 4, iPhone): no change intended. The VideoToolbox session, format,
@@ -214,13 +231,16 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
 18. SHELL-02 first pair and reconnect, iPhone/iPad and Android, on Pocket 3,
     Pocket 4 / 4 Pro and Nano (plus Action 6/360/Xtra if available):
     1. With DJI Frame Tap off and DJI Mimo force-quit, Pair new camera, select the
-       intended body, Continue, approve on camera and accept the OS Wi-Fi join.
+       intended body, Continue (or Pair on its nearby card, which starts at once),
+       approve on camera and accept the OS Wi-Fi join. The four wizard pages follow.
        Progress must reach that body's live picture once; the saved card must
        retain its name and setup after relaunch.
     2. Reconnect the saved body without a new password prompt. Cancel while
        scanning, approving and joining; the app must stop the attempt, and the
-       next selected camera alone connects. Bluetooth denied/off must offer a
-       useful Settings action and resume discovery after returning.
+       next selected camera alone connects. Bluetooth denied must offer Open
+       Settings (iPhone) or the Nearby devices request (Android); Bluetooth off says
+       so with Try again (iPhone) or Turn Bluetooth on (Android); discovery resumes
+       after returning.
     3. Trigger an approval or video-link timeout and verify the DJI Frame Tap /
        DJI Mimo tip remains visible. Retry must connect only the selected body.
     4. Forget and re-pair. Its saved Wi-Fi credential is removed on each platform;
@@ -247,9 +267,8 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
        absent. Never erase real app data to make a downgrade possible.
 
 21. Shared-camera page follow-ups, both platforms (physical checks untested):
-    1. Long-press a camera's only setup, rename it, relaunch and reconnect. Repeat
-       for one setup of a camera with several; other names and routes stay intact.
-       Clear the setup name and confirm the default title returns after relaunch.
+    1. Long-press a camera's only setup: no Rename setup (as on main). Long-press a
+       Wi-Fi or hotspot setup: Forget only; the camera's other setups stay intact.
     2. Saved cameras and empty startup show no Privacy or Terms links (as on main);
        Settings still opens both documents.
 

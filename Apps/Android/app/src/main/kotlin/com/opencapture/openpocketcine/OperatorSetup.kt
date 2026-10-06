@@ -1,5 +1,9 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.cameracontrols.OperatorHelpCopy
+import com.opencapture.opencine.cameracontrols.OperatorMediaCacheDirs
+import com.opencapture.opencine.cameracontrols.lutLookLabel
+import com.opencapture.opencine.cameracontrols.openUrl
 import com.opencapture.opencine.appkit.diagnostics.ManualProblemReportDelivery
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.ConnectionPhase
@@ -141,98 +145,9 @@ import com.opencapture.opencine.cameracontrols.connectionPhaseLabel
 import com.opencapture.opencine.cameracontrols.OperatorLinkHealth
 import com.opencapture.opencine.cameracontrols.CleanPinTool
 
-object SettingsHelpCopy {
-    const val CURRENT_TRANSPORT =
-        "Pocket uses Bluetooth to pair, then the camera's own Wi-Fi for HEVC. USB-C, hotspot, and HDMI capture are not in this build."
-    const val PHASE = "Where the BLE → Wi-Fi → datalink handshake is right now."
-    const val CAMERA_WIFI =
-        "SSID joined for this session. The password stays in the Android Keystore on this phone."
-    const val SAVED_CAMERAS =
-        "Pair from the home list. Settings does not start a new pair \u2014 that stays on Your cameras."
-    const val EDIT_VIEW = "Opens the monitor with an eye on each element you can show or hide."
-    const val FRAME_IO =
-        "Sign in to upload clips from the share popup. Frame.io needs the internet, so the phone hops off the camera Wi‑Fi for the upload."
-    const val RECORD_CONFIRMATION = "Ask before starting or stopping recording to prevent mistaps."
-    const val SHOOTING_MODE =
-        "Switch the camera between Video, Photo and the time-based modes. The camera reports " +
-            "the mode back, so this follows a change made on the body itself."
-    const val HAPTICS =
-        "Short confirmation pulses for switches, settings, and gimbal limits. A connected controller also rumbles at a stop."
-    const val JOYSTICK_SENSITIVITY =
-        "How far a stick throw moves the gimbal \u2014 on-screen and a connected game controller. Small throws crawl; full throw is fastest. 4 is the captured feel. 5 reaches full speed sooner; 1 is the slowest."
-    const val VIRTUAL_JOYSTICK_SIZE =
-        "How large the on-screen stick is. Medium is the default. Large is easier to grab; Small keeps more of the picture clear."
-    const val VIRTUAL_JOYSTICK_INVERT_PAN =
-        "Reverse left and right on the on-screen stick. Off is the default. A game controller is unchanged."
-    const val VIRTUAL_JOYSTICK_INVERT_TILT =
-        "Reverse up and down on the on-screen stick. Off is the default. A game controller is unchanged."
-    const val VIRTUAL_JOYSTICK_DEADZONE =
-        "Ignore small movements near the center. The default is 8%. Increase it to make the center less sensitive."
-    const val VIRTUAL_JOYSTICK_RESPONSE =
-        "Standard keeps the current feel. Linear responds evenly. Fine makes small movements gentler."
-    const val GIMBAL_JOYSTICK =
-        "Which analog stick pans and tilts. Left is the default. The other stick does not move the gimbal."
-    const val GAMEPAD =
-        "A connected game controller. The selected gimbal joystick pans and tilts. Cross/A records. Circle/B recenters. Square/X is rotate-180. Triangle/Y tracks a face. L1/R1 jump zoom out/in. L2/R2 hold-to-zoom (deeper is faster). D-pad up/down ISO, left/right shutter. Unplug rests the stick. On-screen stick wins while you hold it."
-    const val KEEP_SCREEN_AWAKE =
-        "Prevents auto-lock while OpenPocketCine is open. A monitor should stay lit. Android may still dim when the device overheats."
-    const val HDR_DISPLAY =
-        "Outdoor panel brightness, not a grade. WAVE, HISTO, PARADE, VECTOR, zebras and false color still read the decoded camera signal \u2014 judge exposure there, not from how bright the picture looks. Screen recording drops back to a normal SDR picture so the file is not HDR-boosted. This is not the camera's HDR/HLG color mode. Off by default."
-    const val THEME = "Charcoal field-monitor chrome with Sky Blue accents, tuned for low reflection on set."
-    const val SUPPORT = "Connection, live view, controls, and troubleshooting."
-    const val REPORT = "Opens a public issue form on GitHub for this project."
-    const val REPORT_PROBLEM =
-        "Tell us what happened. Technical details stay off unless you include them. You can attach up to three photos. Sending does not turn on automatic reports."
-    const val RELIABILITY_REPORTS =
-        "Optional: send crash, hang, live-feed reports and session health counts to OpenCapture through Sentry. Off by default. Turn off anytime without losing app features. Uploads wait until you leave camera Wi-Fi. Automatic reports exclude all images. No footage or GPS location. Sentry receives the connection IP; stored event IP and derived geography are removed. See Reporting Privacy below."
-    const val RELIABILITY_UNAVAILABLE =
-        "This build cannot send automatic reports. You can still share or delete reports stored on this phone."
-    const val FEATURE = "Start an idea in this project's feature-request discussion."
-    const val SOURCE =
-        "View the OpenPocketCine project on GitHub. Opening this may leave the camera Wi-Fi if that is the only network."
-    const val LINK_HEALTH = "How healthy the camera link is right now \u2014 delivery, not radio RSSI."
-    const val CLEAR_CACHE =
-        "Removes downloaded clip files from this phone. The clip list stays so you can cache them again from the camera."
-    const val LUT_LOOK = "Looks apply on this phone. The file on the camera is unchanged."
+object SettingsHelpCopy : OperatorHelpCopy("OpenPocketCine") {
     const val PROTOCOL =
         "Camera control speaks DUML over Bluetooth and the camera's Wi-Fi. No DJI SDK is bundled or required."
-    const val APP_VERSION = "Current OpenPocketCine build from the native project metadata."
-    const val LOCAL_CACHE = "Originals and playback proxies downloaded from the camera."
-    const val CACHE_FULL_RESOLUTION =
-        "Download the original camera file when you open a clip. Off keeps only the 720p proxy to save space. Share needs the original \u2014 connect the camera if it is not cached."
-    const val FEED_UPSCALER =
-        "How the live-view frame is enlarged to fill the panel. The camera sends far fewer pixels than the panel has, so something always does this. Off is a plain sample, Fast is a fixed sharpening kernel, and Quality is the OS spatial upscaler.\n\nAI is different in kind: it is a machine-learning model that INFERS detail the camera never captured. It gives the sharpest-looking picture, but the fine texture it adds is invented \u2014 plausible rather than real \u2014 so it can suggest crispness the lens did not record. Judge critical focus on Quality or Fast, and treat AI as a viewing aid rather than evidence.\n\nOnly the options this device supports are shown."
-    const val FALSE_COLOR_SCALE =
-        "The camera color mode selects D-Log, D-Log2, Rec.709, or HLG automatically. " +
-            "CineStop paints five stops around 18% gray, read through the " +
-            "camera's log curve: dark green −2, yellow-green −1, gray at 18%, light pink +1 " +
-            "(skin), soft yellow +2 (upper skin limit). Red is clipped and violet is crushed; " +
-            "other shadows are flat dark gray and other highlights flat light gray. " +
-            "Video paints video-level IRE stripes (green 41–48, pink 61–70, red clip) " +
-            "over luminance grayscale. IRE paints six video-level zones over " +
-            "luminance grayscale: purple crush, blue near-black, green 18% gray, pink one " +
-            "stop over, yellow near clip, red clip. On log, Video and IRE read the camera's " +
-            "Rec.709 look (709) or the raw signal (LOG), set under Read. Limits paints only shadow and highlight warnings, leaving other colors untouched."
-    const val FALSE_COLOR_REFERENCE =
-        "Show a compact color key over live view while False Color is active."
-    const val PEAKING_SENSITIVITY =
-        "Higher sensitivity catches finer edges but can get noisy on detailed scenes."
-    const val PEAKING_COLOR = "Choose the edge color that stays readable over your typical scene."
-    const val ZEBRA_UNITS =
-        "Switch between native 0-255 encoded codes and a 0-100 monitoring IRE scale."
-    const val ZEBRA_HIGHLIGHT =
-        "High zebra warns when bright detail approaches clipping after the active log curve is compensated."
-    const val ZEBRA_MIDTONE =
-        "Midtone zebra gives a curve-compensated reference band for faces or key subject exposure."
-    const val WAVEFORM_BRIGHTNESS =
-        "Raise trace intensity when the waveform is hard to read in bright light."
-    const val PARADE_BRIGHTNESS = "Raise trace intensity when channel separation is hard to see."
-    const val VECTORSCOPE_ZOOM =
-        "Magnifies only the chroma trace; the graticule stays at unity. The vectorscope reads the monitor image (your active LUT, or the built-in display tone map), where chroma is meaningful."
-    const val VECTORSCOPE_BRIGHTNESS =
-        "Raise trace intensity when the chroma plot is hard to read."
-    const val TRAFFIC_LIGHTS_COMPENSATION =
-        "Stops of crush/clip tolerance before a channel indicator glows. Shared with the histogram traffic lights."
 }
 
 object OpenPocketCineLinks {
@@ -246,22 +161,9 @@ object OpenPocketCineLinks {
     const val TERMS = "https://openpocketcine.app/terms/"
 }
 
-internal object OperatorMediaCache {
-    fun candidates(context: Context): List<File> =
-        listOf(
-            File(context.noBackupFilesDir, "OpenPocketCine/media"),
-            File(context.filesDir, "OpenPocketCine/media"),
-            File(context.filesDir, "media-cache"),
-            File(context.cacheDir, "media-cache"),
-        )
-
-    fun existingDir(context: Context): File? = candidates(context).firstOrNull { it.isDirectory }
-
-    fun byteCount(context: Context): Long {
-        val dir = existingDir(context) ?: return 0L
-        return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-    }
-
+internal object OperatorMediaCache : OperatorMediaCacheDirs({ context ->
+    listOf(File(context.noBackupFilesDir, "OpenPocketCine/media"), File(context.filesDir, "OpenPocketCine/media"))
+}) {
     /** Same canonical root object retires gallery writes before removing cache bytes. */
     suspend fun clearOwned(root: com.opencapture.opencine.appkit.MonitorMediaCacheRoot, fallback: () -> Unit) {
         if (!root.root.isDirectory) { fallback(); return }
@@ -270,40 +172,8 @@ internal object OperatorMediaCache {
             root.directory(cameraDir.name).clear(preserving = listOf("index.json"))
         }
     }
-
-    fun clear(context: Context) {
-        val mediaRoot = listOf(File(context.noBackupFilesDir, "OpenPocketCine/media"),
-            File(context.filesDir, "OpenPocketCine/media")).firstOrNull { it.isDirectory }
-        if (mediaRoot != null) {
-            mediaRoot.listFiles()?.forEach { cameraDir ->
-                if (!cameraDir.isDirectory) return@forEach
-                cameraDir.listFiles()?.forEach { child ->
-                    if (child.name != "index.json") child.deleteRecursively()
-                }
-            }
-            return
-        }
-        existingDir(context)?.listFiles()?.forEach { it.deleteRecursively() }
-    }
 }
 
-internal fun lutLookLabel(
-    selection: String,
-    enabled: Boolean = true,
-    colorMode: Int = -1,
-    family: String = "pocket",
-    cameraName: String? = null,
-): String {
-    val source =
-        LutLookResolver.resolve(
-            selection = selection,
-            lutOn = true,
-            colorMode = colorMode,
-            family = family,
-            cameraName = cameraName,
-        )
-    return LutLookResolver.statusLabel(enabled, selection, source)
-}
 
 internal fun toggledCleanPins(current: Set<String>, toolKey: String): Set<String> {
     val next = current.toMutableSet()
@@ -910,9 +780,6 @@ private fun SystemRows(model: AppModel, onLegal: (LegalKind) -> Unit) {
     )
 }
 
-internal fun openUrl(context: Context, url: String) {
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
-}
 
 private fun operatorHaptic(view: View, enabled: Boolean) {
     if (!enabled) return

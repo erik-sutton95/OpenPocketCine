@@ -1,41 +1,33 @@
 package com.opencapture.openpocketcine.session
 
-import com.opencapture.opencine.media.FaceDetectFlight
-import com.opencapture.opencine.dji.*
 import android.graphics.Bitmap
-import android.graphics.Rect
-import android.os.Handler
-import android.os.Looper
-import android.os.SystemClock
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.face.FaceLandmark
-import com.opencapture.opencine.vocabulary.*
-import java.util.concurrent.Executors
+import com.opencapture.opencine.cameracontrols.DetectedFace
+import com.opencapture.opencine.cameracontrols.FaceDetectionBackend
+import com.opencapture.opencine.cameracontrols.FaceDetectionFrame
+import com.opencapture.opencine.cameracontrols.FaceDetectionPump
+import com.opencapture.opencine.dji.FaceDetectorPort
+import com.opencapture.opencine.dji.FaceFrame
+import com.opencapture.opencine.vocabulary.TrackingBox
+import java.util.concurrent.Executor
 
 /**
- * iOS `LiveFaceDetector`: latest-frame-wins on a 40 ms cadence, 100 ms after
- * about a second without a face (see [pace]).
+ * iOS `LiveFaceDetector`: camera-controls' [FaceDetectionPump] (cadence, latest frame wins, watchdog) on
+ * ML Kit Face Detection, the Android stand-in for Vision. The platform `android.media.FaceDetector` is
+ * frontal-eyes-only and missed 3/4 views.
  *
- * ML Kit Face Detection is the Android stand-in for Vision. The platform
- * `android.media.FaceDetector` is frontal-eyes-only and missed 3/4 views.
- * Boxes are camera/identity space. Compose mirrors them at draw time.
- *
- * Vulkan hands NV21 bytes (no conversion in ML Kit). GLES / PixelCopy hand bitmaps.
- * Bitmap ownership: a frame handed to ML Kit is recycled **only once its
- * `Task` completes**. ML Kit reads the pixels off-thread on `MlKitThreadPool`
- * inside `ImageConvertUtils.convertToNv21Buffer`, so freeing a bitmap before
- * the task finishes aborts the process with
- * "cannot access an invalid/free'd bitmap here!" (#348). A hung Task may
- * unstick Face AF via a watchdog that posts empty boxes and schedules the
- * next frame; the watchdog never recycles — only the completion listener
- * does.
+ * Vulkan hands NV21 bytes (no conversion in ML Kit). GLES / PixelCopy hand bitmaps. ML Kit reads the pixels
+ * off-thread on `MlKitThreadPool` inside `ImageConvertUtils.convertToNv21Buffer`, so a bitmap is recycled
+ * only once its `Task` completes ("cannot access an invalid/free'd bitmap here!", #348).
  */
-class LiveFaceDetector : FaceDetectorPort {
+class LiveFaceDetector : FaceDetectionPump<LiveFaceDetector.Frame>(MlKitFaceBackend()), FaceDetectorPort {
     /** One detector input; [release] runs once ML Kit is done reading it. */
-    class Frame(val image: InputImage, val width: Int, val height: Int, private val onRelease: () -> Unit = {}) : FaceFrame {
+    class Frame(val image: InputImage, override val width: Int, override val height: Int, private val onRelease: () -> Unit = {}) :
+        FaceDetectionFrame, FaceFrame {
         override fun release() = onRelease()
 
         companion object {
@@ -46,239 +38,12 @@ class LiveFaceDetector : FaceDetectorPort {
         }
     }
 
-    private val lock = Any()
-    private val main = Handler(Looper.getMainLooper())
-    private val exec = Executors.newSingleThreadExecutor { Thread(it, "opc.face-af") }
-    private val flight = FaceDetectFlight()
-    private var finished = false
-    private val detectorLazy =
-        lazy {
-            FaceDetection.getClient(
-                FaceDetectorOptions.Builder()
-                    .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-                    .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-                    .setMinFaceSize(MIN_FACE_SIZE)
-                    .build(),
-            )
-        }
-    private val detector by detectorLazy
-    private var busy = false
-    private var closed = false
-    private var lastRun = 0L
-    private var emptyRuns = 0
-    private var pending: Frame? = null
-    private var pendingDone: ((List<TrackingBox>) -> Unit)? = null
-
-    /** Whether a frame offered now would be detected; skip the readback otherwise. */
-    override fun wantsFrame(): Boolean =
-        synchronized(lock) {
-            !closed && wantsFrame(emptyRuns, SystemClock.elapsedRealtime() - lastRun)
-        }
-
     /** Frames come from this app's [Frame] factories only. */
     override fun consider(frame: FaceFrame, done: (List<TrackingBox>) -> Unit) = consider(frame as Frame, done)
 
-    fun consider(src: Frame, done: (List<TrackingBox>) -> Unit) {
-        synchronized(lock) {
-            if (closed) {
-                src.release()
-                return
-            }
-            pending?.release()
-            pending = src
-            pendingDone = done
-            if (!busy) {
-                busy = true
-                exec.execute { pump() }
-            }
-        }
-    }
-
-    override fun shutdown() {
-        main.removeCallbacksAndMessages(null)
-        val abandoned: Frame?
-        val stopNow: Boolean
-        synchronized(lock) {
-            closed = true
-            flight.invalidate()
-            abandoned = pending
-            pending = null
-            pendingDone = null
-            stopNow = !busy
-        }
-        abandoned?.release()
-        // With no task in flight nothing else owns pixels, so tear down now.
-        // Otherwise the in-flight completion listener finishes the shutdown,
-        // because ML Kit may still be reading that frame.
-        if (stopNow) finishShutdown()
-    }
-
-    private fun pump() {
-        data class Job(val frame: Frame, val done: (List<TrackingBox>) -> Unit)
-        val job: Job?
-        val abortClosed: Boolean
-        synchronized(lock) {
-            val next = pending
-            val cb = pendingDone
-            pending = null
-            pendingDone = null
-            if (closed) {
-                busy = false
-                next?.release()
-                abortClosed = true
-                job = null
-            } else if (next == null || cb == null) {
-                busy = false
-                next?.release()
-                abortClosed = false
-                job = null
-            } else {
-                lastRun = SystemClock.elapsedRealtime()
-                abortClosed = false
-                job = Job(next, cb)
-            }
-        }
-        if (abortClosed) {
-            finishShutdown()
-            return
-        }
-        val (frame, done) = job ?: return
-        val width = frame.width
-        val height = frame.height
-        if (width < 16 || height < 16) {
-            frame.release()
-            main.post { done(emptyList()) }
-            scheduleNext()
-            return
-        }
-        val task =
-            runCatching { detector.process(frame.image) }.getOrNull()
-        if (task == null) {
-            frame.release()
-            main.post { done(emptyList()) }
-            scheduleNext()
-            return
-        }
-        val flightId =
-            synchronized(lock) {
-                if (closed) -1 else flight.begin()
-            }
-        val timeout =
-            Runnable {
-                val timedOut = synchronized(lock) { !closed && flightId >= 0 && flight.take(flightId) }
-                if (!timedOut) return@Runnable
-                // Unstick Face AF only. ML Kit may still be reading [frame].
-                main.post { done(emptyList()) }
-                scheduleNext()
-            }
-        if (flightId >= 0) main.postDelayed(timeout, DETECT_TIMEOUT_MS)
-        task.addOnCompleteListener(exec) { completed ->
-            main.removeCallbacks(timeout)
-            frame.release()
-            val deliver: Boolean
-            val stop: Boolean
-            synchronized(lock) {
-                if (closed) {
-                    busy = false
-                    deliver = false
-                    stop = true
-                } else if (flightId < 0 || !flight.take(flightId)) {
-                    deliver = false
-                    stop = false
-                } else {
-                    deliver = true
-                    stop = false
-                }
-            }
-            if (stop) {
-                finishShutdown()
-                return@addOnCompleteListener
-            }
-            if (!deliver) return@addOnCompleteListener
-            val hits =
-                if (completed.isSuccessful) {
-                    project(completed.result, width, height)
-                } else {
-                    emptyList()
-                }
-            synchronized(lock) { emptyRuns = if (hits.isEmpty()) emptyRuns + 1 else 0 }
-            main.post { done(hits) }
-            scheduleNext()
-        }
-    }
-
-    private fun scheduleNext() {
-        val delay = synchronized(lock) { pace(emptyRuns) } - (SystemClock.elapsedRealtime() - lastRun)
-        val stop: Boolean
-        synchronized(lock) {
-            if (closed) {
-                busy = false
-                stop = true
-            } else {
-                stop = false
-                exec.execute {
-                    if (delay > 0) runCatching { Thread.sleep(delay) }
-                    pump()
-                }
-            }
-        }
-        if (stop) finishShutdown()
-    }
-
-    private fun finishShutdown() {
-        synchronized(lock) {
-            if (finished) return
-            finished = true
-        }
-        if (detectorLazy.isInitialized()) {
-            runCatching { detector.close() }
-        }
-        exec.shutdown()
-    }
-
-    private fun project(faces: List<Face>, width: Int, height: Int): List<TrackingBox> {
-        val hits = ArrayList<TrackingBox>(faces.size)
-        for (face in faces) {
-            val rect = face.boundingBox
-            if (rect.width() < 8 || rect.height() < 8) continue
-            if (
-                !FaceStructurePolicy.hasFaceLandmarks(
-                    leftEyeX = landmarkX(face, FaceLandmark.LEFT_EYE, rect),
-                    rightEyeX = landmarkX(face, FaceLandmark.RIGHT_EYE, rect),
-                    hasNose = face.getLandmark(FaceLandmark.NOSE_BASE) != null,
-                )
-            ) {
-                continue
-            }
-            val box =
-                TrackingBox.fromImageRect(
-                    rect.left,
-                    rect.top,
-                    rect.right,
-                    rect.bottom,
-                    width,
-                    height,
-                ) ?: continue
-            if (box.isTooSmall) continue
-            hits.add(box)
-        }
-        return hits
-    }
-
-    private fun landmarkX(face: Face, type: Int, rect: Rect): Double? {
-        val bw = rect.width().toDouble()
-        if (bw < 1.0) return null
-        val pos = face.getLandmark(type)?.position ?: return null
-        return (pos.x - rect.left) / bw
-    }
-
     companion object {
-        const val INTERVAL_MS = 40L
+        const val INTERVAL_MS = FaceDetectionPump.INTERVAL_MS
 
-        /** No face for about a second: look at 10 Hz until one appears (iOS parity). */
-        const val IDLE_INTERVAL_MS = 100L
-        const val IDLE_AFTER_EMPTY_RUNS = 25
-        const val DETECT_TIMEOUT_MS = 2_000L
         /**
          * Detector input. ML Kit found the same faces at 320x180 as at 640x360 down to
          * 8% of frame width (below MIN_FACE_SIZE) in 30-54% less time per run on an S25.
@@ -286,14 +51,41 @@ class LiveFaceDetector : FaceDetectorPort {
         const val TAP_WIDTH = 320
         const val TAP_HEIGHT = 180
         const val MIN_FACE_SIZE = 0.10f
-
-        fun pace(emptyRuns: Int): Long = if (emptyRuns >= IDLE_AFTER_EMPTY_RUNS) IDLE_INTERVAL_MS else INTERVAL_MS
-
-        /**
-         * Tracking takes every frame (latest wins while busy). Idle takes one within
-         * a feed tick of its next run, so the pump skips readbacks that would be dropped.
-         */
-        fun wantsFrame(emptyRuns: Int, sinceLastRunMs: Long): Boolean =
-            sinceLastRunMs >= pace(emptyRuns) - INTERVAL_MS
     }
+}
+
+private class MlKitFaceBackend : FaceDetectionBackend<LiveFaceDetector.Frame> {
+    private val detectorLazy =
+        lazy {
+            FaceDetection.getClient(
+                FaceDetectorOptions.Builder()
+                    .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                    .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+                    .setMinFaceSize(LiveFaceDetector.MIN_FACE_SIZE)
+                    .build(),
+            )
+        }
+    private val detector by detectorLazy
+
+    override fun detect(frame: LiveFaceDetector.Frame, executor: Executor, done: (List<DetectedFace>?) -> Unit): Boolean {
+        val task = runCatching { detector.process(frame.image) }.getOrNull() ?: return false
+        task.addOnCompleteListener(executor) { completed ->
+            done(if (completed.isSuccessful) completed.result.map(::detectedFace) else null)
+        }
+        return true
+    }
+
+    override fun close() {
+        if (detectorLazy.isInitialized()) runCatching { detector.close() }
+    }
+}
+
+private fun detectedFace(face: Face): DetectedFace {
+    val rect = face.boundingBox
+    return DetectedFace(
+        rect.left, rect.top, rect.right, rect.bottom,
+        leftEyeX = face.getLandmark(FaceLandmark.LEFT_EYE)?.position?.x,
+        rightEyeX = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position?.x,
+        hasNose = face.getLandmark(FaceLandmark.NOSE_BASE) != null,
+    )
 }

@@ -71,43 +71,19 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import com.opencapture.opencine.vocabulary.MediaHTTP
 import com.opencapture.opencine.vocabulary.MediaFile
+import com.opencapture.opencine.cameracontrols.admittedDeliveryToast
+import com.opencapture.opencine.cameracontrols.MediaDeliveryResult
+import com.opencapture.opencine.cameracontrols.MediaCornerShape
+import com.opencapture.opencine.cameracontrols.MediaCloseButton
+import com.opencapture.opencine.cameracontrols.MediaCapsuleShape
+import com.opencapture.opencine.cameracontrols.MediaDeliveryUpcoming
+import com.opencapture.opencine.cameracontrols.MediaDeliveryPostExportAction
+import com.opencapture.opencine.cameracontrols.MediaDeliveryOverlayState
+import com.opencapture.opencine.cameracontrols.MediaDeliveryDestination
 
-enum class MediaDeliveryDestination(
-    val title: String,
-    val subtitle: String,
-    val actionTitle: String,
-) {
-    NATIVE_SHARE(
-        title = "Share",
-        subtitle = "Nearby Share, Files, and other apps",
-        actionTitle = "Share",
-    ),
-}
 
-/** Listed on the Share sheet; never selectable and never starts auth or upload. */
-internal object MediaDeliveryUpcoming {
-    val titles = listOf(
-        "Google Drive",
-        "Dropbox",
-        "NAS (SMB)",
-        "LucidLink",
-        "Backblaze B2",
-        "Vimeo Review",
-    )
-}
 
-enum class MediaDeliveryPostExportAction {
-    SYSTEM_SHARE,
-    SAVE_TO_PHOTOS,
-}
 
-data class MediaDeliveryOverlayState(
-    val statusLine: String,
-    val batchLine: String? = null,
-    val overallFraction: Double = 0.0,
-    val isPreparing: Boolean = true,
-    val filename: String? = null,
-)
 
 private enum class DeliveryStep {
     DESTINATION,
