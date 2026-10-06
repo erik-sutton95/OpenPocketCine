@@ -1214,7 +1214,8 @@ struct FalseColorLegend: View {
 
     var body: some View {
         FalseColorAssist.referenceDisplay(
-            scale: scale, colorMode: colorMode, rec709: rec709, clipByte: clipByte
+            scale: scale, colorMode: colorMode, rec709: rec709, clipByte: clipByte,
+            looks: .app
         )
         .allowsHitTesting(false)
     }

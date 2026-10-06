@@ -840,6 +840,7 @@ struct MediaPlayerView: View {
             let transfer =
                 model.monitorTransfer ?? MonitorTransfer(model.assist.monitorColorMode ?? .normal)
             FalseColorReferenceOverlay(
+                stores: .app, looks: .app,
                 scale: model.assist.falseColorScale,
                 transfer: transfer,
                 rec709: model.assist.falseColorRec709,

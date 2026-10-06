@@ -1137,6 +1137,7 @@ private struct LiveScopeOverlays: View {
             let transfer =
                 model.monitorTransfer ?? MonitorTransfer(model.monitorColorMode ?? .normal)
             FalseColorReferenceOverlay(
+                stores: .app, looks: .app,
                 scale: model.assist.falseColorScale,
                 transfer: transfer,
                 rec709: model.assist.falseColorRec709,

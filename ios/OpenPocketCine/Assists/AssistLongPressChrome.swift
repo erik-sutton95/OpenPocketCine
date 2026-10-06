@@ -13,8 +13,8 @@ enum AssistLongPressChrome {
         switch tool {
         case .peaking:
             PeakingAssist.longPressMenu(assist: assist, palette: LiveDesign.self, haptics: .app)
-        case .falseColor: FalseColorAssist.longPressMenu(assist: assist)
-        case .zebra: ZebraAssist.longPressMenu(assist: assist)
+        case .falseColor: LiveFalseColorMenu(assist: assist)
+        case .zebra: LiveZebraMenu(assist: assist)
         case .lut: LUTAssist.longPressMenu(assist: assist)
         case .waveform: WaveformAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
         case .parade: ParadeAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
