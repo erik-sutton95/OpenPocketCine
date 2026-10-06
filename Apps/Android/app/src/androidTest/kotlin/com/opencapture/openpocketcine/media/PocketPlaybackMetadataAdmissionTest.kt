@@ -28,6 +28,7 @@ import kotlinx.coroutines.yield
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.opencapture.opencine.vocabulary.MediaFile
 
 /** SIMULATED SDK observations on Android. Actual Uri/MediaItem and native admission run unchanged. */
 @RunWith(AndroidJUnit4::class)

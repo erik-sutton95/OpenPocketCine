@@ -13,6 +13,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.opencapture.opencine.vocabulary.MediaLibraryTab
+import com.opencapture.opencine.vocabulary.MediaLibrarySort
+import com.opencapture.opencine.vocabulary.MediaLibraryQuery
+import com.opencapture.opencine.vocabulary.MediaKind
+import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaFile
+import com.opencapture.opencine.vocabulary.MediaCacheGrade
+import com.opencapture.opencine.cameracontrols.MediaOperatorCopy
+import com.opencapture.opencine.cameracontrols.MediaLibraryCopy
+import com.opencapture.opencine.cameracontrols.MediaClipPresentation
 
 class MediaLibraryTest {
     private fun fixture(): ByteArray =

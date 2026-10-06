@@ -3,6 +3,8 @@ package com.opencapture.openpocketcine.media
 import com.opencapture.opencine.appkit.*
 import com.opencapture.opencine.media.*
 import java.io.File
+import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaFile
 
 /** Actual Pocket source values; shared playback owns attempts, preparation and cache commits. */
 internal fun pocketPlaybackCandidates(file: MediaFile, live: Boolean,

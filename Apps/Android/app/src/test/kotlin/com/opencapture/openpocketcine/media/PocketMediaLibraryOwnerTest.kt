@@ -9,6 +9,8 @@ import java.nio.file.Files
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
 import kotlin.test.*
+import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaFile
 
 /** SIMULATED owner/IO fixtures. Original wire and manifest golden suites remain byte unchanged. */
 @OptIn(ExperimentalCoroutinesApi::class)

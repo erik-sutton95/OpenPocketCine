@@ -6,6 +6,7 @@ import com.opencapture.opencine.media.MediaAssetID
 import kotlin.properties.ReadOnlyProperty
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
+import com.opencapture.opencine.vocabulary.MediaFile
 
 /** Value/action bindings read the actual owner on every invocation; they store no presentation state. */
 internal fun <T> libraryRead(read: () -> T): ReadOnlyProperty<Any?, T> = object : ReadOnlyProperty<Any?, T> {

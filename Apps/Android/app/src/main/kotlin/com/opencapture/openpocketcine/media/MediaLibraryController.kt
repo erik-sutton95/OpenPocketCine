@@ -30,6 +30,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaFile
+import com.opencapture.opencine.vocabulary.MediaCacheGrade
+import com.opencapture.opencine.cameracontrols.MediaOperatorCopy
 
 class MediaLibraryController(
     context: Context,

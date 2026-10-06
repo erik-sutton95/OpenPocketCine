@@ -7,6 +7,9 @@ import com.opencapture.openpocketcine.OperatorPrefs
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaFile
+import com.opencapture.opencine.vocabulary.MediaCacheGrade
 
 class MediaCache(
     private val filesDir: File,
@@ -208,7 +211,7 @@ internal fun MediaFile.toJson(): JSONObject =
         put("handleShared", handleShared)
     }
 
-internal fun com.opencapture.opencine.dji.MediaFile.Companion.fromJson(obj: JSONObject): MediaFile =
+internal fun com.opencapture.opencine.vocabulary.MediaFile.Companion.fromJson(obj: JSONObject): MediaFile =
     MediaFile(
         path = obj.optString("path"),
         thumbPath = obj.optString("thumbPath"),

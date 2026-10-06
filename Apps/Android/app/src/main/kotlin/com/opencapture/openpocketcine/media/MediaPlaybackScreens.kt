@@ -133,6 +133,9 @@ import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import com.opencapture.opencine.vocabulary.MediaFile
+import com.opencapture.opencine.vocabulary.MediaClipFormatting
+import com.opencapture.opencine.cameracontrols.MediaOperatorCopy
 
 @Composable
 fun MediaPhotoViewer(

@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.lut
 
 import com.opencapture.opencine.vocabulary.CameraCommands
-import com.opencapture.openpocketcine.media.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaHTTP
 import com.opencapture.opencine.media.QuickTimeKeys
 import java.io.File
 

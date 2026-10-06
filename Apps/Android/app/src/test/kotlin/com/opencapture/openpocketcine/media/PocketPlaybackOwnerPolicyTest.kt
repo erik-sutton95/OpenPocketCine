@@ -6,6 +6,8 @@ import java.nio.file.Files
 import kotlinx.coroutines.test.*
 import kotlinx.coroutines.async
 import kotlin.test.*
+import com.opencapture.opencine.vocabulary.MediaHTTP
+import com.opencapture.opencine.vocabulary.MediaFile
 
 /** SIMULATED actual codec/source values. No camera/service/catalog is fabricated for playback. */
 class PocketPlaybackOwnerPolicyTest {

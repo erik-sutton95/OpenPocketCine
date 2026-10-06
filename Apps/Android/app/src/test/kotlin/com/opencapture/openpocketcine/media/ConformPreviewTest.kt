@@ -7,6 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.opencapture.opencine.vocabulary.MediaClipFormatting
 
 class ConformPreviewTest {
     @Test

@@ -48,6 +48,10 @@ import com.opencapture.openpocketcine.OpcIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.opencapture.opencine.vocabulary.MediaKind
+import com.opencapture.opencine.vocabulary.MediaFile
+import com.opencapture.opencine.vocabulary.MediaClipFormatting
+import com.opencapture.opencine.vocabulary.MediaCacheGrade
 
 @Composable
 fun MediaClipCell(file: MediaFile, controller: MediaLibraryController, onOpen: () -> Unit,
