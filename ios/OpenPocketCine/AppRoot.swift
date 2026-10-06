@@ -81,7 +81,19 @@ final class AppModel {
                 self.session.noteSceneBecameInactive()
             }
         }
+        control.noteFor = AppModel.controlNote(for:_:)
         control.onNote = { [weak self] in self?.session.controlNote = $0 }
+    }
+
+    /// main's write notes come from the session's own send path: the camera's message on a
+    /// refusal, nothing on a timeout or a write it did not show. The shared copy stays only for a
+    /// stale camera state (a kept wrong-camera guard) and for not being connected.
+    static func controlNote(for stage: CommandStage, _ label: String) -> String? {
+        let shared = MonitorControlModel.note(for: stage, label)
+        switch stage {
+        case .rejected(.staleEpoch), .rejected(.staleCapabilities): return shared
+        default: return shared == MonitorControlModel.connectFirst ? shared : nil
+        }
     }
 
     /// A nearby camera as the cameras page and pair page have always shown it: Pocket or Nano by

@@ -41,6 +41,8 @@ import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.opencine.appkit.AppIntegration
 import com.opencapture.opencine.appkit.MonitorControlModel
 import com.opencapture.opencine.appkit.ShellModel
+import com.opencapture.opencine.core.CommandRejection
+import com.opencapture.opencine.core.CommandStage
 import com.opencapture.opencine.core.ConnectedCamera
 import com.opencapture.opencine.core.SessionCloseReason
 import com.opencapture.opencine.appkit.BodyRecordsV0
@@ -152,7 +154,10 @@ class AppModel(
         integration.saveRecord = model::upsert
     }
 
-    val control = MonitorControlModel(scope)
+    val control = MonitorControlModel(scope).also { control ->
+        control.noteFor = ::controlNote
+        control.onNote = { session.presentControlNote(it) }
+    }
     val shell = ShellModel(cameras, control).also { shell ->
         shell.onSceneActivity = { active ->
             if (active) session.noteSceneBecameActive() else session.noteSceneBecameInactive()
@@ -728,6 +733,19 @@ class AppModel(
 
     companion object {
         const val CAMERAS = "openpocketcine.cameras"
+
+        /**
+         * main's write notes come from the session's own send path: the camera's message on a
+         * refusal, nothing on a timeout or a write it did not show. The shared copy stays only for
+         * a stale camera state (a kept wrong-camera guard) and for not being connected.
+         */
+        fun controlNote(stage: CommandStage, label: String): String? {
+            val shared = MonitorControlModel.note(stage, label)
+            if (stage is CommandStage.Rejected &&
+                (stage.rejection == CommandRejection.StaleEpoch || stage.rejection == CommandRejection.StaleCapabilities)
+            ) return shared
+            return shared.takeIf { it == MonitorControlModel.CONNECT_FIRST }
+        }
 
         /**
          * A nearby camera as the cameras and pair pages have always shown it (main's
