@@ -71,6 +71,9 @@ extension MonitorTransfer {
         case .dlogm: "DLM ≈"
         case .dlog2: "DL2"
         case .ilog: "ILOG"
+        case .srgb: "sRGB"
+        case .nlog: "NLOG"
+        case .log3G10: "L3G10"
         }
     }
 }
