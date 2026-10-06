@@ -68,75 +68,21 @@ extension MonitorAssistSelection {
 
 typealias GuideAspect = MonitorGuideAspect
 
-/// Catalog and camera source interpretation belong to the app; shared state receives media values.
-@MainActor @Observable
-final class AppMonitorLooks: MonitorLookProvider {
-    // Shared initialization may read the provider, but native lookup waits for app prefs.
-    var preparationReady = false
-    var lutSelection: LUTSelection = .djiAuto
-    var monitorColorMode: ColorMode?
-    var monitorFamily: CameraBodyFamily = .pocket
-    var monitorCameraName: String?
-    var liveIsPhoto = false
-    var referenceClipByte: Int {
-        OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
+/// This app's LUT looks: its official cubes, saved choices and custom LUT folder.
+extension MonitorLUTLooks {
+    /// Shared initialization may read the provider, but native lookup waits for app prefs.
+    convenience init() {
+        self.init(official: .app, preferences: .app, customLUTs: .app, preparationReady: false)
     }
-    func lutExposureTransfer(for transfer: MonitorTransfer) -> MonitorTransfer {
-        transfer.lutExposureTransfer
-    }
-    var selection: LUTSelection { lutSelection }
-    var transfer: MonitorTransfer { MonitorTransfer(monitorColorMode ?? .normal) }
-    func statusLabel(enabled: Bool) -> String {
-        if liveIsPhoto, enabled, lutSelection == .auto || lutSelection == .djiAuto {
-            return "Auto · Rec.709"
-        }
-        return LUTResolver.statusLabel(
-            enabled: enabled, selection: lutSelection, source: resolvedSource())
-    }
-    func resolvedSource() -> LUTSource {
-        LiveLUTResolver.resolve(
-            selection: lutSelection,
-            colorMode: monitorColorMode,
-            family: monitorFamily,
-            cameraName: monitorCameraName,
-            hasCustomDLog: CustomLUTStore.hasCube(.dLog),
-            hasCustomDLog2: CustomLUTStore.hasCube(.dLog2),
-            hasCustomRec709: CustomLUTStore.hasCube(.rec709),
-            customFileName: OperatorPrefs.selectedCustomFileName,
-            isPhoto: liveIsPhoto
-        )
-    }
-
-    var cube: CubeLUT? {
-        guard preparationReady else { return nil }
-        switch resolvedSource() {
-        case .official(let id):
-            return BundledPocketLUT.cube(id)
-        case .dji(let id):
-            return BundledOfficialDJILUT.cube(id)
-        case .iLogRec709:
-            // No I-Log cube ships with this app; Pocket never resolves it.
-            return nil
-        case .creative(let look):
-            return look.cube()
-        case .custom(let slot):
-            return CustomLUTStore.cube(slot)
-        case .file(let name):
-            return CustomLUTStore.cube(fileName: name)
-        case .off:
-            return nil
-        }
-    }
-
 }
 
-typealias LiveAssistState = MonitorAssistState<AppMonitorLooks>
+typealias LiveAssistState = MonitorAssistState<MonitorLUTLooks>
 
-extension MonitorAssistState where Looks == AppMonitorLooks {
+extension MonitorAssistState where Looks == MonitorLUTLooks {
     convenience init() {
         weak var state: LiveAssistState?
         self.init(
-            looks: AppMonitorLooks(), storage: .standard,
+            looks: MonitorLUTLooks(), storage: .standard,
             keys: .init(
                 assist: "OpenPocketCine.Assist.v1", cleanPins: "OpenPocketCine.CleanViewPins.v1",
                 playback: "OpenPocketCine.PlaybackAssists.v1"),
@@ -152,160 +98,9 @@ extension MonitorAssistState where Looks == AppMonitorLooks {
         OperatorPrefs.load(into: self)
         cleanViewPinnedTools = OperatorPrefs.cleanViewPinnedTools
         playbackVisibleTools = OperatorPrefs.playbackVisibleAssistTools
-        if monitorColorMode == nil { monitorColorMode = OperatorPrefs.lastMonitorColorMode }
+        if monitorColorMode == nil { monitorColorMode = LUTPreferences.app.lastMonitorColorMode }
         looks.preparationReady = true
         if lutEnabled { refreshLUTCube() }
-    }
-    var lutSelection: LUTSelection {
-        get { looks.lutSelection }
-        set { looks.lutSelection = newValue }
-    }
-    var monitorColorMode: ColorMode? {
-        get { looks.monitorColorMode }
-        set { looks.monitorColorMode = newValue }
-    }
-    var monitorFamily: CameraBodyFamily {
-        get { looks.monitorFamily }
-        set { looks.monitorFamily = newValue }
-    }
-    var monitorCameraName: String? {
-        get { looks.monitorCameraName }
-        set { looks.monitorCameraName = newValue }
-    }
-    var liveIsPhoto: Bool {
-        get { looks.liveIsPhoto }
-        set { looks.liveIsPhoto = newValue; allowsTransferInference = !newValue }
-    }
-    var lutStatusLabel: String { looks.statusLabel(enabled: lutEnabled) }
-    func resolvedSource() -> LUTSource { looks.resolvedSource() }
-    var longPressAnchor: CGRect {
-        get {
-            CGRect(
-                x: longPressAnchorRect.x, y: longPressAnchorRect.y,
-                width: longPressAnchorRect.width, height: longPressAnchorRect.height)
-        }
-        set { longPressAnchorRect = MonitorRect(newValue) }
-    }
-    /// Picking a look turns LUT on. Auto stays Auto until the operator picks something else.
-    func selectLUT(_ selection: LUTSelection) {
-        lutSelection = selection
-        lutEnabled = true
-        OperatorPrefs.lutSelection = selection
-        refreshLUTCube()
-        persist()
-    }
-
-    /// Color / zoom / body changes only swap the cube while an Auto row is selected.
-    /// Photo does not persist Rec.709 over last live log, and does not rewrite LUT prefs.
-    func syncLUT(
-        to colorMode: ColorMode?,
-        family: CameraBodyFamily = .pocket,
-        cameraName: String? = nil,
-        isPhoto: Bool = false,
-        persistLast: Bool = true
-    ) {
-        liveIsPhoto = isPhoto && !gradesClip
-        monitorColorMode = LiveMonitorColorScience.colorMode(
-            isPhoto: liveIsPhoto, colorMode: colorMode)
-        monitorFamily = family
-        if let cameraName { monitorCameraName = cameraName }
-        if persistLast, let colorMode, !liveIsPhoto {
-            OperatorPrefs.lastMonitorColorMode = colorMode
-        }
-        refreshLUTCube()
-    }
-
-    /// Playback Auto follows the clip's ColorGammaSxS. Do not persist Rec.709
-    /// from a Normal take over last live D-Log / D-Log2.
-    func adoptPlaybackColor(
-        _ colorMode: ColorMode,
-        family: CameraBodyFamily = .pocket,
-        cameraName: String? = nil
-    ) {
-        liveIsPhoto = false
-        monitorColorMode = colorMode
-        monitorFamily = family
-        if let cameraName { monitorCameraName = cameraName }
-        refreshLUTCube()
-    }
-
-    /// LUT sheet appear. Live SET must not replace the clip's Auto cube -
-    /// including disconnected library playback (`gradesClip`, no camera SET).
-    /// Watcher isolation: do not restamp from the camera session.
-    func bindLUTPicker(
-        live: ColorMode?,
-        inPlayback: Bool,
-        family: CameraBodyFamily = .pocket,
-        cameraName: String? = nil,
-        isPhoto: Bool = false,
-        isWatching: Bool = false
-    ) {
-        if inPlayback || gradesClip {
-            liveIsPhoto = false
-            refreshLUTCube()
-            return
-        }
-        if isWatching {
-            refreshLUTCube()
-            return
-        }
-        syncLUT(to: live, family: family, cameraName: cameraName, isPhoto: isPhoto)
-    }
-
-    /// Import adds a custom cube. Auto rows keep following color; otherwise this file arms.
-    func importCustom(fileName: String) {
-        OperatorPrefs.selectedCustomFileName = fileName
-        if lutSelection != .auto, lutSelection != .djiAuto {
-            lutSelection = .customFile
-            OperatorPrefs.lutSelection = .customFile
-        }
-        lutEnabled = true
-        refreshLUTCube()
-        persist()
-    }
-
-    func importCustom(slot: CustomLUTSlot, fileName: String) {
-        OperatorPrefs.setCustomFileName(fileName, for: slot)
-        importCustom(fileName: fileName)
-    }
-
-    func clearCustomSlot(_ slot: CustomLUTSlot) {
-        if lutSelection == slot.selection
-            || OperatorPrefs.selectedCustomFileName == OperatorPrefs.customFileName(for: slot)
-        {
-            lutSelection = .auto
-            OperatorPrefs.lutSelection = .auto
-            OperatorPrefs.selectedCustomFileName = nil
-        }
-        refreshLUTCube()
-        persist()
-    }
-
-    func selectCustomFile(_ fileName: String) {
-        OperatorPrefs.selectedCustomFileName = fileName
-        selectLUT(.customFile)
-    }
-
-    func clearCustomFile(_ fileName: String) {
-        if OperatorPrefs.selectedCustomFileName == fileName || lutSelection == .customFile {
-            lutSelection = .auto
-            OperatorPrefs.lutSelection = .auto
-            OperatorPrefs.selectedCustomFileName = nil
-        }
-        for slot in CustomLUTSlot.allCases where OperatorPrefs.customFileName(for: slot) == fileName
-        {
-            OperatorPrefs.setCustomFileName(nil, for: slot)
-        }
-        try? CustomLUTStore.remove(StoredCustomLUT(fileName: fileName))
-        refreshLUTCube()
-        persist()
-    }
-
-    func exportLUTCube(bakeExposure: Bool) -> CubeLUT? {
-        let color = PlaybackLUTColor.resolve(
-            clip: monitorColorMode, live: monitorColorMode,
-            last: OperatorPrefs.lastMonitorColorMode)
-        return exportCube(bakeExposure: bakeExposure, transfer: MonitorTransfer(color ?? .normal))
     }
 }
 
@@ -315,14 +110,8 @@ enum OperatorPrefs {
         keys: .init(live: "OpenPocketCine.DispChrome.Live", clean: "OpenPocketCine.DispChrome.Clean"))
     private static let awakeKey = "OpenPocketCine.KeepScreenAwake"
     private static let hdrDisplayKey = "OpenPocketCine.HDRDisplay"
-    private static let lutKey = "OpenPocketCine.LastLUT"
-    private static let customLUTKey = "OpenPocketCine.LastCustomLUT"
-    private static let lutWasCustomKey = "OpenPocketCine.LastLUTWasCustom"
-    private static let lutSelectionKey = "OpenPocketCine.LUTSelection"
     private static let customRec709FileKey = "OpenPocketCine.CustomRec709File"
-    private static let customDLogFileKey = "OpenPocketCine.CustomDLogFile"
     private static let customDLog2FileKey = "OpenPocketCine.CustomDLog2File"
-    private static let selectedCustomFileKey = "OpenPocketCine.SelectedCustomLUTFile"
     private static let assistKey = "OpenPocketCine.Assist.v1"
     private static let recordConfirmKey = "OpenPocketCine.RecordConfirmation"
     private static let hapticsKey = "OpenPocketCine.HapticsEnabled"
@@ -339,7 +128,6 @@ enum OperatorPrefs {
     private static let gimbalDoubleTapKey = "OpenPocketCine.GimbalDoubleTap"
     private static let cleanPinsKey = "OpenPocketCine.CleanViewPins.v1"
     private static let playbackAssistsKey = "OpenPocketCine.PlaybackAssists.v1"
-    private static let lastMonitorColorModeKey = "OpenPocketCine.LastMonitorColorMode"
     private static let cacheFullResolutionKey = "OpenPocketCine.CacheFullResolution"
     private static let portraitFeedAspectKey = "OpenPocketCine.PortraitFeedAspect"
     private static let nativeISOHopKey = "OpenPocketCine.NativeISOHop"
@@ -564,26 +352,6 @@ enum OperatorPrefs {
         set { UserDefaults.standard.set(newValue, forKey: nativeISOHopKey) }
     }
 
-    /// Last live `ColorMode` so Auto LUT can bind a cube from the offline library.
-    static var lastMonitorColorMode: ColorMode? {
-        get {
-            guard UserDefaults.standard.object(forKey: lastMonitorColorModeKey) != nil else {
-                return nil
-            }
-            return ColorMode(
-                rawValue: UInt8(
-                    truncatingIfNeeded: UserDefaults.standard.integer(
-                        forKey: lastMonitorColorModeKey)))
-        }
-        set {
-            if let newValue {
-                UserDefaults.standard.set(Int(newValue.rawValue), forKey: lastMonitorColorModeKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: lastMonitorColorModeKey)
-            }
-        }
-    }
-
     static var playbackVisibleAssistTools: Set<LiveAssistTool> {
         get {
             guard let raw = UserDefaults.standard.array(forKey: playbackAssistsKey) as? [String]
@@ -611,67 +379,6 @@ enum OperatorPrefs {
         }
     }
 
-    static var lastLUT: String {
-        get {
-            if lastLUTWasCustom, let file = lastCustomFileName {
-                return CustomLUTIndex.displayName(fileName: file)
-            }
-            return lastBuiltInLUT
-        }
-        set { UserDefaults.standard.set(newValue, forKey: lutKey) }
-    }
-
-    static var lastBuiltInLUT: String {
-        UserDefaults.standard.string(forKey: lutKey) ?? LUTSelection.auto.title
-    }
-
-    static var lastCustomFileName: String? {
-        get { UserDefaults.standard.string(forKey: customLUTKey) }
-        set { UserDefaults.standard.set(newValue, forKey: customLUTKey) }
-    }
-
-    static var lastLUTWasCustom: Bool {
-        get { UserDefaults.standard.bool(forKey: lutWasCustomKey) }
-        set { UserDefaults.standard.set(newValue, forKey: lutWasCustomKey) }
-    }
-
-    static var lutSelection: LUTSelection {
-        get {
-            if let raw = UserDefaults.standard.string(forKey: lutSelectionKey),
-                let value = LUTSelection(rawValue: raw)
-            {
-                return value
-            }
-            return .djiAuto
-        }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: lutSelectionKey) }
-    }
-
-    static func customFileName(for slot: CustomLUTSlot) -> String? {
-        UserDefaults.standard.string(forKey: customFileKey(slot))
-    }
-
-    static func setCustomFileName(_ fileName: String?, for slot: CustomLUTSlot) {
-        UserDefaults.standard.set(fileName, forKey: customFileKey(slot))
-    }
-
-    static var selectedCustomFileName: String? {
-        get {
-            let name = UserDefaults.standard.string(forKey: selectedCustomFileKey)
-            guard let name, CustomLUTIndex.isSafeFileName(name) else { return nil }
-            return name
-        }
-        set { UserDefaults.standard.set(newValue, forKey: selectedCustomFileKey) }
-    }
-
-    private static func customFileKey(_ slot: CustomLUTSlot) -> String {
-        switch slot {
-        case .rec709: customRec709FileKey
-        case .dLog: customDLogFileKey
-        case .dLog2: customDLog2FileKey
-        }
-    }
-
     @MainActor
     static func load(into state: LiveAssistState) {
         if let data = UserDefaults.standard.data(forKey: assistKey),
@@ -679,26 +386,12 @@ enum OperatorPrefs {
         {
             snap.apply(to: state)
         }
-        migrateLegacyLUTIfNeeded(into: state)
-        let migrated = lutSelection.migratedToDJICatalog
-        if migrated != lutSelection { lutSelection = migrated }
-        state.lutSelection = migrated
-    }
-
-    /// One-shot: old Built-in looks become Auto; a stored custom file becomes Custom D-Log.
-    @MainActor
-    private static func migrateLegacyLUTIfNeeded(into state: LiveAssistState) {
-        guard UserDefaults.standard.object(forKey: lutSelectionKey) == nil else { return }
-        if lastLUTWasCustom, let file = lastCustomFileName,
-            CustomLUTIndex.isSafeFileName(file)
-        {
-            setCustomFileName(file, for: .dLog)
-            if state.lutEnabled {
-                UserDefaults.standard.set(LUTSelection.customDLog.rawValue, forKey: lutSelectionKey)
-                return
-            }
+        LUTPreferences.app.migrateLegacySelectionIfNeeded(lutEnabled: state.lutEnabled)
+        let migrated = LUTPreferences.app.lutSelection.migratedToDJICatalog
+        if migrated != LUTPreferences.app.lutSelection {
+            LUTPreferences.app.lutSelection = migrated
         }
-        UserDefaults.standard.set(LUTSelection.djiAuto.rawValue, forKey: lutSelectionKey)
+        state.lutSelection = migrated
     }
 
     @MainActor
