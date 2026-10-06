@@ -2,6 +2,8 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.monitorui.portraitZones
 import com.opencapture.monitorui.livePortraitReadoutFrame
+import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.cameracontrols.isTopAnchored
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

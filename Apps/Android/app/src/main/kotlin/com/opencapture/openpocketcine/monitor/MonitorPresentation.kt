@@ -5,9 +5,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.opencapture.opencine.cameracontrols.reportChromeFrame
 import com.opencapture.openpocketcine.ChromeRect
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.reportChromeFrame
 
 typealias MonitorValue = com.opencapture.monitorui.MonitorValue
 

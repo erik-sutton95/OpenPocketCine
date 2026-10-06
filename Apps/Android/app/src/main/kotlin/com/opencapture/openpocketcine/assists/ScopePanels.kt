@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.opencine.cameracontrols.LocalLiveCanvasOrigin
 import com.opencapture.openpocketcine.feed.fromColorMode
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,7 +38,7 @@ internal fun MovableAssistPanel(
         placementBounds = placementBounds, defaultCenter = defaultCenter, enabled = enabled,
         onStore = onStore, onScale = onScale,
         onOpenOptions = onOpenOptions?.let { open -> { rect -> open(ChromeRect(rect.x, rect.y, rect.width, rect.height)) } },
-        anchorOrigin = com.opencapture.openpocketcine.LocalLiveCanvasOrigin.current,
+        anchorOrigin = LocalLiveCanvasOrigin.current,
         onActivate = onActivate, onConfirm = { haptics.confirm() },
         fillPlate = fillPlate, chip = chip, content = content,
     )

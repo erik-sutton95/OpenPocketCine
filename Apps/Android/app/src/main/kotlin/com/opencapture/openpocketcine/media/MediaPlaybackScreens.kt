@@ -3,6 +3,7 @@
 package com.opencapture.openpocketcine.media
 
 import com.opencapture.monitorui.MonitorConfirmPopup
+import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.feed.colorMode
 import com.opencapture.monitorui.detectMonitorPlaybackVideoGestures as detectPlaybackVideoGestures
@@ -121,7 +122,6 @@ import com.opencapture.openpocketcine.assists.LiveAssistTool
 import com.opencapture.openpocketcine.assists.MirrorAssist
 import com.opencapture.openpocketcine.assists.PlaybackAssistBar
 import com.opencapture.openpocketcine.assists.scopePanelChrome
-import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.lut.PlaybackLutColor
 import kotlinx.coroutines.Dispatchers

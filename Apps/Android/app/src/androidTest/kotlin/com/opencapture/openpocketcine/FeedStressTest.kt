@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.cameracontrols.CaptureLists
 import com.opencapture.opencine.dji.DjiNative
 import android.graphics.Rect
 import android.os.PowerManager
