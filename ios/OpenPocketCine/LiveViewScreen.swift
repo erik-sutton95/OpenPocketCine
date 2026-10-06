@@ -1143,7 +1143,7 @@ extension LiveViewScreen {
         -> CGRect
     {
         guard let subject else { return .zero }
-        return LiveTrackingChrome.cancelRect(
+        return MonitorTrackingGeometry.cancelRect(
             box: subject, feed: layout.onFeed, mirrored: model.livePictureViewFlip,
             flippedVertically: model.assist.flipsVertically)
     }

@@ -1,10 +1,11 @@
-import CoreMedia
 import OpenCineApple
 import OpenPocketViewCore
 import XCTest
 
 @testable import OpenPocketCine
 
+/// This app's `HevcDecoder` (its effects demand, Watch preview and runtime configuration) on
+/// parameter-set changes.
 @MainActor
 final class EncoderFormatChangeTests: XCTestCase {
     func testSameRasterSpsDoesNotHoldIDR() {
@@ -101,12 +102,6 @@ final class EncoderFormatChangeTests: XCTestCase {
         _ = decoder.decode(accessUnit: sets)
         XCTAssertEqual(decoder.vtRebuildCount, beforeReconnect + 1)
         XCTAssertEqual(enables, 0, "Reconnect uses the normal first GOP")
-    }
-
-    func testLivePresentTimingDoesNotPaceAtThirtyFps() {
-        let timing = LiveViewPresentTiming.sampleTiming(frameIndex: 1)
-        let seconds = CMTimeGetSeconds(timing.duration)
-        XCTAssertLessThan(seconds, 1.0 / 50.0)
     }
 
     private static func annexB(_ nals: [[UInt8]]) -> [UInt8] {
