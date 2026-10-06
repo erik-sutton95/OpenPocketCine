@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineAppKit
 import SwiftUI
 
 @main
@@ -6,11 +7,11 @@ struct OpenPocketCineApp: App {
     init() {
         #if DEBUG
             MultiviewUIReview.prepareIfRequested()
-            ReliabilityReportingVerification.prepareIfRequested()
+            AppDiagnostics.verification.prepareIfRequested()
         #endif
         AppDiagnostics.reporting.install()
         #if DEBUG
-            ReliabilityReportingVerification.runIfRequested()
+            AppDiagnostics.verification.runIfRequested()
         #endif
         MonitorTheme.prepareResources()
         FeedStressAutomation.installIfRequested()

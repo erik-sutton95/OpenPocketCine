@@ -1,3 +1,4 @@
+import OpenCineAppKitApple
 import OpenCineApple
 import OpenCineCameraVocabulary
 import OpenCineMedia
@@ -9,7 +10,7 @@ final class PlaybackFeedSession: OpenCineApple.MonitorPlaybackFeedSession, @unch
     @MainActor init() {
         super.init(
             configuration: LiveAssistEngine.configuration,
-            hdrDisplay: { LiveHDRDisplay.isEnabled },
+            hdrDisplay: { LiveHDRDisplay.app.isEnabled },
             journal: { ControlLiveLog.line($0) },
             sourceAdvanced: {
                 NotificationCenter.default.post(name: .monitorBackdropSourceAdvanced, object: nil)
@@ -21,7 +22,7 @@ final class PlaybackFeedHostView: OpenCineApple.MonitorPlaybackFeedHost {
     init(frame: CGRect = .zero) {
         super.init(
             frame: frame, picture: CIFeedView(),
-            configurePlayerLayer: { LiveHDRDisplay.configure($0) })
+            configurePlayerLayer: { LiveHDRDisplay.app.configure($0) })
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }

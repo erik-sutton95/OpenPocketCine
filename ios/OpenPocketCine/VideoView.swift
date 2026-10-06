@@ -1,4 +1,5 @@
 import AVFoundation
+import OpenCineAppKitApple
 import OpenCineApple
 import OpenPocketViewCore
 import SwiftUI
@@ -116,8 +117,8 @@ final class DisplayLayerView: OpenCineApple.MonitorVideoPictureContainer {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func applyHDRDisplay(_ enabled: Bool) {
-        LiveHDRDisplay.setEnabled(enabled, screen: window?.screen)
-        LiveHDRDisplay.configure(displayLayer, screen: window?.screen)
+        LiveHDRDisplay.app.setEnabled(enabled, screen: window?.screen)
+        LiveHDRDisplay.app.configure(displayLayer, screen: window?.screen)
         ciFeed.syncHDRDisplay()
     }
 }

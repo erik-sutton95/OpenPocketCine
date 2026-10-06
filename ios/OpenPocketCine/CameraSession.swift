@@ -6,6 +6,7 @@ import MonitorUI
 import Observation
 import OpenCineAppKit
 import OpenCineCameraControls
+import class OpenCineCore.LocalVPNNotice
 import OpenCineDJIApple
 import OpenPocketViewCore
 import UIKit
@@ -749,7 +750,7 @@ final class CameraSession {
         }
         AppDiagnostics.reporting.setCameraSessionActive(true)
         guard isCurrent() else { return nil }
-        LocalVPNProbe.noteIfActive()
+        LocalVPNNotice.app.noteIfActive()
         guard isCurrent() else { return nil }
         LocalNetworkAccess.requestEarly()
         guard isCurrent() else { return nil }

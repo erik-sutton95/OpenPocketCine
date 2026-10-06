@@ -124,20 +124,6 @@ final class LUTAssistTests: XCTestCase {
         XCTAssertEqual(assist.resolvedSource(), .off)
     }
 
-    func testClipColorProfileIOReadsColorGammaFromFileTail() throws {
-        let mp4 = Self.colorGammaMP4(gamma: "D-Log2", padMdat: 4096)
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("opc-clip-color-\(UUID().uuidString).mp4")
-        try mp4.write(to: url)
-        defer { try? FileManager.default.removeItem(at: url) }
-        XCTAssertEqual(ClipColorProfileIO.colorMode(at: url), .dLog2)
-        XCTAssertNil(
-            ClipColorProfileIO.shotColor(at: url, path: "DCIM/DJI_001/clip.LRF"),
-            "LRF Rec.709 must not drive Auto")
-        XCTAssertEqual(
-            ClipColorProfileIO.shotColor(at: url, path: "DCIM/DJI_001/clip.MP4"), .dLog2)
-    }
-
     @MainActor
     func testCreativeLooksBindGeneratedCubes() {
         let assist = LiveAssistState()
@@ -547,55 +533,5 @@ final class LUTAssistTests: XCTestCase {
             bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
             format: .RGBA8, colorSpace: nil)
         return (Float(bytes[0]) / 255, Float(bytes[1]) / 255, Float(bytes[2]) / 255)
-    }
-
-    /// `ftyp` + optional `mdat` pad + `moov/meta/{keys,ilst}` like Pocket 4P.
-    private static func colorGammaMP4(gamma: String, padMdat: Int = 0) -> Data {
-        var keysPayload = Data()
-        keysPayload.append(contentsOf: [0, 0, 0, 0, 0, 0, 0, 1])
-        let name = Data("com.dji.camera.ColorGammaSxS".utf8)
-        var entry = Data()
-        entry.append(Self.be32(UInt32(8 + name.count)))
-        entry.append(contentsOf: Array("mdta".utf8))
-        entry.append(name)
-        keysPayload.append(entry)
-        let keys = box("keys", keysPayload)
-
-        var dataPayload = Data()
-        dataPayload.append(Self.be32(1))
-        dataPayload.append(Self.be32(0))
-        dataPayload.append(contentsOf: Array(gamma.utf8))
-        let dataBox = box("data", dataPayload)
-        let child = box(fourCC: 1, dataBox)
-        let ilst = box("ilst", child)
-        let meta = box("meta", keys + ilst)
-        let moov = box("moov", meta)
-        var file = box("ftyp", Data("isomisom".utf8))
-        if padMdat > 0 {
-            file.append(box("mdat", Data(repeating: 0xAB, count: padMdat)))
-        }
-        file.append(moov)
-        return file
-    }
-
-    private static func box(_ type: String, _ payload: Data) -> Data {
-        var out = Data()
-        out.append(Self.be32(UInt32(8 + payload.count)))
-        out.append(contentsOf: Array(type.utf8))
-        out.append(payload)
-        return out
-    }
-
-    private static func box(fourCC: UInt32, _ payload: Data) -> Data {
-        var out = Data()
-        out.append(Self.be32(UInt32(8 + payload.count)))
-        out.append(Self.be32(fourCC))
-        out.append(payload)
-        return out
-    }
-
-    private static func be32(_ value: UInt32) -> Data {
-        var be = value.bigEndian
-        return Data(bytes: &be, count: 4)
     }
 }

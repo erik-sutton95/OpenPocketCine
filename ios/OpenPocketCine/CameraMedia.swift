@@ -780,7 +780,7 @@ extension CameraSession {
                 try await self.fetchMediaFile(file: file, path: MediaHTTP.deliveryPath(file), to: incoming, operation: operation)
             }
             try operation.requireCurrent()
-            if let mode = ClipColorProfileIO.shotColor(at: dest, path: file.path) {
+            if let mode = ClipColorProfile.shotColor(at: dest, path: file.path) {
                 rememberShotColor(mode, for: file, operation: operation)
             }
             finishDownloadProgress(file.path, operation: operation)
@@ -815,7 +815,7 @@ extension CameraSession {
         let operation = PocketMediaLibraryOperation(session: self, file: file)
         guard operation.isCurrent else { return nil }
         if let url = localURL(for: file),
-            let mode = ClipColorProfileIO.shotColor(at: url, path: file.path)
+            let mode = ClipColorProfile.shotColor(at: url, path: file.path)
         {
             rememberShotColor(mode, for: file, operation: operation)
             return mode

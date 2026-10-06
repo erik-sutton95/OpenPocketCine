@@ -1084,9 +1084,11 @@ private struct LiveScopeOverlays: View {
         }
         if model.assist.isVisible(.ndMeter) {
             NDMeterOverlay(
+                stores: .app,
                 bounds: canvas,
                 feed: picture,
-                chromeClearance: clearance
+                chromeClearance: clearance,
+                reading: { [model] in NDAssist.reading(from: model.frameSamples.displayBundle) }
             )
         }
         if !model.isWatchingFeed, !model.session.status.isPhoto,

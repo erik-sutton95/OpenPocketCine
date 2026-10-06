@@ -394,7 +394,7 @@ enum MediaDeliveryRunner {
         let cube: CubeLUT?
         if request.configuration.convertLog {
             let color =
-                ClipColorProfileIO.shotColor(at: source, path: file.path)
+                ClipColorProfile.shotColor(at: source, path: file.path)
                 ?? model.session.shotColor(for: file)
             if let color { model.session.rememberShotColor(color, for: file) }
             guard let color, LogColorTransform.converting(from: color) != nil else {

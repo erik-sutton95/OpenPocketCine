@@ -199,7 +199,7 @@ struct AssistInspectorPreview: View {
         case .ndMeter:
             NDMeterChip(
                 reading: NDAssist.reading(from: model.monitorSamples.displayBundle),
-                notation: NDAssist.store.notation
+                notation: AssistPanelStores.app.nd.notation
             )
             .frame(width: 120, height: 44)
         case .audioMeters:

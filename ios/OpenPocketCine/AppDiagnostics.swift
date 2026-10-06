@@ -3,6 +3,10 @@ import OpenCineAppKit
 import OpenPocketViewCore
 import UIKit
 
+#if DEBUG
+    import Sentry
+#endif
+
 /// The app's diagnostics: OpenCine's reporting runtime with this app's names, destination,
 /// camera network and Sentry.
 enum AppDiagnostics {
@@ -43,6 +47,13 @@ enum AppDiagnostics {
     static let reporting = ReliabilityReporting(
         host: host, consent: consent, dsn: dsn, gate: gate, origin: origin,
         sink: SentryReliabilitySink())
+    /// The SDK transport's forwarding session over this runtime (`AppReliabilityURLProtocol`).
+    static let forwarder = ReliabilityReportingForwarder(reporting: reporting)
+    #if DEBUG
+        static let verification = ReliabilityReportingVerification(
+            reporting: reporting, sdkEnabled: { SentrySDK.isEnabled }, crash: { SentrySDK.crash() },
+            isActive: { UIApplication.shared.applicationState == .active })
+    #endif
     static let incidents = FeedIncidentRuntime(
         reporting: reporting,
         directory: DiagnosticCenter.diagnosticsDirectory?
@@ -59,4 +70,9 @@ enum AppDiagnostics {
                 ? "testflight" : "production"
         #endif
     }
+}
+
+/// The Sentry SDK's URL protocol over this app's reporting runtime.
+final class AppReliabilityURLProtocol: ReliabilityReportingURLProtocol, @unchecked Sendable {
+    override class var forwarder: ReliabilityReportingForwarder { AppDiagnostics.forwarder }
 }

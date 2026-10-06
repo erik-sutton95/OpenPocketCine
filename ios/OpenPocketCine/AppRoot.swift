@@ -247,13 +247,13 @@ final class AppModel {
     var hdrDisplay: Bool = OperatorPrefs.hdrDisplay {
         didSet {
             OperatorPrefs.hdrDisplay = hdrDisplay
-            LiveHDRDisplay.setEnabled(hdrDisplay)
-            LiveHDRDisplay.setScreenCaptured(screenCaptured)
+            LiveHDRDisplay.app.setEnabled(hdrDisplay)
+            LiveHDRDisplay.app.setScreenCaptured(screenCaptured)
         }
     }
     /// Screen recording / AirPlay. HDR present drops to SDR so the file is not boosted.
     var screenCaptured = false {
-        didSet { LiveHDRDisplay.setScreenCaptured(screenCaptured) }
+        didSet { LiveHDRDisplay.app.setScreenCaptured(screenCaptured) }
     }
     var hdrDisplayActive: Bool { hdrDisplay && !screenCaptured }
     var cacheFullResolution: Bool = OperatorPrefs.cacheFullResolution {
@@ -534,7 +534,7 @@ final class AppModel {
             }
             presentSimulatorPreview()
         #endif
-        LiveHDRDisplay.setEnabled(hdrDisplay)
+        LiveHDRDisplay.app.setEnabled(hdrDisplay)
     }
 
     /// Connects a saved camera over its preferred setup (debug and stress drivers).
@@ -928,10 +928,10 @@ struct AppRoot: View {
         .environment(\.font, MonitorTheme.font(16))
         .environment(
             \.monitorHDRChromeGain,
-            model.hdrDisplayActive ? CGFloat(LiveHDRDisplay.presentGain) : 1
+            model.hdrDisplayActive ? CGFloat(LiveHDRDisplay.app.presentGain) : 1
         )
         .background {
-            HDRChromeHost(enabled: model.hdrDisplayActive).allowsHitTesting(false)
+            HDRChromeHost(display: .app, enabled: model.hdrDisplayActive).allowsHitTesting(false)
         }
         .onReceive(
             NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)
@@ -1185,7 +1185,7 @@ struct LinkExperience: View {
             )
         }
         .onChange(of: model.session.phase) { _, phase in
-            if phase == .openingDatalink { LocalVPNProbe.noteIfActive() }
+            if phase == .openingDatalink { LocalVPNNotice.app.noteIfActive() }
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -1215,4 +1215,9 @@ struct LinkExperience: View {
             mirrored: LiveMonitorLayout.shouldMirror(
                 leading: raw.leading, trailing: raw.trailing, orientation: orientation))
     }
+}
+
+extension LiveHDRDisplay {
+    /// This app's HDR display state, read by the feed, scopes and chrome.
+    static let app = LiveHDRDisplay()
 }

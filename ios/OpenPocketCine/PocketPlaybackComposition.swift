@@ -145,10 +145,10 @@ struct PocketPlaybackLook: Equatable, Sendable {
         guard authority.admission.isCurrent() else { return nil }
         let clip: ColorMode?
         if let original = localURL(for: file),
-            let mode = ClipColorProfileIO.shotColor(at: original, path: file.path)
+            let mode = ClipColorProfile.shotColor(at: original, path: file.path)
         {
             clip = mode
-        } else if let mode = ClipColorProfileIO.shotColor(at: item.url, path: item.sourceKey) {
+        } else if let mode = ClipColorProfile.shotColor(at: item.url, path: item.sourceKey) {
             clip = mode
         } else if let cached = shotColor(for: file) {
             clip = cached

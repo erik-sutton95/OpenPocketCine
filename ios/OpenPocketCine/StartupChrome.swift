@@ -1,5 +1,6 @@
 import MonitorUI
 import OpenCineAppKit
+import OpenCineAppKitApple
 import OpenCineCameraControls
 import OpenCineCore
 import OpenPocketViewCore
@@ -15,16 +16,16 @@ enum LiveDesign {
     static let glassBright = MonitorTheme.raised
     static let hairline = MonitorTheme.border
     static let hairlineStrong = MonitorTheme.faint.opacity(0.5)
-    static var text: Color { LiveHDRDisplay.chromeColor(red: 1, green: 1, blue: 1) }
-    static var muted: Color { LiveHDRDisplay.chromeColor(hex: 0x8D9293) }
-    static var faint: Color { LiveHDRDisplay.chromeColor(hex: 0x5E6262) }
-    static var accent: Color { LiveHDRDisplay.chromeColor(hex: 0x00A3E0) }
+    static var text: Color { LiveHDRDisplay.app.chromeColor(red: 1, green: 1, blue: 1) }
+    static var muted: Color { LiveHDRDisplay.app.chromeColor(hex: 0x8D9293) }
+    static var faint: Color { LiveHDRDisplay.app.chromeColor(hex: 0x5E6262) }
+    static var accent: Color { LiveHDRDisplay.app.chromeColor(hex: 0x00A3E0) }
     static let accentDim = MonitorTheme.accent.opacity(0.16)
-    static var amber: Color { LiveHDRDisplay.chromeColor(red: 0.914, green: 0.674, blue: 0.208) }
-    static var good: Color { LiveHDRDisplay.chromeColor(red: 0.18, green: 0.78, blue: 0.42) }
+    static var amber: Color { LiveHDRDisplay.app.chromeColor(red: 0.914, green: 0.674, blue: 0.208) }
+    static var good: Color { LiveHDRDisplay.app.chromeColor(red: 0.18, green: 0.78, blue: 0.42) }
     /// AE lock yellow: the focus box, its `AE-L` tag and the unlock key.
-    static var aeLock: Color { LiveHDRDisplay.chromeColor(hex: 0xF5D052) }
-    static var rec: Color { LiveHDRDisplay.chromeColor(hex: 0xD13034) }
+    static var aeLock: Color { LiveHDRDisplay.app.chromeColor(hex: 0xF5D052) }
+    static var rec: Color { LiveHDRDisplay.app.chromeColor(hex: 0xD13034) }
     static var info: Color { accent }
     static let cornerRadius = MonitorTheme.radius
     static let controlHeight: CGFloat = 58
@@ -37,7 +38,7 @@ extension LiveDesign: LiveChromePalette {
     static var destructive: Color { StartupColors.destructive }
 
     static func chromeColor(red: CGFloat, green: CGFloat, blue: CGFloat) -> Color {
-        LiveHDRDisplay.chromeColor(red: red, green: green, blue: blue)
+        LiveHDRDisplay.app.chromeColor(red: red, green: green, blue: blue)
     }
 }
 

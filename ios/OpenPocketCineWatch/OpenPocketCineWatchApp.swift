@@ -7,17 +7,7 @@ import SwiftUI
 /// radio; this app is a WatchConnectivity remote.
 @main
 struct OpenPocketCineWatchApp: App {
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var controller = WatchSessionController()
-
     var body: some Scene {
-        WindowGroup {
-            WatchMonitorView(openOnIPhone: WatchRelayCopy.openOnIPhone)
-                .environment(controller)
-                .onAppear { controller.activate() }
-                .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { controller.resume() }
-                }
-        }
+        WatchCompanionScene(openOnIPhone: WatchRelayCopy.openOnIPhone)
     }
 }
