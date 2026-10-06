@@ -6,4 +6,8 @@ if [[ ! -f "$shared" ]]; then
   printf 'error: missing %s\n' "$shared" >&2
   exit 1
 fi
+cd "$root" || {
+  printf 'error: cannot enter %s\n' "$root" >&2
+  exit 1
+}
 exec "$shared" --product OpenPocketCineAndroid "$@"
