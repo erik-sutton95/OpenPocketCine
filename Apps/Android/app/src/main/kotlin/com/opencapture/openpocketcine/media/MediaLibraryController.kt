@@ -6,7 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.opencapture.opencine.vocabulary.ConnectionPhase
-import com.opencapture.openpocketcine.lut.ClipColorProfile
+import com.opencapture.opencine.vocabulary.ClipColorProfile
+import com.opencapture.opencine.dji.colorModeFromMp4
 import com.opencapture.opencine.dji.DjiAndroidMediaGalleryCover
 import com.opencapture.opencine.dji.DjiCameraSession
 import com.opencapture.opencine.dji.DJIMediaCatalogRecordSource
