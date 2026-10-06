@@ -1,6 +1,7 @@
 import XCTest
 
-/// The shared page's app-owned legal destinations and a single saved camera setup.
+/// A single saved camera setup on the shared page. Main has no legal links on the cameras
+/// pages, so the app passes none (ui-tests-2 lane).
 final class CamerasPageFollowupTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -48,42 +49,6 @@ final class CamerasPageFollowupTests: XCTestCase {
         app.alerts["Rename setup"].buttons["Save"].tap()
         XCTAssertTrue(chip.waitForExistence(timeout: 5))
         capture("single-setup-default-restored")
-    }
-
-    func testLegalDocumentsReturnToSavedAndFirstPairPages() {
-        for state in ["saved-nearby", "empty"] {
-            app.launchEnvironment["OPV_UI_REVIEW_STATE"] = state
-            app.launch()
-            for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
-                XCUIDevice.shared.orientation = orientation
-                let landscape = orientation != .portrait
-                let rotated = NSPredicate { _, _ in
-                    (self.app.frame.width > self.app.frame.height) == landscape
-                }
-                expectation(for: rotated, evaluatedWith: app)
-                waitForExpectations(timeout: 10)
-                for kind in ["privacy", "terms"] {
-                    let link = app.buttons["legal.\(kind)"]
-                    XCTAssertTrue(link.waitForExistence(timeout: 10))
-                    XCTAssertTrue(link.isHittable)
-                    XCTAssertGreaterThanOrEqual(link.frame.height, 44)
-                    XCTAssertGreaterThanOrEqual(link.frame.minX, 0)
-                    XCTAssertLessThanOrEqual(link.frame.maxX, app.frame.maxX)
-                    XCTAssertLessThanOrEqual(link.frame.maxY, app.frame.maxY)
-                    capture("\(state)-\(orientation.rawValue)-links")
-                    link.tap()
-                    let close = app.buttons["Close"].firstMatch
-                    XCTAssertTrue(close.waitForExistence(timeout: 5))
-                    XCTAssertTrue(app.staticTexts[kind.capitalized].exists)
-                    capture("\(state)-\(orientation.rawValue)-\(kind)")
-                    close.tap()
-                    XCTAssertTrue(link.waitForExistence(timeout: 5))
-                    XCTAssertTrue(link.isHittable)
-                }
-            }
-            app.terminate()
-            XCUIDevice.shared.orientation = .portrait
-        }
     }
 
     private func capture(_ name: String) {

@@ -317,9 +317,7 @@ private fun LinkExperience(
         ShellActions(
             diagnostics = { DiagnosticCenter.shareReport(context, model.session) },
             reportProblem = { showProblemReport = true },
-            multiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null,
-            privacy = { model.homePanel = AppPanel.PRIVACY },
-            terms = { model.homePanel = AppPanel.TERMS }),
+            multiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null),
         monitor = { LiveViewScreen(model) },
         page = { ShellCoverPage(model, it) },
         pageFrame = { route, content ->
