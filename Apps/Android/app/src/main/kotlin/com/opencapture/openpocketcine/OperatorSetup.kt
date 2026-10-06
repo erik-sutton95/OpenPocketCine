@@ -7,7 +7,7 @@ import com.opencapture.opencine.vocabulary.GamepadGimbalStick
 import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import com.opencapture.openpocketcine.assists.scopeDisplayCeiling
 
-import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.opencine.vocabulary.fromColorMode
 
 import com.opencapture.openpocketcine.pairing.lastSSID
 import com.opencapture.openpocketcine.pairing.modelName
@@ -104,7 +104,7 @@ import com.opencapture.openpocketcine.assists.ZebraUnit
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
 import com.opencapture.openpocketcine.feed.FeedUpscaler
-import com.opencapture.openpocketcine.feed.LutLookResolver
+import com.opencapture.opencine.vocabulary.LutLookResolver
 import com.opencapture.openpocketcine.feed.MonitorTransfer
 import com.opencapture.openpocketcine.lut.LUTPicker
 import com.opencapture.openpocketcine.settings.DisplayToggleItem

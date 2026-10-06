@@ -7,7 +7,7 @@ import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.GamepadGimbalStick
 import com.opencapture.opencine.vocabulary.ShutterAngle
 import com.opencapture.openpocketcine.feed.FeedUpscaler
-import com.opencapture.openpocketcine.lut.LutCatalog
+import com.opencapture.opencine.vocabulary.LutCatalog
 import org.json.JSONObject
 
 import com.opencapture.opencine.appkit.MonitorDisplayPreferences
@@ -271,8 +271,8 @@ object OperatorPrefs {
     }
 
     fun lutSelection(context: Context): String {
-        val stored = prefs(context).getString(LUT_SELECTION, LutCatalog.DJI_AUTO) ?: LutCatalog.DJI_AUTO
-        return LutCatalog.migratedToDjiCatalog(stored)
+        val stored = prefs(context).getString(LUT_SELECTION, LutCatalog.OFFICIAL_AUTO) ?: LutCatalog.OFFICIAL_AUTO
+        return LutCatalog.migratedToOfficialCatalog(stored)
     }
 
     fun setLutSelection(context: Context, value: String) {

@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine.settings
 
-import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.opencine.vocabulary.fromColorMode
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween

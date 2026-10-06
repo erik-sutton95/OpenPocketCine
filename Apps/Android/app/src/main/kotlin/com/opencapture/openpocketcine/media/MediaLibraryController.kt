@@ -14,7 +14,7 @@ import com.opencapture.opencine.media.CameraMediaService
 import com.opencapture.opencine.media.MediaCatalog
 import com.opencapture.opencine.media.*
 import com.opencapture.openpocketcine.feed.MonitorTransfer
-import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.opencine.vocabulary.fromColorMode
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import com.opencapture.opencine.appkit.*

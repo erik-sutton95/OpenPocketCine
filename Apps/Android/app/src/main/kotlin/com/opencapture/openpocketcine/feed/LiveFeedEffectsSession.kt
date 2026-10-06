@@ -5,6 +5,7 @@ import android.graphics.SurfaceTexture
 import android.view.Surface
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.opencine.runtime.GlesPresentationOptions
+import com.opencapture.opencine.vocabulary.inferred
 
 /** Source configuration and the existing third-party GL backend remain in the app. */
 internal class LiveFeedEffectsSession(context: Context, scopeBus: LiveScopeSampleBus,

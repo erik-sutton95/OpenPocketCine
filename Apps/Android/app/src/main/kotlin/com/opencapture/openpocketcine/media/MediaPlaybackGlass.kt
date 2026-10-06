@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.media
 
-import com.opencapture.openpocketcine.feed.fromColorMode
-import com.opencapture.openpocketcine.feed.inferred
+import com.opencapture.opencine.vocabulary.fromColorMode
+import com.opencapture.opencine.vocabulary.inferred
 
 import android.app.ActivityManager
 import android.graphics.Bitmap

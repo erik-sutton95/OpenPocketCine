@@ -169,7 +169,6 @@ import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.LiveFaceDetector
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable

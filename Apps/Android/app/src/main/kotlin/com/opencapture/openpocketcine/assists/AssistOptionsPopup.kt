@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine.assists
 
 import com.opencapture.opencine.cameracontrols.LivePopupCloseButton
 import com.opencapture.opencine.vocabulary.CameraCommands
-import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.opencine.vocabulary.fromColorMode
 
 import com.opencapture.monitorui.monitorScrollFade
 import androidx.compose.foundation.layout.Arrangement
@@ -39,8 +39,9 @@ import com.opencapture.openpocketcine.LiveType
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.feed.MonitorTransfer
-import com.opencapture.openpocketcine.lut.LUTPicker
-import com.opencapture.openpocketcine.lut.LUTSplitComparisonBar
+import com.opencapture.opencine.cameracontrols.LUTPicker
+import com.opencapture.openpocketcine.lut.AppLutPickerCopy
+import com.opencapture.opencine.cameracontrols.LUTSplitComparisonBar
 import com.opencapture.openpocketcine.pickerPanelGlass
 import com.opencapture.openpocketcine.settings.SettingsPalette
 
@@ -126,6 +127,7 @@ fun AssistOptionsPopup(
                         .fillMaxWidth(),
                 ) {
                     LUTPicker(
+                        copy = AppLutPickerCopy,
                         selection = lutSelection,
                         onSelect = { id ->
                             if (model != null) {

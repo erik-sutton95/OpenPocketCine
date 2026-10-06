@@ -5,7 +5,7 @@ package com.opencapture.openpocketcine.media
 import com.opencapture.monitorui.MonitorConfirmPopup
 import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.vocabulary.CameraStatus
-import com.opencapture.openpocketcine.feed.colorMode
+import com.opencapture.opencine.vocabulary.colorMode
 import com.opencapture.monitorui.detectMonitorPlaybackVideoGestures as detectPlaybackVideoGestures
 import com.opencapture.monitorui.monitorPlaybackUnitPoint as unitPoint
 
@@ -123,7 +123,7 @@ import com.opencapture.openpocketcine.assists.MirrorAssist
 import com.opencapture.openpocketcine.assists.PlaybackAssistBar
 import com.opencapture.openpocketcine.assists.scopePanelChrome
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
-import com.opencapture.openpocketcine.lut.PlaybackLutColor
+import com.opencapture.opencine.vocabulary.PlaybackLutColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

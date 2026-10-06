@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
 import com.opencapture.opencine.vocabulary.CameraStatus
-import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.opencine.vocabulary.fromColorMode
 
 import com.opencapture.openpocketcine.feed.LiveColorScience
 import com.opencapture.openpocketcine.feed.MonitorTransfer

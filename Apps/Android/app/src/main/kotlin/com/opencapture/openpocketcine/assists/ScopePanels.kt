@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
 import com.opencapture.opencine.cameracontrols.LocalLiveCanvasOrigin
-import com.opencapture.openpocketcine.feed.fromColorMode
+import com.opencapture.opencine.vocabulary.fromColorMode
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
