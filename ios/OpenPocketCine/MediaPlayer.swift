@@ -2,6 +2,7 @@ import AVFoundation
 import ImageIO
 import MonitorPresentation
 import MonitorUI
+import OpenCineCameraControls
 import OpenPocketViewCore
 import OpenCineAppKit
 import OpenCineApple
@@ -254,7 +255,7 @@ struct MediaPhotoViewer: View {
                         .frame(maxHeight: 160)
                 }
                 MonitorInspectorCard {
-                    DesqueezeLongPressMenu(assist: model.assist)
+                    DesqueezeLongPressMenu(assist: model.assist, haptics: .app)
                 }
                 .environment(\.monitorInspectorHelp, desqueezeHelp)
             } footer: {
