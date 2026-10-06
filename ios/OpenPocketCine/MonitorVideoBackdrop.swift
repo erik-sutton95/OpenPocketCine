@@ -5,11 +5,13 @@ import MonitorUI
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
+import OpenCineApple
+import OpenCineMedia
 
 struct MonitorVideoBackdropConfiguration: Equatable {
     var source: ObjectIdentifier
     var generation: Int
-    var effects: LiveImageEffects
+    var effects: MonitorFrameEffects
     var geometry: [CGFloat] = []
 }
 
@@ -18,7 +20,7 @@ struct MonitorVideoBackdropConfiguration: Equatable {
 /// Future producers must preserve this contract or also opt out of caching.
 struct MonitorVideoBackdropSource: Equatable, @unchecked Sendable {
     var buffer: CVPixelBuffer
-    var effects: LiveImageEffects
+    var effects: MonitorFrameEffects
     var frame: CGRect
     var clip: CGRect
 
@@ -44,7 +46,7 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
         // Retain the objects, not just their addresses: a released native
         // buffer's identity may be recycled for a different frame.
         let sources: [MonitorVideoBackdropSource]
-        /// State FALSE / ZEBRA read outside `LiveImageEffects`.
+        /// State FALSE / ZEBRA read outside `MonitorFrameEffects`.
         let externalLook: [Int]
     }
 
@@ -81,7 +83,7 @@ final class MonitorVideoBackdropRenderer: @unchecked Sendable {
     private var admission = MonitorPreviewAdmission()
     private var nextAdmission: UInt64 = 0
     private var cached: CachedResult?  // lock-protected, one successful input only
-    private lazy var imageRenderer = AssistInspectorImageRenderer()
+    private lazy var imageRenderer = MonitorInspectorImageRenderer()
     private lazy var backdropRenderer = MonitorBackdropRenderer()
     private let operation: Operation?
     private let clock: @Sendable () -> UInt64
@@ -435,7 +437,7 @@ extension MonitorVideoBackdropSource {
     /// subsequently fits its wider/taller output inside that same host; it must
     /// not enlarge or crop the host a second time.
     static func displayedFrame(
-        sourceAspect: CGFloat, effects: LiveImageEffects, in rect: CGRect,
+        sourceAspect: CGFloat, effects: MonitorFrameEffects, in rect: CGRect,
         fill: Bool = false, zoom: CGFloat = 1, offset: CGSize = .zero
     ) -> CGRect {
         let host = fill ? fittedFrame(aspect: sourceAspect, in: rect, fill: true) : rect

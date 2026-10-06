@@ -2,6 +2,7 @@ import CoreVideo
 import OpenCineApple
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -104,7 +105,7 @@ import XCTest
             switch event {
             case 0: tile.recovering = true
             case 1: tile.camera = nil
-            case 2: tile.driver = DatalinkDriver(port: 9010, tcpPoke: false, pairingToken: "")
+            case 2: tile.driver = DjiAppleDatalink(port: 9010, tcpPoke: false, pairingToken: "")
             default: tile.controlHost = nil
             }
             XCTAssertNil(tile.controlsModel)
@@ -172,7 +173,7 @@ import XCTest
     private func fixture() -> MultiviewSession {
         let session = MultiviewUIReview.makeSession(count: 2)
         for (index, tile) in session.tiles.prefix(2).enumerated() {
-            tile.driver = DatalinkDriver(
+            tile.driver = DjiAppleDatalink(
                 port: UInt16(9004 + index), tcpPoke: false, pairingToken: "")
             tile.controlHost = "192.0.2.\(index + 1)"
             tile.recordingAvailable = true

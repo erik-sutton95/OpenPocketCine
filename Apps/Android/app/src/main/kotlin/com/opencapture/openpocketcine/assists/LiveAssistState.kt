@@ -2,13 +2,13 @@ package com.opencapture.openpocketcine.assists
 
 import android.content.Context
 import com.opencapture.openpocketcine.OperatorPrefs
+import com.opencapture.opencine.appkit.MonitorInspectorScopeDemand
+import com.opencapture.opencine.appkit.MonitorAssistState
 
-typealias LiveAssistState = com.opencapture.opencine.appkit.MonitorAssistState
-internal typealias InspectorScopeDemand = com.opencapture.opencine.appkit.MonitorInspectorScopeDemand
 
-fun createLiveAssistState(context: Context): LiveAssistState {
+fun createLiveAssistState(context: Context): MonitorAssistState {
     val app = context.applicationContext
-    return LiveAssistState(
+    return MonitorAssistState(
         encoded = OperatorPrefs.assistEncoded(app),
         pinnedNames = OperatorPrefs.cleanViewPinnedTools(app),
         onPersist = { OperatorPrefs.setAssistEncoded(app, it) },
@@ -19,6 +19,6 @@ fun createLiveAssistState(context: Context): LiveAssistState {
 }
 
 /** Before the first tap, use the source's existing calibration table, not a measurement. */
-internal val LiveAssistState.scopeDisplayCeiling: com.opencapture.opencine.media.ScopeClipSource
+internal val MonitorAssistState.scopeDisplayCeiling: com.opencapture.opencine.media.ScopeClipSource
     get() = if (scopeBundle.isEmpty) com.opencapture.opencine.vocabulary.ScopeExposureCeiling.UNOBSERVED
         else scopeCeiling

@@ -4,6 +4,8 @@ import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import SwiftUI
 import os
+import OpenCineApple
+import OpenCineMedia
 
 /// iOS look adapters on the committed core type. Cubes, zebra thresholds, and the
 /// false-colour ruler call `LiveColorScience` — do not keep a second science file.
@@ -36,17 +38,17 @@ enum PocketFalseColorMap {
             case full, overlayPaint, overlayPaintDisplay, overlayWeight
         }
         var kind: Kind
-        var scale: FalseColorScaleKind
+        var scale: MonitorFalseColorSelection
         var transfer: MonitorTransfer
         var clipByte: Int
-        /// Read through the official Rec.709 look (`LiveImageEffects.falseColorRec709`).
+        /// Read through the official Rec.709 look (`MonitorFrameEffects.falseColorRec709`).
         var rec709: Bool
     }
 
     // ponytail: keyed by look, not by source; the latest clip a source requests wins.
     // Only the one monitored source paints FALSE today. Key by clip too if two ever do.
     private struct OverlayKey: Hashable, Sendable {
-        var scale: FalseColorScaleKind
+        var scale: MonitorFalseColorSelection
         var transfer: MonitorTransfer
         var managedRender: Bool
         /// Read: 709 / LOG. Without it a toggle returned the cached overlay forever.
@@ -112,21 +114,21 @@ enum PocketFalseColorMap {
     /// Every look input is explicit: the source's Read (709 / LOG) and its live ceiling for
     /// `transfer` (``ScopeExposureCeiling/clipByte(transfer:iso:)`` of that source).
     private static func key(
-        _ kind: CubeKey.Kind, scale: FalseColorScaleKind, transfer: MonitorTransfer,
+        _ kind: CubeKey.Kind, scale: MonitorFalseColorSelection, transfer: MonitorTransfer,
         rec709: Bool, clipByte: Int
     ) -> CubeKey {
         CubeKey(kind: kind, scale: scale, transfer: transfer, clipByte: clipByte, rec709: rec709)
     }
 
     static func cube(
-        scale: FalseColorScaleKind, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
+        scale: MonitorFalseColorSelection, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> CubeLUT {
         cachedCube(key(.full, scale: scale, transfer: transfer, rec709: rec709, clipByte: clipByte))
     }
 
     /// Band paint for the compositor overlay. Sampled on **encoded camera codes**.
     static func overlayPaintCube(
-        scale: FalseColorScaleKind, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
+        scale: MonitorFalseColorSelection, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> CubeLUT {
         cachedCube(
             key(.overlayPaint, scale: scale, transfer: transfer, rec709: rec709, clipByte: clipByte)
@@ -135,7 +137,7 @@ enum PocketFalseColorMap {
 
     /// Coverage mask for the same overlay. 0 = show the displayed look (LUT or identity).
     static func overlayWeightCube(
-        scale: FalseColorScaleKind, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
+        scale: MonitorFalseColorSelection, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> CubeLUT {
         cachedCube(
             key(
@@ -148,7 +150,7 @@ enum PocketFalseColorMap {
     /// `managedRender` selects the display-compensated paint for the color-managed
     /// (no-LUT Limits) bake; the unmanaged NSNull context wants the raw colors.
     static func overlayPaintData(
-        scale: FalseColorScaleKind, mode: ColorMode, rec709: Bool, clipByte: Int,
+        scale: MonitorFalseColorSelection, mode: ColorMode, rec709: Bool, clipByte: Int,
         managedRender: Bool = false
     ) -> (Int, Data)? {
         overlayPairData(
@@ -161,7 +163,7 @@ enum PocketFalseColorMap {
     /// Not used on the live path: replacing the identity feed with this cube
     /// was the DeviceRGB contrast shift. Tests still sample it.
     static func fullPaintData(
-        scale: FalseColorScaleKind, mode: ColorMode, rec709: Bool, clipByte: Int
+        scale: MonitorFalseColorSelection, mode: ColorMode, rec709: Bool, clipByte: Int
     ) -> (Int, Data)? {
         warmedData(
             key(
@@ -170,7 +172,7 @@ enum PocketFalseColorMap {
     }
 
     static func overlayWeightData(
-        scale: FalseColorScaleKind, mode: ColorMode, rec709: Bool, clipByte: Int
+        scale: MonitorFalseColorSelection, mode: ColorMode, rec709: Bool, clipByte: Int
     ) -> (Int, Data)? {
         overlayPairData(scale: scale, mode: mode, rec709: rec709, clipByte: clipByte)
             .map { ($0.dimension, $0.weight) }
@@ -179,7 +181,7 @@ enum PocketFalseColorMap {
     /// Paint and mask always come from one exposure snapshot. Keep the last
     /// complete map for this look while a new exposure is warming.
     static func overlayPairData(
-        scale: FalseColorScaleKind, mode: ColorMode, rec709: Bool, clipByte: Int,
+        scale: MonitorFalseColorSelection, mode: ColorMode, rec709: Bool, clipByte: Int,
         managedRender: Bool = false
     ) -> OverlayMaps? {
         let key = OverlayKey(
@@ -251,7 +253,7 @@ enum PocketFalseColorMap {
     /// passes `nil`: that rewarms the look at the clip it last showed, or leaves the first
     /// build to the source's own engine so it never warms a different source's ceiling.
     static func warm(
-        scale: FalseColorScaleKind, mode: ColorMode, rec709: Bool, clipByte: Int?,
+        scale: MonitorFalseColorSelection, mode: ColorMode, rec709: Bool, clipByte: Int?,
         hasLUT _: Bool = false
     ) {
         let look = OverlayKey(
@@ -264,7 +266,7 @@ enum PocketFalseColorMap {
     }
 
     static func bands(
-        scale: FalseColorScaleKind, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
+        scale: MonitorFalseColorSelection, transfer: MonitorTransfer, rec709: Bool, clipByte: Int
     ) -> [LiveFalseColorBand] {
         let clip = DJILook.falseColorClip(
             scale: scale.liveScale, transfer: transfer, rec709: rec709, clipByte: clipByte)
@@ -321,7 +323,7 @@ enum PocketFalseColorMap {
         case .overlayPaintDisplay:
             // The managed bake output-converts linear working space → DeviceRGB
             // (≈ sRGB encode; the measured "untagged cube result gets lifted"
-            // from `LiveMonitorWorkingSpace`). Store decode(target) so the encode
+            // from `MonitorWorkingSpace`). Store decode(target) so the encode
             // lands the band on its authored color.
             overlayCube(
                 scale: key.scale, transfer: key.transfer, clipByte: key.clipByte, rec709: key.rec709
@@ -345,7 +347,7 @@ enum PocketFalseColorMap {
     }
 
     private static func buildCube(
-        scale: FalseColorScaleKind, transfer: MonitorTransfer, clipByte: Int, rec709: Bool
+        scale: MonitorFalseColorSelection, transfer: MonitorTransfer, clipByte: Int, rec709: Bool
     ) -> CubeLUT {
         let size = cubeSize
         let denom = Double(size - 1)
@@ -405,7 +407,7 @@ enum PocketFalseColorMap {
     }
 
     private static func overlayCube(
-        scale: FalseColorScaleKind,
+        scale: MonitorFalseColorSelection,
         transfer: MonitorTransfer,
         clipByte: Int,
         rec709: Bool,
@@ -480,7 +482,7 @@ enum PocketFalseColorMap {
     /// Band colour + coverage. Limits: weight 0 leaves the picture. CineStop / Video /
     /// IRE always paint; gaps are WAVE grayscale, not a hole onto the camera image.
     private static func overlayPaint(
-        value: Double, scale: FalseColorScaleKind, bands: [LiveFalseColorBand], monitorGray: Double
+        value: Double, scale: MonitorFalseColorSelection, bands: [LiveFalseColorBand], monitorGray: Double
     ) -> (red: Double, green: Double, blue: Double, weight: Double) {
         switch scale {
         case .sceneStops, .stops, .ire:
@@ -508,7 +510,7 @@ enum PocketFalseColorMap {
 
     private static func renderedColor(
         value: Double,
-        scale: FalseColorScaleKind,
+        scale: MonitorFalseColorSelection,
         bands: [LiveFalseColorBand],
         source: (red: Double, green: Double, blue: Double),
         monitorGray: Double
@@ -553,7 +555,7 @@ enum PocketFalseColorMap {
     }
 
     private static func renderedBandColor(
-        _ band: LiveFalseColorBand, scale: FalseColorScaleKind, detailGray: Double
+        _ band: LiveFalseColorBand, scale: MonitorFalseColorSelection, detailGray: Double
     ) -> (red: Double, green: Double, blue: Double) {
         _ = detailGray
         return (band.red, band.green, band.blue)
@@ -584,7 +586,7 @@ enum PocketFalseColorMap {
     }
 }
 
-extension FalseColorScaleKind {
+extension MonitorFalseColorSelection {
     var transitionWidth: Double { liveScale.edgeSoftness }
 
     /// OpenZCine `FalseColorScale.legendStops` — painted zones in operator order.
@@ -614,7 +616,7 @@ extension FalseColorScaleKind {
 
 /// OpenZCine `FalseColorReference` chrome — 264×52 glass ruler with sparse zone chips.
 struct FalseColorReferenceChrome: View {
-    var scale: FalseColorScaleKind
+    var scale: MonitorFalseColorSelection
     var colorMode: ColorMode = .normal
     var rec709: Bool
     var clipByte: Int

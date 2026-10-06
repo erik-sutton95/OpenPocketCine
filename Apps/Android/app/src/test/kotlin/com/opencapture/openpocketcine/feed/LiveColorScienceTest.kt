@@ -11,6 +11,9 @@ import com.opencapture.opencine.vocabulary.inferred
 import com.opencapture.opencine.vocabulary.fromColorMode
 import com.opencapture.opencine.vocabulary.COLOR_DLOG_M
 import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+import com.opencapture.opencine.media.LiveColorScience
+import com.opencapture.opencine.media.MonitorTransfer
+import com.opencapture.opencine.runtime.MonitorGlesUpscaler
 
 class FeedUpscaleTest {
     @Test
@@ -31,14 +34,14 @@ class FeedUpscaleTest {
     fun reconstructsOnlyWhenThePanelMagnifies() {
         // Fast reconstructs the 720p Rec.709 bake, not log RGB before the cube.
         assertTrue(
-            FeedUpscaler.shouldReconstructToDisplay(1280f, 720f, 1920f, 1080f),
+            MonitorGlesUpscaler.shouldReconstructToDisplay(1280f, 720f, 1920f, 1080f),
         )
         assertTrue(
-            !FeedUpscaler.shouldReconstructToDisplay(1280f, 720f, 1080f, 608f),
+            !MonitorGlesUpscaler.shouldReconstructToDisplay(1280f, 720f, 1080f, 608f),
             "portrait S25 well minifies 720p — cubic would alias",
         )
-        assertTrue(!FeedUpscaler.shouldReconstructToDisplay(1280f, 720f, 1280f, 720f))
-        assertTrue(!FeedUpscaler.shouldReconstructToDisplay(0f, 720f, 1920f, 1080f))
+        assertTrue(!MonitorGlesUpscaler.shouldReconstructToDisplay(1280f, 720f, 1280f, 720f))
+        assertTrue(!MonitorGlesUpscaler.shouldReconstructToDisplay(0f, 720f, 1920f, 1080f))
     }
 }
 

@@ -225,7 +225,7 @@ struct MediaDeliveryPopup: View {
                     Label {
                         Text("Share")
                     } icon: {
-                        OpcIcon.share
+                        MonitorIcon.share
                             .frame(width: 13, height: 13)
                     }
                     .font(MonitorTheme.font(14, weight: .bold))
@@ -244,7 +244,7 @@ struct MediaDeliveryPopup: View {
                         Label {
                             Text("Back")
                         } icon: {
-                            OpcIcon.chevronLeft
+                            MonitorIcon.chevronLeft
                                 .frame(width: 12, height: 12)
                         }
                         .font(MonitorTheme.font(13, weight: .semibold))
@@ -316,7 +316,7 @@ struct MediaDeliveryPopup: View {
                     ], id: \.self
                 ) { title in
                     HStack(spacing: 12) {
-                        OpcIcon.folder.frame(width: 24, height: 24)
+                        MonitorIcon.folder.frame(width: 24, height: 24)
                         Text(title).font(MonitorTheme.font(14, weight: .semibold))
                         Spacer(minLength: 8)
                         Text("Coming soon").font(MonitorTheme.font(11))
@@ -361,7 +361,7 @@ struct MediaDeliveryPopup: View {
                     .foregroundStyle(LiveDesign.muted)
                 }
                 Spacer()
-                OpcIcon.chevronRight
+                MonitorIcon.chevronRight
                     .frame(width: 12, height: 12)
                     .foregroundStyle(LiveDesign.faint)
             }
@@ -380,7 +380,7 @@ struct MediaDeliveryPopup: View {
     private func destinationIcon(_ candidate: MediaDeliveryDestination) -> some View {
         switch candidate {
         case .nativeShare:
-            OpcIcon.share
+            MonitorIcon.share
                 .frame(width: 18, height: 18)
                 .foregroundStyle(LiveDesign.text)
         case .frameio:
@@ -454,7 +454,7 @@ struct MediaDeliveryPopup: View {
                 Label {
                     Text("Hop to internet")
                 } icon: {
-                    OpcIcon.wifiOff
+                    MonitorIcon.wifiOff
                         .frame(width: 16, height: 16)
                 }
                 .font(MonitorTheme.font(15, weight: .semibold))
@@ -510,7 +510,7 @@ struct MediaDeliveryPopup: View {
                     showCreateProjectAlert = true
                 } label: {
                     HStack(spacing: 10) {
-                        OpcIcon.circlePlus
+                        MonitorIcon.circlePlus
                             .frame(width: 16, height: 16)
                             .foregroundStyle(LiveDesign.accent)
                         Text("Create new project")
@@ -543,7 +543,7 @@ struct MediaDeliveryPopup: View {
                             Label {
                                 Text(project.name)
                             } icon: {
-                                OpcIcon.check
+                                MonitorIcon.check
                             }
                         } else {
                             Text(project.name)
@@ -553,7 +553,7 @@ struct MediaDeliveryPopup: View {
             }
         } label: {
             HStack(spacing: 10) {
-                OpcIcon.folder
+                MonitorIcon.folder
                     .frame(width: 14, height: 14)
                     .foregroundStyle(LiveDesign.muted)
                 Text(selectedFrameioProject?.name ?? "Select a project")
@@ -563,7 +563,7 @@ struct MediaDeliveryPopup: View {
                     )
                     .lineLimit(1)
                 Spacer()
-                OpcIcon.chevronsUpDown
+                MonitorIcon.chevronsUpDown
                     .frame(width: 11, height: 11)
                     .foregroundStyle(LiveDesign.muted)
             }

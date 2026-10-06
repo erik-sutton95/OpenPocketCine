@@ -4,25 +4,28 @@ import android.content.Context
 import android.util.Log
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.monitorui.MonitorFalseColorSelection
-import com.opencapture.openpocketcine.assists.LiveAssistState
+import com.opencapture.opencine.appkit.MonitorAssistState
 import com.opencapture.monitorui.MonitorAssistTool
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.opencine.vocabulary.LutCatalog
-import com.opencapture.openpocketcine.lut.LutExposureCompensation
+import com.opencapture.opencine.media.MonitorLUTExposureCompensation
 import java.io.File
 import java.util.LinkedHashMap
 import com.opencapture.opencine.vocabulary.fromColorMode
 import com.opencapture.opencine.vocabulary.LutLookSource
 import com.opencapture.opencine.vocabulary.LutLookResolver
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
+import com.opencapture.opencine.media.MonitorTransfer
+import com.opencapture.opencine.media.MonitorLUTCube
+import com.opencapture.opencine.media.ScopeTapPolicy
 
 private const val TAG = "OpcFeedFx"
 
-internal typealias FeedEffectsRenderPlan = com.opencapture.opencine.media.FeedEffectsRenderPlan
 
 internal object FeedEffectsRenderPlanFactory {
     fun create(
         context: Context,
-        assist: LiveAssistState,
+        assist: MonitorAssistState,
         lutSelection: String,
         colorMode: Int,
         iso: Int,
@@ -209,8 +212,8 @@ internal object FeedEffectsRenderPlanFactory {
         source: LutLookSource,
         exposureStops: Double,
         colorMode: Int,
-    ): FeedEffectsCube? {
-        val snapped = LutExposureCompensation.snap(exposureStops)
+    ): MonitorLUTCube? {
+        val snapped = MonitorLUTExposureCompensation.snap(exposureStops)
         val key =
             when (source) {
                 is LutLookSource.Asset -> "asset:${source.fileName}:$snapped:$colorMode"
@@ -250,7 +253,7 @@ internal object FeedEffectsRenderPlanFactory {
         colorMode: Int,
         iso: Int,
         rec709: Boolean,
-    ): FeedEffectsCube? {
+    ): MonitorLUTCube? {
         if (!SwiftCore.isAvailable) return null
         // 4…7 = each scale read through the official Rec.709 look (Swift `FeedEffectsWire`).
         val ordinal =
@@ -274,15 +277,15 @@ internal object FeedEffectsRenderPlanFactory {
 private object PackedCubeCache {
     private const val MAX_ENTRIES = 8
     private val cubes =
-        object : LinkedHashMap<String, FeedEffectsCube>(MAX_ENTRIES, 0.75f, true) {
+        object : LinkedHashMap<String, MonitorLUTCube>(MAX_ENTRIES, 0.75f, true) {
             override fun removeEldestEntry(
-                eldest: MutableMap.MutableEntry<String, FeedEffectsCube>?,
+                eldest: MutableMap.MutableEntry<String, MonitorLUTCube>?,
             ): Boolean = size > MAX_ENTRIES
         }
 
-    fun value(key: String, bake: () -> ByteArray?): FeedEffectsCube? =
+    fun value(key: String, bake: () -> ByteArray?): MonitorLUTCube? =
         synchronized(cubes) {
             cubes[key]
-                ?: bake()?.let(FeedEffectsCube::fromPacked)?.also { cubes[key] = it }
+                ?: bake()?.let(MonitorLUTCube::fromPacked)?.also { cubes[key] = it }
         }
 }

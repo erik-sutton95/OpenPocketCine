@@ -3,6 +3,7 @@ import OpenCineCameraControls
 import OpenCineMulticam
 import OpenPocketViewCore
 import SwiftUI
+import OpenCineMedia
 
 extension MultiviewSession {
     func controlsAvailable(for tile: Tile) -> Bool {
@@ -240,7 +241,7 @@ struct MultiviewCameraSettings: View {
     }
 
     /// The tile's own picture (color and Auto LUT), without scope or sample demand.
-    private func previewEffects(_ tile: MultiviewSession.Tile) -> LiveImageEffects {
+    private func previewEffects(_ tile: MultiviewSession.Tile) -> MonitorFrameEffects {
         var result = tile.effects
         result.inspectorSample = false
         return result

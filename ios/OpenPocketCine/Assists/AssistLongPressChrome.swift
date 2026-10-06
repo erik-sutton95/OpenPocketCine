@@ -2,6 +2,7 @@ import MonitorUI
 import OpenCineCameraControls
 import SwiftUI
 import UIKit
+import MonitorPresentation
 
 /// Shared long-press options chrome: OpenZCine `AssistPanel` menus and footers.
 enum AssistLongPressChrome {
@@ -9,7 +10,7 @@ enum AssistLongPressChrome {
 
     @MainActor
     @ViewBuilder
-    static func menu(for tool: LiveAssistTool, assist: LiveAssistState) -> some View {
+    static func menu(for tool: MonitorAssistSelection, assist: LiveAssistState) -> some View {
         switch tool {
         case .peaking:
             PeakingAssist.longPressMenu(assist: assist, palette: LiveDesign.self, haptics: .app)
@@ -41,7 +42,7 @@ enum AssistLongPressChrome {
     /// LUT's 50/50 lives here so landscape never hides it under the catalog.
     @MainActor
     @ViewBuilder
-    static func footer(for tool: LiveAssistTool, assist: LiveAssistState) -> some View {
+    static func footer(for tool: MonitorAssistSelection, assist: LiveAssistState) -> some View {
         switch tool {
         case .lut: LUTAssist.longPressFooter(assist: assist)
         default: EmptyView()
@@ -50,11 +51,11 @@ enum AssistLongPressChrome {
 }
 
 struct AssistIconFrameKey: PreferenceKey {
-    static var defaultValue: [LiveAssistTool: CGRect] = [:]
+    static var defaultValue: [MonitorAssistSelection: CGRect] = [:]
 
     static func reduce(
-        value: inout [LiveAssistTool: CGRect],
-        nextValue: () -> [LiveAssistTool: CGRect]
+        value: inout [MonitorAssistSelection: CGRect],
+        nextValue: () -> [MonitorAssistSelection: CGRect]
     ) {
         value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
@@ -63,7 +64,7 @@ struct AssistIconFrameKey: PreferenceKey {
 /// Shared leading inspector; native option views continue to own their existing
 /// bindings and persistence. Selecting a tab never enables that assist.
 struct AssistLongPressOverlay: View {
-    let tool: LiveAssistTool
+    let tool: MonitorAssistSelection
     var assist: LiveAssistState
     let anchor: CGRect
     var toolbar: CGRect = .zero
@@ -74,8 +75,8 @@ struct AssistLongPressOverlay: View {
     @State private var helpVisible = false
 
     private var portrait: Bool { viewport.height > viewport.width }
-    private var tools: [LiveAssistTool] {
-        LiveAssistTool.settingsCases.filter {
+    private var tools: [MonitorAssistSelection] {
+        MonitorAssistSelection.settingsCases.filter {
             $0.hasConfiguration && ($0 != .audioMeters || assist.cameraHasAudio)
         }
     }

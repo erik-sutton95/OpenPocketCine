@@ -103,7 +103,7 @@ enum MediaCategoryTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var opcIcon: OpcIcon {
+    var opcIcon: MonitorIcon {
         switch self {
         case .all: .layoutGrid
         case .videos: .film
@@ -135,7 +135,7 @@ enum MediaBrowserLayout: String, CaseIterable {
     case grid
     case list
 
-    var toggleIcon: OpcIcon {
+    var toggleIcon: MonitorIcon {
         switch self {
         case .grid: .layoutList
         case .list: .layoutGrid
@@ -658,7 +658,7 @@ struct MediaLibraryView: View {
                 ProgressView()
                     .tint(LiveDesign.accent)
             } else {
-                OpcIcon.film
+                MonitorIcon.film
                     .frame(width: 40, height: 40)
                     .foregroundStyle(LiveDesign.faint)
             }
@@ -824,7 +824,7 @@ private struct MediaCatalogThumbnail: View {
             if let thumbnail {
                 Image(uiImage: thumbnail).resizable().aspectRatio(contentMode: .fill)
             } else {
-                (isPhoto ? OpcIcon.image : OpcIcon.film)
+                (isPhoto ? MonitorIcon.image : MonitorIcon.film)
                     .frame(width: 28, height: 28).foregroundStyle(MonitorTheme.faint)
             }
         }

@@ -3,6 +3,7 @@ import Network
 import OpenCineCore
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -46,7 +47,7 @@ final class DJICameraSessionAdapterTests: XCTestCase {
             defer { session.disconnect() }
             let model = CameraModel.resolve(modelId: id, name: name)
             session.updateMultiview(
-                camera: FoundCamera(id: UUID(), name: name, model: model, modelId: id),
+                camera: DjiAppleSighting(id: UUID(), name: name, model: model, modelId: id),
                 driver: nil, status: CameraStatus())
             let layout = OsmoMonitorPresentation.capabilities(session)
             var expected = session.control.layout()
@@ -232,7 +233,7 @@ final class DJICameraSessionAdapterTests: XCTestCase {
         let before = session.control.current
         let receipt = session.control.setISO(.iso800)
         XCTAssertEqual(receipt.stage, .sent)
-        session.datalink = DatalinkDriver(port: 9005, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9005, tcpPoke: false, pairingToken: "")
         XCTAssertEqual(session.control.receipt(of: receipt.operation)?.stage, .outcomeUnknown)
         let stale = session.control.submit(
             CameraCommand(.set(.iso(.manual(400))), preconditions: CommandPreconditions(before)))
@@ -256,14 +257,14 @@ final class DJICameraSessionAdapterTests: XCTestCase {
     /// A session whose unopened driver admits commands without a socket.
     private func linked() -> OpenPocketCine.CameraSession {
         let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
-        session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         return session
     }
 
     private func openLoopback(_ camera: AckingCamera) async throws
-        -> (OpenPocketCine.CameraSession, DatalinkDriver)
+        -> (OpenPocketCine.CameraSession, DjiAppleDatalink)
     {
-        let driver = DatalinkDriver.loopbackForTesting(port: try await camera.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await camera.start())
         let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
         session.datalink = driver
         driver.onStatusFrame = { [weak session] frame in session?.applyIncomingStatus(frame) }
@@ -462,7 +463,7 @@ extension DJICameraSessionAdapterTests {
         defer { session.disconnect() }
         session.applyIncomingStatus(Self.recordPush(recording: false))
         let target = session.control.target
-        session.datalink = DatalinkDriver(port: 9006, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9006, tcpPoke: false, pairingToken: "")
         session.applyIncomingStatus(Self.recordPush(recording: false))
 
         let receipt = session.control.shutter(aimedAt: target)
@@ -519,7 +520,7 @@ extension DJICameraSessionAdapterTests {
         model.session.phase = .live
         model.session.applyIncomingStatus(Self.recordPush(recording: false))
         let approved = model.watcherRecordContext
-        model.session.datalink = DatalinkDriver(port: 9007, tcpPoke: false, pairingToken: "")
+        model.session.datalink = DjiAppleDatalink(port: 9007, tcpPoke: false, pairingToken: "")
         model.session.applyIncomingStatus(Self.recordPush(recording: false))
         XCTAssertNotEqual(approved, model.watcherRecordContext, "A new link dismisses the prompt")
         let receipt = model.session.control.record(start: true, aimedAt: approved.target)

@@ -1,10 +1,12 @@
 import CoreFoundation
 import Darwin
 import Foundation
+import struct OpenCineCore.SavedCamera
 import OpenCineCameraControls
 import OpenPocketViewCore
 import UIKit
 import os
+import MonitorPresentation
 
 /// Debug-only live-feed stress seam. Release is a no-op. No operator chrome.
 ///
@@ -732,7 +734,7 @@ enum FeedStressAutomation {
                     session.control.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
                 }
             }
-            let wanted: [(LiveAssistTool, Bool)] = [
+            let wanted: [(MonitorAssistSelection, Bool)] = [
                 (.peaking, baseline.peaking),
                 (.falseColor, baseline.falseColor),
                 (.waveform, baseline.waveform),

@@ -4,6 +4,7 @@ import MonitorUI
 import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
+import OpenCineDJIApple
 
 struct MultiviewView: View {
     @Environment(AppModel.self) private var model
@@ -15,7 +16,7 @@ struct MultiviewView: View {
     private let reviewPictures: Bool
     @State private var adding: MultiviewSession.Tile?
     @State private var showNetwork = false
-    @State private var selectedCamera: FoundCamera?
+    @State private var selectedCamera: DjiAppleSighting?
     @State private var showLeave = false
     @State private var liveTile: MultiviewSession.Tile?
     @State private var settingsTile: MultiviewSession.Tile?
@@ -270,7 +271,7 @@ struct MultiviewView: View {
         }
     }
 
-    private var availableCameras: [FoundCamera] {
+    private var availableCameras: [DjiAppleSighting] {
         session.found.filter { camera in
             camera.appearsInMultiview
                 && !session.tiles.contains { $0.camera?.id == camera.id }

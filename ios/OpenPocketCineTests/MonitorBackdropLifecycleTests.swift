@@ -4,6 +4,7 @@ import MonitorPresentation
 import MonitorUI
 import OpenPocketViewCore
 import XCTest
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -326,7 +327,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
     private func makeSource(buffer: CVPixelBuffer? = nil) throws -> MonitorVideoBackdropSource {
         let rect = CGRect(x: 0, y: 0, width: 8, height: 8)
         return MonitorVideoBackdropSource(
-            buffer: try buffer ?? makeBuffer(), effects: LiveImageEffects(), frame: rect, clip: rect
+            buffer: try buffer ?? makeBuffer(), effects: MonitorFrameEffects(), frame: rect, clip: rect
         )
     }
 
@@ -438,7 +439,7 @@ final class MonitorBackdropLifecycleTests: XCTestCase {
         let zoom = MonitorVideoBackdropSource.fittedFrame(
             aspect: 2, in: rect, zoom: 2, offset: CGSize(width: 20, height: -10))
         XCTAssertEqual(zoom, CGRect(x: -30, y: 190, width: 600, height: 300))
-        var effects = LiveImageEffects()
+        var effects = MonitorFrameEffects()
         effects.desqueezeFactor = 2
         let stretched = MonitorVideoBackdropSource.displayedFrame(
             sourceAspect: 2, effects: effects, in: rect, fill: true)

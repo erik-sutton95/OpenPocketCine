@@ -35,6 +35,7 @@ import kotlin.test.assertTrue
 import kotlin.math.min
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.opencapture.monitorui.LiveMonitorLayout
 
 /** Production editor lifecycle and accessibility actions, without sending camera commands. */
 @RunWith(AndroidJUnit4::class)

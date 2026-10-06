@@ -18,7 +18,7 @@ import com.opencapture.opencine.cameracontrols.formatAppVersion
 import com.opencapture.openpocketcine.assists.AppAssistHost
 import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
-import com.opencapture.openpocketcine.feed.FeedUpscaler
+import com.opencapture.opencine.runtime.MonitorGlesUpscaler
 import com.opencapture.openpocketcine.lut.LUTPicker
 import com.opencapture.openpocketcine.settings.PanelCloseButton
 import java.io.File
@@ -73,9 +73,9 @@ internal fun operatorSetupApp(model: AppModel) = OperatorSetupApp(
     assistHost = AppAssistHost,
     mediaCache = OperatorMediaCache,
     clearMediaCache = { model.clearOperatorMediaCache() },
-    upscalers = FeedUpscaler.supported.map { it.label },
+    upscalers = MonitorGlesUpscaler.supported.map { it.label },
     upscaler = { OperatorPrefs.feedUpscaler(it).label },
-    setUpscaler = { context, label -> OperatorPrefs.setFeedUpscaler(context, FeedUpscaler.fromStored(label)) },
+    setUpscaler = { context, label -> OperatorPrefs.setFeedUpscaler(context, MonitorGlesUpscaler.fromStored(label)) },
     linkSample = {
         val session = model.session
         OperatorLinkSample(session.decoder.framesEnqueued.get(), session.decoder.lastPresentedAt,

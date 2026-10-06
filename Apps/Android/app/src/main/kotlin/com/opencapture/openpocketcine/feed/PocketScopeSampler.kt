@@ -1,8 +1,10 @@
 package com.opencapture.openpocketcine.feed
 
 import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+import com.opencapture.opencine.media.ScopeAssistBundle
+import com.opencapture.opencine.media.MonitorTransfer
+import com.opencapture.opencine.media.MonitorLUTCube
 
-typealias ScopeAssistBundle = com.opencapture.opencine.media.ScopeAssistBundle
 
 object PocketScopeSampler {
     const val MAX_WIDTH = com.opencapture.opencine.media.ScopeSampler.MAX_WIDTH

@@ -75,7 +75,7 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
                 }))
             let peer = ConnectionDonorPeer(cached: true)
             guard await peer.admitExistingConnection(session) else { return }
-            let driver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+            let driver = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
             defer {
                 session.disconnect(); driver.close(); session.decoder.close()
                 withExtendedLifetime(peer) {}
@@ -156,7 +156,7 @@ final class MediaLiveRecoveryOwnershipTests: XCTestCase {
 
     func testRepeatedMediaReturnWithoutDriverClearsTheCanceledPendingOwner() {
         let session = CameraSession(borrowing: HevcDecoder())
-        let driver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        let driver = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         session.datalink = driver
         session.endMediaBrowse()
         let pending = session.cameraMedia.resumeLiveTask

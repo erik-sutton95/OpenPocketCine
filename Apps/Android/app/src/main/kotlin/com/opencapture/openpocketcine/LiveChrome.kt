@@ -83,6 +83,10 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import java.util.Locale
 import com.opencapture.monitorui.MonitorIcon
+import com.opencapture.monitorui.LivePopupPlacement
+import com.opencapture.monitorui.LiveChromeMetrics
+import com.opencapture.monitorui.LiveMonitorLayout
+import com.opencapture.monitorui.MonitorRect
 
 val ChromeShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
@@ -104,11 +108,11 @@ fun Modifier.chromePressable(enabled: Boolean = true): Modifier {
         .then(Modifier)
 }
 
-fun Modifier.liveModuleFrame(rect: ChromeRect): Modifier =
+fun Modifier.liveModuleFrame(rect: MonitorRect): Modifier =
     offset(rect.x.dp, rect.y.dp).size(rect.width.dp, rect.height.dp)
 
 /** Occupies [rect] and seats wrapping chrome (InfoPill, capture strip) like iOS `alignment`. */
-fun Modifier.liveModuleFrame(rect: ChromeRect, alignment: Alignment): Modifier {
+fun Modifier.liveModuleFrame(rect: MonitorRect, alignment: Alignment): Modifier {
     val vertical =
         when (alignment) {
             Alignment.TopStart, Alignment.TopCenter, Alignment.TopEnd -> Alignment.Top
@@ -177,7 +181,7 @@ fun CaptureStripShell(modifier: Modifier = Modifier, content: @Composable RowSco
  */
 @Composable
 fun LiveBottomChromeBand(
-    band: ChromeRect,
+    band: MonitorRect,
     showAssist: Boolean,
     showCapture: Boolean,
     modifier: Modifier = Modifier,
@@ -227,11 +231,7 @@ fun LiveBottomChromeBand(
     }
 }
 
-typealias LiveChromeMetrics = com.opencapture.monitorui.LiveChromeMetrics
-typealias LivePopupPlacement = com.opencapture.monitorui.LivePopupPlacement
-typealias LiveMonitorLayout = com.opencapture.monitorui.LiveMonitorLayout
 
-typealias ChromeRect = com.opencapture.monitorui.MonitorRect
 
 internal object LiveSessionBridge {
     fun call(target: Any, name: String, vararg args: Any?): Boolean {

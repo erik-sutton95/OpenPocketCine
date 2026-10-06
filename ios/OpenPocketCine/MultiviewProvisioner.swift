@@ -1,9 +1,10 @@
 import Foundation
 import OpenPocketViewCore
+import OpenCineDJIApple
 
 /// One camera owns one BLE link, sequence space, reply router and keepalive.
 @MainActor final class MultiviewProvisioner {
-    private let ble = BleLink(allowsConcurrentCameras: true, host: .pocket)
+    private let ble = DjiAppleBluetoothLink(allowsConcurrentCameras: true, host: .pocket)
     private var router: Task<Void, Never>?
     private var keepalive: Task<Void, Never>?
     private var replies: [UInt16: Duml.Frame] = [:]
@@ -38,7 +39,7 @@ import OpenPocketViewCore
         }
         throw MultiviewSession.Failure.timeout
     }
-    func connect(_ camera: FoundCamera, pairingTimeout: TimeInterval = 90) async throws {
+    func connect(_ camera: DjiAppleSighting, pairingTimeout: TimeInterval = 90) async throws {
         let powerDeadline = Date().addingTimeInterval(8)
         while !ble.isPoweredOn && Date() < powerDeadline {
             guard !closed else { throw CancellationError() }
@@ -144,7 +145,7 @@ extension MultiviewProvisioner {
     /// caller cancels. `07/48 00` then returns the camera to its own Wi-Fi on the same link,
     /// even after cancellation. The caller stamps the role change first.
     static func scanNetworks(
-        _ camera: FoundCamera, rounds: Int = 4,
+        _ camera: DjiAppleSighting, rounds: Int = 4,
         beforeStationChange: @escaping @MainActor () throws -> Void = {},
         onRestored: @escaping @MainActor (Bool) -> Void = { _ in },
         onFound: @escaping @MainActor (String) -> Void

@@ -13,7 +13,7 @@ import UIKit
 // MARK: - Shared chrome
 
 struct MediaCircleIconButton: View {
-    let icon: OpcIcon
+    let icon: MonitorIcon
     var size: CGFloat = 34
 
     var body: some View {
@@ -199,8 +199,8 @@ struct MediaPhotoViewer: View {
         }
     }
 
-    private var photoEffects: LiveImageEffects {
-        var effects = LiveImageEffects()
+    private var photoEffects: MonitorFrameEffects {
+        var effects = MonitorFrameEffects()
         effects.desqueezeFactor =
             model.assist.isPlaybackVisible(.desqueeze)
             ? model.assist.desqueezeFactor : 1
@@ -235,7 +235,7 @@ struct MediaPhotoViewer: View {
     private var photoDesqueezeOptions: some View {
         GeometryReader { geo in
             MonitorInspector(
-                title: LiveAssistTool.desqueeze.title, viewport: geo.size,
+                title: MonitorAssistSelection.desqueeze.title, viewport: geo.size,
                 safeArea: LiveMonitorLayout.resolvedSafeArea(
                     geo.safeAreaInsets, scene: windowGeometry.safeArea),
                 helpVisible: $desqueezeHelp,
@@ -271,7 +271,7 @@ struct MediaPhotoViewer: View {
         return Button {
             session.toggleFavorite(file)
         } label: {
-            OpcIcon.star.view(filled: favorite)
+            MonitorIcon.star.view(filled: favorite)
                 .frame(width: 17, height: 17)
                 .foregroundStyle(favorite ? LiveDesign.accent : LiveDesign.text)
                 .frame(width: 34, height: 34)
@@ -760,7 +760,7 @@ struct MediaPlayerView: View {
         -> some View
     {
         @Bindable var model = model
-        let tools = LiveAssistTool.toolbarCases + [.audioMeters]
+        let tools = MonitorAssistSelection.toolbarCases + [.audioMeters]
         let (metrics, frame) = MonitorAssistPaletteLayout.fieldMonitor(
             presentation, toolCount: tools.count, safeTop: safeTop)
         return MonitorAssistPalette(
@@ -772,13 +772,13 @@ struct MediaPlayerView: View {
             layout: metrics, usageSeed: MonitorToolUsage.fieldMonitorSeed,
             usage: $model.assistToolUsage, expanded: expanded,
             onToggle: { id in
-                if let tool = LiveAssistTool(rawValue: id) { model.assist.togglePlayback(tool) }
+                if let tool = MonitorAssistSelection(rawValue: id) { model.assist.togglePlayback(tool) }
             },
             onOptions: { id in
-                if let tool = LiveAssistTool(rawValue: id) { presentPlaybackAssistOptions(tool) }
+                if let tool = MonitorAssistSelection(rawValue: id) { presentPlaybackAssistOptions(tool) }
             },
             icon: { id in
-                if let tool = LiveAssistTool(rawValue: id) {
+                if let tool = MonitorAssistSelection(rawValue: id) {
                     AssistToolIcon(tool: tool, size: nil)
                 }
             }
@@ -801,7 +801,7 @@ struct MediaPlayerView: View {
         }
     }
 
-    private func presentPlaybackAssistOptions(_ tool: LiveAssistTool) {
+    private func presentPlaybackAssistOptions(_ tool: MonitorAssistSelection) {
         model.assist.longPressAnchor = playbackAssistToolbarFrame
         model.assist.configureTool = tool
         if tool == .lut { model.assist.showLUTPicker = false }

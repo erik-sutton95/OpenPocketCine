@@ -5,6 +5,7 @@ import com.opencapture.opencine.runtime.GpuLiveLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.opencapture.monitorui.MonitorRect
 
 /** Pure-JVM checks of the hardware glass gate. No runtime demote. */
 class GlassTierTest {
@@ -67,7 +68,7 @@ class GlassTierTest {
         assertEquals(600, fill.height)
 
         val wellH = 390f * 16f / 9f
-        val content = portraitFillCropContent(ChromeRect(0f, 0f, 390f, wellH))
+        val content = portraitFillCropContent(MonitorRect(0f, 0f, 390f, wellH))
         val portrait = requireNotNull(liveFeedContentRect(390f, wellH, 1_280, 720, aspectFill = true))
         assertTrue(portrait.left < 0)
         assertEquals(wellH.toInt(), portrait.height)

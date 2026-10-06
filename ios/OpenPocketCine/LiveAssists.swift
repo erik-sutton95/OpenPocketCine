@@ -9,9 +9,7 @@ import SwiftUI
 import UIKit
 
 /// Cinema live-monitor set. MAG is retired; PLAY stays off the video toolbar.
-typealias LiveAssistTool = MonitorAssistSelection
 
-typealias GuideAspect = MonitorGuideAspect
 
 /// This app's LUT looks: its official cubes, saved choices and custom LUT folder.
 extension MonitorLUTLooks {
@@ -31,7 +29,7 @@ extension MonitorAssistState where Looks == MonitorLUTLooks {
             keys: .init(
                 assist: "OpenPocketCine.Assist.v1", cleanPins: "OpenPocketCine.CleanViewPins.v1",
                 playback: "OpenPocketCine.PlaybackAssists.v1"),
-            cleanPinCases: LiveAssistTool.cleanPinCases,
+            cleanPinCases: MonitorAssistSelection.cleanPinCases,
             onToggle: { tool, enabled in
                 guard tool == .falseColor, enabled, let state else { return }
                 PocketFalseColorMap.warm(
@@ -247,12 +245,12 @@ enum OperatorPrefs {
             curve: virtualJoystickResponseCurve)
     }
 
-    static var dispLive: PocketDispChrome {
+    static var dispLive: MonitorDisplayChrome {
         get { display.live }
         set { display.live = newValue }
     }
 
-    static var dispClean: PocketDispChrome {
+    static var dispClean: MonitorDisplayChrome {
         get { display.clean }
         set { display.clean = newValue }
     }
@@ -297,11 +295,11 @@ enum OperatorPrefs {
         set { UserDefaults.standard.set(newValue, forKey: nativeISOHopKey) }
     }
 
-    static var playbackVisibleAssistTools: Set<LiveAssistTool> {
+    static var playbackVisibleAssistTools: Set<MonitorAssistSelection> {
         get {
             guard let raw = UserDefaults.standard.array(forKey: playbackAssistsKey) as? [String]
             else { return [] }
-            return Set(raw.compactMap(LiveAssistTool.init(rawValue:)))
+            return Set(raw.compactMap(MonitorAssistSelection.init(rawValue:)))
         }
         set {
             UserDefaults.standard.set(newValue.map(\.rawValue).sorted(), forKey: playbackAssistsKey)
@@ -309,16 +307,16 @@ enum OperatorPrefs {
     }
 
     /// Absent key = never pinned, so the stock set. Stored empty = operator cleared every pin.
-    static var cleanViewPinnedTools: Set<LiveAssistTool> {
+    static var cleanViewPinnedTools: Set<MonitorAssistSelection> {
         get {
             guard let raw = UserDefaults.standard.array(forKey: cleanPinsKey) as? [String] else {
                 return LiveAssistState.cleanViewDefaultPinnedTools
             }
-            let allowed = Set(LiveAssistTool.cleanPinCases)
-            return Set(raw.compactMap(LiveAssistTool.init(rawValue:))).intersection(allowed)
+            let allowed = Set(MonitorAssistSelection.cleanPinCases)
+            return Set(raw.compactMap(MonitorAssistSelection.init(rawValue:))).intersection(allowed)
         }
         set {
-            let ordered = LiveAssistTool.cleanPinCases.filter { newValue.contains($0) }.map(
+            let ordered = MonitorAssistSelection.cleanPinCases.filter { newValue.contains($0) }.map(
                 \.rawValue)
             UserDefaults.standard.set(ordered, forKey: cleanPinsKey)
         }
@@ -415,7 +413,7 @@ struct FeedLevelView: View {
 
 /// OpenZCine `FalseColorReference` on the live feed.
 struct FalseColorLegend: View {
-    var scale: FalseColorScaleKind
+    var scale: MonitorFalseColorSelection
     var colorMode: ColorMode = .normal
     var rec709: Bool
     var clipByte: Int
@@ -436,7 +434,7 @@ struct AssistToolRow: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(LiveAssistTool.settingsCases) { tool in
+                ForEach(MonitorAssistSelection.settingsCases) { tool in
                     Button {
                         guard !isLocked else { return }
                         assist.toggle(tool)
@@ -461,7 +459,7 @@ struct AssistToolRow: View {
 }
 
 struct AssistToolChip: View {
-    let tool: LiveAssistTool
+    let tool: MonitorAssistSelection
     let isOn: Bool
     var compact = false
 
@@ -490,7 +488,7 @@ struct AssistToolChip: View {
 }
 
 struct AssistToolIcon: View {
-    let tool: LiveAssistTool
+    let tool: MonitorAssistSelection
     /// Shared palettes supply their own size; legacy standalone chips keep 19 points.
     var size: CGFloat? = 19
 

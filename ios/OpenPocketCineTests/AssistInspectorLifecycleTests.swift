@@ -2,6 +2,8 @@ import CoreImage
 import CoreVideo
 import SwiftUI
 import XCTest
+import OpenCineApple
+import MonitorPresentation
 
 @testable import OpenPocketCine
 
@@ -24,7 +26,7 @@ final class AssistInspectorLifecycleTests: XCTestCase {
             CIContext().createCGImage(
                 CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1)),
                 from: CGRect(x: 0, y: 0, width: 1, height: 1)))
-        let renderer = AssistInspectorImageRenderer(
+        let renderer = MonitorInspectorImageRenderer(
             now: { clock.now },
             operation: { _, _ in
                 let invocation = work.begin()
@@ -161,7 +163,7 @@ final class AssistInspectorLifecycleTests: XCTestCase {
             window.isHidden = true
             window.rootViewController = nil
         }
-        let tools = LiveAssistTool.settingsCases.filter(\.hasConfiguration)
+        let tools = MonitorAssistSelection.settingsCases.filter(\.hasConfiguration)
         for cycle in 0..<12 {
             for tool in tools {
                 model.assist.configureTool = tool
@@ -221,7 +223,7 @@ private final class InspectorLifecycleWorkProbe: @unchecked Sendable {
 
 @MainActor
 private final class InspectorLifecycleProbe {
-    var selected: LiveAssistTool?
+    var selected: MonitorAssistSelection?
     var mounts = 0
     var onAppear: (() -> Void)?
     var onDisappear: (() -> Void)?

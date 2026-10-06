@@ -6,6 +6,7 @@ import OpenCineCameraControls
 import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
+import OpenCineMedia
 
 /// Live HEVC feed with OpenZCine landscape chrome. Video and chrome are **siblings**:
 /// the feed is an explicit 16:9 well; chrome is a physical-screen overlay (`ignoresSafeArea`).
@@ -21,7 +22,7 @@ struct LiveViewScreen: View {
     @State private var topMenu: LiveTopMenu?
     @State private var topPickerFrames: [LiveTopMenu: CGRect] = [:]
     @State private var captureTileFrames: [CaptureSheet: CGRect] = [:]
-    @State private var assistIconFrames: [LiveAssistTool: CGRect] = [:]
+    @State private var assistIconFrames: [MonitorAssistSelection: CGRect] = [:]
     @State private var zoomDialVisible = false
     @State private var zoomDialMounted = false
     @State private var zoomDismissTask: Task<Void, Never>?
@@ -31,7 +32,7 @@ struct LiveViewScreen: View {
 
     /// OpenZCine `DisplayChromeVisibility.cleanDefaults`: status + strips + lock off;
     /// batteries, rail (DISP / record / media / settings) stay. Lock remounts while locked.
-    private var editingMode: PocketDispMode? { model.chromeEditorMode }
+    private var editingMode: MonitorDisplayMode? { model.chromeEditorMode }
     private var chromeInteractive: Bool { !model.isEditingChrome }
     private var liveChromeVisible: Bool { model.liveOperatorPanel == nil || model.isEditingChrome }
     private var showsStatusBar: Bool { model.chromeSectionMounts(.statusBar) }
@@ -230,7 +231,7 @@ struct LiveViewScreen: View {
             model.session.decoder.attach(
                 sampleBus: app.frameSamples,
                 effects: { [weak app] in
-                    guard let app else { return LiveImageEffects() }
+                    guard let app else { return MonitorFrameEffects() }
                     return app.assist.effects.withFaceAF(app.session.wantsFaceAF)
                 },
                 transfer: { [weak app] in
@@ -459,7 +460,7 @@ struct LiveViewScreen: View {
                         avoiding: model.chromeSectionMounts(.toolBar)
                             ? FieldMonitorAssistPalette.visibleFrame(
                                 in: layout,
-                                toolCount: LiveAssistTool.toolbarCases.count
+                                toolCount: MonitorAssistSelection.toolbarCases.count
                                     + (status.isPhoto ? 0 : 1),
                                 expanded: assistsExpanded || assistsRevealing) : nil
                     )
@@ -797,7 +798,7 @@ struct LiveViewScreen: View {
 
     /// Live icon frame while the popup is open — a snapshot at long-press
     /// stays on the old side when the phone rolls landscape-left ↔ right.
-    private func liveAssistAnchor(for tool: LiveAssistTool) -> CGRect {
+    private func liveAssistAnchor(for tool: MonitorAssistSelection) -> CGRect {
         if let frame = assistIconFrames[tool], frame.width > 1 { return frame }
         return model.assist.longPressAnchor
     }
@@ -845,7 +846,7 @@ struct LiveViewScreen: View {
 private struct LiveFeedPane: View {
     @Environment(AppModel.self) private var model
 
-    private var liveEffects: LiveImageEffects {
+    private var liveEffects: MonitorFrameEffects {
         var fx = model.assist.effects.withFaceAF(model.session.wantsFaceAF)
         fx.mirror = model.assist.mirrorsHorizontally
         return fx

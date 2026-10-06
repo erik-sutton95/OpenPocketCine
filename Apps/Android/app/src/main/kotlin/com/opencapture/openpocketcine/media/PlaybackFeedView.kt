@@ -19,8 +19,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.opencapture.opencine.media.MonitorPlaybackItemToken
-import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
+import com.opencapture.opencine.runtime.InspectorPreviewPipeline
+import com.opencapture.opencine.runtime.ScopeSampleBus
+import com.opencapture.monitorui.MonitorPlaybackZoom
 
 /**
  * Playback present path: ExoPlayer writes an OES surface, GLES grades LUT /

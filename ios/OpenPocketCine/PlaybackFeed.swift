@@ -28,7 +28,7 @@ final class PlaybackFeedHostView: OpenCineApple.MonitorPlaybackFeedHost {
 }
 
 /// A complete value projection at the native seam; it owns no sampling or presentation workflow.
-extension LiveImageEffects {
+extension MonitorFrameEffects {
     var playbackFrameEffects: MonitorFrameEffects {
         var value = MonitorFrameEffects()
         value.peaking = peaking
@@ -83,7 +83,7 @@ extension LiveImageEffects {
         return value
     }
 
-    private func playbackPaint(_ paint: ZebraPaint) -> MonitorZebraPaint {
+    private func playbackPaint(_ paint: MonitorZebraPaint) -> MonitorZebraPaint {
         switch paint {
         case .white: .white
         case .amber: .amber

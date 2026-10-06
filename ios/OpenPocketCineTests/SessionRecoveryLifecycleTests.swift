@@ -56,7 +56,7 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
     }
 
     func testActualNativeEndpointReportsUnknownTimesAndDoesNotReopenClosedDatalink() {
-        let driver = DatalinkDriver(port: 9, tcpPoke: false, pairingToken: "")
+        let driver = DjiAppleDatalink(port: 9, tcpPoke: false, pairingToken: "")
         let endpoint = DjiAppleHeartbeatEndpoint(datalink: driver)
         let observed = endpoint.transport()
         XCTAssertNil(observed.lastVideoAt)
@@ -129,18 +129,18 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
     }
 
     func testBluetoothPowerWaitEndsOnCancellationAndTimeout() async {
-        let task = Task { await BleLink.waitForPower(timeout: .seconds(30)) { false } }
+        let task = Task { await DjiAppleBluetoothLink.waitForPower(timeout: .seconds(30)) { false } }
         task.cancel()
         let canceled = await task.value
         XCTAssertFalse(canceled)
-        let timeout = await BleLink.waitForPower(timeout: .zero) { false }
+        let timeout = await DjiAppleBluetoothLink.waitForPower(timeout: .zero) { false }
         XCTAssertFalse(timeout)
-        let ready = await BleLink.waitForPower(timeout: .zero) { true }
+        let ready = await DjiAppleBluetoothLink.waitForPower(timeout: .zero) { true }
         XCTAssertTrue(ready)
         // An open Bluetooth prompt does not spend the wait; Allow after it still pairs.
         let clock = ContinuousClock()
         let answeredAt = clock.now.advanced(by: .milliseconds(400))
-        let allowedLate = await BleLink.waitForPower(
+        let allowedLate = await DjiAppleBluetoothLink.waitForPower(
             timeout: .milliseconds(100), isPoweredOn: { clock.now >= answeredAt },
             awaitingPrompt: { clock.now < answeredAt })
         XCTAssertTrue(allowedLate)
@@ -149,7 +149,7 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
     func testHotspotCallbackCancellationIgnoresLateSuccess() async {
         var callback: ((Result<Void, Error>) -> Void)?
         let task = Task {
-            try await WiFiJoiner.awaitCallback(timeout: .seconds(30)) { callback = $0 }
+            try await DjiAppleWiFiJoiner.awaitCallback(timeout: .seconds(30)) { callback = $0 }
         }
         while callback == nil { await Task.yield() }
         task.cancel()
@@ -165,9 +165,9 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
 
     func testHotspotCallbackTimeoutDoesNotRequireOSCompletion() async {
         do {
-            let _: Void = try await WiFiJoiner.awaitCallback(timeout: .zero) { _ in }
+            let _: Void = try await DjiAppleWiFiJoiner.awaitCallback(timeout: .zero) { _ in }
             XCTFail("A missing OS callback must exhaust its deadline")
-        } catch WiFiJoiner.JoinError.timedOut {
+        } catch DjiAppleWiFiJoiner.JoinError.timedOut {
             // The system did not call back and the app can offer another attempt.
         } catch {
             XCTFail("Unexpected error: \(error)")
@@ -242,7 +242,7 @@ final class SessionRecoveryLifecycleTests: XCTestCase {
         peer.recoveryClock = clock
         let session = await peer.establishedRecoverySession(clock: clock)
         let decoder = session.decoder
-        let failedDriver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        let failedDriver = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         defer { session.disconnect(); clock.cancelAll(); failedDriver.close(); decoder.close() }
         decoder.effects.histogram = true
         decoder.unlockHardwareDecoder()

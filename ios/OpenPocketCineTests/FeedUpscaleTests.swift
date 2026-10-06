@@ -5,33 +5,33 @@ import XCTest
 
 final class FeedUpscaleTests: XCTestCase {
     func testOfferedUpscalersAreRunnableAndTheDefaultIsTheFastFloor() {
-        let offered = FeedUpscaler.supportedOnThisDevice
+        let offered = MonitorUpscaler.supportedOnThisDevice
         XCTAssertTrue(offered.contains(.off))
         XCTAssertTrue(offered.contains(.lanczos))
         #if targetEnvironment(simulator)
             XCTAssertEqual(offered, [.off, .lanczos])
         #endif
         // The fast floor is the default even where better upscalers exist.
-        XCTAssertEqual(FeedUpscaler.supported(or: nil), .lanczos)
-        XCTAssertTrue(FeedUpscaler.supported(or: nil).isSupportedOnThisDevice)
-        XCTAssertEqual(FeedUpscaler.supported(or: .lanczos), .lanczos)
-        XCTAssertEqual(FeedUpscaler.lanczos.rawValue, "Fast")
+        XCTAssertEqual(MonitorUpscaler.supported(or: nil), .lanczos)
+        XCTAssertTrue(MonitorUpscaler.supported(or: nil).isSupportedOnThisDevice)
+        XCTAssertEqual(MonitorUpscaler.supported(or: .lanczos), .lanczos)
+        XCTAssertEqual(MonitorUpscaler.lanczos.rawValue, "Fast")
         for upscaler in offered {
             XCTAssertTrue(
                 upscaler.isSupportedOnThisDevice, "\(upscaler) is offered but not runnable")
             XCTAssertEqual(
-                FeedUpscaler.supported(or: upscaler), upscaler,
+                MonitorUpscaler.supported(or: upscaler), upscaler,
                 "\(upscaler) is runnable, so a stored choice keeps it")
         }
-        for upscaler in FeedUpscaler.allCases {
+        for upscaler in MonitorUpscaler.allCases {
             XCTAssertTrue(
-                FeedUpscaler.supported(or: upscaler).isSupportedOnThisDevice,
+                MonitorUpscaler.supported(or: upscaler).isSupportedOnThisDevice,
                 "a stored \(upscaler) this device cannot run resolves to one it can")
         }
     }
 
     func testSuperResolutionShrinksABakeThatOutsizesTheProcessor() {
-        let input = FeedUpscaler.superResolutionInputSize(
+        let input = MonitorUpscaler.superResolutionInputSize(
             source: (1_024, 576), target: (2_347, 1_320), scale: 0, maximum: (960, 960))
         XCTAssertEqual(input.width, 960)
         XCTAssertEqual(input.height, 540)
@@ -40,14 +40,14 @@ final class FeedUpscaleTests: XCTestCase {
     }
 
     func testSuperResolutionLeavesASourceInsideTheLimitAlone() {
-        let input = FeedUpscaler.superResolutionInputSize(
+        let input = MonitorUpscaler.superResolutionInputSize(
             source: (640, 480), target: (1_280, 960), scale: 2, maximum: (960, 960))
         XCTAssertEqual(input.width, 640)
         XCTAssertEqual(input.height, 480)
     }
 
     func testSuperResolutionShrinksToWhicheverDimensionBindsFirst() {
-        let input = FeedUpscaler.superResolutionInputSize(
+        let input = MonitorUpscaler.superResolutionInputSize(
             source: (1_000, 2_000), target: (4_000, 8_000), scale: 0, maximum: (1_440, 1_080))
         XCTAssertEqual(input.height, 1_080)
         XCTAssertEqual(input.width, 540)

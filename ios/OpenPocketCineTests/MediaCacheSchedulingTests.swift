@@ -2,6 +2,7 @@ import Foundation
 import OpenPocketViewCore
 import XCTest
 import os
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -56,7 +57,7 @@ final class MediaCacheSchedulingTests: XCTestCase {
         configuration.protocolClasses = [StreamingProxyProtocol.self]
         let cache = CameraMedia(fileManager: manager, httpConfiguration: configuration)
         let session = CameraSession(borrowing: HevcDecoder(), cameraMedia: cache)
-        session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         session.phase = .live
         defer { session.disconnect() }
         var file = MediaFile(path: "DCIM/DJI_001/DJI_STREAM.MP4", thumbPath: "STREAM.scr")
@@ -101,7 +102,7 @@ final class MediaCacheSchedulingTests: XCTestCase {
         configuration.protocolClasses = [StreamingProxyProtocol.self]
         let cache = CameraMedia(fileManager: manager, httpConfiguration: configuration)
         let session = CameraSession(borrowing: HevcDecoder(), cameraMedia: cache)
-        session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
         session.phase = .live
         defer { session.disconnect() }
         let file = MediaFile(path: "DCIM/DJI_001/DJI_CANCEL.MP4", thumbPath: "CANCEL.scr")

@@ -28,11 +28,11 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.MonitorGlass
-import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
-import com.opencapture.openpocketcine.feed.LiveScopeSampleBus
-import com.opencapture.openpocketcine.feed.MonitorTransfer
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
+import com.opencapture.opencine.runtime.ScopeSampleBus
+import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.openpocketcine.feed.PocketScopeSampler
-import com.opencapture.openpocketcine.feed.ScopeAssistBundle
+import com.opencapture.opencine.media.ScopeAssistBundle
 import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
 import com.opencapture.openpocketcine.resolveTier
 import kotlinx.coroutines.delay
@@ -90,7 +90,7 @@ fun BoxScope.PlaybackDarkenedBars(
 @Composable
 internal fun PlaybackFrameSample(
     textureView: TextureView,
-    scopeBus: LiveScopeSampleBus,
+    scopeBus: ScopeSampleBus,
     enabled: Boolean,
     plan: FeedEffectsRenderPlan,
     colorMode: Int,
@@ -226,7 +226,7 @@ private fun publishPlaybackScopeTap(
     previous: ScopeAssistBundle,
     source: com.opencapture.opencine.runtime.ScopeSampleBus.Source,
     ceiling: ScopeExposureCeiling,
-    scopeBus: LiveScopeSampleBus,
+    scopeBus: ScopeSampleBus,
 ): ScopeAssistBundle {
     val tapW = src.width
     val tapH = src.height

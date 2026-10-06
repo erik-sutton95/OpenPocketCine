@@ -10,7 +10,7 @@ struct LiveTrackingCancelButton: View {
         Button {
             model.session.cancelSubjectTracking()
         } label: {
-            OpcIcon.x
+            MonitorIcon.x
                 .frame(width: 11, height: 11)
                 .foregroundStyle(LiveDesign.background)
                 .frame(

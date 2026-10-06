@@ -64,7 +64,7 @@ import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.monitorui.MonitorIcon
-import com.opencapture.openpocketcine.feed.InspectorPreviewPipeline
+import com.opencapture.opencine.runtime.InspectorPreviewPipeline
 
 internal fun multiviewSettingsCategories(camera: CameraModel, status: CameraStatus): List<LiveSheet> = buildList {
     addAll(listOf(LiveSheet.ISO, LiveSheet.SHUTTER, LiveSheet.EXPO, LiveSheet.WB))

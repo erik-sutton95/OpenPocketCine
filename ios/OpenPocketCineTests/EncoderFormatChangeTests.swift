@@ -1,6 +1,7 @@
 import OpenCineApple
 import OpenPocketViewCore
 import XCTest
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -75,7 +76,7 @@ final class EncoderFormatChangeTests: XCTestCase {
     func testWatchDemandStartsOneDecoderWithoutAssistsAndSurvivesReset() throws {
         let sets = Self.annexB([Self.vps, Self.sps, Self.pps])
         let control = HevcDecoder()
-        control.effects = LiveImageEffects()
+        control.effects = MonitorFrameEffects()
         _ = control.decode(accessUnit: sets)
         XCTAssertEqual(control.vtRebuildCount, 0, "Unpaired identity keeps its existing path")
 
@@ -85,7 +86,7 @@ final class EncoderFormatChangeTests: XCTestCase {
         try XCTSkipUnless(capability.vtRebuildCount == 1, "no VT HEVC decoder on this host")
 
         let decoder = HevcDecoder()
-        decoder.effects = LiveImageEffects()
+        decoder.effects = MonitorFrameEffects()
         decoder.needsWatchPreview = true
         var enables = 0
         decoder.onHandoffNeedsIDR = { enables += 1 }

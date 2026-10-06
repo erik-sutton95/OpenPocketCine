@@ -29,6 +29,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.opencapture.monitorui.MonitorRect
 
 /** Real pointer delivery through the production backdrop and floating-window gesture. */
 @RunWith(AndroidJUnit4::class)
@@ -61,7 +62,7 @@ class MonitorMotionInputTest {
                                 Rect(0f, 0f, 320f, 600f), Rect(200f, 350f, 300f, 450f),
                                 onDismiss = { dismissals++ },
                             )
-                            GimbalFloatMove(app, 160f, 80f, ChromeRect(0f, 0f, 320f, 600f),
+                            GimbalFloatMove(app, 160f, 80f, MonitorRect(0f, 0f, 320f, 600f),
                                 defaultTopCenter = Offset(110f, 50f)) {
                                 editorCompositions++
                                 Box(Modifier.size(160.dp, 80.dp).background(Color.Red)

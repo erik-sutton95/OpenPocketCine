@@ -18,7 +18,7 @@ struct LivePortraitSystemBar: View {
                     Spacer(minLength: 14)
                     if let exit = model.multiviewExit {
                         Button(action: exit) {
-                            OpcIcon.layoutGrid.frame(width: 22, height: 22).frame(
+                            MonitorIcon.layoutGrid.frame(width: 22, height: 22).frame(
                                 width: 44, height: 44
                             )
                             .contentShape(Rectangle())

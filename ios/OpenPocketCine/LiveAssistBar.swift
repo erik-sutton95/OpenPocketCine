@@ -2,6 +2,7 @@ import MonitorUI
 import OpenCineCameraControls
 import SwiftUI
 import UIKit
+import MonitorPresentation
 
 /// OpenZCine landscape assist strip: bottom-left, ~⅓ width (chrome sizes the slot),
 /// grouped into threes with a divider, gold edge chevrons, long-press tray.
@@ -14,7 +15,7 @@ struct LiveAssistBar: View {
     var isLocked = false
     var showsAudio = true
     @State private var edgeFades = ScrollEdgeFades(leading: false, trailing: true)
-    @State private var iconFrames: [LiveAssistTool: CGRect] = [:]
+    @State private var iconFrames: [MonitorAssistSelection: CGRect] = [:]
     @State private var toolbarFrame: CGRect = .zero
 
     private var locked: Bool { isLocked || environmentLocked }
@@ -61,9 +62,9 @@ struct LiveAssistBar: View {
         .allowsHitTesting(!locked)
     }
 
-    /// Groups from ``LiveAssistTool/toolbarGroups``, AUDIO in its own last section.
+    /// Groups from ``MonitorAssistSelection/toolbarGroups``, AUDIO in its own last section.
     private var toolRow: some View {
-        let groups = LiveAssistTool.toolbarGroups
+        let groups = MonitorAssistSelection.toolbarGroups
         return HStack(spacing: 2) {
             ForEach(Array(groups.enumerated()), id: \.offset) { groupIndex, group in
                 if groupIndex > 0 {
@@ -94,7 +95,7 @@ struct LiveAssistBar: View {
     }
 
     private func scrollChevron(_ edge: HorizontalEdge) -> some View {
-        (edge == .leading ? OpcIcon.chevronLeft : OpcIcon.chevronRight)
+        (edge == .leading ? MonitorIcon.chevronLeft : MonitorIcon.chevronRight)
             .frame(width: 12, height: 12)
             .foregroundStyle(LiveDesign.accent)
             .shadow(color: .black.opacity(0.65), radius: 4)
@@ -104,7 +105,7 @@ struct LiveAssistBar: View {
     }
 
     /// OpenZCine `AssistToolButtonRow` → `presentAssistOptions`.
-    private func presentOptions(for tool: LiveAssistTool) {
+    private func presentOptions(for tool: MonitorAssistSelection) {
         guard !locked, tool.hasConfiguration else { return }
         AssistBarHaptics.confirm()
         assist.longPressAnchor = iconFrames[tool] ?? toolbarFrame
@@ -114,10 +115,10 @@ struct LiveAssistBar: View {
 }
 
 struct AssistBarButton: View {
-    let tool: LiveAssistTool
+    let tool: MonitorAssistSelection
     @Bindable var assist: LiveAssistState
     var isLocked = false
-    var onPresent: (LiveAssistTool) -> Void
+    var onPresent: (MonitorAssistSelection) -> Void
     @State private var buildup: Task<Void, Never>?
 
     var body: some View {

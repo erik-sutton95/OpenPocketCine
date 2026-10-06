@@ -1,7 +1,9 @@
 import MonitorUI
 import NetworkExtension
 import OpenPocketViewCore
+import struct OpenCineCore.SavedCamera
 import SwiftUI
+import OpenCineDJIApple
 
 /// One Wi-Fi / hotspot wizard for saved-camera setups and the Multiview session.
 /// Callers supply scanning and connection ownership; this view owns drafts and navigation.
@@ -106,7 +108,7 @@ struct StationNetworkSetupView: View {
         }
         .task {
             while !Task.isCancelled {
-                hotspotActive = SharedWiFiPath.address(hotspot: true) != nil
+                hotspotActive = DjiAppleSharedWiFiPath.address(hotspot: true) != nil
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }
@@ -213,7 +215,7 @@ struct StationNetworkSetupView: View {
     }
 
     private func refreshCurrentNetwork() async {
-        let current = await WiFiJoiner.currentSSID()
+        let current = await DjiAppleWiFiJoiner.currentSSID()
         currentSSID = current.flatMap { isCameraNetwork($0) ? nil : $0 }
         let access = WiFiNameAccess.shared
         if current != nil || access.undecided {

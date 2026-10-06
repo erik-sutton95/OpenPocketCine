@@ -124,7 +124,7 @@ private final class PlaybackOwnerFileManager: FileManager, @unchecked Sendable {
     XCTAssertTrue(authority.operation.isCurrent)
     XCTAssertNil(session.mediaPlaybackRecord(for: file))
     XCTAssertTrue(session.mediaLibrary.records.isEmpty)
-    session.datalink = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
+    session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
     session.phase = .live
     XCTAssertTrue(
       authority.admission.isCurrent(),
@@ -156,7 +156,7 @@ private final class PlaybackOwnerFileManager: FileManager, @unchecked Sendable {
     let samples = LiveFrameSampleBus()
     let feed = PlaybackFeedSession()
     feed.setEffects(
-      LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+      MonitorFrameEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
       sampleBus: samples)
     let native = MonitorApplePlaybackOwner(feed: feed)
     let owner = session.makeMediaPlayback(native: native, previousColor: { nil })
@@ -190,7 +190,7 @@ private final class PlaybackOwnerFileManager: FileManager, @unchecked Sendable {
     let successor = PlaybackFeedSession()
     defer { successor.shutdown() }
     successor.setEffects(
-      LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+      MonitorFrameEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
       sampleBus: samples)
     fixture.prepare(successor)
     try await fixture.publishScopes(using: successor, samples: samples, in: self)
@@ -213,7 +213,7 @@ private final class PlaybackOwnerFileManager: FileManager, @unchecked Sendable {
       incoming.close()
     }
     feed.setEffects(
-      LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+      MonitorFrameEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
       sampleBus: samples)
     outgoing.prepare(feed)
     let replaced = expectation(description: "sample observer replaces the actual native item")
@@ -266,7 +266,7 @@ private final class PlaybackOwnerFileManager: FileManager, @unchecked Sendable {
       fixture.close()
     }
     feed.setEffects(
-      LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+      MonitorFrameEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
       sampleBus: samples)
     fixture.prepare(feed)
     XCTAssertNil(samples.playbackSourcePixelBuffer)

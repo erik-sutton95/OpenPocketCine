@@ -4,6 +4,9 @@ import OpenCineAppKit
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+import OpenCineApple
+import OpenCineMedia
+import MonitorPresentation
 
 @testable import OpenPocketCine
 
@@ -23,11 +26,11 @@ final class EVMeterAssistTests: XCTestCase {
     }
 
     func testEVTogglePersistsWithoutRequestingImageProcessing() {
-        XCTAssertTrue(LiveAssistTool.toolbarCases.contains(.evMeter))
-        XCTAssertTrue(LiveAssistTool.settingsCases.contains(.evMeter))
-        XCTAssertFalse(LiveAssistTool.cleanPinCases.contains(.evMeter))
-        XCTAssertFalse(LiveAssistTool.playbackToolbarCases.contains(.evMeter))
-        XCTAssertFalse(LiveAssistTool.evMeter.hasConfiguration)
+        XCTAssertTrue(MonitorAssistSelection.toolbarCases.contains(.evMeter))
+        XCTAssertTrue(MonitorAssistSelection.settingsCases.contains(.evMeter))
+        XCTAssertFalse(MonitorAssistSelection.cleanPinCases.contains(.evMeter))
+        XCTAssertFalse(MonitorAssistSelection.playbackToolbarCases.contains(.evMeter))
+        XCTAssertFalse(MonitorAssistSelection.evMeter.hasConfiguration)
         let assist = LiveAssistState()
         assist.clean = false
         assist.evMeter = false
@@ -101,7 +104,7 @@ final class EVMeterAssistTests: XCTestCase {
         let samples = LiveFrameSampleBus()
         let session = PlaybackFeedSession()
         session.setEffects(
-            LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+            MonitorFrameEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
             sampleBus: samples)
         let fixture = try await PlaybackOutputFixture.make(in: self)
         defer { session.shutdown(); fixture.close() }

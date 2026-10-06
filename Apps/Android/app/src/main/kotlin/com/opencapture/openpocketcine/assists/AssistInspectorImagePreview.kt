@@ -18,13 +18,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.opencapture.openpocketcine.AppModel
-import com.opencapture.openpocketcine.feed.InspectorPreviewPipeline
+import com.opencapture.opencine.runtime.InspectorPreviewPipeline
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.monitorui.MonitorAssistTool
+import com.opencapture.opencine.appkit.MonitorInspectorScopeDemand
+import com.opencapture.opencine.appkit.MonitorAssistState
 
 /** Selected tool is forced only in this consumer's plan, never in live visibility. */
 @Composable
-internal fun AssistInspectorImagePreview(tool: MonitorAssistTool, state: LiveAssistState, model: AppModel,
+internal fun AssistInspectorImagePreview(tool: MonitorAssistTool, state: MonitorAssistState, model: AppModel,
     lutSelection: String, colorMode: Int, playback: Boolean) {
     if (tool !in listOf(MonitorAssistTool.LUT, MonitorAssistTool.PEAK, MonitorAssistTool.FALSE, MonitorAssistTool.ZEBRA, MonitorAssistTool.DESQ)) return
     val context = LocalContext.current
@@ -46,7 +48,7 @@ internal fun AssistInspectorImagePreview(tool: MonitorAssistTool, state: LiveAss
             val resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
             if (resumed && !active) {
                 model.inspectorPreview.open(owner, playback, context, latestPlan) { image = it }
-                state.inspectorScopeDemand = InspectorScopeDemand(owner, tool, playback)
+                state.inspectorScopeDemand = MonitorInspectorScopeDemand(owner, tool, playback)
                 active = true
             } else if (!resumed && active) {
                 if (state.inspectorScopeDemand?.owner === owner) state.inspectorScopeDemand = null

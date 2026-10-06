@@ -12,7 +12,7 @@ import os
 /// The retained decoder, native demand, recovery facts and presentation live in OpenCineApple.
 @MainActor
 final class HevcDecoder: OpenCineApple.MonitorLiveVideoRuntime {
-    var effects = LiveImageEffects() {
+    var effects = MonitorFrameEffects() {
         didSet { syncDemand() }
     }
     var needsWatchPreview: Bool {
@@ -34,7 +34,7 @@ final class HevcDecoder: OpenCineApple.MonitorLiveVideoRuntime {
     /// Installed once by the actual source owner, never by a borrowed editor.
     /// Read only when binding/reopening a source or after a camera report.
     var sourceCalibrationProvider: (() -> Int?)?
-    var effectsProvider: (() -> LiveImageEffects)? {
+    var effectsProvider: (() -> MonitorFrameEffects)? {
         didSet {
             demandProvider = { [weak self] in
                 guard let self else { return .init() }
@@ -43,7 +43,7 @@ final class HevcDecoder: OpenCineApple.MonitorLiveVideoRuntime {
             }
         }
     }
-    var backdropEffects: LiveImageEffects {
+    var backdropEffects: MonitorFrameEffects {
         var result = effects
         let native = backdropPolicy.image
         result.clipByte = native.clipByte
@@ -103,7 +103,7 @@ final class HevcDecoder: OpenCineApple.MonitorLiveVideoRuntime {
     }
 
     func attach(
-        sampleBus: LiveFrameSampleBus, effects provider: @escaping () -> LiveImageEffects,
+        sampleBus: LiveFrameSampleBus, effects provider: @escaping () -> MonitorFrameEffects,
         transfer: @escaping () -> MonitorTransfer? = { nil }
     ) {
         bindSourcePublication(sampleBus)
@@ -129,7 +129,7 @@ final class HevcDecoder: OpenCineApple.MonitorLiveVideoRuntime {
     }
 
     nonisolated func handleDecodedFrame(
-        _ buffer: CVPixelBuffer, effects: LiveImageEffects? = nil,
+        _ buffer: CVPixelBuffer, effects: MonitorFrameEffects? = nil,
         transfer: MonitorTransfer? = nil, isNewSourceFrame: Bool = true, generation: Int? = nil,
         timeNs: Int64 = 0, source: MonitorVideoSourceToken? = nil
     ) {
@@ -140,7 +140,7 @@ final class HevcDecoder: OpenCineApple.MonitorLiveVideoRuntime {
     }
 
     nonisolated func handleDecodedFrame(
-        _ lease: DecodedFrameLease, effects: LiveImageEffects? = nil,
+        _ lease: DecodedFrameLease, effects: MonitorFrameEffects? = nil,
         transfer: MonitorTransfer? = nil, isNewSourceFrame: Bool = true,
         source: MonitorVideoSourceToken? = nil
     ) {

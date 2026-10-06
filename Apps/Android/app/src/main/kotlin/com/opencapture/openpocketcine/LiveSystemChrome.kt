@@ -12,6 +12,8 @@ import com.opencapture.monitorui.monitorPickerPassthrough
 import com.opencapture.opencine.appkit.ShellModel
 import com.opencapture.opencine.cameracontrols.LockButton
 import com.opencapture.monitorui.MonitorIcon
+import com.opencapture.opencine.appkit.MonitorDisplaySection
+import com.opencapture.monitorui.LiveMonitorLayout
 
 /** App display customization and the native photo adapter over the shared system composition. */
 @Composable
@@ -22,10 +24,10 @@ internal fun LiveSystemChrome(model: AppModel, layout: LiveMonitorLayout,
     val control by model.control.state.collectAsState()
     val editing = model.chromeEditorMode
     val visibility = MonitorSystemControlsVisibility(
-        lock = model.multiviewExit != null || model.chromeSectionMounts(PocketDispSection.LOCK_BUTTON),
-        settings = model.chromeSectionMounts(PocketDispSection.RAIL_SETTINGS),
-        media = model.chromeSectionMounts(PocketDispSection.RAIL_MEDIA),
-        record = model.chromeSectionMounts(PocketDispSection.RAIL_RECORD),
+        lock = model.multiviewExit != null || model.chromeSectionMounts(MonitorDisplaySection.LOCK_BUTTON),
+        settings = model.chromeSectionMounts(MonitorDisplaySection.RAIL_SETTINGS),
+        media = model.chromeSectionMounts(MonitorDisplaySection.RAIL_MEDIA),
+        record = model.chromeSectionMounts(MonitorDisplaySection.RAIL_RECORD),
     ).resolved(uiLocked, model.control.isRecording, model.session.isMultiviewBorrowed)
     // Keep collection in this bounded observation scope, away from native picture geometry.
     control

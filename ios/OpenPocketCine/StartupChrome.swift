@@ -5,6 +5,7 @@ import OpenCineCameraControls
 import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
+import OpenCineDJIApple
 
 enum LiveDesign {
     static let background = MonitorTheme.canvas
@@ -86,7 +87,7 @@ enum StartupConnectionCopy {
     static let bluetoothEnded =
         "The camera ended the connection. Turn off DJI Frame Tap and force quit DJI Mimo on every phone near the camera, then try again."
 
-    /// Why a Bluetooth scan cannot run (`BleLink.unavailableReason`).
+    /// Why a Bluetooth scan cannot run (`DjiAppleBluetoothLink.unavailableReason`).
     static let bluetoothProblems: Set<String> = [bluetoothDenied, bluetoothOff, bluetoothNotReady]
 
     /// Failures the operator can only fix in iOS Settings get an Open Settings action.

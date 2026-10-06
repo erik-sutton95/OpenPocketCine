@@ -7,6 +7,7 @@ import OpenCineCameraVocabulary
 import OpenCineMedia
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -105,7 +106,7 @@ final class PocketNativeVideoOwnershipTests: XCTestCase {
         let borrowed = OpenPocketCine.CameraSession(borrowing: decoder, controlsOnly: true)
         let model = AppModel(session: borrowed)
         model.frameSamples = samples
-        let camera = FoundCamera(
+        let camera = DjiAppleSighting(
             id: UUID(), name: "SIMULATED Pocket source",
             model: .resolve(modelId: 0x0020, name: "SIMULATED Pocket source"), modelId: 0x0020)
         borrowed.updateMultiview(camera: camera, driver: nil, status: CameraStatus())
@@ -149,13 +150,13 @@ final class PocketNativeVideoOwnershipTests: XCTestCase {
         let samples = LiveFrameSampleBus()
         let old = PlaybackFeedSession()
         old.setEffects(
-            LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+            MonitorFrameEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
             sampleBus: samples)
         let oldItem = AVPlayerItem(asset: AVMutableComposition())
         old.prepare(oldItem)
         let successor = PlaybackFeedSession()
         successor.setEffects(
-            LiveImageEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
+            MonitorFrameEffects(histogram: true).playbackFrameEffects, transfer: .rec709,
             sampleBus: samples)
         let fixture = try await PlaybackOutputFixture.make(in: self)
         defer { old.shutdown(); successor.shutdown(); fixture.close() }

@@ -4,6 +4,7 @@ import OpenCineMulticam
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -70,7 +71,7 @@ import XCTest
 
         // A replaced link retires the lease through the control epoch alone.
         let current = try! XCTUnwrap(session.editorLeases.leases.first)
-        b.driver = DatalinkDriver(port: 9049, tcpPoke: false, pairingToken: "")
+        b.driver = DjiAppleDatalink(port: 9049, tcpPoke: false, pairingToken: "")
         b.controlHost = "192.0.2.49"
         XCTAssertEqual(
             session.editorLeases.refusal(
@@ -90,7 +91,7 @@ import XCTest
         let approved = MultiviewRecordContext(session: session)
         XCTAssertTrue(approved.canConfirm)
         // Same camera, replacement link: the dialog's plan must not reach it.
-        session.tiles[1].driver = DatalinkDriver(port: 9048, tcpPoke: false, pairingToken: "")
+        session.tiles[1].driver = DjiAppleDatalink(port: 9048, tcpPoke: false, pairingToken: "")
         let now = MultiviewRecordContext(session: session)
         XCTAssertTrue(now.canConfirm)
         XCTAssertNotEqual(approved, now)
@@ -205,7 +206,7 @@ import XCTest
     /// Live control links with fresh record reports, as `openPreview` and the 1 s monitor leave them.
     private func linked(_ session: MultiviewSession) -> MultiviewSession {
         for (index, tile) in session.recordingTiles.enumerated() {
-            tile.driver = DatalinkDriver(
+            tile.driver = DjiAppleDatalink(
                 port: UInt16(9040 + index), tcpPoke: false, pairingToken: "")
             tile.controlHost = "192.0.2.\(40 + index)"
             tile.recordingAvailable = true

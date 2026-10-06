@@ -4,6 +4,7 @@ import OpenCineApple
 import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import XCTest
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -17,9 +18,9 @@ final class LiveFeedOrientationTests: XCTestCase {
         XCTAssertTrue(Self.zebra.needsGPUFeed)
         XCTAssertTrue(Self.falseColor.needsGPUFeed)
         XCTAssertTrue(Self.lut.needsGPUFeed)
-        XCTAssertFalse(LiveImageEffects().needsGPUFeed)
-        XCTAssertFalse(LiveImageEffects().needsSample)
-        var face = LiveImageEffects()
+        XCTAssertFalse(MonitorFrameEffects().needsGPUFeed)
+        XCTAssertFalse(MonitorFrameEffects().needsSample)
+        var face = MonitorFrameEffects()
         face.faceAF = true
         XCTAssertTrue(face.needsSample)
         XCTAssertFalse(face.needsGPUFeed)
@@ -29,7 +30,7 @@ final class LiveFeedOrientationTests: XCTestCase {
         XCTAssertFalse(Self.lut.needsOverlayFeed)
         XCTAssertFalse(Self.falseColor.replacesIdentityFeed)
         XCTAssertTrue(Self.lut.replacesIdentityFeed)
-        var splitOnly = LiveImageEffects()
+        var splitOnly = MonitorFrameEffects()
         splitOnly.splitComparison = true
         XCTAssertFalse(
             splitOnly.needsGPUFeed,
@@ -129,30 +130,30 @@ final class LiveFeedOrientationTests: XCTestCase {
             "bake must land in drawable orientation — a leftover flip inverts the feed")
     }
 
-    private static var peaking: LiveImageEffects {
-        var fx = LiveImageEffects()
+    private static var peaking: MonitorFrameEffects {
+        var fx = MonitorFrameEffects()
         fx.peaking = true
         return fx
     }
 
-    private static var zebra: LiveImageEffects {
-        var fx = LiveImageEffects()
+    private static var zebra: MonitorFrameEffects {
+        var fx = MonitorFrameEffects()
         fx.zebra = true
         fx.zebraHighlight = true
         fx.zebraMidtone = false
         return fx
     }
 
-    private static var falseColor: LiveImageEffects {
-        var fx = LiveImageEffects()
+    private static var falseColor: MonitorFrameEffects {
+        var fx = MonitorFrameEffects()
         fx.falseColor = true
         fx.falseColorScale = .ire
         return fx
     }
 
-    private static var lut: LiveImageEffects {
+    private static var lut: MonitorFrameEffects {
         let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.lutDimension = cube.size
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         return fx

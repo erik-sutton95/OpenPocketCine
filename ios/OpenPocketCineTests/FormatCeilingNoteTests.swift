@@ -1,5 +1,6 @@
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -15,8 +16,8 @@ final class FormatCeilingNoteTests: XCTestCase {
     private func pocket3Session() -> CameraSession {
         let session = CameraSession(borrowing: HevcDecoder())
         // An unopened driver admits the command without opening a socket.
-        let driver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
-        let camera = FoundCamera(
+        let driver = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
+        let camera = DjiAppleSighting(
             id: UUID(), name: "OsmoPocket3-Test", model: Self.pocket3, modelId: nil)
         var status = CameraStatus()
         status.shootingMode = Int(ShootingMode.video.rawValue)

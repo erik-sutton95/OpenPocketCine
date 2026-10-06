@@ -7,10 +7,12 @@ import Observation
 import OpenCineAppKit
 import OpenCineCameraControls
 import class OpenCineCore.LocalVPNNotice
+import struct OpenCineCore.SavedCamera
 import OpenCineDJIApple
 import OpenPocketViewCore
 import UIKit
 import os
+import OpenCineMedia
 
 /// Composes the DJI Apple connection/exchange/heartbeat owners with native picture, saved
 /// credentials and operator policy. Drives the app's phase/status and remaining recovery policy.
@@ -59,7 +61,7 @@ final class CameraSession {
             publishStatusNow()
         }
     }
-    var found: [FoundCamera] = [] {
+    var found: [DjiAppleSighting] = [] {
         didSet { onSightings?(found.map(Self.sighting)) }
     }
     /// A scan has run 20 s without a camera. The pair page then lists what to check.
@@ -76,7 +78,7 @@ final class CameraSession {
     @ObservationIgnored var lastConnectError: Error?
     @ObservationIgnored var phaseWaiters: [CheckedContinuation<Void, Never>] = []
     /// The body this session is connecting / connected to. Used to persist a saved camera.
-    private(set) var connectedCamera: FoundCamera?
+    private(set) var connectedCamera: DjiAppleSighting?
     /// Camera-AP SSID after a successful join. Re-read over BLE on the next connect.
     private(set) var joinedSSID: String?
     /// Setup for the next connect (#406); session recovery reuses it. Disconnect resets it.
@@ -171,8 +173,8 @@ final class CameraSession {
     @ObservationIgnored private var lastStatusMutation: CFAbsoluteTime = 0
     @ObservationIgnored private var statusFlushTask: Task<Void, Never>?
 
-    @ObservationIgnored private let ble = BleLink(host: .pocket)
-    @ObservationIgnored var datalink: DatalinkDriver? {
+    @ObservationIgnored private let ble = DjiAppleBluetoothLink(host: .pocket)
+    @ObservationIgnored var datalink: DjiAppleDatalink? {
         didSet {
             if oldValue !== datalink {
                 controlExchange.endpoint = .init(bluetooth: ble, datalink: datalink)
@@ -583,7 +585,7 @@ final class CameraSession {
     }
 
     /// Borrow the tile's transport and decoder; Multiview remains the sole repair owner.
-    func updateMultiview(camera: FoundCamera, driver: DatalinkDriver?, status: CameraStatus) {
+    func updateMultiview(camera: DjiAppleSighting, driver: DjiAppleDatalink?, status: CameraStatus) {
         guard isMultiviewBorrowed else { return }
         if connectedCamera?.id != camera.id {
             controlBinding.beginConnection()
@@ -723,11 +725,11 @@ final class CameraSession {
         startScan(reconnect: id)
     }
 
-    func connect(_ camera: FoundCamera) {
+    func connect(_ camera: DjiAppleSighting) {
         connect(camera, preserveMonitor: holdsMonitor)
     }
 
-    private func connect(_ camera: FoundCamera, preserveMonitor: Bool) {
+    private func connect(_ camera: DjiAppleSighting, preserveMonitor: Bool) {
         guard !isMultiviewBorrowed else { return }
         let camera = camera.enriched(from: saved(camera.id))
         if case .live = phase, connectedCamera?.id == camera.id, !sessionRecovery.isRecovering {
@@ -739,7 +741,7 @@ final class CameraSession {
 
     /// Permissions, saved app identity and native source lifetime remain host policy.
     /// An episode supplies captured authority; ordinary explicit connect preserves its path.
-    private func prepareConnectionNative(_ camera: FoundCamera, preserveMonitor: Bool,
+    private func prepareConnectionNative(_ camera: DjiAppleSighting, preserveMonitor: Bool,
         recoveryAttempt: DjiAppleRecoveryEpisode.Attempt? = nil) -> DJIConnectionRoute? {
         let isCurrent = { recoveryAttempt?.isCurrent ?? true }
         guard isCurrent(), !isMultiviewBorrowed else { return nil }
@@ -938,7 +940,7 @@ final class CameraSession {
         }
         guard isCurrent() else { return }
         if !preserveSoftAP, let ssid = joinedSSID {
-            WiFiJoiner.leave(ssid: ssid)
+            DjiAppleWiFiJoiner.leave(ssid: ssid)
             guard isCurrent() else { return }
             joinedSSID = nil
         }
@@ -1000,12 +1002,12 @@ final class CameraSession {
             info: { [weak self] line in self?.log.info("\(line, privacy: .public)") })
     }
 
-    private func connectionCamera(_ target: DJISighting) -> FoundCamera? {
+    private func connectionCamera(_ target: DJISighting) -> DjiAppleSighting? {
         guard let id = UUID(uuidString: target.id) else { return nil }
-        return FoundCamera(id: id, name: target.name, model: target.model, modelId: target.modelId)
+        return DjiAppleSighting(id: id, name: target.name, model: target.model, modelId: target.modelId)
     }
 
-    private func prepareConnectionSource(_ camera: FoundCamera, attempt: DjiAppleConnectionRun.Attempt) {
+    private func prepareConnectionSource(_ camera: DjiAppleSighting, attempt: DjiAppleConnectionRun.Attempt) {
         guard attempt.isCurrent, !isMultiviewBorrowed else { return }
         connectedCamera = camera
         guard attempt.isCurrent else { return }
@@ -1099,7 +1101,7 @@ final class CameraSession {
             if let peers = connectionNativePeers { peers.attach(endpoint); return }
         #endif
         guard let endpoint else { disposeDatalink(ifCurrent: { attempt.isCurrent }); return }
-        guard let driver = endpoint as? DatalinkDriver else { return }
+        guard let driver = endpoint as? DjiAppleDatalink else { return }
         wireDatalink(driver)
         guard attempt.isCurrent else { return }
         datalink = driver
@@ -1107,7 +1109,7 @@ final class CameraSession {
     private func registerConnectionEndpoint(_ endpoint: any DjiAppleConnectionEndpoint,
         attempt: DjiAppleConnectionRun.Attempt) {
         guard attempt.isCurrent, !isMultiviewBorrowed, connectionRunEndpoint === endpoint else { return }
-        if let driver = endpoint as? DatalinkDriver, let source = liveViewSource {
+        if let driver = endpoint as? DjiAppleDatalink, let source = liveViewSource {
             guard pictureRecovery.bindLiveView(endpoint: driver, recovery: .init(datalink: driver),
                 scope: source), attempt.isCurrent else { return }
         }
@@ -1140,9 +1142,9 @@ final class CameraSession {
             : connectionTransport.network.cameraPathReady()
     }
 
-    private func makeDatalink(_ camera: FoundCamera, host: String? = nil) -> DatalinkDriver {
+    private func makeDatalink(_ camera: DjiAppleSighting, host: String? = nil) -> DjiAppleDatalink {
         let host = host ?? (connectionSetup.movesCamera ? stationHost : nil)
-        return DatalinkDriver(
+        return DjiAppleDatalink(
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken, stationHost: host,
             stationHotspot: host != nil && usesHotspot,
@@ -1621,7 +1623,7 @@ final class CameraSession {
     /// from Control Center, 2026-09-22) used to tear down a healthy 25 fps
     /// stream for a full BLE re-pair and Wi-Fi re-join. Reconnect BLE beside
     /// the live picture; the watchdog still owns any later datalink stall.
-    private func reconnectBleKeepingLive(_ camera: FoundCamera) {
+    private func reconnectBleKeepingLive(_ camera: DjiAppleSighting) {
         ControlLiveLog.line("session: BLE dropped with live video; reconnecting BLE only")
         recordFeedBreadcrumb(.pathChange, detail: "bleDroppedVideoLive")
         Task { @MainActor [weak self] in
@@ -2657,7 +2659,7 @@ final class CameraSession {
             sinceAcquire: facePriorityAcquireAt, now: now)
         guard now.timeIntervalSince(lastFacePriorityEVAt) >= spacing else { return }
         guard
-            let packed = PocketScopeSampler.copyBGRA(buffer, maxWidth: PocketScopeSampler.maxWidth)
+            let packed = ScopeSampler.copyBGRA(buffer, maxWidth: ScopeSampler.maxWidth)
         else { return }
         lastFacePriorityEVAt = now
         let transfer = MonitorTransfer.resolved(
@@ -3838,7 +3840,7 @@ final class CameraSession {
             defer {
                 if self.foregroundGeneration == generation { self.foregroundCheckTask = nil }
             }
-            let currentSSID = await WiFiJoiner.currentSSID()
+            let currentSSID = await DjiAppleWiFiJoiner.currentSSID()
             guard !Task.isCancelled, self.foregroundGeneration == generation else { return }
             await self.recoverAfterForeground(currentSSID: currentSSID, pictureOwner: pictureOwner)
         }
@@ -4167,7 +4169,7 @@ final class CameraSession {
                 return await self.ble.waitUntilPoweredOn()
             }, scan: { [weak self] in
                 guard let self else { return AsyncStream { $0.finish() } }
-                let cameras: AsyncStream<FoundCamera>
+                let cameras: AsyncStream<DjiAppleSighting>
                 #if DEBUG
                     if let peers = self.sessionRecoveryNativePeers { cameras = peers.scan() }
                     else { cameras = self.ble.scan() }
@@ -4220,7 +4222,7 @@ final class CameraSession {
             })
     }
 
-    private func recoverySighting(_ camera: FoundCamera) -> DJISighting {
+    private func recoverySighting(_ camera: DjiAppleSighting) -> DJISighting {
         .init(id: camera.id.uuidString, name: camera.name, model: camera.model, modelId: camera.modelId)
     }
 
@@ -4350,13 +4352,13 @@ final class CameraSession {
         disposeDatalink(ifCurrent: { attempt.isCurrent })
         guard attempt.isCurrent,
             let started = attempt.prepareReplacementEndpoint() else { return }
-        var attemptedDatalink: DatalinkDriver?
+        var attemptedDatalink: DjiAppleDatalink?
         do {
             try Task.checkCancellation()
             guard attempt.isCurrent else { return }
             // Station drivers check the hotspot path themselves in open().
             if connectionSetup == .cameraWiFi {
-                try await WiFiJoiner.waitUntilCameraPathReady(timeout: 8, host: .pocket)
+                try await DjiAppleWiFiJoiner.waitUntilCameraPathReady(timeout: 8, host: .pocket)
             }
             try Task.checkCancellation()
             guard attempt.isCurrent else { return }
@@ -4419,7 +4421,7 @@ final class CameraSession {
         #endif
     }
 
-    private func shouldCommitLiveHandshake(_ dl: DatalinkDriver) -> Bool {
+    private func shouldCommitLiveHandshake(_ dl: DjiAppleDatalink) -> Bool {
         let ok = CameraSoftAP.shouldCommitLiveHandshake(
             driverOwned: datalink === dl,
             isClosed: dl.isClosed,
@@ -4430,7 +4432,7 @@ final class CameraSession {
         return ok
     }
 
-    private func wireDatalink(_ dl: DatalinkDriver) {
+    private func wireDatalink(_ dl: DjiAppleDatalink) {
         incidentSocketGeneration += 1
         AppDiagnostics.incidents.noteSocketGeneration(incidentSocketGeneration)
         dl.onVideoDiscontinuity = { [weak self, weak dl] in
@@ -4543,8 +4545,8 @@ final class CameraSession {
             let pass = cachedPassword
         else { return }
         let wpa3 = connectedCamera?.model.wpa3 ?? true
-        try? await WiFiJoiner.join(ssid: ssid, passphrase: pass, wpa3: wpa3, host: .pocket)
-        try? await WiFiJoiner.waitUntilCameraPathReady(timeout: 20, host: .pocket)
+        try? await DjiAppleWiFiJoiner.join(ssid: ssid, passphrase: pass, wpa3: wpa3, host: .pocket)
+        try? await DjiAppleWiFiJoiner.waitUntilCameraPathReady(timeout: 20, host: .pocket)
     }
 
     func sendEnterPlayback() { datalink?.enterPlayback() }
@@ -4642,7 +4644,7 @@ final class CameraSession {
     /// Memory (this launch) or Keychain (camera id / advertised name / last SSID).
     /// A live BLE name that differs from the cached SSID is a renamed SoftAP —
     /// join that name with the cached password (GetSSID after Mimo is often 0xE4).
-    private func resolvedWifiCreds(for camera: FoundCamera) -> KnownWifi {
+    private func resolvedWifiCreds(for camera: DjiAppleSighting) -> KnownWifi {
         #if DEBUG
             if let trace = connectionNativePeers {
                 return KnownWifi(ssid: trace.ssid, password: trace.password,
@@ -4698,7 +4700,7 @@ final class CameraSession {
         )
     }
 
-    private func ssidBelongsToAnotherBody(_ ssid: String, camera: FoundCamera) -> Bool {
+    private func ssidBelongsToAnotherBody(_ ssid: String, camera: DjiAppleSighting) -> Bool {
         if CameraWifiResolution.isSSIDOwnedByAnotherCamera(
             ssid, cameraId: camera.id.uuidString, saved: savedCameras())
         {
@@ -4708,7 +4710,7 @@ final class CameraSession {
             ssid: ssid, modelId: camera.modelId, advertisedName: camera.name)
     }
 
-    private func assertSSIDBelongs(to camera: FoundCamera, ssid: String) throws {
+    private func assertSSIDBelongs(to camera: DjiAppleSighting, ssid: String) throws {
         if ssidBelongsToAnotherBody(ssid, camera: camera) {
             log.info(
                 "creds: SSID \(ssid, privacy: .public) does not belong to \(camera.model.name, privacy: .public)"
@@ -4717,7 +4719,7 @@ final class CameraSession {
         }
     }
 
-    private func persistWifiCreds(camera: FoundCamera, ssid: String, password: String) {
+    private func persistWifiCreds(camera: DjiAppleSighting, ssid: String, password: String) {
         #if DEBUG
             if let trace = connectionNativePeers { trace.persist(ssid, password); return }
         #endif

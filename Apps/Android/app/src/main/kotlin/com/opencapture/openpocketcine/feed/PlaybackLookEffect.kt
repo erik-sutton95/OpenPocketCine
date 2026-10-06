@@ -9,6 +9,7 @@ import androidx.media3.effect.BaseGlShaderProgram
 import androidx.media3.effect.GlEffect
 import androidx.media3.effect.GlShaderProgram
 import com.opencapture.opencine.runtime.FeedEffectsGlProgram
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
 
 /**
  * Media3 video-graph adapter for [FeedEffectsGlProgram].

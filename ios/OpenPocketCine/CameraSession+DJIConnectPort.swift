@@ -2,10 +2,10 @@ import Foundation
 import OpenCineCore
 import OpenCineMedia
 import OpenPocketViewCore
+import OpenCineDJIApple
 
 /// The shared document's saved camera (SHELL-02), for app files that do not import OpenCineCore
 /// (its `ConnectionPhase` and `CameraSession` share names with this app's).
-typealias SavedCamera = OpenCineCore.SavedCamera
 
 /// A saved camera's DJI setups, as this app's session and wizard read them (SHELL-02 document:
 /// camera Wi-Fi is the `ap` route, Wi-Fi and Hotspot the setups that move the camera).
@@ -40,7 +40,7 @@ extension SavedCamera {
 /// and saved-camera connects through it, so the session keeps its phases, recovery, keepalive
 /// and feed exactly as for its own reconnects.
 extension CameraSession: DJIConnectPort {
-    static func sighting(_ camera: FoundCamera) -> DJISighting {
+    static func sighting(_ camera: DjiAppleSighting) -> DJISighting {
         DJISighting(
             id: camera.id.uuidString,
             name: FoundCameraIdentity.listTitle(advertisedName: camera.name, modelName: camera.model.name),
@@ -66,7 +66,7 @@ extension CameraSession: DJIConnectPort {
             nextNetwork = network
             if let password {
                 MultiviewNetworkStore.save(ssid: network, password: password, hotspot: true)
-            } else if SharedWiFiPath.address(hotspot: true) == nil, let confirmHotspot {
+            } else if DjiAppleSharedWiFiPath.address(hotspot: true) == nil, let confirmHotspot {
                 // iOS reports Personal Hotspot only once a device has joined it, so a saved
                 // hotspot connect without that sign asks first. Without it the camera spends
                 // its join retries on a network that is not there.
@@ -143,7 +143,7 @@ extension CameraSession: DJIConnectPort {
     /// Open Settings where only Settings fixes it, typed by the error the pipeline threw.
     func typedFailure(_ why: String) -> ConnectionFailure {
         var message = StartupConnectionCopy.friendly(why)
-        if connectionSetup == .phoneHotspot, SharedWiFiPath.address(hotspot: true) == nil {
+        if connectionSetup == .phoneHotspot, DjiAppleSharedWiFiPath.address(hotspot: true) == nil {
             // The usual cause: the hotspot was off, so the camera had nothing to join.
             message =
                 "The camera could not find this iPhone’s hotspot. Turn on Personal Hotspot and Allow Others to Join, then try again."
@@ -176,14 +176,14 @@ extension CameraSession: DJIConnectPort {
             case .creds, .credsEmpty: return (.other, "creds.unread")
             }
         }
-        if let ble = error as? BleLink.BleError {
+        if let ble = error as? DjiAppleBluetoothLink.BleError {
             return ble == .timeout ? (.timedOut, "bluetooth.timeout") : (.linkLost, "bluetooth.lost")
         }
-        if let join = error as? WiFiJoiner.JoinError {
-            return WiFiJoiner.JoinError.rejectsCredentials(join)
+        if let join = error as? DjiAppleWiFiJoiner.JoinError {
+            return DjiAppleWiFiJoiner.JoinError.rejectsCredentials(join)
                 ? (.credentialsRejected, "wifi.rejected") : (.joinFailed, "wifi.join-failed")
         }
-        if let datalink = error as? DatalinkDriver.DatalinkError {
+        if let datalink = error as? DjiAppleDatalink.DatalinkError {
             if case .localNetworkDenied = datalink { return (.permission(.localNetwork), "local-network.denied") }
             return (.timedOut, "datalink.silent")
         }

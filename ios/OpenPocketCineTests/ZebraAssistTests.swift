@@ -3,6 +3,8 @@ import OpenCineCameraVocabulary
 import OpenPocketViewCore
 import OpenCineCameraControls
 import XCTest
+import OpenCineApple
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -41,36 +43,36 @@ final class ZebraAssistTests: XCTestCase {
 
     /// Per-tool needsGPUFeed / needsOverlayFeed live in LiveFeedOrientationTests.
     func testZebraAloneOverlaysIdentityInsteadOfRemakingThePicture() {
-        var zebra = LiveImageEffects()
+        var zebra = MonitorFrameEffects()
         zebra.zebra = true
         XCTAssertFalse(zebra.replacesIdentityFeed)
 
-        var peaking = LiveImageEffects()
+        var peaking = MonitorFrameEffects()
         peaking.peaking = true
         XCTAssertFalse(peaking.replacesIdentityFeed)
 
-        var both = LiveImageEffects()
+        var both = MonitorFrameEffects()
         both.zebra = true
         both.peaking = true
         XCTAssertTrue(both.needsOverlayFeed)
         XCTAssertFalse(both.replacesIdentityFeed)
 
         let cube = BuiltInLook.mono.cube()
-        var lutAndZebra = LiveImageEffects()
+        var lutAndZebra = MonitorFrameEffects()
         lutAndZebra.zebra = true
         lutAndZebra.lutDimension = cube.size
         lutAndZebra.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         XCTAssertTrue(lutAndZebra.replacesIdentityFeed)
         XCTAssertFalse(lutAndZebra.needsOverlayFeed)
 
-        var lutAndFalseColor = LiveImageEffects()
+        var lutAndFalseColor = MonitorFrameEffects()
         lutAndFalseColor.falseColor = true
         lutAndFalseColor.lutDimension = cube.size
         lutAndFalseColor.lutRGBA = lutAndZebra.lutRGBA
         XCTAssertTrue(lutAndFalseColor.replacesIdentityFeed)
         XCTAssertFalse(lutAndFalseColor.needsOverlayFeed)
 
-        var falseAndZebra = LiveImageEffects()
+        var falseAndZebra = MonitorFrameEffects()
         falseAndZebra.zebra = true
         falseAndZebra.falseColor = true
         XCTAssertFalse(falseAndZebra.replacesIdentityFeed)
@@ -81,7 +83,7 @@ final class ZebraAssistTests: XCTestCase {
         // D-Log2 18% grey is outside highlight 100 and midtone 55 ± 5.
         let buffer = ScopeTestBuffers.makeFlatBuffer(code: 78)
         let source = CIImage(cvPixelBuffer: buffer)
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.zebra = true
         fx.zebraHighlight = true
         fx.zebraMidtone = false
@@ -96,7 +98,7 @@ final class ZebraAssistTests: XCTestCase {
     func testAssistOverlayPaintsHighlightWithAlpha() {
         let buffer = ScopeTestBuffers.makeFlatBuffer(code: 255)
         let source = CIImage(cvPixelBuffer: buffer)
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.zebra = true
         fx.zebraHighlight = true
         fx.zebraMidtone = false
@@ -117,7 +119,7 @@ final class ZebraAssistTests: XCTestCase {
     func testHighlightPaintsTintedHotPixelThatWaveShowsAtCeiling() {
         let buffer = ScopeTestBuffers.makeFlatBuffer(red: 170, green: 215, blue: 247)
         let source = CIImage(cvPixelBuffer: buffer)
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.zebra = true
         fx.zebraHighlight = true
         fx.zebraMidtone = false
@@ -192,7 +194,7 @@ final class ZebraAssistTests: XCTestCase {
             by: CGAffineTransform(
                 scaleX: CGFloat(w) / max(image.extent.width, 1),
                 y: CGFloat(h) / max(image.extent.height, 1)))
-        let context = CIContext(options: LiveMonitorWorkingSpace.contextOptions)
+        let context = CIContext(options: MonitorWorkingSpace.contextOptions)
         context.render(
             scaled, toBitmap: &data, rowBytes: w * 4,
             bounds: CGRect(x: 0, y: 0, width: w, height: h),
@@ -205,7 +207,7 @@ final class ZebraAssistTests: XCTestCase {
     }
 
     private static func sampleRGB(_ image: CIImage) -> (Float, Float, Float) {
-        let context = CIContext(options: LiveMonitorWorkingSpace.contextOptions)
+        let context = CIContext(options: MonitorWorkingSpace.contextOptions)
         var bytes = [UInt8](repeating: 0, count: 4)
         context.render(
             image, toBitmap: &bytes, rowBytes: 4,

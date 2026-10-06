@@ -2,6 +2,7 @@ import Foundation
 import OpenCineCore
 import OpenCineMulticam
 import OpenPocketViewCore
+import OpenCineDJIApple
 
 /// A Multiview tile's record path as `DJICameraSessionAdapter` (OpenCineDJI) drives it, so the
 /// multicam engine sees each tile as a common camera session (MULTI-02). The tile keeps its
@@ -12,7 +13,7 @@ import OpenPocketViewCore
     weak var tile: MultiviewSession.Tile?
     /// Puts a frame on the tile's link: its sequence, or `nil` when it never left the phone.
     /// Tests replace it; production uses the tile's own driver.
-    var transmit: (DatalinkDriver, Duml.Frame) -> UInt16? = { driver, frame in
+    var transmit: (DjiAppleDatalink, Duml.Frame) -> UInt16? = { driver, frame in
         let seq = driver.send(frame)
         return driver.lastWriteLanded == false ? nil : seq
     }

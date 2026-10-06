@@ -12,30 +12,30 @@ import XCTest
 /// itself is pinned in OpenCineCameraControlsTests.
 final class HistogramAssistTests: XCTestCase {
     func testHistogramPlotUsesWaveIREAxis() {
-        let size = ScopePanelSize.histogram
+        let size = MonitorScopePanelSize.histogram
         let plot = HistogramAssist.plotRect(in: size)
         XCTAssertEqual(plot.minX, HistogramAssist.trafficGutter, accuracy: 0.01)
-        XCTAssertEqual(plot.minY, WaveformAxis.titleHeight, accuracy: 0.01)
+        XCTAssertEqual(plot.minY, MonitorWaveformAxis.titleHeight, accuracy: 0.01)
         XCTAssertEqual(plot.width, size.width - HistogramAssist.trafficGutter * 2, accuracy: 0.01)
         XCTAssertEqual(
-            plot.height, size.height - WaveformAxis.titleHeight - WaveformAxis.bottomPad,
+            plot.height, size.height - MonitorWaveformAxis.titleHeight - MonitorWaveformAxis.bottomPad,
             accuracy: 0.01)
         XCTAssertGreaterThan(
-            plot.minX, WaveformAxis.plotRect(in: size).minX,
+            plot.minX, MonitorWaveformAxis.plotRect(in: size).minX,
             "lamp gutters push 0 / 100 inward of WAVE's side pad")
         XCTAssertEqual(
             HistogramAssist.ireX(0, in: plot),
-            plot.minX + WaveformAxis.plotInset, accuracy: 0.01)
+            plot.minX + MonitorWaveformAxis.plotInset, accuracy: 0.01)
         XCTAssertEqual(
             HistogramAssist.ireX(100, in: plot),
-            plot.maxX - WaveformAxis.plotInset, accuracy: 0.01)
+            plot.maxX - MonitorWaveformAxis.plotInset, accuracy: 0.01)
         XCTAssertEqual(
-            HistogramAssist.plotX(0, in: plot), WaveformAxis.plotX(0, plot), accuracy: 0.01)
+            HistogramAssist.plotX(0, in: plot), MonitorWaveformAxis.plotX(0, plot), accuracy: 0.01)
         XCTAssertEqual(
-            HistogramAssist.plotX(100, in: plot), WaveformAxis.plotX(100, plot), accuracy: 0.01)
+            HistogramAssist.plotX(100, in: plot), MonitorWaveformAxis.plotX(100, plot), accuracy: 0.01)
         XCTAssertEqual(
             HistogramAssist.plotX(30.50, in: plot),
-            WaveformAxis.plotX(WaveformAxis.middleGrayIRE(transfer: .dlog2), plot),
+            MonitorWaveformAxis.plotX(MonitorWaveformAxis.middleGrayIRE(transfer: .dlog2), plot),
             accuracy: 0.05)
 
         let leftover = MonitorScopeGeometry.plotRect(size, top: 26)

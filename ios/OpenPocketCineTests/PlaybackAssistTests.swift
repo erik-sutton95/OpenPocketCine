@@ -5,6 +5,7 @@ import Metal
 import OpenCineApple
 import OpenPocketViewCore
 import XCTest
+import OpenCineMedia
 
 @testable import OpenPocketCine
 
@@ -15,9 +16,9 @@ final class PlaybackAssistTests: XCTestCase {
     @MainActor
     func testPlaybackFrameProjectionPreservesTheDonorNativePolicy() {
         for mode in [ColorMode.normal, .hdr, .dLog, .dLogM, .dLog2] {
-            for scale in FalseColorScaleKind.allCases {
+            for scale in MonitorFalseColorSelection.allCases {
                 for clip in [Int?.none, Int?.some(143)] {
-                    var effects = LiveImageEffects()
+                    var effects = MonitorFrameEffects()
                     effects.peaking = true
                     effects.peakingColor = .green
                     effects.peakingSensitivity = .high
@@ -58,8 +59,8 @@ final class PlaybackAssistTests: XCTestCase {
             }
         }
         for effects in [
-            LiveImageEffects(), LiveImageEffects(faceAF: true),
-            LiveImageEffects(inspectorSample: true),
+            MonitorFrameEffects(), MonitorFrameEffects(faceAF: true),
+            MonitorFrameEffects(inspectorSample: true),
         ] {
             XCTAssertEqual(effects.playbackFrameEffects.needsSample, effects.needsSample)
         }
@@ -112,7 +113,7 @@ final class PlaybackAssistTests: XCTestCase {
             player.replaceCurrentItem(with: item)
             let host = PlaybackFeedHostView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
             session.attach(host: host, player: player)
-            var effects = LiveImageEffects()
+            var effects = MonitorFrameEffects()
             effects.zebra = true
             session.setEffects(effects.playbackFrameEffects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
             try? await Task.sleep(for: .milliseconds(150))
@@ -130,7 +131,7 @@ final class PlaybackAssistTests: XCTestCase {
         player.replaceCurrentItem(with: item)
         let host = PlaybackFeedHostView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
         session.attach(host: host, player: player)
-        var effects = LiveImageEffects()
+        var effects = MonitorFrameEffects()
         effects.zebra = true
         session.setEffects(effects.playbackFrameEffects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
         let deadline = ContinuousClock.now.advanced(by: .seconds(2))
@@ -212,16 +213,16 @@ final class PlaybackAssistTests: XCTestCase {
     }
 
     func testHandoffPlanKeepsThePlayerUntilMetalOwnsThePicture() {
-        var zebra = LiveImageEffects()
+        var zebra = MonitorFrameEffects()
         zebra.zebra = true
         let cube = BuiltInLook.mono.cube()
-        var lut = LiveImageEffects()
+        var lut = MonitorFrameEffects()
         lut.lutDimension = cube.size
         lut.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         XCTAssertTrue(lut.replacesIdentityFeed)
         struct Case {
             let name: String
-            let effects: LiveImageEffects
+            let effects: MonitorFrameEffects
             var overlayOnly = false
             var unmanagedBake = false
             var hdrDisplay = false
@@ -241,10 +242,10 @@ final class PlaybackAssistTests: XCTestCase {
                 name: "zebra landed", effects: zebra, overlayOnly: true, metalHasPresented: true,
                 showPlayer: true, showFeed: true, overlay: true),
             Case(
-                name: "HDR identity waiting", effects: LiveImageEffects(), hdrDisplay: true,
+                name: "HDR identity waiting", effects: MonitorFrameEffects(), hdrDisplay: true,
                 metalHasPresented: false, showPlayer: true, showFeed: false),
             Case(
-                name: "HDR identity landed", effects: LiveImageEffects(), hdrDisplay: true,
+                name: "HDR identity landed", effects: MonitorFrameEffects(), hdrDisplay: true,
                 metalHasPresented: true, showPlayer: false, showFeed: true, overlay: false),
             // Player stays until the LUT drawable lands.
             Case(
@@ -256,7 +257,7 @@ final class PlaybackAssistTests: XCTestCase {
                 name: "LUT landed", effects: lut, unmanagedBake: true, metalHasPresented: true,
                 showPlayer: false, showFeed: true, overlay: false, unmanaged: true),
             Case(
-                name: "assists off", effects: LiveImageEffects(), metalHasPresented: true,
+                name: "assists off", effects: MonitorFrameEffects(), metalHasPresented: true,
                 showPlayer: true, showFeed: false),
         ]
         for c in cases {
@@ -404,7 +405,7 @@ final class PlaybackAssistTests: XCTestCase {
         XCTAssertTrue(host.ciFeed.isHidden)
 
         let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.lutDimension = cube.size
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         let waiting = MonitorPlaybackFeedHandoff.plan(
@@ -458,7 +459,7 @@ final class PlaybackAssistTests: XCTestCase {
         let host = PlaybackFeedHostView(frame: CGRect(x: 0, y: 0, width: 64, height: 64))
         let player = AVPlayer()
         session.attach(host: host, player: player)
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.zebra = true
         session.setEffects(fx.playbackFrameEffects, transfer: .rec709, sampleBus: LiveFrameSampleBus())
         XCTAssertFalse(host.ciFeed.hasPresentedFrame)
@@ -481,7 +482,7 @@ final class PlaybackAssistTests: XCTestCase {
 
     func testEngineGradesPlaybackZebraAsOverlayOnly() async {
         let engine = LiveAssistEngine()
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.zebra = true
         fx.colorMode = .dLog2
         let buffer = ScopeTestBuffers.makeEdgeBuffer()
@@ -499,7 +500,7 @@ final class PlaybackAssistTests: XCTestCase {
 
     func testEngineGradesPlaybackLUTAsReplace() async {
         let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.lutDimension = cube.size
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         fx.colorMode = .dLog2
@@ -605,11 +606,11 @@ final class PlaybackAssistTests: XCTestCase {
             throw XCTSkip("Metal required")
         }
         let cube = BuiltInLook.mono.cube()
-        var fx = LiveImageEffects()
+        var fx = MonitorFrameEffects()
         fx.lutDimension = cube.size
         fx.lutRGBA = cube.rgbaComponents.withUnsafeBytes { Data($0) }
         fx.colorMode = colorMode
-        let source = CIImage(cvPixelBuffer: buffer, options: LiveMonitorWorkingSpace.imageOptions)
+        let source = CIImage(cvPixelBuffer: buffer, options: MonitorWorkingSpace.imageOptions)
         let identity = displayIsSource ? source : CIImage(cvPixelBuffer: buffer)
         let product = LiveMonitorCompositor.applyProduct(to: source, effects: fx, display: identity)
         XCTAssertTrue(product.unmanagedBake)
@@ -632,7 +633,7 @@ final class PlaybackAssistTests: XCTestCase {
             defer { baker.releaseBakedTexture(texture) }
             guard
                 let wrapped = CIImage(
-                    mtlTexture: texture, options: LiveMonitorWorkingSpace.imageOptions)
+                    mtlTexture: texture, options: MonitorWorkingSpace.imageOptions)
             else {
                 XCTFail("CIImage(mtlTexture:) must wrap the bake")
                 return 0
@@ -662,7 +663,7 @@ final class PlaybackAssistTests: XCTestCase {
     }
 
     private static func sampleLuma(_ image: CIImage) -> Float {
-        let context = CIContext(options: LiveMonitorWorkingSpace.contextOptions)
+        let context = CIContext(options: MonitorWorkingSpace.contextOptions)
         var bytes = [UInt8](repeating: 0, count: 4)
         context.render(
             image, toBitmap: &bytes, rowBytes: 4,

@@ -12,6 +12,8 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.opencapture.opencine.runtime.InspectorPreviewFrame
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
 
 /** Exercises actual asynchronous bitmap publication and the production EGL grade path. */
 @RunWith(AndroidJUnit4::class)

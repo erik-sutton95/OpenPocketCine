@@ -14,6 +14,8 @@ import com.opencapture.monitorui.MonitorBackdropSource
 import com.opencapture.monitorui.MonitorBlurCapability
 import androidx.compose.ui.platform.LocalView
 import android.view.View
+import com.opencapture.opencine.runtime.InspectorPreviewFrame
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
 
 internal class MonitorBackdropFeed(context: Context) {
     val source = MonitorBackdropSource()

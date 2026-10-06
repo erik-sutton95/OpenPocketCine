@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.assists
 
 import com.opencapture.opencine.vocabulary.CameraStatus
-import com.opencapture.openpocketcine.feed.MonitorTransfer
+import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.monitorui.MonitorScopeTraceRaster as ScopeTraceRaster
 import com.opencapture.monitorui.MonitorTrafficLightsGeometry as TrafficLightsAssist
 import com.opencapture.monitorui.MonitorVectorscopeGraticule as VectorscopeGraticule
@@ -24,6 +24,12 @@ import com.opencapture.monitorui.MonitorZebraUnit
 import com.opencapture.monitorui.MonitorWaveformMode
 import com.opencapture.monitorui.MonitorParadeMode
 import com.opencapture.opencine.media.MonitorCrushClipCompensation
+import com.opencapture.monitorui.MonitorScopePanelMath
+import com.opencapture.monitorui.MonitorScopePanelSize
+import com.opencapture.monitorui.MonitorScopeStoredCenter
+import com.opencapture.monitorui.MonitorScopePoint
+import com.opencapture.monitorui.MonitorScopeSize
+import com.opencapture.monitorui.MonitorScopeRect
 
 class ScopeGeometryTest {
     /** Swift `falseColorClip(.limits)` + `falseColorBands(.limits)` clip edge, probed 2026-09-29. */
@@ -49,7 +55,7 @@ class ScopeGeometryTest {
     fun waveformPlotGuttersDoNotScaleWithPanelSoIre100StaysOnTheGuide() {
         val d = 3f
         val scale = 1.6f
-        val base = ScopePanelSize.waveform
+        val base = MonitorScopePanelSize.waveform
         val live =
             WaveformAxis.plotRect(base.width * scale * d, base.height * scale * d, d)
         assertEquals(WaveformAxis.TITLE_HEIGHT * d, live.minY, 0.01f)
@@ -66,7 +72,7 @@ class ScopeGeometryTest {
 
     @Test
     fun waveformAxisPinsZeroAndOneHundredOnPlotEdges() {
-        val size = ScopePanelSize.waveform
+        val size = MonitorScopePanelSize.waveform
         val plot = WaveformAxis.plotRect(size.width, size.height)
         assertEquals(WaveformAxis.TITLE_HEIGHT, plot.minY, 0.01f)
         assertEquals(size.height - WaveformAxis.BOTTOM_PAD, plot.maxY, 0.01f)
@@ -88,7 +94,7 @@ class ScopeGeometryTest {
 
     @Test
     fun histogramPlotUsesGutteredWaveAxis() {
-        val size = ScopePanelSize.histogram
+        val size = MonitorScopePanelSize.histogram
         val plot = HistogramAssist.plotRect(size.width, size.height)
         assertEquals(HistogramAssist.trafficGutter, plot.minX, 0.01f)
         assertEquals(WaveformAxis.TITLE_HEIGHT, plot.minY, 0.01f)
@@ -120,7 +126,7 @@ class ScopeGeometryTest {
     @Test
     fun plotGuttersScaleWithDensityLikeIosPoints() {
         val d = 2.75f
-        val size = ScopePanelSize.histogram
+        val size = MonitorScopePanelSize.histogram
         val at1 = HistogramAssist.plotRect(size.width, size.height)
         val atD = HistogramAssist.plotRect(size.width * d, size.height * d, d)
         assertEquals(at1.minX * d, atD.minX, 0.02f)
@@ -208,35 +214,35 @@ class ScopeGeometryTest {
 
     @Test
     fun movablePanelClampSnapAndStoredCenter() {
-        assertEquals(0.6, MovablePanelMath.clampedScale(0.2), 1e-9)
-        assertEquals(1.6, MovablePanelMath.clampedScale(3.0), 1e-9)
-        val size = MovablePanelMath.panelSize(ScopePanelSize.vectorscope, 2.0)
+        assertEquals(0.6, MonitorScopePanelMath.clampedScale(0.2), 1e-9)
+        assertEquals(1.6, MonitorScopePanelMath.clampedScale(3.0), 1e-9)
+        val size = MonitorScopePanelMath.panelSize(MonitorScopePanelSize.vectorscope, 2.0)
         assertEquals(304f, size.width)
         assertEquals(304f, size.height)
-        val snapped = MovablePanelMath.snap(AssistPoint(11f, 23f))
+        val snapped = MonitorScopePanelMath.snap(MonitorScopePoint(11f, 23f))
         assertEquals(12f, snapped.x, 0.01f)
         assertEquals(24f, snapped.y, 0.01f)
 
-        val bounds = AssistRect(0f, 0f, 800f, 400f)
-        val feed = AssistRect(40f, 20f, 720f, 360f)
-        val offFeed = MovablePanelMath.clamp(AssistPoint(30f, 200f), AssistSize(40f, 40f), bounds)
+        val bounds = MonitorScopeRect(0f, 0f, 800f, 400f)
+        val feed = MonitorScopeRect(40f, 20f, 720f, 360f)
+        val offFeed = MonitorScopePanelMath.clamp(MonitorScopePoint(30f, 200f), MonitorScopeSize(40f, 40f), bounds)
         assertEquals(30f, offFeed.x, 0.01f)
         assertTrue(offFeed.x < feed.minX)
-        val stored = StoredCenter(AssistPoint(750f, 125f), AssistRect(0f, 0f, 1000f, 500f))
+        val stored = MonitorScopeStoredCenter(MonitorScopePoint(750f, 125f), MonitorScopeRect(0f, 0f, 1000f, 500f))
         assertEquals(0.75, stored.xFraction, 0.001)
         assertEquals(0.25, stored.yFraction, 0.001)
     }
 
     @Test
     fun unplacedWindowedScopeStartsAtCanvasCenterThenClampsToMovement() {
-        val canvas = AssistRect(0f, 0f, 874f, 402f)
-        val movement = AssistRect(8f, 8f, 858f, 386f)
-        val size = ScopePanelSize.histogram
-        val fallback = AssistPoint(canvas.midX, canvas.midY)
-        val raw = MovablePanelMath.resolvedCenter(null, null, fallback, size, canvas)
+        val canvas = MonitorScopeRect(0f, 0f, 874f, 402f)
+        val movement = MonitorScopeRect(8f, 8f, 858f, 386f)
+        val size = MonitorScopePanelSize.histogram
+        val fallback = MonitorScopePoint(canvas.midX, canvas.midY)
+        val raw = MonitorScopePanelMath.resolvedCenter(null, null, fallback, size, canvas)
         assertEquals(canvas.midX, raw.x, 0.05f)
         assertEquals(canvas.midY, raw.y, 0.05f)
-        val fitted = MovablePanelMath.clampWithGrip(raw, size, movement, MovablePanelMath.GRIP_EXTERIOR_DP)
+        val fitted = MonitorScopePanelMath.clampWithGrip(raw, size, movement, MonitorScopePanelMath.GRIP_EXTERIOR_DP)
         assertEquals(canvas.midX, fitted.x, 0.05f)
         assertEquals(canvas.midY, fitted.y, 0.05f)
         assertTrue(fitted.y + size.height / 2f <= movement.maxY + 0.05f)
@@ -244,9 +250,9 @@ class ScopeGeometryTest {
 
     @Test
     fun audioFreshMeterStartsAtLeftAndCanvasVerticalCenter() {
-        val canvas = AssistRect(40f, 20f, 844f, 390f)
-        val movement = AssistRect(54f, 70f, 812f, 268f)
-        val size = ScopePanelSize.audio
+        val canvas = MonitorScopeRect(40f, 20f, 844f, 390f)
+        val movement = MonitorScopeRect(54f, 70f, 812f, 268f)
+        val size = MonitorScopePanelSize.audio
         val center = AudioAssist.defaultCenter(canvas, movement, size)
         assertEquals(movement.minX + size.width / 2f, center.x, 0.05f)
         assertEquals(canvas.midY, center.y, 0.05f)

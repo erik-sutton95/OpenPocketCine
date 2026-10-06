@@ -66,7 +66,7 @@ extension SessionRecoveryOverlay where Host == AppModel {
 }
 
 extension View {
-    func chromeEditable(_ section: PocketDispChrome.Section, editing mode: PocketDispMode?)
+    func chromeEditable(_ section: MonitorDisplayChrome.Section, editing mode: MonitorDisplayMode?)
         -> some View
     {
         modifier(ChromeEditableModifier<AppModel>(section: section, mode: mode))

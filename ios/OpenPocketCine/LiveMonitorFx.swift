@@ -8,11 +8,8 @@ import OpenPocketViewCore
 import UIKit
 
 /// The shared value owns picture and sample demand. DJI source facts remain adapter inputs.
-typealias LiveImageEffects = OpenCineMedia.MonitorFrameEffects
-typealias FalseColorScaleKind = OpenCineMedia.MonitorFalseColorSelection
-typealias ZebraPaint = MonitorZebraPaint
 
-extension LiveImageEffects {
+extension MonitorFrameEffects {
     var colorMode: ColorMode {
         get { transfer.colorMode }
         set {
@@ -31,26 +28,25 @@ extension LiveImageEffects {
     init(histogram: Bool) { self.init(); self.histogram = histogram }
 }
 
-typealias LiveMonitorWorkingSpace = OpenCineApple.MonitorWorkingSpace
 
 enum LiveMonitorCompositor {
     static var fusedPeakingAvailable: Bool {
         OpenCineApple.MonitorImageCompositor.fusedPeakingAvailable
     }
     static var fusedPeakingNote: String { OpenCineApple.MonitorImageCompositor.fusedPeakingNote }
-    static func apply(to source: CIImage, effects: LiveImageEffects, display: CIImage? = nil)
+    static func apply(to source: CIImage, effects: MonitorFrameEffects, display: CIImage? = nil)
         -> CIImage
     {
         OpenCineApple.MonitorImageCompositor.apply(
             to: source, effects: effects.nativeImageEffects, display: display)
     }
-    static func applyProduct(to source: CIImage, effects: LiveImageEffects, display: CIImage? = nil)
+    static func applyProduct(to source: CIImage, effects: MonitorFrameEffects, display: CIImage? = nil)
         -> (image: CIImage, unmanagedBake: Bool)
     {
         OpenCineApple.MonitorImageCompositor.applyProduct(
             to: source, effects: effects.nativeImageEffects, display: display)
     }
-    static func assistOverlay(from source: CIImage, effects: LiveImageEffects) -> CIImage {
+    static func assistOverlay(from source: CIImage, effects: MonitorFrameEffects) -> CIImage {
         OpenCineApple.MonitorImageCompositor.assistOverlay(
             from: source, effects: effects.nativeImageEffects)
     }
@@ -59,7 +55,7 @@ enum LiveMonitorCompositor {
     }
 }
 
-extension LiveImageEffects {
+extension MonitorFrameEffects {
     var nativeImageEffects: OpenCineApple.MonitorImageEffects {
         var result = nativeImagePlan
         if falseColor,

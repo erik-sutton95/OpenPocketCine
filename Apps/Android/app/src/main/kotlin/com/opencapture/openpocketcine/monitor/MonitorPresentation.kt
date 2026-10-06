@@ -6,10 +6,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.opencapture.opencine.cameracontrols.reportChromeFrame
-import com.opencapture.openpocketcine.ChromeRect
+import com.opencapture.monitorui.MonitorRect
 import com.opencapture.monitorui.MonitorIcon
+import com.opencapture.monitorui.MonitorValue
 
-typealias MonitorValue = com.opencapture.monitorui.MonitorValue
 
 /** Adapter boundary for canvas frame reporting; shared rendering owns the layout. */
 @Composable
@@ -20,7 +20,7 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
     quickPreview: (@Composable (String, com.opencapture.monitorui.MonitorQuickPreview, Float) -> Unit)? = null,
     onQuickActiveChange: (Boolean) -> Unit = {},
     quickBottomClearanceDp: Float = 0f,
-    onOpen: (String) -> Unit, onFrame: (String, ChromeRect) -> Unit) {
+    onOpen: (String) -> Unit, onFrame: (String, MonitorRect) -> Unit) {
     com.opencapture.monitorui.MonitorCameraValues(values, enabled, portrait, modifier,
         itemModifier = { id -> Modifier.reportChromeFrame { onFrame(id, it) } },
         quickControl = quickControl, onQuickCommit = onQuickCommit, quickPreview = quickPreview,

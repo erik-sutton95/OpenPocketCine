@@ -23,6 +23,7 @@ import com.opencapture.opencine.vocabulary.MediaCacheGrade
 import com.opencapture.opencine.cameracontrols.MediaOperatorCopy
 import com.opencapture.opencine.cameracontrols.MediaLibraryCopy
 import com.opencapture.opencine.cameracontrols.MediaClipPresentation
+import com.opencapture.opencine.dji.MediaCommands
 
 class MediaLibraryTest {
     private fun fixture(): ByteArray =

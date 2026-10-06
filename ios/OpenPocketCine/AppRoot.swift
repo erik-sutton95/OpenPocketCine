@@ -12,6 +12,8 @@ import OpenCineWatch
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
+import OpenCineApple
+import OpenCineDJIApple
 
 /// App-level session object (OpenZCine `NativeAppModel` analogue). Owns the existing
 /// `CameraSession` connection spine and the shared cameras model. Does not rewrite DUML.
@@ -184,7 +186,7 @@ final class AppModel {
     var assist = LiveAssistState()
     /// Decoded-frame scopes. Filled by `HevcDecoder.handleDecodedFrame` — not camera DUML.
     var frameSamples = LiveFrameSampleBus()
-    @ObservationIgnored var inspectorPreview = AssistInspectorImageRenderer()
+    @ObservationIgnored var inspectorPreview = MonitorInspectorImageRenderer()
     @ObservationIgnored let liveBackdrop = MonitorVideoBackdropRenderer()
     @ObservationIgnored let playbackBackdrop = MonitorVideoBackdropRenderer()
     /// Monitor tools follow the displayed source; watcher scopes must never read the camera bus.
@@ -354,7 +356,7 @@ final class AppModel {
     var dispClean = OperatorPrefs.dispClean {
         didSet { OperatorPrefs.dispClean = dispClean }
     }
-    var operatorSettingsTab: OperatorSettingsTab = .link
+    var operatorSettingsTab: MonitorSettingsTab = .link
     /// Compatibility for native panels while their contents migrate: the shell owns the cover.
     var liveOperatorPanel: LiveOperatorPanel? {
         get {
@@ -370,9 +372,9 @@ final class AppModel {
         }
     }
     /// DISP mode whose chrome the operator is editing on the monitor, or `nil` when live.
-    var chromeEditorMode: PocketDispMode?
+    var chromeEditorMode: MonitorDisplayMode?
     /// Section Display settings should reopen on after Done.
-    var chromeEditorReturnMode: PocketDispMode?
+    var chromeEditorReturnMode: MonitorDisplayMode?
     /// False for a beat after live mounts so the connect tap cannot hit Settings / Media.
     var liveChromeInteractive = true
     var portraitFeedAspect: PortraitFeedAspect = OperatorPrefs.portraitFeedAspect {
@@ -438,12 +440,12 @@ final class AppModel {
     @ObservationIgnored private var internetHopSSID: String?
     @ObservationIgnored private var liveChromeArmTask: Task<Void, Never>?
 
-    var isOnCameraAccessPoint: Bool { WiFiJoiner.isCameraPathReady() }
+    var isOnCameraAccessPoint: Bool { DjiAppleWiFiJoiner.isCameraPathReady() }
 
     func beginInternetHop() {
         internetHopActive = true
         internetHopSSID = session.joinedSSID ?? session.cachedSSID
-        if let ssid = internetHopSSID { WiFiJoiner.leave(ssid: ssid) }
+        if let ssid = internetHopSSID { DjiAppleWiFiJoiner.leave(ssid: ssid) }
     }
 
     func endInternetHop() {
@@ -469,15 +471,15 @@ final class AppModel {
         return (try? await URLSession.shared.data(for: request)) != nil
     }
 
-    var currentDispMode: PocketDispMode { assist.clean ? .clean : .live }
+    var currentDispMode: MonitorDisplayMode { assist.clean ? .clean : .live }
 
-    var dispChrome: PocketDispChrome {
+    var dispChrome: MonitorDisplayChrome {
         chrome(for: currentDispMode)
     }
 
     var isEditingChrome: Bool { chromeEditorMode != nil }
 
-    func chrome(for mode: PocketDispMode) -> PocketDispChrome {
+    func chrome(for mode: MonitorDisplayMode) -> MonitorDisplayChrome {
         switch mode {
         case .live: dispLive
         case .clean: dispClean
@@ -486,9 +488,9 @@ final class AppModel {
 
     /// Whether `section` mounts right now: switched on, or force-mounted while that
     /// mode's chrome is being edited. Settings stays reachable if both modes hid it.
-    func chromeSectionMounts(_ section: PocketDispChrome.Section) -> Bool {
+    func chromeSectionMounts(_ section: MonitorDisplayChrome.Section) -> Bool {
         if let mode = chromeEditorMode, mode == currentDispMode,
-            PocketDispChrome.isConfigurable(section, in: mode)
+            MonitorDisplayChrome.isConfigurable(section, in: mode)
         {
             return true
         }
@@ -498,7 +500,7 @@ final class AppModel {
         return dispChrome.isVisible(section)
     }
 
-    func toggleChrome(_ section: PocketDispChrome.Section, for mode: PocketDispMode) {
+    func toggleChrome(_ section: MonitorDisplayChrome.Section, for mode: MonitorDisplayMode) {
         switch mode {
         case .live: dispLive.toggle(section)
         case .clean: dispClean.toggle(section)
@@ -506,7 +508,7 @@ final class AppModel {
     }
 
     /// Leaves Settings and switches the monitor to `mode` so badges land on the real thing.
-    func beginChromeEditing(_ mode: PocketDispMode) {
+    func beginChromeEditing(_ mode: MonitorDisplayMode) {
         liveOperatorPanel = nil
         liveGimbalPanel = .none
         setDisplayMode(clean: mode == .clean)

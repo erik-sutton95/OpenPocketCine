@@ -4,6 +4,7 @@ import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -11,7 +12,7 @@ import XCTest
 final class CapturePreviewTrafficTests: XCTestCase {
     func testMountedHeldPanelsAndTheirDetentsAreReadOnlyUntilExplicitReleaseCommit() async throws {
         let peer = try CaptureTrafficPeer()
-        let driver = DatalinkDriver.loopbackForTesting(port: try await peer.start())
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let model = AppModel()
         model.session = CameraSession(borrowing: HevcDecoder())
         model.session.datalink = driver
@@ -42,7 +43,7 @@ final class CapturePreviewTrafficTests: XCTestCase {
         status.whiteBalanceTint = 17
         // A body that meters audio: the AUDIO drum comes from its capability projection.
         model.session.updateMultiview(
-            camera: FoundCamera(
+            camera: DjiAppleSighting(
                 id: UUID(), name: "OsmoPocket4P-Test",
                 model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
             driver: driver, status: status)

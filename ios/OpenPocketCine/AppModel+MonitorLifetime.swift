@@ -3,10 +3,11 @@ import OpenCineAppKit
 import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
+import OpenCineDJIApple
 
 extension AppModel {
     /// A tile lends its native transport and decoder. The shell only returns that loan.
-    func borrowMonitor(_ camera: FoundCamera, release: @escaping @MainActor () -> Void) {
+    func borrowMonitor(_ camera: DjiAppleSighting, release: @escaping @MainActor () -> Void) {
         let saved = SavedCamera(id: camera.id.uuidString,
             integration: DJICameraSessionAdapter.integration,
             advertisedName: camera.name, model: camera.model.name)

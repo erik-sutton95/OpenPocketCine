@@ -38,7 +38,7 @@ import com.opencapture.opencine.multicam.ResourceAdmission
 import com.opencapture.opencine.multicam.ResourceRequest
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
-import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlan
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
 import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlanFactory
 import com.opencapture.opencine.dji.BleLink
 import com.opencapture.opencine.dji.DatalinkDriver
@@ -70,6 +70,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import kotlin.time.Duration.Companion.seconds
+import com.opencapture.opencine.runtime.InspectorPreviewPipeline
+import com.opencapture.opencine.runtime.ScopeSampleBus
 
 private const val TAG = "Multiview"
 

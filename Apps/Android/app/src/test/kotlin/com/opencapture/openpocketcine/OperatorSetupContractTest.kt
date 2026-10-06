@@ -5,7 +5,7 @@ import com.opencapture.opencine.cameracontrols.lutLookLabel
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.opencine.vocabulary.GamepadGimbalStick
-import com.opencapture.openpocketcine.feed.FeedUpscaler
+import com.opencapture.opencine.runtime.MonitorGlesUpscaler
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -16,11 +16,13 @@ import com.opencapture.opencine.cameracontrols.formatAppVersion
 import com.opencapture.opencine.cameracontrols.connectionPhaseLabel
 import com.opencapture.opencine.cameracontrols.OperatorLinkHealth
 import com.opencapture.opencine.cameracontrols.CleanPinTool
+import com.opencapture.opencine.appkit.MonitorDisplaySection
+import com.opencapture.opencine.appkit.MonitorDisplayChrome
 
 class OperatorSetupContractTest {
     @Test
     fun liveChromeJsonRoundTripsIosKeys() {
-        val json = JSONObject(PocketDispChrome.liveDefaults.toJson())
+        val json = JSONObject(MonitorDisplayChrome.liveDefaults.toJson())
         val keys =
             listOf(
                 "statusBar",
@@ -45,13 +47,13 @@ class OperatorSetupContractTest {
             assertTrue(json.has(key), "missing $key")
             assertTrue(json.getBoolean(key), "$key should default on for live")
         }
-        val decoded = PocketDispChrome.fromJson(json.toString(), PocketDispChrome.cleanDefaults)
-        assertEquals(PocketDispChrome.liveDefaults, decoded)
+        val decoded = MonitorDisplayChrome.fromJson(json.toString(), MonitorDisplayChrome.cleanDefaults)
+        assertEquals(MonitorDisplayChrome.liveDefaults, decoded)
     }
 
     @Test
     fun cleanChromeDefaultsMatchIos() {
-        val clean = PocketDispChrome.cleanDefaults
+        val clean = MonitorDisplayChrome.cleanDefaults
         assertFalse(clean.statusBar)
         assertFalse(clean.toolBar)
         assertFalse(clean.cameraValues)
@@ -59,13 +61,13 @@ class OperatorSetupContractTest {
         assertTrue(clean.batteries)
         assertTrue(clean.railSettings)
         assertTrue(clean.focusBox)
-        val decoded = PocketDispChrome.fromJson(clean.toJson(), PocketDispChrome.liveDefaults)
+        val decoded = MonitorDisplayChrome.fromJson(clean.toJson(), MonitorDisplayChrome.liveDefaults)
         assertEquals(clean, decoded)
     }
 
     @Test
     fun chromeToggleFlipsSection() {
-        val next = PocketDispChrome.liveDefaults.toggling(PocketDispSection.STATUS_BAR)
+        val next = MonitorDisplayChrome.liveDefaults.toggling(MonitorDisplaySection.STATUS_BAR)
         assertFalse(next.statusBar)
         assertTrue(next.toolBar)
     }
@@ -168,10 +170,10 @@ class OperatorSetupContractTest {
 
     @Test
     fun feedUpscalerOffersOffAndFastOnly() {
-        assertEquals(listOf("Off", "Fast"), FeedUpscaler.supported.map { it.label })
-        assertEquals(FeedUpscaler.FAST, FeedUpscaler.fromStored(null))
-        assertEquals(FeedUpscaler.OFF, FeedUpscaler.fromStored("Off"))
-        assertEquals(FeedUpscaler.FAST, FeedUpscaler.fromStored("Lanczos"))
+        assertEquals(listOf("Off", "Fast"), MonitorGlesUpscaler.supported.map { it.label })
+        assertEquals(MonitorGlesUpscaler.FAST, MonitorGlesUpscaler.fromStored(null))
+        assertEquals(MonitorGlesUpscaler.OFF, MonitorGlesUpscaler.fromStored("Off"))
+        assertEquals(MonitorGlesUpscaler.FAST, MonitorGlesUpscaler.fromStored("Lanczos"))
     }
 
     @Test

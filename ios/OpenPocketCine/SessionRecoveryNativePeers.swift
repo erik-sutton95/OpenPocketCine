@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import OpenCineDJIApple
 
 /// Opt-in SIMULATED dependencies for tracing the actual recovery owner.
 /// This supplies clocks, actual discovery/native boundaries and synthetic source facts, never
@@ -17,7 +18,7 @@ struct SessionRecoveryNativePeers {
     var sleep: @Sendable (Duration) async throws -> Void
     var jitter: () -> Double
     var waitUntilPoweredOn: () async -> Bool
-    var scan: () -> AsyncStream<FoundCamera>
+    var scan: () -> AsyncStream<DjiAppleSighting>
     var stopScan: () -> Void
     var picture: () -> Picture
     var disposeEndpoint: () -> Void

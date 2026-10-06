@@ -3,6 +3,7 @@ import Observation
 import OpenCineDJI
 import OpenPocketViewCore
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -12,8 +13,8 @@ final class ZoomGestureOwnerTests: XCTestCase {
     @MainActor private final class Reentry { var value = false }
     private func borrowed() -> CameraSession {
         let session = CameraSession(borrowing: HevcDecoder())
-        let driver = DatalinkDriver(port: 9004, tcpPoke: false, pairingToken: "")
-        let camera = FoundCamera(
+        let driver = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
+        let camera = DjiAppleSighting(
             id: UUID(), name: "OsmoPocket3-Test",
             model: CameraModel.resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil)
         var status = CameraStatus()

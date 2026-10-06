@@ -15,7 +15,7 @@ struct LiveLockButton: View {
         } label: {
             // Lucide's lock extends farther vertically than the reference
             // glyph; compensate optically without shrinking the 54pt tile.
-            OpcIcon.lock
+            MonitorIcon.lock
                 .frame(width: size * 26 / 54, height: size * 26 / 54)
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: locked)

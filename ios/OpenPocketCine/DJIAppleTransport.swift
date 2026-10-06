@@ -1,13 +1,9 @@
 import Foundation
 import OpenCineDJIApple
+import struct OpenCineCore.SavedCamera
 import OpenPocketViewCore
 
 // Transitional source names resolve to the shared native implementations.
-typealias BleLink = DjiAppleBluetoothLink
-typealias DatalinkDriver = DjiAppleDatalink
-typealias WiFiJoiner = DjiAppleWiFiJoiner
-typealias SharedWiFiPath = DjiAppleSharedWiFiPath
-typealias FoundCamera = DjiAppleSighting
 
 extension DjiAppleTransportHost {
     /// Each connection receives its own value; logging retains Pocket's existing redaction/storage.
@@ -70,7 +66,7 @@ extension FeedIncidentQueue {
 
 /// Permission classification stays typed; branded operator copy remains in app composition.
 func djiConnectionFailureDescription(_ error: Error, fallback: String? = nil) -> String {
-    if case DatalinkDriver.DatalinkError.localNetworkDenied = error {
+    if case DjiAppleDatalink.DatalinkError.localNetworkDenied = error {
         return StartupConnectionCopy.localNetworkDenied
     }
     return fallback ?? (error as? LocalizedError)?.errorDescription ?? "\(error)"

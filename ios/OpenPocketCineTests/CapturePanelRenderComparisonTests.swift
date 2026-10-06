@@ -3,6 +3,7 @@ import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
 import XCTest
+import OpenCineDJIApple
 
 @testable import OpenPocketCine
 
@@ -31,7 +32,7 @@ final class CapturePanelRenderComparisonTests: XCTestCase {
         status.focusTrack = .subjectLock
         // A body with focus: the FOCUS drum comes from its capability projection.
         model.session.updateMultiview(
-            camera: FoundCamera(
+            camera: DjiAppleSighting(
                 id: UUID(), name: "OsmoPocket4P-Test",
                 model: .resolve(modelId: 0x22, name: "OsmoPocket4P-Test"), modelId: 0x22),
             driver: nil, status: status)
