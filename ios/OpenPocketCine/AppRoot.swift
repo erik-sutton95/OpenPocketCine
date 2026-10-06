@@ -1082,7 +1082,8 @@ struct LinkExperience: View {
 
     var body: some View {
         AppShell(
-            model: model.shell, brand: ShellBrand(name: "OpenPocketCine"),
+            // Main's setup chip menu: Forget only, no Rename setup.
+            model: model.shell, brand: ShellBrand(name: "OpenPocketCine", renamesSetups: false),
             actions: ShellActions(
                 diagnostics: {
                     if let url = DiagnosticCenter.shared.beginShare(session: model.session) {

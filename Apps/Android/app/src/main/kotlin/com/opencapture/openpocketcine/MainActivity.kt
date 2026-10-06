@@ -348,7 +348,8 @@ private fun LinkExperience(
     }
     val phase by model.session.phaseFlow.collectAsState()
     val radioOn by model.session.radioOn.collectAsState()
-    AppShell(model.shell, ShellBrand("OpenPocketCine"),
+    // Main's setup chip menu: Forget only, no Rename setup.
+    AppShell(model.shell, ShellBrand("OpenPocketCine", renamesSetups = false),
         ShellActions(
             diagnostics = { DiagnosticCenter.shareReport(context, model.session) },
             reportProblem = { showProblemReport = true },

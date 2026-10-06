@@ -247,9 +247,8 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
        absent. Never erase real app data to make a downgrade possible.
 
 21. Shared-camera page follow-ups, both platforms (physical checks untested):
-    1. Long-press a camera's only setup, rename it, relaunch and reconnect. Repeat
-       for one setup of a camera with several; other names and routes stay intact.
-       Clear the setup name and confirm the default title returns after relaunch.
+    1. Long-press a camera's only setup: no Rename setup (as on main). Long-press a
+       Wi-Fi or hotspot setup: Forget only; the camera's other setups stay intact.
     2. Saved cameras and empty startup show no Privacy or Terms links (as on main);
        Settings still opens both documents.
 

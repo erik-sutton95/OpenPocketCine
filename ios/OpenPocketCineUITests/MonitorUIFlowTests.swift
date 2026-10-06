@@ -1108,6 +1108,20 @@ final class MonitorUIFlowTests: XCTestCase {
         }
     }
 
+    /// A setup chip's menu is main's: Forget for a setup that moves the camera, no Rename setup.
+    func testSetupChipMenuOffersForgetButNoRename() {
+        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
+        app.launch()
+        rotate(.portrait)
+        let hotspot = app.buttons["cameras.setup.phoneHotspot"]
+        XCTAssertTrue(hotspot.waitForExistence(timeout: 10))
+        hotspot.press(forDuration: 1.2)
+        let forget = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Forget '")).firstMatch
+        XCTAssertTrue(forget.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Rename setup"].exists)
+        capture("setup-chip-menu")
+    }
+
     private func reveal(_ tab: XCUIElement, in rail: XCUIElement, portrait: Bool) {
         for _ in 0..<6 where !tab.isHittable {
             if portrait {
