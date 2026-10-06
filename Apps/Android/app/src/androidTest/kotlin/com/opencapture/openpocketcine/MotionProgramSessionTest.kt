@@ -22,6 +22,8 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.opencapture.opencine.cameracontrols.LiveGimbalOverlay
+import com.opencapture.opencine.cameracontrols.LiveGimbalPanel
 import com.opencapture.opencine.motion.GimbalProgram
 import com.opencapture.opencine.motion.GimbalWaypoint
 import com.opencapture.opencine.dji.DjiCameraSession

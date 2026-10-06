@@ -7,7 +7,12 @@ import com.opencapture.opencine.appkit.monitorChromeEditBoxes
 import com.opencapture.opencine.appkit.ObservePhoneBattery
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.cameracontrols.CaptureLists
+import com.opencapture.opencine.cameracontrols.LiveGimbalButton
+import com.opencapture.opencine.cameracontrols.LiveGimbalOverlay
+import com.opencapture.opencine.cameracontrols.LiveGimbalPanel
+import com.opencapture.opencine.cameracontrols.LiveGimbalSheetHost
 import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.cameracontrols.hidesLowerCaptureValues
 import com.opencapture.opencine.cameracontrols.isTopAnchored
 import com.opencapture.opencine.cameracontrols.opening

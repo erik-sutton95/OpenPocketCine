@@ -60,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
+import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.vocabulary.ConnectionPhase
 import kotlin.math.roundToInt
 import androidx.compose.ui.draw.alpha
@@ -78,7 +79,6 @@ import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.panelGlass
 import kotlinx.coroutines.launch
 

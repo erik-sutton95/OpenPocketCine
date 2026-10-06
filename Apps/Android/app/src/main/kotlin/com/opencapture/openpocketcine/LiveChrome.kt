@@ -1,8 +1,8 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.monitorui.MonitorBatteryOutlineRow
-import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.cameracontrols.CaptureLists
+import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.media.CameraLinkPhase
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateOffsetAsState
@@ -16,8 +16,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -111,30 +109,6 @@ val ChromeShape = RoundedCornerShape(LiveDesign.CORNER_RADIUS_DP.dp)
 
 @Composable
 fun Modifier.monitorGlass(shape: Shape = ChromeShape): Modifier = liveChromeGlass(shape)
-
-/** iOS `CloseButton` on live picker / assist cards — 34dp glass circle. */
-@Composable
-fun LivePopupCloseButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    size: Dp = 34.dp,
-) {
-    Box(
-        modifier
-            .size(size)
-            .glass(CircleShape)
-            .chromeClickable(onClick = onClick)
-            .semantics { contentDescription = "Close" },
-        contentAlignment = Alignment.Center,
-    ) {
-        OpcIcon(
-            icon = OpcIcon.X,
-            contentDescription = null,
-            tint = LiveDesign.text,
-            modifier = Modifier.size(size * 0.38f),
-        )
-    }
-}
 
 @Composable
 fun Modifier.chromePressable(enabled: Boolean = true): Modifier {
@@ -272,52 +246,6 @@ fun LiveBottomChromeBand(
             if (showCapture) capturePlaceable.place(constraints.maxWidth - capturePlaceable.width, 0)
         }
     }
-}
-
-@Composable
-fun Modifier.chromeClickable(
-    enabled: Boolean = true,
-    onLongClick: (() -> Unit)? = null,
-    onClick: () -> Unit,
-): Modifier {
-    val interaction = remember { MutableInteractionSource() }
-    val haptics = LocalOperatorHaptics.current
-    val pressed by interaction.collectIsPressedAsState()
-    val alpha by animateFloatAsState(if (pressed && enabled) 0.6f else 1f, tween(120), label = "chrome-a")
-    val scale by animateFloatAsState(if (pressed && enabled) 0.97f else 1f, tween(120), label = "chrome-s")
-    val press =
-        Modifier.graphicsLayer {
-            this.alpha = alpha
-            scaleX = scale
-            scaleY = scale
-        }
-    val clicks =
-        if (onLongClick != null) {
-            Modifier.combinedClickable(
-                enabled = enabled,
-                interactionSource = interaction,
-                indication = null,
-                onClick = {
-                    haptics.selection()
-                    onClick()
-                },
-                onLongClick = {
-                    haptics.longPress()
-                    onLongClick()
-                },
-            )
-        } else {
-            Modifier.clickable(
-                enabled = enabled,
-                interactionSource = interaction,
-                indication = null,
-                onClick = {
-                    haptics.selection()
-                    onClick()
-                },
-            )
-        }
-    return this.then(press).then(clicks)
 }
 
 typealias LiveChromeMetrics = com.opencapture.monitorui.LiveChromeMetrics

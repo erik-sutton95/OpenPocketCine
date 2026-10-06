@@ -55,6 +55,7 @@ import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.monitorui.monitorScrollFade
 import com.opencapture.opencine.cameracontrols.CaptureLists
 import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraStatus
@@ -63,7 +64,6 @@ import com.opencapture.openpocketcine.LiveControlSheet
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.InspectorPreviewPipeline
 
 internal fun multiviewSettingsCategories(camera: CameraModel, status: CameraStatus): List<LiveSheet> = buildList {

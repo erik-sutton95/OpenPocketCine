@@ -53,10 +53,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
+import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.opencine.appkit.MonitorDeliveryCompletion
 import com.opencapture.opencine.appkit.MonitorDeliveryModel
 import kotlinx.coroutines.CoroutineScope

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.openpocketcine.ChromeShape
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
@@ -50,7 +51,6 @@ import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LocalMonitorGlass
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.liveChromeGlass
 import com.opencapture.openpocketcine.panelGlass
 import kotlin.math.max

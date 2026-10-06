@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.opencine.cameracontrols.LivePopupCloseButton
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.openpocketcine.feed.fromColorMode
 
@@ -34,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.LivePopupCloseButton
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.OperatorPrefs
