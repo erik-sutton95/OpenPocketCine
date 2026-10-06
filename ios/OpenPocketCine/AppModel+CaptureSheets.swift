@@ -67,7 +67,8 @@ extension AppModel: CaptureSheetHost {
         let layout = OsmoMonitorPresentation.capabilities(session)
         return CaptureSheetCapabilities(
             focusMode: layout.focus, aperture: layout.iris, nativeIsoHop: true, isoLimit: true,
-            commonExposureCompensation: true, commonFocusMode: true)
+            commonExposureCompensation: true, commonFocusMode: true, audio: layout.audio,
+            faceMetering: false)
     }
     var focusOptions: [FocusOption] { FocusOption.allCases }
     var shutterUsesAngle: Bool {
@@ -75,6 +76,7 @@ extension AppModel: CaptureSheetHost {
         set { OperatorPrefs.shutterUsesAngle = newValue }
     }
     var shutterAngleDegrees: Double { OperatorPrefs.shutterAngleDegrees }
+    var coverOpen: Bool { shell.cover != nil }
     var operatorPanelOpen: Bool { liveOperatorPanel != nil }
 
     func quickSnapshot(_ sheet: CaptureSheet) -> CaptureQuickSnapshot? {

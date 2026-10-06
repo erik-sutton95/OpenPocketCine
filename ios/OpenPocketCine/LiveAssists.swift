@@ -11,61 +11,6 @@ import UIKit
 /// Cinema live-monitor set. MAG is retired; PLAY stays off the video toolbar.
 typealias LiveAssistTool = MonitorAssistSelection
 
-extension MonitorAssistSelection {
-    var isRetired: Bool { self == .magnification }
-    var isPhotographyOnly: Bool { self == .instantReview }
-
-    /// Playback drops LEVEL (needs live camera attitude) and MAG (no on-feed key).
-    /// AUDIO rides last, matching the live strip's trailing section.
-    static var playbackToolbarCases: [LiveAssistTool] {
-        toolbarCases.filter { $0 != .level && $0 != .magnification && $0 != .evMeter } + [
-            .audioMeters
-        ]
-    }
-
-    /// OpenZCine `activeCases` minus photography-only and AUDIO.
-    /// AUDIO is appended as its own trailing section in `LiveAssistBar`.
-    /// ND sits with the exposure meters (HISTO / VECTOR / LIGHTS).
-    static var toolbarGroups: [[LiveAssistTool]] {
-        [
-            [.lut, .peaking, .falseColor],
-            [.zebra, .waveform, .parade],
-            [.histogram, .vectorscope, .trafficLights, .ndMeter, .evMeter],
-            [.guides, .grid, .crosshair, .level],
-            [.desqueeze, .mirror],
-        ]
-    }
-
-    static var toolbarCases: [LiveAssistTool] { toolbarGroups.flatMap { $0 } }
-
-    /// View Assist settings list - same cinema set as the bar, plus AUDIO.
-    static var settingsCases: [LiveAssistTool] {
-        toolbarCases + [.audioMeters]
-    }
-
-    /// Tools the operator can keep on DISP 2. Camera EV stays exclusive to DISP 1.
-    static var cleanPinCases: [LiveAssistTool] { settingsCases.filter { $0 != .evMeter } }
-
-    /// Compact label for the Display ▸ DISP 2 pin grid.
-    var displaySettingsTitle: String { sharedTool?.displaySettingsTitle ?? title }
-
-    var hasConfiguration: Bool { sharedTool?.hasConfiguration ?? false }
-
-    /// The approved prototype owns these tool glyphs; app-only tools retain
-    /// Lucide fallbacks without inventing a new visual language.
-    var monitorIcon: MonitorAssistIcon? { sharedTool?.monitorIcon }
-
-    /// Existing app-only assist glyphs use the shared Lucide catalog.
-    var opcIcon: OpcIcon? {
-        sharedTool?.fallbackIcon
-            ?? (self == .instantReview ? .image : self == .magnification ? .zoomIn : nil)
-    }
-
-    var title: String {
-        sharedTool?.title ?? (self == .instantReview ? "Instant Playback" : "Magnify")
-    }
-}
-
 typealias GuideAspect = MonitorGuideAspect
 
 /// This app's LUT looks: its official cubes, saved choices and custom LUT folder.
@@ -986,7 +931,7 @@ struct AssistToolIcon: View {
                 .frame(width: size, height: size)
         } else if let icon = tool.monitorIcon {
             icon.frame(width: size, height: size)
-        } else if let icon = tool.opcIcon {
+        } else if let icon = tool.lucideIcon {
             icon.frame(width: size, height: size)
                 .rotationEffect(.degrees(tool == .desqueeze ? 90 : 0))
         }
