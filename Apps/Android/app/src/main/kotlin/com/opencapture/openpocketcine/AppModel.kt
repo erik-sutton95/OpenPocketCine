@@ -9,6 +9,7 @@ import com.opencapture.opencine.cameracontrols.CaptureRefresh
 import com.opencapture.opencine.cameracontrols.CaptureSheetHost
 import com.opencapture.opencine.cameracontrols.CaptureWheelState
 import com.opencapture.opencine.cameracontrols.GamepadHost
+import com.opencapture.opencine.cameracontrols.OperatorSetupModel
 import com.opencapture.opencine.cameracontrols.GimbalChromeHost
 import com.opencapture.opencine.cameracontrols.GimbalGamepadDriver
 import com.opencapture.opencine.cameracontrols.LiveGimbalPanel
@@ -85,7 +86,7 @@ class AppModel(
     controlLease: com.opencapture.opencine.dji.MultiviewControlLease? = null,
     discovers: Boolean = false,
     review: String? = null,
-) : GamepadHost, GimbalChromeHost, CaptureSheetHost {
+) : GamepadHost, GimbalChromeHost, CaptureSheetHost, OperatorSetupModel {
     private val appContext = context.applicationContext
     /** One actual cache root/lifetime shared by gallery IO and operator settings. */
     val mediaCacheRoot = com.opencapture.opencine.appkit.MonitorMediaCacheRoot(
@@ -124,7 +125,7 @@ class AppModel(
         saveNetwork = { ssid, password, hotspot -> networkStore.save(ssid, password, hotspot) },
         forgetCredentials = CameraWifiCredentialStore(appContext)::remove,
     )
-    val cameras = CamerasModel(
+    override val cameras = CamerasModel(
         if (discovers) {
             listOf(
                 AppIntegration(
@@ -167,7 +168,7 @@ class AppModel(
     val scopeBus = com.opencapture.opencine.runtime.ScopeSampleBus()
     val inspectorPreview = com.opencapture.opencine.runtime.InspectorPreviewPipeline(
         scopeBus, ::Media3GlBackend, "OpcInspector")
-    val assist = createLiveAssistState(appContext)
+    override val assist = createLiveAssistState(appContext)
 
     /** The operator opened the pair page from the cameras page. */
     var pairing: Boolean
@@ -201,38 +202,38 @@ class AppModel(
             if (value == null) shell.dismissCover()
             else shell.open(if (value == LiveOperatorPanel.SETTINGS) ShellModel.Cover.SETTINGS else ShellModel.Cover.MEDIA)
         }
-    var operatorSettingsTab by mutableStateOf(OperatorSettingsTab.LINK)
+    override var operatorSettingsTab by mutableStateOf(OperatorSettingsTab.LINK)
     var chromeEditorMode by mutableStateOf<PocketDispMode?>(null)
-    var chromeEditorReturnMode by mutableStateOf<PocketDispMode?>(null)
+    override var chromeEditorReturnMode by mutableStateOf<PocketDispMode?>(null)
     override var liveChromeInteractive by mutableStateOf(true)
-    var keepScreenAwake by mutableStateOf(OperatorPrefs.keepScreenAwake(appContext))
+    override var keepScreenAwake by mutableStateOf(OperatorPrefs.keepScreenAwake(appContext))
         private set
-    var hdrDisplay by mutableStateOf(OperatorPrefs.hdrDisplay(appContext))
+    override var hdrDisplay by mutableStateOf(OperatorPrefs.hdrDisplay(appContext))
         private set
     var screenCaptured by mutableStateOf(false)
     val hdrDisplayActive: Boolean
         get() = MonitorHDRDisplay.isEffective(hdrDisplay, screenCaptured)
-    var cacheFullResolution by mutableStateOf(OperatorPrefs.cacheFullResolution(appContext))
+    override var cacheFullResolution by mutableStateOf(OperatorPrefs.cacheFullResolution(appContext))
         private set
-    var recordConfirmationEnabled by mutableStateOf(OperatorPrefs.recordConfirmationEnabled(appContext))
+    override var recordConfirmationEnabled by mutableStateOf(OperatorPrefs.recordConfirmationEnabled(appContext))
         private set
     override var hapticsEnabled by mutableStateOf(OperatorPrefs.hapticsEnabled(appContext))
         private set
-    var gimbalStickSensitivity by mutableIntStateOf(OperatorPrefs.gimbalStickSensitivity(appContext))
+    override var gimbalStickSensitivity by mutableIntStateOf(OperatorPrefs.gimbalStickSensitivity(appContext))
         private set
-    var virtualJoystickInvertPan by mutableStateOf(OperatorPrefs.virtualJoystickInvertPan(appContext))
+    override var virtualJoystickInvertPan by mutableStateOf(OperatorPrefs.virtualJoystickInvertPan(appContext))
         private set
-    var virtualJoystickInvertTilt by mutableStateOf(OperatorPrefs.virtualJoystickInvertTilt(appContext))
+    override var virtualJoystickInvertTilt by mutableStateOf(OperatorPrefs.virtualJoystickInvertTilt(appContext))
         private set
-    var virtualJoystickDeadzonePercent by mutableIntStateOf(
+    override var virtualJoystickDeadzonePercent by mutableIntStateOf(
         OperatorPrefs.virtualJoystickDeadzonePercent(appContext),
     )
         private set
-    var virtualJoystickResponseCurve by mutableStateOf(
+    override var virtualJoystickResponseCurve by mutableStateOf(
         OperatorPrefs.virtualJoystickResponseCurve(appContext),
     )
         private set
-    var virtualJoystickSize by mutableStateOf(OperatorPrefs.virtualJoystickSize(appContext))
+    override var virtualJoystickSize by mutableStateOf(OperatorPrefs.virtualJoystickSize(appContext))
         private set
     val virtualJoystickMapping: CameraCommands.VirtualJoystickMapping
         get() =
@@ -271,7 +272,7 @@ class AppModel(
         private set
     var shutterUsesAngle by mutableStateOf(OperatorPrefs.shutterUsesAngle(appContext))
         private set
-    var lutSelection by mutableStateOf(OperatorPrefs.lutSelection(appContext))
+    override var lutSelection by mutableStateOf(OperatorPrefs.lutSelection(appContext))
         private set
     var assistClean by mutableStateOf(false)
     var phoneBatteryPercent by mutableIntStateOf(-1)
@@ -279,7 +280,7 @@ class AppModel(
     var phoneCharging by mutableStateOf(false)
         private set
     var uiLocked by mutableStateOf(false)
-    val gimbalGamepad = GimbalGamepadDriver(OperatorPrefs::gimbalGamepadStick)
+    override val gimbalGamepad = GimbalGamepadDriver(OperatorPrefs::gimbalGamepadStick)
     override var gamepadConnected by mutableStateOf(false)
 
     val currentDispMode: PocketDispMode
@@ -291,7 +292,7 @@ class AppModel(
     override val isEditingChrome: Boolean
         get() = chromeEditorMode != null
 
-    fun chrome(mode: PocketDispMode): PocketDispChrome =
+    override fun chrome(mode: PocketDispMode): PocketDispChrome =
         when (mode) {
             PocketDispMode.LIVE -> dispLive
             PocketDispMode.CLEAN -> dispClean
@@ -306,7 +307,7 @@ class AppModel(
         return dispChrome.isVisible(section)
     }
 
-    fun toggleChrome(section: PocketDispSection, mode: PocketDispMode) {
+    override fun toggleChrome(section: PocketDispSection, mode: PocketDispMode) {
         when (mode) {
             PocketDispMode.LIVE -> {
                 dispLive = dispLive.toggling(section)
@@ -319,7 +320,8 @@ class AppModel(
         }
     }
 
-    fun beginChromeEditing(mode: PocketDispMode) {
+    override fun beginChromeEditing(mode: PocketDispMode) {
+        homePanel = null
         liveOperatorPanel = null
         liveGimbalPanel = LiveGimbalPanel.NONE
         setDisplayMode(clean = mode == PocketDispMode.CLEAN)
@@ -347,27 +349,27 @@ class AppModel(
         }
     }
 
-    fun updateKeepScreenAwake(value: Boolean) {
+    override fun updateKeepScreenAwake(value: Boolean) {
         keepScreenAwake = value
         OperatorPrefs.setKeepScreenAwake(appContext, value)
     }
 
-    fun updateHdrDisplay(value: Boolean) {
+    override fun updateHdrDisplay(value: Boolean) {
         hdrDisplay = value
         OperatorPrefs.setHdrDisplay(appContext, value)
     }
 
-    fun updateCacheFullResolution(value: Boolean) {
+    override fun updateCacheFullResolution(value: Boolean) {
         cacheFullResolution = value
         OperatorPrefs.setCacheFullResolution(appContext, value)
     }
 
-    fun updateRecordConfirmationEnabled(value: Boolean) {
+    override fun updateRecordConfirmationEnabled(value: Boolean) {
         recordConfirmationEnabled = value
         OperatorPrefs.setRecordConfirmationEnabled(appContext, value)
     }
 
-    fun updateHapticsEnabled(value: Boolean) {
+    override fun updateHapticsEnabled(value: Boolean) {
         hapticsEnabled = value
         OperatorPrefs.setHapticsEnabled(appContext, value)
     }
@@ -384,34 +386,34 @@ class AppModel(
         session.gimbalRamp = value
     }
 
-    fun updateGimbalStickSensitivity(value: Int) {
+    override fun updateGimbalStickSensitivity(value: Int) {
         val clamped = value.coerceIn(1, 5)
         gimbalStickSensitivity = clamped
         OperatorPrefs.setGimbalStickSensitivity(appContext, clamped)
     }
 
-    fun updateVirtualJoystickInvertPan(value: Boolean) {
+    override fun updateVirtualJoystickInvertPan(value: Boolean) {
         virtualJoystickInvertPan = value
         OperatorPrefs.setVirtualJoystickInvertPan(appContext, value)
     }
 
-    fun updateVirtualJoystickInvertTilt(value: Boolean) {
+    override fun updateVirtualJoystickInvertTilt(value: Boolean) {
         virtualJoystickInvertTilt = value
         OperatorPrefs.setVirtualJoystickInvertTilt(appContext, value)
     }
 
-    fun updateVirtualJoystickDeadzonePercent(value: Int) {
+    override fun updateVirtualJoystickDeadzonePercent(value: Int) {
         val clamped = CameraCommands.VirtualJoystickMapping.clampedDeadzonePercent(value)
         virtualJoystickDeadzonePercent = clamped
         OperatorPrefs.setVirtualJoystickDeadzonePercent(appContext, clamped)
     }
 
-    fun updateVirtualJoystickResponseCurve(value: CameraCommands.VirtualJoystickCurve) {
+    override fun updateVirtualJoystickResponseCurve(value: CameraCommands.VirtualJoystickCurve) {
         virtualJoystickResponseCurve = value
         OperatorPrefs.setVirtualJoystickResponseCurve(appContext, value)
     }
 
-    fun updateVirtualJoystickSize(value: com.opencapture.monitorui.MonitorJoystickSize) {
+    override fun updateVirtualJoystickSize(value: com.opencapture.monitorui.MonitorJoystickSize) {
         virtualJoystickSize = value
         OperatorPrefs.setVirtualJoystickSize(appContext, value)
     }
@@ -442,7 +444,7 @@ class AppModel(
         OperatorPrefs.setLutSelection(appContext, value)
     }
 
-    fun updateCleanViewPinnedTools(value: Set<String>) {
+    override fun updateCleanViewPinnedTools(value: Set<String>) {
         cleanViewPinnedTools = value
         OperatorPrefs.setCleanViewPinnedTools(appContext, value)
     }
@@ -696,7 +698,7 @@ class AppModel(
         session.startScan()
     }
 
-    fun disconnect() {
+    override fun disconnect() {
         focusBoxLocked = false
         if (shell.state.value.monitor != null) shell.close() else session.disconnect()
     }
