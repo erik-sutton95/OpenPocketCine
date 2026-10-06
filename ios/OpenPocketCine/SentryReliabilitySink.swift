@@ -11,7 +11,7 @@ final class SentryReliabilitySink: ReliabilityReportingSink, @unchecked Sendable
     var isEnabled: Bool { SentrySDK.isEnabled }
 
     func start(dsn: String, cacheRoot: URL) {
-        let session = ReliabilityReportingURLProtocol.makeSDKSession()
+        let session = AppReliabilityURLProtocol.makeSDKSession()
         sdkSession = session
         SentrySDK.start(options: Self.makeOptions(dsn: dsn, urlSession: session, cacheRoot: cacheRoot))
     }

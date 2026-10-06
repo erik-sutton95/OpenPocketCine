@@ -1,5 +1,7 @@
 import Foundation
 import MetricKit
+import class OpenCineCore.LocalVPNNotice
+import enum OpenCineCore.LocalVPNProbe
 import OpenPocketViewCore
 import SwiftUI
 import UIKit
@@ -401,5 +403,13 @@ private func opcInstallUncaughtExceptionHandler() {
     NSSetUncaughtExceptionHandler { exception in
         DiagnosticCenter.recordUncaught(exception)
         opcPreviousUncaught?(exception)
+    }
+}
+
+extension LocalVPNNotice {
+    /// This app's once-per-launch local VPN line in the diagnostics journal.
+    static let app = LocalVPNNotice { message in
+        DiagnosticCenter.shared.event(
+            level: .notice, category: .session, code: "vpn", message: message)
     }
 }

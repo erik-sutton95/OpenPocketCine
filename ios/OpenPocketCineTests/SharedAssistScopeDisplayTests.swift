@@ -1,5 +1,6 @@
 import MetalKit
 import MonitorUI
+import OpenCineAppKitApple
 import SwiftUI
 import XCTest
 
@@ -9,8 +10,8 @@ import XCTest
 @MainActor
 final class SharedAssistScopeDisplayTests: XCTestCase {
     override func tearDown() {
-        LiveHDRDisplay.setScreenCaptured(false)
-        LiveHDRDisplay.setEnabled(false)
+        LiveHDRDisplay.app.setScreenCaptured(false)
+        LiveHDRDisplay.app.setEnabled(false)
         super.tearDown()
     }
 
@@ -60,8 +61,8 @@ final class SharedAssistScopeDisplayTests: XCTestCase {
         for (index, policy) in [(false, false), (true, false), (true, true), (false, false)]
             .enumerated()
         {
-            LiveHDRDisplay.setEnabled(policy.0)
-            LiveHDRDisplay.setScreenCaptured(policy.1)
+            LiveHDRDisplay.app.setEnabled(policy.0)
+            LiveHDRDisplay.app.setScreenCaptured(policy.1)
             let configured = expectation(description: "shared scope display update \(index)")
             var observedView: MTKView?
             var options: MonitorScopeDisplayOptions?
@@ -87,7 +88,7 @@ final class SharedAssistScopeDisplayTests: XCTestCase {
             }
             let enabled = policy.0 && !policy.1
             XCTAssertEqual(selected.hdr, enabled)
-            XCTAssertEqual(selected.gain, LiveHDRDisplay.presentGain, accuracy: 0.001)
+            XCTAssertEqual(selected.gain, LiveHDRDisplay.app.presentGain, accuracy: 0.001)
             XCTAssertEqual(view.colorPixelFormat, enabled ? .rgba16Float : .bgra8Unorm)
             let layer = try XCTUnwrap(view.layer as? CAMetalLayer)
             XCTAssertEqual(layer.wantsExtendedDynamicRangeContent, enabled)
