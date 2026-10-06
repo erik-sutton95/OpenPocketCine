@@ -61,6 +61,9 @@ final class AppModel {
         integration.saveRecord = { [weak self] in self?.cameras.upsert($0) }
         session.savedCameras = { [weak self] in self?.cameras.saved ?? [] }
         session.confirmHotspot = { [weak self] network in await self?.askHotspot(network) ?? false }
+        #if targetEnvironment(simulator)
+            (port as? ReviewDJIPort)?.confirmHotspot = session.confirmHotspot
+        #endif
         shell.onSceneActivity = { [weak self] active in
             guard let self else { return }
             assist.inspectorSceneActive = active
@@ -1069,8 +1072,7 @@ struct LinkExperience: View {
                         guard model.cameras.attempts.isEmpty else { return }
                         model.openMultiview()
                         showMultiview = true
-                    } : nil,
-                privacy: { model.homePanel = .privacy }, terms: { model.homePanel = .terms }),
+                    } : nil),
             safeArea: { proxy in
                 Self.pageSafeArea(
                     proxy.safeAreaInsets, window: windowGeometry.safeArea,

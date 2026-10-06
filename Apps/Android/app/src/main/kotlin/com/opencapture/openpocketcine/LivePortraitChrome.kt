@@ -6,8 +6,6 @@ import com.opencapture.monitorui.portraitAspectToggle
 import com.opencapture.monitorui.portraitAssistToolbar
 import com.opencapture.monitorui.livePortraitReadoutFrame
 import com.opencapture.monitorui.LivePortraitMetrics
-import com.opencapture.opencine.dji.CaptureShutterPolicy
-import com.opencapture.opencine.dji.EvComp
 import com.opencapture.monitorui.MonitorExposureReadout
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
@@ -72,14 +70,16 @@ import com.opencapture.monitorui.MonitorQuickGestureOwner
 import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.monitorui.monitorPickerPassthrough
 import com.opencapture.monitorui.monitorScrollFade
+import com.opencapture.opencine.vocabulary.ApertureStrategy
+import com.opencapture.opencine.vocabulary.CamFov
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
+import com.opencapture.opencine.vocabulary.EvComp
 import com.opencapture.openpocketcine.assists.AssistToolGlyph
 import com.opencapture.openpocketcine.assists.LiveAssistBar
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.assists.LiveAssistTool
-import com.opencapture.opencine.dji.ApertureStrategy
-import com.opencapture.opencine.dji.CamFov
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraStatus
 import kotlin.math.max
 import kotlin.math.min
 

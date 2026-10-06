@@ -7,10 +7,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.openpocketcine.assists.LiveAssistState
 import com.opencapture.openpocketcine.lut.PlaybackLutColor
-import com.opencapture.opencine.dji.CameraStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.pairing.lastSSID
 
 import android.graphics.SurfaceTexture
@@ -59,7 +60,6 @@ import com.opencapture.opencine.appkit.MultiviewStage
 import com.opencapture.opencine.appkit.MultiviewStageActions
 import com.opencapture.opencine.appkit.MultiviewStageButton
 import com.opencapture.opencine.appkit.MultiviewTool
-import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.opencine.dji.MultiviewNetworkStore
 import com.opencapture.opencine.dji.appearsInMultiview
 import com.opencapture.opencine.dji.hasMultiviewPreview

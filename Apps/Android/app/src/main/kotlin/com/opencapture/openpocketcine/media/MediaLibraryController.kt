@@ -1,10 +1,11 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.opencine.media.QuickTimeKeys
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.opencapture.opencine.dji.ConnectionPhase
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.openpocketcine.lut.ClipColorProfile
 import com.opencapture.opencine.dji.DjiAndroidMediaGalleryCover
 import com.opencapture.opencine.dji.DjiCameraSession
@@ -177,8 +178,8 @@ class MediaLibraryController(
             if (operation.isCurrent() && isLive) resolvedStorage(file) else null
         } ?: return -1
         return try {
-            val range = ClipColorProfile.httpRange(file.sizeBytes)
-            val cap = ClipColorProfile.FILE_TAIL_BYTES * 3
+            val range = QuickTimeKeys.tailRange(file.sizeBytes)
+            val cap = QuickTimeKeys.TAIL_BYTES * 3
             val (data, winner) = MediaTransfer.fetchRange(storage, file.path, range, cap)
             val mode = ClipColorProfile.colorModeFromMp4(data)
             withContext(Dispatchers.Main.immediate) {

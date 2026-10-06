@@ -11,6 +11,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.ConnectionPhase
+import com.opencapture.opencine.vocabulary.GimbalDoubleTap
+import com.opencapture.opencine.vocabulary.GimbalRamp
+import com.opencapture.opencine.vocabulary.VideoFormat
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.opencine.appkit.AppIntegration
 import com.opencapture.opencine.appkit.MonitorControlModel
@@ -26,7 +31,6 @@ import com.opencapture.opencine.appkit.stored
 import com.opencapture.opencine.core.RouteKind
 import com.opencapture.opencine.core.SavedCamera
 import com.opencapture.opencine.dji.CameraWifiCredentialStore
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.DjiConnectPort
 import com.opencapture.opencine.dji.DjiIntegration
@@ -38,11 +42,7 @@ import com.opencapture.openpocketcine.assists.createLiveAssistState
 import com.opencapture.openpocketcine.feed.Media3GlBackend
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.AppSessionHost
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.GimbalDoubleTap
-import com.opencapture.opencine.dji.GimbalRamp
 import com.opencapture.opencine.dji.DjiCameraSession
-import com.opencapture.opencine.dji.VideoFormat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -616,7 +616,7 @@ class AppModel(
         if (shell.state.value.monitor != null) shell.close() else session.disconnect()
     }
 
-    fun borrowMonitor(camera: com.opencapture.opencine.dji.FoundCamera, release: () -> Unit) {
+    fun borrowMonitor(camera: com.opencapture.opencine.vocabulary.FoundCamera, release: () -> Unit) {
         shell.borrow(ConnectedCamera(SavedCamera(camera.id, DjiCameraSessionAdapter.INTEGRATION,
             advertisedName = camera.name, model = camera.model.name), session.control), release)
     }

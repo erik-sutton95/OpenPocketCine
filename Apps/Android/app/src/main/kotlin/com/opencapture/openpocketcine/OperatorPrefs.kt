@@ -1,11 +1,11 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.GamepadGimbalStick
-import com.opencapture.opencine.dji.ShutterAngle
 import android.content.Context
 import androidx.core.content.edit
 import com.opencapture.monitorui.MonitorJoystickSize
-import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.GamepadGimbalStick
+import com.opencapture.opencine.vocabulary.ShutterAngle
 import com.opencapture.openpocketcine.feed.FeedUpscaler
 import com.opencapture.openpocketcine.lut.LutCatalog
 import org.json.JSONObject
@@ -177,18 +177,18 @@ object OperatorPrefs {
             curve = virtualJoystickResponseCurve(context),
         )
 
-    fun gimbalRamp(context: Context): com.opencapture.opencine.dji.GimbalRamp =
-        com.opencapture.opencine.dji.GimbalRamp.fromRaw(prefs(context).getInt(GIMBAL_RAMP, 0))
+    fun gimbalRamp(context: Context): com.opencapture.opencine.vocabulary.GimbalRamp =
+        com.opencapture.opencine.vocabulary.GimbalRamp.fromRaw(prefs(context).getInt(GIMBAL_RAMP, 0))
 
-    fun setGimbalRamp(context: Context, value: com.opencapture.opencine.dji.GimbalRamp) {
+    fun setGimbalRamp(context: Context, value: com.opencapture.opencine.vocabulary.GimbalRamp) {
         prefs(context).edit { putInt(GIMBAL_RAMP, value.raw) }
     }
 
     /** Stick double-tap / gamepad Circle/B. Absent key is Recenter (iOS parity). */
-    fun gimbalDoubleTap(context: Context): com.opencapture.opencine.dji.GimbalDoubleTap =
-        com.opencapture.opencine.dji.GimbalDoubleTap.fromRaw(prefs(context).getInt(GIMBAL_DOUBLE_TAP, 0))
+    fun gimbalDoubleTap(context: Context): com.opencapture.opencine.vocabulary.GimbalDoubleTap =
+        com.opencapture.opencine.vocabulary.GimbalDoubleTap.fromRaw(prefs(context).getInt(GIMBAL_DOUBLE_TAP, 0))
 
-    fun setGimbalDoubleTap(context: Context, value: com.opencapture.opencine.dji.GimbalDoubleTap) {
+    fun setGimbalDoubleTap(context: Context, value: com.opencapture.opencine.vocabulary.GimbalDoubleTap) {
         prefs(context).edit { putInt(GIMBAL_DOUBLE_TAP, value.raw) }
     }
 

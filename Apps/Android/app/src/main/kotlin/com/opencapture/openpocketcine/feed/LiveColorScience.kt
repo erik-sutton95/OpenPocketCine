@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine.feed
 
 import com.opencapture.opencine.media.MonitorTransfer.Companion as MonitorTransferCompanion
 
-import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraCommands
 
 typealias MonitorTransfer = com.opencapture.opencine.media.MonitorTransfer
 typealias LiveColorScience = com.opencapture.opencine.media.LiveColorScience

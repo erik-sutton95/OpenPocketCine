@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.pairing
 
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.DjiFailures
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

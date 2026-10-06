@@ -1,8 +1,10 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.applyMonitorSystemBars
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.appkit.rememberOperatorHaptics
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -68,7 +70,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.appkit.diagnostics.AutomaticReportsPrompt
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.multiview.MultiviewQualificationPolicy
@@ -80,10 +81,10 @@ import com.opencapture.opencine.appkit.ShellBrand
 import com.opencapture.opencine.appkit.ShellActions
 import com.opencapture.opencine.appkit.ShellModel
 import com.opencapture.openpocketcine.diagnostics.ManualProblemReportDialog
-import com.opencapture.openpocketcine.pairing.DiscoveryPermissions
+import com.opencapture.opencine.appkit.DiscoveryPermissions
 import com.opencapture.openpocketcine.pairing.LocalPairingCallouts
 import com.opencapture.openpocketcine.pairing.PairingCallouts
-import com.opencapture.openpocketcine.pairing.PermissionGate
+import com.opencapture.opencine.appkit.PermissionGate
 import com.opencapture.openpocketcine.pairing.rememberPermissionGate
 import com.opencapture.openpocketcine.pairing.startupBackdrop
 import java.util.concurrent.atomic.AtomicBoolean
@@ -316,9 +317,7 @@ private fun LinkExperience(
         ShellActions(
             diagnostics = { DiagnosticCenter.shareReport(context, model.session) },
             reportProblem = { showProblemReport = true },
-            multiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null,
-            privacy = { model.homePanel = AppPanel.PRIVACY },
-            terms = { model.homePanel = AppPanel.TERMS }),
+            multiview = if (MultiviewQualificationPolicy.tileCount > 1) model::openMultiview else null),
         monitor = { LiveViewScreen(model) },
         page = { ShellCoverPage(model, it) },
         pageFrame = { route, content ->

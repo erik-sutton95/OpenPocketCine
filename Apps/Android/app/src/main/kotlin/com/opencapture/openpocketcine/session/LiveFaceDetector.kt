@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.session
 
+import com.opencapture.opencine.media.FaceDetectFlight
 import com.opencapture.opencine.dji.*
 import android.graphics.Bitmap
 import android.graphics.Rect
@@ -11,6 +12,7 @@ import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.face.FaceLandmark
+import com.opencapture.opencine.vocabulary.*
 import java.util.concurrent.Executors
 
 /**

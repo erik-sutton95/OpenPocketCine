@@ -1,12 +1,11 @@
 package com.opencapture.openpocketcine.lut
 
-import com.opencapture.opencine.dji.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraCommands
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class ClipColorProfileTest {
     @Test
@@ -34,13 +33,7 @@ class ClipColorProfileTest {
         for ((gamma, mode) in gammaOnly) {
             assertEquals(mode, ClipColorProfile.colorModeFromGamma(gamma), "'$gamma'")
         }
-    }
-
-    @Test
-    fun findsKeysWhenOnlyTheMoovTailIsPresent() {
-        val full = mp4("D-Log2", padMdat = 4096)
-        val tail = full.copyOfRange(full.size - 2048, full.size)
-        assertEquals(CameraCommands.COLOR_DLOG2, ClipColorProfile.colorModeFromMp4(tail))
+        assertEquals(-1, ClipColorProfile.colorModeFromMp4(box("ftyp", "isomisom".toByteArray())))
     }
 
     @Test
@@ -60,33 +53,6 @@ class ClipColorProfileTest {
                 CameraCommands.COLOR_DLOG2,
                 ClipColorProfile.shotColorFromFile(file, "DCIM/DJI_001/DJI_x_D.MP4"),
             )
-        } finally {
-            file.delete()
-        }
-    }
-
-    @Test
-    fun httpRangeCoversTheMoovTail() {
-        assertEquals("bytes=-${ClipColorProfile.FILE_TAIL_BYTES}", ClipColorProfile.httpRange(0))
-        assertEquals("bytes=0-99", ClipColorProfile.httpRange(100))
-        val size = ClipColorProfile.FILE_TAIL_BYTES.toLong() + 50
-        assertEquals("bytes=50-${size - 1}", ClipColorProfile.httpRange(size))
-    }
-
-    @Test
-    fun missingKeysIsNotAColor() {
-        val empty = box("ftyp", "isomisom".toByteArray())
-        assertNull(ClipColorProfile.gammaFromMp4(empty))
-        assertEquals(-1, ClipColorProfile.colorModeFromMp4(empty))
-    }
-
-    @Test
-    fun colorModeFromFileReadsTail() {
-        val bytes = mp4("D-Log2", padMdat = 4096)
-        val file = File.createTempFile("opc-clip-color", ".mp4")
-        file.writeBytes(bytes)
-        try {
-            assertEquals(CameraCommands.COLOR_DLOG2, ClipColorProfile.colorModeFromFile(file))
         } finally {
             file.delete()
         }

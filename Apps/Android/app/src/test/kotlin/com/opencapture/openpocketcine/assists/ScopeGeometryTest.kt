@@ -1,8 +1,8 @@
 package com.opencapture.openpocketcine.assists
 
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.feed.MonitorTransfer
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.monitorui.MonitorScopeTraceRaster as ScopeTraceRaster
 import com.opencapture.monitorui.MonitorTrafficLightsGeometry as TrafficLightsAssist
 import com.opencapture.monitorui.MonitorVectorscopeGraticule as VectorscopeGraticule

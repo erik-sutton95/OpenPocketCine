@@ -5,11 +5,11 @@ import com.opencapture.opencine.appkit.MultiviewReadout
 import com.opencapture.opencine.appkit.MultiviewRecordContext
 import com.opencapture.opencine.appkit.MultiviewTile
 import com.opencapture.opencine.appkit.MultiviewTileStatus
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraStatus
-import com.opencapture.opencine.dji.VideoResolution
 import com.opencapture.opencine.dji.hasMultiviewPreview
-import com.opencapture.opencine.dji.timecodeClock
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.VideoResolution
+import com.opencapture.opencine.vocabulary.timecodeClock
 
 /** Display values come from the existing throttled tile status; no telemetry polling. */
 internal data class MultiviewTileReadouts(

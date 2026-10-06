@@ -1,8 +1,8 @@
 package com.opencapture.openpocketcine.media
 
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.DjiCameraSession
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 
 /**
  * Bounded legacy command/cache facts retained until favorite and deletion IO adoption.

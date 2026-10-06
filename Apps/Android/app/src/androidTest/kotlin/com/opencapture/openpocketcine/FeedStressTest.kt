@@ -10,9 +10,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.media.LivePipelineCadence
-import com.opencapture.opencine.dji.SessionRecoveryUi
+import com.opencapture.opencine.vocabulary.ConnectionPhase
+import com.opencapture.opencine.vocabulary.SessionRecoveryUi
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger

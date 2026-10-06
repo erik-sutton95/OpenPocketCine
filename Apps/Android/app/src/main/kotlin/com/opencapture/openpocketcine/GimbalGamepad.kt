@@ -1,12 +1,6 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.appkit.OperatorHaptics
-import com.opencapture.opencine.dji.GamepadDpad
-import com.opencapture.opencine.dji.GamepadFaceButton
-import com.opencapture.opencine.dji.GamepadGimbalStick
-import com.opencapture.opencine.dji.GamepadOperatorAction
-import com.opencapture.opencine.dji.GamepadOperatorMap
-import com.opencapture.opencine.dji.GamepadShoulder
 import android.annotation.SuppressLint
 import android.content.Context
 import android.hardware.input.InputManager
@@ -19,9 +13,15 @@ import android.os.Vibrator
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CamFov
-import com.opencapture.opencine.dji.GimbalLimitContact
+import com.opencapture.opencine.vocabulary.CamFov
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.GamepadDpad
+import com.opencapture.opencine.vocabulary.GamepadFaceButton
+import com.opencapture.opencine.vocabulary.GamepadGimbalStick
+import com.opencapture.opencine.vocabulary.GamepadOperatorAction
+import com.opencapture.opencine.vocabulary.GamepadOperatorMap
+import com.opencapture.opencine.vocabulary.GamepadShoulder
+import com.opencapture.opencine.vocabulary.GimbalLimitContact
 import kotlin.math.abs
 import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope

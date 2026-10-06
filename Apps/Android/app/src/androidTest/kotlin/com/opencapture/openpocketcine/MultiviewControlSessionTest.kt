@@ -1,18 +1,20 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.dji.CMD_PARAM
 import com.opencapture.opencine.dji.DjiNative
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.opencapture.opencine.dji.PID_AUDIO_CHANNEL
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.FoundCamera
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.openpocketcine.multiview.MultiviewSession
-import com.opencapture.opencine.dji.CameraModel
-import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CameraNetworkPath
-import com.opencapture.opencine.dji.CameraStatus
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.DumlFrame
-import com.opencapture.opencine.dji.FoundCamera
 import java.net.DatagramSocket
 import java.net.Socket
 import kotlin.test.assertEquals

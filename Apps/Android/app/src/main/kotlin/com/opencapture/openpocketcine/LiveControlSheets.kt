@@ -1,9 +1,6 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
-import com.opencapture.opencine.dji.CaptureShutterPolicy
-import com.opencapture.opencine.dji.EvComp
-import com.opencapture.opencine.dji.ShutterAngle
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -83,17 +80,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.opencapture.opencine.vocabulary.ApertureStrategy
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
+import com.opencapture.opencine.vocabulary.EvComp
+import com.opencapture.opencine.vocabulary.ShutterAngle
+import com.opencapture.opencine.vocabulary.VideoAspect
+import com.opencapture.opencine.vocabulary.VideoFormat
+import com.opencapture.opencine.vocabulary.VideoFrameRate
+import com.opencapture.opencine.vocabulary.VideoResolution
 import com.opencapture.openpocketcine.assists.AssistLongPress
-import com.opencapture.opencine.dji.ApertureStrategy
-import com.opencapture.opencine.dji.CameraCommands
 import com.opencapture.opencine.dji.CaptureWheels
-import com.opencapture.opencine.dji.CameraModel
 import com.opencapture.openpocketcine.settings.SettingsHelpBadge
-import com.opencapture.opencine.dji.CameraStatus
-import com.opencapture.opencine.dji.VideoAspect
-import com.opencapture.opencine.dji.VideoFormat
-import com.opencapture.opencine.dji.VideoFrameRate
-import com.opencapture.opencine.dji.VideoResolution
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -717,7 +717,7 @@ private fun LiveControlSheetContent(
                                 val editor = field?.editor
                                 if (editor != null && model.control.isCurrent(editor) && enabled) {
                                     val value = commonFocusValue(label,
-                                        com.opencapture.opencine.dji.FocusTrackMode.fromRaw(status.focusTrack))
+                                        com.opencapture.opencine.vocabulary.FocusTrackMode.fromRaw(status.focusTrack))
                                     if (value != null) model.control.commit(value, editor, "FOCUS $label")
                                     else applyCaptureFocusChoice(label, status, model)
                                 }

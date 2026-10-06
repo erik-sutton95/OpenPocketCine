@@ -1,13 +1,13 @@
 package com.opencapture.openpocketcine
 
-import com.opencapture.opencine.dji.EvComp
-import com.opencapture.opencine.dji.GamepadShutterSync
 import com.opencapture.monitorui.MonitorQuickControl
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraStatus
-import com.opencapture.opencine.dji.VideoFormat
-import com.opencapture.opencine.dji.VideoFrameRate
-import com.opencapture.opencine.dji.VideoResolution
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.EvComp
+import com.opencapture.opencine.vocabulary.GamepadShutterSync
+import com.opencapture.opencine.vocabulary.VideoFormat
+import com.opencapture.opencine.vocabulary.VideoFrameRate
+import com.opencapture.opencine.vocabulary.VideoResolution
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,10 +30,10 @@ class CaptureQuickControlTest {
         assertEquals(com.opencapture.opencine.core.SettingValue.FocusMode(com.opencapture.opencine.core.FocusMode.SINGLE),
             commonFocusValue("AF-S", null))
         assertEquals(com.opencapture.opencine.core.SettingValue.FocusMode(com.opencapture.opencine.core.FocusMode.CONTINUOUS),
-            commonFocusValue("AF-C", com.opencapture.opencine.dji.FocusTrackMode.DEFAULT))
+            commonFocusValue("AF-C", com.opencapture.opencine.vocabulary.FocusTrackMode.DEFAULT))
         assertNull(commonFocusValue("AF-C", null))
-        assertNull(commonFocusValue("AF-C", com.opencapture.opencine.dji.FocusTrackMode.PRODUCT_SHOWCASE))
-        assertNull(commonFocusValue("Showcase", com.opencapture.opencine.dji.FocusTrackMode.DEFAULT))
+        assertNull(commonFocusValue("AF-C", com.opencapture.opencine.vocabulary.FocusTrackMode.PRODUCT_SHOWCASE))
+        assertNull(commonFocusValue("Showcase", com.opencapture.opencine.vocabulary.FocusTrackMode.DEFAULT))
     }
 
     @Test fun shootingModeRejectsRecordingAtAdmissionAndAtTheSetterBoundary() {

@@ -53,8 +53,11 @@ import com.opencapture.monitorui.MonitorImagePreview
 import com.opencapture.monitorui.MonitorInspector
 import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.monitorui.monitorScrollFade
+import com.opencapture.opencine.vocabulary.CameraCommands
+import com.opencapture.opencine.vocabulary.CameraModel
+import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
 import com.opencapture.openpocketcine.CaptureLists
-import com.opencapture.opencine.dji.CaptureShutterPolicy
 import com.opencapture.openpocketcine.LiveControlSheet
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveSheet
@@ -62,9 +65,6 @@ import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
 import com.opencapture.openpocketcine.chromeClickable
 import com.opencapture.openpocketcine.feed.InspectorPreviewPipeline
-import com.opencapture.opencine.dji.CameraCommands
-import com.opencapture.opencine.dji.CameraModel
-import com.opencapture.opencine.dji.CameraStatus
 
 internal fun multiviewSettingsCategories(camera: CameraModel, status: CameraStatus): List<LiveSheet> = buildList {
     addAll(listOf(LiveSheet.ISO, LiveSheet.SHUTTER, LiveSheet.EXPO, LiveSheet.WB))

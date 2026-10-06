@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.appkit.DiscoveryPermissions
 import com.opencapture.opencine.core.SavedCamera
 
 import com.opencapture.opencine.dji.CameraConnectionSetup

@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.pairing
 
+import com.opencapture.opencine.appkit.PermissionGate
+import com.opencapture.opencine.appkit.DiscoveryPermissions
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -38,10 +40,10 @@ import com.opencapture.opencine.core.RouteDraft
 import com.opencapture.opencine.core.RouteKind
 import com.opencapture.opencine.core.SavedCamera
 import com.opencapture.opencine.dji.CameraConnectionSetup
-import com.opencapture.opencine.dji.ConnectionPhase
 import com.opencapture.opencine.core.LocalVPNFilter
 import com.opencapture.opencine.dji.SharedWiFi
 import com.opencapture.opencine.platform.LocalVPNProbe
+import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import kotlinx.coroutines.delay
