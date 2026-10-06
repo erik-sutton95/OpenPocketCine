@@ -1,6 +1,7 @@
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCameraControls
 import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI

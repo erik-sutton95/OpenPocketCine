@@ -1149,10 +1149,6 @@ private struct LiveScopeOverlays: View {
     }
 }
 
-enum LiveCanvasSpace {
-    static let name = "liveCanvas"
-}
-
 extension LiveViewScreen {
     /// Visible picture the LEVEL strips seat against (de-squeezed when on).
     private func meterFeed(_ layout: LiveMonitorLayout) -> CGRect {
