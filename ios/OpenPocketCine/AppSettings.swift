@@ -503,6 +503,11 @@ struct VirtualJoystickDeadzoneSlider: View {
 
 typealias OperatorSettingsHaptics = OpenCineCameraControls.OperatorSettingsHaptics
 
+extension OperatorHaptics {
+    /// The operator's haptics switch, read at each tap.
+    static let app = OperatorHaptics { OperatorPrefs.hapticsEnabled }
+}
+
 struct SettingsRowCard<Content: View>: View {
     var title: String? = nil
     var onReset: (() -> Void)? = nil

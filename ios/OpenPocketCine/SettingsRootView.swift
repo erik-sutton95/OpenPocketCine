@@ -1,5 +1,6 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineCameraControls
 import OpenCineRelayApple
 import OpenPocketViewCore
 import SwiftUI
@@ -253,17 +254,27 @@ struct SettingsRootView: View {
                 transfer: transfer, clipByte: clipByte), reset: { feedback(); resetFalseColor() }),
             .zebra(ZebraAssist.longPressMenu(assist: model.assist, compact: true)
                 .commonMenu(transfer: transfer, clipByte: clipByte), reset: { feedback(); resetZebra() }),
-            .waveform(WaveformAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
+            .waveform(WaveformAssist.longPressMenu(
+                assist: model.assist, stores: .app, haptics: .app, compact: true
+            ).commonMenu,
                 reset: { feedback(); resetWaveform() }),
-            .parade(ParadeAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
+            .parade(ParadeAssist.longPressMenu(
+                assist: model.assist, stores: .app, haptics: .app, compact: true
+            ).commonMenu,
                 reset: { feedback(); resetParade() }),
-            .histogram(HistogramAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
+            .histogram(HistogramAssist.longPressMenu(
+                assist: model.assist, stores: .app, haptics: .app, compact: true
+            ).commonMenu,
                 reset: { feedback(); resetHistogram() }),
-            .vectorscope(VectorscopeAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
+            .vectorscope(VectorscopeAssist.longPressMenu(
+                assist: model.assist, stores: .app, haptics: .app, compact: true
+            ).commonMenu,
                 reset: { feedback(); resetVectorscope() }),
             .peaking(PeakingAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
                 reset: { feedback(); resetPeaking() }),
-            .trafficLights(TrafficLightsAssist.longPressMenu(assist: model.assist, compact: true).commonMenu,
+            .trafficLights(TrafficLightsAssist.longPressMenu(
+                assist: model.assist, stores: .app, haptics: .app, compact: true
+            ).commonMenu,
                 reset: { feedback(); resetTrafficLights() }),
         ]).buttonStyle(.monitorTapTarget).monitorFullWidthCard()
 

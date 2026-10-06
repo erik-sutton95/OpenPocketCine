@@ -1,5 +1,6 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineCameraControls
 import OpenCineMedia
 import OpenPocketViewCore
 import SwiftUI
@@ -341,13 +342,13 @@ extension TrafficLightsLongPressMenu {
         MonitorCrushClipMenu(
             compensation: Binding(
                 get: {
-                    PocketSettingsAssistMenus.commonTraffic(TrafficLightsAssist.sharedCompensation())
+                    PocketSettingsAssistMenus.commonTraffic(TrafficLightsAssist.sharedCompensation(stores: stores))
                 },
                 set: {
                     let next = PocketSettingsAssistMenus.trafficLights($0)
-                    guard next != TrafficLightsAssist.sharedCompensation() else { return }
+                    guard next != TrafficLightsAssist.sharedCompensation(stores: stores) else { return }
                     PocketSettingsAssistMenus.feedback()
-                    TrafficLightsAssist.setSharedCompensation(next)
+                    TrafficLightsAssist.setSharedCompensation(next, stores: stores)
                     assist.crushClipCompensation = next
                     assist.persist()
                     TrafficLightsAssist.store.persist()

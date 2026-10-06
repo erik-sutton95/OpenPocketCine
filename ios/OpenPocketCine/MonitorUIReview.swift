@@ -1,6 +1,7 @@
 #if targetEnvironment(simulator)
     import Foundation
     import MonitorPresentation
+    import OpenCineCameraControls
     import OpenPocketViewCore
 
     /// Deterministic simulator-only presentation fixture. Opt-in environment values
@@ -24,6 +25,16 @@
 
         /// The shared cameras model's inputs for a review: a scripted DJI pipeline and a private
         /// defaults domain holding the two saved cameras as the shipping app stored them.
+        /// Media favorites persist per camera. Every review starts with none, so a review that
+        /// favorites a clip cannot take "Add favorite" away from the next one. Runs before the
+        /// session builds its library, which reads them once.
+        static func resetMediaFavorites() {
+            for key in UserDefaults.standard.dictionaryRepresentation().keys
+            where key.hasPrefix("opc.media.fav.") {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
         static func cameras() -> (any DJIConnectPort, UserDefaults) {
             // Installed-build migration checks render the real persisted records without BLE.
             if state == "stored" { return (ReviewDJIPort(state: "empty"), .standard) }
@@ -105,7 +116,7 @@
             HistogramAssist.store.options = .default
             VectorscopeAssist.store.options = .default
             AudioAssist.store.options = .init()
-            FalseColorReferencePositionStore.shared.positions = FalseColorReferencePositions()
+            AssistPanelStores.app.reference.positions = FalseColorReferencePositions()
             WaveformAssist.store.sessionCenter = nil
             WaveformAssist.store.sessionCenterPortrait = nil
             ParadeAssist.store.sessionCenter = nil

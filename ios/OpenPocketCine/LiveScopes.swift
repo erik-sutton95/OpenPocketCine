@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineCameraControls
 import OpenPocketViewCore
 import OpenCineMedia
 import SwiftUI
@@ -109,7 +110,8 @@ struct WaveformOverlay: View {
         .accessibilityLabel(options.mode == .rgb ? "RGB waveform" : "Luma waveform")
         if canvas.width > 1, canvas.height > 1 {
             WaveformAssist.overlay(
-                canvas: canvas, feed: feed, chromeClearance: chromeClearance,
+                stores: .app, haptics: .app, canvas: canvas, feed: feed,
+                chromeClearance: chromeClearance,
                 onOpenOptions: { frame in
                     WaveformAssist.presentOptions(anchor: frame, assist: model.assist)
                 }, content: { plot })
@@ -156,7 +158,7 @@ struct ParadeOverlay: View {
         .accessibilityLabel(ParadeAssist.accessibilityLabel(options.mode))
         if canvas.width > 1, canvas.height > 1 {
             ParadeAssist.overlay(
-                canvas: canvas, feed: feed, chromeClearance: chromeClearance
+                stores: .app, canvas: canvas, feed: feed, chromeClearance: chromeClearance
             ) {
                 plot
             }
@@ -195,7 +197,7 @@ struct HistogramOverlay: View {
         .accessibilityLabel("RGB histogram, scale 0 to 100")
         if canvas.width > 1, canvas.height > 1 {
             HistogramAssist.overlay(
-                canvas: canvas, feed: feed, chromeClearance: chromeClearance
+                stores: .app, canvas: canvas, feed: feed, chromeClearance: chromeClearance
             ) {
                 plot
             }
@@ -234,7 +236,7 @@ struct VectorscopeOverlay: View {
         .accessibilityLabel("Vectorscope")
         if canvas.width > 1, canvas.height > 1 {
             VectorscopeAssist.overlay(
-                canvas: canvas, feed: feed, chromeClearance: chromeClearance
+                stores: .app, canvas: canvas, feed: feed, chromeClearance: chromeClearance
             ) {
                 plot
             }
