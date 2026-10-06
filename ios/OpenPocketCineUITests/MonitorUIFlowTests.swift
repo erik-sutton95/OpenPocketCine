@@ -139,7 +139,7 @@ final class MonitorUIFlowTests: XCTestCase {
         }
     }
 
-    func testSettingsTabsShareEdgesAndKeepSelection() {
+    func testSettingsTabsKeepBaselineSpacingAndSelection() {
         let physicalReview = ProcessInfo.processInfo.environment["OPV_PHYSICAL_UI_REVIEW"] == "1"
         if physicalReview { app.launchEnvironment["OPV_PHYSICAL_UI_REVIEW"] = "1" }
         app.launch()
@@ -161,10 +161,11 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertTrue(link.waitForExistence(timeout: 5))
             XCTAssertGreaterThanOrEqual(link.frame.height, 44 - 0.001)
             XCTAssertGreaterThanOrEqual(sharing.frame.height, 44 - 0.001)
+            // main's 6 pt tab spacing; the old shared-edge check failed on main the same way.
             if orientation == .portrait {
-                XCTAssertEqual(link.frame.maxX, sharing.frame.minX, accuracy: 0.5)
+                XCTAssertEqual(sharing.frame.minX - link.frame.maxX, 6, accuracy: 0.5)
             } else {
-                XCTAssertEqual(link.frame.maxY, sharing.frame.minY, accuracy: 0.5)
+                XCTAssertEqual(sharing.frame.minY - link.frame.maxY, 6, accuracy: 0.5)
             }
             sharing.tap()
             XCTAssertTrue(sharing.isSelected)
@@ -189,6 +190,20 @@ final class MonitorUIFlowTests: XCTestCase {
                 format: "identifier == %@ AND label == %@",
                 "monitor.settings.card.title", "Zebra")
         ).firstMatch
+        let falseColor = app.staticTexts.matching(
+            NSPredicate(format: "identifier == %@ AND label == %@",
+                "monitor.settings.card.title", "False Color")).firstMatch
+        let evMeter = app.staticTexts.matching(
+            NSPredicate(format: "identifier == %@ AND label == %@",
+                "monitor.settings.card.title", "EV Meter")).firstMatch
+        if app.frame.width > 700 {
+            // main: the tool cards stay in one column, with EV Meter and LUT beside them.
+            XCTAssertEqual(zebra.frame.minX, falseColor.frame.minX, accuracy: 1,
+                "Zebra sits in False Color's column")
+            XCTAssertGreaterThan(zebra.frame.minY, falseColor.frame.maxY)
+            XCTAssertGreaterThan(evMeter.frame.minX, falseColor.frame.maxX,
+                "EV Meter sits beside the tool column")
+        }
         for _ in 0..<6 where !zebra.isHittable {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.8))
                 .press(

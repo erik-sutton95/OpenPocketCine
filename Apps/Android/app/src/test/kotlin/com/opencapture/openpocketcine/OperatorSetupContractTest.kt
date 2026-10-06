@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.cameracontrols.toggledCleanPins
 import com.opencapture.opencine.cameracontrols.lutLookLabel
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.ConnectionPhase
@@ -111,8 +112,8 @@ class OperatorSetupContractTest {
         assertEquals(OperatorPrefs.DEFAULT_CLEAN_PINS, OperatorPrefs.resolvedCleanPins(null))
         assertEquals(emptySet(), OperatorPrefs.resolvedCleanPins(emptySet()))
         assertEquals(setOf("WAVE"), OperatorPrefs.resolvedCleanPins(setOf("WAVE")))
-        assertEquals(emptySet(), toggledCleanPins(setOf("LUT"), "LUT"))
-        assertEquals(setOf("LUT", "PEAK"), toggledCleanPins(setOf("LUT"), "PEAK"))
+        assertEquals(emptySet(), toggledCleanPins(OperatorPrefs, setOf("LUT"), "LUT"))
+        assertEquals(setOf("LUT", "PEAK"), toggledCleanPins(OperatorPrefs, setOf("LUT"), "PEAK"))
     }
 
     @Test

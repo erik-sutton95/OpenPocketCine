@@ -85,10 +85,24 @@ privacy, a wrong-camera or blind action, or a check that could never work), or a
   unchanged.
 - iOS and Android lay the live monitor out from what the connected body declares through
   OpenCineDJI (gimbal and head tracking from its motion, zoom, focus, aperture, audio meters and
-  timecode), not from app flags. The one visible difference: a Nano no longer shows a live
-  timecode it never reports (Multi View already hid it). On Android the APERTURE sheet and
+  timecode), not from app flags. Android single view shows the timecode on every body, Nano
+  included, and Settings with no camera connected offers the AUDIO clean-view pin (restored to
+  `main`; Multi View hides the Nano timecode, as on `main`). iPhone: a Nano shows no live
+  timecode it never reports (to be restored to `main`). On Android the APERTURE sheet and
   drum appear only on Action 6 and FOCUS only on the bodies `main` showed it for (already
   matched `main`; both now follow the body's declaration instead of a product-name check).
+- Operator Setup (Android) comes from OpenCine's `camera-controls` (`OperatorSetupScreen`; the
+  app supplies its copy, stores and pages). View Assist and Display show `main`'s rows and the
+  tab strip keeps `main`'s spacing (restored to `main`). Clean view pins, System buttons and the
+  zebra threshold sliders have screen-reader names, and the System buttons take touches across
+  48 dp around the unchanged capsule (kept fix, accessibility).
+- Operator Setup (iPhone) uses OpenCine's settings page. Display shows `main`'s rows (caption,
+  Edit view, one switch per item, then the pins), the tab strip keeps `main`'s spacing, Sharing's
+  "Show Wi-Fi code" link is blue again (the move drew it white) and landscape View Assist keeps
+  the tools in one column with EV Meter and LUT beside them (restored to `main`).
+- Colour dots in the zebra and peaking options show the colour each overlay paints (kept fix:
+  iPhone "Cyan" and peaking "Blue", Android "Amber", "Cyan" and peaking "Blue" drew the app's blue
+  accent).
 - Record sends start or stop for the state the camera reported, as on `main`. Right after
   connecting it waits for the camera's first record state ("Waiting for the camera's record
   state") instead of assuming "not recording" (kept fix: a blind Start on a camera already

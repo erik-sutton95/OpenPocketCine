@@ -108,7 +108,7 @@ struct SettingsRootView: View {
     var body: some View {
         MonitorSettingsPage(
             safeArea: safeArea, brand: "OpenPocketCine",
-            selection: Bindable(model).operatorSettingsTab, tabSpacing: 0,
+            selection: Bindable(model).operatorSettingsTab,
             isLive: model.isLive, phaseLabel: model.session.phase.label,
             sharingSubtitle: "Share this feed with OpenPocketCine devices on the same camera Wi-Fi.",
             feedback: { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) },
@@ -280,7 +280,7 @@ struct SettingsRootView: View {
                 assist: model.assist, stores: .app, haptics: .app, compact: true
             ).commonMenu,
                 reset: { feedback(); resetTrafficLights() }),
-        ]).buttonStyle(.monitorTapTarget).monitorFullWidthCard()
+        ]).buttonStyle(.monitorTapTarget)
 
         MonitorExposureMeterSettings(isOn: model.assist.evMeter,
             help: "Show the camera's exposure meter at the picture's left edge in DISP 1. Auto and Manual use the camera reading without changing exposure settings.",
