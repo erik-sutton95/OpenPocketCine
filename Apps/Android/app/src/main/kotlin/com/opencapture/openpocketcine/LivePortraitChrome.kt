@@ -75,6 +75,8 @@ import com.opencapture.opencine.cameracontrols.LiveGimbalButton
 import com.opencapture.opencine.cameracontrols.LiveGimbalOverlay
 import com.opencapture.opencine.cameracontrols.LiveGimbalPanel
 import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.cameracontrols.LiveZoom
+import com.opencapture.opencine.cameracontrols.LiveZoomChip
 import com.opencapture.opencine.cameracontrols.captureShutterReadout
 import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.cameracontrols.portraitSetupSheet
