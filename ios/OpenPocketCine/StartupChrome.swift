@@ -5,23 +5,6 @@ import OpenCineCore
 import OpenPocketViewCore
 import SwiftUI
 
-enum StartupColors {
-    static let background = MonitorTheme.background
-    static let surface = MonitorTheme.surface
-    static let tile = MonitorTheme.raised
-    static let control = MonitorTheme.faint
-    static let ink = MonitorTheme.text
-    static let muted = MonitorTheme.muted
-    static let dim = MonitorTheme.faint
-    static let border = Color.white
-    static let card = MonitorTheme.surface
-    static let accent = MonitorTheme.accent
-    static let ready = Color(red: 0.247, green: 0.710, blue: 0.416)
-    static let destructive = MonitorTheme.recording
-    static let darkText = MonitorTheme.canvas
-    static var backdrop: some View { MonitorTheme.background }
-}
-
 enum LiveDesign {
     static let background = MonitorTheme.canvas
     static let surface = MonitorTheme.surface
@@ -127,30 +110,6 @@ enum StartupConnectionCopy {
             return trimmed
         }
         return trimmed
-    }
-}
-
-struct StartupFilledButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Label(configuration: configuration)
-    }
-
-    private struct Label: View {
-        let configuration: Configuration
-        @Environment(\.isEnabled) private var isEnabled
-
-        var body: some View {
-            configuration.label
-                .font(MonitorTheme.font(16, weight: .semibold))
-                .foregroundStyle(StartupColors.darkText)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 14)
-                .background(
-                    StartupColors.accent.opacity(configuration.isPressed ? 0.80 : 1),
-                    in: RoundedRectangle(cornerRadius: MonitorTheme.radius)
-                )
-                .opacity(isEnabled ? 1 : 0.4)
-        }
     }
 }
 
