@@ -5,6 +5,7 @@ import Foundation
 import MonitorUI
 import Observation
 import OpenCineAppKit
+import OpenCineCameraControls
 import OpenCineDJIApple
 import OpenPocketViewCore
 import UIKit

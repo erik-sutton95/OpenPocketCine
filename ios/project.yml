@@ -67,6 +67,8 @@ targets:
       - package: OpenCine
         product: OpenCineAppKitApple
       - package: OpenCine
+        product: OpenCineCameraControls
+      - package: OpenCine
         product: OpenCineDJI
       - package: OpenCine
         product: OpenCineDJIApple

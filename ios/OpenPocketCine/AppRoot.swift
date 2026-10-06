@@ -4,6 +4,7 @@ import MonitorUI
 import Observation
 import OpenCineAppKit
 import OpenCineAppKitApple
+import OpenCineCameraControls
 import OpenCineCore
 import OpenCineFrameIO
 import OpenCineRelayApple
