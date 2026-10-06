@@ -52,6 +52,8 @@ extension AppModel: CaptureSheetHost {
 
     var cameraStatus: CameraStatus { session.status }
     var displayStatus: CameraStatus { session.whiteBalanceDisplayStatus }
+    /// main held ISO and shutter at the camera's report until it answered.
+    var captureStripShowsPendingEdits: Bool { false }
     var connectedBody: CameraModel? { session.connectedCamera?.model }
     var sessionPhaseLabel: String { session.phase.label }
     var bodyFamily: CameraBodyFamily { session.bodyFamily }
