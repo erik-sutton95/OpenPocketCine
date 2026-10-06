@@ -41,9 +41,9 @@ camera-list header. Settings does not start a new pair. The wizard always shows
 **Report a problem** below the pairing target so a stuck first pair can open the
 native report form. **Share Diagnostics** remains in the overflow menu.
 
-Long-press a saved connection setup to **Rename setup**, even when it is the
-camera's only setup. Leave the name blank to restore its default. **Privacy**
-and **Terms** live in Settings; the startup pages carry no legal links, as on main.
+Long-press a saved connection setup that moves the camera (Wi-Fi or hotspot) to
+**Forget** it; setups have no rename, as on main. **Privacy** and **Terms** live
+in Settings; the startup pages carry no legal links, as on main.
 
 Pocket and Nano are separate bodies. If Bluetooth reached a different camera
 than the one tapped, say so and tell the operator to pick the matching row.

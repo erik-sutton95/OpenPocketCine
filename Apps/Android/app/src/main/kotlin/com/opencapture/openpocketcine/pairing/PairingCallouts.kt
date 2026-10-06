@@ -23,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,9 +39,7 @@ import com.opencapture.opencine.core.RouteDraft
 import com.opencapture.opencine.core.RouteKind
 import com.opencapture.opencine.core.SavedCamera
 import com.opencapture.opencine.dji.CameraConnectionSetup
-import com.opencapture.opencine.core.LocalVPNFilter
 import com.opencapture.opencine.dji.SharedWiFi
-import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
@@ -60,13 +57,10 @@ fun SavedCamera.ssid(setup: CameraConnectionSetup): String? = when (setup) {
     CameraConnectionSetup.PHONE_HOTSPOT -> hotspotSSID
 }
 
-/** The DJI entry's pairing slot: the activity provides the callouts, which need its permission gate. */
-val LocalPairingCallouts = staticCompositionLocalOf<@Composable () -> Unit> { {} }
-
 /**
- * What the pair page shows while choosing a camera, beyond the shared page: the Swift core,
- * Bluetooth, permission and Location fixes with their actions, the VPN banner, then the
- * vendor-app precheck or, after 20 s without a camera, the still-looking tip.
+ * The pair wizard's content: the Swift core, Bluetooth, permission and Location fixes with their
+ * actions, then, while choosing a camera, the vendor-app precheck or, after 20 s without a
+ * camera, the still-looking tip. A local VPN shows on the wizard's video-link page.
  */
 @Composable
 fun PairingCallouts(model: AppModel, discovery: PermissionGate, onEnableBluetooth: () -> Unit) {
@@ -84,7 +78,9 @@ fun PairingCallouts(model: AppModel, discovery: PermissionGate, onEnableBluetoot
             }
         }
     }
-    val waitingForCamera = phase == ConnectionPhase.SCANNING && radioOn && permissionsGranted && !locationOff &&
+    // The tips belong to choosing a camera, as on the pair page this app has always shown.
+    val choosing = state.attempts.isEmpty()
+    val waitingForCamera = choosing && phase == ConnectionPhase.SCANNING && radioOn && permissionsGranted && !locationOff &&
         state.nearby.isEmpty()
     var slowScan by remember { mutableStateOf(false) }
     LaunchedEffect(waitingForCamera) {
@@ -136,12 +132,9 @@ fun PairingCallouts(model: AppModel, discovery: PermissionGate, onEnableBluetoot
                 onAction = { runCatching { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } },
             )
         }
-        if (LocalVPNProbe.isActive(context)) {
-            PairingCallout(title = "Check the connection", body = LocalVPNFilter.WIZARD_BANNER, icon = MonitorIcon.TRIANGLE_ALERT)
-        }
         if (slowScan && waitingForCamera) {
             PairingCallout(title = "Still looking", body = StartupConnectionCopy.STILL_LOOKING, icon = MonitorIcon.RADIO)
-        } else {
+        } else if (choosing) {
             PairingCallout(title = "Before you pair", body = StartupConnectionCopy.PAIRING_PRECHECK, icon = MonitorIcon.TRIANGLE_ALERT)
         }
     }

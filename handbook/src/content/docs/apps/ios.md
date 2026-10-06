@@ -17,9 +17,8 @@ opens the existing network wizard. A connection failure offers the relevant
 retry, setup-edit or Settings action. Multiview stays available from the cameras
 page.
 
-Long-press any setup, including a camera's only setup, to **Rename setup**.
-Leave its name blank to restore the default. **Privacy** and **Terms** are in
-Settings.
+Long-press a Wi-Fi or hotspot setup to **Forget** it. **Privacy** and **Terms**
+are in Settings.
 
 Updates keep saved camera identities, network credentials, media favorites and
 preferences. The saved-camera document mirrors the legacy records so a later
