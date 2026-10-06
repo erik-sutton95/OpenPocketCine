@@ -3,12 +3,13 @@ package com.opencapture.openpocketcine.assists
 import androidx.compose.runtime.Composable
 import com.opencapture.opencine.cameracontrols.AssistInspectorFrame
 import com.opencapture.openpocketcine.AppModel
+import com.opencapture.monitorui.MonitorAssistTool
 
 /** Assist options ride the shared inspector frame; preview work stays in AssistOptionsPopup. */
 @Composable
 @Suppress("UNUSED_PARAMETER")
 fun MonitorAssistInspector(
-    tool: LiveAssistTool, state: LiveAssistState, model: AppModel?, colorMode: Int,
+    tool: MonitorAssistTool, state: LiveAssistState, model: AppModel?, colorMode: Int,
     viewportWidth: Float, viewportHeight: Float, safeLeading: Float,
     safeTop: Float, safeBottom: Float, controlsFloor: Float,
     onDismiss: () -> Unit,

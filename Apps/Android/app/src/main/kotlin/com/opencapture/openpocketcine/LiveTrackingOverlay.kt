@@ -41,6 +41,7 @@ import com.opencapture.opencine.vocabulary.TrackingBox
 import com.opencapture.opencine.vocabulary.TrackingHud
 import kotlin.math.max
 import kotlin.math.min
+import com.opencapture.monitorui.MonitorIcon
 
 @Composable
 fun LiveFocusTrackingLayer(
@@ -54,7 +55,7 @@ fun LiveFocusTrackingLayer(
     focusLocked: Boolean = false,
 ) {
     val measurer = rememberTextMeasurer()
-    val lockIcon = if (focusLocked) painterResource(OpcIcon.LOCK.drawableRes) else null
+    val lockIcon = if (focusLocked) painterResource(MonitorIcon.LOCK.drawableRes) else null
     Canvas(modifier.fillMaxSize()) {
         val aeTag =
             if (aeLocked) {
@@ -125,7 +126,7 @@ fun LiveTrackingCancelButton(
                 .background(LiveDesign.good),
             contentAlignment = Alignment.Center,
         ) {
-            OpcIcon(OpcIcon.X, null, Modifier.size(11.dp), LiveDesign.background)
+            MonitorIcon(MonitorIcon.X, null, Modifier.size(11.dp), LiveDesign.background)
         }
     }
 }

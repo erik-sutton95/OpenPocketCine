@@ -19,6 +19,11 @@ import com.opencapture.opencine.cameracontrols.HistogramAssist
 import com.opencapture.opencine.cameracontrols.FalseColorReference
 import com.opencapture.opencine.cameracontrols.FalseColorBands
 import com.opencapture.opencine.cameracontrols.AudioAssist
+import com.opencapture.monitorui.MonitorFalseColorSelection
+import com.opencapture.monitorui.MonitorZebraUnit
+import com.opencapture.monitorui.MonitorWaveformMode
+import com.opencapture.monitorui.MonitorParadeMode
+import com.opencapture.opencine.media.MonitorCrushClipCompensation
 
 class ScopeGeometryTest {
     /** Swift `falseColorClip(.limits)` + `falseColorBands(.limits)` clip edge, probed 2026-09-29. */
@@ -35,7 +40,7 @@ class ScopeGeometryTest {
             )
         for ((key, edge) in swift) {
             val (transfer, rec709) = key
-            val clip = FalseColorBands.bands(FalseColorScale.LIMITS, transfer, rec709)[3]
+            val clip = FalseColorBands.bands(MonitorFalseColorSelection.LIMITS, transfer, rec709)[3]
             assertEquals(edge, clip.lowerBound, 0.01, "$transfer rec709=$rec709")
         }
     }
@@ -105,10 +110,10 @@ class ScopeGeometryTest {
 
     @Test
     fun paradeLanesSplitThePlot() {
-        assertEquals(3, ParadeMode.RGB.laneCount)
-        assertEquals(4, ParadeMode.YRGB.laneCount)
+        assertEquals(3, MonitorParadeMode.RGB.laneCount)
+        assertEquals(4, MonitorParadeMode.YRGB.laneCount)
         val plot = WaveformAxis.plotRect(250f, 153f)
-        val w = ParadeAssist.laneWidth(ParadeMode.RGB, plot)
+        val w = ParadeAssist.laneWidth(MonitorParadeMode.RGB, plot)
         assertEquals(plot.width / 3f, w, 0.01f)
     }
 
@@ -131,8 +136,8 @@ class ScopeGeometryTest {
     @Test
     fun traceRasterSkipsEmptyPointLists() {
         val table = FloatArray(256)
-        assertEquals(null, ScopeTraceRaster.waveformArgb(emptyList(), emptyList(), table, WaveformMode.RGB, 1.0))
-        assertEquals(null, ScopeTraceRaster.paradeArgb(emptyList(), emptyList(), table, ParadeMode.RGB, 1.0))
+        assertEquals(null, ScopeTraceRaster.waveformArgb(emptyList(), emptyList(), table, MonitorWaveformMode.RGB, 1.0))
+        assertEquals(null, ScopeTraceRaster.paradeArgb(emptyList(), emptyList(), table, MonitorParadeMode.RGB, 1.0))
     }
 
     @Test
@@ -144,7 +149,7 @@ class ScopeGeometryTest {
                 listOf(mid),
                 emptyList(),
                 table,
-                WaveformMode.LUMA,
+                MonitorWaveformMode.LUMA,
                 WaveformAssist.intensity(100),
             )
         requireNotNull(px)
@@ -165,7 +170,7 @@ class ScopeGeometryTest {
         val c = frame(3)
         val intensity = WaveformAssist.intensity(100)
         val layers = com.opencapture.monitorui.MonitorScopeTraceRaster.TraceLayers()
-        for (mode in WaveformMode.entries) {
+        for (mode in MonitorWaveformMode.entries) {
             layers.waveformArgb(a, emptyList(), table, mode, intensity)
             // b's trail is a's samples: the retained live layer stands in for a re-splat.
             val reused = requireNotNull(layers.waveformArgb(b, a, table, mode, intensity)).copyOf()
@@ -176,9 +181,9 @@ class ScopeGeometryTest {
             val skippedFresh = requireNotNull(ScopeTraceRaster.waveformArgb(c, a, table, mode, intensity))
             assertTrue(skipped.indices.all { channelsWithin(skipped[it], skippedFresh[it], 1) }, "$mode fallback matches")
         }
-        layers.paradeArgb(a, emptyList(), table, ParadeMode.RGB, intensity)
-        val parade = requireNotNull(layers.paradeArgb(b, a, table, ParadeMode.RGB, intensity)).copyOf()
-        val paradeFresh = requireNotNull(ScopeTraceRaster.paradeArgb(b, a, table, ParadeMode.RGB, intensity))
+        layers.paradeArgb(a, emptyList(), table, MonitorParadeMode.RGB, intensity)
+        val parade = requireNotNull(layers.paradeArgb(b, a, table, MonitorParadeMode.RGB, intensity)).copyOf()
+        val paradeFresh = requireNotNull(ScopeTraceRaster.paradeArgb(b, a, table, MonitorParadeMode.RGB, intensity))
         assertTrue(parade.indices.all { channelsWithin(parade[it], paradeFresh[it], 1) })
     }
 
@@ -249,10 +254,10 @@ class ScopeGeometryTest {
 
     @Test
     fun trafficLightsCompensationAndNeutralDisplay() {
-        assertEquals(listOf("0", "0.25", "0.5", "0.75", "1.0"), CrushClipCompensation.entries.map { it.label })
-        assertEquals(listOf(0, 2, 5, 7, 10), CrushClipCompensation.entries.map { it.raw })
-        assertEquals(0.025, CrushClipCompensation.QUARTER.pixelFractionThreshold, 1e-12)
-        assertEquals(0.10, CrushClipCompensation.ONE.pixelFractionThreshold, 1e-12)
+        assertEquals(listOf("0", "0.25", "0.5", "0.75", "1.0"), MonitorCrushClipCompensation.entries.map { it.label })
+        assertEquals(listOf(0, 2, 5, 7, 10), MonitorCrushClipCompensation.entries.map { it.raw })
+        assertEquals(0.025, MonitorCrushClipCompensation.QUARTER.pixelFractionThreshold, 1e-12)
+        assertEquals(0.10, MonitorCrushClipCompensation.ONE.pixelFractionThreshold, 1e-12)
         val neutral = TrafficLightsAssist.channelDisplay(0.5)
         assertEquals(TrafficLightsAssist.BarSide.NEUTRAL, neutral.side)
         val over = TrafficLightsAssist.channelDisplay(0.8)
@@ -289,26 +294,26 @@ class ScopeGeometryTest {
     @Test
     fun zebraNativeUnitShows0To255NotIre() {
         val transfer = MonitorTransfer.DLOG2
-        assertEquals(100, ZebraEditor.displayValue(100.0, ZebraUnit.IRE, transfer))
-        assertEquals(100, ZebraEditor.editorMaximum(ZebraUnit.IRE))
-        assertEquals(255, ZebraEditor.editorMaximum(ZebraUnit.NATIVE))
-        val nativeClip = ZebraEditor.displayValue(100.0, ZebraUnit.NATIVE, transfer)
+        assertEquals(100, ZebraEditor.displayValue(100.0, MonitorZebraUnit.IRE, transfer))
+        assertEquals(100, ZebraEditor.editorMaximum(MonitorZebraUnit.IRE))
+        assertEquals(255, ZebraEditor.editorMaximum(MonitorZebraUnit.NATIVE))
+        val nativeClip = ZebraEditor.displayValue(100.0, MonitorZebraUnit.NATIVE, transfer)
         assertTrue(nativeClip in 240..255, "D-Log2 clip maps near code 247, was $nativeClip")
         assertEquals(
             100.0,
-            ZebraEditor.ireFromDisplay(nativeClip, ZebraUnit.NATIVE, transfer),
+            ZebraEditor.ireFromDisplay(nativeClip, MonitorZebraUnit.NATIVE, transfer),
             0.5,
         )
     }
 
     @Test
     fun falseColorVideoRulerUsesVideoModeIre() {
-        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromMenuLabel("Video"))
-        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("PStops"))
-        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("ZC Stops"))
-        assertEquals("Video", FalseColorScale.STOPS.menuLabel)
+        assertEquals(MonitorFalseColorSelection.STOPS, MonitorFalseColorSelection.fromMenuLabel("Video"))
+        assertEquals(MonitorFalseColorSelection.STOPS, MonitorFalseColorSelection.fromPersisted("PStops"))
+        assertEquals(MonitorFalseColorSelection.STOPS, MonitorFalseColorSelection.fromPersisted("ZC Stops"))
+        assertEquals("Video", MonitorFalseColorSelection.STOPS.menuLabel)
         val transfer = MonitorTransfer.DLOG2
-        val stops = FalseColorReference.segments(FalseColorScale.STOPS, transfer)
+        val stops = FalseColorReference.segments(MonitorFalseColorSelection.STOPS, transfer)
         assertEquals(9, stops.size)
         assertEquals(0.0, stops[0].lowerFraction, 1e-4)
         assertEquals(0.05, stops[0].upperFraction, 1e-4)
@@ -318,10 +323,10 @@ class ScopeGeometryTest {
         assertTrue(stops[2].upperFraction < stops[3].lowerFraction)
         assertEquals(
             listOf("crush", "18%", "skin", "clip"),
-            FalseColorReference.axisLabels(FalseColorScale.STOPS),
+            FalseColorReference.axisLabels(MonitorFalseColorSelection.STOPS),
         )
         assertEquals("D-Log2", FalseColorReference.curveKeyLabel(MonitorTransfer.DLOG2))
-        val ire = FalseColorReference.segments(FalseColorScale.IRE, transfer)
+        val ire = FalseColorReference.segments(MonitorFalseColorSelection.IRE, transfer)
         assertEquals(6, ire.size)
         assertEquals(0.0, ire[0].lowerFraction, 1e-4)
         assertEquals(0.025, ire[0].upperFraction, 1e-4)
@@ -335,17 +340,17 @@ class ScopeGeometryTest {
 
     @Test
     fun unknownSavedScaleFallsBackToCineStop() {
-        assertEquals(FalseColorScale.SCENE_STOPS, FalseColorScale.fromPersisted("unknown"))
-        assertEquals(FalseColorScale.SCENE_STOPS, FalseColorScale.fromMenuLabel("unknown"))
+        assertEquals(MonitorFalseColorSelection.SCENE_STOPS, MonitorFalseColorSelection.fromPersisted("unknown"))
+        assertEquals(MonitorFalseColorSelection.SCENE_STOPS, MonitorFalseColorSelection.fromMenuLabel("unknown"))
     }
 
     @Test
     fun savedCineStopKeyKeepsTheVideoScale() {
         // "CineStop" was the Video scale's saved key before the scene-stop scale took the name.
-        assertEquals(FalseColorScale.STOPS, FalseColorScale.fromPersisted("CineStop"))
-        assertEquals(FalseColorScale.SCENE_STOPS, FalseColorScale.fromPersisted("SceneStops"))
-        assertEquals(FalseColorScale.SCENE_STOPS, FalseColorScale.fromMenuLabel("CineStop"))
-        assertEquals("CineStop", FalseColorScale.SCENE_STOPS.menuLabel)
+        assertEquals(MonitorFalseColorSelection.STOPS, MonitorFalseColorSelection.fromPersisted("CineStop"))
+        assertEquals(MonitorFalseColorSelection.SCENE_STOPS, MonitorFalseColorSelection.fromPersisted("SceneStops"))
+        assertEquals(MonitorFalseColorSelection.SCENE_STOPS, MonitorFalseColorSelection.fromMenuLabel("CineStop"))
+        assertEquals("CineStop", MonitorFalseColorSelection.SCENE_STOPS.menuLabel)
     }
 
     @Test
@@ -382,6 +387,6 @@ class ScopeGeometryTest {
             listOf("−6", "−4", "−2", "18%", "clip"),
             FalseColorReference.sceneStopMarkers(MonitorTransfer.REC709).map { it.label },
         )
-        assertTrue(FalseColorReference.axisLabels(FalseColorScale.SCENE_STOPS).isEmpty())
+        assertTrue(FalseColorReference.axisLabels(MonitorFalseColorSelection.SCENE_STOPS).isEmpty())
     }
 }

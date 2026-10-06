@@ -11,6 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.opencapture.monitorui.MonitorAssistTool
 
 class AnamorphicDesqueezeTest {
     @Test
@@ -19,16 +20,16 @@ class AnamorphicDesqueezeTest {
         val state = LiveAssistState()
         assertFalse(state.desqueeze)
         assertFalse(state.desqueezeCustom)
-        assertTrue(LiveAssistTool.DESQ in state.pinned)
+        assertTrue(MonitorAssistTool.DESQ in state.pinned)
         assertEquals(1.33, state.desqueezeFactor)
         assertEquals(16f / 9f, state.presentedAspect(16f / 9f))
         assertEquals(DesqueezeDirection.HORIZONTAL, state.desqueezeDirection)
-        assertEquals("DE-SQ", LiveAssistTool.DESQ.chipLabel)
-        assertEquals(LiveAssistTool.DESQ, LiveAssistTool.fromPersisted("DE-SQ"))
-        assertEquals(LiveAssistTool.DESQ, LiveAssistTool.fromPersisted("DESQ"))
-        assertTrue(LiveAssistTool.DESQ in LiveAssistTool.settingsCases)
-        assertTrue(LiveAssistTool.DESQ in LiveAssistTool.playbackToolbarCases)
-        assertTrue(LiveAssistTool.DESQ in LiveAssistTool.cleanPinCases)
+        assertEquals("DE-SQ", MonitorAssistTool.DESQ.chipLabel)
+        assertEquals(MonitorAssistTool.DESQ, MonitorAssistTool.fromPersisted("DE-SQ"))
+        assertEquals(MonitorAssistTool.DESQ, MonitorAssistTool.fromPersisted("DESQ"))
+        assertTrue(MonitorAssistTool.DESQ in MonitorAssistTool.settingsCases)
+        assertTrue(MonitorAssistTool.DESQ in MonitorAssistTool.playbackToolbarCases)
+        assertTrue(MonitorAssistTool.DESQ in MonitorAssistTool.cleanPinCases)
     }
 
     @Test
@@ -42,7 +43,7 @@ class AnamorphicDesqueezeTest {
         state.selectCustomDesqueeze()
         assertEquals(1.5, state.desqueezeFactor)
         state.updateDesqueezeDirection(DesqueezeDirection.VERTICAL)
-        state.toggle(LiveAssistTool.DESQ)
+        state.toggle(MonitorAssistTool.DESQ)
         val restored = LiveAssistState(state.encoded())
         assertTrue(restored.desqueeze)
         assertTrue(restored.desqueezeCustom)
@@ -84,16 +85,16 @@ class AnamorphicDesqueezeTest {
         var playbackSaved = emptySet<String>()
         var pinsSaved = emptySet<String>()
         val state = LiveAssistState(pinnedNames = setOf("LUT"), onPersistPlayback = { playbackSaved = it }, onPersistPins = { pinsSaved = it })
-        state.toggle(LiveAssistTool.DESQ)
+        state.toggle(MonitorAssistTool.DESQ)
         state.clean = true
         assertEquals(16f / 9f, state.presentedAspect(16f / 9f))
-        state.togglePin(LiveAssistTool.DESQ)
+        state.togglePin(MonitorAssistTool.DESQ)
         assertTrue("DESQ" in pinsSaved)
         assertTrue(state.presentedAspect(16f / 9f) > 16f / 9f)
         assertEquals(16f / 9f, state.presentedAspect(16f / 9f, playback = true))
-        state.togglePlayback(LiveAssistTool.DESQ)
+        state.togglePlayback(MonitorAssistTool.DESQ)
         assertEquals(setOf("DESQ"), playbackSaved)
-        state.toggle(LiveAssistTool.DESQ)
+        state.toggle(MonitorAssistTool.DESQ)
         assertTrue(state.presentedAspect(16f / 9f, playback = true) > 16f / 9f)
     }
 
@@ -102,7 +103,7 @@ class AnamorphicDesqueezeTest {
         val state = LiveAssistState()
         assertEquals(16f / 9f * 1.33f, state.presentedAspect(16f / 9f, preview = true))
         assertFalse(state.desqueeze)
-        assertFalse(state.isPlaybackVisible(LiveAssistTool.DESQ))
+        assertFalse(state.isPlaybackVisible(MonitorAssistTool.DESQ))
     }
 
     @Test
@@ -113,8 +114,8 @@ class AnamorphicDesqueezeTest {
                     val state = LiveAssistState()
                     state.selectDesqueezePreset(DesqueezePreset.X200)
                     state.updateDesqueezeDirection(direction)
-                    state.toggle(LiveAssistTool.DESQ)
-                    state.togglePlayback(LiveAssistTool.DESQ)
+                    state.toggle(MonitorAssistTool.DESQ)
+                    state.togglePlayback(MonitorAssistTool.DESQ)
                     val aspect = state.presentedAspect(source)
                     assertEquals(if (direction == DesqueezeDirection.HORIZONTAL) source * 2 else source / 2, aspect)
                     val live = well.fittedContent(aspect)
@@ -136,7 +137,7 @@ class AnamorphicDesqueezeTest {
     @Test
     fun gridGuideAndPanBoundsFollowCorrectedPresentation() {
         val state = LiveAssistState()
-        state.togglePlayback(LiveAssistTool.DESQ)
+        state.togglePlayback(MonitorAssistTool.DESQ)
         state.selectDesqueezePreset(DesqueezePreset.X200)
         val content = AssistRect(0f, 0f, 1600f, 900f).fittedContent(state.presentedAspect(16f / 9f, playback = true))
         assertEquals(AssistRect(0f, 225f, 1600f, 450f), content)
@@ -155,7 +156,7 @@ class AnamorphicDesqueezeTest {
     fun squareCaptureGuidesExcludeSourcePaddingAfterHorizontalCorrection() {
         val state = LiveAssistState()
         state.selectDesqueezePreset(DesqueezePreset.X200)
-        state.toggle(LiveAssistTool.DESQ)
+        state.toggle(MonitorAssistTool.DESQ)
         val raster = ChromeRect(0f, 0f, 1600f, 900f).fittedContent(state.presentedAspect(16f / 9f))
         val recorded = raster.fittedContent(state.presentedAspect(1f))
         assertEquals(ChromeRect(0f, 225f, 1600f, 450f), raster)
@@ -168,8 +169,8 @@ class AnamorphicDesqueezeTest {
     fun explicitlyEmptyPinsRemainEmptyAcrossSavingAndRestoration() {
         var saved: Set<String>? = null
         val state = LiveAssistState(pinnedNames = setOf("DESQ"), onPersistPins = { saved = it })
-        state.toggle(LiveAssistTool.DESQ)
-        state.togglePin(LiveAssistTool.DESQ)
+        state.toggle(MonitorAssistTool.DESQ)
+        state.togglePin(MonitorAssistTool.DESQ)
         assertEquals(emptySet(), saved)
         val restored = LiveAssistState(state.encoded(), pinnedNames = OperatorPrefs.resolvedCleanPins(saved))
         restored.clean = true
@@ -177,7 +178,7 @@ class AnamorphicDesqueezeTest {
         assertTrue(restored.pinned.isEmpty())
         assertEquals(16f / 9f, restored.presentedAspect(16f / 9f))
         val fresh = LiveAssistState(pinnedNames = OperatorPrefs.resolvedCleanPins(null))
-        assertTrue(LiveAssistTool.DESQ in fresh.pinned)
+        assertTrue(MonitorAssistTool.DESQ in fresh.pinned)
     }
 
 }

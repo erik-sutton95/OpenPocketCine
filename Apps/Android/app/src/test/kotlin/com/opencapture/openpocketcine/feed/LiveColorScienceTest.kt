@@ -1,7 +1,7 @@
 package com.opencapture.openpocketcine.feed
 
 import com.opencapture.opencine.vocabulary.CameraCommands
-import com.opencapture.openpocketcine.assists.CrushClipCompensation
+import com.opencapture.opencine.media.MonitorCrushClipCompensation
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -232,7 +232,7 @@ class LiveColorScienceTest {
                 bins,
                 bins,
                 MonitorTransfer.DLOG2,
-                threshold = CrushClipCompensation.QUARTER.pixelFractionThreshold,
+                threshold = MonitorCrushClipCompensation.QUARTER.pixelFractionThreshold,
             )
         assertFalse(strict.red.crush)
         assertTrue(forgiving.red.crush)

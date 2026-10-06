@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.monitorGlass
 import com.opencapture.opencine.cameracontrols.AssistToolCell
+import com.opencapture.monitorui.MonitorAssistTool
 
 /**
  * OpenZCine landscape assist strip: glass pill, tools in groups of three,
@@ -38,9 +39,9 @@ import com.opencapture.opencine.cameracontrols.AssistToolCell
 @Composable
 fun LiveAssistBar(
     enabled: Boolean,
-    on: Set<LiveAssistTool>,
+    on: Set<MonitorAssistTool>,
     modifier: Modifier = Modifier,
-    onToggle: (LiveAssistTool) -> Unit,
+    onToggle: (MonitorAssistTool) -> Unit,
 ) {
     LiveAssistBarRow(
         locked = !enabled,
@@ -55,10 +56,10 @@ fun LiveAssistBar(
 fun LiveAssistBar(
     state: LiveAssistState,
     locked: Boolean,
-    onLongPress: (LiveAssistTool) -> Unit,
+    onLongPress: (MonitorAssistTool) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val frames = remember { mutableStateMapOf<LiveAssistTool, ChromeRect>() }
+    val frames = remember { mutableStateMapOf<MonitorAssistTool, ChromeRect>() }
     LiveAssistBarRow(
         locked = locked,
         isOn = { state.isOn(it) },
@@ -82,7 +83,7 @@ fun LiveAssistBar(
 @Composable
 fun PlaybackAssistBar(
     state: LiveAssistState,
-    onLongPress: (LiveAssistTool) -> Unit,
+    onLongPress: (MonitorAssistTool) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scroll = rememberScrollState()
@@ -90,7 +91,7 @@ fun PlaybackAssistBar(
         modifier.horizontalScroll(scroll),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LiveAssistTool.toolbarGroups.forEachIndexed { groupIndex, group ->
+        MonitorAssistTool.toolbarGroups.forEachIndexed { groupIndex, group ->
             if (groupIndex > 0) AssistDivider()
             group.forEach { tool ->
                 AssistToolCell(
@@ -112,11 +113,11 @@ fun PlaybackAssistBar(
         }
         AssistDivider()
         AssistToolCell(
-            tool = LiveAssistTool.AUDIO,
-            isOn = state.isPlaybackVisible(LiveAssistTool.AUDIO),
+            tool = MonitorAssistTool.AUDIO,
+            isOn = state.isPlaybackVisible(MonitorAssistTool.AUDIO),
             enabled = true,
             onLongClick = null,
-            onClick = { state.togglePlayback(LiveAssistTool.AUDIO) },
+            onClick = { state.togglePlayback(MonitorAssistTool.AUDIO) },
         )
     }
 }
@@ -124,11 +125,11 @@ fun PlaybackAssistBar(
 @Composable
 private fun LiveAssistBarRow(
     locked: Boolean,
-    isOn: (LiveAssistTool) -> Boolean,
-    onClick: (LiveAssistTool) -> Unit,
-    onLongPress: (LiveAssistTool) -> Unit,
+    isOn: (MonitorAssistTool) -> Boolean,
+    onClick: (MonitorAssistTool) -> Unit,
+    onLongPress: (MonitorAssistTool) -> Unit,
     modifier: Modifier = Modifier,
-    onToolFrame: (LiveAssistTool, ChromeRect) -> Unit = { _, _ -> },
+    onToolFrame: (MonitorAssistTool, ChromeRect) -> Unit = { _, _ -> },
 ) {
     val scroll = rememberScrollState()
     val leadingFade = scroll.canScrollBackward
@@ -176,7 +177,7 @@ private fun LiveAssistBarRow(
                 .horizontalScroll(scroll, enabled = !locked),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LiveAssistTool.toolbarGroups.forEachIndexed { groupIndex, group ->
+            MonitorAssistTool.toolbarGroups.forEachIndexed { groupIndex, group ->
                 if (groupIndex > 0) AssistDivider()
                 group.forEach { tool ->
                 AssistToolCell(
@@ -196,11 +197,11 @@ private fun LiveAssistBarRow(
             }
             AssistDivider()
             AssistToolCell(
-                tool = LiveAssistTool.AUDIO,
-                isOn = isOn(LiveAssistTool.AUDIO),
+                tool = MonitorAssistTool.AUDIO,
+                isOn = isOn(MonitorAssistTool.AUDIO),
                 enabled = !locked,
                 onLongClick = null,
-                onClick = { onClick(LiveAssistTool.AUDIO) },
+                onClick = { onClick(MonitorAssistTool.AUDIO) },
             )
         }
         AssistScrollChevron(

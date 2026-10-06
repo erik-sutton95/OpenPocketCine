@@ -20,12 +20,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.feed.InspectorPreviewPipeline
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
+import com.opencapture.monitorui.MonitorAssistTool
 
 /** Selected tool is forced only in this consumer's plan, never in live visibility. */
 @Composable
-internal fun AssistInspectorImagePreview(tool: LiveAssistTool, state: LiveAssistState, model: AppModel,
+internal fun AssistInspectorImagePreview(tool: MonitorAssistTool, state: LiveAssistState, model: AppModel,
     lutSelection: String, colorMode: Int, playback: Boolean) {
-    if (tool !in listOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.FALSE, LiveAssistTool.ZEBRA, LiveAssistTool.DESQ)) return
+    if (tool !in listOf(MonitorAssistTool.LUT, MonitorAssistTool.PEAK, MonitorAssistTool.FALSE, MonitorAssistTool.ZEBRA, MonitorAssistTool.DESQ)) return
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val configuration = LocalConfiguration.current
@@ -66,5 +67,5 @@ internal fun AssistInspectorImagePreview(tool: LiveAssistTool, state: LiveAssist
     SideEffect { model.inspectorPreview.update(owner, plan) }
     val sourceAspect = image?.let { it.width.toFloat() / it.height } ?: (16f / 9f)
     com.opencapture.monitorui.MonitorImagePreview(image?.asImageBitmap(), "${tool.title} image preview",
-        aspectRatio = if (tool == LiveAssistTool.DESQ) state.presentedAspect(sourceAspect, preview = true) else null)
+        aspectRatio = if (tool == MonitorAssistTool.DESQ) state.presentedAspect(sourceAspect, preview = true) else null)
 }

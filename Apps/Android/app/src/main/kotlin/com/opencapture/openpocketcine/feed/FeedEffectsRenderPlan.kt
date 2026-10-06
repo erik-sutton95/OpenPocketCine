@@ -3,9 +3,9 @@ package com.opencapture.openpocketcine.feed
 import android.content.Context
 import android.util.Log
 import com.opencapture.opencine.vocabulary.CameraCommands
-import com.opencapture.openpocketcine.assists.FalseColorScale
+import com.opencapture.monitorui.MonitorFalseColorSelection
 import com.opencapture.openpocketcine.assists.LiveAssistState
-import com.opencapture.openpocketcine.assists.LiveAssistTool
+import com.opencapture.monitorui.MonitorAssistTool
 import com.opencapture.openpocketcine.bridge.SwiftCore
 import com.opencapture.opencine.vocabulary.LutCatalog
 import com.opencapture.openpocketcine.lut.LutExposureCompensation
@@ -29,10 +29,10 @@ internal object FeedEffectsRenderPlanFactory {
         family: String,
         cameraName: String?,
         playback: Boolean = false,
-        previewTool: LiveAssistTool? = null,
+        previewTool: MonitorAssistTool? = null,
         isPhoto: Boolean = false,
     ): FeedEffectsRenderPlan {
-        val shown: (LiveAssistTool) -> Boolean =
+        val shown: (MonitorAssistTool) -> Boolean =
             if (previewTool != null) {
                 { it == previewTool }
             } else if (playback) {
@@ -40,22 +40,22 @@ internal object FeedEffectsRenderPlanFactory {
             } else {
                 { assist.isVisible(it) }
             }
-        val lutOn = shown(LiveAssistTool.LUT)
-        val peaking = shown(LiveAssistTool.PEAK)
-        val falseColor = shown(LiveAssistTool.FALSE)
-        val zebra = shown(LiveAssistTool.ZEBRA)
+        val lutOn = shown(MonitorAssistTool.LUT)
+        val peaking = shown(MonitorAssistTool.PEAK)
+        val falseColor = shown(MonitorAssistTool.FALSE)
+        val zebra = shown(MonitorAssistTool.ZEBRA)
         val inspectorDemand = assist.inspectorScopeDemand?.takeIf { it.playback == playback && previewTool == null }
         val inspector = inspectorDemand?.tool
         val previewOwner = inspectorDemand?.takeIf {
-            it.tool in listOf(LiveAssistTool.LUT, LiveAssistTool.PEAK, LiveAssistTool.FALSE, LiveAssistTool.ZEBRA, LiveAssistTool.DESQ)
+            it.tool in listOf(MonitorAssistTool.LUT, MonitorAssistTool.PEAK, MonitorAssistTool.FALSE, MonitorAssistTool.ZEBRA, MonitorAssistTool.DESQ)
         }?.owner
-        val inspectorOnly = inspector != null && listOf(LiveAssistTool.WAVE, LiveAssistTool.PARADE,
-            LiveAssistTool.HISTO, LiveAssistTool.VECTOR, LiveAssistTool.LIGHTS, LiveAssistTool.ND).none(shown)
-        val waveform = shown(LiveAssistTool.WAVE) || inspector == LiveAssistTool.WAVE
-        val parade = shown(LiveAssistTool.PARADE) || inspector == LiveAssistTool.PARADE
-        val histogram = shown(LiveAssistTool.HISTO) || inspector == LiveAssistTool.HISTO
-        val vectorscope = shown(LiveAssistTool.VECTOR) || inspector == LiveAssistTool.VECTOR
-        val trafficLights = shown(LiveAssistTool.LIGHTS) || inspector == LiveAssistTool.LIGHTS
+        val inspectorOnly = inspector != null && listOf(MonitorAssistTool.WAVE, MonitorAssistTool.PARADE,
+            MonitorAssistTool.HISTO, MonitorAssistTool.VECTOR, MonitorAssistTool.LIGHTS, MonitorAssistTool.ND).none(shown)
+        val waveform = shown(MonitorAssistTool.WAVE) || inspector == MonitorAssistTool.WAVE
+        val parade = shown(MonitorAssistTool.PARADE) || inspector == MonitorAssistTool.PARADE
+        val histogram = shown(MonitorAssistTool.HISTO) || inspector == MonitorAssistTool.HISTO
+        val vectorscope = shown(MonitorAssistTool.VECTOR) || inspector == MonitorAssistTool.VECTOR
+        val trafficLights = shown(MonitorAssistTool.LIGHTS) || inspector == MonitorAssistTool.LIGHTS
         val look =
             LutLookResolver.resolve(
                 selection = lutSelection,
@@ -69,7 +69,7 @@ internal object FeedEffectsRenderPlanFactory {
         // Same gate as iOS `FeedPresentPolicy.appliesSplitComparison` (#218).
         val split =
             assist.splitComparison && lutCube != null && lutOn &&
-                (!falseColor || assist.falseColorScale == FalseColorScale.LIMITS)
+                (!falseColor || assist.falseColorScale == MonitorFalseColorSelection.LIMITS)
         val scalars =
             if (SwiftCore.isAvailable) {
                 SwiftCore.feedAssistScalars(
@@ -130,7 +130,7 @@ internal object FeedEffectsRenderPlanFactory {
                     histogram = histogram,
                     vectorscope = vectorscope,
                     trafficLights = trafficLights,
-                    ndMeter = shown(LiveAssistTool.ND),
+                    ndMeter = shown(MonitorAssistTool.ND),
                     trafficThreshold = assist.crushClipCompensation.pixelFractionThreshold,
                     transfer = MonitorTransfer.fromColorMode(colorMode),
                     iso = iso.takeIf { it in 50..102_400 },
@@ -246,7 +246,7 @@ internal object FeedEffectsRenderPlanFactory {
 
     private fun falseColorCube(
         paint: Boolean,
-        scale: FalseColorScale,
+        scale: MonitorFalseColorSelection,
         colorMode: Int,
         iso: Int,
         rec709: Boolean,
@@ -255,10 +255,10 @@ internal object FeedEffectsRenderPlanFactory {
         // 4…7 = each scale read through the official Rec.709 look (Swift `FeedEffectsWire`).
         val ordinal =
             when (scale) {
-                FalseColorScale.STOPS -> if (rec709) 4 else 0
-                FalseColorScale.IRE -> if (rec709) 5 else 1
-                FalseColorScale.LIMITS -> if (rec709) 6 else 2
-                FalseColorScale.SCENE_STOPS -> if (rec709) 7 else 3
+                MonitorFalseColorSelection.STOPS -> if (rec709) 4 else 0
+                MonitorFalseColorSelection.IRE -> if (rec709) 5 else 1
+                MonitorFalseColorSelection.LIMITS -> if (rec709) 6 else 2
+                MonitorFalseColorSelection.SCENE_STOPS -> if (rec709) 7 else 3
             }
         val kind = if (paint) "paint" else "weight"
         return PackedCubeCache.value("$kind:$ordinal:$colorMode:$iso") {
