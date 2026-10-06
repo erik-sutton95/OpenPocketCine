@@ -96,6 +96,13 @@ privacy, a wrong-camera or blind action, or a check that could never work), or a
   tab strip keeps `main`'s spacing (restored to `main`). Clean view pins, System buttons and the
   zebra threshold sliders have screen-reader names, and the System buttons take touches across
   48 dp around the unchanged capsule (kept fix, accessibility).
+- Operator Setup (iPhone) uses OpenCine's settings page. Display shows `main`'s rows (caption,
+  Edit view, one switch per item, then the pins), the tab strip keeps `main`'s spacing, Sharing's
+  "Show Wi-Fi code" link is blue again (the move drew it white) and landscape View Assist keeps
+  the tools in one column with EV Meter and LUT beside them (restored to `main`).
+- Colour dots in the zebra and peaking options show the colour each overlay paints (kept fix:
+  iPhone "Cyan" and peaking "Blue", Android "Amber", "Cyan" and peaking "Blue" drew the app's blue
+  accent).
 - Record sends start or stop for the state the camera reported, as on `main`. Right after
   connecting it waits for the camera's first record state ("Waiting for the camera's record
   state") instead of assuming "not recording" (kept fix: a blind Start on a camera already
