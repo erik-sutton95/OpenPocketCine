@@ -136,6 +136,10 @@ import kotlin.math.roundToInt
 import com.opencapture.opencine.vocabulary.MediaFile
 import com.opencapture.opencine.vocabulary.MediaClipFormatting
 import com.opencapture.opencine.cameracontrols.MediaOperatorCopy
+import com.opencapture.opencine.media.PlaybackVideoLayout
+import com.opencapture.opencine.cameracontrols.MediaCornerShape
+import com.opencapture.opencine.cameracontrols.MediaCircleIconButton
+import com.opencapture.opencine.cameracontrols.LocalMediaBackdropGlass
 
 @Composable
 fun MediaPhotoViewer(
@@ -190,7 +194,7 @@ fun MediaPhotoViewer(
     }
 
     val backdrop = rememberPhotoBackdrop(bitmap, file.id)
-    CompositionLocalProvider(LocalMonitorGlass provides glass, LocalMonitorBackdrops provides listOf(backdrop),
+    CompositionLocalProvider(LocalMonitorGlass provides glass, LocalMediaBackdropGlass provides true, LocalMonitorBackdrops provides listOf(backdrop),
         com.opencapture.monitorui.LocalMonitorBackdropSurround provides LiveDesign.feedWell) {
     Box(Modifier.fillMaxSize().background(LiveDesign.feedWell)) {
         val image = bitmap
@@ -532,7 +536,7 @@ fun MediaPlayerScreen(
             if (assist.configureTool != null) { assist.configureTool = null; true } else false
         })
 
-    CompositionLocalProvider(LocalMonitorGlass provides glass, LocalMonitorBackdrops provides listOf(backdrop.source),
+    CompositionLocalProvider(LocalMonitorGlass provides glass, LocalMediaBackdropGlass provides true, LocalMonitorBackdrops provides listOf(backdrop.source),
         com.opencapture.monitorui.LocalMonitorBackdropSurround provides LiveDesign.feedWell) {
         MonitorPlaybackScreen(presentation, actions, backHandler = { handleBack -> BackHandler(onBack = handleBack) },
             picture = { geometry ->
