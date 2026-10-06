@@ -1,48 +1,28 @@
 package com.opencapture.openpocketcine.media
 
+import com.opencapture.opencine.cameracontrols.MediaLibraryPage
+import com.opencapture.opencine.cameracontrols.MediaLibraryPageState
+import com.opencapture.opencine.cameracontrols.MediaLibraryFilterState
+import com.opencapture.opencine.cameracontrols.MediaLibraryPageActions
 import com.opencapture.monitorui.MonitorConfirmPopup
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
-import com.opencapture.monitorui.MonitorTab
-import com.opencapture.monitorui.monitorTabStrip
 import com.opencapture.monitorui.monitorScrollFade
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.absoluteOffset
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import com.opencapture.opencine.appkit.MonitorMediaCategoryFilter
@@ -59,48 +39,32 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.IntOffset
 import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.vocabulary.ConnectionPhase
-import kotlin.math.roundToInt
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LocalMonitorGlass
-import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.OpcIcon
-import com.opencapture.openpocketcine.panelGlass
 import kotlinx.coroutines.launch
 import com.opencapture.opencine.vocabulary.MediaLibraryTab
 import com.opencapture.opencine.vocabulary.MediaLibrarySort
-import com.opencapture.opencine.vocabulary.MediaLibraryQuery
 import com.opencapture.opencine.vocabulary.MediaKind
 import com.opencapture.opencine.vocabulary.MediaFile
 import com.opencapture.opencine.cameracontrols.MediaThumbnailSize
 import com.opencapture.opencine.cameracontrols.MediaLibraryCopy
-import com.opencapture.opencine.cameracontrols.MediaClipPresentation
 import com.opencapture.opencine.cameracontrols.MediaBrowserLayout
-import com.opencapture.opencine.cameracontrols.MediaSelectionTray
 import com.opencapture.opencine.cameracontrols.MediaScrollablePlaceholder
 import com.opencapture.opencine.cameracontrols.MediaListingState
-import com.opencapture.opencine.cameracontrols.MediaFilterPopup
 import com.opencapture.opencine.cameracontrols.MediaEmptyState
-import com.opencapture.opencine.cameracontrols.MediaCategoryTab
-import com.opencapture.opencine.cameracontrols.MediaCategoryStrip
-import com.opencapture.opencine.cameracontrols.MediaCatalogHeaderRow
-import com.opencapture.opencine.cameracontrols.MediaCatalogDisplayControls
 import com.opencapture.opencine.cameracontrols.MediaCapsuleShape
-import com.opencapture.opencine.cameracontrols.MediaCacheBar
 import com.opencapture.opencine.cameracontrols.LocalMediaBackdropGlass
 
 @Composable
@@ -177,24 +141,7 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
                 "$n item${if (n == 1) "" else "s"}"
             }
         }
-    val headerTitle =
-        when (category) {
-            MediaLibraryTab.ALL -> "All clips"
-            MediaLibraryTab.VIDEOS -> "Videos"
-            MediaLibraryTab.PHOTOS -> "Photos"
-            MediaLibraryTab.FAVORITES -> "Favorites"
-        }
-    val emptySubtitle =
-        when {
-            !isLive ->
-                if (controller.files.isEmpty()) MediaLibraryCopy.DISCONNECTED
-                else MediaLibraryCopy.DISCONNECTED_EMPTY_CACHE
-            activeFilterCount > 0 -> MediaLibraryCopy.FILTER_EMPTY
-            category == MediaLibraryTab.FAVORITES -> MediaLibraryCopy.EMPTY_FAVORITES
-            category == MediaLibraryTab.VIDEOS -> MediaLibraryCopy.EMPTY_VIDEOS
-            category == MediaLibraryTab.PHOTOS -> MediaLibraryCopy.EMPTY_PHOTOS
-            else -> MediaLibraryCopy.EMPTY_ALL
-        }
+    val emptySubtitle = MediaLibraryCopy.emptySubtitle(isLive, controller.files.isNotEmpty(), activeFilterCount, category)
 
     fun open(file: MediaFile) {
         if (controller.record(file) == null) return
@@ -228,180 +175,113 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
         }
     }
 
+    val pageState = MediaLibraryPageState(
+        cameraName = model.session.connectedCamera?.name ?: "OpenPocketCine",
+        category = category, layout = layout, thumbnailSize = thumbnailSize, sortOrder = sortOrder,
+        headerCount = headerCount, fetchInProgress = controller.fetchInProgress, isLive = isLive,
+        isSelecting = isSelecting, filterOpen = filterOpen, activeFilterCount = activeFilterCount,
+        selectedCount = selectedFiles.size,
+        cacheEnabled = isLive && selectedFiles.isNotEmpty(),
+        deleteEnabled = selectedFiles.any(controller::canDelete),
+        caching = {
+            controller.downloadProgress.entries.firstOrNull()?.let { (path, progress) ->
+                (displayed.firstOrNull { it.path == path }?.filename ?: path.substringAfterLast('/')) to progress
+            }
+        },
+    )
+    val filterState = MediaLibraryFilterState(
+        formatOptions, resolutionOptions, colorOptions, hasDates,
+        formatFilters, resolutionFilters, colorFilters, dateStartKey, dateEndKey,
+    )
+    val actions = object : MediaLibraryPageActions {
+        override fun selectCategory(tab: MediaLibraryTab) { category = tab }
+        override fun showList(list: Boolean) { layout = if (list) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID }
+        override fun selectThumbnailSize(size: MediaThumbnailSize) { thumbnailSize = size }
+        override fun cycleSort() { sortOrder = sortOrder.next }
+        override fun toggleFilter() { filterOpen = !filterOpen }
+        override fun selectAll() { owner.selectAll() }
+        override fun clearSelection() { exitSelection() }
+        override fun cacheSelected() { scope.launch { selectedFiles.forEach { controller.download(it) } } }
+        override fun favoriteSelected() {
+            val makeFavorite = selectedFiles.any { !controller.isFavorite(it) }
+            selectedFiles.filter { controller.isFavorite(it) != makeFavorite }.forEach(controller::toggleFavorite)
+        }
+        override fun deleteSelected() { confirmBatchDelete = true }
+        override fun shareSelected() { if (selectedFiles.isNotEmpty()) deliveryFiles = selectedFiles }
+        override fun toggleFormat(format: String) { formatFilters = formatFilters.toggle(format) }
+        override fun toggleResolution(resolution: String) { resolutionFilters = resolutionFilters.toggle(resolution) }
+        override fun toggleColor(color: Int) { colorFilters = colorFilters.toggle(color) }
+        override fun filterDates(start: String?, end: String?) { owner.filter(dateStart = start, dateEnd = end) }
+        override fun resetFilters() { owner.resetFilters() }
+        override fun closeFilter() { filterOpen = false }
+    }
+
     CompositionLocalProvider(LocalMonitorGlass provides null, LocalMediaBackdropGlass provides false) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(LiveDesign.background)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {},
-            ),
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val portrait = maxHeight > maxWidth
-            com.opencapture.monitorui.MonitorPageScaffold(
-                modifier = Modifier.statusBarsPadding().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp),
-                navigationWidth = 206f,
-                heading = {
-                    com.opencapture.monitorui.MonitorPageHeading(
-                        "Media", model.session.connectedCamera?.name ?: "OpenPocketCine")
-                },
-                navigation = { compact ->
-                    Column(
-                        if (compact) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        if (compact) {
-                            MediaCategoryStrip(category) { category = it }
-                        } else {
-                            val railScroll = rememberScrollState()
-                            Column(Modifier.weight(1f).monitorScrollFade(railScroll).verticalScroll(railScroll)) {
-                                Column(Modifier.fillMaxWidth().monitorTabStrip()) {
-                                    MediaLibraryTab.entries.forEach { tab ->
-                                        MediaCategoryTab(tab, active = tab == category, fill = true) { category = tab }
-                                    }
-                                }
-                            }
-                            MediaCatalogDisplayControls(
-                                list = layout == MediaBrowserLayout.LIST,
-                                thumbnailSize = thumbnailSize,
-                                onList = { layout = if (it) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID },
-                                onThumbnailSize = { thumbnailSize = it },
-                            )
+        MediaLibraryPage(
+            pageState, filterState, actions,
+            gallery = {
+                MediaGalleryPane(
+                    displayed = displayed,
+                    layout = layout,
+                    thumbnailSize = thumbnailSize,
+                    category = category,
+                    sortOrder = sortOrder,
+                    controller = controller,
+                    isSelecting = isSelecting,
+                    selectedIDs = selectedIDs,
+                    emptySubtitle = emptySubtitle,
+                    connected = isLive,
+                    onOpen = ::open,
+                    onSelectionChange = { nextSelecting, nextIds ->
+                        if (nextSelecting) filterOpen = false
+                        selectionBridge.apply(nextSelecting, nextIds)
+                    },
+                )
+            },
+        ) {
+            playing?.let { file ->
+                MediaPlayerScreen(
+                    files = displayedVideos,
+                    startingAt = file,
+                    controller = controller,
+                    model = model,
+                    onClose = { playing = null },
+                    onDeliver = { deliveryFiles = listOf(it) },
+                )
+            }
+            viewingPhoto?.let { file ->
+                MediaPhotoViewer(
+                    model = model,
+                    file = file,
+                    controller = controller,
+                    onClose = { viewingPhoto = null },
+                    onDeliver = { deliveryFiles = listOf(it) },
+                )
+            }
+
+            MediaDeliveryHost(
+                files = deliveryFiles,
+                controller = controller,
+                onDismissPopup = { deliveryFiles = null },
+            )
+
+            if (confirmBatchDelete) {
+                MonitorConfirmPopup(
+                    title = "Delete ${selectedIDs.size} item${if (selectedIDs.size == 1) "" else "s"} from the camera?",
+                    confirmTitle = "Delete",
+                    onClickFeedback = LocalOperatorHaptics.current::selection,
+                    onDismiss = { confirmBatchDelete = false },
+                    onConfirm = {
+                        confirmBatchDelete = false
+                        val doomed = selectedFiles
+                        scope.launch {
+                            doomed.forEach { controller.delete(it) }
+                            exitSelection()
                         }
-                    }
-                },
-            ) {
-                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MediaCatalogHeaderRow(
-                            headerTitle = headerTitle, headerCount = headerCount,
-                            fetchInProgress = controller.fetchInProgress, isLive = isLive,
-                            isSelecting = isSelecting,
-                            sortOrder = sortOrder, filterOpen = filterOpen, activeFilterCount = activeFilterCount,
-                            compact = portrait,
-                            onFilter = { filterOpen = !filterOpen }, onSort = { sortOrder = sortOrder.next },
-                        )
-                        controller.downloadProgress.entries.firstOrNull()?.let { (path, progress) ->
-                            val name = displayed.firstOrNull { it.path == path }?.filename ?: path.substringAfterLast('/')
-                            MediaCacheBar(name, progress)
-                        }
-                        Box(Modifier.weight(1f).fillMaxWidth()) {
-                            MediaGalleryPane(
-                                displayed = displayed,
-                                layout = layout,
-                                thumbnailSize = thumbnailSize,
-                                category = category,
-                                sortOrder = sortOrder,
-                                controller = controller,
-                                isSelecting = isSelecting,
-                                selectedIDs = selectedIDs,
-                                emptySubtitle = emptySubtitle,
-                                connected = isLive,
-                                onOpen = ::open,
-                                onSelectionChange = { nextSelecting, nextIds ->
-                                    if (nextSelecting) filterOpen = false
-                                    selectionBridge.apply(nextSelecting, nextIds)
-                                },
-                            )
-                        }
-                    if (isSelecting) MediaSelectionTray(selectedFiles.size,
-                        cacheEnabled = isLive && selectedFiles.isNotEmpty(),
-                        deleteEnabled = selectedFiles.any(controller::canDelete),
-                        onAll = owner::selectAll, onClear = ::exitSelection,
-                        onCache = { scope.launch { selectedFiles.forEach { controller.download(it) } } },
-                        onStar = {
-                            val makeFavorite = selectedFiles.any { !controller.isFavorite(it) }
-                            selectedFiles.filter { controller.isFavorite(it) != makeFavorite }.forEach(controller::toggleFavorite)
-                        },
-                        onDelete = { confirmBatchDelete = true },
-                        onShare = { if (selectedFiles.isNotEmpty()) deliveryFiles = selectedFiles },
-                    )
-                    if (portrait) {
-                        MediaCatalogDisplayControls(
-                            list = layout == MediaBrowserLayout.LIST,
-                            thumbnailSize = thumbnailSize,
-                            onList = { layout = if (it) MediaBrowserLayout.LIST else MediaBrowserLayout.GRID },
-                            onThumbnailSize = { thumbnailSize = it },
-                        )
-                    }
-                }
+                    },
+                )
             }
         }
-
-        if (filterOpen) {
-            MediaFilterPopup(
-                formatOptions = formatOptions,
-                resolutionOptions = resolutionOptions,
-                colorOptions = colorOptions,
-                hasDates = hasDates,
-                formatFilters = formatFilters,
-                resolutionFilters = resolutionFilters,
-                colorFilters = colorFilters,
-                dateStartKey = dateStartKey,
-                dateEndKey = dateEndKey,
-                onToggleFormat = { formatFilters = formatFilters.toggle(it) },
-                onToggleResolution = { resolutionFilters = resolutionFilters.toggle(it) },
-                onToggleColor = { colorFilters = colorFilters.toggle(it) },
-                onDateStart = { next ->
-                    val end = dateEndKey
-                    owner.filter(dateStart = next, dateEnd = if (next != null && end != null && next > end) next else end)
-                },
-                onDateEnd = { next ->
-                    val start = dateStartKey
-                    owner.filter(dateEnd = next, dateStart = if (next != null && start != null && next < start) next else start)
-                },
-                onClear = {
-                    owner.resetFilters()
-                },
-                onClose = { filterOpen = false },
-            )
-        }
-
-        playing?.let { file ->
-            MediaPlayerScreen(
-                files = displayedVideos,
-                startingAt = file,
-                controller = controller,
-                model = model,
-                onClose = { playing = null },
-                onDeliver = { deliveryFiles = listOf(it) },
-            )
-        }
-        viewingPhoto?.let { file ->
-            MediaPhotoViewer(
-                model = model,
-                file = file,
-                controller = controller,
-                onClose = { viewingPhoto = null },
-                onDeliver = { deliveryFiles = listOf(it) },
-            )
-        }
-
-        MediaDeliveryHost(
-            files = deliveryFiles,
-            controller = controller,
-            onDismissPopup = { deliveryFiles = null },
-        )
-
-        if (confirmBatchDelete) {
-            MonitorConfirmPopup(
-                title = "Delete ${selectedIDs.size} item${if (selectedIDs.size == 1) "" else "s"} from the camera?",
-                confirmTitle = "Delete",
-                onClickFeedback = LocalOperatorHaptics.current::selection,
-                onDismiss = { confirmBatchDelete = false },
-                onConfirm = {
-                    confirmBatchDelete = false
-                    val doomed = selectedFiles
-                    scope.launch {
-                        doomed.forEach { controller.delete(it) }
-                        exitSelection()
-                    }
-                },
-            )
-        }
-    }
     }
 }
 
