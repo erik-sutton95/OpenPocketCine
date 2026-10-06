@@ -1,6 +1,7 @@
 import CoreImage
 import Metal
 import OpenCineApple
+import OpenCineCameraControls
 import OpenPocketViewCore
 import XCTest
 
@@ -403,8 +404,8 @@ final class LUTAssistTests: XCTestCase {
         assist.syncLUT(to: .dLog, isPhoto: true)
         XCTAssertEqual(assist.lutSelection, .customDLog)
         XCTAssertEqual(assist.resolvedSource(), .off)
-        XCTAssertEqual(LUTSelection.djiCatalog(isPhotoLive: true), [.officialAuto])
-        XCTAssertEqual(LUTSelection.djiCatalog(isPhotoLive: false), LUTSelection.djiCases)
+        XCTAssertEqual(OfficialLUTs.app.catalog(true), [.officialAuto])
+        XCTAssertEqual(OfficialLUTs.app.catalog(false), LUTSelection.djiCases)
     }
 
     @MainActor

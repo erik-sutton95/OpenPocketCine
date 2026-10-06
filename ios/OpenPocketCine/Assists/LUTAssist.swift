@@ -11,8 +11,6 @@ import SwiftUI
 enum LUTAssist {
     static let exposureTitle = "Exposure"
     static let exposureHelp = "Input stops before the cube. Pull 1–2 after ETTR."
-    /// Live Photo / Photo is Rec.709; do not label a stale D-Log conversion.
-    static let photoRec709Caption = "Photo live view is Rec.709 — log conversions are off"
 
     @ViewBuilder
     static func longPressMenu(assist: LiveAssistState) -> some View {
@@ -91,13 +89,15 @@ enum BundledOfficialDJILUT {
 
 extension OfficialLUTs {
     /// Pocket 4P and DJI Rec.709 cubes from the app bundle. No I-Log cube ships with this app.
-    static let app = OfficialLUTs { source in
-        switch source {
-        case .official(let id): BundledPocketLUT.cube(id)
-        case .dji(let id): BundledOfficialDJILUT.cube(id)
-        default: nil
-        }
-    }
+    static let app = OfficialLUTs(
+        catalog: { isPhotoLive in isPhotoLive ? [.officialAuto] : LUTSelection.djiCases },
+        cube: { source in
+            switch source {
+            case .official(let id): BundledPocketLUT.cube(id)
+            case .dji(let id): BundledOfficialDJILUT.cube(id)
+            default: nil
+            }
+        })
 }
 
 extension LUTPreferences {
@@ -112,4 +112,12 @@ extension CustomLUTStore {
             ?? FileManager.default.temporaryDirectory)
             .appendingPathComponent("luts/custom", isDirectory: true),
         preferences: .app)
+}
+
+extension LUTPickerCopy {
+    static let app = LUTPickerCopy(
+        officialTab: "DJI",
+        officialLockedCaption: "Official DJI Rec.709 cube",
+        officialCaption: "Official DJI looks for this color / camera",
+        customEmptyHint: "Imported looks land here. Auto stays on Built-in or DJI.")
 }
