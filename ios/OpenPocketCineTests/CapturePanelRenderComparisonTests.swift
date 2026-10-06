@@ -8,6 +8,11 @@ import XCTest
 
 @MainActor
 final class CapturePanelRenderComparisonTests: XCTestCase {
+    /// main's strip held ISO and shutter at the camera's report until it answered.
+    func testStripShowsTheReportedValueWhileARequestIsPending() {
+        XCTAssertFalse(AppModel().captureStripShowsPendingEdits)
+    }
+
     /// Renders both production hosts. Tap keeps the full details drawer; hold
     /// is the compact dial at the same bottom-center well.
     func testTappedISOWhiteBalanceAndFocusKeepFullDetailsWhileHoldIsCompact() async throws {

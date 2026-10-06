@@ -80,15 +80,19 @@ privacy, a wrong-camera or blind action, or a check that could never work), or a
 
 - Shared UI and media math are meant to be invisible: screenshots matched the pre-move app
   and the moved media tests keep their numbers (golden values unchanged).
-- ISO, white balance and record go through the OpenCineCore camera session. On iOS the HUD
-  shows what the camera reported, with a pending state until it answers; the Android HUD is
-  unchanged.
+- ISO, white balance and record go through the OpenCineCore camera session. The iOS strip
+  keeps ISO and shutter at the camera's value until it answers and shows a custom white
+  balance at once, as on `main` (restored to `main`); the Android HUD is unchanged. A write from
+  a picker sheet says the camera's own message on a refusal and nothing on a timeout, on both
+  platforms (restored to `main`); "Connect the camera to use its controls." and a write held
+  back after the camera state changed keep the shared copy (kept fix: a wrong-camera guard).
 - iOS and Android lay the live monitor out from what the connected body declares through
   OpenCineDJI (gimbal and head tracking from its motion, zoom, focus, aperture, audio meters and
   timecode), not from app flags. Android single view shows the timecode on every body, Nano
   included, and Settings with no camera connected offers the AUDIO clean-view pin (restored to
-  `main`; Multi View hides the Nano timecode, as on `main`). iPhone: a Nano shows no live
-  timecode it never reports (to be restored to `main`). On Android the APERTURE sheet and
+  `main`; Multi View hides the Nano timecode, as on `main`). iPhone single view does the same
+  (restored to `main`). With no timecode yet VoiceOver reads "Timecode not available" (kept fix,
+  accessibility: `main` read the "--:--:--" placeholder). On Android the APERTURE sheet and
   drum appear only on Action 6 and FOCUS only on the bodies `main` showed it for (already
   matched `main`; both now follow the body's declaration instead of a product-name check).
 - Operator Setup (Android) comes from OpenCine's `camera-controls` (`OperatorSetupScreen`; the
@@ -231,7 +235,8 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
        appear and move the head; on Action 6 and Nano none of them appear.
     2. Audio: on every body in video, the AUDIO tile, the audio assist in the palette and the live
        meter overlay appear and the meters move with sound; in photo they hide.
-    3. Timecode: Pocket and Action 6 show the live timecode; Nano shows none (live and Multi View).
+    3. Timecode: every body shows the live timecode, Nano included; a Nano Multi View tile shows
+       none (as on `main`).
     4. Focus, aperture and zoom: FOCUS tile and drum on Pocket, APERTURE on Action 6, neither on
        Nano; the zoom chip on Pocket only.
     5. Record: start and stop from the record button with and without confirmation on each body;
@@ -239,8 +244,8 @@ Use Osmo Pocket 3 and Pocket 4 / 4 Pro, an iPhone with an Apple Watch, and an An
     6. Android (same bodies, against `opencine/integration` without `opencine/shell-01k`): repeat
        1 to 5 on an Android phone. Gimbal: joystick, gimbal sheet, motion overlay and settings
        gimbal card on a Pocket only. Audio: AUDIO tile, assist and meter in video on every body,
-       meters move with sound. Timecode: live on Pocket and Action 6, none on Nano (live and
-       Multi View tile). Record: start and stop with and without confirmation.
+       meters move with sound. Timecode: live on every body, Nano included; none on a Nano Multi
+       View tile. Record: start and stop with and without confirmation.
 
 18. SHELL-02 first pair and reconnect, iPhone/iPad and Android, on Pocket 3,
     Pocket 4 / 4 Pro and Nano (plus Action 6/360/Xtra if available):
