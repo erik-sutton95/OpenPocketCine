@@ -43,24 +43,6 @@ func scopeTraceLevelY(
         Double(ScopeDisplayScale.levelTable(for: transfer, clipByte: clipByte)[Int(byte)]), rect)
 }
 
-func scopePlotRect(_ size: CGSize, top: CGFloat) -> CGRect {
-    CGRect(x: 6, y: top, width: size.width - 12, height: size.height - top - 8)
-}
-
-/// OpenZCine `ScopeMini` vectorscope square - centred in `scopePlotRect(..., top: 26)`.
-func vectorscopePlotSquare(in size: CGSize) -> CGRect {
-    let plot = scopePlotRect(size, top: 26)
-    let side = min(plot.width, plot.height)
-    return CGRect(
-        x: plot.midX - side / 2, y: plot.midY - side / 2, width: side, height: side)
-}
-
-/// Full plot plus 2pt so origin-anchored 1–2px ticks on the 0 / 100 lines
-/// are not scissored off the line (OpenZCine Metal has no scissor).
-func scopeTraceClipRect(_ plot: CGRect) -> CGRect {
-    plot.insetBy(dx: 0, dy: -2)
-}
-
 extension MonitorTransfer {
     /// Scope panel chip label (OpenZCine `ScopeMini` chrome).
     var scopeChip: String {

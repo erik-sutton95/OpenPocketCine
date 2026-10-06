@@ -14,6 +14,9 @@ import XCTest
     }
 }
 
+/// This app's coordinator wrapper: the sheet binding's captured lease and the staging cleanup.
+/// The lifetime cases (acknowledgement order, callback replacement) are OpenCineAppKit
+/// `MonitorDeliveryModelTests`.
 @MainActor final class MediaDeliveryCoordinatorAdapterTests: XCTestCase {
     private func settle(_ predicate: () -> Bool) async {
         for _ in 0..<1000 {
@@ -64,47 +67,6 @@ import XCTest
         if let id = current?.id { XCTAssertTrue(coordinator.completeSharePresentation(id: id)) }
     }
 
-    func testUIKitCompletionBeforeBindingNilAcknowledgesDismissalOnlyOnce() async {
-        let coordinator = MediaDeliveryCoordinator(execute: { _, _, _ in
-            .share(
-                urls: [URL(fileURLWithPath: "/SIMULATED/A.mp4")],
-                metadataText: nil, stagingCleanupURL: nil)
-        })
-        let model = AppModel()
-        defer {
-            coordinator.close()
-            model.session.disconnect()
-        }
-        coordinator.begin(request, model: model)
-        await settle { coordinator.sharePayload != nil }
-        let id = coordinator.sharePayload!.id
-        let binding = coordinator.sharePresentation
-        XCTAssertTrue(coordinator.completeSharePresentation(id: id))
-        binding.wrappedValue = nil
-        XCTAssertFalse(coordinator.completeSharePresentation(id: id))
-        XCTAssertNil(coordinator.sharePayload)
-    }
-
-    func testBindingNilBeforeUIKitCompletionAcknowledgesDismissalOnlyOnce() async {
-        let coordinator = MediaDeliveryCoordinator(execute: { _, _, _ in
-            .share(
-                urls: [URL(fileURLWithPath: "/SIMULATED/A.mp4")],
-                metadataText: nil, stagingCleanupURL: nil)
-        })
-        let model = AppModel()
-        defer {
-            coordinator.close()
-            model.session.disconnect()
-        }
-        coordinator.begin(request, model: model)
-        await settle { coordinator.sharePayload != nil }
-        let id = coordinator.sharePayload!.id
-        coordinator.sharePresentation.wrappedValue = nil
-        XCTAssertNil(coordinator.sharePayload)
-        XCTAssertTrue(coordinator.completeSharePresentation(id: id))
-        XCTAssertFalse(coordinator.completeSharePresentation(id: id))
-    }
-
     func testCancelledLateShareCleansOnlyReturnedStagingLease() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("SIMULATED-delivery-lease-\(UUID())", isDirectory: true)
@@ -129,30 +91,5 @@ import XCTest
         XCTAssertNil(coordinator.sharePayload)
         XCTAssertNil(coordinator.overlayState)
         XCTAssertFalse(coordinator.isActive)
-    }
-
-    func testCompletionCallbackReplacementRejectsOutgoingSharePresentation() async {
-        let gate = DeliveryAdapterGate()
-        let coordinator = MediaDeliveryCoordinator(execute: { _, _, _ in await gate.wait() })
-        let model = AppModel()
-        defer {
-            coordinator.close()
-            model.session.disconnect()
-        }
-        coordinator.begin(
-            request, model: model,
-            onComplete: { _ in
-                coordinator.begin(self.request, model: model)
-            })
-        await settle { gate.waiters.count == 1 }
-        gate.release(
-            .share(
-                urls: [URL(fileURLWithPath: "/SIMULATED/retired.mp4")],
-                metadataText: nil, stagingCleanupURL: nil))
-        await settle { gate.waiters.count == 1 }
-        XCTAssertTrue(coordinator.isActive)
-        XCTAssertNil(coordinator.sharePayload)
-        coordinator.cancel()
-        gate.release(.failed(message: "Cancelled."))
     }
 }

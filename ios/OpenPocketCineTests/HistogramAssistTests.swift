@@ -1,3 +1,4 @@
+import MonitorUI
 import OpenCineCameraControls
 import OpenCineCameraVocabulary
 import OpenPocketViewCore
@@ -7,7 +8,7 @@ import XCTest
 @testable import OpenPocketCine
 
 /// Pins OpenZCine histogram rows + `MovablePanel` ("histo") onto PocketCine.
-/// HISTO's plot against this app's legacy scope plot rect (`scopePlotRect`). The scope
+/// HISTO's plot against the shared scope plot rect (`MonitorScopeGeometry.plotRect`). The scope
 /// itself is pinned in OpenCineCameraControlsTests.
 final class HistogramAssistTests: XCTestCase {
     func testHistogramPlotUsesWaveIREAxis() {
@@ -37,7 +38,7 @@ final class HistogramAssistTests: XCTestCase {
             WaveformAxis.plotX(WaveformAxis.middleGrayIRE(transfer: .dlog2), plot),
             accuracy: 0.05)
 
-        let leftover = scopePlotRect(size, top: 26)
+        let leftover = MonitorScopeGeometry.plotRect(size, top: 26)
         let leftover0 = leftover.minX + 0.04 * leftover.width
         XCTAssertNotEqual(
             HistogramAssist.ireX(0, in: plot), leftover0, accuracy: 0.5,
