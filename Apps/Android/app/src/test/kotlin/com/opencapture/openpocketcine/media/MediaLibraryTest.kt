@@ -25,6 +25,40 @@ import com.opencapture.opencine.cameracontrols.MediaLibraryCopy
 import com.opencapture.opencine.cameracontrols.MediaClipPresentation
 import com.opencapture.opencine.dji.MediaCommands
 
+// The original primitive-copy goldens now exercise the real shared native stream owner.
+private sealed class MediaTransferError : Exception() {
+    data object BadResponse : MediaTransferError()
+    data class HttpStatus(val code: Int) : MediaTransferError()
+    data object Timeout : MediaTransferError()
+}
+private fun MediaTransfer.readUntilLength(input: java.io.InputStream, output: java.io.OutputStream,
+    expected: Long, maxBytes: Long = Long.MAX_VALUE, onProgress: (Double) -> Unit): Long = kotlinx.coroutines.runBlocking {
+    if (maxBytes <= 0) throw MediaTransferError.BadResponse
+    val source = object : com.opencapture.opencine.runtime.MonitorMediaReadSource {
+        override fun cancel() {}
+        override fun open() = object : com.opencapture.opencine.runtime.MonitorMediaReadStream {
+            override val status: Int? = null
+            override val contentLength: Long? = expected.takeIf { it > 0 }
+            override val input: java.io.InputStream = input
+            override fun close() {}
+        }
+    }
+    val sink = object : com.opencapture.opencine.media.MediaTransferProgressSink {
+        var length: Long? = null
+        var count = 0L
+        override suspend fun expectedByteCount(count: Long?) { length = count }
+        override suspend fun write(chunk: ByteArray) {
+            output.write(chunk); count += chunk.size
+            length?.let { onProgress((count.toDouble() / it).coerceAtMost(1.0)) }
+        }
+    }
+    try {
+        val receipt = com.opencapture.opencine.runtime.MonitorMediaStreamPump().transfer(source, sink = sink, maxByteCount = maxBytes)
+        output.flush()
+        receipt.byteCount
+    } catch (_: com.opencapture.opencine.runtime.MonitorMediaStreamException.Limit) { throw MediaTransferError.BadResponse }
+}
+
 class MediaLibraryTest {
     private fun fixture(): ByteArray =
         javaClass.classLoader!!.getResourceAsStream("nano-manifest.bin")!!.readBytes()

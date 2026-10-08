@@ -32,7 +32,7 @@ extension MonitorTransfer {
 
 /// DJI source calibration supplied to neutral native owners; it is not a camera observation.
 enum PocketMonitorCalibration {
-    static let clipProfile = OpenCineCameraVocabulary.ScopeExposureCeiling.sourceProfile
+    static let clipProfile = DJIScopeExposureCeiling.sourceProfile
 }
 
 // Source adapters select measured calibration and interpretation for the shared native owner.
@@ -99,7 +99,7 @@ final class LiveAssistEngine: Sendable {
                 case .rec709, .hdr, .dlogm, .ilog, .srgb, .nlog, .log3G10: return nil
                 }
             },
-            inferTransfer: { MonitorTransfer.inferred(minByte: $0, maxByte: $1, fallback: $2) },
+            inferTransfer: { DJIMonitorColorProfile.inferredTransfer(minByte: $0, maxByte: $1, fallback: $2) },
             logSubsystem: "com.opencapture.openpocketcine", journal: { ControlLiveLog.line($0) })
     }
     init() { native = OpenCineApple.MonitorAssistEngine(configuration: Self.configuration) }

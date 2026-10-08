@@ -96,13 +96,13 @@ final class DJIControlLifetimeTests: XCTestCase {
         defer { model.session.disconnect() }
         model.shell.present(camera(model.session.control))
         let monitor = model.shell.monitor?.id
-        model.liveOperatorPanel = .settings
+        model.shell.open(.settings)
         XCTAssertEqual(model.shell.cover, .settings)
         XCTAssertNil(model.homePanel)
         model.shell.open(.media)
-        XCTAssertEqual(model.liveOperatorPanel, .media)
+        XCTAssertEqual(model.shell.cover, .media)
         XCTAssertEqual(model.shell.monitor?.id, monitor)
-        model.liveOperatorPanel = nil
+        model.shell.dismissCover()
         XCTAssertNil(model.shell.cover)
         XCTAssertEqual(model.shell.monitor?.id, monitor)
     }

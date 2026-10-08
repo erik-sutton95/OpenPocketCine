@@ -28,13 +28,15 @@ extension CaptureQuickSnapshot {
         var result = primary(
             sheet, status: model.session.whiteBalanceDisplayStatus,
             cameraModel: model.session.connectedCamera?.model,
-            supportsFocusMode: layout.focus,
+            supportsFocusMode: layout.focus, supportsAperture: layout.iris,
             facePriorityExposureEnabled: model.facePriorityExposureEnabled,
             shutterUsesAngle: OperatorPrefs.shutterUsesAngle,
             shutterAngleDegrees: OperatorPrefs.shutterAngleDegrees,
             aeLocked: model.session.autoExposureLock != nil,
             awbLocked: model.session.autoWhiteBalanceLock != nil,
-            offersAwbLock: model.session.canLockAutoWhiteBalance)
+            offersAwbLock: model.session.canLockAutoWhiteBalance,
+            profile: model.labelProfile, audioField: model.audioService?.fields.first,
+            audioSourceID: model.audioService?.sourceID)
         if sheet == .shutter, model.session.status.expoMode == .auto,
             let field = model.control.captureField(.exposureCompensation) {
             result = .common(field)
@@ -57,7 +59,49 @@ extension AppModel: CaptureSheetHost {
     var connectedBody: CameraModel? { session.connectedCamera?.model }
     var sessionPhaseLabel: String { session.phase.label }
     var bodyFamily: CameraBodyFamily { session.bodyFamily }
-    var labelProfile: CameraLabelProfile { .standard }
+    var labelProfile: CameraLabelProfile { connectedBody?.captureProfile?.labels ?? .standard }
+    var audioService: CaptureAudioService? {
+        guard OsmoMonitorPresentation.capabilities(session).audio,
+            let cameraID = session.connectedCamera?.id else { return nil }
+        let snapshot = session.control.current
+        let sourceID = CaptureAudioSourceID(session: snapshot.session, epoch: snapshot.epoch)
+        let status = session.status
+        return CaptureAudioService(sourceID: sourceID, fields: [
+            CaptureAudioField(id: .channel, title: "Channel",
+                choices: AudioChannel.allCases.map(CaptureAudioValue.channel),
+                observed: status.audioChannel.map(CaptureAudioValue.channel)),
+            CaptureAudioField(id: .wind, title: "Wind",
+                choices: WindNoiseReduction.allCases.map(CaptureAudioValue.wind),
+                observed: status.windNR.map(CaptureAudioValue.wind)),
+            CaptureAudioField(id: .direction, title: "Direction",
+                choices: DirectionalAudio.allCases.map(CaptureAudioValue.direction),
+                observed: status.directionalAudio.map(CaptureAudioValue.direction)),
+            CaptureAudioField(id: .vocal, title: "Vocal",
+                choices: VocalBoost.allCases.map(CaptureAudioValue.vocal),
+                observed: status.vocalBoost.map(CaptureAudioValue.vocal))
+        ], commit: { [weak self] value in
+            guard let self, self.session.connectedCamera?.id == cameraID else { return .unavailable }
+            let current = self.session.control.current
+            guard CaptureAudioSourceID(session: current.session, epoch: current.epoch) == sourceID,
+                OsmoMonitorPresentation.capabilities(self.session).audio else { return .unavailable }
+            guard self.session.phase == .live, !self.session.isLocked else {
+                self.session.controlNote = "Audio control refused"
+                return .refused
+            }
+            switch value {
+            case .channel(let channel): self.session.setAudioChannel(channel)
+            case .wind(let wind): self.session.setWindNR(wind)
+            case .direction(let direction): self.session.setDirectionalAudio(direction)
+            case .vocal(let vocal): self.session.setVocalBoost(vocal)
+            }
+            return .submitted
+        }, refresh: { [weak self] in
+            guard let self, self.session.connectedCamera?.id == cameraID else { return }
+            let current = self.session.control.current
+            guard CaptureAudioSourceID(session: current.session, epoch: current.epoch) == sourceID else { return }
+            await self.session.refreshAudioState()
+        })
+    }
     var colorModes: [ColorMode] { session.colorModes }
     var currentShootingMode: ShootingMode? { session.currentShootingMode }
     var sessionLocked: Bool { session.isLocked }
@@ -69,7 +113,7 @@ extension AppModel: CaptureSheetHost {
         let layout = OsmoMonitorPresentation.capabilities(session)
         return CaptureSheetCapabilities(
             focusMode: layout.focus, aperture: layout.iris, nativeIsoHop: true, isoLimit: true,
-            commonExposureCompensation: true, commonFocusMode: true, audio: layout.audio,
+            commonExposureCompensation: true, commonFocusMode: true, audio: audioService != nil,
             faceMetering: false)
     }
     var focusOptions: [FocusOption] { FocusOption.allCases }
@@ -79,7 +123,7 @@ extension AppModel: CaptureSheetHost {
     }
     var shutterAngleDegrees: Double { OperatorPrefs.shutterAngleDegrees }
     var coverOpen: Bool { shell.cover != nil }
-    var operatorPanelOpen: Bool { liveOperatorPanel != nil }
+    var operatorPanelOpen: Bool { shell.cover != nil }
 
     func quickSnapshot(_ sheet: CaptureSheet) -> CaptureQuickSnapshot? {
         CaptureQuickSnapshot.primary(sheet, model: self)
@@ -117,10 +161,6 @@ extension AppModel: CaptureSheetHost {
         case .aperture(let strategy): session.setApertureStrategy(strategy)
         case .expoMode(let mode): session.setExpoMode(mode)
         case .focus(let option, let label): commitFocus(option, label: label, from: origin)
-        case .audioChannel(let channel): session.setAudioChannel(channel)
-        case .windNoiseReduction(let value): session.setWindNR(value)
-        case .directionalAudio(let value): session.setDirectionalAudio(value)
-        case .vocalBoost(let value): session.setVocalBoost(value)
         }
     }
 
@@ -142,5 +182,4 @@ extension AppModel: CaptureSheetHost {
 
     func captureDrumDidCommit(_ value: SettingValue) {}
     func refreshIsoLimit() async { await session.refreshIsoLimit() }
-    func refreshAudioState() async { await session.refreshAudioState() }
 }

@@ -1,54 +1,8 @@
+import MonitorPresentation
 import MonitorUI
 import OpenCineCameraControls
+import OpenCineMedia
 import SwiftUI
-import UIKit
-import MonitorPresentation
-
-/// Shared long-press options chrome: OpenZCine `AssistPanel` menus and footers.
-enum AssistLongPressChrome {
-    static let revealCurve = Animation.timingCurve(0.16, 1, 0.3, 1, duration: 0.20)
-
-    @MainActor
-    @ViewBuilder
-    static func menu(for tool: MonitorAssistSelection, assist: LiveAssistState) -> some View {
-        switch tool {
-        case .peaking:
-            PeakingAssist.longPressMenu(assist: assist, palette: LiveDesign.self, haptics: .app)
-        case .falseColor: LiveFalseColorMenu(assist: assist)
-        case .zebra: LiveZebraMenu(assist: assist)
-        case .lut: LUTAssist.longPressMenu(assist: assist)
-        case .waveform: WaveformAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
-        case .parade: ParadeAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
-        case .histogram: HistogramAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
-        case .vectorscope:
-            VectorscopeAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
-        case .trafficLights:
-            TrafficLightsAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
-        case .ndMeter: NDAssist.longPressMenu(stores: .app, haptics: .app)
-        case .guides: GuidesAssist.longPressMenu(assist: assist, haptics: .app)
-        case .grid: GridAssist.longPressMenu(assist: assist, haptics: .app)
-        case .crosshair: CrosshairAssist.longPressMenu(assist: assist)
-        case .mirror: MirrorAssist.longPressMenu(assist: assist, haptics: .app)
-        case .audioMeters:
-            AudioAssist.longPressMenu(assist: assist, stores: .app, haptics: .app)
-        case .desqueeze: DesqueezeAssist.longPressMenu(assist: assist, haptics: .app)
-        case .level, .instantReview, .magnification, .evMeter:
-            EmptyView()
-        default: EmptyView()
-        }
-    }
-
-    /// Controls that must stay on screen when a tall menu scrolls.
-    /// LUT's 50/50 lives here so landscape never hides it under the catalog.
-    @MainActor
-    @ViewBuilder
-    static func footer(for tool: MonitorAssistSelection, assist: LiveAssistState) -> some View {
-        switch tool {
-        case .lut: LUTAssist.longPressFooter(assist: assist)
-        default: EmptyView()
-        }
-    }
-}
 
 struct AssistIconFrameKey: PreferenceKey {
     static var defaultValue: [MonitorAssistSelection: CGRect] = [:]
@@ -61,8 +15,7 @@ struct AssistIconFrameKey: PreferenceKey {
     }
 }
 
-/// Shared leading inspector; native option views continue to own their existing
-/// bindings and persistence. Selecting a tab never enables that assist.
+/// Source facts and the bounded SDK preview for the common operator inspector.
 struct AssistLongPressOverlay: View {
     let tool: MonitorAssistSelection
     var assist: LiveAssistState
@@ -72,67 +25,17 @@ struct AssistLongPressOverlay: View {
     var safeArea: EdgeInsets = EdgeInsets()
     var ceilingY: CGFloat = 0
     var onDismiss: () -> Void
-    @State private var helpVisible = false
-
-    private var portrait: Bool { viewport.height > viewport.width }
-    private var tools: [MonitorAssistSelection] {
-        MonitorAssistSelection.settingsCases.filter {
-            $0.hasConfiguration && ($0 != .audioMeters || assist.cameraHasAudio)
-        }
-    }
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        MonitorInspector(
-            title: tool.title, viewport: viewport, safeArea: safeArea,
-            helpVisible: $helpVisible,
-            onClose: dismiss
-        ) {
-            ScrollView(portrait ? .horizontal : .vertical, showsIndicators: false) {
-                MonitorTabStrip(vertical: !portrait) {
-                    MonitorSnapshotRows(tools) { item in
-                        Button {
-                            assist.configureTool = item
-                        } label: {
-                            HStack(spacing: 7) {
-                                AssistToolIcon(tool: item, size: 17)
-                                Text(item.rawValue).font(MonitorTheme.font(9, weight: .semibold))
-                            }
-                            .foregroundStyle(
-                                item == tool ? MonitorTheme.accent : MonitorTheme.muted
-                            )
-                            .frame(width: portrait ? 88 : 96, height: 44)
-                            .monitorTabSurface(
-                                selected: item == tool, separator: item != tools.first)
-                        }
-                        .buttonStyle(MonitorTabButtonStyle()).accessibilityLabel(item.title)
-                        .accessibilityAddTraits(item == tool ? .isSelected : [])
-                    }
-                }.padding(.horizontal, 6)
-            }
-            .monitorScrollFade(portrait ? .horizontal : .vertical)
-        } content: {
-            VStack(alignment: .leading, spacing: 14) {
-                AssistInspectorPreview(tool: tool)
-                Group {
-                    if tool == .waveform || tool == .parade {
-                        AssistLongPressChrome.menu(for: tool, assist: assist)
-                    } else {
-                        MonitorInspectorCard {
-                            AssistLongPressChrome.menu(for: tool, assist: assist)
-                        }
-                    }
-                }
-                .environment(\.monitorInspectorHelp, helpVisible)
-            }
-        } footer: {
-            AssistLongPressChrome.footer(for: tool, assist: assist)
+        let transfer = model.monitorTransfer ?? model.monitorColorMode.map(MonitorTransfer.init) ?? .rec709
+        MonitorOperatorAssistInspector(tool: tool, assist: assist, stores: .app, looks: .app,
+            palette: LiveDesign.self, haptics: .app, transfer: transfer,
+            clipByte: model.monitorSamples.exposureCeiling.clipByte(transfer: transfer),
+            viewport: viewport, safeArea: safeArea, onDismiss: onDismiss) { selected in
+            AssistInspectorPreview(tool: selected)
+        } lookMenu: {
+            LUTAssist.longPressMenu(assist: assist)
         }
-        .environment(\.monitorSegmentedAppearance, .inspector)
-    }
-
-    private func dismiss() {
-        UIApplication.shared.sendAction(
-            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        onDismiss()
     }
 }

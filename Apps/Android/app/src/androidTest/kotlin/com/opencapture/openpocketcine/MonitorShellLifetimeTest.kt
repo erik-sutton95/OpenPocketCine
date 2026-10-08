@@ -38,15 +38,15 @@ class MonitorShellLifetimeTest {
                 presentSimulatedNativeMonitor(model)
                 val common = model.session.control
                 val monitor = model.shell.state.value.monitor?.id
-                model.liveOperatorPanel = LiveOperatorPanel.SETTINGS
+                model.shell.open(ShellModel.Cover.SETTINGS)
                 assertEquals(ShellModel.Cover.SETTINGS, model.shell.state.value.cover)
                 assertNull(model.homePanel)
                 model.shell.open(ShellModel.Cover.MEDIA)
-                assertEquals(LiveOperatorPanel.MEDIA, model.liveOperatorPanel)
+                assertEquals(ShellModel.Cover.MEDIA, model.shellState.cover)
                 assertEquals(monitor, model.shell.state.value.monitor?.id)
                 assertEquals(common.id, model.session.control.id)
                 assertNull(model.control.recordEditor(), "Unknown mode and recording cannot approve capture")
-                model.liveOperatorPanel = null
+                model.shell.dismissCover()
                 assertNull(model.shell.state.value.cover)
                 model.shell.close()
                 model.shell.close()

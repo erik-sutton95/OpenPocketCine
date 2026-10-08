@@ -3,7 +3,7 @@ package com.opencapture.openpocketcine.assists
 import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.openpocketcine.feed.PocketScopeSampler
 import com.opencapture.opencine.media.ScopeAssistBundle
-import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+import com.opencapture.opencine.dji.DjiScopeExposureCeiling as ScopeExposureCeiling
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

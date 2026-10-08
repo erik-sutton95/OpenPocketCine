@@ -14,13 +14,13 @@ extension MonitorFrameEffects {
         get { transfer.colorMode }
         set {
             transfer = MonitorTransfer(newValue)
-            referenceClipByte = OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(
+            referenceClipByte = DJIScopeExposureCeiling.referenceClipByte(
                 transfer: transfer)
         }
     }
-    mutating func stamp(transfer: MonitorTransfer, ceiling: OpenCineCameraVocabulary.ScopeExposureCeiling) {
+    mutating func stamp(transfer: MonitorTransfer, ceiling: DJIScopeExposureCeiling) {
         self.transfer = transfer
-        referenceClipByte = OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(transfer: transfer)
+        referenceClipByte = DJIScopeExposureCeiling.referenceClipByte(transfer: transfer)
         clipByte = ceiling.clipByte(transfer: transfer)
     }
     init(faceAF: Bool) { self.init(); self.faceAF = faceAF }

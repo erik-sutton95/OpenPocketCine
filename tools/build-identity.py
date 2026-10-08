@@ -26,29 +26,31 @@ def identity(root: Path, platform: str, configuration: str) -> str:
     return platform + "-" + digest.hexdigest()[:32]
 
 
-# The one OpenCine checkout, hashed per platform by the parts this app builds:
-# iOS links MonitorUI + MonitorPresentation, OpenCineCore and its products (Media, FrameIO,
-# Motion, Relay, Apple), OpenCineDJI and OpenCineMulticam. Android compiles the Swift core
-# (OpenCineMedia, Motion, Relay, DJI and Core, through the root Package.swift) and includes the
-# Gradle build (its root files plus :core, :media, :decoder, :dji, :vulkan with the native
-# renderer, :multicam and :monitor-ui). Insta360 and Nikon sources are not inputs.
-SWIFT_ANDROID_CORE = [
-    "Sources/OpenCineCore", "Sources/OpenCineMedia", "Sources/OpenCineMotion",
-    "Sources/OpenCineRelay", "Sources/OpenCineDJI", "Sources/OpenCineDJIAndroid",
-    "Sources/OpenCineJNI", "Sources/OpenCineJNISupport",
-]
+# Shipping target inputs from ios/project.yml, Package.swift and the Android composite.
+# Android stages portable Swift/JNI and compiles its own Kotlin/Compose source, not SwiftUI.
 SIBLING_PACKAGES = {
-    "ios": [
-        ("OpenCine", ["Package.swift", "Sources/MonitorUI", "Sources/MonitorPresentation",
-                      "Sources/OpenCineFrameIO", "Sources/OpenCineApple", "Sources/OpenCineMulticam",
-                      *SWIFT_ANDROID_CORE]),
-    ],
+    "ios": [("OpenCine", [
+        "Package.swift", "Package.resolved",
+        "Sources/OpenCineCore", "Sources/OpenCineMedia", "Sources/OpenCineMotion",
+        "Sources/OpenCineRelay", "Sources/OpenCineRelayApple", "Sources/OpenCineFrameIO",
+        "Sources/OpenCineApple", "Sources/OpenCineWatch", "Sources/OpenCineMulticam",
+        "Sources/MonitorPresentation", "Sources/MonitorUI",
+        "Sources/OpenCineAppKit", "Sources/OpenCineAppKitApple",
+        "Sources/OpenCineCameraVocabulary", "Sources/OpenCineCameraControls",
+        "Sources/OpenCineDJI", "Sources/OpenCineDJIApple",
+    ])],
     "android": [
-        ("OpenCine", ["Package.swift", "scripts/android-stage-swift-core.sh", *SWIFT_ANDROID_CORE,
-                      "Android/settings.gradle.kts", "Android/build.gradle.kts",
-                      "Android/gradle.properties", "Android/gradle",
-                      "Android/core", "Android/media", "Android/decoder", "Android/dji",
-                      "Android/vulkan", "Android/multicam", "Android/monitor-ui"]),
+        ("OpenCine", [
+            "Package.swift", "Package.resolved", "scripts/android-stage-swift-core.sh",
+            "Sources/OpenCineCore", "Sources/OpenCineMedia", "Sources/OpenCineMotion",
+            "Sources/OpenCineRelay", "Sources/MonitorPresentation", "Sources/OpenCineCameraVocabulary",
+            "Sources/OpenCineDJI", "Sources/OpenCineDJIAndroid", "Sources/OpenCineJNISupport", "Sources/OpenCineJNI",
+            "Android/build.gradle.kts", "Android/settings.gradle.kts", "Android/gradle.properties",
+            "Android/gradle", "Android/gradlew", "Android/gradlew.bat",
+            "Android/core", "Android/media", "Android/platform", "Android/decoder",
+            "Android/native-runtime", "Android/vulkan", "Android/dji", "Android/multicam",
+            "Android/monitor-ui", "Android/appkit", "Android/camera-vocabulary", "Android/camera-controls",
+        ]),
     ],
 }
 

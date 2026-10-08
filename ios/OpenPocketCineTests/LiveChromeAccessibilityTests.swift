@@ -27,7 +27,13 @@ final class LiveChromeAccessibilityTests: XCTestCase {
         let host = UIHostingController(
             rootView: LiveViewScreen().environment(model).environment(\.scenePhase, .active))
         host.safeAreaRegions = []
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 874, height: 402))
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first {
+                $0.activationState == .foregroundActive
+            })
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 874, height: 402)
         window.rootViewController = host
         window.makeKeyAndVisible()
         host.view.frame = window.bounds
@@ -35,6 +41,7 @@ final class LiveChromeAccessibilityTests: XCTestCase {
             window.isHidden = true
             window.rootViewController = nil
             model.session.disconnect()
+            originalKeyWindow?.makeKeyAndVisible()
         }
 
         try await settle(host.view)
@@ -69,7 +76,7 @@ final class LiveChromeAccessibilityTests: XCTestCase {
         try await settle(host.view)
 
         // A covering page.
-        model.liveOperatorPanel = .settings
+        model.shell.open(.settings)
         try await settle(host.view)
         let covered = try exposed(host.view)
         XCTAssertTrue(covered.isDisjoint(with: live), "Covered: \(covered.sorted())")

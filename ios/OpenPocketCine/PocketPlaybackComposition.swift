@@ -1,3 +1,7 @@
+import OpenCineCameraControls
+import OpenCineAppKitApple
+import Observation
+import AVFoundation
 import Foundation
 import OpenCineAppKit
 import OpenCineApple
@@ -68,7 +72,9 @@ struct PocketPlaybackLook: Equatable, Sendable {
         if let apple = native as? MonitorApplePlaybackOwner {
             apple.sourceAdmission = { [weak owner] in
                 guard let owner else { return false }
-                if owner.isActive { return true }
+                let captured = owner.token, accepted = owner.isActive
+                guard owner.token == captured, !owner.closed else { return false }
+                if accepted { return true }
                 owner.close()
                 return false
             }
@@ -169,18 +175,81 @@ struct PocketPlaybackLook: Equatable, Sendable {
     }
 }
 
-/// Bounded IO only. It neither names a canonical destination nor changes catalog or playback state.
-enum PocketPlaybackStaging {
-    static func copy(_ source: URL, into sink: any MediaByteSink) async throws -> UInt64 {
-        let input = try FileHandle(forReadingFrom: source)
-        defer { try? input.close() }
-        var count: UInt64 = 0
-        while true {
-            try Task.checkCancellation()
-            let chunk = try input.read(upToCount: 64 * 1024) ?? Data()
-            if chunk.isEmpty { return count }
-            try await sink.write(chunk)
-            count += UInt64(chunk.count)
-        }
+/// Bounded native/source construction. Shared operators own the complete page lifetime.
+@MainActor @Observable final class PocketPlaybackPresentationSource {
+    @ObservationIgnored private var currentNative: MonitorApplePlaybackOwner?
+    @ObservationIgnored private var currentAssists: MonitorPlaybackAssistSession?
+    var native: MonitorApplePlaybackOwner? {
+        access(keyPath: \.native); return currentNative
+    }
+    var assists: MonitorPlaybackAssistSession? {
+        access(keyPath: \.assists); return currentAssists
+    }
+    func makeOwner(model: AppModel) -> MonitorOperatorMediaModel<MediaFile, PocketPlaybackLook> {
+        MonitorOperatorMediaModel(library: model.session.mediaLibrary,
+            recordAdmission: { record in PocketPlaybackAuthority(session: model.session, file: record.payload).admission },
+            makeAdmittedPlayback: { [self] _, admission in
+                currentAssists?.close()
+                guard admission.isCurrent() else { return nil }
+                let native = MonitorApplePlaybackOwner(feed: PlaybackFeedSession())
+                let player = model.session.makeMediaPlayback(native: native,
+                    previousColor: { model.assist.monitorColorMode })
+                let assists = MonitorPlaybackAssistSession(native: native, samples: model.frameSamples,
+                    projectEffects: { $0.playbackFrameEffects },
+                    onTapFailure: MediaPlaybackAudioSession.tapFailure,
+                    onAudioFailure: MediaPlaybackAudioSession.audioFailure)
+                guard admission.isCurrent() else { assists.close(); player.close(); return nil }
+                currentNative = native; currentAssists = assists
+                withMutation(keyPath: \.native) {}; withMutation(keyPath: \.assists) {}
+                guard admission.isCurrent() else { assists.close(); player.close(); return nil }
+                return player
+            })
+    }
+    func operations(model: AppModel,
+        owner: MonitorOperatorMediaModel<MediaFile, PocketPlaybackLook>) -> MonitorOperatorPlaybackOperations<MediaFile, PocketPlaybackLook> {
+        let cache: (@MainActor (MonitorMediaRecord<MediaFile>) async -> Void)?
+        let delete: (@MainActor (MonitorMediaRecord<MediaFile>) async -> Bool)?
+        if model.session.canReachCameraMedia {
+            cache = { record in await model.session.download(file: record.payload) }
+            delete = { record in
+                await model.session.deleteMediaFiles([record.payload])
+                return model.session.mediaLibrary.record(record.asset.id) == nil
+            }
+        } else { cache = nil; delete = nil }
+        return .init(cacheOriginal: cache, delete: delete,
+            favorite: { record in model.session.toggleFavorite(record.payload) }, adoptLook: { _, look in
+            let value = look.source
+            guard let player = owner.playback else { return }
+            let token = player.token
+            guard owner.isCurrent(token), value.authority.admission.isCurrent(), owner.isCurrent(token) else { return }
+            if let shot = value.shotColor {
+                model.session.rememberShotColor(shot, for: value.file, operation: value.authority.operation)
+            }
+            guard owner.isCurrent(token) else { return }
+            let family = value.family != .other ? value.family : model.assist.monitorFamily
+            model.assist.adoptPlaybackColor(value.color, family: family, cameraName: value.cameraName,
+                lookProfile: DJICameraLUTProfile.make(family: family,
+                    cameraName: value.cameraName ?? model.assist.monitorCameraName))
+        })
+    }
+    func values(record: MonitorMediaRecord<MediaFile>, model: AppModel) -> MonitorPlaybackSourceValues {
+        let file = record.payload
+        let grade = model.session.cacheGrade(for: file)
+        let availability: MonitorPlaybackAvailability
+        #if targetEnvironment(simulator)
+        if MonitorMediaReview.clipURL(for: file) != nil { availability = .original }
+        else { availability = grade == .original ? .original : grade.isProxyOnly ? .proxy : .camera }
+        #else
+        availability = grade == .original ? .original : grade.isProxyOnly ? .proxy : .camera
+        #endif
+        let transfer = model.monitorTransfer ?? model.assist.monitorColorMode.map(MonitorTransfer.init)
+        let buffered = currentNative?.player.currentItem?.loadedTimeRanges.map {
+            CMTimeGetSeconds(CMTimeRangeGetEnd($0.timeRangeValue))
+        }.filter(\.isFinite).max()
+        return .init(availability: availability,
+            progress: model.session.mediaDownloadProgress[file.path], buffered: buffered,
+            colorLabel: model.session.shotColor(for: file)?.label,
+            transfer: transfer,
+            clipByte: transfer.map { model.frameSamples.exposureCeiling.clipByte(transfer: $0) })
     }
 }

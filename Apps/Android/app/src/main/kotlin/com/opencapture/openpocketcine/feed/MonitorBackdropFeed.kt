@@ -19,7 +19,7 @@ import com.opencapture.opencine.media.FeedEffectsRenderPlan
 
 internal class MonitorBackdropFeed(context: Context) {
     val source = MonitorBackdropSource()
-    val native = com.opencapture.opencine.runtime.NativeBackdropFeed(context, ::Media3GlBackend,
+    val native = com.opencapture.opencine.runtime.NativeBackdropFeed(context, { com.opencapture.opencine.runtime.NativeGlBackend.create(it) },
         com.opencapture.monitorui.MonitorBackdropPolicy.MINIMUM_INTERVAL_NS,
         receive = { source.image = it }, logTag = "OpcBackdrop")
     fun close() = native.close()

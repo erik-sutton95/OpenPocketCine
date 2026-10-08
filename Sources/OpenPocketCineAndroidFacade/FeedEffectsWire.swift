@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineMedia
 import OpenCineCameraVocabulary
 import OpenPocketViewCore
 
@@ -34,50 +35,43 @@ public enum FeedEffectsWire {
 
     /// Packed-2D RGBA8 overlay paint (`n³ × 4`). Sampled on encoded camera codes.
     public static func packedFalseColorPaint(
-        scaleOrdinal: Int, colorModeCode: Int, iso: Int
+        scaleOrdinal: Int, colorModeCode: Int, iso: Int,
+        sourceProfile: MonitorColorSourceProfile = DJIMonitorColorProfile.value
     ) -> [UInt8]? {
         guard let scale = falseColorScale(scaleOrdinal) else { return nil }
-        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso)
+        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso, sourceProfile: sourceProfile)
         let key = cacheKey(
             readsRec709Look(scaleOrdinal) ? "paint709" : "paint", scale: scale, transfer: transfer,
-            ceiling: ceiling)
+            ceiling: ceiling, sourceProfile: sourceProfile)
         return cached(key) {
-            LUTLibraryWire.packedRGBA(
-                cube: overlayCube(
-                    scale: scale, transfer: transfer, ceiling: ceiling,
-                    rec709: readsRec709Look(scaleOrdinal)
-                ) {
-                    ($0.red, $0.green, $0.blue)
-                })
+            lattice(scale: scale, transfer: transfer, ceiling: ceiling,
+                rec709: readsRec709Look(scaleOrdinal), sourceProfile: sourceProfile).packedCube(.paint)
         }
     }
 
     /// Packed-2D RGBA8 overlay weight. CineStop / Video / IRE are opaque; Limits is holes-only.
     public static func packedFalseColorWeight(
-        scaleOrdinal: Int, colorModeCode: Int, iso: Int
+        scaleOrdinal: Int, colorModeCode: Int, iso: Int,
+        sourceProfile: MonitorColorSourceProfile = DJIMonitorColorProfile.value
     ) -> [UInt8]? {
         guard let scale = falseColorScale(scaleOrdinal) else { return nil }
-        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso)
+        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso, sourceProfile: sourceProfile)
         let key = cacheKey(
             readsRec709Look(scaleOrdinal) ? "weight709" : "weight", scale: scale,
             transfer: transfer,
-            ceiling: ceiling)
+            ceiling: ceiling, sourceProfile: sourceProfile)
         return cached(key) {
-            LUTLibraryWire.packedRGBA(
-                cube: overlayCube(
-                    scale: scale, transfer: transfer, ceiling: ceiling,
-                    rec709: readsRec709Look(scaleOrdinal)
-                ) {
-                    ($0.weight, $0.weight, $0.weight)
-                })
+            lattice(scale: scale, transfer: transfer, ceiling: ceiling,
+                rec709: readsRec709Look(scaleOrdinal), sourceProfile: sourceProfile).packedCube(.weight)
         }
     }
 
     /// `[highlightNative, midtoneNative, midtoneHalfNative, peakingGateScale]`.
     public static func assistScalars(
-        colorModeCode: Int, iso: Int, highlightIRE: Double, midtoneIRE: Double
+        colorModeCode: Int, iso: Int, highlightIRE: Double, midtoneIRE: Double,
+        sourceProfile: MonitorColorSourceProfile = DJIMonitorColorProfile.value
     ) -> [Float] {
-        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso)
+        let (transfer, ceiling) = prepared(colorModeCode: colorModeCode, iso: iso, sourceProfile: sourceProfile)
         let clipByte = ceiling.clipByte(transfer: transfer, iso: iso)
         let highlight = ScopeDisplayScale.zebraHighlightNative(
             monitorPercent: highlightIRE, transfer: transfer, clipByte: clipByte)
@@ -108,176 +102,22 @@ public enum FeedEffectsWire {
     /// Each JNI call carries its session's ISO, so the facade builds that source's ceiling
     /// per call instead of sharing one process-wide ratchet. Kotlin ratchets its own tap
     /// ceiling per feed session; the facade never observed tap maxima. An ISO outside
-    /// 50…102400 reads as unknown: the reference EI 1600.
+    /// 50…102400 leaves ISO unknown; the supplied source profile selects any reference.
     private static func prepared(
-        colorModeCode: Int, iso: Int
-    ) -> (transfer: MonitorTransfer, ceiling: OpenCineCameraVocabulary.ScopeExposureCeiling) {
-        let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
+        colorModeCode: Int, iso: Int, sourceProfile: MonitorColorSourceProfile
+    ) -> (transfer: MonitorTransfer, ceiling: OpenCineMedia.ScopeExposureCeiling) {
+        let ceiling = OpenCineMedia.ScopeExposureCeiling(profile: sourceProfile.clip)
         ceiling.setISO(iso)
         return (monitorTransfer(colorModeCode: colorModeCode), ceiling)
     }
 
-    private static func overlayCube(
-        scale: LiveFalseColorScale,
-        transfer: MonitorTransfer,
-        ceiling: OpenCineCameraVocabulary.ScopeExposureCeiling,
-        rec709: Bool,
-        component: ((red: Double, green: Double, blue: Double, weight: Double)) -> (
-            Double, Double, Double
-        )
-    ) -> CubeLUT {
-        let size = falseColorCubeSize
-        let denom = Double(size - 1)
-        // 709 reading: every scale evaluates the official look as a Rec.709 feed.
-        let clip = DJILook.falseColorClip(
-            scale: scale, transfer: transfer, rec709: rec709,
-            clipByte: ceiling.clipByte(transfer: transfer))
-        let bandList = LiveColorScience.falseColorBands(
-            scale, transfer: clip.transfer, clipEncoded: clip.ceiling, latticeSize: size)
-        var rgb = [Float]()
-        rgb.reserveCapacity(size * size * size * 3)
-        for b in 0..<size {
-            for g in 0..<size {
-                for r in 0..<size {
-                    let er = Double(r) / denom
-                    let eg = Double(g) / denom
-                    let eb = Double(b) / denom
-                    let yEnc = encodedLuma(red: er, green: eg, blue: eb, transfer: transfer)
-                    let read = DJILook.falseColorReading(
-                        encoded: yEnc, transfer: transfer, rec709: rec709, scale: scale)
-                    let ire = ScopeDisplayScale.monitorPercent(
-                        read.encoded, transfer: read.transfer,
-                        clipByte: ceiling.clipByte(transfer: read.transfer))
-                    let value =
-                        scale.usesSceneStops
-                        ? LiveColorScience.stops(encoded: read.encoded, transfer: read.transfer) : ire
-                    let chosen = component(
-                        overlayPaint(
-                            value: value, scale: scale, bands: bandList,
-                            monitorGray: ire / 100))
-                    rgb.append(Float(chosen.0))
-                    rgb.append(Float(chosen.1))
-                    rgb.append(Float(chosen.2))
-                }
-            }
-        }
-        return CubeLUT(size: size, rgb: rgb)
-    }
-
-    private static func encodedLuma(
-        red: Double, green: Double, blue: Double, transfer: MonitorTransfer
-    ) -> Double {
-        let w = LiveColorScience.lumaWeights(transfer)
-        return w.red * red + w.green * green + w.blue * blue
-    }
-
-    private static func overlayPaint(
-        value: Double, scale: LiveFalseColorScale, bands: [LiveFalseColorBand],
-        monitorGray: Double
-    ) -> (red: Double, green: Double, blue: Double, weight: Double) {
-        switch scale {
-        case .stops, .ire, .sceneStops:
-            let color = renderedColor(
-                value: value, scale: scale, bands: bands,
-                source: (0, 0, 0), monitorGray: monitorGray)
-            return (color.red, color.green, color.blue, 1)
-        case .limits:
-            break
-        }
-        let width = transitionWidth(scale)
-        var paint = (red: 0.0, green: 0.0, blue: 0.0)
-        var total = 0.0
-        for item in bands {
-            let weight = bandWeight(value: value, band: item, width: width)
-            let color = renderedBandColor(item, scale: scale, detailGray: monitorGray)
-            paint.red += color.red * weight
-            paint.green += color.green * weight
-            paint.blue += color.blue * weight
-            total += weight
-        }
-        guard total > 0 else { return (0, 0, 0, 0) }
-        return (paint.red / total, paint.green / total, paint.blue / total, min(1, total))
-    }
-
-    private static func renderedColor(
-        value: Double,
-        scale: LiveFalseColorScale,
-        bands: [LiveFalseColorBand],
-        source: (red: Double, green: Double, blue: Double),
-        monitorGray: Double
-    ) -> (red: Double, green: Double, blue: Double) {
-        let base: (red: Double, green: Double, blue: Double)
-        switch scale {
-        case .stops, .ire, .sceneStops:
-            let gray = min(1, max(0, monitorGray))
-            base = (gray, gray, gray)
-        case .limits:
-            base = (
-                min(1, max(0, source.red)),
-                min(1, max(0, source.green)),
-                min(1, max(0, source.blue))
-            )
-        }
-        let weighted = bands.map {
-            ($0, bandWeight(value: value, band: $0, width: transitionWidth(scale)))
-        }
-        let total = weighted.reduce(0) { $0 + $1.1 }
-        guard total > 0 else { return base }
-        let normalization = max(1, total)
-        let baseWeight = max(0, 1 - total)
-        let painted = weighted.reduce(
-            (
-                red: base.red * baseWeight, green: base.green * baseWeight,
-                blue: base.blue * baseWeight
-            )
-        ) { result, item in
-            let color = renderedBandColor(item.0, scale: scale, detailGray: monitorGray)
-            return (
-                result.red + color.red * item.1,
-                result.green + color.green * item.1,
-                result.blue + color.blue * item.1
-            )
-        }
-        return (
-            painted.red / normalization,
-            painted.green / normalization,
-            painted.blue / normalization
-        )
-    }
-
-    private static func renderedBandColor(
-        _ band: LiveFalseColorBand, scale: LiveFalseColorScale, detailGray: Double
-    ) -> (red: Double, green: Double, blue: Double) {
-        _ = detailGray
-        return (band.red, band.green, band.blue)
-    }
-
-    private static func bandWeight(
-        value: Double, band: LiveFalseColorBand, width: Double
-    ) -> Double {
-        let rising =
-            band.lowerBound.isFinite && band.lowerBound != 0
-            ? smoothStep(
-                edge0: band.lowerBound - width, edge1: band.lowerBound + width, value: value)
-            : 1
-        let falling =
-            band.upperBound.isFinite
-            ? 1
-                - smoothStep(
-                    edge0: band.upperBound - width, edge1: band.upperBound + width, value: value)
-            : 1
-        return rising * falling
-    }
-
-    private static func smoothStep(edge0: Double, edge1: Double, value: Double) -> Double {
-        let span = edge1 - edge0
-        guard span != 0 else { return value >= edge1 ? 1 : 0 }
-        let progress = min(1, max(0, (value - edge0) / span))
-        return progress * progress * (3 - 2 * progress)
-    }
-
-    private static func transitionWidth(_ scale: LiveFalseColorScale) -> Double {
-        scale.edgeSoftness
+    private static func lattice(scale: LiveFalseColorScale, transfer: MonitorTransfer,
+        ceiling: OpenCineMedia.ScopeExposureCeiling, rec709: Bool,
+        sourceProfile: MonitorColorSourceProfile) -> MonitorFalseColorLattice {
+        .signal(scale: scale, transfer: transfer, clipByte: ceiling.clipByte(transfer: transfer),
+            rec709ClipByte: ceiling.clipByte(transfer: .rec709),
+            lookCurve: sourceProfile.rec709LookCurves[transfer], readThroughLook: rec709,
+            size: falseColorCubeSize)
     }
 
     private static let cacheLock = NSLock()
@@ -286,10 +126,12 @@ public enum FeedEffectsWire {
 
     private static func cacheKey(
         _ kind: String, scale: LiveFalseColorScale, transfer: MonitorTransfer,
-        ceiling: OpenCineCameraVocabulary.ScopeExposureCeiling
+        ceiling: OpenCineMedia.ScopeExposureCeiling, sourceProfile: MonitorColorSourceProfile
     ) -> String {
         let clip = ceiling.clipByte(transfer: transfer)
-        return "\(kind):\(scale.rawValue):\(transfer.rawValue):\(clip)"
+        let curve = sourceProfile.rec709LookCurves[transfer]?.map { String(describing: $0) }.joined(separator: ",") ?? "signal"
+        let rec709Clip = ceiling.clipByte(transfer: .rec709)
+        return "\(kind):\(scale.rawValue):\(transfer.rawValue):\(clip):\(rec709Clip):\(curve)"
     }
 
     private static func cached(_ key: String, build: () -> [UInt8]) -> [UInt8] {

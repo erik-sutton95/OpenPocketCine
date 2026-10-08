@@ -4,6 +4,7 @@ import com.opencapture.opencine.appkit.NearbyCardCopy
 import com.opencapture.opencine.appkit.PairingWizard
 import com.opencapture.opencine.core.NearbyCamera
 import com.opencapture.opencine.core.RouteKind
+import com.opencapture.opencine.dji.fromJson
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.ConnectionPhase
 import com.opencapture.opencine.vocabulary.FoundCamera
@@ -53,7 +54,7 @@ class PairingWizardCopyTest {
     @Test
     fun nearbyCardsReadAsMain() {
         val camera = NearbyCamera("n1", name = "OsmoPocket3-4D5E", model = "Osmo Pocket 3", routes = setOf(RouteKind.CAMERA_ACCESS_POINT))
-        val found = FoundCamera("n1", "BB", "OsmoPocket3-4D5E", CameraModel(name = "Osmo Pocket 3", verified = true), 0x20)
+        val found = FoundCamera("n1", "BB", "OsmoPocket3-4D5E", CameraModel.fromJson("""{"name":"Osmo Pocket 3","family":"pocket","verified":true}"""), 0x20)
         assertEquals(
             NearbyCardCopy("OsmoPocket3-4D5E", "Pocket · Osmo Pocket 3 · nearby", "Needs approval on the camera"),
             AppModel.nearbyCard(camera, found),

@@ -13,7 +13,7 @@ import OpenCineMedia
 /// ImageEffectsCompositor.swift).
 final class ZebraAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
+    private let ceiling = DJIScopeExposureCeiling()
     private let assistKey = "OpenPocketCine.Assist.v1"
     private let unitKey = "OpenPocketCine.zebraUnit"
     private var savedAssist: Data?

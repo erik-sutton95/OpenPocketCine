@@ -227,8 +227,8 @@ import OpenCineDJIApple
                     model.presentSimulatorPreview()
                 #endif
             }
-            if screen == "settings" { model.liveOperatorPanel = .settings }
-            if screen == "media" { model.liveOperatorPanel = .media }
+            if screen == "settings" { model.shell.open(.settings) }
+            if screen == "media" { model.shell.open(.media) }
         }
     }
 

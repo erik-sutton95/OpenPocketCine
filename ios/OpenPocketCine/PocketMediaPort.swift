@@ -6,7 +6,7 @@ import OpenPocketViewCore
 
 /// Native source facts, primitive exchange/driver IO and existing recovery authority.
 /// It contains no catalog, assembler, retry, pagination or return loop.
-@MainActor final class PocketMediaPort: DjiAppleMediaPort {
+@MainActor final class PocketMediaPort: DjiAppleMediaMutationPort {
     private weak var session: CameraSession?
     private var identity: DjiAppleMediaIdentity
     private var target: ControlTarget
@@ -33,7 +33,10 @@ import OpenPocketViewCore
         return .init(
             identity: identity,
             canQuery: session.canReachCameraMedia && session.control.target == target,
-            bodyGalleryOpen: session.cameraGalleryOpen, inPlayback: session.status.inPlayback)
+            bodyGalleryOpen: session.cameraGalleryOpen, inPlayback: session.status.inPlayback,
+            model: session.connectedCamera?.model,
+            sourcePolicy: .init(model: session.connectedCamera?.model,
+                inPlayback: session.status.inPlayback, internalTotalMB: session.status.internalTotalMb))
     }
 
     func mediaBrowseChanged(
@@ -82,6 +85,20 @@ import OpenPocketViewCore
         guard mediaFacts?.identity == source, mediaFacts?.canQuery == true else {
             throw MediaServiceError.retired
         }
+        return reply
+    }
+
+    func requestMedia(_ frame: Duml.Frame, source: DjiAppleMediaIdentity, timeout: Duration)
+        async throws -> Duml.Frame {
+        guard let session, mediaFacts?.identity == source, mediaFacts?.canQuery == true
+        else { throw MediaServiceError.retired }
+        let reply = try await session.awaitMediaOpcode(frame.cmdSet, frame.cmdId, timeout: timeout) {
+            if self.mediaFacts?.identity == source, self.mediaFacts?.canQuery == true {
+                session.sendMediaFrame(frame)
+            }
+        }
+        guard mediaFacts?.identity == source, mediaFacts?.canQuery == true
+        else { throw MediaServiceError.retired }
         return reply
     }
 

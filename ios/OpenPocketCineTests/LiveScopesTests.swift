@@ -13,7 +13,7 @@ import OpenCineMedia
 /// and the end-to-end legal-scaled contract.
 final class LiveScopesTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
+    private let ceiling = DJIScopeExposureCeiling()
 
     // MARK: - Plot geometry
 
@@ -26,8 +26,8 @@ final class LiveScopesTests: XCTestCase {
         XCTAssertEqual(clip.minY, plot.minY - 2, accuracy: 0.01)
         XCTAssertEqual(clip.maxY, plot.maxY + 2, accuracy: 0.01)
         // IRE 0 / 100 sit on the OpenZCine 4% buffer edges — no extra shelf.
-        let line0 = scopeScaleLineY(0, plot)
-        let line100 = scopeScaleLineY(100, plot)
+        let line0 = MonitorScopeGeometry.legacyScaleLineY(0, plot)
+        let line100 = MonitorScopeGeometry.legacyScaleLineY(100, plot)
         XCTAssertEqual(line0, plot.maxY - 0.04 * plot.height, accuracy: 0.01)
         XCTAssertEqual(line100, plot.maxY - 0.96 * plot.height, accuracy: 0.01)
         XCTAssertLessThan(line0, clip.maxY)
@@ -46,8 +46,8 @@ final class LiveScopesTests: XCTestCase {
     func testGreyMarkerSitsAtTheTransferMidLevel() {
         let plot = MonitorScopeGeometry.plotRect(CGSize(width: 250, height: 153), top: 26)
         for transfer in MonitorTransfer.allCases {
-            let marker = scopeLevelY(ceiling.anchors(transfer: transfer).midLevel, plot)
-            let greyTick = scopeTraceLevelY(
+            let marker = MonitorScopeGeometry.legacyLevelY(ceiling.anchors(transfer: transfer).midLevel, plot)
+            let greyTick = MonitorScopeGeometry.legacyTraceLevelY(
                 UInt8((ceiling.anchors(transfer: transfer).mid * 255).rounded()),
                 transfer: transfer, clipByte: ceiling.clipByte(transfer: transfer), plot)
             XCTAssertEqual(
@@ -131,7 +131,7 @@ final class LiveScopesTests: XCTestCase {
 
         let plot = MonitorWaveformAxis.plotRect(in: CGSize(width: 250, height: 153))
         let line0 = MonitorWaveformAxis.scaleLineY(0, plot)
-        let leftover = scopeLevelY(
+        let leftover = MonitorScopeGeometry.legacyLevelY(
             ScopeDisplayScale.crushLevel, MonitorScopeGeometry.plotRect(CGSize(width: 250, height: 153), top: 26))
         let table = MonitorWaveformAxis.levelTable(
             for: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2))
@@ -205,9 +205,9 @@ final class LiveScopesTests: XCTestCase {
         // And it draws on the 0 line.
         let plot = CGRect(x: 0, y: 0, width: 100, height: 100)
         XCTAssertEqual(
-            scopeTraceLevelY(
+            MonitorScopeGeometry.legacyTraceLevelY(
                 16, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot),
-            scopeLevelY(ScopeDisplayScale.crushLevel, plot),
+            MonitorScopeGeometry.legacyLevelY(ScopeDisplayScale.crushLevel, plot),
             accuracy: 0.5,
             "legal black sits on the drawn 0 line")
     }
@@ -217,11 +217,11 @@ final class LiveScopesTests: XCTestCase {
         // prediction. Those dips must stay visible in the sub-black margin and
         // must not light the crush lamp (they are noise, not crushed picture).
         let plot = CGRect(x: 0, y: 0, width: 100, height: 100)
-        let noise = scopeTraceLevelY(
+        let noise = MonitorScopeGeometry.legacyTraceLevelY(
             10, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot)
-        let zero = scopeLevelY(ScopeDisplayScale.crushLevel, plot)
+        let zero = MonitorScopeGeometry.legacyLevelY(ScopeDisplayScale.crushLevel, plot)
         XCTAssertGreaterThan(noise, zero, "sub-black draws in the margin below the 0 line")
-        XCTAssertLessThanOrEqual(noise, scopeLevelY(0, plot) + 0.01, "but inside the clip band")
+        XCTAssertLessThanOrEqual(noise, MonitorScopeGeometry.legacyLevelY(0, plot) + 0.01, "but inside the clip band")
 
         var bytes = [UInt8]()
         for _ in 0..<32 {
@@ -252,15 +252,15 @@ final class LiveScopesTests: XCTestCase {
         XCTAssertEqual(values, [5, 16], "container 80/119 → curve bytes 5/16, no premature clamp")
 
         let plot = CGRect(x: 0, y: 0, width: 100, height: 100)
-        let zeroLine = scopeLevelY(ScopeDisplayScale.crushLevel, plot)
+        let zeroLine = MonitorScopeGeometry.legacyLevelY(ScopeDisplayScale.crushLevel, plot)
         XCTAssertGreaterThan(
-            scopeTraceLevelY(
+            MonitorScopeGeometry.legacyTraceLevelY(
                 5, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot),
             zeroLine + 1,
             "container-80 noise draws strictly below the 0 line, not crushed onto it")
         XCTAssertEqual(
             Double(
-                scopeTraceLevelY(
+                MonitorScopeGeometry.legacyTraceLevelY(
                     16, transfer: .dlog2, clipByte: ceiling.clipByte(transfer: .dlog2), plot)),
             Double(zeroLine),
             accuracy: 0.5, "container-119 true black sits on the 0 line")

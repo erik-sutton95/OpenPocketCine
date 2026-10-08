@@ -10,7 +10,7 @@ extension AppModel: GimbalGamepadHost {
     var gamepadCanDrive: Bool {
         if session.isLocked { return false }
         if session.isBrowsingMedia { return false }
-        if liveOperatorPanel != nil { return false }
+        if shell.cover != nil { return false }
         if isEditingChrome { return false }
         return isLive && session.datalink != nil
     }

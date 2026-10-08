@@ -15,7 +15,7 @@ struct FeedEffectsWireTests {
             midtoneIRE: LiveZebra.midtoneIRE)
         #expect(scalars.count == FeedEffectsWire.assistScalarCount)
         let shelf = Float(
-            Int(OpenCineCameraVocabulary.ScopeExposureCeiling.dlog2LiveTapByteAt1600) - OpenCineCameraVocabulary.ScopeExposureCeiling.clipShelfCodes)
+            Int(DJIScopeExposureCeiling.dlog2LiveTapByteAt1600) - DJIScopeExposureCeiling.clipShelfCodes)
         #expect(abs(scalars[0] - shelf / 255) < 0.002, "zebra 100% fires on the clip shelf")
         #expect(scalars[3] == 1)
     }
@@ -44,7 +44,7 @@ struct FeedEffectsWireTests {
             highlightIRE: 100,
             midtoneIRE: 55)
         #expect(abs(Double(scalars[3]) - 1.57 * 1.57) < 1e-5)
-        let shelf = Float(255 - OpenCineCameraVocabulary.ScopeExposureCeiling.clipShelfCodes) / 255
+        let shelf = Float(255 - DJIScopeExposureCeiling.clipShelfCodes) / 255
         #expect(abs(scalars[0] - shelf) < 0.002, "Rec.709 zebra 100% sits on the clip shelf")
     }
 
@@ -90,7 +90,7 @@ struct FeedEffectsWireTests {
         }
         // The GPU blends neighbouring lattice points: both points around the shelf byte
         // must already be clip red, or a blown window paints a pink blend.
-        let shelf = Double(OpenCineCameraVocabulary.ScopeExposureCeiling().clipShelfByte(transfer: .dlog2))
+        let shelf = Double(DJIScopeExposureCeiling().clipShelfByte(transfer: .dlog2))
         let below = Int((shelf / 255 * Double(size - 1)).rounded(.down))
         for i in [below, below + 1] {
             let (r, g, b) = rgb(i)
@@ -108,7 +108,7 @@ struct FeedEffectsWireTests {
         let weight = try #require(
             FeedEffectsWire.packedFalseColorWeight(scaleOrdinal: 2, colorModeCode: code, iso: 1600))
         let size = FeedEffectsWire.falseColorCubeSize
-        let shelf = Double(OpenCineCameraVocabulary.ScopeExposureCeiling().clipShelfByte(transfer: .dlog2))
+        let shelf = Double(DJIScopeExposureCeiling().clipShelfByte(transfer: .dlog2))
         let below = Int((shelf / 255 * Double(size - 1)).rounded(.down))
         for i in [below, below + 1] {
             let dst = (i * size * size + i * size + i) * 4

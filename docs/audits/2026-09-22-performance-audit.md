@@ -6,6 +6,9 @@ Surfaces: portable core, iOS shell, Android shell and their shared native UI.
 This change records engineering evidence and adds a synthetic host probe; it
 changes no app behavior or budget.
 
+Source links follow current shared owners. File names, line references and findings
+below retain the reviewed audit baseline.
+
 ## Status and evidence limits
 
 The source review covers decode, GPU looks, composition, chrome, control/status,
@@ -178,7 +181,7 @@ and forced live GLES. Shader-cache-dependent duration remains unmeasured.
 
 [FeedEffectsRenderPlan](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/FeedEffectsRenderPlan.kt)
 lines 133–135 creates `inspectorOnly` scope demand.
-[LiveScopeSampleBus](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/LiveScopeSampleBus.kt)
+[LiveScopeSampleBus](../../../OpenCine/Android/media/src/main/kotlin/com/opencapture/opencine/media/ScopeSampling.kt)
 line 90 encodes its 200 ms interval. However, `LiveFeedEffectsSession` line 193
 and `LiveVulkanSession` line 456 call `chromeSampleIntervalNs` with scope count
 and backdrop demand, losing that flag. One inspector scope can thus use the
@@ -327,10 +330,10 @@ Transport inspection also found existing limits worth preserving:
   active/cancel lifetime. Connection retry probes are bounded, not always-idle
   timers. Android's 250 ms receive timeout is a small wakeup candidate whose
   priority cannot be inferred without profiling.
-- [WatchRelay](../../ios/OpenPocketCine/WatchRelay.swift) lines 128–155 gates work
+- [WatchRelay](../../../OpenCine/Sources/OpenCineWatch/WatchRelay.swift) lines 128–155 gates work
   before JPEG encoding and allows three outstanding frames. Wrist sleep stops
   JPEG work while intentionally retaining native decode/GOP ownership.
-  [WatcherRelayHost](../../ios/OpenPocketCine/WatcherRelayHost.swift) lines 140–159
+  [WatcherRelayHost](../../../OpenCine/Sources/OpenCineRelayApple/WatcherRelayHost.swift) lines 140–159
   and 584–609 bounds source admission and skips encoding when no watcher can
   accept video; state sends are 5 Hz. Joined-client recovery polling stops on leave.
 

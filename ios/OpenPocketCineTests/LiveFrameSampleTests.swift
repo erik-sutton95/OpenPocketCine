@@ -17,7 +17,7 @@ import OpenCineMedia
 @MainActor
 final class LiveFrameSampleTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
+    private let ceiling = DJIScopeExposureCeiling()
 
     func testVideoFallbackStillInfersLogFromTap() async {
         let engine = LiveAssistEngine()
@@ -410,7 +410,7 @@ final class LiveFrameSampleTests: XCTestCase {
         XCTAssertEqual(a.bundle.clipByte, 233, "camera A ratchets its own ISO 800 ceiling")
         XCTAssertEqual(b.bundle.clipByte, 247, "camera B keeps the reference ceiling")
         XCTAssertEqual(
-            b.exposureCeiling.resolvedISO(), OpenCineCameraVocabulary.ScopeExposureCeiling.referenceEI)
+            b.exposureCeiling.resolvedISO(), DJIScopeExposureCeiling.referenceEI)
         XCTAssertEqual(a.exposureCeiling.clipByte(transfer: .dlog2), 233)
         XCTAssertEqual(decoders.count, 2)
     }

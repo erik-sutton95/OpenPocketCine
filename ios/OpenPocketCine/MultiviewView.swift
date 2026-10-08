@@ -1,3 +1,4 @@
+import OpenCineAppKitApple
 import AVFoundation
 import MonitorPresentation
 import MonitorUI
@@ -328,8 +329,10 @@ private struct MultiviewBackdrop: ViewModifier {
             enabled: enabled
         ) { _ in
             session.tiles.enumerated().compactMap { index, tile in
+                let decoder = tile.decoder, samples = tile.sampleBus
+                let epoch = samples.inspectorSourceEpoch
                 guard tile.liveModel == nil, tile.camera != nil,
-                    let buffer = tile.decoder.backdropSource
+                    let token = decoder.sourceToken, let buffer = decoder.backdropSource
                 else { return nil }
                 guard let placement = geometry.placement(index) else { return nil }
                 let rect = placement.frame
@@ -339,7 +342,10 @@ private struct MultiviewBackdrop: ViewModifier {
                     frame: MonitorVideoBackdropSource.displayedFrame(
                         sourceAspect: tile.decoder.pictureAspect, effects: effects, in: rect,
                         fill: session.feedAspect == .fill),
-                    clip: placement.clip)
+                    clip: placement.clip, identity: .live(token: token, epoch: epoch), admission: { [weak decoder, weak samples] in
+                        guard let decoder, let samples else { return false }
+                        return decoder.sourceToken == token && samples.inspectorSourceEpoch == epoch
+                    })
             }
         }
     }

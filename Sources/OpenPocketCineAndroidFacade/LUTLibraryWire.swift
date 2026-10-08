@@ -31,20 +31,7 @@ public enum LUTLibraryWire {
 
     /// Packed-2D RGBA8: pixel `(x = b·n + r, y = g)`, alpha 255. GLES-atlas ready.
     public static func packedRGBA(cube: CubeLUT) -> [UInt8] {
-        let size = cube.size
-        var out = [UInt8](repeating: 255, count: size * size * size * 4)
-        for g in 0..<size {
-            for b in 0..<size {
-                for r in 0..<size {
-                    let src = (r + g * size + b * size * size) * 3
-                    let dst = (g * size * size + b * size + r) * 4
-                    out[dst] = quantized(cube.rgb[src])
-                    out[dst + 1] = quantized(cube.rgb[src + 1])
-                    out[dst + 2] = quantized(cube.rgb[src + 2])
-                }
-            }
-        }
-        return out
+        cube.packedRGBA
     }
 
     public static func isSafeStoredFileName(_ name: String) -> Bool {
@@ -61,9 +48,5 @@ public enum LUTLibraryWire {
     private static func cube(from utf8: [UInt8]) -> CubeLUT? {
         guard let text = String(bytes: utf8, encoding: .utf8) else { return nil }
         return try? CubeLUT.parse(text)
-    }
-
-    private static func quantized(_ value: Float) -> UInt8 {
-        UInt8((min(max(value, 0), 1) * 255).rounded())
     }
 }

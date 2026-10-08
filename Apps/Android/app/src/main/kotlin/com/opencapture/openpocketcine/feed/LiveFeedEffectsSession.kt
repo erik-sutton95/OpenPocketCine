@@ -5,14 +5,14 @@ import android.graphics.SurfaceTexture
 import android.view.Surface
 import com.opencapture.openpocketcine.OperatorPrefs
 import com.opencapture.opencine.runtime.GlesPresentationOptions
-import com.opencapture.opencine.vocabulary.inferred
-import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+import com.opencapture.opencine.dji.DjiMonitorColorProfile
+import com.opencapture.opencine.dji.DjiScopeExposureCeiling as ScopeExposureCeiling
 import com.opencapture.opencine.runtime.InspectorPreviewPipeline
 import com.opencapture.opencine.media.FeedEffectsRenderPlan
 import com.opencapture.opencine.runtime.ScopeSampleBus
 import com.opencapture.opencine.media.MonitorTransfer
 
-/** Source configuration and the existing third-party GL backend remain in the app. */
+/** Integration source configuration around the shared native GL owner. */
 internal class LiveFeedEffectsSession(context: Context, scopeBus: ScopeSampleBus,
     preview: InspectorPreviewPipeline, onDecoderSurface: (Surface) -> Unit,
     onGpuFailed: () -> Unit, onFirstFrame: () -> Unit = {}, letterboxSource: Boolean = true,
@@ -20,8 +20,8 @@ internal class LiveFeedEffectsSession(context: Context, scopeBus: ScopeSampleBus
     playback: Boolean = false, backdrop: MonitorBackdropFeed? = null,
 ) {
     private val runtime = com.opencapture.opencine.runtime.NativeGlesFeedSession(context, scopeBus,
-        preview, ::Media3GlBackend, clipProfile = ScopeExposureCeiling.PROFILE,
-        inferTransfer = { low, high, transfer -> MonitorTransfer.inferred(low, high, transfer) },
+        preview, { com.opencapture.opencine.runtime.NativeGlBackend.create(it) }, clipProfile = ScopeExposureCeiling.PROFILE,
+        inferTransfer = { low, high, transfer -> DjiMonitorColorProfile.inferredTransfer(low, high, transfer) },
         options = { GlesPresentationOptions(OperatorPrefs.feedUpscaler(context)) },
         logTag = "OpcFeedFx", onDecoderSurface = onDecoderSurface, onGpuFailed = onGpuFailed,
         onFirstFrame = onFirstFrame, letterboxSource = letterboxSource,

@@ -20,9 +20,9 @@ class PocketMediaLibraryOwnerTest {
         thumbPath = "MISC/THM/DJI_001/a.scr", handle = 0x40100040L,
         sizeBytes = size, storage = 1, storageKnown = true, resolution = "3840x2160", fps = 25)
     private fun codec(nano: Boolean = false) = PocketMediaLibraryCodec({ null }, { nano }, { -1 })
-    private fun TestScope.owner(files: List<MediaFile>, colors: Map<String, Int> = emptyMap()): MonitorMediaLibraryModel<MediaFile> {
+    private fun TestScope.owner(files: List<MediaFile>, colors: Map<String, Int> = emptyMap(),
+        directory: MonitorMediaCacheDirectory = MonitorMediaCacheDirectory(Files.createTempDirectory("pocket-library-owner-").toFile())): MonitorMediaLibraryModel<MediaFile> {
         val codec = codec()
-        val directory = MonitorMediaCacheDirectory(Files.createTempDirectory("pocket-library-owner-").toFile())
         val cache = MonitorMediaCache(directory, codec, MonitorMediaOriginalEligibility.ExactSize,
             "index.json", listOf("index.json", "color.json"), persistEmptyCatalog = false)
         val favorites = object : MonitorMediaFavoritesStore {
@@ -101,7 +101,8 @@ class PocketMediaLibraryOwnerTest {
         directory.write("old color".toByteArray(), "color.json")
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
-        val operation = PocketMediaOperation(directory) { true }
+        val model = owner(emptyList(), directory = directory)
+        val operation = PocketMediaOperation(model, model.captureIO(MonitorMediaLibraryIOKey("a"), null) { true })
         val temporaryRoot = Files.createTempDirectory("pocket-http-stage-").toFile()
         val pending = async {
             runCatching {
@@ -128,14 +129,15 @@ class PocketMediaLibraryOwnerTest {
         val temporaryRoot = Files.createTempDirectory("pocket-http-stage-").toFile()
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
-        val outgoing = PocketMediaOperation(directory) { true }
+        val model = owner(emptyList(), directory = directory)
+        val outgoing = PocketMediaOperation(model, model.captureIO(MonitorMediaLibraryIOKey("a"), null) { true })
         val old = async {
             runCatching { outgoing.download("files/a", temporaryRoot, dispatcher) { staged ->
                 staged.writeText("old"); started.complete(Unit); release.await()
             } }
         }
         started.await()
-        val successor = PocketMediaOperation(directory) { true }
+        val successor = PocketMediaOperation(model, model.captureIO(MonitorMediaLibraryIOKey("a"), null) { true })
         successor.download("files/a", temporaryRoot, dispatcher) { it.writeText("new") }
         release.complete(Unit)
         assertTrue(old.await().isFailure)
@@ -148,9 +150,10 @@ class PocketMediaLibraryOwnerTest {
         val model = owner(listOf(file()))
         val captured = model.state.value.records.single()
         val token = model.actionToken
-        val operation = PocketMediaOperation(model.cache.directory) {
-            model.isCurrent(token) && model.record(captured.asset.id) != null
-        }
+        val operation = PocketMediaOperation(model,
+            model.captureIO(MonitorMediaLibraryIOKey(captured.payload.path), captured.asset.id) {
+                model.isCurrent(token) && model.record(captured.asset.id) != null
+            })
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         val temporaryRoot = Files.createTempDirectory("pocket-http-stage-").toFile()

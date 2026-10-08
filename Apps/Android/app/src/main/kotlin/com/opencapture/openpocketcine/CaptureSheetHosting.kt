@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.cameracontrols.*
+
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -87,7 +89,7 @@ internal fun AppModel.routeCaptureSetting(setting: CaptureSetting, field: Monito
         is CaptureSetting.Format -> setVideoFormat(setting.format)
         is CaptureSetting.ColorMode -> setColorMode(setting.code)
         is CaptureSetting.ShootingMode -> applyCaptureShootingMode(setting.label, session.status.value,
-            session.connectedCamera?.model?.name, send = ::setShootingMode)
+            session.connectedCamera?.model?.name, labelProfile, send = ::setShootingMode)
         is CaptureSetting.Aperture -> setApertureStrategy(setting.raw)
         is CaptureSetting.ExpoMode -> setExpoMode(setting.mode)
         is CaptureSetting.Focus -> {
@@ -98,17 +100,55 @@ internal fun AppModel.routeCaptureSetting(setting: CaptureSetting, field: Monito
                 else applyCaptureFocusChoice(setting.label, status, this)
             }
         }
-        is CaptureSetting.AudioChannel -> setAudioChannel(setting.value)
-        is CaptureSetting.DirectionalAudio -> setDirectionalAudio(setting.mode)
-        is CaptureSetting.WindNoiseReduction -> setWindNr(setting.on)
-        is CaptureSetting.VocalBoost -> setVocalBoost(setting.on)
     }
 }
 
 internal suspend fun AppModel.refreshForCaptureSheet(what: CaptureRefresh) {
     when (what) {
-        CaptureRefresh.AUDIO -> refreshAudio()
+        CaptureRefresh.AUDIO -> audioService?.refresh?.invoke()
         CaptureRefresh.FOCUS_TRACK -> refreshFocusTrack()
         CaptureRefresh.ISO_LIMIT -> refreshIsoLimitNow()
     }
+}
+
+internal fun AppModel.captureAudioService(): CaptureAudioService? {
+    if (!monitorLayout().audio) return null
+    val owner = session.connectedCamera?.id ?: return null
+    val snapshot = control.state.value.snapshot ?: return null
+    val source = CaptureAudioSourceID(snapshot.session, snapshot.epoch)
+    val status = session.status.value
+    return CaptureAudioService(source, listOf(
+        CaptureAudioField(CaptureAudioControl.CHANNEL, "Channel",
+            CaptureAudioChannel.entries.map { CaptureAudioValue.Channel(it) },
+            CaptureAudioChannel.entries.firstOrNull { it.raw == status.audioChannel }?.let { CaptureAudioValue.Channel(it) }),
+        CaptureAudioField(CaptureAudioControl.WIND, "Wind",
+            listOf(CaptureAudioValue.Wind(false), CaptureAudioValue.Wind(true)),
+            status.windNr.takeIf { it in 0..1 }?.let { CaptureAudioValue.Wind(it == 1) }),
+        CaptureAudioField(CaptureAudioControl.DIRECTION, "Direction",
+            CaptureAudioDirection.entries.map { CaptureAudioValue.Direction(it) },
+            CaptureAudioDirection.entries.firstOrNull { it.raw == status.directionalAudio }?.let { CaptureAudioValue.Direction(it) }),
+        CaptureAudioField(CaptureAudioControl.VOCAL, "Vocal",
+            listOf(CaptureAudioValue.Vocal(false), CaptureAudioValue.Vocal(true)),
+            status.vocalBoost.takeIf { it in 0..1 }?.let { CaptureAudioValue.Vocal(it == 1) })
+    ), commit = { value ->
+        val current = control.state.value.snapshot
+        if (session.connectedCamera?.id != owner || !monitorLayout().audio || current == null ||
+            CaptureAudioSourceID(current.session, current.epoch) != source) CaptureAudioCommitResult.UNAVAILABLE
+        else if (session.phase != com.opencapture.opencine.vocabulary.ConnectionPhase.LIVE || session.controlBusy.value) {
+            session.presentControlNote("Audio control refused")
+            CaptureAudioCommitResult.REFUSED
+        } else {
+            when (value) {
+                is CaptureAudioValue.Channel -> setAudioChannel(value.value.raw)
+                is CaptureAudioValue.Wind -> setWindNr(value.enabled)
+                is CaptureAudioValue.Direction -> setDirectionalAudio(value.value.raw)
+                is CaptureAudioValue.Vocal -> setVocalBoost(value.enabled)
+            }
+            CaptureAudioCommitResult.SUBMITTED
+        }
+    }, refresh = {
+        val current = control.state.value.snapshot
+        if (session.connectedCamera?.id == owner && current != null &&
+            CaptureAudioSourceID(current.session, current.epoch) == source) refreshAudio()
+    })
 }

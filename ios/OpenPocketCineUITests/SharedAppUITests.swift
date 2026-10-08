@@ -14,3 +14,6 @@ final class PhysicalReferenceAppTests: OpenCineAppUITesting.PhysicalReferenceApp
 final class PhysicalShootingModeTests: OpenCineAppUITesting.PhysicalShootingModeTests {}
 final class PhysicalVirtualJoystickTests: OpenCineAppUITesting.PhysicalVirtualJoystickTests {}
 final class ShareUIFlowTests: OpenCineAppUITesting.ShareUIFlowTests {}
+
+/// Opted-in current-build camera qualification through the common physical driver.
+final class PhysicalMigrationQualificationTests: OpenCineAppUITesting.PhysicalMigrationQualificationTests {}

@@ -53,83 +53,28 @@ import com.opencapture.opencine.vocabulary.MediaFile
 import com.opencapture.opencine.vocabulary.MediaClipFormatting
 import com.opencapture.opencine.vocabulary.MediaCacheGrade
 
+/** Bounded SDK decode/cache adapter; the shared catalog owns card and selection composition. */
 @Composable
-fun MediaClipCell(file: MediaFile, controller: MediaLibraryController, onOpen: () -> Unit,
-    isSelecting: Boolean = false, isSelected: Boolean = false,
-    onBeginSelection: (() -> Unit)? = null, onToggleSelection: (() -> Unit)? = null) =
-    MediaCatalogClip(file, controller, onOpen, false, isSelecting, isSelected, onBeginSelection, onToggleSelection)
-
-@Composable
-fun MediaClipListRow(file: MediaFile, controller: MediaLibraryController, onOpen: () -> Unit,
-    isSelecting: Boolean = false, isSelected: Boolean = false,
-    onBeginSelection: (() -> Unit)? = null, onToggleSelection: (() -> Unit)? = null) =
-    MediaCatalogClip(file, controller, onOpen, true, isSelecting, isSelected, onBeginSelection, onToggleSelection)
-
-/** The adapter owns cache lookup and bounded thumbnail IO; shared UI owns both renderers. */
-@Composable
-private fun MediaCatalogClip(file: MediaFile, controller: MediaLibraryController, onOpen: () -> Unit,
-    list: Boolean, isSelecting: Boolean, isSelected: Boolean,
-    onBeginSelection: (() -> Unit)?, onToggleSelection: (() -> Unit)?) {
-    var thumbnail by remember(file.id) { mutableStateOf<Bitmap?>(null) }
-    var duration by remember(file.id) { mutableStateOf<String?>(null) }
-    LaunchedEffect(file.id, controller.thumbnailFile(file)?.path, list) {
-        thumbnail = MediaThumbs.load(file, controller, maxPx = if (list) 480 else 640)
-        duration = MediaThumbs.durationLabel(file, controller)
-    }
-    val grade = controller.cacheGrade(file)
-    val source = if (grade == MediaCacheGrade.ORIGINAL) "CACHED" else if (grade.isProxyOnly) "PROXY" else "ON CAMERA"
-    val clip = com.opencapture.monitorui.MonitorClipValue(file.id, file.filename,
-        listOfNotNull(file.resolution, file.fileExtension.uppercase()).joinToString(" · "),
-        duration, source, controller.isFavorite(file), controller.downloadProgress[file.path]?.toFloat())
-    com.opencapture.monitorui.MonitorClipCard(clip, list, isSelecting, isSelected,
-        onOpen = onOpen,
-        onSelect = { if (isSelecting) onToggleSelection?.invoke() else onBeginSelection?.invoke() },
-        onFavorite = { controller.toggleFavorite(file) },
-        clicks = false) {
-        val bitmap = thumbnail
-        if (bitmap != null) Image(bitmap.asImageBitmap(), contentDescription = null,
-            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        else MonitorIcon(if (file.kind == MediaKind.PHOTO) MonitorIcon.IMAGE else MonitorIcon.FILM, null,
-            Modifier.size(if (list) 20.dp else 28.dp).align(Alignment.Center), LiveDesign.faint)
-    }
-}
-
-@Composable
-fun FavoriteStar(
-    favorite: Boolean,
-    iconSize: androidx.compose.ui.unit.Dp = 13.dp,
-    onClick: () -> Unit,
+internal fun androidx.compose.foundation.layout.BoxScope.MediaCatalogPicture(
+    context: com.opencapture.opencine.cameracontrols.MonitorMediaGalleryThumbnail<MediaFile>,
+    controller: MediaLibraryController,
 ) {
-    Box(
-        Modifier
-            .size(44.dp)
-            .chromeClickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        MonitorIcon(
-            icon = MonitorIcon.STAR,
-            contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
-            tint = if (favorite) Color(0xFFE9C35A) else LiveDesign.faint,
-            modifier = Modifier.size(iconSize),
-            filled = favorite,
-        )
+    val file = context.record.payload
+    var thumbnail by remember(controller, context.record.asset.id, context.admission) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(controller, context.record.asset.id, context.admission, context.entry?.thumbnail?.path,
+        context.entry?.original?.path, context.list) {
+        if (!context.isCurrent) return@LaunchedEffect
+        val image = MediaThumbs.load(file, controller, maxPx = if (context.list) 480 else 640)
+        if (!context.isCurrent) return@LaunchedEffect
+        thumbnail = image
+        val duration = MediaThumbs.durationLabel(file, controller)
+        if (context.isCurrent && duration != null) context.duration(duration)
     }
-}
-
-@Composable
-fun SelectionMarker(selected: Boolean, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .size(22.dp)
-            .background(
-                if (selected) LiveDesign.accent else Color.Black.copy(alpha = 0.56f),
-                CircleShape,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        MonitorIcon(if (selected) MonitorIcon.CHECK else MonitorIcon.CIRCLE, null, Modifier.size(12.dp),
-            if (selected) LiveDesign.background else LiveDesign.text)
-    }
+    val image = thumbnail
+    if (image != null) Image(image.asImageBitmap(), contentDescription = null,
+        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    else MonitorIcon(if (file.kind == MediaKind.PHOTO) MonitorIcon.IMAGE else MonitorIcon.FILM, null,
+        Modifier.size(if (context.list) 20.dp else 28.dp).align(Alignment.Center), LiveDesign.faint)
 }
 
 object MediaThumbs {
@@ -143,8 +88,7 @@ object MediaThumbs {
             decode(controller.thumbnailFile(file), maxPx)?.let { return@withContext it }
             if (controller.isLive) {
                 runCatching {
-                    val storage = file.storage
-                    val data = MediaTransfer.fetchBytes(storage, file.thumbPath).first
+                    val data = controller.thumbnailBytes(file) ?: byteArrayOf()
                     if (data.isNotEmpty()) {
                         controller.thumbnailFile(file)
                         decodeBytes(data, maxPx)

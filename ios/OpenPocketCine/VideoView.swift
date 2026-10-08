@@ -25,6 +25,7 @@ struct VideoView: View {
     var pictureFlip = false
     /// Outdoor HDR panel. Identity presents through Metal EDR.
     var hdrDisplay = false
+    var qualification: (@MainActor () -> MonitorNativeQualificationSnapshot?)? = nil
 
     var body: some View {
         VideoDisplayRepresentable(
@@ -36,7 +37,8 @@ struct VideoView: View {
             sampleBus: sampleBus,
             transfer: transfer,
             feedUpscaler: FeedUpscaleSwitch.shared.upscaler,
-            hdrDisplay: hdrDisplay
+            hdrDisplay: hdrDisplay,
+            qualification: qualification
         )
         .transaction { $0.animation = nil }
     }
@@ -59,9 +61,17 @@ struct VideoDisplayRepresentable: UIViewRepresentable {
     var transfer: MonitorTransfer?
     var feedUpscaler: MonitorUpscaler
     var hdrDisplay: Bool
+    var qualification: (@MainActor () -> MonitorNativeQualificationSnapshot?)? = nil
 
     func makeUIView(context: Context) -> DisplayLayerView {
         let view = DisplayLayerView(decoder.displayLayer)
+        view.accessibilityIdentifier = "monitor.native.picture"
+        if let qualification {
+            view.qualificationProbe = MonitorNativeQualificationProbe.install(in: view) { [weak view] in
+                guard view?.ownsDisplayLayer == true else { return nil }
+                return qualification()
+            }
+        }
         view.onReady = { [decoder] in decoder.noteDisplayReady() }
         decoder.processedFeed = view.ciFeed
         view.applyHDRDisplay(hdrDisplay)
@@ -76,6 +86,12 @@ struct VideoDisplayRepresentable: UIViewRepresentable {
 
     func updateDisplay(_ uiView: DisplayLayerView) {
         guard uiView.ownsDisplayLayer else { return }
+        if let qualification {
+            uiView.qualificationProbe?.snapshot = { [weak uiView] in
+                guard uiView?.ownsDisplayLayer == true else { return nil }
+                return qualification()
+            }
+        }
         uiView.onReady = { [decoder] in decoder.noteDisplayReady() }
         decoder.processedFeed = uiView.ciFeed
         uiView.applyHDRDisplay(hdrDisplay)
@@ -111,6 +127,7 @@ struct VideoDisplayRepresentable: UIViewRepresentable {
 
 final class DisplayLayerView: OpenCineApple.MonitorVideoPictureContainer {
     let ciFeed: CIFeedView
+    var qualificationProbe: MonitorNativeQualificationProbe?
     init(_ layer: AVSampleBufferDisplayLayer) {
         let feed = CIFeedView()
         self.ciFeed = feed

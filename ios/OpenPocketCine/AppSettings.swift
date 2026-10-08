@@ -565,22 +565,8 @@ struct SettingsDashScale: View {
 
 struct SettingsLinkHealthCard: View {
     @Environment(AppModel.self) private var model
-
     var body: some View {
-        let bars = model.session.liveSignalBars
-        let score = min(4, max(0, bars)) * 25
-        SettingsDashScale(title: "Link Health", caption: caption, score: score)
-    }
-
-    private var caption: String {
-        if !model.isLive { return "No live path." }
-        let bars = model.session.liveSignalBars
-        guard bars > 0 else { return "Waiting for the link." }
-        switch MonitorLinkHealthBand(bars: bars) {
-        case .stable: return "Link is clean. · Stable"
-        case .watch: return "Some loss on the link. · Watch"
-        case .poor: return "Link is weak. · Poor"
-        }
+        MonitorSettingsLinkHealthCard(isLive: model.isLive, signalBars: model.session.liveSignalBars)
     }
 }
 

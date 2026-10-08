@@ -1,4 +1,7 @@
 import MonitorUI
+import OpenCineAppKit
+import OpenCineApple
+import OpenCineCameraControls
 import OpenCineFrameIO
 import OpenPocketViewCore
 import SwiftUI
@@ -7,34 +10,10 @@ struct MediaDeliveryPopupOverlay: View {
     let files: [MediaFile]
     var preferredDestination: MediaDeliveryDestination? = nil
     var onDismiss: () -> Void
-    @Environment(\.monitorWindowGeometry) private var windowGeometry
-
+    @Environment(AppModel.self) private var model
     var body: some View {
-        GeometryReader { geo in
-            let safeArea = OperatorPanelMetrics.resolvedDeviceSafeArea(
-                geo.safeAreaInsets, window: windowGeometry.safeArea)
-            let cap = max(
-                0,
-                min(
-                    geo.size.height * 0.86,
-                    geo.size.height - safeArea.top - safeArea.bottom - 20))
-            ZStack(alignment: .bottom) {
-                Color.black.opacity(0.42)
-                    .ignoresSafeArea()
-                    .onTapGesture { onDismiss() }
-                MediaDeliveryPopup(
-                    files: files,
-                    preferredDestination: preferredDestination,
-                    maxCardHeight: cap,
-                    onClose: onDismiss
-                )
-                .padding(.leading, safeArea.leading + 12)
-                .padding(.trailing, safeArea.trailing + 12)
-                .padding(.bottom, safeArea.bottom + 10)
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-        .ignoresSafeArea()
+        CapturedMediaDeliveryPopup(model: model, files: files, preferredDestination: preferredDestination,
+            maxCardHeight: nil, onClose: onDismiss)
     }
 }
 
@@ -43,822 +22,92 @@ struct MediaDeliveryPopup: View {
     var preferredDestination: MediaDeliveryDestination? = nil
     var maxCardHeight: CGFloat = MediaDeliveryChrome.maxCardHeight
     let onClose: () -> Void
-
     @Environment(AppModel.self) private var model
-    @State private var step: DeliveryStep
-    @State private var destination: MediaDeliveryDestination?
-    @State private var configuration = MediaDeliveryConfiguration()
-    @State private var shareAction: MediaDeliveryPostExportAction = .systemShare
-    @State private var statusMessage: String?
-    @State private var frameioListing: FrameioProjectListing?
-    @State private var frameioProjectsLoading = false
-    @State private var frameioProjectsError: String?
-    @State private var selectedFrameioProjectID: String?
-    @State private var showCreateProjectAlert = false
-    @State private var newProjectName = ""
-    @State private var showFrameioHopConfirm = false
-    @State private var isHoppingForFrameio = false
-    @State private var popupStartedHop = false
-    @State private var onCameraAP = false
-
-    private enum DeliveryStep { case destination, options }
-
-    init(
-        files: [MediaFile],
-        preferredDestination: MediaDeliveryDestination? = nil,
-        maxCardHeight: CGFloat = MediaDeliveryChrome.maxCardHeight,
-        onClose: @escaping () -> Void
-    ) {
-        self.files = files
-        self.preferredDestination = preferredDestination
-        self.maxCardHeight = maxCardHeight
-        self.onClose = onClose
-        _destination = State(initialValue: preferredDestination)
-        _step = State(initialValue: preferredDestination == nil ? .destination : .options)
-    }
-
-    private var session: CameraSession { model.session }
-    private var lutAvailable: Bool {
-        model.assist.playbackEffects.lutDimension >= 2 || model.assist.effects.lutDimension >= 2
-    }
-    private var cached: [MediaFile] { files.filter { session.isDownloaded($0) } }
-    private var isConnected: Bool {
-        if case .live = session.phase { return true }
-        return false
-    }
-    private var selectedFrameioProject: FrameioProject? {
-        guard let listing = frameioListing, let id = selectedFrameioProjectID else { return nil }
-        return listing.projects.first { $0.id == id }
-    }
-    private var uploadableFrameioProjects: [FrameioProject] {
-        frameioListing?.projects.filter { $0.rootFolderID != nil } ?? []
-    }
-    private var frameioHopGateActive: Bool { destination == .frameio && onCameraAP }
-    private var frameioProjectReady: Bool {
-        guard destination == .frameio else { return true }
-        guard model.isFrameioConnected else { return false }
-        if selectedFrameioProject?.rootFolderID != nil { return true }
-        if FrameioDestination.loaded != nil { return true }
-        return model.isOnCameraAccessPoint
-    }
-    private var convertLogAvailable: Bool {
-        MediaDelivery.convertLogAvailable(
-            files: files,
-            shotColors: files.map { session.shotColor(for: $0) })
-    }
-    private var previewTransform: LogColorTransform? {
-        configuration.convertLog ? configuration.logTransform : nil
-    }
-    private var convertLogBinding: Binding<Bool> {
-        Binding(
-            get: { configuration.convertLog },
-            set: { on in
-                configuration.convertLog = on
-                if on { configuration.bakeLUT = false }
-            })
-    }
-    private var bakeLUTBinding: Binding<Bool> {
-        Binding(
-            get: { configuration.bakeLUT },
-            set: { on in
-                configuration.bakeLUT = on
-                if on { configuration.convertLog = false }
-            })
-    }
-    private var canContinue: Bool {
-        destination != nil
-            && (!cached.isEmpty || (isConnected && !files.isEmpty))
-            && !(configuration.bakeLUT && !lutAvailable)
-            && !(configuration.convertLog && !convertLogAvailable)
-            && !(destination == .frameio && !frameioProjectReady)
-    }
-
     var body: some View {
-        ViewThatFits(in: .vertical) {
-            card(scrolling: false)
-            card(scrolling: true)
-                .frame(maxHeight: maxCardHeight)
-        }
-        .frame(maxWidth: UIDevice.current.userInterfaceIdiom == .pad ? 620 : 460)
-        .frame(maxHeight: maxCardHeight, alignment: .bottom)
-        .onAppear {
-            if let firstLog = files.filter({ $0.kind == .video })
-                .compactMap({ session.shotColor(for: $0) })
-                .compactMap({ LogColorTransform.converting(from: $0) }).first
-            {
-                configuration.logTransform = firstLog
-            }
-            if !lutAvailable { configuration.bakeLUT = false }
-            if !convertLogAvailable { configuration.convertLog = false }
-            if let saved = FrameioDestination.loaded {
-                selectedFrameioProjectID = saved.projectID
-            }
-            onCameraAP = model.isOnCameraAccessPoint
-        }
-        .onDisappear { finishPopupHop() }
-        .alert("New Frame.io project", isPresented: $showCreateProjectAlert) {
-            TextField("Project name", text: $newProjectName)
-            Button("Cancel", role: .cancel) { newProjectName = "" }
-            Button("Create") {
-                let name = newProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
-                newProjectName = ""
-                guard !name.isEmpty else { return }
-                Task { await createFrameioProject(named: name) }
-            }
-            .disabled(newProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            Text("Creates a blank project in your workspace.")
-        }
-        .alert("Leave camera Wi‑Fi?", isPresented: $showFrameioHopConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Hop") { startFrameioHop() }
-        } message: {
-            Text(
-                "We'll hop to home Wi‑Fi or cellular so you can sign in and pick a project. The camera reconnects automatically when you're done."
-            )
-        }
+        CapturedMediaDeliveryPopup(model: model, files: files, preferredDestination: preferredDestination,
+            maxCardHeight: maxCardHeight, onClose: onClose)
     }
+}
 
-    @ViewBuilder
-    private func card(scrolling: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            if scrolling {
-                ScrollView {
-                    mainColumn
-                }
-                .accessibilityIdentifier("monitor.share.optionsScroll")
-                .monitorScrollFade()
-            } else {
-                mainColumn
-            }
-            if step == .options, !frameioHopGateActive {
-                footer.padding(.top, 12)
-            }
-        }
-        .padding(16)
-        .monitorGlass(in: RoundedRectangle(cornerRadius: 16), density: .delivery)
+private struct CapturedMediaDeliveryPopup: View {
+    @State private var source: MediaDeliveryPreparationSource
+    let maxCardHeight: CGFloat?
+    let onClose: () -> Void
+    init(model: AppModel, files: [MediaFile], preferredDestination: MediaDeliveryDestination?,
+        maxCardHeight: CGFloat?, onClose: @escaping () -> Void) {
+        _source = State(initialValue: .init(model: model, files: files, preferredDestination: preferredDestination))
+        self.maxCardHeight = maxCardHeight; self.onClose = onClose
     }
-
-    private var mainColumn: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            summary
-            switch step {
-            case .destination: destinations
-            case .options: options
-            }
-            if let statusMessage {
-                Text(statusMessage)
-                    .font(MonitorTheme.font(12))
-                    .foregroundStyle(LiveDesign.accent)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 12)
-    }
-
-    private var header: some View {
-        Group {
-            switch step {
-            case .destination:
-                HStack(spacing: 10) {
-                    Label {
-                        Text("Share")
-                    } icon: {
-                        MonitorIcon.share
-                            .frame(width: 13, height: 13)
-                    }
-                    .font(MonitorTheme.font(14, weight: .bold))
-                    .kerning(1)
-                    .textCase(.uppercase)
-                    .foregroundStyle(LiveDesign.text)
-                    Spacer(minLength: 0)
-                    CloseButton(action: closePopup, size: 30)
-                        .accessibilityIdentifier("monitor.share.close")
-                }
-            case .options:
-                HStack(spacing: 10) {
-                    Button {
-                        step = .destination
-                    } label: {
-                        Label {
-                            Text("Back")
-                        } icon: {
-                            MonitorIcon.chevronLeft
-                                .frame(width: 12, height: 12)
-                        }
-                        .font(MonitorTheme.font(13, weight: .semibold))
-                        .foregroundStyle(LiveDesign.accent)
-                    }
-                    .buttonStyle(.monitorTapTarget)
-                    .accessibilityIdentifier("monitor.share.back")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(destination?.title ?? "Share")
-                            .font(MonitorTheme.font(9, weight: .bold)).tracking(1.8)
-                            .textCase(.uppercase)
-                            .foregroundStyle(LiveDesign.text)
-                        Text("Options")
-                            .font(MonitorTheme.font(11, weight: .medium))
-                            .foregroundStyle(LiveDesign.muted)
-                    }
-                    Spacer(minLength: 0)
-                    CloseButton(action: closePopup, size: 30)
-                        .accessibilityIdentifier("monitor.share.close")
-                }
-            }
-        }
-    }
-
-    private var summary: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("\(files.count) clip\(files.count == 1 ? "" : "s")")
-                .font(MonitorTheme.font(15, weight: .semibold))
-                .foregroundStyle(LiveDesign.text)
-            if cached.count < files.count {
-                Text(
-                    isConnected
-                        ? "\(files.count - cached.count) on-camera clip(s) will be cached from the camera first."
-                        : "\(files.count - cached.count) on-camera clip(s) will be skipped — reconnect the camera to cache them."
-                )
-                .font(MonitorTheme.font(12))
-                .foregroundStyle(LiveDesign.muted)
-            }
-            if destination == .frameio, !model.isFrameioConfigured {
-                Text("Frame.io isn't configured — add credentials in Settings → Storage.")
-                    .font(MonitorTheme.font(12))
-                    .foregroundStyle(LiveDesign.accent)
-            } else if destination == .frameio,
-                let name = selectedFrameioProject?.name
-                    ?? FrameioDestination.loaded?.projectName, step == .options
-            {
-                Text("Project: \(name)")
-                    .font(MonitorTheme.font(12))
-                    .foregroundStyle(LiveDesign.muted)
-            }
-        }
-    }
-
-    private var destinations: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("DESTINATION")
-            LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(.flexible(), spacing: 7),
-                    count: UIDevice.current.userInterfaceIdiom == .pad ? 2 : 1), spacing: 7
-            ) {
-                ForEach(MediaDeliveryDestination.allCases) { candidate in
-                    destinationRow(candidate)
-                }
-                ForEach(
-                    [
-                        "Google Drive", "Dropbox", "NAS (SMB)", "LucidLink", "Backblaze B2",
-                        "Vimeo Review",
-                    ], id: \.self
-                ) { title in
-                    HStack(spacing: 12) {
-                        MonitorIcon.folder.frame(width: 24, height: 24)
-                        Text(title).font(MonitorTheme.font(14, weight: .semibold))
-                        Spacer(minLength: 8)
-                        Text("Coming soon").font(MonitorTheme.font(11))
-                    }
-                    .foregroundStyle(LiveDesign.muted)
-                    .padding(.horizontal, 12).padding(.vertical, 14)
-                    .background(
-                        LiveDesign.hairline.opacity(0.2),
-                        in: RoundedRectangle(cornerRadius: MonitorTheme.radius)
-                    )
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("monitor.share.upcoming.\(title)")
-                }
-            }
-        }
-    }
-
-    private func destinationRow(_ candidate: MediaDeliveryDestination) -> some View {
-        let enabled = isDestinationEnabled(candidate)
-        return Button {
-            guard enabled else { return }
-            destination = candidate
-            step = .options
-            if candidate == .frameio {
-                Task { await loadFrameioProjects() }
-            }
-        } label: {
-            HStack(spacing: 12) {
-                destinationIcon(candidate)
-                    .frame(width: 24, height: 24)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(candidate.title)
-                        .font(MonitorTheme.font(14, weight: .semibold))
-                        .foregroundStyle(enabled ? LiveDesign.text : LiveDesign.faint)
-                    Text(
-                        candidate == .frameio && model.isFrameioConfigured
-                            && !model.isFrameioConnected
-                            ? "Sign in from Settings → Storage first."
-                            : candidate.subtitle
-                    )
-                    .font(MonitorTheme.font(11))
-                    .foregroundStyle(LiveDesign.muted)
-                }
-                Spacer()
-                MonitorIcon.chevronRight
-                    .frame(width: 12, height: 12)
-                    .foregroundStyle(LiveDesign.faint)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                LiveDesign.hairline.opacity(0.35),
-                in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous))
-        }
-        .buttonStyle(.monitorTapTarget)
-        .disabled(!enabled)
-        .accessibilityIdentifier("monitor.share.destination.\(candidate.rawValue)")
-    }
-
-    @ViewBuilder
-    private func destinationIcon(_ candidate: MediaDeliveryDestination) -> some View {
-        switch candidate {
-        case .nativeShare:
-            MonitorIcon.share
-                .frame(width: 18, height: 18)
-                .foregroundStyle(LiveDesign.text)
-        case .frameio:
-            FrameioMark()
-                .foregroundStyle(model.isFrameioConfigured ? LiveDesign.text : LiveDesign.faint)
-        }
-    }
-
-    private func isDestinationEnabled(_ candidate: MediaDeliveryDestination) -> Bool {
-        let hasDeliverable = !cached.isEmpty || (isConnected && !files.isEmpty)
-        switch candidate {
-        case .nativeShare: return hasDeliverable
-        case .frameio:
-            return model.isFrameioConfigured && model.isFrameioConnected && hasDeliverable
-        }
-    }
-
-    private var options: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if destination == .frameio {
-                VStack(alignment: .leading, spacing: 10) {
-                    sectionHeader(frameioHopGateActive ? "FRAME.IO" : "PROJECT")
-                    if frameioHopGateActive {
-                        frameioHopGate
-                    } else {
-                        frameioProjectPicker
-                    }
-                }
-            }
-            if !frameioHopGateActive {
-                exportSection
-            }
-        }
-        .onAppear { onCameraAP = model.isOnCameraAccessPoint }
-        .task {
-            while !Task.isCancelled {
-                onCameraAP = model.isOnCameraAccessPoint
-                if destination == .frameio, model.isFrameioConfigured, model.isFrameioConnected,
-                    !onCameraAP, frameioListing == nil, !frameioProjectsLoading,
-                    frameioProjectsError == nil
-                {
-                    await loadFrameioProjects()
-                }
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
-    }
-
-    @ViewBuilder private var frameioHopGate: some View {
-        Text(
-            FrameioDestination.loaded.map {
-                "Frame.io needs the internet. Hop off the camera's Wi‑Fi to pick a project (currently “\($0.projectName)”) and upload — the camera reconnects automatically when you're done."
-            }
-                ?? "Frame.io needs the internet. Hop off the camera's Wi‑Fi to sign in and pick a project — the camera reconnects automatically when you're done."
-        )
-        .font(MonitorTheme.font(13))
-        .foregroundStyle(LiveDesign.muted)
-        .fixedSize(horizontal: false, vertical: true)
-
-        if isHoppingForFrameio {
-            HStack(spacing: 8) {
-                ProgressView().tint(LiveDesign.accent)
-                Text("Switching networks…")
-                    .font(MonitorTheme.font(13))
-                    .foregroundStyle(LiveDesign.muted)
-            }
+    var body: some View {
+        if let maxCardHeight {
+            MonitorOperatorDeliveryScreen(model: source.preparation, maxCardHeight: maxCardHeight,
+                onClose: onClose, onBegin: source.begin, remoteArtwork: { FrameioMark() })
         } else {
-            Button {
-                showFrameioHopConfirm = true
-            } label: {
-                Label {
-                    Text("Hop to internet")
-                } icon: {
-                    MonitorIcon.wifiOff
-                        .frame(width: 16, height: 16)
-                }
-                .font(MonitorTheme.font(15, weight: .semibold))
-                .foregroundStyle(LiveDesign.text)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(
-                    LiveDesign.accent.opacity(0.22),
-                    in: RoundedRectangle(
-                        cornerRadius: MonitorTheme.radius, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(
-                        cornerRadius: MonitorTheme.radius, style: .continuous
-                    )
-                    .strokeBorder(LiveDesign.accent.opacity(0.55), lineWidth: 1))
-            }
-            .buttonStyle(.monitorTapTarget)
+            MonitorOperatorDeliveryPopupOverlay(model: source.preparation, onDismiss: onClose, onBegin: source.begin, remoteArtwork: { FrameioMark() })
         }
     }
+}
 
-    private var frameioProjectPicker: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 4) {
-                Text("Project")
-                    .font(MonitorTheme.font(14, weight: .semibold))
-                    .foregroundStyle(LiveDesign.text)
-                HelpBadge(text: "Upload destination in your Frame.io workspace.")
-            }
-            if !model.isFrameioConnected {
-                Text("Sign in to Frame.io from Settings → Storage to upload.")
-                    .font(MonitorTheme.font(12))
-                    .foregroundStyle(LiveDesign.muted)
-            }
-            if frameioProjectsLoading {
-                HStack(spacing: 8) {
-                    ProgressView().tint(LiveDesign.accent)
-                    Text("Loading projects…")
-                        .font(MonitorTheme.font(12))
-                        .foregroundStyle(LiveDesign.muted)
-                }
-            } else if let frameioProjectsError {
-                Text(frameioProjectsError)
-                    .font(MonitorTheme.font(12))
-                    .foregroundStyle(LiveDesign.accent)
-                Button("Retry") { Task { await loadFrameioProjects() } }
-                    .font(MonitorTheme.font(13, weight: .semibold))
-                    .foregroundStyle(LiveDesign.accent)
-            } else if frameioListing != nil {
-                frameioProjectMenu
-                Button {
-                    newProjectName = ""
-                    showCreateProjectAlert = true
-                } label: {
-                    HStack(spacing: 10) {
-                        MonitorIcon.circlePlus
-                            .frame(width: 16, height: 16)
-                            .foregroundStyle(LiveDesign.accent)
-                        Text("Create new project")
-                            .font(MonitorTheme.font(13, weight: .semibold))
-                            .foregroundStyle(LiveDesign.text)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(
-                        LiveDesign.hairline.opacity(0.35),
-                        in: RoundedRectangle(
-                            cornerRadius: MonitorTheme.radius, style: .continuous))
-                }
-                .buttonStyle(.monitorTapTarget)
-            }
+/// Immutable selection/source and actual SDK account/export facts only.
+@MainActor private struct MediaDeliveryPreparationSource {
+    let model: AppModel
+    let files: [MediaFile]
+    let preparation: MonitorDeliveryPreparationModel<LogColorTransform, MediaExportFormat,
+        FrameioProject, FrameioProjectListing, FrameioInternetHop.Token>
+    private let isCurrent: () -> Bool
+    init(model: AppModel, files: [MediaFile], preferredDestination: MediaDeliveryDestination?) {
+        self.model = model; self.files = files
+        let session = model.session, library = session.mediaLibrary, directory = library.cache.directory
+        let cameraID = session.mediaCameraID, generation = directory.generation
+        let current: () -> Bool = {
+            model.session === session && session.mediaLibrary === library && session.mediaCameraID == cameraID && directory.generation == generation
         }
+        isCurrent = current
+        var configuration = MediaDeliveryConfiguration()
+        if let first = files.filter({ $0.kind == .video }).compactMap({ session.shotColor(for: $0) })
+            .compactMap({ LogColorTransform.converting(from: $0) }).first { configuration.logTransform = first }
+        let remote = MonitorDeliveryRemoteService<FrameioProject, FrameioProjectListing, FrameioInternetHop.Token>(
+            presentation: .init(displayName: "Frame.io", progressCaption: "Uploading to Frame.io"), observe: {
+                let saved = FrameioDestination.loaded
+                return .init(configured: model.isFrameioConfigured, connected: model.isFrameioConnected,
+                    onCameraNetwork: model.isOnCameraAccessPoint, savedProjectID: saved?.projectID, savedProjectName: saved?.projectName)
+            }, load: {
+                let listing = try await model.loadFrameioProjectListing()
+                return .init(context: listing, projects: listing.projects.map {
+                    .init(id: $0.id, name: $0.name, uploadable: $0.rootFolderID.map { _ in true }, payload: $0)
+                })
+            }, create: { name, context in
+                let project = try await model.createFrameioProject(name: name, accountID: context.accountID, workspaceID: context.workspaceID)
+                return .init(id: project.id, name: project.name, uploadable: project.rootFolderID.map { _ in true }, payload: project)
+            }, persist: { project, context in
+                model.persistFrameioDestination(project: project.payload, accountID: context.accountID, workspaceID: context.workspaceID)
+            }, internet: .init(needsHop: { model.isOnCameraAccessPoint }, begin: { model.beginInternetHop() },
+                owns: { model.internetHop.owns($0) }, wait: { await model.waitForInternetPath(timeoutSeconds: 30, token: $0) },
+                restore: { model.endInternetHop($0) }), transfer: { model.transferInternetHop($0) })
+        preparation = .init(selection: {
+            .init(files: files.map { .init(filename: $0.filename, sizeBytes: $0.sizeBytes > 0 ? $0.sizeBytes : nil) },
+                cachedCount: files.filter { session.isDownloaded($0) }.count,
+                connected: { if case .live = session.phase { return true }; return false }())
+        }, configuration: configuration, exportOptions: .init(
+            curves: LogColorTransform.allCases.map { .init(id: $0.rawValue, label: $0.destination.label, value: $0) },
+            formats: MediaExportFormat.allCases.map { .init(id: $0.rawValue, label: $0.label, value: $0) },
+            lutAvailable: { model.assist.playbackEffects.lutDimension >= 2 || model.assist.effects.lutDimension >= 2 },
+            convertLogAvailable: { MediaDelivery.convertLogAvailable(files: files, shotColors: files.map { session.shotColor(for: $0) }) },
+            lutLabel: { model.assist.lutStatusLabel }, convertHelp: MediaDeliveryCopy.convertLogHelp,
+            convertUnavailableHelp: MediaDeliveryCopy.convertLogHelpUnavailable,
+            filename: { configuration in files.count == 1 ? files.first.map {
+                MediaDelivery.filename(for: $0, configuration: configuration,
+                    transform: configuration.convertLog ? configuration.logTransform : nil)
+            } : nil }), remote: remote, preferredDestination: preferredDestination?.shared, sourceCurrent: current)
     }
-
-    private var frameioProjectMenu: some View {
-        Menu {
-            if uploadableFrameioProjects.isEmpty {
-                Button("No projects") {}.disabled(true)
-            } else {
-                ForEach(uploadableFrameioProjects) { project in
-                    Button {
-                        selectFrameioProject(project)
-                    } label: {
-                        if selectedFrameioProjectID == project.id {
-                            Label {
-                                Text(project.name)
-                            } icon: {
-                                MonitorIcon.check
-                            }
-                        } else {
-                            Text(project.name)
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 10) {
-                MonitorIcon.folder
-                    .frame(width: 14, height: 14)
-                    .foregroundStyle(LiveDesign.muted)
-                Text(selectedFrameioProject?.name ?? "Select a project")
-                    .font(MonitorTheme.font(13, weight: .semibold))
-                    .foregroundStyle(
-                        selectedFrameioProject != nil ? LiveDesign.text : LiveDesign.muted
-                    )
-                    .lineLimit(1)
-                Spacer()
-                MonitorIcon.chevronsUpDown
-                    .frame(width: 11, height: 11)
-                    .foregroundStyle(LiveDesign.muted)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                LiveDesign.hairline.opacity(0.35),
-                in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous))
+    func begin(_ request: MonitorDeliveryPreparedRequest<LogColorTransform, MediaExportFormat, FrameioInternetHop.Token>) {
+        guard isCurrent() else { if let token = request.internetLease { model.endInternetHop(token) }; return }
+        guard let configuration = request.configuration else {
+            if let token = request.internetLease { model.endInternetHop(token) }
+            model.delivery.failUnavailableExportSettings()
+            return
         }
-        .buttonStyle(.monitorTapTarget)
-    }
-
-    private var exportSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("EXPORT")
-            if let file = files.first, files.count == 1 {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Filename")
-                        .font(MonitorTheme.font(12, weight: .semibold))
-                        .foregroundStyle(LiveDesign.muted)
-                    Text(
-                        MediaDelivery.filename(
-                            for: file, configuration: configuration, transform: previewTransform)
-                    )
-                    .font(MonitorTheme.font(13)).monospacedDigit()
-                    .foregroundStyle(LiveDesign.text)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    LiveDesign.hairline.opacity(0.35),
-                    in: RoundedRectangle(
-                        cornerRadius: MonitorTheme.radius, style: .continuous))
-            }
-            toggleRow(
-                MediaDeliveryCopy.convertLog,
-                help: convertLogAvailable
-                    ? MediaDeliveryCopy.convertLogHelp
-                    : MediaDeliveryCopy.convertLogHelpUnavailable,
-                isOn: convertLogBinding,
-                enabled: convertLogAvailable)
-            if configuration.convertLog {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(MediaDeliveryCopy.convertLogDestination)
-                        .font(MonitorTheme.font(14, weight: .semibold))
-                    MonitorSegmentedControl(
-                        options: LogColorTransform.allCases,
-                        selection: $configuration.logTransform, stacked: true,
-                        title: { $0.destination.label }
-                    )
-                    .buttonStyle(.monitorTapTarget)
-                }
-            }
-            toggleRow(
-                MediaDeliveryCopy.bakeLUT,
-                help: lutAvailable
-                    ? MediaDeliveryCopy.bakeLUTHelp(statusLabel: model.assist.lutStatusLabel)
-                    : MediaDeliveryCopy.bakeLUTHelpUnavailable,
-                isOn: bakeLUTBinding,
-                enabled: lutAvailable)
-            if configuration.bakeLUT {
-                toggleRow(
-                    MediaDeliveryCopy.bakeExposure,
-                    help: MediaDeliveryCopy.bakeExposureHelp,
-                    isOn: $configuration.bakeLUTExposure,
-                    enabled: lutAvailable)
-            }
-            if configuration.bakeLUT || configuration.convertLog || destination == .nativeShare {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 4) {
-                        Text("Format")
-                            .font(MonitorTheme.font(12.5, weight: .semibold))
-                            .foregroundStyle(LiveDesign.text)
-                    }
-                    Text("MOV preserves quality; MP4 is more widely compatible.")
-                        .font(MonitorTheme.font(10.5)).foregroundStyle(LiveDesign.muted)
-                    MonitorSegmentedControl(
-                        options: MediaExportFormat.allCases,
-                        selection: $configuration.exportFormat, stacked: true, title: { $0.label }
-                    )
-                    .buttonStyle(.monitorTapTarget)
-                }
-                .padding(12)
-                .background(
-                    LiveDesign.hairline.opacity(0.35),
-                    in: RoundedRectangle(
-                        cornerRadius: MonitorTheme.radius, style: .continuous))
-            }
-            toggleRow(
-                "Include metadata",
-                help: "Filename, capture date, and size (best-effort JSON sidecar).",
-                isOn: $configuration.includeMetadata,
-                enabled: true)
-            if destination == .frameio {
-                toggleRow(
-                    "Re-upload already uploaded",
-                    help: "Skip clips already on Frame.io unless enabled.",
-                    isOn: $configuration.forceFrameioReupload,
-                    enabled: true)
-            }
-        }
-    }
-
-    private var footer: some View {
-        VStack(spacing: 10) {
-            Text(exportSummary)
-                .accessibilityIdentifier("monitor.share.summary")
-                .font(MonitorTheme.font(9.5)).monospacedDigit()
-                .foregroundStyle(LiveDesign.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if destination == .nativeShare {
-                MonitorSegmentedControl(
-                    options: [MediaDeliveryPostExportAction.systemShare, .saveToPhotos],
-                    selection: $shareAction, stacked: true,
-                    title: { $0 == .systemShare ? "Share" : "Save to Photos" }
-                )
-                .buttonStyle(.monitorTapTarget)
-            }
-            Button {
-                beginDelivery()
-            } label: {
-                Text(actionTitle)
-                    .font(MonitorTheme.font(15, weight: .semibold))
-                    .foregroundStyle(canContinue ? LiveDesign.text : LiveDesign.faint)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        canContinue
-                            ? LiveDesign.accent.opacity(0.22) : LiveDesign.hairline.opacity(0.25),
-                        in: RoundedRectangle(
-                            cornerRadius: MonitorTheme.radius, style: .continuous)
-                    )
-                    .overlay(
-                        RoundedRectangle(
-                            cornerRadius: MonitorTheme.radius, style: .continuous
-                        )
-                        .strokeBorder(
-                            canContinue
-                                ? LiveDesign.accent.opacity(0.55)
-                                : LiveDesign.hairline.opacity(0.35),
-                            lineWidth: 1))
-            }
-            .buttonStyle(.monitorTapTarget)
-            .disabled(!canContinue)
-            .accessibilityIdentifier("monitor.share.begin")
-        }
-    }
-
-    private var exportSummary: String {
-        let known = files.filter { $0.sizeBytes > 0 }
-        let bytes = known.reduce(UInt64(0)) { total, file in
-            let sum = total.addingReportingOverflow(file.sizeBytes)
-            return sum.overflow ? UInt64.max : sum.partialValue
-        }
-        let size = ByteCountFormatter.string(
-            fromByteCount: Int64(clamping: bytes), countStyle: .file)
-        let sizeLabel =
-            known.isEmpty
-            ? "Size unavailable" : known.count == files.count ? size : "At least \(size)"
-        let mode =
-            configuration.convertLog
-            ? configuration.logTransform.destination.label
-            : configuration.bakeLUT ? "LUT baked" : "Camera original"
-        return "\(files.count) \(files.count == 1 ? "clip" : "clips") · \(sizeLabel) · \(mode)"
-    }
-
-    private var actionTitle: String {
-        switch destination {
-        case .nativeShare:
-            shareAction == .saveToPhotos ? "Save to Photos" : "Share"
-        case .frameio:
-            destination?.actionTitle ?? "Upload"
-        case .none:
-            "Continue"
-        }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(MonitorTheme.font(11, weight: .bold)).monospacedDigit()
-            .kerning(0.6)
-            .foregroundStyle(LiveDesign.faint)
-    }
-
-    private func toggleRow(
-        _ title: String, help: String, isOn: Binding<Bool>, enabled: Bool
-    ) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(MonitorTheme.font(12.5, weight: .semibold))
-                    .foregroundStyle(enabled ? LiveDesign.text : LiveDesign.faint)
-                Text(help)
-                    .font(MonitorTheme.font(10.5)).foregroundStyle(LiveDesign.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .accessibilityLabel(title)
-                .tint(LiveDesign.accent)
-                .scaleEffect(0.75).frame(width: 38, height: 44)
-        }
-        .padding(.leading, 12)
-        .padding(.trailing, 10)
-        .padding(.vertical, 10)
-        .background(
-            LiveDesign.hairline.opacity(0.35),
-            in: RoundedRectangle(cornerRadius: MonitorTheme.radius, style: .continuous)
-        )
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.55)
-    }
-
-    private func beginDelivery() {
-        guard let destination else { return }
-        if destination == .frameio {
-            // The accepted upload owns restoration, including preflight failure.
-            popupStartedHop = false
-        } else {
-            finishPopupHop()
-        }
-        let request = MediaDeliveryBeginRequest(
-            files: files,
-            destination: destination,
-            configuration: configuration,
-            postExportAction: shareAction)
-        onClose()
-        model.delivery.begin(request, model: model)
-    }
-
-    private func closePopup() {
-        finishPopupHop()
-        onClose()
-    }
-
-    private func finishPopupHop() {
-        guard popupStartedHop else { return }
-        popupStartedHop = false
-        model.endInternetHop()
-    }
-
-    private func startFrameioHop() {
-        isHoppingForFrameio = true
-        popupStartedHop = true
-        model.beginInternetHop()
-        Task {
-            let online = await model.waitForInternetPath(timeoutSeconds: 30)
-            isHoppingForFrameio = false
-            if online {
-                await loadFrameioProjects()
-            } else {
-                frameioProjectsError =
-                    "Couldn't reach the internet after leaving the camera's Wi‑Fi. Check cellular or home Wi‑Fi."
-            }
-        }
-    }
-
-    private func loadFrameioProjects() async {
-        guard !model.isOnCameraAccessPoint else { return }
-        frameioProjectsLoading = true
-        frameioProjectsError = nil
-        defer { frameioProjectsLoading = false }
-        do {
-            let listing = try await model.loadFrameioProjectListing()
-            frameioListing = listing
-            if selectedFrameioProjectID == nil {
-                selectedFrameioProjectID =
-                    FrameioDestination.loaded?.projectID ?? listing.projects.first?.id
-            }
-            if let project = selectedFrameioProject {
-                selectFrameioProject(project)
-            }
-        } catch {
-            frameioProjectsError = error.localizedDescription
-        }
-    }
-
-    private func selectFrameioProject(_ project: FrameioProject) {
-        selectedFrameioProjectID = project.id
-        if let listing = frameioListing {
-            model.persistFrameioDestination(
-                project: project, accountID: listing.accountID, workspaceID: listing.workspaceID)
-        }
-    }
-
-    private func createFrameioProject(named name: String) async {
-        guard let listing = frameioListing else { return }
-        do {
-            let project = try await model.createFrameioProject(
-                name: name, accountID: listing.accountID, workspaceID: listing.workspaceID)
-            frameioListing?.projects.insert(project, at: 0)
-            selectFrameioProject(project)
-        } catch {
-            frameioProjectsError = error.localizedDescription
-        }
+        model.delivery.begin(.init(files: files, destination: .init(request.destination), configuration: configuration,
+            postExportAction: request.action, internetHopToken: request.internetLease), model: model)
     }
 }

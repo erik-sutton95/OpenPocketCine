@@ -232,6 +232,8 @@ val stageSwiftCore =
                     "Sources/OpenCineMedia/**",
                     "Sources/OpenCineMotion/**",
                     "Sources/OpenCineRelay/**",
+                    "Sources/MonitorPresentation/**",
+                    "Sources/OpenCineCameraVocabulary/**",
                     "Sources/OpenCineCore/**",
                     "Sources/OpenCineJNISupport/**",
                     "Sources/OpenCineDJI/**",

@@ -1,3 +1,4 @@
+import MonitorPresentation
 import CoreImage
 import OpenCineCameraControls
 import OpenPocketViewCore
@@ -137,9 +138,10 @@ final class DesqueezeAssistTests: XCTestCase {
     }
 
     func testPlaybackZoomReclampsAfterChangingDirection() {
-        var zoom = AnchoredPinchZoom()
+        var zoom = MonitorPlaybackZoom()
         zoom.pinchChanged(
-            magnification: 3, startAnchor: .center, size: CGSize(width: 800, height: 225))
+            magnification: 3, startAnchorX: 0.5, startAnchorY: 0.5,
+            size: CGSize(width: 800, height: 225))
         zoom.panChanged(translation: CGSize(width: 900, height: 900))
         zoom.endGesture(size: CGSize(width: 400, height: 600))
         XCTAssertEqual(zoom.offset.width, 400)

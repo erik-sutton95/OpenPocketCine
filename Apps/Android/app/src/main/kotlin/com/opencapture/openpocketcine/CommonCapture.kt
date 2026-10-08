@@ -7,11 +7,8 @@ import androidx.compose.runtime.collectAsState
 import com.opencapture.opencine.vocabulary.FocusTrackMode
 
 /** AF-C must retain the native strategy reset when tracking is unknown or non-default. */
-internal fun commonFocusValue(label: String, track: FocusTrackMode?): SettingValue? = when {
-    label == "AF-S" -> SettingValue.FocusMode(com.opencapture.opencine.core.FocusMode.SINGLE)
-    label == "AF-C" && track == FocusTrackMode.DEFAULT -> SettingValue.FocusMode(com.opencapture.opencine.core.FocusMode.CONTINUOUS)
-    else -> null
-}
+internal fun commonFocusValue(label: String, track: FocusTrackMode?): SettingValue? =
+    com.opencapture.opencine.cameracontrols.captureFocusValue(label, track)
 
 /** Cycle taps admit the target against the current described range. DJI owns continuous gesture completion. */
 internal fun AppModel.commitZoomCycle(ratio: Double): Boolean {

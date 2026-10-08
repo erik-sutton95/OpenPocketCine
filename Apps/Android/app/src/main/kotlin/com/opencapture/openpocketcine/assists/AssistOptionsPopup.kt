@@ -29,6 +29,7 @@ internal val AppAssistHost = AssistHost(
     midtoneColors = SettingsPalette.midtone.map { MonitorSettingsColorDot(it.name, it.color) },
     guideMaskPolicy = MonitorGuideMaskPolicy.ENVELOPE,
     scopeCeiling = { it.scopeDisplayCeiling },
+    rec709LookCurve = { com.opencapture.opencine.dji.DjiMonitorColorProfile.value.rec709LookCurves[it] },
 )
 
 /**
@@ -66,8 +67,7 @@ fun AssistOptionsPopup(
                 OperatorPrefs.setLutSelection(context, id)
             }
         },
-        family = model?.session?.connectedCamera?.model?.family ?: "pocket",
-        cameraName = model?.session?.connectedCamera?.name,
+        profile = model?.session?.connectedCamera?.model?.captureProfile?.looks ?: com.opencapture.opencine.dji.DjiCameraLUTProfile.make("pocket", null),
         colorMode = colorMode,
     )
     AssistOptionsPanel(

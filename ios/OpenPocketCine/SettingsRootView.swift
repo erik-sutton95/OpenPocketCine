@@ -82,479 +82,138 @@ enum SettingsHelpCopy {
 
 
 struct SettingsRootView: View {
-    /// Real device insets after the host zeros the clean landscape edge.
     var safeArea: EdgeInsets = EdgeInsets()
     var onClose: (() -> Void)? = nil
-
     @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
-    @State private var legalKind: LegalDocumentView.Kind?
-    @State private var showLUTPicker = false
-    @State private var showWatcherWiFiCode = false
-    @State private var confirmClearCache = false
-    @State private var cacheBytes: UInt64?
-    private struct CacheSizeRequest: Equatable {
-        var cameraID: String
-        var revision: UInt64
-    }
-    private var cacheSizeRequest: CacheSizeRequest {
-        CacheSizeRequest(
-            cameraID: model.session.mediaCameraID, revision: model.session.mediaCacheRevision)
-    }
-    @State private var clearingCache = false
-    @State private var cacheClearFailed = false
-    @State private var diagnosticsShare: DiagnosticSharePayload?
-    @State private var showProblemReport = false
-    @State private var showDiagnosticOptions = false
-    @State private var supportError = false
-    @State private var reliabilityOptIn = AppDiagnostics.reporting.isOptedIn
-    @State private var gimbalGamepadStick = OperatorPrefs.gimbalGamepadStick
 
     var body: some View {
-        MonitorSettingsPage(
-            safeArea: safeArea, brand: "OpenPocketCine",
-            selection: Bindable(model).operatorSettingsTab,
-            isLive: model.isLive, phaseLabel: model.session.phase.label,
-            sharingSubtitle: "Share this feed with OpenPocketCine devices on the same camera Wi-Fi.",
-            feedback: { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) },
-            onClose: dismiss, disconnect: model.disconnect
-        ) { _ in
-            settingsRows
-        }
-        .overlay {
-            if let legalKind {
-                LegalDocumentView(kind: legalKind, onClose: { self.legalKind = nil })
-            }
-        }
-        .sheet(isPresented: $showWatcherWiFiCode) {
-            WatcherWiFiCodeSheet().environment(model)
-        }
-        .sheet(isPresented: $showLUTPicker) {
-            LUTPicker(assist: model.assist)
-        }
-        .sheet(isPresented: $showProblemReport) {
-            ProblemReportView().environment(model)
-        }
-        .alert("Report unavailable", isPresented: $supportError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(
-                "Email support@opencapture.org. You can save a report under Diagnostic options.")
-        }
-        .sheet(item: $diagnosticsShare) { payload in
-            DiagnosticActivityShareView(items: [payload.url])
-        }
+        MonitorOperatorSettingsScreen(shell: model.shell, brand: "OpenPocketCine",
+            preferences: OperatorPrefs.common, display: OperatorPrefs.display, assist: model.assist,
+            library: model.session.mediaLibrary, operatorSession: model.operatorSession,
+            configuration: configuration)
     }
 
-    private func dismiss() {
-        if let onClose {
-            onClose()
-        } else {
-            model.homePanel = nil
-        }
-    }
-
-    @ViewBuilder private var settingsRows: some View {
-        switch model.operatorSettingsTab {
-        case .link: linkRows
-        case .sharing: sharingRows
-        case .assist: assistRows
-        case .controls: controlsRows
-        case .display: displayRows
-        case .storage: storageRows
-        case .system: systemRows
-        }
-    }
-
-    // MARK: - Link
-
-    @ViewBuilder private var linkRows: some View {
-        SettingsLinkHealthCard().monitorFullWidthCard()
-
-        MonitorConnectionSettings(
-            transport: model.isLive ? "BLE + Wi-Fi active" : "Not connected",
-            transportHelp: SettingsHelpCopy.currentTransport,
-            phase: model.session.phase.label,
-            phaseHelp: "Where the BLE → Wi-Fi → datalink handshake is right now.",
-            network: model.session.joinedSSID.flatMap { $0.isEmpty ? nil : $0 },
-            networkHelp: "SSID joined for this session. The password stays in the iOS Keychain on this phone.")
-
-        if MonitorUpscaler.supportedOnThisDevice.count > 1 {
-            SettingsRowCard(title: "Processing") {
-                SettingsInlineRow(
-                    title: "Feed Upscaler",
-                    help: SettingsHelpCopy.feedUpscaler,
-                    showTopDivider: false
-                ) {
-                    SettingsSegmented(
-                        options: MonitorUpscaler.supportedOnThisDevice.map(\.rawValue),
-                        selected: FeedUpscaleSwitch.shared.upscaler.rawValue,
-                        compact: true
-                    ) { value in
-                        guard let choice = MonitorUpscaler(rawValue: value) else { return }
-                        FeedUpscaleSwitch.shared.upscaler = choice
-                    }
-                }
-            }
-        }
-
-        MonitorSavedCameraSettings(cameras: model.savedCameras.map { camera in
-            let network = camera.lastSSID
-            return .init(id: camera.id, name: camera.displayName,
-                detail: camera.modelName + (network.map { " · \($0)" } ?? ""), network: network)
-        }, emptyHelp: "Pair from the home list. Settings does not start a new pair; that stays on Your cameras.")
-    }
-
-    // MARK: - Sharing
-
-    @ViewBuilder private var sharingRows: some View {
-        if model.session.isMultiviewBorrowed {
-            SettingsRowCard {
-                SettingsInlineRow(
-                    title: "Sharing unavailable in Multiview",
-                    help:
-                        "Connect to one camera from Your cameras to share its feed with watchers.",
-                    showTopDivider: false
-                ) {
-                    EmptyView()
-                }
-            }
-        } else if model.isLive {
-            let priorities = ["Quality", "High", "Medium", "Steady"]
-            MonitorFeedSharingSettings(
-                sharing: Binding(get: { model.shareThisFeed }, set: model.setShareThisFeed),
-                passcode: Bindable(model).sharePasscode,
-                controlRequests: Bindable(model).controlRequestsAllowed,
-                priority: Binding(get: { priorities[min(model.broadcastPriority, 3)] }, set: {
-                    if let index = priorities.firstIndex(of: $0) { model.broadcastPriority = index }
-                }), priorities: priorities,
-                help: .init(sharing: SettingsHelpCopy.shareThisFeed,
-                    passcode: SettingsHelpCopy.watcherPasscode,
-                    controlRequests: SettingsHelpCopy.controlRequests,
-                    priority: SettingsHelpCopy.broadcastPriority),
-                showWiFiCode: { showWatcherWiFiCode = true },
-                passcodeChanged: { WatcherRelayKeychain.app.hostPasscode = $0 },
-                feedback: { OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled) })
-        } else {
-            SettingsRowCard {
-                SettingsInlineRow(
-                    title: SettingsHelpCopy.watchAFeed,
-                    help: SettingsHelpCopy.shareFeed,
-                    showTopDivider: false
-                ) {
-                    SettingsActionPill(title: "Browse") { model.openWatcherBrowse() }
-                }
-            }
-        }
-    }
-
-    // MARK: - View Assist
-
-    @ViewBuilder private var assistRows: some View {
+    private var configuration: MonitorOperatorSettingsConfiguration<MonitorLUTLooks> {
         let transfer = model.monitorTransfer ?? model.monitorColorMode.map(MonitorTransfer.init) ?? .rec709
-        let clipByte = model.monitorSamples.exposureCeiling.clipByte(transfer: transfer)
-        let feedback = { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) }
-        MonitorViewAssistSettings(sections: [
-            .falseColor(PocketSettingsAssistMenus.falseColor(assist: model.assist, compact: true,
-                transfer: transfer, clipByte: clipByte), reset: { feedback(); resetFalseColor() }),
-            .zebra(ZebraAssist.longPressMenu(
-                assist: model.assist, stores: .app, palette: LiveDesign.self, haptics: .app,
-                transfer: transfer, clipByte: clipByte, compact: true
-            ).commonMenu(transfer: transfer, clipByte: clipByte), reset: { feedback(); resetZebra() }),
-            .waveform(WaveformAssist.longPressMenu(
-                assist: model.assist, stores: .app, haptics: .app, compact: true
-            ).commonMenu,
-                reset: { feedback(); resetWaveform() }),
-            .parade(ParadeAssist.longPressMenu(
-                assist: model.assist, stores: .app, haptics: .app, compact: true
-            ).commonMenu,
-                reset: { feedback(); resetParade() }),
-            .histogram(HistogramAssist.longPressMenu(
-                assist: model.assist, stores: .app, haptics: .app, compact: true
-            ).commonMenu,
-                reset: { feedback(); resetHistogram() }),
-            .vectorscope(VectorscopeAssist.longPressMenu(
-                assist: model.assist, stores: .app, haptics: .app, compact: true
-            ).commonMenu,
-                reset: { feedback(); resetVectorscope() }),
-            .peaking(PeakingAssist.longPressMenu(
-                assist: model.assist, palette: LiveDesign.self, haptics: .app, compact: true
-            ).commonMenu,
-                reset: { feedback(); resetPeaking() }),
-            .trafficLights(TrafficLightsAssist.longPressMenu(
-                assist: model.assist, stores: .app, haptics: .app, compact: true
-            ).commonMenu,
-                reset: { feedback(); resetTrafficLights() }),
-        ]).buttonStyle(.monitorTapTarget)
-
-        MonitorExposureMeterSettings(isOn: model.assist.evMeter,
-            help: "Show the camera's exposure meter at the picture's left edge in DISP 1. Auto and Manual use the camera reading without changing exposure settings.",
-            feedback: { OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled) },
-            onToggle: { model.assist.toggle(.evMeter) })
-
-        MonitorLookSettings(look: lutLabel,
-            help: "Looks apply on this phone. The file on the camera is unchanged.",
-            onOpen: { showLUTPicker = true })
+        return .init(safeArea: safeArea, phase: model.session.phase.label, isLive: model.isLive,
+            sharingSubtitle: "Share this feed with OpenPocketCine devices on the same camera Wi-Fi.",
+            close: { if let onClose { onClose() } else { model.shell.dismissCover() } },
+            disconnect: model.disconnect, feedback: feedback, link: link, sharing: sharing, motion: motion,
+            account: .init(title: "Frame.io", help: SettingsHelpCopy.frameIO, state: accountState,
+                signIn: { Task { try? await model.connectFrameio() } }, signOut: model.disconnectFrameio),
+            cache: cache, support: support,
+            information: .init(theme: "DJI Black", protocolName: "DUML / BLE + Wi-Fi", version: Self.appVersionText,
+                themeHelp: SettingsHelpCopy.themeHelp, protocolHelp: "Camera control speaks DUML over Bluetooth and the camera's Wi-Fi. No DJI SDK is bundled or required.",
+                versionHelp: "Current OpenPocketCine build from the native project metadata."),
+            recordConfirmation: Bindable(model).recordConfirmationEnabled, haptics: Bindable(model).hapticsEnabled,
+            keepAwake: Bindable(model).keepScreenAwake, hdrDisplay: Bindable(model).hdrDisplay,
+            cacheOriginals: Bindable(model).cacheFullResolution,
+            hapticsHelp: SettingsHelpCopy.haptics, keepAwakeHelp: SettingsHelpCopy.keepScreenAwake,
+            hdrHelp: SettingsHelpCopy.hdrDisplay, cacheHelp: SettingsHelpCopy.cacheFullResolution,
+            clearHelp: SettingsHelpCopy.clearCache, exposureHelp: "Show the camera's exposure meter at the picture's left edge in DISP 1. Auto and Manual use the camera reading without changing exposure settings.",
+            availableDisplay: availableDisplay, assist: model.assist, stores: .app, falseColorLooks: .app,
+            palette: LiveDesign.self, operatorHaptics: .app, transfer: transfer,
+            clipByte: model.monitorSamples.exposureCeiling.clipByte(transfer: transfer),
+            lookLabel: model.assist.lutStatusLabel, lookCatalog: { AnyView(LUTPicker(assist: model.assist)) })
     }
 
-    private func resetFalseColor() {
-        model.assist.falseColorScale = FalseColorAssist.Options.default.scale
-        model.assist.falseColorReference = FalseColorAssist.Options.default.referenceEnabled
-        model.assist.persist()
+    private func feedback() { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) }
+
+    private var link: MonitorSettingsLinkSource {
+        .init(transport: model.isLive ? "BLE + Wi-Fi active" : "Not connected",
+            transportHelp: SettingsHelpCopy.currentTransport, phase: model.session.phase.label,
+            phaseHelp: "Where the BLE → Wi-Fi → datalink handshake is right now.", network: model.session.joinedSSID.flatMap { $0.isEmpty ? nil : $0 },
+            networkHelp: "SSID joined for this session. The password stays in the iOS Keychain on this phone.",
+            signalBars: model.session.liveSignalBars, saved: model.savedCameras.map { camera in
+                let network = camera.lastSSID
+                return .init(id: camera.id, name: camera.displayName,
+                    detail: camera.modelName + (network.map { " · \($0)" } ?? ""), network: network)
+            }, savedHelp: "Pair from the home list. Settings does not start a new pair; that stays on Your cameras.",
+            processing: MonitorUpscaler.supportedOnThisDevice.count > 1 ? .init(
+                options: MonitorUpscaler.supportedOnThisDevice.map(\.rawValue),
+                selection: Binding(get: { FeedUpscaleSwitch.shared.upscaler.rawValue }, set: {
+                    if let value = MonitorUpscaler(rawValue: $0) { FeedUpscaleSwitch.shared.upscaler = value }
+                }), help: SettingsHelpCopy.feedUpscaler) : nil)
     }
 
-    private func resetZebra() {
-        model.assist.setZebraOptions(.default, stores: .app)
-        model.assist.persist()
+    private var sharing: MonitorSettingsSharingSource {
+        .init(enabled: !model.session.isMultiviewBorrowed, unavailableHelp: "Connect to one camera from Your cameras to share its feed with watchers.",
+            sharing: Binding(get: { model.shareThisFeed }, set: model.setShareThisFeed),
+            passcode: Bindable(model).sharePasscode, controlRequests: Bindable(model).controlRequestsAllowed,
+            priority: Bindable(model).broadcastPriority,
+            help: .init(sharing: SettingsHelpCopy.shareThisFeed, passcode: SettingsHelpCopy.watcherPasscode,
+                controlRequests: SettingsHelpCopy.controlRequests, priority: SettingsHelpCopy.broadcastPriority),
+            browseHelp: SettingsHelpCopy.shareFeed, browse: model.openWatcherBrowse,
+            passcodeChanged: { WatcherRelayKeychain.app.hostPasscode = $0 },
+            joinCode: { AnyView(WatcherWiFiCodeSheet().environment(model)) })
     }
 
-    private func resetWaveform() {
-        WaveformAssist.store.options = .default
-    }
-
-    private func resetParade() {
-        ParadeAssist.store.options = .default
-    }
-
-    private func resetHistogram() {
-        HistogramAssist.store.options = .default
-    }
-
-    private func resetVectorscope() {
-        VectorscopeAssist.store.options = .default
-    }
-
-    private func resetPeaking() {
-        PeakingAssist.reset(model.assist)
-    }
-
-    private func resetTrafficLights() {
-        model.assist.crushClipCompensation = TrafficLightsAssist.defaultCompensation
-        model.assist.persist()
-    }
-
-    private var lutLabel: String {
-        model.assist.lutStatusLabel
-    }
-
-    // MARK: - Controls
-
-    @ViewBuilder private var controlsRows: some View {
-        MonitorOperatorSafetySettings(
-            recordConfirmation: Bindable(model).recordConfirmationEnabled,
-            haptics: Bindable(model).hapticsEnabled,
-            keepScreenAwake: Bindable(model).keepScreenAwake,
-            hapticsHelp: SettingsHelpCopy.haptics,
-            keepScreenAwakeHelp: SettingsHelpCopy.keepScreenAwake,
-            feedback: { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) }
-        )
+    private var motion: MonitorSettingsMotionSource {
         let capabilities = OsmoMonitorPresentation.capabilities(model.session)
-        let preferenceFeedback = {
-            OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
-        }
-        if capabilities.gimbal {
-            MonitorGimbalSettings(
-                sensitivity: .init(value: Bindable(model).gimbalStickSensitivity, range: 1...5,
-                    help: SettingsHelpCopy.joystickSensitivity,
-                    feedback: { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) }),
-                headTracking: capabilities.headTracking
-                    ? .init(value: Bindable(model).headTrackingEnabled,
-                        help: SettingsHelpCopy.headTracking, feedback: preferenceFeedback) : nil)
-            MonitorJoystickSettings(
+        return .init(sensitivity: capabilities.gimbal ? .init(value: Bindable(model).gimbalStickSensitivity,
+                range: 1...5, help: SettingsHelpCopy.joystickSensitivity, feedback: feedback) : nil,
+            headTracking: capabilities.headTracking ? .init(value: Bindable(model).headTrackingEnabled,
+                help: SettingsHelpCopy.headTracking, feedback: feedback) : nil,
+            joystick: capabilities.gimbal ? .init(
                 size: .init(options: MonitorJoystickSize.allCases.map(\.label),
-                    selection: Binding(get: { model.virtualJoystickSize.label },
-                        set: { model.virtualJoystickSize = MonitorJoystickSize.fromLabel($0) }),
-                    help: SettingsHelpCopy.virtualJoystickSize, feedback: preferenceFeedback),
+                    selection: Binding(get: { model.virtualJoystickSize.label }, set: { model.virtualJoystickSize = MonitorJoystickSize.fromLabel($0) }),
+                    help: SettingsHelpCopy.virtualJoystickSize, feedback: feedback),
                 invertPan: .init(value: Bindable(model).virtualJoystickInvertPan,
-                    help: SettingsHelpCopy.virtualJoystickInvertPan, feedback: preferenceFeedback),
+                    help: SettingsHelpCopy.virtualJoystickInvertPan, feedback: feedback),
                 invertTilt: .init(value: Bindable(model).virtualJoystickInvertTilt,
-                    help: SettingsHelpCopy.virtualJoystickInvertTilt, feedback: preferenceFeedback),
+                    help: SettingsHelpCopy.virtualJoystickInvertTilt, feedback: feedback),
                 deadZone: .init(value: Bindable(model).virtualJoystickDeadzonePercent,
-                    range: GimbalStick.deadzonePercentRange, help: SettingsHelpCopy.virtualJoystickDeadzone,
-                    suffix: "%", feedback: { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) }),
+                    range: GimbalStick.deadzonePercentRange, help: SettingsHelpCopy.virtualJoystickDeadzone, suffix: "%", feedback: feedback),
                 response: .init(options: GimbalStick.ResponseCurve.allCases.map(\.label),
-                    selection: Binding(get: { model.virtualJoystickResponseCurve.label },
-                        set: { model.virtualJoystickResponseCurve = GimbalStick.ResponseCurve.fromLabel($0) }),
-                    help: SettingsHelpCopy.virtualJoystickResponse, feedback: preferenceFeedback),
-                identifierPrefix: "gimbal.virtual")
-        }
-        MonitorControllerSettings(
-            stick: .init(options: GamepadGimbalStick.allCases.map(\.label),
-                selection: Binding(get: { gimbalGamepadStick.label }, set: { value in
-                    let next = GamepadGimbalStick.fromLabel(value)
-                    if next != OperatorPrefs.gimbalGamepadStick {
-                        OperatorPrefs.gimbalGamepadStick = next
-                        gimbalGamepadStick = next
-                        model.gimbalPadHeld = false
-                        model.session.gimbal.endStick()
-                    }
-                }), help: SettingsHelpCopy.gimbalJoystick, feedback: preferenceFeedback),
-            status: model.gamepadConnected ? "Connected" : "Not connected", statusHelp: SettingsHelpCopy.gamepad)
+                    selection: Binding(get: { model.virtualJoystickResponseCurve.label }, set: { model.virtualJoystickResponseCurve = GimbalStick.ResponseCurve.fromLabel($0) }),
+                    help: SettingsHelpCopy.virtualJoystickResponse, feedback: feedback), identifier: "gimbal.virtual") : nil,
+            controller: .init(options: GamepadGimbalStick.allCases.map(\.label),
+                selection: Binding(get: { OperatorPrefs.gimbalGamepadStick.label }, set: {
+                    let next = GamepadGimbalStick.fromLabel($0)
+                    guard next != OperatorPrefs.gimbalGamepadStick else { return }
+                    OperatorPrefs.gimbalGamepadStick = next
+                    model.gimbalPadHeld = false
+                    model.session.gimbal.endStick()
+                }), help: SettingsHelpCopy.gimbalJoystick, feedback: feedback),
+            controllerStatus: model.gamepadConnected ? "Connected" : "Not connected", controllerHelp: SettingsHelpCopy.gamepad)
     }
 
-    // MARK: - Display (honest: rail-owned)
-
-    @ViewBuilder private var displayRows: some View {
-        Group {
-            MonitorPanelSettings(
-                hdrDisplay: Bindable(model).hdrDisplay, help: SettingsHelpCopy.hdrDisplay,
-                feedback: { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) }
-            )
-            MonitorDisplaySections(sections: MonitorDisplayMode.allCases.map { mode in
-                MonitorDisplaySection(
-                    id: mode.rawValue, title: mode.settingsTitle, caption: mode.settingsCaption,
-                    reset: {
-                        OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
-                        if mode == .clean { model.dispClean = .cleanDefaults }
-                        else { model.dispLive = .liveDefaults }
-                    },
-                    editHint: SettingsHelpCopy.editView,
-                    edit: model.isLive ? { model.beginChromeEditing(mode) } : nil,
-                    unavailableEditHelp: "Connect to arrange this on the monitor.",
-                    visibility: displayVisibility(mode),
-                    pinsTitle: "View assists that stay on in clean view",
-                    pins: mode == .clean ? cleanPins : [], style: .controls)
-            })
-        }
-        .onAppear { model.chromeEditorReturnMode = nil }
-    }
-
-    private func displayVisibility(_ mode: MonitorDisplayMode) -> [MonitorDisplayToggle] {
-        let chrome = mode == .clean ? Bindable(model).dispClean : Bindable(model).dispLive
+    private var availableDisplay: Set<MonitorDisplayChrome.Section> {
         let capabilities = OsmoMonitorPresentation.capabilities(model.session)
-        let values: [(String, String, WritableKeyPath<MonitorDisplayChrome, Bool>, Bool)] = [
-            ("Status Bar", "REC, timecode, format, and FPS along the top of the feed.", \.statusBar, true),
-            ("Tool Bar", "The view-assist strip under the feed.", \.toolBar, true),
-            ("Camera Values", "ISO, shutter, white balance, and the rest of the capture strip.", \.cameraValues, true),
-            ("Lock Button", "Side-rail lock. Remounts while the interface is locked.", \.lockButton, true),
-            ("Batteries", "Phone and camera battery cluster.", \.batteries, true),
-            ("REC", "Standby / recording chip on the status bar.", \.recReadout, true),
-            ("Timecode", "Running timecode on the status bar.", \.timecode, true),
-            ("Format", "Recording resolution and frame rate.", \.format, true),
-            ("Color", "Color mode chip on the status bar.", \.color, true),
-            ("Storage", "Remaining media time on the status bar.", \.storage, true),
-            ("FPS", "Live-view rate and link bars.", \.fps, true),
-            ("Record", "Rail record lamp. Stays available while rolling.", \.railRecord, true),
-            ("Media", "Rail media button.", \.railMedia, true),
-            ("Settings", "Rail settings button. Always an escape hatch.", \.railSettings, true),
-            ("Zoom Chip", "Live zoom readout on the feed.", \.zoomChip, capabilities.zoom),
-            ("Gimbal Stick", "On-screen gimbal stick.", \.gimbalStick, capabilities.gimbal),
-            ("AF Box", "Focus and face-tracking brackets on the feed.", \.focusBox, true),
-        ]
-        return values.filter { $0.3 }.map { title, help, field, _ in
-            MonitorDisplayToggle(id: mode.rawValue + "." + title, title: title,
-                isOn: chrome.wrappedValue[keyPath: field], help: help) {
-                OperatorSettingsHaptics.selection(enabled: OperatorPrefs.hapticsEnabled)
-                chrome.wrappedValue[keyPath: field].toggle()
-            }
-        }
+        return Set(MonitorDisplayChrome.Section.allCases.filter {
+            if $0 == .zoomChip { return capabilities.zoom }
+            if $0 == .gimbalStick { return capabilities.gimbal }
+
+            return true
+        })
     }
-
-    private var cleanPins: [MonitorDisplayToggle] {
-        MonitorAssistSelection.cleanPinCases.map { tool in
-            MonitorDisplayToggle(id: "clean.pin." + tool.rawValue,
-                title: tool.displaySettingsTitle,
-                isOn: model.assist.cleanViewPinnedTools.contains(tool),
-                accessibilityLabel: "Keep \(tool.displaySettingsTitle) in clean view") {
-                OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled)
-                model.assist.toggleCleanViewPin(tool)
-            }
-        }
-    }
-
-    // MARK: - Storage
-
-    @ViewBuilder private var storageRows: some View {
-        MonitorAccountSettings(title: "Frame.io", help: SettingsHelpCopy.frameIO,
-            state: frameioAccountState,
-            signIn: { Task { try? await model.connectFrameio() } },
-            signOut: { model.disconnectFrameio() })
-        MonitorCacheSettings(
-            cacheOriginals: Binding(get: { model.cacheFullResolution }, set: { model.cacheFullResolution = $0 }),
-            sizeLabel: cacheSizeLabel, clearing: clearingCache,
-            cacheHelp: SettingsHelpCopy.cacheFullResolution,
-            scopeHelp: "Originals and playback proxies downloaded from the camera.",
-            clearHelp: SettingsHelpCopy.clearCache,
-            feedback: { OperatorSettingsHaptics.selection(enabled: model.hapticsEnabled) },
-            clear: { confirmClearCache = true })
-        .confirmationDialog(
-            "Clear cache?",
-            isPresented: $confirmClearCache,
-            titleVisibility: .visible
-        ) {
-            Button("Clear", role: .destructive) {
-                clearingCache = true
-                Task {
-                    do { try await model.session.clearMediaCache() } catch {
-                        cacheClearFailed = true
-                    }
-                    clearingCache = false
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Removes downloaded clip files from this phone. The clip list is kept.")
-        }
-        .disabled(clearingCache)
-        .task(id: cacheSizeRequest) {
-            let request = cacheSizeRequest
-            cacheBytes = nil
-            let bytes = await model.session.cameraMedia.cacheByteCount(cameraID: request.cameraID)
-            guard !Task.isCancelled, cacheSizeRequest == request else { return }
-            cacheBytes = bytes
-        }
-        .alert("Could not clear the cache. Try again.", isPresented: $cacheClearFailed) {
-            Button("OK", role: .cancel) {}
-        }
-    }
-
-    private var frameioAccountState: MonitorAccountState {
+    private var accountState: MonitorAccountState {
         if !model.isFrameioConfigured { return .notConfigured }
         if model.frameioConnecting { return .connecting }
         return model.isFrameioConnected ? .signedIn : .signedOut
     }
-
-    private var cacheSizeLabel: String {
-        guard let bytes = cacheBytes else { return "Checking…" }
-        if bytes == 0 { return "Empty" }
-        return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    private var cache: MonitorSettingsCacheSource {
+        let cameraID = model.session.mediaCameraID
+        let revision = model.session.mediaCacheRevision
+        let source = model.shell.monitor?.id
+        return .init(identity: .init(namespace: cameraID, source: source), revision: revision,
+            isCurrent: { model.shell.monitor?.id == source && model.session.mediaCameraID == cameraID && model.session.mediaCacheRevision == revision },
+            count: { await model.session.cameraMedia.cacheByteCount(cameraID: cameraID) },
+            clear: { try await model.session.clearMediaCache() })
     }
-
-    // MARK: - System
-
-    @ViewBuilder private var systemRows: some View {
-        MonitorSupportSettings(
-            automaticReports: Binding(get: { reliabilityOptIn }, set: {
-                reliabilityOptIn = $0; AppDiagnostics.reporting.setConsent($0)
-            }), available: AppDiagnostics.reporting.isAvailable,
-            automaticHelp: SettingsHelpCopy.reliabilityReports,
-            unavailableHelp: SettingsHelpCopy.reliabilityUnavailable,
-            report: { showProblemReport = true }, privacy: { legalKind = .privacy })
-        MonitorDiagnosticSettings(expanded: $showDiagnosticOptions,
-            deleteHelp: SettingsHelpCopy.deleteStoredIncidents,
-            save: {
-                if let url = DiagnosticCenter.shared.writeReport(session: model.session) {
-                    diagnosticsShare = DiagnosticSharePayload(url: url)
-                } else { supportError = true }
-            }, delete: { AppDiagnostics.incidents.deleteStoredIncidents {} })
-
-        MonitorProjectLegalSettings(
+    private var support: MonitorSettingsSupportSource {
+        .init(consent: Binding(get: { AppDiagnostics.reporting.isOptedIn }, set: AppDiagnostics.reporting.setConsent),
+            available: AppDiagnostics.reporting.isAvailable, automaticHelp: SettingsHelpCopy.reliabilityReports,
+            unavailableHelp: SettingsHelpCopy.reliabilityUnavailable, deleteHelp: SettingsHelpCopy.deleteStoredIncidents,
             sourceHelp: SettingsHelpCopy.sourceHelp, termsHelp: "How you can use OpenPocketCine.",
-            source: { if let url = OpenPocketCineLinks.source { openURL(url) } },
-            privacy: { legalKind = .privacy },
-            terms: { if let url = OpenPocketCineLinks.terms { openURL(url) } },
-            licenses: { legalKind = .licenses }, notice: { legalKind = .notice })
-        MonitorAppInformationSettings(
-            theme: "DJI Black", protocolName: "DUML / BLE + Wi-Fi", version: Self.appVersionText,
-            themeHelp: SettingsHelpCopy.themeHelp,
-            protocolHelp: "Camera control speaks DUML over Bluetooth and the camera's Wi-Fi. No DJI SDK is bundled or required.",
-            versionHelp: "Current OpenPocketCine build from the native project metadata.")
+            sourceURL: OpenPocketCineLinks.source, termsURL: OpenPocketCineLinks.terms,
+            saveReport: { DiagnosticCenter.shared.writeReport(session: model.session) },
+            deleteReports: { AppDiagnostics.incidents.deleteStoredIncidents {} },
+            report: { AnyView(ProblemReportView().environment(model)) },
+            document: { kind, close in
+                let legal: LegalDocumentView.Kind = switch kind { case .privacy: .privacy; case .licenses: .licenses; case .notice: .notice }
+                return AnyView(LegalDocumentView(kind: legal, onClose: close))
+            }, shareReport: { AnyView(DiagnosticActivityShareView(items: [$0])) })
     }
-
-    static var appVersionText: String {
-        let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "0.1"
-        let build = info?["CFBundleVersion"] as? String ?? "1"
-        return "\(version) (\(build))"
-    }
+    static var appVersionText: String { MonitorSettingsAppInformation.version() }
 }

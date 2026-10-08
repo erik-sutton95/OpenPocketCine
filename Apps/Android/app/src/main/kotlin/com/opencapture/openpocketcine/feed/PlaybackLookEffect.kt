@@ -33,7 +33,7 @@ private class PlaybackLookShaderProgram(
         /* useHighPrecisionColorComponents= */ false,
         /* texturePoolCapacity= */ 2,
     ) {
-    private val effects = FeedEffectsGlProgram(Media3GlBackend(context), plan, flipInputVertically = false)
+    private val effects = FeedEffectsGlProgram(com.opencapture.opencine.runtime.NativeGlBackend.create(context), plan, flipInputVertically = false)
     private var frameWidth = 1
     private var frameHeight = 1
 

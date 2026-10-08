@@ -172,7 +172,7 @@ final class LiveFeedOrientationTests: XCTestCase {
     /// them; isolation still needs a short wait so IRE paint actually runs.
     private static func warmFalseColorCubes() {
         // Unstamped effects (the compositor here) read the reference ceiling.
-        let clip = OpenCineCameraVocabulary.ScopeExposureCeiling.referenceClipByte(transfer: .rec709)
+        let clip = DJIScopeExposureCeiling.referenceClipByte(transfer: .rec709)
         PocketFalseColorMap.warm(scale: .ire, mode: .normal, rec709: false, clipByte: clip)
         let deadline = Date().addingTimeInterval(5)
         while Date() < deadline {

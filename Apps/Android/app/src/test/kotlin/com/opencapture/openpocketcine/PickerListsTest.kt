@@ -1,6 +1,8 @@
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.cameracontrols.CaptureLists
+import com.opencapture.opencine.dji.fromJson
+import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.FocusOption
@@ -37,7 +39,8 @@ class PickerListsTest {
         for (name in listOf("Osmo Pocket 4 Pro", "Osmo Pocket 4", "Osmo Nano", "Osmo Action 6", null)) {
             assertEquals(standard, CaptureLists.shootingModeLabels(name), "$name")
         }
-        assertEquals(list("Video|Photo|TimeLapse|HyperLapse|Low-Light|SlowMo"), CaptureLists.shootingModeLabels("Osmo Pocket 3"))
+        assertEquals(list("Video|Photo|TimeLapse|HyperLapse|Low-Light|SlowMo"), CaptureLists.shootingModeLabels("Osmo Pocket 3",
+            profile = CameraModel.fromJson("""{"name":"Osmo Pocket 3"}""").captureProfile!!.labels))
         assertEquals(
             list("Video|Photo|Live Photo|TimeLapse|HyperLapse|SuperNight|SlowMo"),
             CaptureLists.shootingModeLabels("Osmo Pocket 4 Pro", CameraCommands.SHOOT_LIVE_PHOTO),
@@ -54,7 +57,8 @@ class PickerListsTest {
             Triple("", "pocket", "Normal|HDR|D-Log"),
         )
         for ((name, family, labels) in wheels) {
-            assertEquals(list(labels), CaptureLists.colorWheelLabels(CameraStatus(), family, name), name)
+            assertEquals(list(labels), CaptureLists.colorWheelLabels(CameraStatus(), family, name,
+                CameraModel.fromJson("""{"name":"$name","family":"$family"}""").captureProfile!!.labels), name)
         }
     }
 

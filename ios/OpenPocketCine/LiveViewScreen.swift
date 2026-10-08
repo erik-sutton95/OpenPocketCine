@@ -8,176 +8,40 @@ import OpenPocketViewCore
 import SwiftUI
 import OpenCineMedia
 
-/// Live HEVC feed with OpenZCine landscape chrome. Video and chrome are **siblings**:
-/// the feed is an explicit 16:9 well; chrome is a physical-screen overlay (`ignoresSafeArea`).
-/// `VideoView` is never wrapped in a `GeometryReader` and does not host rails or decks.
+/// Integration and native picture adapters for the shared complete operator surface.
 struct LiveViewScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.monitorWindowGeometry) private var windowGeometry
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var interfaceLocked = false
+    @State private var interaction = MonitorOperatorInteraction()
     @State private var gamepad = GimbalGamepadBridge()
     @State private var headphones = HeadphoneMotionBridge.appBridge()
     @State private var orientationObserver = InterfaceOrientationObserver()
-    @State private var topMenu: LiveTopMenu?
-    @State private var topPickerFrames: [LiveTopMenu: CGRect] = [:]
-    @State private var captureTileFrames: [CaptureSheet: CGRect] = [:]
-    @State private var assistIconFrames: [MonitorAssistSelection: CGRect] = [:]
-    @State private var zoomDialVisible = false
-    @State private var zoomDialMounted = false
-    @State private var zoomDismissTask: Task<Void, Never>?
-    @State private var assistsExpanded = false
-    @State private var assistsRevealing = false
-    @State private var zoomGestureAnchor = 1.0
-
-    /// OpenZCine `DisplayChromeVisibility.cleanDefaults`: status + strips + lock off;
-    /// batteries, rail (DISP / record / media / settings) stay. Lock remounts while locked.
-    private var editingMode: MonitorDisplayMode? { model.chromeEditorMode }
-    private var chromeInteractive: Bool { !model.isEditingChrome }
-    private var liveChromeVisible: Bool { model.liveOperatorPanel == nil || model.isEditingChrome }
-    private var showsStatusBar: Bool { model.chromeSectionMounts(.statusBar) }
+    private var interfaceLocked: Bool { interaction.locked }
     private var showsBottomBars: Bool {
         model.chromeSectionMounts(.toolBar) || model.chromeSectionMounts(.cameraValues)
     }
-    private var showsLock: Bool { model.chromeSectionMounts(.lockButton) || interfaceLocked }
-    private var showsBatteries: Bool { model.chromeSectionMounts(.batteries) }
-    private var captureControlsPresented: Bool {
-        model.captureSheet != nil || model.captureDrum != nil
-    }
-    /// Bottom camera-value drawers cover the strip; a top recording-category
-    /// drawer leaves the strip in place, matching the Field Monitor mockup.
-    private var hidesCaptureValues: Bool {
-        CaptureReadoutAdmission.hidesLowerCaptureValues(
-            sheet: model.captureSheet, drum: model.captureDrum?.sheet)
-    }
-    private var showsGimbalButton: Bool {
-        OsmoMonitorPresentation.capabilities(model.session).gimbal
-            && model.chromeSectionMounts(.gimbalStick)
-    }
-    /// The transient value drum is a draw-only preview of an existing touch.
-    private var hasInteractivePopup: Bool {
-        guard chromeInteractive, !interfaceLocked else { return false }
-        return (showsStatusBar && topMenu != nil)
-            || (model.liveOperatorPanel == nil && !model.assist.gradesClip
-                && model.assist.configureTool != nil)
-            || (showsGimbalButton && model.liveGimbalPanel == .sheet)
-            || model.captureSheet != nil
-            || zoomDialMounted
-    }
-
-    /// The Motion editor and its run pill take touches without a popup (main gated only popups).
-    private var gimbalPanelOpen: Bool {
-        model.liveGimbalPanel == .editor || model.liveGimbalPanel == .runPill
-    }
-
-    private func gimbalCluster(_ layout: LiveMonitorLayout) -> GimbalCluster {
-        layout.gimbalCluster(showGimbalButton: showsGimbalButton)
-    }
-
-    /// Portrait parks the cluster on the picture; landscape uses the cinema well.
-
-    private static func cgRect(_ region: MonitorLayoutRegion) -> CGRect {
-        CGRect(x: region.x, y: region.y, width: region.width, height: region.height)
-    }
 
     var body: some View {
-        liveInteractionObservers
-        .onChange(of: model.assist.clean) { _, clean in
-            if clean {
-                assistsExpanded = false
-                model.captureDrum = nil
-                closeZoomDial()
-                topMenu = nil
-                model.captureSheet = nil
-                model.assist.configureTool = nil
-            }
-        }
-        .onChange(of: model.chromeEditorMode) { _, mode in
-            if mode != nil {
-                assistsExpanded = false
-                model.captureDrum = nil
-                topMenu = nil
-                model.captureSheet = nil
-                model.assist.configureTool = nil
-            }
-        }
-        .onChange(of: model.chromeSectionMounts(.toolBar)) { _, mounted in
-            if !mounted { assistsExpanded = false }
-        }
-        .onChange(of: orientationObserver.orientation) { _, _ in model.captureDrum = nil }
-        .onChange(of: topMenu) { _, value in if value != nil { selectOverlay(.top) } }
-        .onChange(of: model.captureSheet) { _, value in if value != nil { selectOverlay(.capture) }
-        }
-        .onChange(of: model.captureDrum?.id) { _, value in if value != nil { selectOverlay(.drum) }
-        }
-        .onChange(of: model.assist.configureTool) { _, value in
-            if value != nil { selectOverlay(.assist) }
-        }
-        .onChange(of: model.liveGimbalPanel) { _, value in
-            if value != .none { selectOverlay(.gimbal) }
-        }
-        .sheet(isPresented: Bindable(model.assist).showLUTPicker) {
-            LUTPicker(assist: model.assist)
-        }
-    }
-
-    private var liveInteractionObservers: some View {
-        liveCanvasWithLifecycle
-        .onChange(of: interfaceLocked) { _, locked in
-            model.session.isLocked = locked
-            if locked {
-                assistsExpanded = false
-                model.captureDrum = nil
-                closeZoomDial()
-                topMenu = nil
-                model.captureSheet = nil
-                model.assist.configureTool = nil
-                gamepad.noteBlocked()
-                headphones.noteBlocked()
-                model.liveGimbalPanel = .none
-                model.session.gimbal.cancelProgrammedMove()
-            }
-        }
+        nativeSurface
+        .monitorOperatorInteraction(host: model, interaction: interaction,
+            covered: model.shell.cover != nil, motion: Bindable(model).liveGimbalPanel,
+            orientation: orientationObserver.orientation, onInputAdmission: updateInputAdmission)
         // Camera-body gallery follows DJI Mimo: open Media with it, and close
         // Media (which returns the camera to live) when the body leaves it.
-        .onChange(of: model.liveOperatorPanel) { old, next in
-            if old == .media, next != .media { model.session.endMediaBrowse() }
-        }
         .onChange(of: model.session.cameraGalleryOpen) { _, open in
-            if open, model.liveOperatorPanel == nil {
-                model.liveOperatorPanel = .media
-            } else if !open, model.liveOperatorPanel == .media {
-                model.liveOperatorPanel = nil
+            if open, model.shell.cover == nil {
+                model.shell.open(.media)
+            } else if !open, model.shell.cover == .media {
+                model.shell.dismissCover()
             }
         }
-        .onChange(of: liveChromeVisible, initial: true) { _, visible in
-            model.assist.liveCovered = !visible
-        }
-        .onChange(of: model.liveOperatorPanel) { oldPanel, panel in
+        .onChange(of: model.shell.cover) { oldPanel, panel in
             model.session.incidentSettingsCovered = panel == .settings
             if oldPanel == .settings { model.session.recordFeedBreadcrumb(.settingsExit) }
             if panel == .settings { model.session.recordFeedBreadcrumb(.settingsEnter) }
-            if panel != nil {
-                model.captureDrum = nil
-                model.assist.configureTool = nil
-                closeZoomDial()
-                gamepad.noteBlocked()
-                headphones.noteBlocked()
-                model.liveGimbalPanel = .none
-            } else {
-                headphones.sync()
-            }
         }
         .onChange(of: model.headTrackingEnabled) { _, _ in
             headphones.sync()
-        }
-        .onChange(of: model.isEditingChrome) { _, editing in
-            if editing {
-                headphones.noteBlocked()
-                model.liveGimbalPanel = .none
-            } else {
-                headphones.sync()
-            }
         }
         .onChange(of: model.session.gimbalLimitPulse) { _, _ in
             gamepad.pulseLimit(
@@ -186,45 +50,36 @@ struct LiveViewScreen: View {
                 tiltSign: model.session.gimbalLimitTiltSign,
                 enabled: model.hapticsEnabled)
         }
+        .sheet(isPresented: Bindable(model.assist).showLUTPicker) { LUTPicker(assist: model.assist) }
     }
 
-    private var liveCanvasWithLifecycle: some View {
+    private func updateInputAdmission(_ admission: MonitorInputAdmission) {
+        model.session.isLocked = interaction.locked
+        switch admission {
+        case .blocked(let reason):
+            gamepad.noteBlocked(); headphones.noteBlocked()
+            if reason == .lock { model.session.gimbal.cancelProgrammedMove() }
+        case .resumed: headphones.sync()
+        }
+    }
+
+    private var nativeSurface: some View {
         GeometryReader { proxy in
-            let safeArea = LiveMonitorLayout.resolvedSafeArea(
-                proxy.safeAreaInsets, scene: windowGeometry.safeArea)
-            let size = LiveMonitorLayout.canvasSize(
-                layoutSize: proxy.size, safeArea: safeArea,
-                screenSize: windowGeometry.validSize)
-            let layout = LiveMonitorLayout.fieldMonitor(
-                size: size, safeArea: safeArea,
+            let safeArea = LiveMonitorLayout.resolvedSafeArea(proxy.safeAreaInsets, scene: windowGeometry.safeArea)
+            let size = LiveMonitorLayout.canvasSize(layoutSize: proxy.size, safeArea: safeArea, screenSize: windowGeometry.validSize)
+            let layout = LiveMonitorLayout.fieldMonitor(size: size, safeArea: safeArea,
                 sourceAspect: model.session.pictureAspect,
                 fill: model.portraitFeedAspect == .fill && !model.assist.isVisible(.desqueeze),
-                showsValues: model.chromeSectionMounts(.cameraValues),
-                showsBottomBars: showsBottomBars,
-                topControlInset: windowGeometry.topControlInset,
-                joystick: model.virtualJoystickSize)
-            Color.clear
-                .ignoresSafeArea()
-                .overlay(alignment: .topLeading) {
-                    canvas(layout)
-                        .frame(
-                            width: layout.viewport.width,
-                            height: layout.viewport.height,
-                            alignment: .topLeading
-                        )
-                }
-        }
-        .ignoresSafeArea()
-        .preferredColorScheme(.dark)
-        // Field-monitor HUD is pinned dark. `preferredColorScheme` restyles the scene
-        // (and its sheets); this pins the in-canvas environment synchronously so
-        // semantic styles (`.secondary`, checkmarks, vibrancy) can never resolve light
-        // no matter what the system appearance or the feed behind the chrome does.
-        .environment(\.colorScheme, .dark)
-        .animation(.easeInOut(duration: 0.22), value: orientationObserver.orientation)
-        .animation(.easeInOut(duration: 0.18), value: model.assist.clean)
-        .animation(.easeOut(duration: 0.16), value: model.chromeEditorMode)
-        .animation(.easeOut(duration: 0.22), value: model.session.isFeedWarming)
+                showsValues: model.chromeSectionMounts(.cameraValues), showsBottomBars: showsBottomBars,
+                topControlInset: windowGeometry.topControlInset, joystick: model.virtualJoystickSize)
+            Color.clear.ignoresSafeArea().overlay(alignment: .topLeading) {
+                canvas(layout).frame(width: layout.viewport.width, height: layout.viewport.height, alignment: .topLeading)
+            }
+        }.ignoresSafeArea().preferredColorScheme(.dark).environment(\.colorScheme, .dark)
+            .animation(.easeInOut(duration: 0.22), value: orientationObserver.orientation)
+            .animation(.easeInOut(duration: 0.18), value: model.assist.clean)
+            .animation(.easeOut(duration: 0.16), value: model.chromeEditorMode)
+            .animation(.easeOut(duration: 0.22), value: model.session.isFeedWarming)
         .onAppear {
             let app = model
             orientationObserver.start()
@@ -251,122 +106,40 @@ struct LiveViewScreen: View {
             headphones.attach(host: model)
         }
         .onDisappear {
-            model.captureDrum = nil
-            model.assist.liveCovered = false
             orientationObserver.stop()
-            closeZoomDial()
-            zoomDismissTask?.cancel()
-            zoomDismissTask = nil
-            zoomDialMounted = false
             headphones.detach()
             gamepad.detach()
             model.session.decoder.stopSimulatorSample()
         }
     }
 
-    @ViewBuilder
     private func canvas(_ layout: LiveMonitorLayout) -> some View {
-        let geometry =
-            layout.presentation
-            ?? FieldMonitorLayout(width: layout.viewport.width, height: layout.viewport.height)
-        MonitorScreen(control: model.control, layout: geometry,
-            sourceAspect: model.session.pictureAspect,
-            presentation: MonitorScreenPresentation(
-                visible: liveChromeVisible,
-                interactive: chromeInteractive && model.liveChromeInteractive,
-                dimmed: zoomDialVisible, transientControlsHidden: zoomDialMounted,
-                pictureWaiting: model.session.isFeedWarming,
-                statusMounted: showsStatusBar, powerMounted: showsBatteries,
-                captureMounted: model.chromeSectionMounts(.cameraValues),
-                captureHidden: hidesCaptureValues,
-                captureInteractive: model.captureSheet == nil || model.captureSheet?.isTopAnchored == true,
-                locked: interfaceLocked, popupInteractive: hasInteractivePopup || gimbalPanelOpen,
-                capturePresented: captureControlsPresented && chromeInteractive,
-                panelsRaised: zoomDialMounted, recovering: model.session.sessionRecovery.isRecovering)
-        ) {
-            LiveFeedPane().opacity(model.session.isFeedWarming ? 0 : 1)
-                .transaction { $0.animation = nil }
-        } assists: {
-            LiveFeedAssistsPane().opacity(model.session.isFeedWarming ? 0 : 1)
-        } signal: {
-            LiveFeedWarmupCover()
-        } status: {
-            FieldMonitorStatusChrome(menu: $topMenu, layout: layout)
-                .chromeEditable(.statusBar, editing: editingMode)
-        } power: {
-            FieldMonitorGauges(horizontal: geometry.portrait && !geometry.tablet,
-                showsLink: !geometry.portrait || geometry.tablet)
-                .chromeEditable(.batteries, editing: editingMode)
-        } capture: {
-            LiveCameraControlBar(columns: layout.capture.height > 60 ? 3 : 6)
-                .chromeEditable(.cameraValues, editing: editingMode)
-        } system: {
-            LiveSystemChrome(locked: $interfaceLocked, layout: geometry,
-                capturePresented: captureControlsPresented && chromeInteractive,
-                visible: liveChromeVisible && !zoomDialMounted,
-                interactive: chromeInteractive && model.liveChromeInteractive)
-        } tools: {
-            nativeTools(layout)
-        } panels: {
-            popups(layout).allowsHitTesting(hasInteractivePopup)
-            if showsGimbalButton, chromeInteractive, !interfaceLocked,
-                model.liveOperatorPanel == nil
-            {
-                LiveGimbalOverlay(
-                    layout: layout, feed: layout.onFeed,
-                    joystickBounds: model.chromeSectionMounts(.gimbalStick)
-                        && !captureControlsPresented
-                        ? Self.cgRect(self.gimbalCluster(layout).stick) : .zero,
-                    zoomBounds: OsmoMonitorPresentation.capabilities(model.session).zoom
-                        && model.chromeSectionMounts(.zoomChip) && !captureControlsPresented
-                        ? Self.cgRect(self.gimbalCluster(layout).zoom) : .zero,
-                    coveredByZoom: zoomDialMounted
-                )
-                .environment(\.interfaceLocked, interfaceLocked)
-                .opacity(zoomDialVisible ? 0.16 : 1)
-                .animation(MonitorMotion.dim(reduceMotion), value: zoomDialVisible)
-                .allowsHitTesting(model.liveChromeInteractive && !zoomDialMounted)
-                .zIndex(15)
+        let capability = OsmoMonitorPresentation.capabilities(model.session)
+        return MonitorOperatorLiveSurface(host: model, layout: layout, interaction: interaction,
+            source: MonitorOperatorLivePresentation(pictureAspect: model.session.pictureAspect,
+                pictureWaiting: model.session.isFeedWarming, verticalPicture: model.session.isVerticalPicture,
+                recovering: model.session.feedRecovering, zoom: capability.zoom, gimbal: capability.gimbal,
+                headTracking: capability.headTracking, watching: model.isWatchingFeed),
+            capture: MonitorOperatorLiveCaptureSource(confirmRecording: model.recordConfirmationEnabled,
+                busy: { model.session.controlBusy }, takePhoto: { model.session.control.shutter() }),
+            zoom: zoomSource, focus: focusSource, assists: assistSource,
+            portraitAspect: Bindable(model).portraitFeedAspect, orientation: orientationObserver.orientation,
+            controlNote: Bindable(model.session).controlNote,
+            headTracking: MonitorOperatorHeadTrackingSource(enabled: model.headTrackingEnabled,
+                title: model.headTrackControlTitle, readPose: { model.headTrackAxisPose },
+                readIMU: { model.headTrackImuReadout }, calibrate: { headphones.tapControl() }),
+            readLevel: { now, viewFlip in
+                LevelAssist.display(model.session.gimbal.levelReading.mode(now: now, viewFlip: viewFlip))
             }
-
-        } cover: {
-            if let panel = model.liveOperatorPanel, !model.isEditingChrome {
-                operatorPanelCover(panel, layout: layout)
-            }
-        } recovery: {
-            if model.session.sessionRecovery.isRecovering { MonitorRecoveryOverlay() }
-        }
-        .environment(\.interfaceLocked, interfaceLocked)
-        .coordinateSpace(name: LiveCanvasSpace.name)
-        .onPreferenceChange(LiveTopPickerFramesKey.self) { topPickerFrames = $0 }
-        .onPreferenceChange(LiveCaptureTileFramesKey.self) { captureTileFrames = $0 }
-        .onPreferenceChange(AssistIconFrameKey.self) { frames in
-            assistIconFrames = frames
-            if let tool = model.assist.configureTool, let frame = frames[tool], frame.width > 1 {
-                model.assist.longPressAnchor = frame
-            }
-        }
-        .overlayPreferenceValue(ChromeEditBoundsKey.self) { boxes in
-            if let mode = editingMode {
-                ChromeEditBadgeLayer(mode: mode, boxes: boxes, viewport: layout.viewport)
-                    .frame(
-                        width: layout.viewport.width,
-                        height: layout.viewport.height,
-                        alignment: .topLeading
-                    )
-                    .environment(\.colorScheme, .dark)
-            }
-        }
+        ) { LiveFeedPane()
+        } preview: { AssistInspectorPreview(tool: $0)
+        } lookMenu: { LUTAssist.longPressMenu(assist: model.assist) }
         .overlay {
-            if let mode = editingMode {
-                ChromeEditBanner(mode: mode)
-                    .position(x: layout.feed.midX, y: chromeEditBannerY(layout))
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(40)
+            if model.session.sessionRecovery.isRecovering {
+                MonitorRecoveryOverlay().frame(width: layout.viewport.width, height: layout.viewport.height)
+                    .animation(.easeOut(duration: 0.2), value: model.session.sessionRecovery.isRecovering)
             }
         }
-        .environment(\.colorScheme, .dark)
-        .ignoresSafeArea()
         .monitorVideoBackdrop(
             renderer: model.liveBackdrop,
             configuration: [
@@ -381,12 +154,13 @@ struct LiveViewScreen: View {
                         model.portraitFeedAspect == .fill ? 1 : 0,
                     ])
             ],
-            enabled: model.liveOperatorPanel == nil && !model.assist.gradesClip
+            enabled: model.shell.cover == nil && !model.assist.gradesClip
                 && !model.isWatchingFeed
                 && !model.session.isFeedWarming
         ) { _ in
-            let decoder = model.session.decoder
-            guard let buffer = decoder.backdropSource else { return [] }
+            let decoder = model.session.decoder, samples = model.frameSamples
+            let epoch = samples.inspectorSourceEpoch
+            guard let token = decoder.sourceToken, let buffer = decoder.backdropSource else { return [] }
             let effects = decoder.backdropEffects
             return [
                 MonitorVideoBackdropSource(
@@ -396,450 +170,42 @@ struct LiveViewScreen: View {
                         fill: layout.presentation?.portrait == true
                             && layout.presentation?.fillsPicture == true
                             && decoder.pictureAspect >= 1),
-                    clip: layout.onFeed)
+                    clip: layout.onFeed, identity: .live(token: token, epoch: epoch), admission: { [weak decoder, weak samples] in
+                        guard let decoder, let samples else { return false }
+                        return decoder.sourceToken == token && samples.inspectorSourceEpoch == epoch
+                    })
             ]
         }
     }
 
-    private func chromeEditBannerY(_ layout: LiveMonitorLayout) -> CGFloat {
-        let floor =
-            showsBottomBars
-            ? min(layout.assist.minY, layout.capture.minY)
-            : layout.feed.maxY
-        return floor - 28
+    private var zoomSource: MonitorOperatorZoomPresentation {
+        MonitorOperatorZoomPresentation(maximum: model.session.zoomMax,
+            opticalStops: model.session.zoomStops.contains(3) ? [1, 3] : [1],
+            caption: OsmoMonitorPresentation.zoomCaption(model.session),
+            readValue: { model.session.zoomDialReadout },
+            readOrigin: { model.session.status.zoomFactor ?? model.session.zoomOptimistic ?? model.session.zoomStop },
+            label: { CamFov.displayLabel(factor: $0) })
     }
 
-    /// Physical-screen overlay. OpenZCine `canvasLayer` + `ignoresSafeArea` — not the safe-area box.
-    @ViewBuilder
-    private func nativeTools(_ layout: LiveMonitorLayout) -> some View {
-        ZStack(alignment: .topLeading) {
-            Color.clear
-                .allowsHitTesting(false)
-
-            // Pinch + DISP swipe (OpenZCine feed well). Under chip + scopes;
-            // chrome `Color.clear` must not cover this well.
-            LiveFocusScope { resetAvailable, subject in
-                LiveZoomPinchWell(
-                    feed: model.assist.isVisible(.desqueeze)
-                        ? DesqueezeAssist.presentationRect(
-                            sourceSize: CGSize(
-                                width: model.session.pictureAspect, height: 1),
-                            in: layout.onFeed, effects: model.assist.effects)
-                        : layout.onFeed,
-                    chip: Self.cgRect(self.gimbalCluster(layout).zoom),
-                    stick: Self.cgRect(self.gimbalCluster(layout).stick),
-                    gimbalButton: Self.cgRect(self.gimbalCluster(layout).controls),
-                    reset: resetAvailable ? layout.focusReset : .zero,
-                    aeUnlock: model.session.autoExposureLock != nil ? layout.aeUnlock : .zero,
-                    cancel: trackingCancelRect(subject, in: layout),
-                    calibrate: model.headTrackingEnabled
-                        && OsmoMonitorPresentation.capabilities(model.session).headTracking
-                        ? layout.gimbalCalibrate : .zero,
-                    enabled: !interfaceLocked && model.liveOperatorPanel == nil
-                        && chromeInteractive
-                )
-            }
-
-            LiveScopeOverlays(
-                layout: layout,
-                interfaceLocked: interfaceLocked,
-                chromeClearance: scopeClearance(layout: layout)
-            )
-
-            if model.assist.isVisible(.evMeter) {
-                LiveStatusScope { status in
-                    CameraEVMeterOverlay(
-                        feed: model.assist.isVisible(.desqueeze)
-                            ? DesqueezeAssist.presentationRect(
-                                sourceSize: CGSize(
-                                    width: model.session.pictureAspect, height: 1),
-                                in: layout.onFeed, effects: model.assist.effects
-                            )
-                            .intersection(layout.onFeed)
-                            : layout.onFeed,
-                        avoiding: model.chromeSectionMounts(.toolBar)
-                            ? FieldMonitorAssistPalette.visibleFrame(
-                                in: layout,
-                                toolCount: MonitorAssistSelection.toolbarCases.count
-                                    + (status.isPhoto ? 0 : 1),
-                                expanded: assistsExpanded || assistsRevealing) : nil
-                    )
-                    .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
-                }
-            }
-
-            if model.assist.isVisible(.level) {
-                FeedLevelView(
-                    feed: meterFeed(layout),
-                    viewport: CGRect(origin: .zero, size: layout.viewport),
-                    portrait: layout.viewport.height > layout.viewport.width)
-                    .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
-            }
-
-            // The collapse backdrop is above the picture/scopes and below
-            // fixed controls. A Record or Settings tap keeps its own action.
-            if assistsExpanded, model.chromeSectionMounts(.toolBar), !interfaceLocked,
-                chromeInteractive
-            {
-                Color.clear
-                    .frame(width: layout.viewport.width, height: layout.viewport.height)
-                    .contentShape(Rectangle())
-                    .onTapGesture { assistsExpanded = false }
-                    .accessibilityHidden(true)
-            }
-
-            if let p = layout.presentation, p.portrait {
-                if !model.session.isVerticalPicture, editingMode == nil,
-                    !model.assist.isVisible(.desqueeze)
-                {
-                    LivePortraitAspectToggle(aspect: Bindable(model).portraitFeedAspect)
-                        .accessibilityHidden(!liveChromeVisible || zoomDialMounted)
-                        .liveModuleFrame(p.aspectToggle.cgRect)
-                        .allowsHitTesting(!interfaceLocked)
-                }
-            }
-
-            // After the scope well — that well covers this chip and used to eat the tap.
-            if OsmoMonitorPresentation.capabilities(model.session).zoom
-                && model.chromeSectionMounts(.zoomChip)
-            {
-                LiveZoomChip(onOpenDial: openZoomDial)
-                    .chromeEditable(.zoomChip, editing: editingMode)
-                    .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).zoom))
-                    .opacity(captureControlsPresented ? 0 : 1)
-                    .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
-                    .accessibilityHidden(
-                        captureControlsPresented || !liveChromeVisible || zoomDialMounted
-                    )
-                    .zIndex(2)
-            }
-
-            if showsGimbalButton {
-                LiveGimbalButton()
-                    .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).controls))
-                    .opacity(captureControlsPresented ? 0 : 1)
-                    .allowsHitTesting(!interfaceLocked && !captureControlsPresented)
-                    .accessibilityHidden(
-                        captureControlsPresented || !liveChromeVisible || zoomDialMounted
-                    )
-                    .zIndex(2)
-            }
-
-            if OsmoMonitorPresentation.capabilities(model.session).gimbal
-                && model.chromeSectionMounts(.gimbalStick)
-            {
-                LiveGimbalStick(
-                    enabled: !interfaceLocked && model.liveOperatorPanel == nil
-                        && chromeInteractive && !captureControlsPresented,
-                    frame: Self.cgRect(self.gimbalCluster(layout).stick),
-                    feed: layout.feed
-                )
-                .id("live-gimbal-stick")
-                // Never animate across rotation (see PERFORMANCE.md), but let DISP
-                // fade it with the zoom chip and gimbal controls.
-                .transaction(value: orientationObserver.orientation) { $0.animation = nil }
-                .chromeEditable(.gimbalStick, editing: editingMode)
-                .liveModuleFrame(Self.cgRect(self.gimbalCluster(layout).stick))
-                .opacity(captureControlsPresented ? 0 : 1)
-                .accessibilityHidden(
-                    captureControlsPresented || !liveChromeVisible || zoomDialMounted
-                )
-                .zIndex(3)
-            }
-
-            if model.headTrackingEnabled,
-                OsmoMonitorPresentation.capabilities(model.session).headTracking,
-                !interfaceLocked, chromeInteractive,
-                model.liveOperatorPanel == nil
-            {
-                LiveHeadTrackCalibrateButton(
-                    title: model.headTrackControlTitle, onTap: { headphones.tapControl() }
-                )
-                .liveModuleFrame(layout.gimbalCalibrate)
-                .opacity(captureControlsPresented ? 0 : 1)
-                .allowsHitTesting(!captureControlsPresented && !zoomDialMounted)
-                .accessibilityHidden(
-                    captureControlsPresented || !liveChromeVisible || zoomDialMounted
-                )
-                .zIndex(3)
-            }
-
-            LiveFocusScope { resetAvailable, _ in
-                if !interfaceLocked, resetAvailable, chromeInteractive {
-                    LiveFocusResetButton()
-                        .liveModuleFrame(layout.focusReset)
-                        .transition(.scale(scale: 0.6).combined(with: .opacity))
-                }
-            }
-            .zIndex(3)
-
-            if !interfaceLocked, chromeInteractive, model.session.autoExposureLock != nil {
-                LiveAutoExposureUnlockButton()
-                    .liveModuleFrame(layout.aeUnlock)
-                    .transition(.scale(scale: 0.6).combined(with: .opacity))
-                    .zIndex(3)
-            }
-
-            LiveFocusScope { _, subject in
-                if !interfaceLocked, chromeInteractive, subject != nil {
-                    LiveTrackingCancelButton()
-                        .liveModuleFrame(trackingCancelRect(subject, in: layout))
-                }
-            }
-            .zIndex(4)
-
-            LiveSessionBanners(
-                feed: layout.onFeed,
-                topBar: showsStatusBar ? layout.topDeck : nil
-            )
-        }
-        .frame(width: layout.viewport.width, height: layout.viewport.height)
-        // Pin the overlay tree itself. `preferredColorScheme` on the screen is
-        // not enough — iOS 26 glass / vibrancy can still resolve light from the
-        // feed. Chrome materials must stay dark glass + light text.
-        .environment(\.colorScheme, .dark)
-        .preferredColorScheme(.dark)
-        .ignoresSafeArea()
-
-        // Outside the tools ZStack: MonitorScreen draws the camera values above the tools slot,
-        // and the expanded palette must cover them as on main (its zIndex beats the values' 0).
-        if model.chromeSectionMounts(.toolBar) {
-            FieldMonitorAssistPalette(
-                layout: layout, isLocked: interfaceLocked,
-                otherOverlayPresented: topMenu != nil || zoomDialVisible,
-                expanded: $assistsExpanded,
-                onExpansionActivityChange: { assistsRevealing = $0 }
-            )
-            .opacity(interfaceLocked ? 0.4 : 1)
-            .allowsHitTesting(!interfaceLocked)
-            .environment(\.colorScheme, .dark)
-            .ignoresSafeArea()
-            .zIndex(6)
-        }
+    private var focusSource: MonitorOperatorFocusSource {
+        MonitorOperatorFocusSource(read: {
+            let session = model.session
+            return MonitorOperatorFocusObservation(point: session.focusPoint, overlay: session.focusOverlay,
+                faces: session.dimmedFaces, resetAvailable: session.isFocusResetAvailable,
+                supportsTapFocus: session.supportsTapFocus, tracking: session.isTracking,
+                search: session.searchBox, subject: session.subjectBox)
+        }, cancelTracking: { model.session.cancelSubjectTracking() })
     }
 
-    /// Full-screen overlays — not in-flow, not `.sheet` for live capture.
-    @ViewBuilder
-    private func popups(_ layout: LiveMonitorLayout) -> some View {
-        let floorY =
-            showsBottomBars
-            ? min(layout.assist.minY, layout.capture.minY) - LiveChromeMetrics.popupGap
-            : nil
-        let ceilingY =
-            showsStatusBar
-            ? layout.topDeck.maxY + LiveChromeMetrics.topPickerGap
-            : max(layout.safeArea.top + 4, LiveChromeMetrics.chromeTop)
-
-        if chromeInteractive, showsStatusBar, topMenu != nil {
-            LiveTopPickerHost(
-                menu: $topMenu,
-                frames: topPickerFrames,
-                viewport: layout.viewport,
-                topDeck: layout.topDeck,
-                safeArea: layout.safeArea,
-                floorY: floorY
-            )
-        }
-
-        if chromeInteractive, model.liveOperatorPanel == nil, !model.assist.gradesClip,
-            let tool = model.assist.configureTool, !interfaceLocked
-        {
-            AssistLongPressOverlay(
-                tool: tool,
-                assist: model.assist,
-                anchor: liveAssistAnchor(for: tool),
-                toolbar: layout.assist,
-                viewport: layout.viewport,
-                safeArea: layout.safeArea,
-                ceilingY: ceilingY,
-                onDismiss: { model.assist.configureTool = nil }
-            )
-        }
-
-        if chromeInteractive, showsGimbalButton, model.liveGimbalPanel == .sheet, !interfaceLocked {
-            LiveGimbalSheetHost(
-                layout: layout,
-                cluster: gimbalCluster(layout)
-            )
-        }
-
-        if chromeInteractive, !interfaceLocked {
-            LiveStatusScope { status in
-                LiveCapturePickerHost(
-                    sheet: Bindable(model).captureSheet,
-                    frames: captureTileFrames,
-                    passthroughFrames: captureNavigationFrames(
-                        layout, recording: status.isRecording),
-                    bar: layout.capture,
-                    viewport: layout.viewport,
-                    safeArea: layout.safeArea,
-                    ceilingY: max(
-                        layout.safeArea.top + LivePopupPlacement.assistTopInset,
-                        LivePopupPlacement.edgeMargin
-                    ),
-                    bottomY: layout.presentation?.portrait == true
-                        ? layout.rail.minY - 12 : layout.viewport.height,
-                    topDeckMaxY: layout.topDeck.maxY
-                )
-            }
-        }
-
-        if chromeInteractive, model.captureDrum != nil, !interfaceLocked {
-            LiveCaptureDrumHost(
-                viewport: layout.viewport, safeArea: layout.safeArea,
-                ceilingY: max(
-                    layout.safeArea.top + LivePopupPlacement.assistTopInset,
-                    LivePopupPlacement.edgeMargin
-                ),
-                bottomY: layout.presentation?.portrait == true
-                    ? layout.rail.minY - 12 : layout.viewport.height,
-                topDeckMaxY: layout.topDeck.maxY)
-        }
-
-        if zoomDialMounted, chromeInteractive, !interfaceLocked {
-            MonitorZoomDial(
-                viewport: layout.viewport, safeArea: layout.safeArea,
-                attachment: (layout.presentation?.portrait
-                    ?? (layout.viewport.height > layout.viewport.width)) ? .bottom : .trailing,
-                bottomClearance: 0,
-                isPresented: zoomDialVisible,
-                scale: MonitorZoomScale(minimum: 1, maximum: model.session.zoomMax),
-                marks: Array(Set([1, 1.5, 2, 4, 6, 9] + model.session.zoomStops)).sorted(),
-                opticalStops: model.session.zoomStops.contains(3) ? [1, 3] : [1],
-                caption: OsmoMonitorPresentation.zoomCaption(model.session),
-                value: Binding(
-                    get: { model.session.zoomDialReadout },
-                    set: {
-                        model.session.updateZoomPinch(magnification: $0 / max(1, zoomGestureAnchor))
-                    }),
-                label: { CamFov.displayLabel(factor: $0) },
-                onEditing: { editing in
-                    if editing {
-                        model.control.cancelEdit(.zoom)
-                        zoomGestureAnchor =
-                            model.session.status.zoomFactor ?? model.session.zoomOptimistic
-                            ?? model.session.zoomStop
-                    } else {
-                        model.session.endZoomPinch()
-                    }
-                }, onClose: closeZoomDial, haptics: model.hapticsEnabled
-            )
-            .frame(
-                width: layout.viewport.width, height: layout.viewport.height,
-                alignment: .topLeading)
-        }
+    private var assistSource: MonitorOperatorLiveAssistSource {
+        MonitorOperatorLiveAssistSource(stores: .app, looks: .app, haptics: .app,
+            readBundle: { model.monitorSamples.displayBundle },
+            readTransfer: { model.monitorTransfer ?? model.monitorColorMode.map(MonitorTransfer.init) ?? .rec709 },
+            readClipByte: { model.monitorSamples.exposureCeiling.clipByte(transfer: $0) },
+            configureDisplay: scopeDisplay)
     }
 
-    /// Portrait keeps these buttons above the reference drawer's dismiss plane.
-    /// Exclude their real rectangles so their original controls receive the tap.
-    private func captureNavigationFrames(_ layout: LiveMonitorLayout, recording: Bool) -> [CGRect] {
-        guard layout.presentation?.portrait == true, model.captureDrum == nil else { return [] }
-        var frames: [CGRect] = []
-        if model.chromeSectionMounts(.railSettings) || recording {
-            frames.append(layout.settings)
-        }
-        if model.chromeSectionMounts(.railMedia), !model.session.isMultiviewBorrowed {
-            frames.append(layout.media)
-        }
-        return frames
-    }
 
-    private func openZoomDial() {
-        guard !interfaceLocked else { return }
-        assistsExpanded = false
-        selectOverlay(.zoom)
-        zoomDismissTask?.cancel()
-        zoomDismissTask = nil
-        zoomDialMounted = true
-        zoomDialVisible = true
-    }
-
-    /// Presentation arbitration only. The existing model fields remain the
-    /// adapter boundary for camera- and playback-owned native controls.
-    private enum OverlayOwner { case top, capture, drum, assist, gimbal, zoom }
-
-    private func selectOverlay(_ owner: OverlayOwner) {
-        guard !interfaceLocked else {
-            topMenu = nil
-            model.captureSheet = nil
-            model.captureDrum = nil
-            model.assist.configureTool = nil
-            model.liveGimbalPanel = .none
-            closeZoomDial()
-            return
-        }
-        if owner != .top { topMenu = nil }
-        if owner != .capture { model.captureSheet = nil }
-        if owner != .drum { model.captureDrum = nil }
-        if owner != .assist { model.assist.configureTool = nil }
-        if owner != .gimbal && !(owner == .zoom && model.liveGimbalPanel == .editor) {
-            model.liveGimbalPanel = .none
-        }
-        if owner != .zoom { closeZoomDial() }
-    }
-
-    private func closeZoomDial() {
-        guard zoomDialVisible else { return }
-        model.session.endZoomPinch()
-        zoomDialVisible = false
-        zoomDismissTask?.cancel()
-        guard !reduceMotion else {
-            zoomDialMounted = false
-            zoomDismissTask = nil
-            return
-        }
-        zoomDismissTask = Task { @MainActor in
-            do { try await Task.sleep(for: .milliseconds(190)) } catch { return }
-            guard !Task.isCancelled, !zoomDialVisible else { return }
-            zoomDialMounted = false
-            zoomDismissTask = nil
-        }
-    }
-
-    /// Live icon frame while the popup is open — a snapshot at long-press
-    /// stays on the old side when the phone rolls landscape-left ↔ right.
-    private func liveAssistAnchor(for tool: MonitorAssistSelection) -> CGRect {
-        if let frame = assistIconFrames[tool], frame.width > 1 { return frame }
-        return model.assist.longPressAnchor
-    }
-
-    /// Live rail presents the real pages with `onClose`. Home still uses `model.homePanel`.
-    /// Settings gets OpenZCine `fullScreenPanelSafeArea` from the monitor's real insets —
-    /// this overlay sits on an `ignoresSafeArea` canvas, so a child GeometryReader reads 0.
-    @ViewBuilder
-    private func operatorPanelCover(_ panel: LiveOperatorPanel, layout: LiveMonitorLayout)
-        -> some View
-    {
-        switch panel {
-        case .settings:
-            SettingsRootView(
-                safeArea: settingsSafeArea(from: layout),
-                onClose: { model.liveOperatorPanel = nil }
-            )
-            .frame(width: layout.viewport.width, height: layout.viewport.height)
-        case .media:
-            MediaLibraryView(
-                safeArea: settingsSafeArea(from: layout),
-                onClose: { model.liveOperatorPanel = nil }
-            )
-            .frame(width: layout.viewport.width, height: layout.viewport.height)
-        }
-    }
-
-    /// OpenZCine `MonitorFullScreenPanelOverlay.fullScreenPanelSafeArea`.
-    private func settingsSafeArea(from layout: LiveMonitorLayout) -> EdgeInsets {
-        let raw = OperatorPanelMetrics.resolvedDeviceSafeArea(
-            layout.safeArea, window: windowGeometry.safeArea)
-        return OperatorPanelMetrics.fullScreenPanelSafeArea(
-            from: raw,
-            isPortrait: layout.viewport.height > layout.viewport.width,
-            mirrored: LiveMonitorLayout.shouldMirror(
-                leading: raw.leading,
-                trailing: raw.trailing,
-                orientation: orientationObserver.orientation
-            )
-        )
-    }
 }
 
 /// HEVC + LUT/PEAK present. Isolated so 25 Hz decode / 5 Hz status cannot rebuild chrome.
@@ -861,7 +227,8 @@ private struct LiveFeedPane: View {
                 isPhoto: model.session.status.isPhoto,
                 colorMode: model.session.status.colorMode),
             pictureFlip: model.livePictureViewFlip,
-            hdrDisplay: model.hdrDisplayActive
+            hdrDisplay: model.hdrDisplayActive,
+            qualification: { [weak session = model.session] in session?.nativeQualificationSnapshot }
         )
         .onChange(of: model.assist.effects) { _, fx in
             model.session.decoder.effects = fx.withFaceAF(model.session.wantsFaceAF)
@@ -878,302 +245,5 @@ private struct LiveFeedPane: View {
         .onChange(of: model.assist.gradesClip) { _, grading in
             if !grading { model.syncLiveMonitorColor() }
         }
-    }
-}
-
-/// Empty / frozen feed well until a rolling picture exists.
-private struct LiveFeedWarmupCover: View {
-    @Environment(AppModel.self) private var model
-    @State private var showVPNHint = false
-
-    var body: some View {
-        ZStack {
-            Color.black
-            VStack(spacing: 12) {
-                // The cover stays mounted at zero opacity for the whole session;
-                // an idle spinner there would keep animating under the picture.
-                if model.session.isFeedWarming {
-                    ProgressView()
-                        .controlSize(.large)
-                        .tint(LiveDesign.text.opacity(0.72))
-                }
-                Text("WAITING FOR LIVE VIEW")
-                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(LiveDesign.text.opacity(0.72))
-                if showVPNHint {
-                    Text(LocalVPNFilter.liveHint)
-                        .font(MonitorTheme.font(12, weight: .regular))
-                        .foregroundStyle(LiveDesign.muted)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 28)
-                }
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            showVPNHint
-                ? "Waiting for live view. \(LocalVPNFilter.liveHint)"
-                : "Waiting for live view"
-        )
-        .task(id: model.session.isFeedWarming) {
-            showVPNHint = false
-            guard model.session.isFeedWarming else { return }
-            let delay = UInt64(LocalVPNFilter.liveHintDelaySeconds * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: delay)
-            showVPNHint = LocalVPNFilter.shouldHintOnLiveWait(
-                vpnActive: LocalVPNProbe.isActive(),
-                hadVideo: !model.session.isFeedWarming,
-                secondsWithoutVideo: LocalVPNFilter.liveHintDelaySeconds)
-        }
-    }
-}
-
-private struct LiveFeedAssistsPane: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        let showBox = model.chromeSectionMounts(.focusBox)
-        let dimmed = focusBoxEditDimmed
-        ZStack {
-            FeedAlignedAssists(
-                grid: model.assist.isVisible(.grid),
-                crosshair: model.assist.isVisible(.crosshair),
-                guides: model.assist.isVisible(.guides),
-                guideAspect: model.assist.guideAspect,
-                focusPoint: model.session.focusPoint,
-                overlay: model.session.focusOverlay,
-                sceneFaces: showBox ? model.session.dimmedFaces : [],
-                showFocusChrome: showBox,
-                showTapFocusBox: model.session.supportsTapFocus,
-                aeLocked: model.session.autoExposureLock != nil,
-                focusLocked: model.focusBoxLocked,
-                sourceAspect: model.session.pictureAspect,
-                pictureAspect: CGFloat(
-                    model.session.status.videoFormat?.resolution.ratio
-                        ?? model.session.status.videoResolution?.ratio
-                        ?? model.session.pictureAspect),
-                pictureMirrored: model.livePictureViewFlip
-            )
-            .opacity(dimmed ? 0.3 : 1)
-            // Focus boxes keep the ease they had when this lived on the screen root.
-            .animation(.easeOut(duration: 0.20), value: model.session.isFocusResetAvailable)
-
-            if model.chromeEditorMode != nil {
-                GeometryReader { proxy in
-                    let feed = DesqueezeAssist.presentationRect(
-                        sourceSize: CGSize(width: model.session.pictureAspect, height: 1),
-                        in: CGRect(origin: .zero, size: proxy.size), effects: model.assist.effects)
-                    let rect = LiveChromeEditGeometry.focusEditRect(
-                        overlay: model.session.focusOverlay,
-                        faces: model.session.dimmedFaces,
-                        focusPoint: model.session.focusPoint,
-                        mirrored: model.livePictureViewFlip,
-                        flippedVertically: model.assist.flipsVertically,
-                        in: feed
-                    )
-                    Color.clear
-                        .frame(width: rect.width, height: rect.height)
-                        .chromeEditable(.focusBox, editing: model.chromeEditorMode)
-                        .position(x: rect.midX, y: rect.midY)
-                }
-            }
-        }
-    }
-
-    private var focusBoxEditDimmed: Bool {
-        guard let mode = model.chromeEditorMode else { return false }
-        return !model.chrome(for: mode).focusBox
-    }
-}
-
-private struct LiveSessionBanners: View {
-    @Environment(AppModel.self) private var model
-    var feed: CGRect
-    var topBar: CGRect?
-
-    var body: some View {
-        let chromeBottom =
-            (topBar?.height ?? 0) > 1 ? topBar.map { Double($0.maxY) } : nil
-        let toastY = CGFloat(
-            ControlHud.toastCenterY(feedMinY: Double(feed.minY), chromeBottomY: chromeBottom))
-        Group {
-            if model.session.feedRecovering {
-                Text("Reconnecting")
-                    .font(MonitorTheme.font(11, weight: .semibold))
-                    .foregroundStyle(LiveDesign.text)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .liveChromeCapsule()
-                    .position(x: feed.midX, y: toastY)
-                    .zIndex(3)
-                    .allowsHitTesting(false)
-            }
-            if let note = model.session.controlNote, !note.isEmpty, !model.session.feedRecovering {
-                Text(note)
-                    .font(MonitorTheme.font(12, weight: .semibold))
-                    .foregroundStyle(LiveDesign.text.opacity(0.92))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .liveChromeCapsule()
-                    .opacity(ControlHud.toastOpacity)
-                    .position(x: feed.midX, y: toastY)
-                    .zIndex(3)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-                    .task(id: note) {
-                        try? await Task.sleep(for: .seconds(ControlHud.toastHoldSeconds))
-                        guard !Task.isCancelled, model.session.controlNote == note else { return }
-                        model.session.controlNote = nil
-                    }
-            }
-            if model.headTrackingEnabled, let pose = model.headTrackAxisPose {
-                VStack(alignment: .leading, spacing: 6) {
-                    LiveHeadTrackAxisDials(pose: pose)
-                    if !model.headTrackImuReadout.isEmpty {
-                        Text(model.headTrackImuReadout)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(LiveDesign.text)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: 220, alignment: .leading)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .liveChromeCapsule()
-                    }
-                }
-                .position(x: feed.minX + 118, y: feed.minY + 118)
-                .zIndex(5)
-                .allowsHitTesting(false)
-                .transaction { $0.animation = nil }
-            }
-        }
-        .animation(.easeOut(duration: 0.18), value: model.session.controlNote)
-        .animation(.easeOut(duration: 0.18), value: toastY)
-    }
-}
-
-/// Scope panels observe `frameSamples.bundle` themselves (≤25 Hz). This host
-/// only tracks assist on/off flags — not `generation`.
-private struct LiveScopeOverlays: View {
-    @Environment(AppModel.self) private var model
-    var layout: LiveMonitorLayout
-    var interfaceLocked: Bool
-    var chromeClearance: EdgeInsets
-
-    var body: some View {
-        let canvas = CGRect(origin: .zero, size: layout.viewport)
-        let picture = layout.onFeed
-        let clearance = chromeClearance
-        if model.assist.isVisible(.waveform) {
-            WaveformOverlay(canvas: canvas, feed: picture, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.parade) {
-            ParadeOverlay(canvas: canvas, feed: picture, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.vectorscope) {
-            VectorscopeOverlay(canvas: canvas, feed: picture, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.histogram) {
-            HistogramOverlay(canvas: canvas, feed: picture, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.trafficLights) {
-            TrafficLightsOverlay(
-                bounds: canvas,
-                feed: picture,
-                chromeClearance: clearance
-            )
-        }
-        if model.assist.isVisible(.ndMeter) {
-            NDMeterOverlay(
-                stores: .app,
-                bounds: canvas,
-                feed: picture,
-                chromeClearance: clearance,
-                reading: { [model] in NDAssist.reading(from: model.frameSamples.displayBundle) }
-            )
-        }
-        if !model.isWatchingFeed, !model.session.status.isPhoto,
-            OsmoMonitorPresentation.capabilities(model.session).audio,
-            model.assist.isVisible(.audioMeters)
-        {
-            LiveAudioMeterOverlay(bounds: canvas, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.falseColor), model.assist.falseColorReference {
-            let transfer =
-                model.monitorTransfer ?? MonitorTransfer(model.monitorColorMode ?? .normal)
-            FalseColorReferenceOverlay(
-                stores: .app, looks: .app,
-                scale: model.assist.falseColorScale,
-                transfer: transfer,
-                rec709: model.assist.falseColorRec709,
-                clipByte: model.monitorSamples.exposureCeiling.clipByte(transfer: transfer),
-                bounds: canvas, chromeClearance: clearance, hapticsEnabled: model.hapticsEnabled,
-                onConfigure: { model.assist.configureTool = .falseColor })
-        }
-
-    }
-}
-
-extension LiveViewScreen {
-    /// Visible picture the LEVEL strips seat against (de-squeezed when on).
-    private func meterFeed(_ layout: LiveMonitorLayout) -> CGRect {
-        model.assist.isVisible(.desqueeze)
-            ? DesqueezeAssist.presentationRect(
-                sourceSize: CGSize(width: model.session.pictureAspect, height: 1),
-                in: layout.onFeed, effects: model.assist.effects
-            )
-            .intersection(layout.onFeed)
-            : layout.onFeed
-    }
-
-    /// One rectangle shared by all movable tools; full-canvas coordinates remain persisted.
-    private func scopeClearance(layout: LiveMonitorLayout) -> EdgeInsets {
-        let portrait = layout.presentation?.portrait == true
-        let floor =
-            portrait ? (layout.presentation?.system.y ?? layout.rail.minY) : layout.viewport.height
-        let right =
-            portrait ? layout.viewport.width - layout.safeArea.trailing : layout.settings.minX - 6
-        return EdgeInsets(
-            top: layout.safeArea.top,
-            leading: layout.safeArea.leading,
-            bottom: max(0, layout.viewport.height - floor),
-            trailing: max(0, layout.viewport.width - right))
-    }
-
-    fileprivate func trackingCancelRect(_ subject: TrackingBox?, in layout: LiveMonitorLayout)
-        -> CGRect
-    {
-        guard let subject else { return .zero }
-        return MonitorTrackingGeometry.cancelRect(
-            box: subject, feed: layout.onFeed, mirrored: model.livePictureViewFlip,
-            flippedVertically: model.assist.flipsVertically)
-    }
-}
-
-/// Reads `CameraStatus` in its own observation scope. Read in the chrome
-/// slot, each 5 Hz publish re-evaluated every closure-bearing chrome child,
-/// including Settings or Media while they cover live.
-private struct LiveStatusScope<Content: View>: View {
-    @Environment(AppModel.self) private var model
-    @ViewBuilder let content: (CameraStatus) -> Content
-
-    var body: some View { content(model.session.status) }
-}
-
-/// Focus recenter availability and the ActiveTrack subject in their own scope.
-/// `focusOverlay` also follows per-frame AF-C faces and 5 Hz status; its
-/// `.subject` case depends only on the tracking fields read here.
-private struct LiveFocusScope<Content: View>: View {
-    @Environment(AppModel.self) private var model
-    @ViewBuilder let content: (_ resetAvailable: Bool, _ subject: TrackingBox?) -> Content
-
-    var body: some View {
-        let session = model.session
-        let resetAvailable = session.isFocusResetAvailable
-        let overlay = FocusOverlayPolicy.resolve(
-            tracking: session.isTracking, search: session.searchBox, subject: session.subjectBox)
-        let subject: TrackingBox? = if case .subject(let box) = overlay { box } else { nil }
-        content(resetAvailable, subject)
-            .animation(.easeOut(duration: 0.20), value: resetAvailable)
     }
 }

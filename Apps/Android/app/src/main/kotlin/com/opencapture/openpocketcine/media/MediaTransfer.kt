@@ -1,282 +1,87 @@
 package com.opencapture.openpocketcine.media
 
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.File
+import com.opencapture.opencine.dji.DJIMediaHTTPError
+import com.opencapture.opencine.media.MediaByteSink
+import com.opencapture.opencine.media.MediaTransferReceipt
+import com.opencapture.opencine.runtime.MonitorMediaReadSource
+import com.opencapture.opencine.runtime.MonitorMediaReadStream
+import com.opencapture.opencine.runtime.MonitorMediaStreamException
+import com.opencapture.opencine.runtime.MonitorMediaStreamPump
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.io.OutputStream
-import java.util.UUID
 import java.util.concurrent.TimeUnit
-import kotlin.math.min
-import com.opencapture.opencine.vocabulary.MediaHTTP
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 
-sealed class MediaTransferError : Exception() {
-    data object BadResponse : MediaTransferError()
-    data class HttpStatus(val code: Int) : MediaTransferError()
-    data object Timeout : MediaTransferError()
-}
-
-/**
- * SoftAP `/v2` GET. Finish at Content-Length — the camera often keeps the socket
- * open after the body, so waiting for EOF hangs at 100%.
- */
+/** Actual HTTP socket construction. The native runtime owns bounded copying, cancellation and
+ * completion at an observed length; the integration owns storage candidates and retry. */
 object MediaTransfer {
-    /** RAM GET is thumbs/SCR only. LRF/XRF and originals stream to disk. */
     const val MAX_RAM_BYTES: Long = 8L * 1024 * 1024
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS)
+        .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build()
+    private val pump = MonitorMediaStreamPump()
 
-    private val client: OkHttpClient =
-        OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
-            .callTimeout(0, TimeUnit.SECONDS)
-            .followRedirects(false)
-            .followSslRedirects(false)
-            .retryOnConnectionFailure(false)
-            .build()
+    suspend fun stream(url: String, expected: Long?, sink: MediaByteSink): MediaTransferReceipt =
+        transfer(HTTPSource(url), expected, sink, Long.MAX_VALUE)
 
-    fun getBytes(storage: Int, path: String): ByteArray {
-        val (data, _) = performGet(storage, path)
-        return data
+    suspend fun bytes(url: String): ByteArray {
+        val sink = MemorySink()
+        transfer(HTTPSource(url), null, sink, MAX_RAM_BYTES)
+        return sink.bytes()
     }
 
-    fun downloadFile(
-        storage: Int,
-        path: String,
-        dest: File,
-        expectedSize: Long = 0,
-        onProgress: (Double) -> Unit = {},
-    ) {
-        var last: MediaTransferError = MediaTransferError.BadResponse
-        for (candidate in storageOrder(storage)) {
+    /** A genuine Range response may end early with useful tail bytes. A server ignoring Range
+     * cannot materialize the full original, and the native worker still owns each read/cancel. */
+    suspend fun range(url: String, range: String, maximum: Int): ByteArray {
+        if (maximum <= 0) throw DJIMediaHTTPError.BadResponse
+        val sink = MemorySink()
+        try { transfer(HTTPSource(url, range, maximum.toLong()), null, sink, maximum.toLong()) }
+        catch (error: IOException) {
+            if (error is DJIMediaHTTPError || sink.size == 0) throw error
+        }
+        return sink.bytes()
+    }
+
+    private suspend fun transfer(source: MonitorMediaReadSource, expected: Long?, sink: MediaByteSink,
+        maximum: Long): MediaTransferReceipt {
+        try { return pump.transfer(source, expected, sink, maximum) }
+        catch (error: MonitorMediaStreamException.Status) { throw DJIMediaHTTPError.HttpStatus(error.status) }
+        catch (_: MonitorMediaStreamException.Empty) { throw DJIMediaHTTPError.BadResponse }
+        catch (_: MonitorMediaStreamException.Limit) { throw DJIMediaHTTPError.BadResponse }
+    }
+    private class MemorySink : MediaByteSink {
+        private val output = ByteArrayOutputStream()
+        val size: Int get() = output.size()
+        override suspend fun write(chunk: ByteArray) { output.write(chunk) }
+        fun bytes(): ByteArray = output.toByteArray()
+    }
+    private class HTTPSource(url: String, private val range: String? = null,
+        private val maximum: Long? = null) : MonitorMediaReadSource {
+        private val call = client.newCall(Request.Builder().url(url).header("Accept", "*/*")
+            .apply { range?.let { header("Range", it) } }.get().build())
+        override fun cancel() { call.cancel() }
+        override fun open(): MonitorMediaReadStream {
+            val response = call.execute()
             try {
-                downloadOnce(
-                    url = MediaHTTP.pathUrlString(candidate, path),
-                    dest = dest,
-                    expectedSize = expectedSize,
-                    onProgress = onProgress,
-                )
-                return
-            } catch (e: MediaTransferError.HttpStatus) {
-                last = e
-                if (e.code == 404 || e.code in 400..499) continue
-                throw e
-            } catch (e: MediaTransferError) {
-                last = e
-            }
-        }
-        throw last
-    }
-
-    /** In-memory GET for thumbs/SCR. Capped at [MAX_RAM_BYTES]. */
-    fun fetchBytes(storage: Int, path: String): Pair<ByteArray, Int> = performGet(storage, path)
-
-    /** Last 2 MiB of the original take. Camera `/v2` already answers Range. */
-    fun fetchRange(storage: Int, path: String, range: String, maxBytes: Int): Pair<ByteArray, Int> {
-        var last: MediaTransferError = MediaTransferError.BadResponse
-        for (candidate in storageOrder(storage)) {
-            try {
-                val data = getOnceRange(MediaHTTP.pathUrlString(candidate, path), range, maxBytes)
-                if (data.isEmpty()) {
-                    last = MediaTransferError.BadResponse
-                    continue
+                if (response.code !in 200..299) throw DJIMediaHTTPError.HttpStatus(response.code)
+                val body = response.body ?: throw DJIMediaHTTPError.BadResponse
+                val header = body.contentLength().takeIf { it > 0 }
+                if (range != null && response.code == 200 && header != null && header > checkNotNull(maximum)) {
+                    throw DJIMediaHTTPError.BadResponse
                 }
-                return data to candidate
-            } catch (e: MediaTransferError.HttpStatus) {
-                last = e
-                if (e.code == 404 || e.code in 400..499) continue
-                throw e
-            } catch (e: MediaTransferError) {
-                last = e
-            }
-        }
-        throw last
-    }
-
-    private fun performGet(firstStorage: Int, path: String): Pair<ByteArray, Int> {
-        var last: MediaTransferError = MediaTransferError.BadResponse
-        for (storage in storageOrder(firstStorage)) {
-            try {
-                val data = getOnce(MediaHTTP.pathUrlString(storage, path))
-                if (data.isEmpty()) {
-                    last = MediaTransferError.BadResponse
-                    continue
-                }
-                return data to storage
-            } catch (e: MediaTransferError.HttpStatus) {
-                last = e
-                if (e.code == 404 || e.code in 400..499) continue
-                throw e
-            } catch (e: MediaTransferError) {
-                last = e
-            }
-        }
-        throw last
-    }
-
-    private fun getOnceRange(url: String, range: String, maxBytes: Int): ByteArray {
-        val request =
-            Request.Builder()
-                .url(url)
-                .header("Accept", "*/*")
-                .header("Range", range)
-                .get()
-                .build()
-        val call = client.newCall(request)
-        call.execute().use { response ->
-            val code = response.code
-            if (code !in 200..299) throw MediaTransferError.HttpStatus(code)
-            val body = response.body ?: throw MediaTransferError.BadResponse
-            val expected = body.contentLength()
-            if (code == 200 && expected > maxBytes.toLong()) {
-                call.cancel()
-                throw MediaTransferError.BadResponse
-            }
-            val cap = if (expected > 0) expected.coerceAtMost(maxBytes.toLong()) else maxBytes.toLong()
-            val sink = java.io.ByteArrayOutputStream()
-            val written =
-                try {
-                    readUntilLength(body.byteStream(), sink, cap) { }
-                } catch (e: IOException) {
-                    if (sink.size() > 0) sink.size().toLong() else throw e
-                }
-            call.cancel()
-            if (written <= 0L) throw MediaTransferError.BadResponse
-            if (sink.size() > maxBytes) throw MediaTransferError.BadResponse
-            return sink.toByteArray()
+                // The requested tail, not the original movie length, bounds a Range read.
+                val length = if (range == null) header else header?.coerceAtMost(checkNotNull(maximum)) ?: maximum
+                return HTTPStream(response, length, body.byteStream())
+            } catch (error: Throwable) { response.close(); throw error }
         }
     }
-
-    private fun getOnce(url: String): ByteArray {
-        val request =
-            Request.Builder()
-                .url(url)
-                .header("Accept", "*/*")
-                .get()
-                .build()
-        val call = client.newCall(request)
-        call.execute().use { response ->
-            val code = response.code
-            if (code !in 200..299) throw MediaTransferError.HttpStatus(code)
-            val body = response.body ?: throw MediaTransferError.BadResponse
-            val expected = body.contentLength().takeIf { it > 0 } ?: 0L
-            if (expected > MAX_RAM_BYTES) throw MediaTransferError.BadResponse
-            val sink = java.io.ByteArrayOutputStream()
-            val written =
-                try {
-                    readUntilLength(
-                        body.byteStream(),
-                        sink,
-                        expected,
-                        maxBytes = MAX_RAM_BYTES,
-                    ) { }
-                } catch (e: IOException) {
-                    if (sink.size() > 0 && expected > 0 && sink.size().toLong() >= expected) {
-                        sink.size().toLong()
-                    } else {
-                        throw e
-                    }
-                }
-            if (written <= 0L) throw MediaTransferError.BadResponse
-            if (expected > 0 && written >= expected) call.cancel()
-            return sink.toByteArray()
-        }
+    private class HTTPStream(private val response: Response,
+        override val contentLength: Long?, override val input: InputStream) : MonitorMediaReadStream {
+        override val status: Int get() = response.code
+        override fun close() { response.close() }
     }
-
-    private fun downloadOnce(
-        url: String,
-        dest: File,
-        expectedSize: Long,
-        onProgress: (Double) -> Unit,
-    ) {
-        dest.parentFile?.mkdirs()
-        val tmp = File(dest.parentFile, "${UUID.randomUUID()}.part")
-        val request =
-            Request.Builder()
-                .url(url)
-                .header("Accept", "*/*")
-                .get()
-                .build()
-        val call = client.newCall(request)
-        try {
-            call.execute().use { response ->
-                val code = response.code
-                if (code !in 200..299) throw MediaTransferError.HttpStatus(code)
-                val body = response.body ?: throw MediaTransferError.BadResponse
-                val headerLength = body.contentLength()
-                val expected = if (headerLength > 0) headerLength else expectedSize
-                tmp.outputStream().use { out ->
-                    val written =
-                        try {
-                            readUntilLength(body.byteStream(), out, expected) { onProgress(it) }
-                        } catch (e: IOException) {
-                            val already = tmp.length()
-                            if (already > 0 && expected > 0 && already >= expected) {
-                                already
-                            } else {
-                                throw e
-                            }
-                        }
-                    if (written <= 0L) throw MediaTransferError.BadResponse
-                    if (expected > 0 && written >= expected) call.cancel()
-                }
-            }
-        } catch (e: IOException) {
-            if (tmp.isFile && expectedSize > 0 && tmp.length() >= expectedSize) {
-                // Content-Length complete; camera kept the socket open.
-            } else {
-                tmp.delete()
-                throw e
-            }
-        }
-        if (!tmp.isFile || tmp.length() <= 0L) {
-            tmp.delete()
-            throw MediaTransferError.BadResponse
-        }
-        if (dest.exists()) dest.delete()
-        if (!tmp.renameTo(dest)) {
-            tmp.copyTo(dest, overwrite = true)
-            tmp.delete()
-        }
-    }
-
-    /**
-     * Copy [expected] bytes (or until EOF when [expected] is 0). Progress is
-     * `written / expected` when the length is known. [maxBytes] is a hard cap:
-     * a larger Content-Length or extra bytes fail instead of growing RAM.
-     */
-    fun readUntilLength(
-        input: InputStream,
-        output: OutputStream,
-        expected: Long,
-        maxBytes: Long = Long.MAX_VALUE,
-        onProgress: (Double) -> Unit,
-    ): Long {
-        if (maxBytes <= 0L) throw MediaTransferError.BadResponse
-        if (expected > maxBytes) throw MediaTransferError.BadResponse
-        val buf = ByteArray(64 * 1024)
-        var written = 0L
-        while (true) {
-            val remainingExpected =
-                if (expected > 0) (expected - written).coerceAtLeast(0L) else Long.MAX_VALUE
-            if (expected > 0 && remainingExpected == 0L) break
-            val remainingMax = (maxBytes - written).coerceAtLeast(0L)
-            if (remainingMax == 0L) {
-                if (input.read() >= 0) throw MediaTransferError.BadResponse
-                break
-            }
-            val toRead = minOf(remainingExpected, remainingMax, buf.size.toLong()).toInt()
-            val n = input.read(buf, 0, toRead)
-            if (n < 0) break
-            output.write(buf, 0, n)
-            written += n
-            if (expected > 0) onProgress(min(1.0, written.toDouble() / expected.toDouble()))
-            if (expected > 0 && written >= expected) break
-        }
-        output.flush()
-        return written
-    }
-
-    fun storageOrder(first: Int): List<Int> = if (first == 0) listOf(0, 1) else listOf(1, 0)
 }

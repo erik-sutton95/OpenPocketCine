@@ -11,7 +11,7 @@ import OpenCineMedia
 /// Pins OpenZCine `falseColorRows` + `FalseColorScale.legendStops` against what we ship.
 final class FalseColorAssistTests: XCTestCase {
     /// This test's monitored source (XCTest makes a fresh one per test).
-    private let ceiling = OpenCineCameraVocabulary.ScopeExposureCeiling()
+    private let ceiling = DJIScopeExposureCeiling()
 
     func testExposureChangeKeepsFalseColorPaintAvailable() throws {
         ceiling.setISO(1600)

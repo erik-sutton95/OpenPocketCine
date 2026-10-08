@@ -8,6 +8,9 @@ import com.opencapture.opencine.dji.CAPABILITY_KEY
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.STATE_KEY
 import com.opencapture.opencine.dji.StatusExtras
+import com.opencapture.opencine.dji.colorModesFor
+import com.opencapture.opencine.dji.photoModeRaw
+import com.opencapture.opencine.dji.captureKind
 import com.opencapture.opencine.dji.fromJson
 import com.opencapture.opencine.dji.irisHundredths
 import com.opencapture.opencine.dji.parseCapability
@@ -58,7 +61,8 @@ class Action6SupportTest {
         assertEquals(0x3D, CameraCommands.wireColorMode(CameraCommands.COLOR_DLOG_M, action6, "other"))
         assertEquals(CameraCommands.COLOR_NORMAL10, CameraCommands.parseColorMode(0x3F, action6, "other"))
         assertEquals(CameraCommands.COLOR_DLOG_M, CameraCommands.parseColorMode(0x3D, action6, "other"))
-        assertEquals(listOf("Normal 10-bit", "D-Log M"), CaptureLists.colorWheelLabels(CameraStatus(), "other", action6))
+        assertEquals(listOf("Normal 10-bit", "D-Log M"), CaptureLists.colorWheelLabels(CameraStatus(), "other", action6,
+            CameraModel.fromJson("""{"name":"$action6","family":"other"}""").captureProfile!!.labels))
     }
 
     @Test fun captureBytes() {
@@ -83,8 +87,8 @@ class Action6SupportTest {
     }
 
     @Test fun subscriptionsAppendApertureKeysOnlyForAction6() {
-        val base = DatalinkDriver.subscriptionKeys(CameraModel(name = "Osmo Pocket 4"))
-        val a6 = DatalinkDriver.subscriptionKeys(CameraModel(name = action6))
+        val base = DatalinkDriver.subscriptionKeys(CameraModel.fromJson("""{"name":"Osmo Pocket 4"}"""))
+        val a6 = DatalinkDriver.subscriptionKeys(CameraModel.fromJson("""{"name":"$action6","family":"other"}"""))
         assertEquals(base, a6.take(base.size))
         assertEquals(listOf(ApertureStrategy.STATE_KEY, ApertureStrategy.CAPABILITY_KEY), a6.drop(base.size))
     }

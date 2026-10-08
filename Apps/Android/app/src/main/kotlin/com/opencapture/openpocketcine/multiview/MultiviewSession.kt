@@ -6,7 +6,6 @@ import com.opencapture.opencine.dji.toJson
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.FoundCamera
 import com.opencapture.opencine.vocabulary.GimbalStickMapping
-import com.opencapture.openpocketcine.feed.Media3GlBackend
 
 import com.opencapture.opencine.dji.hasMultiviewPreview
 import com.opencapture.opencine.dji.multicamSupport
@@ -130,7 +129,7 @@ class MultiviewSession(
         val decoder = HevcDecoder(errorJournal = DiagnosticCenter::logDecoderError)
         val scopeBus = com.opencapture.opencine.runtime.ScopeSampleBus()
         val inspectorPreview = com.opencapture.opencine.runtime.InspectorPreviewPipeline(
-            scopeBus, ::Media3GlBackend, "OpcTileInspector")
+            scopeBus, { com.opencapture.opencine.runtime.NativeGlBackend.create(it) }, "OpcTileInspector")
         /** Record-only control port on this tile's own link (MULTI-02); see [MultiviewTileControl]. */
         internal val controlPort = MultiviewTileControl(
             state = ::recordState,

@@ -5,6 +5,8 @@ import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.monitorui.MonitorScopeTraceRaster as ScopeTraceRaster
 import com.opencapture.monitorui.MonitorTrafficLightsGeometry as TrafficLightsAssist
 import com.opencapture.monitorui.MonitorVectorscopeGraticule as VectorscopeGraticule
+import com.opencapture.opencine.dji.DjiScopeExposureCeiling
+import com.opencapture.opencine.dji.DjiMonitorColorProfile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -46,7 +48,7 @@ class ScopeGeometryTest {
             )
         for ((key, edge) in swift) {
             val (transfer, rec709) = key
-            val clip = FalseColorBands.bands(MonitorFalseColorSelection.LIMITS, transfer, rec709)[3]
+            val clip = FalseColorBands.bands(MonitorFalseColorSelection.LIMITS, transfer, rec709, ceiling = DjiScopeExposureCeiling.UNOBSERVED, lookCurve = DjiMonitorColorProfile.value.rec709LookCurves[transfer])[3]
             assertEquals(edge, clip.lowerBound, 0.01, "$transfer rec709=$rec709")
         }
     }
@@ -300,14 +302,14 @@ class ScopeGeometryTest {
     @Test
     fun zebraNativeUnitShows0To255NotIre() {
         val transfer = MonitorTransfer.DLOG2
-        assertEquals(100, ZebraEditor.displayValue(100.0, MonitorZebraUnit.IRE, transfer))
+        assertEquals(100, ZebraEditor.displayValue(100.0, MonitorZebraUnit.IRE, transfer, DjiScopeExposureCeiling.UNOBSERVED))
         assertEquals(100, ZebraEditor.editorMaximum(MonitorZebraUnit.IRE))
         assertEquals(255, ZebraEditor.editorMaximum(MonitorZebraUnit.NATIVE))
-        val nativeClip = ZebraEditor.displayValue(100.0, MonitorZebraUnit.NATIVE, transfer)
+        val nativeClip = ZebraEditor.displayValue(100.0, MonitorZebraUnit.NATIVE, transfer, DjiScopeExposureCeiling.UNOBSERVED)
         assertTrue(nativeClip in 240..255, "D-Log2 clip maps near code 247, was $nativeClip")
         assertEquals(
             100.0,
-            ZebraEditor.ireFromDisplay(nativeClip, MonitorZebraUnit.NATIVE, transfer),
+            ZebraEditor.ireFromDisplay(nativeClip, MonitorZebraUnit.NATIVE, transfer, DjiScopeExposureCeiling.UNOBSERVED),
             0.5,
         )
     }
@@ -319,7 +321,7 @@ class ScopeGeometryTest {
         assertEquals(MonitorFalseColorSelection.STOPS, MonitorFalseColorSelection.fromPersisted("ZC Stops"))
         assertEquals("Video", MonitorFalseColorSelection.STOPS.menuLabel)
         val transfer = MonitorTransfer.DLOG2
-        val stops = FalseColorReference.segments(MonitorFalseColorSelection.STOPS, transfer)
+        val stops = FalseColorReference.segments(MonitorFalseColorSelection.STOPS, transfer, ceiling = DjiScopeExposureCeiling.UNOBSERVED)
         assertEquals(9, stops.size)
         assertEquals(0.0, stops[0].lowerFraction, 1e-4)
         assertEquals(0.05, stops[0].upperFraction, 1e-4)
@@ -332,7 +334,7 @@ class ScopeGeometryTest {
             FalseColorReference.axisLabels(MonitorFalseColorSelection.STOPS),
         )
         assertEquals("D-Log2", FalseColorReference.curveKeyLabel(MonitorTransfer.DLOG2))
-        val ire = FalseColorReference.segments(MonitorFalseColorSelection.IRE, transfer)
+        val ire = FalseColorReference.segments(MonitorFalseColorSelection.IRE, transfer, ceiling = DjiScopeExposureCeiling.UNOBSERVED)
         assertEquals(6, ire.size)
         assertEquals(0.0, ire[0].lowerFraction, 1e-4)
         assertEquals(0.025, ire[0].upperFraction, 1e-4)
@@ -381,17 +383,17 @@ class ScopeGeometryTest {
         assertEquals(gray.red, gray.green, 0.0)
         assertEquals(gray.green, gray.blue, 0.0)
 
-        val rec709 = FalseColorBands.sceneStopBands(FalseColorBands.clipStops(MonitorTransfer.REC709))
+        val rec709 = FalseColorBands.sceneStopBands(FalseColorBands.clipStops(MonitorTransfer.REC709, ceiling = DjiScopeExposureCeiling.UNOBSERVED))
         assertEquals("+2", rec709.first { it.contains(2.0) }.label)
         assertEquals("clip", rec709.last().label)
 
         assertEquals(
             listOf("−6", "−4", "−2", "18%", "+2", "+4", "+6", "+8", "clip"),
-            FalseColorReference.sceneStopMarkers(MonitorTransfer.DLOG2).map { it.label },
+            FalseColorReference.sceneStopMarkers(MonitorTransfer.DLOG2, ceiling = DjiScopeExposureCeiling.UNOBSERVED).map { it.label },
         )
         assertEquals(
             listOf("−6", "−4", "−2", "18%", "clip"),
-            FalseColorReference.sceneStopMarkers(MonitorTransfer.REC709).map { it.label },
+            FalseColorReference.sceneStopMarkers(MonitorTransfer.REC709, ceiling = DjiScopeExposureCeiling.UNOBSERVED).map { it.label },
         )
         assertTrue(FalseColorReference.axisLabels(MonitorFalseColorSelection.SCENE_STOPS).isEmpty())
     }

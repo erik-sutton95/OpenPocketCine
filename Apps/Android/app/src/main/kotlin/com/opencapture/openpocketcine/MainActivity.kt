@@ -242,7 +242,7 @@ private fun OpenPocketCineApp(model: AppModel) {
         }
         onDispose { runCatching { windowManager.removeScreenRecordingCallback(callback) } }
     }
-    val hideNavigation = (showLive && model.liveOperatorPanel == null) || model.showsMultiview
+    val hideNavigation = (showLive && model.shellState.cover == null) || model.showsMultiview
     LaunchedEffect(activity, hideNavigation) {
         (activity as? MainActivity)?.hideSystemNavigation = hideNavigation
         (activity as? MainActivity)?.updateSystemBars()
@@ -361,6 +361,7 @@ private fun LinkExperience(
             }),
         monitor = { LiveViewScreen(model) },
         page = { ShellCoverPage(model, it) },
+        coverPresentation = com.opencapture.opencine.appkit.ShellCoverPresentation.SHELL,
         pageFrame = { route, content ->
             val pair = route == ShellModel.Route.PAIR
             Column(Modifier.fillMaxSize().then(

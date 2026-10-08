@@ -10,7 +10,7 @@ final class ChromeEditorReturnTests: XCTestCase {
     func testBecomingLiveDismissesSettingsAndHomePanels() {
         let model = AppModel()
         model.homePanel = .settings
-        model.liveOperatorPanel = .settings
+        model.shell.open(.settings)
         model.operatorSettingsTab = .display
         model.chromeEditorMode = .live
         model.chromeEditorReturnMode = .live
@@ -19,7 +19,7 @@ final class ChromeEditorReturnTests: XCTestCase {
         model.noteBecameLive()
 
         XCTAssertNil(model.homePanel)
-        XCTAssertNil(model.liveOperatorPanel)
+        XCTAssertNil(model.shell.cover)
         XCTAssertNil(model.chromeEditorMode)
         XCTAssertNil(model.chromeEditorReturnMode)
         XCTAssertFalse(model.liveChromeInteractive)
@@ -29,13 +29,13 @@ final class ChromeEditorReturnTests: XCTestCase {
     func testLeavingLiveDismissesOperatorSetup() {
         let model = AppModel()
         present(model)
-        model.liveOperatorPanel = .settings
+        model.shell.open(.settings)
         model.chromeEditorMode = .clean
 
         model.shell.close()
         model.noteLeftLive()
 
-        XCTAssertNil(model.liveOperatorPanel)
+        XCTAssertNil(model.shell.cover)
         XCTAssertNil(model.chromeEditorMode)
         XCTAssertTrue(model.liveChromeInteractive)
     }
@@ -44,12 +44,12 @@ final class ChromeEditorReturnTests: XCTestCase {
     func testOpeningTheEditorLeavesSettingsAndSwitchesMode() {
         let model = AppModel()
         present(model)
-        model.liveOperatorPanel = .settings
+        model.shell.open(.settings)
         model.assist.clean = false
 
         model.beginChromeEditing(.clean)
 
-        XCTAssertNil(model.liveOperatorPanel)
+        XCTAssertNil(model.shell.cover)
         XCTAssertTrue(model.assist.clean)
         XCTAssertEqual(model.chromeEditorMode, .clean)
         XCTAssertEqual(model.currentDispMode, .clean)
@@ -64,7 +64,7 @@ final class ChromeEditorReturnTests: XCTestCase {
         model.endChromeEditing()
 
         XCTAssertNil(model.chromeEditorMode)
-        XCTAssertEqual(model.liveOperatorPanel, .settings)
+        XCTAssertEqual(model.shell.cover, .settings)
         XCTAssertEqual(model.operatorSettingsTab, .display)
         XCTAssertEqual(model.chromeEditorReturnMode, .clean)
     }

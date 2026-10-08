@@ -299,7 +299,7 @@ final class ConnectionLifecycleRegressionTests: XCTestCase {
             CGSize(width: 400, height: 800),
             CGSize(width: 800, height: 400),
         ].enumerated() {
-            model.liveOperatorPanel = index.isMultiple(of: 2) ? .settings : nil
+            if index.isMultiple(of: 2) { model.shell.open(.settings) } else { model.shell.dismissCover() }
             window.frame.size = size
             host.view.frame = window.bounds
             try await settle(host.view)

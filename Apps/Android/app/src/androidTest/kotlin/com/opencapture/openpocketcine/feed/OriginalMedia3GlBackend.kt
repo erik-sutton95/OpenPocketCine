@@ -9,8 +9,8 @@ import androidx.media3.common.util.GlUtil
 import com.opencapture.opencine.runtime.NativeGlBackend
 import com.opencapture.opencine.runtime.NativeGlProgram
 
-/** Only the existing third-party GL helpers remain in the application adapter. */
-internal class Media3GlBackend(private val context: Context) : NativeGlBackend {
+/** SIMULATED native-pixel oracle: original SDK adapter retained unchanged in tests. */
+internal class OriginalMedia3GlBackend(private val context: Context) : NativeGlBackend {
     override fun createProgram(vertexAsset: String, fragmentAsset: String): NativeGlProgram =
         Media3Program(GlProgram(context, vertexAsset, fragmentAsset))
     override fun normalizedCoordinateBounds() = GlUtil.getNormalizedCoordinateBounds()

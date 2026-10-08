@@ -307,7 +307,7 @@ final class CameraSession {
             var file = record.payload; file.isStarred = record.favorite; return file
         } ?? []
     }
-    var mediaFetchInProgress: Bool { mediaLibraryOwner?.fetching ?? false }
+    var mediaFetchInProgress: Bool { mediaLibraryOwner.map { $0.acquiringSource || $0.fetching } ?? false }
     var mediaFetchListedCount: Int { mediaLibraryOwner?.fetchedCount ?? 0 }
     var mediaOperationNote: String?
     var mediaNote: String? {
@@ -324,7 +324,10 @@ final class CameraSession {
     /// closes it (returning the camera to live) when it turns false (#273).
     private(set) var cameraGalleryOpen = false
     @ObservationIgnored private var cameraGalleryAwayTicks = 0
-    var mediaDownloadProgress: [String: Double] = [:]
+    var mediaDownloadProgress: [String: Double] {
+        Dictionary((mediaLibraryOwner?.hostProgress ?? [:]).map { ($0.key.rawValue, $0.value) },
+            uniquingKeysWith: { _, latest in latest })
+    }
     var mediaIOCacheRevision: UInt64 = 0
     var mediaCacheRevision: UInt64 { mediaIOCacheRevision &+ (mediaLibraryOwner?.cacheRevision ?? 0) }
     @ObservationIgnored let cameraMedia: CameraMedia
@@ -1288,7 +1291,7 @@ final class CameraSession {
                 }
                 self.fireCamera(
                     request.frame, name: request.name, expect: request.expectation,
-                    retransmits: request.retransmits, coalesce: request.coalesce,
+                    retransmits: request.retransmits, coalesce: request.coalesce, admission: request.admission,
                     onStage: { event(.stage($0)) }, onFail: { event(.failed) },
                     onSettle: { event(.settled($0)) })
             },
@@ -1348,6 +1351,8 @@ final class CameraSession {
                         "zoom: SET \(Duml.hex(frame.payload)) ack=\(success ? "ok" : (self.controlNote ?? "failed"))"
                     )
                 }
+            }, admittedNativeISO: { [weak self] from, to, admission in
+                self?.hopNativeISO(from: from, to: to, suppliedAdmission: admission)
             })
     }
 
@@ -1368,6 +1373,12 @@ final class CameraSession {
                 ControlLiveLog.line(
                     "control: send AE spot 0x02/0x22 seq=\(seq) flags=0x\(String(prepare.flags, radix: 16)) payload=\(Duml.hex(prepare.payload)) via=datalink"
                 )
+            }, sendAdmittedPrepare: { [weak self] frame, admission in
+                guard let self, self.controlLinkReady, admission.admits(self.commandOwner) else { return .skipped }
+                return self.datalink?.sendUntracked(frame, admission: admission) ?? .skipped
+            }, admittedRequest: { [weak self] frame, name, timeout, admission in
+                guard let self else { return false }
+                return await self.requestCamera(frame, name: name, timeout: timeout, admission: admission)
             })
     }
 
@@ -1534,6 +1545,10 @@ final class CameraSession {
                 case .focus(let x, let y):
                     self.adoptCameraFocus(x: x, y: y, fromTrackingBox: true)
                 }
+            }, sendAdmitted: { [weak self] frame, name, retransmits, admission, settle in
+                guard let self else { settle(false); return }
+                self.fireCamera(frame, name: name, retransmits: retransmits,
+                    admission: admission, onSettle: settle)
             })
     }
 
@@ -1704,13 +1719,17 @@ final class CameraSession {
 
     /// Fire a still in Photo. Record lamp, gamepad, Watch and watcher toggles reach this
     /// through `control.shutter()`, which resolves video to an explicit start or stop.
-    func takePhoto() {
+    func takePhoto() { takePhoto(suppliedAdmission: nil) }
+    func takePhoto(admission: DJICommandAdmission) { takePhoto(suppliedAdmission: admission) }
+
+    private func takePhoto(suppliedAdmission admission: DJICommandAdmission?) {
+        guard admission?.admits(commandOwner) ?? true else { return }
         let frame = CaptureCommand.frame(
             mode: currentShootingMode, model: connectedCamera?.model,
             isRecording: status.isRecording)
         controlBusy = true
         fireCamera(
-            frame, name: "Photo", retransmits: false,
+            frame, name: "Photo", retransmits: false, admission: admission,
             onSettle: { [weak self] _ in self?.controlBusy = false })
     }
 
@@ -1719,6 +1738,15 @@ final class CameraSession {
     /// The rec button stays disabled (`controlBusy`) until the ACK or the
     /// `rec_state` telemetry confirms — record must never lie.
     func setRecording(_ start: Bool, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setRecording(start, suppliedAdmission: nil, onStage: onStage)
+    }
+    func setRecording(_ start: Bool, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setRecording(start, suppliedAdmission: admission, onStage: onStage)
+    }
+
+    private func setRecording(_ start: Bool, suppliedAdmission admission: DJICommandAdmission?, onStage: (@MainActor (ControlWireEvent) -> Void)?) {
+        guard admission?.admits(commandOwner) ?? true else { onStage?(.notSent); return }
         let mode = currentShootingMode
         let frame = CaptureCommand.frame(
             mode: mode, model: connectedCamera?.model, isRecording: !start)
@@ -1730,7 +1758,7 @@ final class CameraSession {
             name = start ? "Record" : "Stop"
         }
         fireCamera(
-            frame, name: name, expect: .recording(start), onStage: onStage,
+            frame, name: name, expect: .recording(start), admission: admission, onStage: onStage,
             onSettle: { [weak self] _ in self?.controlBusy = false }
         )
     }
@@ -1814,12 +1842,21 @@ final class CameraSession {
     }
 
     func setEv(_ ev: EvComp, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setEv(ev, suppliedAdmission: nil, onStage: onStage)
+    }
+    func setEv(_ ev: EvComp, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setEv(ev, suppliedAdmission: admission, onStage: onStage)
+    }
+
+    private func setEv(_ ev: EvComp, suppliedAdmission admission: DJICommandAdmission?, onStage: (@MainActor (ControlWireEvent) -> Void)?) {
+        guard admission?.admits(commandOwner) ?? true else { onStage?(.notSent); return }
         let previous = status.evComp
         editorReconciliation.pinExpo(ev: ev)
         status.evComp = ev
         fireCamera(
             Commands.setEv(ev), name: "EV \(ev.label)", expect: .ev(ev),
-            coalesce: true, onStage: onStage,
+            coalesce: true, admission: admission, onStage: onStage,
             onFail: { [weak self] in
                 self?.editorReconciliation.clearExpoPin(ev: true)
                 self?.status.evComp = previous
@@ -1929,9 +1966,21 @@ final class CameraSession {
         zoomGesture.chip(factor, onStage: onStage)
     }
 
+    func setZoom(_ factor: Double, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        guard admission.admits(commandOwner) else { onStage?(.notSent); return }
+        zoomGesture.chip(factor, admission: admission, onStage: onStage)
+    }
+
     /// Pinch hybrid: `0A 4E` + unquantized lens. Coalesces to the newest tick.
     func setZoomSlider(_ factor: Double, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
         zoomGesture.slider(factor, onStage: onStage)
+    }
+
+    func setZoomSlider(_ factor: Double, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        guard admission.admits(commandOwner) else { onStage?(.notSent); return }
+        zoomGesture.slider(factor, admission: admission, onStage: onStage)
     }
 
     /// Directional slew. 100 toward 12×; 300 from 12× to the 9.15× detent.
@@ -1943,7 +1992,10 @@ final class CameraSession {
     func setZoomStop() { zoomGesture.stop() }
 
     /// D-Log native 400 ↔ D-Log2 native 1600 when the operator is still on base.
-    private func hopNativeISO(from: ColorMode?, to: ColorMode) {
+    private func hopNativeISO(from: ColorMode?, to: ColorMode) { hopNativeISO(from: from, to: to, suppliedAdmission: nil) }
+
+    private func hopNativeISO(from: ColorMode?, to: ColorMode, suppliedAdmission admission: DJICommandAdmission?) {
+        guard admission?.admits(commandOwner) ?? true else { return }
         guard
             let next = CamCapIso.nativeISOHop(
                 from: from, to: to, current: status.isoIndex,
@@ -1952,14 +2004,23 @@ final class CameraSession {
         ControlLiveLog.line(
             "iso: native hop \(from?.label ?? "?") → \(to.label) \(status.isoIndex?.label ?? "?") → \(next.label)"
         )
-        setISO(next)
+        if let admission { setISO(next, admission: admission) } else { setISO(next) }
     }
 
     func setISO(_ index: IsoIndex, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setISO(index, suppliedAdmission: nil, onStage: onStage)
+    }
+    func setISO(_ index: IsoIndex, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setISO(index, suppliedAdmission: admission, onStage: onStage)
+    }
+
+    private func setISO(_ index: IsoIndex, suppliedAdmission admission: DJICommandAdmission?, onStage: (@MainActor (ControlWireEvent) -> Void)?) {
+        guard admission?.admits(commandOwner) ?? true else { onStage?(.notSent); return }
         editorReconciliation.pinExpo(iso: index.isoValue, isoIndex: index)
         fireCamera(
             Commands.setIsoIndex(index), name: "ISO \(index.label)", expect: .iso(index),
-            coalesce: true, onStage: onStage,
+            coalesce: true, admission: admission, onStage: onStage,
             onFail: { [weak self] in self?.editorReconciliation.clearExpoPin(iso: true) },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
@@ -1970,22 +2031,29 @@ final class CameraSession {
     /// Pass `Int` into `Commands.setShutter(denom:)` — `UInt8` cannot encode 1/256 and above.
     /// Manual-expo rides the same socket right before the shutter SET (Mimo never
     /// round-trips between them; the camera applies datagrams in arrival order).
-    func setShutterDenom(
-        _ denom: Int, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil,
-        ensureManual: Bool = true
-    ) {
+    func setShutterDenom(_ denom: Int,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil, ensureManual: Bool = true) {
+        setShutterDenom(denom, suppliedAdmission: nil, onStage: onStage, ensureManual: ensureManual)
+    }
+    func setShutterDenom(_ denom: Int, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil, ensureManual: Bool = true) {
+        setShutterDenom(denom, suppliedAdmission: admission, onStage: onStage, ensureManual: ensureManual)
+    }
+
+    private func setShutterDenom(_ denom: Int, suppliedAdmission admission: DJICommandAdmission?, onStage: (@MainActor (ControlWireEvent) -> Void)?, ensureManual: Bool) {
+        guard admission?.admits(commandOwner) ?? true else { onStage?(.notSent); return }
         // A direct speed choice supersedes an angle waiting for FORMAT.
         editorReconciliation.clearFormatAngle()
         if ensureManual, status.expoMode != .manual {
             editorReconciliation.pinExpo(mode: .manual)
             fireCamera(
-                Commands.setExpoMode(.manual), name: "Manual expo", expect: .expo(.manual),
+                Commands.setExpoMode(.manual), name: "Manual expo", expect: .expo(.manual), admission: admission,
                 onFail: { [weak self] in self?.editorReconciliation.clearExpoPin(mode: true) })
         }
         editorReconciliation.pinExpo(shutter: denom)
         fireCamera(
             Commands.setShutter(denom: denom), name: "1/\(denom)", expect: .shutter(denom),
-            coalesce: true, onStage: onStage,
+            coalesce: true, admission: admission, onStage: onStage,
             onFail: { [weak self] in self?.editorReconciliation.clearExpoPin(shutter: true) },
             onSettle: { [weak self] ok in
                 ControlLiveLog.line(
@@ -2077,17 +2145,32 @@ final class CameraSession {
         return display
     }
 
-    func setWhiteBalanceAuto(
-        tint: Int? = nil, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil
-    ) {
-        autoWhiteBalanceLock = nil
-        let next = min(max(tint ?? whiteBalanceDisplayStatus.whiteBalanceTint ?? 0, -100), 100)
-        fireWhiteBalance(.auto(tint: next), onStage: onStage)
+    func setWhiteBalanceAuto(tint: Int? = nil, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setWhiteBalanceAuto(tint: tint, suppliedAdmission: nil, onStage: onStage)
+    }
+    func setWhiteBalanceAuto(tint: Int?, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setWhiteBalanceAuto(tint: tint, suppliedAdmission: admission, onStage: onStage)
     }
 
-    func setWhiteBalanceCustom(
-        kelvin: Int, tint: Int, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil
-    ) {
+    private func setWhiteBalanceAuto(tint: Int?, suppliedAdmission admission: DJICommandAdmission?, onStage: (@MainActor (ControlWireEvent) -> Void)?) {
+        guard admission?.admits(commandOwner) ?? true else { onStage?(.notSent); return }
+        autoWhiteBalanceLock = nil
+        let next = min(max(tint ?? whiteBalanceDisplayStatus.whiteBalanceTint ?? 0, -100), 100)
+        fireWhiteBalance(.auto(tint: next), onStage: onStage, admission: admission)
+    }
+
+    func setWhiteBalanceCustom(kelvin: Int, tint: Int,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setWhiteBalanceCustom(kelvin: kelvin, tint: tint, suppliedAdmission: nil, onStage: onStage)
+    }
+    func setWhiteBalanceCustom(kelvin: Int, tint: Int, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setWhiteBalanceCustom(kelvin: kelvin, tint: tint, suppliedAdmission: admission, onStage: onStage)
+    }
+
+    private func setWhiteBalanceCustom(kelvin: Int, tint: Int, suppliedAdmission admission: DJICommandAdmission?, onStage: (@MainActor (ControlWireEvent) -> Void)?) {
+        guard admission?.admits(commandOwner) ?? true else { onStage?(.notSent); return }
         let wb = WhiteBalance.custom(
             kelvin: min(max(kelvin, 2_000), 10_000), tint: min(max(tint, -100), 100))
         // Custom from AWB Lock keeps the locked value; the camera is already there.
@@ -2097,13 +2180,13 @@ final class CameraSession {
             return
         }
         autoWhiteBalanceLock = nil
-        fireWhiteBalance(wb, onStage: onStage)
+        fireWhiteBalance(wb, onStage: onStage, admission: admission)
     }
 
     /// The request is held as `pendingWhiteBalance` until the camera reports it; `status`
     /// keeps the camera's own value so confirmation can never be self-fulfilling.
     private func fireWhiteBalance(
-        _ wb: WhiteBalance, onStage: (@MainActor (ControlWireEvent) -> Void)?
+        _ wb: WhiteBalance, onStage: (@MainActor (ControlWireEvent) -> Void)?, admission: DJICommandAdmission? = nil
     ) {
         let pin = editorReconciliation.holdWhiteBalance(wb)
         guard editorReconciliation.isPending(pin) else {
@@ -2120,7 +2203,7 @@ final class CameraSession {
             : Commands.setWhiteBalanceCustom(kelvin: wb.kelvin, tint: wb.tint)
         fireCamera(
             frame, name: name, expect: .wb(wb),
-            coalesce: true, onStage: onStage,
+            coalesce: true, admission: admission, onStage: onStage,
             onFail: { [weak self] in
                 guard let self, self.editorReconciliation.isPending(pin) else { return }
                 _ = self.editorReconciliation.reject(pin)
@@ -2148,9 +2231,16 @@ final class CameraSession {
             })
     }
 
-    func setFocusMode(
-        _ mode: FocusMode, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil
-    ) {
+    func setFocusMode(_ mode: FocusMode, onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setFocusMode(mode, suppliedAdmission: nil, onStage: onStage)
+    }
+    func setFocusMode(_ mode: FocusMode, admission: DJICommandAdmission,
+        onStage: (@MainActor (ControlWireEvent) -> Void)? = nil) {
+        setFocusMode(mode, suppliedAdmission: admission, onStage: onStage)
+    }
+
+    private func setFocusMode(_ mode: FocusMode, suppliedAdmission admission: DJICommandAdmission?, onStage: (@MainActor (ControlWireEvent) -> Void)?) {
+        guard admission?.admits(commandOwner) ?? true else { onStage?(.notSent); return }
         guard supportsFocusMode else {
             onStage?(.notSent)
             return
@@ -2164,7 +2254,7 @@ final class CameraSession {
         }
         fireCamera(
             Commands.setFocusMode(mode), name: "Focus \(mode.label)", expect: .focus(mode),
-            onStage: onStage,
+            admission: admission, onStage: onStage,
             onFail: { [weak self] in
                 guard let self, self.editorReconciliation.isPending(pin) else { return }
                 _ = self.editorReconciliation.reject(pin)
@@ -2333,7 +2423,13 @@ final class CameraSession {
     }
 
     /// `0x02/0x42` via `Commands.setColorMode`.
-    func setColorMode(_ mode: ColorMode) {
+    func setColorMode(_ mode: ColorMode) { setColorMode(mode, suppliedAdmission: nil) }
+    func setColorMode(_ mode: ColorMode, admission: DJICommandAdmission) {
+        setColorMode(mode, suppliedAdmission: admission)
+    }
+
+    private func setColorMode(_ mode: ColorMode, suppliedAdmission admission: DJICommandAdmission?) {
+        guard admission?.admits(commandOwner) ?? true else { return }
         if status.isRecording, mode != status.colorMode {
             controlNote = ControlHud.recordingColorLockNote
             return
@@ -2345,9 +2441,9 @@ final class CameraSession {
         editorReconciliation.holdColor(mode)
         fireCamera(
             Commands.setColorMode(mode, model: connectedCamera?.model),
-            name: mode.label(for: bodyFamily), expect: .color(mode),
+            name: mode.label(for: bodyFamily), expect: .color(mode), admission: admission,
             onFail: { [weak self] in self?.editorReconciliation.clearColor() })
-        hopNativeISO(from: from, to: mode)
+        hopNativeISO(from: from, to: mode, suppliedAdmission: admission)
         if mode == .dLog { zoomGesture.confirmIfReady() }
     }
 
@@ -2382,9 +2478,16 @@ final class CameraSession {
 
     /// Tap-to-focus: Mimo's four-write burst (`0x22` `02`, `0x30` xy, `0x68` `08`,
     /// `0x32` region). Glamour is `0x8E` pid `0x0039`, not `0x68`.
-    func markFocus(at normalized: CGPoint) {
+    func markFocus(at normalized: CGPoint) { markFocus(at: normalized, suppliedAdmission: nil) }
+    func markFocus(at normalized: CGPoint, admission: DJICommandAdmission) {
+        markFocus(at: normalized, suppliedAdmission: admission)
+    }
+
+    private func markFocus(at normalized: CGPoint, suppliedAdmission admission: DJICommandAdmission?) {
+        guard admission?.admits(commandOwner) ?? true else { return }
         guard supportsTapFocus else { return }
-        subjectTracking.cancel(sendClear: isTrackingActive)
+        if let admission { subjectTracking.cancel(sendClear: isTrackingActive, admission: admission) }
+        else { subjectTracking.cancel(sendClear: isTrackingActive) }
         // Hold the tap reticle so AF-C face detect cannot hide it immediately.
         lastTapFocusAt = Date()
         lastFocusTapAt = Date()
@@ -2395,7 +2498,8 @@ final class CameraSession {
         let y = Float(min(max(normalized.y, 0), 1))
         focusPoint = CGPoint(x: Double(x), y: Double(y))
         guard datalink != nil else { return }
-        tapFocus.start(x: x, y: y)
+        if let admission { tapFocus.start(x: x, y: y, admission: admission) }
+        else { tapFocus.start(x: x, y: y) }
     }
 
     /// Drag-to-track: `0x02/0xA6` centre+size, then poll `0x02/0xA5` until lock or idle.
@@ -2722,12 +2826,12 @@ final class CameraSession {
     /// One fire-and-forget SET. Latest-wins pending while the same opcode is in flight.
     private func fireCamera(
         _ frame: Duml.Frame, name: String, expect: DjiAppleControlExpectation? = nil,
-        retransmits: Bool = true, coalesce: Bool = false,
+        retransmits: Bool = true, coalesce: Bool = false, admission: DJICommandAdmission? = nil,
         onStage: (@MainActor (ControlWireEvent) -> Void)? = nil,
         onFail: (@MainActor () -> Void)? = nil,
         onSettle: (@MainActor (Bool) -> Void)? = nil
     ) {
-        guard !Task.isCancelled, controlLinkReady else {
+        guard !Task.isCancelled, admission?.admits(commandOwner) ?? true, controlLinkReady else {
             controlNote = "not live"
             onStage?(.notSent)
             onFail?()
@@ -2743,7 +2847,7 @@ final class CameraSession {
         controlExchange.submit(
             .init(
                 frame, name: name, expectation: expect,
-                retransmits: retransmits, coalesce: coalesce)
+                retransmits: retransmits, coalesce: coalesce, admission: admission)
         ) { event in
             switch event {
             case .stage(let stage): onStage?(stage)
@@ -2758,10 +2862,10 @@ final class CameraSession {
     @discardableResult
     private func requestCamera(
         _ frame: Duml.Frame, name: String, timeout: Duration = .seconds(3),
-        logSend: Bool = true
+        logSend: Bool = true, admission: DJICommandAdmission? = nil
     ) async -> Bool {
         let generation = controlGeneration
-        guard !Task.isCancelled,
+        guard !Task.isCancelled, admission?.admits(commandOwner) ?? true,
             DjiAppleCameraSettings.requestControlGeneration.map({ $0 == generation }) ?? true
         else { return false }
         guard admitsMultiviewControl, datalink != nil, datalink?.isRebuilding != true else {
@@ -2775,18 +2879,31 @@ final class CameraSession {
         do {
             // Waiter is registered inside waitFrame *before* `send` runs. Do not `async let`
             // on MainActor — that wrote UDP before the child task could register.
-            let reply = try await waitFrame(
-                frame.cmdSet, frame.cmdId,
-                timeout: timeout,
-                consumeHold: false
-            ) {
-                guard self.admitsMultiviewControl else { return }
-                let seq = self.datalink?.send(frame) ?? 0
+            let send: () -> Bool = { [self] in
+                guard admitsMultiviewControl else { return false }
+                let sequence: UInt16
+                if let admission {
+                    guard admission.admits(commandOwner), let datalink,
+                        case .queued(let queued) = datalink.send(frame, admission: admission)
+                    else { return false }
+                    sequence = queued
+                } else { sequence = datalink?.send(frame) ?? 0 }
                 if logSend {
                     ControlLiveLog.line(
-                        "control: send \(name) \(opcode) seq=\(seq) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink"
+                        "control: send \(name) \(opcode) seq=\(sequence) flags=0x\(String(frame.flags, radix: 16)) payload=\(Duml.hex(frame.payload)) via=datalink"
                     )
                 }
+                return true
+            }
+            let reply: Duml.Frame
+            if admission != nil {
+                let registered = controlExchange.request(matching: [(frame.cmdSet, frame.cmdId)],
+                    timeout: timeout, consumeHold: false, send: nil)
+                guard send() else { registered.cancel(); return false }
+                reply = try await registered.value()
+            } else {
+                reply = try await waitFrame(frame.cmdSet, frame.cmdId, timeout: timeout,
+                    consumeHold: false) { _ = send() }
             }
             guard !Task.isCancelled, controlGeneration == generation else { return false }
             return finishControlReply(
@@ -4575,8 +4692,6 @@ final class CameraSession {
         guard ifCurrent() else { return }
         mediaOperationNote = nil
         guard ifCurrent() else { return }
-        mediaDownloadProgress = [:]
-        guard ifCurrent() else { return }
         mediaLibraryOwner?.visibility = .cachedOnly
     }
 
@@ -4585,7 +4700,6 @@ final class CameraSession {
         cameraMedia.resetSession()
         library.bind(nil)
         let token = library.actionToken
-        mediaDownloadProgress = [:]
         try await cameraMedia.clearCache(cameraID: mediaCameraID, preservingCatalog: true)
         guard library.isCurrent(token), !Task.isCancelled else { return }
         mediaIOCacheRevision &+= 1

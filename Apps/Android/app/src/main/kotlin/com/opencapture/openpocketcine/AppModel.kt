@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkit.MonitorOperatorSessionModel
 import androidx.compose.runtime.Composable
 import com.opencapture.opencine.appkit.MonitorCaptureField
 import com.opencapture.opencine.appkit.MonitorCapturePreferences
@@ -7,6 +8,7 @@ import com.opencapture.opencine.appkit.captureField
 import com.opencapture.opencine.appkit.readPhoneBatteryReadout
 import com.opencapture.opencine.cameracontrols.CaptureRefresh
 import com.opencapture.opencine.cameracontrols.CaptureSheetHost
+import com.opencapture.opencine.cameracontrols.CaptureAudioService
 import com.opencapture.opencine.cameracontrols.CaptureWheelState
 import com.opencapture.opencine.cameracontrols.GamepadHost
 import com.opencapture.opencine.cameracontrols.OperatorSetupModel
@@ -64,7 +66,6 @@ import com.opencapture.opencine.vocabulary.FoundCamera
 import com.opencapture.openpocketcine.pairing.AddSetupSlot
 import com.opencapture.openpocketcine.pairing.isBusy
 import com.opencapture.openpocketcine.assists.createLiveAssistState
-import com.opencapture.openpocketcine.feed.Media3GlBackend
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.session.AppSessionHost
 import com.opencapture.opencine.dji.DjiCameraSession
@@ -104,10 +105,12 @@ class AppModel(
     private val _mediaCacheRevision = kotlinx.coroutines.flow.MutableStateFlow(0L)
     val mediaCacheRevision: kotlinx.coroutines.flow.StateFlow<Long> = _mediaCacheRevision
     fun clearOperatorMediaCache() {
-        scope.launch {
-            try { OperatorMediaCache.clearOwned(mediaCacheRoot) { OperatorMediaCache.clear(appContext) } }
-            finally { _mediaCacheRevision.value += 1 }
-        }
+        scope.launch { clearOperatorMediaCacheOwned() }
+    }
+    /** Bounded cache IO used by the captured common settings action. */
+    suspend fun clearOperatorMediaCacheOwned() {
+        try { OperatorMediaCache.clearOwned(mediaCacheRoot) { OperatorMediaCache.clear(appContext) } }
+        finally { _mediaCacheRevision.value += 1 }
     }
 
     init {
@@ -169,7 +172,8 @@ class AppModel(
             if (active) session.noteSceneBecameActive() else session.noteSceneBecameInactive()
         }
     }
-    private var shellState by mutableStateOf(shell.state.value)
+    var shellState by mutableStateOf(shell.state.value)
+        private set
     init { scope.launch { shell.state.collect { shellState = it } } }
 
     /** Saved cameras, most recently connected first. */
@@ -178,7 +182,7 @@ class AppModel(
     var multiviewExit by mutableStateOf<(() -> Unit)?>(null)
     val scopeBus = com.opencapture.opencine.runtime.ScopeSampleBus()
     val inspectorPreview = com.opencapture.opencine.runtime.InspectorPreviewPipeline(
-        scopeBus, ::Media3GlBackend, "OpcInspector")
+        scopeBus, { com.opencapture.opencine.runtime.NativeGlBackend.create(it) }, "OpcInspector")
     override val assist = createLiveAssistState(appContext)
 
     /** The operator opened the pair page from the cameras page. */
@@ -205,18 +209,17 @@ class AppModel(
         }
     /** The Multiview stage covers the camera home until it closes. */
     var showsMultiview by mutableStateOf(false)
-    var liveOperatorPanel: LiveOperatorPanel?
-        get() = if (shellState.monitor != null) shellState.cover?.let {
-            if (it == ShellModel.Cover.SETTINGS) LiveOperatorPanel.SETTINGS else LiveOperatorPanel.MEDIA
-        } else null
-        set(value) {
-            if (value == null) shell.dismissCover()
-            else shell.open(if (value == LiveOperatorPanel.SETTINGS) ShellModel.Cover.SETTINGS else ShellModel.Cover.MEDIA)
-        }
-    override var operatorSettingsTab by mutableStateOf(MonitorSettingsTab.LINK)
-    var chromeEditorMode by mutableStateOf<MonitorDisplayMode?>(null)
-    override var chromeEditorReturnMode by mutableStateOf<MonitorDisplayMode?>(null)
-    override var liveChromeInteractive by mutableStateOf(true)
+    internal val operatorSession = MonitorOperatorSessionModel(shell, assist, OperatorPrefs.displayPreferences(appContext), scope)
+    override var operatorSettingsTab: MonitorSettingsTab
+        get() = operatorSession.settingsTab
+        set(value) { operatorSession.settingsTab = value }
+    var chromeEditorMode: MonitorDisplayMode?
+        get() = operatorSession.editingMode
+        set(value) { operatorSession.editingMode = value }
+    override var chromeEditorReturnMode: MonitorDisplayMode?
+        get() = operatorSession.returnedMode
+        set(value) { operatorSession.returnedMode = value }
+    override val liveChromeInteractive: Boolean get() = operatorSession.interactive
     override var keepScreenAwake by mutableStateOf(OperatorPrefs.keepScreenAwake(appContext))
         private set
     override var hdrDisplay by mutableStateOf(OperatorPrefs.hdrDisplay(appContext))
@@ -269,10 +272,8 @@ class AppModel(
         session.gimbalRamp = gimbalRamp
         session.gimbalDoubleTap = gimbalDoubleTap
     }
-    var dispLive by mutableStateOf(OperatorPrefs.dispLive(appContext))
-        private set
-    var dispClean by mutableStateOf(OperatorPrefs.dispClean(appContext))
-        private set
+    val dispLive: MonitorDisplayChrome get() = operatorSession.live
+    val dispClean: MonitorDisplayChrome get() = operatorSession.clean
     var cleanViewPinnedTools by mutableStateOf(OperatorPrefs.cleanViewPinnedTools(appContext))
         private set
     var portraitFeedAspect by mutableStateOf(OperatorPrefs.portraitFeedAspect(appContext))
@@ -285,7 +286,9 @@ class AppModel(
         private set
     override var lutSelection by mutableStateOf(OperatorPrefs.lutSelection(appContext))
         private set
-    var assistClean by mutableStateOf(false)
+    var assistClean: Boolean
+        get() = assist.clean
+        set(value) { assist.clean = value }
     var phoneBatteryPercent by mutableIntStateOf(-1)
         private set
     var phoneCharging by mutableStateOf(false)
@@ -294,70 +297,24 @@ class AppModel(
     override val gimbalGamepad = GimbalGamepadDriver(OperatorPrefs::gimbalGamepadStick)
     override var gamepadConnected by mutableStateOf(false)
 
-    val currentDispMode: MonitorDisplayMode
-        get() = if (assistClean) MonitorDisplayMode.CLEAN else MonitorDisplayMode.LIVE
-
-    val dispChrome: MonitorDisplayChrome
-        get() = chrome(currentDispMode)
-
-    override val isEditingChrome: Boolean
-        get() = chromeEditorMode != null
-
-    override fun chrome(mode: MonitorDisplayMode): MonitorDisplayChrome =
-        when (mode) {
-            MonitorDisplayMode.LIVE -> dispLive
-            MonitorDisplayMode.CLEAN -> dispClean
-        }
-
-    fun chromeSectionMounts(section: MonitorDisplaySection): Boolean {
-        val editing = chromeEditorMode
-        if (editing != null && editing == currentDispMode) return true
-        if (section == MonitorDisplaySection.RAIL_SETTINGS && !dispLive.railSettings && !dispClean.railSettings) {
-            return true
-        }
-        return dispChrome.isVisible(section)
-    }
-
-    override fun toggleChrome(section: MonitorDisplaySection, mode: MonitorDisplayMode) {
-        when (mode) {
-            MonitorDisplayMode.LIVE -> {
-                dispLive = dispLive.toggling(section)
-                OperatorPrefs.setDispLive(appContext, dispLive)
-            }
-            MonitorDisplayMode.CLEAN -> {
-                dispClean = dispClean.toggling(section)
-                OperatorPrefs.setDispClean(appContext, dispClean)
-            }
-        }
-    }
+    val currentDispMode: MonitorDisplayMode get() = operatorSession.mode
+    val dispChrome: MonitorDisplayChrome get() = operatorSession.chrome
+    override val isEditingChrome: Boolean get() = operatorSession.isEditing
+    override fun chrome(mode: MonitorDisplayMode): MonitorDisplayChrome = operatorSession.chrome(mode)
+    fun chromeSectionMounts(section: MonitorDisplaySection): Boolean = operatorSession.mounts(section)
+    override fun toggleChrome(section: MonitorDisplaySection, mode: MonitorDisplayMode) = operatorSession.toggle(section, mode)
 
     override fun beginChromeEditing(mode: MonitorDisplayMode) {
-        homePanel = null
-        liveOperatorPanel = null
         liveGimbalPanel = LiveGimbalPanel.NONE
-        setDisplayMode(clean = mode == MonitorDisplayMode.CLEAN)
-        chromeEditorMode = mode
+        operatorSession.beginEditing(mode)
     }
 
-    fun endChromeEditing() {
-        chromeEditorReturnMode = chromeEditorMode
-        chromeEditorMode = null
-        operatorSettingsTab = MonitorSettingsTab.DISPLAY
-        liveOperatorPanel = LiveOperatorPanel.SETTINGS
-    }
-
-    fun setDisplayMode(clean: Boolean) {
-        assistClean = clean
-    }
+    fun endChromeEditing() = operatorSession.finishEditing()
+    fun setDisplayMode(clean: Boolean) { assist.clean = clean }
 
     fun noteBecameLive() {
         legalPanel = null
-        chromeEditorMode = null
-        liveChromeInteractive = false
-        scope.launch {
-            kotlinx.coroutines.delay(550)
-            liveChromeInteractive = true
-        }
+        operatorSession.synchronize(shell.state.value.monitor?.id)
     }
 
     override fun updateKeepScreenAwake(value: Boolean) {
@@ -587,8 +544,11 @@ class AppModel(
     val isLive: Boolean
         get() = shellState.monitor != null
 
+    internal val operatorCaptureSource by lazy { makeOperatorCaptureSource() }
+
     // CaptureSheetHost (camera-controls): the capture sheets read these values and commit through one typed entry.
     override val camera get() = session.connectedCamera?.model
+    override val audioService get() = captureAudioService()
     override fun captureField(sheet: LiveSheet, expoMode: Int): MonitorCaptureField? =
         capturePanelSettingKey(sheet, expoMode)?.let { control.captureField(it) }
     @Composable override fun captureSessionState(status: CameraStatus) = observedCaptureSessionState(status)
@@ -607,7 +567,7 @@ class AppModel(
 
     // GimbalChromeHost (camera-controls): the gimbal chrome reads these host values and reaches the session through the rest.
     override val mirrorsHorizontally get() = assist.mirrorsHorizontally
-    override val labelProfile get() = CameraLabelProfile.standard
+    override val labelProfile get() = camera?.captureProfile?.labels ?: CameraLabelProfile.standard
     override val waypointWideHFovDeg get() = GimbalMoveEngine.WIDE_HFOV
     override val connectedCameraId get() = session.connectedCamera?.id
     override val phase get() = session.phase
@@ -650,7 +610,7 @@ class AppModel(
     override fun canDriveGimbalPad(): Boolean =
         isLive &&
             !uiLocked &&
-            liveOperatorPanel == null &&
+            shellState.cover == null &&
             !isEditingChrome &&
             !session.browsingMedia
 
@@ -662,7 +622,7 @@ class AppModel(
             shell.state.collect { state ->
                 if (state.monitor?.id != monitor) {
                     monitor = state.monitor?.id
-                    if (monitor != null) noteBecameLive()
+                    if (monitor != null) noteBecameLive() else operatorSession.close()
                 }
             }
         }

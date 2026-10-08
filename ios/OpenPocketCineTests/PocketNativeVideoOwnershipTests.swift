@@ -180,7 +180,7 @@ final class PocketNativeVideoOwnershipTests: XCTestCase {
         let transfers: [MonitorTransfer] = [.rec709, .hdr, .dlog, .dlogm, .dlog2, .ilog]
         for iso in [50, 100, 200, 400, 800, 1600, 3200, 6400, 102_400] {
             for transfer in transfers {
-                let legacy = OpenCineCameraVocabulary.ScopeExposureCeiling()
+                let legacy = DJIScopeExposureCeiling()
                 let neutral = OpenCineMedia.ScopeExposureCeiling(
                     profile: PocketMonitorCalibration.clipProfile)
                 legacy.setISO(iso)

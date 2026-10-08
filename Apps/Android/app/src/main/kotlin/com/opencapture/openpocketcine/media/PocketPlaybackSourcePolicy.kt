@@ -42,6 +42,5 @@ internal fun mayAdvancePocketPlaybackAfterRemoval(
     token: com.opencapture.opencine.media.MonitorPlaybackItemToken,
     current: com.opencapture.opencine.appkit.MonitorMediaPlaybackState<MediaFile, PocketPlaybackLook>,
     sameComposition: Boolean, sameGallery: Boolean, sameContent: Boolean,
-): Boolean = removed == captured && sameComposition && sameGallery && sameContent &&
-    current.active?.asset?.id == captured &&
-    (current.token == token || (current.closed && current.token == token.copy(revision = token.revision + 1)))
+): Boolean = MonitorPlaybackRemovalAdmission.accepts(removed, captured, token, current.token,
+    current.active?.asset?.id, current.closed, sameComposition, sameGallery, sameContent)

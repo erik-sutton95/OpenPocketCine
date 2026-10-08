@@ -2,6 +2,8 @@
 package com.opencapture.openpocketcine.media
 
 import androidx.media3.exoplayer.ExoPlayer
+import com.opencapture.opencine.appkit.*
+import com.opencapture.opencine.media.*
 import com.opencapture.opencine.media.MonitorPlaybackItemToken
 import kotlinx.coroutines.test.runTest
 import java.lang.reflect.Proxy
@@ -149,19 +151,37 @@ class PocketMedia3PlaybackPortTest {
         val directory = com.opencapture.opencine.appkit.MonitorMediaCacheDirectory(java.io.File(parent, "canonical"))
         val staged = java.io.File(parent, "incoming")
         staged.writeBytes(ByteArray(128 * 1024 + 7) { (it % 127).toByte() })
-        val operation = PocketMediaOperation(directory) {
-            kotlin.test.assertSame(ownerThread, Thread.currentThread())
-            true
+        val codec = PocketMediaLibraryCodec({ null }, { false }, { -1 })
+        val cache = MonitorMediaCache(directory, codec, MonitorMediaOriginalEligibility.ExactSize,
+            "index.json", listOf("index.json", "color.json"), persistEmptyCatalog = false)
+        val favorites = object : MonitorMediaFavoritesStore {
+            override fun favorites() = emptySet<String>()
+            override fun saveFavorites(keys: Set<String>) {}
         }
+        val library = MonitorMediaLibraryModel(cache, favorites,
+            scope = kotlinx.coroutines.CoroutineScope(backgroundScope.coroutineContext + dispatcher),
+            cacheScanning = MonitorMediaCacheScanning.IMMEDIATE, initialCatalog = MediaCatalog(),
+            initialRecords = emptyList(), catalogBase = MonitorMediaCatalogBase.FRESH_LISTING)
+        val operation = PocketMediaOperation(library,
+            library.captureIO(MonitorMediaLibraryIOKey("captured-player"), null) {
+                kotlin.test.assertSame(ownerThread, Thread.currentThread())
+                true
+            })
+        val plan = MediaTransferPlan(expectedByteCount = staged.length(), attempts = listOf({ sink ->
+            sink.write(staged.readBytes())
+            MediaTransferReceipt(staged.length(), staged.length())
+        }), retry = { false })
         val sizes = mutableListOf<Int>()
         try {
-            pumpPocketPlaybackFile(staged, object : com.opencapture.opencine.media.MediaByteSink {
+            kotlinx.coroutines.withContext(dispatcher) {
+                library.transferHostFile(operation.authority, object : com.opencapture.opencine.media.MediaByteSink {
                 override suspend fun write(chunk: ByteArray) {
                     kotlin.test.assertSame(dispatcher,
                         kotlinx.coroutines.currentCoroutineContext()[kotlin.coroutines.ContinuationInterceptor])
                     sizes += chunk.size
                 }
-            }, operation, dispatcher)
+                }, plan, parent)
+            }
             assertEquals(listOf(64 * 1024, 64 * 1024, 7), sizes)
             var releases = 0
             val player = Proxy.newProxyInstance(ExoPlayer::class.java.classLoader, arrayOf(ExoPlayer::class.java)) { _, method, _ ->
@@ -175,8 +195,9 @@ class PocketMedia3PlaybackPortTest {
             val token = MonitorPlaybackItemToken(UUID.randomUUID(), 0)
             native.retireItem(token)
             var writes = 0
-            kotlin.test.assertFailsWith<kotlinx.coroutines.CancellationException> {
-                pumpPocketPlaybackFile(staged, object : com.opencapture.opencine.media.MediaByteSink {
+            val refusal = kotlin.test.assertFailsWith<MediaServiceException> {
+                kotlinx.coroutines.withContext(dispatcher) {
+                    library.transferHostFile(operation.authority, object : com.opencapture.opencine.media.MediaByteSink {
                     override suspend fun write(chunk: ByteArray) {
                         kotlin.test.assertSame(dispatcher,
                             kotlinx.coroutines.currentCoroutineContext()[kotlin.coroutines.ContinuationInterceptor])
@@ -184,8 +205,10 @@ class PocketMedia3PlaybackPortTest {
                         native.close(token)
                         directory.clear(emptyList())
                     }
-                }, operation, dispatcher)
+                    }, plan, parent)
+                }
             }
+            assertEquals(MediaServiceFailure.RETIRED, refusal.failure)
             assertEquals(1, writes, "Clear retires later chunks before they reach the shared sink")
             assertEquals(1, releases, "Actual SDK release stays on the captured presentation owner")
         } finally { parent.deleteRecursively() }

@@ -62,7 +62,8 @@ internal fun AppModel.operatorSetupState(): OperatorSetupState {
     val status by session.chromeStatus.collectAsState()
     val camera = session.connectedCamera
     return OperatorSetupState(phase, failure, status.monitorColorMode, session.joinedSSID, camera?.name,
-        camera?.model?.family, remember(status) { monitorLayout() })
+        camera?.model?.family, remember(status) { monitorLayout() },
+        lookProfile = camera?.model?.captureProfile?.looks ?: com.opencapture.opencine.dji.DjiCameraLUTProfile.make("pocket", null))
 }
 
 /** Pocket's copy, links, stores and pages, as on main. */
@@ -97,6 +98,19 @@ internal fun operatorSetupApp(model: AppModel) = OperatorSetupApp(
     ),
     legalPage = { page, onClose -> LegalDocumentScreen(kind = page.kind, onClose = onClose) },
     lutPicker = { onClose -> LUTPicker(model = model, onClose = onClose) },
+    cacheSource = { context ->
+        val revision by model.mediaCacheRevision.collectAsState()
+        val shell by model.shell.state.collectAsState()
+        val source = shell.monitor?.id
+        val capturedRevision = revision
+        com.opencapture.opencine.appkit.MonitorSettingsCacheSource(
+            com.opencapture.opencine.appkit.MonitorSettingsCacheIdentity(model.mediaCacheRoot.root.absolutePath, source?.toString()),
+            capturedRevision,
+            isCurrent = { model.shell.state.value.monitor?.id == source && model.mediaCacheRevision.value == capturedRevision },
+            count = { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { OperatorMediaCache.byteCount(context) } },
+            clear = { model.clearOperatorMediaCacheOwned() },
+        )
+    },
 )
 
 private val OperatorLegalPage.kind: LegalKind

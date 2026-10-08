@@ -7,10 +7,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import com.opencapture.opencine.vocabulary.inferred
+import com.opencapture.opencine.dji.inferred
 import com.opencapture.opencine.vocabulary.fromColorMode
 import com.opencapture.opencine.vocabulary.COLOR_DLOG_M
-import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+import com.opencapture.opencine.dji.DjiScopeExposureCeiling as ScopeExposureCeiling
 import com.opencapture.opencine.media.LiveColorScience
 import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.opencine.runtime.MonitorGlesUpscaler

@@ -44,13 +44,13 @@ struct LivePortraitSystemBar: View {
                 HStack(spacing: 0) {
                     Spacer(minLength: 14)
                     if model.chromeSectionMounts(.railMedia) && !model.session.isMultiviewBorrowed {
-                        LiveMediaButton { model.liveOperatorPanel = .media }
+                        LiveMediaButton { model.shell.open(.media) }
                             .chromeEditable(.railMedia, editing: editing)
                         Spacer(minLength: 14)
                     }
                     if model.chromeSectionMounts(.railSettings) || model.session.status.isRecording
                     {
-                        LiveSettingsButton { model.liveOperatorPanel = .settings }
+                        LiveSettingsButton { model.shell.open(.settings) }
                             .chromeEditable(.railSettings, editing: editing)
                         Spacer(minLength: 14)
                     }

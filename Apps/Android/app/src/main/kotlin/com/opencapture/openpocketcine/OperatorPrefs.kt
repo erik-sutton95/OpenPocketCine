@@ -11,11 +11,6 @@ import com.opencapture.opencine.appkit.MonitorDisplayMode
 
 
 
-enum class LiveOperatorPanel {
-    SETTINGS,
-    MEDIA,
-}
-
 /** The operator's choices in this app's existing preferences file and keys. */
 object OperatorPrefs : OperatorPreferenceStore(file = "openpocketcine.operator", keyPrefix = "OpenPocketCine.") {
     private val FEED_UPSCALER = key("feedUpscaler")

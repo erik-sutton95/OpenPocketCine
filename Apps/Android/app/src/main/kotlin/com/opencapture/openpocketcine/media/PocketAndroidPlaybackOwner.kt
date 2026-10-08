@@ -20,6 +20,8 @@ class PocketAndroidPlaybackOwner(context: Context, controller: MediaLibraryContr
     val meterSink = PlaybackPcmBufferSink(meterBox)
     val meterSampler = MonitorAudioMeterSampler(meterBox)
     val native = Media3PlaybackPort(createPlaybackExoPlayer(context, meterSink), scope)
+    val audio = com.opencapture.opencine.appkit.MonitorPlaybackAudioSession(scope,
+        read = meterSampler::step, reset = { meterSampler.reset(); meterBox.readAndReset() })
     val playback = MonitorMediaPlaybackModel<MediaFile, PocketPlaybackLook>(controller.library, native, scope,
         readyTimeout = null, retryNativeFailures = false, candidates = controller::playbackCandidates,
         lookTiming = MonitorPlaybackLookTiming.BEFORE_NATIVE_PREPARATION,
@@ -27,15 +29,18 @@ class PocketAndroidPlaybackOwner(context: Context, controller: MediaLibraryContr
         resolveLook = { record, _ -> controller.resolvePlaybackLook(record) }).also { owner ->
             owner.setItemAdmission(controller::playbackAdmission)
             native.listedFrameRate = { token ->
-                owner.state.value.takeIf { it.token == token && owner.isActive }?.active?.payload?.fps?.toDouble()
+                val current = owner.state.value
+                if (current.token == token && owner.isActive && owner.state.value.token == token)
+                    current.active?.payload?.fps?.toDouble() else null
             }
-            native.sourceAdmission = { token -> owner.state.value.token == token && owner.isActive }
+            native.sourceAdmission = { token -> owner.state.value.token == token && owner.isActive && owner.state.value.token == token }
             owner.setMuted(muted)
             owner.setLooping(looping)
         }
     fun close() {
         // The native/render owner retires before its coroutine parent or audio input disappears.
         playback.close()
+        audio.close()
         meterSink.close()
         meterBox.close()
         scope.cancel()

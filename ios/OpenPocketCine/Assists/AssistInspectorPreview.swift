@@ -1,10 +1,10 @@
-import CoreImage
 import MonitorPresentation
 import MonitorUI
+import OpenCineAppKitApple
 import OpenCineCameraControls
 import OpenPocketViewCore
-import SwiftUI
 import OpenCineMedia
+import SwiftUI
 
 enum AssistInspectorPreviewPolicy {
     static let maximumImageDimension = CGFloat(MonitorInspectorImageSizing.maximumDimension)
@@ -43,246 +43,23 @@ enum AssistInspectorPreviewPolicy {
     }
 }
 
-/// Identifies image meaning without observing every retained source buffer.
-/// Cached picture effects and LUT inputs are cheap to compare. Resolving a
-/// preview-only LUT is deferred until the retained worker admits a job.
-private struct AssistInspectorImageConfiguration: Equatable {
-    let source: ObjectIdentifier
-    let sourceEpoch: UInt64
-    let playback: Bool
-    let tool: MonitorAssistSelection
-    let effects: MonitorFrameEffects
-    let transfer: MonitorTransfer
-    let lutSelection: LUTSelection
-    let lutExposureStops: Double
-    let customLUTName: String?
-    let lutColorMode: ColorMode?
-    let lutFamily: CameraBodyFamily
-    let lutCameraName: String?
-}
-
-/// A draw-only preview slot for the shared inspector. Scope plots reuse the
-/// existing bounded sample bundle. Image tasks borrow the session's retained
-/// worker, so tool changes and remounts cannot reset its one-job/5 Hz admission.
+/// Native source, look and calibration facts for the common inspector owner.
 struct AssistInspectorPreview: View {
     var tool: MonitorAssistSelection
-    /// A host's own picture effects replace the tool's forced assist, e.g. a Multiview camera.
     var pictureEffects: MonitorFrameEffects? = nil
     @Environment(AppModel.self) private var model
-    @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.audioInspectorLevels) private var audioInspectorLevels
-    @State private var owner: UUID?
-    @State private var image: CGImage?
-    @State private var renderedTool: MonitorAssistSelection?
-    @State private var availableWidth: CGFloat = 0
-
-    private var isActive: Bool {
-        scenePhase == .active && model.assist.inspectorSceneActive
-    }
-
-    private var imageConfiguration: AssistInspectorImageConfiguration? {
-        guard isActive, AssistInspectorPreviewPolicy.isImage(tool) else { return nil }
-        let samples = model.monitorSamples
-        guard let source = samples.inspectorSource else { return nil }
-        return AssistInspectorImageConfiguration(
-            source: ObjectIdentifier(samples), sourceEpoch: samples.inspectorSourceEpoch,
-            playback: samples.usesPlaybackSource, tool: tool,
-            effects: pictureEffects
-                ?? AssistInspectorPreviewPolicy.imageOptions(
-                    assist: model.assist, tool: tool, transfer: source.transfer,
-                    ceiling: samples.exposureCeiling),
-            transfer: source.transfer,
-            lutSelection: model.assist.lutSelection,
-            lutExposureStops: model.assist.lutExposureStops,
-            customLUTName: LUTPreferences.app.selectedCustomFileName,
-            lutColorMode: model.assist.monitorColorMode,
-            lutFamily: model.assist.monitorFamily, lutCameraName: model.assist.monitorCameraName)
-    }
 
     var body: some View {
-        Group {
-            if AssistInspectorPreviewPolicy.isImage(tool) {
-                imagePreview
-            } else {
-                scopePreview
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: AssistInspectorPreviewPolicy.height(width: availableWidth, tool: tool))
-        .onGeometryChange(for: CGFloat.self) {
-            $0.size.width
-        } action: {
-            availableWidth = $0
-        }
-        .background(MonitorTheme.canvas, in: RoundedRectangle(cornerRadius: 10))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(MonitorTheme.border))
-        .allowsHitTesting(false)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(tool.title) preview")
-        .accessibilityIdentifier("monitor.inspector.preview")
-        .task(id: isActive ? tool : nil) {
-            guard isActive else { return }
-            await updateImage()
-        }
-        .onChange(of: imageConfiguration) { _, _ in
-            if let owner { model.inspectorPreview.invalidate(owner: owner) }
-            clearImage()
-        }
-        .onDisappear {
-            if let owner { model.inspectorPreview.deactivate(owner: owner) }
-            clearImage()
-        }
-    }
-
-    @ViewBuilder
-    private var imagePreview: some View {
-        if let image, renderedTool == tool {
-            Image(decorative: image, scale: 1)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .overlay {
-                    GeometryReader { proxy in
-                        let imageAspect = CGFloat(image.width) / CGFloat(max(1, image.height))
-                        let width = min(proxy.size.width, proxy.size.height * imageAspect)
-                        let height = width / imageAspect
-                        let frame = CGRect(
-                            x: (proxy.size.width - width) / 2,
-                            y: (proxy.size.height - height) / 2, width: width, height: height)
-                        switch tool {
-                        case .guides:
-                            GuidesAssist.overlay(
-                                feed: frame, assist: model.assist,
-                                fallback: model.assist.guideAspect)
-                        case .grid:
-                            GridAssist.overlay(
-                                feed: frame, thirds: model.assist.gridThirds,
-                                phi: model.assist.gridPhi, diagonal: model.assist.gridDiagonal)
-                        case .crosshair:
-                            CrosshairAssist.overlay(feed: frame)
-                        default:
-                            EmptyView()
-                        }
-                    }
-                }
-        } else {
-            Text("Waiting for picture")
-                .font(MonitorTheme.font(11))
-                .foregroundStyle(MonitorTheme.muted)
-        }
-    }
-
-    @ViewBuilder
-    private var scopePreview: some View {
-        switch tool {
-        case .waveform:
-            fittedScope(size: WaveformAssist.panelSize(scale: WaveformAssist.store.options.scale)) {
-                WaveformOverlay()
-            }
-        case .parade:
-            fittedScope(size: ParadeAssist.panelSize(scale: ParadeAssist.store.options.scale)) {
-                ParadeOverlay()
-            }
-        case .histogram:
-            fittedScope(size: HistogramAssist.panelSize(scale: HistogramAssist.store.options.scale))
-            {
-                HistogramOverlay()
-            }
-        case .vectorscope:
-            fittedScope(
-                size: VectorscopeAssist.panelSize(scale: VectorscopeAssist.store.options.scale)
-            ) {
-                VectorscopeOverlay()
-            }
-        case .trafficLights:
-            MonitorTrafficLightsMeter(reading: model.monitorSamples.displayBundle.traffic)
-                .frame(width: 88, height: 120)
-        case .ndMeter:
-            NDMeterChip(
-                reading: NDAssist.reading(from: model.monitorSamples.displayBundle),
-                notation: AssistPanelStores.app.nd.notation
-            )
-            .frame(width: 120, height: 44)
-        case .audioMeters:
-            if let levels = audioInspectorLevels {
-                audioPreview(levels: levels, sensitivity: nil)
-            } else if !model.assist.gradesClip {
-                audioPreview(
-                    levels: model.session.status.audioMeters ?? .silent,
-                    sensitivity: model.session.status.audioChannel?.label)
-            }
-
-        default:
-            EmptyView()
-        }
-    }
-
-    private func audioPreview(levels: AudioMeterLevels, sensitivity: String?) -> some View {
-        let options = AudioAssist.store.options
-        return fittedScope(size: AudioAssist.panelSize(orientation: options.orientation)) {
-            AudioMetersPanelMini(
-                levels: levels, sensitivity: sensitivity,
-                orientation: options.orientation, showsDB: options.showsDB)
-        }
-    }
-
-    private func fittedScope<Content: View>(size: CGSize, @ViewBuilder content: () -> Content)
-        -> some View
-    {
-        let plot = content()
-        return GeometryReader { proxy in
-            let scale = min(
-                1, max(1, proxy.size.width - 16) / max(1, size.width),
-                max(1, proxy.size.height - 16) / max(1, size.height))
-            plot.frame(width: size.width, height: size.height)
-                .scaleEffect(scale)
-                .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-        }
-    }
-
-    @MainActor
-    private func updateImage() async {
-        guard !Task.isCancelled, AssistInspectorPreviewPolicy.isImage(tool) else { return }
-        let renderer = model.inspectorPreview
-        let identity = UUID()
-        owner = identity
-        renderer.activate(owner: identity)
-        defer {
-            renderer.deactivate(owner: identity)
-            if owner == identity { owner = nil }
-        }
-        while !Task.isCancelled {
-            if let configuration = imageConfiguration,
-                let source = model.monitorSamples.inspectorFrame
-            {
-                let rendered = await renderer.render(
-                    owner: identity, source: source
-                ) {
-                    pictureEffects
-                        ?? AssistInspectorPreviewPolicy.imageEffects(
-                            assist: model.assist, tool: tool, transfer: source.transfer,
-                            ceiling: model.monitorSamples.exposureCeiling)
-                }
-                guard !Task.isCancelled else { return }
-                if let rendered, renderer.isCurrent(rendered),
-                    configuration == imageConfiguration
-                {
-                    image = rendered.image
-                    renderedTool = tool
-                }
-            }
-            do {
-                // This inspector-local cadence cannot schedule catch-up work.
-                // It stops with SwiftUI task cancellation and never paces video.
-                try await Task.sleep(for: AssistInspectorPreviewPolicy.refreshInterval)
-            } catch {
-                return
-            }
-        }
-    }
-
-    private func clearImage() {
-        image = nil
-        renderedTool = nil
+        MonitorOperatorInspectorPreview(tool: tool, assist: model.assist,
+            stores: .app, haptics: .app,
+            source: MonitorInspectorImageSource(renderer: model.inspectorPreview, samples: model.monitorSamples),
+            readCustomName: { LUTPreferences.app.selectedCustomFileName }, pictureEffects: pictureEffects,
+            prepareEffects: { frame in
+                AssistInspectorPreviewPolicy.imageEffects(assist: model.assist, tool: tool,
+                    transfer: frame.transfer, ceiling: model.monitorSamples.exposureCeiling)
+            }, readBundle: { model.monitorSamples.displayBundle },
+            readAudio: { model.session.status.audioMeters },
+            readAudioSensitivity: { model.session.status.audioChannel?.label },
+            configureDisplay: scopeDisplay)
     }
 }

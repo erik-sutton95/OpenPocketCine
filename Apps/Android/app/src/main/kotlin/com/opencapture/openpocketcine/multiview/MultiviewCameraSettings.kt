@@ -210,38 +210,29 @@ internal fun MultiviewCameraSettings(
     }
 }
 
-/** Live View's inspector image preview, fed by the selected tile's existing present tap. */
+/** Tile source and native preview-owner facts for the common image-preview lifecycle. */
 @Composable
 private fun MultiviewSettingsPreview(tile: MultiviewSession.Tile, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val owner = remember(tile) { Any() }
-    var image by remember(owner) { mutableStateOf<Bitmap?>(null) }
-    val plan by rememberUpdatedState(tile.plan)
-    DisposableEffect(owner, lifecycle) {
-        var active = false
-        fun update() {
-            val resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-            if (resumed && !active) {
-                tile.inspectorPreview.open(owner, false, context, plan) { image = it }
+    val client = remember(tile, context) {
+        object : com.opencapture.opencine.appkit.MonitorInspectorPreviewClient<androidx.compose.ui.graphics.ImageBitmap> {
+            override fun open(owner: Any, playback: Boolean,
+                plan: com.opencapture.opencine.media.FeedEffectsRenderPlan,
+                receive: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit) {
+                tile.inspectorPreview.open(owner, playback, context, plan) { receive(it?.asImageBitmap()) }
                 tile.previewOwner = owner
-                active = true
-            } else if (!resumed && active) {
+            }
+            override fun update(owner: Any, plan: com.opencapture.opencine.media.FeedEffectsRenderPlan) {
+                tile.inspectorPreview.update(owner, plan)
+            }
+            override fun close(owner: Any) {
                 if (tile.previewOwner === owner) tile.previewOwner = null
                 tile.inspectorPreview.close(owner)
-                image = null
-                active = false
             }
         }
-        val observer = LifecycleEventObserver { _, _ -> update() }
-        lifecycle.addObserver(observer)
-        update()
-        onDispose {
-            lifecycle.removeObserver(observer)
-            if (tile.previewOwner === owner) tile.previewOwner = null
-            tile.inspectorPreview.close(owner)
-        }
     }
-    SideEffect { tile.inspectorPreview.update(owner, tile.plan) }
-    MonitorImagePreview(image?.asImageBitmap(), "${tile.camera?.name ?: "Camera"} preview", modifier)
+    com.opencapture.opencine.cameracontrols.MonitorOperatorInspectorImagePreview(
+        com.opencapture.monitorui.MonitorAssistTool.LUT, null, client, tile.plan,
+        tile, null, false, modifier, "${tile.camera?.name ?: "Camera"} preview",
+        com.opencapture.opencine.cameracontrols.MonitorInspectorPreviewLayout.SOURCE)
 }

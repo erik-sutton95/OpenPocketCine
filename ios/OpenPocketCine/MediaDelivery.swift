@@ -1,3 +1,7 @@
+import OpenCineFrameIO
+import OpenCineAppKit
+import OpenCineAppKitApple
+import OpenCineCameraControls
 import AVFoundation
 import Foundation
 import OpenPocketViewCore
@@ -7,8 +11,9 @@ import UIKit
 import UniformTypeIdentifiers
 import MonitorUI
 
-/// OpenZCine `IconFrameio` template mark.
+// Existing shared destination artwork, moved without changing its path.
 struct FrameioMark: View {
+    init() {}
     var body: some View {
         FrameioMarkShape()
             .fill(Color.primary)
@@ -56,52 +61,32 @@ enum MediaExportFormat: String, Sendable, CaseIterable, Identifiable {
 }
 
 enum MediaDeliveryDestination: String, CaseIterable, Identifiable, Sendable {
-    case nativeShare
-    case frameio
+    case nativeShare, frameio
     var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .nativeShare: "Share"
-        case .frameio: "Frame.io"
-        }
-    }
-    var subtitle: String {
-        switch self {
-        case .nativeShare: "Convert log, Bake LUT, AirDrop, Files"
-        case .frameio: "Upload to your Frame.io project"
-        }
-    }
-    var icon: MonitorIcon {
-        switch self {
-        case .nativeShare: .share
-        case .frameio: .upload
-        }
-    }
-    var actionTitle: String {
-        switch self {
-        case .nativeShare: "Share"
-        case .frameio: "Upload"
-        }
-    }
+    var shared: MonitorDeliveryDestination { self == .nativeShare ? .nativeShare : .remoteUpload }
+    init(_ shared: MonitorDeliveryDestination) { self = shared == .nativeShare ? .nativeShare : .frameio }
+    var title: String { shared.title(remoteDisplayName: "Frame.io") }
+    var subtitle: String { shared.subtitle(remoteDisplayName: "Frame.io") }
+    var actionTitle: String { shared.actionTitle }
 }
+typealias MediaDeliveryPostExportAction = MonitorDeliveryPostExportAction
+typealias MediaDeliveryConfiguration = MonitorDeliveryExportConfiguration<LogColorTransform, MediaExportFormat>
 
-enum MediaDeliveryPostExportAction: String, Sendable {
-    case systemShare
-    case saveToPhotos
+extension MonitorDeliveryDestination {
+    static var frameio: Self { .remoteUpload }
 }
-
-struct MediaDeliveryConfiguration: Sendable {
-    var bakeLUT = true
-    /// When ``bakeLUT`` is on, write ``LUTExposureCompensation`` into the file.
-    /// Off keeps the cube at 0.0. Default on so the export matches the monitor.
-    var bakeLUTExposure = true
-    /// Technical D-Log ↔ D-Log2 convert. Exclusive with ``bakeLUT``.
-    var convertLog = false
-    /// The destination applies to the whole selection, including mixed log clips.
-    var logTransform: LogColorTransform = .dLogToDLog2
-    var exportFormat: MediaExportFormat = .mov
-    var includeMetadata = true
-    var forceFrameioReupload = false
+extension MonitorDeliveryBatchOutcome {
+    static func frameio(summary: String) -> Self { .uploaded(summary: summary) }
+}
+extension MediaDeliveryDestination {
+    var icon: MonitorIcon { self == .nativeShare ? .share : .upload }
+}
+extension MonitorDeliveryExportConfiguration where Curve == LogColorTransform, Format == MediaExportFormat {
+    var forceFrameioReupload: Bool {
+        get { forceReupload }
+        set { forceReupload = newValue }
+    }
+    init() { self.init(logTransform: .dLogToDLog2, exportFormat: .mov) }
 }
 
 enum MediaDeliveryChrome {
@@ -168,21 +153,10 @@ struct MediaDeliveryBeginRequest: Sendable {
     let destination: MediaDeliveryDestination
     let configuration: MediaDeliveryConfiguration
     var postExportAction: MediaDeliveryPostExportAction = .systemShare
+    var internetHopToken: FrameioInternetHop.Token? = nil
 }
 
-enum MediaDeliveryRunOutcome: Sendable {
-    case share(urls: [URL], metadataText: String?, stagingCleanupURL: URL?)
-    case savedToPhotos(count: Int)
-    case frameio(summary: String)
-    case failed(message: String)
-}
-
-struct MediaDeliveryBatchResult: Sendable {
-    var exportedURLs: [URL] = []
-    var metadataURLs: [URL] = []
-    var uploadedCount: Int = 0
-    var failed: [(MediaFile, String)] = []
-}
+typealias MediaDeliveryRunOutcome = MonitorDeliveryBatchOutcome<URL>
 
 enum MediaDelivery {
     /// Convert log is video-only. Unknown shot color stays available until export
@@ -201,12 +175,8 @@ enum MediaDelivery {
         for file: MediaFile, configuration: MediaDeliveryConfiguration,
         transform: LogColorTransform? = nil
     ) -> String {
-        let stem = (file.filename as NSString).deletingPathExtension
-        if configuration.convertLog, let transform {
-            return "\(stem).\(transform.filenameToken).\(configuration.exportFormat.rawValue)"
-        }
-        guard configuration.bakeLUT || configuration.convertLog else { return file.filename }
-        return "\(stem).\(configuration.exportFormat.rawValue)"
+        MonitorDeliveryFileNaming.filename(original: file.filename, configuration: configuration,
+            formatExtension: configuration.exportFormat.rawValue, transformToken: transform?.filenameToken)
     }
 
     static func metadata(
@@ -214,62 +184,26 @@ enum MediaDelivery {
         cameraName: String?, lutExposureStops: Double = 0,
         convertLog: LogColorTransform? = nil
     ) -> MediaClipDeliveryMetadata? {
-        guard configuration.includeMetadata else { return nil }
-        let converting = configuration.convertLog
-        let bakedStops: Double?
-        if !converting, configuration.bakeLUT, configuration.bakeLUTExposure {
-            bakedStops = LUTExposureCompensation.snap(lutExposureStops)
-        } else {
-            bakedStops = nil
-        }
+        let selection = MonitorDeliveryMetadataSelection(configuration)
+        guard selection.included else { return nil }
+        let bakedStops = selection.bakedExposure ? LUTExposureCompensation.snap(lutExposureStops) : nil
         return MediaClipDeliveryMetadata(
             filename: file.filename,
             captureDate: file.filenameTimestamp ?? "",
             sizeBytes: file.sizeBytes,
             cameraName: cameraName,
-            lutName: !converting && configuration.bakeLUT ? lutName : nil,
+            lutName: selection.bakedLook ? lutName : nil,
             lutExposureStops: bakedStops,
-            convertLog: converting ? convertLog?.label : nil,
+            convertLog: selection.convertedCurve ? convertLog?.label : nil,
             exportedAt: Date())
     }
 
     static func metadataSummary(for files: [MediaFile]) -> String {
-        files.map { file in
-            let size =
-                file.sizeBytes > 0
-                ? ByteCountFormatter.string(fromByteCount: Int64(file.sizeBytes), countStyle: .file)
-                : "unknown size"
-            let date = file.filenameTimestamp ?? "unknown date"
-            return "\(file.filename) · \(date) · \(size)"
-        }.joined(separator: "\n")
+        MonitorDeliveryMetadataSummary.text(files: files.map {
+            .init(filename: $0.filename, captureDate: $0.filenameTimestamp, sizeBytes: $0.sizeBytes > 0 ? $0.sizeBytes : nil)
+        }, formatBytes: { ByteCountFormatter.string(fromByteCount: Int64(clamping: $0), countStyle: .file) })
     }
 }
 
-enum MediaPhotosSaver {
-    static func saveVideos(at urls: [URL]) async throws -> Int {
-        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited else {
-            throw MediaDeliveryError.photosDenied
-        }
-        var count = 0
-        try await PHPhotoLibrary.shared().performChanges {
-            for url in urls where ["mp4", "mov", "m4v"].contains(url.pathExtension.lowercased()) {
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-                count += 1
-            }
-        }
-        return count
-    }
-}
-
-enum MediaShareStaging {
-    static let shareableVideoExtensions: Set<String> = ["mp4", "mov", "m4v"]
-
-    static func prepareForShare(videoURLs: [URL]) throws -> (urls: [URL], stagingCleanupURL: URL?) {
-        let videos = videoURLs.filter {
-            shareableVideoExtensions.contains($0.pathExtension.lowercased())
-        }
-        guard !videos.isEmpty else { throw MediaDeliveryError.emptySelection }
-        return (videos, nil)
-    }
-}
+typealias MediaPhotosSaver = MonitorDeliveryPhotosSaver
+typealias MediaShareStaging = MonitorDeliveryShareStaging

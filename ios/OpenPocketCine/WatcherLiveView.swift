@@ -1,5 +1,7 @@
+import OpenCineAppKitApple
 import AVFoundation
 import MonitorUI
+import MonitorPresentation
 import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
@@ -7,9 +9,7 @@ import SwiftUI
 /// Pocket monitor tools around a remote source. Never opens a camera session.
 struct WatcherLiveView: View {
     @Environment(AppModel.self) private var model
-    @State private var clean = false
-    @State private var confirmRecording = false
-    @State private var focusPoint: CGPoint?
+    @State private var pictureGeometry: MonitorWatcherPictureGeometry?
     private var client: WatcherRelayClient { model.relayClient }
     private var mirrored: Bool {
         GimbalStick.liveViewFlip(
@@ -18,121 +18,75 @@ struct WatcherLiveView: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let viewport = CGRect(origin: .zero, size: proxy.size)
-            let raster =
-                client.decoder.pictureSize.width > 0
-                ? client.decoder.pictureSize : CGSize(width: 1280, height: 720)
-            let feed = DesqueezeAssist.presentationRect(
-                sourceSize: raster, in: viewport, effects: model.assist.effects)
-            let bottom = max(proxy.safeAreaInsets.bottom, 10.0)
-            ZStack {
-                Color.black.ignoresSafeArea()
-                VideoView(
-                    decoder: client.decoder, effects: model.assist.effects,
-                    sampleBus: client.samples, transfer: client.transfer,
-                    pictureFlip: client.decoder.poseViewFlip,
-                    hdrDisplay: model.hdrDisplayActive
-                )
-                .frame(width: feed.width, height: feed.height)
-                .contentShape(Rectangle())
-                .gesture(
-                    SpatialTapGesture().onEnded { value in
-                        guard client.canControl,
-                            let point = WatcherFocusPoint.map(
-                                x: value.location.x, y: value.location.y,
-                                width: feed.width, height: feed.height, mirrored: mirrored,
-                                flippedVertically: model.assist.flipsVertically)
-                        else { return }
-                        focusPoint = CGPoint(x: Double(point.x) / 1000, y: Double(point.y) / 1000)
-                        client.sendCommand(
-                            .tapFocus(
-                                cameraX: point.x, cameraY: point.y, coordinateWidth: 1000,
-                                coordinateHeight: 1000))
-                    }
-                )
-                .position(x: feed.midX, y: feed.midY)
+        MonitorOperatorWatcherScreen(host: model, value: watcherValue,
+            pictureSize: client.decoder.pictureSize, mirrored: mirrored,
+            confirmRecording: model.recordConfirmationEnabled, assists: assistSource,
+            action: handleWatcherAction, readTapSource: { client.tapSource },
+            capturedTapAction: { size in
+                Self.capturedTapAction(client: client, feed: size,
+                    mirrored: { mirrored }, flippedVertically: { model.assist.flipsVertically })
+            }, onGeometry: { pictureGeometry = $0 }) { effects in
+                VideoView(decoder: client.decoder, effects: effects, sampleBus: client.samples,
+                    transfer: client.transfer, pictureFlip: client.decoder.poseViewFlip,
+                    hdrDisplay: model.hdrDisplayActive)
+            } preview: { AssistInspectorPreview(tool: $0)
+            } lookMenu: { LUTAssist.longPressMenu(assist: model.assist) }
+            .monitorVideoBackdrop(renderer: model.liveBackdrop,
+                configuration: backdropConfiguration,
+                enabled: model.isWatchingFeed && !model.assist.gradesClip && pictureGeometry?.belongs(to: client.tapSource) == true,
+                surroundRGB: 0x000000) { _ in backdropSources() }
+            .onAppear { syncColor() }
+            .onChange(of: client.state.color) { _, _ in syncColor() }
+            .onChange(of: client.state.cameraModel) { _, _ in syncColor() }
+    }
 
-                FeedAlignedAssists(
-                    grid: model.assist.isVisible(.grid),
-                    crosshair: model.assist.isVisible(.crosshair),
-                    guides: model.assist.isVisible(.guides), guideAspect: model.assist.guideAspect,
-                    focusPoint: focusPoint ?? CGPoint(x: 0.5, y: 0.5),
-                    showFocusChrome: focusPoint != nil && client.canControl,
-                    feed: feed, pictureMirrored: mirrored)
+    private var assistSource: MonitorOperatorLiveAssistSource {
+        .init(stores: .app, looks: .app, haptics: .app,
+            readBundle: { model.monitorSamples.displayBundle },
+            readTransfer: { model.monitorTransfer ?? model.monitorColorMode.map(MonitorTransfer.init) ?? .rec709 },
+            readClipByte: { model.monitorSamples.exposureCeiling.clipByte(transfer: $0) },
+            configureDisplay: scopeDisplay)
+    }
 
-                if !clean {
-                    scopes(viewport: viewport, feed: feed, bottom: bottom)
-                }
-                VStack(spacing: 8) {
-                    header
-                    if !clean { telemetry }
-                    Spacer(minLength: 0)
-                    connectionNotice
-                    if !clean {
-                        controlStrip
-                        LiveAssistBar(showsAudio: false)
-                            .frame(height: LiveDesign.controlHeight)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, max(proxy.safeAreaInsets.top, 10))
-                .padding(.bottom, bottom)
+    private var backdropConfiguration: [MonitorVideoBackdropConfiguration] {
+        guard let geometry = pictureGeometry, geometry.belongs(to: client.tapSource) else { return [] }
+        let feed = geometry.feed
+        return [MonitorVideoBackdropConfiguration(source: ObjectIdentifier(client.decoder),
+            generation: Int(client.samples.inspectorSourceEpoch), effects: model.assist.effects,
+            geometry: [CGFloat(feed.x), CGFloat(feed.y), CGFloat(feed.width), CGFloat(feed.height), geometry.mirrored ? 1 : 0])]
+    }
+    private func backdropSources() -> [MonitorVideoBackdropSource] {
+        guard let geometry = pictureGeometry, geometry.belongs(to: client.tapSource) else { return [] }
+        let feed = CGRect(x: CGFloat(geometry.feed.x), y: CGFloat(geometry.feed.y),
+            width: CGFloat(geometry.feed.width), height: CGFloat(geometry.feed.height))
+        let decoder = client.decoder, samples = client.samples
+        let epoch = samples.inspectorSourceEpoch
+        guard let token = decoder.sourceToken, let buffer = decoder.backdropSource else { return [] }
+        let effects = decoder.backdropEffects
+        return [MonitorVideoBackdropSource(buffer: buffer, effects: effects,
+            frame: MonitorVideoBackdropSource.displayedFrame(sourceAspect: decoder.pictureAspect, effects: effects, in: feed),
+            clip: feed, identity: .live(token: token, epoch: epoch), admission: { [weak decoder, weak samples] in
+                guard let decoder, let samples else { return false }
+                return decoder.sourceToken == token && samples.inspectorSourceEpoch == epoch
+            })]
+    }
 
-                if !clean, let tool = model.assist.configureTool, tool != .audioMeters {
-                    AssistLongPressOverlay(
-                        tool: tool, assist: model.assist,
-                        anchor: model.assist.longPressAnchor,
-                        toolbar: CGRect(
-                            x: 14, y: viewport.height - bottom - LiveDesign.controlHeight,
-                            width: viewport.width - 28, height: LiveDesign.controlHeight),
-                        viewport: proxy.size, safeArea: proxy.safeAreaInsets, ceilingY: 70,
-                        onDismiss: { model.assist.configureTool = nil })
-                }
-            }
-            .coordinateSpace(name: LiveCanvasSpace.name)
-            .monitorVideoBackdrop(
-                renderer: model.liveBackdrop,
-                configuration: [
-                    MonitorVideoBackdropConfiguration(
-                        source: ObjectIdentifier(client.decoder),
-                        generation: Int(client.samples.inspectorSourceEpoch),
-                        effects: model.assist.effects,
-                        geometry: [feed.minX, feed.minY, feed.width, feed.height, mirrored ? 1 : 0])
-                ],
-                enabled: model.isWatchingFeed && !model.assist.gradesClip, surroundRGB: 0x000000
-            ) { _ in
-                guard let buffer = client.decoder.backdropSource else { return [] }
-                let effects = client.decoder.backdropEffects
-                return [
-                    MonitorVideoBackdropSource(
-                        buffer: buffer, effects: effects,
-                        frame: MonitorVideoBackdropSource.displayedFrame(
-                            sourceAspect: client.decoder.pictureAspect, effects: effects, in: feed),
-                        clip: feed)
-                ]
-            }
-        }
-        .ignoresSafeArea()
-        .preferredColorScheme(.dark)
-        .statusBarHidden(true)
-        .onAppear { syncColor() }
-        .onChange(of: client.state.color) { _, _ in syncColor() }
-        .onChange(of: client.state.cameraModel) { _, _ in syncColor() }
-        .onChange(of: client.canControl) { _, canControl in
-            if !canControl {
-                confirmRecording = false
-                focusPoint = nil
-            }
-        }
-        .onDisappear { model.assist.configureTool = nil }
-        .confirmationDialog(
-            client.state.isRecording ? "Stop recording?" : "Start recording?",
-            isPresented: $confirmRecording, titleVisibility: .visible
-        ) {
-            Button(client.state.isRecording ? "Stop recording" : "Start recording") {
-                client.sendCommand(.toggleRecording)
-            }
+    @MainActor
+    static func capturedTapAction(client: WatcherRelayClient, feed: CGSize,
+        mirrored: @escaping @MainActor () -> Bool, flippedVertically: @escaping @MainActor () -> Bool
+    ) -> @MainActor (CGPoint) -> MonitorWatcherFocus? {
+        let captured = client.tapSource
+        return { location in
+            guard captured.admits(client.tapSource) else { return nil }
+            let mirror = mirrored(), flip = flippedVertically()
+            guard captured.admits(client.tapSource),
+                let point = WatcherFocusPoint.map(x: Double(location.x), y: Double(location.y),
+                    width: Double(feed.width), height: Double(feed.height),
+                    mirrored: mirror, flippedVertically: flip),
+                client.sendCommand(.tapFocus(cameraX: point.x, cameraY: point.y,
+                    coordinateWidth: 1000, coordinateHeight: 1000), captured: captured)
+            else { return nil }
+            return .init(source: captured, x: Double(point.x) / 1000, y: Double(point.y) / 1000)
         }
     }
 
@@ -140,177 +94,61 @@ struct WatcherLiveView: View {
         client.decoder.incomingColorMode = client.colorMode
         model.assist.syncLUT(
             to: client.colorMode, family: client.state.isNano == true ? .nano : .pocket,
-            cameraName: client.state.cameraModel, persistLast: false)
+            cameraName: client.state.cameraModel, lookProfile: DJICameraLUTProfile.make(
+                family: client.state.isNano == true ? .nano : .pocket,
+                cameraName: client.state.cameraModel), persistLast: false)
     }
 
-    private var header: some View {
-        HStack(spacing: 12) {
-            Button("Leave") { model.stopWatching() }
-                .accessibilityIdentifier("watcher.leave")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(client.hostTitle).font(MonitorTheme.font(13, weight: .semibold)).lineLimit(1)
-                if !clean {
-                    Text("WATCHING · \(client.receivedFPS) fps")
-                        .font(MonitorTheme.font(10, weight: .medium))
-                        .foregroundStyle(LiveDesign.text.opacity(0.65))
-                }
-            }
-            Spacer(minLength: 4)
-            if client.state.isRecording {
-                HStack(spacing: 5) {
-                    Circle().fill(LiveDesign.rec).frame(width: 7, height: 7)
-                    Text("REC")
-                }
-                .foregroundStyle(LiveDesign.rec)
-                .accessibilityLabel("Camera recording")
-            }
-            Button(clean ? "Controls" : "Clean view") {
-                model.assist.configureTool = nil
-                clean.toggle()
-            }
-        }
-        .font(MonitorTheme.font(12, weight: .semibold))
-        .foregroundStyle(LiveDesign.text)
-        .padding(.horizontal, 12).padding(.vertical, 9)
-        .liveChromeCapsule()
-    }
-
-    private var telemetry: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                reading("FORMAT", client.state.format)
-                reading("COLOR", client.state.color)
-                reading("SHUTTER", client.state.shutter)
-                reading("ISO", client.state.iso)
-                reading("ZOOM", client.state.zoom)
-                reading(
-                    "BATTERY",
-                    client.state.batteryPercent >= 0 ? "\(client.state.batteryPercent)%" : "—")
-            }.padding(.horizontal, 12).padding(.vertical, 7)
-        }
-        .monitorScrollFade(.horizontal)
-        .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private func reading(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(MonitorTheme.font(8, weight: .medium)).foregroundStyle(
-                LiveDesign.text.opacity(0.65))
-            Text(value.isEmpty ? "—" : value).font(
-                MonitorTheme.font(12, weight: .semibold)
-            )
-            .foregroundStyle(LiveDesign.text)
-        }
-    }
-
-    @ViewBuilder private var connectionNotice: some View {
-        switch client.status {
-        case .reconnecting(let attempt):
-            notice(
-                "Reconnecting… \(attempt) of \(WatcherRelayRecovery.maximumRetries)", retry: false)
-        case .failed(let message): notice(message, retry: true)
-        case .live:
-            if client.waitingForPicture {
-                notice("Waiting for picture from the host…", retry: false)
-            }
-        default: notice("Joining shared feed…", retry: false)
-        }
-    }
-
-    private func notice(_ message: String, retry: Bool) -> some View {
-        VStack(spacing: 10) {
-            Text(message).multilineTextAlignment(.center)
-            if retry {
-                Button("Choose a feed") {
-                    model.stopWatching()
-                    model.openWatcherBrowse()
-                }
-                .buttonStyle(StartupFilledButtonStyle())
-            }
-        }
-        .font(MonitorTheme.font(14, weight: .medium))
-        .foregroundStyle(LiveDesign.text)
-        .padding(14)
-        .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var controlStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                Text(client.canControl ? "CONTROL · YOU" : "CONTROL · \(client.token.holderName)")
-                    .font(MonitorTheme.font(10, weight: .semibold))
-                    .foregroundStyle(
-                        client.canControl ? LiveDesign.accent : LiveDesign.text.opacity(0.65))
-                if client.canControl {
-                    remoteSettings
-                    Button("Release") { client.releaseControl() }
-                    Button(client.state.isRecording ? "Stop REC" : "REC") {
-                        if model.recordConfirmationEnabled {
-                            confirmRecording = true
-                        } else {
-                            client.sendCommand(.toggleRecording)
-                        }
-                    }.foregroundStyle(LiveDesign.rec)
-                } else if client.status == .live, client.state.allowsControlRequests {
-                    Button(client.controlRequested ? "Requested…" : "Request control") {
-                        client.requestControl()
-                    }
-                    .disabled(client.controlRequested)
-                }
-            }.padding(.horizontal, 12).padding(.vertical, 8)
-        }
-        .monitorScrollFade(.horizontal)
-        .font(MonitorTheme.font(12, weight: .semibold))
-        .foregroundStyle(LiveDesign.text)
-        .background(.black.opacity(0.72), in: Capsule())
-    }
-
-    @ViewBuilder private var remoteSettings: some View {
+    private var watcherValue: MonitorWatcherPresentation {
+        let context = MonitorWatcherContext(source: String(describing: ObjectIdentifier(client)),
+            revision: client.actionRevision, canControl: client.canControl, recording: client.state.isRecording)
+        var settings: [MonitorWatcherSettingValue] = []
         if let options = client.state.controlOptions {
-            if !options.isoIndices.isEmpty {
-                Menu("ISO \(client.state.iso)") {
-                    ForEach(options.isoIndices, id: \.self) { raw in
-                        if let iso = IsoIndex(rawValue: UInt8(clamping: raw)) {
-                            Button(iso.label) { client.sendCommand(.setISO(raw)) }
-                        }
-                    }
-                }
+            let iso = options.isoIndices.compactMap { raw -> MonitorWatcherChoice? in
+                IsoIndex(rawValue: UInt8(clamping: raw)).map { MonitorWatcherChoice(id: raw, title: $0.label) }
             }
+            if !iso.isEmpty { settings.append(.init(id: .iso, title: "ISO \(client.state.iso)", choices: iso)) }
             if !options.shutterDenominators.isEmpty {
-                Menu(client.state.shutter.isEmpty ? "Shutter" : client.state.shutter) {
-                    ForEach(options.shutterDenominators, id: \.self) { denom in
-                        Button("1/\(denom)") { client.sendCommand(.setShutterDenom(denom)) }
-                    }
-                }
+                settings.append(.init(id: .shutter, title: client.state.shutter.isEmpty ? "Shutter" : client.state.shutter,
+                    choices: options.shutterDenominators.map { .init(id: $0, title: "1/\($0)") }))
             }
             if !options.zoomHundredths.isEmpty {
-                Menu(client.state.zoom.isEmpty ? "Zoom" : client.state.zoom) {
-                    ForEach(options.zoomHundredths, id: \.self) { zoom in
-                        Button(CamFov.displayLabel(factor: Double(zoom) / 100)) {
-                            client.sendCommand(.setZoom(zoom))
-                        }
-                    }
-                }
+                settings.append(.init(id: .zoom, title: client.state.zoom.isEmpty ? "Zoom" : client.state.zoom,
+                    choices: options.zoomHundredths.map { raw in .init(id: raw, title: CamFov.displayLabel(factor: Double(raw) / 100)) }))
+            }
+        }
+        let notice: MonitorWatcherNotice?
+        switch client.status {
+        case .reconnecting(let attempt): notice = MonitorWatcherNotices.reconnecting(attempt: attempt, maximum: WatcherRelayRecovery.maximumRetries)
+        case .failed(let message): notice = MonitorWatcherNotices.failed(message)
+        case .live: notice = client.waitingForPicture ? MonitorWatcherNotices.waitingForPicture : nil
+        default: notice = MonitorWatcherNotices.joining
+        }
+        return MonitorWatcherPresentation(context: context, hostTitle: client.hostTitle, receivedFPS: client.receivedFPS,
+            readings: [.init("FORMAT", value: client.state.format), .init("COLOR", value: client.state.color),
+                .init("SHUTTER", value: client.state.shutter), .init("ISO", value: client.state.iso),
+                .init("ZOOM", value: client.state.zoom),
+                .init("BATTERY", value: client.state.batteryPercent >= 0 ? "\(client.state.batteryPercent)%" : nil)],
+            settings: settings, holderName: client.token.holderName,
+            canRequestControl: client.status == .live && client.state.allowsControlRequests,
+            controlRequested: client.controlRequested, notice: notice)
+    }
+
+    private func handleWatcherAction(_ action: MonitorWatcherAction) {
+        guard watcherValue.admits(action) else { return }
+        switch action {
+        case .leave: model.stopWatching()
+        case .chooseFeed: model.stopWatching(); model.openWatcherBrowse()
+        case .requestControl: client.requestControl()
+        case .releaseControl: client.releaseControl()
+        case .record: client.sendCommand(.toggleRecording)
+        case .set(_, let setting, let choice):
+            switch setting {
+            case .iso: client.sendCommand(.setISO(choice))
+            case .shutter: client.sendCommand(.setShutterDenom(choice))
+            case .zoom: client.sendCommand(.setZoom(choice))
             }
         }
     }
 
-    @ViewBuilder private func scopes(viewport: CGRect, feed: CGRect, bottom: CGFloat) -> some View {
-        let clearance = EdgeInsets(top: 100, leading: 14, bottom: bottom + 104, trailing: 14)
-        if model.assist.isVisible(.waveform) {
-            WaveformOverlay(canvas: viewport, feed: feed, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.parade) {
-            ParadeOverlay(canvas: viewport, feed: feed, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.histogram) {
-            HistogramOverlay(canvas: viewport, feed: feed, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.vectorscope) {
-            VectorscopeOverlay(canvas: viewport, feed: feed, chromeClearance: clearance)
-        }
-        if model.assist.isVisible(.trafficLights) {
-            TrafficLightsOverlay(bounds: viewport, feed: feed, chromeClearance: clearance)
-        }
-    }
 }

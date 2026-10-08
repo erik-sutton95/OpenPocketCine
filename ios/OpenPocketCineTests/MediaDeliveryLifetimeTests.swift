@@ -8,9 +8,9 @@ final class MediaDeliveryLifetimeTests: XCTestCase {
         let model = AppModel()
         // Simulate the popup's already-completed handoff without leaving any
         // Wi-Fi network. The fixture has no camera or credentials to rejoin.
-        model.internetHopActive = true
+        let token = model.internetHop.begin()
         let request = MediaDeliveryBeginRequest(
-            files: [], destination: .frameio, configuration: .init())
+            files: [], destination: .frameio, configuration: .init(), internetHopToken: token)
 
         let outcome = await MediaDeliveryRunner.execute(request: request, model: model) { _ in
             XCTFail("An empty request must fail before presenting progress")
@@ -25,13 +25,13 @@ final class MediaDeliveryLifetimeTests: XCTestCase {
 
     func testNativePreflightDoesNotAdoptUnrelatedInternetHop() async {
         let model = AppModel()
-        model.internetHopActive = true
+        let token = model.internetHop.begin()
         let request = MediaDeliveryBeginRequest(
             files: [], destination: .nativeShare, configuration: .init())
 
         _ = await MediaDeliveryRunner.execute(request: request, model: model) { _ in }
 
         XCTAssertTrue(model.internetHopActive, "Native export never owns an internet hop")
-        model.internetHopActive = false
+        model.endInternetHop(token)
     }
 }

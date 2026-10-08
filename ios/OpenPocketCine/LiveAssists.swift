@@ -15,7 +15,9 @@ import UIKit
 extension MonitorLUTLooks {
     /// Shared initialization may read the provider, but native lookup waits for app prefs.
     convenience init() {
-        self.init(official: .app, preferences: .app, customLUTs: .app, preparationReady: false)
+        self.init(official: .app, preferences: .app, customLUTs: .app, preparationReady: false,
+            lookProfile: DJICameraLUTProfile.make(family: .pocket, cameraName: nil),
+            colorSourceProfile: DJIMonitorColorProfile.value)
     }
 }
 
@@ -48,7 +50,11 @@ extension MonitorAssistState where Looks == MonitorLUTLooks {
 }
 
 enum OperatorPrefs {
-    private static let display = MonitorDisplayPreferences(
+    static let common = MonitorOperatorPreferences(storage: .standard,
+        keys: .init(keepScreenAwake: "OpenPocketCine.KeepScreenAwake", hdrDisplay: "OpenPocketCine.HDRDisplay",
+            recordConfirmation: "OpenPocketCine.RecordConfirmation", haptics: "OpenPocketCine.HapticsEnabled",
+            cacheOriginals: "OpenPocketCine.CacheFullResolution"))
+    static let display = MonitorDisplayPreferences(
         storage: .standard,
         keys: .init(live: "OpenPocketCine.DispChrome.Live", clean: "OpenPocketCine.DispChrome.Clean"))
     private static let awakeKey = "OpenPocketCine.KeepScreenAwake"
@@ -105,42 +111,30 @@ enum OperatorPrefs {
     }
 
     static var keepScreenAwake: Bool {
-        get {
-            if UserDefaults.standard.object(forKey: awakeKey) == nil { return true }
-            return UserDefaults.standard.bool(forKey: awakeKey)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: awakeKey) }
+        get { common.keepScreenAwake }
+        set { common.keepScreenAwake = newValue }
     }
 
     /// Outdoor HDR panel boost for live view. Off by default.
     static var hdrDisplay: Bool {
-        get { UserDefaults.standard.bool(forKey: hdrDisplayKey) }
-        set { UserDefaults.standard.set(newValue, forKey: hdrDisplayKey) }
+        get { common.hdrDisplay }
+        set { common.hdrDisplay = newValue }
     }
 
     /// Download the original camera file when a clip is opened. Off keeps the 720p proxy.
     static var cacheFullResolution: Bool {
-        get {
-            if UserDefaults.standard.object(forKey: cacheFullResolutionKey) == nil { return true }
-            return UserDefaults.standard.bool(forKey: cacheFullResolutionKey)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: cacheFullResolutionKey) }
+        get { common.cacheOriginals }
+        set { common.cacheOriginals = newValue }
     }
 
     static var recordConfirmationEnabled: Bool {
-        get {
-            if UserDefaults.standard.object(forKey: recordConfirmKey) == nil { return true }
-            return UserDefaults.standard.bool(forKey: recordConfirmKey)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: recordConfirmKey) }
+        get { common.recordConfirmation }
+        set { common.recordConfirmation = newValue }
     }
 
     static var hapticsEnabled: Bool {
-        get {
-            if UserDefaults.standard.object(forKey: hapticsKey) == nil { return true }
-            return UserDefaults.standard.bool(forKey: hapticsKey)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: hapticsKey) }
+        get { common.haptics }
+        set { common.haptics = newValue }
     }
 
     static var assistToolUsage: MonitorToolUsage {
@@ -462,27 +456,9 @@ struct AssistToolChip: View {
     let tool: MonitorAssistSelection
     let isOn: Bool
     var compact = false
-
     var body: some View {
-        VStack(spacing: 3) {
+        MonitorAssistChip(id: tool.rawValue, isOn: isOn, compact: compact) {
             AssistToolIcon(tool: tool, size: 19)
-                .frame(height: 23)
-            Text(tool.rawValue)
-                .font(MonitorTheme.font(9, weight: .medium)).monospacedDigit()
-                .tracking(0.9)
-                .lineLimit(1)
-        }
-        .foregroundStyle(isOn ? LiveDesign.accent : LiveDesign.muted)
-        .padding(.vertical, 5)
-        .padding(.horizontal, compact ? 5 : 8)
-        .frame(minWidth: compact ? 48 : 52)
-        .background {
-            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                .fill(isOn ? LiveDesign.accentDim : Color.clear)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: LiveDesign.cornerRadius, style: .continuous)
-                .strokeBorder(isOn ? LiveDesign.accent : Color.clear, lineWidth: 1)
         }
     }
 }

@@ -30,13 +30,9 @@ extension AppModel {
 struct ShellCoverPage: View {
     let cover: ShellModel.Cover
     @Environment(AppModel.self) private var model
-    @Environment(\.monitorWindowGeometry) private var windowGeometry
 
     var body: some View {
-        GeometryReader { proxy in
-            let safeArea = OperatorPanelMetrics.standalonePanelSafeArea(
-                from: OperatorPanelMetrics.resolvedDeviceSafeArea(
-                    proxy.safeAreaInsets, window: windowGeometry.safeArea))
+        MonitorCoverPage { safeArea in
             switch cover {
             case .settings:
                 SettingsRootView(safeArea: safeArea, onClose: { model.shell.dismissCover() })

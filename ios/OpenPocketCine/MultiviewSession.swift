@@ -111,9 +111,10 @@ final class MultiviewSession {
             }
             var next = MonitorFrameEffects()
             next.colorMode = settings.colorMode ?? .normal
-            let lut = OfficialDJILUT.auto(
-                colorMode: settings.colorMode,
-                family: camera?.model.family ?? .pocket, cameraName: camera?.model.name)
+            let source = LUTResolver.builtInAutoSource(colorMode: settings.colorMode,
+                profile: camera?.model.captureProfile?.looks)
+            let lut: OfficialDJILUT?
+            if case .dji(let official) = source { lut = official } else { lut = nil }
             lutCaption =
                 settings.colorMode == nil
                 ? "Waiting for camera color" : "Auto · no conversion needed"

@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import OpenPocketViewCore
 import XCTest
 import os
@@ -9,36 +10,32 @@ import OpenCineDJIApple
 @MainActor
 final class MediaCacheSchedulingTests: XCTestCase {
     func testCancelledDownloadCannotPublishQueuedProgress() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let pump = MediaDownloadPump()
+        let manager = ProbedCacheFileManager()
+        defer { try? FileManager.default.removeItem(at: manager.support) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StreamingProxyProtocol.self]
-        let http = URLSession(configuration: configuration, delegate: pump, delegateQueue: nil)
-        defer { http.invalidateAndCancel() }
+        let cache = CameraMedia(fileManager: manager, httpConfiguration: configuration)
+        let session = CameraSession(borrowing: HevcDecoder(), cameraMedia: cache)
+        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
+        session.phase = .live
+        defer { session.disconnect() }
+        let file = MediaFile(path: "DCIM/DJI_001/DJI_QUEUED.MP4", thumbPath: "QUEUED.scr")
+        let proxy = try XCTUnwrap(MediaHTTP.proxyPaths(file).first)
         let ready = expectation(description: "Transfer is awaiting more bytes")
         StreamingProxyProtocol.state.withLock { $0 = .init(firstChunk: ready) }
         defer { StreamingProxyProtocol.state.withLock { $0 = .init() } }
-        var published: [Double] = []
-        let download = Task {
-            try await pump.download(
-                session: http, from: MediaHTTP.pathURL(storage: 1, path: "proxy.LRF")!,
-                to: root.appendingPathComponent("proxy.mov"), path: "proxy.LRF", expectedSize: 0,
-                onProgress: { published.append($0) })
-        }
+        let progress = QueuedMediaProgressProbe(session: session, path: file.path)
+        let download = Task { try await session.cachePlaybackFile(file: file, path: proxy) }
         await fulfillment(of: [ready], timeout: 5)
-        let tasks = await withCheckedContinuation { continuation in
-            http.getAllTasks { continuation.resume(returning: $0) }
-        }
-        let networkTask = try XCTUnwrap(tasks.first as? URLSessionDataTask)
-        published.removeAll()
-        // Queue the actual delegate's progress publication while MainActor is
-        // occupied by this test, then cancel before allowing the callback to run.
-        pump.urlSession(http, dataTask: networkTask, didReceive: Data([7]))
-        pump.cancelAll()
+        progress.values.removeAll()
+        // Queue bytes on the actual URLProtocol/native stream while MainActor is occupied,
+        // then cancel before its captured library progress publication can run.
+        let network = try XCTUnwrap(StreamingProxyProtocol.state.withLock { $0.paused })
+        network.queueProgressChunk()
+        download.cancel()
         _ = try? await download.value
         await Task.yield()
+        let published = progress.values
         XCTAssertTrue(published.isEmpty, "Cancelled work must not recreate a caching badge")
     }
 
@@ -282,6 +279,7 @@ private final class StreamingProxyProtocol: URLProtocol, @unchecked Sendable {
         }
         ready?.fulfill()
     }
+    func queueProgressChunk() { client?.urlProtocol(self, didLoad: Data([7])) }
     func finishBody() {
         client?.urlProtocol(self, didLoad: Data(repeating: 7, count: Self.chunkSize))
         client?.urlProtocolDidFinishLoading(self)
@@ -320,5 +318,21 @@ private final class ProbedCacheFileManager: FileManager, @unchecked Sendable {
         removal.withLock { $0 = Thread.isMainThread }
         try beforeRemoval?()
         try super.removeItem(at: URL)
+    }
+}
+
+@MainActor private final class QueuedMediaProgressProbe {
+    private weak var session: CameraSession?
+    private let path: String
+    var values: [Double] = []
+    init(session: CameraSession, path: String) { self.session = session; self.path = path; watch() }
+    private func watch() {
+        withObservationTracking { _ = session?.mediaDownloadProgress } onChange: { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let value = self.session?.mediaDownloadProgress[self.path] { self.values.append(value) }
+                self.watch()
+            }
+        }
     }
 }

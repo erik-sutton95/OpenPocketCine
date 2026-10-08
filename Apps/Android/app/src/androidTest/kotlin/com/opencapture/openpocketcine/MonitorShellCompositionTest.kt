@@ -48,7 +48,8 @@ class MonitorShellCompositionTest {
                         AppShell(model.shell, ShellBrand("SIMULATED Pocket"),
                             ShellActions(diagnostics = {}, reportProblem = {}),
                             monitor = { LiveViewScreen(model) },
-                            page = { ShellCoverPage(model, it) })
+                            page = { ShellCoverPage(model, it) },
+                            coverPresentation = com.opencapture.opencine.appkit.ShellCoverPresentation.SHELL)
                     }
                 }
             }

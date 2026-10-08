@@ -6,6 +6,7 @@ import OpenPocketViewCore
 /// events and control targets live in the package; this maps the app's datalink, recovery and
 /// connect phase onto the port.
 extension CameraSession: DJIControlPort {
+    var commandOwner: DJICommandOwner? { datalink?.commandOwner }
     var connectedCameraID: String? { connectedCamera?.id.uuidString }
     var connectedModel: CameraModel? {
         #if targetEnvironment(simulator)

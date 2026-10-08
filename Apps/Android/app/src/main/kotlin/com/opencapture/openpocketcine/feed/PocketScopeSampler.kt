@@ -1,6 +1,6 @@
 package com.opencapture.openpocketcine.feed
 
-import com.opencapture.opencine.vocabulary.ScopeExposureCeiling
+import com.opencapture.opencine.dji.DjiScopeExposureCeiling as ScopeExposureCeiling
 import com.opencapture.opencine.media.ScopeAssistBundle
 import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.opencine.media.MonitorLUTCube
