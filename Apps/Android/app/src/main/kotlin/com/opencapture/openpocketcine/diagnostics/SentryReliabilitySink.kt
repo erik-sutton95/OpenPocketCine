@@ -270,9 +270,17 @@ internal class ReliabilityReportingTransport(
                     ) return@execute
                     // Reload disk on every idle flush, including native reports cached
                     // before the camera gate opened. Bound memory and queued work.
-                    for (envelope in options.envelopeDiskCache.take(options.maxCacheItems)) {
-                        if (pending.size >= options.maxCacheItems) break
-                        pending.putIfAbsent(key(envelope), envelope to Hint())
+                    try {
+                        for (envelope in options.envelopeDiskCache.take(options.maxCacheItems)) {
+                            if (pending.size >= options.maxCacheItems) break
+                            pending.putIfAbsent(key(envelope), envelope to Hint())
+                        }
+                    } catch (error: Exception) {
+                        // A malformed cached envelope must not terminate the transport worker
+                        // or block healthy reports already admitted to the pending queue.
+                        options.logger.log(SentryLevel.WARNING,
+                            "Could not reload cached reliability envelopes (%s); retaining disk cache",
+                            error.javaClass.simpleName)
                     }
                     for ((id, entry) in pending.entries.toList()) {
                         if (closed.get() || reporting.gate.shouldBlockUpload ||

@@ -157,6 +157,12 @@ the camera IPv4 path is up. Queued automatic send waits until the operator leave
 A local receipt distinguishes queued from HTTP-confirmed delivery; an SDK event
 ID alone is not a delivery confirmation.
 
+Android cache reload failures are contained by the reporting transport. A malformed SDK cached
+envelope cannot terminate its worker or prevent healthy pending reports from being delivered
+when the upload gate opens. The transport retains the disk cache and logs only the exception
+class; it does not delete unreadable reports. Disk-only reports remain unavailable until the SDK
+can read their cache. Upload gates, HTTP-confirmed receipts and retry policy still apply.
+
 ## Motion stutter and recovery capture
 
 The connection audit adds one delivery summary per second. These rows contain
