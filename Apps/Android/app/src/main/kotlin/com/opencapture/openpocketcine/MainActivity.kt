@@ -37,8 +37,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,10 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.InfiniteAnimationPolicy
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -329,23 +324,12 @@ private fun LinkExperience(
     discovery: PermissionGate,
     onEnableBluetooth: () -> Unit,
 ) {
-    val density = LocalDensity.current
-    val layoutDir = LocalLayoutDirection.current
-    val configuration = LocalConfiguration.current
     val context = LocalContext.current
     val state by model.cameras.state.collectAsState()
     // No saved camera opens the pair page, as at first launch.
     val pairing = state.saved.isEmpty() || model.pairing
     var showProblemReport by remember { mutableStateOf(false) }
     var showReportingPrivacy by remember { mutableStateOf(false) }
-    val landscapeHome = configuration.screenWidthDp > configuration.screenHeightDp
-    val homeSide = with(density) {
-        val leading = WindowInsets.safeDrawing.getLeft(this, layoutDir).toDp()
-        val trailing = WindowInsets.safeDrawing.getRight(this, layoutDir).toDp()
-        com.opencapture.monitorui.MonitorLayoutPolicy.pageSideInsets(
-            landscape = true, safeLeading = leading.value, safeTrailing = trailing.value,
-        ).first.dp
-    }
     val phase by model.session.phaseFlow.collectAsState()
     val radioOn by model.session.radioOn.collectAsState()
     // Main's setup chip menu: Forget only, no Rename setup.
@@ -364,24 +348,18 @@ private fun LinkExperience(
         coverPresentation = com.opencapture.opencine.appkit.ShellCoverPresentation.SHELL,
         pageFrame = { route, content ->
             val pair = route == ShellModel.Route.PAIR
-            Column(Modifier.fillMaxSize().then(
-                if (!pair && landscapeHome) {
-                    Modifier.padding(start = homeSide, end = homeSide)
-                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))
-                } else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
-            ).padding(vertical = 16.dp)) {
-                Box(Modifier.weight(1f).padding(start = if (pair) 14.dp else 18.dp,
-                    end = if (pair) 14.dp else 18.dp, top = if (pair) 0.dp else 8.dp)) {
-                    if (pair) {
+            if (pair) {
+                Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(vertical = 16.dp)) {
+                    Box(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                         // As the pair page always did: Back stops a connect and leaves the page.
                         BackHandler(enabled = state.attempts.isNotEmpty() || state.saved.isNotEmpty()) {
                             model.cameras.cancelAll()
                             model.shell.endPairing()
                         }
+                        content()
                     }
-                    content()
                 }
-            }
+            } else content()
         },
         pairingFlow = pairingWizard(
             label = PairingWizard.phaseLabel(
