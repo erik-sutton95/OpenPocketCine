@@ -16,6 +16,14 @@ Forgetting a camera now removes its Android Wi-Fi credentials too, matching iOS.
 Saved IDs and media favorites stay unchanged; the new document mirrors legacy
 records and merges edits made by an older build after a downgrade.
 
+Android credential reads, migration, writes and explicit Forget run away from
+Main. One cooperative transaction gate on the session's existing credential cache
+prevents a retired entered migration from overwriting a successor save. Forget
+awaits that same cache before removing camera metadata. Credential keys, encryption
+and pairing policy remain unchanged. This is Android Keystore infrastructure;
+iOS retains its existing async integration. Controlled scheduling and transaction
+regressions pass; physical Keystore behavior remains untested for this increment.
+
 As on main, a saved setup's menu offers Forget only (no Rename setup), and the
 cameras and empty pairing pages carry no Privacy or Terms links; Settings opens
 both documents.
