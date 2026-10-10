@@ -28,7 +28,7 @@ Fixes
 - Pairing reminds you to turn off Frame Tap and force quit DJI Mimo.
 - The gimbal joystick moves as fast on diagonals as straight. AE lock gives a stronger double tap.
 - Portrait Live View shows Recenter focus after an off-centre tap.
-- Media lists complete SD and internal-storage libraries and keeps capacity visible during playback.
+- Media lists complete SD and internal libraries with capacity visible. Playback stays paused during a loop, seek or scrub.
 - Shutter angle stays at your chosen value when changing frame rate or opening the picker.
 - A new track no longer flashes on a previously tracked face.
 - Multiview Exit retries a temporary pairing refusal before showing an error.
@@ -44,5 +44,5 @@ What to test
 - Record with and without record confirmation from the lamp and a gamepad: the camera starts or stops once. Right after connecting, Record waits.
 - In Multiview, Record all on 2 to 4 cameras: each tile changes once and shows its result. Reconnect a tile with the confirmation open: it closes.
 - Two Multiview tiles at different ISO, and playback scopes while live, keep their own WAVE 100 and false color clip.
-- Open Media on a camera with many clips or both storage types, and on Nano right after playback. Set 180° and change FPS: angle should stay 180°.
+- Browse many clips or both storage types, and Nano after playback. Pause in a loop or scrub: it must hold. Change FPS at 180°: the angle stays 180°.
 - Turn on LEVEL and roll the handle in FPV. On Nano, the whole picture shows upright with no zoom chip.

@@ -26,7 +26,7 @@ Fixes
 - Pairing says what blocks it: Bluetooth or Local Network access (with Open Settings), Personal Hotspot, or DJI Frame Tap and DJI Mimo holding the camera.
 - The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
 - Media lists complete SD and internal libraries, including on Nano, and keeps capacity visible during playback.
-- Switching clips in Media no longer freezes the app while the previous clip is still being processed.
+- Switching clips no longer freezes Media. Pause stays paused during looping, seeking and scrubbing.
 - Live View no longer freezes for seconds after one dropped video packet.
 - Shutter angle stays at your chosen value when changing frame rate or opening the picker.
 - Tapping to move focus no longer snaps back to the old point first. A new track no longer flashes on a previously tracked face.
@@ -41,5 +41,5 @@ What to test
 - Record with and without record confirmation from the lamp, a gamepad and Apple Watch: the camera starts or stops once. Right after connecting, Record waits.
 - Change ISO and white balance: pending shows, then the camera's value. Press record on the watch during a Wi-Fi repair: it says "Camera changed".
 - In Multiview, Record all on 2 to 4 cameras: each tile changes once and shows its result. Reconnect a tile with the confirmation open: it closes.
-- Open Media on a camera with many clips or both storage types, and on Nano right after playback. Set 180° and change FPS: angle should stay 180°.
+- Browse many clips or both storage types, and Nano after playback. Pause in a loop or scrub: it must hold. Change FPS at 180°: the angle stays 180°.
 - Turn the camera vertical in portrait: the whole picture should show. Pair with Local Network or Bluetooth off, or Personal Hotspot on: the error should name the fix.
