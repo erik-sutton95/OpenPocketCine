@@ -3108,7 +3108,8 @@ final class CameraSession {
                     assistState: decoder.effects.replacesIdentityFeed ? "replacement" : "identity",
                     outputObservable: decoder.videoToolboxActive,
                     presentationExpected: !incidentSettingsCovered),
-                watchdogAction: feedWatchdog.stage.rawValue))
+                watchdogAction: feedWatchdog.stage.rawValue,
+                ingress: datalink?.incidentIngress))
     }
 
     private func publishPipelineStats() {
