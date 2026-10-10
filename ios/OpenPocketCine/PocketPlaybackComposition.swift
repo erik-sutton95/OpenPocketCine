@@ -194,7 +194,8 @@ struct PocketPlaybackLook: Equatable, Sendable {
                 let native = MonitorApplePlaybackOwner(feed: PlaybackFeedSession())
                 let player = model.session.makeMediaPlayback(native: native,
                     previousColor: { model.assist.monitorColorMode })
-                let assists = MonitorPlaybackAssistSession(native: native, samples: model.frameSamples,
+                let assists = MonitorPlaybackAssistSession(audioSession: model.playbackAudioSession,
+                    native: native, samples: model.frameSamples,
                     projectEffects: { $0.playbackFrameEffects },
                     onTapFailure: MediaPlaybackAudioSession.tapFailure,
                     onAudioFailure: MediaPlaybackAudioSession.audioFailure)

@@ -22,6 +22,7 @@ import OpenCineDJIApple
 @Observable
 final class AppModel {
     var session: CameraSession
+    @ObservationIgnored let playbackAudioSession = MonitorPlaybackAudioSession()
     /// Saved cameras, nearby sightings, pairing and connect attempts (SHELL-02): the shared flow
     /// over the DJI integration, which connects through `session`.
     let cameras: CamerasModel

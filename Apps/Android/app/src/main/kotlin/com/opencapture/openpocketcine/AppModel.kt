@@ -57,7 +57,6 @@ import com.opencapture.opencine.appkit.stored
 import com.opencapture.opencine.core.NearbyCamera
 import com.opencapture.opencine.core.RouteKind
 import com.opencapture.opencine.core.SavedCamera
-import com.opencapture.opencine.dji.CameraWifiCredentialStore
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.DjiConnectPort
 import com.opencapture.opencine.dji.DjiIntegration
@@ -134,7 +133,7 @@ class AppModel(
         port,
         loadNetwork = networkStore::load,
         saveNetwork = { ssid, password, hotspot -> networkStore.save(ssid, password, hotspot) },
-        forgetCredentials = CameraWifiCredentialStore(appContext)::remove,
+        forgetCredentialsAsync = session::forgetWifiCredentials,
     )
     override val cameras = CamerasModel(
         if (discovers) {
