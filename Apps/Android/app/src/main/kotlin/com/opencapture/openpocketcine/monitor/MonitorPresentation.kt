@@ -26,4 +26,3 @@ fun MonitorCameraValues(values: List<MonitorValue>, enabled: Boolean, portrait: 
         quickControl = quickControl, onQuickCommit = onQuickCommit, quickPreview = quickPreview,
         onQuickActiveChange = onQuickActiveChange, quickBottomClearanceDp = quickBottomClearanceDp, onOpen = onOpen)
 }
-
