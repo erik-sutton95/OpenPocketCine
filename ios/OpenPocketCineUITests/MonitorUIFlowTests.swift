@@ -104,6 +104,64 @@ final class MonitorUIFlowTests: XCTestCase {
         capture("iso-drum")
     }
 
+    /// SIMULATED existing writable fixture; real touch/lift, binding, and confirmed ISO report.
+    func testSIMULATEDVisibleISODrumTapCommitsAndSurvivesPopupReopen() throws {
+        #if !targetEnvironment(simulator)
+            throw XCTSkip("Writable presentation fixtures are simulator-only")
+        #endif
+        app.launch()
+        rotate(.landscapeLeft)
+        let iso = app.buttons["monitor.capture.iso"]
+        XCTAssertTrue(iso.waitForExistence(timeout: 10))
+        XCTAssertEqual(iso.value as? String, "1600")
+        iso.tap()
+        let drum = app.descendants(matching: .any)["Value"].firstMatch
+        XCTAssertTrue(drum.waitForExistence(timeout: 5))
+        XCTAssertTrue(drum.isHittable)
+        XCTAssertEqual(drum.value as? String, "1600")
+
+        func assertReported(_ expected: String) {
+            let reported = NSPredicate { _, _ in
+                drum.value as? String == expected && iso.value as? String == expected
+            }
+            expectation(for: reported, evaluatedWith: app)
+            waitForExpectations(timeout: 5)
+            XCTAssertEqual(drum.value as? String, expected)
+            XCTAssertEqual(iso.value as? String, expected)
+        }
+        func tapVisible(_ expected: String) {
+            let rows = drum.descendants(matching: .staticText)
+                .matching(NSPredicate(format: "label == %@", expected))
+            XCTAssertEqual(rows.count, 1, "Tap one actually supplied visible detent")
+            let row = rows.firstMatch
+            let point = CGPoint(x: row.frame.midX, y: row.frame.midY)
+            XCTAssertTrue(drum.frame.contains(point))
+            XCTAssertTrue(app.frame.contains(point))
+            capture("SIMULATED-iso-drum-before-\(expected)")
+            // The drawing row need not own hit testing. Tap its actual visible centre.
+            app.coordinate(withNormalizedOffset: .zero).withOffset(
+                CGVector(dx: point.x - app.frame.minX, dy: point.y - app.frame.minY)).tap()
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "SIMULATED-iso-drum-after-\(expected)-tree"
+            tree.lifetime = .keepAlways
+            add(tree)
+            assertReported(expected)
+            capture("SIMULATED-iso-drum-reported-\(expected)")
+        }
+
+        tapVisible("3200")
+        app.buttons["monitor.capture.close"].tap()
+        XCTAssertFalse(drum.exists)
+        XCTAssertEqual(iso.value as? String, "3200")
+        iso.tap()
+        XCTAssertTrue(drum.waitForExistence(timeout: 5))
+        assertReported("3200")
+        capture("SIMULATED-iso-drum-fresh-popup-3200")
+        tapVisible("1600")
+        app.buttons["monitor.capture.close"].tap()
+        XCTAssertEqual(iso.value as? String, "1600")
+    }
+
     func testPortraitToolsStayInPlaceWhenFitFillChanges() {
         app.launchEnvironment["OPV_UI_REVIEW_FIT"] = "1"
         app.launch()
