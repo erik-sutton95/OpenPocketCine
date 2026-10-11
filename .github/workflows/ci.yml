@@ -55,6 +55,9 @@ jobs:
       - name: Sentry release configuration
         run: bash ./tools/sentry-test.sh
 
+      - name: Packaged iOS privacy regression
+        run: python3 -m unittest discover -s tools -p 'test_ios_archive_privacy.py'
+
       - name: Connection stress harness (offline)
         run: python3 -m unittest discover -s tools/connection-stress -p 'test_*.py'
 

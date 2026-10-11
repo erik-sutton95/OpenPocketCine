@@ -144,7 +144,10 @@ class CloudArchiveDsnTests(unittest.TestCase):
             )
             for destination, expected in (("", 3), (SAMPLE, 0)):
                 with self.subTest(configured=bool(destination)):
-                    plist.write_bytes(plistlib.dumps({"SentryDSN": destination}))
+                    plist.write_bytes(plistlib.dumps({
+                        "SentryDSN": destination,
+                        "NSCameraUsageDescription": "Receive video from USB capture devices.",
+                    }))
                     result = subprocess.run(
                         ["sh", str(ROOT.parent / "ios/ci_scripts/ci_post_xcodebuild.sh")],
                         env=env, capture_output=True, text=True, check=False,
