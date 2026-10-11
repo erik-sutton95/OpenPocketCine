@@ -310,6 +310,7 @@ private final class PlaybackOwnerFileManager: FileManager, @unchecked Sendable {
   init(fixture: PlaybackOutputFixture) { self.fixture = fixture }
 
   func start(using session: PlaybackFeedSession, in test: XCTestCase) async throws {
+    XCTAssertTrue(fixture.item.outputs.contains(where: { $0 === session.output }))
     let ready = test.expectation(description: "actual encoded clip becomes ready")
     readiness = ready
     observation = fixture.item.observe(\.status, options: [.initial, .new]) { [weak self] _, _ in
@@ -330,7 +331,6 @@ private final class PlaybackOwnerFileManager: FileManager, @unchecked Sendable {
     guard fixture.item.status == .readyToPlay else {
       throw fixture.item.error ?? NativePlaybackBoundaryError.itemNotReady
     }
-    XCTAssertTrue(fixture.item.outputs.contains(where: { $0 === session.output }))
     session.noteItemReady()
     fixture.player.play()
   }
