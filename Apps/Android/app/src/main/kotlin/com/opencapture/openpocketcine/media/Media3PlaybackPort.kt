@@ -102,6 +102,16 @@ class Media3PlaybackPort(val player: ExoPlayer, scope: CoroutineScope) : Monitor
                     onEvent?.invoke(token, MonitorPlaybackEvent.Playing(isPlaying))
                 }
             }
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (!current(token, request)) return
+                val transport = when {
+                    player.playbackState == Player.STATE_IDLE -> null
+                    player.isPlaying -> MonitorPlaybackTransportState.PLAYING
+                    !player.playWhenReady || player.playbackState == Player.STATE_ENDED -> MonitorPlaybackTransportState.PAUSED
+                    else -> MonitorPlaybackTransportState.WAITING
+                }
+                if (current(token, request)) onEvent?.invoke(token, MonitorPlaybackEvent.Transport(transport))
+            }
             override fun onPlayerError(error: PlaybackException) {
                 if (!current(token, request)) return
                 ready.completeExceptionally(error)
