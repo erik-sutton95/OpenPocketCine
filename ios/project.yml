@@ -129,6 +129,8 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "OpenPocketCine uses Bluetooth to find and pair with your DJI Osmo Pocket and hand off Wi-Fi."
+        # OpenCineApple links AVFoundation external USB capture support.
+        INFOPLIST_KEY_NSCameraUsageDescription: "If you use an external USB capture device on iPad, OpenPocketCine needs camera access to receive its video."
         INFOPLIST_KEY_NSMotionUsageDescription: "OpenPocketCine uses headphone motion so AirPods can aim the gimbal."
         # iOS names the current Wi-Fi only to apps with precise location (Add setup › Wi-Fi).
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "OpenPocketCine uses your location only so iOS can tell it which Wi-Fi this iPhone is on, to offer that network when you add a camera's Wi-Fi setup. Your location is not stored or shared."

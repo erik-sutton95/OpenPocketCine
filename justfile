@@ -17,7 +17,11 @@ setup:
 # Run every repository quality check that this tree currently supports.
 # `swift-lint` is available as `just lint` after `just format`; the existing tree is not
 # yet fully swift-format clean, so it is not a merge gate.
-check: hygiene testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test connection-stress-test swift-test handbook-build
+check: hygiene testflight-notes android-play-notes typos lint-md check-links check-editorconfig lint-actions secrets sentry-test ios-privacy-test connection-stress-test swift-test handbook-build
+
+# Exercise the actual Cloud archive hook with synthetic packaged privacy values.
+ios-privacy-test:
+    python3 -m unittest discover -s tools -p 'test_ios_archive_privacy.py'
 
 # Verify release reporting configuration without network or real credentials.
 sentry-test:

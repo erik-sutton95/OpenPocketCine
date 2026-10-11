@@ -16,6 +16,19 @@ if [ "${CI_XCODEBUILD_ACTION:-}" = "archive" ] \
     && [ "${CI_XCODEBUILD_EXIT_CODE:-0}" = "0" ]; then
   cd "$CI_PRIMARY_REPOSITORY_PATH"
   app_plist="${CI_ARCHIVE_PATH}/Products/Applications/OpenPocketCine.app/Info.plist"
+  # Validate the packaged value, including Xcode's generated Info.plist settings.
+  # Linked OpenCineApple capture APIs require this even for wireless-only builds.
+  python3 - "$app_plist" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as source:
+    info = plistlib.load(source)
+purpose = info.get("NSCameraUsageDescription")
+if not isinstance(purpose, str) or not purpose.strip():
+    sys.exit("Archive is missing a non-empty NSCameraUsageDescription.")
+print("Archive camera purpose string verified.")
+PY
   python3 ./tools/sentry-verify-ios-dsn.py --plist "$app_plist" --require
 
   if [ "${SENTRY_UPLOAD_ENABLED:-}" = "true" ]; then

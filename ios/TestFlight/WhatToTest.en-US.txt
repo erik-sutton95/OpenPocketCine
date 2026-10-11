@@ -21,7 +21,7 @@ New and changed
 
 Fixes
 
-- Frame.io no longer asks you to sign in again after a token refresh. A cancelled upload batch says "Cancelled."
+- Fixed missing privacy information that blocked TestFlight uploads.
 - Traffic Lights no longer flag clipping just under clip, and zebra at 100% now marks clipped highlights.
 - Pairing says what blocks it: Bluetooth or Local Network access (with Open Settings), Personal Hotspot, or DJI Frame Tap and DJI Mimo holding the camera.
 - The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.

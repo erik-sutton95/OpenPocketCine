@@ -7,6 +7,18 @@ Public join link: <https://testflight.apple.com/join/1tmt3aEB>
 
 ## What the cloud workflow does
 
+Successful archives require a non-empty `NSCameraUsageDescription` in the
+packaged app. `ios/project.yml` supplies the purpose for external USB capture
+on iPad because the linked OpenCineApple module references AVFoundation camera
+APIs. The archive hook validates the built plist before upload, preventing App
+Store error 90683. USB capture is linked but not currently exposed by this app.
+This metadata does not request camera access during wireless monitoring. Run
+the hook regressions with:
+
+```bash
+python3 -m unittest discover -s tools -p 'test_ios_archive_privacy.py'
+```
+
 | Step | Where it lives |
 | --- | --- |
 | Generate `ios/OpenPocketCine.xcodeproj` | [`ios/ci_scripts/ci_post_clone.sh`](../ios/ci_scripts/ci_post_clone.sh) (`xcodegen`) |
