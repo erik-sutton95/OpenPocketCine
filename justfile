@@ -143,11 +143,14 @@ ios-build: ios-generate
 ios-device-build *args: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS' -allowProvisioningUpdates {{args}} build
 
-# Run the iOS shell's XCTest suite on the first available iPhone simulator.
+# Run the iOS suite on IOS_TEST_DEVICE_ID, falling back to the first available iPhone.
 ios-test *args: ios-generate
     #!/usr/bin/env bash
     set -euo pipefail
-    device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && !found { print $2; found = 1 }')"
+    device_id="${IOS_TEST_DEVICE_ID:-}"
+    if [ -z "$device_id" ]; then
+        device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && !found { print $2; found = 1 }')"
+    fi
     if [ -z "$device_id" ]; then
         echo "No available iPhone simulator found." >&2
         exit 1
