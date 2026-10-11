@@ -1,45 +1,16 @@
-Since open beta build 158
-
 New and changed
 
-- Record sends start or stop for the camera's reported state, never a blind toggle, and waits for that state after connecting.
-- ISO and white balance show the camera's reported value, pending until the camera answers.
-- Apple Watch, watcher relay and record confirmation act only on the camera shown. After a link change the watch says "Camera changed. Try again."
-- Multiview Record all rechecks every camera when you confirm and shows each tile's result; one failure stops no other. Photo mode disables it.
-- New CineStop false color: greens below 18% gray, gray at 18%, pink +1 skin, yellow +2 upper skin, red clip. Old scale is now Video; Read picks 709 or LOG.
-- Long-press MIRROR for Horizontal and Vertical. Both on show an underslung camera, such as on a car mount, the right way up.
-- Long-press the picture to lock exposure: the focus box turns yellow with AE-L. The sun-and-lock key beside Recenter unlocks. WB Mode adds AWB Lock.
-- Multiview redesign: bigger main picture, scrolling camera strip, Live View's toolbar, and Grid and Center stage in portrait and landscape.
-- Multiview Camera settings: a side panel with a tab and live preview per camera.
-- Multiview starts with Auto LUT on, HH:MM:SS timecode and Live View battery pills.
-- Multiview uses the Add setup Wi-Fi and Hotspot flow with saved networks and retry.
-- Double-tap the same spot on the picture to start object tracking, as on the camera.
-- Joystick size: Small, Medium or Large in Settings, Controls. Its ink adapts to bright and dark scenes.
-- Live View indicators are glass pills for camera battery, phone battery and link; tap the link pill for feed fps.
-- REC setup shows your format and color, such as 4K 25p over D-Log2, in line with the timecode.
-- Tabs use one highlighted edge and tool buttons share one size.
+- Live View, camera controls, media and Multiview now share the OpenCine foundation, keeping Pocket's familiar monitor layout.
+- View Assist keeps compact labels, familiar icons and matching monitoring options in Live View and playback.
+- Diagnostic reports now separate incoming video, decoding and display stalls to help investigate live-view interruptions.
 
 Fixes
 
-- Fixed missing privacy information that blocked TestFlight uploads.
-- Traffic Lights no longer flag clipping just under clip, and zebra at 100% now marks clipped highlights.
-- Pairing says what blocks it: Bluetooth or Local Network access (with Open Settings), Personal Hotspot, or DJI Frame Tap and DJI Mimo holding the camera.
-- The gimbal joystick moves as fast on diagonals as straight up, down or sideways. AE lock gives a stronger double tap.
-- Media lists complete SD and internal libraries, including on Nano, and keeps capacity visible during playback.
-- Switching clips no longer freezes Media. Pause stays paused during looping, seeking and scrubbing.
-- Live View no longer freezes for seconds after one dropped video packet.
-- Shutter angle stays at your chosen value when changing frame rate or opening the picker.
-- Tapping to move focus no longer snaps back to the old point first. A new track no longer flashes on a previously tracked face.
-- A vertical camera feed fits whole in portrait and refits when the camera turns.
-- Value drums open on the current value instead of sliding in.
-- Multiview repairs its picture after you return from another app.
-- Multiview Exit retries a temporary pairing refusal before showing an error.
-- Wi-Fi setup fields align and Connect stays above the keyboard.
+- Pause stays paused during looping, seeking and scrubbing instead of unexpectedly resuming.
+- Corrected the privacy information required for TestFlight uploads.
 
 What to test
 
-- Record with and without record confirmation from the lamp, a gamepad and Apple Watch: the camera starts or stops once. Right after connecting, Record waits.
-- Change ISO and white balance: pending shows, then the camera's value. Press record on the watch during a Wi-Fi repair: it says "Camera changed".
-- In Multiview, Record all on 2 to 4 cameras: each tile changes once and shows its result. Reconnect a tile with the confirmation open: it closes.
-- Browse many clips or both storage types, and Nano after playback. Pause in a loop or scrub: it must hold. Change FPS at 180°: the angle stays 180°.
-- Turn the camera vertical in portrait: the whole picture should show. Pair with Local Network or Bluetooth off, or Personal Hotspot on: the error should name the fix.
+- Connect your camera, change recording settings and use View Assist in portrait and landscape. Check Multiview if you use more than one camera.
+- In Media, pause a clip near its end, seek and scrub, then switch clips. Confirm Pause holds and playback resumes only when you ask.
+- If the live picture drops out, note the time and use Connection setup > Share Diagnostics. Please include whether camera controls still respond.

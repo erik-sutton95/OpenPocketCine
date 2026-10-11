@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Feed incident reports on iOS and Android separate incoming video, decode
+  acceptance and display activity to help investigate interruptions without
+  adding camera polling or network traffic. This does not establish a fix for
+  every reported live-view dropout.
+
 - False color **Read** option for every scale on iOS and Android. LOG (the
   default) reads the raw signal like the waveform, with the full highlight
   range. 709 reads log through the camera's official Rec.709 look, the way RED
@@ -49,6 +54,10 @@ All notable changes to this project are documented here. The format is based on
   it. Neither uses a camera-native lock.
 
 ### Changed
+
+- Android release packages shrink unused code and resources, retain native
+  camera and rendering entry points, and associate crash reports with the
+  matching release mapping. Full-screen setup follows Android 15 and later.
 
 - Record is never a blind toggle on iOS and Android: the lamp, record
   confirmation, gamepad, Apple Watch and watcher relay send an explicit start
@@ -155,6 +164,12 @@ All notable changes to this project are documented here. The format is based on
   to help narrow down which gate stops decoding when Live View freezes.
 
 ### Fixed
+
+- Paused media playback stays paused through looping, seeking and scrubbing
+  instead of resuming unexpectedly.
+- iOS archives include the camera-purpose information required by linked
+  external capture support; archive validation rejects a missing value before
+  upload.
 
 - Android scopes, zebra and false color read the clip ceiling of the feed they
   show. A Multiview tile or playback scope no longer moves the live feed's
