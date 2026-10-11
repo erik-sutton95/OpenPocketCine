@@ -64,7 +64,13 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         let host = UIHostingController(
             rootView: InspectorLifecycleHost(model: model, viewport: size, probe: probe)
                 .environment(\.scenePhase, .active))
-        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first {
+                $0.activationState == .foregroundActive
+            })
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(origin: .zero, size: size)
         window.rootViewController = host
         window.makeKeyAndVisible()
         host.view.frame = window.bounds
@@ -74,6 +80,7 @@ final class AssistInspectorLifecycleTests: XCTestCase {
             model.monitorSamples.closeSource(publicationSource)
             window.isHidden = true
             window.rootViewController = nil
+            originalKeyWindow?.makeKeyAndVisible()
         }
         model.assist.configureTool = .peaking
         host.view.setNeedsLayout()
@@ -152,7 +159,13 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         }
         let host = UIHostingController(
             rootView: InspectorLifecycleHost(model: model, viewport: size, probe: probe))
-        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first {
+                $0.activationState == .foregroundActive
+            })
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(origin: .zero, size: size)
         window.rootViewController = host
         window.makeKeyAndVisible()
         host.view.frame = window.bounds
@@ -162,6 +175,7 @@ final class AssistInspectorLifecycleTests: XCTestCase {
             model.monitorSamples.closeSource(publicationSource)
             window.isHidden = true
             window.rootViewController = nil
+            originalKeyWindow?.makeKeyAndVisible()
         }
         let tools = MonitorAssistSelection.settingsCases.filter(\.hasConfiguration)
         for cycle in 0..<12 {

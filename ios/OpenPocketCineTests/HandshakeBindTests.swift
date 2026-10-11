@@ -251,7 +251,9 @@ final class HandshakeBindTests: XCTestCase {
         try await driver.open()
         driver.startLiveView()
         let firstDeadline = ContinuousClock.now.advanced(by: .seconds(2))
-        while driver.lastStatusAt == nil, ContinuousClock.now < firstDeadline {
+        while driver.lastStatusAt == nil || peer.snapshot.enables < 1,
+            ContinuousClock.now < firstDeadline
+        {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertNotNil(driver.lastStatusAt, "Initial negotiated endpoint receives the peer")
@@ -260,7 +262,9 @@ final class HandshakeBindTests: XCTestCase {
         try await driver.rebuildUDP(reason: "endpoint regression")
         driver.startLiveView()  // the shell owns exactly one enable after repair
         let repairedDeadline = ContinuousClock.now.advanced(by: .seconds(1))
-        while driver.lastStatusAt == nil, ContinuousClock.now < repairedDeadline {
+        while driver.lastStatusAt == nil || peer.snapshot.enables < 2,
+            ContinuousClock.now < repairedDeadline
+        {
             try await Task.sleep(for: .milliseconds(10))
         }
         let result = peer.snapshot
