@@ -64,7 +64,7 @@ Never pass `--auth-token`. Never print the token or DSN. Do not set
 | `SENTRY_AUTH_TOKEN` | Xcode Cloud secret / `play-closed` secret | Required when upload is enabled. |
 | `SENTRY_DSN_IOS` or `SENTRY_DSN` | Xcode Cloud secret | Public https DSN for the Cocoa SDK. Injected in `ci_post_clone.sh`. |
 | `SENTRY_DSN_ANDROID` | `play-closed` secret | Public https DSN for the Android SDK. Passed into `bundleRelease`. |
-| `SENTRY_PROGUARD_UUID` | future Android CI | Required **if** `mapping.txt` exists. Unset + mapping is a hard fail. |
+| `SENTRY_PROGUARD_UUID` | Play CI / local release environment | Bound into the app before building; reused for that mapping upload. Unset + mapping is a hard fail. |
 
 Optional: `SENTRY_URL` (self-hosted).
 
@@ -123,11 +123,15 @@ Paths scanned after `bundleRelease` are **candidates** only. Suffix or an empty
 `.dSYM`/`.so` is not enough; `sentry-cli debug-files check` must report
 `Usable: yes` and a non-zero debug ID.
 
-R8 `mapping.txt`: minify is **off**. If a mapping file appears anyway,
-upload **fails** unless `SENTRY_PROGUARD_UUID` matches an
-`io.sentry.proguard-uuid` the Android app actually ships. Uploading mappings
-without that UUID cannot deobfuscate. Android Gradle owns UUID injection; this
-CI does not invent one.
+R8 is enabled for release. Play CI generates `SENTRY_PROGUARD_UUID` before
+bundling, and Gradle embeds the same value as `io.sentry.proguard-uuid`. The
+`r8-mapping` artifact retains the mapping and UUID together. The uploader still
+fails without the UUID; reuse the value bound into that app for its mapping.
+`just android-bundle` generates a UUID unless one is supplied. For direct
+Gradle releases or later manual uploads, export the UUID before building and
+record it with the mapping. A direct Gradle build without the UUID has no
+Sentry mapping binding and must not be used for a reporting-enabled release.
+Reporting consent and upload opt-in are unchanged.
 
 GitHub: variable `SENTRY_UPLOAD_ENABLED=true`, optional `SENTRY_ORG` /
 `SENTRY_PROJECT`, `play-closed` secrets `SENTRY_AUTH_TOKEN` and
@@ -226,9 +230,8 @@ Not owned by this CI-tooling change:
    Maintainer OAuth `sentry` 0.45.0 is for hosted setup, not CI.
 2. Set `SENTRY_UPLOAD_ENABLED=true` on the Archive workflow and as a GitHub
    variable only when DSN + token are in those stores.
-3. Android minify / `io.sentry.proguard-uuid` + `SENTRY_PROGUARD_UUID` if R8
-   mappings become a release artifact (Android Gradle owner). Until then a
-   mapping.txt in CI is a fail.
+3. Preserve each Android R8 mapping and its app-bound `SENTRY_PROGUARD_UUID`
+   for deobfuscation. Native debug files and mappings remain separate artifacts.
 4. Store privacy disclosures if opted-in reporting is offered to testers.
 5. Historical events with inferred geo cannot be deleted (API 403).
 

@@ -153,8 +153,11 @@ jobs:
           set -euo pipefail
           base="${{ vars.ANDROID_VERSION_CODE_BASE }}"
           base="${base:-0}"
-          echo "VERSION_CODE=$((base + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
-          echo "VERSION_NAME=$(sed -n 's/^openpocketcine.versionName=//p' Apps/Android/gradle.properties)" >> "$GITHUB_ENV"
+          {
+            echo "VERSION_CODE=$((base + GITHUB_RUN_NUMBER))"
+            echo "VERSION_NAME=$(sed -n 's/^openpocketcine.versionName=//p' Apps/Android/gradle.properties)"
+            echo "SENTRY_PROGUARD_UUID=$(python3 -c 'import uuid; print(uuid.uuid4())')"
+          } >> "$GITHUB_ENV"
 
       - name: Require Sentry Android DSN
         # Presence only. Invalid DSN shape is handled in Apps/Android Gradle/SDK.
@@ -171,13 +174,27 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           SENTRY_DSN_ANDROID: ${{ secrets.SENTRY_DSN_ANDROID }}
-        run: ./gradlew bundleRelease -PversionCode="${VERSION_CODE}"
+        run: |
+          set -euo pipefail
+          ./gradlew bundleRelease -PversionCode="${VERSION_CODE}"
+          test -s app/build/outputs/mapping/release/mapping.txt
+          printf '%s\n' "${SENTRY_PROGUARD_UUID}" > app/build/outputs/mapping/release/sentry-proguard-uuid.txt
 
       - name: Attach signed AAB
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-release-${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}
           path: Apps/Android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach R8 mapping
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: r8-mapping-${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}
+          path: |
+            Apps/Android/app/build/outputs/mapping/release/mapping.txt
+            Apps/Android/app/build/outputs/mapping/release/sentry-proguard-uuid.txt
           if-no-files-found: error
           retention-days: 14
 

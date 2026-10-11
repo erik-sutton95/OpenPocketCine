@@ -2,7 +2,7 @@ Since open beta build 138
 
 New and changed
 
-- Record sends start or stop for the camera's reported state, never a blind toggle, and waits for that state after connecting.
+- Record starts or stops for the reported camera state, never a blind toggle, and waits for it after connecting.
 - Multiview Record all rechecks every camera when you confirm and shows each tile's result; one failure stops no other. Photo mode disables it.
 - New CineStop false color: greens below 18% gray, gray at 18%, pink +1 skin, yellow +2 upper skin, red clip. Old scale is now Video; Read picks 709 or LOG.
 - Long-press MIRROR for Horizontal and Vertical. Both on show an underslung camera, such as on a car mount, the right way up.
@@ -13,7 +13,7 @@ New and changed
 - Experimental Multiview: up to four Osmo cameras on shared Wi-Fi or a phone hotspot, from the grid button on Your cameras.
 - Multiview redesign: bigger main picture, camera strip, Live View's toolbar and a Camera settings side panel.
 - Wi-Fi and Hotspot setup uses choice cards, grouped networks, checklists and a pinned Connect button.
-- Saved cameras can connect over your Wi-Fi or this phone's hotspot: Add setup on the camera card, then switch with its chips.
+- Saved cameras connect over your Wi-Fi or phone hotspot: Add setup on the camera card, then switch with its chips.
 - New LEVEL View Assist: roll and tilt meters from the camera's sensor, with a bubble for top-down shots.
 - Gimbal drawer Double-tap: Recenter, or Level to move the lens level or straight down. Experimental.
 - Osmo Action 6: live view, D-Log M with its LUT, Photo, Timelapse and APERTURE. Not yet checked on a real Action 6.
@@ -21,13 +21,14 @@ New and changed
 
 Fixes
 
-- Multiview tiles and playback scopes each keep their own WAVE 100 and false color clip.
+- Updated full-screen display setup for Android 15 and later.
+- Multiview and playback each keep their own WAVE 100 and false color clip.
 - The Multiview record confirmation closes when a camera reconnects or changes.
 - Traffic Lights no longer flag clipping just under clip; zebra at 100% marks clipped highlights.
 - Pairing finds the camera with only Nearby devices allowed (Location on Android 10 and 11). If Android stops asking, Allow opens Settings.
-- Pairing reminds you to turn off Frame Tap and force quit DJI Mimo.
+- Pairing flags Frame Tap or DJI Mimo holding the camera.
 - The gimbal joystick moves as fast on diagonals as straight. AE lock gives a stronger double tap.
-- Portrait Live View shows Recenter focus after an off-centre tap.
+- Portrait shows Recenter focus after an off-centre tap.
 - Media lists complete SD and internal libraries with capacity visible. Playback stays paused during a loop, seek or scrub.
 - Shutter angle stays at your chosen value when changing frame rate or opening the picker.
 - A new track no longer flashes on a previously tracked face.

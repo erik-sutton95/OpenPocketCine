@@ -9,7 +9,6 @@ import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
@@ -17,11 +16,9 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -65,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import com.opencapture.opencine.appkit.diagnostics.AutomaticReportsPrompt
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.openpocketcine.multiview.MultiviewQualificationPolicy
@@ -112,13 +110,21 @@ class MainActivity : ComponentActivity() {
         if (review != null) lifecycleScope.launch { ReviewCameras.start(review, model) }
         reviewState = review
         model.gimbalGamepad.ensureListening(this, model)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        // Target SDK 35+ enforces edge-to-edge on Android 15 and later.
+        if (Build.VERSION.SDK_INT < 35) {
+            WindowCompat.enableEdgeToEdge(window)
+        }
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
         window.isNavigationBarContrastEnforced = false
         window.attributes.layoutInDisplayCutoutMode =
-            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            if (Build.VERSION.SDK_INT >= 35) {
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            } else {
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
         // Compose's Popup polls its anchor with an infinite frame loop, so the always-mounted
         // assist palette alone woke Main every vsync (120 Hz) over live view. Pace every
         // infinite loop (Popup polls, REC pulse, spinners) like iOS's 30 Hz pulse timeline.

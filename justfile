@@ -281,12 +281,15 @@ android-bundle:
         echo "ANDROID_KEYSTORE_FILE is unset. Run just android-play-sync-secrets" >&2
         exit 1
     fi
+    export SENTRY_PROGUARD_UUID="${SENTRY_PROGUARD_UUID:-$(python3 -c 'import uuid; print(uuid.uuid4())')}"
     extra=()
     if [[ -n "${VERSION_CODE:-}" ]]; then
         extra+=(-PversionCode="$VERSION_CODE")
     fi
     cd Apps/Android
     JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk}" ./gradlew bundleRelease ${extra[@]+"${extra[@]}"}
+    test -s app/build/outputs/mapping/release/mapping.txt
+    printf '%s\n' "$SENTRY_PROGUARD_UUID" > app/build/outputs/mapping/release/sentry-proguard-uuid.txt
     echo "AAB: Apps/Android/app/build/outputs/bundle/release/app-release.aab"
 
 # One-time Play Console + upload keystore + API robot + first AAB.

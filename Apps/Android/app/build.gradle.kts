@@ -25,6 +25,7 @@ android {
         targetSdk = 36
         versionCode = resolvedVersionCode
         versionName = resolvedVersionName
+        manifestPlaceholders["sentryProguardUuid"] = System.getenv("SENTRY_PROGUARD_UUID").orEmpty()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Camera stress runs use android-feed-stress's explicit adb invocation.
         // Exclude before execution: UTP can report a runtime assumption as failure.
@@ -92,7 +93,8 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

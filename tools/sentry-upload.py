@@ -362,8 +362,8 @@ def collect_roots(args: argparse.Namespace) -> tuple[list[Path], Path | None] | 
             return die(
                 "R8 mapping.txt is present but SENTRY_PROGUARD_UUID is unset. "
                 "upload-proguard without an io.sentry.proguard-uuid bound in the "
-                "Android app cannot deobfuscate. Minify is off; do not emit "
-                "mapping.txt until the Android owner injects a matching UUID.",
+                "Android app cannot deobfuscate. Set the UUID before building "
+                "the release and reuse it for this mapping upload.",
                 EXIT_CONFIG,
             )
     return debug_roots, mapping
