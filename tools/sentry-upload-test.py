@@ -447,6 +447,60 @@ class SentryUploadTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("already on the server", result.stdout)
 
+    def duplicate_android_uploader(self, unavailable_id: str = "") -> Path:
+        partial = self.dir / "duplicate-uploader.sh"
+        partial.write_text(
+            "#!/bin/sh\n"
+            'printf "%s\\n" "$*" >> "$SENTRY_FAKE_UPLOADER_LOG"\n'
+            'if [ "$1" = debug-files ] && [ "$2" = check ]; then\n'
+            "  printf '%s\\n' "
+            '\'{"type":"elf","variants":['
+            '{"debug_id":"11111111-1111-1111-1111-111111111111","arch":"arm64"},'
+            '{"debug_id":"22222222-2222-2222-2222-222222222222","arch":"arm64"},'
+            '{"debug_id":"33333333-3333-3333-3333-333333333333","arch":"arm64"}],'
+            '"is_usable":true}\'\n'
+            "  exit 0\n"
+            "fi\n"
+            "count=0\n"
+            "while [ $# -gt 0 ]; do\n"
+            '  if [ "$1" = --id ]; then\n'
+            "    shift\n"
+            f'    if [ "$1" != "{unavailable_id}" ]; then count=$((count + 2)); fi\n'
+            "    recheck=1\n"
+            "  fi\n"
+            "  shift\n"
+            "done\n"
+            'if [ "$recheck" = 1 ]; then\n'
+            '  printf "> Found %s debug information files\\n" "$count"\n'
+            "  printf '> Nothing to upload, all files are on the server\\n'\n"
+            "else\n"
+            "  printf '> Uploaded 1 missing debug information file\\n'\n"
+            "  printf '       OK 11111111-1111-1111-1111-111111111111 (app)\\n'\n"
+            "fi\n"
+            "exit 0\n"
+        )
+        partial.chmod(0o755)
+        return partial
+
+    def test_android_duplicate_files_already_on_server_are_verified_by_id(self) -> None:
+        native = make_so(self.dir / "jni")
+        env = self.enabled_env(SENTRY_PROJECT="openpocketcine-android",
+                               SENTRY_UPLOADER=str(self.duplicate_android_uploader()))
+        result = run_upload(env, ["--platform", "android", "--paths", str(native)], self.dir)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        rechecks = [line for line in self.argv_text().splitlines() if "--id" in line]
+        self.assertEqual(len(rechecks), 2)
+        self.assertTrue(all(line.count("--id") == 1 for line in rechecks))
+
+    def test_android_duplicate_files_do_not_hide_an_unavailable_id(self) -> None:
+        native = make_so(self.dir / "jni")
+        missing_id = "33333333-3333-3333-3333-333333333333"
+        env = self.enabled_env(SENTRY_PROJECT="openpocketcine-android",
+                               SENTRY_UPLOADER=str(self.duplicate_android_uploader(missing_id)))
+        result = run_upload(env, ["--platform", "android", "--paths", str(native)], self.dir)
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn("1 missing", result.stderr)
+
     def test_zip_is_extracted_before_check(self) -> None:
         native = make_so(self.dir / "jni")
         zip_path = self.dir / "native-debug-symbols.zip"

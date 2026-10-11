@@ -468,20 +468,25 @@ def main(argv: list[str] | None = None) -> int:
         # Unchanged targets (the Watch app) link to the same debug ID as the
         # last build. sentry-cli skips files the server already has and lists
         # only new uploads as OK, so ask it about the rest by ID.
+        # The CLI counts files, not distinct IDs. Merged and stripped Android
+        # copies can share an ID, so verify each missing ID separately.
         # No --require-all: it calls skipped-because-present IDs missing.
-        recheck = ["debug-files", "upload", "--wait", "--org", org, "--project", project]
         for debug_id in sorted(missing):
-            recheck += ["--id", debug_id]
-        status, recheck_output = run_cli(
-            uploader, recheck + [str(path) for path in usable_paths], secrets)
-        if status == EXIT_OK:
+            recheck = ["debug-files", "upload", "--wait", "--org", org,
+                       "--project", project, "--id", debug_id]
+            status, recheck_output = run_cli(
+                uploader, recheck + [str(path) for path in usable_paths], secrets)
+            if status != EXIT_OK:
+                return die("debug ID recheck failed", EXIT_UPLOAD)
+            if "some symbols did not process correctly" in recheck_output.lower():
+                return die("debug ID recheck reported processing errors", EXIT_UPLOAD)
             accepted |= set(parse_accepted_ids(recheck_output))
             found = FOUND_RE.search(recheck_output)
             if (upload_already_on_server(recheck_output) and found
-                    and int(found.group(1)) == len(missing)):
-                log("remaining debug IDs are already on the server")
-                accepted |= missing
-            missing = expected_ids - accepted
+                    and int(found.group(1)) > 0):
+                log(f"debug ID {debug_id} is already on the server")
+                accepted.add(debug_id)
+        missing = expected_ids - accepted
     if missing:
         if upload_already_on_server(output):
             log("upload --wait reported files already on the server; treating as success")
