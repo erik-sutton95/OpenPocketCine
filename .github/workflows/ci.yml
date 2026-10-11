@@ -235,6 +235,10 @@ jobs:
       - name: Check out pinned OpenCine next to the repository
         run: scripts/checkout-opencine.sh
       - name: Run native checks
+        # Xcode forwards TEST_RUNNER_ variables into the test host.
+        # Preserve the existing hosted-CI versus hardware timing contract.
+        env:
+          TEST_RUNNER_CI: "true"
         run: just native-check
 
   android:
