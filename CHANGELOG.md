@@ -165,6 +165,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Media gallery taps remain valid after the active source changes or reconnects.
+- Playback controls distinguish waiting for data from an operator pause. Pause
+  stays available while waiting and prevents a late buffer refill from restarting
+  playback. Apple playback reports its actual transport state through the shared
+  owner; Android uses the existing player listener.
+
 - Paused media playback stays paused through looping, seeking and scrubbing
   instead of resuming unexpectedly.
 - iOS archives include the camera-purpose information required by linked
