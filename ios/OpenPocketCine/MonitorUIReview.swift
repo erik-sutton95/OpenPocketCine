@@ -140,6 +140,8 @@ import OpenCineDJIApple
             status.whiteBalanceKelvin = 5600
             status.focusMode = .continuous
             status.audioChannel = .stereo
+            // A connected body reports its audio levels; the audio meter needs them to draw.
+            if launch?.screen == .live, launch?.connected == true { status.audioMeters = .silent }
             status.timecode = "15:39:50:00"
             status.colorMode = .dLog2
             if let ev = launch?.meteredEV {
@@ -185,10 +187,21 @@ import OpenCineDJIApple
                     model.session.status.zoomLens = CamFov.lens1x
                 }
                 if ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_RUNNING"] == "1" {
-                    model.session.gimbalMoveRunning = true
-                    model.session.gimbalMoveCanPause = true
-                    model.session.gimbalMovePaused =
-                        ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_PAUSED"] == "1"
+                    let paused = ProcessInfo.processInfo.environment["OPV_UI_REVIEW_MOTION_PAUSED"] == "1"
+                    let session = model.session
+                    func run() {
+                        session.gimbalMoveRunning = true
+                        session.gimbalMoveCanPause = true
+                        session.gimbalMovePaused = paused
+                    }
+                    run()
+                    // Launch passes through an inactive scene, which stops a programmed move
+                    // (`noteSceneBecameInactive`): the scripted run resumes when the scene is active.
+                    let activity = model.shell.onSceneActivity
+                    model.shell.onSceneActivity = { active in
+                        activity(active)
+                        if active { run() }
+                    }
                 }
             }
             model.session.liveSignalBars = 4
@@ -241,7 +254,11 @@ import OpenCineDJIApple
                         model.shell.open(.media)
                     }
                 #endif
-            case .cameras, .pair, .live: break
+            case .live:
+                #if DEBUG
+                    if launch.connected { connectReviewCamera(model.session) }
+                #endif
+            case .cameras, .pair: break
             }
         }
 
@@ -291,6 +308,15 @@ import OpenCineDJIApple
             static func connectCameraMedia(_ session: CameraSession) {
                 session.datalink = DjiAppleDatalink(port: 0, tcpPoke: false, pairingToken: "")
                 session.phase = .live
+            }
+
+            /// A connected camera on the live screen: the session reports the studio body as
+            /// connected, so its camera-owned controls (audio) are offered as on a real connection.
+            static func connectReviewCamera(_ session: CameraSession) {
+                connectCameraMedia(session)
+                session.presentReviewCamera(DjiAppleSighting(
+                    id: UUID(uuidString: studioID)!, name: "Studio camera",
+                    model: .resolve(modelId: 0x22, name: "Osmo Pocket 4 Pro"), modelId: 0x22))
             }
         #endif
     }

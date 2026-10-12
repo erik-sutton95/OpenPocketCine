@@ -209,6 +209,9 @@ final class CameraSession {
         /// DEBUG watchdog/adopter probe clock; nil uses the normal wall clock.
         /// Recipe/repair timing is the immutable pictureRecoveryTiming passed at init.
         @ObservationIgnored var liveViewDonorTiming: DjiApplePictureRecoveryTiming?
+        /// Review only (`ReviewLaunch.connected` on the live screen): the body the session reports
+        /// as connected, so camera-owned controls such as audio are offered. Nothing connects.
+        func presentReviewCamera(_ camera: DjiAppleSighting) { connectedCamera = camera }
     #endif
     private var connectionTransport: DjiAppleConnectionTransport {
         #if DEBUG

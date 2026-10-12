@@ -15,21 +15,25 @@
         let admitsMultiviewControl = true
         let isBusy = false
         let link = DJILinkState.ready
-        var controlNote: String?
+        /// Shown where the session's notes show (`CameraSession.controlNote`).
+        var controlNote: String? { didSet { if let controlNote { note(controlNote) } } }
         var captureControlState: DJICaptureControlState? {
             .init(reported: status, model: connectedModel)
         }
         private(set) var writes: [String] = []
         private let render: @MainActor (CameraStatus) -> Void
+        private let note: @MainActor (String) -> Void
         lazy var control = DJICameraSessionAdapter(session: self)
 
-        init(status: CameraStatus, body: CameraModel, render: @escaping @MainActor (CameraStatus) -> Void = { _ in }) {
+        init(status: CameraStatus, body: CameraModel, render: @escaping @MainActor (CameraStatus) -> Void = { _ in },
+            note: @escaping @MainActor (String) -> Void = { _ in }) {
             self.status = status
             self.status.recordingReported = true
             self.status.focusTrack = .default
             self.status.zoomLens = status.zoomLens ?? CamFov.lens1x
             connectedModel = body
             self.render = render
+            self.note = note
         }
 
         private func report(_ name: String, onStage: (@MainActor (ControlWireEvent) -> Void)?, change: (inout CameraStatus) -> Void) {
@@ -69,6 +73,15 @@
             report("SIMULATED focus", onStage: onStage) { $0.focusMode = value }
         }
         func writeZoom(_ ratio: Double, onStage: @escaping @MainActor (ControlWireEvent) -> Void) {
+            // The session refuses a zoom that needs a color hop while rolling (`DjiAppleImageControl`).
+            if CamFov.zoomNeedsColorHopWhileRecording(
+                factor: ratio, current: status.colorMode, isRecording: status.isRecording)
+            {
+                writes.append("SIMULATED zoom refused")
+                controlNote = ControlHud.recordingColorLockNote
+                onStage(.notSent)
+                return
+            }
             report("SIMULATED zoom", onStage: onStage) { $0.zoomLens = CamFov.pinchLens(for: ratio) }
         }
     }
@@ -83,7 +96,7 @@
                 presentation.recordingReported = session.status.recordingReported
                 presentation.isRecording = session.status.isRecording
                 session.status = presentation
-            }
+            } note: { [weak self] in self?.session.controlNote = $0 }
             let saved = OpenCineCore.SavedCamera(id: "simulated-common-input",
                 integration: DJICameraSessionAdapter.integration,
                 advertisedName: "SIMULATED common input", model: "SIMULATED")
