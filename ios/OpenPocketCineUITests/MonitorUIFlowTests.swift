@@ -6,6 +6,10 @@ import XCTest
 /// Optional OPV_SIM_FEED_CLIP points at private local footage for the live feed; media screens
 /// stage generated clips (`ReviewClip`). Screenshots are attached to the local xcresult only.
 final class MonitorUIFlowTests: SharedAppUITestCase {
+    static let systemButtonSide = MonitorSystemButtonMetrics.side(tablet: UIDevice.current.userInterfaceIdiom == .pad)
+    /// What a reached system control presents: Settings, Media, the record confirmation.
+    var presentedPages: [XCUIElement] { [app.buttons["Back to live"], app.buttons["Back"], app.buttons["Start"]] }
+
     override func setUp() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
@@ -70,7 +74,9 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
             let cameraBattery = app.descendants(matching: .any)["monitor.telemetry.camera"]
                 .firstMatch
             XCTAssertTrue(cameraBattery.exists)
-            XCTAssertTrue(cameraBattery.label.hasPrefix("Camera battery "))
+            // The percentage is the value, so VoiceOver reads "Camera battery, 68 percent".
+            XCTAssertEqual(cameraBattery.label, "Camera battery")
+            XCTAssertTrue((cameraBattery.value as? String)?.hasSuffix(" percent") == true)
             capture("monitor-\(orientation.rawValue)")
         }
     }
@@ -170,7 +176,8 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
         let peak = app.buttons["monitor.assist.PEAK"]
         XCTAssertTrue(peak.waitForExistence(timeout: 5))
         XCTAssertTrue(peak.isHittable, "Portrait collapsed View Assist must show a favorite tool")
-        XCTAssertGreaterThanOrEqual(peak.frame.height, 50)
+        // A palette cell is one system button (MonitorAssistPaletteLayout.cellHeight).
+        XCTAssertEqual(peak.frame.height, Self.systemButtonSide, accuracy: 0.5)
         let tools = [
             app.buttons["monitor.assists.expand"],
             peak,
@@ -281,7 +288,9 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
         XCTAssertTrue(app.buttons["monitor.capture.iso"].isHittable)
     }
 
-    func testCoveredPickerControlsAreInaccessibleAndReturnWithTheirState() {
+    /// A cover retires the open picker (`MonitorInteractionLifecycle`: entering a cover dismisses
+    /// transient presentation); Back returns to the monitor with its controls reachable.
+    func testCoveredPickerControlsAreInaccessibleAndTheCoverRetiresThePicker() {
         app.launch()
         rotate(.portrait)
         app.buttons["monitor.capture.iso"].tap()
@@ -301,9 +310,11 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
             XCTAssertFalse(app.buttons["monitor.capture.iso"].isHittable)
             XCTAssertFalse(navigation.isHittable)
             back.tap()
-            XCTAssertTrue(panel.isHittable, "The same picker returns after \(control)")
-            XCTAssertTrue(app.buttons["monitor.capture.close"].isHittable)
+            XCTAssertTrue(panel.waitForNonExistence(timeout: 5), "The cover retired the picker: \(control)")
             XCTAssertTrue(app.buttons["monitor.system.record"].isHittable)
+            XCTAssertTrue(app.buttons["monitor.capture.iso"].isHittable)
+            app.buttons["monitor.capture.iso"].tap()
+            XCTAssertTrue(panel.waitForExistence(timeout: 5))
         }
         app.buttons["monitor.capture.close"].tap()
         XCTAssertTrue(app.buttons["monitor.capture.iso"].isHittable)
@@ -365,10 +376,20 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
         app.buttons["monitor.system.zoom"].press(forDuration: 0.55)
         let dial = app.descendants(matching: .any)["monitor.zoom.dial"].firstMatch
         XCTAssertTrue(dial.waitForExistence(timeout: 5))
+        // XCTest on iOS 26 can list a covered SwiftUI control as hittable: each is proven by touch.
+        // A touch outside the disc closes it; the disc reopens for the next control.
+        let zoomChip = app.buttons["monitor.system.zoom"]
         for control in ["record", "display", "settings", "media"] {
-            XCTAssertFalse(
-                app.buttons["monitor.system.\(control)"].isHittable,
+            if !dial.exists {
+                zoomChip.press(forDuration: 0.55)
+                XCTAssertTrue(dial.waitForExistence(timeout: 5), control)
+            }
+            assertOutOfReach(app.buttons["monitor.system.\(control)"], opening: presentedPages,
                 "The zoom modal must cover underlying \(control) controls")
+        }
+        if !dial.exists {
+            zoomChip.press(forDuration: 0.55)
+            XCTAssertTrue(dial.waitForExistence(timeout: 5))
         }
         capture("zoom-dial-landscape")
         XCTAssertGreaterThan(
@@ -388,10 +409,12 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
             "Portrait zoom disc must sit on the screen bottom edge")
         let record = app.buttons["monitor.system.record"]
         XCTAssertTrue(record.exists)
-        XCTAssertFalse(
-            record.isHittable,
-            "The portrait zoom disc covers the bottom system controls")
         capture("zoom-dial-portrait")
+        assertOutOfReach(record, opening: presentedPages, "The portrait zoom disc covers the bottom system controls")
+        if !dial.exists {
+            zoomChip.press(forDuration: 0.55)
+            XCTAssertTrue(dial.waitForExistence(timeout: 5))
+        }
         app.buttons["Close zoom dial"].tap()
         let iso = app.buttons["monitor.capture.iso"]
         let display = app.buttons["monitor.system.display"]
@@ -433,7 +456,8 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
         capture("assist-inspector-portrait")
         rotate(.landscapeRight)
         XCTAssertTrue(inspector.exists)
-        app.buttons["Zebra"].firstMatch.tap()
+        // The palette chips stay in the tree under the inspector: tap the inspector's own tab.
+        inspector.buttons["Zebra"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Close Zebra"].waitForExistence(timeout: 5))
         capture("assist-inspector-landscape")
     }
@@ -450,7 +474,7 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
         let initialFrame = inspector.frame
         for iteration in 0..<20 {
             for title in ["False Color", "Zebra", "Peaking"] {
-                app.buttons[title].firstMatch.tap()
+                inspector.buttons[title].firstMatch.tap()
                 XCTAssertEqual(
                     app.state, .runningForeground, "Terminated at \(iteration): \(title)")
                 XCTAssertTrue(app.buttons["Close \(title)"].waitForExistence(timeout: 3))
@@ -478,7 +502,8 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
     }
 
     func testCameraPickersUseReferenceTopAndBottomAnchors() {
-        app.launch()
+        // Audio is a connected camera's control: the review connects the studio body.
+        launch(ReviewLaunch(screen: .live, connected: true))
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             rotate(orientation)
             let identifiers =
@@ -497,14 +522,21 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
                 }
                 XCTAssertTrue(app.buttons["monitor.system.record"].isHittable, id)
                 XCTAssertTrue(app.buttons["monitor.system.display"].isHittable, id)
-                XCTAssertFalse(app.buttons["monitor.system.zoom"].isHittable, id)
-                if orientation == .landscapeLeft {
-                    XCTAssertFalse(app.buttons["monitor.system.settings"].isHittable, id)
-                    XCTAssertFalse(app.buttons["monitor.system.media"].isHittable, id)
-                }
+                // XCTest on iOS 26 lists a hidden SwiftUI control as hittable: the zoom chip
+                // under a picker is proven out of reach by touch at the end of this step.
                 capture("capture-\(id)-\(orientation.rawValue)")
-                app.buttons["Close"].firstMatch.tap()
-                XCTAssertFalse(panel.exists)
+                // The picker hides the zoom chip and, in landscape, Settings and Media. A touch on a
+                // hidden control may close the picker; it reopens for the next.
+                let hidden = ["zoom"] + (orientation == .landscapeLeft ? ["settings", "media"] : [])
+                for control in hidden {
+                    if !panel.exists {
+                        app.buttons["monitor.capture.\(id)"].tap()
+                        XCTAssertTrue(panel.waitForExistence(timeout: 5), id)
+                    }
+                    assertOutOfReach(app.buttons["monitor.system.\(control)"], opening: presentedPages, id)
+                }
+                if panel.exists { app.buttons["Close"].firstMatch.tap() }
+                XCTAssertTrue(panel.waitForNonExistence(timeout: 3), id)
             }
         }
     }
@@ -556,7 +588,8 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
     }
 
     func testAudioMeterMovesAndRetainsOrientationOptions() {
-        app.launch()
+        // Audio and its levels come from a connected camera: the review connects the studio body.
+        launch(ReviewLaunch(screen: .live, connected: true))
         rotate(.landscapeLeft)
         app.buttons["monitor.assists.expand"].tap()
         let audio = app.buttons["monitor.assist.AUDIO"]
@@ -948,11 +981,14 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
             let back = app.buttons["Back to media"]
             XCTAssertTrue(back.waitForExistence(timeout: 10))
             XCTAssertTrue(back.isHittable)
-            XCTAssertEqual(back.frame.width, 54, accuracy: 1)
+            // Back is the live surface's corner control (FieldMonitorLayout.lock).
+            XCTAssertEqual(back.frame.width, Self.systemButtonSide, accuracy: 1)
             for title in [
                 "Favorite clip", "Clip information", "Share clip", "Delete clip from camera",
             ] {
                 let button = app.buttons[title]
+                // Delete follows the camera's own listing of the clip, which can land after Back.
+                XCTAssertTrue(button.waitForExistence(timeout: 10), title)
                 XCTAssertTrue(button.isHittable, title)
                 XCTAssertLessThanOrEqual(button.frame.maxX, app.frame.maxX - 12, title)
                 XCTAssertGreaterThanOrEqual(button.frame.minX, 12, title)
@@ -960,8 +996,11 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
             capture("polished-playback-\(orientation.rawValue)")
         }
         rotate(.landscapeLeft)
-        app.buttons["monitor.assists.expand"].tap()
-        app.buttons["monitor.assist.LUT"].press(forDuration: 0.6)
+        // The covered live palette is still in the tree under the player's: act on the reachable one.
+        reachable(app.buttons.matching(identifier: "monitor.assists.expand"))?.tap()
+        let lutChip = reachable(app.buttons.matching(identifier: "monitor.assist.LUT"))
+        XCTAssertNotNil(lutChip, "The player's LUT chip must be reachable")
+        lutChip?.press(forDuration: 0.6)
         let inspector = app.otherElements["monitor.inspector"]
         XCTAssertTrue(inspector.waitForExistence(timeout: 5))
         let lut = inspector.buttons["LUT"].firstMatch

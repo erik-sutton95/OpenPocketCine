@@ -24,4 +24,5 @@ final class ShareRoundTrip: OpenCineAppUITesting.ShareRoundTrip {}
 final class ConfirmationCancel: OpenCineAppUITesting.ConfirmationCancel {}
 final class ChromeEditReturn: OpenCineAppUITesting.ChromeEditReturn {}
 final class AccessibilityTraversal: OpenCineAppUITesting.AccessibilityTraversal {}
+final class ScreenMatrix: OpenCineAppUITesting.ScreenMatrix {}
 final class ConformanceCoverageTests: OpenCineAppUITesting.ConformanceCoverageTests {}
