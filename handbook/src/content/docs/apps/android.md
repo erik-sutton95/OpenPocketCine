@@ -429,7 +429,7 @@ Recorded clips keep their own color profile.
 not drop the live picture (GPU split only while a cube is loaded). Next/prev
 with LUT on keeps the grade on
 the same GLES host (ExoPlayer writes an OES surface; LUT / PEAK / FALSE /
-ZEBRA grade in `LiveFeedEffectsSession` like live — TextureView is only the
+ZEBRA grade in OpenCine's `NativeGlesFeedSession` like live; TextureView is only the
 window). Auto on a clip reads `com.dji.camera.ColorGammaSxS`
 from the original take like iOS — not the LRF/XRF sidecar (Rec.709 even
 for log). Shot color is stored with the cached clip. A **Proxy** tag means

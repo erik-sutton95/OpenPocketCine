@@ -67,7 +67,8 @@ import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.LiveDesign
 import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LiveViewScreen
-import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
+import com.opencapture.opencine.runtime.NativeGlesFeedSession
+import com.opencapture.openpocketcine.feed.LiveFeed
 import com.opencapture.openpocketcine.liveChromeGlass
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -333,7 +334,7 @@ private fun TileFeed(session: MultiviewSession, tile: MultiviewSession.Tile, fil
     var gpuFailed by remember { mutableStateOf(false) }
     val handed = remember { arrayOfNulls<Surface>(1) }
     val feed = remember(tile) {
-        LiveFeedEffectsSession(
+        LiveFeed.glesFeed(
             context = context,
             scopeBus = tile.scopeBus,
             preview = tile.inspectorPreview,
@@ -402,7 +403,7 @@ private fun TileFeed(session: MultiviewSession, tile: MultiviewSession.Tile, fil
 /** The decoder output is dropped before the GL window, so MediaCodec never writes a dead Surface. */
 private class TileTextureListener(
     private val gles: Boolean,
-    private val feed: LiveFeedEffectsSession,
+    private val feed: NativeGlesFeedSession,
     private val onPlainSurface: (Surface) -> Unit,
     private val onDestroyed: () -> Unit,
     private val onUpdated: (SurfaceTexture) -> Unit,

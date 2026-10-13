@@ -102,7 +102,7 @@ class PocketScopeSamplerTest {
                 includePoints = true,
                 includeVectorPoints = true,
                 iso = 1600,
-             ceiling = ScopeExposureCeiling.UNOBSERVED)
+                ceiling = ScopeExposureCeiling.UNOBSERVED)
         val pixels = ((width + 1) / 2) * ((height + 1) / 2)
         assertEquals(pixels, bundle.samples.points.size)
         assertEquals(pixels, bundle.samples.histogramRed.sum())

@@ -6,8 +6,8 @@ Surfaces: portable core, iOS shell, Android shell and their shared native UI.
 This change records engineering evidence and adds a synthetic host probe; it
 changes no app behavior or budget.
 
-Source links follow current shared owners. File names, line references and findings
-below retain the reviewed audit baseline.
+Links to removed app files pin the reviewed baseline. Other source links follow current
+shared owners. File names, line references and findings retain the reviewed audit baseline.
 
 ## Status and evidence limits
 
@@ -70,7 +70,7 @@ used directly for follow-up issues; recording a candidate does not accept it.
 [LiveViewScreen](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/LiveViewScreen.kt)
 lines 490–522 invokes `syncAssists` from a Compose `LaunchedEffect`; overlay
 dismissal also calls `redrawLast` at line 851.
-[LiveVulkanSession](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/LiveVulkanSession.kt)
+[LiveVulkanSession](https://github.com/erik-sutton95/OpenPocketCine/blob/abe7ea2499c05a368114468387afb62bbfdbb439/Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/LiveVulkanSession.kt)
 lines 170–179 and 224–288 call JNI directly, ending in `nativeRedraw`.
 [opc_vulkan.cpp](../../../OpenCine/Android/vulkan/src/main/cpp/opc_vulkan.cpp) lines 2344–2362
 shares the frame-submit mutex; `renderFrame` at 1733–1759 waits on fences, can
@@ -90,7 +90,7 @@ asynchronously and reintroduce native-window lifetime races.
 ### R2: Duplicate playback work
 
 **Android:** all video playback uses GLES, even on Vulkan-capable phones.
-[LiveFeedEffectsSession](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/LiveFeedEffectsSession.kt)
+[LiveFeedEffectsSession](https://github.com/erik-sutton95/OpenPocketCine/blob/abe7ea2499c05a368114468387afb62bbfdbb439/Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/LiveFeedEffectsSession.kt)
 lines 338–470 waits 100 ms, then draws whenever a first OES frame has existed.
 Timestamp deduplication only executes when another OES frame is pending. A paused
 source therefore continues copy/grade/swap opportunities at roughly ten per second
@@ -179,7 +179,7 @@ and forced live GLES. Shader-cache-dependent duration remains unmeasured.
 
 ### R6: Android scope inspector admission loses its 5 Hz flag
 
-[FeedEffectsRenderPlan](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/FeedEffectsRenderPlan.kt)
+[FeedEffectsRenderPlan](https://github.com/erik-sutton95/OpenPocketCine/blob/abe7ea2499c05a368114468387afb62bbfdbb439/Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/FeedEffectsRenderPlan.kt)
 lines 133–135 creates `inspectorOnly` scope demand.
 [LiveScopeSampleBus](../../../OpenCine/Android/media/src/main/kotlin/com/opencapture/opencine/media/ScopeSampling.kt)
 line 90 encodes its 200 ms interval. However, `LiveFeedEffectsSession` line 193
@@ -246,8 +246,8 @@ lines 70–112 makes four distinct blur/saturation products for seven surface ro
 That is five image-production calls per uncached single-source job, not five
 full-resolution captures. `createCGImage` alone does not prove CPU readback.
 
-Android [MonitorBackdropFeed](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/MonitorBackdropFeed.kt)
-and [InspectorPreviewRenderer](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/InspectorPreviewRenderer.kt)
+Android [MonitorBackdropFeed](https://github.com/erik-sutton95/OpenPocketCine/blob/abe7ea2499c05a368114468387afb62bbfdbb439/Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/MonitorBackdropFeed.kt)
+and [InspectorPreviewRenderer](https://github.com/erik-sutton95/OpenPocketCine/blob/abe7ea2499c05a368114468387afb62bbfdbb439/Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/InspectorPreviewRenderer.kt)
 use the small raw tap, GLES look, readback and bitmap, followed by panel RenderNode
 blurs. Admission, thermal backoff and hidden-source gates already bound work.
 The small raster does not by itself establish negligible compositor cost.
@@ -271,7 +271,7 @@ the trail as the prior sampled bundle. Bound pending builds and reuse the prior
 current product when revision/options match, retaining GPU resource lifetime.
 No sustained backlog was measured.
 
-Android [PocketScopeSampler](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/PocketScopeSampler.kt)
+Android [PocketScopeSampler](https://github.com/erik-sutton95/OpenPocketCine/blob/abe7ea2499c05a368114468387afb62bbfdbb439/Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/PocketScopeSampler.kt)
 and scope rasters deserve allocation profiling: a 213×120 tap sampled every two
 pixels yields 6,420 raw point objects, with another mapped list possible for
 VECTOR. That is arithmetic, not observed allocation rate. Preserve the existing

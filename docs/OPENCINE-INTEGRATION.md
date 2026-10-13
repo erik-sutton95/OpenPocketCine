@@ -138,6 +138,13 @@ privacy, a wrong-camera or blind action, or a check that could never work), or a
 - Android live picture (MEDIA-02 step 3): no change intended. `libopc_vulkan.so` (C++, shaders,
   JNI facade `feed.OpcVulkan`) is now built by OpenCineCore's `:vulkan` module from the same
   sources; the APK carries one copy with the same 21 JNI exports. `LiveVulkanSession` stays in the app.
+- Android live host (F11, A3-11/A3-12): no change intended. Live View runs OpenCine's
+  `MonitorLiveFeedHost` (insets, link readout, Vulkan picture with GLES and direct-decoder
+  fallbacks, backdrop, face readback, recovery card) and its feed plans come from
+  `MonitorFeedEffectsPlans` over this app's Swift core; the app keeps its DJI session adapter,
+  chrome wiring and `LiveFeed` integration values. The live TextureView now has the shared
+  late-callback guard. The feed bakes (`FeedEffectsWire`) moved to OpenCine
+  `MonitorFeedEffectsWire`; the JNI exports pass the DJI source profile.
 - Android DJI session (SHELL-04): no change intended. The live-view MediaCodec `HevcDecoder` comes
   from OpenCine's `:decoder` (the same class OpenInstaCine uses); the DJI BLE link, datalink
   driver, command and status models, gimbal programs, connection and live-view policies,

@@ -3,20 +3,17 @@ import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
 
-/// The shared LUT picker on this app's session, copy and palette; the sheet form pins this
-/// app's exposure and 50/50 bar under the catalog.
+/// The shared LUT picker on this app's session, copy and palette; the sheet form pins the
+/// shared exposure and 50/50 controls under the catalog.
 struct LUTPicker: View {
     @Bindable var assist: LiveAssistState
     var embedded = false
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        LUTPickerView(
-            assist: assist, embedded: embedded, context: context, copy: .app,
-            palette: LiveDesign.self
-        ) {
-            LUTSplitComparisonBar(assist: assist)
-        }
+        MonitorLUTPickerView(
+            assist: assist, embedded: embedded, context: context, copy: .app, haptics: .app,
+            palette: LiveDesign.self)
     }
 
     private var context: LUTPickerContext {
@@ -29,10 +26,4 @@ struct LUTPicker: View {
             isWatching: model.isWatchingFeed,
             lookProfile: model.session.connectedCamera?.model.captureProfile?.looks ?? assist.monitorLookProfile)
     }
-}
-
-/// Existing catalog callers use the common pinned exposure and comparison controls.
-struct LUTSplitComparisonBar: View {
-    var assist: LiveAssistState
-    var body: some View { MonitorOperatorLookComparison(assist: assist, haptics: .app) }
 }

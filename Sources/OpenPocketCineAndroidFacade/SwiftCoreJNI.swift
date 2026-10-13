@@ -56,10 +56,11 @@
         scaleOrdinal: jint, colorMode: jint, iso: jint
     ) -> jbyteArray? {
         guard
-            let packed = FeedEffectsWire.packedFalseColorPaint(
+            let packed = MonitorFeedEffectsWire.packedFalseColorPaint(
                 scaleOrdinal: Int(scaleOrdinal),
                 colorModeCode: Int(colorMode),
-                iso: Int(iso))
+                iso: Int(iso),
+                sourceProfile: DJIMonitorColorProfile.value)
         else { return nil }
         return javaByteArray(env, packed)
     }
@@ -70,10 +71,11 @@
         scaleOrdinal: jint, colorMode: jint, iso: jint
     ) -> jbyteArray? {
         guard
-            let packed = FeedEffectsWire.packedFalseColorWeight(
+            let packed = MonitorFeedEffectsWire.packedFalseColorWeight(
                 scaleOrdinal: Int(scaleOrdinal),
                 colorModeCode: Int(colorMode),
-                iso: Int(iso))
+                iso: Int(iso),
+                sourceProfile: DJIMonitorColorProfile.value)
         else { return nil }
         return javaByteArray(env, packed)
     }
@@ -85,11 +87,12 @@
     ) -> jfloatArray? {
         javaFloatArray(
             env,
-            FeedEffectsWire.assistScalars(
+            MonitorFeedEffectsWire.assistScalars(
                 colorModeCode: Int(colorMode),
                 iso: Int(iso),
                 highlightIRE: Double(highlightIRE),
-                midtoneIRE: Double(midtoneIRE)))
+                midtoneIRE: Double(midtoneIRE),
+                sourceProfile: DJIMonitorColorProfile.value))
     }
 
 #endif

@@ -12,7 +12,7 @@ public enum LUTLibraryWire {
         colorModeCode: Int = Int(ColorMode.normal.rawValue)
     ) -> [UInt8]? {
         guard utf8.count <= maximumSourceBytes, let cube = cube(from: utf8) else { return nil }
-        let transfer = FeedEffectsWire.monitorTransfer(colorModeCode: colorModeCode)
+        let transfer = MonitorFeedEffectsWire.monitorTransfer(colorModeCode: colorModeCode)
         let graded = cube.colorCube.compensatingExposure(
             stops: exposureStops, transfer: transfer.lutExposureTransfer)
         return packedRGBA(cube: graded)
@@ -23,7 +23,7 @@ public enum LUTLibraryWire {
         colorModeCode: Int = Int(ColorMode.normal.rawValue)
     ) -> [UInt8]? {
         guard let look = BuiltInLook(rawValue: title) else { return nil }
-        let transfer = FeedEffectsWire.monitorTransfer(colorModeCode: colorModeCode)
+        let transfer = MonitorFeedEffectsWire.monitorTransfer(colorModeCode: colorModeCode)
         let cube = look.cube().colorCube.compensatingExposure(
             stops: exposureStops, transfer: transfer.lutExposureTransfer)
         return packedRGBA(cube: cube)

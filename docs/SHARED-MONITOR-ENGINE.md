@@ -426,3 +426,15 @@ A solo maintainer can ship a new camera brand’s TestFlight by:
 4. Inheriting monitoring, media, and delivery unchanged
 
 If step 4 requires copying SwiftUI/Compose screens, the architecture is not done.
+
+## F11 shared assist candidate
+
+The local F11 candidate composes the shared look picker/provider, inspector preview and modal
+ownership. The inspector excludes retained monitor controls from input and accessibility until
+closed, and its held picture remains available across comparison changes. Source transfers drive
+peaking calibration and the shared false-colour lattice; histogram resizing keeps every channel
+lamp inside the graph. Android native live-feed composition uses the optional `appkit-native`
+module so draw-only camera controls do not own native frame delivery.
+
+This describes candidate adoption, not a shipped pin. Per-app final checks, source seals and
+physical qualification are tracked in the F11 lane handoff; the public OpenCine pin is unchanged.

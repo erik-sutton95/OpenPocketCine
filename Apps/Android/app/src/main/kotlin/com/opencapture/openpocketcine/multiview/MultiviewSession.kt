@@ -38,7 +38,8 @@ import com.opencapture.opencine.multicam.ResourceRequest
 import com.opencapture.openpocketcine.AppModel
 import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 import com.opencapture.opencine.media.FeedEffectsRenderPlan
-import com.opencapture.openpocketcine.feed.FeedEffectsRenderPlanFactory
+import com.opencapture.openpocketcine.feed.FeedEffectsPlans
+import com.opencapture.opencine.dji.DjiCameraLUTProfile
 import com.opencapture.opencine.dji.BleLink
 import com.opencapture.opencine.dji.DatalinkDriver
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
@@ -285,8 +286,8 @@ class MultiviewSession(
 
         fun updateLUT() {
             val cam = camera
-            val result = FeedEffectsRenderPlanFactory.multiviewAutoLut(
-                app, lutEnabled, settings.colorMode, cam?.model?.family ?: "pocket", cam?.model?.name,
+            val result = FeedEffectsPlans.multiviewAutoLut(
+                app, lutEnabled, settings.colorMode, DjiCameraLUTProfile.make(cam?.model?.family ?: "pocket", cam?.model?.name),
             )
             plan = result.first
             lutCaption = result.second

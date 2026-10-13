@@ -249,7 +249,7 @@ Android Vulkan live present: `surfaceDestroyed` must drop the swapchain and
 `ANativeWindow` (`nativeDetachWindow`) before it returns — presenting after
 that mutex is destroyed aborts in `vkQueuePresentKHR`. `opc.vk.img` must not
 `vkQueuePresentKHR` or `vkCreateImage` once the window is gone.
-`LiveVulkanSession.release` clears the ImageReader listener, joins
+`NativeVulkanFeedSession.release` (OpenCine native-runtime) clears the ImageReader listener, joins
 `opc.vk.img`, then `nativeDestroy`. Do not destroy the swapchain on the
 Compose thread while a present is in flight.
 

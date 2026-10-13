@@ -11,7 +11,7 @@ import com.opencapture.monitorui.monitorPlaybackUnitPoint as unitPoint
 
 import com.opencapture.monitorui.LocalMonitorBackdrops
 import com.opencapture.monitorui.monitorBackdropSource
-import com.opencapture.openpocketcine.feed.rememberMonitorBackdropFeed
+import com.opencapture.opencine.appkitnative.rememberMonitorBackdropFeed
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
 import android.graphics.Bitmap

@@ -9,6 +9,8 @@ useDefault = true
 [allowlist]
 description = "Repo-specific known-safe values and paths"
 regexes = [
+  # Persisted Frame.io destination preference identifier; both history matches compare this key.
+  '''^opc\.frameio\.destination\.v1$''',
   # Operator-preference storage keys. They are named `<AREA>_..._KEY = "dotted.path.vN"`, which is
   # the exact shape `generic-api-key` looks for. Deliberately anchored to the dotted-path form
   # these keys use rather than allowlisting the `_KEY` name, so a real credential assigned to a
