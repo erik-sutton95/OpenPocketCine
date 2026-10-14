@@ -264,6 +264,7 @@ tasks.matching { it.name == "bundleRelease" }.configureEach {
 }
 
 dependencies {
+    debugImplementation("com.opencapture.opencine:platform:0.1.0-SNAPSHOT")
     implementation(libs.opencine.monitor.ui)
     // Cameras and pairing pages, the connection model and the saved-camera store (SHELL-02).
     implementation(libs.opencine.appkit)
@@ -305,6 +306,7 @@ dependencies {
     androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation(libs.kotlin.test.junit)
+    androidTestImplementation("com.opencapture.opencine:app-ui-testing:0.1.0-SNAPSHOT")
     androidTestImplementation(testFixtures("com.opencapture.opencine:core:0.1.0-SNAPSHOT"))
 
     testImplementation(libs.kotlin.test.junit)

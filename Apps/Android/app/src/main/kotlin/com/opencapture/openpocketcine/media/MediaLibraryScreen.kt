@@ -23,7 +23,11 @@ fun MediaLibraryScreen(model: AppModel, onClose: () -> Unit) {
     // Persisted namespace only routes existing cache files; it grants no source admission.
     val actualCameraID = model.session.mediaConnectionIdentity?.cameraID
         ?: context.getSharedPreferences("openpocketcine.media", android.content.Context.MODE_PRIVATE).getString("opc.media.lastCameraID", null)
-    val controller = remember(model, actualCameraID) { MediaLibraryController(context.applicationContext, model.session, cacheOwner = model.mediaCache) }
+    val controller = remember(model, actualCameraID) {
+        MediaLibraryController(context.applicationContext, model.session, cacheOwner = model.mediaCache).also {
+            model.reviewLaunch?.let { review -> it.library.display(layout = review.layout) }
+        }
+    }
     val library = controller.library
     val state by library.state.collectAsState()
     val cacheRevision by model.mediaCacheRevision.collectAsState()

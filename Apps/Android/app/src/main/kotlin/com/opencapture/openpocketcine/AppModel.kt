@@ -90,6 +90,7 @@ class AppModel(
     controlLease: com.opencapture.opencine.dji.MultiviewControlLease? = null,
     discovers: Boolean = false,
     review: String? = null,
+    val reviewLaunch: com.opencapture.monitorui.ReviewLaunch? = null,
 ) : GamepadHost, GimbalChromeHost, CaptureSheetHost, OperatorSetupModel {
     private val appContext = context.applicationContext
     /** One actual cache root/lifetime shared by gallery IO and operator settings. */

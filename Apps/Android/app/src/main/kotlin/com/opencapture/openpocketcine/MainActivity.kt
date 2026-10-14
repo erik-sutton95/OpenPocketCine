@@ -104,7 +104,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Debug review only: a scripted connection state of the cameras and pair pages.
         val review = if (BuildConfig.DEBUG) intent?.getStringExtra("opv_review_state") else null
-        model = AppModel(applicationContext, discovers = true, review = review)
+        val localReview = MonitorReview.decode(intent)
+        model = AppModel(applicationContext, discovers = localReview == null, review = review,
+            reviewLaunch = localReview)
+        if (localReview != null) lifecycleScope.launch { MonitorReview.start(applicationContext, model, localReview) }
         if (review == "multiview") model.showsMultiview = true
         if (review?.startsWith("pair-") == true) model.pairing = true
         if (review != null) lifecycleScope.launch { ReviewCameras.start(review, model) }
@@ -182,7 +185,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun OpenPocketCineApp(model: AppModel) {
     val phase by model.session.phaseFlow.collectAsState()
-    var launchSplashVisible by remember { mutableStateOf(true) }
+    var launchSplashVisible by remember { mutableStateOf(model.reviewLaunch == null) }
     val activity = LocalActivity.current
     lateinit var discovery: PermissionGate
     val enableBluetooth =
@@ -210,9 +213,9 @@ private fun OpenPocketCineApp(model: AppModel) {
 
     LaunchedEffect(Unit) {
         model.prepareStartup()
-        if (discovery.granted) {
+        if (model.reviewLaunch == null && discovery.granted) {
             beginDiscovery(model, onBluetoothOff = { requestBluetoothOn() })
-        } else if (!discovery.needsSettings) {
+        } else if (model.reviewLaunch == null && !discovery.needsSettings) {
             discovery.request()
         }
         delay(2_250)
@@ -249,7 +252,7 @@ private fun OpenPocketCineApp(model: AppModel) {
         (activity as? MainActivity)?.updateSystemBars()
     }
 
-    Box(Modifier.fillMaxSize().startupBackdrop()) {
+    Box(Modifier.fillMaxSize().startupBackdrop().reviewMetadata(model.reviewLaunch)) {
         if (model.showsMultiview && !showLive) {
             com.opencapture.openpocketcine.multiview.MultiviewScreen(model, onClose = model::closeMultiview)
         } else {
@@ -264,7 +267,7 @@ private fun OpenPocketCineApp(model: AppModel) {
             AppPanelHost(model)
         }
         var showAutomaticPrompt by remember {
-            mutableStateOf(AppDiagnostics.consent.shouldOfferAutomaticPrompt())
+            mutableStateOf(model.reviewLaunch == null && AppDiagnostics.consent.shouldOfferAutomaticPrompt())
         }
         if (!launchSplashVisible && !showLive && !model.showsMultiview && showAutomaticPrompt &&
             model.homePanel != AppPanel.PRIVACY
