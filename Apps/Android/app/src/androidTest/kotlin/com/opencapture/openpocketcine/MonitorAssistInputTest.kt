@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionOnScreen
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -69,7 +70,9 @@ class MonitorAssistInputTest {
                     density = activity.resources.displayMetrics.density
                     activity.setContent {
                         Box(Modifier.fillMaxSize()) {
-                            Box(Modifier.offset(canvasOffset.value.x.dp, canvasOffset.value.y.dp)
+                            Box(Modifier.offset {
+                                IntOffset(canvasOffset.value.x.dp.roundToPx(), canvasOffset.value.y.dp.roundToPx())
+                            }
                                 .size(94.dp, 119.dp).onGloballyPositioned {
                                     anchor = it.positionOnScreen(); anchorSize = it.size
                                 }) {

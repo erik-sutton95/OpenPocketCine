@@ -4,6 +4,9 @@ import com.opencapture.opencine.appkitnative.MonitorLiveFeedDisplay
 import com.opencapture.opencine.appkitnative.MonitorLiveFeedOwners
 import com.opencapture.opencine.appkitnative.MonitorLiveFeedHost
 import com.opencapture.opencine.appkitnative.MonitorLiveFeedSource
+import com.opencapture.opencine.appkitnative.MonitorFaceReadbackEpoch
+import com.opencapture.opencine.core.ConnectionState
+import com.opencapture.opencine.dji.PocketCameraSession
 
 import android.graphics.Bitmap
 import android.view.Surface
@@ -24,6 +27,36 @@ import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.openpocketcine.feed.LiveFeed
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.openpocketcine.session.LiveFaceDetector
+
+/** The actual live adapter; native fixtures exercise its frame factories and discard owner. */
+internal fun monitorLiveFeedSource(sessionOwner: () -> PocketCameraSession): MonitorLiveFeedSource<LiveFaceDetector.Frame> =
+    object : MonitorLiveFeedSource<LiveFaceDetector.Frame> {
+        private val session get() = sessionOwner()
+        override val decoder get() = session.decoder
+        override val pictureIdentity: Any get() = session.connectedCamera ?: session
+        override val faceReadbackEpoch: MonitorFaceReadbackEpoch?
+            get() {
+                if (session.phaseFlow.value != com.opencapture.opencine.vocabulary.ConnectionPhase.LIVE ||
+                    session.connectedCamera == null) return null
+                val current = session.control.current
+                if (current.connection != ConnectionState.Ready) return null
+                return MonitorFaceReadbackEpoch(current.session, current.epoch)
+            }
+        override val cameraName get() = session.connectedCamera?.name
+        override val connection get() = session.phaseFlow.value
+        override val recoveryState get() = session.recoveryState
+        override val isFeedRecovering get() = session.isFeedRecovering
+        override val isFocusResetAvailable get() = session.isFocusResetAvailable
+        override val wantsFaceDetect get() = session.wantsFaceDetect
+        override fun attachSurface(surface: Surface?) = session.attachSurface(surface)
+        override fun noteLiveFrame() = session.noteLiveFrame()
+        override fun retrySessionRecovery() = session.retrySessionRecovery()
+        override fun wantsFaceFrame() = session.wantsFaceFrame()
+        override fun faceFrame(bitmap: Bitmap) = LiveFaceDetector.Frame.of(bitmap)
+        override fun discardUnsubmittedFaceFrame(frame: LiveFaceDetector.Frame, bitmap: Bitmap) = frame.release()
+        override fun faceFrame(nv21: ByteArray, width: Int, height: Int) = LiveFaceDetector.Frame.nv21(nv21, width, height)
+        override fun considerFaceFrame(frame: LiveFaceDetector.Frame) = session.considerFaceFrame(frame)
+    }
 
 @Composable
 fun LiveViewScreen(model: AppModel) {
@@ -58,25 +91,7 @@ fun LiveViewScreen(model: AppModel) {
         model.gimbalGamepad.pulseLimit(model, operatorHaptics)
     }
     val session = model.session
-    val source = remember(session) {
-        object : MonitorLiveFeedSource<LiveFaceDetector.Frame> {
-            override val decoder get() = session.decoder
-            override val pictureIdentity: Any get() = session.connectedCamera ?: session
-            override val cameraName get() = session.connectedCamera?.name
-            override val connection get() = session.phaseFlow.value
-            override val recoveryState get() = session.recoveryState
-            override val isFeedRecovering get() = session.isFeedRecovering
-            override val isFocusResetAvailable get() = session.isFocusResetAvailable
-            override val wantsFaceDetect get() = session.wantsFaceDetect
-            override fun attachSurface(surface: Surface?) = session.attachSurface(surface)
-            override fun noteLiveFrame() = session.noteLiveFrame()
-            override fun retrySessionRecovery() = session.retrySessionRecovery()
-            override fun wantsFaceFrame() = session.wantsFaceFrame()
-            override fun faceFrame(bitmap: Bitmap) = LiveFaceDetector.Frame.of(bitmap)
-            override fun faceFrame(nv21: ByteArray, width: Int, height: Int) = LiveFaceDetector.Frame.nv21(nv21, width, height)
-            override fun considerFaceFrame(frame: LiveFaceDetector.Frame) = session.considerFaceFrame(frame)
-        }
-    }
+    val source = remember(session) { monitorLiveFeedSource { session } }
     val plan = rememberLiveFeedEffectsPlan(assist = assist, lutSelection = model.lutSelection, status = status,
         family = session.connectedCamera?.model?.family.orEmpty(), cameraName = session.connectedCamera?.name)
     MonitorLiveFeedHost(LiveFeed, source,

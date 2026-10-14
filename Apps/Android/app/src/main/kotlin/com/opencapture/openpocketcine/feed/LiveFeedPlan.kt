@@ -3,7 +3,7 @@ package com.opencapture.openpocketcine.feed
 import androidx.compose.runtime.Composable
 import com.opencapture.monitorui.MonitorAssistTool
 import com.opencapture.opencine.appkit.MonitorAssistState
-import com.opencapture.opencine.cameracontrols.MonitorFeedEffectsPlans
+import com.opencapture.opencine.cameracontrols.rememberMonitorFeedEffectsPlans
 import com.opencapture.opencine.appkitnative.MonitorLiveFeedIntegration
 import com.opencapture.opencine.cameracontrols.rememberMonitorFeedEffectsPlan
 import com.opencapture.opencine.dji.DjiCameraLUTProfile
@@ -20,9 +20,6 @@ import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 internal val LiveFeed = MonitorLiveFeedIntegration(DjiScopeExposureCeiling.PROFILE, appVulkanCrashGuard,
     DiagnosticCenter::log, { GlesPresentationOptions(OperatorPrefs.feedUpscaler(it)) }, DjiMonitorColorProfile::inferredTransfer)
 
-/** The shared feed plans on this app's Swift core bakes; one cube cache for the process. */
-internal val FeedEffectsPlans = MonitorFeedEffectsPlans(SwiftCore)
-
 /** The live, playback or inspector plan through the connected body's DJI looks. */
 @Composable
 internal fun rememberLiveFeedEffectsPlan(
@@ -34,6 +31,8 @@ internal fun rememberLiveFeedEffectsPlan(
     playback: Boolean = false,
     clipColorMode: Int = -1,
     previewTool: MonitorAssistTool? = null,
-): FeedEffectsRenderPlan =
-    rememberMonitorFeedEffectsPlan(FeedEffectsPlans, OperatorPrefs, assist, lutSelection, status,
+): FeedEffectsRenderPlan {
+    val plans = rememberMonitorFeedEffectsPlans(SwiftCore)
+    return rememberMonitorFeedEffectsPlan(plans, OperatorPrefs, assist, lutSelection, status,
         DjiCameraLUTProfile.make(family, cameraName), playback, clipColorMode, previewTool)
+}
