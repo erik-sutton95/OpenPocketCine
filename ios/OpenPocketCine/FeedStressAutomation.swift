@@ -403,7 +403,6 @@ enum FeedStressAutomation {
                 return true
             }
             guard first else { return }
-            AppDiagnostics.incidents.noteTestSource(.faultInjection)
             AppDiagnostics.reporting.noteCurrentTestSource(.faultInjection)
         }
 

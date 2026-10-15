@@ -1,15 +1,16 @@
 New and changed
 
-- Playback controls follow the player's real playing and buffering state.
-- Diagnostic reports separate incoming video, decoding and display stalls to help investigate live-view interruptions.
+- Exposure, shutter angle and frame-rate readouts follow the values supplied by your connected camera.
+- Storage readouts preserve the camera's reported values; missing readings are marked unavailable.
+- Recording duration follows confirmed camera recording state.
 
 Fixes
 
-- Pause remains available while playback waits for data; pressing it prevents an unexpected restart.
-- Playback stays paused when a late loop, seek or scrub finishes. Press Play to resume.
+- ISO controls follow the camera's declared settings, including its native ISO choices.
+- Camera controls and Media use the connected camera's available settings.
 
 What to test
 
-- Reconnect your camera, open Media and tap a clip. Try short and long clips, then switch clips during playback.
-- Pause while a clip is buffering, then scrub or return to Media. Playback should restart only when you press Play.
-- If a clip will not open or live view drops out, share diagnostics and include its duration, whether it was cached and whether camera controls still responded.
+- Connect your camera, try manual and automatic exposure, and compare ISO, shutter and storage readouts with the camera screen.
+- Start and stop a short recording on the camera. Check the duration and return from Media to Live View.
+- Reconnect and rotate the phone. Check missing readings and confirm that the controls stay usable.

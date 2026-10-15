@@ -1,5 +1,7 @@
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCore
+import OpenCineMedia
 import OpenCineMulticam
 import OpenPocketViewCore
 import SwiftUI
@@ -8,6 +10,7 @@ import SwiftUI
 /// timecode; the session's existing status publication remains its cadence owner.
 struct MultiviewTelemetryPresentation {
     let settings: CameraStatus
+    var storageObservation: StorageStatus? = nil
 
     var iso: String { settings.iso > 0 ? "\(settings.iso)" : "—" }
     var shutter: String { settings.shutterDenom > 0 ? "1/\(settings.shutterDenom)" : "—" }
@@ -25,8 +28,8 @@ struct MultiviewTelemetryPresentation {
         (0...100).contains(settings.batteryPercent) ? "\(settings.batteryPercent)%" : "—"
     }
     var storage: String {
-        guard settings.storageTotalMb > 0, settings.storageFreeMb >= 0 else { return "—" }
-        return String(format: "%.0f GB", Double(settings.storageFreeMb) / 1024)
+        let readout = storageObservation.map { $0.storageReadout } ?? settings.storageReadout
+        return readout?.free ?? StorageReadout.unavailable
     }
     var format: String {
         let resolution = settings.videoResolution?.label ?? "—"
@@ -73,7 +76,8 @@ extension MultiviewSession {
     func stageTile(_ index: Int) -> MultiviewTile? {
         let tile = tiles[index]
         guard let camera = tile.camera else { return nil }
-        let values = MultiviewTelemetryPresentation(settings: tile.settings)
+        let values = MultiviewTelemetryPresentation(
+            settings: tile.settings, storageObservation: tile.control.current.storage)
         let preview = camera.hasMultiviewPreview
         let settled = !busy && !tile.connecting && !tile.recovering
         var actions = [

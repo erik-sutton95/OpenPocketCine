@@ -10,9 +10,6 @@ options:
   postGenCommand: sh sync-package-resolved.sh
 
 packages:
-  Sentry:
-    url: https://github.com/getsentry/sentry-cocoa
-    exactVersion: 9.24.0
   OpenPocketViewCore:
     path: ..
   # The OpenCine platform package (shared UI MonitorUI/MonitorPresentation, OpenCineCore and its
@@ -22,6 +19,9 @@ packages:
   # targets that name it. Swap to the published URL + exact version when it has a remote.
   OpenCine:
     path: ../../OpenCine
+  # OpenCine's optional reporting adapter (sentry-cocoa), its own package in the same checkout.
+  OpenCineSentryApple:
+    path: ../../OpenCine/Packages/OpenCineSentryApple
 
 targets:
   OpenPocketCine:
@@ -31,11 +31,12 @@ targets:
       - OpenPocketCine
     postBuildScripts:
       - name: Stamp source revision
-        script: bash "${SRCROOT}/../tools/stamp-source-revision.sh"
+        script: bash "${SRCROOT}/../../OpenCine/scripts/sentry/stamp-source-revision.sh"
+        # Ordered after Info.plist processing, which otherwise may rerun after it and drop the stamp.
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         basedOnDependencyAnalysis: false
     dependencies:
-      - package: Sentry
-        product: Sentry
       - package: OpenPocketViewCore
         product: OpenPocketViewCore
       - package: OpenCine
@@ -54,10 +55,13 @@ targets:
         product: MonitorPresentation
       - package: OpenCine
         product: OpenCineCore
-      # Optional Frame.io delivery (OpenCine plan OPTIONAL-01). Pocket keeps OAuth UI, the
-      # callback scheme, client ID and its keychain namespace (Frameio/FrameioCredentials.swift).
+      # Optional Frame.io delivery (OpenCine plan OPTIONAL-01). Pocket keeps the callback
+      # scheme, client ID and its keychain, destination and history namespaces (MediaDelivery.swift);
+      # the account, sign-in and uploads are OpenCineFrameIOApple's.
       - package: OpenCine
         product: OpenCineFrameIO
+      - package: OpenCine
+        product: OpenCineFrameIOApple
       # Apple media runtime (OpenCine plan MEDIA-02): the VideoToolbox decoder runtime under
       # HevcDecoder and decoded-frame leases. iOS app only; the watch never decodes live video.
       - package: OpenCine
@@ -78,6 +82,10 @@ targets:
       # pair screens over the DJI integration.
       - package: OpenCine
         product: OpenCineAppKit
+      # The shared reporting adapter: the app shell's reporting sink on the Sentry SDK
+      # (sentry-cocoa comes with it, at the version OpenCine pins).
+      - package: OpenCineSentryApple
+        product: OpenCineSentryApple
       - target: OpenPocketCineWatch
         embed: true
         codeSign: true
@@ -223,13 +231,18 @@ targets:
       - OpenPocketCineUITests
     dependencies:
       - target: OpenPocketCine
-      # The UI tests every app shares (OpenCine OpenCineAppUITesting).
+      # The UI tests every app shares (OpenCine OpenCineAppUITesting) and the review contract
+      # and capabilities its conformance profile names (MonitorPresentation).
       - package: OpenCine
         product: OpenCineAppUITesting
+      - package: OpenCine
+        product: MonitorPresentation
     settings:
       base:
         SWIFT_VERSION: "5.0"
         GENERATE_INFOPLIST_FILE: YES
+        # Declares the conformance profile before any test runs (ConformanceApp.swift).
+        INFOPLIST_KEY_NSPrincipalClass: $(PRODUCT_MODULE_NAME).ConformanceApp
         PRODUCT_BUNDLE_IDENTIFIER: com.opencapture.openpocketcine.uitests
         TEST_TARGET_NAME: OpenPocketCine
         DEVELOPMENT_TEAM: "4V4EGQ6LZA"

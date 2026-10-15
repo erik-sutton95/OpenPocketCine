@@ -1,4 +1,5 @@
 package com.opencapture.openpocketcine
+import androidx.compose.ui.unit.IntOffset
 
 import android.os.SystemClock
 import android.view.InputDevice
@@ -59,15 +60,22 @@ class MonitorAssistInputTest {
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             for (portrait in listOf(false, true)) {
                 var anchor = Offset.Zero
+                var anchorSize = androidx.compose.ui.unit.IntSize.Zero
                 var target = Offset.Zero
+                var cell = androidx.compose.ui.geometry.Rect.Zero
                 var density = 1f
+                val canvasOffset = androidx.compose.runtime.mutableStateOf(Offset(20f, 100f))
                 var toggles = 0
                 scenario.onActivity { activity ->
                     density = activity.resources.displayMetrics.density
                     activity.setContent {
                         Box(Modifier.fillMaxSize()) {
-                            Box(Modifier.offset(20.dp, 100.dp).size(94.dp, 119.dp)
-                                .onGloballyPositioned { anchor = it.positionOnScreen() }) {
+                            Box(Modifier.offset {
+                                IntOffset(canvasOffset.value.x.dp.roundToPx(), canvasOffset.value.y.dp.roundToPx())
+                            }
+                                .size(94.dp, 119.dp).onGloballyPositioned {
+                                    anchor = it.positionOnScreen(); anchorSize = it.size
+                                }) {
                                 MonitorAssistPalette(
                                     tools = listOf("Peaking", "False Color"), portrait = portrait,
                                     locked = false, isOn = { false }, title = { it }, label = { it },
@@ -76,6 +84,12 @@ class MonitorAssistInputTest {
                                         Text("+", modifier.onGloballyPositioned {
                                             if (tool == "Peaking") target = it.positionOnScreen() +
                                                 Offset(it.size.width / 2f, it.size.height / 2f)
+                                            if (tool == "Peaking") {
+                                                val input = checkNotNull(it.parentLayoutCoordinates)
+                                                val location = input.positionOnScreen()
+                                                cell = androidx.compose.ui.geometry.Rect(location,
+                                                    androidx.compose.ui.geometry.Size(input.size.width.toFloat(), input.size.height.toFloat()))
+                                            }
                                         })
                                     }, chevron = { _, _ -> Text(">") },
                                 )
@@ -85,19 +99,51 @@ class MonitorAssistInputTest {
                 }
                 SystemClock.sleep(700)
                 instrumentation.waitForIdleSync()
-                var initial = Offset.Zero
+                val firstCell = cell
+                var initialAnchor = Offset.Zero
                 scenario.onActivity {
-                    initial = target
-                    assertEquals(anchor.x + 31f * density, target.x, 2f, "Popup must retain the slot leading edge")
-                    assertTrue(target.y > anchor.y && target.y < anchor.y + 119 * density,
+                    initialAnchor = anchor
+                    assertTrue(firstCell.width >= 44 * density && firstCell.height >= 44 * density,
+                        "Measured parent must be the native input cell, not the smaller glyph")
+                    assertTrue(firstCell.left >= anchor.x - 2 && firstCell.right <= anchor.x + anchorSize.width + 2,
+                        "Native cell must remain within the offset popup slot: cell=$firstCell anchor=$anchor")
+                    assertEquals(anchor.x + 4f * density, firstCell.left, 2f,
+                        "Native input cell must retain the slot leading inset")
+                    assertEquals(firstCell.center.x, target.x, 2f, "Glyph must stay centered in its actual native input cell")
+                    assertTrue(firstCell.contains(target), "Glyph must belong to the native clicked cell")
+                    assertTrue(target.y > anchor.y && target.y < anchor.y + anchorSize.height,
                         "Popup must follow the offset slot: anchor=$anchor target=$target")
+                    canvasOffset.value = Offset(60f, 140f)
+                }
+                val movedDeadline = SystemClock.uptimeMillis() + 3_000
+                var moved = false
+                while (SystemClock.uptimeMillis() < movedDeadline && !moved) {
+                    instrumentation.waitForIdleSync()
+                    scenario.onActivity {
+                        val dx = anchor.x - initialAnchor.x
+                        val dy = anchor.y - initialAnchor.y
+                        moved = kotlin.math.abs(dx - 40f * density) <= 2f
+                            && kotlin.math.abs(dy - 40f * density) <= 2f
+                            && kotlin.math.abs(cell.left - firstCell.left - dx) <= 2f
+                            && kotlin.math.abs(cell.top - firstCell.top - dy) <= 2f
+                    }
+                    if (!moved) SystemClock.sleep(16)
+                }
+                assertTrue(moved, "Actual moved canvas and native popup cell must settle within 3 seconds")
+                val movedCell = cell
+                scenario.onActivity {
+                    assertEquals(anchor.x - initialAnchor.x, (movedCell.left - firstCell.left).toFloat(), 2f,
+                        "Separate popup window must follow the consumer canvas horizontal offset")
+                    assertEquals(anchor.y - initialAnchor.y, (movedCell.top - firstCell.top).toFloat(), 2f,
+                        "Separate popup window must follow the consumer canvas vertical offset")
+                    assertEquals(movedCell.center.x, target.x, 2f)
                 }
                 SystemClock.sleep(250)
-                scenario.onActivity { assertEquals(initial, target, "Popup anchor must remain stable") }
+                assertEquals(movedCell, cell, "Popup anchor must remain stable")
                 val down = SystemClock.uptimeMillis()
                 for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
                     val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
-                        initial.x, initial.y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+                        target.x, target.y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
                     instrumentation.uiAutomation.injectInputEvent(event, true)
                     event.recycle()
                 }

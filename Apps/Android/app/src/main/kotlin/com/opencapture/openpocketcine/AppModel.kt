@@ -5,7 +5,6 @@ import androidx.compose.runtime.Composable
 import com.opencapture.opencine.appkit.MonitorCaptureField
 import com.opencapture.opencine.appkit.MonitorCapturePreferences
 import com.opencapture.opencine.appkit.captureField
-import com.opencapture.opencine.appkit.readPhoneBatteryReadout
 import com.opencapture.opencine.cameracontrols.CaptureRefresh
 import com.opencapture.opencine.cameracontrols.CaptureSheetHost
 import com.opencapture.opencine.cameracontrols.CaptureAudioService
@@ -20,9 +19,6 @@ import com.opencapture.opencine.dji.GimbalMoveEngine
 import com.opencapture.opencine.motion.GimbalWaypointSlot
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.BatteryManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -86,30 +82,36 @@ import com.opencapture.opencine.appkit.MonitorDisplayMode
  * [borrowing] builds a Live View model over a Multiview tile's decoder (iOS
  * `CameraSession(borrowing:)`). [discovers]: the cameras and pair pages discover and connect
  * through this model (the activity's one root model; a Multiview tile's, a preview's or a test's
- * never does). [review]: a debug review state of those pages.
+ * never does). [connectPort] replaces the session's connect port (the debug review activity's scripted
+ * pipeline).
  */
 class AppModel(
     context: Context,
     borrowing: com.opencapture.opencine.decoder.HevcDecoder? = null,
     controlLease: com.opencapture.opencine.dji.MultiviewControlLease? = null,
     discovers: Boolean = false,
-    review: String? = null,
-) : GamepadHost, GimbalChromeHost, CaptureSheetHost, OperatorSetupModel {
+    connectPort: (DjiCameraSession) -> DjiConnectPort = { it },
+    val reviewLaunch: com.opencapture.monitorui.ReviewLaunch? = null,
+) : GamepadHost, GimbalChromeHost, CaptureSheetHost, OperatorSetupModel, AutoCloseable {
     private val appContext = context.applicationContext
     /** One actual cache root/lifetime shared by gallery IO and operator settings. */
     val mediaCacheRoot = com.opencapture.opencine.appkit.MonitorMediaCacheRoot(
         java.io.File(appContext.noBackupFilesDir, "OpenPocketCine/media"))
     val mediaCache = com.opencapture.openpocketcine.media.MediaCache(appContext.noBackupFilesDir,
         appContext.getSharedPreferences("openpocketcine.media", Context.MODE_PRIVATE), mediaCacheRoot)
-    private val _mediaCacheRevision = kotlinx.coroutines.flow.MutableStateFlow(0L)
-    val mediaCacheRevision: kotlinx.coroutines.flow.StateFlow<Long> = _mediaCacheRevision
-    fun clearOperatorMediaCache() {
-        scope.launch { clearOperatorMediaCacheOwned() }
-    }
-    /** Bounded cache IO used by the captured common settings action. */
-    suspend fun clearOperatorMediaCacheOwned() {
-        try { OperatorMediaCache.clearOwned(mediaCacheRoot) { OperatorMediaCache.clear(appContext) } }
-        finally { _mediaCacheRevision.value += 1 }
+    private var mediaOwner: com.opencapture.openpocketcine.media.MediaLibraryController? = null
+    /**
+     * The gallery's library owner for the current camera, created when first asked for. The gallery
+     * and Settings share it, so Settings counts and clears that camera's cache, as Insta and iOS do.
+     */
+    fun mediaController(): com.opencapture.openpocketcine.media.MediaLibraryController {
+        val camera = com.opencapture.openpocketcine.media.MediaLibraryController.cameraKey(session, mediaCache)
+        mediaOwner?.let { if (it.cameraId == camera) return it; it.release() }
+        return com.opencapture.openpocketcine.media.MediaLibraryController(appContext, session, cacheOwner = mediaCache)
+            .also { controller ->
+                mediaOwner = controller
+                reviewLaunch?.let { review -> controller.library.display(layout = review.layout) }
+            }
     }
 
     init {
@@ -128,7 +130,7 @@ class AppModel(
      * the session, with its Wi-Fi passwords in the Multiview store; forget drops the camera's saved
      * Wi-Fi (D1). Nearby cards read in this app's words; Add setup is the station wizard.
      */
-    private val port: DjiConnectPort = review?.let { ReviewCameras.port(it, session) } ?: session
+    private val port: DjiConnectPort = connectPort(session)
     val integration = DjiIntegration(
         port,
         loadNetwork = networkStore::load,
@@ -151,8 +153,7 @@ class AppModel(
         },
         camerasStore(
             appContext.getSharedPreferences(CAMERAS, Context.MODE_PRIVATE).stored("document"),
-            appContext.getSharedPreferences(LEGACY_CAMERAS, Context.MODE_PRIVATE).also { ReviewCameras.seed(review, it) }
-                .stored("records-json"),
+            appContext.getSharedPreferences(LEGACY_CAMERAS, Context.MODE_PRIVATE).stored("records-json"),
         ),
         scope,
     ).also { model ->
@@ -188,7 +189,6 @@ class AppModel(
     var pairing: Boolean
         get() = shellState.pairing
         set(value) { if (value) shell.beginPairing() else shell.endPairing() }
-    var showsLaunchSplash by mutableStateOf(true)
     /** Long-press on the tap-focus box locks it: feed taps no longer move focus. */
     var focusBoxLocked by mutableStateOf(false)
     var coreVersion by mutableStateOf<String?>(null)
@@ -206,8 +206,14 @@ class AppModel(
                 else -> legalPanel = value
             }
         }
+    /**
+     * The open Multiview stage. Owned here, not by its screen, so whatever the root composes (a late
+     * connect going live, a recreated activity) its tiles live until [closeMultiview].
+     */
+    var multiview by mutableStateOf<com.opencapture.openpocketcine.multiview.MultiviewSession?>(null)
+        private set
     /** The Multiview stage covers the camera home until it closes. */
-    var showsMultiview by mutableStateOf(false)
+    val showsMultiview: Boolean get() = multiview != null
     internal val operatorSession = MonitorOperatorSessionModel(shell, assist, OperatorPrefs.displayPreferences(appContext), scope)
     override var operatorSettingsTab: MonitorSettingsTab
         get() = operatorSession.settingsTab
@@ -285,14 +291,6 @@ class AppModel(
         private set
     override var lutSelection by mutableStateOf(OperatorPrefs.lutSelection(appContext))
         private set
-    var assistClean: Boolean
-        get() = assist.clean
-        set(value) { assist.clean = value }
-    var phoneBatteryPercent by mutableIntStateOf(-1)
-        private set
-    var phoneCharging by mutableStateOf(false)
-        private set
-    var uiLocked by mutableStateOf(false)
     override val gimbalGamepad = GimbalGamepadDriver(OperatorPrefs::gimbalGamepadStick)
     override var gamepadConnected by mutableStateOf(false)
 
@@ -309,7 +307,7 @@ class AppModel(
     }
 
     fun endChromeEditing() = operatorSession.finishEditing()
-    fun setDisplayMode(clean: Boolean) { assist.clean = clean }
+    fun setDisplayMode(clean: Boolean) { operatorSession.select(if (clean) MonitorDisplayMode.CLEAN else MonitorDisplayMode.LIVE) }
 
     fun noteBecameLive() {
         legalPanel = null
@@ -416,24 +414,6 @@ class AppModel(
         OperatorPrefs.setCleanViewPinnedTools(appContext, value)
     }
 
-    fun toggleUiLocked() {
-        uiLocked = !uiLocked
-    }
-
-    fun refreshPhoneBattery() {
-        val readout =
-            readPhoneBatteryReadout(
-                appContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)),
-                appContext.getSystemService(Context.BATTERY_SERVICE) as BatteryManager,
-            )
-        applyPhoneBattery(readout.percent ?: -1, readout.externalPower == true)
-    }
-
-    fun applyPhoneBattery(percent: Int, charging: Boolean) {
-        phoneBatteryPercent = percent
-        phoneCharging = charging
-    }
-
     /** Rec lamp, after any confirmation: an explicit start or stop through the CORE-02 seam. */
     fun pressShutter() {
         session.control.shutter()
@@ -523,7 +503,7 @@ class AppModel(
     fun tapFocus(x: Float, y: Float) = session.tapFocus(x, y)
 
     fun updateGimbalStick(x: Float, y: Float) {
-        if (uiLocked) return
+        if (operatorSession.locked) return
         session.updateGimbalStick(
             x,
             y,
@@ -534,7 +514,7 @@ class AppModel(
     }
 
     override fun updateGimbalPadStick(x: Float, y: Float) {
-        if (uiLocked) return
+        if (operatorSession.locked) return
         session.updateGimbalStick(x, y, gimbalStickSensitivity, assist.mirrorsHorizontally)
     }
 
@@ -546,6 +526,7 @@ class AppModel(
     internal val operatorCaptureSource by lazy { makeOperatorCaptureSource() }
 
     // CaptureSheetHost (camera-controls): the capture sheets read these values and commit through one typed entry.
+    override val captureRouting = com.opencapture.opencine.cameracontrols.CaptureSheetRouting(commonExposureCompensation = true, commonFocusMode = true)
     override val camera get() = session.connectedCamera?.model
     override val audioService get() = captureAudioService()
     override fun captureField(sheet: LiveSheet, expoMode: Int): MonitorCaptureField? =
@@ -608,7 +589,7 @@ class AppModel(
 
     override fun canDriveGimbalPad(): Boolean =
         isLive &&
-            !uiLocked &&
+            !operatorSession.locked &&
             shellState.cover == null &&
             !isEditingChrome &&
             !session.browsingMedia
@@ -660,11 +641,12 @@ class AppModel(
         if (session.phaseFlow.value.isBusy() || session.isReconnecting.value) return
         disconnect()
         session.ble.stopScan()
-        showsMultiview = true
+        if (multiview == null) multiview = com.opencapture.openpocketcine.multiview.MultiviewSession(appContext).also { it.start() }
     }
 
     fun closeMultiview() {
-        showsMultiview = false
+        multiview?.dispose()
+        multiview = null
         session.startScan()
     }
 
@@ -678,7 +660,10 @@ class AppModel(
             advertisedName = camera.name, model = camera.model.name), session.control), release)
     }
 
-    fun close() {
+    override fun close() {
+        multiview?.dispose()
+        multiview = null
+        mediaOwner?.release()
         gimbalGamepad.stopListening()
         control.unbind()
         val monitor = shell.state.value.monitor

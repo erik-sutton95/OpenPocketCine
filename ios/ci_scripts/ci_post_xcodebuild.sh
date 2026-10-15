@@ -29,13 +29,13 @@ if not isinstance(purpose, str) or not purpose.strip():
     sys.exit("Archive is missing a non-empty NSCameraUsageDescription.")
 print("Archive camera purpose string verified.")
 PY
-  python3 ./tools/sentry-verify-ios-dsn.py --plist "$app_plist" --require
+  python3 ../OpenCine/scripts/sentry/sentry-verify-ios-dsn.py --plist "$app_plist" --require
 
   if [ "${SENTRY_UPLOAD_ENABLED:-}" = "true" ]; then
     install_dir="${CI_DERIVED_DATA_PATH:-${TMPDIR:-/tmp}}/opc-sentry-cli"
-    bash ./tools/sentry-install.sh --install-dir "$install_dir"
+    bash ../OpenCine/scripts/sentry/sentry-install.sh --install-dir "$install_dir"
     PATH="${install_dir}:${PATH}"
     export PATH
-    python3 ./tools/sentry-upload.py --platform ios
+    python3 ../OpenCine/scripts/sentry/sentry-upload.py --platform ios --project openpocketcine-ios
   fi
 fi

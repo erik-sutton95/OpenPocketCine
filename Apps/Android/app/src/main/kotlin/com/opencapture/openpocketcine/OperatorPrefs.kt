@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.openpocketcine.diagnostics.AppDiagnostics
 import android.content.Context
 import androidx.core.content.edit
 import com.opencapture.opencine.cameracontrols.OperatorPreferenceStore
@@ -20,5 +21,6 @@ object OperatorPrefs : OperatorPreferenceStore(file = "openpocketcine.operator",
 
     fun setFeedUpscaler(context: Context, value: MonitorGlesUpscaler) {
         prefs(context).edit { putString(FEED_UPSCALER, value.label) }
+        AppDiagnostics.reporting.noteFeedUpscaler(value.label)
     }
 }

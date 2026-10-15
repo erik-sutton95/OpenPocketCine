@@ -5,7 +5,7 @@ import XCTest
 /// setup and reports whether the monitor went live. Needs the camera on and nearby and the
 /// setup already added. Run with `TEST_RUNNER_OPV_PHYSICAL_STATION=wifi` (or
 /// `phoneHotspot`); the device journal (`Documents/control-live.log`) holds the detail.
-final class PhysicalStationSetupTests: XCTestCase {
+final class PhysicalStationSetupTests: SharedAppUITestCase {
     func testConnectOverSavedStationSetup() throws {
         guard let setup = ProcessInfo.processInfo.environment["OPV_PHYSICAL_STATION"] else {
             throw XCTSkip("Requires TEST_RUNNER_OPV_PHYSICAL_STATION=wifi or phoneHotspot")
@@ -498,12 +498,5 @@ final class PhysicalStationSetupTests: XCTestCase {
         }
         capture(live.exists ? "\(name)-live" : "\(name)-result")
         return (live.exists, Int(Date().timeIntervalSince(started)))
-    }
-
-    private func capture(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
     }
 }

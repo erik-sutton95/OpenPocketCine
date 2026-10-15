@@ -1,17 +1,16 @@
+import MonitorPresentation
+import OpenCineAppUITesting
 import XCTest
 
 /// These exercise rendered hit targets and navigation, not camera transport.
-/// Optional OPV_SIM_FEED_CLIP points at private local footage; no footage is
-/// bundled in tests. Screenshots are attached to the local xcresult only.
-final class MonitorUIFlowTests: XCTestCase {
-    private var app: XCUIApplication!
-
+/// Optional OPV_SIM_FEED_CLIP points at private local footage for the live feed; media screens
+/// stage generated clips (`ReviewClip`). Screenshots are attached to the local xcresult only.
+final class MonitorUIFlowTests: SharedAppUITestCase {
     override func setUp() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         app = XCUIApplication()
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "live"
-        app.launchEnvironment["OPV_UI_REVIEW_COMMON_CONTROLS"] = "1"
+        app.launchEnvironment = ReviewLaunch(screen: .live).environment
         if let clip = ProcessInfo.processInfo.environment["OPV_SIM_FEED_CLIP"] {
             app.launchEnvironment["OPV_SIM_FEED_CLIP"] = clip
         }
@@ -23,8 +22,7 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     func testOrdinaryNativePreviewDoesNotApproveUnknownRecording() {
-        app.launchEnvironment["OPV_UI_REVIEW_COMMON_CONTROLS"] = "0"
-        app.launch()
+        launch(ReviewLaunch(screen: .live, commonControls: false))
         let record = app.buttons["monitor.system.record"]
         XCTAssertTrue(record.waitForExistence(timeout: 10))
         XCTAssertFalse(record.isEnabled)
@@ -607,8 +605,7 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     func testMediaPageAdaptsToOrientation() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "media-fixture"
-        app.launch()
+        launch(ReviewLaunch(screen: .media))
         let navigation = app.otherElements["monitor.page.navigation"]
         XCTAssertTrue(navigation.waitForExistence(timeout: 10))
         rotate(.portrait)
@@ -710,33 +707,44 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     func testPopulatedMediaLayoutsAndPlayback() {
-        for screen in ["media-fixture", "media-list", "media-selection", "playback"] {
-            app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = screen
-            app.launch()
+        let reviews = [
+            ("media-grid", ReviewLaunch(screen: .media, mediaCount: 12)),
+            ("media-list", ReviewLaunch(screen: .media, layout: .list, mediaCount: 12)),
+            ("media-selection", ReviewLaunch(screen: .media, mediaCount: 12)),
+            ("playback", ReviewLaunch(screen: .playback, mediaCount: 12)),
+        ]
+        for (name, review) in reviews {
+            launch(review)
             let expected =
-                screen == "playback"
+                review.screen == .playback
                 ? app.buttons["Back to media"] : app.staticTexts["Media"].firstMatch
             XCTAssertTrue(expected.waitForExistence(timeout: 10))
-            capture(screen + "-portrait")
+            if name == "media-selection" {
+                XCTAssertTrue(app.staticTexts[Self.clip(1)].waitForExistence(timeout: 10))
+                mediaClipCenter(Self.clip(1)).press(
+                    forDuration: 0.4, thenDragTo: mediaClipCenter(Self.clip(3)), withVelocity: .slow,
+                    thenHoldForDuration: 0)
+                XCTAssertTrue(app.staticTexts["3 selected"].waitForExistence(timeout: 5))
+            }
+            capture(name + "-portrait")
             rotate(.landscapeLeft)
-            capture(screen + "-landscape")
+            capture(name + "-landscape")
             app.terminate()
             XCUIDevice.shared.orientation = .portrait
         }
     }
 
     func testMediaDragSelectionEntersFromHoldAndDeselectsFromSelectedClip() {
-        for screen in ["media-fixture", "media-list"] {
-            app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = screen
-            app.launch()
-            XCTAssertTrue(app.staticTexts["Review_001.MP4"].waitForExistence(timeout: 10))
-            XCTAssertFalse(app.buttons["Select Review_001.MP4"].exists)
-            let first = mediaClipCenter("Review_001.MP4")
-            let fourth = mediaClipCenter("Review_004.MP4")
+        for layout in [MonitorMediaLayout.grid, .list] {
+            launch(ReviewLaunch(screen: .media, layout: layout, mediaCount: 12))
+            XCTAssertTrue(app.staticTexts[Self.clip(1)].waitForExistence(timeout: 10))
+            XCTAssertFalse(app.buttons["Select \(Self.clip(1))"].exists)
+            let first = mediaClipCenter(Self.clip(1))
+            let fourth = mediaClipCenter(Self.clip(4))
             first.press(
                 forDuration: 0.4, thenDragTo: fourth, withVelocity: .slow, thenHoldForDuration: 0)
             XCTAssertTrue(app.staticTexts["4 selected"].waitForExistence(timeout: 5))
-            XCTAssertTrue(app.buttons["Deselect Review_001.MP4"].exists)
+            XCTAssertTrue(app.buttons["Deselect \(Self.clip(1))"].exists)
             capture("media-drag-selected")
             first.press(
                 forDuration: 0.4, thenDragTo: fourth, withVelocity: .slow, thenHoldForDuration: 0)
@@ -744,66 +752,64 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertTrue(app.buttons["Clear selection"].exists)
             XCTAssertFalse(app.buttons["Back to media"].exists)
             app.buttons["Clear selection"].tap()
-            XCTAssertFalse(app.buttons["Select Review_001.MP4"].exists)
+            XCTAssertFalse(app.buttons["Select \(Self.clip(1))"].exists)
             app.terminate()
         }
     }
 
     func testMediaDragSelectionAutoScrollsAtBothEdgesAndStopsOnRelease() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "media-fixture"
-        app.launch()
-        XCTAssertTrue(app.staticTexts["Review_001.MP4"].waitForExistence(timeout: 10))
+        launch(ReviewLaunch(screen: .media, mediaCount: 12))
+        XCTAssertTrue(app.staticTexts[Self.clip(1)].waitForExistence(timeout: 10))
         app.buttons["Large thumbnails"].tap()
         let gallery = app.scrollViews["monitor.media.gallery"]
-        let first = app.staticTexts["Review_001.MP4"].coordinate(
+        let first = app.staticTexts[Self.clip(1)].coordinate(
             withNormalizedOffset: CGVector(dx: 0.5, dy: -2))
         let bottom = gallery.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1)).withOffset(
             CGVector(dx: 0, dy: -10))
         first.press(
             forDuration: 0.4, thenDragTo: bottom, withVelocity: .fast, thenHoldForDuration: 6)
-        XCTAssertTrue(app.buttons["Deselect Review_012.MP4"].isHittable)
+        XCTAssertTrue(app.buttons["Deselect \(Self.clip(12))"].isHittable)
         XCTAssertTrue(app.staticTexts["12 selected"].exists)
-        let last = app.buttons["Deselect Review_012.MP4"]
+        let last = app.buttons["Deselect \(Self.clip(12))"]
         let stoppedFrame = last.frame
         Thread.sleep(forTimeInterval: 0.3)
         XCTAssertEqual(last.frame.minY, stoppedFrame.minY, accuracy: 1)
         let top = gallery.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(
             CGVector(dx: 0, dy: 5))
-        mediaClipCenter("Review_012.MP4").press(
+        mediaClipCenter(Self.clip(12)).press(
             forDuration: 0.4, thenDragTo: top, withVelocity: .fast, thenHoldForDuration: 6)
         XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Select Review_001.MP4"].isHittable)
+        XCTAssertTrue(app.buttons["Select \(Self.clip(1))"].isHittable)
         capture("media-drag-returned-to-top")
     }
 
     func testMediaDragSelectionPreservesNativeScrollingAndSidewaysRange() {
-        for screen in ["media-fixture", "media-list"] {
-            app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = screen
-            app.launch()
-            XCTAssertTrue(app.staticTexts["Review_001.MP4"].waitForExistence(timeout: 10))
+        for layout in [MonitorMediaLayout.grid, .list] {
+            launch(ReviewLaunch(screen: .media, layout: layout, mediaCount: 12))
+            XCTAssertTrue(app.staticTexts[Self.clip(1)].waitForExistence(timeout: 10))
             let gallery = app.scrollViews["monitor.media.gallery"]
             XCTAssertTrue(gallery.waitForExistence(timeout: 5))
-            mediaClipCenter("Review_001.MP4").press(
-                forDuration: 0.4, thenDragTo: mediaClipCenter("Review_002.MP4"),
+            mediaClipCenter(Self.clip(1)).press(
+                forDuration: 0.4, thenDragTo: mediaClipCenter(Self.clip(2)),
                 withVelocity: .slow,
                 thenHoldForDuration: 0)
             XCTAssertTrue(app.staticTexts["2 selected"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["Clear selection"].exists)
 
-            if screen == "media-list" {
-                mediaClipCenter("Review_003.MP4").press(
+            if layout == .list {
+                mediaClipCenter(Self.clip(3)).press(
                     forDuration: 0.05,
-                    thenDragTo: mediaClipCenter("Review_003.MP4").withOffset(
+                    thenDragTo: mediaClipCenter(Self.clip(3)).withOffset(
                         CGVector(dx: 80, dy: 4)),
                     withVelocity: .slow, thenHoldForDuration: 0)
                 XCTAssertTrue(app.staticTexts["3 selected"].waitForExistence(timeout: 5))
             } else {
-                mediaClipCenter("Review_003.MP4").press(
-                    forDuration: 0.05, thenDragTo: mediaClipCenter("Review_004.MP4"),
+                mediaClipCenter(Self.clip(3)).press(
+                    forDuration: 0.05, thenDragTo: mediaClipCenter(Self.clip(4)),
                     withVelocity: .slow, thenHoldForDuration: 0)
                 XCTAssertTrue(app.staticTexts["4 selected"].waitForExistence(timeout: 5))
             }
-            let selected = screen == "media-list" ? "3 selected" : "4 selected"
+            let selected = layout == .list ? "3 selected" : "4 selected"
             let before = visibleReviewClips()
             gallery.swipeUp(velocity: .fast)
             var after = visibleReviewClips()
@@ -815,12 +821,12 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertTrue(app.buttons["Clear selection"].exists)
             XCTAssertFalse(app.buttons["Back to media"].exists)
             XCTAssertNotEqual(
-                before, after, "\(screen) must scroll natively while selection stays active")
+                before, after, "\(layout) must scroll natively while selection stays active")
             gallery.swipeDown(velocity: .fast)
-            XCTAssertTrue(app.staticTexts["Review_001.MP4"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts[Self.clip(1)].waitForExistence(timeout: 5))
             XCTAssertTrue(app.staticTexts[selected].exists)
 
-            let origin = mediaClipCenter("Review_001.MP4")
+            let origin = mediaClipCenter(Self.clip(1))
             origin.press(
                 forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: 4, dy: 220)),
                 withVelocity: .fast, thenHoldForDuration: 0)
@@ -828,44 +834,41 @@ final class MonitorUIFlowTests: XCTestCase {
             XCTAssertFalse(app.buttons["Back to media"].exists)
 
             origin.press(
-                forDuration: 0.4, thenDragTo: mediaClipCenter("Review_004.MP4"),
+                forDuration: 0.4, thenDragTo: mediaClipCenter(Self.clip(4)),
                 withVelocity: .slow,
                 thenHoldForDuration: 0)
             XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["Clear selection"].exists)
             app.buttons["Clear selection"].tap()
-            XCTAssertFalse(app.buttons["Select Review_001.MP4"].exists)
+            XCTAssertFalse(app.buttons["Select \(Self.clip(1))"].exists)
             app.terminate()
         }
     }
 
     func testHomePairAndOperatorPages() {
-        for screen in ["cameras", "pair", "settings", "media"] {
-            app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = screen
-            app.launch()
-            let expected = [
-                "cameras": "Your cameras", "pair": "Find your camera",
-                "settings": "Operator Setup", "media": "Media",
-            ]
-            XCTAssertTrue(
-                app.staticTexts[expected[screen]!].firstMatch.waitForExistence(timeout: 10))
-            if screen == "pair" {
+        let expected: [(ReviewLaunch.Screen, String)] = [
+            (.cameras, "Your cameras"), (.pair, "Find your camera"), (.settings, "Operator Setup"),
+            (.media, "Media"),
+        ]
+        for (screen, title) in expected {
+            launch(ReviewLaunch(screen: screen))
+            XCTAssertTrue(app.staticTexts[title].firstMatch.waitForExistence(timeout: 10))
+            if screen == .pair {
                 XCTAssertTrue(
                     app.staticTexts[
                         "Before pairing, turn off DJI Frame Tap and force quit DJI Mimo."
                     ].firstMatch.exists)
             }
-            capture(screen + "-portrait")
+            capture(screen.rawValue + "-portrait")
             rotate(.landscapeLeft)
-            capture(screen + "-landscape")
+            capture(screen.rawValue + "-landscape")
             app.terminate()
             XCUIDevice.shared.orientation = .portrait
         }
     }
 
     func testAllOperatorTabsRetainSelectionAcrossRotation() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "settings"
-        app.launch()
+        launch(ReviewLaunch(screen: .settings))
         let tabs = app.scrollViews["monitor.settings.tabs"]
         XCTAssertTrue(tabs.waitForExistence(timeout: 10))
         let sections = [
@@ -900,8 +903,7 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     func testPlaybackInfoLoopAndShareReturnToTheSamePlayer() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "playback"
-        app.launch()
+        launch(ReviewLaunch(screen: .playback))
         let info = app.buttons["Clip information"]
         XCTAssertTrue(info.waitForExistence(timeout: 10))
         info.tap()
@@ -930,8 +932,7 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     func testPlaybackChromeAndCameraHomeSafeAreas() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
-        app.launch()
+        launch(ReviewLaunch(screen: .cameras))
         for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight] {
             rotate(orientation)
             let pair = app.buttons["cameras.pair"]
@@ -940,8 +941,8 @@ final class MonitorUIFlowTests: XCTestCase {
             capture("centered-cameras-\(orientation.rawValue)")
         }
         app.terminate()
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "playback"
-        app.launch()
+        // Delete is offered only for a connected camera's clip.
+        launch(ReviewLaunch(screen: .playback, source: .camera, connected: true))
         for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portrait] {
             rotate(orientation)
             let back = app.buttons["Back to media"]
@@ -983,8 +984,7 @@ final class MonitorUIFlowTests: XCTestCase {
     /// #406: saved cameras show their setups; Add setup offers Wi-Fi or Hotspot. Chips and
     /// Connect are not tapped here because they start a real connection.
     func testSavedCameraSetupChipsAndAddSetupFlow() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
-        app.launch()
+        launch(ReviewLaunch(screen: .cameras))
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             rotate(orientation)
             let wifi = app.buttons["cameras.setup.wifi"]
@@ -1030,8 +1030,7 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     func testMultiviewReusesStationNetworkWizard() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
-        app.launch()
+        launch(ReviewLaunch(screen: .cameras))
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             rotate(orientation)
             let multiview = app.buttons["cameras.multiview"]
@@ -1093,8 +1092,7 @@ final class MonitorUIFlowTests: XCTestCase {
     /// The simulator never has a hotspot, so a hotspot connect must ask first. Cancel
     /// leaves the camera untouched.
     func testHotspotConnectAsksToTurnOnPersonalHotspot() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
-        app.launch()
+        launch(ReviewLaunch(screen: .cameras))
         rotate(.portrait)
         let hotspot = app.buttons["cameras.setup.phoneHotspot"]
         XCTAssertTrue(hotspot.waitForExistence(timeout: 10))
@@ -1113,9 +1111,7 @@ final class MonitorUIFlowTests: XCTestCase {
     }
 
     func testConnectingCardShowsOneProgressLine() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
-        app.launchEnvironment["OPV_UI_REVIEW_CONNECTING"] = "1"
-        app.launch()
+        launch(ReviewLaunch(screen: .cameras, state: "connecting"))
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             rotate(orientation)
             let progress = app.descendants(matching: .any)
@@ -1129,8 +1125,7 @@ final class MonitorUIFlowTests: XCTestCase {
 
     /// A nearby camera reads as main showed it, and Pair connects it at once on the four pages.
     func testNearbyPairStartsThePocketWizard() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
-        app.launch()
+        launch(ReviewLaunch(screen: .cameras))
         rotate(.portrait)
         let pair = app.buttons["Pair OsmoPocket3-4D5E"]
         XCTAssertTrue(pair.waitForExistence(timeout: 10))
@@ -1168,9 +1163,7 @@ final class MonitorUIFlowTests: XCTestCase {
             ),
         ]
         for (state, texts) in pages {
-            app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "pair"
-            app.launchEnvironment["OPV_UI_REVIEW_STATE"] = state
-            app.launch()
+            launch(ReviewLaunch(screen: .pair, state: state))
             rotate(.portrait)
             XCTAssertTrue(app.staticTexts[texts[0]].waitForExistence(timeout: 10), state)
             for text in texts.dropFirst() {
@@ -1183,8 +1176,7 @@ final class MonitorUIFlowTests: XCTestCase {
 
     /// A setup chip's menu is main's: Forget for a setup that moves the camera, no Rename setup.
     func testSetupChipMenuOffersForgetButNoRename() {
-        app.launchEnvironment["OPV_UI_REVIEW_SCREEN"] = "cameras"
-        app.launch()
+        launch(ReviewLaunch(screen: .cameras))
         rotate(.portrait)
         let hotspot = app.buttons["cameras.setup.phoneHotspot"]
         XCTAssertTrue(hotspot.waitForExistence(timeout: 10))
@@ -1205,50 +1197,24 @@ final class MonitorUIFlowTests: XCTestCase {
         }
     }
 
-    private func rotate(_ orientation: UIDeviceOrientation) {
-        XCUIDevice.shared.orientation = orientation
-        let landscape = orientation == .landscapeLeft || orientation == .landscapeRight
-        let rotated = NSPredicate { _, _ in
-            (self.app.frame.width > self.app.frame.height) == landscape
-        }
-        expectation(for: rotated, evaluatedWith: app)
-        waitForExpectations(timeout: 10)
-        // XCUI updates the application frame before UIKit finishes rotating its
-        // content. Require both the window and first control to settle before
-        // asserting hit targets or capturing the device's physical pixels.
-        var previous: [CGRect] = []
-        var unchangedSince = Date()
-        let settled = NSPredicate { _, _ in
-            let frames = [self.app.frame, self.app.buttons.firstMatch.frame]
-            if frames != previous {
-                previous = frames
-                unchangedSince = Date()
-                return false
-            }
-            return Date().timeIntervalSince(unchangedSince) >= 0.5
-        }
-        expectation(for: settled, evaluatedWith: app)
-        waitForExpectations(timeout: 10)
-    }
-
-    private func capture(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
+    /// The clip at a gallery position (1 is the newest) of a twelve-clip review, named as the
+    /// app's review stages them: one a minute from 2026-09-12 12:00 UTC.
+    private static func clip(_ position: Int) -> String {
+        let number = 13 - position
+        return String(format: "DJI_2026091212%02d00_%04d_D.MP4", number - 1, number)
     }
 
     private func mediaClipCenter(_ filename: String) -> XCUICoordinate {
-        // A clip is identified by its page key, `<storage>:<path>` (`MediaFile.id`), on main too.
-        app.otherElements["monitor.media.clip.0:UI-REVIEW/\(filename)"]
-            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        // Asset identities are opaque: the clip is the gallery cell named by its filename.
+        app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'monitor.media.clip.' AND label == %@", filename)
+        ).firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     }
 
     private func visibleReviewClips() -> [String] {
-        (1...12).compactMap { index in
-            let name = String(format: "Review_%03d.MP4", index)
+        (1...12).map(Self.clip).filter { name in
             let clip = app.staticTexts[name]
-            return clip.exists && clip.isHittable ? name : nil
+            return clip.exists && clip.isHittable
         }
     }
 }

@@ -1,6 +1,9 @@
+@file:Suppress("DEPRECATION")
 package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.cameracontrols.toggledCleanPins
+import com.opencapture.opencine.cameracontrols.MonitorLegalDocument
+import com.opencapture.opencine.cameracontrols.MonitorLegalPage
 import com.opencapture.opencine.cameracontrols.lutLookLabel
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.ConnectionPhase
@@ -120,21 +123,23 @@ class OperatorSetupContractTest {
 
     @Test
     fun legalBodiesAreAndroidKeyedAndIncludeNotice() {
-        assertEquals(listOf("Privacy", "Terms", "Licenses", "NOTICE"), LegalKind.entries.map { it.title })
-        assertTrue(LegalKind.PRIVACY.body.contains("Android Keystore"))
-        assertFalse(LegalKind.PRIVACY.body.contains("iOS Keychain"))
-        assertTrue(LegalKind.PRIVACY.body.contains("Android may ask for location"))
-        assertTrue(LegalKind.PRIVACY.body.contains("OpenCapture is the data controller"))
-        assertTrue(LegalKind.PRIVACY.body.contains("support@openpocketcine.app"))
-        assertTrue(LegalKind.PRIVACY.body.contains("optional and off by default"))
-        assertTrue(LegalKind.PRIVACY.body.contains("sends your description and any optional reply email"))
-        assertTrue(LegalKind.PRIVACY.body.contains("up to three photos or screenshots"))
-        assertTrue(LegalKind.PRIVACY.body.contains("no images are attached automatically"))
-        assertTrue(LegalKind.PRIVACY.body.contains("Automatic reports exclude all images"))
-        assertFalse(LegalKind.PRIVACY.body.contains("prepares an email to support@openpocketcine.app"))
-        assertFalse(LegalKind.PRIVACY.body.contains("does not send analytics, crash reports"))
-        assertTrue(LegalKind.NOTICE.body.contains("Apache License, Version 2.0"))
-        assertTrue(LegalKind.LICENSES.body.contains("No DJI SDK is included or required."))
+        assertEquals(listOf("Privacy", "Terms", "Licenses", "NOTICE"), MonitorLegalPage.entries.map { it.title })
+        val privacy = (PocketLegalDocuments.privacy as MonitorLegalDocument.Text).body
+        assertEquals(OpenPocketCineLinks.TERMS, (PocketLegalDocuments.terms as MonitorLegalDocument.Link).url)
+        assertTrue(privacy.contains("Android Keystore"))
+        assertFalse(privacy.contains("iOS Keychain"))
+        assertTrue(privacy.contains("Android may ask for location"))
+        assertTrue(privacy.contains("OpenCapture is the data controller"))
+        assertTrue(privacy.contains("support@openpocketcine.app"))
+        assertTrue(privacy.contains("optional and off by default"))
+        assertTrue(privacy.contains("sends your description and any optional reply email"))
+        assertTrue(privacy.contains("up to three photos or screenshots"))
+        assertTrue(privacy.contains("no images are attached automatically"))
+        assertTrue(privacy.contains("Automatic reports exclude all images"))
+        assertFalse(privacy.contains("prepares an email to support@openpocketcine.app"))
+        assertFalse(privacy.contains("does not send analytics, crash reports"))
+        assertTrue(PocketLegalDocuments.notice.body.contains("Apache License, Version 2.0"))
+        assertTrue(PocketLegalDocuments.licenses.body.contains("No DJI SDK is included or required."))
     }
 
     @Test

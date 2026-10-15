@@ -12,6 +12,14 @@ import kotlin.test.assertTrue
 
 /** Pocket's capture sheet host values, as on main. */
 class CaptureSheetHostTest {
+    @Test fun anUnqualifiedNativeIsoPairDoesNotOfferAnAutomaticHop() {
+        val unknown = pocketCaptureSessionState({ null }, { null }, { false }, { false }, { MonitorLayoutCapabilities() })
+        assertFalse(unknown.nativeIsoHopSupported, "No native ISO pair was declared by this source")
+        val knownFocus = pocketCaptureSessionState({ null }, { null }, { false }, { false },
+            { MonitorLayoutCapabilities(focus = true, iris = true) })
+        assertFalse(knownFocus.nativeIsoHopSupported, "Focus and iris support do not declare a native ISO pair")
+    }
+
     @Test fun isoShutterEvWhiteBalanceAndFocusOpenThroughCore() {
         val manual = CameraCommands.EXPO_MANUAL
         assertEquals(SettingKey.ISO, capturePanelSettingKey(LiveSheet.ISO, manual))
@@ -41,15 +49,19 @@ class CaptureSheetHostTest {
         assertFalse(state.formatPinned)
     }
 
-    @Test fun focusAndIrisFollowTheLayoutAndNativeIsoHopAlwaysShows() {
+    @Test fun focusAndIrisFollowTheLayoutWithoutInventingNativeIsoSupport() {
         val none = pocketCaptureSessionState({ null }, { null }, { false }, { false }, { MonitorLayoutCapabilities() })
         assertFalse(none.focusModeSupported)
         assertFalse(none.irisSupported)
-        assertTrue(none.nativeIsoHopSupported, "Every DJI body hops native ISO, even before a body is known")
+        assertFalse(none.nativeIsoHopSupported)
+        assertNull(none.nativeISO.hop)
+        assertNull(none.nativeISO.ceiling)
         val both = pocketCaptureSessionState({ null }, { null }, { false }, { false },
             { MonitorLayoutCapabilities(focus = true, iris = true) })
         assertTrue(both.focusModeSupported)
         assertTrue(both.irisSupported)
-        assertTrue(both.nativeIsoHopSupported)
+        assertFalse(both.nativeIsoHopSupported)
+        assertNull(both.nativeISO.hop)
+        assertNull(both.nativeISO.ceiling)
     }
 }

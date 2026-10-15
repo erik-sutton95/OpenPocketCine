@@ -9,6 +9,7 @@ struct OpenPocketCineApp: App {
             MultiviewUIReview.prepareIfRequested()
             AppDiagnostics.verification.prepareIfRequested()
         #endif
+        AppDiagnostics.reporting.noteFeedUpscaler(FeedUpscaleSwitch.rendererReadsUpscaler.rawValue)
         AppDiagnostics.reporting.install()
         #if DEBUG
             AppDiagnostics.verification.runIfRequested()

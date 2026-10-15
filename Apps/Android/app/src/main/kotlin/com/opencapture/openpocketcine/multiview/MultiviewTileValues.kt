@@ -8,6 +8,10 @@ import com.opencapture.opencine.appkit.MultiviewTileStatus
 import com.opencapture.opencine.dji.hasMultiviewPreview
 import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraStatus
+import com.opencapture.opencine.vocabulary.StorageReadout
+import com.opencapture.opencine.vocabulary.storageReadout
+import com.opencapture.opencine.media.storageReadout
+import com.opencapture.opencine.core.StorageStatus
 import com.opencapture.opencine.vocabulary.VideoResolution
 import com.opencapture.opencine.vocabulary.timecodeClock
 
@@ -31,10 +35,8 @@ internal fun multiviewTileReadouts(
     index: Int, name: String, model: String, settings: CameraStatus, timecode: String?,
     recordingObservation: Boolean?, recordingAvailable: Boolean, recordingBusy: Boolean,
     recovering: Boolean, hasPicture: Boolean, failure: String?, recordingNote: String? = null,
-    colorFamily: String = "pocket",
+    colorFamily: String = "pocket", storage: StorageStatus? = null,
 ): MultiviewTileReadouts {
-    val total = if (settings.sdTotalMb > 0) settings.sdTotalMb else settings.storageTotalMb
-    val free = if (settings.sdTotalMb > 0) settings.sdFreeMb else settings.storageFreeMb
     val elapsed = settings.recordElapsedSec.coerceAtLeast(0)
     val recording = when {
         recordingBusy -> "WAIT"
@@ -53,7 +55,7 @@ internal fun multiviewTileReadouts(
         battery = if (settings.batteryPercent in 0..100) "${settings.batteryPercent}%" else "—",
         batteryPercent = settings.batteryPercent,
         charging = settings.charging,
-        storage = if (total > 0 && free >= 0) "${free / 1024} GB" else "—",
+        storage = (if (storage != null) storage.storageReadout else settings.storageReadout)?.free ?: StorageReadout.UNAVAILABLE,
         recording = recording, isRecording = recordingObservation == true,
         format = "$resolution · $fps · $color",
         recovery = when {
@@ -98,7 +100,7 @@ internal fun MultiviewSession.stageTile(index: Int): MultiviewTile? {
         index, camera.name, camera.model.name, tile.settings, tile.timecodeReadout,
         tile.recordingObservation?.first, tile.recordingAvailable,
         tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage, tile.recordingNote,
-        colorFamily = camera.model.family,
+        colorFamily = camera.model.family, storage = tile.control.snapshots.value.storage,
     )
     val settled = !busy && !tile.connecting && !tile.recovering
     val experimental = tile.failureMessage != null && !tile.experimentalNetwork && tile.identity == null

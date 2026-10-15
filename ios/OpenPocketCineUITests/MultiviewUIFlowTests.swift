@@ -1,16 +1,18 @@
+import OpenCineAppUITesting
 import XCTest
 
 /// Runs the production stage on simulator or an opt-in physical review device.
 /// The DEBUG fixture has no camera transports or saved-camera writes.
-final class MultiviewUIFlowTests: XCTestCase {
-    private var app: XCUIApplication!
-
+final class MultiviewUIFlowTests: SharedAppUITestCase {
     override func setUp() {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         app = XCUIApplication()
         app.launchEnvironment["OPV_UI_REVIEW_MULTIVIEW"] = "1"
     }
+
+    /// Rotation settles on the stage's display control.
+    private var display: XCUIElement { app.buttons["multiview.display"] }
 
     override func tearDown() {
         app.terminate()
@@ -21,7 +23,7 @@ final class MultiviewUIFlowTests: XCTestCase {
         app.launch()
         var landscapeMain: CGRect?
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
-            rotate(orientation)
+            rotate(orientation, settling: display)
             let record = app.buttons["multiview.recordAll"]
             let display = app.buttons["multiview.display"]
             XCTAssertTrue(display.waitForExistence(timeout: 10))
@@ -97,7 +99,7 @@ final class MultiviewUIFlowTests: XCTestCase {
     func testFocusedStripScrollsAndPromotesCameraWithoutMovingSystemControls() {
         app.launchEnvironment["OPV_UI_REVIEW_MULTIVIEW_COUNT"] = "4"
         app.launch()
-        rotate(.landscapeLeft)
+        rotate(.landscapeLeft, settling: display)
         let strip = app.scrollViews["multiview.secondaryStrip"]
         XCTAssertTrue(strip.waitForExistence(timeout: 10))
         let record = app.buttons["multiview.recordAll"].frame
@@ -141,7 +143,7 @@ final class MultiviewUIFlowTests: XCTestCase {
     func testFloatingPanelsStayBoundedAndCameraTabsKeepStageSelection() {
         app.launch()
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft, .landscapeRight] {
-            rotate(orientation)
+            rotate(orientation, settling: display)
             let tile = app.buttons["multiview.tile.0"]
             let originalFrame = tile.frame
             let selectedValue = tile.value as? String
@@ -248,35 +250,5 @@ final class MultiviewUIFlowTests: XCTestCase {
         recovery.tap()
         XCTAssertTrue(app.buttons["Reconnect"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Reconnect"].isEnabled, "An active recovery retains ownership")
-    }
-
-    private func rotate(_ orientation: UIDeviceOrientation) {
-        XCUIDevice.shared.orientation = orientation
-        let landscape = orientation == .landscapeLeft || orientation == .landscapeRight
-        let rotated = NSPredicate { _, _ in
-            (self.app.frame.width > self.app.frame.height) == landscape
-        }
-        expectation(for: rotated, evaluatedWith: app)
-        waitForExpectations(timeout: 10)
-        var previous: [CGRect] = []
-        var unchangedSince = Date()
-        let settled = NSPredicate { _, _ in
-            let frames = [self.app.frame, self.app.buttons["multiview.display"].frame]
-            if frames != previous {
-                previous = frames
-                unchangedSince = Date()
-                return false
-            }
-            return Date().timeIntervalSince(unchangedSince) >= 0.5
-        }
-        expectation(for: settled, evaluatedWith: app)
-        waitForExpectations(timeout: 10)
-    }
-
-    private func capture(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
     }
 }

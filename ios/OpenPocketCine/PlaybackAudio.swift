@@ -12,9 +12,6 @@ private let playbackAudioLogger = Logger(
 
 /// Configures `AVAudioSession` for in-app clip playback so audio plays through the mute switch.
 enum MediaPlaybackAudioSession {
-    @MainActor static func makeMeter() -> MonitorPlaybackAudioMeterRuntime {
-        MonitorPlaybackAudioMeterRuntime(onTapFailure: tapFailure)
-    }
     nonisolated static func tapFailure(_ status: Int32) {
         playbackAudioLogger.error("MTAudioProcessingTapCreate failed: \(status)")
     }

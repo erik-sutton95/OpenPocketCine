@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineAppKit
 import OpenCineAppKitApple
 import OpenCineCameraControls
 import OpenCineCore
@@ -81,16 +82,10 @@ final class OperatorFacingCopyTests: XCTestCase {
             TrafficLightsAssist.compensationHelp,
             LUTAssist.exposureTitle,
             LUTAssist.exposureHelp,
-            MediaDeliveryCopy.bakeLUT,
-            MediaDeliveryCopy.bakeLUTHelpUnavailable,
-            MediaDeliveryCopy.bakeLUTHelp(statusLabel: "Auto · D-Log2 → Rec.709"),
-            MediaDeliveryCopy.bakeExposure,
-            MediaDeliveryCopy.bakeExposureHelp,
-            MediaDeliveryCopy.convertLog,
-            MediaDeliveryCopy.convertLogHelp,
-            MediaDeliveryCopy.convertLogDestination,
-            MediaDeliveryCopy.convertLogHelpUnavailable,
-            MediaDeliveryDestination.nativeShare.subtitle,
+            MonitorClipDeliveryCopy.openPocketCine.convertHelp,
+            MonitorClipDeliveryCopy.openPocketCine.convertUnavailableHelp,
+            MonitorClipDeliveryCopy.openPocketCine.notLog("SIMULATED.MP4"),
+            MonitorDeliveryDestination.nativeShare.subtitle(remoteDisplayName: "Frame.io"),
             AudioAssist.helpCopy,
             CrosshairAssist.helpCopy,
             MirrorAssist.explanation,

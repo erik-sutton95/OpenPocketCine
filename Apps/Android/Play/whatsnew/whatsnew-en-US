@@ -1,1 +1,1 @@
-Playback controls now follow actual playing and buffering state. Pause stays available while waiting for data and prevents an unexpected restart. Detailed diagnostics help investigate live-view interruptions. Please test short and long clips, switching clips and pausing while buffering.
+Exposure, shutter angle, storage and recording duration follow camera reports. ISO controls use the camera's declared choices. Please compare readings with your camera, record a short clip, reconnect and return from Media to Live View. Missing measurements are marked unavailable.

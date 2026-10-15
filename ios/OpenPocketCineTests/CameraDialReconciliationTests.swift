@@ -24,6 +24,12 @@ final class CameraDialReconciliationTests: XCTestCase {
     }
 
     func testCommonDurationRequiresReportedManualAndDoesNotConfirmItsPin() {
+        // The shutter presentation reads the operator's persisted preference, which a
+        // physical test host inherits from the real app's stored state. Pin the native
+        // camera-value path this fixture asserts and restore the operator's choice.
+        let operatorChoice = OperatorPrefs.shutterUsesAngle
+        OperatorPrefs.shutterUsesAngle = false
+        defer { OperatorPrefs.shutterUsesAngle = operatorChoice }
         let session = commonFixture()
         defer { session.disconnect() }
         let receipt = session.control.request(.set(.shutter(.duration(Rational(1, 100)))))
@@ -148,7 +154,14 @@ final class CameraDialReconciliationTests: XCTestCase {
 
     func testParameterDialsIgnoreUnrelatedFramesUntilTheirOwnConfirmation() {
         let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
-        session.datalink = DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: "")
+        let model = CameraModel(
+            name: "SIMULATED ceiling",
+            captureProfile: CameraCaptureProfile(
+                supportsFocusMode: true, nativeISO: .init(ceiling: true)))
+        session.updateMultiview(
+            camera: DjiAppleSighting(id: UUID(), name: model.name, model: model, modelId: nil),
+            driver: DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: ""),
+            status: session.status)
         defer { session.disconnect() }
         session.status.isoLimit = .max800
         session.status.audioChannel = .stereo

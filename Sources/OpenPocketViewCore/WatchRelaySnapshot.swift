@@ -1,4 +1,6 @@
 import Foundation
+import OpenCineCore
+import OpenCineMedia
 import OpenCineRelay
 
 /// This app's side of the shared watch relay (OpenCineRelay): the wrist copy that names the
@@ -13,7 +15,8 @@ extension WatchRelayState {
         status: CameraStatus,
         phase: ConnectionPhase,
         cameraName: String,
-        feedLive: Bool
+        feedLive: Bool,
+        storage: StorageStatus? = nil
     ) -> WatchRelayState {
         let live = {
             if case .live = phase { return true }
@@ -23,12 +26,7 @@ extension WatchRelayState {
         return WatchRelayState(
             isRecording: status.isRecording,
             timecode: status.timecodeClock,
-            media: WatchRelayMedia.label(
-                storageFreeMb: status.storageFreeMb,
-                storageTotalMb: status.storageTotalMb,
-                sdFreeMb: status.sdFreeMb,
-                sdTotalMb: status.sdTotalMb,
-                recordRemainingSec: status.recordRemainingSec),
+            media: storage?.wristMediaLabel ?? status.wristMediaLabel,
             cameraBatteryPercent: status.batteryPercent,
             cameraName: cameraName,
             connection: live ? .connected : .noCamera,

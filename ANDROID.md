@@ -58,7 +58,7 @@ library's unit tests and lint (`:opencine:monitor-ui:testDebugUnitTest`,
 | Portable Swift core | `OpenPocketViewCore` (DUML, HEVC depacketizer, saved-camera records, connection phase) |
 | JNI facade | `OpenPocketCineAndroidFacade`: BLE/Wi-Fi/UDP session that calls the core, JNI surface for scan/connect/live-frame callbacks |
 | OpenCine `dji` | DJI session `DjiCameraSession`, BLE link, Wi-Fi joining, datalink, wire models, gimbal programs, `ConnectionPhase` (BLE, Wi-Fi, datalink stages), `DjiCameraSessionAdapter`, JNI facade `DjiNative`; the app's side is `AppSessionHost` |
-| Compose shell | Splash + saved cameras + Osmo connection wizard using the same `StartupColors` / `BrandColors` floats as iOS |
+| Compose shell | Splash + saved cameras + Osmo connection wizard drawn by the shared pair page in the monitor-ui palette |
 | Saved cameras | `SharedPreferences` file `openpocketcine.saved-cameras`, key `records-json`. Wi-Fi passwords stay out of prefs (re-read over BLE, same as iOS) |
 | applicationId | `com.opencapture.openpocketcine` on iOS and Android |
 

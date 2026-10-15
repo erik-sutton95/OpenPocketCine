@@ -13,6 +13,7 @@ import com.opencapture.opencine.vocabulary.COLOR_DLOG_M
 import com.opencapture.opencine.dji.DjiScopeExposureCeiling as ScopeExposureCeiling
 import com.opencapture.opencine.media.LiveColorScience
 import com.opencapture.opencine.media.MonitorTransfer
+import com.opencapture.opencine.media.ScopeSampler
 import com.opencapture.opencine.runtime.MonitorGlesUpscaler
 
 class FeedUpscaleTest {
@@ -63,8 +64,8 @@ class LiveColorScienceTest {
         assertEquals(248, b.clipByte(MonitorTransfer.DLOG2))
         assertEquals(247, ScopeExposureCeiling.UNOBSERVED.clipByte(MonitorTransfer.DLOG2))
         val pixels = ByteArray(4 * 4 * 4) { 120 }
-        val bundleA = PocketScopeSampler.sample(pixels, 4, 4, 16, MonitorTransfer.DLOG2, includePoints = false, ceiling = a)
-        val bundleB = PocketScopeSampler.sample(pixels, 4, 4, 16, MonitorTransfer.DLOG2, includePoints = false, ceiling = b)
+        val bundleA = ScopeSampler.sample(pixels, 4, 4, 16, MonitorTransfer.DLOG2, includePoints = false, ceiling = a)
+        val bundleB = ScopeSampler.sample(pixels, 4, 4, 16, MonitorTransfer.DLOG2, includePoints = false, ceiling = b)
         assertEquals(800, bundleA.iso)
         assertEquals(231, bundleA.ceiling.clipByte(MonitorTransfer.DLOG2))
         assertEquals(1600, bundleB.iso)

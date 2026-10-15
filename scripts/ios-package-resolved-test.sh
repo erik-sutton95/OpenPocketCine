@@ -32,7 +32,7 @@ if sh "$sync" "$empty_dir" >/dev/null 2>&1; then
   fail "sync succeeded without Package.resolved"
 fi
 
-# Committed lockfile matches project.yml Sentry pin.
+# Committed lockfile pins every remote package (project.yml and the OpenCine reporting adapter package).
 "$check"
 
 printf 'ios-package-resolved-test: ok\n'

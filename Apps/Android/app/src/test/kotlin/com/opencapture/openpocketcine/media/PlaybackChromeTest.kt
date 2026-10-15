@@ -3,8 +3,6 @@ package com.opencapture.openpocketcine.media
 import com.opencapture.monitorui.MonitorPlaybackChromeSwipe
 import com.opencapture.monitorui.MonitorPlaybackFrameScrub
 import com.opencapture.opencine.media.MonitorAudioMeterBallistics
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,8 +12,6 @@ import com.opencapture.opencine.media.FeedEffectsRenderPlan
 import com.opencapture.opencine.media.MonitorAudioMeterChannel
 import com.opencapture.monitorui.MonitorPlaybackZoom
 
-private const val ENCODING_PCM_16BIT = 2
-private const val ENCODING_PCM_FLOAT = 4
 
 class PlaybackChromeTest {
     @Test
@@ -161,103 +157,9 @@ class PlaybackChromeTest {
     }
 
     @Test
-    fun pcmFloatAndInt16PeaksMatchIosMaxMagnitude() {
-        val floatBuf =
-            ByteBuffer.allocate(4 * 4).order(ByteOrder.LITTLE_ENDIAN).apply {
-                asFloatBuffer().put(floatArrayOf(0.25f, -0.5f, 1f, 0.1f))
-                rewind()
-            }
-        val floatPeaks = PlaybackPcmPeaks.ingest(floatBuf, ENCODING_PCM_FLOAT, 2)
-        assertEquals(1f, floatPeaks.first, 0.001f)
-        assertEquals(0.5f, floatPeaks.second, 0.001f)
-
-        val pcm16 =
-            ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).apply {
-                asShortBuffer().put(shortArrayOf(32767, 16384, 0, -8192))
-                rewind()
-            }
-        val intPeaks = PlaybackPcmPeaks.ingest(pcm16, ENCODING_PCM_16BIT, 2)
-        assertEquals(1f, intPeaks.first, 0.02f)
-        assertEquals(0.5f, intPeaks.second, 0.02f)
-
-        val mono =
-            ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).apply {
-                asFloatBuffer().put(floatArrayOf(0.4f, -0.8f))
-                rewind()
-            }
-        val monoPeaks = PlaybackPcmPeaks.ingest(mono, ENCODING_PCM_FLOAT, 1)
-        assertEquals(0.8f, monoPeaks.first, 0.001f)
-        assertEquals(0.8f, monoPeaks.second, 0.001f)
-    }
-
-    @Test
-    fun metersMuteWhileConformingAndKeepPeaksOtherwise() {
-        val box = AudioLevelTapBox()
-        box.ingest(0.9f, 0.4f)
-        assertEquals(0f to 0f, box.peaksForMeters(conforming = true))
-        box.ingest(0.7f, 0.2f)
-        val live = box.peaksForMeters(conforming = false)
-        assertEquals(0.7f, live.first, 0.001f)
-        assertEquals(0.2f, live.second, 0.001f)
-    }
-
-    @Test
-    fun transportRowFitsNarrowestPhoneLikeIos() {
-        val needed = PlaybackChromeMetrics.transportRowWidth()
-        val usable = PlaybackChromeMetrics.narrowestScreenWidth - PlaybackChromeMetrics.chromeHorizontalPadding * 2
-        assertTrue(needed <= usable, "needed=$needed usable=$usable")
-    }
-
-    @Test
-    fun argbPackIsRgbaByteOrder() {
-        val packed = argb8888ToRgba(intArrayOf(0xFF112233.toInt()))
-        assertEquals(0x11, packed[0].toInt() and 0xFF)
-        assertEquals(0x22, packed[1].toInt() and 0xFF)
-        assertEquals(0x33, packed[2].toInt() and 0xFF)
-        assertEquals(0xFF, packed[3].toInt() and 0xFF)
-    }
-
-    @Test
     fun identityPlanIsANoOpPlaybackLook() {
         val identity = FeedEffectsRenderPlan.IDENTITY
         assertFalse(identity.hasPlaybackLook)
         assertTrue(com.opencapture.openpocketcine.feed.PlaybackLookEffect(identity).isNoOp(3840, 2160))
-        val px = intArrayOf(0xFF8090A0.toInt())
-        applyPlaybackLookPixels(px, 1, 1, identity)
-        assertEquals(0xFF8090A0.toInt(), px[0])
-    }
-
-    @Test
-    fun zebraHighlightPaintsHotPixels() {
-        val plan =
-            FeedEffectsRenderPlan(
-                lutCube = null,
-                falseColorPaint = null,
-                falseColorWeight = null,
-                peaking = false,
-                peakingColor = floatArrayOf(1f, 0f, 0f),
-                peakingRatioThreshold = 2.1f,
-                peakingNoiseGate = 0.001f,
-                zebraHighlightOn = true,
-                zebraHighlightCode = 0.5f,
-                zebraHighlightColor = floatArrayOf(1f, 1f, 1f),
-                zebraMidtoneOn = false,
-                zebraMidtoneCode = 0.5f,
-                zebraMidtoneHalf = 0.02f,
-                zebraMidtoneColor = floatArrayOf(1f, 0.72f, 0.2f),
-                splitComparison = false,
-                splitVertical = true,
-            )
-        val hot = intArrayOf(0xFFFFFFFF.toInt())
-        applyPlaybackLookPixels(hot, 1, 1, plan)
-        assertEquals(0xFFFFFFFF.toInt(), hot[0])
-        val cool = intArrayOf(0xFF101010.toInt())
-        applyPlaybackLookPixels(cool, 1, 1, plan)
-        assertEquals(0xFF101010.toInt(), cool[0])
-        // #136: a blue-led pixel whose max channel is hot paints even though
-        // its Rec.709 luma is under the threshold — same axis as WAVE 100.
-        val tinted = intArrayOf(0xFF2040FF.toInt())
-        applyPlaybackLookPixels(tinted, 1, 1, plan)
-        assertEquals(0xFFFFFFFF.toInt(), tinted[0])
     }
 }

@@ -5,20 +5,21 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.monitorui.MonitorAssistTool
+import com.opencapture.monitorui.MonitorClock
+import com.opencapture.monitorui.MonitorRecordingReadout
+import com.opencapture.monitorui.MonitorStatusPresentation
+import com.opencapture.monitorui.MonitorTelemetry
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -35,35 +36,29 @@ import org.junit.runner.RunWith
 class LiveChromeSemanticsTest {
 
     /**
-     * Each readout speaks one sentence, not its fragments ("REC" and "02:14").
-     * The last case is the shared readout shape the chips all reuse.
+     * Each readout the mounted shared surface draws speaks one sentence, not
+     * its fragments ("REC" and "02:14").
      */
     @Test fun readoutChipsSpeakOneNamedSentence() {
         val cases: List<Pair<String, @Composable () -> Unit>> = listOf(
-            "Recording, 2 minutes 14 seconds" to @Composable { RecChip(recording = true, elapsedSeconds = 134) },
-            "Standby" to @Composable { RecChip(recording = false, elapsedSeconds = 0) },
-            "Camera battery 87 percent" to @Composable { CameraBatteryReadout(percent = 87) },
-            "Camera battery level unknown" to @Composable { CameraBatteryReadout(percent = -1) },
-            "Timecode not available" to @Composable { TimecodeReadout(timecode = null) },
-            "Timecode 01:23:45" to @Composable { TimecodeReadout(timecode = "01:23:45:12") },
-            "Lens 24 mm" to @Composable {
-                ReadoutPill(value = "24 mm", accessibilityLabel = "Lens") { Spacer(Modifier.size(12.dp)) }
+            "Recording, 2 minutes 14 seconds" to @Composable {
+                MonitorRecordingReadout(MonitorStatusPresentation(recording = true, elapsedSeconds = 134))
             },
+            "Standby" to @Composable { MonitorRecordingReadout(MonitorStatusPresentation(recording = false, elapsedSeconds = 0)) },
+            "Timecode not available" to @Composable { MonitorClock(timecode = null) },
+            "Timecode 01:23:45:12" to @Composable { MonitorClock(timecode = "01:23:45:12") },
         )
         for ((expected, content) in cases) {
             assertEquals(listOf(expected), render(content), "readout should speak \"$expected\" as one node")
         }
     }
 
-    /**
-     * Every readout here shares one shape, so a leak in it is a leak in all of
-     * them. This measures the shape itself rather than trusting it.
-     */
-    @Test fun fpsChipShapeDoesNotLeakItsChildText() {
+    /** The link gauge toggles its value on tap, so its shape must merge rather than leak child text. */
+    @Test fun linkGaugeDoesNotLeakItsChildText() {
         assertEquals(
-            listOf("Live view 23.98 frames per second, 3 of 4 signal bars"),
-            render { FpsChip(fps = "23.98", bars = 3) },
-            "readout chips must merge; a stray \"FPS\" node means the convention leaks",
+            listOf("Live link 3 of 4 delivery bars, feed 23.98 frames per second"),
+            render { MonitorTelemetry(signalBars = 3, fps = "23.98", power = emptyList(), horizontal = true) },
+            "readout chips must merge; a stray value node means the convention leaks",
         )
     }
 

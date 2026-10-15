@@ -26,7 +26,7 @@ import com.opencapture.opencine.vocabulary.FocusTrackMode
 
 /**
  * Pocket's capture session state: the DJI session's AE/AWB locks and format pin, and the DJI
- * integration's layout for focus and iris. Every DJI body hops native ISO, so the toggle always shows.
+ * integration's layout for focus and iris. Native ISO support stays unknown without a source declaration.
  * Values are read when the sheet reads them (the format pin expires on time).
  */
 internal fun pocketCaptureSessionState(
@@ -35,6 +35,9 @@ internal fun pocketCaptureSessionState(
     awbLockOffered: () -> Boolean,
     formatPinned: () -> Boolean,
     layout: () -> MonitorLayoutCapabilities,
+    nativeISOCapabilities: () -> com.opencapture.opencine.vocabulary.CaptureNativeISOCapabilities = {
+        com.opencapture.opencine.vocabulary.CaptureNativeISOCapabilities()
+    },
 ): CaptureSessionState = object : CaptureSessionState {
     override val aeLocked get() = aeLock() != null
     override val awbLockKelvin get() = awbLockKelvin()
@@ -42,7 +45,8 @@ internal fun pocketCaptureSessionState(
     override val formatPinned get() = formatPinned()
     override val focusModeSupported get() = layout().focus
     override val irisSupported get() = layout().iris
-    override val nativeIsoHopSupported get() = true
+    override val nativeISO get() = nativeISOCapabilities()
+    override val nativeIsoHopSupported get() = nativeISO.hop == true
 }
 
 @Composable
@@ -50,7 +54,7 @@ internal fun AppModel.observedCaptureSessionState(status: CameraStatus): Capture
     val aeLock by session.aeLock.collectAsState()
     val awbLock by session.awbLockKelvin.collectAsState()
     return pocketCaptureSessionState({ aeLock }, { awbLock }, { session.autoWhiteBalanceLock(status) != null },
-        { session.isFormatPinActive }, { monitorLayout() })
+        { session.isFormatPinActive }, { monitorLayout() }, { session.nativeISOCapabilities })
 }
 
 /** ISO, shutter and white balance Kelvin through the captured Core field; EV through Core too. */

@@ -1,14 +1,11 @@
 import Foundation
 import OpenCineAppKit
+import OpenCineSentryApple
 import OpenPocketViewCore
 import UIKit
 
-#if DEBUG
-    import Sentry
-#endif
-
 /// The app's diagnostics: OpenCine's reporting runtime with this app's names, destination,
-/// camera network and Sentry.
+/// camera network and OpenCine's Sentry adapter.
 enum AppDiagnostics {
     static let host = DiagnosticsHost(
         product: "OpenPocketCine", listingName: "OpenPocketCine",
@@ -20,7 +17,7 @@ enum AppDiagnostics {
         sourceRevision: Bundle.main.object(forInfoDictionaryKey: "OPCSourceRevision") as? String
             ?? "unknown",
         supportEmail: "support@openpocketcine.app",
-        redact: { PrivacyRedactor.redact($0) })
+        redact: { DJICameraNetwork.redact($0) })
     static let consent = ReliabilityReportingConsent()
     static let dsn = ReliabilityReportingDSN {
         [
@@ -46,13 +43,13 @@ enum AppDiagnostics {
     }()
     static let reporting = ReliabilityReporting(
         host: host, consent: consent, dsn: dsn, gate: gate, origin: origin,
-        sink: SentryReliabilitySink())
+        sink: SentryReliabilitySink(
+            host: host, consent: consent, urlProtocol: AppReliabilityURLProtocol.self))
     /// The SDK transport's forwarding session over this runtime (`AppReliabilityURLProtocol`).
     static let forwarder = ReliabilityReportingForwarder(reporting: reporting)
     #if DEBUG
         static let verification = ReliabilityReportingVerification(
-            reporting: reporting, sdkEnabled: { SentrySDK.isEnabled }, crash: { SentrySDK.crash() },
-            isActive: { UIApplication.shared.applicationState == .active })
+            sentry: reporting, isActive: { UIApplication.shared.applicationState == .active })
     #endif
     static let incidents = FeedIncidentRuntime(
         reporting: reporting,
@@ -62,12 +59,14 @@ enum AppDiagnostics {
         host: host, gate: gate, dsnProvider: dsn.configured,
         isForeground: { UIApplication.shared.applicationState == .active })
 
+    /// Only store builds report `production`; Xcode and ad hoc release installs are `local`.
     private static var environment: String {
         #if DEBUG
-            return ReliabilityReportingVerification.mode == nil ? "development" : "verification"
+            ReliabilityEnvironment.apple(
+                debug: true, verification: ReliabilityReportingVerification.mode != nil
+            ).rawValue
         #else
-            return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-                ? "testflight" : "production"
+            ReliabilityEnvironment.apple(debug: false, verification: false).rawValue
         #endif
     }
 }

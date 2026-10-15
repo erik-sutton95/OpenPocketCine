@@ -302,9 +302,13 @@ alone. A cloud dashboard represents reporting-enabled, opted-in installations on
 not the entire installed population. Keep Android qualification and session
 exposure coverage explicit when comparing platforms.
 
-The SDK sends typed incident attachments and small session summaries. Native
-crash/hang events preserve diagnostic stack information but scrub user, request,
-automatic breadcrumb, message and exception-value fields. Only bounded, typed
+The SDK sends typed incident attachments; each ended session is two Sentry
+metrics (`feed.session.healthy_exposure` in seconds and `feed.session.incidents`,
+with outcome, test source, build identity, revision and build attributes), not an
+issue event. Native crash/hang events preserve diagnostic stack information but
+replace the user with the anonymous install id (a random UUID made under consent
+and deleted on opt-out) and scrub request, automatic breadcrumb and message
+fields and exception values other than the SDK's own hang, watchdog and ANR text. Only bounded, typed
 feed breadcrumb names and validated details are retained by the SDK; arbitrary UI text is not. Replay, screenshots, view
 hierarchy, tracing, profiling and automatic network breadcrumbs are disabled.
 SDK close uses no flush timeout on the UI thread; consent is rechecked by the
@@ -436,3 +440,10 @@ uploads are disabled. The unavailable-build message indicates missing build
 configuration; reinstalling that binary cannot enable the prompt. Configure
 `SENTRY_DSN_IOS` in Xcode Cloud and deliver a new archive. No consent reset is
 needed for installations that have never saved a choice.
+
+Decoder incidents can include the first failing access unit's numeric status,
+ordered NAL types, byte count, reference/format ages and recent input rate. This
+optional context contains no compressed frame bytes or camera identity. Apple
+captures it at the decoder callback boundary; Android codec-level failures leave
+per-access-unit context absent. Source retirement clears the context. The facts
+help compare error episodes without claiming the origin of damaged references.

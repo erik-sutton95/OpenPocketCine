@@ -1,9 +1,12 @@
 import Foundation
+import OpenCineMedia
 import OpenPocketViewCore
 
 extension CameraSession {
     var captureControlState: DJICaptureControlState? {
-        DJICaptureControlState(reported: cameraReportedCapture, model: connectedModel)
+        DJICaptureControlState(
+            reported: cameraReportedCapture, model: connectedModel,
+            shutterPresentation: OperatorPrefs.shutterUsesAngle ? .emulatedAngle : .cameraValue)
     }
 
     func writeShutter(
@@ -16,6 +19,32 @@ extension CameraSession {
             return
         }
         setShutterDenom(denominator, onStage: onStage, ensureManual: false)
+    }
+
+    func writeHostShutterAngle(
+        _ degrees: Double, denominator: Int, admission: DJICommandAdmission?,
+        onStage: @escaping @MainActor (ControlWireEvent) -> Void
+    ) {
+        guard OperatorPrefs.shutterUsesAngle, !cameraReportedCapture.isPhoto,
+            admission?.admits(commandOwner) ?? true
+        else {
+            onStage(.notSent)
+            return
+        }
+        let source = commandOwner.map { DJICommandAdmission(owner: $0, isCurrent: { true }) }
+        let note: @MainActor (ControlWireEvent) -> Void = { [weak self] stage in
+            if stage == .sent, let self, source?.admits(self.commandOwner) == true,
+                admission?.isCurrent ?? true
+            {
+                OperatorPrefs.shutterAngleDegrees = degrees
+            }
+            onStage(stage)
+        }
+        if let admission {
+            writeShutter(denominator, admission: admission, onStage: note)
+        } else {
+            writeShutter(denominator, onStage: note)
+        }
     }
 
     func writeExposureCompensation(

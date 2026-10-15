@@ -90,8 +90,8 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         }
         let event = DiagnosticEvent(
             level: level, category: category, code: code,
-            message: PrivacyRedactor.redact(message),
-            fields: fields.mapValues { PrivacyRedactor.redact($0) })
+            message: DJICameraNetwork.redact(message),
+            fields: fields.mapValues { DJICameraNetwork.redact($0) })
         let line = event.journalLine
         switch level {
         case .debug: log.debug("\(line, privacy: .public)")
@@ -173,7 +173,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
             journal: ControlLiveLog.recentLines(),
             exceptions: Self.readLines(Self.exceptionsURL),
             extras: AppDiagnostics.incidents.reportExtras() + Self.metricKitExtras(),
-            isSafeNetwork: PrivacyRedactor.isCameraNetwork)
+            isSafeNetwork: DJICameraNetwork.isAccessPoint)
     }
 
     @MainActor
@@ -184,7 +184,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         let extras = Self.metricKitExtras() + AppDiagnostics.incidents.reportExtras()
         let body = DiagnosticReport.fullReport(
             environment: env, journal: journal, exceptions: exceptions, extras: extras,
-            isSafeNetwork: PrivacyRedactor.isCameraNetwork)
+            isSafeNetwork: DJICameraNetwork.isAccessPoint)
         guard let dir = Self.diagnosticsDirectory else { return nil }
         let name = "report.txt"
         let url = dir.appendingPathComponent(name)
@@ -211,7 +211,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         DiagnosticReport.compactSummary(
             environment: environment(session: session),
             recent: ControlLiveLog.recentLines(),
-            isSafeNetwork: PrivacyRedactor.isCameraNetwork)
+            isSafeNetwork: DJICameraNetwork.isAccessPoint)
     }
 
     @MainActor
@@ -245,7 +245,7 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
         let deliveryID = UUID()
         let deliveredAt = Date()
         for (index, data) in payloads.enumerated() {
-            let text = PrivacyRedactor.redact(String(data: data, encoding: .utf8) ?? "")
+            let text = DJICameraNetwork.redact(String(data: data, encoding: .utf8) ?? "")
             let name = FeedIncidentFileNaming.metricKit(
                 kind: kind, deliveredAt: deliveredAt, deliveryID: deliveryID, index: index)
             let url = dir.appendingPathComponent(name)
@@ -319,12 +319,12 @@ final class DiagnosticCenter: NSObject, MXMetricManagerSubscriber {
     }
 
     private func currentStack() -> String {
-        PrivacyRedactor.redact(Thread.callStackSymbols.prefix(24).joined(separator: " | "))
+        DJICameraNetwork.redact(Thread.callStackSymbols.prefix(24).joined(separator: " | "))
     }
 
     nonisolated static func recordUncaught(_ exception: NSException) {
-        let reason = PrivacyRedactor.redact(exception.reason ?? "")
-        let stack = PrivacyRedactor.redact(exception.callStackSymbols.joined(separator: " | "))
+        let reason = DJICameraNetwork.redact(exception.reason ?? "")
+        let stack = DJICameraNetwork.redact(exception.callStackSymbols.joined(separator: " | "))
         let line =
             "fault diagnostics ns-exception name=\(exception.name.rawValue) reason=\(reason) stack=\(stack)"
         ControlLiveLog.appendRedacted(line, logNow: true)

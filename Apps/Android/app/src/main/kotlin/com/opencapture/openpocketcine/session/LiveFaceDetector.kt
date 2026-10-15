@@ -14,6 +14,8 @@ import com.opencapture.opencine.dji.FaceDetectorPort
 import com.opencapture.opencine.dji.FaceFrame
 import com.opencapture.opencine.vocabulary.TrackingBox
 import java.util.concurrent.Executor
+import java.util.concurrent.CancellationException
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * iOS `LiveFaceDetector`: camera-controls' [FaceDetectionPump] (cadence, latest frame wins, watchdog) on
@@ -51,6 +53,35 @@ class LiveFaceDetector : FaceDetectionPump<LiveFaceDetector.Frame>(MlKitFaceBack
         const val TAP_WIDTH = 320
         const val TAP_HEIGHT = 180
         const val MIN_FACE_SIZE = 0.10f
+    }
+}
+
+/** One optional face-frame producer. A broken SDK initializer must not close the live monitor. */
+internal class FaceFrameInput(private val onFailure: (RuntimeException) -> Unit) {
+    private val unavailable = AtomicBoolean(false)
+    val failed: Boolean get() = unavailable.get()
+
+    fun of(bitmap: Bitmap): LiveFaceDetector.Frame? =
+        construct(bitmap.width, bitmap.height, bitmap::recycle) { InputImage.fromBitmap(bitmap, 0) }
+
+    fun nv21(bytes: ByteArray, width: Int, height: Int): LiveFaceDetector.Frame? =
+        construct(width, height) { InputImage.fromByteArray(bytes, width, height, 0, InputImage.IMAGE_FORMAT_NV21) }
+
+    internal fun construct(width: Int, height: Int, release: () -> Unit = {}, image: () -> InputImage): LiveFaceDetector.Frame? {
+        if (failed) {
+            release()
+            return null
+        }
+        return try {
+            LiveFaceDetector.Frame(image(), width, height, release)
+        } catch (cancelled: CancellationException) {
+            release()
+            throw cancelled
+        } catch (failure: RuntimeException) {
+            release()
+            if (unavailable.compareAndSet(false, true)) onFailure(failure)
+            null
+        }
     }
 }
 

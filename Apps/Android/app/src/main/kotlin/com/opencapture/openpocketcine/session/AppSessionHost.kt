@@ -5,6 +5,7 @@ import android.content.Context
 import com.opencapture.opencine.dji.FaceDetectorPort
 import com.opencapture.opencine.media.FeedIncidentSink
 import com.opencapture.opencine.media.FeedIncidentTestSource
+import com.opencapture.opencine.media.FeedIncidentSessionContext
 import com.opencapture.opencine.dji.DjiSessionHost
 import com.opencapture.openpocketcine.BuildConfig
 import com.opencapture.openpocketcine.OperatorPrefs
@@ -18,10 +19,14 @@ class AppSessionHost(context: Context) : DjiSessionHost {
     override fun setShutterAngleDegrees(degrees: Double) = OperatorPrefs.setShutterAngleDegrees(appContext, degrees)
     override fun nativeISOHopEnabled(): Boolean = OperatorPrefs.nativeISOHopEnabled(appContext)
 
-    override fun setCameraSessionActive(active: Boolean) = AppDiagnostics.reporting.setCameraSessionActive(active)
+    override fun beginCameraPath(): AutoCloseable = AppDiagnostics.reporting.beginCameraPath()
     override val incidents: FeedIncidentSink get() = AppDiagnostics.incidents
     override fun incidentTestSource(): FeedIncidentTestSource = AppDiagnostics.origin.currentTestSource()
     override fun incidentBuildIdentity(): String = AppDiagnostics.origin.currentBuildIdentity()
+    override fun incidentSessionContext(sessionId: String, cameraFamily: String,
+        decoderGeneration: Int, socketGeneration: Int): FeedIncidentSessionContext =
+        AppDiagnostics.incidents.sessionContext(sessionId, cameraFamily,
+            decoderGeneration = decoderGeneration, socketGeneration = socketGeneration)
 
     override val appVersion: String get() = BuildConfig.VERSION_NAME
     override val appBuild: String get() = BuildConfig.VERSION_CODE.toString()

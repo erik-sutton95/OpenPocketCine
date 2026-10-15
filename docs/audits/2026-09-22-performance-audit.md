@@ -271,7 +271,8 @@ the trail as the prior sampled bundle. Bound pending builds and reuse the prior
 current product when revision/options match, retaining GPU resource lifetime.
 No sustained backlog was measured.
 
-Android [PocketScopeSampler](../../Apps/Android/app/src/main/kotlin/com/opencapture/openpocketcine/feed/PocketScopeSampler.kt)
+Android `PocketScopeSampler` (historical private file; now the shared
+[ScopeSampler](../../../OpenCine/Android/media/src/main/kotlin/com/opencapture/opencine/media/ScopeSampling.kt))
 and scope rasters deserve allocation profiling: a 213×120 tap sampled every two
 pixels yields 6,420 raw point objects, with another mapped list possible for
 VECTOR. That is arithmetic, not observed allocation rate. Preserve the existing

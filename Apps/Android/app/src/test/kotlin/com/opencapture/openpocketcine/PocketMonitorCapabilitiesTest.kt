@@ -12,7 +12,7 @@ import org.junit.Test
 class PocketMonitorCapabilitiesTest {
     private fun declared(model: CameraModel?) = MonitorLayoutCapabilities(
         CapabilitySnapshot(
-            timecode = DjiCameraSessionAdapter.timecodeSupport(model),
+            timecodeCapability = DjiCameraSessionAdapter.timecodeCapability(model),
             audioLevels = DjiCameraSessionAdapter.audioLevelsSupport(model),
         ),
         appLayoutBase,

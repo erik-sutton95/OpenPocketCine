@@ -109,11 +109,15 @@ extension AppModel: CaptureSheetHost {
     var autoExposureLocked: Bool { session.autoExposureLock != nil }
     var autoWhiteBalanceLocked: Bool { session.autoWhiteBalanceLock != nil }
     var canLockAutoWhiteBalance: Bool { session.canLockAutoWhiteBalance }
+    var captureRouting: CaptureSheetRouting {
+        .init(commonExposureCompensation: true, commonFocusMode: true)
+    }
     var captureCapabilities: CaptureSheetCapabilities {
         let layout = OsmoMonitorPresentation.capabilities(session)
         return CaptureSheetCapabilities(
-            focusMode: layout.focus, aperture: layout.iris, nativeIsoHop: true, isoLimit: true,
-            commonExposureCompensation: true, commonFocusMode: true, audio: audioService != nil,
+            focusMode: layout.focus, aperture: layout.iris,
+            nativeISO: session.nativeISOCapabilities,
+            audio: audioService != nil,
             faceMetering: false)
     }
     var focusOptions: [FocusOption] { FocusOption.allCases }

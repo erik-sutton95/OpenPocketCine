@@ -7,6 +7,7 @@ import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.appkit.MonitorAssistState
 import com.opencapture.monitorui.MonitorAssistTool
 import com.opencapture.opencine.dji.StatusExtras
+import com.opencapture.opencine.cameracontrols.MonitorOperatorExposureReading
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -22,34 +23,34 @@ class CameraExposureMeterTest {
             val status = StatusExtras.applyExpo(exposure(mode, configured = 0x10, metered = 0x0E), CameraStatus())
             assertEquals(0x10, status.evComp)
             assertEquals(0x0E, status.meteredEv)
-            assertEquals("−0.7", CameraExposureMeter(status.meteredEv).label)
+            assertEquals("−0.7", MonitorOperatorExposureReading(status.meteredEv).label)
             val optimisticCompensation = status.copy(evComp = 0x19)
-            assertEquals("−0.7", CameraExposureMeter(optimisticCompensation.meteredEv).label)
+            assertEquals("−0.7", MonitorOperatorExposureReading(optimisticCompensation.meteredEv).label)
             val next = StatusExtras.applyExpo(exposure(mode, configured = 0x19, metered = 0x07), optimisticCompensation)
             assertEquals(0x19, next.evComp)
-            assertEquals("−3.0", CameraExposureMeter(next.meteredEv).label)
+            assertEquals("−3.0", MonitorOperatorExposureReading(next.meteredEv).label)
         }
     }
 
     @Test fun everyValidRawMeterStepMapsToThirdStopsAndTheVerticalNeedle() {
         for (raw in 0x07..0x19) {
-            val meter = CameraExposureMeter(raw)
+            val meter = MonitorOperatorExposureReading(raw)
             assertEquals((raw - 16) / 3.0, meter.stops)
             assertEquals((25 - raw) / 18f, meter.needleFraction)
         }
-        assertEquals("−3.0", CameraExposureMeter(0x07).label)
-        assertEquals("0.0", CameraExposureMeter(0x10).label)
-        assertEquals("+3.0", CameraExposureMeter(0x19).label)
+        assertEquals("−3.0", MonitorOperatorExposureReading(0x07).label)
+        assertEquals("0.0", MonitorOperatorExposureReading(0x10).label)
+        assertEquals("+3.0", MonitorOperatorExposureReading(0x19).label)
     }
 
     @Test fun activeRecoveryHidesRetainedTelemetryButFreshMeterDoesNotRequireAPicture() {
-        val recovering = CameraExposureMeter(0x19, available = false)
+        val recovering = MonitorOperatorExposureReading(0x19, available = false)
         assertEquals("—", recovering.label)
         assertNull(recovering.needleFraction)
         assertNull(recovering.stops)
         assertEquals("Camera exposure meter, unavailable", recovering.accessibilityLabel)
         // Availability depends on camera telemetry and recovery, with no decoder-picture input.
-        val fresh = CameraExposureMeter(0x19)
+        val fresh = MonitorOperatorExposureReading(0x19)
         assertEquals("+3.0", fresh.label)
         assertEquals(0f, fresh.needleFraction)
     }
@@ -57,7 +58,7 @@ class CameraExposureMeterTest {
     @Test fun unavailableAndMalformedTelemetryNeverBorrowConfiguredEVOrRetainTheLastMeter() {
         val prior = CameraStatus(evComp = 0x10, meteredEv = 0x19)
         for (raw in listOf(-1, 0, 6, 26, 255, Int.MIN_VALUE, Int.MAX_VALUE)) {
-            val meter = CameraExposureMeter(raw)
+            val meter = MonitorOperatorExposureReading(raw)
             assertNull(meter.stops)
             assertNull(meter.needleFraction)
             assertEquals("—", meter.label)
@@ -68,7 +69,7 @@ class CameraExposureMeterTest {
         assertEquals(-1, missing.meteredEv)
         val invalid = StatusExtras.applyExpo(exposure(CameraCommands.EXPO_AUTO, 0x10, 0), prior)
         assertEquals(-1, invalid.meteredEv)
-        assertEquals("—", CameraExposureMeter(CameraStatus(evComp = 0x10).meteredEv).label)
+        assertEquals("\u2014", MonitorOperatorExposureReading(CameraStatus(evComp = 0x10).meteredEv).label)
     }
 
     @Test fun subscribeAndStatusWirePreserveTheReportedValueSeparately() {
@@ -85,21 +86,21 @@ class CameraExposureMeterTest {
 
     @Test fun fixedGaugeUsesFeedLeftEdgeAndUpwardPreferredCenterInDispOneOnly() {
         for (feed in listOf(MonitorRect(80f, 200f, 300f, 300f), MonitorRect(170f, 30f, 600f, 320f))) {
-            val frame = CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE)!!
+            val frame = MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE)!!
             assertEquals(feed.minX + 6f, frame.minX)
             assertEquals(feed.midY - 16f, frame.midY)
             assertEquals(28f, frame.width)
             assertEquals(180f, frame.height)
-            assertNull(CameraExposureMeter.frame(feed, MonitorDisplayMode.CLEAN))
+            assertNull(MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.CLEAN))
         }
         val shortFeed = MonitorRect(40f, 25f, 200f, 100f)
-        val short = CameraExposureMeter.frame(shortFeed, MonitorDisplayMode.LIVE)!!
+        val short = MonitorOperatorExposureReading.frame(shortFeed, MonitorDisplayMode.LIVE)!!
         assertEquals(88f, short.height)
         assertEquals(shortFeed.minY + 6f, short.minY)
         assertEquals(shortFeed.maxY - 6f, short.maxY)
-        assertNull(CameraExposureMeter.frame(MonitorRect(0f, 0f, 39f, 180f), MonitorDisplayMode.LIVE))
-        assertNull(CameraExposureMeter.frame(MonitorRect(0f, 0f, 100f, 83f), MonitorDisplayMode.LIVE))
-        val minimum = CameraExposureMeter.frame(MonitorRect(0f, 0f, 40f, 84f), MonitorDisplayMode.LIVE)!!
+        assertNull(MonitorOperatorExposureReading.frame(MonitorRect(0f, 0f, 39f, 180f), MonitorDisplayMode.LIVE))
+        assertNull(MonitorOperatorExposureReading.frame(MonitorRect(0f, 0f, 100f, 83f), MonitorDisplayMode.LIVE))
+        val minimum = MonitorOperatorExposureReading.frame(MonitorRect(0f, 0f, 40f, 84f), MonitorDisplayMode.LIVE)!!
         assertEquals(28f, minimum.width)
         assertEquals(72f, minimum.height)
     }
@@ -107,8 +108,8 @@ class CameraExposureMeterTest {
     @Test fun gaugeMovesAboveCollapsedPaletteBeforeShorteningItsScale() {
         val feed = MonitorRect(20f, 40f, 500f, 300f)
         val palette = MonitorRect(22f, 240f, 54f, 100f)
-        val normal = CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE)!!
-        val above = CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE, palette)!!
+        val normal = MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE)!!
+        val above = MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE, palette)!!
         assertEquals(180f, above.height)
         assertEquals(normal.minX, above.minX)
         assertEquals(28f, above.width)
@@ -116,9 +117,9 @@ class CameraExposureMeterTest {
         assertFalse(above.intersects(palette))
         assertTrue(above.midY < normal.midY)
         // A toolbar beside or far below the preferred gauge does not move it.
-        assertEquals(normal, CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE, palette.copy(x = 100f)))
-        assertEquals(normal, CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE, palette.copy(y = 400f)))
-        val limited = CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE, palette.copy(y = 220f))!!
+        assertEquals(normal, MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE, palette.copy(x = 100f)))
+        assertEquals(normal, MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE, palette.copy(y = 400f)))
+        val limited = MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE, palette.copy(y = 220f))!!
         assertEquals(162f, limited.height)
         assertEquals(feed.minY + 6f, limited.minY)
         assertEquals(208f, limited.maxY)
@@ -127,7 +128,7 @@ class CameraExposureMeterTest {
     @Test fun gaugeUsesBelowIntervalWhenExpandedPaletteLeavesNoRoomAbove() {
         val feed = MonitorRect(20f, 40f, 500f, 400f)
         val expanded = MonitorRect(22f, 50f, 54f, 180f)
-        val below = CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE, expanded)!!
+        val below = MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE, expanded)!!
         assertEquals(180f, below.height)
         assertEquals(expanded.maxY + 12f, below.minY)
         assertFalse(below.intersects(expanded))
@@ -137,9 +138,9 @@ class CameraExposureMeterTest {
     @Test fun gaugeHidesWhenExpandedPaletteLeavesNeitherIntervalTallEnough() {
         val feed = MonitorRect(20f, 40f, 500f, 400f)
         val expanded = MonitorRect(22f, 80f, 54f, 300f)
-        assertNull(CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE, expanded))
+        assertNull(MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE, expanded))
         val exactMinimum = MonitorRect(22f, 130f, 54f, 300f)
-        val minimum = CameraExposureMeter.frame(feed, MonitorDisplayMode.LIVE, exactMinimum)!!
+        val minimum = MonitorOperatorExposureReading.frame(feed, MonitorDisplayMode.LIVE, exactMinimum)!!
         assertEquals(72f, minimum.height)
         assertEquals(exactMinimum.minY - 12f, minimum.maxY)
         assertFalse(minimum.intersects(exactMinimum))

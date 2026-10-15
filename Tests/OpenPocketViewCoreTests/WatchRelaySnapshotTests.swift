@@ -1,4 +1,6 @@
 import Foundation
+import OpenCineCore
+import OpenCineMedia
 import Testing
 
 @testable import OpenPocketViewCore
@@ -20,9 +22,33 @@ struct WatchRelaySnapshotTests {
         #expect(state.feedLive)
         #expect(state.isRecording)
         #expect(state.timecode == "01:02:03")
-        #expect(state.media == "2 GB · 50%")
+        #expect(state.media == "2.15 GB · 50%")
         #expect(state.cameraBatteryPercent == 41)
         #expect(!state.isPhotography)
+    }
+
+    @Test("Typed storage keeps exact bytes, zero and unknown on the wrist")
+    func typedStorageOverridesLegacyMegabytesWithoutInventingUnknown() {
+        var status = CameraStatus()
+        status.storageFreeMb = 2048
+        status.storageTotalMb = 4096
+        func state(_ bytes: UInt64) -> WatchRelayState {
+            let volume = StorageVolume(
+                id: "active",
+                freeBytes: ObservedValue(bytes, origin: .cameraReported, at: nil),
+                totalBytes: ObservedValue(UInt64(2000), origin: .cameraReported, at: nil))
+            return .snapshot(
+                status: status, phase: .live, cameraName: "SIMULATED", feedLive: true,
+                storage: ObservedValue([volume], origin: .cameraReported, at: nil))
+        }
+        #expect(state(1001).media == "1 KB · 50%")
+        #expect(state(0).media == "0 B · 0%")
+        let unknown: StorageStatus = .unknown
+        #expect(
+            WatchRelayState.snapshot(
+                status: status, phase: .live, cameraName: "SIMULATED", feedLive: true,
+                storage: unknown
+            ).media == StorageReadout.unavailable)
     }
 
     @Test("Snapshot is noCamera when the phone is not live")

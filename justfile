@@ -25,7 +25,9 @@ ios-privacy-test:
 
 # Verify release reporting configuration without network or real credentials.
 sentry-test:
-    bash tools/sentry-test.sh
+    OPC_APP_ROOT=. OPC_APP_NAME=OpenPocketCine bash ../OpenCine/scripts/sentry/sentry-test.sh
+    python3 tools/ios-package-resolved-check.py
+    bash scripts/ios-package-resolved-test.sh
 
 # Reject tracked proprietary, secret-bearing, generated, or machine-specific files.
 hygiene:
@@ -162,6 +164,11 @@ ios-test *args: ios-generate
 # UI 2.0 interaction and screenshot checks, isolated from camera hardware.
 ios-ui-test device *args: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS Simulator,id={{device}}' {{args}} test
+
+# The shared conformance scenarios (OpenCine docs/conformance/SCENARIOS.md) on the simulator `udid`,
+# which needs accessibility enabled (OpenCine scripts/ios-private-simulator.py create).
+conformance-ios udid result="": ios-generate
+    xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview -destination 'platform=iOS Simulator,id={{udid}}' -parallel-testing-enabled NO {{ if result != "" { "-resultBundlePath " + result } else { "" } }} -only-testing:OpenPocketCineUITests/GalleryRoundTrip -only-testing:OpenPocketCineUITests/ShareRoundTrip -only-testing:OpenPocketCineUITests/ConfirmationCancel -only-testing:OpenPocketCineUITests/ChromeEditReturn -only-testing:OpenPocketCineUITests/AccessibilityTraversal -only-testing:OpenPocketCineUITests/ConformanceCoverageTests test
 
 # Opt-in navigation on an attached physical iPhone/iPad; never records or moves a camera.
 ios-physical-ui-test device test="OpenPocketCineUITests/PhysicalNavigationTests": ios-generate

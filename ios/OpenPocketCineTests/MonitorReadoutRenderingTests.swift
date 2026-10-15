@@ -7,9 +7,19 @@ import XCTest
 /// The status chrome on this app's model. The drum and shadow cases are in MonitorUITests.
 @MainActor
 final class MonitorReadoutRenderingTests: XCTestCase {
-    func testPortraitStorageRendersOutsideTheRasterizedStatusBand() throws {
-        let model = AppModel()
-        model.session.status.storageFreeMb = 102_400
+    func testPortraitStorageRendersOutsideTheRasterizedStatusBand() async throws {
+        let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
+        let model = AppModel(session: session)
+        session.status.storageFreeMb = 102_400
+        session.status.storageTotalMb = 131_072
+        model.control.bind(session.control)
+        defer { model.control.unbind() }
+        for _ in 0..<100 where model.control.snapshot?.storage.value == nil { await Task.yield() }
+        let snapshot = try XCTUnwrap(model.control.snapshot)
+        XCTAssertEqual(
+            snapshot.storage.value?.first?.freeBytes.value, 107_374_182_400,
+            "The native fixture publishes its real MiB readback through the common storage observation"
+        )
         let layout = LiveMonitorLayout.fieldMonitor(
             size: CGSize(width: 440, height: 956),
             safeArea: EdgeInsets(top: 62, leading: 0, bottom: 34, trailing: 0),

@@ -1,5 +1,18 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkitnative.MonitorLiveFeedDisplay
+import com.opencapture.opencine.appkitnative.MonitorLiveFeedOwners
+import com.opencapture.opencine.appkitnative.MonitorLiveFeedHost
+import com.opencapture.opencine.appkitnative.MonitorLiveFeedSource
+import com.opencapture.opencine.appkitnative.MonitorFaceReadbackEpoch
+import com.opencapture.opencine.core.ConnectionState
+import com.opencapture.opencine.dji.PocketCameraSession
+import com.opencapture.openpocketcine.feed.LiveFeed
+
+
+import com.opencapture.opencine.cameracontrols.MonitorLinkObservation
+import com.opencapture.opencine.cameracontrols.rememberMonitorLinkReadout
+import com.opencapture.opencine.cameracontrols.MonitorOperatorRecoveryCard
 import com.opencapture.opencine.cameracontrols.*
 
 import com.opencapture.opencine.appkit.ShellModel
@@ -12,11 +25,9 @@ import com.opencapture.opencine.appkit.monitorChromeEditStroke
 import com.opencapture.opencine.appkit.MonitorChromeEditBadgeLayer
 import com.opencapture.opencine.appkit.MonitorChromeEditBanner
 import com.opencapture.opencine.appkit.monitorChromeEditBoxes
-import com.opencapture.opencine.appkit.ObservePhoneBattery
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.opencine.cameracontrols.CaptureLists
 import com.opencapture.opencine.cameracontrols.LiveAutoExposureUnlockButton
-import com.opencapture.opencine.cameracontrols.LiveChromeReadout
 import com.opencapture.opencine.cameracontrols.LiveControlSheet
 import com.opencapture.opencine.cameracontrols.LiveFeedGestureWell
 import com.opencapture.opencine.cameracontrols.LiveFocusResetButton
@@ -27,7 +38,6 @@ import com.opencapture.opencine.cameracontrols.LiveGimbalSheetHost
 import com.opencapture.opencine.cameracontrols.LiveGimbalStick
 import com.opencapture.opencine.cameracontrols.LivePickerHost
 import com.opencapture.opencine.cameracontrols.LiveSheet
-import com.opencapture.opencine.cameracontrols.LiveViewLink
 import com.opencapture.opencine.cameracontrols.LiveZoom
 import com.opencapture.opencine.cameracontrols.LiveZoomChip
 import com.opencapture.opencine.cameracontrols.LocalLiveCanvasOrigin
@@ -40,10 +50,6 @@ import com.opencapture.opencine.cameracontrols.reportChromeFrame
 import com.opencapture.opencine.cameracontrols.retainedSheet
 import com.opencapture.opencine.platform.LocalVPNProbe
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
-import com.opencapture.opencine.media.CameraLinkHealthInputs
-import com.opencapture.opencine.media.CameraLinkHealthScorer
-import com.opencapture.opencine.media.FrameRateSampler
-import com.opencapture.opencine.media.LinkSignalBars
 import com.opencapture.monitorui.portraitZones
 import com.opencapture.monitorui.portraitAssistToolbar
 import com.opencapture.monitorui.portraitFillCropContent
@@ -131,11 +137,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
-import android.os.SystemClock
 import com.opencapture.monitorui.MonitorQuickGestureOwner
 import com.opencapture.monitorui.monitorReadoutGesture
 import com.opencapture.opencine.core.LocalVPNFilter
-import com.opencapture.opencine.appkit.MonitorRecoveryOverlay
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.opencapture.opencine.vocabulary.CamFov
@@ -145,17 +149,12 @@ import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
 import com.opencapture.opencine.vocabulary.ControlHud
 import com.opencapture.opencine.vocabulary.FocusOverlay
 import com.opencapture.opencine.vocabulary.LiveFeedFocusGesture
-import com.opencapture.opencine.vocabulary.SessionRecoveryCopy
-import com.opencapture.opencine.vocabulary.SessionRecoveryUi
 import com.opencapture.opencine.vocabulary.TrackingBox
 import com.opencapture.opencine.vocabulary.VideoResolution
 import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.createBitmap
-import com.opencapture.openpocketcine.assists.AssistOptionsPopup
-import com.opencapture.openpocketcine.assists.LiveAssistBar
-import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.opencine.appkit.MonitorAssistState
 import com.opencapture.monitorui.MonitorAssistTool
 import com.opencapture.opencine.media.FeedEffectsRenderPlan
@@ -186,6 +185,36 @@ import com.opencapture.monitorui.LiveMonitorLayout
 import com.opencapture.opencine.appkit.MonitorDisplayMode
 import com.opencapture.monitorui.MonitorRect
 
+/** The actual live adapter; native fixtures exercise its frame factories and discard owner. */
+internal fun monitorLiveFeedSource(sessionOwner: () -> PocketCameraSession): MonitorLiveFeedSource<LiveFaceDetector.Frame> =
+    object : MonitorLiveFeedSource<LiveFaceDetector.Frame> {
+        private val session get() = sessionOwner()
+        override val decoder get() = session.decoder
+        override val pictureIdentity: Any get() = session.connectedCamera ?: session
+        override val faceReadbackEpoch: MonitorFaceReadbackEpoch?
+            get() {
+                if (session.phaseFlow.value != com.opencapture.opencine.vocabulary.ConnectionPhase.LIVE ||
+                    session.connectedCamera == null) return null
+                val current = session.control.current
+                if (current.connection != ConnectionState.Ready) return null
+                return MonitorFaceReadbackEpoch(current.session, current.epoch)
+            }
+        override val cameraName get() = session.connectedCamera?.name
+        override val connection get() = session.phaseFlow.value
+        override val recoveryState get() = session.recoveryState
+        override val isFeedRecovering get() = session.isFeedRecovering
+        override val isFocusResetAvailable get() = session.isFocusResetAvailable
+        override val wantsFaceDetect get() = session.wantsFaceDetect
+        override fun attachSurface(surface: Surface?) = session.attachSurface(surface)
+        override fun noteLiveFrame() = session.noteLiveFrame()
+        override fun retrySessionRecovery() = session.retrySessionRecovery()
+        override fun wantsFaceFrame() = session.wantsFaceFrame()
+        override fun faceFrame(bitmap: Bitmap) = LiveFaceDetector.Frame.of(bitmap)
+        override fun discardUnsubmittedFaceFrame(frame: LiveFaceDetector.Frame, bitmap: Bitmap) = frame.release()
+        override fun faceFrame(nv21: ByteArray, width: Int, height: Int) = LiveFaceDetector.Frame.nv21(nv21, width, height)
+        override fun considerFaceFrame(frame: LiveFaceDetector.Frame) = session.considerFaceFrame(frame)
+    }
+
 @Composable
 fun LiveViewScreen(model: AppModel) {
     val cover = model.shellState.cover
@@ -211,378 +240,53 @@ fun LiveViewScreen(model: AppModel) {
     val poseInvertPan by model.session.gimbalPoseInvertPan.collectAsState()
     val gimbalLimitPulse by model.session.gimbalLimitPulse.collectAsState()
     val operatorHaptics = LocalOperatorHaptics.current
-    var tick by remember { mutableIntStateOf(0) }
-    val liveState = remember(model) { MonitorOperatorLiveState(model.uiLocked) }
+    val liveState = remember(model) { MonitorOperatorLiveState() }
     val context = LocalContext.current
     val assist = model.assist
-    val wantedViewFlip = CameraCommands.liveViewFlip(poseViewFlip, assist.mirrorsHorizontally)
-    // MIRROR Vertical has no pose latch, so it applies on the toggle.
-    val flipV = assist.flipsVertically
-    var liveViewFlip by remember { mutableStateOf(wantedViewFlip) }
-    LaunchedEffect(wantedViewFlip) {
-        if (liveViewFlip == wantedViewFlip) return@LaunchedEffect
-        delay(FeedPresentPolicy.EXTRA_MIRROR_HOLD_MS)
-        liveViewFlip = wantedViewFlip
-    }
-
-
-    val recovery by model.session.recoveryState.collectAsState()
-    val verticalPicture by model.session.decoder.isVerticalPicture.collectAsState()
-    val hasPicture by model.session.decoder.hasPicture.collectAsState()
-
-    ObservePhoneBattery { model.applyPhoneBattery(it.percent ?: -1, it.externalPower == true) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1_000)
-            tick += 1
-        }
-    }
-
     LaunchedEffect(gimbalLimitPulse) {
         if (gimbalLimitPulse == 0) return@LaunchedEffect
         model.gimbalGamepad.pulseLimit(model, operatorHaptics)
     }
-
-    var fpsLabel by remember { mutableStateOf("\u2014") }
-    var bars by remember { mutableIntStateOf(0) }
-    val fpsSampler = remember { FrameRateSampler() }
-    val signalBars = remember { LinkSignalBars() }
-    tick
-
-    val glass = remember { MonitorGlass(GlassTier.FLAT) }
-    val backdrop = rememberMonitorBackdropFeed(model.session.connectedCamera ?: model.session,
-        enabled = model.shellState.cover == null && hasPicture)
-
-    var vulkanFailed by remember { mutableStateOf(false) }
-    val vulkanSession =
-        remember {
-            if (OpcVulkan.isAvailable && !appVulkanCrashGuard.isTripped(context)) {
-                LiveVulkanSession(
-                    context = context,
-                    scopeBus = model.scopeBus,
-                    preview = model.inspectorPreview,
-                    backdrop = backdrop,
-                    onDecoderSurface = { model.session.attachSurface(it) },
-                    onFirstFrame = { model.session.noteLiveFrame() },
-                    onFailed = { vulkanFailed = true },
-                    onFramePresented = { model.session.decoder.notePresented(it) },
-                )
-            } else {
-                null
-            }
-        }
-    DisposableEffect(vulkanSession) {
-        onDispose {
-            vulkanSession?.release()
-            model.session.attachSurface(null)
-        }
-    }
-    val useVulkan = vulkanSession != null && !vulkanFailed
-    val scopeSourceIdentity = model.session.connectedCamera ?: model.session
-    val scopeSourceActive = model.shellState.cover != ShellModel.Cover.MEDIA
-    LaunchedEffect(vulkanSession, useVulkan, scopeSourceIdentity, hasPicture, scopeSourceActive) {
-        vulkanSession?.configureScopeSource(scopeSourceIdentity, hasPicture, scopeSourceActive && useVulkan)
-    }
-    LaunchedEffect(model.session, useVulkan, vulkanSession) {
-        var lastCount = 0
-        var lastAt = 0L
-        var held = "\u2014"
-        while (true) {
-            val now = SystemClock.elapsedRealtime()
-            val count =
-                if (useVulkan) {
-                    vulkanSession?.framesPresented?.get() ?: 0
-                } else {
-                    model.session.decoder.framesPresented.get()
-                }
-            if (lastAt > 0L && now > lastAt) {
-                val instant = (count - lastCount) * 1000.0 / (now - lastAt).toDouble()
-                if (instant >= 0.0) fpsSampler.recordFrameRate(instant)
-            }
-            lastCount = count
-            lastAt = now
-            val presented = model.session.decoder.lastPresentedAt
-            val recovering = model.session.isFeedRecovering
-            val phase = model.session.phaseFlow.value
-            val label =
-                if (model.session.recoveryState.value.isRecovering) {
-                    SessionRecoveryCopy.HELD_FRAME_BADGE
-                } else {
-                    LiveViewLink.fpsChipLabel(
-                        connection = phase,
-                        recovering = recovering,
-                        formattedFPS = fpsSampler.formatted,
-                        measuredFPS = fpsSampler.displayFPS,
-                    )
-                }
-            held = LiveChromeReadout.holdFPS(label, held)
-            fpsLabel = held
-            val measured = fpsSampler.displayFPS
-            val snapshot =
-                CameraLinkHealthScorer.score(
-                    CameraLinkHealthInputs(
-                        phase = LiveViewLink.cameraLinkPhase(phase, recovering, measured),
-                        liveViewFPS = measured.takeIf { it > 0 },
-                        targetLiveViewFPS = LiveViewLink.TARGET_FPS,
-                        secondsSinceLastGoodFrame = presented?.let { (now - it) / 1000.0 },
-                        isRecoveringStream = recovering,
-                    ),
-                )
-            bars = signalBars.update(snapshot.linkHealthScore)
-            delay(200)
-        }
-    }
-
-    CompositionLocalProvider(LocalMonitorGlass provides glass, LocalMonitorBackdrops provides listOf(backdrop.source),
-        com.opencapture.monitorui.LocalMonitorBackdropSurround provides if (useVulkan) Color.Black else LiveDesign.background) {
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            .background(if (useVulkan) Color.Transparent else LiveDesign.background)
-            .windowInsetsPadding(WindowInsets.navigationBars),
-    ) {
-        val density = LocalDensity.current
-        val layoutDir = LocalLayoutDirection.current
-        val cutout = WindowInsets.displayCutout
-        val portrait = maxHeight > maxWidth
-        val chromeScale =
-            monitorChromeScale(LocalConfiguration.current.smallestScreenWidthDp.toFloat())
-        LiveChromeMetrics.scale = chromeScale
-        // Navigation is consumed by the outer viewport. Only cutouts and a
-        // temporarily revealed status bar remain inside the live safe area.
-        // Landscape leading is floored at the iPhone island lane so the 16:9
-        // feed sits right of lock/battery (OpenZCine `monitorLeadingInsetDp`).
-        // Trailing gets no floor; `feedFrame` yields a RAIL_W lane so the
-        // record rail clears the picture.
-        fun edgeDp(cutoutPx: Int, barPx: Int): Float =
-            with(density) { maxOf(cutoutPx, barPx).toDp().value }
-        val safeTop by animateFloatAsState(
-            edgeDp(cutout.getTop(density), WindowInsets.systemBars.getTop(density)),
-            label = "safeTop",
-        )
-        val safeBottom by animateFloatAsState(
-            monitorBottomInsetDp(
-                rawInsetDp = edgeDp(cutout.getBottom(density), 0),
-                isPortrait = portrait && model.shellState.cover == null,
-            ),
-            label = "safeBottom",
-        )
-        val safeLeading by animateFloatAsState(
-            with(density) {
-                val cutoutDp = cutout.getLeft(this, layoutDir).toDp().value
-                if (portrait) {
-                    cutoutDp
-                } else {
-                    monitorLeadingInsetDp(
-                        cutoutDp = cutoutDp,
-                        transientBarDp = 0f,
-                        chromeScale = chromeScale,
-                    )
-                }
-            },
-            label = "safeLeading",
-        )
-        val safeTrailing = with(density) { cutout.getRight(this, layoutDir).toDp().value }
-        val vw = maxWidth.value
-        val vh = maxHeight.value
-        val pictureAspect = model.session.decoder.pictureAspect.toFloat()
-        val desqueezeVisible = assist.isVisible(MonitorAssistTool.DESQ)
-        val focusOffCenter = model.session.isFocusResetAvailable
-        val geometry = monitorOperatorLiveLayout(
-            MonitorOperatorViewport(vw, vh, safeLeading, safeTrailing, safeTop, safeBottom, chromeScale,
-                with(density) { cutout.getTop(this) > 0 || cutout.getBottom(this) > 0 ||
-                    cutout.getLeft(this, layoutDir) > 0 || cutout.getRight(this, layoutDir) > 0 }),
-            assist, model::chromeSectionMounts, model.portraitFeedAspect, pictureAspect, verticalPicture,
-            model.virtualJoystickSize, focusOffCenter)
-        val layout = geometry.layout
-        val pictureContent = geometry.pictureContent
-        val effectsPlan =
-            rememberLiveFeedEffectsPlan(
-                assist = assist,
-                lutSelection = model.lutSelection,
-                status = status,
-                family = model.session.connectedCamera?.model?.family.orEmpty(),
-                cameraName = model.session.connectedCamera?.name,
-            )
-        var vulkanSurfaceView by remember { mutableStateOf<SurfaceView?>(null) }
-        LaunchedEffect(vulkanSurfaceView, model.hdrDisplayActive) {
-            val surface = vulkanSurfaceView ?: return@LaunchedEffect
-            MonitorHDRDisplay.apply(surface, enabled = model.hdrDisplayActive)
-        }
-        var glesTextureView by remember { mutableStateOf<TextureView?>(null) }
-        val wantsFaceDetect by model.session.wantsFaceDetect.collectAsState()
-
-        var canvasOrigin by remember { mutableStateOf(Offset.Zero) }
-        DisposableEffect(vulkanSession) {
-            GpuOverlayBus.onSlotsMoved = { vulkanSession?.slotsMoved() }
-            model.session.decoder.onOutputSizeChanged = { w, h ->
-                vulkanSession?.setSourceSize(w, h)
-            }
-            onDispose {
-                GpuOverlayBus.onSlotsMoved = null
-                model.session.decoder.onOutputSizeChanged = null
-            }
-        }
-        LaunchedEffect(
-            useVulkan,
-            effectsPlan,
-            canvasOrigin,
-            pictureContent,
-            desqueezeVisible,
-            density.density,
-            liveViewFlip,
-        ) {
-            val session = vulkanSession ?: return@LaunchedEffect
-            if (!useVulkan) return@LaunchedEffect
-            val picture = if (desqueezeVisible) pictureContent else layout.onFeed
-            session.setFeedRect(
-                with(density) { picture.x.dp.toPx() },
-                with(density) { picture.y.dp.toPx() },
-                with(density) { picture.width.dp.toPx() },
-                with(density) { picture.height.dp.toPx() },
-                stretchToRect = desqueezeVisible,
-            )
-            session.updateEffects(
-                plan = effectsPlan,
-                uiScale = density.density,
-                pictureMirrored = liveViewFlip,
-                pictureFlippedVertically = flipV,
-            )
-        }
-        val readoutRegions = remember { com.opencapture.monitorui.MonitorReadoutRegions() }
-        CompositionLocalProvider(
-            com.opencapture.monitorui.LocalMonitorReadoutRegions provides readoutRegions,
-            LocalDensity provides Density(density.density, density.fontScale * chromeScale),
-            LocalLiveCanvasOrigin provides canvasOrigin,
-            LocalGpuLive provides if (useVulkan) vulkanSession else null,
-        ) {
+    val session = model.session
+    val source = remember(session) { monitorLiveFeedSource { session } }
+    val plan = rememberLiveFeedEffectsPlan(assist = assist, lutSelection = model.lutSelection, status = status,
+        family = session.connectedCamera?.model?.family.orEmpty(), cameraName = session.connectedCamera?.name)
+    MonitorLiveFeedHost(LiveFeed, source,
+        owners = MonitorLiveFeedOwners(assist, model.scopeBus, model.inspectorPreview),
+        display = MonitorLiveFeedDisplay(plan, CameraCommands.liveViewFlip(poseViewFlip, assist.mirrorsHorizontally),
+            model::chromeSectionMounts, model.portraitFeedAspect, model.virtualJoystickSize, model.hdrDisplayActive),
+        cover = cover,
+        onOperatorMenu = { model.disconnect() },
+        // The camera holds its overlay chrome while a cover hides the live picture.
+        onCover = { session.setOperatorOverlayHeld(it != null) }) {
+        // Current scene observations, precision and operator actions remain app-owned.
+        val flipV = assist.flipsVertically
+        val focusOffCenter = session.isFocusResetAvailable
         val metering: MonitorOperatorMeteringTile? = null
-        val chrome = rememberOperatorChromeSource(model, status)
-        val focus = MonitorOperatorFocusObservation(focusPoint, trackingHud, model.session.supportsTapFocus,
+        val chrome = rememberOperatorChromeSource(model, status, capabilities)
+        val focus = MonitorOperatorFocusObservation(focusPoint, trackingHud, session.supportsTapFocus,
             aeLock != null, model.focusBoxLocked, focusOffCenter)
         val focusActions = MonitorOperatorFocusActions(
-            { x, y -> model.session.handleFeedTap(x, y); Unit },
-            { box -> model.session.startTracking(box); Unit }, model.session::lockAutoExposure,
-            { model.session.canLockAutoExposure }, { model.session.unlockAutoExposure() },
+            { x, y -> session.handleFeedTap(x, y); Unit },
+            { box -> session.startTracking(box); Unit }, session::lockAutoExposure,
+            { session.canLockAutoExposure }, { session.unlockAutoExposure() },
             { model.focusBoxLocked = !model.focusBoxLocked; model.focusBoxLocked },
-            model::resetFocusPoint, { model.session.cancelSubjectTracking() }, model.session::presentControlNote)
+            model::resetFocusPoint, { session.cancelSubjectTracking() }, session::presentControlNote)
         MonitorOperatorLiveSurface(chrome,
             geometry, liveState,
-            MonitorOperatorLivePresentation(status, capabilities, fpsLabel, bars,
-                model.phoneBatteryPercent.takeIf { it >= 0 }, hasPicture, verticalPicture, liveViewFlip, flipV,
-                recovery.isRecovering, controlBusy, controlNote, metering),
-            assist, rememberOperatorAssistSource(model, status), focus, focusActions, model.session.levelReading,
-            CameraCommands.liveInvertPan(poseInvertPan, assist.mirrorsHorizontally) != flipV,
-            readExposure = { status.meteredEv },
-            exposureAvailable = !recovery.isRecovering && !model.session.isFeedRecovering,
-            vpnActive = { LocalVPNProbe.isActive(context) }, clearNote = model.session::clearControlNoteIf,
-            lockedChanged = { model.uiLocked = it }, nativeInputBlocked = { reason ->
+            cameraStatusLiveSource(chrome, geometry, liveState, link.label, link.bars, hasPicture, verticalPicture,
+                mirrored = mirrored, recovering = recovering, busy = controlBusy, note = controlNote,
+                clearNote = session::clearControlNoteIf, readExposure = { status.meteredEv },
+                exposureAvailable = !recovering && !session.isFeedRecovering,
+                level = session.levelReading,
+                levelViewFlip = CameraCommands.liveInvertPan(poseInvertPan, assist.mirrorsHorizontally) != flipV,
+                vpnActive = { LocalVPNProbe.isActive(context) }, metering = metering),
+            rememberOperatorAssistSource(model, status), focus, focusActions, nativeInputBlocked = { reason ->
                 model.gimbalGamepad.noteBlocked(model)
                 model.endGimbalStick()
-                if (reason == MonitorInputBlock.LOCK) model.session.cancelProgrammedMove()
-            }, modifier = Modifier.onGloballyPositioned { if (!useVulkan) canvasOrigin = it.positionInRoot() },
-            picture = {
-            if (useVulkan) {
-                VulkanLivePresenter(
-                    session = checkNotNull(vulkanSession),
-                    onSurfaceView = { vulkanSurfaceView = it },
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .onGloballyPositioned { canvasOrigin = it.positionInRoot() },
-                )
-            }
-            // The native image stays in its existing SurfaceView/TextureView.
-            if (!useVulkan) {
-            Box(
-                Modifier
-                    .liveModuleFrame(layout.onFeed)
-                    .clipToBounds(),
-            ) {
-                LiveFeedPresenter(
-                    scopeBus = model.scopeBus,
-                    preview = model.inspectorPreview,
-                    mirrored = liveViewFlip,
-                    flippedVertically = flipV,
-                    stretchToRect = desqueezeVisible,
-                    backdrop = backdrop,
-                    sourceIdentity = model.session.connectedCamera ?: model.session,
-                    sourceReady = hasPicture,
-                    sourceActive = scopeSourceActive,
-                    plan = effectsPlan,
-                    onDecoderSurface = { model.session.attachSurface(it) },
-                    onPresented = { model.session.noteLiveFrame() },
-                    onSourcePresented = { model.session.decoder.notePresented(it) },
-                    onTextureView = { glesTextureView = it },
-                    modifier =
-                        Modifier
-                            .offset(
-                                (pictureContent.x - layout.onFeed.x).dp,
-                                (pictureContent.y - layout.onFeed.y).dp,
-                            )
-                            .size(pictureContent.width.dp, pictureContent.height.dp),
-                )
-            }
-            }
-
-            // Passive source geometry; this box draws and captures nothing.
-            Box(Modifier.liveModuleFrame(layout.onFeed).monitorBackdropSource(backdrop.source,
-                imageRect = androidx.compose.ui.geometry.Rect(
-                    (pictureContent.x - layout.onFeed.x) * density.density,
-                    (pictureContent.y - layout.onFeed.y) * density.density,
-                    (pictureContent.maxX - layout.onFeed.x) * density.density,
-                    (pictureContent.maxY - layout.onFeed.y) * density.density), mirrored = liveViewFlip,
-                flippedVertically = flipV))
-
-
-            LiveFaceFramePump(surfaceView = vulkanSurfaceView, textureView = glesTextureView,
-                feed = layout.onFeed, enabled = wantsFaceDetect && hasPicture,
-                wantsFrame = model.session::wantsFaceFrame, onFrame = { model.session.considerFaceFrame(it) })
-            })
-        Box(Modifier.fillMaxSize().zIndex(20f)) {
-            val panel = model.shellState.cover
-            LaunchedEffect(panel) {
-                assist.configureTool = null
-                model.session.setOperatorOverlayHeld(panel != null)
-                if (panel == null) {
-                    val ready = vulkanSession?.windowReady == true
-                    DiagnosticCenter.log(
-                        "info",
-                        "feed",
-                        "overlay",
-                        "feed: overlay dismissed windowReady=${if (ready) 1 else 0} " +
-                            "frames=${vulkanSession?.framesPresented?.get() ?: -1}",
-                    )
-                    vulkanSession?.redrawLast()
-                } else {
-                    DiagnosticCenter.log(
-                        "info",
-                        "feed",
-                        "overlay",
-                        "feed: overlay held $panel windowReady=${if (vulkanSession?.windowReady == true) 1 else 0}",
-                    )
-                }
-            }
-
-
-                    }
-        Box(Modifier.fillMaxSize().zIndex(30f)) {
-            if (recovery.isRecovering) {
-                MonitorRecoveryOverlay(
-                    retrying = recovery is SessionRecoveryUi.Retrying,
-                    title = SessionRecoveryCopy.title(recovery),
-                    detail = SessionRecoveryCopy.detail(recovery, model.session.connectedCamera?.name.orEmpty()),
-                    retryTitle = SessionRecoveryCopy.RETRY_CONNECTION,
-                    operatorMenuTitle = SessionRecoveryCopy.OPERATOR_MENU,
-                    onRetry = { model.session.retrySessionRecovery() },
-                    onOperatorMenu = { model.disconnect() },
-                )
-            }
-        }
-
+                if (reason == MonitorInputBlock.LOCK) session.cancelProgrammedMove()
+            }, modifier = modifier, picture = picture)
     }
-    }
-}
 }
 
 @Composable
@@ -600,11 +304,17 @@ private fun LiveFaceFramePump(
     val latest = rememberUpdatedState(onFrame)
     val wanted = rememberUpdatedState(wantsFrame)
     val vulkan = LocalGpuLive.current
+    val faceInput = remember(surfaceView, textureView, vulkan, enabled) {
+        com.opencapture.openpocketcine.session.FaceFrameInput { failure ->
+            DiagnosticCenter.log("error", "faceAF", "input", "faceAF input unavailable class=${failure.javaClass.simpleName}")
+        }
+    }
     LaunchedEffect(surfaceView, textureView, vulkan, enabled, feed.x, feed.y, feed.width, feed.height) {
         if (!enabled) return@LaunchedEffect
         val tapW = LiveFaceDetector.TAP_WIDTH
         while (isActive) {
             delay(LiveFaceDetector.INTERVAL_MS)
+            if (faceInput.failed) return@LaunchedEffect
             // Vulkan: identity 720p RGB, same space as iOS Vision / 0xA6.
             // PixelCopy of the swapchain is already mirrored when TT180/MIRROR
             // is on, and the overlay mirrors again - box on the opposite side.
@@ -613,7 +323,7 @@ private fun LiveFaceFramePump(
                 // Take a fresh readback first, then ask for the next only when the
                 // detector will use it (10 Hz idle pace skips the GPU readback too).
                 session.takeFaceNv21()?.let {
-                    latest.value(LiveFaceDetector.Frame.nv21(it, LiveFaceDetector.TAP_WIDTH, LiveFaceDetector.TAP_HEIGHT))
+                    faceInput.nv21(it, LiveFaceDetector.TAP_WIDTH, LiveFaceDetector.TAP_HEIGHT)?.let(latest.value)
                 }
                 if (wanted.value()) session.requestFaceTap()
                 continue
@@ -626,7 +336,7 @@ private fun LiveFaceFramePump(
             if (gles != null && gles.isAvailable) {
                 val src = gles.getBitmap(tapW, tapH)
                 inFlight.set(false)
-                if (src != null) latest.value(LiveFaceDetector.Frame.of(src))
+                if (src != null) faceInput.of(src)?.let(latest.value)
                 continue
             }
             val view = surfaceView
@@ -655,7 +365,7 @@ private fun LiveFaceFramePump(
                     { result ->
                         inFlight.set(false)
                         if (result == PixelCopy.SUCCESS) {
-                            latest.value(LiveFaceDetector.Frame.of(dest))
+                            faceInput.of(dest)?.let(latest.value)
                         } else {
                             dest.recycle()
                         }

@@ -6,15 +6,6 @@ import Testing
 @Suite
 struct LUTLibraryWireTests {
     @Test
-    func rejectsPathEscapeAndBadNames() {
-        #expect(LUTLibraryWire.isSafeStoredFileName("Look.cube"))
-        #expect(!LUTLibraryWire.isSafeStoredFileName("../Look.cube"))
-        #expect(!LUTLibraryWire.isSafeStoredFileName("dir/Look.cube"))
-        #expect(!LUTLibraryWire.isSafeStoredFileName("Look:cube.cube"))
-        #expect(!LUTLibraryWire.isSafeStoredFileName("Look.CUBE.bak"))
-    }
-
-    @Test
     func identity2CubePacks32Bytes() throws {
         let text = """
             LUT_3D_SIZE 2
@@ -57,6 +48,17 @@ struct LUTLibraryWireTests {
                 utf8: utf8, exposureStops: -1, colorModeCode: Int(ColorMode.dLog2.rawValue)))
         #expect(pulled.count == identity.count)
         #expect(pulled != identity)
+    }
+
+    /// A4-27: an import the shared gate (`CubeLUT.validatedImport`) refuses never packs, so the
+    /// Android library stores nothing for it.
+    @Test(arguments: [
+        "not a cube",
+        "LUT_3D_SIZE 2\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n",
+        "LUT_3D_SIZE 2\n1.2 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n",
+    ])
+    func refusesWhatTheImportGateRefuses(text: String) {
+        #expect(LUTLibraryWire.packedImportedLUT(utf8: Array(text.utf8)) == nil)
     }
 
     @Test

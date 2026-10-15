@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
+import com.opencapture.opencine.media3.Media3PlaybackPort
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.opencapture.opencine.media.MonitorPlaybackEvent
 import com.opencapture.opencine.media.MonitorPlaybackItem

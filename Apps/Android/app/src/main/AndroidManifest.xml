@@ -55,7 +55,7 @@
             android:launchMode="singleTop"
             android:theme="@style/Theme.OpenPocketCine.Starting"
             android:screenOrientation="user"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -70,13 +70,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/opc_media_file_paths" />
         </provider>
-        <!-- Manual Sentry init only after consent + DSN. Never auto-start. -->
-        <meta-data
-            android:name="io.sentry.auto-init"
-            android:value="false" />
-        <meta-data
-            android:name="io.sentry.proguard-uuid"
-            android:value="${sentryProguardUuid}" />
     </application>
 
 </manifest>

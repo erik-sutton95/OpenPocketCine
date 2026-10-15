@@ -1,3 +1,4 @@
+import OpenCineCore
 import OpenCineDJIApple
 
 #if DEBUG
@@ -59,7 +60,9 @@ import OpenCineDJIApple
             tile.settings.whiteBalanceKelvin = 5600
             tile.settings.whiteBalanceTint = 0
                 tile.settings.focusMode = index == 2 ? nil : .continuous
-                tile.settings.timecode = index == 2 ? nil : "14:32:08:12"
+                tile.settings.timecodeValue =
+                    index == 2
+                    ? nil : CameraTimecode(hours: 14, minutes: 32, seconds: 8, frames: 12)
                 tile.settings.batteryPercent = [87, 72, 64, 91][index]
                 tile.settings.storageTotalMb = 128 * 1024
                 tile.settings.storageFreeMb = [96, 73, 52, 110][index] * 1024

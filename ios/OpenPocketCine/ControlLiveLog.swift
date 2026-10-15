@@ -8,4 +8,4 @@ let ControlLiveLog = DiagnosticJournal(
     subsystem: "com.opencapture.openpocketcine", category: "session",
     file: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
         .appendingPathComponent("control-live.log"),
-    redact: { PrivacyRedactor.redact($0) })
+    redact: { DJICameraNetwork.redact($0) })

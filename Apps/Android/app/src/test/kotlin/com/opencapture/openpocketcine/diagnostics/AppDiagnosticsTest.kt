@@ -16,7 +16,8 @@ class AppDiagnosticsTest {
             "com.opencapture.openpocketcine@${BuildConfig.VERSION_NAME}+${BuildConfig.VERSION_CODE}",
             host.currentRelease,
         )
-        assertEquals(if (BuildConfig.DEBUG) "development" else "production", host.environment)
+        // A local release build is local, never production; only a CI channel names another.
+        assertEquals(if (BuildConfig.DEBUG) "development" else "local", host.environment)
         assertEquals(BuildConfig.SOURCE_REVISION, host.sourceRevision)
         assertEquals(BuildConfig.SENTRY_DSN_ANDROID, host.reportingDsn)
         assertEquals("openpocketcine-android", host.reportingClient)

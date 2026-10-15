@@ -36,6 +36,33 @@ final class DJICameraSessionAdapterTests: XCTestCase {
         }
     }
 
+    func testAnglePreferenceIsDescribedAsEmulatedInTheCommonSnapshot() throws {
+        let usesAngle = OperatorPrefs.shutterUsesAngle
+        defer { OperatorPrefs.shutterUsesAngle = usesAngle }
+        OperatorPrefs.shutterUsesAngle = true
+        let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
+        defer { session.disconnect() }
+        let model = CameraModel.resolve(modelId: 0x22, name: "SIMULATED-Angle")
+        var status = CameraStatus()
+        status.shootingMode = Int(ShootingMode.video.rawValue)
+        status.expoMode = .manual
+        status.shutterDenom = 50
+        status.fps = 25
+        status.availableShutterDenoms = [25, 50, 100]
+        session.updateMultiview(
+            camera: DjiAppleSighting(
+                id: UUID(), name: "SIMULATED-Angle", model: model, modelId: 0x22),
+            driver: nil, status: status)
+        let angle = session.control.current
+        XCTAssertEqual(angle.capabilities[.shutter]?.semantics.implementation, .emulated)
+        XCTAssertEqual(angle.value(of: .shutter).value, .shutter(.angle(180)))
+        XCTAssertEqual(angle.value(of: .shutter).origin, .protocolDerived)
+        OperatorPrefs.shutterUsesAngle = false
+        let duration = session.control.current
+        XCTAssertEqual(duration.capabilities[.shutter]?.semantics.implementation, .native)
+        XCTAssertEqual(duration.value(of: .shutter).value, .shutter(.duration(Rational(1, 50))))
+    }
+
     // MARK: Layout (SHELL-01)
 
     /// The monitor lays out the integration's projection of the connected body; the app adds

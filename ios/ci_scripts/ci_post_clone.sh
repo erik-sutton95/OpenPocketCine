@@ -65,11 +65,11 @@ if [ -z "${FRAMEIO_CLIENT_ID:-}" ]; then
   echo "warning: FRAMEIO_CLIENT_ID not set — Frame.io login will be disabled in this build."
 fi
 
-# Sentry public DSN for the Cocoa SDK. xcconfig encoding lives in
-# tools/sentry-dsn-xcconfig.py so https:// is not treated as a comment.
+# Sentry public DSN for the Cocoa SDK. xcconfig encoding lives in OpenCine's
+# scripts/sentry/sentry-dsn-xcconfig.py so https:// is not treated as a comment.
 # Prefer SENTRY_DSN_IOS; SENTRY_DSN is the fallback. Never echo the value.
 if [ "${SENTRY_UPLOAD_ENABLED:-}" = "true" ]; then
-  python3 ./tools/sentry-dsn-xcconfig.py --out ios/OpenPocketCine/Reliability.local.xcconfig --require
+  python3 ../OpenCine/scripts/sentry/sentry-dsn-xcconfig.py --out ios/OpenPocketCine/Reliability.local.xcconfig --require
 else
-  python3 ./tools/sentry-dsn-xcconfig.py --out ios/OpenPocketCine/Reliability.local.xcconfig
+  python3 ../OpenCine/scripts/sentry/sentry-dsn-xcconfig.py --out ios/OpenPocketCine/Reliability.local.xcconfig
 fi

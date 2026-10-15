@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Require ios/Package.resolved to pin every remote package in ios/project.yml."""
+"""Require ios/Package.resolved to pin every remote package in ios/project.yml and in the
+OpenCine reporting adapter package the app links (it takes sentry-cocoa)."""
 
 from __future__ import annotations
 
@@ -11,9 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 YML = ROOT / "ios" / "project.yml"
 RESOLVED = ROOT / "ios" / "Package.resolved"
+OPENCINE = ROOT.parent / "OpenCine" / "Packages" / "OpenCineSentryApple" / "Package.swift"
 REMOTE_PACKAGE = re.compile(
     r"(?m)^  ([A-Za-z0-9_]+):\n    url: (\S+)\n    exactVersion: (\S+)\s*$"
 )
+OPENCINE_PACKAGE = re.compile(r'\.package\(url: "(\S+?)", exact: "(\S+)"\)')
 
 
 def fail(message: str) -> int:
@@ -73,8 +76,13 @@ def main() -> int:
         return fail(f"{RESOLVED} has no pins array")
 
     packages = REMOTE_PACKAGE.findall(YML.read_text())
+    if OPENCINE.is_file():
+        packages += [
+            (url.rsplit("/", 1)[-1], url, version)
+            for url, version in OPENCINE_PACKAGE.findall(OPENCINE.read_text())
+        ]
     if not packages:
-        return fail(f"{YML} has no remote exactVersion packages")
+        return fail(f"no remote exactVersion packages in {YML} or {OPENCINE}")
 
     by_location = pins_by_location(pins)
     missing: list[str] = []

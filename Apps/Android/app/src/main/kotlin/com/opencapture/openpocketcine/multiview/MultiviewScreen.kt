@@ -1,17 +1,16 @@
 package com.opencapture.openpocketcine.multiview
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.pairing.lastSSID
 
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.TextureView
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -79,9 +78,8 @@ private val StageCanvas = MonitorPalette.backgroundDeep
  * persistent tile per camera, the network popup, the camera picker and borrowed Live View.
  */
 @Composable
-fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
+fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> Unit) {
     val context = LocalContext.current
-    val session = remember { MultiviewSession(context) }
     val scope = rememberCoroutineScope()
     var adding by remember { mutableStateOf<MultiviewSession.Tile?>(null) }
     var showNetwork by remember { mutableStateOf(false) }
@@ -94,16 +92,8 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
         scope.launch { if (session.closeStage()) close.value() }
     }
 
-    val activity = LocalActivity.current
-    DisposableEffect(session) {
-        session.start()
-        showNetwork = !session.networkConfigured
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose {
-            if (!model.keepScreenAwake) activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            session.dispose()
-        }
-    }
+    // The stage lives in the model (started by openMultiview, disposed by closeMultiview).
+    LaunchedEffect(session) { showNetwork = !session.networkConfigured }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle, session) {
         val observer = LifecycleEventObserver { _, event ->
@@ -162,7 +152,8 @@ fun MultiviewScreen(model: AppModel, onClose: () -> Unit) {
     val overlayOpen = showNetwork || adding != null || session.closing || cameraSettings
     val haptics = LocalOperatorHaptics.current
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(StageCanvas)) {
+    // Drawn over the shell: no touch falls through to the camera home underneath.
+    BoxWithConstraints(Modifier.fillMaxSize().background(StageCanvas).pointerInput(Unit) { detectTapGestures {} }) {
         val layout = MultiviewPresentationLayout.compute(
             width = maxWidth.value, height = maxHeight.value, safeArea = safe,
             arrangement = session.layout.arrangement, selected = session.focusedIndex,

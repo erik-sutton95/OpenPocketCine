@@ -3,6 +3,7 @@
 package com.opencapture.openpocketcine.media
 
 import com.opencapture.monitorui.MonitorConfirmPopup
+import com.opencapture.opencine.media3.Media3PlaybackOwner
 import com.opencapture.opencine.cameracontrols.chromeClickable
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.colorMode
@@ -15,7 +16,7 @@ import com.opencapture.openpocketcine.feed.rememberMonitorBackdropFeed
 import com.opencapture.monitorui.MonitorMaterial
 import com.opencapture.monitorui.monitorMaterial
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import com.opencapture.opencine.appkit.MonitorBitmapDecoder
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -112,16 +113,12 @@ import com.opencapture.opencine.appkit.LocalOperatorHaptics
 import com.opencapture.openpocketcine.MonitorGlass
 import com.opencapture.monitorui.MonitorIcon
 import com.opencapture.openpocketcine.OperatorPrefs
-import com.opencapture.openpocketcine.assists.AssistOptionsPopup
 import com.opencapture.opencine.cameracontrols.AudioAssist
 import com.opencapture.opencine.cameracontrols.AssistAudioOverlay
 import com.opencapture.monitorui.MonitorScopeRect
 import com.opencapture.opencine.appkit.MonitorAssistState
-import com.opencapture.openpocketcine.assists.LiveAssistLayer
 import com.opencapture.monitorui.MonitorAssistTool
 import com.opencapture.opencine.cameracontrols.MirrorAssist
-import com.opencapture.openpocketcine.assists.PlaybackAssistBar
-import com.opencapture.openpocketcine.assists.scopePanelChrome
 import com.opencapture.openpocketcine.feed.rememberLiveFeedEffectsPlan
 import com.opencapture.opencine.vocabulary.PlaybackLutColor
 import kotlinx.coroutines.Dispatchers
@@ -149,22 +146,26 @@ import com.opencapture.opencine.media.MonitorAudioMeterLevels
 @Composable
 fun MediaPhotoViewer(model: AppModel, file: MediaFile, controller: MediaLibraryController, onClose: () -> Unit,
     coverPresented: Boolean = false, onDeliver: (MediaFile) -> Unit = {},
+    opening: MonitorMediaGalleryOpen<MediaFile>? = null,
 ) {
     val library = controller.library
-    val admission = remember(library, file.id) { library.actionToken }
-    val source = remember(library, file.id) { model.shell.state.value.monitor?.id }
-    val record = controller.record(file)
-    if (record == null || !library.isCurrent(admission)) { Box(Modifier.fillMaxSize().background(Color.Black)); return }
+    // A supplied gallery opening retains its original record and source token.
+    val admission = opening?.admission ?: remember(library, file.id) { library.actionToken }
+    val source = remember(library, opening?.id, file.id) { model.shell.state.value.monitor?.id }
+    val record = opening?.record ?: controller.record(file)
+    if (record == null) {
+        com.opencapture.opencine.cameracontrols.MonitorOperatorMediaUnavailable(close = onClose); return
+    }
     val loaders = com.opencapture.opencine.appkit.MonitorMediaPictureLoaders<MediaFile, Bitmap>(
         cached = { request ->
             if (!request.isCurrent()) null else (controller.localFile(request.record.payload) ?: controller.thumbnailFile(request.record.payload))?.let { location ->
-                withContext(Dispatchers.IO) { BitmapFactory.decodeFile(location.absolutePath) }
+                withContext(Dispatchers.IO) { MonitorBitmapDecoder.decode(location, MonitorBitmapDecoder.PAGE_EDGE) }
             }
         }, source = { request ->
             if (!request.isCurrent()) null else {
                 val location = controller.cacheForPlayback(request.record.payload)
                 if (location == null || !request.isCurrent()) null
-                else withContext(Dispatchers.IO) { BitmapFactory.decodeFile(location.absolutePath) }
+                else withContext(Dispatchers.IO) { MonitorBitmapDecoder.decode(location, MonitorBitmapDecoder.PAGE_EDGE) }
             }
         })
     val operations = com.opencapture.opencine.appkit.MonitorMediaGalleryOperations<MediaFile>(
@@ -182,16 +183,18 @@ fun MediaPhotoViewer(model: AppModel, file: MediaFile, controller: MediaLibraryC
 fun MediaPlayerScreen(files: List<MediaFile>, startingAt: MediaFile, controller: MediaLibraryController,
     model: AppModel, onClose: () -> Unit, onDeliver: (MediaFile) -> Unit = {},
     coverPresented: Boolean = false,
+    opening: MonitorMediaGalleryOpen<MediaFile>? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var composition by remember(controller) { mutableStateOf<PocketAndroidPlaybackOwner?>(null) }
+    var composition by remember(controller) { mutableStateOf<Media3PlaybackOwner<MediaFile, PocketPlaybackLook>?>(null) }
     val owner = remember(controller) {
         com.opencapture.opencine.appkit.MonitorOperatorMediaModel<MediaFile, PocketPlaybackLook>(controller.library,
             scope = scope, makeAdmittedPlayback = { _, admission ->
                 composition?.close()
                 if (!admission.isCurrent()) null else {
-                    val next = PocketAndroidPlaybackOwner(context, controller)
+                    val next = Media3PlaybackOwner(context, controller.library, controller::playbackCandidates,
+                        controller::resolvePlaybackLook, controller::playbackAdmission) { it.fps?.toDouble() }
                     if (!admission.isCurrent()) { next.close(); null } else {
                         composition = next
                         if (!admission.isCurrent()) { next.close(); null } else next.playback
@@ -202,13 +205,15 @@ fun MediaPlayerScreen(files: List<MediaFile>, startingAt: MediaFile, controller:
     val outer by owner.state.collectAsState()
     val state = outer.playback?.state?.collectAsState()?.value
     val active = state?.active?.payload ?: startingAt
-    val initial = remember(owner, startingAt.id) { controller.record(startingAt)?.let { record ->
+    val initial = remember(owner, opening?.id, startingAt.id) { opening ?: controller.record(startingAt)?.let { record ->
         com.opencapture.opencine.appkit.MonitorMediaGalleryOpen(record,
             (if (files.any { it.id == startingAt.id }) files else listOf(startingAt)).mapNotNull(controller::record),
             controller.library.actionToken)
     } }
     DisposableEffect(owner) { onDispose { owner.closePlayback(); composition?.close() } }
-    if (initial == null) { Box(Modifier.fillMaxSize().background(Color.Black)) { Text(MediaOperatorCopy.CLIP_NOT_CACHED) }; return }
+    if (initial == null) {
+        com.opencapture.opencine.cameracontrols.MonitorOperatorMediaUnavailable(close = onClose); return
+    }
     val status by model.session.chromeStatus.collectAsState()
     val color = state?.look?.source?.colorMode ?: -1
     val effects = rememberLiveFeedEffectsPlan(model.assist, model.lutSelection, status,
@@ -218,7 +223,7 @@ fun MediaPlayerScreen(files: List<MediaFile>, startingAt: MediaFile, controller:
     val resolvedColor = PlaybackLutColor.resolve(clip = color, live = status.colorMode,
         last = OperatorPrefs.lastMonitorColorMode(context))
     val picker = base.lookPicker?.let {
-        com.opencapture.opencine.cameracontrols.AssistLutPicker(it.copy, it.selection, it.onSelect, it.profile, resolvedColor)
+        com.opencapture.opencine.cameracontrols.AssistLutPicker(it.copy, it.selection, it.onSelect, it.library, it.profile, resolvedColor)
     }
     val assists = com.opencapture.opencine.cameracontrols.MonitorOperatorAssistSource(base.host, base.scopes,
         base.scopeStackMoved, picker, preview = { tool ->
@@ -241,7 +246,11 @@ fun MediaPlayerScreen(files: List<MediaFile>, startingAt: MediaFile, controller:
                         controller.cacheGrade(file).isProxyOnly -> com.opencapture.opencine.media.MonitorPlaybackAvailability.PROXY
                         else -> com.opencapture.opencine.media.MonitorPlaybackAvailability.CAMERA
                     }, progress = controller.downloadProgress[file.path]?.toDouble(),
-                    buffered = composition?.native?.player?.bufferedPosition?.takeIf { it >= 0 }?.let { it / 1000.0 },
+                    bufferedThroughSeconds = composition?.takeIf { current ->
+                        val playback = owner.state.value.playback
+                        playback != null && playback === current.playback && playback.state.value.ready &&
+                            playback.state.value.active?.asset?.id == record.asset.id
+                    }?.let { current -> current.native.bufferedThroughSeconds(current.playback.state.value.token) },
                     transfer = state?.look?.transfer)
             }, nativeAudio = { player -> composition?.takeIf { it.playback === player }?.audio },
             close = onClose, share = { record -> onDeliver(record.payload) }) { player, plan, geometry ->

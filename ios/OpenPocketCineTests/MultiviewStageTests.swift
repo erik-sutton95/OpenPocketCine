@@ -1,3 +1,4 @@
+import OpenCineCore
 import OpenPocketViewCore
 import XCTest
 import OpenCineDJIApple
@@ -33,9 +34,10 @@ import OpenCineDJIApple
             tile.camera = DjiAppleSighting(
                 id: UUID(), name: name,
                 model: .resolve(modelId: nil, name: name), modelId: nil)
-            tile.settings.timecode = nil
+            tile.settings.timecodeValue = nil
             XCTAssertNil(tile.timecodeReadout)
-            tile.settings.timecode = "01:02:03:04"
+            tile.settings.timecodeValue =
+                CameraTimecode(hours: 1, minutes: 2, seconds: 3, frames: 4)
             XCTAssertEqual(tile.timecodeReadout, name.contains("Nano") ? nil : "01:02:03")
         }
     }

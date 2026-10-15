@@ -96,139 +96,8 @@ extension UIImage.Orientation {
     }
 }
 
-enum MediaCategoryTab: String, CaseIterable, Identifiable {
-    case all = "All"
-    case videos = "Videos"
-    case photos = "Photos"
-    case favorites = "Favorites"
-
-    var id: String { rawValue }
-
-    var opcIcon: MonitorIcon {
-        switch self {
-        case .all: .layoutGrid
-        case .videos: .film
-        case .photos: .image
-        case .favorites: .star
-        }
-    }
-
-    var headerTitle: String {
-        switch self {
-        case .all: "All clips"
-        case .videos: "Videos"
-        case .photos: "Photos"
-        case .favorites: "Favorites"
-        }
-    }
-
-    var libraryTab: MediaLibraryTab {
-        switch self {
-        case .all: .all
-        case .videos: .videos
-        case .photos: .photos
-        case .favorites: .favorites
-        }
-    }
-}
-
-enum MediaBrowserLayout: String, CaseIterable {
-    case grid
-    case list
-
-    var toggleIcon: MonitorIcon {
-        switch self {
-        case .grid: .layoutList
-        case .list: .layoutGrid
-        }
-    }
-
-    var accessibilityLabel: String {
-        switch self {
-        case .grid: "List view"
-        case .list: "Grid view"
-        }
-    }
-}
-
-enum MediaThumbnailSize: String, CaseIterable, Identifiable {
-    case small, medium, large
-    var id: String { rawValue }
-
-    var gridMinimum: CGFloat {
-        switch self {
-        case .small: 148
-        case .medium: 210
-        case .large: 280
-        }
-    }
-
-    var gridMaximum: CGFloat {
-        switch self {
-        case .small: 200
-        case .medium: 300
-        case .large: 380
-        }
-    }
-
-    var gridIconSize: CGFloat {
-        switch self {
-        case .small: 9
-        case .medium: 12
-        case .large: 15
-        }
-    }
-
-    var accessibilityLabel: String {
-        switch self {
-        case .small: "Small thumbnails"
-        case .medium: "Medium thumbnails"
-        case .large: "Large thumbnails"
-        }
-    }
-}
-
-enum MediaSortOrder: String, CaseIterable {
-    case newest, oldest, name, rating
-
-    var menuLabel: String {
-        switch self {
-        case .newest: "Newest"
-        case .oldest: "Oldest"
-        case .name: "Name"
-        case .rating: "Rating"
-        }
-    }
-
-    var next: MediaSortOrder {
-        switch self {
-        case .newest: .oldest
-        case .oldest: .name
-        case .name: .rating
-        case .rating: .newest
-        }
-    }
-
-    var librarySort: MediaLibrarySort {
-        switch self {
-        case .newest: .newest
-        case .oldest: .oldest
-        case .name: .name
-        case .rating: .rating
-        }
-    }
-}
-
 enum MediaClipPresentation {
     static let resolutionLevels = MonitorMediaResolutionLevel.standard.filter { $0.minimumWidth <= 3840 && $0.minimumWidth != 2880 }
-    static func resolutionLabel(_ value: String?) -> String? { MonitorMediaGalleryLabels.resolution(value, levels: resolutionLevels) }
-    static func dateLabel(_ key: String) -> String { MonitorMediaGalleryLabels.date(key) }
-    static func metadataLine(file: MediaFile, durationOverride: String? = nil) -> String {
-        MonitorMediaGalleryLabels.metadata(resolution: file.resolution,
-            bytes: MediaClipFormatting.byteLabel(file.sizeBytes),
-            duration: file.kind == .video ? durationOverride ?? MediaClipFormatting.durationLabel(seconds: file.durationSeconds) : nil,
-            levels: resolutionLevels)
-    }
 }
 
 typealias MediaLibraryCopy = MonitorMediaGalleryCopy
@@ -275,34 +144,27 @@ struct MediaLibraryView: View {
                     isCurrent: context.isCurrent, onDuration: context.duration)
             })
             .fullScreenCover(item: $presented) { request in
-                if library.isCurrent(request.admission) {
-                    let record = request.record
-                    let file = session.libraryFile(record)
-                    if (record.facts.presentationKind ?? record.asset.kind) == .photo {
-                        MediaPhotoViewer(file: file, admission: request.admission).environment(model)
-                    } else {
-                        MediaPlayerView(files: request.playlist.map { record in session.libraryFile(record) }, startingAt: file).environment(model)
-                    }
+                if (request.record.facts.presentationKind ?? request.record.asset.kind) == .photo {
+                    MediaPhotoViewer(opening: request, library: library, session: session).environment(model)
+                } else {
+                    MediaPlayerView(opening: request).environment(model)
                 }
             }
-            .overlay {
-                if let state = model.delivery.overlayState {
-                    VStack {
-                        MediaDeliveryOverlay(state: state) { model.delivery.cancel() }
-                            .padding(.horizontal, 20).padding(.top, 8)
-                        Spacer()
-                    }.allowsHitTesting(true)
-                }
-            }
+            .overlay { MonitorOperatorDeliveryChrome(model: model.delivery.lifetime, scope: .surface, remoteDisplayName: "Frame.io") }
             .overlay {
                 if let deliveryFiles {
                     MediaDeliveryPopupOverlay(files: deliveryFiles) { self.deliveryFiles = nil }
                 }
             }
-            .sheet(item: model.delivery.sharePresentation) { payload in
-                MediaShareSheet(urls: payload.urls) { model.delivery.completeSharePresentation(id: payload.id) }
-            }
-            .onChange(of: library.lifetimeToken) { _, _ in presented = nil; deliveryFiles = nil }
+            .onChange(of: library.lifetimeToken) { _, _ in deliveryFiles = nil }
+            #if DEBUG && targetEnvironment(simulator)
+                .task(id: library.displayedRecords.first?.asset.id) {
+                    // `ReviewLaunch(screen: .playback)`: open the first staged clip as a tap would.
+                    guard MonitorUIReview.opensFirstClip, let record = library.displayedRecords.first else { return }
+                    MonitorUIReview.opensFirstClip = false
+                    presented = .init(record: record, playlist: library.displayedRecords, admission: library.actionToken)
+                }
+            #endif
     }
     private func dismiss() {
         if let onClose { onClose() } else { model.homePanel = nil }
@@ -415,20 +277,18 @@ private struct MediaCatalogThumbnail: View {
     }
 }
 
-/// Home overlay host. Live chrome may present `MediaLibraryView` / `SettingsRootView` directly.
+/// Legal documents over home, shown only while one is open. Settings and media are the
+/// shell's own covers.
 struct AppPanelHost: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.monitorWindowGeometry) private var windowGeometry
 
     var body: some View {
         switch model.homePanel {
-        case .settings: ShellCoverPage(cover: .settings)
-        case .media: ShellCoverPage(cover: .media)
         case .privacy: LegalDocumentView(kind: .privacy)
         case .terms: LegalDocumentView(kind: .terms)
         case .licenses: LegalDocumentView(kind: .licenses)
         case .notice: LegalDocumentView(kind: .notice)
-        case nil: EmptyView()
+        case .settings, .media, nil: EmptyView()
         }
     }
 }

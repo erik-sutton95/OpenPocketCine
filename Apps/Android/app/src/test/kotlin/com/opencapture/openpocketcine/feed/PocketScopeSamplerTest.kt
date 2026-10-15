@@ -1,66 +1,69 @@
 package com.opencapture.openpocketcine.feed
 
-import com.opencapture.opencine.media.ScopeHistogramDisplay
-import com.opencapture.opencine.media.ScopePoint
-import com.opencapture.opencine.media.ScopeSamples
-import com.opencapture.opencine.media.VectorscopeRaster
-import com.opencapture.opencine.runtime.InspectorPreviewAdmission
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.opencapture.opencine.media.MonitorTransfer
 import com.opencapture.opencine.media.MonitorLUTCube
+import com.opencapture.opencine.runtime.InspectorPreviewAdmission
+import com.opencapture.opencine.media.WaveformIre
+import com.opencapture.opencine.media.ScopePoint
+import com.opencapture.opencine.media.ScopeSamples
+import com.opencapture.opencine.media.ScopeHistogramDisplay
+import com.opencapture.opencine.media.ScopeSampler
+import com.opencapture.opencine.media.MonitorTransfer
+import com.opencapture.opencine.media.VectorscopeRaster
+import com.opencapture.opencine.dji.DjiScopeExposureCeiling as ScopeExposureCeiling
 
 class PocketScopeSamplerTest {
     @Test
     fun tapSizeMatchesIosNearestNeighbour() {
-        val (w, h) = PocketScopeSampler.tapSize(1280, 720)
+        val (w, h) = ScopeSampler.tapSize(1280, 720)
         assertEquals(213, w)
         assertEquals(120, h)
-        assertEquals(1_000_000_000L / 25, PocketScopeSampler.BASE_MIN_INTERVAL_NS)
-        assertEquals(1_000_000_000L / 10, PocketScopeSampler.DENSE_MIN_INTERVAL_NS)
-        assertEquals(PocketScopeSampler.BASE_MIN_INTERVAL_NS, PocketScopeSampler.minIntervalNs(1))
-        assertEquals(PocketScopeSampler.BASE_MIN_INTERVAL_NS, PocketScopeSampler.minIntervalNs(2))
-        assertEquals(PocketScopeSampler.DENSE_MIN_INTERVAL_NS, PocketScopeSampler.minIntervalNs(3))
-        assertTrue(PocketScopeSampler.minIntervalNs(1) < PocketScopeSampler.minIntervalNs(3))
-        assertEquals(3.0, PocketScopeSampler.thermalMultiplier(3))
-        assertEquals(5.0, PocketScopeSampler.thermalMultiplier(4))
+        assertEquals(1_000_000_000L / 25, ScopeSampler.BASE_MIN_INTERVAL_NS)
+        assertEquals(1_000_000_000L / 10, ScopeSampler.DENSE_MIN_INTERVAL_NS)
+        assertEquals(ScopeSampler.BASE_MIN_INTERVAL_NS, ScopeSampler.minIntervalNs(1))
+        assertEquals(ScopeSampler.BASE_MIN_INTERVAL_NS, ScopeSampler.minIntervalNs(2))
+        assertEquals(ScopeSampler.DENSE_MIN_INTERVAL_NS, ScopeSampler.minIntervalNs(3))
+        assertTrue(ScopeSampler.minIntervalNs(1) < ScopeSampler.minIntervalNs(3))
+        assertEquals(3.0, ScopeSampler.thermalMultiplier(3))
+        assertEquals(5.0, ScopeSampler.thermalMultiplier(4))
         assertEquals(
-            3 * PocketScopeSampler.BASE_MIN_INTERVAL_NS,
-            PocketScopeSampler.minIntervalNs(1, 3.0),
+            3 * ScopeSampler.BASE_MIN_INTERVAL_NS,
+            ScopeSampler.minIntervalNs(1, 3.0),
         )
         // 15 Hz next to a 25 fps well is a 2-frame hold. WAVE-only must
         // tap every typical SoftAP picture; dense 3+ stays the 10 Hz back-off.
-        assertEquals(25, scheduledTaps(frames = 25, fps = 25, PocketScopeSampler.minIntervalNs(1)))
+        assertEquals(25, scheduledTaps(frames = 25, fps = 25, ScopeSampler.minIntervalNs(1)))
         // 10 Hz on a 40 ms picture clock lands every third frame (deadline skip).
-        assertEquals(9, scheduledTaps(frames = 25, fps = 25, PocketScopeSampler.minIntervalNs(3)))
+        assertEquals(9, scheduledTaps(frames = 25, fps = 25, ScopeSampler.minIntervalNs(3)))
     }
 
     @Test fun chromeSampleFollowsThePictureWhenBackdropNeedsATap() {
         assertEquals(
-            PocketScopeSampler.BASE_MIN_INTERVAL_NS,
-            PocketScopeSampler.chromeSampleIntervalNs(0, 1.0, backdropDemand = true),
+            ScopeSampler.BASE_MIN_INTERVAL_NS,
+            ScopeSampler.chromeSampleIntervalNs(0, 1.0, backdropDemand = true),
         )
         assertEquals(
             InspectorPreviewAdmission.MIN_INTERVAL_NS,
-            PocketScopeSampler.chromeSampleIntervalNs(0, 1.0, backdropDemand = false),
+            ScopeSampler.chromeSampleIntervalNs(0, 1.0, backdropDemand = false),
         )
         assertEquals(
-            PocketScopeSampler.minIntervalNs(2, 1.0),
-            PocketScopeSampler.chromeSampleIntervalNs(2, 1.0, backdropDemand = true),
+            ScopeSampler.minIntervalNs(2, 1.0),
+            ScopeSampler.chromeSampleIntervalNs(2, 1.0, backdropDemand = true),
         )
         // Heat and 3+ scopes slow scope work, never the glass tap.
         assertEquals(
-            PocketScopeSampler.BASE_MIN_INTERVAL_NS,
-            PocketScopeSampler.chromeSampleIntervalNs(0, 5.0, backdropDemand = true),
+            ScopeSampler.BASE_MIN_INTERVAL_NS,
+            ScopeSampler.chromeSampleIntervalNs(0, 5.0, backdropDemand = true),
         )
         assertEquals(
-            PocketScopeSampler.BASE_MIN_INTERVAL_NS,
-            PocketScopeSampler.chromeSampleIntervalNs(3, 3.0, backdropDemand = true),
+            ScopeSampler.BASE_MIN_INTERVAL_NS,
+            ScopeSampler.chromeSampleIntervalNs(3, 3.0, backdropDemand = true),
         )
         assertEquals(
-            PocketScopeSampler.minIntervalNs(3, 3.0),
-            PocketScopeSampler.chromeSampleIntervalNs(3, 3.0, backdropDemand = false),
+            ScopeSampler.minIntervalNs(3, 3.0),
+            ScopeSampler.chromeSampleIntervalNs(3, 3.0, backdropDemand = false),
         )
     }
 
@@ -90,7 +93,7 @@ class PocketScopeSamplerTest {
             bytes[i + 3] = 255.toByte()
         }
         val bundle =
-            PocketScopeSampler.sample(
+            ScopeSampler.sample(
                 bytes = bytes,
                 width = width,
                 height = height,
@@ -99,7 +102,7 @@ class PocketScopeSamplerTest {
                 includePoints = true,
                 includeVectorPoints = true,
                 iso = 1600,
-            )
+                ceiling = ScopeExposureCeiling.UNOBSERVED)
         val pixels = ((width + 1) / 2) * ((height + 1) / 2)
         assertEquals(pixels, bundle.samples.points.size)
         assertEquals(pixels, bundle.samples.histogramRed.sum())
@@ -122,16 +125,17 @@ class PocketScopeSamplerTest {
                 histogramBlue = IntArray(256).also { it[16] = 40; it[247] = 10 },
                 points = emptyList(),
             )
-        val remapped = WaveformIre.remapHistogram(samples.histogramRed, MonitorTransfer.DLOG2, 1600)
+        val remapped = WaveformIre.remapHistogram(samples.histogramRed, MonitorTransfer.DLOG2, 1600, ceiling = ScopeExposureCeiling.UNOBSERVED)
         assertEquals(50, remapped.sum())
         assertEquals(40, remapped[0])
         assertEquals(10, remapped[255])
         val display =
-            PocketScopeSampler.histogramDisplay(
+            ScopeSampler.histogramDisplay(
                 samples,
                 ScopeHistogramDisplay.EMPTY,
                 MonitorTransfer.DLOG2,
                 1600,
+                ceiling = ScopeExposureCeiling.UNOBSERVED,
             )
         assertTrue(display.red[0] > 0f)
         assertTrue(display.red[255] > 0f)

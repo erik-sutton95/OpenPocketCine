@@ -9,6 +9,25 @@ import OpenCineDJIApple
 
 @MainActor
 final class CapturePanelRenderComparisonTests: XCTestCase {
+    func testUndeclaredNativeIsoServicesAreNotOfferedByTheCaptureHost() {
+        let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
+        let model = AppModel(session: session)
+        XCTAssertFalse(model.captureCapabilities.nativeIsoHop, "No native ISO pair was declared")
+        XCTAssertFalse(
+            model.captureCapabilities.isoLimit, "No writable Auto ISO ceiling was declared")
+        session.updateMultiview(
+            camera: DjiAppleSighting(
+                id: UUID(), name: "SIMULATED",
+                model: .resolve(modelId: 0x22, name: "SIMULATED"), modelId: 0x22),
+            driver: nil, status: CameraStatus())
+        XCTAssertFalse(
+            model.captureCapabilities.nativeIsoHop,
+            "A body identity does not declare its native ISO pair")
+        XCTAssertFalse(
+            model.captureCapabilities.isoLimit,
+            "A body identity does not declare a writable ceiling")
+    }
+
     /// main's strip held ISO and shutter at the camera's report until it answered.
     func testStripShowsTheReportedValueWhileARequestIsPending() {
         XCTAssertFalse(AppModel().captureStripShowsPendingEdits)

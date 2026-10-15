@@ -52,7 +52,9 @@ class HarnessTests(unittest.TestCase):
     def test_accepts_repository_generated_installed_build_identity(self):
         for platform in ("ios", "android"):
             identity = subprocess.check_output(
-                [sys.executable, str(Path(h.__file__).parents[1] / "build-identity.py"),
+                [sys.executable,
+                 str(Path(h.__file__).parents[2].parent / "OpenCine/scripts/sentry/build-identity.py"),
+                 "--root", str(Path(h.__file__).parents[2]),
                  "--platform", platform, "--configuration", "test"], text=True).strip()
             raw = {"platform": platform, "build": {"source_revision": "abcdef0-dirty",
                    "build_identity": identity, "camera_models": ["pocket4pro"]}}

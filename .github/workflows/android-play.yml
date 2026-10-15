@@ -165,7 +165,7 @@ jobs:
         env:
           SENTRY_UPLOAD_ENABLED: ${{ vars.SENTRY_UPLOAD_ENABLED }}
           SENTRY_DSN_ANDROID: ${{ secrets.SENTRY_DSN_ANDROID }}
-        run: bash ./tools/sentry-require-android-dsn.sh
+        run: bash ../OpenCine/scripts/sentry/sentry-require-android-dsn.sh
 
       - name: Bundle release
         working-directory: Apps/Android
@@ -174,6 +174,8 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           SENTRY_DSN_ANDROID: ${{ secrets.SENTRY_DSN_ANDROID }}
+          # Play testing tracks: reports name this build internal, never production.
+          OPC_DISTRIBUTION_CHANNEL: internal
         run: |
           set -euo pipefail
           ./gradlew bundleRelease -PversionCode="${VERSION_CODE}"
@@ -214,9 +216,9 @@ jobs:
             echo "Sentry symbol upload skipped (SENTRY_UPLOAD_ENABLED is not true)."
             exit 0
           fi
-          bash ./tools/sentry-install.sh --install-dir "${RUNNER_TEMP}/sentry-cli"
+          bash ../OpenCine/scripts/sentry/sentry-install.sh --install-dir "${RUNNER_TEMP}/sentry-cli"
           export PATH="${RUNNER_TEMP}/sentry-cli:${PATH}"
-          python3 tools/sentry-upload.py --platform android
+          python3 ../OpenCine/scripts/sentry/sentry-upload.py --platform android --project openpocketcine-android
 
       - name: Upload to Play
         if: ${{ steps.creds.outputs.play_api == 'true' }}

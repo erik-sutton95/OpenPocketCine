@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.multicam.RecordAll
+import com.opencapture.opencine.multicam.RecordPlan
 import com.opencapture.opencine.appkit.MultiviewRecordContext
 import com.opencapture.opencine.core.CommandRejection
 import com.opencapture.opencine.core.MonitorEntryID
@@ -74,8 +76,8 @@ class MultiviewMulticamTest {
 
     private fun view(tiles: List<FakeTile>) = MultiviewMulticam(tiles.map { it.multicam() })
 
-    private fun plan(tiles: List<FakeTile>, policy: TargetPolicy = MultiviewMulticam.RECORD_POLICY) =
-        view(tiles).plan(tiles.map { it.id }, stop = tiles.any { it.state.observation?.first == true }, policy = policy)
+    private fun plan(tiles: List<FakeTile>) =
+        view(tiles).plan(tiles.map { it.id }, stop = tiles.any { it.state.observation?.first == true })
 
     @Test
     fun reconnectDuringConfirmationInvalidatesTheApprovedPlan() = runTest {
@@ -116,13 +118,13 @@ class MultiviewMulticamTest {
         val tiles = tiles(3)
         tiles[2].state = tiles[2].state.copy(recordingAvailable = false) // its record report went stale
         val strict = plan(tiles)
-        assertEquals(TargetPolicy.STRICT, MultiviewMulticam.RECORD_POLICY)
+        assertEquals(TargetPolicy.STRICT, strict.policy)
         assertTrue(strict.isRefused)
         val exclusion = Exclusion(tiles[2].id, ExclusionReason.Rejected(CommandRejection.RecordingStateUnknown))
         assertEquals(listOf(exclusion), strict.exclusions)
         assertEquals("Waiting for a camera's record state.", MultiviewRecordContext(strict).refusal)
 
-        val subset = plan(tiles, TargetPolicy.ELIGIBLE_SUBSET)
+        val subset = view(tiles).let { RecordPlan.make(RecordDirection.START, TargetPolicy.ELIGIBLE_SUBSET, tiles.map { it.id }, it.group, it.state) }
         assertTrue(subset.isExecutable)
         assertEquals(listOf(exclusion), subset.exclusions)
         assertEquals(tiles.take(2).map { it.control.id }, subset.targets.map { it.session })
@@ -150,13 +152,13 @@ class MultiviewMulticamTest {
         assertEquals(TargetOutcome.Confirmed, result.outcome(b.id, view(tiles).group))
         assertEquals(TargetOutcome.TimedOut, result.outcome(c.id, view(tiles).group))
         assertEquals(TargetOutcome.Rejected(CommandRejection.CameraRefused), result.outcome(d.id, view(tiles).group))
-        assertEquals("Recording", recordingNote(TargetOutcome.Confirmed, start = true))
-        assertEquals("No confirmation · check camera", recordingNote(TargetOutcome.TimedOut, start = true))
+        assertEquals("Recording", RecordAll.note(TargetOutcome.Confirmed, RecordDirection.START))
+        assertEquals("No confirmation · check camera", RecordAll.note(TargetOutcome.TimedOut, RecordDirection.START))
         assertEquals(
             "Recording command rejected · check camera",
-            recordingNote(TargetOutcome.Rejected(CommandRejection.CameraRefused), start = true),
+            RecordAll.note(TargetOutcome.Rejected(CommandRejection.CameraRefused), RecordDirection.START),
         )
-        assertEquals("2 of 4 confirmed · check camera tiles", groupRecordingNote(result, allMatch = false))
+        assertEquals("2 of 4 confirmed · check camera tiles", RecordAll.summary(result, allMatch = false))
         advanceTimeBy(5_000)
         // Only the four starts went out: no stop for a or b because c and d failed.
         assertEquals(listOf(listOf(true), listOf(true), listOf(true), listOf(true)), tiles.map { it.sent })

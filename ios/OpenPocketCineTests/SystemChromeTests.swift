@@ -11,12 +11,10 @@ final class SystemChromeTests: XCTestCase {
         XCTAssertEqual(
             Bundle.main.object(forInfoDictionaryKey: "UIViewControllerBasedStatusBarAppearance")
                 as? Bool, true)
-        // `object(forInfoDictionaryKey:)` drops `~ipad` variants on iPhone.
-        // The merged Info-Frameio.plist is what iPad reads at launch.
-        let source = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("OpenPocketCine/Info-Frameio.plist")
+        // `object(forInfoDictionaryKey:)` drops `~ipad` variants on iPhone. The merged
+        // Info.plist inside the built app is what iPad reads at launch; the source tree
+        // path does not exist inside a device bundle.
+        let source = Bundle.main.bundleURL.appendingPathComponent("Info.plist")
         let raw = try XCTUnwrap(NSDictionary(contentsOf: source))
         XCTAssertEqual(raw["UIStatusBarHidden"] as? Bool, true)
         XCTAssertEqual(raw["UIStatusBarHidden~ipad"] as? Bool, true)

@@ -68,7 +68,7 @@ final class PlaybackAssistTests: XCTestCase {
 
     @MainActor
     func testPlaybackAudioWithoutASourceRemainsUnknown() async {
-        let runtime = MediaPlaybackAudioSession.makeMeter()
+        let runtime = MonitorPlaybackAudioMeterRuntime(onTapFailure: MediaPlaybackAudioSession.tapFailure)
         let polled = expectation(description: "actual native audio owner polls its absent source")
         var observed: AudioMeterLevels?
         var received = false

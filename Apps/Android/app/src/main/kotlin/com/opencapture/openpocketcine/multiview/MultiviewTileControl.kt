@@ -1,8 +1,8 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.multicam.RecordAll
 import com.opencapture.opencine.core.CameraSession
 import com.opencapture.opencine.core.CameraSessionID
-import com.opencapture.opencine.core.CommandRejection
 import com.opencapture.opencine.core.ControlAuthority
 import com.opencapture.opencine.core.MonitorEntryDescriptor
 import com.opencapture.opencine.core.MonitorEntryID
@@ -12,12 +12,8 @@ import com.opencapture.opencine.core.StreamID
 import com.opencapture.opencine.core.TelemetrySource
 import com.opencapture.opencine.multicam.MulticamGroup
 import com.opencapture.opencine.multicam.MulticamSnapshot
-import com.opencapture.opencine.multicam.RecordDirection
 import com.opencapture.opencine.multicam.RecordPlan
 import com.opencapture.opencine.multicam.RecordResult
-import com.opencapture.opencine.multicam.RecordSubmissionException
-import com.opencapture.opencine.multicam.TargetOutcome
-import com.opencapture.opencine.multicam.TargetPolicy
 import com.opencapture.opencine.dji.ControlWireEvent
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
 import com.opencapture.opencine.dji.PocketControlPort
@@ -170,7 +166,7 @@ internal class MulticamTile(
 
 /**
  * The engine's view of the tiles with a camera, in slot order, at one instant (iOS
- * `multicamGroup` / `multicamSnapshot`). Pocket qualifies strict group record.
+ * `multicamGroup` / `multicamSnapshot`), recorded with the shared [RecordAll] policy.
  */
 internal class MultiviewMulticam(tiles: List<MulticamTile>) {
     val group = MulticamGroup().apply {
@@ -194,47 +190,10 @@ internal class MultiviewMulticam(tiles: List<MulticamTile>) {
     ) // now: the shared host clock (MonotonicInstant.now(), MULTI-03 F1)
     val sessions: Map<CameraSessionID, CameraSession> = tiles.associate { it.control.id to it.control }
 
-    fun plan(requested: List<MonitorEntryID>, stop: Boolean, policy: TargetPolicy = RECORD_POLICY): RecordPlan =
-        RecordPlan.make(if (stop) RecordDirection.STOP else RecordDirection.START, policy, requested, group, state)
+    /** The shared record-all plan (Core [RecordAll]): stop when any requested camera records. */
+    fun plan(requested: List<MonitorEntryID>, stop: Boolean): RecordPlan =
+        RecordAll.plan(requested, { stop }, group, state)
 
-    /**
-     * Revalidates and sends an approved plan, then waits for every camera's outcome. `null`: the
-     * plan is stale and nothing was sent. A partial result is never compensated.
-     */
-    suspend fun submit(plan: RecordPlan): RecordResult? =
-        try {
-            plan.submit(group, state, sessions).finished(sessions)
-        } catch (_: RecordSubmissionException) {
-            null
-        }
-
-    companion object {
-        val RECORD_POLICY = TargetPolicy.STRICT
-    }
-}
-
-/** The tile note for one camera's record outcome. */
-internal fun recordingNote(outcome: TargetOutcome, start: Boolean): String? =
-    when (outcome) {
-        TargetOutcome.Confirmed -> if (start) "Recording" else "Recording stopped"
-        is TargetOutcome.Rejected ->
-            if (outcome.rejection == CommandRejection.CameraRefused) {
-                "Recording command rejected · check camera"
-            } else {
-                "Not sent · check camera"
-            }
-        is TargetOutcome.Failed -> "Not sent · check camera"
-        TargetOutcome.Superseded -> null
-        else -> "No confirmation · check camera"
-    }
-
-/** Record all's summary: every target confirmed and every camera in the requested state. */
-internal fun groupRecordingNote(result: RecordResult, allMatch: Boolean): String {
-    val start = result.plan.direction == RecordDirection.START
-    val targets = result.plan.targets.size
-    return if (result.confirmed == targets && allMatch) {
-        if (start) "Recording on ${result.confirmed} cameras" else "Recording stopped"
-    } else {
-        "${result.confirmed} of $targets confirmed · check camera tiles"
-    }
+    /** Revalidates and sends an approved plan; `null`: stale, nothing was sent. */
+    suspend fun submit(plan: RecordPlan): RecordResult? = RecordAll.run(plan, group, state, sessions)
 }

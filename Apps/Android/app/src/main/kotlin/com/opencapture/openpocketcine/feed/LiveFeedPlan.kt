@@ -1,22 +1,26 @@
 package com.opencapture.openpocketcine.feed
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
+import com.opencapture.monitorui.MonitorAssistTool
+import com.opencapture.opencine.appkit.MonitorAssistState
+import com.opencapture.opencine.cameracontrols.rememberMonitorFeedEffectsPlans
+import com.opencapture.opencine.appkitnative.MonitorLiveFeedIntegration
+import com.opencapture.opencine.cameracontrols.rememberMonitorFeedEffectsPlan
+import com.opencapture.opencine.dji.DjiCameraLUTProfile
+import com.opencapture.opencine.dji.DjiMonitorColorProfile
+import com.opencapture.opencine.dji.DjiScopeExposureCeiling
+import com.opencapture.opencine.media.FeedEffectsRenderPlan
+import com.opencapture.opencine.runtime.GlesPresentationOptions
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.openpocketcine.OperatorPrefs
-import com.opencapture.opencine.appkit.MonitorAssistState
-import com.opencapture.opencine.vocabulary.PlaybackLutColor
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import com.opencapture.monitorui.MonitorAssistTool
-import com.opencapture.opencine.media.FeedEffectsRenderPlan
+import com.opencapture.openpocketcine.bridge.SwiftCore
+import com.opencapture.openpocketcine.diagnostics.DiagnosticCenter
 
-/** Bakes the live GPU look off the UI thread when operator state or color mode changes. */
+/** The shared native feeds on the DJI clip ceiling and colour inference, this app's guard, journal and upscaler. */
+internal val LiveFeed = MonitorLiveFeedIntegration(DjiScopeExposureCeiling.PROFILE, appVulkanCrashGuard,
+    DiagnosticCenter::log, { GlesPresentationOptions(OperatorPrefs.feedUpscaler(it)) }, DjiMonitorColorProfile::inferredTransfer)
+
+/** The live, playback or inspector plan through the connected body's DJI looks. */
 @Composable
 internal fun rememberLiveFeedEffectsPlan(
     assist: MonitorAssistState,
@@ -26,106 +30,9 @@ internal fun rememberLiveFeedEffectsPlan(
     cameraName: String?,
     playback: Boolean = false,
     clipColorMode: Int = -1,
-    previewTool: com.opencapture.monitorui.MonitorAssistTool? = null,
+    previewTool: MonitorAssistTool? = null,
 ): FeedEffectsRenderPlan {
-    val context = LocalContext.current
-    var plan by remember { mutableStateOf(FeedEffectsRenderPlan.IDENTITY) }
-    val lutOn = assist.lutOn
-    val peaking = assist.peaking
-    val falseColor = assist.falseColor
-    val zebra = assist.zebra
-    val clean = assist.clean
-    val splitComparison = assist.splitComparison
-    val splitVertical = assist.splitVertical
-    val peakingColor = assist.peakingColor
-    val peakingSense = assist.peakingSensitivity
-    val falseScale = assist.falseColorScale
-    val falseRec709 = assist.falseColorRec709
-    val zebraHighlight = assist.zebraHighlight
-    val zebraMidtone = assist.zebraMidtone
-    val zebraHighlightIRE = assist.zebraHighlightIRE
-    val zebraMidtoneIRE = assist.zebraMidtoneIRE
-    val zebraHighlightColor = assist.zebraHighlightColor
-    val zebraMidtoneColor = assist.zebraMidtoneColor
-    val pinned = assist.pinned
-    val waveform = assist.waveform
-    val parade = assist.parade
-    val histogram = assist.histogram
-    val vectorscope = assist.vectorscope
-    val trafficLights = assist.trafficLights
-    val ndMeter = assist.ndMeter
-    val crushClip = assist.crushClipCompensation
-    val playbackTools = assist.playbackVisibleTools
-    val lutExposureStops = assist.lutExposureStops
-    LaunchedEffect(
-        playback,
-        previewTool,
-        playbackTools,
-        assist.inspectorScopeDemand,
-        lutOn,
-        lutSelection,
-        peaking,
-        falseColor,
-        zebra,
-        clean,
-        splitComparison,
-        splitVertical,
-        peakingColor,
-        peakingSense,
-        falseScale,
-        falseRec709,
-        zebraHighlight,
-        zebraMidtone,
-        zebraHighlightIRE,
-        zebraMidtoneIRE,
-        zebraHighlightColor,
-        zebraMidtoneColor,
-        pinned,
-        waveform,
-        parade,
-        histogram,
-        vectorscope,
-        trafficLights,
-        ndMeter,
-        crushClip,
-        lutExposureStops,
-        status.colorMode,
-        status.shootingMode,
-        status.iso,
-        family,
-        cameraName,
-        clipColorMode,
-    ) {
-        val app = context.applicationContext
-        val isPhoto = !playback && status.isPhoto
-        if (!playback && previewTool == null && status.colorMode >= 0 && !isPhoto) {
-            OperatorPrefs.setLastMonitorColorMode(app, status.colorMode)
-        }
-        val colorMode =
-            if (playback) {
-                PlaybackLutColor.resolve(
-                    clip = clipColorMode,
-                    live = status.colorMode,
-                    last = OperatorPrefs.lastMonitorColorMode(app),
-                )
-            } else {
-                status.monitorColorMode
-            }
-        plan =
-            withContext(Dispatchers.Default) {
-                FeedEffectsRenderPlanFactory.create(
-                    context = app,
-                    assist = assist,
-                    lutSelection = lutSelection,
-                    colorMode = colorMode,
-                    iso = status.iso,
-                    family = family,
-                    cameraName = cameraName,
-                    playback = playback,
-                    previewTool = previewTool,
-                    isPhoto = isPhoto,
-                )
-            }
-    }
-    return plan
+    val plans = rememberMonitorFeedEffectsPlans(SwiftCore)
+    return rememberMonitorFeedEffectsPlan(plans, OperatorPrefs, assist, lutSelection, status,
+        DjiCameraLUTProfile.make(family, cameraName), playback, clipColorMode, previewTool)
 }

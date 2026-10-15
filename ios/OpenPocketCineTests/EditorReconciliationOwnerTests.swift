@@ -25,10 +25,15 @@ final class EditorReconciliationOwnerTests: XCTestCase {
         status.shutterDenom = 48
         status.availableShutterDenoms = [24, 48, 60, 120, 240]
         status.whiteBalance = .auto
+        var model = CameraModel.resolve(modelId: nil, name: "OsmoPocket3-Test")
+        var profile = model.captureProfile ?? CameraCaptureProfile()
+        // SIMULATED support for the existing ceiling SET/GET ownership scenarios.
+        profile.nativeISO = .init(ceiling: true)
+        model.captureProfile = profile
         session.updateMultiview(
             camera: DjiAppleSighting(
                 id: UUID(), name: "OsmoPocket3-Test",
-                model: CameraModel.resolve(modelId: nil, name: "OsmoPocket3-Test"), modelId: nil),
+                model: model, modelId: nil),
             driver: DjiAppleDatalink(port: 9004, tcpPoke: false, pairingToken: ""), status: status)
         return session
     }

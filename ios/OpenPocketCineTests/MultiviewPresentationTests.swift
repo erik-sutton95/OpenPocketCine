@@ -27,7 +27,15 @@ import OpenCineDJIApple
         status.storageFreeMb = 0
         let values = MultiviewTelemetryPresentation(settings: status)
         XCTAssertEqual(values.battery, "0%")
-        XCTAssertEqual(values.storage, "0 GB")
+        XCTAssertEqual(values.storage, "0 B")
+    }
+
+    /// A5-11: 60e9 free of 128e9 bytes, as the DJI wire carries them (MiB), reads as every surface.
+    func testSharedStorageCaseReadsSixtyGigabytes() {
+        var status = CameraStatus()
+        status.storageFreeMb = 57_220
+        status.storageTotalMb = 122_070
+        XCTAssertEqual(MultiviewTelemetryPresentation(settings: status).storage, "60 GB")
     }
 
     func testGroupResultAndRecoveryAreVisibleWithoutInventingConnectedCameras() {

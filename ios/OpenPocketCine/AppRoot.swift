@@ -7,6 +7,7 @@ import OpenCineAppKitApple
 import OpenCineCameraControls
 import OpenCineCore
 import OpenCineFrameIO
+import OpenCineFrameIOApple
 import OpenCineRelay
 import OpenCineRelayApple
 import OpenCineWatch
@@ -390,9 +391,9 @@ final class AppModel {
         }
     }
     var portraitRailExpanded = false
-    var frameioConnecting = false
-    var frameioUser: FrameioUser?
-    var delivery = MediaDeliveryCoordinator()
+    /// The app-scoped delivery owner: runs survive leaving the gallery or the player.
+    let delivery = MonitorDeliveryCoordinator()
+    let frameio = FrameioAccountModel(namespace: .openPocketCine)
     var relayHost = WatcherRelayHost(
         versionMismatchReason: WatcherRelayJoin.versionMismatchReason,
         logSubsystem: "com.opencapture.openpocketcine", journal: { ControlLiveLog.line($0) })
@@ -450,99 +451,28 @@ final class AppModel {
             locked: session.isLocked, busy: session.controlBusy, phase: session.phase,
             target: session.control.target)
     }
-    @ObservationIgnored private var internetHopState = FrameioInternetHop()
-    @ObservationIgnored private var internetHopRevision: UInt64 = 0
-    @ObservationIgnored private var internetHopNotifying = false
-    var internetHop: FrameioInternetHop {
-        get { access(keyPath: \.internetHop); return internetHopState }
-        set {
-            internetHopState = newValue
-            internetHopRevision &+= 1
-            guard !internetHopNotifying else { return }
-            internetHopNotifying = true
-            defer { internetHopNotifying = false }
-            var delivered: UInt64
-            repeat {
-                delivered = internetHopRevision
-                withMutation(keyPath: \.internetHop) {}
-            } while delivered != internetHopRevision
-        }
-    }
-    var internetHopActive: Bool { internetHop.token != nil }
-    @ObservationIgnored private var internetHopSSID: String?
-    @ObservationIgnored private var internetHopSession: CameraSession?
-    @ObservationIgnored private var internetHopSessionID: CameraSessionID?
-    @ObservationIgnored private var internetHopReturnToken: FrameioInternetHop.Token?
-    @ObservationIgnored private var internetHopReturnSessionID: CameraSessionID?
+    /// The one internet hop off the camera's Wi-Fi (A2-16): the DJI joiner leaves and rejoins,
+    /// and only the session that left is ever rejoined.
+    @ObservationIgnored lazy var internetHop = MonitorInternetHop<PocketHopRoute>(
+        port: .init(
+            onCameraNetwork: { DjiAppleWiFiJoiner.isCameraPathReady() },
+            leave: { route, _ in
+                if let ssid = route.ssid { DjiAppleWiFiJoiner.leave(ssid: ssid) }
+                return route
+            },
+            admitsReturn: { [weak self] route in
+                guard let self else { return false }
+                return self.session === route.session && route.session.control.id == route.sessionID
+            },
+            rejoin: { route, _ in await route.session.rejoinSoftAPAfterInternetHop() }))
 
-    var isOnCameraAccessPoint: Bool { DjiAppleWiFiJoiner.isCameraPathReady() }
+    var isOnCameraAccessPoint: Bool { internetHop.onCameraNetwork }
 
-    @discardableResult func beginInternetHop() -> FrameioInternetHop.Token {
-        internetHopReturnToken = nil
-        internetHopReturnSessionID = nil
-        let capturedSession = session
-        let capturedID = capturedSession.control.id
-        let token = internetHop.begin()
-        guard internetHop.owns(token), session === capturedSession,
-            capturedSession.control.id == capturedID, internetHop.owns(token),
-            session === capturedSession else { return token }
-        internetHopSession = capturedSession
-        internetHopSessionID = capturedID
-        internetHopSSID = capturedSession.joinedSSID ?? capturedSession.cachedSSID
-        if let ssid = internetHopSSID { DjiAppleWiFiJoiner.leave(ssid: ssid) }
-        return token
-    }
-
-    func transferInternetHop(_ token: FrameioInternetHop.Token) -> FrameioInternetHop.Token? {
-        internetHop.transfer(token)
-    }
-
-    func endInternetHop(_ token: FrameioInternetHop.Token) {
-        guard internetHop.owns(token) else { return }
-        let returningSession = internetHopSession
-        let returningSessionID = internetHopSessionID
-        internetHopSession = nil
-        internetHopSessionID = nil
-        internetHopSSID = nil
-        internetHopReturnToken = token
-        internetHopReturnSessionID = returningSessionID
-        guard internetHop.end(token), internetHopReturnToken == token, internetHop.token == nil else { return }
-        Task { [weak self, weak returningSession] in
-            guard let self, let returningSession,
-                self.consumeInternetHopReturn(token, session: returningSession) else { return }
-            await returningSession.rejoinSoftAPAfterInternetHop()
-        }
-    }
-
-    /// The queued native return consumes exactly one captured route/source admission.
-    @discardableResult func consumeInternetHopReturn(_ token: FrameioInternetHop.Token, session returningSession: CameraSession) -> Bool {
-        guard internetHop.token == nil, internetHopReturnToken == token,
-            session === returningSession, let expected = internetHopReturnSessionID,
-            returningSession.control.id == expected, internetHopReturnToken == token,
-            internetHop.token == nil, session === returningSession else { return false }
-        internetHopReturnToken = nil
-        internetHopReturnSessionID = nil
-        return true
-    }
-
-    func waitForInternetPath(timeoutSeconds: Double, token: FrameioInternetHop.Token) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
-        while Date() < deadline {
-            if Task.isCancelled || !internetHop.owns(token) { return false }
-            if !isOnCameraAccessPoint, await Self.canReachInternet() {
-                return !Task.isCancelled && internetHop.owns(token)
-            }
-            try? await Task.sleep(for: .milliseconds(400))
-        }
-        return false
-    }
-
-    private static func canReachInternet() async -> Bool {
-        guard let url = URL(string: "https://ims-na1.adobelogin.com") else { return false }
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"
-        request.timeoutInterval = 3
-        return (try? await URLSession.shared.data(for: request)) != nil
+    /// Where a hop leaves from: the current session and the camera network it joined.
+    var hopRoute: PocketHopRoute {
+        PocketHopRoute(
+            session: session, sessionID: session.control.id,
+            ssid: session.joinedSSID ?? session.cachedSSID)
     }
 
     var currentDispMode: MonitorDisplayMode { operatorSession.mode }
@@ -822,10 +752,9 @@ final class AppModel {
         disconnect()
     }
 
-    /// OpenZCine `NativeAppModel.setDisplayMode` — feed swipe jumps, it does not cycle.
+    /// A feed swipe jumps to a mode through the display owner (refused while locked); it does not cycle.
     func setDisplayMode(clean: Bool) {
-        guard assist.clean != clean else { return }
-        assist.clean = clean
+        operatorSession.select(clean ? .clean : .live)
     }
 
     func activateWatchRelay() {
@@ -890,7 +819,8 @@ final class AppModel {
                 status: session.status,
                 phase: session.phase,
                 cameraName: session.connectedCamera?.name ?? "",
-                feedLive: session.decoder.lastPresentedAt != nil))
+                feedLive: session.decoder.lastPresentedAt != nil,
+                storage: shell.control.snapshot?.storage ?? .unknown))
     }
 
     func watchToggleRecord() -> WatchCommandResult {
@@ -908,54 +838,42 @@ final class AppModel {
     private func watchShutter(photo: Bool, watchAdmission: RelayWatchCommandAdmission?)
         -> WatchCommandResult
     {
-        let recording = session.status.isRecording
-        if session.controlBusy || session.isBrowsingMedia {
-            return WatchCommandResult(
-                accepted: false, isRecording: recording, error: WatchRelayCopy.busy)
-        }
-        guard case .live = session.phase else {
-            return WatchCommandResult(
-                accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
-        }
-        let isPhoto = session.status.isPhoto
-        if photo, !isPhoto {
-            return WatchCommandResult(
-                accepted: false, isRecording: recording, error: WatchRelayCopy.switchToPhoto)
-        }
-        if !photo, isPhoto {
-            return WatchCommandResult(
-                accepted: false, isRecording: recording, error: WatchRelayCopy.switchToVideo)
-        }
-        // Aimed at what the watch showed: another session or link is refused, not commanded.
-        guard let target = watchTarget else {
-            publishWatchState()
-            return WatchCommandResult(
-                accepted: false, isRecording: recording, error: WatchRelayCopy.cameraChanged)
-        }
-        let receipt: CommandReceipt?
-        if let watchAdmission {
-            guard watchAdmission.isCurrent, let shown = watchCommandSource,
-                shown.admits(session.commandOwner)
-            else {
-                publishWatchState()
-                return WatchCommandResult(
-                    accepted: false, isRecording: recording, error: WatchRelayCopy.cameraChanged)
-            }
-            let admission = DJICommandAdmission(
-                owner: shown.owner, isCurrent: { shown.isCurrent && watchAdmission.isCurrent })
-            receipt = session.control.shutter(aimedAt: target, admission: admission)
-        } else {
-            receipt = session.control.shutter(aimedAt: target)
-        }
-        if let receipt, receipt.didNotAct {
-            // Explicit start/stop; unknown record state is refused.
-            publishWatchState()
-            return WatchCommandResult(
-                accepted: false, isRecording: recording,
-                error: receipt.targetChanged ? WatchRelayCopy.cameraChanged : WatchRelayCopy.busy)
-        }
+        let result = WatchCommandPolicy.answer(
+            photo ? .capture : .toggleRecord,
+            facts: {
+                WatchCommandFacts(
+                    isRecording: session.status.isRecording,
+                    isBusy: session.controlBusy || session.isBrowsingMedia,
+                    isLive: session.phase == .live, isPhotography: session.status.isPhoto)
+            },
+            shutter: {
+                // Keep the target and supplied first-send admission captured by the shown source.
+                guard let target = watchTarget else { return .targetChanged }
+                guard !session.isLocked, session.controlLinkReady else { return .notSent }
+                let receipt: CommandReceipt?
+                if let watchAdmission {
+                    guard watchAdmission.isCurrent, let shown = watchCommandSource,
+                        shown.admits(session.commandOwner)
+                    else { return .targetChanged }
+                    let admission = DJICommandAdmission(
+                        owner: shown.owner,
+                        isCurrent: { shown.isCurrent && watchAdmission.isCurrent })
+                    receipt = session.control.shutter(aimedAt: target, admission: admission)
+                } else {
+                    receipt = session.control.shutter(aimedAt: target)
+                }
+                if let receipt {
+                    if receipt.didNotAct {
+                        return receipt.targetChanged ? .targetChanged : .notSent
+                    }
+                    return .sent
+                }
+                // The legacy photo port returns Void. Its queued operation owns controlBusy;
+                // a refused photo clears it, so nil alone is never evidence of submission.
+                return photo && session.controlBusy ? .sent : .notSent
+            })
         publishWatchState()
-        return WatchCommandResult(accepted: true, isRecording: recording, error: nil)
+        return result
     }
 }
 
@@ -979,15 +897,7 @@ struct AppRoot: View {
     var body: some View {
         ZStack {
             MonitorTheme.background.ignoresSafeArea()
-            #if targetEnvironment(simulator)
-                if MonitorMediaReview.isActive {
-                    MonitorMediaReviewView()
-                } else {
-                    primaryExperience
-                }
-            #else
-                primaryExperience
-            #endif
+            primaryExperience
 
             if model.showsLaunchSplash {
                 LaunchSplashOverlay(isVisible: Bindable(model).showsLaunchSplash)
@@ -1210,6 +1120,9 @@ struct LinkExperience: View {
             if old == .media, next != .media { model.session.endMediaBrowse() }
         }
         .ignoresSafeArea()
+        .overlay { MonitorOperatorDeliveryChrome(model: model.delivery.lifetime, scope: .root, remoteDisplayName: "Frame.io") }
+        // The app's one share sheet, above any gallery, player or photo cover (A2-52).
+        .monitorDeliverySharePresenter(model.delivery.lifetime)
         .background(StartupColors.background.ignoresSafeArea())
         .foregroundStyle(StartupColors.ink)
         .onAppear {

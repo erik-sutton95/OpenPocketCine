@@ -4,7 +4,6 @@ import com.opencapture.opencine.appkit.*
 import com.opencapture.opencine.dji.DjiAndroidMediaAssets
 import com.opencapture.opencine.dji.MediaManifest
 import com.opencapture.opencine.media.*
-import com.opencapture.openpocketcine.OperatorMediaCache
 import java.nio.file.Files
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
@@ -56,43 +55,7 @@ class PocketMediaLibraryOwnerTest {
         assertEquals(MediaAssetKind.VIDEO, cached.facts.presentationKind)
     }
 
-    @Test fun selectionReadsLiveOwnerAndOldSamePageKeyCannotSelectReplacement() = runTest {
-        val old = file(4)
-        val model = owner(listOf(old))
-        val bridge = PocketMediaSelectionBridge(model)
-        bridge.apply(true, setOf(old.id))
-        assertEquals(setOf(old.id), bridge.selectedIDs)
-        // Same rendered page ID and different true content-size identity.
-        val replacement = old.copy(sizeBytes = 8)
-        assertEquals(old.id, replacement.id)
-        val oldID = DjiAndroidMediaAssets.asset(old).id
-        val newRecord = codec().record(replacement)
-        assertNotEquals(oldID, newRecord.asset.id)
-        model.applyLocalRecords(MonitorMediaCatalogCapture(resetLibrary = false,
-            upserts = listOf(newRecord), removed = listOf(oldID)), model.actionToken)
-        bridge.apply(true, setOf(old.id))
-        assertTrue(model.state.value.selectedIDs.isEmpty())
-        val current = PocketMediaSelectionBridge(model)
-        current.apply(true, setOf(replacement.id))
-        assertEquals(setOf(replacement.id), current.selectedIDs)
-        current.apply(false, emptySet())
-        assertTrue(current.selectedIDs.isEmpty())
-        model.dispose()
-    }
-
-    @Test fun oldSelectionCallbackCannotChangeReopenedGallery() = runTest {
-        val item = file()
-        val model = owner(listOf(item))
-        val old = PocketMediaSelectionBridge(model)
-        model.close()
-        model.begin()
-        old.apply(true, setOf(item.id))
-        assertTrue(model.state.value.selectedIDs.isEmpty())
-        assertFalse(model.state.value.selecting)
-        model.dispose()
-    }
-
-    @Test fun settingsClearPreservesIndexAndRejectsPendingCanonicalCommit() = runTest {
+    @Test fun settingsClearKeepsClipListAndRejectsPendingCanonicalCommit() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val parent = Files.createTempDirectory("pocket-library-settings-").toFile()
         val root = MonitorMediaCacheRoot(parent)
@@ -114,9 +77,9 @@ class PocketMediaLibraryOwnerTest {
             }
         }
         started.await()
-        OperatorMediaCache.clearOwned(root) { error("Canonical root must not fall back") }
+        model.clearCache()
         assertEquals("index", directory.file("index.json").readText())
-        assertFalse(directory.file("color.json").exists())
+        assertEquals("old color", directory.file("color.json").readText())
         release.complete(Unit)
         assertTrue(pending.await().isFailure)
         assertFalse(directory.file("files/a").exists())
@@ -191,7 +154,7 @@ class PocketMediaLibraryOwnerTest {
         cache.rememberShotColor("take", 65, "camera")
         assertEquals(65, cache.readShotColor("take", "camera"))
         val outgoingGeneration = directory.generation
-        OperatorMediaCache.clearOwned(root) { error("Canonical root exists") }
+        directory.clear(preserving = listOf("index.json"))
         assertEquals(-1, cache.readShotColor("take", "camera"))
         cache.rememberShotColor("take", 65, "camera", outgoingGeneration)
         assertFalse(directory.file("color.json").exists())
@@ -218,22 +181,6 @@ class PocketMediaLibraryOwnerTest {
         model.dispose()
     }
 
-    @Test fun settingsClearSkipsProtectedRetirementAndMissingRootUsesOriginalFallback() = runTest {
-        val parent = Files.createTempDirectory("pocket-library-settings-").toFile()
-        val root = MonitorMediaCacheRoot(parent)
-        val protected = java.io.File(parent, ".retiring-camera-foreign").apply { mkdirs() }
-        java.io.File(protected, "keep").writeText("protected")
-        val directory = root.directory("camera")
-        directory.write("index".toByteArray(), "index.json")
-        directory.write("cached".toByteArray(), "files/a")
-        OperatorMediaCache.clearOwned(root) { error("Canonical root exists") }
-        assertEquals("protected", java.io.File(protected, "keep").readText())
-        assertEquals("index", directory.file("index.json").readText())
-        assertFalse(directory.file("files/a").exists())
-        var fallback = 0
-        OperatorMediaCache.clearOwned(MonitorMediaCacheRoot(java.io.File(parent, "missing"))) { fallback++ }
-        assertEquals(1, fallback)
-    }
     @Test fun actualCodecModelKeepsOriginalManifestCategoryFormatResolutionAndOrderGoldens() = runTest {
         val videos = listOf(
             MediaFile(path = "DCIM/DJI_001/DJI_20260814125250_0034_D.MP4", thumbPath = "new.scr", resolution = "3840x2160"),

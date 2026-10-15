@@ -17,9 +17,6 @@ class MediaCache(
     val root: com.opencapture.opencine.appkit.MonitorMediaCacheRoot =
         com.opencapture.opencine.appkit.MonitorMediaCacheRoot(File(filesDir, "OpenPocketCine/media")),
 ) {
-    private var colorMapCameraId: String? = null
-    private var colorMapCache: JSONObject? = null
-    private var colorMapGeneration: Long? = null
     fun directory(cameraId: String) = root.directory(cameraId)
     fun cacheRoot(cameraId: String): File = directory(cameraId).root
 
@@ -69,59 +66,23 @@ class MediaCache(
             hasProxy = localProxyFile(file, cameraId) != null,
         )
 
-    fun colorStoreFile(cameraId: String): File = File(cacheRoot(cameraId), "color.json")
-
     fun shotColor(path: String, cameraId: String, context: Context? = null): Int {
         migrateLegacyShotColors(cameraId, context)
-        val map = loadColorMap(cameraId)
-        return map.optInt(path, -1)
+        return readShotColor(path, cameraId)
     }
 
-    @Synchronized fun rememberShotColor(path: String, colorMode: Int, cameraId: String, expectedGeneration: Long? = null) {
-        if (colorMode < 0 || (expectedGeneration != null && directory(cameraId).generation != expectedGeneration)) return
-        val map = loadColorMap(cameraId)
-        map.put(path, colorMode)
-        persistColorMap(map, cameraId, expectedGeneration)
+    fun rememberShotColor(path: String, colorMode: Int, cameraId: String, expectedGeneration: Long? = null) {
+        val directory = directory(cameraId)
+        directory.shotColors.remember(path, colorMode, expectedGeneration ?: directory.generation)
     }
 
     /** Read-only preparation never migrates or recreates deleted metadata. */
-    @Synchronized fun readShotColor(path: String, cameraId: String): Int = loadColorMap(cameraId).optInt(path, -1)
-
-    @Synchronized private fun loadColorMap(cameraId: String): JSONObject {
-        val generation = directory(cameraId).generation
-        if (colorMapCameraId == cameraId && colorMapGeneration == generation) colorMapCache?.let { return it }
-        val dest = colorStoreFile(cameraId)
-        val map =
-            if (!dest.isFile) JSONObject()
-            else runCatching { JSONObject(dest.readText()) }.getOrDefault(JSONObject())
-        colorMapCameraId = cameraId
-        colorMapCache = map
-        colorMapGeneration = generation
-        return map
-    }
-
-    private fun persistColorMap(map: JSONObject, cameraId: String, expectedGeneration: Long? = null) {
-        val directory = directory(cameraId)
-        if (expectedGeneration != null && directory.generation != expectedGeneration) return
-        val writerGeneration = directory.generation
-        if (expectedGeneration != null && writerGeneration != expectedGeneration) return
-        directory.write(map.toString().toByteArray(Charsets.UTF_8), "color.json")
-        if (directory.generation != writerGeneration) return
-        colorMapCameraId = cameraId
-        colorMapCache = map
-        colorMapGeneration = writerGeneration
-    }
+    fun readShotColor(path: String, cameraId: String): Int = directory(cameraId).shotColors.color(path) ?: -1
 
     private fun migrateLegacyShotColors(cameraId: String, context: Context?) {
         val ctx = context ?: return
         val raw = OperatorPrefs.legacyClipShotColorJson(ctx) ?: return
-        val map = loadColorMap(cameraId)
-        val keys = raw.keys()
-        while (keys.hasNext()) {
-            val path = keys.next()
-            if (!map.has(path)) map.put(path, raw.optInt(path, -1))
-        }
-        persistColorMap(map, cameraId)
+        directory(cameraId).shotColors.adopt(raw.keys().asSequence().associateWith { raw.optInt(it, -1) })
         OperatorPrefs.clearLegacyClipShotColor(ctx)
     }
 

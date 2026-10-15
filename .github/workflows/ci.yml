@@ -53,7 +53,11 @@ jobs:
         run: ./scripts/check-repository-hygiene.sh
 
       - name: Sentry release configuration
-        run: bash ./tools/sentry-test.sh
+        # OpenCine's shared Sentry tooling, run against this app's Xcode Cloud archive hook.
+        run: |
+          OPC_APP_ROOT=. OPC_APP_NAME=OpenPocketCine bash ../OpenCine/scripts/sentry/sentry-test.sh
+          python3 tools/ios-package-resolved-check.py
+          bash scripts/ios-package-resolved-test.sh
 
       - name: Packaged iOS privacy regression
         run: python3 -m unittest discover -s tools -p 'test_ios_archive_privacy.py'
@@ -88,7 +92,7 @@ jobs:
           # production iOS paths change (docs/tester-notes.md). Test targets are not
           # in the archive either: a test-only branch has no operator-visible work to
           # describe, and the window is what testers have not been asked to try yet.
-          production_files="$(grep -E '^(Sources/|Tests/|ios/|Package\.swift$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/ios-release-notes|Tests/|ios/OpenPocketCine(UI)?Tests/|ios/ci_scripts/)' || true)"
+          production_files="$(grep -E '^(Sources/|Tests/|ios/|Package\.swift$|opencine-pins\.txt$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/ios-release-notes|Tests/|ios/OpenPocketCine(UI)?Tests/|ios/ci_scripts/)' || true)"
           if [[ -n "$production_files" ]]; then
             if ! grep -Fxq 'ios/TestFlight/WhatToTest.en-US.txt' <<< "$changed_files"; then
               echo "Update ios/TestFlight/WhatToTest.en-US.txt with the this-build window (docs/tester-notes.md)." >&2
@@ -116,7 +120,7 @@ jobs:
           # merges that source set. Matched per module rather than per name, so
           # any module added later is exempt on the same terms as app instead of
           # silently demanding notes.
-          production_files="$(grep -E '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Package\.swift$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/android-release-notes|Apps/Android/[^/]+/src/(test|androidTest|debug)/)' || true)"
+          production_files="$(grep -E '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Package\.swift$|opencine-pins\.txt$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/android-release-notes|Apps/Android/[^/]+/src/(test|androidTest|debug)/)' || true)"
           if [[ -n "$production_files" ]]; then
             if ! grep -Fxq 'Apps/Android/Play/WhatToTest.en-US.txt' <<< "$changed_files"; then
               echo "Update Apps/Android/Play/WhatToTest.en-US.txt with the this-build window (docs/tester-notes.md)." >&2
@@ -241,6 +245,50 @@ jobs:
           TEST_RUNNER_CI: "true"
         run: just native-check
 
+  conformance:
+    name: Shared conformance scenarios, iOS
+    needs: changes
+    # Hosted macOS, public repositories only, for the same reasons as `native`: it runs code from
+    # the pull request.
+    if: ${{ needs.changes.outputs.code == 'true' && !github.event.repository.private }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: latest-stable
+      - name: Install native tooling
+        run: brew install just xcodegen || true
+      - name: Check out pinned OpenCine next to the repository
+        run: scripts/checkout-opencine.sh
+      # OpenCine's scripts/ios-private-simulator.py: a new iPhone 16 Pro with accessibility enabled in
+      # its own preference store only, the setup every app's conformance job shares.
+      - name: Create a private simulator with accessibility enabled
+        run: |
+          mkdir -p "$RUNNER_TEMP/conformance-ios"
+          udid=$(../OpenCine/scripts/ios-private-simulator.py create \
+            "opc-pocket-conformance-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --report "$RUNNER_TEMP/conformance-ios/simulator-setup.json")
+          echo "CONFORMANCE_DEVICE_ID=$udid" >> "$GITHUB_ENV"
+      - name: Run the shared scenarios (OpenPocketCineUIReview)
+        run: just conformance-ios "$CONFORMANCE_DEVICE_ID" "$RUNNER_TEMP/conformance-ios/OpenPocketCineUIReview.xcresult"
+      - name: Delete the private simulator
+        if: always()
+        run: |
+          if [ -n "${CONFORMANCE_DEVICE_ID:-}" ]; then
+            ../OpenCine/scripts/ios-private-simulator.py delete "$CONFORMANCE_DEVICE_ID"
+          fi
+      - name: Retain conformance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conformance-ios-evidence
+          path: ${{ runner.temp }}/conformance-ios
+          retention-days: 7
+          if-no-files-found: warn
+
   android:
     name: Android
     needs: changes
@@ -314,7 +362,7 @@ jobs:
     # other job's result into one verdict. Path-filter skips and private-repo native/
     # android skips are success.
     if: always()
-    needs: [meta, changes, native, android, handbook]
+    needs: [meta, changes, native, conformance, android, handbook]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to have passed or been deliberately skipped

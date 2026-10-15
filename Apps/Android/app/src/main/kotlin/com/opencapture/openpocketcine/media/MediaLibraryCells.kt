@@ -1,8 +1,8 @@
 package com.opencapture.openpocketcine.media
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import com.opencapture.opencine.appkit.MonitorBitmapDecoder
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -64,7 +64,7 @@ internal fun androidx.compose.foundation.layout.BoxScope.MediaCatalogPicture(
     LaunchedEffect(controller, context.record.asset.id, context.admission, context.entry?.thumbnail?.path,
         context.entry?.original?.path, context.list) {
         if (!context.isCurrent) return@LaunchedEffect
-        val image = MediaThumbs.load(file, controller, maxPx = if (context.list) 480 else 640)
+        val image = MediaThumbs.load(file, controller, maxPx = if (context.list) MonitorBitmapDecoder.LIST_THUMBNAIL_EDGE else MonitorBitmapDecoder.THUMBNAIL_EDGE)
         if (!context.isCurrent) return@LaunchedEffect
         thumbnail = image
         val duration = MediaThumbs.durationLabel(file, controller)
@@ -118,20 +118,9 @@ object MediaThumbs {
         }
     }
 
-    private fun decode(file: File?, maxPx: Int): Bitmap? {
-        if (file == null) return null
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, bounds)
-        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, maxPx) }
-        return BitmapFactory.decodeFile(file.absolutePath, options)
-    }
+    private fun decode(file: File?, maxPx: Int): Bitmap? = file?.let { MonitorBitmapDecoder.decode(it, maxPx) }
 
-    private fun decodeBytes(data: ByteArray, maxPx: Int): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
-        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, maxPx) }
-        return BitmapFactory.decodeByteArray(data, 0, data.size, options)
-    }
+    private fun decodeBytes(data: ByteArray, maxPx: Int): Bitmap? = MonitorBitmapDecoder.decode(data, maxPx)
 
     private fun frameGrab(file: File?, maxPx: Int): Bitmap? {
         if (file == null) return null
@@ -140,13 +129,5 @@ object MediaThumbs {
             retriever.setDataSource(file.absolutePath)
             retriever.getFrameAtTime(200_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
         }.getOrNull().also { retriever.release() }
-    }
-
-    private fun sampleSize(w: Int, h: Int, maxPx: Int): Int {
-        if (w <= 0 || h <= 0) return 1
-        var sample = 1
-        val longest = maxOf(w, h)
-        while (longest / sample > maxPx) sample *= 2
-        return sample
     }
 }

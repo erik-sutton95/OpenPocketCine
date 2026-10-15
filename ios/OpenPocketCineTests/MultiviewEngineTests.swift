@@ -110,7 +110,8 @@ import OpenCineDJIApple
         for tile in session.recordingTiles {
             tile.settings.batteryPercent -= 3
             tile.settings.storageFreeMb -= 512
-            tile.settings.timecode = "14:32:09:00"
+            tile.settings.timecodeValue =
+                CameraTimecode(hours: 14, minutes: 32, seconds: 9, frames: 0)
             tile.settings.recordElapsedSec += 1
             tile.settings.whiteBalanceKelvin = 5_200
             tile.latestSettings = tile.settings

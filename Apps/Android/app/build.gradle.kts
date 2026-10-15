@@ -1,7 +1,7 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
+    // BuildConfig.SENTRY_DSN_ANDROID: the CI secret, else the ignored .local/reliability.properties.
+    id("com.opencapture.opencine.reporting")
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -32,7 +32,6 @@ android {
         testInstrumentationRunnerArguments["notClass"] =
             "com.opencapture.openpocketcine.FeedStressTest"
         buildConfigField("String", "SOURCE_REVISION", "\"unknown\"")
-        buildConfigField("String", "SENTRY_DSN_ANDROID", "\"\"")
 
         ndk {
             abiFilters += supportedAndroidAbi
@@ -131,6 +130,8 @@ android {
     }
 
     sourceSets {
+        getByName("androidTest").kotlin.srcDir(
+            gradle.includedBuild("opencine").projectDir.resolve("appkit-native/src/cacheOwnerProof/kotlin"))
         getByName("main").jniLibs.directories.apply {
             clear()
             add(swiftCoreJniLibsRoot.get().asFile.absolutePath)
@@ -164,26 +165,6 @@ val sourceRevisionField =
             com.android.build.api.variant.BuildConfigField("String", "\"$value\"", "git source revision")
         }
 
-// Non-empty SENTRY_DSN_ANDROID wins; otherwise optional ignored repo-root properties.
-val sentryDsnAndroidField =
-    providers.environmentVariable("SENTRY_DSN_ANDROID")
-        .orElse("")
-        .zip(
-            providers.of(LocalReliabilityDsnValueSource::class.java) {
-                parameters.propertiesFile.set(
-                    repositoryRoot.resolve(".local/reliability.properties"),
-                )
-            },
-        ) { env, file ->
-            val raw = env.trim().ifEmpty { file.trim() }
-            val escaped = raw.replace("\\", "\\\\").replace("\"", "\\\"")
-            com.android.build.api.variant.BuildConfigField(
-                "String",
-                "\"$escaped\"",
-                "optional Sentry Android DSN",
-            )
-        }
-
 // Windows CPython installs put `python` on PATH and no `python3`, so the POSIX
 // name aborts the build identity exec. `PYTHON` overrides both.
 val pythonExecutable: Provider<String> =
@@ -196,14 +177,14 @@ val pythonExecutable: Provider<String> =
 androidComponents {
     onVariants { variant ->
         variant.buildConfigFields?.put("SOURCE_REVISION", sourceRevisionField)
-        variant.buildConfigFields?.put("SENTRY_DSN_ANDROID", sentryDsnAndroidField)
         // Exec output participates in configuration-cache validation, so dirty
         // source edits cannot silently retain the preceding build identity.
         val identity = providers.exec {
             workingDir = repositoryRoot
             commandLine(
-                pythonExecutable.get(), repositoryRoot.resolve("tools/build-identity.py").absolutePath,
-                "--platform", "android", "--configuration",
+                pythonExecutable.get(),
+                repositoryRoot.resolve("../OpenCine/scripts/sentry/build-identity.py").absolutePath,
+                "--root", repositoryRoot.absolutePath, "--platform", "android", "--configuration",
                 "${variant.name}-$resolvedVersionName-$resolvedVersionCode-${gradle.gradleVersion}",
             )
         }.standardOutput.asText.map { value ->
@@ -264,18 +245,42 @@ tasks.named("preBuild").configure {
     dependsOn(stageSwiftCore)
 }
 
+// ML Kit instantiates its ComponentRegistrar classes reflectively; a shrunk bundle without their
+// constructors crashes face detection (OPENPOCKETCINE-ANDROID-18). Every bundleRelease checks the dex.
+val releaseBundle = layout.buildDirectory.file("outputs/bundle/release/app-release.aab")
+val verifyReleaseComponentRegistrars =
+    tasks.register<Exec>("verifyReleaseComponentRegistrars") {
+        group = "verification"
+        description = "Fail when R8 strips a ComponentRegistrar constructor from the release bundle."
+        dependsOn("bundleRelease")
+        inputs.file(releaseBundle)
+        environment("ANDROID_HOME", androidComponents.sdkComponents.sdkDirectory.get().asFile.absolutePath)
+        commandLine(
+            "bash",
+            repositoryRoot.resolve("../OpenCine/scripts/android-verify-component-registrars.sh").absolutePath,
+            releaseBundle.get().asFile.absolutePath,
+        )
+    }
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    finalizedBy(verifyReleaseComponentRegistrars)
+}
+
 dependencies {
+    debugImplementation("com.opencapture.opencine:platform:0.1.0-SNAPSHOT")
     implementation(libs.opencine.monitor.ui)
     // Cameras and pairing pages, the connection model and the saved-camera store (SHELL-02).
     implementation(libs.opencine.appkit)
     // Capture sheets, live chrome and gimbal views over the camera vocabulary (camera-controls).
     implementation("com.opencapture.opencine:camera-controls:0.1.0-SNAPSHOT")
+    implementation("com.opencapture.opencine:appkit-native:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:core:0.1.0-SNAPSHOT")
     implementation("com.opencapture.opencine:media:0.1.0-SNAPSHOT")
     // Live-view MediaCodec decoder (HevcDecoder), shared with OpenInstaCine.
     implementation("com.opencapture.opencine:decoder:0.1.0-SNAPSHOT")
-    // Native source/publication/inspector and GLES/Vulkan owners; app supplies Media3 adapter.
+    // Native source/publication/inspector and GLES/Vulkan owners.
     implementation("com.opencapture.opencine:native-runtime:0.1.0-SNAPSHOT")
+    // Shared Media3 player recipe, port, audio meter tap and playback owner.
+    implementation("com.opencapture.opencine:media3:0.1.0-SNAPSHOT")
     // DJI BLE link, datalink, wire models, gimbal programs and the CameraSession adapter, with the
     // DjiNative JNI facade this app's Swift library implements.
     implementation("com.opencapture.opencine:dji:0.1.0-SNAPSHOT")
@@ -298,34 +303,18 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.okhttp)
     implementation(libs.mlkit.face.detection)
-    implementation(libs.sentry.android)
+    // The shared reporting adapter: appkit's reporting sink, transport and problem report upload on
+    // the Sentry SDK (sentry-android comes with it, at the version OpenCine pins).
+    implementation("com.opencapture.opencine:appkit-sentry:0.1.0-SNAPSHOT")
 
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation(libs.kotlin.test.junit)
+    androidTestImplementation("com.opencapture.opencine:app-ui-testing:0.1.0-SNAPSHOT")
     androidTestImplementation(testFixtures("com.opencapture.opencine:core:0.1.0-SNAPSHOT"))
 
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.json)
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.okhttp.mockwebserver)
-}
-
-abstract class LocalReliabilityDsnValueSource :
-    ValueSource<String, LocalReliabilityDsnValueSource.Params> {
-    interface Params : ValueSourceParameters {
-        @get:org.gradle.api.tasks.Optional
-        @get:InputFile
-        @get:PathSensitive(PathSensitivity.NONE)
-        val propertiesFile: RegularFileProperty
-    }
-
-    override fun obtain(): String {
-        val file = parameters.propertiesFile.orNull?.asFile ?: return ""
-        if (!file.isFile) return ""
-        val props = Properties()
-        file.inputStream().use { props.load(it) }
-        return props.getProperty("SENTRY_DSN_ANDROID")?.trim().orEmpty()
-    }
 }

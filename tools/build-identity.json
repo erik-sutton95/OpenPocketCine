@@ -1,0 +1,81 @@
+{
+  "ios": {
+    "app": [
+      "Sources",
+      "Package.swift",
+      "Package.resolved",
+      "ios/OpenPocketCine",
+      "ios/Config",
+      "ios/project.yml",
+      "ios/ci_scripts"
+    ],
+    "OpenCine": [
+      "Package.swift",
+      "Package.resolved",
+      "scripts/sentry/build-identity.py",
+      "scripts/sentry/stamp-source-revision.sh",
+      "Sources/OpenCineCore",
+      "Sources/OpenCineMedia",
+      "Sources/OpenCineMotion",
+      "Sources/OpenCineRelay",
+      "Sources/OpenCineRelayApple",
+      "Sources/OpenCineFrameIO",
+      "Sources/OpenCineApple",
+      "Sources/OpenCineWatch",
+      "Sources/OpenCineMulticam",
+      "Sources/MonitorPresentation",
+      "Sources/MonitorUI",
+      "Sources/OpenCineAppKit",
+      "Sources/OpenCineAppKitApple",
+      "Packages/OpenCineSentryApple",
+      "Sources/OpenCineCameraVocabulary",
+      "Sources/OpenCineCameraControls",
+      "Sources/OpenCineDJI",
+      "Sources/OpenCineDJIApple"
+    ]
+  },
+  "android": {
+    "app": [
+      "Sources",
+      "Package.swift",
+      "Package.resolved",
+      "Apps/Android",
+      "scripts/android-stage-swift-core.sh"
+    ],
+    "OpenCine": [
+      "Package.swift",
+      "Package.resolved",
+      "scripts/android-stage-swift-core.sh",
+      "scripts/sentry/build-identity.py",
+      "Sources/OpenCineCore",
+      "Sources/OpenCineMedia",
+      "Sources/OpenCineMotion",
+      "Sources/OpenCineRelay",
+      "Sources/MonitorPresentation",
+      "Sources/OpenCineCameraVocabulary",
+      "Sources/OpenCineDJI",
+      "Sources/OpenCineDJIAndroid",
+      "Sources/OpenCineJNISupport",
+      "Sources/OpenCineJNI",
+      "Android/build.gradle.kts",
+      "Android/settings.gradle.kts",
+      "Android/gradle.properties",
+      "Android/gradle",
+      "Android/gradlew",
+      "Android/gradlew.bat",
+      "Android/core",
+      "Android/media",
+      "Android/platform",
+      "Android/decoder",
+      "Android/native-runtime",
+      "Android/vulkan",
+      "Android/dji",
+      "Android/multicam",
+      "Android/monitor-ui",
+      "Android/appkit",
+      "Android/appkit-sentry",
+      "Android/camera-vocabulary",
+      "Android/camera-controls"
+    ]
+  }
+}

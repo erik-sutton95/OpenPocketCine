@@ -47,6 +47,8 @@ import com.opencapture.opencine.cameracontrols.LiveControlSheet
 import com.opencapture.opencine.cameracontrols.LivePickerHost
 import com.opencapture.opencine.cameracontrols.LiveSheet
 import com.opencapture.opencine.cameracontrols.LockButton
+import com.opencapture.opencine.cameracontrols.MonitorChromeButton
+import com.opencapture.monitorui.LiveChromeMetrics
 import com.opencapture.opencine.vocabulary.CameraStatus
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -58,19 +60,22 @@ import com.opencapture.monitorui.MonitorIcon
 /** Reuses the existing native activity/instrumentation harness; no Compose test dependency. */
 @RunWith(AndroidJUnit4::class)
 class MonitorCaptureInputTest {
-    @Test fun recordHasOnlyShutterActionAndRespectsLock() {
+    @Test fun captureHasOnlyShutterActionAndRespectsLock() {
         ActivityScenario.launch(BackdropRenderActivity::class.java).use { scenario ->
             var shutters = 0
             var enabled by mutableStateOf(true)
             scenario.onActivity { activity ->
                 activity.setContent {
                     Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        RecordButton(recording = false, enabled = enabled, confirm = false, onClick = { shutters++ })
+                        val scope = androidx.compose.runtime.rememberCoroutineScope()
+                        val control = remember(scope) { com.opencapture.opencine.appkit.MonitorControlModel(scope) }
+                        com.opencapture.opencine.appkit.MonitorCaptureButton(control, diameter = LiveChromeMetrics.RECORD,
+                            enabled = enabled, photo = true, confirm = false, takePhoto = { shutters++ })
                     }
                 }
             }
             settle()
-            val target = nativeControlRect(scenario, "Start recording")
+            val target = nativeControlRect(scenario, "Take photo")
             fun hold() {
                 val down = SystemClock.uptimeMillis()
                 event(scenario, MotionEvent.ACTION_DOWN, target.center.x, target.center.y, down)
@@ -108,7 +113,7 @@ class MonitorCaptureInputTest {
                         activity.setContent { NavigationFixture(checkNotNull(model), probe, layoutProbe, tablet) }
                     }
                     awaitReady(scenario, layoutProbe)
-                    for ((label, destination) in listOf("Settings" to ShellModel.Cover.SETTINGS,
+                    for ((label, destination) in listOf("Operator Setup" to ShellModel.Cover.SETTINGS,
                         "Media" to ShellModel.Cover.MEDIA)) {
                         val target = nativeControlRect(scenario, label)
                         val down = SystemClock.uptimeMillis()
@@ -136,7 +141,7 @@ class MonitorCaptureInputTest {
                         }
                         settle()
                     }
-                    val oldSettings = nativeControlRect(scenario, "Settings")
+                    val oldSettings = nativeControlRect(scenario, "Operator Setup")
                     scenario.onActivity { probe.showsNavigation = false }
                     settle()
                     tap(scenario, oldSettings)
@@ -414,15 +419,16 @@ private fun NavigationFixture(model: AppModel, probe: NavigationProbe, layoutPro
                         // its quick-edit gesture still hides it in the production composition.
                         capturePresented = true, navigationHidden = false, interactive = probe.navigationEnabled,
                         lock = { enabled -> LockButton(false, enabled = enabled, onClick = {}) },
-                        settings = { enabled -> AuxCircleButton(Modifier.monitorPickerPassthrough(enabled), enabled = enabled,
-                            onClick = { model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.SETTINGS) }) {
-                            MonitorIcon(MonitorIcon.SETTINGS, "Settings", Modifier.fillMaxSize(), it)
+                        settings = { enabled -> MonitorChromeButton(MonitorIcon.SETTINGS, "Operator Setup",
+                            Modifier.monitorPickerPassthrough(enabled), enabled = enabled) {
+                            model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.SETTINGS)
                         } },
-                        media = { enabled -> AuxCircleButton(Modifier.monitorPickerPassthrough(enabled), enabled = enabled,
-                            onClick = { model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.MEDIA) }) {
-                            MonitorIcon(MonitorIcon.FILM, "Media", Modifier.fillMaxSize(), it)
+                        media = { enabled -> MonitorChromeButton(MonitorIcon.FILM, "Media",
+                            Modifier.monitorPickerPassthrough(enabled), enabled = enabled) {
+                            model.shell.open(com.opencapture.opencine.appkit.ShellModel.Cover.MEDIA)
                         } },
-                        record = { enabled -> LiveCaptureButton(model, enabled, field.record.width, openMode = {}) },
+                        record = { enabled -> com.opencapture.opencine.appkit.MonitorCaptureButton(model.control,
+                            field.record.width, enabled, openMode = {}) },
                         display = { enabled -> com.opencapture.monitorui.MonitorDisplayButton(false,
                             field.display.width, field.display.height, enabled = enabled, onClick = {}) })
                 }

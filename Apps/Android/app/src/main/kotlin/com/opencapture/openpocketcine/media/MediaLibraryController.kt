@@ -49,8 +49,7 @@ class MediaLibraryController(
         )
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     /** Canonical namespace captured for this actual gallery; a different camera creates a new owner. */
-    val cameraId = session.connectedCamera?.id?.takeIf { it.isNotEmpty() }?.also(cache::rememberCameraId)
-        ?: cache.lastCameraId() ?: "unknown"
+    val cameraId = cameraKey(session, cache).also { if (it == session.connectedCamera?.id) cache.rememberCameraId(it) }
     private var sourceOwner: CameraMediaService? = null
     private val codec = PocketMediaLibraryCodec(
         source = { sourceOwner as? DJIMediaCatalogRecordSource },
@@ -117,21 +116,6 @@ class MediaLibraryController(
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try { withContext(NonCancellable) { library.dispose() } }
             finally { scope.coroutineContext[Job]?.cancel() }
-        }
-    }
-    /** Settings clear is a local observation; it cannot open/query or replace raw source facts. */
-    fun cacheContentsChanged() {
-        val token = library.actionToken
-        val directory = cache.directory(cameraId)
-        val generation = directory.generation
-        val captured = library.state.value.records.toList()
-        scope.launch {
-            val facts = withContext(Dispatchers.IO) {
-                captured.associate { it.asset.id to codec.record(it.payload, cache.readShotColor(it.payload.path, cameraId)).facts }
-            }
-            if (released || !library.isCurrent(token) || directory.generation != generation) return@launch
-            library.updateLocalFacts(facts, token)
-            library.refreshLocalCache()
         }
     }
     fun visibilityChanged() {
@@ -412,5 +396,9 @@ class MediaLibraryController(
 
     companion object {
         private const val PREFS = "openpocketcine.media"
+
+        /** The camera whose gallery shows: the connected one, else the last one connected. */
+        fun cameraKey(session: DjiCameraSession, cache: MediaCache): String =
+            session.connectedCamera?.id?.takeIf { it.isNotEmpty() } ?: cache.lastCameraId() ?: "unknown"
     }
 }
