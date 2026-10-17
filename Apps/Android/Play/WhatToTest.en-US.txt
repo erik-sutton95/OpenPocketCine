@@ -5,11 +5,12 @@ New and changed
 
 Fixes
 
+- Fixed ML Kit initialization in minified Android releases to prevent a crash when live video starts.
 - Pause remains available while playback waits for data; pressing it prevents an unexpected restart.
 - Playback stays paused when a late loop, seek or scrub finishes. Press Play to resume.
 
 What to test
 
-- Reconnect your camera, open Media and tap a clip. Try short and long clips, then switch clips during playback.
-- Pause while a clip is buffering, then scrub or return to Media. Playback should restart only when you press Play.
+- Connect your camera, keep live view running and try face tracking. Report any crash after the first picture.
+- Open Media and try short and long clips, switch clips, pause while buffering, then scrub or return to Media. Playback should restart only when you press Play.
 - If a clip will not open or live view drops out, share diagnostics and include its duration, whether it was cached and whether camera controls still responded.

@@ -276,11 +276,14 @@ jobs:
       - name: Install Swift Android SDK
         run: ./scripts/ci-install-swift-android.sh
 
-      - name: Build, unit-test, and lint
+      # The release bundle is built on every pull request, as OpenZCine does: R8 only runs there, and
+      # :app:verifyReleaseComponentRegistrars (OpenCine's dex check) fails when it strips the ML Kit
+      # ComponentRegistrar constructors (OPENPOCKETCINE-ANDROID-18). Unsigned without the Play keystore.
+      - name: Build, unit-test, lint, and verify the release bundle
         working-directory: Apps/Android
         env:
           SWIFT_ANDROID_SDK_ID: swift-6.3.3-RELEASE_android
-        run: ./gradlew assembleDebug test lint :opencine:monitor-ui:testDebugUnitTest :opencine:monitor-ui:lint
+        run: ./gradlew assembleDebug test lint :opencine:monitor-ui:testDebugUnitTest :opencine:monitor-ui:lint :app:verifyReleaseComponentRegistrars
 
   handbook:
     name: Protocol handbook

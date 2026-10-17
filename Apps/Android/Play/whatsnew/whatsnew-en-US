@@ -1,1 +1,1 @@
-Playback controls now follow actual playing and buffering state. Pause stays available while waiting for data and prevents an unexpected restart. Detailed diagnostics help investigate live-view interruptions. Please test short and long clips, switching clips and pausing while buffering.
+Fixed an Android live-view crash caused by release shrinking removing ML Kit initialization. Playback pause and buffering fixes are retained. Please reconnect your camera, keep live view running, try face tracking, then test pausing and switching media clips.

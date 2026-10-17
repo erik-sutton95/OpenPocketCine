@@ -1983,3 +1983,10 @@ incoming-status confirmation hook are wired to the owner. All existing numeric a
 goldens are retained unchanged.23 new manual-gate shared scenarios and4 actual nil-transport
 native scenarios are proposed, uncompiled/unexecuted. Android preserves its existing
 integration behavior. Physical format/zoom/color/ISO behavior remains untested.
+
+## Android release initialization
+
+Android keeps the ML Kit component registrar constructors that its release
+shrinker otherwise removes. Every release bundle runs the shared OpenCine dex
+check, and pull requests build that bundle. This is Android SDK packaging; iOS
+uses Vision and needs no corresponding runtime change.
