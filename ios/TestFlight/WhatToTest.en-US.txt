@@ -1,16 +1,15 @@
 New and changed
 
-- Live View, camera controls, media and Multiview now share the OpenCine foundation, keeping Pocket's familiar monitor layout.
-- View Assist keeps compact labels, familiar icons and matching monitoring options in Live View and playback.
-- Diagnostic reports now separate incoming video, decoding and display stalls to help investigate live-view interruptions.
+- Playback controls follow the player's real playing and buffering state.
+- Diagnostic reports separate incoming video, decoding and display stalls to help investigate live-view interruptions.
 
 Fixes
 
-- Pause stays paused during looping, seeking and scrubbing instead of unexpectedly resuming.
-- Corrected the privacy information required for TestFlight uploads.
+- Media clip taps stay usable after a camera source changes or reconnects.
+- Pause remains available while playback waits for data; pressing it prevents an unexpected restart.
 
 What to test
 
-- Connect your camera, change recording settings and use View Assist in portrait and landscape. Check Multiview if you use more than one camera.
-- In Media, pause a clip near its end, seek and scrub, then switch clips. Confirm Pause holds and playback resumes only when you ask.
-- If the live picture drops out, note the time and use Connection setup > Share Diagnostics. Please include whether camera controls still respond.
+- Reconnect your camera, open Media and tap a clip. Try short and long clips, then switch clips during playback.
+- Pause while a clip is buffering, then scrub or return to Media. Playback should restart only when you press Play.
+- If a clip will not open or live view drops out, share diagnostics and include its duration, whether it was cached and whether camera controls still responded.
