@@ -47,7 +47,8 @@ jobs:
           GIT_CONFIG_KEY_0: safe.directory
           GIT_CONFIG_VALUE_0: /github/workspace
         with:
-          args: "detect --source=. --redact --no-banner --config=.gitleaks.toml"
+          # Scan this candidate and every ancestor, excluding unrelated fetched branches.
+          args: "detect --source=. --redact --no-banner --log-opts=HEAD --config=.gitleaks.toml"
 
       - name: Repository hygiene
         run: ./scripts/check-repository-hygiene.sh
