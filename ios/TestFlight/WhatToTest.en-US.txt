@@ -1,7 +1,7 @@
 New and changed
 
-- Exposure, shutter angle and frame-rate readouts follow the values supplied by your connected camera.
-- Storage readouts preserve the camera's reported values; missing readings are marked unavailable.
+- Camera controls and Media now use the shared OpenCine screens, so they look and behave as in the other OpenCine camera apps.
+- Exposure, shutter angle, frame-rate and storage readouts follow the camera's reported values; missing readings are marked unavailable.
 - Recording duration follows confirmed camera recording state.
 
 Fixes

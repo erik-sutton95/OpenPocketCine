@@ -1,2 +1,2 @@
-Exposure, shutter angle, storage and recording duration follow camera reports. ISO controls use the camera's declared choices. Please compare readings with your camera, record a short clip, reconnect and return from Media to Live View. Missing measurements are marked unavailable.
+Camera controls and Media use the shared OpenCine screens. Readouts and recording duration follow camera reports; ISO uses the camera's choices. Compare readings with your camera, record a short clip and return from Media to Live View.
 Fixed an Android live-view crash caused by release shrinking removing ML Kit initialization. Playback pause and buffering fixes are retained. Try face tracking, then pause and switch media clips.
