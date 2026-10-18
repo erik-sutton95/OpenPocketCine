@@ -8,9 +8,11 @@ Fixes
 
 - ISO controls follow the camera's declared settings, including its native ISO choices.
 - Camera controls and Media use the connected camera's available settings.
+- In portrait, the status readouts use a three-column grid that grows with the number of rows.
 
 What to test
 
 - Connect your camera, try manual and automatic exposure, and compare ISO, shutter and storage readouts with the camera screen.
 - Start and stop a short recording on the camera. Check the duration and return from Media to Live View.
 - Reconnect and rotate the phone. Check missing readings and confirm that the controls stay usable.
+- Rotate to portrait and check that every status readout is visible in the grid.
