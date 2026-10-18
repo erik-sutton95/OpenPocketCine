@@ -6,7 +6,7 @@ New and changed
 
 Fixes
 
-- Fixed ML Kit initialization in minified Android releases to prevent a crash when live video starts.
+- Media scrolls to the newest clip; in portrait, status readouts use a three-column grid that grows with the rows.
 - Pause remains available while playback waits for data; using it prevents unexpected restarts. Late loops, seeks and scrubs stay paused until you press Play.
 - ISO controls follow the camera's declared settings, including its native ISO choices.
 - Camera controls and Media use the connected camera's available settings.
@@ -15,4 +15,4 @@ What to test
 
 - Connect your camera; keep live view running and try face tracking. Compare manual/auto exposure, ISO, shutter and storage with its screen. Report crashes after the first picture.
 - Start/stop a short camera recording; check duration. In Media, try short/long clips, pause while buffering, scrub and switch. Restart only with Play; return to Live View.
-- Reconnect and rotate; check missing readings and usable controls. For failed clips or live-view dropouts, share diagnostics, clip duration, cached status and whether controls responded.
+- Reconnect and rotate; check every portrait readout and usable controls. For failed clips or live-view dropouts, share diagnostics, clip duration, cached status and whether controls responded.
