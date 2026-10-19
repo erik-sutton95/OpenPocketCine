@@ -194,7 +194,8 @@ final class HandshakeBindTests: XCTestCase {
         XCTAssertTrue(session.holdsMonitor, "Handshake alone cannot release recovery ownership")
         XCTAssertTrue(session.sessionRecovery.isRecovering)
         XCTAssertTrue(driver.isClosed, "The failed picture attempt must release its transport")
-        XCTAssertEqual(peer.snapshot.handshakes, 2)
+        XCTAssertEqual(
+            peer.snapshot.handshakeEndpoints, 2, "One negotiation for the first link, one for the repair")
         XCTAssertEqual(peer.snapshot.enables, 2, "No duplicate enable within one repair")
     }
 
@@ -918,6 +919,9 @@ final class LiveEnableDonorTests: XCTestCase {
 private final class EndpointPinnedCamera: @unchecked Sendable {
     struct Snapshot {
         var handshakes = 0
+        /// Distinct sockets that sent a handshake: one per negotiation. `handshakes` also counts
+        /// the datalink's resends every 350 ms until the ACK lands, which a loaded runner hits.
+        var handshakeEndpoints = 0
         var registrations = 0
         var registrationSequences: [UInt16] = []
         var enables = 0
@@ -929,6 +933,7 @@ private final class EndpointPinnedCamera: @unchecked Sendable {
     private let listener: NWListener
     private var connections: [NWConnection] = []
     private var peer: NWConnection?
+    private var lastHandshakeConnection: NWConnection?
     private var registered = false
     private var subscribed = false
     private var counts = Snapshot()
@@ -1016,6 +1021,10 @@ private final class EndpointPinnedCamera: @unchecked Sendable {
     private func consume(_ bytes: [UInt8], from connection: NWConnection) {
         if DumlTransport.isHandshake(bytes) {
             counts.handshakes += 1
+            if lastHandshakeConnection !== connection {
+                lastHandshakeConnection = connection
+                counts.handshakeEndpoints += 1
+            }
             if counts.handshakes <= initialHandshakesToIgnore { return }
             if rejectingHandshakes { return }
             peer = connection
