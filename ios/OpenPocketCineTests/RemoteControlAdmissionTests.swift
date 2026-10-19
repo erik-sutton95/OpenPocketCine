@@ -28,7 +28,19 @@ final class RemoteControlAdmissionTests: XCTestCase {
         }
     }
 
-    private func assertWatchDispatch(photo: Bool, betweenPollingQueries: Bool) async throws {
+    /// PIA-366: the phone's interface lock guards touches on the phone, not the wrist remote. Before
+    /// the shared watch policy the Watch recorded and captured with the phone locked (baseline
+    /// `watchShutter(photo:)` had no lock check), like the Z and Insta Watch paths still do.
+    func testWatchRecordsAndCapturesWhilePhoneInterfaceLocked() async throws {
+        for photo in [false, true] {
+            try await assertWatchDispatch(
+                photo: photo, betweenPollingQueries: false, interfaceLocked: true)
+        }
+    }
+
+    private func assertWatchDispatch(
+        photo: Bool, betweenPollingQueries: Bool, interfaceLocked: Bool = false
+    ) async throws {
         let peer = try WatchAckingCamera()
         let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
         let session = CameraSession(borrowing: HevcDecoder())
@@ -44,6 +56,7 @@ final class RemoteControlAdmissionTests: XCTestCase {
         session.status.shootingMode =
             photo ? Int(ShootingMode.photo.rawValue) : Int(ShootingMode.video.rawValue)
         session.status.recordingReported = true
+        session.isLocked = interfaceLocked
         let model = AppModel(session: session)
         model.activateWatchRelay()
         let (phone, receipt) = try watchReceipt()
@@ -139,7 +152,7 @@ final class RemoteControlAdmissionTests: XCTestCase {
         print(trace)
     }
 
-    func testWatchRefusesNilUnknownRecordUnsupportedModeLockAndMissingNativeLink() {
+    func testWatchRefusesNilUnknownRecordUnsupportedModeAndMissingNativeLink() {
         let session = CameraSession(borrowing: HevcDecoder())
         let driver = DjiAppleDatalink(port: 9041, tcpPoke: false, pairingToken: "")
         defer { session.disconnect() }
@@ -154,9 +167,6 @@ final class RemoteControlAdmissionTests: XCTestCase {
         XCTAssertFalse(model.watchCapture().accepted)
         session.status.shootingMode = Int(ShootingMode.photo.rawValue)
         XCTAssertFalse(model.watchToggleRecord().accepted)
-        session.isLocked = true
-        XCTAssertFalse(model.watchCapture().accepted)
-        session.isLocked = false
         session.datalink = nil
         model.publishWatchState()
         XCTAssertFalse(

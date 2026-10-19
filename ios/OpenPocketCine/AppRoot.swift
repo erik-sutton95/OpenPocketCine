@@ -842,7 +842,9 @@ final class AppModel {
             shutter: {
                 // Keep the target and supplied first-send admission captured by the shown source.
                 guard let target = watchTarget else { return .targetChanged }
-                guard !session.isLocked, session.controlLinkReady else { return .notSent }
+                // The phone's interface lock guards touches on the phone, not the wrist remote
+                // (pre-shared behavior; the Z and Insta Watch paths agree).
+                guard session.controlLinkReady else { return .notSent }
                 let receipt: CommandReceipt?
                 if let watchAdmission {
                     guard watchAdmission.isCurrent, let shown = watchCommandSource,
