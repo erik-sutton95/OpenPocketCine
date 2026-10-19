@@ -54,7 +54,11 @@ final class WatcherConnectionTests: XCTestCase {
     func testWatcherVersionMismatchTeachesUpdatingBothDevices() async throws {
         let listener = try NWListener(using: WatcherRelayNetwork.parameters())
         let queue = DispatchQueue(label: "SIMULATED-version-mismatch-listener")
+        // A newer host keeps the link open after its hello; closing at once races the hello
+        // against the drop, and the watcher may read the drop first and reconnect.
+        let held = VersionMismatchHostConnections()
         listener.newConnectionHandler = { connection in
+            held.connections.append(connection)
             connection.stateUpdateHandler = { state in
                 guard case .ready = state else { return }
                 let hello = WatcherRelayHello(
@@ -62,12 +66,15 @@ final class WatcherConnectionTests: XCTestCase {
                 guard let payload = try? JSONEncoder().encode(hello) else { return }
                 connection.send(
                     content: WatcherRelayFraming.encode(kind: .hello, payload: payload),
-                    completion: .contentProcessed { _ in connection.cancel() })
+                    completion: .contentProcessed { _ in })
             }
             connection.start(queue: queue)
         }
         listener.start(queue: queue)
-        defer { listener.cancel() }
+        defer {
+            listener.cancel()
+            queue.sync { held.connections.forEach { $0.cancel() } }
+        }
         let ready = await waitUntil { listener.port != nil }
         XCTAssertTrue(ready)
         let port = try XCTUnwrap(listener.port)
@@ -164,4 +171,9 @@ final class WatcherConnectionTests: XCTestCase {
         XCTAssertEqual(client.status, .idle)
         XCTAssertEqual(resolutions, 0)
     }
+}
+
+/// The simulated newer host's open connections, touched only on its listener queue.
+private final class VersionMismatchHostConnections: @unchecked Sendable {
+    var connections: [NWConnection] = []
 }
