@@ -1,0 +1,94 @@
+name: Remote Gradle
+
+# Runs Gradle tasks for one exact commit on a GitHub-hosted runner, so maintainers can move
+# unit tests, lint and assemble off their machine. Dispatched by the parity tool
+# remote-gradle.sh, which pushes a snapshot commit and passes its SHA. The setup mirrors the
+# Android job in ci.yml; keep the two in step.
+run-name: Remote Gradle ${{ inputs.ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Full commit SHA to build
+        required: true
+        type: string
+      tasks:
+        description: Space-separated Gradle tasks and flags (letters, digits, ':', '_', '.', '-', space)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  gradle:
+    name: Gradle
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # Inputs reach the shell only through env and are checked before any use.
+      - name: Validate inputs
+        env:
+          REF: ${{ inputs.ref }}
+          TASKS: ${{ inputs.tasks }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::ref must be a full 40-character commit SHA"
+            exit 1
+          fi
+          # At least one non-space: blank tasks would run Gradle's default task and pass.
+          if [[ ! "$TASKS" =~ ^[A-Za-z0-9:_.\ -]+$ || ! "$TASKS" =~ [^\ ] ]]; then
+            echo "::error::tasks must name a task and may contain only letters, digits, ':', '_', '.', '-' and spaces"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      # The pin at this commit decides the OpenCine checkout, so a snapshot that moves the pin
+      # builds against the moved pin.
+      - name: Check out pinned OpenCine next to the repository
+        run: scripts/checkout-opencine.sh
+      - name: Set up Android NDK 27
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        with:
+          ndk-version: r27c
+          link-to-sdk: true
+      - name: Install Swift Android SDK
+        run: ./scripts/ci-install-swift-android.sh
+      - name: Run Gradle tasks
+        working-directory: Apps/Android
+        env:
+          TASKS: ${{ inputs.tasks }}
+          SWIFT_ANDROID_SDK_ID: swift-6.3.3-RELEASE_android
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/remote-gradle"
+          read -ra args <<< "$TASKS"
+          ./gradlew "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/remote-gradle/gradle.log"
+      - name: Collect reports
+        if: always()
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/remote-gradle"
+          mkdir -p "$out"
+          for root in . ../OpenCine; do
+            [ -d "$root" ] || continue
+            rsync -a --prune-empty-dirs --exclude='.git/' --exclude='.gradle/' --include='*/' \
+              --include='**/build/reports/**' --include='**/build/test-results/**' --exclude='*' \
+              "$root/" "$out/$(basename "$(cd "$root" && pwd)")/"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: remote-gradle-${{ github.run_id }}
+          path: ${{ runner.temp }}/remote-gradle
+          retention-days: 7
+          if-no-files-found: warn

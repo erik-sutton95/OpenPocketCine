@@ -64,6 +64,35 @@ final class DJICameraSessionAdapterTests: XCTestCase {
         XCTAssertEqual(duration.value(of: .shutter).value, .shutter(.duration(Rational(1, 50))))
     }
 
+    /// Behavior audit PIA-211: Pocket 3 publishes no `camcap_shutter`; the Speed drum offers the
+    /// documented 1/8000..1/24 ladder and the port admits a speed from it, as the standalone app did.
+    func testEmptyShutterCapOffersTheDocumentedLadder() {
+        let usesAngle = OperatorPrefs.shutterUsesAngle
+        defer { OperatorPrefs.shutterUsesAngle = usesAngle }
+        OperatorPrefs.shutterUsesAngle = false
+        let session = OpenPocketCine.CameraSession(borrowing: HevcDecoder())
+        defer { session.disconnect() }
+        var status = CameraStatus()
+        status.shootingMode = Int(ShootingMode.video.rawValue)
+        status.expoMode = .manual
+        status.shutterDenom = 50
+        status.fps = 25
+        session.updateMultiview(
+            camera: DjiAppleSighting(
+                id: UUID(), name: "SIMULATED-Pocket3",
+                model: .resolve(modelId: 0x20, name: "SIMULATED-Pocket3"), modelId: 0x20),
+            driver: nil, status: status)
+        let shutter = session.control.current.capabilities[.shutter]
+        XCTAssertEqual(shutter?.access, .readWrite)
+        XCTAssertEqual(
+            shutter?.domain?.choices,
+            CamCapShutter.wheelDenoms(available: [], current: 50).map {
+                SettingValue.shutter(.duration(Rational(1, $0)))
+            })
+        XCTAssertEqual(session.captureControlState?.admitsShutterWrite(100), true)
+        XCTAssertEqual(session.captureControlState?.admitsShutterWrite(8000), true)
+    }
+
     // MARK: Layout (SHELL-01)
 
     /// The monitor lays out the integration's projection of the connected body; the app adds

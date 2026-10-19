@@ -61,16 +61,15 @@ GitHub-specific:
 - Open a pull request into `main`. Actions runs on the PR, not a second time
   on the branch push. The required check is **CI gate** (Meta checks, Native
   Swift/iOS, Android, and the protocol handbook feed that gate and skip when
-  their paths did not change). The PR template must be filled in. Maintainer
+  their paths did not change); the full suite runs nightly
+  ([`docs/ci.md`](docs/ci.md)). The PR template must be filled in. Maintainer
   GitHub settings: [`docs/repository-settings.md`](docs/repository-settings.md).
-- Changes that can trigger a TestFlight build must **replace**
-  [`ios/TestFlight/WhatToTest.en-US.txt`](ios/TestFlight/WhatToTest.en-US.txt)
-  with the this-build window (`just tester-notes-window`). See
+- Tester notes ([`ios/TestFlight/WhatToTest.en-US.txt`](ios/TestFlight/WhatToTest.en-US.txt),
+  [`Apps/Android/Play/WhatToTest.en-US.txt`](Apps/Android/Play/WhatToTest.en-US.txt) and the
+  500-character [`whatsnew-en-US`](Apps/Android/Play/whatsnew/whatsnew-en-US)) are replaced
+  once per release, not in feature pull requests; releases fail while they are stale. See
   [`docs/tester-notes.md`](docs/tester-notes.md).
-- Changes that can trigger a Play closed-testing upload must **replace**
-  [`Apps/Android/Play/WhatToTest.en-US.txt`](Apps/Android/Play/WhatToTest.en-US.txt)
-  and the 500-character [`whatsnew-en-US`](Apps/Android/Play/whatsnew/whatsnew-en-US)
-  the same way. See [`docs/tester-notes.md`](docs/tester-notes.md).
+- CodeRabbit reviews are advisory: address every finding, but it never blocks a merge.
 
 ## Code standards
 

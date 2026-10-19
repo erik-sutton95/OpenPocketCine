@@ -42,6 +42,9 @@ Re-run a branch without a PR with **Run workflow**. Meta checks always run and
 include gitleaks. Native iOS, Android, and the protocol handbook run only when
 their paths change (and native/Android also skip while the repository is
 private so they do not burn paid macOS minutes). Skipped jobs are success.
+The simulator conformance suite and the iPad storage oracle run only in the
+nightly full suite, which tracks failures on `main` in one issue
+([`ci.md`](ci.md)).
 The **CI gate** job is the only required check — do not require Native,
 Android, or handbook by name, or a docs PR stays blocked waiting for a check
 that never reports. The Android job installs the official Swift 6.3.3 Android

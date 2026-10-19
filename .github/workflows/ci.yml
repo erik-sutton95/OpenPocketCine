@@ -8,12 +8,22 @@ name: CI
 # Required check on `main` is **CI gate**. Native / Android / handbook skip when
 # their paths did not change; skip is success. Do not add those job names to
 # branch protection — a skipped required check blocks the PR.
+#
+# Two tiers (docs/ci.md): this is the fast PR tier. nightly.yml calls it with
+# `full: true`, which runs every job regardless of paths and adds the simulator
+# conformance suite and the iPad storage oracle.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      full:
+        description: Run every job regardless of paths, plus the nightly-only suites
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -94,110 +104,6 @@ jobs:
           ./scripts/android-release-notes-test.sh
           ./scripts/prepare-android-testers-test.sh
 
-      - name: Require reviewed notes for TestFlight-triggering pull requests
-        # Dependency bumps change no operator-visible behavior, so dependabot is exempt.
-        # Keyed on the PR author: `github.actor` is whoever last pushed or updated the branch.
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_REF: ${{ github.head_ref }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          REPOSITORY: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          # Files touched by this branch's own commits. A content diff against main
-          # goes blank once a sibling PR lands the same notes, and then a PR that did
-          # write notes fails here.
-          # Combined merge diffs also count notes rewritten during conflict resolution.
-          changed_files="$(git log --diff-merges=combined --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
-          # Owner decision 2026-10-19: tester notes are written once per release at
-          # the release gate, so a pin-only bot branch is exempt.
-          pin_only_bot=false
-          if [ "$changed_files" = "opencine-pins.txt" ]; then
-            if [ "$EVENT_NAME" = "pull_request" ] &&
-              [ "$HEAD_REF" = "bot/pin-core" ] &&
-              [ "$HEAD_REPO" = "$REPOSITORY" ] &&
-              [ "$PR_AUTHOR" = "github-actions[bot]" ]; then
-              pin_only_bot=true
-            fi
-            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF_NAME" = "bot/pin-core" ]; then
-              pin_only_bot=true
-            fi
-          fi
-          if [ "$pin_only_bot" = true ]; then
-            echo "Pin-only bot change: tester notes are written once per release at the release gate."
-            exit 0
-          fi
-          # Notes-check tooling is not a TestFlight archive. Require copy only when
-          # production iOS paths change (docs/tester-notes.md). Test targets are not
-          # in the archive either: a test-only branch has no operator-visible work to
-          # describe, and the window is what testers have not been asked to try yet.
-          production_files="$(grep -E '^(Sources/|Tests/|ios/|Package\.swift$|opencine-pins\.txt$|scripts/ios-|scripts/setup-xcode-cloud\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/ios-release-notes|Tests/|ios/OpenPocketCine(UI)?Tests/|ios/ci_scripts/)' || true)"
-          if [[ -n "$production_files" ]]; then
-            if ! grep -Fxq 'ios/TestFlight/WhatToTest.en-US.txt' <<< "$changed_files"; then
-              echo "Update ios/TestFlight/WhatToTest.en-US.txt with the this-build window (docs/tester-notes.md)." >&2
-              exit 1
-            fi
-          fi
-
-      - name: Require reviewed notes for Play-triggering pull requests
-        # Dependency bumps change no operator-visible behavior, so dependabot is exempt.
-        # Keyed on the PR author: `github.actor` is whoever last pushed or updated the branch.
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_REF: ${{ github.head_ref }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          REPOSITORY: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          # Files touched by this branch's own commits. A content diff against main
-          # goes blank once a sibling PR lands the same notes, and then a PR that did
-          # write notes fails here.
-          # Combined merge diffs also count notes rewritten during conflict resolution.
-          changed_files="$(git log --diff-merges=combined --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
-          # Owner decision 2026-10-19: tester notes are written once per release at
-          # the release gate, so a pin-only bot branch is exempt.
-          pin_only_bot=false
-          if [ "$changed_files" = "opencine-pins.txt" ]; then
-            if [ "$EVENT_NAME" = "pull_request" ] &&
-              [ "$HEAD_REF" = "bot/pin-core" ] &&
-              [ "$HEAD_REPO" = "$REPOSITORY" ] &&
-              [ "$PR_AUTHOR" = "github-actions[bot]" ]; then
-              pin_only_bot=true
-            fi
-            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF_NAME" = "bot/pin-core" ]; then
-              pin_only_bot=true
-            fi
-          fi
-          if [ "$pin_only_bot" = true ]; then
-            echo "Pin-only bot change: tester notes are written once per release at the release gate."
-            exit 0
-          fi
-          # Notes-check tooling is not a Play upload. Require copy only when
-          # production Android paths change (docs/tester-notes.md). Unit and
-          # instrumentation sources are not in the upload either: a test-only branch
-          # has no operator-visible work to describe. `src/debug/` is exempt on the
-          # same grounds: the Play artifact is the release variant, which never
-          # merges that source set. Matched per module rather than per name, so
-          # any module added later is exempt on the same terms as app instead of
-          # silently demanding notes.
-          production_files="$(grep -E '^(Apps/Android/|Sources/OpenPocketViewCore/|Sources/OpenPocketCineAndroidFacade/|Package\.swift$|opencine-pins\.txt$|scripts/android-|scripts/ci-install-swift-android\.sh$)' <<< "$changed_files" | grep -vE '^(scripts/android-release-notes|Apps/Android/[^/]+/src/(test|androidTest|debug)/)' || true)"
-          if [[ -n "$production_files" ]]; then
-            if ! grep -Fxq 'Apps/Android/Play/WhatToTest.en-US.txt' <<< "$changed_files"; then
-              echo "Update Apps/Android/Play/WhatToTest.en-US.txt with the this-build window (docs/tester-notes.md)." >&2
-              exit 1
-            fi
-            if ! grep -Fxq 'Apps/Android/Play/whatsnew/whatsnew-en-US' <<< "$changed_files"; then
-              echo "Update Apps/Android/Play/whatsnew/whatsnew-en-US (Play allows 500 characters)." >&2
-              exit 1
-            fi
-          fi
-
       - name: Spell check
         uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
 
@@ -229,9 +135,10 @@ jobs:
     outputs:
       # The pin bot dispatches CI on bot/pin-core after a GITHUB_TOKEN push, which
       # does not trigger pull_request. Run the shared-core jobs as if the pin changed.
-      code: ${{ steps.filter.outputs.code == 'true' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'bot/pin-core') }}
-      android: ${{ steps.filter.outputs.android == 'true' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'bot/pin-core') }}
-      handbook: ${{ steps.filter.outputs.handbook }}
+      # The nightly full suite runs every job.
+      code: ${{ steps.filter.outputs.code == 'true' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'bot/pin-core') || inputs.full }}
+      android: ${{ steps.filter.outputs.android == 'true' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'bot/pin-core') || inputs.full }}
+      handbook: ${{ steps.filter.outputs.handbook == 'true' || inputs.full }}
     steps:
       # `dorny/paths-filter` fetches the base ref to diff on push / dispatch, which
       # needs the checkout's git credentials — so this job keeps them (unlike the
@@ -308,7 +215,9 @@ jobs:
       # repository is published. Delete when the app pins it by url + version.
       - name: Check out pinned OpenCine next to the repository
         run: scripts/checkout-opencine.sh
+      # Nightly tier: a second private simulator boot (docs/ci.md).
       - name: Original storage oracle on a private native 2x iPad
+        if: ${{ inputs.full }}
         env:
           TEST_RUNNER_CI: "true"
         run: |
@@ -326,7 +235,7 @@ jobs:
             -resultBundlePath "$evidence/storage-oracle.xcresult" \
             -only-testing:OpenPocketCineTests/MonitorPortraitHeaderClearanceTests/testCompactDeclaredGaugeRetainsClearanceWhenSafeTopChanges test
       - name: Retain original storage oracle evidence
-        if: always()
+        if: ${{ always() && inputs.full }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-storage-oracle-evidence
@@ -346,9 +255,9 @@ jobs:
   conformance:
     name: Shared conformance scenarios, iOS
     needs: changes
-    # Hosted macOS, public repositories only, for the same reasons as `native`: it runs code from
-    # the pull request.
-    if: ${{ needs.changes.outputs.code == 'true' && !github.event.repository.private }}
+    # Nightly tier, QUARANTINE (docs/ci.md). Hosted macOS, public repositories only, for the same
+    # reasons as `native`: it runs code from the pull request.
+    if: ${{ inputs.full && needs.changes.outputs.code == 'true' && !github.event.repository.private }}
     runs-on: macos-latest
     timeout-minutes: 60
     steps:

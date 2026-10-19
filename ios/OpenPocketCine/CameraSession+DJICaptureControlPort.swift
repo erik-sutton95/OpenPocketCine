@@ -12,9 +12,7 @@ extension CameraSession {
     func writeShutter(
         _ denominator: Int, onStage: @escaping @MainActor (ControlWireEvent) -> Void
     ) {
-        guard cameraReportedCapture.expoMode == .manual,
-            cameraReportedCapture.availableShutterDenoms.contains(denominator)
-        else {
+        guard captureControlState?.admitsShutterWrite(denominator) == true else {
             onStage(.notSent)
             return
         }
@@ -69,9 +67,7 @@ extension CameraSession {
         _ denominator: Int, admission: DJICommandAdmission,
         onStage: @escaping @MainActor (ControlWireEvent) -> Void
     ) {
-        guard cameraReportedCapture.expoMode == .manual,
-            cameraReportedCapture.availableShutterDenoms.contains(denominator)
-        else {
+        guard captureControlState?.admitsShutterWrite(denominator) == true else {
             onStage(.notSent)
             return
         }
