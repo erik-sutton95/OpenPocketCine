@@ -1,0 +1,49 @@
+name: Nightly
+
+# The full suite on main every night: every CI job regardless of paths, plus the simulator
+# conformance suite and the iPad storage oracle (docs/ci.md). A failure opens or updates the one
+# "Nightly CI failing on main" issue (label ci-nightly); the next passing night closes it.
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  suite:
+    name: Full suite
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      full: true
+
+  report:
+    name: Tracking issue
+    needs: suite
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # OpenCine's scripts/ci-nightly-report.sh, at the pin, keeps the issue for every repository.
+      - name: Check out pinned OpenCine next to the repository
+        run: scripts/checkout-opencine.sh
+      - name: Open, update or close the nightly tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUITE_RESULT: ${{ needs.suite.result }}
+        run: bash ../OpenCine/scripts/ci-nightly-report.sh

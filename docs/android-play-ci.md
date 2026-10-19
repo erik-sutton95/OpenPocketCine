@@ -125,19 +125,21 @@ maintainer-named open-beta build, using the same contract as TestFlight:
 [`tester-notes.md`](tester-notes.md). Play listing "what's new" is 500
 characters. The longer What to Test file is operator copy for GitHub / email.
 
-Any pull request that can trigger a Play upload replaces
-`Apps/Android/Play/WhatToTest.en-US.txt` **and** `whatsnew-en-US` with this
-PR plus up to three other newest operator-visible `feat:` / `fix:` items
-Android testers can see.
+Before a Play release, the notes pull request replaces
+`Apps/Android/Play/WhatToTest.en-US.txt` **and** `whatsnew-en-US` with up to
+four of the newest operator-visible `feat:` / `fix:` items Android testers can
+see since the previous release.
 
 ```bash
 just tester-notes-window
 just android-play-notes
 ```
 
-`scripts/android-release-notes-check.sh` enforces the format. Pull-request CI
-also verifies that the notes files changed when Android production paths
-changed.
+`scripts/android-release-notes-check.sh` enforces the format. The Play
+workflow runs it and OpenCine's `scripts/tester-notes-release-check.py` before
+building: the upload fails while an earlier successful `android-play.yml` run
+already carried either notes file. Pull requests no longer have to edit them
+([`ci.md`](ci.md)).
 
 ## Version numbers
 

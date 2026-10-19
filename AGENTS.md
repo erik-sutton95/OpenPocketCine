@@ -68,6 +68,7 @@ primarily **Osmo Pocket 4 / 4 Pro**, with Nano live view on AVC.
 - **release** — tag, version bump, TestFlight train, `develop` / Git Flow: [`docs/RELEASE.md`](docs/RELEASE.md)
 - **tester-notes** — TestFlight / Play What to Test, this-build window: [`docs/tester-notes.md`](docs/tester-notes.md)
 - **play** — Android closed testing, AAB upload, Play CI: [`docs/android-play-ci.md`](docs/android-play-ci.md)
+- **ci**: CI gate, nightly full suite, quarantine, CodeRabbit (advisory, never blocks a merge): [`docs/ci.md`](docs/ci.md)
 
 ## Verification
 

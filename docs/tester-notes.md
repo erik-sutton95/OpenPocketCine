@@ -17,31 +17,24 @@ that file at a `v*` tag ([`RELEASE.md`](RELEASE.md)).
 | iOS TestFlight | [`ios/TestFlight/WhatToTest.en-US.txt`](../ios/TestFlight/WhatToTest.en-US.txt) | (TestFlight uses the same file) |
 | Android Play | [`Apps/Android/Play/WhatToTest.en-US.txt`](../Apps/Android/Play/WhatToTest.en-US.txt) | [`whatsnew-en-US`](../Apps/Android/Play/whatsnew/whatsnew-en-US) (500 characters) |
 
-Any pull request that can trigger a TestFlight archive or a Play upload
-**replaces** those files. CI requires the path to change; this document
-requires the *content* to be the window, not an append.
+Notes are written **once per release**, not in every pull request (owner
+decision 2026-10-19). Before releasing, a notes pull request **replaces** those
+files with the window since the previous release; this document requires the
+*content* to be the window, not an append. Feature pull requests leave them
+alone.
 
-A branch that touches only test targets is exempt on both platforms: no test
-source ships in an archive or an upload, so there is nothing testers have not
-already been asked to try. CI skips the requirement for those paths.
-
-Android's `src/debug/` source set is exempt on the same grounds. The Play
-artifact is the release variant, which never merges it, so a debug-only change
-reaches no tester.
-
-A pin-only bot pull request (`bot/pin-core`, changed files exactly
-`opencine-pins.txt`) is also exempt on both platforms: tester notes are
-written once per release at the release gate (owner decision 2026-10-19).
-The owner admin-merges bot pin PRs after the dispatched CI is green; the
-dispatched run is the evidence, not the merge gate.
+Every release path fails fast while the notes still describe the previous
+release ([`ci.md`](ci.md#release-time)): the Play workflow and the Xcode Cloud
+archive run OpenCine's `scripts/tester-notes-release-check.py`, which fails
+when an earlier successful upload already carried the current revision of a
+notes file. Re-releasing the same commit is allowed.
 
 ## Steps
 
-1. Run `just tester-notes-window`. Completion: the printed list is this PR's
-   `feat:` / `fix:` commits (if any) plus the newest operator-visible merges
-   on `origin/main`.
-2. Keep **this PR first**, then fill from that list until you have about
-   **four** items this platform can actually see. Skip `build:`, `ci:`,
+1. Run `just tester-notes-window` on a branch from `origin/main`. Completion:
+   the printed list is the newest operator-visible merges on `origin/main`.
+2. Fill from that list, newest first, until you have about **four** items
+   this platform can actually see since the previous release. Skip `build:`, `ci:`,
    `docs:`, `chore:`, website-only work, and the other shell.
 3. Replace the whole What to Test file. Prefer **New features** when the
    window is new capabilities only. Use the three-section form when testers
@@ -84,7 +77,7 @@ dispatched run is the evidence, not the merge gate.
 
 ## Window
 
-Newest first, cap four, this PR leads. That is enough for testers who
+Newest first, cap four. That is enough for testers who
 missed one or two builds and short enough that last week's recap drops off.
 
 ```bash
@@ -123,9 +116,10 @@ when the maintainer selects a new release window.
 ## Checks
 
 `scripts/ios-release-notes-check.sh` and
-`scripts/android-release-notes-check.sh` enforce the format and the caps.
-Pull-request CI also requires the notes path to change when production
-paths change (dependabot is exempt). Preview:
+`scripts/android-release-notes-check.sh` enforce the format and the caps, in
+pull-request Meta checks and again at release time. At release time OpenCine's
+`scripts/tester-notes-release-check.py` also requires notes no earlier release
+carried. Preview:
 
 ```bash
 just testflight-notes

@@ -102,9 +102,9 @@ profiles outside git.
 
 **this-build** window by default. A maintainer-named open-beta baseline instead
 uses the cumulative release window: [`tester-notes.md`](tester-notes.md).
-For routine internal builds, a pull request that can trigger a TestFlight build replaces
-`ios/TestFlight/WhatToTest.en-US.txt` with this PR plus up to three other
-newest operator-visible `feat:` / `fix:` items iPhone testers can see.
+For routine internal builds, the notes pull request before a release replaces
+`ios/TestFlight/WhatToTest.en-US.txt` with up to four of the newest operator-visible
+`feat:` / `fix:` items iPhone testers can see since the previous release.
 **New features** (1–4) for a capability-only window; three-section form when
 testers need a named fix or a concrete action.
 
@@ -113,8 +113,11 @@ just tester-notes-window
 just testflight-notes
 ```
 
-`scripts/ios-release-notes-check.sh` enforces the format. Pull-request CI also verifies that the
-notes file changed when iOS production paths changed.
+`scripts/ios-release-notes-check.sh` enforces the format. Every archive is a TestFlight
+release, so [`ios/ci_scripts/ci_pre_xcodebuild.sh`](../ios/ci_scripts/ci_pre_xcodebuild.sh)
+runs that check and OpenCine's `scripts/tester-notes-release-check.py` before building: the
+archive fails while an earlier successful TestFlight build (its Xcode Cloud commit status)
+already carried the current notes. Pull requests no longer have to edit them ([`ci.md`](ci.md)).
 
 TestFlight screenshot feedback cannot carry an attached file (Apple has no
 API for that). The app copies a redacted compact report to the pasteboard
