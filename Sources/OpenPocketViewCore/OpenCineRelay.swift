@@ -5,8 +5,13 @@
 @_exported import OpenCineRelay
 
 extension WatcherRelayJoin {
-    /// This app's version-mismatch copy, sent to the watcher in `joinDenied`.
+    /// The host's version-mismatch copy, sent to the watcher in `joinDenied`.
     public static let versionMismatchReason = "This OpenPocketCine build cannot watch that feed."
+
+    /// The watcher's own copy when the host's hello outran this build: the baseline instructed the
+    /// operator to update both devices, because the mismatch can be either end.
+    public static let watcherVersionMismatchReason =
+        "Update OpenPocketCine on both devices to watch this feed."
 
     public static func hostAccepts(hello: WatcherRelayHello, requiredPasscode: String)
         -> Result<Void, WatcherRelayJoinDenied>

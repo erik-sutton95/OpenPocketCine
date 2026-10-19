@@ -12,7 +12,7 @@ extension MonitorWatcherSource where Decoder == HevcDecoder {
     convenience init(commandWire: (@MainActor (Data) -> Void)? = nil) {
         let decoder = HevcDecoder(), samples = LiveFrameSampleBus()
         self.init(decoder: decoder, samples: samples,
-            versionMismatchReason: WatcherRelayJoin.versionMismatchReason,
+            versionMismatchReason: WatcherRelayJoin.watcherVersionMismatchReason,
             journal: { ControlLiveLog.line($0) }, commandWire: commandWire)
         preparePicture = { [weak self, weak decoder, weak samples] in
             guard let self, let decoder, let samples else { return }

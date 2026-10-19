@@ -48,6 +48,41 @@ final class WatcherConnectionTests: XCTestCase {
         XCTAssertTrue(stopped, "Explicit host stop is terminal, not a reconnect loop")
     }
 
+    /// PIB-130: a host hello from another relay version must teach the baseline fix ("update on
+    /// both devices"), not read as a property of this build alone.
+    @MainActor
+    func testWatcherVersionMismatchTeachesUpdatingBothDevices() async throws {
+        let listener = try NWListener(using: WatcherRelayNetwork.parameters())
+        let queue = DispatchQueue(label: "SIMULATED-version-mismatch-listener")
+        listener.newConnectionHandler = { connection in
+            connection.stateUpdateHandler = { state in
+                guard case .ready = state else { return }
+                let hello = WatcherRelayHello(
+                    version: WatcherRelayProtocol.version + 1, hostName: "Future relay")
+                guard let payload = try? JSONEncoder().encode(hello) else { return }
+                connection.send(
+                    content: WatcherRelayFraming.encode(kind: .hello, payload: payload),
+                    completion: .contentProcessed { _ in connection.cancel() })
+            }
+            connection.start(queue: queue)
+        }
+        listener.start(queue: queue)
+        defer { listener.cancel() }
+        let ready = await waitUntil { listener.port != nil }
+        XCTAssertTrue(ready)
+        let port = try XCTUnwrap(listener.port)
+        let client = WatcherRelayClient()
+        defer { client.leave() }
+        client.join(
+            endpoint: .hostPort(host: "127.0.0.1", port: port), hostName: "Future relay",
+            passcode: "", watcherID: "test-watcher", deviceName: "Test watcher")
+        let failed = await waitUntil {
+            client.status == .failed(
+                "Update OpenPocketCine on both devices to watch this feed.")
+        }
+        XCTAssertTrue(failed, "unexpected watcher status \(client.status)")
+    }
+
     @MainActor
     func testIncomingFramePreservesLocalAssistsAndMirror() async throws {
         let host = host()
