@@ -4421,6 +4421,8 @@ final class CameraSession {
                 ControlLiveLog.line("session: recovery exhausted after \(count) attempts")
             case .pausedAfterRepeatedDrops(let drops):
                 log.info("session: storm pause after \(drops) drops")
+            case .takenOver(let holder):
+                ControlLiveLog.line("session: camera taken over by \(holder ?? "another device")")
             case .retrying: break
             }
         }

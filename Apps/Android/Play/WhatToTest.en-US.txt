@@ -4,9 +4,9 @@ New and changed
 
 Fixes
 
-- No other Android-visible changes in this build; the earlier Media playback, storage and portrait readout fixes stay in place.
+- After a long Media visit, the live picture comes back instead of the camera disconnecting.
 
 What to test
 
 - Point the camera at a bright or white scene and check that every top bar readout stays readable in portrait and landscape.
-- Connect your camera, record a short clip, open Media and return to Live View; report crashes or controls that stop responding.
+- Record a short clip, stay in Media for 30 minutes or more and return to Live View; the picture should come back. Report crashes or controls that stop responding.
