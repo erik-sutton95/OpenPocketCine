@@ -4,12 +4,13 @@ New and changed
 
 Fixes
 
+- With Shutter Angle on, picking an angle now sets the shutter, and the shutter list is no longer stuck at 1/60.
 - After the landscape assist palette collapses, its hidden buttons are no longer reachable with VoiceOver.
 - Using a volume button as the remote shutter is protected against a rare unexpected quit.
 - After a long Media visit, the live picture comes back instead of the camera disconnecting.
 
 What to test
 
+- Turn on Shutter Angle, pick 180 degrees at 25p, then switch EXPOSURE to Auto and back to Manual; check the shutter follows and other speeds are offered.
 - Rotate to portrait and check that the format readout and the clock share the same top edge, and that every status readout is visible.
-- In landscape, open and collapse the assist palette. With VoiceOver on, check that only the visible buttons are announced.
 - Use a volume button as the remote shutter to start and stop a recording. Then stay in Media for 30 minutes or more and return; the live picture should come back.
