@@ -1,17 +1,14 @@
 New and changed
 
-- Camera controls and Media now use the shared OpenCine screens, so they look and behave as in the other OpenCine camera apps.
-- Exposure, shutter angle, frame-rate and storage readouts follow the camera's reported values; missing readings are marked unavailable.
-- Recording duration follows confirmed camera recording state.
+- In portrait, the large format readout now lines up exactly with the clock at the top of the screen.
 
 Fixes
 
-- ISO controls follow the camera's declared settings, including its native ISO choices.
-- Camera controls and Media use the connected camera's available settings.
-- In portrait, the status readouts use a three-column grid that grows with the number of rows.
+- After the landscape assist palette collapses, its hidden buttons are no longer reachable with VoiceOver.
+- Using a volume button as the remote shutter is protected against a rare unexpected quit.
 
 What to test
 
-- Connect your camera, try manual and automatic exposure, and compare ISO, shutter and storage readouts with the camera screen.
-- Start and stop a short recording on the camera. Check the duration and return from Media to Live View.
-- Reconnect and rotate the phone. Check missing readings and confirm that the controls stay usable. In portrait, check that every status readout is visible.
+- Rotate to portrait and check that the format readout and the clock share the same top edge, and that every status readout is visible.
+- In landscape, open and collapse the assist palette. With VoiceOver on, check that only the visible buttons are announced.
+- Use a volume button as the remote shutter to start and stop a recording; report any unexpected quit.
