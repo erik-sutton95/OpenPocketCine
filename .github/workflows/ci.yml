@@ -199,7 +199,7 @@ jobs:
     # `just native-check` from the pull request, so a fork PR would execute attacker-controlled
     # code on a persistent machine.
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -215,6 +215,31 @@ jobs:
       # repository is published. Delete when the app pins it by url + version.
       - name: Check out pinned OpenCine next to the repository
         run: scripts/checkout-opencine.sh
+      - name: Xcode version for the cache key
+        id: xcode
+        run: echo "version=$(xcodebuild -version | awk 'NR == 1 { print $2 }')" >> "$GITHUB_OUTPUT"
+      # SwiftPM checkouts and Xcode's content-addressed compilation cache, keyed on the package
+      # pins, the OpenCine pin and Xcode. Saved only from main; pull requests read main's.
+      - name: Restore Xcode package and compilation caches
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/ci-dd/SourcePackages
+            ~/ci-dd/CompilationCache.noindex
+            ~/ci-dd/ModuleCache.noindex
+          key: ios-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-${{ github.sha }}
+          restore-keys: |
+            ios-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-
+            ios-xcode-${{ steps.xcode.outputs.version }}-
+      - name: Swift package tests
+        run: just swift-test
+      # One build of the app and its unit tests; every test run below reuses it without building.
+      - name: Build the app and its tests (iOS Simulator)
+        run: |
+          just ios-generate
+          xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath ~/ci-dd \
+            -skipMacroValidation -skipPackagePluginValidation COMPILATION_CACHE_ENABLE_CACHING=YES build-for-testing
       # Nightly tier: a second private simulator boot (docs/ci.md).
       - name: Original storage oracle on a private native 2x iPad
         if: ${{ inputs.full }}
@@ -224,16 +249,16 @@ jobs:
           set -euo pipefail
           evidence="$RUNNER_TEMP/native-storage-oracle"
           mkdir -p "$evidence"
-          just ios-generate
           udid=""
           trap 'if [ -n "$udid" ]; then python3 ../OpenCine/scripts/ios-private-simulator.py delete "$udid"; fi' EXIT
           udid=$(python3 ../OpenCine/scripts/ios-private-simulator.py create \
             "opc-pocket-storage-2x-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --device "iPad Pro 11-inch (M4)" --report "$evidence/simulator-setup.json")
           xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine \
-            -destination "platform=iOS Simulator,id=$udid" -parallel-testing-enabled NO \
+            -destination "platform=iOS Simulator,id=$udid" -derivedDataPath ~/ci-dd -parallel-testing-enabled NO \
             -resultBundlePath "$evidence/storage-oracle.xcresult" \
-            -only-testing:OpenPocketCineTests/MonitorPortraitHeaderClearanceTests/testCompactDeclaredGaugeRetainsClearanceWhenSafeTopChanges test
+            -only-testing:OpenPocketCineTests/MonitorPortraitHeaderClearanceTests/testCompactDeclaredGaugeRetainsClearanceWhenSafeTopChanges \
+            test-without-building
       - name: Retain original storage oracle evidence
         if: ${{ always() && inputs.full }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -242,15 +267,35 @@ jobs:
           path: ${{ runner.temp }}/native-storage-oracle
           retention-days: 7
           if-no-files-found: error
-      - name: Run native checks
+      # The portrait header layout matrix (MonitorPortraitHeaderClearanceTests, about eight minutes
+      # hosted) renders the monitor at every size: nightly tier only (docs/ci.md).
+      - name: Unit tests
         # Xcode forwards TEST_RUNNER_ variables into the test host.
         # Preserve the existing hosted-CI versus hardware timing contract.
         env:
           TEST_RUNNER_CI: "true"
+          SKIP: ${{ inputs.full && 'MonitorPortraitHeaderClearanceTests/testCompactDeclaredGaugeRetainsClearanceWhenSafeTopChanges' || 'MonitorPortraitHeaderClearanceTests' }}
         run: |
-          just swift-test
-          just ios-test -skip-testing:OpenPocketCineTests/MonitorPortraitHeaderClearanceTests/testCompactDeclaredGaugeRetainsClearanceWhenSafeTopChanges
-          just ios-build watch-build
+          set -euo pipefail
+          device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && !found { print $2; found = 1 }')"
+          xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine \
+            -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ~/ci-dd \
+            -parallel-testing-enabled YES -parallel-testing-worker-count 2 \
+            "-skip-testing:OpenPocketCineTests/$SKIP" test-without-building
+      - name: Build the Watch companion (watchOS Simulator)
+        run: |
+          xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineWatch \
+            -destination 'generic/platform=watchOS Simulator' -derivedDataPath ~/ci-dd \
+            -skipMacroValidation -skipPackagePluginValidation COMPILATION_CACHE_ENABLE_CACHING=YES CODE_SIGNING_ALLOWED=NO build
+      - name: Save Xcode package and compilation caches
+        if: ${{ success() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/ci-dd/SourcePackages
+            ~/ci-dd/CompilationCache.noindex
+            ~/ci-dd/ModuleCache.noindex
+          key: ios-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-${{ github.sha }}
 
   conformance:
     name: Shared conformance scenarios, iOS

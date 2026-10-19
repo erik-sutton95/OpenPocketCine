@@ -5,7 +5,8 @@ name: Nightly
 # "Nightly CI failing on main" issue (label ci-nightly); the next passing night closes it.
 on:
   schedule:
-    - cron: "30 2 * * *"
+    # Staggered with the other repositories so their macOS jobs do not queue behind each other.
+    - cron: "15 3 * * *"
   workflow_dispatch:
 
 permissions:
