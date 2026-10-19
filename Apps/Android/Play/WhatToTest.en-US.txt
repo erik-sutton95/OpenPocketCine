@@ -1,12 +1,12 @@
 New and changed
 
-- This build picks up the latest shared OpenCine update; Android screens and camera behaviour match the previous build.
+- The live top bar readouts (storage, format, mode, REC and timecode) get their dark glow back, so they stay readable over bright pictures.
 
 Fixes
 
-- No Android-specific fixes in this build; the earlier Media playback, storage and portrait readout fixes stay in place.
+- No other Android-visible changes in this build; the earlier Media playback, storage and portrait readout fixes stay in place.
 
 What to test
 
-- Connect your camera, compare exposure and storage with its screen, record a short clip, open Media and return to Live View.
-- Rotate to portrait and check every status readout; report crashes or controls that stop responding.
+- Point the camera at a bright or white scene and check that every top bar readout stays readable in portrait and landscape.
+- Connect your camera, record a short clip, open Media and return to Live View; report crashes or controls that stop responding.

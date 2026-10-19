@@ -1,1 +1,1 @@
-This build picks up the latest shared OpenCine update; Android screens and camera behaviour match the previous build. Connect your camera, record a short clip, open Media, return to Live View, then rotate to portrait and check every readout.
+The live top bar readouts get their dark glow back, so they stay readable over bright pictures. Point the camera at a bright scene and check every top bar readout in portrait and landscape, then record a short clip, open Media and return to Live View.
