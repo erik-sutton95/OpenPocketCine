@@ -38,8 +38,9 @@ jobs:
             echo "::error::ref must be a full 40-character commit SHA"
             exit 1
           fi
-          if [[ ! "$TASKS" =~ ^[A-Za-z0-9:_.\ -]+$ ]]; then
-            echo "::error::tasks may contain only letters, digits, ':', '_', '.', '-' and spaces"
+          # At least one non-space: blank tasks would run Gradle's default task and pass.
+          if [[ ! "$TASKS" =~ ^[A-Za-z0-9:_.\ -]+$ || ! "$TASKS" =~ [^\ ] ]]; then
+            echo "::error::tasks must name a task and may contain only letters, digits, ':', '_', '.', '-' and spaces"
             exit 1
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
