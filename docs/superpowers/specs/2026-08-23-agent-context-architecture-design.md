@@ -26,7 +26,7 @@ client stub.
 
 - UX / FTUE design contract
 - `SECURITY.md` rewrite
-- Knowledge graph / graphify corpus
+- Knowledge graph corpus
 - Task-graph orchestration docs (diamond, bounded loops) as a standalone system
 - Deleting `STATUS.md` / `OVERNIGHT.md` / `.planning/` (already gitignored)
 - `docs/agent/` tree, `llms.txt`, extra Cursor/Gemini/Windsurf instruction files

@@ -55,25 +55,11 @@ ontology of domain terms. That pair is the GraphRAG for this repo: single-hop
 “where does X live” is a pointer, not a graph query.
 
 A committed triple store does not earn its keep here. Lookups are “open the
-pointer.” `graphify-out/` is gitignored local scratch — never commit it.
-
-Run a local graphify pass only for **multi-hop** questions (what core types a
-chrome change must call, which docs name the same opcode). Entity types to
-extract if you do:
-
-| Type | Examples |
-| --- | --- |
-| CoreType | `FeedWatchdog`, `CameraSetMailbox`, `LiveChromeThrottle` |
-| ShellSurface | live chrome, wizard, media library |
-| PointerDoc | `docs/PARITY.md`, `docs/live-session.md` |
-| Opcode | `0x09/0xa8`, pktType `0x02` |
-| Budget | 40 Hz ACK, 5 Hz HUD |
-| Assist | LUT, WAVE, ZEBRA |
-
-Relations: `IMPLEMENTS`, `OWNS_IO`, `DOCUMENTED_IN`, `MUST_MATCH`, `MAY_DIVERGE`.
-Every fact keeps a source path. Fusion (duplicate names) before you trust a path.
+pointer.” For multi-hop questions across OpenCine and this app (which Core types
+a chrome change must call, which apps use a Core symbol), use the OpenCine atlas:
+`python3 atlas/tools/atlas.py impact <symbol|path>` from the OpenCine checkout.
 
 ## When this pointer fires
 
 Parallel workers, subagents, a recover loop, “how should agents split this,” or
-a knowledge-graph / graphify request.
+a knowledge-graph request.

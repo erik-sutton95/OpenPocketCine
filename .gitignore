@@ -67,9 +67,6 @@ OVERNIGHT.md
 # Local live-view / assist UI dumps (home interiors, camera feed). Never commit.
 /images/
 
-# ── Generated knowledge-graph output (graphify CLI) ───────────────────────────
-graphify-out/
-
 # ── OS / editor junk ──────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db

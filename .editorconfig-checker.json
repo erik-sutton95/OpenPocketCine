@@ -2,7 +2,6 @@
   "Exclude": [
     "LICENSE",
     ".local/",
-    "graphify-out/",
     ".claude/skills/",
     ".claude/worktrees/",
     ".worktrees/",
