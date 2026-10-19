@@ -29,6 +29,12 @@ Android's `src/debug/` source set is exempt on the same grounds. The Play
 artifact is the release variant, which never merges it, so a debug-only change
 reaches no tester.
 
+A pin-only bot pull request (`bot/pin-core`, changed files exactly
+`opencine-pins.txt`) is also exempt on both platforms: tester notes are
+written once per release at the release gate (owner decision 2026-10-19).
+The owner admin-merges bot pin PRs after the dispatched CI is green; the
+dispatched run is the evidence, not the merge gate.
+
 ## Steps
 
 1. Run `just tester-notes-window`. Completion: the printed list is this PR's

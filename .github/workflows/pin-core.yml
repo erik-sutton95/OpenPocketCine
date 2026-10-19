@@ -1,0 +1,91 @@
+name: Pin Core
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  pin:
+    name: Pin OpenCine main
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Move the pin when Core main has advanced
+        run: |
+          set -euo pipefail
+          pin="$(awk '$1 == "OpenCine" { print $2; exit }' opencine-pins.txt)"
+          core_sha="$(git ls-remote https://github.com/erik-sutton95/OpenCine.git refs/heads/main | cut -f1)"
+          if [ -z "$pin" ] || [ -z "$core_sha" ]; then
+            echo "Could not read the current pin or Core main." >&2
+            exit 1
+          fi
+          if [ "$pin" = "$core_sha" ]; then
+            echo "OpenCine pin ${pin:0:7} is current."
+            exit 0
+          fi
+          pin_short="${pin:0:7}"
+          core_short="${core_sha:0:7}"
+
+          # bot/pin-core belongs to this workflow alone; reuse it when it is current.
+          git fetch --no-tags origin main
+          git fetch --no-tags origin \
+            refs/heads/bot/pin-core:refs/remotes/origin/bot/pin-core 2>/dev/null || true
+
+          # An unchanged bot branch must keep its SHA: a new commit restarts all of its CI.
+          branch_current=false
+          if git rev-parse -q --verify refs/remotes/origin/bot/pin-core >/dev/null; then
+            bot_pin="$(git show origin/bot/pin-core:opencine-pins.txt 2>/dev/null | awk '$1 == "OpenCine" { print $2; exit }' || true)"
+            main_sha="$(git rev-parse origin/main)"
+            merge_base="$(git merge-base origin/bot/pin-core origin/main || true)"
+            if [ "$bot_pin" = "$core_sha" ] && [ "$merge_base" = "$main_sha" ]; then
+              branch_current=true
+              echo "bot/pin-core already pins ${core_short} on current main; leaving it alone."
+            fi
+          fi
+          if [ "$branch_current" = true ]; then
+            exit 0
+          fi
+
+          git checkout -B bot/pin-core origin/main
+          sed -i -E "s/^OpenCine .*/OpenCine ${core_sha}/" opencine-pins.txt
+          git add opencine-pins.txt
+
+          export GIT_AUTHOR_NAME="github-actions[bot]"
+          export GIT_AUTHOR_EMAIL="41898283+github-actions[bot]@users.noreply.github.com"
+          export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+          export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+          git commit -m "build: pin OpenCine to main ${core_short}"
+          git push --force-with-lease origin bot/pin-core
+
+          body="$RUNNER_TEMP/pin-core-pr.md"
+          {
+            echo "Moves \`opencine-pins.txt\` from \`${pin_short}\` to Core main \`${core_short}\`."
+            echo
+            echo "Core commits since the previous pin:"
+            echo
+            gh api "repos/erik-sutton95/OpenCine/compare/${pin}...${core_sha}" \
+              --jq '.commits[].commit.message | split("\n")[0]' | sed 's/^/- /'
+          } > "$body"
+
+          title="build: pin OpenCine to main ${core_short}"
+          pr="$(gh pr list --head bot/pin-core --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "$title" --body-file "$body"
+          else
+            gh pr create --base main --head bot/pin-core --title "$title" --body-file "$body"
+          fi
+          # GITHUB_TOKEN pull requests do not trigger pull_request workflows.
+          gh workflow run ci.yml --ref bot/pin-core

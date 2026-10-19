@@ -25,7 +25,7 @@ is_forbidden_path() {
     "Osmo LUTS"|"Osmo LUTS"/*)
       return 0
       ;;
-    graphify-out|graphify-out/*|.build|.build/*|build|build/*)
+    .build|.build/*|build|build/*)
       return 0
       ;;
     Apps/Android/*/build|Apps/Android/*/build/*|Apps/Android/.gradle|Apps/Android/.gradle/*)

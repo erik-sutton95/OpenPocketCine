@@ -2,7 +2,6 @@
 # Generated files carry pseudo-random IDs that trip typos: Xcode projects (hex UUIDs)
 # and other machine-generated tables.
 extend-exclude = [
-    "graphify-out/**",
     "CHANGELOG.md",
     "*.lock",
     "**/*.storyboard",

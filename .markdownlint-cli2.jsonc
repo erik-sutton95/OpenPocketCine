@@ -21,8 +21,6 @@
     "STATUS.md",
     "OVERNIGHT.md",
     ".claude/skills/**",
-    // graphify knowledge-graph output is regenerated locally; never committed.
-    "graphify-out/**",
     // Worktree checkouts (agent sessions) are full repo copies — linted in their
     // own checkout, not the parent's.
     ".claude/worktrees/**",

@@ -34,6 +34,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Warn when the OpenCine pin is behind
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pin="$(awk '$1 == "OpenCine" { print $2; exit }' opencine-pins.txt)"
+          core_sha="$(git ls-remote https://github.com/erik-sutton95/OpenCine.git refs/heads/main | cut -f1 || true)"
+          if [ -z "$pin" ] || [ -z "$core_sha" ] || [ "$pin" = "$core_sha" ]; then
+            exit 0
+          fi
+          ahead="$(gh api "repos/erik-sutton95/OpenCine/compare/${pin}...${core_sha}" --jq '.ahead_by' 2>/dev/null || true)"
+          if [ -n "$ahead" ] && [ "$ahead" != "0" ]; then
+            echo "::warning::OpenCine pin ${pin:0:7} is ${ahead} commits behind Core main ${core_sha:0:7}"
+          fi
+
       # The app's release-note scripts delegate to the pinned shared validators.
       - name: Check out pinned OpenCine for shared metadata checks
         run: scripts/checkout-opencine.sh
@@ -84,12 +100,36 @@ jobs:
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           # Files touched by this branch's own commits. A content diff against main
           # goes blank once a sibling PR lands the same notes, and then a PR that did
           # write notes fails here.
           # Combined merge diffs also count notes rewritten during conflict resolution.
           changed_files="$(git log --diff-merges=combined --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
+          # Owner decision 2026-10-19: tester notes are written once per release at
+          # the release gate, so a pin-only bot branch is exempt.
+          pin_only_bot=false
+          if [ "$changed_files" = "opencine-pins.txt" ]; then
+            if [ "$EVENT_NAME" = "pull_request" ] &&
+              [ "$HEAD_REF" = "bot/pin-core" ] &&
+              [ "$HEAD_REPO" = "$REPOSITORY" ] &&
+              [ "$PR_AUTHOR" = "github-actions[bot]" ]; then
+              pin_only_bot=true
+            fi
+            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF_NAME" = "bot/pin-core" ]; then
+              pin_only_bot=true
+            fi
+          fi
+          if [ "$pin_only_bot" = true ]; then
+            echo "Pin-only bot change: tester notes are written once per release at the release gate."
+            exit 0
+          fi
           # Notes-check tooling is not a TestFlight archive. Require copy only when
           # production iOS paths change (docs/tester-notes.md). Test targets are not
           # in the archive either: a test-only branch has no operator-visible work to
@@ -108,12 +148,36 @@ jobs:
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           # Files touched by this branch's own commits. A content diff against main
           # goes blank once a sibling PR lands the same notes, and then a PR that did
           # write notes fails here.
           # Combined merge diffs also count notes rewritten during conflict resolution.
           changed_files="$(git log --diff-merges=combined --format= --name-only "$BASE_SHA..HEAD" | sort -u)"
+          # Owner decision 2026-10-19: tester notes are written once per release at
+          # the release gate, so a pin-only bot branch is exempt.
+          pin_only_bot=false
+          if [ "$changed_files" = "opencine-pins.txt" ]; then
+            if [ "$EVENT_NAME" = "pull_request" ] &&
+              [ "$HEAD_REF" = "bot/pin-core" ] &&
+              [ "$HEAD_REPO" = "$REPOSITORY" ] &&
+              [ "$PR_AUTHOR" = "github-actions[bot]" ]; then
+              pin_only_bot=true
+            fi
+            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF_NAME" = "bot/pin-core" ]; then
+              pin_only_bot=true
+            fi
+          fi
+          if [ "$pin_only_bot" = true ]; then
+            echo "Pin-only bot change: tester notes are written once per release at the release gate."
+            exit 0
+          fi
           # Notes-check tooling is not a Play upload. Require copy only when
           # production Android paths change (docs/tester-notes.md). Unit and
           # instrumentation sources are not in the upload either: a test-only branch
@@ -163,8 +227,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      code: ${{ steps.filter.outputs.code }}
-      android: ${{ steps.filter.outputs.android }}
+      # The pin bot dispatches CI on bot/pin-core after a GITHUB_TOKEN push, which
+      # does not trigger pull_request. Run the shared-core jobs as if the pin changed.
+      code: ${{ steps.filter.outputs.code == 'true' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'bot/pin-core') }}
+      android: ${{ steps.filter.outputs.android == 'true' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'bot/pin-core') }}
       handbook: ${{ steps.filter.outputs.handbook }}
     steps:
       # `dorny/paths-filter` fetches the base ref to diff on push / dispatch, which
