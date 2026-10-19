@@ -39,10 +39,26 @@ jobs:
           pin_short="${pin:0:7}"
           core_short="${core_sha:0:7}"
 
-          # bot/pin-core belongs to this workflow alone, so replace it wholesale.
+          # bot/pin-core belongs to this workflow alone; reuse it when it is current.
           git fetch --no-tags origin main
           git fetch --no-tags origin \
             refs/heads/bot/pin-core:refs/remotes/origin/bot/pin-core 2>/dev/null || true
+
+          # An unchanged bot branch must keep its SHA: a new commit restarts all of its CI.
+          branch_current=false
+          if git rev-parse -q --verify refs/remotes/origin/bot/pin-core >/dev/null; then
+            bot_pin="$(git show origin/bot/pin-core:opencine-pins.txt 2>/dev/null | awk '$1 == "OpenCine" { print $2; exit }' || true)"
+            main_sha="$(git rev-parse origin/main)"
+            merge_base="$(git merge-base origin/bot/pin-core origin/main || true)"
+            if [ "$bot_pin" = "$core_sha" ] && [ "$merge_base" = "$main_sha" ]; then
+              branch_current=true
+              echo "bot/pin-core already pins ${core_short} on current main; leaving it alone."
+            fi
+          fi
+          if [ "$branch_current" = true ]; then
+            exit 0
+          fi
+
           git checkout -B bot/pin-core origin/main
           sed -i -E "s/^OpenCine .*/OpenCine ${core_sha}/" opencine-pins.txt
           git add opencine-pins.txt

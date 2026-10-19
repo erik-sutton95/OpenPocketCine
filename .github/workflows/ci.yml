@@ -101,6 +101,9 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPOSITORY: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -113,8 +116,13 @@ jobs:
           # the release gate, so a pin-only bot branch is exempt.
           pin_only_bot=false
           if [ "$changed_files" = "opencine-pins.txt" ]; then
-            if [ "$HEAD_REF" = "bot/pin-core" ] ||
-            { [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF_NAME" = "bot/pin-core" ]; }; then
+            if [ "$EVENT_NAME" = "pull_request" ] &&
+              [ "$HEAD_REF" = "bot/pin-core" ] &&
+              [ "$HEAD_REPO" = "$REPOSITORY" ] &&
+              [ "$PR_AUTHOR" = "github-actions[bot]" ]; then
+              pin_only_bot=true
+            fi
+            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF_NAME" = "bot/pin-core" ]; then
               pin_only_bot=true
             fi
           fi
@@ -141,6 +149,9 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPOSITORY: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -153,8 +164,13 @@ jobs:
           # the release gate, so a pin-only bot branch is exempt.
           pin_only_bot=false
           if [ "$changed_files" = "opencine-pins.txt" ]; then
-            if [ "$HEAD_REF" = "bot/pin-core" ] ||
-            { [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF_NAME" = "bot/pin-core" ]; }; then
+            if [ "$EVENT_NAME" = "pull_request" ] &&
+              [ "$HEAD_REF" = "bot/pin-core" ] &&
+              [ "$HEAD_REPO" = "$REPOSITORY" ] &&
+              [ "$PR_AUTHOR" = "github-actions[bot]" ]; then
+              pin_only_bot=true
+            fi
+            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF_NAME" = "bot/pin-core" ]; then
               pin_only_bot=true
             fi
           fi
