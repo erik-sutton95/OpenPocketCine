@@ -426,7 +426,8 @@ jobs:
     # other job's result into one verdict. Path-filter skips and private-repo native/
     # android skips are success.
     if: always()
-    needs: [meta, changes, native, conformance, android, handbook]
+    # The conformance job is nightly-only and quarantined (docs/ci.md): it never feeds the gate.
+    needs: [meta, changes, native, android, handbook]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

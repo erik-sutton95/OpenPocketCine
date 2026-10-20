@@ -47,4 +47,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SUITE_RESULT: ${{ needs.suite.result }}
+          # Whole jobs in QUARANTINE (docs/ci.md); they keep their own issues.
+          QUARANTINED_JOBS: |
+            Shared conformance scenarios, iOS
         run: bash ../OpenCine/scripts/ci-nightly-report.sh
