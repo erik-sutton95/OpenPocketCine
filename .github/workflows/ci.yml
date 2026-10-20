@@ -218,13 +218,16 @@ jobs:
       - name: Xcode version for the cache key
         id: xcode
         run: echo "version=$(xcodebuild -version | awk 'NR == 1 { print $2 }')" >> "$GITHUB_OUTPUT"
-      # SwiftPM checkouts and Xcode's content-addressed compilation cache, keyed on the package
+      # SwiftPM checkouts (not the 2.9 GB sentry-cocoa binary artifact, a quick download) and Xcode's
+      # content-addressed compilation cache, keyed on the package
       # pins, the OpenCine pin and Xcode. Saved only from main; pull requests read main's.
       - name: Restore Xcode package and compilation caches
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/ci-dd/SourcePackages
+            ~/ci-dd/SourcePackages/checkouts
+            ~/ci-dd/SourcePackages/repositories
+            ~/ci-dd/SourcePackages/workspace-state.json
             ~/ci-dd/CompilationCache.noindex
             ~/ci-dd/ModuleCache.noindex
           key: ios-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-${{ github.sha }}
@@ -292,7 +295,9 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/ci-dd/SourcePackages
+            ~/ci-dd/SourcePackages/checkouts
+            ~/ci-dd/SourcePackages/repositories
+            ~/ci-dd/SourcePackages/workspace-state.json
             ~/ci-dd/CompilationCache.noindex
             ~/ci-dd/ModuleCache.noindex
           key: ios-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-${{ github.sha }}
