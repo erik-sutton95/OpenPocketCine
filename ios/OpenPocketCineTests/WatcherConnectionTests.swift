@@ -75,7 +75,12 @@ final class WatcherConnectionTests: XCTestCase {
             listener.cancel()
             queue.sync { held.connections.forEach { $0.cancel() } }
         }
-        let ready = await waitUntil { listener.port != nil }
+        // Like the real host's listeningPort: a port is dialable only once the listener is ready
+        // and has bound a nonzero port (port 0 fails with EADDRNOTAVAIL).
+        let ready = await waitUntil {
+            guard case .ready = listener.state, let port = listener.port else { return false }
+            return port.rawValue != 0
+        }
         XCTAssertTrue(ready)
         let port = try XCTUnwrap(listener.port)
         let client = WatcherRelayClient()
