@@ -402,6 +402,7 @@ private final class InspectorRenderInvocationCounter: @unchecked Sendable {
 /// The finite fallback throws out of the test before cancellation assertions
 /// can manufacture a cascade; each caller releases blocked work in defer.
 final class InspectorPreviewTestSignal: Sendable {
+    static let timeoutSeconds = 10
     private let name: String
     private let events: AsyncStream<Void>
     private let continuation: AsyncStream<Void>.Continuation
@@ -425,7 +426,7 @@ final class InspectorPreviewTestSignal: Sendable {
                 throw CancellationError()
             }
             group.addTask {
-                try await Task.sleep(for: .seconds(10))
+                try await Task.sleep(for: .seconds(Self.timeoutSeconds))
                 throw WaitFailure(event: self.name)
             }
             defer { group.cancelAll() }

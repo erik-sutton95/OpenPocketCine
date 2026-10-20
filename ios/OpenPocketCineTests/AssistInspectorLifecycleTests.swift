@@ -23,6 +23,10 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         let nextRequest = InspectorPreviewTestSignal(
             "Replacement inspector completed its prior request")
         let release = DispatchSemaphore(value: 0)
+        // Work stays blocked across started, dismissed, remounted and remountRequested,
+        // each with its own event wait. Include one more event budget for layout.
+        // This outer hang guard must not expire before the test intentionally releases work.
+        let blockedLifecycleTimeout = Double(InspectorPreviewTestSignal.timeoutSeconds * 5)
         let reference = try XCTUnwrap(
             CIContext().createCGImage(
                 CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1)),
@@ -41,7 +45,7 @@ final class AssistInspectorLifecycleTests: XCTestCase {
                     clock.freezeAtLastRead()
                     started.signal()
                     XCTAssertEqual(
-                        release.wait(timeout: .now() + 10), .success,
+                        release.wait(timeout: .now() + blockedLifecycleTimeout), .success,
                         "Test did not release the mounted inspector's first worker")
                 } else if invocation == 2 {
                     resumed.signal()
