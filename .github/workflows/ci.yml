@@ -224,13 +224,13 @@ jobs:
       # SwiftPM checkouts (not the 2.9 GB sentry-cocoa binary artifact, a quick download) and Xcode's
       # content-addressed compilation cache, keyed on the package
       # pins, the OpenCine pin and Xcode. Saved only from main; pull requests read main's.
+      # No workspace-state.json either: it records that artifact as present, so Xcode skips the download.
       - name: Restore Xcode package and compilation caches
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/ci-dd/SourcePackages/checkouts
             ~/ci-dd/SourcePackages/repositories
-            ~/ci-dd/SourcePackages/workspace-state.json
             ~/ci-dd/CompilationCache.noindex
             ~/ci-dd/ModuleCache.noindex
           key: ios-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-${{ github.sha }}
@@ -301,7 +301,6 @@ jobs:
           path: |
             ~/ci-dd/SourcePackages/checkouts
             ~/ci-dd/SourcePackages/repositories
-            ~/ci-dd/SourcePackages/workspace-state.json
             ~/ci-dd/CompilationCache.noindex
             ~/ci-dd/ModuleCache.noindex
           key: ios-xcode-${{ steps.xcode.outputs.version }}-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-${{ github.sha }}
