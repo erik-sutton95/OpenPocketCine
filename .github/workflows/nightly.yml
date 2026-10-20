@@ -17,8 +17,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # GitHub can start a scheduled run hours late (2026-10-20: 07:50 to 09:38 UTC for 02:30 to 04:45
+  # crons). A late nightly would take the daytime macOS runners from pull requests, so a scheduled
+  # run that starts at 07:00 UTC or later skips; manual dispatch always runs.
+  window:
+    name: Night window
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          hour=$(date -u +%H)
+          if [ "$EVENT" = schedule ] && [ "$hour" -ge 7 ]; then
+            echo "::notice::scheduled nightly started at ${hour}:xx UTC, after the night window; skipped"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   suite:
     name: Full suite
+    needs: window
+    if: needs.window.outputs.run == 'true'
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
@@ -28,8 +52,8 @@ jobs:
 
   report:
     name: Tracking issue
-    needs: suite
-    if: always()
+    needs: [window, suite]
+    if: always() && needs.window.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
