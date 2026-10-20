@@ -199,7 +199,8 @@ jobs:
     # `just native-check` from the pull request, so a fork PR would execute attacker-controlled
     # code on a persistent machine.
     runs-on: macos-latest
-    timeout-minutes: 45
+    # The nightly tier adds the portrait header layout matrix and the iPad storage oracle.
+    timeout-minutes: ${{ inputs.full && 90 || 45 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
