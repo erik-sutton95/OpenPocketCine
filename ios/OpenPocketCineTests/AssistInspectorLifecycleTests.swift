@@ -10,7 +10,27 @@ import MonitorPresentation
 
 @MainActor
 final class AssistInspectorLifecycleTests: XCTestCase {
+    override func record(_ issue: XCTIssue) {
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) issue: \(issue.compactDescription)")
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) associatedError: \(String(describing: issue.associatedError))")
+        for frame in issue.sourceCodeContext.callStack {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) origin: \(frame.symbolInfo?.symbolName ?? String(frame.address))")
+        }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) stack: \(Thread.callStackSymbols.joined(separator: "\n"))")
+        super.record(issue)
+    }
+
     func testBlockedRenderKeepsItsSlotAcrossActualInspectorDismissalAndRemount() async throws {
+        do {
+            try await exerciseBlockedRender()
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) fixture-returned normally after all cleanup")
+        } catch {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) fixture-threw after cleanup \(String(reflecting: type(of: error))): \(error)")
+            throw error
+        }
+    }
+
+    private func exerciseBlockedRender() async throws {
         let model = AppModel()
         let clock = InspectorPreviewTestClock(advancesUntilFrozen: true)
         let work = InspectorLifecycleWorkProbe()
@@ -35,6 +55,7 @@ final class AssistInspectorLifecycleTests: XCTestCase {
             now: { clock.now },
             operation: { _, _ in
                 let invocation = work.begin()
+                print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) worker-enter")
                 defer {
                     work.end()
                     if invocation == 1 { finished.signal() }
@@ -60,7 +81,12 @@ final class AssistInspectorLifecycleTests: XCTestCase {
                 [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &source),
             kCVReturnSuccess)
         let publicationSource = model.monitorSamples.openSource(.live)
-        defer { model.monitorSamples.closeSource(publicationSource) }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) source-open")
+        defer {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) source-close before active=\(publicationSource.isActive)")
+            model.monitorSamples.closeSource(publicationSource)
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) source-close after active=\(publicationSource.isActive)")
+        }
         model.monitorSamples.publish(
             publicationSource,
             source: try XCTUnwrap(source), transfer: .rec709, reportedTransfer: .rec709, bundle: nil
@@ -79,34 +105,69 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         window.frame = CGRect(origin: .zero, size: size)
         window.rootViewController = host
         window.makeKeyAndVisible()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) window-mount")
         host.view.frame = window.bounds
         defer {
             release.signal()
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) cleanup-worker-release")
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) cleanup")
             model.assist.configureTool = nil
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) cleanup-tool-clear")
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) window-hide before sourceActive=\(publicationSource.isActive)")
             window.isHidden = true
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) host-detach before sourceActive=\(publicationSource.isActive)")
             window.rootViewController = nil
             originalKeyWindow?.makeKeyAndVisible()
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) window-cleanup finished sourceActive=\(publicationSource.isActive)")
         }
         model.assist.configureTool = .peaking
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) first-tool")
         host.view.setNeedsLayout()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) initial-layout before")
         host.view.layoutIfNeeded()
-        try await started.wait()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) initial-layout after")
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait started")
+        do { try await started.wait() } catch {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait started threw \(String(reflecting: type(of: error))): \(error)")
+            throw error
+        }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) received started")
         let admittedAt = clock.now
         probe.onDisappear = { dismissed.signal() }
         probe.onAppear = { remounted.signal() }
 
         model.assist.configureTool = nil
         host.view.setNeedsLayout()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) dismissal-layout before")
         host.view.layoutIfNeeded()
-        try await dismissed.wait()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) dismissal-layout after")
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait dismissed")
+        do { try await dismissed.wait() } catch {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait dismissed threw \(String(reflecting: type(of: error))): \(error)")
+            throw error
+        }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) received dismissed")
         XCTAssertNil(probe.selected)
         clock.now = admittedAt + 100_000_000
         clock.signalNextRead(remountRequested)
         model.assist.configureTool = .zebra
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) remount")
         host.view.setNeedsLayout()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) remount-layout before")
         host.view.layoutIfNeeded()
-        try await remounted.wait()
-        try await remountRequested.wait()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) remount-layout after")
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait remounted")
+        do { try await remounted.wait() } catch {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait remounted threw \(String(reflecting: type(of: error))): \(error)")
+            throw error
+        }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) received remounted")
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait remountRequested")
+        do { try await remountRequested.wait() } catch {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait remountRequested threw \(String(reflecting: type(of: error))): \(error)")
+            throw error
+        }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) received remountRequested")
         XCTAssertEqual(probe.mounts, 2, "Exercise real removal/reinsertion, not just tab mutation")
         XCTAssertEqual(probe.selected, .zebra)
         XCTAssertTrue(model.inspectorPreview === renderer)
@@ -115,16 +176,31 @@ final class AssistInspectorLifecycleTests: XCTestCase {
         // Stay below the original admission deadline when releasing CI: rejected
         // requests cannot queue to run automatically behind the canceled work.
         release.signal()
-        try await finished.wait()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait finished")
+        do { try await finished.wait() } catch {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait finished threw \(String(reflecting: type(of: error))): \(error)")
+            throw error
+        }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) received finished")
         // The real remounted updateImage loop awaits render before asking for
         // another admission. Its next clock read therefore follows completion
         // of any incorrectly queued remount work, which must fail count == 1.
         // Keep time below the deadline until that caller-loop barrier arrives.
         clock.signalNextRead(nextRequest)
-        try await nextRequest.wait()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait nextRequest")
+        do { try await nextRequest.wait() } catch {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait nextRequest threw \(String(reflecting: type(of: error))): \(error)")
+            throw error
+        }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) received nextRequest")
         XCTAssertEqual(work.count, 1, "Rejected requests must not queue behind the worker")
         clock.now = admittedAt + 200_000_000
-        try await resumed.wait()
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait resumed")
+        do { try await resumed.wait() } catch {
+            print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) wait resumed threw \(String(reflecting: type(of: error))): \(error)")
+            throw error
+        }
+        print("[DEBUG-pocket910] t=\(ProcessInfo.processInfo.systemUptime) received resumed")
         XCTAssertEqual(work.count, 2)
         XCTAssertEqual(work.maximumConcurrent, 1)
         XCTAssertFalse(model.session.holdsMonitor)

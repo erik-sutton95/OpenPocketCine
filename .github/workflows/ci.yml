@@ -18,6 +18,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      inspector910_diagnostic:
+        description: One Pocket910 throwing-boundary diagnostic; no other jobs
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       full:
@@ -37,6 +42,7 @@ concurrency:
 
 jobs:
   meta:
+    if: ${{ !inputs.inspector910_diagnostic }}
     name: Meta checks
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -131,6 +137,7 @@ jobs:
           args: "-color"
 
   changes:
+    if: ${{ !inputs.inspector910_diagnostic }}
     name: Detect changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -427,7 +434,7 @@ jobs:
     # leaves a pull request blocked forever — so this job always runs and collapses every
     # other job's result into one verdict. Path-filter skips and private-repo native/
     # android skips are success.
-    if: always()
+    if: ${{ always() && !inputs.inspector910_diagnostic }}
     # The conformance job is nightly-only and quarantined (docs/ci.md): it never feeds the gate.
     needs: [meta, changes, native, android, handbook]
     runs-on: ubuntu-latest
@@ -448,3 +455,122 @@ jobs:
             esac
           done
           echo "All CI jobs passed or were skipped: $RESULTS"
+
+  inspector910_diagnostic:
+    name: Pocket910 native throwing-boundary diagnostic
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.inspector910_diagnostic }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard original source and toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pocket910-diagnostic"
+          git merge-base --is-ancestor 91069003684ec0fe256d87d88849bad2e0e938f0 HEAD
+          git diff 91069003684ec0fe256d87d88849bad2e0e938f0 --name-only > "$RUNNER_TEMP/pocket910-diagnostic/changed-paths.txt"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          actual=set((Path(os.environ['RUNNER_TEMP'])/'pocket910-diagnostic/changed-paths.txt').read_text().splitlines())
+          assert actual == {'.github/workflows/ci.yml','ios/OpenPocketCineTests/AssistInspectorLifecycleTests.swift'}, actual
+          assert Path('opencine-pins.txt').read_text().splitlines()[-1] == 'OpenCine fe2bd22f9736d87e4cc324120c048d048e56aee6'
+          PY
+          xcodebuild -version | tee "$RUNNER_TEMP/pocket910-diagnostic/xcode-version.txt"
+          test "$(xcodebuild -version | head -1)" = 'Xcode 26.6'
+          test "$(xcodebuild -version | tail -1)" = 'Build version 17F113'
+          git rev-parse HEAD > "$RUNNER_TEMP/pocket910-diagnostic/head.txt"
+          git diff 91069003684ec0fe256d87d88849bad2e0e938f0 > "$RUNNER_TEMP/pocket910-diagnostic/source.diff"
+      - name: Install original native tooling and exact Core pin
+        run: |
+          set -euo pipefail
+          brew install just swift-format xcodegen || true
+          scripts/checkout-opencine.sh
+          test "$(git -C ../OpenCine rev-parse HEAD)" = fe2bd22f9736d87e4cc324120c048d048e56aee6
+      - name: Restore original package and compilation cache inputs
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/ci-dd/SourcePackages/checkouts
+            ~/ci-dd/SourcePackages/repositories
+            ~/ci-dd/CompilationCache.noindex
+            ~/ci-dd/ModuleCache.noindex
+          key: ios-xcode-26.6-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-${{ github.sha }}
+          restore-keys: |
+            ios-xcode-26.6-${{ hashFiles('ios/Package.resolved', 'opencine-pins.txt') }}-
+            ios-xcode-26.6-
+      - name: Build the original native scheme once
+        run: |
+          set -euo pipefail
+          just ios-generate
+          perl -e 'alarm 1800; exec @ARGV' xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath ~/ci-dd \
+            -skipMacroValidation -skipPackagePluginValidation COMPILATION_CACHE_ENABLE_CACHING=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            build-for-testing 2>&1 | tee "$RUNNER_TEMP/pocket910-diagnostic/build.log"
+      - name: Run original failing suite prefix once on owned CI runtime
+        env:
+          TEST_RUNNER_CI: "true"
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/pocket910-diagnostic"
+          udid=""
+          # shellcheck disable=SC2329 # Invoked by the EXIT trap.
+          cleanup() {
+            status=$?
+            set +e
+            if [ -n "$udid" ]; then
+              xcrun simctl shutdown "$udid" > "$evidence/host-cleanup.log" 2>&1
+              xcrun simctl delete "$udid" >> "$evidence/host-cleanup.log" 2>&1
+              cleanup_status=$?
+              printf '%s\n' "$cleanup_status" > "$evidence/host-delete-exit.txt"
+              if [ "$status" -eq 0 ]; then status=$cleanup_status; fi
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+          udid=$(xcrun simctl create "pocket910-boundary-$GITHUB_RUN_ID" \
+            com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-26-2)
+          printf '%s\n' "$udid" > "$evidence/owned-device.txt"
+          # Match the original default simulator accessibility configuration.
+          # Do not call the accessibility-enabling UI-test helper.
+          perl -e 'alarm 180; exec @ARGV' xcrun simctl bootstatus "$udid" -b
+          xcrun simctl list devices available --json > "$evidence/devices-at-run.json"
+          set +e
+          perl -e 'alarm 600; exec @ARGV' xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine \
+            -destination "platform=iOS Simulator,id=$udid" -derivedDataPath ~/ci-dd -parallel-testing-enabled NO \
+            -resultBundlePath "$evidence/prefix.xcresult" \
+            -only-testing:OpenPocketCineTests/AppDiagnosticsTests \
+            -only-testing:OpenPocketCineTests/AssistInspectorLifecycleTests \
+            test-without-building 2>&1 | tee "$evidence/test.log"
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > "$evidence/test-exit.txt"
+          exit "$status"
+      - name: Record actual execution counts without changing test verdict
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os,json,re
+          from pathlib import Path
+          e=Path(os.environ['RUNNER_TEMP'])/'pocket910-diagnostic'
+          p=e/'test.log'
+          text=p.read_text(errors='replace') if p.exists() else ''
+          cases=re.findall(r"Test Case '-\[([^]]+)\]' (started|passed|failed)",text)
+          (e/'actual-cases.json').write_text(json.dumps(cases,indent=2)+'\n')
+          starts=[name for name,state in cases if state=='started']
+          assert len(starts)==4, starts
+          assert starts[0]=='OpenPocketCineTests.AppDiagnosticsTests testHolderWiresThisAppsNamesDestinationAndRedaction', starts
+          assert starts[1]=='OpenPocketCineTests.AssistInspectorLifecycleTests testBlockedRenderKeepsItsSlotAcrossActualInspectorDismissalAndRemount', starts
+          PY
+      - name: Retain complete diagnostic evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pocket910-native-boundary-diagnostic
+          path: ${{ runner.temp }}/pocket910-diagnostic
+          retention-days: 7
+          if-no-files-found: error
