@@ -31,7 +31,9 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Cancel only a superseded pull-request run. Main pushes, dispatches and the nightly's call run
+  # to completion (a newer pending main run still replaces an older pending one).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   meta:
