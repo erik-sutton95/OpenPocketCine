@@ -35,10 +35,11 @@ jobs:
           tail -1 opencine-pins.txt
       - name: Check out OpenCine next to the repository
         run: scripts/checkout-opencine.sh
+      # UIReview first: the last build-for-testing installs the app, and only OpenPocketCine embeds the unit bundle.
       - name: Build both test schemes
         run: |
           just ios-generate
-          for scheme in OpenPocketCine OpenPocketCineUIReview; do
+          for scheme in OpenPocketCineUIReview OpenPocketCine; do
             xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme $scheme \
               -destination 'generic/platform=iOS Simulator' -derivedDataPath ~/ci-dd \
               -skipMacroValidation -skipPackagePluginValidation ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
