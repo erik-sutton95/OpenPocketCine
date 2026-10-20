@@ -1,0 +1,79 @@
+name: Diag conformance iterations
+
+# Diagnostic only (do not merge): repeats the nightly's flaky hosted tests to measure their
+# failure rate, once at the pinned OpenCine and once at a candidate fix commit.
+on:
+  push:
+    branches: ["diag/conformance-iterations"]
+
+permissions:
+  contents: read
+
+jobs:
+  iterate:
+    name: Iterate (${{ matrix.core }})
+    runs-on: macos-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        core: [pin, fix]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: latest-stable
+      - name: Install native tooling
+        run: brew install just xcodegen || true
+      - name: Choose the OpenCine commit
+        if: matrix.core == 'fix'
+        run: |
+          sha=$(cat diag-core-fix.txt)
+          sed -i '' "s/^OpenCine [0-9a-f]*$/OpenCine $sha/" opencine-pins.txt
+          tail -1 opencine-pins.txt
+      - name: Check out OpenCine next to the repository
+        run: scripts/checkout-opencine.sh
+      - name: Build both test schemes
+        run: |
+          just ios-generate
+          for scheme in OpenPocketCine OpenPocketCineUIReview; do
+            xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme $scheme \
+              -destination 'generic/platform=iOS Simulator' -derivedDataPath ~/ci-dd \
+              -skipMacroValidation -skipPackagePluginValidation ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+              build-for-testing -quiet
+          done
+      - name: Gallery sweep and share, 6 iterations
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/diag"
+          udid=$(../OpenCine/scripts/ios-private-simulator.py create "opc-diag-$GITHUB_RUN_ID-${{ matrix.core }}")
+          echo "DIAG_UDID=$udid" >> "$GITHUB_ENV"
+          xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineUIReview \
+            -destination "platform=iOS Simulator,id=$udid" -derivedDataPath ~/ci-dd \
+            -parallel-testing-enabled NO -test-iterations 6 \
+            -resultBundlePath "$RUNNER_TEMP/diag/ui.xcresult" \
+            -only-testing:OpenPocketCineUITests/ConfirmationCancel/testCancellingGalleryDeleteKeepsTheSelection \
+            -only-testing:OpenPocketCineUITests/ShareRoundTrip/testGalleryAndPlayerSurviveShareAndDelivery \
+            test-without-building 2>&1 | grep -E "Test Case .*(passed|failed)|error: -\[" || true
+      - name: Assist inspector lifecycle, 10 iterations on the default iPhone
+        continue-on-error: true
+        env:
+          TEST_RUNNER_CI: "true"
+        run: |
+          device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && !found { print $2; found = 1 }')"
+          xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine \
+            -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ~/ci-dd \
+            -parallel-testing-enabled NO -test-iterations 10 \
+            -resultBundlePath "$RUNNER_TEMP/diag/unit.xcresult" \
+            -only-testing:OpenPocketCineTests/AssistInspectorLifecycleTests \
+            test-without-building 2>&1 | grep -E "Test Case .*(passed|failed)|error: -\[" || true
+      - name: Retain evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: diag-${{ matrix.core }}
+          path: ${{ runner.temp }}/diag
+          retention-days: 3
+          if-no-files-found: warn
