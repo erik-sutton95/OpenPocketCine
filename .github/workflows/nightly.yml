@@ -40,9 +40,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # OpenCine's scripts/ci-nightly-report.sh, at the pin, keeps the issue for every repository.
-      - name: Check out pinned OpenCine next to the repository
-        run: scripts/checkout-opencine.sh
+      # OpenCine's scripts/ci-nightly-report.sh keeps the issue for every repository. It is CI
+      # plumbing, tested in OpenCine's Meta job, so it runs from OpenCine main rather than the pin:
+      # report fixes reach every app's next nightly without waiting for a pin bump.
+      - name: Check out OpenCine's nightly report script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: erik-sutton95/OpenCine
+          ref: main
+          path: .opencine-report
+          sparse-checkout: scripts/ci-nightly-report.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Open, update or close the nightly tracking issue
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,4 +59,4 @@ jobs:
           # Whole jobs in QUARANTINE (docs/ci.md); they keep their own issues.
           QUARANTINED_JOBS: |
             Shared conformance scenarios, iOS
-        run: bash ../OpenCine/scripts/ci-nightly-report.sh
+        run: bash .opencine-report/scripts/ci-nightly-report.sh

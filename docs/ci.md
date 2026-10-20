@@ -26,8 +26,9 @@ Every night at 03:15 UTC on `main` (OpenCine 02:30, Insta 04:00, Z 04:45), and o
 `workflow_dispatch`. It calls `ci.yml` with `full: true`: every job regardless of paths, plus
 the shared conformance scenarios on iOS, the portrait header layout matrix and the original
 storage oracle on a private 2x iPad. On `main`, OpenCine's
-`scripts/ci-nightly-report.sh` keeps one issue, **Nightly CI failing on main** (label
-`ci-nightly`): opened or updated with the failing jobs and run link on failure, closed by the
+`scripts/ci-nightly-report.sh` (from OpenCine main, not the pin) keeps one issue,
+**Nightly CI failing on main** (label `ci-nightly`): opened or updated with the failing jobs
+and run link on failure, closed by the
 next passing night.
 
 ## QUARANTINE
