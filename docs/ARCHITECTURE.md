@@ -375,12 +375,14 @@ state without inventing a final seek; the player adapter decides whether an
 interrupted current clip resumes. Source changes and disappearance cannot
 restart a dismissed player.
 
-The migration is intentionally incomplete: media/playback orchestration, scope
-implementations and delivery coordinators still live in the Osmo shell, and
-Nikon has not been migrated to these local packages. Full backend contracts and
-cross-repository package adoption follow the documented engine phases. Do not
-claim the thin-brand-app end state until another backend inherits the same
-screens and workflows without copying them.
+The migration remains incomplete, but shared adoption now includes iOS
+`MonitorClipDelivery`, Android `MonitorOriginalDeliveryHost` and Android
+`MonitorAssistState`. Shared MonitorUI owners render Apple scope plots. The app
+retains source calibration, composition and native integration policy. Android
+original sharing does not imply conversion or Frame.io parity. Current adoption
+and remaining verification are tracked in the [engine plan](SHARED-MONITOR-ENGINE.md).
+Do not claim the thin-brand-app end state until another backend inherits the same
+screens and workflows without copying them and the advertised paths are qualified.
 
 ## Apple session heartbeat
 

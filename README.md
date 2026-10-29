@@ -14,7 +14,7 @@ Free and open source.
 
 [![Join the TestFlight](https://img.shields.io/badge/TestFlight-iPhone_%26_iPad-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/1tmt3aEB) [![Get it on Google Play](https://img.shields.io/badge/Google_Play-Android_beta-01875F?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.opencapture.openpocketcine&hl=en-US&ah=mXzHtdYCMQTB83vt0jIRLnOOZaA) [![Download APK](https://img.shields.io/badge/Download_APK-No_Play_Store-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/erik-sutton95/OpenPocketCine/releases/tag/sideload-v0.1.5-8)
 
-[Website](https://opencapture.org/openpocketcine/) · [Docs](https://opencapture.org/openpocketcine/docs/) · [Roadmap](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas) · [Report a bug](https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml)
+[Website](https://opencapture.org/openpocketcine/) · [Docs](https://opencapture.org/openpocketcine/docs/) · [Roadmap](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas-feature-requests) · [Report a bug](https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml)
 
 <br>
 
@@ -170,9 +170,10 @@ and [Mark Exploring New Stuff](https://www.youtube.com/watch?v=cqGz6-kFcDA).
 ## Roadmap
 
 The roadmap lives in [GitHub Discussions](https://github.com/erik-sutton95/OpenPocketCine/discussions).
-Browse the [Ideas category](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas)
+Browse the [Ideas category](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas-feature-requests)
 to vote, add production context, or propose what to tackle next. Roadmap threads describe
-direction, not promised dates. Engineering-phase detail lives in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+direction, not promised dates. Current engineering priorities, adoption status and acceptance criteria live in
+[`docs/ROADMAP.md`](docs/ROADMAP.md). Older discussion summaries may describe earlier builds.
 
 ## Free. Open source. Yours
 
@@ -257,7 +258,7 @@ Contributions are welcome.
 - Bugs go in [GitHub's bug-report form](https://github.com/erik-sutton95/OpenPocketCine/issues/new?template=bug_report.yml).
   Never put camera Wi-Fi passwords or captures in an issue.
 - Ideas and questions go in **GitHub Discussions**:
-  [Ideas](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas) and
+  [Ideas](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas-feature-requests) and
   [Q&A](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/q-a).
 - Please read the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). For security issues, see
   [`SECURITY.md`](SECURITY.md).

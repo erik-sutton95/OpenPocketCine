@@ -449,7 +449,7 @@ SIMULATED native tests host the actual shared wave/parade/vector views and exerc
 make/update display configuration, pixel format, layer EDR/colorspace and delegate owner.
 They do not claim physical HDR brightness or rendered-pixel qualification.
 
-### Applied Apple assist and combined delivery candidate
+### Applied Apple assist and combined delivery candidate (historical snapshot)
 
 The reviewed Apple assist owner proposal is applied locally beside the seven-file
 shared delivery adapter. Original app native fixtures remain unchanged. Added shared
@@ -457,6 +457,9 @@ state scenarios preserve every original test body; narrow formatting touches cha
 code only. Shared delivery and DJI source are integrated locally in the owned checkout.
 Combined app portable, strict, repository, both-architecture iOS and bounded native
 qualification are pending. Prior settings/DJI results qualify their earlier sources,
-not this uncompiled combined candidate. Android assist adoption remains a separate
-source proposal, with the current Android implementation retained. Physical behavior
-and full thin-app exit remain untested/incomplete. No pins or remote refs move.
+not that uncompiled combined candidate. At that snapshot Android assist adoption
+was a separate source proposal. Current source now constructs shared
+`MonitorAssistState` and uses `MonitorOriginalDeliveryHost` for original sharing;
+see the [current adoption review](SHARED-MONITOR-ENGINE.md#11-migration-status-and-remaining-work).
+This supersedes the proposal status, not the missing physical evidence. Conversion,
+Frame.io parity and the full thin-app exit are not established by this adoption.

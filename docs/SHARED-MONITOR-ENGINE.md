@@ -1,9 +1,9 @@
 # Shared Monitor Engine — Multi-Brand Architecture
 
-**Status:** design intent (2026-09-06)
+**Status:** design intent with adoption review (2026-10-30); implementation is not physical qualification
 **Audience:** human maintainers + coding agents (Grok / Cursor / CLI)
 **Related products today:** OpenPocketCine (DJI Osmo), OpenZCine (Nikon Z)
-**Planned adapters later:** Insta360 (e.g. Luna Ultra), Fujifilm, others
+**Other adapters:** tracked in OpenCine and their app repositories; their readiness is not established by this Pocket review
 
 This document is the source of truth for *how* we scale to many camera brands without multiplying full apps. If an agent is about to fork UI, media, scopes, or delivery per brand: **stop and re-read this file.**
 
@@ -87,7 +87,7 @@ This document is the source of truth for *how* we scale to many camera brands wi
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Rule for agents:** business/protocol *policy* that is brand-agnostic stays in the shared engine. Wire codecs and OS calls stay in shells. Brand-specific *bytes on the wire* stay in adapters.
+**Rule for agents:** business/protocol *policy* that is brand-agnostic stays in the shared engine. Portable wire codecs and brand-specific *bytes on the wire* stay in adapters. OS calls belong in native integration modules or shells.
 
 ---
 
@@ -134,7 +134,7 @@ This document is the source of truth for *how* we scale to many camera brands wi
 
 ## 7. `CameraBackend` contract (agent-facing sketch)
 
-Agents implementing or refactoring should aim for a portable Swift protocol (names can be refined, responsibilities must not). Kotlin/Android calls the same ideas via facade/JNI where the project already does.
+The protocol below is a historical responsibility sketch, not a new API to introduce. Current code uses OpenCineCore camera sessions and DJI adapters; follow [Architecture](ARCHITECTURE.md) and extend those contracts. Kotlin/Android follows its existing integration and facade/JNI boundaries.
 
 ```swift
 public struct CameraCapabilities: Equatable, Sendable {
@@ -239,100 +239,44 @@ Frame.io today: Adobe IMS OAuth 2.0 PKCE (Native App, no client secret), Create 
 
 ---
 
-## 10. Repository layout (target)
+## 10. Repository layout
 
-Prefer a **monorepo** long-term so agents cannot drift packages. Until migration completes, a multi-repo setup with a shared package is acceptable if versioned strictly.
+OpenCine is the shared platform repository. This app consumes the sibling checkout
+through SwiftPM and a Gradle included build, pinned by
+[opencine-pins.txt](../opencine-pins.txt). The checkout script resolves an exact
+revision; a moving upstream branch is not a release dependency.
 
-### 10.1 Proposed monorepo sketch
-
-```text
-OpenCaptureMonitor/   # working title for the monorepo — rename when the umbrella engine name is chosen
-  Packages/
-    MonitorEngine/           # scopes, layout policy, media models, delivery coordinator
-    CameraBackend/           # protocol + shared types (capabilities, clip descriptors)
-    FrameioKit/              # Platform API v4 + PKCE planning (optional split)
-    DeliveryKit/             # destination protocol + hop orchestration hooks
-  Adapters/
-    OsmoDUML/
-    NikonZ/
-    Insta360/                # later
-    Fujifilm/                # later
-  Apps/
-    OpenPocketCine/          # iOS + Android app targets
-    OpenZCine/
-    …
-  docs/
-    SHARED-MONITOR-ENGINE.md  # this file
-    PARITY.md                 # operator-visible sameness across brands
-  Tests/
-```
-
-### 10.2 Until monorepo exists
-
-1. Extract shared Swift packages from the stronger shared surface (often OpenZCine Frame.io + media delivery docs; OpenPocketCine SoftAP/DUML policy).
-2. Both brand repos depend on the same package versions (SPM path or tagged).
-3. Agents MUST update the shared package for cross-brand features, then bump both apps — never only one app’s copy.
+Keep brand app repositories and their native integration boundaries. The early
+proposal to move every app into a new umbrella monorepo is not an active
+prerequisite. Shared changes belong in OpenCine, followed by explicit consumer pin
+updates and verification. Published SPM/Maven packages remain a separate delivery
+milestone; do not invent a second package layout while completing current work.
 
 ---
 
-## 11. Migration plan (phased — agents follow in order)
+## 11. Migration status and remaining work
 
-### Phase 0 — Freeze the wrong path
+Reviewed against app `35f51dc` on 2026-10-30. These are source-adoption findings;
+the dependency checkout and current combined physical build were not verified in
+this review. Historical candidate results apply only to their recorded revisions.
 
-- No Flutter spike for production.
-- No new per-brand Frame.io clone.
-- No user-facing “Camera to Cloud” copy (fix OpenZCine README etc. when touching those files).
+| Area | Integrated in current app source | Remaining exit evidence |
+| --- | --- | --- |
+| Shared presentation and capabilities | Both shells consume shared pages and capability projections described in [Architecture](ARCHITECTURE.md). | Qualify navigation, control admission and accessibility on the current combined build. |
+| Delivery and media | iOS `MediaDelivery.swift` calls `MonitorClipDelivery`; Android `MediaDeliveryPopup.kt` calls `MonitorOriginalDeliveryHost`. | Prove cancellation, original-cache ownership and physical delivery. Android original sharing does not implement LUT bake, log conversion or Frame.io. |
+| Assists and scopes | Android `LiveAssistState.kt` constructs `MonitorAssistState`; Apple scope views use shared MonitorUI owners. | Retain source calibration and platform I/O boundaries; qualify current rendering, thermal load and live budgets. |
+| Camera controls | Existing OpenCineCore sessions and DJI adapters own the common control seam. | Qualify camera-reported confirmation, rejected/timed-out writes and stale-connection cancellation on each claimed body. Do not add a parallel `CameraBackend` wrapper just to match the sketch above. |
+| Thin app exit | Substantial shared adoption exists; app composition, source policy and native adapters remain. | Demonstrate another backend inheriting the same workflows without copied screens. Pocket source inspection alone cannot establish cross-brand completion. |
 
-### Phase 1 — Document + capability inventory
+Execution order and operator priorities live in [ROADMAP.md](ROADMAP.md): first
+qualify the pinned combination, then fill explicit capability gaps in bounded
+increments. Do not restart the old extraction phases merely because a dated note
+calls an already adopted owner a proposal. Keep physical gaps and platform
+exceptions in [PARITY.md](PARITY.md).
 
-- Inventory features in OpenPocketCine vs OpenZCine.
-- Mark each: Shared engine / Osmo adapter / Nikon adapter / Shell-only.
-- List capability flags needed for current UI differences (gimbal stick, head track, SoftAP hop, etc.).
-
-### Phase 2 — Extract Delivery + Media orchestration
-
-- Move delivery coordinator + Frame.io client planning into shared packages.
-- Both apps call shared code; brand apps only supply OAuth plist/gradle config.
-- Prove: identical Frame.io upload behavior on Osmo and Nikon builds.
-
-### Phase 3 — Extract Monitor scopes/assists/layout policy
-
-- Unify scope/assist entry points and layout policy.
-- Wire capability gates for gimbal cluster.
-
-### Phase 4 — Formalize `CameraBackend`
-
-- Wrap existing Osmo session as `OsmoAdapter`.
-- Wrap existing Nikon session as `NikonAdapter`.
-- Brand apps construct adapter at launch; no protocol code in UI views.
-
-Candidate (OpenCine plan CORE-02, local branch `opencine/core-02-dji`): ISO, white balance and
-record start/stop go through `OpenCineCore.CameraSession` adapters, `session.control`
-(OpenCine `Sources/OpenCineDJI/DJICameraSessionAdapter.swift`, Android OpenCine
-`Android/dji/.../DjiCameraSessionAdapter.kt`). Receipts follow the Core lifecycle: an ACK is
-`accepted`, only the camera's own status confirms, a settle without ACK or matching status is
-`timedOut` (never success), a NACK is `rejected(cameraRefused)`. The record lamp, gamepad,
-watcher and Watch resolve to explicit start or stop from the reported state; a start while
-recording sends nothing, and unknown record state is refused. On iOS `status` is camera-reported
-for these controls and a pending WB request is `pendingWhiteBalance`; Android keeps its
-optimistic HUD values and the seam reads separate camera-reported values. White balance tint is
-its own Core setting (`whiteBalanceTint`, -100...100); DJI sends white balance and tint in one
-frame, so each write is composed on the pending (else reported) white balance, and a sheet that
-changes both submits two operations. Built against OpenCineCore 8c2415c (CORE-01b).
-Hardware-unqualified.
-
-### Phase 5 — Thin brand apps
-
-- Strip duplicated SwiftUI/Compose screens that are now shared.
-- Keep storefront identity.
-
-### Phase 6 — Add brand N (Insta360 / Fuji)
-
-- New adapter package + new thin app target.
-- Reuse engine; only implement backend + capabilities + credentials.
-- Partnership/SDK/loaner work is **out of band** (docs/outreach), not a reason to fork UI.
-
-**Done when:** a coding agent can add a stub backend + empty brand app and inherit monitoring + media + delivery UI without copying screens.
+**Done when:** a new backend and thin brand app inherit monitoring, media and
+supported delivery workflows without copying screens, with consumer tests and
+physical qualification for the advertised capabilities.
 
 ---
 
@@ -371,6 +315,7 @@ Agents: prefer extending existing `Frameio*Tests` / parity docs over new paralle
 
 | Date | Decision |
 | --- | --- |
+| 2026-10-30 | Reconcile the migration plan with current OpenCine adoption. Qualify the combined app before expanding capability; retain separate platform exceptions and defer repository relocation. |
 | 2026-09-14 | Playback View Assist uses the live Field Monitor assist slot (`MonitorAssistPaletteLayout.fieldMonitor` / `MonitorLayoutPolicy.fieldMonitorAssists`). |
 | 2026-09-14 | Auto-exposure EV caption is shared `MonitorExposureReadout.autoEvCaption` (`EV 1/Ns`). |
 | 2026-09-14 | Head Lock chrome is a 44 pt Lucide compass trailing-aligned above the stick/zoom cluster (`FieldMonitorLayout.headTrack` / `GimbalCluster.headTrack`). iOS-only AirPods IMU; Android keeps the layout region and no live control. |
@@ -406,13 +351,12 @@ When unsure, prefer **shared** over **duplicated**.
 
 ---
 
-## 17. Open questions (product decisions — do not block Phase 1–2)
+## 17. Open questions
 
-- Final umbrella name for the monorepo / engine package (OpenCapture, etc.).
 - Whether Android for every brand ships in lockstep with iOS for each adapter.
 - Drive/Dropbox priority order after Frame.io.
 - Whether Insta360 uses public panoramic SDK vs separate Luna path (loaner/SDK dependent).
-- Monorepo now vs shared SPM package across two GitHub repos first.
+- Versioned SPM/Maven distribution after reproducible pinned consumer builds.
 
 ---
 
