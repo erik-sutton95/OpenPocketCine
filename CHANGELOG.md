@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-30
+
+Public beta, cumulative since open beta build 128 (0.1.5). The operator-facing iOS and
+Android lists are in the [0.1.8 release notes](handbook/src/content/docs/releases/0-1-8.md).
+
 This beta is a parity and reliability update built on the shared OpenCine
 foundation. Camera setup, the monitor, settings, View Assist, media and playback
 use more of the same components and behavior as the other OpenCapture apps,
@@ -367,6 +372,17 @@ out in the tester notes.
   incident session across automatic reconnects like iOS, and records
   first-picture resends. An incident still open when the operator disconnects
   ends as `userEnded` (a warning) on both platforms, not `suppressed`.
+
+### Public beta additions
+
+- Media grid is staggered: portrait photos stand upright and every item fills the space above it.
+- Caching and downloads show a live speed beside the percentage.
+- Media selection leads with an Exit selection close; the bar keeps All, Share and Delete.
+- Pinch-zoomed playback fills the screen past the clip's letterbox.
+- Landscape Photo moves setup values to the status corner, and the open tools panel keeps the camera values visible beside it.
+- iOS: connecting no longer freezes on Starting live view.
+- Share finishes a clip whose cache the player left running or stopped.
+- Bluetooth Remote Shutter is opt-in on iOS and Android; iOS ignores late volume changes.
 
 ## [0.1.5] - 2026-09-24
 
