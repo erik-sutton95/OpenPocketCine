@@ -2,37 +2,41 @@ Since open beta build 128
 
 New and changed
 
-- Camera setup, settings, View Assist and Media controls are closer to the other OpenCine apps, with the same look and behavior.
-- Media is much faster on large cards: listing, selecting clips, Select all and transfer progress stay responsive while clips cache.
-- The live picture runs more smoothly after connecting, because the screen no longer redraws everything as the timecode advances.
-- Tapping the storage readout steps through free space, free percentage and remaining time, with the same text in portrait and landscape.
-- In landscape, the colour profile sits beside the codec. In portrait, readouts use a three-column grid that grows with the rows.
+- Camera setup, settings, View Assist and Media controls look and behave like the other OpenCine apps.
+- Media is much faster on large cards: listing, selecting, Select all and transfer progress stay responsive while clips cache.
+- Media grid is staggered: portrait photos stand upright and every item fills the space above it.
+- Caching and downloads show a live speed beside the percentage, for example 18% and 42 MB/s.
+- Selecting clips shows an Exit selection close beside the count, then All, Share and Delete. Media's top corner is now a Back arrow.
+- Pinch-zoomed playback now fills the screen past the clip's letterbox, up to the screen edge.
+- The live picture runs more smoothly after connecting: the screen no longer redraws everything as the timecode advances.
+- Tap the storage readout to step through free space, free percentage and remaining time, the same in portrait and landscape.
+- In landscape, the colour profile sits beside the codec, and in Photo mode white balance and focus move to the top corner so captions fit.
 - Media scrolls to the newest clip. Offline, it says the camera is disconnected and shows the clips cached on this phone.
 - The ISO drum stars the native ISO of the current colour profile, for example 400 in D-Log M.
-- Connection diagnostics separate incoming video, decoding and display activity to help investigate live-picture interruptions.
+- Bluetooth Remote Shutter is now off until you turn it on in Operator Setup > Controls. Your saved choice is kept.
+- Diagnostics separate incoming video, decoding and display activity to help investigate picture interruptions.
 
 Fixes
 
-- The app no longer freezes or shows App not responding while the live picture rebuilds, for example after rotating or returning to the app.
-- Reconnecting waits while the app is in the background and resumes when you return, so the live picture comes back without Retry.
-- The reconnect card names its 3-minute window. When the link drops, the signal shows no bars and TalkBack says the live link is down.
+- The app no longer freezes or shows App not responding while the live picture rebuilds, for example after rotating or returning.
+- Reconnecting waits in the background and resumes on return without Retry. The card names its 3-minute window; a dropped link shows no bars.
 - Returning from Media, even after a long visit, restores the live picture instead of disconnecting the camera.
 - Connection failures open the relevant Wi-Fi settings, and pairing timeouts explain what to try next.
-- Shutter Angle follows angle picks, Auto-to-Manual and frame-rate changes again, and the shutter list is no longer stuck at 1/60.
-- Osmo Pocket 3, Pocket 4, Pocket 4 Pro, Nano and Action 6 offer the Auto ISO ceiling, the ISO limit and the native ISO hop again.
-- On a Pocket 3 that reports no shutter list, Speed offers the standard shutter speeds and sets them.
+- Shutter Angle follows angle picks, Auto-to-Manual and frame-rate changes; the list is no longer stuck at 1/60, and a Pocket 3 with no list gets standard speeds.
+- Pocket 3, Pocket 4, Pocket 4 Pro, Nano and Action 6 offer the Auto ISO ceiling, the ISO limit and the native ISO hop again.
 - The live top bar readouts get their dark glow back, so they stay readable over bright pictures.
 - Playback keeps Pause through buffering, scrubbing and Share.
 - Playback stays smoother on large cards; scopes and audio meters update without redrawing the whole player.
 - Clip deletion, caching and sharing several cached clips work together on the current selection. The selection bar shows the whole count.
-- With Full Resolution Caching on, a played clip finishes downloading after you close it and reads CACHED. TalkBack reads that setting as one switch.
+- With Full Resolution Caching on, a played clip keeps downloading after you close it and reads CACHED. TalkBack reads it as one switch.
+- Sharing a clip you left mid-download in the player, or whose download stopped, finishes its copy instead of failing.
 - Shared clips keep their DJI file names instead of arriving with long random names.
-- The open landscape View Assist palette hides the camera values it covers. Portrait card-space labels keep their full value near the cutout.
+- Portrait card-space labels keep their full value near the cutout.
 
 What to test
 
-- Open Media on a full card. Scroll, select clips, use Select all and cache a few. Check the screen stays responsive and progress keeps moving.
-- Rotate the phone repeatedly and leave and return to the app during Live View. Check the app stays responsive and the live picture returns.
+- On a full card, scroll the grid, select, use Select all, then Exit selection. Play a clip, pinch to zoom and pan to the screen edges.
+- Rotate the phone repeatedly and leave and return to the app during Live View: the app stays responsive and the picture returns.
 - In Live View, go Home, record 60 to 90 s with the system camera app, then return: the picture comes back by itself with no Retry.
-- At 180 degrees/25p in Auto, check native ISO and Auto ISO limits. Select Manual, then 50p: 180 stays selected as 1/50 becomes 1/100.
-- With Full Resolution Caching on, play an uncached clip briefly, go back and wait: it reads CACHED. Play with scopes or audio meters, then Share two clips and check their names.
+- At 180 degrees/25p in Auto, check native ISO and Auto ISO limits. Select Manual, then 50p: 180 stays as 1/50 becomes 1/100.
+- With Full Resolution Caching on, play an uncached clip briefly, go back and Share it with a second clip: the speed shows and both keep their names.

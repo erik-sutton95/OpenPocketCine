@@ -3,39 +3,41 @@ Since open beta build 128
 New and changed
 
 - Camera setup, settings, View Assist and Media controls look and behave like the other OpenCine apps.
-- Media is much faster on large cards: listing, selecting clips, Select all and transfer progress stay responsive while clips cache.
+- Media is much faster on large cards: listing, selecting, Select all and transfer progress stay responsive while clips cache.
+- Media grid is staggered: portrait photos stand upright and every item fills the space above it.
+- Caching and downloads show a live speed beside the percentage, for example 18% and 42 MB/s.
+- Selecting clips shows an Exit selection close beside the count, then All, Share and Delete.
+- Pinch-zoomed playback now fills the screen past the clip's letterbox, up to the screen edge.
 - The live picture runs more smoothly after connecting: the screen no longer redraws everything as the timecode advances.
-- Tapping the storage readout steps through free space, free percentage and remaining time, with the same text in portrait and landscape.
-- In landscape, the colour profile sits beside the codec. In portrait, readouts use a three-column grid and the format readout lines up with the clock.
-- Offline, Media says the camera is disconnected and shows the clips cached on this phone. An empty filter says No matching clips.
-- Apple Watch can record and capture while the phone is locked. A watcher running an older app version is asked to update.
-- Connection diagnostics separate incoming video, decoding and display activity to help investigate live-picture interruptions.
+- Tap the storage readout to step through free space, free percentage and remaining time, the same in portrait and landscape.
+- In landscape, colour sits beside the codec, and in Photo mode white balance and focus move to the top corner so captions fit.
+- Portrait readouts use a three-column grid. Offline, Media shows the clips cached on this phone; an empty filter says No matching clips.
+- Apple Watch can record and capture while the phone is locked. A watcher on an older app version is asked to update.
+- Bluetooth Remote Shutter is now off until you turn it on in Operator Setup > Controls, and it ignores late volume changes.
+- Diagnostics separate video, decoding and display activity to help investigate picture interruptions.
 
 Fixes
 
-- An approved camera Wi-Fi join is kept for rejoins, and a retry no longer asks to join again. Forgetting a camera setup also removes its Wi-Fi network.
-- A refused camera Wi-Fi join shows clear guidance and a way to open Wi-Fi settings.
-- The Local Network prompt appears during pairing, before the camera Wi-Fi join, and Allow carries on pairing without relaunching the app.
-- Reconnecting waits while the app is in the background, so the live picture can return without Retry. The card names its 3-minute reconnect window.
-- When the link drops, the signal shows no bars and VoiceOver says the live link is down.
+- Connecting no longer freezes the app on Starting live view or Opening the video link.
+- Camera Wi-Fi: an approved join is kept for rejoins, a refused join offers guidance and Wi-Fi settings, and forgetting a setup removes its network.
+- The Local Network prompt comes during pairing, before the camera Wi-Fi join, and Allow carries on without relaunching the app.
+- Reconnecting waits in the background, so the picture returns without Retry. The card names its 3-minute window; a dropped link shows no bars.
 - Returning from Media, even after a long visit, restores the live picture instead of disconnecting the camera.
-- Shutter Angle follows angle picks, Auto-to-Manual and frame-rate changes again, and the shutter list is no longer stuck at 1/60.
-- Osmo Pocket 3, Pocket 4, Pocket 4 Pro, Nano and Action 6 offer the Auto ISO ceiling, the ISO limit and the native ISO hop again.
-- On a Pocket 3 that reports no shutter list, Speed offers the standard shutter speeds and sets them.
-- The app no longer hangs while capture readouts update during a long session.
-- Using a volume button as the remote shutter is protected against a rare unexpected quit.
+- Shutter Angle follows angle picks, Auto-to-Manual and frame-rate changes; the list is no longer stuck at 1/60, and a Pocket 3 with no list gets standard speeds.
+- Pocket 3, Pocket 4, Pocket 4 Pro, Nano and Action 6 offer the Auto ISO ceiling, the ISO limit and the native ISO hop again.
+- The app no longer hangs while readouts update in a long session, and a volume-button shutter no longer causes a rare quit.
 - Playback keeps Pause through buffering, seeking, Share and returning to the app.
-- Playback controls and media details stay smoother on large cards, and playback scopes update more evenly.
-- Wide clips keep their correct brightness through LUTs, zebra, false color and scopes instead of looking crushed.
-- Media selection, deletion, caching and sharing stay tied to the current clips, and sharing several cached clips works together.
-- With Full Resolution Caching on, a played clip finishes downloading after you close it and reads CACHED. Sharing it meanwhile waits for that download.
-- VoiceOver no longer reaches live controls under a covering screen or the hidden buttons of a collapsed landscape palette.
-- The open landscape View Assist palette hides the camera values it covers. Portrait card-space labels keep their full value near the cutout.
+- Playback stays smoother on large cards, scopes update more evenly, and wide clips keep correct brightness through LUTs and scopes.
+- Selection, deletion, caching and sharing stay tied to the current clips, and sharing several cached clips works together.
+- With Full Resolution Caching on, a played clip keeps downloading after you close it and reads CACHED.
+- Sharing a clip you left mid-download in the player, or whose download stopped, finishes its copy instead of failing.
+- VoiceOver skips live controls under a covering screen and the hidden buttons of a collapsed landscape palette.
+- Portrait card-space labels keep their full value near the cutout.
 
 What to test
 
-- Open Media on a full card. Scroll, select clips, use Select all and cache a few. Check the screen stays responsive and progress keeps moving.
-- Delete and reinstall, then pair: the Local Network prompt comes before the Wi-Fi Join alert. Forget the camera setup, pair again and check it joins.
-- During Live View, go Home for over 3 minutes and return, then stay in Media for 30 minutes and return: the picture comes back each time without Retry.
-- At 180 degrees/25p in Auto, check native ISO and Auto ISO limits. Select Manual, then 50p: 180 stays selected as 1/50 becomes 1/100.
-- With Full Resolution Caching on, play an uncached clip briefly, go back and wait: it reads CACHED. Try a wide clip with LUT and scopes: controls stay smooth, brightness natural and Pause holds.
+- On a full card, scroll the grid, select, use Select all, then Exit selection. Play a clip, pinch to zoom and pan to the screen edges.
+- Reinstall and pair: Local Network comes before the Wi-Fi Join alert. Disconnect and connect again: live view starts without a freeze.
+- During Live View, go Home for over 3 minutes, then stay in Media for 30 minutes: the picture returns each time without Retry.
+- At 180 degrees/25p in Auto, check native ISO and Auto ISO limits. Select Manual, then 50p: 180 stays as 1/50 becomes 1/100.
+- With Full Resolution Caching on, play an uncached clip briefly, go back and Share it: the speed shows, it shares and reads CACHED.
