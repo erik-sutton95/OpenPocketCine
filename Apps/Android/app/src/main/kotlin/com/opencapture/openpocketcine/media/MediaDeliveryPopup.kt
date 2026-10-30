@@ -27,7 +27,8 @@ fun MediaDeliveryHost(
             fileFacts = { MonitorDeliveryFileFacts(it.filename, it.sizeBytes.takeIf { bytes -> bytes > 0 }) },
             connected = { controller.isLive },
             originals = MonitorDeliveryOriginalService(controller::isDownloaded,
-                acquire = controller::download, progress = { controller.downloadProgress[it.path] }),
+                acquire = controller::download, progress = { controller.downloadProgress[it.path] },
+                rate = controller::downloadRate),
             // No native conversion service was advertised on this platform; the true original is delivered.
             exporter = MonitorDeliveryExportService { file, _ -> controller.localFile(file) })
     }
