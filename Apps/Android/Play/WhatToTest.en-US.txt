@@ -31,7 +31,7 @@ Fixes
 - With Full Resolution Caching on, a played clip keeps downloading after you close it and reads CACHED. TalkBack reads it as one switch.
 - Sharing a clip you left mid-download in the player, or whose download stopped, finishes its copy instead of failing.
 - Shared clips keep their DJI file names instead of arriving with long random names.
-- The open tools panel keeps the camera values visible beside it instead of hiding them. Portrait card-space labels keep their full value.
+- Portrait card-space labels keep their full value near the cutout.
 
 What to test
 

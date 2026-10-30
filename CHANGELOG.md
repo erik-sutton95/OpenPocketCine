@@ -379,7 +379,7 @@ out in the tester notes.
 - Caching and downloads show a live speed beside the percentage.
 - Media selection leads with an Exit selection close; the bar keeps All, Share and Delete.
 - Pinch-zoomed playback fills the screen past the clip's letterbox.
-- Landscape Photo moves setup values to the status corner, and the open tools panel keeps the camera values visible beside it.
+- Landscape Photo moves setup values to the status corner.
 - iOS: connecting no longer freezes on Starting live view.
 - Share finishes a clip whose cache the player left running or stopped.
 - Bluetooth Remote Shutter is opt-in on iOS and Android; iOS ignores late volume changes.
