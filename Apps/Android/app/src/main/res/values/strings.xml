@@ -15,4 +15,9 @@
     <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_close_anyway">Close anyway</string>
+    <string name="multiview_could_not_connect">Could not connect</string>
+    <string name="multiview_restore_failed">Could not restore preview. Tap Reconnect to try again.</string>
+    <string name="multiview_shared_network_unavailable">Shared network unavailable. Rejoin it, then reconnect this camera.</string>
+    <string name="settings_protocol_help">Camera control speaks DUML over Bluetooth and the camera\'s Wi-Fi. No DJI SDK is bundled or required.</string>
+    <string name="settings_terms_help">How you can use OpenPocketCine.</string>
 </resources>

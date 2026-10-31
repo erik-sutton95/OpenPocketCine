@@ -12,4 +12,9 @@
     <string name="action_ok">确定</string>
     <string name="action_cancel">取消</string>
     <string name="action_close_anyway">仍然关闭</string>
+    <string name="multiview_could_not_connect">无法连接</string>
+    <string name="multiview_restore_failed">无法恢复预览。请点击「重新连接」再试一次。</string>
+    <string name="multiview_shared_network_unavailable">共享网络不可用。请先重新加入该网络，再重新连接这台相机。</string>
+    <string name="settings_protocol_help">相机控制通过蓝牙和相机自身的 Wi-Fi 传输 DUML。应用不包含也不需要 DJI SDK。</string>
+    <string name="settings_terms_help">OpenPocketCine 的使用条款说明。</string>
 </resources>
