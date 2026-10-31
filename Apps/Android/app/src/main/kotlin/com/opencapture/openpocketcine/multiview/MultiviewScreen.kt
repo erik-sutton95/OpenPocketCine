@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.openpocketcine.R
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import com.opencapture.opencine.vocabulary.CameraStatus
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -175,7 +177,7 @@ fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> U
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = LiveDesign.text, strokeWidth = 2.dp)
-                Text("Returning cameras to their Wi-Fi…", color = LiveDesign.text, style = LiveType.text(15f))
+                Text(stringResource(R.string.multiview_returning), color = LiveDesign.text, style = LiveType.text(15f))
             }
         }
         if (showNetwork) {
@@ -193,12 +195,13 @@ fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> U
                 val available = session.found.filter { camera ->
                     camera.appearsInMultiview && session.tiles.none { it.camera?.id == camera.id }
                 }
+                val experimentalDetail = stringResource(R.string.multiview_experimental_detail)
                 MultiviewCameraPicker(
                     rows = available.map { camera ->
                         MultiviewPickerRow(
                             camera.id, camera.name,
                             detail = if (camera.hasMultiviewPreview) null
-                            else "Try experimental shared Wi-Fi · Preview unavailable",
+                            else experimentalDetail,
                             limited = !camera.hasMultiviewPreview,
                         )
                     },
@@ -209,7 +212,7 @@ fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> U
                             session.enqueueAdd(camera, tile, experimental = !camera.hasMultiviewPreview)
                         }
                     },
-                    footer = "Each camera will join ${session.ssid}. Approve on the camera if asked.",
+                    footer = stringResource(R.string.multiview_join_footer, session.ssid),
                     feedback = { haptics.selection() },
                 )
             }
@@ -225,11 +228,11 @@ fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> U
     session.error?.let { message ->
         AlertDialog(
             onDismissRequest = { session.error = null },
-            title = { Text("Multiview") },
+            title = { Text(stringResource(R.string.multiview_title)) },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { session.error = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { session.error = null }) { Text(stringResource(R.string.action_ok)) } },
             dismissButton = if (session.hasPendingCleanup) {
-                { TextButton(onClick = { session.error = null; close.value() }) { Text("Close anyway") } }
+                { TextButton(onClick = { session.error = null; close.value() }) { Text(stringResource(R.string.action_close_anyway)) } }
             } else null,
         )
     }
@@ -243,7 +246,7 @@ fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> U
                     closeStage()
                 }) { Text(MultiviewNetworkRestore.CLOSE_ACTION) }
             },
-            dismissButton = { TextButton(onClick = { showLeave = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showLeave = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }

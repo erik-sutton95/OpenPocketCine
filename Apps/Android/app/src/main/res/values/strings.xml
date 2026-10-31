@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenPocketCine</string>
-    <string name="startup_wordmark">OPENPOCKETCINE</string>
+    <string name="app_name" translatable="false">OpenPocketCine</string>
+    <string name="startup_wordmark" translatable="false">OPENPOCKETCINE</string>
+
+    <!-- Multiview, the app's own screens. Shared monitor copy lives in OpenCine. -->
+    <string name="multiview_title">Multiview</string>
+    <string name="multiview_returning">Returning cameras to their Wi-Fi\u2026</string>
+    <string name="multiview_experimental_detail">Try experimental shared Wi-Fi \u00b7 Preview unavailable</string>
+    <string name="multiview_join_footer">Each camera will join %1$s. Approve on the camera if asked.</string>
+    <string name="multiview_camera_settings">Camera settings</string>
+    <string name="multiview_reconnect_before_settings">Reconnect this camera before changing settings.</string>
+    <string name="multiview_settings_need_connection">Camera settings are available when its connection is ready.</string>
+    <string name="setting_not_available">Setting not available</string>
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close_anyway">Close anyway</string>
 </resources>

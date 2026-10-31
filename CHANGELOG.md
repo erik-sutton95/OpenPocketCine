@@ -41,6 +41,11 @@ out in the tester notes.
 
 ### Added
 
+- Android localizes the app's own screens. The multiview chrome, its dialogs and the capture
+  sheet's unavailable line read from string resources, a simplified Chinese table ships with
+  them, and the app declares its locales so Android's per-app language setting can switch the
+  app without changing the device language. Shared monitor copy follows the OpenCine platform
+  translations.
 - Feed incident reports on iOS and Android separate incoming video, decode
   acceptance and display activity to help investigate interruptions without
   adding camera polling or network traffic. This does not establish a fix for

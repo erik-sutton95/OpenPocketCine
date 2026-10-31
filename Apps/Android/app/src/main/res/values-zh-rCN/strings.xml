@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The wordmark is a brand mark and stays as it is. -->
+    <string name="multiview_title">多机位</string>
+    <string name="multiview_returning">正在把相机切回各自的 Wi-Fi\u2026</string>
+    <string name="multiview_experimental_detail">尝试实验性共享 Wi-Fi \u00b7 预览不可用</string>
+    <string name="multiview_join_footer">每台相机都会加入 %1$s。如果相机上有提示，请在相机上确认。</string>
+    <string name="multiview_camera_settings">相机设置</string>
+    <string name="multiview_reconnect_before_settings">请先重新连接这台相机，再修改设置。</string>
+    <string name="multiview_settings_need_connection">相机连接就绪后才能修改设置。</string>
+    <string name="setting_not_available">该设置当前不可用</string>
+    <string name="action_ok">确定</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_close_anyway">仍然关闭</string>
+</resources>
