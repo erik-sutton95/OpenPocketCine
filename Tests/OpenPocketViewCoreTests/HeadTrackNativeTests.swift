@@ -23,7 +23,7 @@ import Testing
         let point = track.target(lookRightDeg: 53, lookUpDeg: 12)
         #expect(point?.yawDeg == 33)
         #expect(point?.pitchDeg == 2)
-        #expect(point?.nativePitchDeg == 177)
+        #expect(point?.nativePitchDeg == -183, "continuous beside the -171° calibration, not +177°")
         #expect(HeadTrackNative.commandDuration == 0.1)
         // A 100 ms native horizon does not impose an artificial angular-speed cap.
         #expect((point?.yawDeg ?? 0) - origin.yawDeg > 50 * HeadTrackNative.commandDuration)
@@ -37,7 +37,7 @@ import Testing
         let point = track.target(lookRightDeg: 120, lookUpDeg: 100)
         #expect(point?.yawDeg == HeadTrack.Reach.panMaxDeg)
         #expect(point?.pitchDeg == HeadTrack.Reach.tiltMaxDeg)
-        #expect(point?.nativePitchDeg == 109)
+        #expect(point?.nativePitchDeg == -251, "80° of look-up from -171°, on the calibration side")
         let back = track.target(lookRightDeg: 0, lookUpDeg: 0)
         #expect(back == edgeOrigin)
     }
@@ -65,11 +65,15 @@ import Testing
         #expect(HeadTrack.Reach.project(lookRight: 0, lookUp: 0, yaw0: 0, pitch0: -90).pitch == -44)
     }
 
-    @Test func nativePitchCrossesWrapWithoutInventingMountOffset() {
+    /// OpenPocketCine#621: a target wrapped to the far side of ±180° sent a Pocket 3 the long way.
+    @Test func nativePitchStaysContinuousAcrossTheWrapWithoutInventingMountOffset() {
         var track = HeadTrackNative()
         let mounted = GimbalWaypoint(yawDeg: 180, pitchDeg: 3, zoom: 1, nativePitchDeg: 179)
         #expect(track.center(pose: mounted) == .centered)
-        #expect(track.target(lookRightDeg: 0, lookUpDeg: -2)?.nativePitchDeg == -179)
+        #expect(track.target(lookRightDeg: 0, lookUpDeg: -2)?.nativePitchDeg == 181)
+        #expect(track.target(lookRightDeg: 0, lookUpDeg: 2)?.nativePitchDeg == 177)
+        #expect(
+            track.target(lookRightDeg: 0, lookUpDeg: 0)?.nativePitchDeg == 179, "back to centre")
         #expect(track.target(lookRightDeg: 10, lookUpDeg: 0)?.yawDeg == 190)
     }
 
