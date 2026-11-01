@@ -72,7 +72,8 @@ import Testing
         #expect(track.center(pose: mounted) == .centered)
         #expect(track.target(lookRightDeg: 0, lookUpDeg: -2)?.nativePitchDeg == 181)
         #expect(track.target(lookRightDeg: 0, lookUpDeg: 2)?.nativePitchDeg == 177)
-        #expect(track.target(lookRightDeg: 0, lookUpDeg: 0)?.nativePitchDeg == 179, "back to centre")
+        #expect(
+            track.target(lookRightDeg: 0, lookUpDeg: 0)?.nativePitchDeg == 179, "back to centre")
         #expect(track.target(lookRightDeg: 10, lookUpDeg: 0)?.yawDeg == 190)
     }
 
