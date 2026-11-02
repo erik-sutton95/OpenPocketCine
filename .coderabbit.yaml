@@ -1,0 +1,10 @@
+# CodeRabbit reviews product-logic pull requests only, on request.
+# Request a review with a "@coderabbitai review" comment; pins, docs, test or CI-only changes,
+# version bumps and screenshot-approved layout changes do not get one.
+reviews:
+  # No status comments when a review is skipped.
+  review_status: false
+  auto_review:
+    # No automatic reviews: each one spends the hourly allowance, and every push past it
+    # posts a "Review limit reached" comment.
+    enabled: false
