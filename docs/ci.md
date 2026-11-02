@@ -23,8 +23,10 @@ have to edit tester notes (see Release time).
 
 ## Nightly tier: `.github/workflows/nightly.yml`
 
-Every night at 03:15 UTC on `main` (OpenCine 02:30, Insta 04:00, Z 04:45), and on
-`workflow_dispatch`. It calls `ci.yml` with `full: true`: every job regardless of paths
+Every night at 19:40 UTC on `main` (OpenCine 19:00, Z 19:20, Insta 20:00), and on
+`workflow_dispatch`. GitHub can start a scheduled run hours late, so a scheduled run that starts
+between 07:00 and 18:59 UTC skips (the Night window job) and leaves the daytime macOS runners to
+pull requests; a manual dispatch always runs. It calls `ci.yml` with `full: true`: every job regardless of paths
 (the shared conformance scenarios on iOS included), plus the portrait header layout matrix and the
 original storage oracle on a private 2x iPad. On `main`, OpenCine's
 `scripts/ci-nightly-report.sh` (from OpenCine main, not the pin) keeps one issue,
