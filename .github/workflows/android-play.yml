@@ -1,8 +1,8 @@
 name: Android Play
 
 # Closed-testing analog of Xcode Cloud → TestFlight. Mirrors OpenZCine
-# play-internal.yml: auto-upload on main when Android-relevant paths change,
-# once ANDROID_PLAY_UPLOAD is exactly "true". Fail-closed on missing
+# play-internal.yml: auto-upload to internal testing on main when Android-relevant
+# paths change, once ANDROID_PLAY_UPLOAD is exactly "true"; tester tracks by dispatch. Fail-closed on missing
 # play-closed secrets. Never runs on pull_request (forks must not see Play
 # or keystore secrets).
 #
@@ -51,7 +51,7 @@ on:
 
 permissions:
   contents: read
-  actions: read # earlier successful uploads, for the tester notes check
+  actions: read # earlier tester uploads, for the tester notes check
 
 concurrency:
   group: android-play-${{ github.repository }}
@@ -59,13 +59,16 @@ concurrency:
 
 jobs:
   play:
-    name: Bundle and upload
+    # The notes check below counts only tester uploads, so the job name carries the audience.
+    name: ${{ (github.event.inputs.track || 'internal') == 'internal' && 'Bundle and upload (internal)' || 'Bundle and upload (testers)' }}
     if: ${{ github.repository == 'erik-sutton95/OpenPocketCine' && (github.event_name == 'workflow_dispatch' || vars.ANDROID_PLAY_UPLOAD == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: play-closed
     env:
       SWIFT_ANDROID_SDK_ID: swift-6.3.3-RELEASE_android
+      # Merges upload to internal testing; tester tracks only by dispatch.
+      PLAY_TRACK: ${{ github.event.inputs.track || 'internal' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,14 +83,19 @@ jobs:
         run: scripts/checkout-opencine.sh
 
       # Release gate for tester notes (docs/tester-notes.md): fail before building when the
-      # notes break the caps or an earlier successful upload already carried them.
+      # notes break the caps or, for a tester upload, an earlier tester upload already carried them.
       - name: Tester notes are for this release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ./scripts/android-release-notes-check.sh
-          python3 ../OpenCine/scripts/tester-notes-release-check.py --released-by-workflow android-play.yml \
-            --notes Apps/Android/Play/WhatToTest.en-US.txt --notes Apps/Android/Play/whatsnew/whatsnew-en-US
+          # Internal builds follow every merge and keep the version's notes; only tester uploads
+          # need notes that no earlier tester upload carried.
+          if [ "$PLAY_TRACK" != internal ]; then
+            python3 ../OpenCine/scripts/tester-notes-release-check.py --released-by-workflow android-play.yml \
+              --release-job "Bundle and upload (testers)" \
+              --notes Apps/Android/Play/WhatToTest.en-US.txt --notes Apps/Android/Play/whatsnew/whatsnew-en-US
+          fi
 
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
@@ -240,7 +248,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.opencapture.openpocketcine
           releaseFiles: Apps/Android/app/build/outputs/bundle/release/app-release.aab
-          tracks: ${{ github.event.inputs.track || 'alpha' }}
+          tracks: ${{ env.PLAY_TRACK }}
           status: ${{ github.event.inputs.status || 'completed' }}
           changesNotSentForReview: ${{ github.event.inputs.changes_not_sent_for_review || false }}
           releaseName: ${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})
@@ -262,10 +270,10 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "## Play closed testing"
+            echo "## Play upload"
             echo "- versionName: \`${VERSION_NAME}\`"
             echo "- versionCode: \`${VERSION_CODE}\`"
-            echo "- track: \`${{ github.event.inputs.track || 'alpha' }}\`"
+            echo "- track: \`${{ env.PLAY_TRACK }}\`"
             echo "- status: \`${{ github.event.inputs.status || 'completed' }}\`"
             echo "- artifact: \`app-release-${VERSION_NAME}-${VERSION_CODE}\`"
             echo "- play API: \`${{ steps.creds.outputs.play_api }}\`"

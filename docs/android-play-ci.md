@@ -49,7 +49,7 @@ Play-delivered updates.
 | `versionCode` | CI stamp: `ANDROID_VERSION_CODE_BASE` + `github.run_number` (local `openpocketcine.versionCode` is the sideload floor) |
 | Tester notes | [`Apps/Android/Play/WhatToTest.en-US.txt`](../Apps/Android/Play/WhatToTest.en-US.txt) |
 | Play "what's new" (500 chars) | [`Apps/Android/Play/whatsnew/whatsnew-en-US`](../Apps/Android/Play/whatsnew/whatsnew-en-US) |
-| Upload | `.github/workflows/android-play.yml` → track `alpha` |
+| Upload | `.github/workflows/android-play.yml` → track `internal` on a merge, the dispatch input (default `alpha`) otherwise |
 
 The workflow **never** runs on `pull_request`. Forks must not see the keystore
 or the service account (`github.repository` is pinned to
@@ -66,7 +66,9 @@ API robot is invited.
 
 - **Merges to `main`** that touch `Apps/Android/`, the Swift core, the JNI
   facade, `Package.swift`, the Android scripts, or `Apps/Android/Play/`
-  upload once `ANDROID_PLAY_UPLOAD` is `true`. Docs-only commits do not.
+  upload to **internal testing** once `ANDROID_PLAY_UPLOAD` is `true` (owner
+  decision 2026-11-02: merges never reach outside testers before their
+  hardware pass). Docs-only commits do not.
   Auto-upload is fail-closed: all five `play-closed` secrets must exist and
   `PLAY_SERVICE_ACCOUNT_JSON` must be a service-account key.
 - **Dispatch inputs**: `alpha` (closed) or `internal` (smoke); `completed` or
@@ -103,7 +105,7 @@ Repository variables:
 
 | Variable | Value |
 | --- | --- |
-| `ANDROID_PLAY_UPLOAD` | `true` to auto-upload on `main`; anything else is off |
+| `ANDROID_PLAY_UPLOAD` | `true` to auto-upload merges on `main` to internal testing; anything else is off |
 | `ANDROID_VERSION_CODE_BASE` | Offset added to `github.run_number` (default `0`) |
 
 Local signed bundle (same keystore as CI):
@@ -136,9 +138,10 @@ just android-play-notes
 ```
 
 `scripts/android-release-notes-check.sh` enforces the format. The Play
-workflow runs it and OpenCine's `scripts/tester-notes-release-check.py` before
-building: the upload fails while an earlier successful `android-play.yml` run
-already carried either notes file. Pull requests no longer have to edit them
+workflow runs it before building. A tester-track upload also runs OpenCine's
+`scripts/tester-notes-release-check.py`: it fails while an earlier tester
+upload (`Bundle and upload (testers)`) already carried either notes file.
+Internal uploads follow every merge and keep the version's notes. Pull requests no longer have to edit them
 ([`ci.md`](ci.md)).
 
 ## Version numbers

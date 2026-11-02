@@ -23,11 +23,13 @@ files with the window since the previous release; this document requires the
 *content* to be the window, not an append. Feature pull requests leave them
 alone.
 
-Every release path fails fast while the notes still describe the previous
-release ([`ci.md`](ci.md#release-time)): the Play workflow and the Xcode Cloud
-archive run OpenCine's `scripts/tester-notes-release-check.py`, which fails
-when an earlier successful upload already carried the current revision of a
-notes file. Re-releasing the same commit is allowed.
+Every tester release fails fast while the notes still describe the previous
+release ([`ci.md`](ci.md#release-time)): a Play upload to a tester track and any
+Xcode Cloud archive other than TestFlight Internal run OpenCine's
+`scripts/tester-notes-release-check.py`, which fails when an earlier tester
+upload already carried the current revision of a notes file. Internal builds
+follow every merge and keep the version's notes. Re-releasing the same commit is
+allowed.
 
 ## Steps
 
@@ -117,9 +119,9 @@ when the maintainer selects a new release window.
 
 `scripts/ios-release-notes-check.sh` and
 `scripts/android-release-notes-check.sh` enforce the format and the caps, in
-pull-request Meta checks and again at release time. At release time OpenCine's
-`scripts/tester-notes-release-check.py` also requires notes no earlier release
-carried. Preview:
+pull-request Meta checks and again at upload time. For a tester release,
+OpenCine's `scripts/tester-notes-release-check.py` also requires notes no
+earlier tester release carried. Preview:
 
 ```bash
 just testflight-notes
