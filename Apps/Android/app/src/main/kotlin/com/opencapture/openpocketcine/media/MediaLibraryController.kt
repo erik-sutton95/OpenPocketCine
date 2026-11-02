@@ -67,6 +67,8 @@ class MediaLibraryController(
     private val httpSource = DJIMediaHTTPSource()
     private var released = false
     val downloadProgress: Map<String, Double> get() = library.state.value.hostProgress.mapKeys { it.key.rawValue }
+    /** The running download's speed for [file], from the library's one rate source (OpenCine). */
+    fun downloadRate(file: MediaFile): MediaTransferRate? = library.transferRates.rate(DjiAndroidMediaAssets.asset(file).id)
 
     val files: List<MediaFile> get() = library.state.value.records.map(::file)
     val fetchInProgress: Boolean get() = library.state.value.acquiringSource || library.state.value.fetching ||
