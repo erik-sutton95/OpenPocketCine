@@ -50,18 +50,22 @@ A test leaves quarantine after its issue is fixed and several consecutive nightl
 
 ## Release time
 
-Tester notes are checked when a build is released, not on every pull request. Each release path
-first runs the format check (caps in OpenCine `scripts/tester-notes-limits.sh`) and OpenCine's
-`scripts/tester-notes-release-check.py`, which fails when an earlier release already carried the
-current notes:
+Tester notes are checked when a build is uploaded, not on every pull request. Every upload runs
+the format check (caps in OpenCine `scripts/tester-notes-limits.sh`). An upload for testers also
+runs OpenCine's `scripts/tester-notes-release-check.py`, which fails when an earlier tester upload
+already carried the current notes. Internal builds follow every merge to `main` and keep the
+version's notes, so they skip that second check (owner decision 2026-11-02):
 
-| Release path | Hook | Earlier releases |
-| --- | --- | --- |
-| Play closed testing | `android-play.yml`, before the build | successful `android-play.yml` runs |
-| TestFlight (Xcode Cloud archive) | `ios/ci_scripts/ci_pre_xcodebuild.sh` | successful `TestFlight` commit statuses |
+| Upload | Hook | Notes must be new | Earlier tester uploads |
+| --- | --- | --- | --- |
+| Play internal (every Android merge, or dispatch with `internal`) | `android-play.yml`, before the build | no | none |
+| Play tester track (dispatch) | `android-play.yml`, before the build | yes | `android-play.yml` runs whose `Bundle and upload (testers)` job succeeded |
+| TestFlight Internal (Xcode Cloud, every merge) | `ios/ci_scripts/ci_pre_xcodebuild.sh` | no | none |
+| Any other Xcode Cloud archive | `ios/ci_scripts/ci_pre_xcodebuild.sh` | yes | successful `TestFlight` commit statuses |
 
-The release gate still holds: Play upload variables stay off and no build reaches outside
-testers before its hardware pass. See [`tester-notes.md`](tester-notes.md).
+The release gate still holds: no build reaches outside testers before its hardware pass. On iOS
+that is adding the build to the external group in App Store Connect; on Android, a dispatch to a
+tester track. Check the notes describe the release before either. See [`tester-notes.md`](tester-notes.md).
 
 ## Reviews
 

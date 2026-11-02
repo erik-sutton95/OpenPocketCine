@@ -113,11 +113,13 @@ just tester-notes-window
 just testflight-notes
 ```
 
-`scripts/ios-release-notes-check.sh` enforces the format. Every archive is a TestFlight
-release, so [`ios/ci_scripts/ci_pre_xcodebuild.sh`](../ios/ci_scripts/ci_pre_xcodebuild.sh)
-runs that check and OpenCine's `scripts/tester-notes-release-check.py` before building: the
-archive fails while an earlier successful TestFlight build (its Xcode Cloud commit status)
-already carried the current notes. Pull requests no longer have to edit them ([`ci.md`](ci.md)).
+`scripts/ios-release-notes-check.sh` enforces the format. Every archive uploads to TestFlight,
+so [`ios/ci_scripts/ci_pre_xcodebuild.sh`](../ios/ci_scripts/ci_pre_xcodebuild.sh) runs that
+check before building. TestFlight Internal archives every merge to `main` and keeps the
+version's notes; any other archive workflow also runs OpenCine's
+`scripts/tester-notes-release-check.py`, which fails while an earlier successful TestFlight build
+(its Xcode Cloud commit status) already carried the current notes. Pull requests no longer have
+to edit them ([`ci.md`](ci.md)).
 
 TestFlight screenshot feedback cannot carry an attached file (Apple has no
 API for that). The app copies a redacted compact report to the pasteboard

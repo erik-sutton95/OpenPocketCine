@@ -5,8 +5,8 @@ Trunk-based GitHub Flow. One long-lived branch (`main`), short-lived PRs, annota
 standing `release/*`, and no `git-flow` CLI.
 
 This matches how the repo already ships: PRs into `main`, squash merge, linear
-history, **CI gate**, TestFlight from `main`, Play closed testing from `main`
-once `ANDROID_PLAY_UPLOAD` is on. See
+history, **CI gate**, TestFlight from `main`, Play internal testing from `main`
+once `ANDROID_PLAY_UPLOAD` is on, and closed testing by dispatch. See
 [`repository-settings.md`](repository-settings.md),
 [`testflight-ci.md`](testflight-ci.md), and
 [`android-play-ci.md`](android-play-ci.md).
