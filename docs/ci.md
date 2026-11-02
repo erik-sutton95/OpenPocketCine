@@ -14,18 +14,21 @@ platforms it touches; a skipped job counts as passed in the gate.
 | Meta checks | pin drift warning, gitleaks, hygiene, Sentry configuration, privacy and stress harness tests, tester notes format, CI timing summary, `ios-test` option and Swift Android SDK install recovery tests, typos, Markdown, offline links, EditorConfig, actionlint |
 | Native Swift/iOS | Swift packages, one `build-for-testing`, unit tests without rebuilding on one simulator (serial: `-parallel-testing-enabled NO`), Watch build; SwiftPM and compilation caches from main. The job summary lists per-suite times for the package and unit tests |
 | Android | three parallel jobs: JVM tests (`test :opencine:monitor-ui:testDebugUnitTest`); debug build and lint (`assembleDebug lint :opencine:monitor-ui:lint`); release bundle (`:app:verifyReleaseComponentRegistrars`: R8 release bundle and the registrar check). Together they schedule exactly the task graph of the former single Gradle step, and the gate fails if any of them fails. Each job summary lists per-task times (`scripts/ci-gradle-task-timing.gradle`), and the JVM tests job per-suite times |
+| Shared conformance scenarios, iOS | the shared scenarios (`just conformance-ios`: gallery, share, confirmation cancel, chrome edit return, accessibility traversal and coverage) in `OpenPocketCineUIReview` on a private iPhone simulator with accessibility enabled (OpenCine `scripts/ios-private-simulator.py`); same paths as Native Swift/iOS |
 | Protocol handbook | static site build and links |
 
-No simulator UI suite, iPad oracle, portrait header layout matrix
+No other simulator UI suite, iPad oracle, portrait header layout matrix
 (`MonitorPortraitHeaderClearanceTests`) or quarantined test runs here, and pull requests no longer
 have to edit tester notes (see Release time).
 
 ## Nightly tier: `.github/workflows/nightly.yml`
 
-Every night at 03:15 UTC on `main` (OpenCine 02:30, Insta 04:00, Z 04:45), and on
-`workflow_dispatch`. It calls `ci.yml` with `full: true`: every job regardless of paths, plus
-the shared conformance scenarios on iOS, the portrait header layout matrix and the original
-storage oracle on a private 2x iPad. On `main`, OpenCine's
+Every night at 19:40 UTC on `main` (OpenCine 19:00, Z 19:20, Insta 20:00), and on
+`workflow_dispatch`. GitHub can start a scheduled run hours late, so a scheduled run that starts
+between 07:00 and 18:59 UTC skips (the Night window job) and leaves the daytime macOS runners to
+pull requests; a manual dispatch always runs. It calls `ci.yml` with `full: true`: every job regardless of paths
+(the shared conformance scenarios on iOS included), plus the portrait header layout matrix and the
+original storage oracle on a private 2x iPad. On `main`, OpenCine's
 `scripts/ci-nightly-report.sh` (from OpenCine main, not the pin) keeps one issue,
 **Nightly CI failing on main** (label `ci-nightly`): opened or updated with the failing jobs
 and run link on failure, closed by the
@@ -38,9 +41,10 @@ Tests with a known hosted flake run only in the nightly tier, each with an open 
 `ci-quarantine`). There are no accepted reds in pull requests: fix the failure, or quarantine
 the test here with its issue in the same pull request.
 
+No test is quarantined now. Add a row per quarantined test:
+
 | Test | Job | Issue |
 | --- | --- | --- |
-| Shared conformance scenarios, iOS (never passed hosted; `simctl list` timeouts) | `conformance` | [#541](https://github.com/erik-sutton95/OpenPocketCine/issues/541), [OpenCine#111](https://github.com/erik-sutton95/OpenCine/issues/111) |
 
 A test leaves quarantine after its issue is fixed and several consecutive nightlies pass.
 

@@ -1,7 +1,7 @@
 name: Nightly
 
-# The full suite on main every night: every CI job regardless of paths, plus the simulator
-# conformance suite and the iPad storage oracle (docs/ci.md). A failure opens or updates the one
+# The full suite on main every night: every CI job regardless of paths, plus the portrait
+# header layout matrix and the iPad storage oracle (docs/ci.md). A failure opens or updates the one
 # "Nightly CI failing on main" issue (label ci-nightly); the next passing night closes it.
 on:
   schedule:
@@ -81,7 +81,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SUITE_RESULT: ${{ needs.suite.result }}
-          # Whole jobs in QUARANTINE (docs/ci.md); they keep their own issues.
-          QUARANTINED_JOBS: |
-            Shared conformance scenarios, iOS
+          # Whole jobs in QUARANTINE (docs/ci.md), one per line; they keep their own issues. None now.
+          QUARANTINED_JOBS: ""
         run: bash .opencine-report/scripts/ci-nightly-report.sh
