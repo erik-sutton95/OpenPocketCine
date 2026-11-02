@@ -62,3 +62,10 @@ extension CameraSession {
         return location
     }
 }
+
+extension CameraSession {
+    /// The running download's speed for `file`, from the library's one rate source (OpenCine).
+    func mediaDownloadRate(_ file: MediaFile) -> MediaTransferRate? {
+        mediaLibraryOwner?.transferRates.rate(DjiAppleMediaAssets.asset(for: file).id)
+    }
+}
