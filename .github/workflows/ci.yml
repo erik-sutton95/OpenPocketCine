@@ -10,8 +10,8 @@ name: CI
 # branch protection — a skipped required check blocks the PR.
 #
 # Two tiers (docs/ci.md): this is the fast PR tier. nightly.yml calls it with
-# `full: true`, which runs every job regardless of paths and adds the simulator
-# conformance suite and the iPad storage oracle.
+# `full: true`, which runs every job regardless of paths and adds the portrait
+# header layout matrix and the iPad storage oracle.
 on:
   push:
     branches: [main]
@@ -338,9 +338,9 @@ jobs:
   conformance:
     name: Shared conformance scenarios, iOS
     needs: changes
-    # Nightly tier, QUARANTINE (docs/ci.md). Hosted macOS, public repositories only, for the same
-    # reasons as `native`: it runs code from the pull request.
-    if: ${{ inputs.full && needs.changes.outputs.code == 'true' && !github.event.repository.private }}
+    # PR tier, feeds the gate (docs/ci.md; out of quarantine since #541). Hosted macOS, public
+    # repositories only, for the same reasons as `native`: it runs code from the pull request.
+    if: ${{ needs.changes.outputs.code == 'true' && !github.event.repository.private }}
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -484,14 +484,13 @@ jobs:
 
   gate:
     name: CI gate
-    # The single required status check on `main` (name must stay "CI gate"). `native`,
+    # The single required status check on `main` (name must stay "CI gate"). `native`, `conformance`,
     # `android`, and `handbook` are conditional, and a required check that never reports
     # leaves a pull request blocked forever — so this job always runs and collapses every
     # other job's result into one verdict. Path-filter skips and private-repo native/
     # android skips are success.
     if: always()
-    # The conformance job is nightly-only and quarantined (docs/ci.md): it never feeds the gate.
-    needs: [meta, changes, native, android, handbook]
+    needs: [meta, changes, native, conformance, android, handbook]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
