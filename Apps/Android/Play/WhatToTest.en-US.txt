@@ -32,6 +32,7 @@ Fixes
 - Sharing a clip you left mid-download in the player, or whose download stopped, finishes its copy instead of failing.
 - Shared clips keep their DJI file names instead of arriving with long random names.
 - Portrait card-space labels keep their full value near the cutout.
+- On a Pocket 3 with current firmware, Double-tap Level and Motion Control moves read the gimbal position again.
 
 What to test
 

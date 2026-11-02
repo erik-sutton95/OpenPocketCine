@@ -24,6 +24,9 @@ while keeping DJI camera capabilities and Pocket's familiar operating layout.
   card-space values and cutout clearance, and Android restores the readout glow.
 - Shutter Angle applies angle picks and follows exposure-mode and frame-rate changes. Supported
   native ISO, Auto ISO limits and native ISO selection are restored.
+- Pocket 3 on current firmware: AirPods head tracking calibrates instead of
+  waiting for the gimbal, small nods no longer swing the gimbal the long way,
+  and Double-tap Level and Motion Control read its position.
 - A long Media visit hands the live picture back correctly. Playback preserves
   Pause while buffering, seeking and scrubbing, and on app return.
 - Camera-clip deletion, full-resolution caching and multi-clip sharing use the
@@ -272,6 +275,13 @@ out in the tester notes.
 - Gimbal attitude (`0x04/0x05`) is read only from the known 50-byte layout on
   both platforms. Another length used to parse as pan 0 / tilt 0, which could
   throw Motion Control and head tracking at the wrong pose.
+- Pocket 3 gimbal attitude from current firmware (49 bytes) is read as a second
+  known layout on both platforms; other lengths still fail closed. iOS head
+  tracking calibrates instead of waiting for the gimbal, and Double-tap Level
+  and Motion Control read the pose on iOS and Android. For this layout, native
+  pitch targets stay continuous around the calibration, Start or live pose, so
+  a small nod near level no longer wraps past 180 degrees and drives the gimbal
+  the long way to its stop. Pocket 3 hardware validation is pending.
 - The iOS `head-motion` journal row now counts why headphone samples were
   rejected (stale, stamped in the future, or superseded) with the last
   rejected age, so a head-tracking report with zero accepted samples is
