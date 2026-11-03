@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.openpocketcine.R
 import com.opencapture.opencine.multicam.RecordAll
 import com.opencapture.opencine.dji.applyAttitude
 import com.opencapture.opencine.dji.fromJson
@@ -817,7 +818,7 @@ class MultiviewSession(
             tile.driver?.close()
             tile.driver = null
             tile.status = "Could not connect"
-            tile.failureMessage = error.message ?: "Could not connect"
+            tile.failureMessage = error.message ?: app.getString(R.string.multiview_could_not_connect)
             log("multiview: add failed stage=$stage error=${error.javaClass.simpleName}")
             // Keep the tile available for discovery retry after a successful join.
         } finally {
@@ -891,7 +892,7 @@ class MultiviewSession(
             tile.publishing = false
             tile.controlHost = null
             tile.status = "Could not connect preview"
-            tile.failureMessage = "Could not restore preview. Tap Reconnect to try again."
+            tile.failureMessage = app.getString(R.string.multiview_restore_failed)
             tile.recovery.fail()
         } finally {
             tile.connecting = false
@@ -1138,7 +1139,7 @@ class MultiviewSession(
         if (action == "none") {
             if (!pathReady && now - (tile.pathLostAt ?: now) > 45_000) {
                 tile.recovery.fail()
-                tile.failureMessage = "Shared network unavailable. Rejoin it, then reconnect this camera."
+                tile.failureMessage = app.getString(R.string.multiview_shared_network_unavailable)
             }
             return
         }
@@ -1186,7 +1187,7 @@ class MultiviewSession(
         while (busy && running) delay(200)
         if (!running || tile.camera == null) return
         if (!tile.recovery.beginRejoin()) {
-            tile.failureMessage = "Could not restore preview. Tap Reconnect to try again."
+            tile.failureMessage = app.getString(R.string.multiview_restore_failed)
             return
         }
         connectPreview(tile)

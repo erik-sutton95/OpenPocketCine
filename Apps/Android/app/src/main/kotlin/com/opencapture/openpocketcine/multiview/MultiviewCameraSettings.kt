@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.openpocketcine.R
 import android.graphics.Bitmap
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -118,7 +120,7 @@ internal fun MultiviewCameraSettings(
     val ready = camera != null && controls != null && available
     // Live View's gimbal side panel container: trailing edge, width, glass, reveal and tap-outside dismissal.
     MonitorInspector(
-        title = "Camera settings",
+        title = stringResource(R.string.multiview_camera_settings),
         viewportWidth = width,
         viewportHeight = height,
         onDismiss = onDismiss,
@@ -205,8 +207,12 @@ internal fun MultiviewCameraSettings(
                     }
                 }
             } else {
-                Text(if (tile?.recovering == true) "Reconnect this camera before changing settings."
-                    else "Camera settings are available when its connection is ready.",
+                Text(
+                    if (tile?.recovering == true) {
+                        stringResource(R.string.multiview_reconnect_before_settings)
+                    } else {
+                        stringResource(R.string.multiview_settings_need_connection)
+                    },
                     color = LiveDesign.muted, style = LiveType.text(13f), modifier = Modifier.padding(vertical = 16.dp))
             }
         }
