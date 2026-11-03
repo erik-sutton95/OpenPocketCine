@@ -43,6 +43,17 @@ links resolve from the final trailing-slash URL, not the Markdown file path.
 A merge to `main` that touches `handbook/` triggers a Vercel deploy hook. The rest
 of the website lives in the private repo `erik-sutton95/opencapture-site`.
 
+## Roadmap status
+
+Current engineering priorities and acceptance criteria live in the
+[repository roadmap](https://github.com/erik-sutton95/OpenPocketCine/blob/main/docs/ROADMAP.md).
+Feature proposals belong in
+[Ideas & Feature Requests](https://github.com/erik-sutton95/OpenPocketCine/discussions/categories/ideas-feature-requests).
+A proposal, integrated source and a physically qualified feature are different
+states. Update the roadmap when implementation or qualification changes; link
+platform exceptions and evidence rather than duplicating them in the handbook.
+Older discussion summaries do not establish availability in a current build.
+
 ## Release notes
 
 Tester notes normally cover the current build for camera operators. For an

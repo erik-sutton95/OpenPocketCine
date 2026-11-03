@@ -264,7 +264,7 @@ write the exception in the table in the same PR.
 | Nano frame-queue protection | Preserve AVC parameter sets and IDR when trimming a live frame backlog. | iOS queue uses a latched codec; Android has a different buffering path. The iOS regression fix is not yet physically verified as a stutter fix. | iOS synthetic overload regression plus physical cadence comparison pending |
 | Level | **LEVEL** View Assist in the framing group (after CROSS), tap-only. Camera attitude quaternion (`0x04/0x05` `@24`), not phone IMU. Nikon Z virtual-horizon strips (8 pt dark band (black 32 %), 1 pt white centreline, 2 pt cross-bar marker, zero notches, no glow, faint text-only shadow, number at the start, no end labels, ±8° full scale, centreline/marker/number green < 0.6°): roll 28 tall along the bottom (lift 84 landscape / 22 portrait); tilt centres vertically, right of centre by the same distance roll sits below centre, kept 6 inside the picture. Bubble (±10° ring, 5° inner ring, centre cross, 13 pt bead amber / green) within 25° of plumb, hysteresis 65° / 60°. Dash and `No level data` after 1 s without a valid sample. Gimbal drawer **Double-tap** Recenter / Level (saved, default Recenter) drives stick double-tap and gamepad Circle/B. Level: one `0x04/0x14` target to horizon or plumb, ±0.5° within duration + 1.5 s, else stop and `Couldn't level: N° off`; FPV adds the roll note. | Not in playback. Sharing watcher does not show LEVEL (attitude is not relayed). | **physical** both pending: roll sign on a rolled handle; roll sign in selfie with Selfie Flip on and off; top-down snap with the handle angled. Core and Kotlin fixtures from 1,014 captured frames. |
 | Action 6 body | Live `0x09/0xa8` to `0x41` with no Nano gate and no Pocket `0x02/0x68`; Normal 10-bit `3F` / D-Log M `3D`; Photo `05`; Timelapse `0x02/0x01`; Action `0x02/0xBF` favorite layout; aperture state/capability subscriptions appended after the base keys. APERTURE tile takes the FOCUS slot (`supportsAperture`): live iris `cam_expo_param` `@13`, strategy choices from `camcap_aperture_ctrl_strategy` (captured fallback per exposure/mode), SET `0x02/0x8E` pid `0x0044`. Gimbal, tap focus and focus modes hidden. | Android mirrors the flags, color map and parsers in Kotlin; iOS reads them from the core. | **physical** pending both (loaner returned; Mimo survey only) |
-| Explicit skip | — | VideoToolbox, MetalFX super-res, iOS 26 Liquid Glass API, Frame.io OAuth, De-SQ / MAG | n/a |
+| Explicit skip | — | VideoToolbox, MetalFX super-res, iOS 26 Liquid Glass API, Frame.io OAuth, MAG | n/a |
 
 Datalink bind, ACK, enable-write, and decoder latch facts live in
 [`live-session.md`](live-session.md). Android I/O that implements these rows
@@ -1946,7 +1946,7 @@ SIMULATED native tests host the actual shared wave/parade/vector views and exerc
 make/update display configuration, pixel format, layer EDR/colorspace and delegate owner.
 They do not claim physical HDR brightness or rendered-pixel qualification.
 
-### Applied Apple assist and combined delivery candidate
+### Applied Apple assist and combined delivery candidate (historical snapshot)
 
 The reviewed Apple assist owner proposal is applied locally beside the seven-file
 shared delivery adapter. Original app native fixtures remain unchanged. Added shared
@@ -1954,9 +1954,12 @@ state scenarios preserve every original test body; narrow formatting touches cha
 code only. Shared delivery and DJI source are integrated locally in the owned checkout.
 Combined app portable, strict, repository, both-architecture iOS and bounded native
 qualification are pending. Prior settings/DJI results qualify their earlier sources,
-not this uncompiled combined candidate. Android assist adoption remains a separate
-source proposal, with the current Android implementation retained. Physical behavior
-and full thin-app exit remain untested/incomplete. No pins or remote refs move.
+not that uncompiled combined candidate. At that snapshot Android assist adoption
+was a separate source proposal. Current source now constructs shared
+`MonitorAssistState` and uses `MonitorOriginalDeliveryHost` for original sharing;
+see the [current adoption review](SHARED-MONITOR-ENGINE.md#11-migration-status-and-remaining-work).
+This supersedes the proposal status, not the missing physical evidence. Conversion,
+Frame.io parity and the full thin-app exit are not established by this adoption.
 
 ## Apple ActiveTrack owner candidate
 
