@@ -1,0 +1,8 @@
+{
+  "id": "pocket",
+  "displayName": "Pocket",
+  "inputName": "OpenCine Pocket",
+  "version": "0.1.0",
+  "minimumDockVersion": "0.1.0",
+  "bundleName": "OpenPocketCine.app"
+}

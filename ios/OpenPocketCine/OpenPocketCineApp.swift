@@ -1,6 +1,9 @@
 import MonitorUI
 import OpenCineAppKit
 import OpenCineCameraControls
+#if targetEnvironment(macCatalyst)
+    import OpenCineVirtualCamera
+#endif
 import SwiftUI
 import UIKit
 
@@ -33,6 +36,9 @@ struct OpenPocketCineApp: App {
                 // iPad ignores Info.plist `UIStatusBarHidden` after launch unless
                 // the hosting controller prefers it hidden. `~ipad` covers launch.
                 .statusBarHidden(true)
+                #if targetEnvironment(macCatalyst)
+                    .task { DesktopModuleHost.current?.start() }
+                #endif
         }
     }
 
