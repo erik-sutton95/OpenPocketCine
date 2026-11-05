@@ -97,6 +97,8 @@ targets:
       - target: OpenPocketCineWatch
         embed: true
         codeSign: true
+        # Mac Catalyst has no watch companion.
+        destinationFilters: [iOS]
     settings:
       base:
         # The app shell (CoreBluetooth / Network / Hotspot glue) uses the Swift 5 language mode to
@@ -114,6 +116,13 @@ targets:
         # rewrites it in place (strips comments, retabs) and the build then fails with
         # "Entitlements file was modified during the build".
         CODE_SIGN_ENTITLEMENTS: OpenPocketCine/OpenPocketCine.entitlements
+        # Mac Catalyst: the camera module of the OpenCine Mac dock, under its own App ID and
+        # sandbox. Every Mac value is an sdk=macosx override, so iOS settings stay as they are.
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        "PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]": com.opencapture.openpocketcine.module
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": OpenPocketCine/OpenPocketCine-Mac.entitlements
+        "ENABLE_APP_SANDBOX[sdk=macosx*]": YES
         GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) CI_SILENCE_GL_DEPRECATION=1"
         OTHER_SWIFT_FLAGS: "$(inherited) -Xcc -DCI_SILENCE_GL_DEPRECATION"
         # Same team as OpenZCine — it already has the Hotspot Configuration capability.
@@ -282,6 +291,12 @@ schemes:
     test:
       targets:
         - OpenPocketCineTests
+  # Mac Catalyst build: the app alone. The iOS scheme names the watch app, which has no Mac
+  # destination and would ask for a provisioning profile.
+  OpenPocketCineMac:
+    build:
+      targets:
+        OpenPocketCine: all
   OpenPocketCineWatch:
     build:
       targets:
