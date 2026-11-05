@@ -153,6 +153,10 @@ ios-resolve: ios-generate
 ios-build: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 
+# Build the Mac Catalyst camera module. Extra xcodebuild options (signing) are passed through.
+macos-build *args: ios-generate
+    ./scripts/macos-build.sh {{args}}
+
 # Build a development-signed app for a connected iPhone/iPad prototype test.
 ios-device-build *args: ios-generate
     xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine -destination 'generic/platform=iOS' -allowProvisioningUpdates {{args}} build
