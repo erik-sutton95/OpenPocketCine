@@ -23,23 +23,36 @@ struct SettingsRootView: View {
     var safeArea: EdgeInsets = EdgeInsets()
     var onClose: (() -> Void)? = nil
     @Environment(AppModel.self) private var model
+    @State private var teleprompterPresented = false
 
     var body: some View {
         MonitorOperatorSettingsScreen(shell: model.shell, brand: "OpenPocketCine",
             preferences: OperatorPrefs.common, display: OperatorPrefs.display, assist: model.assist,
             library: model.session.mediaLibrary, operatorSession: model.operatorSession,
             configuration: configuration)
+        .fullScreenCover(isPresented: $teleprompterPresented) {
+            MonitorTeleprompterScreen(model: model.teleprompter,
+                onClose: { teleprompterPresented = false },
+                onUseScript: model.isLive ? {
+                    model.assist.teleprompterEnabled = true
+                    model.assist.persist()
+                    teleprompterPresented = false
+                    closeSettings()
+                } : nil)
+        }
+    }
+
+    private func closeSettings() {
+        model.settingsAccount.retire()
+        model.settingsSupport.retire()
+        if let onClose { onClose() } else { model.shell.dismissCover() }
     }
 
     private var configuration: MonitorOperatorSettingsConfiguration<MonitorLUTLooks> {
         let transfer = model.monitorTransfer ?? model.monitorColorMode.map(MonitorTransfer.init) ?? .rec709
         return .init(safeArea: safeArea, phase: model.session.phase.label, isLive: model.isLive,
             sharingSubtitle: MonitorSettingsCopy.sharingSubtitle(app: "OpenPocketCine"),
-            close: {
-                model.settingsAccount.retire()
-                model.settingsSupport.retire()
-                if let onClose { onClose() } else { model.shell.dismissCover() }
-            },
+            close: closeSettings,
             disconnect: {
                 model.settingsAccount.retire()
                 model.settingsSupport.retire()
@@ -53,7 +66,7 @@ struct SettingsRootView: View {
                 haptics: .init(value: Bindable(model).hapticsEnabled, help: MonitorSettingsCopy.gimbalHaptics),
                 keepAwake: .init(value: Bindable(model).keepScreenAwake, help: MonitorSettingsCopy.keepScreenAwake),
                 input: .init(remoteShutter: .volumeButtons(enabled: Bindable(model).remoteShutterEnabled)),
-                motion: motion),
+                motion: motion, teleprompter: { teleprompterPresented = true }),
             display: .init(hdr: .init(value: Bindable(model).hdrDisplay, help: MonitorSettingsCopy.hdrPanel(cameraMode: "HDR/HLG color mode")),
                 sections: availableDisplay),
             cache: .init(source: cache,

@@ -1,7 +1,10 @@
 import MonitorUI
+import OpenCineAppKit
 import OpenCineCameraControls
+import OpenCineDJIApple
 import OpenPocketViewCore
 import XCTest
+import Testing
 
 @testable import OpenPocketCine
 
@@ -55,5 +58,54 @@ final class LiveScreenParityTests: XCTestCase {
         let new = best { for i in 0..<iterations { if shared(Double(i), false) == .unavailable { sink &+= 1 } } }
         XCTAssertGreaterThanOrEqual(sink, 0)
         XCTAssertLessThanOrEqual(new, old * 1.5 + 0.002, "shared \(new * 1_000) ms vs app \(old * 1_000) ms")
+    }
+}
+
+
+@MainActor @Suite struct TeleprompterAdoptionTests {
+    @Test func memberMonitorSharesTheRootScriptAndPlaybackOwner() throws {
+        let key = "teleprompter-owner-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: key))
+        defer { defaults.removePersistentDomain(forName: key) }
+        let owner = MonitorTeleprompterModel(defaults: defaults)
+        let root = AppModel(teleprompter: owner)
+        let stage = MultiviewSession()
+        defer { stage.closeLiveView() }
+        let tile = try #require(stage.tiles.first)
+        tile.camera = DjiAppleSighting(id: UUID(), name: "Test camera",
+            model: .resolve(modelId: 0x19, name: "OsmoNano-Test"), modelId: 0x19)
+        tile.controlHost = "192.0.2.30"
+        stage.openLiveView(tile, teleprompter: root.teleprompter)
+        let member = try #require(tile.liveModel)
+        #expect(member.teleprompter === root.teleprompter)
+        member.teleprompter.previewPaste("Shared member script")
+        member.teleprompter.useCandidate()
+        member.teleprompter.position = 80
+        #expect(root.teleprompter.script?.text == "Shared member script")
+        #expect(root.teleprompter.position == 80)
+    }
+
+    @Test func readerPresentationRetainsTheCameraSessionAndDecoder() {
+        let storage = UserDefaults.standard
+        let keys = ["teleprompter.backgroundOpacity", "teleprompter.showsPreview"]
+        let saved = keys.map { storage.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, saved) {
+                if let value { storage.set(value, forKey: key) }
+                else { storage.removeObject(forKey: key) }
+            }
+        }
+        let model = AppModel()
+        let session = model.session
+        let decoder = session.decoder
+        model.assist.teleprompterEnabled = true
+        model.teleprompter.backgroundOpacity = 0.6
+        model.teleprompter.showsPreview = false
+        #expect(model.liveTeleprompter === model.teleprompter)
+        #expect(model.session === session && model.session.decoder === decoder)
+        #expect(model.shell.cover == nil)
+        model.assist.teleprompterEnabled = false
+        #expect(model.session === session && model.session.decoder === decoder)
+        #expect(model.shell.cover == nil)
     }
 }

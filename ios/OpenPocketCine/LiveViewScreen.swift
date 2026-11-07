@@ -1,5 +1,6 @@
 import MonitorPresentation
 import MonitorUI
+import OpenCineAppKit
 import OpenCineAppKitApple
 import OpenCineCameraControls
 import OpenCineCore
@@ -10,6 +11,7 @@ import SwiftUI
 typealias LiveViewScreen = MonitorOperatorLiveScreen<AppModel>
 
 extension AppModel: MonitorLiveScreenHost {
+    var liveTeleprompter: MonitorTeleprompterModel? { teleprompter }
     static func headphoneBridge() -> HeadphoneMotionBridge { .appBridge() }
     var liveCapabilities: MonitorLayoutCapabilities { OsmoMonitorPresentation.capabilities(session) }
     var liveZoomCaption: String { OsmoMonitorPresentation.zoomCaption(session) }

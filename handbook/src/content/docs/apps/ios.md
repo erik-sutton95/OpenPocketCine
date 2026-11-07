@@ -25,6 +25,20 @@ preferences. The saved-camera document mirrors the legacy records so a later
 upgrade can merge edits made in an older build. **Forget** removes the camera's
 saved Wi-Fi credential as well as its saved card.
 
+## Teleprompter
+
+Open **Operator Setup → Controls → Teleprompter** to paste text, choose a TXT or
+Markdown file, or load a direct HTTPS text link. Review the preview before
+**Use script** replaces the saved offline copy. Web pages and sign-in pages
+are not supported script links.
+
+On the live monitor, tap **PROMPT** in View Assist to show or hide the reader.
+Hold PROMPT for text size, speed, mirroring, background opacity and live-preview
+controls. The existing camera picture and recording controls stay in place;
+teleprompter controls never start or stop recording. Without a camera, use
+**Read** in the script manager. Playback pauses when you hide the reader
+or leave the app. This version uses timed scrolling without speech tracking.
+
 ## Field Monitor interface
 
 The native UI uses Sora typography, cyan controls and dark panels. Portrait

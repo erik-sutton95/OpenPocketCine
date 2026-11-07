@@ -155,7 +155,7 @@ fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> U
             session, layout, confirmsRecord = model.recordConfirmationEnabled, interactive = !overlayOpen,
             onAdd = { empty -> if (session.networkConfigured) adding = empty else showNetwork = true },
             onOpenLive = { tile ->
-                session.openLiveView(tile)
+                session.openLiveView(tile, teleprompter = model.teleprompter)
                 if (tile.liveModel != null) liveTile = tile
             },
             onSettings = { cameraSettings = true },

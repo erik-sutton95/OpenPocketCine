@@ -5,6 +5,22 @@ unless a row lists an exception. GPU backends, Bluetooth stacks, and OS APIs may
 diverge. Shipping a one-platform operator-visible change without a row here is
 incomplete.
 
+## Teleprompter
+
+Both shells use OpenCine's retained script owner for the in-app Paste, TXT,
+Markdown and direct HTTPS text-link import flow. Preview precedes replacement;
+the accepted script stays available offline. Settings supplies the shared script
+manager, and the existing live View Assist palette supplies PROMPT with the same
+script, text size, speed, opacity, preview and mirror controls. Showing or hiding
+the reader leaves the existing picture source and camera controls in place.
+Speech recognition and spoken-word highlighting remain deferred.
+
+See [the workflow and acceptance checks](teleprompter.md). Android layout and
+script controls were checked on a physical Pixel with a decoded review feed.
+On iPhone, the standalone reader was checked in landscape; the live overlay was
+checked with a Pocket camera in landscape and portrait. These checks cover
+teleprompter presentation, control clearance and live-feed operation.
+
 ## Shared cameras and pairing (SHELL-02)
 
 Both shells use OpenCine's cameras model and camera/pair pages. Nearby selection

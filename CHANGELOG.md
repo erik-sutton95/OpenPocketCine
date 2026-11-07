@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Teleprompter on iOS and Android: preview pasted text, TXT/Markdown files or
+  direct HTTPS script links before saving offline. PROMPT in View Assist shows
+  the reader over the live picture; hold it for opacity, preview, size, speed
+  and mirror controls. Camera recording stays with the existing monitor controls.
+
 ## [0.1.8] - 2026-10-30
 
 Public beta, cumulative since open beta build 128 (0.1.5). The operator-facing iOS and
