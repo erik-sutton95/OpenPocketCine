@@ -92,6 +92,7 @@ class AppModel(
     discovers: Boolean = false,
     connectPort: (DjiCameraSession) -> DjiConnectPort = { it },
     val reviewLaunch: com.opencapture.monitorui.ReviewLaunch? = null,
+    teleprompter: com.opencapture.opencine.appkit.MonitorTeleprompterModel? = null,
 ) : GamepadHost, GimbalChromeHost, CaptureSheetHost, OperatorSetupModel, AutoCloseable {
     private val appContext = context.applicationContext
     /** One actual cache root/lifetime shared by gallery IO and operator settings. */
@@ -210,6 +211,7 @@ class AppModel(
         private set
     /** The Multiview stage covers the camera home until it closes. */
     val showsMultiview: Boolean get() = multiview != null
+    internal val teleprompter = teleprompter ?: com.opencapture.opencine.appkit.MonitorTeleprompterModel(appContext)
     internal val operatorSession = MonitorOperatorSessionModel(shell, assist, OperatorPrefs.displayPreferences(appContext), scope)
     override var operatorSettingsTab: MonitorSettingsTab
         get() = operatorSession.settingsTab

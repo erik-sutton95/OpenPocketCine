@@ -38,7 +38,9 @@ final class AppModel {
 
     /// `connects`: the cameras and pair pages discover and connect through this model (the app's
     /// one root model). A Multiview tile's live or settings model, previews and tests never do.
-    init(session: CameraSession? = nil, connects: Bool = false) {
+    init(session: CameraSession? = nil, connects: Bool = false,
+        teleprompter: MonitorTeleprompterModel? = nil) {
+        self.teleprompter = teleprompter ?? MonitorTeleprompterModel()
         #if targetEnvironment(simulator)
             if session == nil, MonitorUIReview.isActive { MonitorUIReview.resetMediaFavorites() }
         #endif
@@ -337,6 +339,8 @@ final class AppModel {
             deadzone: GimbalStick.deadzoneFromPercent(virtualJoystickDeadzonePercent),
             curve: virtualJoystickResponseCurve)
     }
+    /// Shared script and reader state retained across Settings and the live monitor.
+    let teleprompter: MonitorTeleprompterModel
     @ObservationIgnored lazy var operatorSession = MonitorOperatorSessionModel(
         shell: shell, assist: assist, display: OperatorPrefs.display)
     var dispLive: MonitorDisplayChrome {

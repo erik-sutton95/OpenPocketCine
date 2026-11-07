@@ -293,7 +293,7 @@ struct MultiviewView: View {
     private func openLiveView(_ slot: Int) {
         let tile = session.tiles[slot]
         guard tile.controlHost != nil, !tile.recovering else { return }
-        session.openLiveView(tile)
+        session.openLiveView(tile, teleprompter: model.teleprompter)
         if tile.liveModel != nil { liveTile = tile }
     }
 

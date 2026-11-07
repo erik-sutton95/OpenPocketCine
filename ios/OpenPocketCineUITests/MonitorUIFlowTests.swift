@@ -1,6 +1,7 @@
 import MonitorPresentation
 import OpenCineAppUITesting
 import XCTest
+import UIKit
 
 /// These exercise rendered hit targets and navigation, not camera transport.
 /// Optional OPV_SIM_FEED_CLIP points at private local footage for the live feed; media screens
@@ -1287,6 +1288,194 @@ final class MonitorUIFlowTests: SharedAppUITestCase {
         XCTAssertTrue(forget.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Rename setup"].exists)
         capture("setup-chip-menu")
+    }
+
+    func testTeleprompterImportsAndTogglesOverTheExistingLiveMonitor() throws {
+        // This fixture runs on the task simulator; reading another test process’s clipboard can prompt.
+        defer { UIPasteboard.general.items = [] }
+        UIPasteboard.general.string = String(
+            repeating:
+                "Welcome to our camera test.\n\nRead over the picture and keep camera controls reachable.\n\n",
+            count: 6)
+        let clip = ProcessInfo.processInfo.environment["OPV_SIM_FEED_CLIP"]
+        var environment = clip.map { ["OPV_SIM_FEED_CLIP": $0] } ?? [:]
+        if clip != nil { environment["OPV_PHYSICAL_UI_REVIEW"] = "1" }
+        launch(ReviewLaunch(screen: .live),
+            environment: environment)
+        rotate(.landscapeLeft)
+        let record = app.buttons["monitor.system.record"]
+        XCTAssertTrue(record.waitForExistence(timeout: 10))
+        struct FrameReceipt: Decodable {
+            let sourceIdentity: String?
+            let sourcePresentations: Int?
+            let sourceFrameAt: Double?
+            let cameraRecording: Bool?
+        }
+        enum FrameFailure: Error { case unavailable }
+        func frames() throws -> FrameReceipt {
+            let values = app.descendants(matching: .any).matching(
+                identifier: "opencine.native.qualification").allElementsBoundByIndex
+                .compactMap { $0.value as? String }
+            guard let value = values.first else { throw FrameFailure.unavailable }
+            let receipt = try JSONDecoder().decode(FrameReceipt.self, from: Data(value.utf8))
+            print("SIMULATED-PROMPT observed frames=\(receipt.sourcePresentations ?? -1) at=\(receipt.sourceFrameAt ?? -1)")
+            return receipt
+        }
+        func expectNewFrames(after before: FrameReceipt) throws {
+            let advanced = NSPredicate { _, _ in
+                guard let next = try? frames(), let count = next.sourcePresentations,
+                    let previous = before.sourcePresentations, let frameAt = next.sourceFrameAt,
+                    let previousFrameAt = before.sourceFrameAt else { return false }
+                return next.sourceIdentity == before.sourceIdentity && count > previous
+                    && frameAt > previousFrameAt + 0.15
+            }
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: advanced,
+                object: nil)], timeout: 12), .completed, "The existing native picture keeps advancing")
+            let next = try frames()
+            XCTAssertEqual(next.sourceIdentity, before.sourceIdentity)
+            XCTAssertEqual(next.cameraRecording, before.cameraRecording)
+            print("SIMULATED-PROMPT native frames \(before.sourcePresentations ?? -1) -> \(next.sourcePresentations ?? -1), owner unchanged")
+        }
+        let initialFrames = try clip.map { _ in try frames() }
+        if let initialFrames { try expectNewFrames(after: initialFrames) }
+        app.buttons["monitor.system.settings"].tap()
+        let tabs = app.scrollViews["monitor.settings.tabs"]
+        XCTAssertTrue(tabs.waitForExistence(timeout: 10))
+        let controls = app.buttons["monitor.settings.tab.Controls"]
+        reveal(controls, in: tabs, portrait: false)
+        controls.tap()
+        let open = app.buttons["settings.controls.teleprompter"]
+        for _ in 0..<8 where !open.isHittable { app.swipeUp() }
+        XCTAssertTrue(open.isHittable)
+        open.tap()
+        XCTAssertTrue(app.buttons["teleprompter.import.paste"].waitForExistence(timeout: 5))
+        app.buttons["teleprompter.import.paste"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any).matching(identifier: "teleprompter.import.preview")
+                .firstMatch.waitForExistence(timeout: 5))
+        capture("teleprompter-import-preview-landscape")
+        app.buttons["teleprompter.import.use"].tap()
+        let overlay = app.descendants(matching: .any)["teleprompter.overlay"].firstMatch
+        XCTAssertTrue(overlay.waitForExistence(timeout: 10))
+        if let resumedFrames = try clip.map({ _ in try frames() }) {
+            try expectNewFrames(after: resumedFrames)
+        }
+        XCTAssertTrue(record.isHittable)
+        let prompt = app.buttons["monitor.assist.PROMPT"]
+        XCTAssertTrue(prompt.isHittable)
+        capture("teleprompter-live-overlay-landscape")
+        let recordingLabel = record.label
+        for orientation in [UIDeviceOrientation.portrait, .landscapeRight, .landscapeLeft] {
+            rotate(orientation, settling: overlay)
+            let frame = overlay.frame
+            XCTAssertTrue(app.frame.insetBy(dx: -1, dy: -1).contains(frame))
+            if orientation == .portrait {
+                XCTAssertGreaterThan(frame.height, app.frame.width * 9 / 16 * 1.5)
+            } else {
+                XCTAssertGreaterThan(frame.height, app.frame.height * 0.4)
+            }
+            XCTAssertGreaterThan(frame.width, app.frame.width * (orientation == .portrait ? 0.75 : 0.6))
+            for id in ["monitor.system.record", "monitor.system.settings", "monitor.system.media",
+                "monitor.system.lock", "monitor.capture.iso", "monitor.capture.shutter", "monitor.assist.PROMPT"] {
+                let control = app.buttons[id]
+                if control.exists {
+                    XCTAssertTrue(control.isHittable, "Reader leaves \(id) reachable")
+                    XCTAssertFalse(frame.intersects(control.frame), "Reader clears \(id)")
+                }
+            }
+            XCTAssertTrue(app.buttons["teleprompter.play"].isHittable)
+            XCTAssertTrue(app.buttons["teleprompter.reset"].isHittable)
+            XCTAssertTrue(app.buttons["teleprompter.settings"].isHittable)
+            XCTAssertEqual(record.label, recordingLabel)
+            capture("teleprompter-expanded-\(orientation.rawValue)")
+            if orientation == .portrait {
+                app.buttons["monitor.capture.iso"].tap()
+                let close = app.buttons["monitor.capture.close"]
+                XCTAssertTrue(close.waitForExistence(timeout: 5))
+                close.tap()
+                XCTAssertTrue(overlay.waitForExistence(timeout: 5))
+            }
+        }
+
+        let lock = app.buttons["monitor.system.lock"]
+        let play = app.buttons["teleprompter.play"]
+        let reset = app.buttons["teleprompter.reset"]
+        let quickSettings = app.buttons["teleprompter.settings"]
+        XCTAssertTrue(lock.isHittable && play.exists && reset.exists && quickSettings.isHittable)
+        XCTAssertGreaterThan(play.frame.midX, app.frame.midX)
+        XCTAssertLessThan(play.frame.minX, reset.frame.minX)
+        XCTAssertLessThan(reset.frame.minX, quickSettings.frame.minX)
+        lock.tap()
+        XCTAssertFalse(play.isEnabled)
+        XCTAssertFalse(reset.isEnabled)
+        XCTAssertFalse(quickSettings.isEnabled)
+        lock.tap()
+        XCTAssertTrue(play.isEnabled && reset.isEnabled && quickSettings.isEnabled)
+        prompt.tap()
+        XCTAssertFalse(overlay.exists)
+        XCTAssertTrue(record.isHittable)
+        prompt.tap()
+        XCTAssertTrue(overlay.waitForExistence(timeout: 5))
+        let scriptText = app.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Welcome to our camera test.")).firstMatch
+        XCTAssertTrue(scriptText.waitForExistence(timeout: 5))
+        XCTAssertTrue(scriptText.isHittable)
+        let beforeOpacity = try clip.map { _ in try frames() }
+        quickSettings.tap()
+        XCTAssertTrue(app.buttons["monitor.assist.close"].waitForExistence(timeout: 5))
+        let opacity = app.sliders["teleprompter.opacity"]
+        XCTAssertTrue(opacity.waitForExistence(timeout: 5))
+        let options = app.scrollViews.containing(
+            .button, identifier: "teleprompter.manage").firstMatch
+        for _ in 0..<6 where !options.frame.contains(opacity.frame) { options.swipeUp() }
+        XCTAssertTrue(opacity.isHittable && options.frame.contains(opacity.frame))
+        let wasOpaque = app.staticTexts["Background 100%"].exists
+        opacity.adjust(toNormalizedSliderPosition: wasOpaque ? 0 : 1)
+        XCTAssertTrue(app.staticTexts[wasOpaque ? "Background 0%" : "Background 100%"].exists)
+        capture("teleprompter-quick-controls-landscape")
+        app.buttons["monitor.assist.close"].tap()
+        XCTAssertTrue(app.buttons["monitor.assist.close"].waitForNonExistence(timeout: 5))
+        if let beforeOpacity { try expectNewFrames(after: beforeOpacity) }
+        let liveReaderFrame = overlay.frame
+        quickSettings.tap()
+        let manage = app.buttons["teleprompter.manage"]
+        let managerScroll = app.scrollViews.containing(.button, identifier: "teleprompter.manage").firstMatch
+        for _ in 0..<6 where !manage.isHittable { managerScroll.swipeDown() }
+        manage.tap()
+        let managerControls = app.descendants(matching: .any)["teleprompter.manager.controls"].firstMatch
+        XCTAssertTrue(managerControls.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["teleprompter.manager.preview"].firstMatch.exists)
+        rotate(.portrait)
+        XCTAssertTrue(app.buttons["teleprompter.read"].isHittable)
+        XCTAssertTrue(app.sliders["teleprompter.fontSize"].isHittable)
+        XCTAssertTrue(app.sliders["teleprompter.speed"].isHittable)
+        capture("teleprompter-settings-portrait")
+        rotate(.landscapeLeft)
+        app.sliders["teleprompter.fontSize"].adjust(toNormalizedSliderPosition: 1)
+        app.sliders["teleprompter.speed"].adjust(toNormalizedSliderPosition: 1)
+        XCTAssertTrue(app.staticTexts["Speed 300"].exists)
+        capture("teleprompter-settings-landscape")
+        app.buttons["teleprompter.read"].tap()
+        let reader = app.descendants(matching: .any)["teleprompter.reader"].firstMatch
+        XCTAssertTrue(reader.waitForExistence(timeout: 5))
+        XCTAssertEqual(reader.frame.width, app.frame.width, accuracy: 1)
+        XCTAssertEqual(reader.frame.height, app.frame.height, accuracy: 1)
+        XCTAssertGreaterThan(reader.frame.width, liveReaderFrame.width)
+        XCTAssertGreaterThan(reader.frame.height, liveReaderFrame.height)
+        capture("teleprompter-calibrated-reader-landscape")
+        quickSettings.tap()
+        XCTAssertTrue(app.sliders["teleprompter.fontSize"].isHittable)
+        app.buttons["teleprompter.edit"].tap()
+        let editor = app.textViews["teleprompter.script.editor"]
+        editor.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Done"].isHittable && editor.isHittable)
+        XCTAssertGreaterThanOrEqual(editor.frame.height, 44)
+        XCTAssertLessThanOrEqual(editor.frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
+        capture("teleprompter-editor-keyboard-landscape")
+        app.buttons["Done"].tap()
+        app.buttons["teleprompter.close"].tap()
+        if let restoredFrames = try clip.map({ _ in try frames() }) { try expectNewFrames(after: restoredFrames) }
     }
 
     /// A2-32 product ruling 2026-10-16: the remote shutter row sits in Controls with Z's wording and

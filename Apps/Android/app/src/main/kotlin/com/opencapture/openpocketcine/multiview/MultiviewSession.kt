@@ -467,11 +467,11 @@ class MultiviewSession(
 
     // --- Borrowed Live View -------------------------------------------------------------------
 
-    fun openLiveView(tile: Tile) {
+    fun openLiveView(tile: Tile, teleprompter: com.opencapture.opencine.appkit.MonitorTeleprompterModel) {
         tile.closeControls()
         val camera = tile.camera ?: return
         if (tile.controlHost == null || tile.recovering) return
-        val model = AppModel(app, borrowing = tile.decoder)
+        val model = AppModel(app, borrowing = tile.decoder, teleprompter = teleprompter)
         model.session.updateMultiview(camera, tile.driver, tile.latestSettings)
         model.session.adoptMultiviewPose(tile.pose)
         model.setBorrowedLut(tile.lutEnabled)

@@ -121,6 +121,6 @@ fun LiveViewScreen(model: AppModel) {
                 model.gimbalGamepad.noteBlocked(model)
                 model.endGimbalStick()
                 if (reason == MonitorInputBlock.LOCK) session.cancelProgrammedMove()
-            }, modifier = modifier, picture = picture)
+            }, modifier = modifier, picture = picture, teleprompter = model.teleprompter)
     }
 }

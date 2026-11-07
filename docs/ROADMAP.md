@@ -14,6 +14,8 @@ Issues are for bugs only.
 
 ## Next
 
+- Shared teleprompter on iOS and Android: in-app script imports, live reader overlay and quick controls
+  ([OpenCine #339](https://github.com/erik-sutton95/OpenCine/issues/339))
 - Camera control writes (record, ISO, white balance, tap-to-focus) proven on hardware
 - Landing-page screenshots (reviewed, faces blurred)
 - Play closed testing (waitlist → `alpha` track) when Android is operator-ready;
