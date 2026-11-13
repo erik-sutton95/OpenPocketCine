@@ -22,6 +22,10 @@ import com.opencapture.opencine.vocabulary.VideoResolution
 /** The toolbar in iOS order (Pocket iOS `MultiviewStage` tools). */
 internal val multiviewTools = listOf(MultiviewTool.LAYOUT, MultiviewTool.CAMERA, MultiviewTool.FIT, MultiviewTool.LUT)
 
+/** The note on the tile itself: iOS keeps the plain recording confirmations off it. */
+internal fun multiviewTileNote(note: String?): String? =
+    note.takeUnless { it == "Recording" || it == "Recording stopped" }
+
 /** Display values come from the existing throttled tile status; no telemetry polling. */
 internal data class MultiviewTileReadouts(
     val letter: String,
@@ -112,6 +116,7 @@ internal fun MultiviewSession.stageTile(index: Int): MultiviewTile? {
         name = camera.name, model = camera.model.name, format = readouts.format,
         storage = readouts.storage, timecode = tile.timecodeReadout,
         tally = readouts.recording, recording = readouts.isRecording, lut = tile.lutEnabled,
+        note = tile.recordingNote, tileNote = multiviewTileNote(tile.recordingNote),
         readouts = multiviewStageReadouts(tile.settings),
         status = readouts.recovery?.let { text ->
             MultiviewTileStatus(

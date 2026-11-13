@@ -36,6 +36,30 @@ class MultiviewStageStoreTest {
         )
     }
 
+    @Test fun decodeAppliesThisAppsValidation() {
+        val ok = MultiviewStageJournal.Stage(
+            ssid = "Test", hotspot = false, layout = "Center stage", focusedIndex = 0, cameras = listOf(camera(0, "a")),
+        )
+        assertEquals(ok, MultiviewStageStore.decode(MultiviewStageStore.encode(ok)))
+        assertNull(MultiviewStageStore.decode(MultiviewStageStore.encode(ok.copy(focusedIndex = 4))))
+        val five = (0..4).map { camera(it % 4, "c$it") }
+        assertNull(MultiviewStageStore.decode(MultiviewStageStore.encode(ok.copy(cameras = five))))
+        assertNull(MultiviewStageStore.decode("not json"))
+    }
+
+    @Test fun legacyStoredJsonStillLoads() {
+        val raw = """{"version":1,"ssid":"Net","hotspot":true,"layout":"Grid","focusedIndex":1,
+            "cameras":[{"slot":0,"id":"a","name":"OsmoPocket3-a","bleAddress":"AA:BB:CC:DD:EE:00",
+            "address":"192.168.1.30","experimental":false,"lutEnabled":true,"modelId":32,"identity":"000541"}],
+            "pendingReset":[],"returnedToCameraWiFi":false,"fill":true}"""
+        val stage = MultiviewStageStore.decode(raw)!!
+        val camera = stage.cameras.single()
+        assertEquals("AA:BB:CC:DD:EE:00", camera.deviceAddress)
+        assertEquals(32, camera.modelId)
+        assertTrue(byteArrayOf(0, 5, 0x41).contentEquals(camera.identity))
+        assertEquals(true, stage.fill)
+    }
+
     @Test fun cleanupTargetsReplaceByIdentityAndAppendNewCameras() {
         val merged = MultiviewStageJournal.cleanupTargets(
             listOf(camera(0, "a"), camera(1, "b")),

@@ -76,6 +76,14 @@ class MultiviewTileReadoutsTest {
         assertEquals("4K 25p \u00b7 D-Log M", readouts(CameraStatus(resolutionCode = CameraCommands.RES_4K, fps = 25, colorMode = CameraCommands.COLOR_DLOG_M), false, true).format)
     }
 
+    @Test fun recordNoteReachesTheTileExceptPlainConfirmations() {
+        assertEquals("Camera rejected the record command", multiviewTileNote("Camera rejected the record command"))
+        assertEquals("No confirmation from camera", multiviewTileNote("No confirmation from camera"))
+        assertNull(multiviewTileNote("Recording"))
+        assertNull(multiviewTileNote("Recording stopped"))
+        assertNull(multiviewTileNote(null))
+    }
+
     @Test fun toolbarMatchesIOSOrder() {
         assertEquals(listOf(MultiviewTool.LAYOUT, MultiviewTool.CAMERA, MultiviewTool.FIT, MultiviewTool.LUT), multiviewTools)
     }
