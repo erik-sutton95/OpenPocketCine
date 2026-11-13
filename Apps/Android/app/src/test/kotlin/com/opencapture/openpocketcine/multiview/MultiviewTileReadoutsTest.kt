@@ -63,7 +63,7 @@ class MultiviewTileReadoutsTest {
         assertEquals("10:20:30", two.timecode)
         assertEquals("STBY", two.recording)
         val stale = readouts(CameraStatus(recordElapsedSec = 84), true, false)
-        assertEquals("\u2014", stale.recording)
+        assertEquals("REC 01:24", stale.recording)
     }
 
     @Test fun tallyAndFormatMatchIOS() {

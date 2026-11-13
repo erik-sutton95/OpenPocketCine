@@ -49,9 +49,9 @@ internal fun multiviewTileReadouts(
     storage: StorageStatus? = null,
 ): MultiviewTileReadouts {
     val elapsed = settings.recordElapsedSec.coerceAtLeast(0)
-    // As iOS `recordingStatus`: the observation counts only while recording status is available.
+    // As iOS: the last reported observation is shown even when status is stale.
     val recording = MultiviewTally.text(
-        recording = recordingObservation.takeIf { recordingAvailable },
+        recording = recordingObservation,
         seconds = elapsed, waiting = recordingBusy, holding = recovering, failed = failure != null,
     )
     val resolution = VideoResolution.fromRaw(settings.resolutionCode)?.label ?: "—"
