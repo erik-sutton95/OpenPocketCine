@@ -10,7 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.opencapture.opencine.appkit.StationNetwork
+import com.opencapture.opencine.core.StationNetwork
 import com.opencapture.opencine.appkit.StationNetworkSetup
 import com.opencapture.openpocketcine.pairing.POCKET_STATION_BRAND
 import com.opencapture.openpocketcine.pairing.rememberWifiNameAccess

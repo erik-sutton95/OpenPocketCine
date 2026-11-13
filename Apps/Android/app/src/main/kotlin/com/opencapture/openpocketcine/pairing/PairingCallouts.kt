@@ -9,7 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.opencapture.opencine.appkit.AddSetupFlow
 import com.opencapture.opencine.appkit.AddSetupFlowView
 import com.opencapture.opencine.appkit.DiscoveryPermissions
-import com.opencapture.opencine.appkit.StationNetwork
+import com.opencapture.opencine.core.StationNetwork
 import com.opencapture.opencine.appkit.StationNetworkBrand
 import com.opencapture.opencine.appkit.StationNetworkSetup
 import com.opencapture.opencine.appkit.StationSetupPage
