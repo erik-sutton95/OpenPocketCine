@@ -81,7 +81,7 @@ enum PocketStationNetwork {
         StationNetworkServices(
             savedNetworks: {
                 MultiviewNetworkStore.savedNetworks().map {
-                    StationNetwork(ssid: $0.ssid, password: $0.password, hotspot: $0.hotspot ?? false)
+                    StationNetwork(ssid: $0.ssid, password: $0.password, hotspot: $0.hotspot)
                 }
             },
             currentSSID: { await DjiAppleWiFiJoiner.currentSSID() },

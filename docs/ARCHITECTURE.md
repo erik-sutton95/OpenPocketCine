@@ -272,8 +272,11 @@ handoff. Fixed section headers align the columns through scan state changes;
 Connect and manual network entry stay in the bottom safe/keyboard-adjusted footer. The entry points inject their connection owners. Android Multiview
 uses the equivalent shell form, `StationNetworkSetup`, with injected scan and
 connect actions. Saved-camera setup chips and Add setup use the shared flow on both platforms.
-`MultiviewProvisioner` owns a bounded camera scan and returns the camera to its
-access point on the same BLE link, including cancellation. Multiview journals a
+Multiview reaches DJI's camera setup, the phone's shared-network path and each tile's
+link through OpenCine's seams (`StationCommissioner`, `StationHostPath`,
+`MultiviewMemberLink`; the tiles are the DJI member link). OpenCine's DJI provisioner
+(`DjiAppleMultiviewProvisioner`, Android `MultiviewProvisioner`) owns a bounded camera scan
+and returns the camera to its access point on the same BLE link, including cancellation. Multiview journals a
 cleanup obligation immediately before the station setter, removes it only on a
 confirmed return and waits for the scan before stage shutdown. No network form
 owns a live decoder, watchdog or preview-enable path.

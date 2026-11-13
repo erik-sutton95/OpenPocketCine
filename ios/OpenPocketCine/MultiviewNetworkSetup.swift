@@ -27,7 +27,8 @@ struct MultiviewNetworkSetup: View {
                 ? StationNetwork(
                     ssid: session.ssid, password: session.password,
                     hotspot: session.usePhoneHotspot)
-                : nil)
+                : nil,
+            complete: complete)
         .font(MonitorTheme.font(15))
         .foregroundStyle(MonitorTheme.text)
         .tint(MonitorTheme.accent)
