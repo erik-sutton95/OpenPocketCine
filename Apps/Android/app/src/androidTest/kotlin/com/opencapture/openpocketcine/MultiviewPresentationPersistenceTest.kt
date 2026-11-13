@@ -6,7 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.opencapture.opencine.appkit.MultiviewStagePreferencesStore
 import com.opencapture.openpocketcine.multiview.MultiviewLayout
 import com.opencapture.openpocketcine.multiview.MultiviewSession
-import com.opencapture.openpocketcine.multiview.MultiviewStageStore
+import com.opencapture.opencine.appkit.MultiviewStageJournal
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.test.assertEquals
@@ -24,7 +24,7 @@ class MultiviewPresentationPersistenceTest {
         try {
             instrumentation.runOnMainSync {
                 val store = MultiviewStagePreferencesStore(storage, "presentation")
-                val legacy = MultiviewStageStore.Stage(
+                val legacy = MultiviewStageJournal.Stage(
                     ssid = "Previous network", hotspot = true, layout = MultiviewLayout.GRID.raw,
                     focusedIndex = 2, cameras = emptyList(), pendingReset = emptyList(), returnedToCameraWiFi = true, fill = true,
                 )

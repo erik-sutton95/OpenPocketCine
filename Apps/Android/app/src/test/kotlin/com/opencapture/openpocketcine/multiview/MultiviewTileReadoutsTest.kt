@@ -1,8 +1,10 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.appkit.MultiviewTool
 import com.opencapture.opencine.core.CameraTimecode
 import com.opencapture.opencine.core.PowerStatus
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
+import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.core.ObservedValue
@@ -23,7 +25,7 @@ class MultiviewTileReadoutsTest {
         assertEquals("—", readouts.timecode)
         assertEquals("—", readouts.battery)
         assertEquals("—", readouts.storage)
-        assertEquals("REC —", readouts.recording)
+        assertEquals("\u2014", readouts.recording)
         assertFalse(readouts.isRecording)
         assertTrue(multiviewExposureReadouts(CameraStatus()).all { it.second == "—" })
     }
@@ -57,11 +59,33 @@ class MultiviewTileReadoutsTest {
         val one = readouts(CameraStatus(recordElapsedSec = 84), true, true, timecode = "01:02:03")
         val two = readouts(CameraStatus(), false, true, timecode = "10:20:30")
         assertEquals("01:02:03", one.timecode)
-        assertEquals("REC 1:24", one.recording)
+        assertEquals("REC 01:24", one.recording)
         assertEquals("10:20:30", two.timecode)
         assertEquals("STBY", two.recording)
         val stale = readouts(CameraStatus(recordElapsedSec = 84), true, false)
-        assertEquals("REC —", stale.recording)
+        assertEquals("REC 01:24", stale.recording)
+    }
+
+    @Test fun tallyAndFormatMatchIOS() {
+        assertEquals("REC 01:05", readouts(CameraStatus(recordElapsedSec = 65), true, true).recording)
+        assertEquals("STBY", readouts(CameraStatus(), false, true).recording)
+        assertEquals("\u2014", readouts(CameraStatus(), null, false).recording)
+        assertEquals("WAIT", readouts(CameraStatus(), false, true, busy = true).recording)
+        assertEquals("HOLD", readouts(CameraStatus(), false, true, recovering = true).recording)
+        assertEquals("CHECK", readouts(CameraStatus(), false, true, failure = "lost").recording)
+        assertEquals("4K 25p \u00b7 D-Log M", readouts(CameraStatus(resolutionCode = CameraCommands.RES_4K, fps = 25, colorMode = CameraCommands.COLOR_DLOG_M), false, true).format)
+    }
+
+    @Test fun recordNoteReachesTheTileExceptPlainConfirmations() {
+        assertEquals("Camera rejected the record command", multiviewTileNote("Camera rejected the record command"))
+        assertEquals("No confirmation from camera", multiviewTileNote("No confirmation from camera"))
+        assertNull(multiviewTileNote("Recording"))
+        assertNull(multiviewTileNote("Recording stopped"))
+        assertNull(multiviewTileNote(null))
+    }
+
+    @Test fun toolbarMatchesIOSOrder() {
+        assertEquals(listOf(MultiviewTool.LAYOUT, MultiviewTool.CAMERA, MultiviewTool.FIT, MultiviewTool.LUT), multiviewTools)
     }
 
     @Test fun compactReadoutsRetainIdentityAndUnknownFields() {
@@ -106,8 +130,9 @@ class MultiviewTileReadoutsTest {
 
     /** [timecode] is the tile's clock as the shared status formats it (`MultiviewSession.Tile.timecodeReadout`). */
     private fun readouts(settings: CameraStatus, observed: Boolean?, available: Boolean, storage: StorageStatus? = null,
-        timecode: String? = null, power: PowerStatus = PowerStatus.unknown) = multiviewTileReadouts(
+        timecode: String? = null, power: PowerStatus = PowerStatus.unknown,
+        busy: Boolean = false, recovering: Boolean = false, failure: String? = null) = multiviewTileReadouts(
         1, "Side angle", "Osmo Pocket 4", settings, timecode, observed, available,
-        recordingBusy = false, recovering = false, hasPicture = true, failure = null, power = power, storage = storage,
+        recordingBusy = busy, recovering = recovering, hasPicture = true, failure = failure, power = power, storage = storage,
     )
 }

@@ -85,7 +85,7 @@ import OpenCineDJIApple
         let clock = clock
         let deadline = clock.now() + confirmationWindow
         tile.recordingBusy = true
-        tile.recordingNote = "Waiting for camera confirmation"
+        tile.recordingNote = RecordAll.waiting
         onStage?(.sent)
         Task { @MainActor [weak tile] in
             var event = ControlWireEvent.unconfirmed
@@ -138,9 +138,6 @@ extension MultiviewSession.Tile {
 }
 
 extension MultiviewSession {
-    /// Pocket's qualified group record: every camera must be eligible, or nothing is sent.
-    static let recordPolicy = TargetPolicy.strict
-
     /// Tiles with a camera, in slot order.
     var multicamGroup: MulticamGroup { multicamGroup(of: recordingTiles) }
 
@@ -178,9 +175,10 @@ extension MultiviewSession {
     /// reports recording, else start. `tile == nil` is Record all.
     func recordPlan(for tile: Tile? = nil) -> RecordPlan {
         let requested = tile.map { [$0] } ?? recordingTiles
-        let stop = requested.contains { $0.recordingActive == true }
-        return RecordPlan.make(
-            stop ? .stop : .start, policy: Self.recordPolicy, entries: requested.map(\.entryID),
+        return RecordAll.plan(
+            requested.map(\.entryID), recording: { id in
+                requested.contains { $0.entryID == id && $0.recordingActive == true }
+            },
             in: multicamGroup(of: requested), at: multicamSnapshot(of: requested))
     }
 
@@ -189,46 +187,31 @@ extension MultiviewSession {
     /// started is a separate operator action.
     func record(_ plan: RecordPlan, together: Bool) async {
         guard !busy, !closing, !groupRecordingBusy else { return }
-        let start = plan.direction == .start
         if together {
             groupRecordingBusy = true
-            groupRecordingNote = start ? "Starting cameras…" : "Stopping cameras…"
+            groupRecordingNote = RecordAll.progress(plan.direction)
         }
         defer { if together { groupRecordingBusy = false } }
-        let sessions = cameraSessions
         guard
-            let submission = try? await plan.submit(
-                in: multicamGroup, at: multicamSnapshot(), sessions: sessions)
+            let result = await RecordAll.run(
+                plan, in: multicamGroup, at: multicamSnapshot(), sessions: cameraSessions)
         else {
             // Stale: a camera, link or mode changed after the operator approved.
-            if together { groupRecordingNote = "Cameras changed · try again" }
+            if together { groupRecordingNote = RecordAll.changed }
             return
         }
-        let result = await submission.finished(sessions: sessions)
         let group = multicamGroup
         for tile in tiles {
             guard let outcome = result.outcome(for: tile.entryID, in: group),
-                let note = Self.recordingNote(outcome, start: start)
+                let note = RecordAll.note(outcome, direction: plan.direction)
             else { continue }
             tile.recordingNote = note
         }
         guard together else { return }
+        let start = plan.direction == .start
         let allMatch = recordingTiles.allSatisfy {
             $0.recordingAvailable && $0.recordingActive == start
         }
-        groupRecordingNote =
-            result.confirmed == plan.targets.count && allMatch
-            ? (start ? "Recording on \(result.confirmed) cameras" : "Recording stopped")
-            : "\(result.confirmed) of \(plan.targets.count) confirmed · check camera tiles"
-    }
-
-    static func recordingNote(_ outcome: TargetOutcome, start: Bool) -> String? {
-        switch outcome {
-        case .confirmed: start ? "Recording" : "Recording stopped"
-        case .rejected(.cameraRefused): "Recording command rejected · check camera"
-        case .rejected, .failed: "Not sent · check camera"
-        case .timedOut, .outcomeUnknown, .accepted, .pending: "No confirmation · check camera"
-        case .superseded: nil
-        }
+        groupRecordingNote = RecordAll.summary(result, allMatch: allMatch)
     }
 }

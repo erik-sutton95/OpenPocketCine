@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineAppKit
 import OpenCineAppKitApple
 import SwiftUI
 
@@ -10,42 +11,23 @@ struct MultiviewNetworkSetup: View {
     var complete: () -> Void
 
     var body: some View {
-        Group {
-            if session.tiles.contains(where: { $0.camera != nil }) {
-                NavigationStack {
-                    VStack(alignment: .leading, spacing: 18) {
-                        HStack(spacing: 10) {
-                            MonitorIcon.wifi.frame(width: 20, height: 20)
-                            Text(session.ssid)
-                        }
-                        Text("Cameras are using this network. Remove them before changing it.")
-                            .foregroundStyle(MonitorTheme.muted)
-                        Spacer()
-                    }
-                    .padding(24)
-                    .navigationTitle("Shared Wi-Fi")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done", action: complete)
-                        }
-                    }
-                }
-            } else {
-                StationNetworkSetupView(
-                    context: .multiview, brand: PocketStationNetwork.brand,
-                    services: PocketStationNetwork.services,
-                    cameraSSIDs: Set(model.savedCameras.compactMap(\.lastSSID)),
-                    scan: { try await session.scanNetworks(onFound: $0) },
-                    save: { network in
-                        session.selectNetworkSource(hotspot: network.hotspot)
-                        session.selectNetwork(network.ssid)
-                        session.password = network.password
-                        return await session.configureNetwork()
-                    }, errorMessage: session.networkSetupError,
-                    close: { if session.networkConfigured { complete() } else { cancel() } })
-            }
-        }
+        StationNetworkSetupView(
+            context: .multiview, brand: PocketStationNetwork.brand,
+            services: PocketStationNetwork.services,
+            cameraSSIDs: Set(model.savedCameras.compactMap(\.lastSSID)),
+            scan: { try await session.scanNetworks(onFound: $0) },
+            save: { network in
+                session.selectNetworkSource(hotspot: network.hotspot)
+                session.selectNetwork(network.ssid)
+                session.password = network.password
+                return await session.configureNetwork()
+            }, errorMessage: session.networkSetupError,
+            close: { if session.networkConfigured { complete() } else { cancel() } },
+            lockedNetwork: session.tiles.contains(where: { $0.camera != nil })
+                ? StationNetwork(
+                    ssid: session.ssid, password: session.password,
+                    hotspot: session.usePhoneHotspot)
+                : nil)
         .font(MonitorTheme.font(15))
         .foregroundStyle(MonitorTheme.text)
         .tint(MonitorTheme.accent)
